@@ -1,0 +1,18 @@
+appId: org.navoss.mobile
+---
+- launchApp
+- tapOn: 'Search Calgary'
+- eraseText
+- inputText: 'University'
+- assertVisible: 'Select University of Calgary'
+- tapOn: 'Select University of Calgary'
+- extendedWaitUntil:
+    visible: 'Start navigation'
+    timeout: 20000
+- tapOn: 'Avoid highways'
+- extendedWaitUntil:
+    visible: 'Start navigation'
+    timeout: 20000
+- assertVisible: 'Avoid highways'
+- assertVisible: 'No live traffic'
+- assertVisible: 'Select 16 min route, 8.2 km, via Memorial Drive NW / University Drive NW'

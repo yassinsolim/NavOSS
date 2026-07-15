@@ -1,0 +1,31 @@
+# Dependencies and package-manager state
+node_modules/
+.pnpm-store/
+
+# Build and test output
+.turbo/
+coverage/
+dist/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Apple and editor output
+.DS_Store
+*.xcuserstate
+DerivedData/
+
+# Expo and React Native output
+.expo/
+apps/mobile/android/
+apps/mobile/ios/
+
+# Local map and routing artifacts
+data/downloads/
+data/generated/
+*.mbtiles
+*.pmtiles
