@@ -3,6 +3,7 @@ import { SymbolView } from 'expo-symbols';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Modal,
   Pressable,
   SafeAreaView,
@@ -84,9 +85,12 @@ export function SearchPanel({
   return (
     <View pointerEvents="box-none" style={styles.container}>
       <View style={styles.brandRow}>
-        <View style={styles.brandMark}>
-          <Text style={styles.brandLetter}>N</Text>
-        </View>
+        <Image
+          accessibilityIgnoresInvertColors
+          accessible={false}
+          source={require('@/assets/images/icon.png')}
+          style={styles.brandMark}
+        />
         <Text style={styles.brandName}>NavOSS</Text>
         <View style={styles.connectionStatus}>
           <View style={[styles.connectionDot, { backgroundColor: connectionColor }]} />
@@ -371,20 +375,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     lineHeight: 38,
   },
-  brandLetter: {
-    color: NavOssColors.asphalt,
-    fontFamily: NavOssFonts.bold,
-    fontSize: 18,
-    letterSpacing: 0,
-    lineHeight: 22,
-  },
   brandMark: {
-    alignItems: 'center',
-    backgroundColor: NavOssColors.sun,
     borderRadius: 6,
     height: 30,
-    justifyContent: 'center',
-    transform: [{ rotate: '-4deg' }],
     width: 30,
   },
   brandName: {
