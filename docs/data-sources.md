@@ -5,6 +5,9 @@
 NavOSS combines a local copy of two City of Calgary datasets with its self-hosted
 OpenStreetMap/Nominatim index. The local copy is refreshed every 24 hours and swapped
 atomically after a complete import, so user searches never query Calgary Open Data directly.
+Before a swap, the indexer verifies filtered source counts, rejects implausible or greater-than-10%
+drops, confirms source timestamps and counts did not change during pagination, and checks the
+staging-table totals. The previous accepted index remains available for immediate rollback.
 
 ### Business licences
 

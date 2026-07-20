@@ -1,24 +1,12 @@
+import { CALGARY_STREET_TYPE_ALIASES } from './calgary-street-types.js';
+
 const TOKEN_ALIASES: Readonly<Record<string, string>> = {
-  alley: 'al',
-  avenue: 'av',
-  boulevard: 'bv',
-  circle: 'ci',
-  court: 'co',
-  crescent: 'cr',
-  drive: 'dr',
+  ...CALGARY_STREET_TYPE_ALIASES,
   east: 'e',
-  highway: 'hy',
-  lane: 'ln',
   northeast: 'ne',
   northwest: 'nw',
-  parkway: 'py',
-  place: 'pl',
-  road: 'rd',
   southeast: 'se',
   southwest: 'sw',
-  street: 'st',
-  terrace: 'tc',
-  trail: 'tr',
   west: 'w',
 };
 

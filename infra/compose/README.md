@@ -65,6 +65,10 @@ sudo docker compose up -d --build --wait --wait-timeout 300 api caddy
 ./check-stack.sh
 ```
 
+Indexer health requires both expected sources, bounded record counts, and a successful import
+within the previous 36 hours. A failed refresh keeps the current and previous accepted indexes;
+the API can fall back to Nominatim with an explicit degraded response while the index is repaired.
+
 Install the bounded host-log policy before recreating services with the
 `journald` logging driver:
 

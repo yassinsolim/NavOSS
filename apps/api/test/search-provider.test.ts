@@ -239,4 +239,82 @@ describe('Nominatim search provider', () => {
     ]);
     expect(response.source.id).toBe('calgary-hybrid-search');
   });
+
+  it('keeps distinct nearby branches from the same source', async () => {
+    const source = {
+      datasetVersion: 'vdjc-pybd',
+      freshness: 'fresh' as const,
+      id: 'calgary-open-data-index',
+      updatedAt: '2026-07-20T12:00:00Z',
+    };
+    const calgaryProvider = {
+      search: () =>
+        Promise.resolve({
+          degraded: false,
+          results: [
+            {
+              category: 'poi' as const,
+              center: { latitude: 51.05, longitude: -114.08 },
+              confidence: 0.99,
+              id: 'calgary-business:1',
+              label: 'Coffee Shop, Unit 1, Calgary, AB',
+              name: 'Coffee Shop',
+            },
+            {
+              category: 'poi' as const,
+              center: { latitude: 51.0501, longitude: -114.0801 },
+              confidence: 0.99,
+              id: 'calgary-business:2',
+              label: 'Coffee Shop, Unit 2, Calgary, AB',
+              name: 'Coffee Shop',
+            },
+          ],
+          source,
+        }),
+    };
+    const provider = createProductionSearchProvider([], calgaryProvider);
+
+    const response = await provider.search({ limit: 8, q: 'Coffee Shop' });
+
+    expect(response.results.map((result) => result.id)).toEqual([
+      'calgary-business:1',
+      'calgary-business:2',
+    ]);
+  });
+
+  it('degrades to Nominatim when the Calgary index is unavailable', async () => {
+    const source = {
+      datasetVersion: 'alberta',
+      freshness: 'fresh' as const,
+      id: 'nominatim-self-hosted',
+      updatedAt: '2026-07-20T12:00:00Z',
+    };
+    const nominatimProvider = {
+      search: () =>
+        Promise.resolve({
+          degraded: false,
+          results: [
+            {
+              category: 'landmark' as const,
+              center: { latitude: 51.04427, longitude: -114.06309 },
+              confidence: 0.98,
+              id: 'nominatim:node:2359239747',
+              label: 'Calgary Tower, Calgary, Alberta, Canada',
+              name: 'Calgary Tower',
+            },
+          ],
+          source,
+        }),
+    };
+    const calgaryProvider = {
+      search: () => Promise.reject(new Error('metadata unavailable')),
+    };
+    const provider = createProductionSearchProvider([], nominatimProvider, calgaryProvider);
+
+    const response = await provider.search({ limit: 8, q: 'Calgary Tower' });
+
+    expect(response.degraded).toBe(true);
+    expect(response.results[0]?.id).toBe('nominatim:node:2359239747');
+    expect(response.source.id).toBe('nominatim-self-hosted');
+  });
 });

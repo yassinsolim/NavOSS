@@ -12,7 +12,7 @@ curl --fail --silent --show-error \
   --header 'content-type: application/json' \
   --data '{"limit":3,"q":"Calgary Tower"}' \
   "$base_url/v1/search" |
-  jq -e '.degraded == false and .source.id == "calgary-hybrid-search" and (.results | length) > 0' >/dev/null
+  jq -e '.degraded == false and .source.id == "calgary-hybrid-search" and .source.freshness == "fresh" and (.results | length) > 0' >/dev/null
 curl --fail --silent --show-error \
   --header 'content-type: application/json' \
   --data '{"limit":3,"q":"Cosmos Collision"}' \

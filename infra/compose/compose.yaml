@@ -79,10 +79,10 @@ services:
         - CMD
         - node
         - -e
-        - "const{Pool}=require('pg');const p=new Pool();p.query('SELECT count(*) = 2 AS ready FROM calgary_search_metadata').then(r=>{if(!r.rows[0]?.ready)process.exitCode=1}).catch(()=>{process.exitCode=1}).finally(()=>p.end())"
+        - 'const{Pool}=require(''pg'');const p=new Pool();p.query("SELECT count(*) = 2 AND bool_and(CASE WHEN source = ''address'' THEN row_count >= 300000 WHEN source = ''business'' THEN row_count >= 10000 ELSE false END) AND min(indexed_at) > now() - interval ''36 hours'' AS ready FROM calgary_search_metadata").then(r=>{if(!r.rows[0]?.ready)process.exitCode=1}).catch(()=>{process.exitCode=1}).finally(()=>p.end())'
       interval: 30s
       timeout: 5s
-      start_period: 15m
+      start_period: 20m
       retries: 3
 
   caddy:

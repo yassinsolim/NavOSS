@@ -4,10 +4,17 @@ import { pathToFileURL } from 'node:url';
 import { Pool, type PoolClient } from 'pg';
 import { z } from 'zod/v4';
 
+import { calgaryStreetTypeLabel } from './calgary-street-types.js';
 import { normalizeSearchText } from './search-text.js';
 
 const BUSINESS_DATASET_ID = 'vdjc-pybd';
 const ADDRESS_DATASET_ID = 's8b3-j88p';
+const BUSINESS_WHERE =
+  "point IS NOT NULL AND homeoccind = 'N' AND upper(jobstatusdesc) LIKE '%LICENSED'";
+const ADDRESS_WHERE =
+  'latitude IS NOT NULL AND longitude IS NOT NULL AND street_name IS NOT NULL AND street_type IS NOT NULL';
+const MINIMUM_SOURCE_COUNTS = { address: 300_000, business: 10_000 } as const;
+const MAXIMUM_SOURCE_DROP_RATIO = 0.1;
 const DEFAULT_PAGE_SIZE = 10_000;
 const DEFAULT_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1_000;
 const DEFAULT_RETRY_INTERVAL_MS = 15 * 60 * 1_000;
@@ -43,6 +50,20 @@ const AddressRowSchema = z
 
 const MetadataSchema = z.object({ rowsUpdatedAt: z.number().int().positive() }).loose();
 const TableNameRowSchema = z.object({ name: z.string().nullable() });
+const CountResponseSchema = z
+  .array(z.object({ count: z.coerce.number().int().nonnegative() }).loose())
+  .length(1);
+const SourceCountRowSchema = z.object({
+  count: z.coerce.number().int().nonnegative(),
+  source: z.enum(['address', 'business']),
+});
+
+type CalgarySearchSource = IndexedCalgaryPlace['source'];
+
+export interface CalgaryDatasetSnapshot {
+  count: number;
+  updatedAt: Date;
+}
 
 export interface IndexedCalgaryPlace {
   category: 'address' | 'poi';
@@ -64,35 +85,6 @@ interface IndexerOptions {
   pageSize?: number;
   requestTimeoutMs?: number;
 }
-
-const STREET_TYPE_LABELS: Readonly<Record<string, string>> = {
-  AL: 'Alley',
-  AV: 'Ave',
-  BV: 'Blvd',
-  CI: 'Cir',
-  CL: 'Close',
-  CO: 'Court',
-  CR: 'Cres',
-  DR: 'Dr',
-  GA: 'Gate',
-  GR: 'Grove',
-  HE: 'Heights',
-  HL: 'Hill',
-  LN: 'Lane',
-  MR: 'Manor',
-  PA: 'Park',
-  PL: 'Pl',
-  PY: 'Pkwy',
-  RD: 'Rd',
-  RI: 'Rise',
-  RO: 'Row',
-  SQ: 'Sq',
-  ST: 'St',
-  TC: 'Terr',
-  TR: 'Trail',
-  VW: 'View',
-  WY: 'Way',
-};
 
 const UPPERCASE_LABELS = new Set(['AB', 'BMW', 'NE', 'NW', 'SE', 'SW', 'YMCA']);
 
@@ -140,8 +132,7 @@ export function normalizeBusinessRow(payload: unknown): IndexedCalgaryPlace {
 export function normalizeAddressRow(payload: unknown): IndexedCalgaryPlace {
   const row = AddressRowSchema.parse(payload);
   const streetName = displayWords(row.street_name);
-  const streetType =
-    STREET_TYPE_LABELS[row.street_type.toUpperCase()] ?? displayWords(row.street_type);
+  const streetType = calgaryStreetTypeLabel(row.street_type) ?? displayWords(row.street_type);
   const quadrant = row.street_quad?.toUpperCase();
   const house = `${row.house_number}${row.house_alpha?.trim() ?? ''}`;
   const name = [house, streetName, streetType, quadrant].filter(Boolean).join(' ');
@@ -197,6 +188,90 @@ async function fetchMetadata(
   return new Date(MetadataSchema.parse(payload).rowsUpdatedAt * 1_000);
 }
 
+async function fetchDatasetCount(
+  fetchImplementation: typeof fetch,
+  datasetId: string,
+  where: string,
+  requestTimeoutMs: number,
+): Promise<number> {
+  const url = datasetUrl(datasetId);
+  url.searchParams.set('$select', 'count(*)');
+  url.searchParams.set('$where', where);
+  const payload = await fetchJson(fetchImplementation, url, requestTimeoutMs);
+  const row = CountResponseSchema.parse(payload).at(0);
+  if (row === undefined) {
+    throw new Error(`Calgary dataset ${datasetId} did not return a count.`);
+  }
+  return row.count;
+}
+
+async function fetchDatasetSnapshot(
+  fetchImplementation: typeof fetch,
+  datasetId: string,
+  where: string,
+  requestTimeoutMs: number,
+): Promise<CalgaryDatasetSnapshot> {
+  const [count, updatedAt] = await Promise.all([
+    fetchDatasetCount(fetchImplementation, datasetId, where, requestTimeoutMs),
+    fetchMetadata(fetchImplementation, datasetId, requestTimeoutMs),
+  ]);
+  return { count, updatedAt };
+}
+
+export function validateDatasetSnapshot(
+  source: CalgarySearchSource,
+  snapshot: CalgaryDatasetSnapshot,
+  previousCount?: number,
+): void {
+  if (snapshot.count < MINIMUM_SOURCE_COUNTS[source]) {
+    throw new Error(
+      `Calgary ${source} source returned an implausible record count (${String(snapshot.count)}).`,
+    );
+  }
+
+  if (
+    previousCount !== undefined &&
+    snapshot.count < Math.floor(previousCount * (1 - MAXIMUM_SOURCE_DROP_RATIO))
+  ) {
+    throw new Error(
+      `Calgary ${source} source dropped from ${String(previousCount)} to ${String(snapshot.count)} records.`,
+    );
+  }
+}
+
+export function assertDatasetSnapshotStable(
+  source: CalgarySearchSource,
+  before: CalgaryDatasetSnapshot,
+  after: CalgaryDatasetSnapshot,
+): void {
+  if (before.count !== after.count || before.updatedAt.getTime() !== after.updatedAt.getTime()) {
+    throw new Error(`Calgary ${source} source changed during indexing.`);
+  }
+}
+
+async function tableExists(client: PoolClient, tableName: string): Promise<boolean> {
+  const response = await client.query('SELECT to_regclass($1) AS name', [`public.${tableName}`]);
+  return TableNameRowSchema.parse(response.rows.at(0) as unknown).name !== null;
+}
+
+async function currentSourceCounts(
+  client: PoolClient,
+): Promise<Partial<Record<CalgarySearchSource, number>>> {
+  if (!(await tableExists(client, 'calgary_search_places'))) {
+    return {};
+  }
+
+  const response = await client.query(
+    'SELECT source, count(*)::bigint AS count FROM calgary_search_places GROUP BY source',
+  );
+  return Object.fromEntries(
+    z
+      .array(SourceCountRowSchema)
+      .parse(response.rows)
+      .map((row) => [row.source, row.count]),
+  );
+}
+
 async function createStagingTables(client: PoolClient, suffix: string): Promise<void> {
   await client.query('CREATE EXTENSION IF NOT EXISTS pg_trgm');
   await client.query(`
@@ -225,7 +300,8 @@ async function createStagingTables(client: PoolClient, suffix: string): Promise<
       source text PRIMARY KEY,
       dataset_id text NOT NULL,
       dataset_updated_at timestamptz NOT NULL,
-      indexed_at timestamptz NOT NULL
+      indexed_at timestamptz NOT NULL,
+      row_count bigint NOT NULL CHECK (row_count > 0)
     )
   `);
 }
@@ -337,18 +413,12 @@ async function swapTables(client: PoolClient, suffix: string): Promise<void> {
   try {
     await client.query('DROP TABLE IF EXISTS calgary_search_places_previous');
     await client.query('DROP TABLE IF EXISTS calgary_search_metadata_previous');
-    const placesTable = await client.query(
-      "SELECT to_regclass('public.calgary_search_places') AS name",
-    );
-    if (TableNameRowSchema.parse(placesTable.rows.at(0) as unknown).name !== null) {
+    if (await tableExists(client, 'calgary_search_places')) {
       await client.query(
         'ALTER TABLE calgary_search_places RENAME TO calgary_search_places_previous',
       );
     }
-    const metadataTable = await client.query(
-      "SELECT to_regclass('public.calgary_search_metadata') AS name",
-    );
-    if (TableNameRowSchema.parse(metadataTable.rows.at(0) as unknown).name !== null) {
+    if (await tableExists(client, 'calgary_search_metadata')) {
       await client.query(
         'ALTER TABLE calgary_search_metadata RENAME TO calgary_search_metadata_previous',
       );
@@ -359,8 +429,6 @@ async function swapTables(client: PoolClient, suffix: string): Promise<void> {
     await client.query(
       `ALTER TABLE calgary_search_metadata_${suffix} RENAME TO calgary_search_metadata`,
     );
-    await client.query('DROP TABLE IF EXISTS calgary_search_places_previous');
-    await client.query('DROP TABLE IF EXISTS calgary_search_metadata_previous');
     await client.query('COMMIT');
   } catch (error: unknown) {
     await client.query('ROLLBACK');
@@ -387,11 +455,24 @@ export async function syncCalgarySearchIndex(options: IndexerOptions): Promise<{
   const metadataTable = `calgary_search_metadata_${suffix}`;
 
   try {
-    await createStagingTables(client, suffix);
-    const [businessUpdatedAt, addressUpdatedAt] = await Promise.all([
-      fetchMetadata(fetchImplementation, BUSINESS_DATASET_ID, requestTimeoutMs),
-      fetchMetadata(fetchImplementation, ADDRESS_DATASET_ID, requestTimeoutMs),
+    const previousCounts = await currentSourceCounts(client);
+    const [businessSnapshot, addressSnapshot] = await Promise.all([
+      fetchDatasetSnapshot(
+        fetchImplementation,
+        BUSINESS_DATASET_ID,
+        BUSINESS_WHERE,
+        requestTimeoutMs,
+      ),
+      fetchDatasetSnapshot(
+        fetchImplementation,
+        ADDRESS_DATASET_ID,
+        ADDRESS_WHERE,
+        requestTimeoutMs,
+      ),
     ]);
+    validateDatasetSnapshot('business', businessSnapshot, previousCounts.business);
+    validateDatasetSnapshot('address', addressSnapshot, previousCounts.address);
+    await createStagingTables(client, suffix);
     const businesses = await ingestDataset(client, {
       datasetId: BUSINESS_DATASET_ID,
       fetchImplementation,
@@ -401,7 +482,7 @@ export async function syncCalgarySearchIndex(options: IndexerOptions): Promise<{
       requestTimeoutMs,
       select: 'getbusid,tradename,address,comdistnm,licencetypes,point',
       tableName: placesTable,
-      where: "point IS NOT NULL AND homeoccind = 'N' AND upper(jobstatusdesc) LIKE '%LICENSED'",
+      where: BUSINESS_WHERE,
     });
     const addresses = await ingestDataset(client, {
       datasetId: ADDRESS_DATASET_ID,
@@ -412,20 +493,55 @@ export async function syncCalgarySearchIndex(options: IndexerOptions): Promise<{
       requestTimeoutMs,
       select: 'house_number,house_alpha,street_name,street_type,street_quad,latitude,longitude',
       tableName: placesTable,
-      where:
-        'latitude IS NOT NULL AND longitude IS NOT NULL AND street_name IS NOT NULL AND street_type IS NOT NULL',
+      where: ADDRESS_WHERE,
     });
+    const [businessSnapshotAfter, addressSnapshotAfter] = await Promise.all([
+      fetchDatasetSnapshot(
+        fetchImplementation,
+        BUSINESS_DATASET_ID,
+        BUSINESS_WHERE,
+        requestTimeoutMs,
+      ),
+      fetchDatasetSnapshot(
+        fetchImplementation,
+        ADDRESS_DATASET_ID,
+        ADDRESS_WHERE,
+        requestTimeoutMs,
+      ),
+    ]);
+    assertDatasetSnapshotStable('business', businessSnapshot, businessSnapshotAfter);
+    assertDatasetSnapshotStable('address', addressSnapshot, addressSnapshotAfter);
+    const indexedCountResponse = await client.query(
+      `SELECT source, count(*)::bigint AS count FROM ${placesTable} GROUP BY source`,
+    );
+    const indexedCounts = Object.fromEntries(
+      z
+        .array(SourceCountRowSchema)
+        .parse(indexedCountResponse.rows)
+        .map((row) => [row.source, row.count]),
+    ) as Partial<Record<CalgarySearchSource, number>>;
+    if (
+      businesses !== businessSnapshot.count ||
+      indexedCounts.business !== businessSnapshot.count
+    ) {
+      throw new Error('Calgary business source did not index its complete snapshot.');
+    }
+    if (addresses !== addressSnapshot.count || indexedCounts.address !== addressSnapshot.count) {
+      throw new Error('Calgary address source did not index its complete snapshot.');
+    }
     const indexedAt = new Date();
     await client.query(
-      `INSERT INTO ${metadataTable} (source, dataset_id, dataset_updated_at, indexed_at) VALUES ($1, $2, $3, $4), ($5, $6, $7, $4)`,
+      `INSERT INTO ${metadataTable} (source, dataset_id, dataset_updated_at, indexed_at, row_count) VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $4, $9)`,
       [
         'business',
         BUSINESS_DATASET_ID,
-        businessUpdatedAt,
+        businessSnapshot.updatedAt,
         indexedAt,
+        businesses,
         'address',
         ADDRESS_DATASET_ID,
-        addressUpdatedAt,
+        addressSnapshot.updatedAt,
+        addresses,
       ],
     );
     await createIndexes(client, placesTable);

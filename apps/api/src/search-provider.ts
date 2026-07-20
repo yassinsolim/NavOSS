@@ -313,6 +313,7 @@ function resultDistance(result: SearchResult, query: SearchQuery): number {
 
 function samePlace(left: SearchResult, right: SearchResult): boolean {
   return (
+    left.id.split(':', 1)[0] !== right.id.split(':', 1)[0] &&
     normalizeSearchText(left.name) === normalizeSearchText(right.name) &&
     Math.abs(left.center.latitude - right.center.latitude) < 0.0003 &&
     Math.abs(left.center.longitude - right.center.longitude) < 0.0004
@@ -431,7 +432,9 @@ export function createProductionSearchProvider(
         return fixtureResponse;
       }
       return {
-        degraded: settled.some((result) => result.status === 'rejected'),
+        degraded:
+          settled.some((result) => result.status === 'rejected') ||
+          responses.some((response) => response.degraded),
         results: mergeResults(
           [fixtureResponse.results, ...responses.map((response) => response.results)],
           query,

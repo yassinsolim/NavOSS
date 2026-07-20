@@ -1,8 +1,32 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeAddressRow, normalizeBusinessRow } from '../src/calgary-search-indexer.js';
+import {
+  assertDatasetSnapshotStable,
+  normalizeAddressRow,
+  normalizeBusinessRow,
+  validateDatasetSnapshot,
+} from '../src/calgary-search-indexer.js';
+import { normalizeSearchText } from '../src/search-text.js';
 
 describe('Calgary search index normalization', () => {
+  it('rejects incomplete or implausibly reduced source snapshots', () => {
+    const updatedAt = new Date('2026-07-20T12:00:00Z');
+
+    expect(() => {
+      validateDatasetSnapshot('business', { count: 0, updatedAt });
+    }).toThrow('implausible record count');
+    expect(() => {
+      validateDatasetSnapshot('address', { count: 350_000, updatedAt }, 418_471);
+    }).toThrow('dropped from 418471 to 350000');
+    expect(() => {
+      assertDatasetSnapshotStable(
+        'address',
+        { count: 418_471, updatedAt },
+        { count: 418_470, updatedAt },
+      );
+    }).toThrow('changed during indexing');
+  });
+
   it('normalizes Cosmos Collision from the official business dataset', () => {
     expect(
       normalizeBusinessRow({
@@ -41,5 +65,29 @@ describe('Calgary search index normalization', () => {
       name: '800 Macleod Trail SE',
       normalizedName: '800 macleod tr se',
     });
+  });
+
+  it.each([
+    ['GR', 'Green', 'green', 'gr'],
+    ['GV', 'Grove', 'grove', 'gv'],
+    ['HE', 'Heath', 'heath', 'he'],
+    ['HT', 'Heights', 'heights', 'ht'],
+    ['AV', 'Avenue', 'avenue', 'av'],
+    ['HI', 'Highway', 'highway', 'hi'],
+  ])('keeps City street code %s distinct as %s', (code, label, longForm, normalized) => {
+    const result = normalizeAddressRow({
+      house_number: '100',
+      latitude: '51.05',
+      longitude: '-114.08',
+      street_name: 'EXAMPLE',
+      street_quad: 'SW',
+      street_type: code,
+    });
+
+    expect(result.name).toBe(`100 Example ${label} SW`);
+    expect(result.normalizedName).toBe(`100 example ${normalized} sw`);
+    expect(normalizeSearchText(`100 Example ${longForm} Southwest`)).toBe(
+      `100 example ${normalized} sw`,
+    );
   });
 });

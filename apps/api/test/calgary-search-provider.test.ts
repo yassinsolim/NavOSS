@@ -7,12 +7,14 @@ const metadataRows = [
     dataset_id: 'vdjc-pybd',
     dataset_updated_at: new Date('2026-07-20T00:00:00Z'),
     indexed_at: new Date('2026-07-20T12:00:00Z'),
+    row_count: 18_861,
     source: 'business',
   },
   {
     dataset_id: 's8b3-j88p',
     dataset_updated_at: new Date('2026-07-20T00:00:00Z'),
     indexed_at: new Date('2026-07-20T12:00:00Z'),
+    row_count: 418_471,
     source: 'address',
   },
 ];
@@ -20,6 +22,16 @@ const metadataRows = [
 type DatabaseQuery = (queryText: string, values?: unknown[]) => Promise<{ rows: unknown[] }>;
 
 describe('Calgary indexed search provider', () => {
+  it('rejects metadata failures before starting a place query', async () => {
+    const query = vi.fn<DatabaseQuery>().mockRejectedValueOnce(new Error('metadata unavailable'));
+    const provider = createPostgresCalgarySearchProvider({ database: { query } });
+
+    await expect(provider.search({ limit: 8, q: 'Calgary Tower' })).rejects.toThrow(
+      'metadata unavailable',
+    );
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
   it('returns authoritative business autocomplete results', async () => {
     const query = vi
       .fn<DatabaseQuery>()

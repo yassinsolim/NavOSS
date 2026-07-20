@@ -6,7 +6,7 @@ import { normalizeSearchText, prefixTsQuery } from './search-text.js';
 import type { SearchProvider } from './search-provider.js';
 
 const DEFAULT_METADATA_CACHE_MS = 5 * 60 * 1_000;
-const DEFAULT_STALE_AFTER_MS = 48 * 60 * 60 * 1_000;
+const DEFAULT_STALE_AFTER_MS = 36 * 60 * 60 * 1_000;
 
 const SearchRowSchema = z.object({
   category: z.enum(['address', 'landmark', 'neighborhood', 'poi', 'street']),
@@ -22,6 +22,7 @@ const MetadataRowSchema = z.object({
   dataset_id: z.string().min(1),
   dataset_updated_at: z.coerce.date(),
   indexed_at: z.coerce.date(),
+  row_count: z.coerce.number().int().positive(),
   source: z.string().min(1),
 });
 
@@ -101,7 +102,7 @@ const FUZZY_SEARCH_SQL = `
 `;
 
 const METADATA_SQL = `
-  SELECT source, dataset_id, dataset_updated_at, indexed_at
+  SELECT source, dataset_id, dataset_updated_at, indexed_at, row_count
   FROM calgary_search_metadata
   ORDER BY source
 `;
@@ -113,8 +114,9 @@ const READY_SQL = `
 `;
 
 function toSource(rows: z.infer<typeof MetadataRowSchema>[], now: number): SearchSource {
-  if (rows.length === 0) {
-    throw new Error('Calgary search metadata is empty.');
+  const sources = new Set(rows.map((row) => row.source));
+  if (rows.length !== 2 || !sources.has('address') || !sources.has('business')) {
+    throw new Error('Calgary search metadata is incomplete.');
   }
 
   const indexedAt = Math.min(...rows.map((row) => row.indexed_at.getTime()));
@@ -185,16 +187,27 @@ export function createPostgresCalgarySearchProvider(
     async isReady() {
       try {
         const response = await database.query(READY_SQL);
-        return z.object({ ready: z.boolean() }).parse(response.rows[0]).ready;
+        const tablesReady = z.object({ ready: z.boolean() }).parse(response.rows[0]).ready;
+        if (!tablesReady) {
+          return false;
+        }
+        const source = await getSource();
+        const metadataResponse = await database.query(METADATA_SQL);
+        const metadata = z.array(MetadataRowSchema).parse(metadataResponse.rows);
+        return (
+          source.freshness === 'fresh' &&
+          metadata.some((row) => row.source === 'address' && row.row_count >= 300_000) &&
+          metadata.some((row) => row.source === 'business' && row.row_count >= 10_000)
+        );
       } catch {
         return false;
       }
     },
     async search(query: SearchQuery): Promise<SearchResponse> {
       const normalizedQuery = normalizeSearchText(query.q);
-      const sourcePromise = getSource();
+      const source = await getSource();
       if (normalizedQuery.length === 0) {
-        return { degraded: false, results: [], source: await sourcePromise };
+        return { degraded: false, results: [], source };
       }
 
       const response = await database.query(PRIMARY_SEARCH_SQL, [
@@ -229,9 +242,9 @@ export function createPostgresCalgarySearchProvider(
         }));
 
       return {
-        degraded: false,
+        degraded: source.freshness === 'stale',
         results,
-        source: await sourcePromise,
+        source,
       };
     },
   };
