@@ -42,7 +42,7 @@ The aggregate Maestro suite requires the API and Metro on port 3001 and 8081. It
 Production builds must receive a public HTTPS API origin:
 
 ```sh
-EXPO_PUBLIC_API_URL=https://api.navoss.yassin.app \
+EXPO_PUBLIC_API_URL=https://navoss-api.yassin.app \
   corepack pnpm --filter @navoss/mobile validate:release
 ```
 

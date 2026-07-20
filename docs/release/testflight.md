@@ -1,16 +1,16 @@
 # TestFlight beta runbook
 
-Date: 2026-07-19
+Date: 2026-07-20
 
 ## Current verdict
 
-| Stage                                     | Verdict             | Reason                                                                                                                                                                                                                                                |
-| ----------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local simulator and physical-device alpha | GO                  | Core, API, mobile, native, route-matrix, reroute, arrival, camera, and privacy-sheet checks pass.                                                                                                                                                     |
-| Metro-independent iOS Release archive     | GO, structural only | An unsigned arm64 `0.1.0 (1)` archive succeeded with an embedded bundle, injected HTTPS origin, privacy manifests, compiled icons, foreground-only location, and no localhost/local-network keys. The test origin was reserved and is not deployable. |
-| Internal TestFlight                       | NO-GO               | Apple membership, EAS linking, and public privacy/support URLs are complete; a real public backend, App Store Connect record, distribution signing, and uploaded build are still missing.                                                             |
-| External TestFlight                       | NO-GO               | Internal soak, Beta App Review metadata, on-road evidence, support operations, and the internal blockers are incomplete.                                                                                                                              |
-| Public App Store                          | NO-GO               | Background guidance, spoken maneuvers, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                                                                                       |
+| Stage                                     | Verdict | Reason                                                                                                                                                                                                         |
+| ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local simulator and physical-device alpha | GO      | Core, API, mobile, native, route-matrix, reroute, arrival, camera, and privacy-sheet checks pass.                                                                                                              |
+| Metro-independent iOS Release export      | GO      | A July 20 Hermes export embeds `https://navoss-api.yassin.app`, uses POST search, and contains no retired, localhost, or LAN endpoint. The earlier unsigned native archive also compiled successfully.         |
+| Internal TestFlight                       | NO-GO   | Backend, EAS origin, signing, App Store record, privacy policy, and release export are ready. App Privacy/provider classification, owner questionnaires, signed build/upload, and clean-device testing remain. |
+| External TestFlight                       | NO-GO   | Internal soak, reviewer-accessible Calgary route planning, Beta App Review metadata, on-road evidence, support operations, and the internal blockers are incomplete.                                           |
+| Public App Store                          | NO-GO   | Background guidance, spoken maneuvers, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                                                |
 
 The right next launch is a small **internal TestFlight technical beta**, not a public navigation release.
 
@@ -18,14 +18,13 @@ The right next launch is a small **internal TestFlight technical beta**, not a p
 
 ### P0: required before any TestFlight invite
 
-- Deploy a stable public HTTPS NavOSS API. It must use production-capable Valhalla, search, map-tile, and camera dependencies. Public Photon and FOSSGIS endpoints are development-only.
-- Keep request bodies and query strings out of logs. Decide and document IP/security-log retention before publishing the privacy policy.
-- Create the App Store Connect app for `org.navoss.mobile` and establish App Store distribution signing. Apple Developer Program membership is active; this Mac currently has only an Apple Development identity.
-- Keep `https://navoss.yassin.app/privacy` and `https://navoss.yassin.app/support` current as production providers and retention decisions are finalized.
-- Activate and test `navoss@yassin.app` forwarding. The source repository and private vulnerability reporting are already public.
-- Replace every `REQUIRED` field in `docs/release/app-store-metadata.md`, `docs/privacy.md`, and `docs/support.md`.
-- Reconcile the app privacy manifest and App Store Connect label with the final providers and retention. The current manifest declares no collected data; that is valid only if search/location data is discarded immediately after servicing each request under Apple's definition.
-- Produce build 1 with the real API URL, upload it, install it from TestFlight, disconnect Metro/the Mac, and repeat the physical-device smoke test.
+- [x] Deploy `https://navoss-api.yassin.app` with self-hosted Alberta Valhalla/Nominatim, public OpenFreeMap rendering, and official Calgary camera data.
+- [x] Send search in a JSON POST body; disable routine access logging; enforce seven-day host logs and 14-day report-database backups; publish the verified policy.
+- [x] Configure App Store Connect app `NavOSS`, Apple ID `6792619727`, EAS production origin, distribution certificate, provisioning profile, and Submit ID.
+- [x] Verify the public privacy/support URLs and the Metro-independent production export.
+- [ ] Classify Cloudflare/OpenFreeMap map and network metadata, then reconcile App Store Connect App Privacy, `PrivacyInfo.xcprivacy`, SDK manifests, and the hosted policy.
+- [ ] Complete the account-holder age-rating, content-rights, and export-compliance decisions.
+- [ ] Produce build 1, inspect/upload it, install it from TestFlight, disconnect Metro/the Mac, and repeat the physical-device smoke test.
 
 ### P1: required before external testers
 
@@ -34,6 +33,8 @@ The right next launch is a small **internal TestFlight technical beta**, not a p
 - Run passenger-operated on-road tests across downtown, Deerfoot Trail, Stoney Trail, complex interchanges, weak-GPS areas, destination arrival, rerouting, and camera approaches.
 - Add crash diagnostics or document the privacy-preserving alternative and support triage process.
 - Confirm map/search/routing data attribution and production usage rights in the shipped UI and hosted legal pages.
+- Add manual Calgary origin selection or a clearly visible route-preview path so Beta App Review can exercise routing from outside Calgary.
+- Activate and externally test `navoss@yassin.app` delivery and reply handling.
 - Verify the app remains usable for the stated beta scope when the screen locks or clearly constrain the beta to foreground, screen-on testing. Current guidance is foreground-only.
 
 ## Backend release gate
@@ -41,24 +42,24 @@ The right next launch is a small **internal TestFlight technical beta**, not a p
 Set the final origin and run:
 
 ```sh
-EXPO_PUBLIC_API_URL=https://api.example.org \
+EXPO_PUBLIC_API_URL=https://navoss-api.yassin.app \
   corepack pnpm --filter @navoss/mobile validate:release
 ```
 
-The validator rejects missing, non-HTTPS, loopback, `.local`, and private-network origins. Replace `https://api.example.org` with the real deployment.
+The validator rejects missing, non-HTTPS, loopback, `.local`, and private-network origins.
 
 Before creating a build, verify:
 
 ```sh
-curl --fail https://api.example.org/health
-curl --fail https://api.example.org/ready
-curl --fail https://api.example.org/v1/config
+curl --fail https://navoss-api.yassin.app/health
+curl --fail https://navoss-api.yassin.app/ready
+curl --fail https://navoss-api.yassin.app/v1/config
 ```
 
 Run a release export to prove the JavaScript bundle embeds the backend origin:
 
 ```sh
-EXPO_PUBLIC_API_URL=https://api.example.org \
+EXPO_PUBLIC_API_URL=https://navoss-api.yassin.app \
   corepack pnpm --filter @navoss/mobile build:release
 ```
 
@@ -83,9 +84,9 @@ With local Xcode signing configured:
 5. In Organizer, choose **Distribute App > App Store Connect > Upload**.
 6. Resolve every validation warning; do not upload an archive containing a reserved, localhost, LAN, or development-provider URL.
 
-Native Release compilation has already been exercised with signing disabled. The resulting arm64 archive used bundle ID `org.navoss.mobile`, version `0.1.0 (1)`, and a 3.0 MB embedded JavaScript bundle. It is intentionally not uploadable: this Mac currently has an Apple Development identity only, not the Apple Distribution certificate/profile required by App Store Connect.
+Native Release compilation has already been exercised with signing disabled. The resulting arm64 archive used bundle ID `org.navoss.mobile`, version `0.1.0 (1)`, and a 3.0 MB embedded JavaScript bundle. That structural test archive is intentionally not uploadable. EAS now holds a valid Apple Distribution certificate and App Store provisioning profile for the production build.
 
-EAS project `@yassinsolim/navoss` is linked in app configuration. Its production environment contains the planned `EXPO_PUBLIC_API_URL=https://api.navoss.yassin.app`; do not queue a production build until that hostname serves the real backend and passes the release gate. The mobile package runs the release validator in EAS's pre-install hook.
+EAS project `@yassinsolim/navoss` is linked in app configuration. Its production environment contains the verified `EXPO_PUBLIC_API_URL=https://navoss-api.yassin.app`, and `submit.production.ios.ascAppId` is `6792619727`. The mobile package runs the release validator in EAS's pre-install hook. No production iOS build has been queued; keep it blocked until App Privacy and account-holder questionnaires are complete.
 
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use the `production` profile for a store-signed build:
 
@@ -93,8 +94,6 @@ The `preview` profile is an ad hoc production-like build, not TestFlight. Use th
 eas build --platform ios --profile production
 eas submit --platform ios --profile production
 ```
-
-After App Store Connect creates the app, add its numeric Apple ID as `submit.production.ios.ascAppId` or let EAS prompt during the first submission.
 
 ## Internal TestFlight
 
@@ -113,9 +112,10 @@ After the internal gate passes:
 
 1. Create an external group.
 2. Complete Test Information, including beta description, feedback email, privacy-policy URL, and What to Test.
-3. Add the tested build and submit it for Beta App Review.
-4. Start with a small named cohort; do not begin with a public link.
-5. Expand only after service and route-quality thresholds remain stable.
+3. Verify the documented manual-origin or route-preview path from a device physically outside Calgary.
+4. Add the tested build and submit it for Beta App Review.
+5. Start with a small named cohort; do not begin with a public link.
+6. Expand only after service and route-quality thresholds remain stable.
 
 Apple permits up to 10,000 external testers, subject to Beta App Review.
 
@@ -129,3 +129,5 @@ Do not submit the current technical beta as a full navigation replacement. Befor
 - [Upload builds](https://developer.apple.com/help/app-store-connect/manage-builds/upload-builds-overview/)
 - [Manage App Privacy](https://developer.apple.com/help/app-store-connect/manage-app-information/manage-app-privacy)
 - [Submit for App Review](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/overview-of-submitting-for-review)
+
+See `docs/release/app-review.md` for the current guideline risk matrix, privacy decision record, and channel-specific submission gates.

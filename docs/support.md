@@ -8,7 +8,7 @@ Support email: `navoss@yassin.app` (planned; do not publish until forwarding is 
 
 Target response time during beta: seven days on a best-effort basis
 
-Service status URL: `https://status.navoss.yassin.app` (planned)
+Service status URL: `https://navoss-status.yassin.app` (planned)
 
 Source: <https://github.com/yassinsolim/NavOSS>
 

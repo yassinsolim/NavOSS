@@ -5,7 +5,13 @@ appId: org.navoss.mobile
 - tapOn: 'About and privacy'
 - assertVisible: 'Navigation without an account'
 - assertVisible: 'Privacy'
-- assertVisible: 'Beta feedback'
+- assertVisible: 'Support and feedback'
+- assertVisible: 'Open NavOSS privacy policy'
+- scrollUntilVisible:
+    element:
+      text: 'Open NavOSS support'
+    direction: DOWN
+- assertVisible: 'Open NavOSS support'
 - takeScreenshot: '/tmp/navoss-about-privacy'
 - tapOn: 'Close about and privacy'
 - assertVisible: 'Search Calgary'

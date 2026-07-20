@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Linking,
   Modal,
   Pressable,
   SafeAreaView,
@@ -16,6 +17,9 @@ import {
 import { useState } from 'react';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
+
+const PRIVACY_POLICY_URL = 'https://navoss.yassin.app/privacy';
+const SUPPORT_URL = 'https://navoss.yassin.app/support';
 
 export type ApiConnectionState = 'connecting' | 'online' | 'offline';
 export type SearchState = 'idle' | 'loading' | 'success' | 'error';
@@ -57,7 +61,9 @@ function searchSourceLabel(source: SearchSource | undefined): string {
 
   return source.freshness === 'static'
     ? 'Static Calgary fallback'
-    : 'OpenStreetMap search · Development';
+    : source.id === 'nominatim-self-hosted'
+      ? 'OpenStreetMap search'
+      : 'OpenStreetMap search · Development';
 }
 
 export function SearchPanel({
@@ -246,10 +252,10 @@ export function SearchPanel({
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={styles.aboutContent}>
-            <Text style={styles.aboutEyebrow}>CALGARY TECHNICAL BETA</Text>
+            <Text style={styles.aboutEyebrow}>CALGARY COVERAGE</Text>
             <Text style={styles.aboutTitle}>Navigation without an account</Text>
             <Text style={styles.aboutLead}>
-              NavOSS is an account-free, privacy-first navigation project being tested in Calgary.
+              NavOSS is account-free, privacy-first navigation for Calgary.
             </Text>
 
             <View style={styles.aboutSection}>
@@ -262,17 +268,47 @@ export function SearchPanel({
               </Text>
               <Text style={styles.aboutBody}>
                 NavOSS does not require an account, show ads, ask for background location, or save
-                trip history in the app during this beta.
+                trip history in the app.
               </Text>
+              <Pressable
+                accessibilityLabel="Open NavOSS privacy policy"
+                accessibilityRole="link"
+                onPress={() => {
+                  void Linking.openURL(PRIVACY_POLICY_URL);
+                }}
+                style={styles.aboutLink}
+              >
+                <Text style={styles.aboutLinkText}>Privacy policy</Text>
+                <SymbolView
+                  name={{ android: 'open_in_new', ios: 'arrow.up.right' }}
+                  size={15}
+                  tintColor={NavOssColors.green}
+                />
+              </Pressable>
             </View>
 
             <View style={styles.aboutSection}>
-              <Text style={styles.aboutSectionTitle}>Beta feedback</Text>
+              <Text style={styles.aboutSectionTitle}>Support and feedback</Text>
               <Text style={styles.aboutBody}>
-                Feedback is handled through TestFlight. Route reports are most useful when they
-                include the start area, destination, time, and unexpected road or maneuver. Avoid
-                including a private address unless it is necessary to reproduce the issue.
+                Route reports are most useful when they include the start area, destination, time,
+                and unexpected road or maneuver. Avoid including a private address unless it is
+                necessary to reproduce the issue.
               </Text>
+              <Pressable
+                accessibilityLabel="Open NavOSS support"
+                accessibilityRole="link"
+                onPress={() => {
+                  void Linking.openURL(SUPPORT_URL);
+                }}
+                style={styles.aboutLink}
+              >
+                <Text style={styles.aboutLinkText}>Support</Text>
+                <SymbolView
+                  name={{ android: 'open_in_new', ios: 'arrow.up.right' }}
+                  size={15}
+                  tintColor={NavOssColors.green}
+                />
+              </Pressable>
             </View>
 
             <View style={styles.aboutSection}>
@@ -351,6 +387,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: 0,
     lineHeight: 27,
+  },
+  aboutLink: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    gap: 7,
+    minHeight: 44,
+  },
+  aboutLinkText: {
+    color: NavOssColors.green,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 16,
+    letterSpacing: 0,
   },
   aboutScreen: {
     backgroundColor: NavOssColors.paper,

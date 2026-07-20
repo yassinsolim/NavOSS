@@ -26,14 +26,14 @@ NavOSS is an independently designed navigation project using OpenStreetMap-deriv
 
 ## Project Status
 
-| Area               | Current state                                                                                                 |
-| ------------------ | ------------------------------------------------------------------------------------------------------------- |
-| iOS app            | Search, alternatives, route preview, foreground guidance, rerouting, arrival, and official camera alerts      |
-| Native core        | Swift course/continuity matching with accuracy-aware off-route and arrival hysteresis                         |
-| API                | Fastify contracts around development search, Valhalla routing, and Calgary camera data                        |
-| Automated evidence | Contract/API/mobile/Swift suites, simulator journeys, and a 16-variant Calgary route matrix                   |
-| TestFlight         | Not released; production API/providers, App Store Connect setup, signing, and device smoke tests remain gated |
-| Android            | Planned after the iOS navigation core is stable                                                               |
+| Area               | Current state                                                                                                          |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| iOS app            | Search, alternatives, route preview, foreground guidance, rerouting, arrival, and official camera alerts               |
+| Native core        | Swift course/continuity matching with accuracy-aware off-route and arrival hysteresis                                  |
+| API                | Public Fastify ingress with self-hosted Alberta Nominatim/Valhalla and Calgary camera data                             |
+| Automated evidence | Contract/API/mobile/Swift suites, simulator journeys, and a 17-variant Calgary route matrix                            |
+| TestFlight         | Not released; backend/signing/App Store setup are ready, while privacy decisions, build, and device tests remain gated |
+| Android            | Planned after the iOS navigation core is stable                                                                        |
 
 ## Architecture
 
@@ -52,12 +52,13 @@ The mobile client remains independent of provider-specific route models. Public 
 - Strict TypeScript pnpm/Turbo monorepo
 - Shared Zod contracts for coordinates, coverage, health, readiness, problems, and search
 - Fastify 5 API with Calgary-bounded OpenStreetMap search and deterministic fixture fallback
+- Self-hosted Alberta Nominatim search and Valhalla routing behind provider-aware readiness checks
 - Expo SDK 57 iOS development client with a full-screen MapLibre Calgary map
 - Frictionless destination flow: search, automatic route calculation, ETA/distance, alternatives, route preview, Start, live maneuver banner, and End
 - Foreground GPS progress with native iOS route projection, a map-matched puck, a course-following MapLibre camera, and explicit development/degraded source labels
 - All current official Calgary intersection-safety cameras on the map, with direction-safe route-ahead visual and spoken alerts
 - Runtime request and response validation plus generated OpenAPI 3.1
-- Automatic request logging disabled so queries and coordinates are not written to logs
+- Search text/proximity sent in JSON POST bodies; routine access logging disabled and host logs bounded to seven days
 
 ## Local API
 
@@ -74,7 +75,7 @@ The API binds to `127.0.0.1:3000` by default. Set `HOST` or `PORT` to override i
 - `GET /ready`
 - `GET /v1/config`
 - `GET /v1/cameras`
-- `GET /v1/search?q=calgary+tower`
+- `POST /v1/search` with a JSON body
 - `POST /v1/routes`
 - `GET /openapi.json`
 
@@ -90,6 +91,8 @@ The public service is for development validation, not production. Selecting a de
 Place and address search uses the public Photon development endpoint by default and is restricted to the Calgary coverage bounds. Each search sends the entered text, English language preference, result limit, and, when location is available, approximate latitude/longitude to Photon. Photon continuously derives its results from OpenStreetMap. If Photon is unavailable, NavOSS falls back to deterministic Calgary fixtures and labels that fallback in the app.
 
 Override Photon with a self-hosted endpoint by setting `PHOTON_URL`. The public endpoint is a fair-use development dependency with throttling and no availability guarantee; it is not suitable for production traffic or a claim of exhaustive address coverage.
+
+Production uses `https://navoss-api.yassin.app` through an outbound Cloudflare Tunnel. Nominatim and Valhalla run on the operator-controlled Alberta VM and have no public ports. Search and route payloads are processed for each response and discarded; Caddy/Fastify access logging is disabled. The deployed route-quality gate passes all 17 Calgary variants with 73 ms p95 API latency.
 
 Fixed red-light and speed-on-green camera locations come from The City of Calgary's monthly Intersection Safety Cameras dataset. The API validates and caches all current official records; the phone receives normalized public locations without sending user location to Calgary Open Data. Source details, terms, and alert safeguards are documented in [docs/data-sources.md](docs/data-sources.md).
 

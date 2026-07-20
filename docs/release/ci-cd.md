@@ -28,7 +28,7 @@ Complete these steps after Apple Developer Program enrollment is active:
 
 4. Configure the App Store Connect API key through `eas credentials --platform ios`.
 5. Add the numeric App Store Connect Apple ID as `submit.production.ios.ascAppId` in `apps/mobile/eas.json`.
-6. `EXPO_PUBLIC_API_URL=https://api.navoss.yassin.app` is stored in the EAS `production` environment; keep builds blocked until that endpoint is healthy.
+6. `EXPO_PUBLIC_API_URL=https://navoss-api.yassin.app` is stored in the EAS `production` environment and passes the release gate. Keep production builds blocked until App Privacy and account-holder questionnaires are complete.
 7. Create an Expo access token at <https://expo.dev/settings/access-tokens>.
 8. In GitHub, create an `app-store-production` environment and add `EXPO_TOKEN` as an environment secret. Add protection rules before other maintainers receive release access.
 9. Run the `iOS TestFlight` workflow manually once before relying on GitHub release triggers.

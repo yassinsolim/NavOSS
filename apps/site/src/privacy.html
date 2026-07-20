@@ -25,15 +25,15 @@
     </header>
     <main class="document-shell">
       <article class="document">
-        <p class="document__meta">Technical alpha notice · Updated July 19, 2026</p>
+        <p class="document__meta">Internal beta policy · Effective July 20, 2026</p>
         <h1>Privacy without an account</h1>
         <p>
-          NavOSS is operated by Yassin Soliman as an individual developer. The app is in local
-          technical-alpha testing and is not yet available through TestFlight or the App Store.
+          NavOSS is operated by Yassin Soliman as an individual developer in Alberta, Canada. It is
+          an account-free Calgary navigation technical beta.
         </p>
         <div class="callout">
-          This notice describes the current app and development API. It will be updated with final
-          hosting providers, security-log fields, and retention periods before any public beta.
+          This policy is ready for internal TestFlight. External testing remains blocked until a
+          direct privacy and support email has been activated and tested.
         </div>
 
         <h2>Foreground location</h2>
@@ -49,13 +49,15 @@
 
         <h2>Search and routing</h2>
         <p>
-          Search text and, when available, an approximate search origin are sent to the configured
-          NavOSS API and search provider. Route requests send origin and destination coordinates. An
-          automatic reroute sends the latest route origin.
+          Search text and, when available, an approximate search origin are sent in an encrypted
+          request body to the NavOSS API. Route requests send origin and destination coordinates. An
+          automatic reroute sends the latest route origin and destination. Nominatim search and
+          Valhalla routing run on the operator-controlled server in Alberta.
         </p>
         <p>
-          Automatic API request logging is disabled so request bodies, search query strings, and
-          route coordinates are not written to normal application logs.
+          These values are processed in memory for the response and then discarded. They are not
+          written to a NavOSS database, access log, or backup. Active route matching and camera
+          eligibility run on the phone.
         </p>
 
         <h2>No advertising or cross-app tracking</h2>
@@ -64,30 +66,87 @@
           cross-app tracking. Location is not used for advertising or user profiling.
         </p>
 
-        <h2>Providers and retention</h2>
+        <h2>Map and camera data</h2>
         <p>
-          Development search and routing currently use OpenStreetMap-derived services that are
-          explicitly unsuitable for production traffic. The production provider list, hosting
-          region, IP/security-log retention, backups, and international processing will be published
-          before TestFlight.
+          The phone requests map styles, tiles, fonts, and sprites directly from
+          <a href="https://openfreemap.org/privacy/">OpenFreeMap</a>. The requested resources can
+          indicate the viewed map area. OpenFreeMap says regular logs omit IP addresses, while it may
+          retain incident IP logs for up to 30 days. Camera records come through NavOSS from Calgary
+          Open Data; the phone does not send location to the City of Calgary.
         </p>
 
-        <h2>Your choices</h2>
+        <h2>Providers and retention</h2>
+        <p>
+          <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a> provides DNS, TLS,
+          traffic delivery, and the outbound tunnel. It processes client IP and network/request
+          metadata on its global network under its policy. NavOSS does not enable raw Cloudflare
+          request-log export. Map delivery uses OpenFreeMap; TestFlight feedback uses Apple; and
+          user-initiated support may use GitHub.
+        </p>
+        <p>
+          NavOSS keeps operational, SSH, and firewall logs for no more than seven days. Routine HTTP
+          access logging is disabled. Logs exclude request bodies, search text, and route
+          coordinates. The currently disabled report database has 14-day backups; route and search
+          requests never enter those backups.
+        </p>
+        <p>
+          Operational logs may contain timestamps, service identity, severity, lifecycle or health
+          events, error names, and random request IDs. SSH and firewall logs may contain source IP
+          and port, local account, action, and outcome. Cloudflare applies its own variable network
+          and security retention. OpenFreeMap says anonymized logs may be retained indefinitely and
+          incident IP logs for no more than 30 days.
+        </p>
+
+        <h2>Your choices and deletion</h2>
         <p>
           You can deny or revoke location permission in iOS Settings and can stop an active trip
           with End navigation. Search and map browsing may remain available, while current-position
           routing and active guidance will be limited.
         </p>
+        <p>
+          Because NavOSS has no account and does not retain search, route, or trip records, it
+          normally has no history to export or delete. A rights request may identify a support
+          message or recent security event, but NavOSS may be unable to associate a transient,
+          IP-only request with a person. Requests about provider-controlled data may also need to be
+          directed to that provider.
+        </p>
+
+        <h2>Security and international processing</h2>
+        <p>
+          App-to-API traffic uses HTTPS through Cloudflare. The Alberta origin uses an outbound
+          tunnel rather than a public inbound port, key-only SSH, a default-deny firewall,
+          least-privilege containers, security updates, bounded logs, and read-only filesystems where
+          practical. No security measure can guarantee absolute protection.
+        </p>
+        <p>
+          The NavOSS origin is in Alberta. Cloudflare, OpenFreeMap, Apple, and GitHub may process
+          data outside Canada as described in their policies.
+        </p>
+
+        <h2>Children and changes</h2>
+        <p>
+          NavOSS is a general-audience navigation utility and is not directed to children. It does
+          not create profiles or knowingly maintain children's personal information. A parent or
+          guardian should supervise a minor's use of navigation and support channels.
+        </p>
+        <p>
+          Material changes will appear here with a revised effective date. During beta testing,
+          material data-use changes will also be identified in TestFlight release notes before the
+          changed feature is tested.
+        </p>
 
         <h2>Contact</h2>
         <p>
-          Until the app-specific email alias is active, use the repository's
-          <a href="https://github.com/yassinsolim/NavOSS/issues">public issue tracker</a> for
-          non-sensitive questions and
+          Use the repository's
+          <a href="https://github.com/yassinsolim/NavOSS/issues">public issue tracker</a> only for
+          non-sensitive questions. Use
           <a href="https://github.com/yassinsolim/NavOSS/security/advisories/new"
             >private vulnerability reporting</a
           >
-          for security matters. Never publish a private address or precise trip history.
+          for a security issue or sensitive privacy request. Internal testers may also use
+          TestFlight feedback. Never publish a private address or precise trip history. The planned
+          address <code>navoss@yassin.app</code> is not presented as active until delivery and reply
+          handling are tested.
         </p>
       </article>
     </main>

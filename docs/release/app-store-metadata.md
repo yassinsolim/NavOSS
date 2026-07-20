@@ -1,98 +1,212 @@
 # App Store Connect metadata draft
 
-Status: incomplete release draft. Replace every `REQUIRED` value before upload.
+Status: **internal TestFlight preparation. Do not submit for Beta App Review or public App Review while any field below is marked pending or blocked.**
+
+Use `docs/release/app-review.md` for the guideline-by-guideline risk assessment and `docs/release/testflight.md` for the release procedure.
+
+## Readiness snapshot
+
+| Item                         | Status            | Evidence or next action                                                                                                       |
+| ---------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Public product site          | Verified          | `https://navoss.yassin.app` returns HTTP 200 over HTTPS.                                                                      |
+| Privacy URL                  | Verified internal | `/privacy` serves the July 20 provider, retention, security, and deletion policy. Direct email remains an external-beta gate. |
+| Support URL                  | Verified internal | `/support` returns HTTP 200 and links to public/private GitHub channels. Add and test direct contact before external review.  |
+| Source repository            | Verified public   | `https://github.com/yassinsolim/NavOSS` is public.                                                                            |
+| Apple signing                | Verified ready    | EAS has the App Store distribution certificate and provisioning profile.                                                      |
+| App Store Connect app record | Verified          | App `NavOSS`, bundle `org.navoss.mobile`, Apple ID `6792619727`.                                                              |
+| Production API               | Verified, soaking | Public checks and 17 route variants pass; controlled reboot recovery passed. Restore/rollback and soak gates remain.          |
+| Review contact               | Pending           | Test the app-specific email and enter a reachable phone number in App Store Connect.                                          |
+| App Privacy answers          | Decision pending  | NavOSS-controlled retention is frozen; classify Cloudflare/OpenFreeMap map and network metadata before upload.                |
+| Screenshots                  | Pending           | Capture the submitted production build after the backend and metadata are final.                                              |
+| External reviewer route      | Blocked           | Add manual Calgary origin selection or a visible Calgary route-preview flow.                                                  |
 
 ## App information
 
-| Field              | Draft                                              |
-| ------------------ | -------------------------------------------------- |
-| Name               | NavOSS                                             |
-| Bundle ID          | `org.navoss.mobile`                                |
-| Version            | `0.1.0`                                            |
-| Primary language   | English (Canada)                                   |
-| Primary category   | Navigation                                         |
-| Secondary category | Travel                                             |
-| Subtitle           | Private Calgary navigation                         |
-| SKU                | `navoss-ios-001`                                   |
-| Privacy policy URL | `https://navoss.yassin.app/privacy` (must be live) |
-| Support URL        | `https://navoss.yassin.app/support` (must be live) |
-| Marketing URL      | `https://navoss.yassin.app` (after launch)         |
-| Copyright          | `2026 Yassin Soliman`                              |
+| Field              | Draft                                                |
+| ------------------ | ---------------------------------------------------- |
+| Name               | NavOSS                                               |
+| Apple ID           | `6792619727`                                         |
+| Bundle ID          | `org.navoss.mobile`                                  |
+| Version            | `0.1.0`                                              |
+| Primary language   | English (Canada)                                     |
+| Primary category   | Navigation                                           |
+| Secondary category | Travel                                               |
+| Subtitle           | Calgary routes, no account                           |
+| SKU                | `navoss-ios-001`                                     |
+| Privacy policy URL | `https://navoss.yassin.app/privacy`                  |
+| Support URL        | `https://navoss.yassin.app/support`                  |
+| Marketing URL      | `https://navoss.yassin.app`                          |
+| Copyright          | `2026 Yassin Soliman`                                |
+| Content rights     | Confirm after the provider-rights packet is complete |
 
 Suggested keywords, under Apple's 100-character limit:
 
 ```text
-navigation,Calgary,maps,routing,privacy,GPS,safety cameras,directions
+navigation,Calgary,maps,routing,GPS,safety cameras,directions,route planner,open source
 ```
+
+Do not add competitor names, “best,” parity claims, live traffic, CarPlay, lane guidance, background navigation, spoken maneuvers, offline routing, or exhaustive-search claims.
+
+## Public App Store description
+
+This copy is a future public-listing draft, not approval to submit the current technical beta.
+
+> NavOSS helps you search for Calgary places and plan driving routes without creating an account.
+>
+> Compare route choices, avoid highways when needed, and follow foreground route progress with automatic rerouting and arrival detection. NavOSS also displays fixed intersection safety cameras from the official City of Calgary open dataset and provides direction-aware route-ahead notices.
+>
+> NavOSS is open source and built on OpenStreetMap-derived map, search, and routing data. Attribution and data-source details are available in the app and on the NavOSS website.
+>
+> Current coverage is Calgary, Alberta. This version does not include live traffic, background navigation, spoken maneuver instructions, lane guidance, CarPlay, or offline routing. Data and alerts may be incomplete or outdated. Always follow posted signs, road closures, and applicable laws.
+
+Do not use “beta,” “alpha,” “technical preview,” “test,” or “have a passenger report bugs” in the public description. If the shipped public product still requires foreground, screen-on use, state that limitation plainly rather than implying background turn-by-turn navigation.
 
 ## TestFlight beta description
 
-NavOSS is an account-free, privacy-first Calgary navigation technical beta. It provides Calgary place search, route alternatives, avoid-highways routing, foreground GPS progress, automatic rerouting, arrival detection, and official City of Calgary safety-camera markers and route-ahead alerts.
+Beta language belongs here, not in a public App Store listing:
 
-This build has no live traffic and does not yet provide background or spoken turn-by-turn guidance. Keep the app visible during a test trip and have a passenger operate the phone. Do not rely on the beta as the only navigation or safety source.
+> NavOSS is an account-free Calgary navigation technical beta. It provides Calgary place search, route choices, avoid-highways routing, foreground GPS progress, automatic rerouting, arrival detection, and official City of Calgary safety-camera markers and route-ahead notices.
+>
+> This build has no live traffic and does not provide background or spoken turn-by-turn guidance. Keep the app visible during a test trip and have a passenger operate it. Do not rely on this beta as the only navigation, road-closure, traffic, or safety source.
 
 ## What to Test
 
 1. Search for a Calgary landmark, business, or address and report missing or incorrect results.
-2. Compare the suggested route, distance, ETA, first maneuver, and major roads with current road conditions.
+2. Compare the suggested route, distance, ETA, first maneuver, and major roads with current conditions.
 3. Toggle Avoid highways and confirm the route changes meaningfully.
 4. Start guidance with the phone mounted and a passenger operating it; report puck jumps, incorrect maneuvers, false reroutes, missed reroutes, or early/late arrival.
-5. On a lawful trip past an official camera, report missing, repeated, late, or wrong-direction alerts.
-6. End navigation and confirm location activity stops.
+5. On a lawful trip past an official camera, report missing, repeated, late, or wrong-direction notices.
+6. End navigation and confirm foreground location activity stops.
+7. Open About and privacy and confirm the hosted privacy and support links work.
 
-Include the start area, destination, local time, and unexpected road or maneuver. Avoid including a private address unless necessary to reproduce the issue.
+Include the public start area, destination, local time, app build, iPhone model, and unexpected road or maneuver. Do not include a home address or precise personal trip history unless essential to reproduce a safety issue.
 
-## App Review notes
+## App Review information
 
-- No account, sign-in, subscription, purchase, or demo credentials are required.
-- Coverage is intentionally limited to Calgary, Alberta.
-- Foreground precise location is used for map position, route matching, rerouting, arrival, and route-ahead camera warnings.
-- Search text and route endpoints are sent to the configured NavOSS services. Automatic request logging is disabled.
-- The app does not request background location in this beta.
-- Live traffic is explicitly unavailable.
-- Safety-camera records come from the City of Calgary Intersection Safety Cameras open dataset and may change monthly.
-- Map/search/routing data is OpenStreetMap-derived with visible attribution.
-- Review contact name, phone, and email: REQUIRED.
-- Production API will remain available throughout review: REQUIRED URL and monitoring owner.
+| Field            | Value                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------ |
+| Sign-in required | No                                                                                               |
+| Demo credentials | None; the app has no account system                                                              |
+| Contact name     | Yassin Soliman                                                                                   |
+| Contact email    | Pending successful external delivery/reply test for `navoss@yassin.app`                          |
+| Contact phone    | Pending; enter a phone that Apple can reach during review and do not commit it to the repository |
+| Notes            | Use the reviewed template below only after every bracketed item has been resolved                |
 
-Provide reviewers a reproducible Calgary route, such as Downtown Calgary to Calgary International Airport, and explain that camera speech is exercised only when approaching a matching official camera in the route direction.
+### Notes for Review template
 
-## App Privacy draft
+Do not paste this template into App Store Connect until the production build and reviewer-access path are complete.
 
-Use this as a conservative starting point, then reconcile it with the final production providers and retention policy in App Store Connect.
+> NavOSS is an account-free navigation app with coverage intentionally limited to Calgary, Alberta, Canada. No sign-in, purchase, subscription, or demo credential is required.
+>
+> To review search, tap Search Calgary, enter “Calgary Tower,” and select the result. To review routing from outside Calgary, [insert exact manual-origin or visible route-preview steps and labels]. The route preview shows distance, estimated time, route geometry, and the Avoid highways preference. Physical GPS progress, rerouting, arrival, and route-ahead camera notices require movement along the selected Calgary route.
+>
+> The app requests precise location only while open. It uses location for map position, route origin, route matching, rerouting, arrival detection, and direction-aware official safety-camera notices. It does not request background location. Search and map browsing remain available when location is denied; current-position routing and active navigation do not.
+>
+> NavOSS has no live traffic, background navigation, spoken maneuver guidance, lane guidance, CarPlay, advertising, analytics, tracking, account system, or in-app purchases. Search and route payloads are processed for each response and then discarded. Routine HTTP access logging is disabled; NavOSS operational/security logs retain no more than seven days and exclude request bodies. Cloudflare and OpenFreeMap practices are linked from the privacy policy.
+>
+> Fixed camera records come from the Calgary Police Service Intersection Safety Cameras dataset published through Calgary Open Data. Notices are informational, direction-filtered, and supplementary to posted signs and laws. Map/search/routing data is OpenStreetMap-derived with visible attribution.
+>
+> Production service status during review: [insert monitored URL and escalation owner]. Support: `https://navoss.yassin.app/support`. Privacy: `https://navoss.yassin.app/privacy`.
 
-| Data type        | Collected | Linked to identity | Tracking | Purpose                                                    |
-| ---------------- | --------- | ------------------ | -------- | ---------------------------------------------------------- |
-| Precise Location | Yes       | No                 | No       | App Functionality: route origin, rerouting, and navigation |
-| Search History   | Yes       | No                 | No       | App Functionality: place/address search                    |
-| User ID          | No        | N/A                | No       | No account system                                          |
-| Device ID        | No        | N/A                | No       | No advertising or analytics identifier                     |
-| Purchases        | No        | N/A                | No       | No commerce                                                |
-| Contacts         | No        | N/A                | No       | Not accessed                                               |
-| Photos/Audio     | No        | N/A                | No       | Not accessed                                               |
+The current app has no AI feature or AI provider. App Store Connect has no general “AI-authored code” disclosure field. Do not add an irrelevant AI statement to the review notes. If runtime behavior changes, reassess Guideline 5.1.2(i) before submission.
 
-The final answer depends on Apple's definition of collection and the actual backend/provider retention. If route/search data is used only transiently to fulfill the request and is not retained, App Store Connect may classify it differently. Do not choose the less-disclosive answer without confirming production logs, subprocessors, and Apple's current definitions.
+## App Privacy decision table
 
-## Screenshots
+Production recipients and retention are now documented. Do not submit final answers until the account holder classifies direct OpenFreeMap requests and Cloudflare network/security processing. Apple defines collection as off-device transmission that lets the developer or a partner access data longer than needed to service the request in real time.
 
-Capture real production-build screens at the current iPhone sizes requested by App Store Connect:
+| Data type              | Current behavior                                                                                                                                                                                         | Final answer gate                                                                                                                                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Precise Location       | Route/reroute coordinates transit Cloudflare to operator-hosted Valhalla and are discarded after each response. Active matching is on device. Direct map tile identifiers can describe the current view. | Route payloads meet Apple's Not Collected real-time exception. Classify the direct map path conservatively from OpenFreeMap/Cloudflare retention before upload.                      |
+| Coarse Location        | Optional search origin is discarded after each response. IP addresses and requested map resources are processed by infrastructure providers.                                                             | Search payloads meet the real-time exception. Decide whether provider-retained network/map metadata requires Location or Other Diagnostic Data for App Functionality.                |
+| Search History         | Search text is sent in a JSON body to operator-hosted Nominatim and discarded after each response; tested values are absent from logs/backups.                                                           | Not Collected under Apple's real-time-service definition unless request tracing, persistence, or provider settings change.                                                           |
+| Device ID              | No advertising ID, app user ID, or device-level identifier is created. Cloudflare/OpenFreeMap necessarily receive an IP address in transit.                                                              | Apple says retained IP addresses must be classified according to use, potentially as Device ID, location, or diagnostics. The account holder must make this provider-level decision. |
+| Customer Support       | Users may choose GitHub Issues, private vulnerability reporting, TestFlight feedback, or the planned support email.                                                                                      | Reassess after the final in-app support path is fixed. Optional customer-support disclosure applies only when all of Apple's criteria are met.                                       |
+| Crash/Performance Data | No crash, analytics, APM, or uptime SDK is integrated. Host logs are bounded and exclude routine HTTP access events and payloads.                                                                        | No app-originated Crash/Performance collection now. Reassess before adding telemetry or diagnostics.                                                                                 |
+| User ID                | No account or user ID exists.                                                                                                                                                                            | No, unless a future service introduces an account-level or persistent identifier.                                                                                                    |
+| Purchases              | No commerce or StoreKit flow exists.                                                                                                                                                                     | No.                                                                                                                                                                                  |
+| Contacts               | Not accessed.                                                                                                                                                                                            | No.                                                                                                                                                                                  |
+| Photos, Videos, Audio  | Not accessed or collected.                                                                                                                                                                               | No.                                                                                                                                                                                  |
+| Tracking               | No ads, data broker, cross-app linking, or tracking SDK exists.                                                                                                                                          | No, provided production providers do not repurpose data for tracking.                                                                                                                |
 
-- Calgary map with search and healthy production service status;
-- useful search results;
-- route alternatives with ETA/distance and Avoid highways;
-- active foreground guidance with a maneuver;
-- official safety-camera markers/alert; and
-- arrival state.
+Any data type that is ultimately disclosed should use only its real purpose. The current expected purpose is App Functionality, not advertising, marketing, analytics, personalization, or tracking.
 
-Do not show simulator-only labels, reserved endpoints, personal addresses, debug UI, or claims of traffic/Apple/Google parity.
+The conservative unresolved option is to disclose provider-retained map/network data as Location and/or Other Diagnostic Data for App Functionality, with no tracking. Whether it is linked depends on the account holder's final interpretation of temporary IP/security records and current provider terms.
 
-## Remaining fields
+The generated app privacy manifest currently declares no collected data and no tracking. Keep that only if the production real-time discard facts support it; otherwise update the app-level manifest and App Store Connect together. Embedded SDK manifests must also be present and accurate.
 
-- REQUIRED: activate and test `navoss@yassin.app` forwarding.
-- REQUIRED: publish and verify the privacy and support URLs above.
-- REQUIRED: age-rating questionnaire completed by the legal owner.
-- REQUIRED: final encryption/export-compliance determination.
-- REQUIRED: final App Privacy answers after backend deployment.
-- REQUIRED: make `PrivacyInfo.xcprivacy` collection entries match those final answers and retention practices.
-- REQUIRED: publish the source repository before adding an open-source App Store claim.
-- REQUIRED: production screenshots and review contact.
+## Location and permissions
+
+Current iOS purpose string:
+
+> NavOSS uses your precise location while the app is open to show your position, provide navigation, reroute, detect arrival, and warn about official safety cameras ahead.
+
+Before upload, confirm the signed archive has:
+
+- foreground When In Use location only;
+- no background location usage description or background location mode;
+- no unrelated permission strings;
+- permission requested only when the user invokes location-dependent functionality; and
+- graceful denial/revocation behavior with search and map browsing still available.
+
+## Age rating inputs
+
+The legal owner must complete Apple's current questionnaire in App Store Connect. Use actual behavior, not a desired rating. Current factual inputs include:
+
+- no user-generated content displayed inside the app;
+- no advertising;
+- no gambling, contests, loot boxes, or purchases;
+- no alcohol, tobacco, drug, sexual, horror, violence, or medical content;
+- no anonymous chat or messaging;
+- no unrestricted web browser; fixed privacy and support links open external pages;
+- foreground location use for navigation; and
+- official fixed safety-camera information without reckless-driving rewards or evasion features.
+
+An Unrated app cannot be published.
+
+## Encryption and export compliance
+
+The app currently sets `ITSAppUsesNonExemptEncryption` to `false`. The intended basis is that NavOSS implements no proprietary cryptography and relies on standard HTTPS/TLS provided by the operating system and networking stack.
+
+The account holder must still answer Apple's export-compliance questions from the submitted binary and distribution territories. Do not treat the Info.plist value as legal advice or as a substitute for that determination. Reassess if custom cryptography, a VPN, encrypted messaging, or security functionality is added.
+
+## Screenshot plan
+
+Apple currently accepts one to ten screenshots per device size in PNG or JPEG without transparency. Because the app is iPhone-only, capture the highest-resolution iPhone portrait set requested by the current App Store Connect record and let App Store Connect scale it where permitted.
+
+Recommended order:
+
+1. Calgary map, account-free search, and production service online.
+2. Useful Calgary search results for a public landmark.
+3. Route preview with ETA, distance, geometry, and route choice.
+4. Avoid highways preference with a visibly different valid route.
+5. Active foreground guidance with a clear maneuver and public roads.
+6. Official safety-camera marker or route-ahead notice, with City attribution visible where practical.
+7. Arrival state.
+
+Use the exact submitted production build. Use fictional or public locations. Do not show simulator chrome, development labels, reserved endpoints, personal addresses, private notifications, competitor UI, competitor logos, traffic claims, or unimplemented functionality. Screenshots must show the app in use rather than only the icon, splash screen, or title art.
+
+## TestFlight versus public wording
+
+| Topic                  | TestFlight                             | Public App Store                                                                               |
+| ---------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Beta/technical status  | State clearly                          | Remove; public binaries must be complete rather than beta/trial versions                       |
+| What to Test           | Detailed tester tasks and evidence     | Not part of customer-facing description                                                        |
+| Passenger operation    | Appropriate safety testing instruction | Describe safe use without presenting the listing as a test program                             |
+| Known limitations      | Explicit and detailed                  | Keep material product limitations accurate and concise                                         |
+| Missing features       | Useful for testers                     | Never imply those features exist; mention only limitations needed to set customer expectations |
+| Competitor comparisons | Manual testing worksheet only          | No names, logos, parity claims, or keyword stuffing                                            |
+
+## Submission blockers
+
+- [x] Create the App Store Connect app record and add its numeric Apple ID to `submit.production.ios.ascAppId`.
+- [x] Deploy the production API and production-capable providers.
+- [ ] Complete the 24-hour soak, PostgreSQL restore, and graph/index rollback exercises.
+- [ ] Add a reviewer-accessible manual Calgary origin or visible route preview before Beta App Review.
+- [x] Freeze NavOSS-controlled data flows, providers, regions, logs, retention, backups, and deletion behavior.
+- [x] Publish and verify the internal-beta privacy policy and support paths.
+- [ ] Activate and test `navoss@yassin.app` from an external sender through a successful reply.
+- [ ] Reconcile App Privacy answers, app/SDK privacy manifests, permission strings, and network captures.
+- [ ] Complete age-rating, content-rights, and export-compliance questions.
+- [ ] Enter reachable App Review contact details.
+- [ ] Capture and validate production screenshots.
+- [ ] Install the processed build from TestFlight without Metro and pass the clean-device smoke test.
