@@ -19,7 +19,7 @@ EAS Submit sends iOS builds to TestFlight. It does not submit them for public Ap
 Complete these steps after Apple Developer Program enrollment is active:
 
 1. Create the App Store Connect app for bundle ID `org.navoss.mobile`.
-2. From `apps/mobile`, sign in to Expo and run `eas init` to create the real EAS project ID.
+2. EAS project `@yassinsolim/navoss` is linked with project ID `2a95b51d-dd23-431b-b941-fd80c13aadf5`.
 3. Run the first production build interactively so EAS can establish the Apple Distribution certificate and provisioning profile:
 
    ```sh
@@ -28,7 +28,7 @@ Complete these steps after Apple Developer Program enrollment is active:
 
 4. Configure the App Store Connect API key through `eas credentials --platform ios`.
 5. Add the numeric App Store Connect Apple ID as `submit.production.ios.ascAppId` in `apps/mobile/eas.json`.
-6. Store `EXPO_PUBLIC_API_URL=https://api.navoss.yassin.app` in the EAS `production` environment.
+6. `EXPO_PUBLIC_API_URL=https://api.navoss.yassin.app` is stored in the EAS `production` environment; keep builds blocked until that endpoint is healthy.
 7. Create an Expo access token at <https://expo.dev/settings/access-tokens>.
 8. In GitHub, create an `app-store-production` environment and add `EXPO_TOKEN` as an environment secret. Add protection rules before other maintainers receive release access.
 9. Run the `iOS TestFlight` workflow manually once before relying on GitHub release triggers.

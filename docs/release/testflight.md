@@ -8,7 +8,7 @@ Date: 2026-07-19
 | ----------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Local simulator and physical-device alpha | GO                  | Core, API, mobile, native, route-matrix, reroute, arrival, camera, and privacy-sheet checks pass.                                                                                                                                                     |
 | Metro-independent iOS Release archive     | GO, structural only | An unsigned arm64 `0.1.0 (1)` archive succeeded with an embedded bundle, injected HTTPS origin, privacy manifests, compiled icons, foreground-only location, and no localhost/local-network keys. The test origin was reserved and is not deployable. |
-| Internal TestFlight                       | NO-GO               | A real public backend, Apple distribution setup, public privacy/support URLs, and a signed uploaded build are missing.                                                                                                                                |
+| Internal TestFlight                       | NO-GO               | Apple membership, EAS linking, and public privacy/support URLs are complete; a real public backend, App Store Connect record, distribution signing, and uploaded build are still missing.                                                             |
 | External TestFlight                       | NO-GO               | Internal soak, Beta App Review metadata, on-road evidence, support operations, and the internal blockers are incomplete.                                                                                                                              |
 | Public App Store                          | NO-GO               | Background guidance, spoken maneuvers, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                                                                                       |
 
@@ -20,9 +20,9 @@ The right next launch is a small **internal TestFlight technical beta**, not a p
 
 - Deploy a stable public HTTPS NavOSS API. It must use production-capable Valhalla, search, map-tile, and camera dependencies. Public Photon and FOSSGIS endpoints are development-only.
 - Keep request bodies and query strings out of logs. Decide and document IP/security-log retention before publishing the privacy policy.
-- Enroll in the Apple Developer Program, create the App Store Connect app for `org.navoss.mobile`, and establish App Store distribution signing. This Mac currently has only an Apple Development identity.
-- Publish `https://navoss.yassin.app/privacy` and `https://navoss.yassin.app/support`, then verify them without authentication.
-- Activate and test `navoss@yassin.app` forwarding, and make the cleaned source repository public before marketing NavOSS as open source.
+- Create the App Store Connect app for `org.navoss.mobile` and establish App Store distribution signing. Apple Developer Program membership is active; this Mac currently has only an Apple Development identity.
+- Keep `https://navoss.yassin.app/privacy` and `https://navoss.yassin.app/support` current as production providers and retention decisions are finalized.
+- Activate and test `navoss@yassin.app` forwarding. The source repository and private vulnerability reporting are already public.
 - Replace every `REQUIRED` field in `docs/release/app-store-metadata.md`, `docs/privacy.md`, and `docs/support.md`.
 - Reconcile the app privacy manifest and App Store Connect label with the final providers and retention. The current manifest declares no collected data; that is valid only if search/location data is discarded immediately after servicing each request under Apple's definition.
 - Produce build 1 with the real API URL, upload it, install it from TestFlight, disconnect Metro/the Mac, and repeat the physical-device smoke test.
@@ -85,7 +85,7 @@ With local Xcode signing configured:
 
 Native Release compilation has already been exercised with signing disabled. The resulting arm64 archive used bundle ID `org.navoss.mobile`, version `0.1.0 (1)`, and a 3.0 MB embedded JavaScript bundle. It is intentionally not uploadable: this Mac currently has an Apple Development identity only, not the Apple Distribution certificate/profile required by App Store Connect.
 
-An EAS Build workflow is also configured in `apps/mobile/eas.json`, but the app has not yet been linked to an Expo/EAS project. Do not invent a project ID. From `apps/mobile`, the owner should authenticate and run `eas init`, store `EXPO_PUBLIC_API_URL` in the production EAS environment, and add the resulting real project ID to app configuration. The mobile package runs the release validator in EAS's pre-install hook.
+EAS project `@yassinsolim/navoss` is linked in app configuration. Its production environment contains the planned `EXPO_PUBLIC_API_URL=https://api.navoss.yassin.app`; do not queue a production build until that hostname serves the real backend and passes the release gate. The mobile package runs the release validator in EAS's pre-install hook.
 
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use the `production` profile for a store-signed build:
 

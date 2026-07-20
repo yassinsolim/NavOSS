@@ -26,14 +26,14 @@ NavOSS is an independently designed navigation project using OpenStreetMap-deriv
 
 ## Project Status
 
-| Area               | Current state                                                                                            |
-| ------------------ | -------------------------------------------------------------------------------------------------------- |
-| iOS app            | Search, alternatives, route preview, foreground guidance, rerouting, arrival, and official camera alerts |
-| Native core        | Swift course/continuity matching with accuracy-aware off-route and arrival hysteresis                    |
-| API                | Fastify contracts around development search, Valhalla routing, and Calgary camera data                   |
-| Automated evidence | Contract/API/mobile/Swift suites, simulator journeys, and a 16-variant Calgary route matrix              |
-| TestFlight         | Not released; production HTTPS providers, Apple/EAS setup, and public legal/support pages remain gated   |
-| Android            | Planned after the iOS navigation core is stable                                                          |
+| Area               | Current state                                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- |
+| iOS app            | Search, alternatives, route preview, foreground guidance, rerouting, arrival, and official camera alerts      |
+| Native core        | Swift course/continuity matching with accuracy-aware off-route and arrival hysteresis                         |
+| API                | Fastify contracts around development search, Valhalla routing, and Calgary camera data                        |
+| Automated evidence | Contract/API/mobile/Swift suites, simulator journeys, and a 16-variant Calgary route matrix                   |
+| TestFlight         | Not released; production API/providers, App Store Connect setup, signing, and device smoke tests remain gated |
+| Android            | Planned after the iOS navigation core is stable                                                               |
 
 ## Architecture
 
