@@ -52,6 +52,7 @@ import {
   clearNavigationRoute,
   type NativeNavigationSnapshot,
   observeNavigationSnapshots,
+  recordRecentDestination,
   setNavigationRoute,
   stopNavigationAnnouncements,
   updateNavigationLocation,
@@ -61,6 +62,7 @@ import {
   VehiclePuck,
   type VehicleStyle,
 } from '@/features/navigation/vehicle-puck';
+import { mapRelativeHeadingDegrees } from '@/features/navigation/vehicle-heading';
 import {
   fetchAppConfig,
   fetchRoutes,
@@ -211,6 +213,7 @@ export function MapScreen() {
   const [rerouteCount, setRerouteCount] = useState(0);
   const [navigationStepIndex, setNavigationStepIndex] = useState(0);
   const [userHeading, setUserHeading] = useState(0);
+  const [mapBearing, setMapBearing] = useState(0);
   const [vehicleStyle, setVehicleStyle] = useState<VehicleStyle>('arrow');
   const [userCoordinate, setUserCoordinate] = useState<{
     latitude: number;
@@ -344,9 +347,6 @@ export function MapScreen() {
           longitude: location.coords.longitude,
         };
         setUserCoordinate(coordinate);
-        if (location.coords.heading !== null && location.coords.heading >= 0) {
-          setUserHeading(location.coords.heading);
-        }
         const courseDegrees =
           location.coords.speed !== null &&
           location.coords.speed >= 2 &&
@@ -361,6 +361,9 @@ export function MapScreen() {
           courseDegrees,
         );
         setNavigationSnapshot(snapshot);
+        setUserHeading(
+          (currentHeading) => snapshot.matchedCourseDegrees ?? courseDegrees ?? currentHeading,
+        );
         const progressCoordinate = snapshot.matchedCoordinate ?? coordinate;
         setNavigationStepIndex((currentStep) =>
           Math.max(currentStep, findNearestStepIndex(route, progressCoordinate)),
@@ -613,6 +616,7 @@ export function MapScreen() {
 
   const handleSelectResult = (result: SearchResult) => {
     Keyboard.dismiss();
+    recordRecentDestination(result);
     setQuery(result.name);
     setResults([]);
     setSearchState('idle');
@@ -831,6 +835,9 @@ export function MapScreen() {
         onDidFinishLoadingMap={() => {
           setMapError(false);
         }}
+        onRegionIsChanging={({ nativeEvent }) => {
+          setMapBearing(nativeEvent.bearing);
+        }}
         preferredFramesPerSecond={60}
         ref={mapRef}
         style={styles.map}
@@ -861,7 +868,7 @@ export function MapScreen() {
         {routeState.type === 'navigating' && userCoordinate !== undefined && (
           <VehiclePuck
             coordinate={navigationSnapshot?.matchedCoordinate ?? userCoordinate}
-            heading={userHeading}
+            heading={mapRelativeHeadingDegrees(userHeading, mapBearing)}
             vehicleStyle={vehicleStyle}
           />
         )}
@@ -1046,6 +1053,7 @@ export function MapScreen() {
           <>
             <NavigationBanner
               instruction={currentStep.instruction}
+              maneuverType={currentStep.maneuverType}
               roadName={currentStep.roadName}
               safeAreaTop={insets.top}
               status={navigationRouteStatus}

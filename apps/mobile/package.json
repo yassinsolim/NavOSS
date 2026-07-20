@@ -34,6 +34,7 @@
     "react-native-worklets": "0.10.0"
   },
   "devDependencies": {
+    "@expo/config-plugins": "57.0.3",
     "@types/geojson": "7946.0.16",
     "@types/react": "~19.2.2",
     "typescript": "catalog:",
@@ -52,7 +53,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "vitest run",
-    "test:native:ios": "swift test --package-path modules/navoss-navigation",
+    "test:native:ios": "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test --package-path modules/navoss-navigation",
     "test:e2e:ios": "sh ./scripts/run-maestro-ios.sh ../../.maestro/about-privacy.yaml && sh ./scripts/run-maestro-ios.sh ../../.maestro/search-calgary-tower.yaml && sh ./scripts/run-maestro-ios.sh ../../.maestro/route-to-airport.yaml && sh ./scripts/run-maestro-ios.sh ../../.maestro/route-to-university-avoid-highways.yaml && sh ./scripts/run-reroute-maestro-ios.sh && sh ./scripts/run-arrival-maestro-ios.sh && sh ./scripts/run-safety-camera-maestro-ios.sh",
     "test:e2e:about:ios": "sh ./scripts/run-maestro-ios.sh ../../.maestro/about-privacy.yaml",
     "test:e2e:arrival:ios": "sh ./scripts/run-arrival-maestro-ios.sh",

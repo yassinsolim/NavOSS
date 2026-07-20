@@ -1,4 +1,4 @@
-import type { Coordinate, RouteAlternative } from '@navoss/contracts';
+import type { Coordinate, RouteAlternative, SearchResult } from '@navoss/contracts';
 
 import NavOSSNavigation, {
   type NativeNavigationSnapshot,
@@ -18,6 +18,16 @@ export function setNavigationRoute(route: RouteAlternative): NativeNavigationSna
   return NavOSSNavigation.setRoute(
     route.geometry.map(([longitude, latitude]) => ({ latitude, longitude })),
   );
+}
+
+export function recordRecentDestination(destination: SearchResult): void {
+  NavOSSNavigation.recordRecentDestination({
+    id: destination.id,
+    label: destination.label,
+    latitude: destination.center.latitude,
+    longitude: destination.center.longitude,
+    name: destination.name,
+  });
 }
 
 export function updateNavigationLocation(

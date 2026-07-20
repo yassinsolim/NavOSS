@@ -2,6 +2,40 @@ import XCTest
 @testable import NavOSSNavigationCore
 
 final class NavigationCoreTests: XCTestCase {
+  func testCarPlayDestinationCatalogDeduplicatesAndBoundsRecents() throws {
+    let suiteName = "NavOSSNavigationCoreTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let store = NavOSSCarPlayDestinationStore(defaults: defaults, key: "catalog")
+
+    for index in 0..<14 {
+      store.recordRecent(
+        NavOSSCarPlayDestination(
+          id: "destination-\(index)",
+          label: "Calgary",
+          latitude: 51.04,
+          longitude: -114.08,
+          name: "Destination \(index)"
+        )
+      )
+    }
+    store.recordRecent(
+      NavOSSCarPlayDestination(
+        id: "destination-5",
+        label: "Calgary",
+        latitude: 51.05,
+        longitude: -114.07,
+        name: "Updated Destination"
+      )
+    )
+
+    let catalog = store.snapshot()
+    XCTAssertEqual(catalog.recents.count, 12)
+    XCTAssertEqual(catalog.recents.first?.id, "destination-5")
+    XCTAssertEqual(catalog.recents.first?.name, "Updated Destination")
+    XCTAssertEqual(catalog.recents.filter { $0.id == "destination-5" }.count, 1)
+  }
+
   func testProjectsLocationOntoRouteSegment() throws {
     let core = NavigationCore()
     try core.setRoute([
@@ -19,6 +53,7 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(matchedCoordinate.latitude, 51.04, accuracy: 0.000_001)
     XCTAssertEqual(matchedCoordinate.longitude, -114.07, accuracy: 0.000_001)
     XCTAssertEqual(snapshot.distanceFromRouteMeters ?? 0, 111.2, accuracy: 0.5)
+    XCTAssertEqual(snapshot.matchedCourseDegrees ?? 0, 90, accuracy: 0.1)
     XCTAssertEqual(snapshot.routeProgress, 0.5, accuracy: 0.001)
   }
 
@@ -116,8 +151,10 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertFalse(firstDeparture.isOffRoute)
     XCTAssertFalse(secondDeparture.isOffRoute)
     XCTAssertNotNil(secondDeparture.matchedCoordinate)
+    XCTAssertEqual(secondDeparture.matchedCourseDegrees ?? 0, 90, accuracy: 0.1)
     XCTAssertTrue(confirmedDeparture.isOffRoute)
     XCTAssertNil(confirmedDeparture.matchedCoordinate)
+    XCTAssertNil(confirmedDeparture.matchedCourseDegrees)
 
     let firstRecovery = try core.updateLocation(onRouteSample)
     let confirmedRecovery = try core.updateLocation(onRouteSample)

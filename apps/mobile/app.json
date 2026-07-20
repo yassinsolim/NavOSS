@@ -47,10 +47,11 @@
         }
       ],
       "@maplibre/maplibre-react-native",
+      "./plugins/with-navoss-carplay.cjs",
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "NavOSS uses your location to center the map and prepare navigation.",
+          "locationWhenInUsePermission": "NavOSS uses your precise location while the app is open to show your position, provide navigation, reroute, detect arrival, and warn about official safety cameras ahead.",
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": false
         }

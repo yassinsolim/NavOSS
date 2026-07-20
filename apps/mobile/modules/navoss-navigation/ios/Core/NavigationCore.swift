@@ -70,6 +70,7 @@ struct NavigationSnapshot: Equatable, Sendable {
   let horizontalAccuracyMeters: Double?
   let isOffRoute: Bool
   let matchedCoordinate: NavigationCoordinate?
+  let matchedCourseDegrees: Double?
   let phase: NavigationPhase
   let rawCoordinate: NavigationCoordinate?
   let routeProgress: Double
@@ -79,6 +80,7 @@ struct NavigationSnapshot: Equatable, Sendable {
 
 private struct RouteProjection {
   let coordinate: NavigationCoordinate
+  let courseDegrees: Double
   let distanceMeters: Double
   let progress: Double
 }
@@ -170,6 +172,7 @@ private struct RoutePolyline {
       ) / totalDistanceMeters
       let projection = RouteProjection(
         coordinate: matchedCoordinate,
+        courseDegrees: segment.courseDegrees,
         distanceMeters: distanceMeters,
         progress: max(0, min(1, progress))
       )
@@ -249,6 +252,7 @@ final class NavigationCore {
       horizontalAccuracyMeters: nil,
       isOffRoute: false,
       matchedCoordinate: nil,
+      matchedCourseDegrees: nil,
       phase: .idle,
       rawCoordinate: nil,
       routeProgress: 0,
@@ -276,6 +280,7 @@ final class NavigationCore {
       horizontalAccuracyMeters: nil,
       isOffRoute: false,
       matchedCoordinate: nil,
+      matchedCourseDegrees: nil,
       phase: .tracking,
       rawCoordinate: nil,
       routeProgress: 0,
@@ -300,6 +305,7 @@ final class NavigationCore {
       horizontalAccuracyMeters: nil,
       isOffRoute: false,
       matchedCoordinate: nil,
+      matchedCourseDegrees: nil,
       phase: .idle,
       rawCoordinate: nil,
       routeProgress: 0,
@@ -329,6 +335,7 @@ final class NavigationCore {
         horizontalAccuracyMeters: sample.horizontalAccuracyMeters,
         isOffRoute: false,
         matchedCoordinate: nil,
+        matchedCourseDegrees: nil,
         phase: .idle,
         rawCoordinate: sample.coordinate,
         routeProgress: 0,
@@ -350,6 +357,7 @@ final class NavigationCore {
         horizontalAccuracyMeters: sample.horizontalAccuracyMeters,
         isOffRoute: false,
         matchedCoordinate: route.destination,
+        matchedCourseDegrees: projection.courseDegrees,
         phase: .arrived,
         rawCoordinate: sample.coordinate,
         routeProgress: 1,
@@ -399,6 +407,7 @@ final class NavigationCore {
         horizontalAccuracyMeters: sample.horizontalAccuracyMeters,
         isOffRoute: false,
         matchedCoordinate: route.destination,
+        matchedCourseDegrees: projection.courseDegrees,
         phase: .arrived,
         rawCoordinate: sample.coordinate,
         routeProgress: 1,
@@ -410,7 +419,9 @@ final class NavigationCore {
 
     let shouldAcceptProjection = !isOffRoute && !isDepartureSample
     let previousMatchedCoordinate = snapshot.matchedCoordinate
+    let previousMatchedCourseDegrees = snapshot.matchedCourseDegrees
     let provisionalMatchedCoordinate = previousMatchedCoordinate ?? projection.coordinate
+    let provisionalMatchedCourseDegrees = previousMatchedCourseDegrees ?? projection.courseDegrees
     let provisionalRouteProgress = previousMatchedCoordinate == nil
       ? projection.progress
       : snapshot.routeProgress
@@ -421,6 +432,9 @@ final class NavigationCore {
       matchedCoordinate: shouldAcceptProjection
         ? projection.coordinate
         : isOffRoute ? nil : provisionalMatchedCoordinate,
+      matchedCourseDegrees: shouldAcceptProjection
+        ? projection.courseDegrees
+        : isOffRoute ? nil : provisionalMatchedCourseDegrees,
       phase: .tracking,
       rawCoordinate: sample.coordinate,
       routeProgress: shouldAcceptProjection

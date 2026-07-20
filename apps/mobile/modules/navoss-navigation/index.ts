@@ -10,12 +10,18 @@ export interface NativeNavigationCapabilities {
   routeContinuity: true;
   routeMatching: true;
   safetyCameraAnnouncements: true;
-  version: 5;
+  version: 6;
 }
 
 export interface NativeNavigationCoordinate {
   latitude: number;
   longitude: number;
+}
+
+export interface NativeNavigationDestination extends NativeNavigationCoordinate {
+  id: string;
+  label: string;
+  name: string;
 }
 
 export interface NativeNavigationLocationSample extends NativeNavigationCoordinate {
@@ -28,6 +34,7 @@ export interface NativeNavigationSnapshot {
   horizontalAccuracyMeters?: number;
   isOffRoute: boolean;
   matchedCoordinate?: NativeNavigationCoordinate;
+  matchedCourseDegrees?: number;
   phase: 'arrived' | 'idle' | 'tracking';
   rawCoordinate?: NativeNavigationCoordinate;
   routeProgress: number;
@@ -44,7 +51,11 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   clearRoute(): NativeNavigationSnapshot;
   getCapabilities(): NativeNavigationCapabilities;
   getSnapshot(): NativeNavigationSnapshot;
+  recordRecentDestination(destination: NativeNavigationDestination): void;
+  replaceFavoriteDestinations(destinations: NativeNavigationDestination[]): void;
+  setHomeDestination(destination: NativeNavigationDestination | null): void;
   setRoute(geometry: NativeNavigationCoordinate[]): NativeNavigationSnapshot;
+  setWorkDestination(destination: NativeNavigationDestination | null): void;
   stopAnnouncements(): void;
   updateLocation(location: NativeNavigationLocationSample): NativeNavigationSnapshot;
 }

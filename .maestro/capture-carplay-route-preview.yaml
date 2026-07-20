@@ -1,0 +1,19 @@
+appId: org.navoss.mobile
+---
+- launchApp
+- extendedWaitUntil:
+    visible: 'Search Calgary'
+    timeout: 20000
+- tapOn: 'Search Calgary'
+- eraseText
+- inputText: 'Airport'
+- extendedWaitUntil:
+    visible: 'Select Calgary International Airport'
+    timeout: 20000
+- tapOn: 'Select Calgary International Airport'
+- extendedWaitUntil:
+    visible: 'Start navigation'
+    timeout: 20000
+- assertVisible: 'Route preview'
+- assertVisible: 'No live traffic'
+- takeScreenshot: '/tmp/navoss-carplay-route-preview'

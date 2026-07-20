@@ -14,6 +14,10 @@ import {
   formatDuration,
   routeViaLabel,
 } from '@/features/navigation/route-progress';
+import {
+  maneuverDirection,
+  type ManeuverDirection,
+} from '@/features/navigation/maneuver-direction';
 import type { VehicleMatchStatus, VehicleStyle } from '@/features/navigation/vehicle-puck';
 
 interface RoutePlanningPanelProps {
@@ -278,6 +282,7 @@ export function SafetyCameraAlertBanner({
 
 interface NavigationBannerProps {
   instruction: string;
+  maneuverType: string;
   roadName: string;
   safeAreaTop: number;
   status: NavigationRouteStatus;
@@ -316,10 +321,12 @@ export function ArrivalPanel({ bottomInset, destination, onDone }: ArrivalPanelP
 
 export function NavigationBanner({
   instruction,
+  maneuverType,
   roadName,
   safeAreaTop,
   status,
 }: NavigationBannerProps) {
+  const direction = maneuverDirection(maneuverType, instruction);
   const displayedInstruction =
     status === 'rerouting'
       ? 'Finding a new route'
@@ -345,7 +352,7 @@ export function NavigationBanner({
               ? { android: 'sync', ios: 'arrow.triangle.2.circlepath' }
               : status === 'reroute-failed'
                 ? { android: 'wifi_off', ios: 'wifi.slash' }
-                : { android: 'near_me', ios: 'arrow.up.right' }
+                : maneuverSymbol(direction)
           }
           size={29}
           tintColor={NavOssColors.asphalt}
@@ -363,6 +370,23 @@ export function NavigationBanner({
       </View>
     </View>
   );
+}
+
+function maneuverSymbol(direction: ManeuverDirection) {
+  switch (direction) {
+    case 'arrive':
+      return { android: 'flag', ios: 'flag.checkered' } as const;
+    case 'left':
+      return { android: 'turn_left', ios: 'arrow.turn.up.left' } as const;
+    case 'right':
+      return { android: 'turn_right', ios: 'arrow.turn.up.right' } as const;
+    case 'roundabout':
+      return { android: 'roundabout_right', ios: 'arrow.clockwise' } as const;
+    case 'uturn':
+      return { android: 'u_turn_left', ios: 'arrow.uturn.backward' } as const;
+    case 'straight':
+      return { android: 'straight', ios: 'arrow.up' } as const;
+  }
 }
 
 interface NavigationStatusBarProps {

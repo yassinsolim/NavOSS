@@ -37,6 +37,33 @@ private struct NavigationLocationRecord: Record {
   }
 }
 
+private struct NavigationDestinationRecord: Record {
+  @Field
+  var id: String = ""
+
+  @Field
+  var label: String = ""
+
+  @Field
+  var latitude: Double = 0
+
+  @Field
+  var longitude: Double = 0
+
+  @Field
+  var name: String = ""
+
+  var destination: NavOSSCarPlayDestination {
+    NavOSSCarPlayDestination(
+      id: id,
+      label: label,
+      latitude: latitude,
+      longitude: longitude,
+      name: name
+    )
+  }
+}
+
 public final class NavOSSNavigationModule: Module {
   private let core = NavigationCore()
   private let speechSynthesizer = AVSpeechSynthesizer()
@@ -57,7 +84,7 @@ public final class NavOSSNavigationModule: Module {
         "routeContinuity": true,
         "routeMatching": true,
         "safetyCameraAnnouncements": true,
-        "version": 5
+        "version": 6
       ]
     }
 
@@ -78,6 +105,22 @@ public final class NavOSSNavigationModule: Module {
       (location: NavigationLocationRecord) throws -> [String: Any] in
       let snapshot = try self.core.updateLocation(location.sample)
       return self.emit(snapshot)
+    }
+
+    Function("recordRecentDestination") { (destination: NavigationDestinationRecord) in
+      NavOSSCarPlayDestinationStore.shared.recordRecent(destination.destination)
+    }
+
+    Function("setHomeDestination") { (destination: NavigationDestinationRecord?) in
+      NavOSSCarPlayDestinationStore.shared.setHome(destination?.destination)
+    }
+
+    Function("setWorkDestination") { (destination: NavigationDestinationRecord?) in
+      NavOSSCarPlayDestinationStore.shared.setWork(destination?.destination)
+    }
+
+    Function("replaceFavoriteDestinations") { (destinations: [NavigationDestinationRecord]) in
+      NavOSSCarPlayDestinationStore.shared.replaceFavorites(destinations.map(\.destination))
     }
 
     Function("announceSafetyCamera") { () in
@@ -120,6 +163,9 @@ public final class NavOSSNavigationModule: Module {
     }
     if let matchedCoordinate = snapshot.matchedCoordinate {
       payload["matchedCoordinate"] = serialize(matchedCoordinate)
+    }
+    if let matchedCourseDegrees = snapshot.matchedCourseDegrees {
+      payload["matchedCourseDegrees"] = matchedCourseDegrees
     }
     if let distanceFromRouteMeters = snapshot.distanceFromRouteMeters {
       payload["distanceFromRouteMeters"] = distanceFromRouteMeters
