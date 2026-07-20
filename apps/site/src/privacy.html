@@ -70,9 +70,9 @@
         <p>
           The phone requests map styles, tiles, fonts, and sprites directly from
           <a href="https://openfreemap.org/privacy/">OpenFreeMap</a>. The requested resources can
-          indicate the viewed map area. OpenFreeMap says regular logs omit IP addresses, while it may
-          retain incident IP logs for up to 30 days. Camera records come through NavOSS from Calgary
-          Open Data; the phone does not send location to the City of Calgary.
+          indicate the viewed map area. OpenFreeMap says regular logs omit IP addresses, while it
+          may retain incident IP logs for up to 30 days. Camera records come through NavOSS from
+          Calgary Open Data; the phone does not send location to the City of Calgary.
         </p>
 
         <h2>Providers and retention</h2>
@@ -115,8 +115,8 @@
         <p>
           App-to-API traffic uses HTTPS through Cloudflare. The Alberta origin uses an outbound
           tunnel rather than a public inbound port, key-only SSH, a default-deny firewall,
-          least-privilege containers, security updates, bounded logs, and read-only filesystems where
-          practical. No security measure can guarantee absolute protection.
+          least-privilege containers, security updates, bounded logs, and read-only filesystems
+          where practical. No security measure can guarantee absolute protection.
         </p>
         <p>
           The NavOSS origin is in Alberta. Cloudflare, OpenFreeMap, Apple, and GitHub may process

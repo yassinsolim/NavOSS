@@ -11,9 +11,7 @@ import {
 
 describe('resolveApiBaseUrl', () => {
   it('uses the simulator API only for development', () => {
-    expect(resolveApiBaseUrl(undefined, 'http://127.0.0.1:3001')).toBe(
-      'http://127.0.0.1:3001',
-    );
+    expect(resolveApiBaseUrl(undefined, 'http://127.0.0.1:3001')).toBe('http://127.0.0.1:3001');
   });
 
   it('requires an explicit API URL for release builds', () => {

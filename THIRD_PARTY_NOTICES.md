@@ -4,7 +4,7 @@ This inventory is generated from production JavaScript dependencies in `pnpm-loc
 It excludes development-only packages, downloaded map/routing data, native build-tool dependencies,
 and external services. Those components retain their own licenses and attribution requirements.
 
-Lockfile SHA-256: `243e548766a790443c83003ac57f157edbf5da0ff1c7d5f1b8733b9324c81cbf`
+Lockfile SHA-256: `25d021d901ea9fa9bc2af40132fb137dee24f2d6db27316ee1b96c8f701d1aee`
 
 Regenerate with:
 
