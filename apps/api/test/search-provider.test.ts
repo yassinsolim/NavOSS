@@ -80,4 +80,36 @@ describe('Photon search provider', () => {
     expect(response.results[0]?.id).toBe('poi:yyc-airport');
     expect(response.source.id).toBe('calgary-alpha-fixtures');
   });
+
+  it('keeps major Calgary destinations ahead of ambiguous Photon results', async () => {
+    const photonProvider: SearchProvider = {
+      search: () =>
+        Promise.resolve({
+          degraded: true,
+          results: [
+            {
+              category: 'neighborhood',
+              center: { latitude: 51.1548141, longitude: -114.0645792 },
+              confidence: 0.9,
+              id: 'photon:wrong-result',
+              label: 'Northpointe Shopping Centre, Calgary',
+              name: 'Northpointe Shopping Centre',
+            },
+          ],
+          source: {
+            datasetVersion: 'openstreetmap-continuous',
+            freshness: 'fresh',
+            id: 'photon-development',
+            updatedAt: '2026-07-19T12:00:00Z',
+          },
+        }),
+    };
+    const provider = createDevelopmentSearchProvider(undefined, photonProvider);
+
+    const eastHills = await provider.search({ limit: 8, q: 'East Hills Shopping Centre' });
+    const saddletowne = await provider.search({ limit: 8, q: 'Saddletowne LRT' });
+
+    expect(eastHills.results[0]?.id).toBe('poi:east-hills-shopping-centre');
+    expect(saddletowne.results[0]?.id).toBe('poi:saddletowne-lrt');
+  });
 });

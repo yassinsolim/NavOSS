@@ -17,6 +17,13 @@ export { ProblemCodeSchema, ProblemDetailsSchema } from './problem.js';
 export type { ProblemCode, ProblemDetails } from './problem.js';
 
 export {
+  SafetyCameraDirectionSchema,
+  SafetyCameraResponseSchema,
+  SafetyCameraSchema,
+} from './safety-camera.js';
+export type { SafetyCamera, SafetyCameraDirection, SafetyCameraResponse } from './safety-camera.js';
+
+export {
   RouteAlternativeSchema,
   RoutePositionSchema,
   RoutePreferencesSchema,

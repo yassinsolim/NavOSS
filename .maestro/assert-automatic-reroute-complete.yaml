@@ -1,0 +1,7 @@
+appId: org.navoss.mobile
+---
+- extendedWaitUntil:
+    visible: 'Navigation status, .*route updated .*'
+    timeout: 20000
+- assertVisible: 'End navigation'
+- assertVisible: '.*(Drive|Turn).*'

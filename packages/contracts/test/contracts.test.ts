@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AppConfigResponseSchema,
   GeographicBoundsSchema,
+  SafetyCameraResponseSchema,
   RouteRequestSchema,
   RouteResponseSchema,
   SearchQuerySchema,
@@ -54,6 +55,35 @@ describe('SearchResponseSchema', () => {
         freshness: 'static',
         id: 'calgary-alpha-fixtures',
         updatedAt: '2026-07-15T12:00:00Z',
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('SafetyCameraResponseSchema', () => {
+  it('accepts official combined red-light and speed enforcement cameras', () => {
+    const result = SafetyCameraResponseSchema.safeParse({
+      cameras: [
+        {
+          community: 'BELTLINE',
+          coordinate: { latitude: 51.0412867, longitude: -114.0584045 },
+          direction: 'northbound',
+          enforcement: ['red-light', 'speed-on-green'],
+          id: 'calgary-isc:51.0412867:-114.0584045',
+          location: 'Macleod Trail and 12 Avenue S.E.',
+          quadrant: 'SE',
+          ward: 11,
+        },
+      ],
+      source: {
+        attribution: 'The City of Calgary',
+        datasetId: 'dv2f-necx',
+        datasetUrl:
+          'https://data.calgary.ca/Health-and-Safety/Intersection-Safety-Cameras/dv2f-necx',
+        updateFrequency: 'monthly',
+        updatedAt: '2026-07-01T12:00:00Z',
       },
     });
 
@@ -149,6 +179,7 @@ describe('AppConfigResponseSchema', () => {
         modes: ['driving'],
       },
       endpoints: {
+        cameras: '/v1/cameras',
         events: '/v1/events',
         routes: '/v1/routes',
         search: '/v1/search',
@@ -156,6 +187,7 @@ describe('AppConfigResponseSchema', () => {
       features: {
         communityReports: false,
         liveTraffic: false,
+        officialSafetyCameras: true,
         productionSearch: false,
       },
       generatedAt: '2026-07-15T12:00:00Z',

@@ -2,14 +2,16 @@ import {
   AppConfigResponseSchema,
   ProblemDetailsSchema,
   RouteResponseSchema,
+  SafetyCameraResponseSchema,
   SearchResponseSchema,
   type AppConfigResponse,
   type RouteRequest,
   type RouteResponse,
+  type SafetyCameraResponse,
   type SearchResponse,
 } from '@navoss/contracts';
 
-const DEFAULT_API_BASE_URL = 'http://127.0.0.1:3000';
+const DEVELOPMENT_API_BASE_URL = 'http://127.0.0.1:3001';
 
 export class NavOssApiError extends Error {
   public readonly status: number;
@@ -35,15 +37,54 @@ export interface FetchRoutesOptions {
   signal?: AbortSignal;
 }
 
+export interface FetchSafetyCamerasOptions {
+  baseUrl?: string;
+  fetchImplementation?: typeof fetch;
+  signal?: AbortSignal;
+}
+
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, '');
 }
 
+export function resolveApiBaseUrl(
+  configuredBaseUrl: unknown,
+  allowDevelopmentFallback: boolean,
+): string {
+  if (typeof configuredBaseUrl !== 'string' || configuredBaseUrl.trim().length === 0) {
+    if (allowDevelopmentFallback) {
+      return DEVELOPMENT_API_BASE_URL;
+    }
+
+    throw new NavOssApiError(
+      'This NavOSS build is missing its API configuration. Install a corrected build.',
+      0,
+    );
+  }
+
+  const normalizedBaseUrl = normalizeBaseUrl(configuredBaseUrl.trim());
+  let parsedBaseUrl: URL;
+
+  try {
+    parsedBaseUrl = new URL(normalizedBaseUrl);
+  } catch {
+    throw new NavOssApiError('The NavOSS API URL is invalid.', 0);
+  }
+
+  if (parsedBaseUrl.protocol !== 'http:' && parsedBaseUrl.protocol !== 'https:') {
+    throw new NavOssApiError('The NavOSS API URL must use HTTP or HTTPS.', 0);
+  }
+
+  if (!allowDevelopmentFallback && parsedBaseUrl.protocol !== 'https:') {
+    throw new NavOssApiError('Release builds require an HTTPS NavOSS API URL.', 0);
+  }
+
+  return normalizedBaseUrl;
+}
+
 export function getApiBaseUrl(): string {
   const configuredBaseUrl: unknown = process.env.EXPO_PUBLIC_API_URL;
-  return normalizeBaseUrl(
-    typeof configuredBaseUrl === 'string' ? configuredBaseUrl : DEFAULT_API_BASE_URL,
-  );
+  return resolveApiBaseUrl(configuredBaseUrl, process.env.NODE_ENV !== 'production');
 }
 
 export function buildSearchUrl(query: string, options: SearchPlacesOptions = {}): string {
@@ -111,4 +152,15 @@ export async function fetchRoutes(
     },
   );
   return RouteResponseSchema.parse(await parseResponse(response));
+}
+
+export async function fetchSafetyCameras(
+  options: FetchSafetyCamerasOptions = {},
+): Promise<SafetyCameraResponse> {
+  const fetchImplementation = options.fetchImplementation ?? fetch;
+  const response = await fetchImplementation(
+    `${normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl())}/v1/cameras`,
+    options.signal === undefined ? undefined : { signal: options.signal },
+  );
+  return SafetyCameraResponseSchema.parse(await parseResponse(response));
 }

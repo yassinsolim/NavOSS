@@ -1,0 +1,17 @@
+{
+  "name": "navoss-navigation",
+  "version": "0.0.0",
+  "description": "Native navigation state and route matching for NavOSS.",
+  "main": "index.ts",
+  "private": true,
+  "license": "MPL-2.0",
+  "author": "NavOSS contributors",
+  "homepage": "https://github.com/yassinsolim/NavOSS",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yassinsolim/NavOSS.git"
+  },
+  "peerDependencies": {
+    "expo": "*"
+  }
+}

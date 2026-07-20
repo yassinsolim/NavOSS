@@ -4,8 +4,10 @@ import {
   ProblemDetailsSchema,
   ReadinessResponseSchema,
   RouteResponseSchema,
+  SafetyCameraResponseSchema,
   SearchResponseSchema,
   type RouteAlternative,
+  type SafetyCameraResponse,
 } from '@navoss/contracts';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -13,6 +15,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { CALGARY_SEARCH_FIXTURES } from '../src/fixtures.js';
 import { createFixtureSearchProvider } from '../src/search-provider.js';
+import { CameraProviderError } from '../src/safety-camera-provider.js';
 
 const FIXED_DATE = new Date('2026-07-15T12:00:00Z');
 const apps: FastifyInstance[] = [];
@@ -68,7 +71,66 @@ describe('client configuration', () => {
     expect(body.features).toEqual({
       communityReports: false,
       liveTraffic: false,
+      officialSafetyCameras: true,
       productionSearch: false,
+    });
+    expect(body.endpoints.cameras).toBe('/v1/cameras');
+    expect(body.attribution).toContainEqual({
+      label: 'The City of Calgary',
+      url: 'https://data.calgary.ca/',
+    });
+  });
+});
+
+describe('safety cameras', () => {
+  const cameraResponse: SafetyCameraResponse = {
+    cameras: [
+      {
+        community: 'BELTLINE',
+        coordinate: { latitude: 51.0412867, longitude: -114.0584045 },
+        direction: 'northbound',
+        enforcement: ['red-light', 'speed-on-green'],
+        id: 'calgary-isc:51.0412867:-114.0584045',
+        location: 'Macleod Trail and 12 Avenue S.E.',
+        quadrant: 'SE',
+        ward: 11,
+      },
+    ],
+    source: {
+      attribution: 'The City of Calgary',
+      datasetId: 'dv2f-necx',
+      datasetUrl: 'https://data.calgary.ca/Health-and-Safety/Intersection-Safety-Cameras/dv2f-necx',
+      updateFrequency: 'monthly',
+      updatedAt: '2026-07-01T08:33:43.000Z',
+    },
+  };
+
+  it('returns normalized official camera locations and provenance', async () => {
+    const app = await createTestApp({
+      cameraProvider: { getCameras: () => Promise.resolve(cameraResponse) },
+    });
+    const response = await app.inject({ method: 'GET', url: '/v1/cameras' });
+    const body = SafetyCameraResponseSchema.parse(response.json());
+
+    expect(response.statusCode).toBe(200);
+    expect(body.cameras[0]?.direction).toBe('northbound');
+    expect(body.source.datasetId).toBe('dv2f-necx');
+  });
+
+  it('returns a stable problem when official camera data is unavailable', async () => {
+    const app = await createTestApp({
+      cameraProvider: {
+        getCameras: () => Promise.reject(new CameraProviderError('offline')),
+      },
+    });
+    const response = await app.inject({ method: 'GET', url: '/v1/cameras' });
+    const body = ProblemDetailsSchema.parse(response.json());
+
+    expect(response.statusCode).toBe(503);
+    expect(body).toMatchObject({
+      code: 'service_unavailable',
+      status: 503,
+      title: 'Camera data unavailable',
     });
   });
 });
@@ -191,6 +253,7 @@ describe('OpenAPI', () => {
     expect(document.paths).toHaveProperty('/health');
     expect(document.paths).toHaveProperty('/ready');
     expect(document.paths).toHaveProperty('/v1/config');
+    expect(document.paths).toHaveProperty('/v1/cameras');
     expect(document.paths).toHaveProperty('/v1/routes');
     expect(document.paths).toHaveProperty('/v1/search');
     expect(document.paths).not.toHaveProperty('/openapi.json');

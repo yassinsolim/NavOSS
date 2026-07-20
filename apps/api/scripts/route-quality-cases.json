@@ -1,0 +1,90 @@
+[
+  {
+    "id": "downtown-airport",
+    "origin": { "latitude": 51.04427, "longitude": -114.06309 },
+    "destination": { "latitude": 51.13157, "longitude": -114.01055 },
+    "distanceRangeKm": [15, 25],
+    "maximumEndpointOffsetMeters": 75,
+    "testAvoidHighways": true
+  },
+  {
+    "id": "downtown-university",
+    "origin": { "latitude": 51.04427, "longitude": -114.06309 },
+    "destination": { "latitude": 51.07795, "longitude": -114.13073 },
+    "distanceRangeKm": [6, 12],
+    "maximumEndpointOffsetMeters": 75
+  },
+  {
+    "id": "downtown-chinook",
+    "origin": { "latitude": 51.04427, "longitude": -114.06309 },
+    "destination": { "latitude": 50.99865, "longitude": -114.07367 },
+    "distanceRangeKm": [4, 10],
+    "maximumEndpointOffsetMeters": 100
+  },
+  {
+    "id": "downtown-east-hills",
+    "origin": { "latitude": 51.04427, "longitude": -114.06309 },
+    "destination": { "latitude": 51.04112, "longitude": -113.9132 },
+    "distanceRangeKm": [9, 18],
+    "maximumEndpointOffsetMeters": 80
+  },
+  {
+    "id": "downtown-canada-olympic-park",
+    "origin": { "latitude": 51.04427, "longitude": -114.06309 },
+    "destination": { "latitude": 51.0809235, "longitude": -114.2164025 },
+    "distanceRangeKm": [10, 20],
+    "maximumEndpointOffsetMeters": 250
+  },
+  {
+    "id": "downtown-south-health-campus",
+    "origin": { "latitude": 51.04427, "longitude": -114.06309 },
+    "destination": { "latitude": 50.8822452, "longitude": -113.9526766 },
+    "distanceRangeKm": [22, 36],
+    "maximumEndpointOffsetMeters": 80,
+    "testAvoidHighways": true
+  },
+  {
+    "id": "crowfoot-saddletowne",
+    "origin": { "latitude": 51.1236422, "longitude": -114.208115 },
+    "destination": { "latitude": 51.12075, "longitude": -113.94678 },
+    "distanceRangeKm": [18, 40],
+    "maximumEndpointOffsetMeters": 60,
+    "testAvoidHighways": true
+  },
+  {
+    "id": "foothills-south-health-campus",
+    "origin": { "latitude": 51.06534, "longitude": -114.13308 },
+    "destination": { "latitude": 50.8822452, "longitude": -113.9526766 },
+    "distanceRangeKm": [25, 40],
+    "maximumEndpointOffsetMeters": 80
+  },
+  {
+    "id": "east-hills-westhills",
+    "origin": { "latitude": 51.04112, "longitude": -113.9132 },
+    "destination": { "latitude": 51.0157721, "longitude": -114.1693872 },
+    "distanceRangeKm": [18, 38],
+    "maximumEndpointOffsetMeters": 80,
+    "testAvoidHighways": true
+  },
+  {
+    "id": "mckenzie-towne-airport",
+    "origin": { "latitude": 50.9164994, "longitude": -113.9643527 },
+    "destination": { "latitude": 51.13157, "longitude": -114.01055 },
+    "distanceRangeKm": [25, 42],
+    "maximumEndpointOffsetMeters": 80
+  },
+  {
+    "id": "rockyview-university",
+    "origin": { "latitude": 50.9908499, "longitude": -114.0971138 },
+    "destination": { "latitude": 51.07795, "longitude": -114.13073 },
+    "distanceRangeKm": [8, 18],
+    "maximumEndpointOffsetMeters": 80
+  },
+  {
+    "id": "stampede-foothills",
+    "origin": { "latitude": 51.03746, "longitude": -114.05193 },
+    "destination": { "latitude": 51.06534, "longitude": -114.13308 },
+    "distanceRangeKm": [6, 14],
+    "maximumEndpointOffsetMeters": 100
+  }
+]

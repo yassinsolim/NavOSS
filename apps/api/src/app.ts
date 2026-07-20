@@ -6,6 +6,7 @@ import {
   ReadinessResponseSchema,
   RouteRequestSchema,
   RouteResponseSchema,
+  SafetyCameraResponseSchema,
   SearchQuerySchema,
   SearchResponseSchema,
   type ReadinessResponse,
@@ -28,6 +29,11 @@ import {
   type RouteProvider,
 } from './route-provider.js';
 import { createDevelopmentSearchProvider, type SearchProvider } from './search-provider.js';
+import {
+  CameraProviderError,
+  createCalgarySafetyCameraProvider,
+  type SafetyCameraProvider,
+} from './safety-camera-provider.js';
 
 const SERVICE_VERSION = '0.0.0';
 
@@ -36,6 +42,7 @@ function errorName(error: unknown): string {
 }
 
 export interface BuildAppOptions {
+  cameraProvider?: SafetyCameraProvider;
   clock?: () => Date;
   logger?: FastifyServerOptions['logger'];
   routeProvider?: RouteProvider;
@@ -45,6 +52,7 @@ export interface BuildAppOptions {
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const clock = options.clock ?? (() => new Date());
+  const cameraProvider = options.cameraProvider ?? createCalgarySafetyCameraProvider();
   const fixtures = options.searchFixtures ?? CALGARY_SEARCH_FIXTURES;
   const routeProvider = options.routeProvider ?? createValhallaRouteProvider();
   const searchProvider = options.searchProvider ?? createDevelopmentSearchProvider(fixtures);
@@ -65,6 +73,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
       openapi: '3.1.0',
       tags: [
+        { description: 'Official City of Calgary safety-camera locations', name: 'cameras' },
         { description: 'Application configuration', name: 'config' },
         { description: 'Driving route calculation and guidance', name: 'routes' },
         { description: 'Fixture-backed Calgary place search', name: 'search' },
@@ -202,6 +211,38 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         timestamp,
       };
       return response;
+    },
+  );
+
+  typedApp.get(
+    '/v1/cameras',
+    {
+      schema: {
+        description: 'Returns official Calgary red-light and speed-on-green camera locations.',
+        response: {
+          200: SafetyCameraResponseSchema,
+          503: ProblemDetailsSchema,
+        },
+        tags: ['cameras'],
+      },
+    },
+    async (request, reply) => {
+      try {
+        return await cameraProvider.getCameras();
+      } catch (error: unknown) {
+        if (error instanceof CameraProviderError) {
+          reply.status(503).type('application/problem+json');
+          return createProblem(
+            request,
+            503,
+            'service_unavailable',
+            'Camera data unavailable',
+            'Official Calgary safety-camera data could not be loaded right now.',
+          );
+        }
+
+        throw error;
+      }
     },
   );
 

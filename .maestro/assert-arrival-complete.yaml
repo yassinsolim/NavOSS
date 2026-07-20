@@ -1,0 +1,11 @@
+appId: org.navoss.mobile
+---
+- extendedWaitUntil:
+    visible: "You've arrived"
+    timeout: 20000
+- assertVisible: 'Calgary International Airport'
+- assertVisible: 'Finish navigation'
+- tapOn: 'Finish navigation'
+- extendedWaitUntil:
+    visible: 'Search Calgary'
+    timeout: 10000

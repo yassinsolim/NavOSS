@@ -84,6 +84,26 @@ export const CALGARY_SEARCH_FIXTURES = [
     },
   },
   {
+    aliases: ['east hills', 'east hills shopping', 'east hills shopping centre'],
+    result: {
+      category: 'poi',
+      center: { latitude: 51.04112, longitude: -113.9132 },
+      id: 'poi:east-hills-shopping-centre',
+      label: 'East Hills Shopping Centre, East Hills Boulevard SE',
+      name: 'East Hills Shopping Centre',
+    },
+  },
+  {
+    aliases: ['saddletowne', 'saddletowne lrt', 'saddletowne station'],
+    result: {
+      category: 'poi',
+      center: { latitude: 51.12075, longitude: -113.94678 },
+      id: 'poi:saddletowne-lrt',
+      label: 'Saddletowne LRT Station, Saddletowne Circle NE',
+      name: 'Saddletowne LRT Station',
+    },
+  },
+  {
     aliases: ['downtown library', 'municipal building', 'city hall station'],
     result: {
       category: 'landmark',
@@ -123,6 +143,10 @@ export function createAppConfig(generatedAt: string): AppConfigResponse {
         label: 'OpenStreetMap contributors',
         url: 'https://www.openstreetmap.org/copyright',
       },
+      {
+        label: 'The City of Calgary',
+        url: 'https://data.calgary.ca/',
+      },
     ],
     coverage: {
       bounds: {
@@ -134,6 +158,7 @@ export function createAppConfig(generatedAt: string): AppConfigResponse {
       modes: ['driving'],
     },
     endpoints: {
+      cameras: '/v1/cameras',
       events: '/v1/events',
       routes: '/v1/routes',
       search: '/v1/search',
@@ -141,6 +166,7 @@ export function createAppConfig(generatedAt: string): AppConfigResponse {
     features: {
       communityReports: false,
       liveTraffic: false,
+      officialSafetyCameras: true,
       productionSearch: false,
     },
     generatedAt,

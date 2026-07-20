@@ -16,6 +16,18 @@ export default defineConfig(
     extends: [eslint.configs.recommended],
   },
   {
+    files: ['**/scripts/*.{js,mjs,cjs}'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        fetch: 'readonly',
+        performance: 'readonly',
+        process: 'readonly',
+        URL: 'readonly',
+      },
+    },
+  },
+  {
     files: ['**/*.ts'],
     extends: [
       eslint.configs.recommended,

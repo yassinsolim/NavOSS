@@ -1,7 +1,7 @@
 {
   "name": "@navoss/mobile",
   "main": "expo-router/entry",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "license": "MPL-2.0",
   "dependencies": {
     "@expo-google-fonts/atkinson-hyperlegible-next": "0.4.1",
@@ -41,20 +41,27 @@
   },
   "scripts": {
     "build": "expo export --platform ios --output-dir dist",
+    "build:release": "node ./scripts/validate-release-env.mjs && expo export --platform ios --output-dir dist-release",
     "check": "tsc -p tsconfig.json --noEmit",
+    "eas-build-pre-install": "node ./scripts/validate-release-env.mjs",
     "start": "expo start --dev-client",
     "start:simulator": "EXPO_PUBLIC_API_URL=http://127.0.0.1:3001 expo start --dev-client --localhost",
-    "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer EXPO_PUBLIC_API_URL=http://127.0.0.1:3001 expo run:ios",
     "ios:device": "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer expo run:ios --device",
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "vitest run",
-    "test:e2e:ios": "sh ./scripts/run-maestro-ios.sh ../../.maestro/search-calgary-tower.yaml && sh ./scripts/run-maestro-ios.sh ../../.maestro/route-to-airport.yaml && sh ./scripts/run-maestro-ios.sh ../../.maestro/route-to-university-avoid-highways.yaml",
+    "test:native:ios": "swift test --package-path modules/navoss-navigation",
+    "test:e2e:ios": "sh ./scripts/run-maestro-ios.sh ../../.maestro/about-privacy.yaml && sh ./scripts/run-maestro-ios.sh ../../.maestro/search-calgary-tower.yaml && sh ./scripts/run-maestro-ios.sh ../../.maestro/route-to-airport.yaml && sh ./scripts/run-maestro-ios.sh ../../.maestro/route-to-university-avoid-highways.yaml && sh ./scripts/run-reroute-maestro-ios.sh && sh ./scripts/run-arrival-maestro-ios.sh && sh ./scripts/run-safety-camera-maestro-ios.sh",
+    "test:e2e:about:ios": "sh ./scripts/run-maestro-ios.sh ../../.maestro/about-privacy.yaml",
+    "test:e2e:arrival:ios": "sh ./scripts/run-arrival-maestro-ios.sh",
     "test:e2e:avoid-highways:ios": "sh ./scripts/run-maestro-ios.sh ../../.maestro/route-to-university-avoid-highways.yaml",
+    "test:e2e:reroute:ios": "sh ./scripts/run-reroute-maestro-ios.sh",
     "test:e2e:route:ios": "sh ./scripts/run-maestro-ios.sh ../../.maestro/route-to-airport.yaml",
-    "test:simulate:ios": "sh ./scripts/run-maestro-ios.sh ../../.maestro/start-airport-simulation.yaml && node ./scripts/replay-route-ios.mjs"
+    "test:e2e:safety-cameras:ios": "sh ./scripts/run-safety-camera-maestro-ios.sh",
+    "test:simulate:ios": "sh ./scripts/run-maestro-ios.sh ../../.maestro/start-airport-simulation.yaml && node ./scripts/replay-route-ios.mjs",
+    "validate:release": "node ./scripts/validate-release-env.mjs"
   },
   "private": true
 }

@@ -10,6 +10,8 @@ const destinationQuery =
   process.env.NAVOSS_SIMULATION_DESTINATION ?? 'Calgary International Airport';
 const speedMetersPerSecond = Number(process.env.NAVOSS_SIMULATION_SPEED_MPS ?? '25');
 const intervalSeconds = Number(process.env.NAVOSS_SIMULATION_INTERVAL_SECONDS ?? '1');
+const headDistanceMeters = Number(process.env.NAVOSS_SIMULATION_HEAD_METERS ?? '0');
+const tailDistanceMeters = Number(process.env.NAVOSS_SIMULATION_TAIL_METERS ?? '0');
 const origin = {
   latitude: Number(process.env.NAVOSS_SIMULATION_ORIGIN_LATITUDE ?? '51.0447'),
   longitude: Number(process.env.NAVOSS_SIMULATION_ORIGIN_LONGITUDE ?? '-114.0719'),
@@ -22,11 +24,61 @@ function requireFinitePositive(value, name) {
   }
 }
 
+function requireFiniteNonNegative(value, name) {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${name} must be a non-negative number.`);
+  }
+}
+
+function distanceMeters(origin, destination) {
+  const latitudeDelta = ((destination[1] - origin[1]) * Math.PI) / 180;
+  const longitudeDelta = ((destination[0] - origin[0]) * Math.PI) / 180;
+  const originLatitude = (origin[1] * Math.PI) / 180;
+  const destinationLatitude = (destination[1] * Math.PI) / 180;
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(originLatitude) * Math.cos(destinationLatitude) * Math.sin(longitudeDelta / 2) ** 2;
+
+  return 12_742_000 * Math.asin(Math.sqrt(haversine));
+}
+
 function routeWaypoints(geometry) {
   return geometry.filter((position, index) => {
     const previous = geometry[index - 1];
     return previous === undefined || position[0] !== previous[0] || position[1] !== previous[1];
   });
+}
+
+function routeTailWaypoints(waypoints, maximumDistanceMeters) {
+  if (maximumDistanceMeters === 0) {
+    return waypoints;
+  }
+
+  let accumulatedDistanceMeters = 0;
+  let startIndex = waypoints.length - 1;
+
+  while (startIndex > 0 && accumulatedDistanceMeters < maximumDistanceMeters) {
+    accumulatedDistanceMeters += distanceMeters(waypoints[startIndex - 1], waypoints[startIndex]);
+    startIndex -= 1;
+  }
+
+  return waypoints.slice(startIndex);
+}
+
+function routeHeadWaypoints(waypoints, maximumDistanceMeters) {
+  if (maximumDistanceMeters === 0) {
+    return waypoints;
+  }
+
+  let accumulatedDistanceMeters = 0;
+  let endIndex = 0;
+
+  while (endIndex < waypoints.length - 1 && accumulatedDistanceMeters < maximumDistanceMeters) {
+    accumulatedDistanceMeters += distanceMeters(waypoints[endIndex], waypoints[endIndex + 1]);
+    endIndex += 1;
+  }
+
+  return waypoints.slice(0, endIndex + 1);
 }
 
 function findSimulatorId() {
@@ -47,6 +99,11 @@ function findSimulatorId() {
 
 requireFinitePositive(speedMetersPerSecond, 'NAVOSS_SIMULATION_SPEED_MPS');
 requireFinitePositive(intervalSeconds, 'NAVOSS_SIMULATION_INTERVAL_SECONDS');
+requireFiniteNonNegative(headDistanceMeters, 'NAVOSS_SIMULATION_HEAD_METERS');
+requireFiniteNonNegative(tailDistanceMeters, 'NAVOSS_SIMULATION_TAIL_METERS');
+if (headDistanceMeters > 0 && tailDistanceMeters > 0) {
+  throw new Error('Only one route replay distance limit may be set.');
+}
 
 const searchUrl = new URL('/v1/search', apiUrl);
 searchUrl.searchParams.set('limit', '8');
@@ -84,7 +141,11 @@ if (route === undefined) {
   throw new Error('The route response contained no route.');
 }
 
-const waypoints = routeWaypoints(route.geometry);
+const routeGeometryWaypoints = routeWaypoints(route.geometry);
+const waypoints =
+  tailDistanceMeters > 0
+    ? routeTailWaypoints(routeGeometryWaypoints, tailDistanceMeters)
+    : routeHeadWaypoints(routeGeometryWaypoints, headDistanceMeters);
 if (waypoints.length < 2) {
   throw new Error('The route geometry contained fewer than two distinct waypoints.');
 }

@@ -43,6 +43,12 @@ The native navigation-core spike is therefore a prerequisite, not optional polis
 
 ## Native Components
 
+### Current spike status
+
+The entitlement-free native slice now lives in `apps/mobile/modules/navoss-navigation`. It provides an autolinked iOS Expo module, deterministic Swift tests, route geometry ownership, course-aware and route-continuous segment scoring, raw and matched coordinates, route progress, horizontal-accuracy input, accuracy-aware off-route confirmation and recovery hysteresis, conservative endpoint arrival confirmation, and typed snapshot events. The phone UI uses its matched coordinate during active guidance and falls back to raw GPS after a departure is confirmed. Foreground JavaScript consumes that confirmed state, requests a cooldown-limited replacement route, and installs it without ending guidance. A sticky native `arrived` phase ends guidance and drives the phone completion panel.
+
+This slice deliberately does not enable CarPlay or background location. Foreground JavaScript still supplies location samples and owns maneuver progression and reroute requests. Native location lifecycle, road-topology matching, native reroute execution, speech, and background continuity remain prerequisites before this service can become the shared source of truth described below.
+
 ### Navigation service
 
 `NavOSSNavigation` will own:

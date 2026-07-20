@@ -15,6 +15,7 @@ export const AppConfigResponseSchema = z
       .strict(),
     endpoints: z
       .object({
+        cameras: z.string().startsWith('/v1/'),
         events: z.string().startsWith('/v1/'),
         routes: z.string().startsWith('/v1/'),
         search: z.string().startsWith('/v1/'),
@@ -24,6 +25,7 @@ export const AppConfigResponseSchema = z
       .object({
         communityReports: z.boolean(),
         liveTraffic: z.boolean(),
+        officialSafetyCameras: z.boolean(),
         productionSearch: z.boolean(),
       })
       .strict(),

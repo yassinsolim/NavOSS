@@ -1,4 +1,9 @@
-import type { RouteAlternative, RouteResponse, SearchResult } from '@navoss/contracts';
+import type {
+  RouteAlternative,
+  RouteResponse,
+  SafetyCamera,
+  SearchResult,
+} from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -9,7 +14,7 @@ import {
   formatDuration,
   routeViaLabel,
 } from '@/features/navigation/route-progress';
-import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
+import type { VehicleMatchStatus, VehicleStyle } from '@/features/navigation/vehicle-puck';
 
 interface RoutePlanningPanelProps {
   bottomInset: number;
@@ -232,29 +237,127 @@ export function RoutePreviewPanel({
   );
 }
 
+export type NavigationRouteStatus = 'reroute-failed' | 'rerouting' | 'tracking';
+
+interface SafetyCameraAlertBannerProps {
+  camera: SafetyCamera;
+  distanceAheadMeters: number;
+  safeAreaTop: number;
+}
+
+export function SafetyCameraAlertBanner({
+  camera,
+  distanceAheadMeters,
+  safeAreaTop,
+}: SafetyCameraAlertBannerProps) {
+  const distance = formatDistance(distanceAheadMeters);
+
+  return (
+    <View
+      accessibilityLabel={`Red light and speed camera ahead, ${distance}, ${camera.location}`}
+      accessibilityLiveRegion="polite"
+      accessible
+      style={[styles.cameraAlertBanner, { top: safeAreaTop + 100 }]}
+    >
+      <View style={styles.cameraAlertIcon}>
+        <SymbolView
+          name={{ android: 'photo_camera', ios: 'camera.fill' }}
+          size={23}
+          tintColor={NavOssColors.asphalt}
+        />
+      </View>
+      <View style={styles.cameraAlertCopy}>
+        <Text style={styles.cameraAlertTitle}>Red light + speed camera</Text>
+        <Text numberOfLines={1} style={styles.cameraAlertMeta}>
+          {distance} · {camera.location}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 interface NavigationBannerProps {
   instruction: string;
   roadName: string;
   safeAreaTop: number;
+  status: NavigationRouteStatus;
 }
 
-export function NavigationBanner({ instruction, roadName, safeAreaTop }: NavigationBannerProps) {
+interface ArrivalPanelProps {
+  bottomInset: number;
+  destination: SearchResult;
+  onDone: () => void;
+}
+
+export function ArrivalPanel({ bottomInset, destination, onDone }: ArrivalPanelProps) {
   return (
-    <View style={[styles.navigationBanner, { top: safeAreaTop + 8 }]}>
+    <View style={[styles.bottomPanel, { paddingBottom: Math.max(bottomInset, 14) }]}>
+      <View style={styles.arrivalSummary}>
+        <View style={styles.arrivalIcon}>
+          <SymbolView
+            name={{ android: 'check_circle', ios: 'checkmark.circle.fill' }}
+            size={30}
+            tintColor={NavOssColors.green}
+          />
+        </View>
+        <View style={styles.panelTitleCopy}>
+          <Text style={styles.arrivalTitle}>You've arrived</Text>
+          <Text numberOfLines={1} style={styles.destinationName}>
+            {destination.name}
+          </Text>
+        </View>
+      </View>
+      <Pressable accessibilityLabel="Finish navigation" onPress={onDone} style={styles.doneButton}>
+        <Text style={styles.doneText}>Done</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+export function NavigationBanner({
+  instruction,
+  roadName,
+  safeAreaTop,
+  status,
+}: NavigationBannerProps) {
+  const displayedInstruction =
+    status === 'rerouting'
+      ? 'Finding a new route'
+      : status === 'reroute-failed'
+        ? 'Route update unavailable'
+        : instruction;
+  const displayedRoadName =
+    status === 'rerouting'
+      ? 'Using your current location'
+      : status === 'reroute-failed'
+        ? 'Check your connection'
+        : roadName;
+
+  return (
+    <View
+      accessibilityLiveRegion="polite"
+      style={[styles.navigationBanner, { top: safeAreaTop + 8 }]}
+    >
       <View style={styles.maneuverIcon}>
         <SymbolView
-          name={{ android: 'near_me', ios: 'arrow.up.right' }}
+          name={
+            status === 'rerouting'
+              ? { android: 'sync', ios: 'arrow.triangle.2.circlepath' }
+              : status === 'reroute-failed'
+                ? { android: 'wifi_off', ios: 'wifi.slash' }
+                : { android: 'near_me', ios: 'arrow.up.right' }
+          }
           size={29}
           tintColor={NavOssColors.asphalt}
         />
       </View>
       <View style={styles.guidanceCopy}>
         <Text numberOfLines={2} style={styles.guidanceInstruction}>
-          {instruction}
+          {displayedInstruction}
         </Text>
-        {roadName.length > 0 && (
+        {displayedRoadName.length > 0 && (
           <Text numberOfLines={1} style={styles.guidanceRoad}>
-            {roadName}
+            {displayedRoadName}
           </Text>
         )}
       </View>
@@ -264,20 +367,49 @@ export function NavigationBanner({ instruction, roadName, safeAreaTop }: Navigat
 
 interface NavigationStatusBarProps {
   bottomInset: number;
+  cameraAnnouncementCount: number;
   distanceMeters: number;
   durationSeconds: number;
+  matchStatus: VehicleMatchStatus;
   onEnd: () => void;
+  rerouteCount: number;
 }
 
 export function NavigationStatusBar({
   bottomInset,
+  cameraAnnouncementCount,
   distanceMeters,
   durationSeconds,
+  matchStatus,
   onEnd,
+  rerouteCount,
 }: NavigationStatusBarProps) {
+  const matchStatusLabel =
+    matchStatus === 'matched'
+      ? 'on route'
+      : matchStatus === 'off-route'
+        ? 'off route'
+        : 'acquiring route position';
+  const rerouteDetail =
+    rerouteCount === 0
+      ? 'original route'
+      : rerouteCount === 1
+        ? 'route updated once'
+        : `route updated ${String(rerouteCount)} times`;
+  const cameraDetail =
+    cameraAnnouncementCount === 0
+      ? 'no camera alerts announced'
+      : cameraAnnouncementCount === 1
+        ? 'one camera alert announced'
+        : `${String(cameraAnnouncementCount)} camera alerts announced`;
+
   return (
     <View style={[styles.navigationStatus, { paddingBottom: Math.max(bottomInset, 10) }]}>
-      <View style={styles.navigationMetric}>
+      <View
+        accessibilityLabel={`Navigation status, ${matchStatusLabel}, ${rerouteDetail}, ${cameraDetail}, ${formatDuration(durationSeconds)}, ${formatDistance(distanceMeters)}`}
+        accessible
+        style={styles.navigationMetric}
+      >
         <Text style={styles.navigationEta}>{formatDuration(durationSeconds)}</Text>
         <Text style={styles.navigationMeta}>
           {formatDistance(distanceMeters)} · {formatArrivalTime(durationSeconds)}
@@ -302,6 +434,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     letterSpacing: 0,
   },
+  arrivalIcon: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  arrivalSummary: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+  },
+  arrivalTitle: {
+    color: NavOssColors.green,
+    fontFamily: NavOssFonts.bold,
+    fontSize: 20,
+    letterSpacing: 0,
+  },
   bottomPanel: {
     backgroundColor: NavOssColors.white,
     borderTopColor: NavOssColors.border,
@@ -316,6 +465,51 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
   },
+  cameraAlertBanner: {
+    alignItems: 'center',
+    backgroundColor: NavOssColors.paper,
+    borderColor: NavOssColors.sun,
+    borderRadius: 8,
+    borderWidth: 2,
+    flexDirection: 'row',
+    gap: 10,
+    left: 12,
+    minHeight: 62,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    position: 'absolute',
+    right: 12,
+    shadowColor: '#000000',
+    shadowOffset: { height: 3, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    zIndex: 29,
+  },
+  cameraAlertCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  cameraAlertIcon: {
+    alignItems: 'center',
+    backgroundColor: NavOssColors.sun,
+    borderRadius: 7,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
+  },
+  cameraAlertMeta: {
+    color: NavOssColors.muted,
+    fontFamily: NavOssFonts.regular,
+    fontSize: 13,
+    letterSpacing: 0,
+  },
+  cameraAlertTitle: {
+    color: NavOssColors.coral,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 17,
+    letterSpacing: 0,
+  },
   destinationName: {
     color: NavOssColors.asphalt,
     fontFamily: NavOssFonts.semibold,
@@ -328,6 +522,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0,
     flex: 1,
+  },
+  doneButton: {
+    alignItems: 'center',
+    backgroundColor: NavOssColors.green,
+    borderRadius: 7,
+    height: 48,
+    justifyContent: 'center',
+    marginTop: 14,
+  },
+  doneText: {
+    color: NavOssColors.white,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 17,
+    letterSpacing: 0,
   },
   endButton: {
     alignItems: 'center',

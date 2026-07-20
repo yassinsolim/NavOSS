@@ -1,6 +1,36 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildSearchUrl, fetchRoutes, NavOssApiError } from '../src/lib/api.js';
+import {
+  buildSearchUrl,
+  fetchRoutes,
+  fetchSafetyCameras,
+  NavOssApiError,
+  resolveApiBaseUrl,
+} from '../src/lib/api.js';
+
+describe('resolveApiBaseUrl', () => {
+  it('uses the simulator API only for development', () => {
+    expect(resolveApiBaseUrl(undefined, true)).toBe('http://127.0.0.1:3001');
+  });
+
+  it('requires an explicit API URL for release builds', () => {
+    expect(() => resolveApiBaseUrl(undefined, false)).toThrow(
+      'This NavOSS build is missing its API configuration.',
+    );
+  });
+
+  it('requires HTTPS for release builds', () => {
+    expect(() => resolveApiBaseUrl('http://api.navoss.example/', false)).toThrow(
+      'Release builds require an HTTPS NavOSS API URL.',
+    );
+  });
+
+  it('normalizes a configured HTTPS API URL', () => {
+    expect(resolveApiBaseUrl(' https://api.navoss.example/// ', false)).toBe(
+      'https://api.navoss.example',
+    );
+  });
+});
 
 describe('buildSearchUrl', () => {
   it('encodes the query and optional Calgary proximity', () => {
@@ -102,5 +132,44 @@ describe('fetchRoutes', () => {
 
     expect(capturedRequest).toMatchObject({ method: 'POST' });
     expect(response.routes[0]?.durationSeconds).toBe(1_215.354);
+  });
+});
+
+describe('fetchSafetyCameras', () => {
+  it('validates official camera locations and source freshness', async () => {
+    const response = await fetchSafetyCameras({
+      baseUrl: 'http://127.0.0.1:3001/',
+      fetchImplementation: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              cameras: [
+                {
+                  community: 'BELTLINE',
+                  coordinate: { latitude: 51.0412867, longitude: -114.0584045 },
+                  direction: 'northbound',
+                  enforcement: ['red-light', 'speed-on-green'],
+                  id: 'calgary-isc:51.0412867:-114.0584045',
+                  location: 'Macleod Trail and 12 Avenue S.E.',
+                  quadrant: 'SE',
+                  ward: 11,
+                },
+              ],
+              source: {
+                attribution: 'The City of Calgary',
+                datasetId: 'dv2f-necx',
+                datasetUrl:
+                  'https://data.calgary.ca/Health-and-Safety/Intersection-Safety-Cameras/dv2f-necx',
+                updateFrequency: 'monthly',
+                updatedAt: '2026-07-01T08:33:43.000Z',
+              },
+            }),
+            { headers: { 'content-type': 'application/json' }, status: 200 },
+          ),
+        ),
+    });
+
+    expect(response.cameras[0]?.direction).toBe('northbound');
+    expect(response.source.updatedAt).toBe('2026-07-01T08:33:43.000Z');
   });
 });

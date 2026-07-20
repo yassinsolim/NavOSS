@@ -1,6 +1,6 @@
 {
   "fill": {
-    "automatic-gradient": "extended-srgb:0.00000,0.47843,1.00000,1.00000"
+    "solid": "extended-srgb:0.10588,0.14510,0.14902,1.00000"
   },
   "groups": [
     {
@@ -9,13 +9,9 @@
           "image-name": "expo-symbol 2.svg",
           "name": "expo-symbol 2",
           "position": {
-            "scale": 1,
-            "translation-in-points": [1.1008400065293245e-5, -16.046875]
+            "scale": 0.82,
+            "translation-in-points": [0, 0]
           }
-        },
-        {
-          "image-name": "grid.png",
-          "name": "grid"
         }
       ],
       "shadow": {
@@ -23,8 +19,8 @@
         "opacity": 0.5
       },
       "translucency": {
-        "enabled": true,
-        "value": 0.5
+        "enabled": false,
+        "value": 0
       }
     }
   ],

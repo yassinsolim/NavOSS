@@ -7,6 +7,7 @@ import { StyleSheet, View } from 'react-native';
 import { NavOssColors } from '@/constants/navoss-theme';
 
 export type VehicleStyle = 'arrow' | 'car';
+export type VehicleMatchStatus = 'acquiring' | 'matched' | 'off-route';
 
 interface VehiclePuckProps {
   coordinate: Coordinate;

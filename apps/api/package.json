@@ -10,7 +10,8 @@
     "dev": "tsx watch src/server.ts",
     "lint": "eslint .",
     "start": "node dist/server.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:routes:live": "node ./scripts/route-quality.mjs"
   },
   "dependencies": {
     "@fastify/swagger": "catalog:",

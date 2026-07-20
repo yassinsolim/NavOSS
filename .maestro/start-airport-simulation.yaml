@@ -1,6 +1,9 @@
 appId: org.navoss.mobile
 ---
 - launchApp
+- extendedWaitUntil:
+    visible: 'Search Calgary'
+    timeout: 20000
 - tapOn: 'Search Calgary'
 - eraseText
 - inputText: 'Airport'
@@ -13,3 +16,6 @@ appId: org.navoss.mobile
 - tapOn: 'Start navigation'
 - assertVisible: 'End navigation'
 - assertVisible: '.*Drive.*'
+- extendedWaitUntil:
+    visible: 'Navigation status, on route.*'
+    timeout: 20000

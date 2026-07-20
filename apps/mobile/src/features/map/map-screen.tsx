@@ -12,6 +12,7 @@ import type {
   RouteAlternative,
   RoutePreferences,
   RouteResponse,
+  SafetyCamera,
   SearchResult,
   SearchSource,
 } from '@navoss/contracts';
@@ -29,25 +30,49 @@ import {
   type SearchState,
 } from '@/features/map/search-panel';
 import {
+  ArrivalPanel,
   NavigationBanner,
+  type NavigationRouteStatus,
   NavigationStatusBar,
   RoutePlanningPanel,
   RoutePreviewPanel,
+  SafetyCameraAlertBanner,
 } from '@/features/navigation/route-panels';
+import { RerouteGate } from '@/features/navigation/reroute-gate';
 import {
   findNearestStepIndex,
   getRemainingRouteSummary,
 } from '@/features/navigation/route-progress';
-import { VehiclePuck, type VehicleStyle } from '@/features/navigation/vehicle-puck';
-import { fetchAppConfig, fetchRoutes, NavOssApiError, searchPlaces } from '@/lib/api';
+import {
+  findUpcomingSafetyCamera,
+  type UpcomingSafetyCamera,
+} from '@/features/navigation/safety-camera-alert';
+import {
+  announceSafetyCamera,
+  clearNavigationRoute,
+  type NativeNavigationSnapshot,
+  observeNavigationSnapshots,
+  setNavigationRoute,
+  stopNavigationAnnouncements,
+  updateNavigationLocation,
+} from '@/features/navigation/native-navigation';
+import {
+  type VehicleMatchStatus,
+  VehiclePuck,
+  type VehicleStyle,
+} from '@/features/navigation/vehicle-puck';
+import {
+  fetchAppConfig,
+  fetchRoutes,
+  fetchSafetyCameras,
+  NavOssApiError,
+  searchPlaces,
+} from '@/lib/api';
 
 const CALGARY_CENTER: [longitude: number, latitude: number] = [-114.0719, 51.0447];
 const DEVELOPMENT_MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+const REROUTE_RETRY_COOLDOWN_MS = 10_000;
 const EMPTY_FEATURE_COLLECTION: FeatureCollection<Point> = {
-  features: [],
-  type: 'FeatureCollection',
-};
-const EMPTY_ROUTE_COLLECTION: FeatureCollection<LineString> = {
   features: [],
   type: 'FeatureCollection',
 };
@@ -68,6 +93,12 @@ type RouteUiState =
       route: RouteAlternative;
       routes: RouteAlternative[];
       type: 'navigating';
+    }
+  | {
+      destination: SearchResult;
+      route: RouteAlternative;
+      routes: RouteAlternative[];
+      type: 'arrived';
     };
 
 function selectedFeature(result: SearchResult | undefined): FeatureCollection<Point> {
@@ -91,10 +122,6 @@ function selectedFeature(result: SearchResult | undefined): FeatureCollection<Po
 }
 
 function routeFeatures(routes: RouteAlternative[]): FeatureCollection<LineString> {
-  if (routes.length === 0) {
-    return EMPTY_ROUTE_COLLECTION;
-  }
-
   return {
     features: routes.map((route) => ({
       geometry: {
@@ -102,6 +129,24 @@ function routeFeatures(routes: RouteAlternative[]): FeatureCollection<LineString
         type: 'LineString',
       },
       properties: { id: route.id },
+      type: 'Feature',
+    })),
+    type: 'FeatureCollection',
+  };
+}
+
+function safetyCameraFeatures(cameras: readonly SafetyCamera[]): FeatureCollection<Point> {
+  return {
+    features: cameras.map((camera) => ({
+      geometry: {
+        coordinates: [camera.coordinate.longitude, camera.coordinate.latitude],
+        type: 'Point',
+      },
+      properties: {
+        direction: camera.direction,
+        id: camera.id,
+        location: camera.location,
+      },
       type: 'Feature',
     })),
     type: 'FeatureCollection',
@@ -132,7 +177,12 @@ export function MapScreen() {
   const { height } = useWindowDimensions();
   const cameraRef = useRef<CameraRef>(null);
   const mapRef = useRef<MapRef>(null);
+  const announcedCameraIdsRef = useRef(new Set<string>());
+  const cameraAlertTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const rerouteGateRef = useRef(new RerouteGate(REROUTE_RETRY_COOLDOWN_MS));
   const routeAbortControllerRef = useRef<AbortController>(null);
+  const rerouteAbortControllerRef = useRef<AbortController>(null);
+  const safetyCamerasRef = useRef<readonly SafetyCamera[]>([]);
   const [apiConnection, setApiConnection] = useState<ApiConnectionState>('connecting');
   const [coverageName, setCoverageName] = useState('Calgary alpha');
   const [locationState, setLocationState] = useState<LocationState>('idle');
@@ -152,6 +202,13 @@ export function MapScreen() {
   });
   const [routeTrafficStatus, setRouteTrafficStatus] =
     useState<RouteResponse['source']['traffic']>('unavailable');
+  const [cameraAnnouncementCount, setCameraAnnouncementCount] = useState(0);
+  const [safetyCameraAlert, setSafetyCameraAlert] = useState<UpcomingSafetyCamera>();
+  const [safetyCameras, setSafetyCameras] = useState<readonly SafetyCamera[]>([]);
+  const [navigationSnapshot, setNavigationSnapshot] = useState<NativeNavigationSnapshot>();
+  const [navigationRouteStatus, setNavigationRouteStatus] =
+    useState<NavigationRouteStatus>('tracking');
+  const [rerouteCount, setRerouteCount] = useState(0);
   const [navigationStepIndex, setNavigationStepIndex] = useState(0);
   const [userHeading, setUserHeading] = useState(0);
   const [vehicleStyle, setVehicleStyle] = useState<VehicleStyle>('arrow');
@@ -175,6 +232,28 @@ export function MapScreen() {
           startTransition(() => {
             setApiConnection('offline');
           });
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void fetchSafetyCameras({ signal: controller.signal })
+      .then((response) => {
+        safetyCamerasRef.current = response.cameras;
+        startTransition(() => {
+          setSafetyCameras(response.cameras);
+        });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          safetyCamerasRef.current = [];
+          setSafetyCameras([]);
         }
       });
 
@@ -230,7 +309,13 @@ export function MapScreen() {
 
   useEffect(() => {
     return () => {
+      if (cameraAlertTimeoutRef.current !== undefined) {
+        clearTimeout(cameraAlertTimeoutRef.current);
+      }
+      stopNavigationAnnouncements();
+      rerouteGateRef.current.resetSession();
       routeAbortControllerRef.current?.abort();
+      rerouteAbortControllerRef.current?.abort();
     };
   }, []);
 
@@ -242,6 +327,11 @@ export function MapScreen() {
     const route = routeState.route;
     let cancelled = false;
     let subscription: Location.LocationSubscription | undefined;
+    const nativeSubscription = observeNavigationSnapshots(setNavigationSnapshot);
+    const rerouteGate = rerouteGateRef.current;
+
+    setNavigationRouteStatus('tracking');
+    setNavigationSnapshot(setNavigationRoute(route));
 
     void Location.watchPositionAsync(
       {
@@ -257,9 +347,118 @@ export function MapScreen() {
         if (location.coords.heading !== null && location.coords.heading >= 0) {
           setUserHeading(location.coords.heading);
         }
-        setNavigationStepIndex((currentStep) =>
-          Math.max(currentStep, findNearestStepIndex(route, coordinate)),
+        const courseDegrees =
+          location.coords.speed !== null &&
+          location.coords.speed >= 2 &&
+          location.coords.heading !== null &&
+          location.coords.heading >= 0 &&
+          location.coords.heading < 360
+            ? location.coords.heading
+            : undefined;
+        const snapshot = updateNavigationLocation(
+          coordinate,
+          location.coords.accuracy ?? undefined,
+          courseDegrees,
         );
+        setNavigationSnapshot(snapshot);
+        const progressCoordinate = snapshot.matchedCoordinate ?? coordinate;
+        setNavigationStepIndex((currentStep) =>
+          Math.max(currentStep, findNearestStepIndex(route, progressCoordinate)),
+        );
+
+        if (snapshot.phase === 'arrived') {
+          if (cameraAlertTimeoutRef.current !== undefined) {
+            clearTimeout(cameraAlertTimeoutRef.current);
+          }
+          setSafetyCameraAlert(undefined);
+          stopNavigationAnnouncements();
+          rerouteAbortControllerRef.current?.abort();
+          rerouteAbortControllerRef.current = null;
+          rerouteGate.resetSession();
+          setNavigationStepIndex(Math.max(0, route.steps.length - 1));
+          setRouteState({
+            destination: routeState.destination,
+            route,
+            routes: routeState.routes,
+            type: 'arrived',
+          });
+          return;
+        }
+
+        if (!snapshot.isOffRoute) {
+          const upcomingCamera = findUpcomingSafetyCamera(
+            safetyCamerasRef.current,
+            route,
+            snapshot.routeProgress,
+            announcedCameraIdsRef.current,
+          );
+          if (upcomingCamera !== undefined) {
+            announcedCameraIdsRef.current.add(upcomingCamera.camera.id);
+            setCameraAnnouncementCount((currentCount) => currentCount + 1);
+            setSafetyCameraAlert(upcomingCamera);
+            announceSafetyCamera();
+            if (cameraAlertTimeoutRef.current !== undefined) {
+              clearTimeout(cameraAlertTimeoutRef.current);
+            }
+            cameraAlertTimeoutRef.current = setTimeout(() => {
+              setSafetyCameraAlert(undefined);
+              cameraAlertTimeoutRef.current = undefined;
+            }, 6_000);
+          }
+
+          rerouteAbortControllerRef.current?.abort();
+          rerouteAbortControllerRef.current = null;
+          rerouteGate.completeRequest();
+          setNavigationRouteStatus('tracking');
+          return;
+        }
+
+        if (!rerouteGate.shouldRequest(true)) {
+          return;
+        }
+
+        const controller = new AbortController();
+        rerouteAbortControllerRef.current = controller;
+        setNavigationRouteStatus('rerouting');
+
+        void fetchRoutes(
+          {
+            alternatives: 1,
+            destination: routeState.destination.center,
+            origin: coordinate,
+            preferences: routePreferences,
+          },
+          { signal: controller.signal },
+        )
+          .then((response) => {
+            const replacementRoute = response.routes[0];
+            if (cancelled || controller.signal.aborted || replacementRoute === undefined) {
+              return;
+            }
+
+            setApiConnection('online');
+            setNavigationRouteStatus('tracking');
+            setNavigationStepIndex(0);
+            setRerouteCount((currentCount) => currentCount + 1);
+            setRouteTrafficStatus(response.source.traffic);
+            setRouteState({
+              destination: routeState.destination,
+              route: replacementRoute,
+              routes: response.routes,
+              type: 'navigating',
+            });
+          })
+          .catch(() => {
+            if (!cancelled && !controller.signal.aborted) {
+              setNavigationRouteStatus('reroute-failed');
+            }
+          })
+          .finally(() => {
+            if (rerouteAbortControllerRef.current === controller) {
+              rerouteAbortControllerRef.current = null;
+              rerouteGate.completeRequest();
+            }
+          });
       },
     ).then((locationSubscription) => {
       if (cancelled) {
@@ -272,9 +471,15 @@ export function MapScreen() {
 
     return () => {
       cancelled = true;
+      rerouteAbortControllerRef.current?.abort();
+      rerouteAbortControllerRef.current = null;
+      rerouteGate.completeRequest();
       subscription?.remove();
+      nativeSubscription.remove();
+      clearNavigationRoute();
+      setNavigationSnapshot(undefined);
     };
-  }, [routeState]);
+  }, [routePreferences, routeState]);
 
   const fitRoute = (route: RouteAlternative) => {
     cameraRef.current?.fitBounds(routeBounds(route), {
@@ -387,7 +592,18 @@ export function MapScreen() {
   };
 
   const handleClear = () => {
+    announcedCameraIdsRef.current.clear();
+    if (cameraAlertTimeoutRef.current !== undefined) {
+      clearTimeout(cameraAlertTimeoutRef.current);
+      cameraAlertTimeoutRef.current = undefined;
+    }
+    setSafetyCameraAlert(undefined);
+    setCameraAnnouncementCount(0);
+    stopNavigationAnnouncements();
     routeAbortControllerRef.current?.abort();
+    rerouteAbortControllerRef.current?.abort();
+    rerouteAbortControllerRef.current = null;
+    rerouteGateRef.current.resetSession();
     setQuery('');
     setResults([]);
     setSearchState('idle');
@@ -442,7 +658,18 @@ export function MapScreen() {
   };
 
   const handleCancelRoute = () => {
+    announcedCameraIdsRef.current.clear();
+    if (cameraAlertTimeoutRef.current !== undefined) {
+      clearTimeout(cameraAlertTimeoutRef.current);
+      cameraAlertTimeoutRef.current = undefined;
+    }
+    setSafetyCameraAlert(undefined);
+    setCameraAnnouncementCount(0);
+    stopNavigationAnnouncements();
     routeAbortControllerRef.current?.abort();
+    rerouteAbortControllerRef.current?.abort();
+    rerouteAbortControllerRef.current = null;
+    rerouteGateRef.current.resetSession();
     setRouteState({ type: 'idle' });
     setSelectedResult(undefined);
     setQuery('');
@@ -474,7 +701,7 @@ export function MapScreen() {
   const selectedRoute =
     routeState.type === 'preview'
       ? routeState.routes.find((route) => route.id === routeState.selectedRouteId)
-      : routeState.type === 'navigating'
+      : routeState.type === 'navigating' || routeState.type === 'arrived'
         ? routeState.route
         : undefined;
   const alternateRoutes =
@@ -487,15 +714,36 @@ export function MapScreen() {
       : undefined;
   const remainingRoute =
     routeState.type === 'navigating'
-      ? getRemainingRouteSummary(routeState.route, navigationStepIndex, userCoordinate)
+      ? getRemainingRouteSummary(
+          routeState.route,
+          navigationStepIndex,
+          navigationSnapshot?.matchedCoordinate ?? userCoordinate,
+        )
       : undefined;
+  const vehicleMatchStatus: VehicleMatchStatus =
+    navigationSnapshot?.rawCoordinate === undefined
+      ? 'acquiring'
+      : navigationSnapshot.isOffRoute
+        ? 'off-route'
+        : 'matched';
 
   const handleStartNavigation = () => {
     if (routeState.type !== 'preview' || selectedRoute === undefined) {
       return;
     }
 
+    announcedCameraIdsRef.current.clear();
+    if (cameraAlertTimeoutRef.current !== undefined) {
+      clearTimeout(cameraAlertTimeoutRef.current);
+      cameraAlertTimeoutRef.current = undefined;
+    }
+    setSafetyCameraAlert(undefined);
+    setCameraAnnouncementCount(0);
+    stopNavigationAnnouncements();
     setNavigationStepIndex(0);
+    setNavigationRouteStatus('tracking');
+    setRerouteCount(0);
+    rerouteGateRef.current.resetSession();
     setRouteState({
       destination: routeState.destination,
       route: selectedRoute,
@@ -509,7 +757,19 @@ export function MapScreen() {
       return;
     }
 
+    if (cameraAlertTimeoutRef.current !== undefined) {
+      clearTimeout(cameraAlertTimeoutRef.current);
+      cameraAlertTimeoutRef.current = undefined;
+    }
+    setSafetyCameraAlert(undefined);
+    setCameraAnnouncementCount(0);
+    stopNavigationAnnouncements();
+    rerouteAbortControllerRef.current?.abort();
+    rerouteAbortControllerRef.current = null;
+    rerouteGateRef.current.resetSession();
     setNavigationStepIndex(0);
+    setNavigationRouteStatus('tracking');
+    setRerouteCount(0);
     setRouteState({
       destination: routeState.destination,
       routes: routeState.routes,
@@ -521,20 +781,45 @@ export function MapScreen() {
     });
   };
 
+  const handleFinishArrival = () => {
+    if (routeState.type !== 'arrived') {
+      return;
+    }
+
+    announcedCameraIdsRef.current.clear();
+    if (cameraAlertTimeoutRef.current !== undefined) {
+      clearTimeout(cameraAlertTimeoutRef.current);
+      cameraAlertTimeoutRef.current = undefined;
+    }
+    setSafetyCameraAlert(undefined);
+    setCameraAnnouncementCount(0);
+    stopNavigationAnnouncements();
+    rerouteGateRef.current.resetSession();
+    setNavigationStepIndex(0);
+    setNavigationRouteStatus('tracking');
+    setRerouteCount(0);
+    setQuery('');
+    setSelectedResult(undefined);
+    setRouteState({ type: 'idle' });
+  };
+
   const selectedPanelHeight =
     routeState.type === 'preview'
       ? 314 + insets.bottom
       : routeState.type === 'loading' || routeState.type === 'error'
         ? 156 + insets.bottom
-        : routeState.type === 'navigating'
-          ? 86 + insets.bottom
-          : 0;
+        : routeState.type === 'arrived'
+          ? 170 + insets.bottom
+          : routeState.type === 'navigating'
+            ? 86 + insets.bottom
+            : 0;
   const controlBottom = selectedPanelHeight + 18;
   const resultsHeight = Math.min(360, Math.max(180, height * 0.42));
 
   return (
     <View style={styles.container}>
       <Map
+        accessibilityLabel={`Map with ${String(safetyCameras.length)} official safety cameras`}
         attribution={false}
         compass
         compassPosition={{ right: 14, top: insets.top + 118 }}
@@ -575,7 +860,7 @@ export function MapScreen() {
         )}
         {routeState.type === 'navigating' && userCoordinate !== undefined && (
           <VehiclePuck
-            coordinate={userCoordinate}
+            coordinate={navigationSnapshot?.matchedCoordinate ?? userCoordinate}
             heading={userHeading}
             vehicleStyle={vehicleStyle}
           />
@@ -601,38 +886,61 @@ export function MapScreen() {
             type="circle"
           />
         </GeoJSONSource>
-        <GeoJSONSource data={routeFeatures(alternateRoutes)} id="alternate-routes">
-          <Layer
-            id="alternate-route-lines"
-            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-            paint={{
-              'line-color': '#81908E',
-              'line-opacity': 0.65,
-              'line-width': 4,
-            }}
-            type="line"
-          />
-        </GeoJSONSource>
-        <GeoJSONSource
-          data={routeFeatures(selectedRoute === undefined ? [] : [selectedRoute])}
-          id="selected-route"
-        >
-          <Layer
-            id="selected-route-casing"
-            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-            paint={{ 'line-color': NavOssColors.white, 'line-width': 9 }}
-            type="line"
-          />
-          <Layer
-            id="selected-route-line"
-            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-            paint={{ 'line-color': NavOssColors.green, 'line-width': 6 }}
-            type="line"
-          />
-        </GeoJSONSource>
+        {alternateRoutes.length > 0 && (
+          <GeoJSONSource data={routeFeatures(alternateRoutes)} id="alternate-routes">
+            <Layer
+              id="alternate-route-lines"
+              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+              paint={{
+                'line-color': '#81908E',
+                'line-opacity': 0.65,
+                'line-width': 4,
+              }}
+              type="line"
+            />
+          </GeoJSONSource>
+        )}
+        {selectedRoute !== undefined && (
+          <GeoJSONSource data={routeFeatures([selectedRoute])} id="selected-route">
+            <Layer
+              id="selected-route-casing"
+              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+              paint={{ 'line-color': NavOssColors.white, 'line-width': 9 }}
+              type="line"
+            />
+            <Layer
+              id="selected-route-line"
+              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+              paint={{ 'line-color': NavOssColors.green, 'line-width': 6 }}
+              type="line"
+            />
+          </GeoJSONSource>
+        )}
+        {safetyCameras.length > 0 && (
+          <GeoJSONSource data={safetyCameraFeatures(safetyCameras)} id="safety-cameras">
+            <Layer
+              id="safety-camera-markers"
+              paint={{
+                'circle-color': NavOssColors.sun,
+                'circle-radius': 9,
+                'circle-stroke-color': NavOssColors.asphalt,
+                'circle-stroke-width': 2,
+              }}
+              type="circle"
+            />
+            <Layer
+              id="safety-camera-centers"
+              paint={{
+                'circle-color': NavOssColors.coral,
+                'circle-radius': 3,
+              }}
+              type="circle"
+            />
+          </GeoJSONSource>
+        )}
       </Map>
 
-      {routeState.type !== 'navigating' && (
+      {routeState.type !== 'navigating' && routeState.type !== 'arrived' && (
         <View pointerEvents="box-none" style={[styles.topOverlay, { paddingTop: insets.top + 10 }]}>
           <SearchPanel
             apiConnection={apiConnection}
@@ -669,7 +977,7 @@ export function MapScreen() {
         </View>
       )}
 
-      {routeState.type !== 'navigating' && (
+      {routeState.type !== 'navigating' && routeState.type !== 'arrived' && (
         <Pressable
           accessibilityLabel="Center map on my location"
           disabled={locationState === 'locating'}
@@ -698,7 +1006,9 @@ export function MapScreen() {
         }}
         style={[styles.attribution, { bottom: selectedPanelHeight + 8 }]}
       >
-        <Text style={styles.attributionText}>© OpenMapTiles · © OpenStreetMap</Text>
+        <Text style={styles.attributionText}>
+          © OpenMapTiles · © OpenStreetMap · © City of Calgary
+        </Text>
       </Pressable>
 
       {(routeState.type === 'loading' || routeState.type === 'error') && (
@@ -738,15 +1048,35 @@ export function MapScreen() {
               instruction={currentStep.instruction}
               roadName={currentStep.roadName}
               safeAreaTop={insets.top}
+              status={navigationRouteStatus}
             />
             <NavigationStatusBar
               bottomInset={insets.bottom}
+              cameraAnnouncementCount={cameraAnnouncementCount}
               distanceMeters={remainingRoute.distanceMeters}
               durationSeconds={remainingRoute.durationSeconds}
+              matchStatus={vehicleMatchStatus}
               onEnd={handleEndNavigation}
+              rerouteCount={rerouteCount}
             />
           </>
         )}
+
+      {routeState.type === 'navigating' && safetyCameraAlert !== undefined && (
+        <SafetyCameraAlertBanner
+          camera={safetyCameraAlert.camera}
+          distanceAheadMeters={safetyCameraAlert.distanceAheadMeters}
+          safeAreaTop={insets.top}
+        />
+      )}
+
+      {routeState.type === 'arrived' && (
+        <ArrivalPanel
+          bottomInset={insets.bottom}
+          destination={routeState.destination}
+          onDone={handleFinishArrival}
+        />
+      )}
     </View>
   );
 }

@@ -3,12 +3,16 @@ import { SymbolView } from 'expo-symbols';
 import {
   ActivityIndicator,
   FlatList,
+  Modal,
   Pressable,
+  SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { useState } from 'react';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
 
@@ -68,6 +72,7 @@ export function SearchPanel({
   searchSource,
   searchState,
 }: SearchPanelProps) {
+  const [isAboutVisible, setIsAboutVisible] = useState(false);
   const showResults = query.trim().length >= 2 && (searchState !== 'idle' || results.length > 0);
   const connectionColor =
     apiConnection === 'online'
@@ -89,6 +94,20 @@ export function SearchPanel({
             {connectionLabel(apiConnection, coverageName)}
           </Text>
         </View>
+        <Pressable
+          accessibilityLabel="About and privacy"
+          hitSlop={8}
+          onPress={() => {
+            setIsAboutVisible(true);
+          }}
+          style={({ pressed }) => [styles.aboutButton, pressed && styles.aboutButtonPressed]}
+        >
+          <SymbolView
+            name={{ android: 'info', ios: 'info.circle' }}
+            size={20}
+            tintColor={NavOssColors.asphalt}
+          />
+        </Pressable>
       </View>
 
       <View style={styles.searchBar}>
@@ -192,11 +211,166 @@ export function SearchPanel({
           </View>
         </View>
       )}
+
+      <Modal
+        animationType="slide"
+        onRequestClose={() => {
+          setIsAboutVisible(false);
+        }}
+        presentationStyle="pageSheet"
+        visible={isAboutVisible}
+      >
+        <SafeAreaView style={styles.aboutScreen}>
+          <View style={styles.aboutHeader}>
+            <Text style={styles.aboutHeaderTitle}>NavOSS</Text>
+            <Pressable
+              accessibilityLabel="Close about and privacy"
+              hitSlop={8}
+              onPress={() => {
+                setIsAboutVisible(false);
+              }}
+              style={({ pressed }) => [
+                styles.aboutCloseButton,
+                pressed && styles.aboutButtonPressed,
+              ]}
+            >
+              <SymbolView
+                name={{ android: 'close', ios: 'xmark' }}
+                size={20}
+                tintColor={NavOssColors.asphalt}
+              />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={styles.aboutContent}>
+            <Text style={styles.aboutEyebrow}>CALGARY TECHNICAL BETA</Text>
+            <Text style={styles.aboutTitle}>Navigation without an account</Text>
+            <Text style={styles.aboutLead}>
+              NavOSS is an account-free, privacy-first navigation project being tested in Calgary.
+            </Text>
+
+            <View style={styles.aboutSection}>
+              <Text style={styles.aboutSectionTitle}>Privacy</Text>
+              <Text style={styles.aboutBody}>
+                Precise foreground location is used to show your position, match you to an active
+                route, detect reroutes and arrival, and warn about safety cameras. Search text and
+                route endpoints are sent to the NavOSS API and its configured OpenStreetMap-based
+                search and routing services. Rerouting sends your latest route origin.
+              </Text>
+              <Text style={styles.aboutBody}>
+                NavOSS does not require an account, show ads, ask for background location, or save
+                trip history in the app during this beta.
+              </Text>
+            </View>
+
+            <View style={styles.aboutSection}>
+              <Text style={styles.aboutSectionTitle}>Beta feedback</Text>
+              <Text style={styles.aboutBody}>
+                Feedback is handled through TestFlight. Route reports are most useful when they
+                include the start area, destination, time, and unexpected road or maneuver. Avoid
+                including a private address unless it is necessary to reproduce the issue.
+              </Text>
+            </View>
+
+            <View style={styles.aboutSection}>
+              <Text style={styles.aboutSectionTitle}>Data and safety</Text>
+              <Text style={styles.aboutBody}>
+                Map and search data comes from OpenStreetMap contributors. Safety-camera data comes
+                from City of Calgary Open Data. Routes come from the configured Valhalla service.
+                Data and alerts may be incomplete or outdated; always follow posted signs and road
+                laws.
+              </Text>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  aboutBody: {
+    color: NavOssColors.asphalt,
+    fontFamily: NavOssFonts.regular,
+    fontSize: 16,
+    letterSpacing: 0,
+    lineHeight: 25,
+  },
+  aboutButton: {
+    alignItems: 'center',
+    borderColor: NavOssColors.border,
+    borderRadius: 17,
+    borderWidth: StyleSheet.hairlineWidth,
+    height: 34,
+    justifyContent: 'center',
+    width: 34,
+  },
+  aboutButtonPressed: {
+    backgroundColor: NavOssColors.fog,
+  },
+  aboutCloseButton: {
+    alignItems: 'center',
+    borderRadius: 20,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
+  },
+  aboutContent: {
+    gap: 28,
+    paddingBottom: 44,
+    paddingHorizontal: 24,
+    paddingTop: 34,
+  },
+  aboutEyebrow: {
+    color: NavOssColors.green,
+    fontFamily: NavOssFonts.bold,
+    fontSize: 12,
+    letterSpacing: 0,
+  },
+  aboutHeader: {
+    alignItems: 'center',
+    borderBottomColor: NavOssColors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    height: 56,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+  },
+  aboutHeaderTitle: {
+    color: NavOssColors.asphalt,
+    fontFamily: NavOssFonts.bold,
+    fontSize: 18,
+    letterSpacing: 0,
+  },
+  aboutLead: {
+    color: NavOssColors.muted,
+    fontFamily: NavOssFonts.regular,
+    fontSize: 18,
+    letterSpacing: 0,
+    lineHeight: 27,
+  },
+  aboutScreen: {
+    backgroundColor: NavOssColors.paper,
+    flex: 1,
+  },
+  aboutSection: {
+    borderTopColor: NavOssColors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+    paddingTop: 22,
+  },
+  aboutSectionTitle: {
+    color: NavOssColors.asphalt,
+    fontFamily: NavOssFonts.bold,
+    fontSize: 20,
+    letterSpacing: 0,
+  },
+  aboutTitle: {
+    color: NavOssColors.asphalt,
+    fontFamily: NavOssFonts.bold,
+    fontSize: 32,
+    letterSpacing: 0,
+    lineHeight: 38,
+  },
   brandLetter: {
     color: NavOssColors.asphalt,
     fontFamily: NavOssFonts.bold,
