@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en-CA">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="NavOSS map, search, routing, and Calgary safety-camera data provenance and limitations."
+    />
+    <meta name="theme-color" content="#1b2526" />
+    <link rel="canonical" href="https://navoss.yassin.app/data-sources" />
+    <link rel="icon" href="/assets/navoss-chevron.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <title>Data sources | NavOSS</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="NavOSS home"
+        ><img src="/assets/navoss-chevron.svg" alt="" /><span>NavOSS</span></a
+      >
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="/privacy">Privacy</a><a href="/support">Support</a><a href="/data-sources">Data</a
+        ><a class="source-link" href="https://github.com/yassinsolim/NavOSS">View source</a>
+      </nav>
+    </header>
+    <main class="document-shell">
+      <article class="document">
+        <p class="document__meta">Provenance and limitations</p>
+        <h1>Know where the map comes from</h1>
+
+        <h2>Map and place data</h2>
+        <p>
+          NavOSS uses OpenStreetMap-derived map and search data. OpenStreetMap is open data licensed
+          under the Open Data Commons Open Database License. Visible map attribution names
+          OpenStreetMap contributors.
+        </p>
+
+        <h2>Routing</h2>
+        <p>
+          Development routes are calculated by Valhalla using OpenStreetMap data. The public
+          development endpoint has no production availability guarantee and is visibly reported as
+          degraded. A self-hosted regional service is required before beta distribution.
+        </p>
+
+        <h2>Safety cameras</h2>
+        <p>
+          Fixed red-light and speed-on-green locations come from The City of Calgary's Intersection
+          Safety Cameras dataset. NavOSS validates and caches the official records without sending
+          user location to Calgary Open Data.
+        </p>
+        <p>
+          Camera data can be incomplete or outdated. Alerts are supplementary and never replace
+          posted signs or road laws.
+        </p>
+
+        <h2>What NavOSS does not use</h2>
+        <p>
+          NavOSS does not scrape or copy route, place, traffic, or map data from Apple Maps, Google
+          Maps, Waze, or other proprietary navigation products. Manual comparisons are evidence for
+          testing, not a source database.
+        </p>
+
+        <h2>Detailed registry</h2>
+        <p>
+          Dataset IDs, update cadence, fields, safeguards, and links are maintained in the
+          repository's
+          <a href="https://github.com/yassinsolim/NavOSS/blob/main/docs/data-sources.md"
+            >data-source documentation</a
+          >.
+        </p>
+      </article>
+    </main>
+    <footer class="site-footer">
+      <div class="footer__inner">
+        <span>NavOSS · Calgary, Alberta</span>
+        <nav aria-label="Footer navigation">
+          <a href="/privacy">Privacy</a><a href="/support">Support</a
+          ><a href="/data-sources">Data sources</a><a href="/licenses">Licenses</a>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>

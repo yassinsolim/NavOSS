@@ -6,17 +6,17 @@
     {
       "layers": [
         {
-          "image-name": "expo-symbol 2.svg",
-          "name": "expo-symbol 2",
+          "image-name": "navoss-chevron.svg",
+          "name": "NavOSS Chevron",
           "position": {
-            "scale": 0.82,
+            "scale": 0.88,
             "translation-in-points": [0, 0]
           }
         }
       ],
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.5
+        "opacity": 0.18
       },
       "translucency": {
         "enabled": false,

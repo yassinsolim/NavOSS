@@ -1,0 +1,13 @@
+{
+  "name": "@navoss/site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node scripts/check.mjs",
+    "lint": "node scripts/check.mjs",
+    "test": "node --test test/site.test.mjs"
+  }
+}

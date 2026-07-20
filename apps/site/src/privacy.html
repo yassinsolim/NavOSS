@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en-CA">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="How the NavOSS Calgary technical alpha handles location, search, routing, and support data."
+    />
+    <meta name="theme-color" content="#1b2526" />
+    <link rel="canonical" href="https://navoss.yassin.app/privacy" />
+    <link rel="icon" href="/assets/navoss-chevron.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <title>Privacy | NavOSS</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="NavOSS home"
+        ><img src="/assets/navoss-chevron.svg" alt="" /><span>NavOSS</span></a
+      >
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="/privacy">Privacy</a><a href="/support">Support</a><a href="/data-sources">Data</a
+        ><a class="source-link" href="https://github.com/yassinsolim/NavOSS">View source</a>
+      </nav>
+    </header>
+    <main class="document-shell">
+      <article class="document">
+        <p class="document__meta">Technical alpha notice · Updated July 19, 2026</p>
+        <h1>Privacy without an account</h1>
+        <p>
+          NavOSS is operated by Yassin Soliman as an individual developer. The app is in local
+          technical-alpha testing and is not yet available through TestFlight or the App Store.
+        </p>
+        <div class="callout">
+          This notice describes the current app and development API. It will be updated with final
+          hosting providers, security-log fields, and retention periods before any public beta.
+        </div>
+
+        <h2>Foreground location</h2>
+        <p>
+          When permission is granted, precise foreground location shows your position, chooses a
+          route origin, matches progress to an active route, detects rerouting and arrival, and
+          checks whether an official safety camera is ahead.
+        </p>
+        <p>
+          The current alpha does not request background location and does not maintain an in-app
+          trip-history database.
+        </p>
+
+        <h2>Search and routing</h2>
+        <p>
+          Search text and, when available, an approximate search origin are sent to the configured
+          NavOSS API and search provider. Route requests send origin and destination coordinates. An
+          automatic reroute sends the latest route origin.
+        </p>
+        <p>
+          Automatic API request logging is disabled so request bodies, search query strings, and
+          route coordinates are not written to normal application logs.
+        </p>
+
+        <h2>No advertising or cross-app tracking</h2>
+        <p>
+          NavOSS has no account system, ads, advertising identifier, data broker integration, or
+          cross-app tracking. Location is not used for advertising or user profiling.
+        </p>
+
+        <h2>Providers and retention</h2>
+        <p>
+          Development search and routing currently use OpenStreetMap-derived services that are
+          explicitly unsuitable for production traffic. The production provider list, hosting
+          region, IP/security-log retention, backups, and international processing will be published
+          before TestFlight.
+        </p>
+
+        <h2>Your choices</h2>
+        <p>
+          You can deny or revoke location permission in iOS Settings and can stop an active trip
+          with End navigation. Search and map browsing may remain available, while current-position
+          routing and active guidance will be limited.
+        </p>
+
+        <h2>Contact</h2>
+        <p>
+          Until the app-specific email alias is active, use the repository's
+          <a href="https://github.com/yassinsolim/NavOSS/issues">public issue tracker</a> for
+          non-sensitive questions and
+          <a href="https://github.com/yassinsolim/NavOSS/security/advisories/new"
+            >private vulnerability reporting</a
+          >
+          for security matters. Never publish a private address or precise trip history.
+        </p>
+      </article>
+    </main>
+    <footer class="site-footer">
+      <div class="footer__inner">
+        <span>NavOSS · Calgary, Alberta</span>
+        <nav aria-label="Footer navigation">
+          <a href="/privacy">Privacy</a><a href="/support">Support</a
+          ><a href="/data-sources">Data sources</a><a href="/licenses">Licenses</a>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>
