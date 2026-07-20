@@ -58,6 +58,41 @@ describe('system routes', () => {
     expect(response.statusCode).toBe(503);
     expect(body.status).toBe('not_ready');
   });
+
+  it('reports production provider readiness', async () => {
+    const app = await createTestApp({
+      productionSearch: true,
+      routeProvider: {
+        getRoutes: () => Promise.resolve([]),
+        isReady: () => Promise.resolve(true),
+      },
+      searchProvider: {
+        isReady: () => Promise.resolve(true),
+        search: (query) => createFixtureSearchProvider(CALGARY_SEARCH_FIXTURES).search(query),
+      },
+    });
+    const response = await app.inject({ method: 'GET', url: '/ready' });
+    const body = ReadinessResponseSchema.parse(response.json());
+
+    expect(response.statusCode).toBe(200);
+    expect(body.checks.routingProvider?.status).toBe('ready');
+    expect(body.checks.searchProvider?.status).toBe('ready');
+  });
+
+  it('fails readiness when a production provider is unavailable', async () => {
+    const app = await createTestApp({
+      productionSearch: true,
+      searchProvider: {
+        isReady: () => Promise.resolve(false),
+        search: (query) => createFixtureSearchProvider(CALGARY_SEARCH_FIXTURES).search(query),
+      },
+    });
+    const response = await app.inject({ method: 'GET', url: '/ready' });
+    const body = ReadinessResponseSchema.parse(response.json());
+
+    expect(response.statusCode).toBe(503);
+    expect(body.checks.searchProvider?.status).toBe('not_ready');
+  });
 });
 
 describe('client configuration', () => {
@@ -79,6 +114,14 @@ describe('client configuration', () => {
       label: 'The City of Calgary',
       url: 'https://data.calgary.ca/',
     });
+  });
+
+  it('reports production search only when explicitly configured', async () => {
+    const app = await createTestApp({ productionSearch: true });
+    const response = await app.inject({ method: 'GET', url: '/v1/config' });
+    const body = AppConfigResponseSchema.parse(response.json());
+
+    expect(body.features.productionSearch).toBe(true);
   });
 });
 
@@ -139,8 +182,13 @@ describe('search', () => {
   it('returns deterministic fixture results and provenance', async () => {
     const app = await createTestApp();
     const response = await app.inject({
-      method: 'GET',
-      url: '/v1/search?q=tower&latitude=51.0447&longitude=-114.0719',
+      method: 'POST',
+      payload: {
+        latitude: 51.0447,
+        longitude: -114.0719,
+        q: 'tower',
+      },
+      url: '/v1/search',
     });
     const body = SearchResponseSchema.parse(response.json());
 
@@ -157,7 +205,7 @@ describe('search', () => {
 
   it('returns a stable problem document for invalid input', async () => {
     const app = await createTestApp();
-    const response = await app.inject({ method: 'GET', url: '/v1/search?q=x' });
+    const response = await app.inject({ method: 'POST', payload: { q: 'x' }, url: '/v1/search' });
     const body = ProblemDetailsSchema.parse(response.json());
 
     expect(response.statusCode).toBe(400);

@@ -24,6 +24,8 @@ export const ReadinessResponseSchema = z
   .object({
     checks: z
       .object({
+        routingProvider: ReadinessCheckSchema.optional(),
+        searchProvider: ReadinessCheckSchema.optional(),
         searchFixtures: ReadinessCheckSchema,
       })
       .strict(),

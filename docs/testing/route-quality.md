@@ -1,10 +1,10 @@
 # Calgary route-quality report
 
-Date: 2026-07-19
+Date: 2026-07-20
 
 ## Verdict
 
-The NavOSS automated route-quality gate passed all 16 tested variants across 12 representative Calgary corridors. This is evidence that the current Valhalla integration returns plausible, internally consistent routes. It is not evidence of Apple Maps or Google Maps parity.
+The NavOSS automated route-quality gate passed all 17 tested variants across 12 representative Calgary corridors against the production Alberta Valhalla deployment. This is evidence that the current Valhalla integration returns plausible, internally consistent routes. It is not evidence of Apple Maps or Google Maps parity.
 
 Manual Apple Maps and Google Maps measurements remain **not run**. NavOSS has no licensed API access to either provider, and their route data must not be scraped. Use the worksheet below to capture a same-time comparison from their consumer apps.
 
@@ -12,24 +12,25 @@ Manual Apple Maps and Google Maps measurements remain **not run**. NavOSS has no
 
 | Corridor                         | Mode           | Distance |      ETA | API latency |
 | -------------------------------- | -------------- | -------: | -------: | ----------: |
-| Downtown to Airport              | Default        |  19.1 km | 19.6 min |    1,018 ms |
-| Downtown to Airport              | Avoid highways |  16.4 km | 28.9 min |      390 ms |
-| Downtown to University           | Default        |   8.4 km | 15.1 min |      207 ms |
-| Downtown to Chinook              | Default        |   6.4 km | 12.6 min |      203 ms |
-| Downtown to East Hills           | Default        |  12.2 km | 21.0 min |      206 ms |
-| Downtown to Canada Olympic Park  | Default        |  14.7 km | 20.6 min |      207 ms |
-| Downtown to South Health Campus  | Default        |  28.5 km | 27.6 min |      211 ms |
-| Downtown to South Health Campus  | Avoid highways |  26.1 km | 40.7 min |      225 ms |
-| Crowfoot to Saddletowne          | Default        |  33.4 km | 28.5 min |      873 ms |
-| Crowfoot to Saddletowne          | Avoid highways |  23.7 km | 36.6 min |    1,160 ms |
-| Foothills to South Health Campus | Default        |  31.2 km | 30.9 min |      998 ms |
-| East Hills to Westhills          | Default        |  28.4 km | 29.3 min |      989 ms |
-| East Hills to Westhills          | Avoid highways |  22.3 km | 36.9 min |    1,315 ms |
-| McKenzie Towne to Airport        | Default        |  34.7 km | 29.1 min |      535 ms |
-| Rockyview to University          | Default        |  12.9 km | 19.0 min |    1,159 ms |
-| Stampede to Foothills            | Default        |   9.3 km | 14.9 min |    1,136 ms |
+| Downtown to Airport              | Default        |  19.1 km | 22.5 min |       73 ms |
+| Downtown to Airport              | Avoid highways |  16.4 km | 38.2 min |       70 ms |
+| Downtown to University           | Default        |   8.4 km | 20.2 min |       48 ms |
+| Downtown to Chinook              | Default        |   6.5 km | 17.1 min |       39 ms |
+| Downtown to East Hills           | Default        |  18.9 km | 29.0 min |       45 ms |
+| Downtown to East Hills           | Avoid highways |  12.2 km | 30.0 min |       49 ms |
+| Downtown to Canada Olympic Park  | Default        |  14.5 km | 27.2 min |       54 ms |
+| Downtown to South Health Campus  | Default        |  28.5 km | 29.9 min |       46 ms |
+| Downtown to South Health Campus  | Avoid highways |  25.4 km | 53.2 min |       60 ms |
+| Crowfoot to Saddletowne          | Default        |  33.4 km | 30.8 min |       38 ms |
+| Crowfoot to Saddletowne          | Avoid highways |  23.8 km | 52.1 min |       42 ms |
+| Foothills to South Health Campus | Default        |  31.3 km | 32.0 min |       47 ms |
+| East Hills to Westhills          | Default        |  28.5 km | 32.5 min |       39 ms |
+| East Hills to Westhills          | Avoid highways |  22.0 km | 54.0 min |       52 ms |
+| McKenzie Towne to Airport        | Default        |  34.7 km | 29.2 min |       36 ms |
+| Rockyview to University          | Default        |  12.3 km | 21.7 min |       40 ms |
+| Stampede to Foothills            | Default        |   8.5 km | 19.9 min |       44 ms |
 
-Summary: 16 passed, 0 failed, p95 API latency 1,315 ms. A final full-regression rerun also passed 16 of 16 variants with p95 latency 1,872 ms; both runs remained below the 5-second gate.
+Summary: 17 passed, 0 failed, p95 API latency 73 ms. The run used the production API image, Caddy ingress, Alberta Valhalla graph, and the same loopback endpoint served by the Cloudflare tunnel.
 
 The gate checked:
 
@@ -77,10 +78,11 @@ Fill the blank cells after opening the links on the same device and at the same 
 
 ## Reproduce
 
-With the API running on port 3001:
+Against the production API:
 
 ```sh
-corepack pnpm --filter @navoss/api test:routes:live
+NAVOSS_API_URL=https://navoss-api.yassin.app \
+	corepack pnpm --filter @navoss/api test:routes:live
 ```
 
 The executable cases live in `apps/api/scripts/route-quality-cases.json`; the gate is `apps/api/scripts/route-quality.mjs`.

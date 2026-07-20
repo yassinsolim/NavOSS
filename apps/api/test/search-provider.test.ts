@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildNominatimSearchUrl,
   buildPhotonSearchUrl,
   createDevelopmentSearchProvider,
+  createNominatimSearchProvider,
   createPhotonSearchProvider,
+  createProductionSearchProvider,
   type SearchProvider,
 } from '../src/search-provider.js';
 
@@ -111,5 +114,73 @@ describe('Photon search provider', () => {
 
     expect(eastHills.results[0]?.id).toBe('poi:east-hills-shopping-centre');
     expect(saddletowne.results[0]?.id).toBe('poi:saddletowne-lrt');
+  });
+});
+
+describe('Nominatim search provider', () => {
+  it('builds a Calgary-bounded production query', () => {
+    const url = new URL(
+      buildNominatimSearchUrl({ limit: 8, q: 'Calgary Tower' }, 'http://nominatim:8080/'),
+    );
+
+    expect(url.pathname).toBe('/search');
+    expect(url.searchParams.get('bounded')).toBe('1');
+    expect(url.searchParams.get('format')).toBe('jsonv2');
+    expect(url.searchParams.get('viewbox')).toBe('-114.316,51.212,-113.859,50.842');
+  });
+
+  it('normalizes self-hosted results as production search', async () => {
+    const provider = createNominatimSearchProvider({
+      datasetVersion: 'alberta-2026-07-20',
+      endpoint: 'http://nominatim:8080/',
+      fetchImplementation: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                addresstype: 'attraction',
+                category: 'tourism',
+                display_name: 'Calgary Tower, 101 9 Avenue SW, Calgary, Alberta, Canada',
+                importance: 0.8,
+                lat: '51.04427',
+                lon: '-114.06309',
+                name: 'Calgary Tower',
+                osm_id: 2_359_239_747,
+                osm_type: 'node',
+                type: 'attraction',
+              },
+            ]),
+            { status: 200 },
+          ),
+        ),
+      now: () => new Date('2026-07-20T12:00:00Z'),
+    });
+
+    const response = await provider.search({ limit: 8, q: 'Calgary Tower' });
+
+    expect(response.degraded).toBe(false);
+    expect(response.source).toEqual({
+      datasetVersion: 'alberta-2026-07-20',
+      freshness: 'fresh',
+      id: 'nominatim-self-hosted',
+      updatedAt: '2026-07-20T12:00:00.000Z',
+    });
+    expect(response.results[0]).toMatchObject({
+      category: 'poi',
+      center: { latitude: 51.04427, longitude: -114.06309 },
+      name: 'Calgary Tower',
+    });
+  });
+
+  it('falls back to fixtures when self-hosted search is unavailable', async () => {
+    const provider = createProductionSearchProvider(undefined, {
+      search: () => Promise.reject(new Error('offline')),
+    });
+
+    const response = await provider.search({ limit: 8, q: 'airport' });
+
+    expect(response.degraded).toBe(true);
+    expect(response.results[0]?.id).toBe('poi:yyc-airport');
+    expect(response.source.id).toBe('calgary-alpha-fixtures');
   });
 });

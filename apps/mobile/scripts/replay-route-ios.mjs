@@ -106,10 +106,12 @@ if (headDistanceMeters > 0 && tailDistanceMeters > 0) {
 }
 
 const searchUrl = new URL('/v1/search', apiUrl);
-searchUrl.searchParams.set('limit', '8');
-searchUrl.searchParams.set('q', destinationQuery);
 const searchResponse = SearchResponseSchema.parse(
-  await fetch(searchUrl).then((response) => response.json()),
+  await fetch(searchUrl, {
+    body: JSON.stringify({ limit: 8, q: destinationQuery }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  }).then((response) => response.json()),
 );
 const destination =
   searchResponse.results.find((result) => result.name === destinationQuery) ??

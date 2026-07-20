@@ -5,10 +5,10 @@ NavOSS uses an app-scoped namespace under `yassin.app` so future projects can us
 | Host                       | Purpose                                                  | Target                                             |
 | -------------------------- | -------------------------------------------------------- | -------------------------------------------------- |
 | `navoss.yassin.app`        | Product, privacy, support, attribution, and source links | Dedicated Vercel project                           |
-| `api.navoss.yassin.app`    | Versioned mobile API                                     | Stable backend ingress; not Vercel-hosted Valhalla |
-| `status.navoss.yassin.app` | Public service status                                    | Reserved for a later independent status provider   |
+| `navoss-api.yassin.app`    | Versioned mobile API                                     | Stable backend ingress; not Vercel-hosted Valhalla |
+| `navoss-status.yassin.app` | Public service status                                    | Reserved for a later independent status provider   |
 
-Future apps can use `<app>.yassin.app`, `api.<app>.yassin.app`, and `status.<app>.yassin.app`.
+Future apps should use `<app>.yassin.app`, `<app>-api.yassin.app`, and `<app>-status.yassin.app`. Cloudflare Universal SSL for `*.yassin.app` covers one label below the zone; nested hosts such as `api.<app>.yassin.app` require a separate certificate product and must not be published accidentally.
 
 ## Website
 
@@ -25,16 +25,16 @@ The site must publish these stable routes before TestFlight:
 
 ## API
 
-`api.navoss.yassin.app` must point to the backend ingress, not the static Vercel project. Vercel can host the public documentation site, but the regional Valhalla/search stack requires an always-on container or VM with persistent artifacts and measured capacity.
+`navoss-api.yassin.app` must point to the backend ingress, not the static Vercel project. Vercel can host the public documentation site, but the regional Valhalla/search stack requires an always-on container or VM with persistent artifacts and measured capacity.
 
 For a temporary private device test, a Cloudflare Tunnel can terminate HTTPS and forward the hostname to the API on the development Mac. That still depends on the Mac remaining online and does not qualify as a production TestFlight backend.
 
 Before embedding the API hostname in a release:
 
 ```sh
-curl --fail https://api.navoss.yassin.app/health
-curl --fail https://api.navoss.yassin.app/ready
-EXPO_PUBLIC_API_URL=https://api.navoss.yassin.app \
+curl --fail https://navoss-api.yassin.app/health
+curl --fail https://navoss-api.yassin.app/ready
+EXPO_PUBLIC_API_URL=https://navoss-api.yassin.app \
   corepack pnpm --filter @navoss/mobile validate:release
 ```
 

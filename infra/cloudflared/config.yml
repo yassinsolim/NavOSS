@@ -1,0 +1,12 @@
+tunnel: af581a50-b047-4ce6-810c-8abf802f9c64
+credentials-file: /etc/cloudflared/af581a50-b047-4ce6-810c-8abf802f9c64.json
+metrics: 127.0.0.1:2000
+no-autoupdate: true
+
+ingress:
+  - hostname: navoss-api.yassin.app
+    service: http://127.0.0.1:8080
+    originRequest:
+      connectTimeout: 10s
+      noHappyEyeballs: false
+  - service: http_status:404

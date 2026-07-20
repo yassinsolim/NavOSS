@@ -1,58 +1,114 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildSearchUrl,
+  buildSearchRequest,
   fetchRoutes,
   fetchSafetyCameras,
   NavOssApiError,
   resolveApiBaseUrl,
+  searchPlaces,
 } from '../src/lib/api.js';
 
 describe('resolveApiBaseUrl', () => {
   it('uses the simulator API only for development', () => {
-    expect(resolveApiBaseUrl(undefined, true)).toBe('http://127.0.0.1:3001');
+    expect(resolveApiBaseUrl(undefined, 'http://127.0.0.1:3001')).toBe(
+      'http://127.0.0.1:3001',
+    );
   });
 
   it('requires an explicit API URL for release builds', () => {
-    expect(() => resolveApiBaseUrl(undefined, false)).toThrow(
+    expect(() => resolveApiBaseUrl(undefined)).toThrow(
       'This NavOSS build is missing its API configuration.',
     );
   });
 
   it('requires HTTPS for release builds', () => {
-    expect(() => resolveApiBaseUrl('http://api.navoss.example/', false)).toThrow(
+    expect(() => resolveApiBaseUrl('http://api.navoss.example/')).toThrow(
       'Release builds require an HTTPS NavOSS API URL.',
     );
   });
 
   it('normalizes a configured HTTPS API URL', () => {
-    expect(resolveApiBaseUrl(' https://api.navoss.example/// ', false)).toBe(
-      'https://api.navoss.example',
-    );
+    expect(resolveApiBaseUrl(' https://api.navoss.example/// ')).toBe('https://api.navoss.example');
   });
 });
 
-describe('buildSearchUrl', () => {
-  it('encodes the query and optional Calgary proximity', () => {
-    const url = buildSearchUrl('Calgary Tower', {
+describe('buildSearchRequest', () => {
+  it('includes the query and optional Calgary proximity', () => {
+    const request = buildSearchRequest('Calgary Tower', {
       baseUrl: 'http://192.168.1.20:3000/',
       latitude: 51.0447,
       limit: 8,
       longitude: -114.0719,
     });
 
-    expect(url).toBe(
-      'http://192.168.1.20:3000/v1/search?q=Calgary+Tower&latitude=51.0447&longitude=-114.0719&limit=8',
-    );
+    expect(request).toEqual({
+      latitude: 51.0447,
+      limit: 8,
+      longitude: -114.0719,
+      q: 'Calgary Tower',
+    });
   });
 
   it('omits an incomplete proximity pair', () => {
-    const url = buildSearchUrl('library', {
+    const request = buildSearchRequest('library', {
       baseUrl: 'http://127.0.0.1:3000',
       latitude: 51.0447,
     });
 
-    expect(url).toBe('http://127.0.0.1:3000/v1/search?q=library');
+    expect(request).toEqual({ q: 'library' });
+  });
+});
+
+describe('searchPlaces', () => {
+  it('posts search inputs in the request body', async () => {
+    let capturedRequest: RequestInit | undefined;
+    const response = await searchPlaces('Calgary Tower', {
+      baseUrl: 'https://navoss-api.yassin.app/',
+      fetchImplementation: (input, init) => {
+        expect(input).toBe('https://navoss-api.yassin.app/v1/search');
+        capturedRequest = init;
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              degraded: false,
+              results: [
+                {
+                  category: 'landmark',
+                  center: { latitude: 51.0442999, longitude: -114.0631347 },
+                  confidence: 1,
+                  id: 'nominatim:calgary-tower',
+                  label: 'Calgary Tower, Calgary, Alberta',
+                  name: 'Calgary Tower',
+                },
+              ],
+              source: {
+                datasetVersion: 'alberta-2026-07-20',
+                freshness: 'fresh',
+                id: 'nominatim-self-hosted',
+                updatedAt: '2026-07-20T12:00:00Z',
+              },
+            }),
+            { headers: { 'content-type': 'application/json' }, status: 200 },
+          ),
+        );
+      },
+      latitude: 51.0447,
+      limit: 8,
+      longitude: -114.0719,
+    });
+
+    expect(capturedRequest).toMatchObject({
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    expect(JSON.parse(String(capturedRequest?.body))).toEqual({
+      latitude: 51.0447,
+      limit: 8,
+      longitude: -114.0719,
+      q: 'Calgary Tower',
+    });
+    expect(response.results[0]?.name).toBe('Calgary Tower');
   });
 });
 

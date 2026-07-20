@@ -11,8 +11,6 @@ import {
   type SearchResponse,
 } from '@navoss/contracts';
 
-const DEVELOPMENT_API_BASE_URL = 'http://127.0.0.1:3001';
-
 export class NavOssApiError extends Error {
   public readonly status: number;
 
@@ -25,6 +23,7 @@ export class NavOssApiError extends Error {
 
 export interface SearchPlacesOptions {
   baseUrl?: string;
+  fetchImplementation?: typeof fetch;
   latitude?: number;
   limit?: number;
   longitude?: number;
@@ -49,11 +48,11 @@ function normalizeBaseUrl(baseUrl: string): string {
 
 export function resolveApiBaseUrl(
   configuredBaseUrl: unknown,
-  allowDevelopmentFallback: boolean,
+  developmentFallback?: string,
 ): string {
   if (typeof configuredBaseUrl !== 'string' || configuredBaseUrl.trim().length === 0) {
-    if (allowDevelopmentFallback) {
-      return DEVELOPMENT_API_BASE_URL;
+    if (developmentFallback !== undefined) {
+      return developmentFallback;
     }
 
     throw new NavOssApiError(
@@ -75,7 +74,7 @@ export function resolveApiBaseUrl(
     throw new NavOssApiError('The NavOSS API URL must use HTTP or HTTPS.', 0);
   }
 
-  if (!allowDevelopmentFallback && parsedBaseUrl.protocol !== 'https:') {
+  if (developmentFallback === undefined && parsedBaseUrl.protocol !== 'https:') {
     throw new NavOssApiError('Release builds require an HTTPS NavOSS API URL.', 0);
   }
 
@@ -84,22 +83,17 @@ export function resolveApiBaseUrl(
 
 export function getApiBaseUrl(): string {
   const configuredBaseUrl: unknown = process.env.EXPO_PUBLIC_API_URL;
-  return resolveApiBaseUrl(configuredBaseUrl, process.env.NODE_ENV !== 'production');
+  return resolveApiBaseUrl(configuredBaseUrl, __DEV__ ? 'http://127.0.0.1:3001' : undefined);
 }
 
-export function buildSearchUrl(query: string, options: SearchPlacesOptions = {}): string {
-  const parameters = new URLSearchParams({ q: query });
-
-  if (options.latitude !== undefined && options.longitude !== undefined) {
-    parameters.set('latitude', String(options.latitude));
-    parameters.set('longitude', String(options.longitude));
-  }
-
-  if (options.limit !== undefined) {
-    parameters.set('limit', String(options.limit));
-  }
-
-  return `${normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl())}/v1/search?${parameters.toString()}`;
+export function buildSearchRequest(query: string, options: SearchPlacesOptions = {}) {
+  return {
+    ...(options.latitude !== undefined && options.longitude !== undefined
+      ? { latitude: options.latitude, longitude: options.longitude }
+      : {}),
+    ...(options.limit === undefined ? {} : { limit: options.limit }),
+    q: query,
+  };
 }
 
 async function parseResponse(response: Response): Promise<unknown> {
@@ -130,9 +124,15 @@ export async function searchPlaces(
   query: string,
   options: SearchPlacesOptions = {},
 ): Promise<SearchResponse> {
-  const response = await fetch(
-    buildSearchUrl(query, options),
-    options.signal === undefined ? undefined : { signal: options.signal },
+  const fetchImplementation = options.fetchImplementation ?? fetch;
+  const response = await fetchImplementation(
+    `${normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl())}/v1/search`,
+    {
+      body: JSON.stringify(buildSearchRequest(query, options)),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    },
   );
   return SearchResponseSchema.parse(await parseResponse(response));
 }

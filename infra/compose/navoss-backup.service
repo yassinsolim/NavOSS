@@ -1,0 +1,11 @@
+[Unit]
+Description=Back up the NavOSS reports database
+Requires=docker.service
+RequiresMountsFor=/srv/navoss/state
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/navoss/NavOSS/infra/compose/backup-reports-db.sh
+User=root
+Group=root

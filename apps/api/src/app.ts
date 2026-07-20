@@ -28,7 +28,11 @@ import {
   RouteProviderError,
   type RouteProvider,
 } from './route-provider.js';
-import { createDevelopmentSearchProvider, type SearchProvider } from './search-provider.js';
+import {
+  createDevelopmentSearchProvider,
+  createProductionSearchProvider,
+  type SearchProvider,
+} from './search-provider.js';
 import {
   CameraProviderError,
   createCalgarySafetyCameraProvider,
@@ -45,6 +49,7 @@ export interface BuildAppOptions {
   cameraProvider?: SafetyCameraProvider;
   clock?: () => Date;
   logger?: FastifyServerOptions['logger'];
+  productionSearch?: boolean;
   routeProvider?: RouteProvider;
   searchProvider?: SearchProvider;
   searchFixtures?: readonly SearchFixture[];
@@ -54,8 +59,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const clock = options.clock ?? (() => new Date());
   const cameraProvider = options.cameraProvider ?? createCalgarySafetyCameraProvider();
   const fixtures = options.searchFixtures ?? CALGARY_SEARCH_FIXTURES;
+  const productionSearch = options.productionSearch ?? process.env.NOMINATIM_URL !== undefined;
   const routeProvider = options.routeProvider ?? createValhallaRouteProvider();
-  const searchProvider = options.searchProvider ?? createDevelopmentSearchProvider(fixtures);
+  const searchProvider =
+    options.searchProvider ??
+    (productionSearch
+      ? createProductionSearchProvider(fixtures)
+      : createDevelopmentSearchProvider(fixtures));
   const app = Fastify({
     logController: new LogController({ disableRequestLogging: true }),
     logger: options.logger ?? false,
@@ -182,32 +192,56 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         tags: ['system'],
       },
     },
-    (request, reply) => {
+    async (request, reply) => {
       const timestamp = clock().toISOString();
-      if (fixtures.length === 0) {
+      const searchFixturesReady = fixtures.length > 0;
+      const routingProviderReady =
+        routeProvider.isReady === undefined ? undefined : await routeProvider.isReady();
+      const searchProviderReady =
+        productionSearch && searchProvider.isReady !== undefined
+          ? await searchProvider.isReady()
+          : productionSearch
+            ? false
+            : undefined;
+      const isReady =
+        searchFixturesReady && routingProviderReady !== false && searchProviderReady !== false;
+
+      if (!isReady) {
         reply.status(503);
-        const response: ReadinessResponse = {
-          checks: {
-            searchFixtures: {
-              detail: 'No Calgary search fixtures are loaded.',
-              status: 'not_ready',
-            },
-          },
-          status: 'not_ready',
-          timestamp,
-        };
-        return response;
+      } else {
+        reply.status(200);
       }
 
-      reply.status(200);
       const response: ReadinessResponse = {
         checks: {
+          ...(routingProviderReady === undefined
+            ? {}
+            : {
+                routingProvider: {
+                  detail: routingProviderReady
+                    ? 'The routing provider is reachable.'
+                    : 'The routing provider is unavailable.',
+                  status: routingProviderReady ? ('ready' as const) : ('not_ready' as const),
+                },
+              }),
+          ...(searchProviderReady === undefined
+            ? {}
+            : {
+                searchProvider: {
+                  detail: searchProviderReady
+                    ? 'The production search provider is reachable.'
+                    : 'The production search provider is unavailable.',
+                  status: searchProviderReady ? ('ready' as const) : ('not_ready' as const),
+                },
+              }),
           searchFixtures: {
-            detail: `${String(fixtures.length)} Calgary search fixtures loaded.`,
-            status: 'ready',
+            detail: searchFixturesReady
+              ? `${String(fixtures.length)} Calgary search fixtures loaded.`
+              : 'No Calgary search fixtures are loaded.',
+            status: searchFixturesReady ? 'ready' : 'not_ready',
           },
         },
-        status: 'ready',
+        status: isReady ? 'ready' : 'not_ready',
         timestamp,
       };
       return response;
@@ -255,15 +289,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         tags: ['config'],
       },
     },
-    () => createAppConfig(clock().toISOString()),
+    () => createAppConfig(clock().toISOString(), productionSearch),
   );
 
-  typedApp.get(
+  typedApp.post(
     '/v1/search',
     {
       schema: {
-        description: 'Searches the deterministic Calgary technical-alpha dataset.',
-        querystring: SearchQuerySchema,
+        description: 'Searches Calgary places and addresses with a deterministic fallback.',
+        body: SearchQuerySchema,
         response: {
           200: SearchResponseSchema,
           400: ProblemDetailsSchema,
@@ -271,7 +305,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         tags: ['search'],
       },
     },
-    (request) => searchProvider.search(request.query),
+    (request) => searchProvider.search(request.body),
   );
 
   typedApp.post(

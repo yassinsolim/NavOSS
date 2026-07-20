@@ -51,11 +51,13 @@ export class RouteProviderError extends Error {
 
 export interface RouteProvider {
   getRoutes(request: RouteRequest): Promise<RouteAlternative[]>;
+  isReady?(): Promise<boolean>;
 }
 
 export interface ValhallaRouteProviderOptions {
   endpoint?: string;
   fetchImplementation?: typeof fetch;
+  readinessEndpoint?: string;
 }
 
 function buildValhallaRequest(request: RouteRequest): unknown {
@@ -119,6 +121,7 @@ export function createValhallaRouteProvider(
 ): RouteProvider {
   const endpoint = options.endpoint ?? process.env.VALHALLA_URL ?? DEFAULT_VALHALLA_URL;
   const fetchImplementation = options.fetchImplementation ?? fetch;
+  const readinessEndpoint = options.readinessEndpoint ?? process.env.VALHALLA_STATUS_URL;
 
   return {
     async getRoutes(request) {
@@ -159,5 +162,20 @@ export function createValhallaRouteProvider(
 
       return normalizeRoutes(parsed.data);
     },
+    ...(readinessEndpoint === undefined
+      ? {}
+      : {
+          async isReady() {
+            try {
+              const response = await fetchImplementation(readinessEndpoint, {
+                headers: { accept: 'application/json' },
+                signal: AbortSignal.timeout(3_000),
+              });
+              return response.ok;
+            } catch {
+              return false;
+            }
+          },
+        }),
   };
 }

@@ -7,6 +7,7 @@ import { searchFixtures } from './search.js';
 const DEFAULT_PHOTON_URL = 'https://photon.komoot.io/api/';
 const PHOTON_TIMEOUT_MS = 3_000;
 const CALGARY_BOUNDS = '-114.316,50.842,-113.859,51.212';
+const NOMINATIM_TIMEOUT_MS = 4_000;
 
 const PhotonFeatureSchema = z.object({
   geometry: z.object({
@@ -34,11 +35,34 @@ const PhotonResponseSchema = z.object({
   type: z.literal('FeatureCollection'),
 });
 
+const NominatimResultSchema = z.looseObject({
+  addresstype: z.string().optional(),
+  category: z.string().optional(),
+  display_name: z.string().min(1),
+  importance: z.number().optional(),
+  lat: z.coerce.number().min(-90).max(90),
+  lon: z.coerce.number().min(-180).max(180),
+  name: z.string().optional(),
+  osm_id: z.union([z.number(), z.string()]),
+  osm_type: z.string().min(1),
+  type: z.string().optional(),
+});
+
+const NominatimResponseSchema = z.array(NominatimResultSchema);
+
 export interface SearchProvider {
+  isReady?(): Promise<boolean>;
   search(query: SearchQuery): Promise<SearchResponse>;
 }
 
 export interface PhotonSearchProviderOptions {
+  endpoint?: string;
+  fetchImplementation?: typeof fetch;
+  now?: () => Date;
+}
+
+export interface NominatimSearchProviderOptions {
+  datasetVersion?: string;
   endpoint?: string;
   fetchImplementation?: typeof fetch;
   now?: () => Date;
@@ -119,6 +143,40 @@ function normalizePhotonResults(
   }));
 }
 
+function nominatimCategory(
+  result: z.infer<typeof NominatimResultSchema>,
+): SearchResult['category'] {
+  if (['house', 'building'].includes(result.addresstype ?? '')) {
+    return 'address';
+  }
+  if (['road', 'street', 'footway', 'path'].includes(result.addresstype ?? '')) {
+    return 'street';
+  }
+  if (
+    ['city', 'borough', 'suburb', 'quarter', 'neighbourhood'].includes(result.addresstype ?? '')
+  ) {
+    return 'neighborhood';
+  }
+  if (['amenity', 'shop', 'tourism', 'leisure', 'aeroway'].includes(result.category ?? '')) {
+    return 'poi';
+  }
+  return 'landmark';
+}
+
+function normalizeNominatimResults(
+  payload: z.infer<typeof NominatimResponseSchema>,
+  limit: number,
+): SearchResult[] {
+  return payload.slice(0, limit).map((result, index) => ({
+    category: nominatimCategory(result),
+    center: { latitude: result.lat, longitude: result.lon },
+    confidence: Math.max(0.55, Math.min(0.95, result.importance ?? 0.9 - index * 0.06)),
+    id: `nominatim:${result.osm_type}:${String(result.osm_id)}`,
+    label: result.display_name,
+    name: result.name ?? result.display_name.split(',')[0]?.trim() ?? 'Unnamed place',
+  }));
+}
+
 export function buildPhotonSearchUrl(query: SearchQuery, endpoint = DEFAULT_PHOTON_URL): string {
   const url = new URL(endpoint);
   url.searchParams.set('bbox', CALGARY_BOUNDS);
@@ -131,6 +189,18 @@ export function buildPhotonSearchUrl(query: SearchQuery, endpoint = DEFAULT_PHOT
     url.searchParams.set('lon', String(query.longitude));
   }
 
+  return url.toString();
+}
+
+export function buildNominatimSearchUrl(query: SearchQuery, endpoint: string): string {
+  const url = new URL('search', endpoint.endsWith('/') ? endpoint : `${endpoint}/`);
+  url.searchParams.set('accept-language', 'en-CA,en');
+  url.searchParams.set('addressdetails', '1');
+  url.searchParams.set('bounded', '1');
+  url.searchParams.set('format', 'jsonv2');
+  url.searchParams.set('limit', String(query.limit));
+  url.searchParams.set('q', query.q);
+  url.searchParams.set('viewbox', '-114.316,51.212,-113.859,50.842');
   return url.toString();
 }
 
@@ -175,6 +245,56 @@ export function createPhotonSearchProvider(
   };
 }
 
+export function createNominatimSearchProvider(
+  options: NominatimSearchProviderOptions,
+): SearchProvider {
+  const endpoint = options.endpoint ?? process.env.NOMINATIM_URL;
+  if (endpoint === undefined) {
+    throw new Error('NOMINATIM_URL is required for production search.');
+  }
+  const datasetVersion =
+    options.datasetVersion ?? process.env.NOMINATIM_DATASET_VERSION ?? 'alberta-geofabrik';
+  const fetchImplementation = options.fetchImplementation ?? fetch;
+  const now = options.now ?? (() => new Date());
+
+  return {
+    async isReady() {
+      try {
+        const statusUrl = new URL('status', endpoint.endsWith('/') ? endpoint : `${endpoint}/`);
+        const response = await fetchImplementation(statusUrl, {
+          headers: { accept: 'text/plain', 'user-agent': 'NavOSS/0.1' },
+          signal: AbortSignal.timeout(NOMINATIM_TIMEOUT_MS),
+        });
+        return response.ok;
+      } catch {
+        return false;
+      }
+    },
+    async search(query) {
+      const response = await fetchImplementation(buildNominatimSearchUrl(query, endpoint), {
+        headers: { accept: 'application/json', 'user-agent': 'NavOSS/0.1' },
+        signal: AbortSignal.timeout(NOMINATIM_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        throw new Error(`Nominatim returned status ${String(response.status)}.`);
+      }
+
+      const payload: unknown = await response.json();
+      const parsed = NominatimResponseSchema.parse(payload);
+      return {
+        degraded: false,
+        results: normalizeNominatimResults(parsed, query.limit),
+        source: {
+          datasetVersion,
+          freshness: 'fresh',
+          id: 'nominatim-self-hosted',
+          updatedAt: now().toISOString(),
+        },
+      };
+    },
+  };
+}
+
 function mergeResults(
   fixtureResults: SearchResult[],
   photonResults: SearchResult[],
@@ -209,6 +329,30 @@ export function createDevelopmentSearchProvider(
           degraded: true,
           results: mergeResults(fixtureResponse.results, photonResponse.results, query.limit),
           source: photonResponse.source,
+        };
+      } catch {
+        return fixtureResponse;
+      }
+    },
+  };
+}
+
+export function createProductionSearchProvider(
+  fixtures: readonly SearchFixture[] = CALGARY_SEARCH_FIXTURES,
+  productionProvider: SearchProvider = createNominatimSearchProvider({}),
+): SearchProvider {
+  const fixtureProvider = createFixtureSearchProvider(fixtures);
+
+  return {
+    isReady: () => productionProvider.isReady?.() ?? Promise.resolve(false),
+    async search(query) {
+      const fixtureResponse = await fixtureProvider.search(query);
+
+      try {
+        const productionResponse = await productionProvider.search(query);
+        return {
+          ...productionResponse,
+          results: mergeResults(fixtureResponse.results, productionResponse.results, query.limit),
         };
       } catch {
         return fixtureResponse;

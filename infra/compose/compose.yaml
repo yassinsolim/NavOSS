@@ -1,0 +1,192 @@
+name: navoss
+
+x-logging: &navoss-logging
+  driver: journald
+  options:
+    tag: navoss/{{.Name}}
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/compose/api.Dockerfile
+    logging: *navoss-logging
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      NODE_ENV: production
+      NOMINATIM_DATASET_VERSION: ${NOMINATIM_DATASET_VERSION}
+      NOMINATIM_URL: http://nominatim:8080/
+      PORT: 3000
+      VALHALLA_STATUS_URL: http://valhalla:8002/status
+      VALHALLA_URL: http://valhalla:8002/route
+    depends_on:
+      nominatim:
+        condition: service_healthy
+      valhalla:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    mem_limit: 768m
+    cpus: 0.75
+    networks:
+      - backend
+      - egress
+      - ingress
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    logging: *navoss-logging
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    mem_limit: 192m
+    cpus: 0.25
+    networks:
+      - ingress
+    ports:
+      - 127.0.0.1:8080:8080
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /config:size=16m,mode=0700
+      - /data:size=16m,mode=0700
+      - /tmp:size=16m,mode=1777
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+
+  valhalla:
+    image: ghcr.io/valhalla/valhalla-scripted:3.8.2
+    logging: *navoss-logging
+    restart: unless-stopped
+    environment:
+      build_admins: 'True'
+      build_elevation: 'False'
+      build_tar: 'True'
+      build_time_zones: 'True'
+      force_rebuild: 'False'
+      server_threads: '2'
+      tile_urls: https://download.geofabrik.de/north-america/canada/alberta-latest.osm.pbf
+      traffic_name: ''
+      use_default_speeds_config: 'True'
+      use_tiles_ignore_pbf: 'True'
+    cap_drop:
+      - ALL
+    cpus: 2
+    mem_limit: 2g
+    networks:
+      - backend
+      - egress
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /srv/navoss/artifacts/valhalla:/custom_files
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl --fail --silent http://127.0.0.1:8002/status >/dev/null
+      interval: 30s
+      timeout: 5s
+      start_period: 20m
+      retries: 5
+
+  nominatim:
+    image: mediagis/nominatim:5.3
+    logging: *navoss-logging
+    restart: unless-stopped
+    shm_size: 2g
+    environment:
+      FREEZE: 'false'
+      GUNICORN_CMD_ARGS: --no-control-socket
+      GUNICORN_WORKERS: '2'
+      IMPORT_SECONDARY_WIKIPEDIA: 'false'
+      IMPORT_STYLE: full
+      IMPORT_WIKIPEDIA: 'false'
+      NOMINATIM_PASSWORD: ${NOMINATIM_PASSWORD}
+      PBF_URL: https://download.geofabrik.de/north-america/canada/alberta-latest.osm.pbf
+      POSTGRES_AUTOVACUUM_WORK_MEM: 256MB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 6GB
+      POSTGRES_MAINTENANCE_WORK_MEM: 2GB
+      POSTGRES_MAX_CONNECTIONS: '30'
+      POSTGRES_MAX_WAL_SIZE: 2GB
+      POSTGRES_SHARED_BUFFERS: 1GB
+      POSTGRES_WORK_MEM: 32MB
+      REPLICATION_RECHECK_INTERVAL: '900'
+      REPLICATION_UPDATE_INTERVAL: '86400'
+      REPLICATION_URL: https://download.geofabrik.de/north-america/canada/alberta-updates/
+      THREADS: '2'
+      UPDATE_MODE: continuous
+      WARMUP_ON_STARTUP: 'false'
+    cpus: 2.5
+    mem_limit: 6g
+    networks:
+      - backend
+      - egress
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /srv/navoss/artifacts/nominatim/postgres:/var/lib/postgresql/16/main
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl --fail --silent http://127.0.0.1:8080/status >/dev/null
+      interval: 30s
+      timeout: 5s
+      start_period: 90m
+      retries: 5
+
+  reports-db:
+    image: postgis/postgis:16-3.5-alpine
+    logging: *navoss-logging
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: navoss
+      POSTGRES_PASSWORD: ${REPORTS_POSTGRES_PASSWORD}
+      POSTGRES_USER: navoss
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - max_connections=30
+      - -c
+      - log_statement=none
+      - -c
+      - log_min_duration_statement=-1
+      - -c
+      - log_min_error_statement=panic
+      - -c
+      - log_parameter_max_length_on_error=0
+    cpus: 0.5
+    mem_limit: 768m
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /srv/navoss/state/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U navoss -d navoss
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+networks:
+  backend:
+    internal: true
+  egress: {}
+  ingress: {}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the NavOSS database backup each night
+
+[Timer]
+OnCalendar=*-*-* 03:20:00 America/Edmonton
+Persistent=true
+RandomizedDelaySec=15m
+Unit=navoss-backup.service
+
+[Install]
+WantedBy=timers.target

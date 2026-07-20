@@ -25,8 +25,9 @@
     "id": "downtown-east-hills",
     "origin": { "latitude": 51.04427, "longitude": -114.06309 },
     "destination": { "latitude": 51.04112, "longitude": -113.9132 },
-    "distanceRangeKm": [9, 18],
-    "maximumEndpointOffsetMeters": 80
+    "distanceRangeKm": [9, 20],
+    "maximumEndpointOffsetMeters": 80,
+    "testAvoidHighways": true
   },
   {
     "id": "downtown-canada-olympic-park",
