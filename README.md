@@ -1,11 +1,15 @@
 <p align="center">
-	<img src="apps/mobile/assets/images/icon.png" alt="NavOSS road-shaped N icon" width="128" height="128">
+	<img src="apps/mobile/assets/images/icon.png" alt="NavOSS upward chevron icon" width="128" height="128">
 </p>
 
 <h1 align="center">NavOSS</h1>
 
 <p align="center">
 	Account-free, privacy-first navigation built in the open, beginning with Calgary.
+</p>
+
+<p align="center">
+	<a href="https://navoss.vercel.app">Project site</a> · <a href="https://github.com/yassinsolim/NavOSS/issues">Issues</a> · <a href="https://github.com/yassinsolim/NavOSS/discussions">Discussions</a>
 </p>
 
 <p align="center">

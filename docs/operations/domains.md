@@ -12,7 +12,9 @@ Future apps can use `<app>.yassin.app`, `api.<app>.yassin.app`, and `status.<app
 
 ## Website
 
-Create a separate Vercel project from the NavOSS repository for the public site, then add `navoss.yassin.app` under **Project > Settings > Domains**. Cloudflare remains authoritative DNS, so add the CNAME target shown by Vercel.
+The dedicated Vercel project `navoss` deploys `apps/site` from the GitHub `main` branch. Its working fallback URL is <https://navoss.vercel.app>.
+
+`navoss.yassin.app` is assigned to that project. Cloudflare remains authoritative DNS and must approve Vercel's Domain Connect change or add the CNAME shown by `vercel domains verify navoss.yassin.app`. Keep the Cloudflare proxy disabled for that record so Vercel can verify and issue TLS.
 
 The site must publish these stable routes before TestFlight:
 
