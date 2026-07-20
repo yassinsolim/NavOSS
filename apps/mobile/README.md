@@ -1,56 +1,51 @@
-# Welcome to your Expo app 👋
+# NavOSS Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The NavOSS mobile client is an Expo SDK 57 and React Native 0.86 application with MapLibre rendering and a local Swift navigation module. The first supported release target is iPhone; Android follows after the iOS navigation core is stable.
 
-## Get started
+Expo Go cannot run this project because MapLibre and `NavOSSNavigation` require native code.
 
-1. Install dependencies
+## Development
 
-   ```bash
-   npm install
-   ```
+From the repository root, install dependencies and start the API on the dedicated mobile-development port:
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```sh
+corepack pnpm install --frozen-lockfile
+HOST=0.0.0.0 PORT=3001 corepack pnpm --filter @navoss/api dev
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Build the custom iOS development client:
 
-### Other setup steps
+```sh
+corepack pnpm --filter @navoss/mobile ios
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+After the native client exists, JavaScript-only work can use:
 
-## Learn more
+```sh
+corepack pnpm --filter @navoss/mobile start:simulator
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+## Validation
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```sh
+corepack pnpm --filter @navoss/mobile check
+corepack pnpm --filter @navoss/mobile lint
+corepack pnpm --filter @navoss/mobile test
+corepack pnpm --filter @navoss/mobile test:native:ios
+corepack pnpm --filter @navoss/mobile test:e2e:ios
+```
 
-## Join the community
+The aggregate Maestro suite requires the API and Metro on port 3001 and 8081. It uses the dedicated `NavOSS iPhone 15 Pro Max` simulator and reboots it between flows to keep XCTest and simulated GPS reliable.
 
-Join our community of developers creating universal apps.
+## Release Configuration
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Production builds must receive a public HTTPS API origin:
+
+```sh
+EXPO_PUBLIC_API_URL=https://api.navoss.yassin.app \
+  corepack pnpm --filter @navoss/mobile validate:release
+```
+
+The validator rejects missing, HTTP, loopback, `.local`, and private-network origins. The planned hostname is not usable until the backend and DNS are live.
+
+See the root [README](../../README.md), [TestFlight runbook](../../docs/release/testflight.md), and [CI/CD guide](../../docs/release/ci-cd.md) for the full workflow.

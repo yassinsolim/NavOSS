@@ -1,0 +1,65 @@
+name: iOS TestFlight
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag matching apps/mobile/app.json, for example ios-v0.1.0
+        required: true
+        type: string
+
+concurrency:
+  group: ios-testflight-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-submit:
+    name: Build and submit to TestFlight
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'ios-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: app-store-production
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Verify release tag
+        run: |
+          node -e "const app=require('./apps/mobile/app.json').expo; const expected='ios-v'+app.version; if(process.env.RELEASE_TAG!==expected){console.error('Expected '+expected+', received '+process.env.RELEASE_TAG); process.exit(1)}"
+
+      - name: Require Expo token
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo 'Configure EXPO_TOKEN in the app-store-production GitHub environment.' >&2
+            exit 1
+          fi
+
+      - name: Set up Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Queue production build and TestFlight submission
+        working-directory: apps/mobile
+        run: eas build --platform ios --profile production --auto-submit --non-interactive --no-wait

@@ -1,0 +1,7 @@
+NavOSS API is licensed under the GNU Affero General Public License v3.0 only
+(AGPL-3.0-only).
+
+The canonical license text is available at ../../LICENSES/AGPL-3.0-only.txt.
+
+Third-party dependencies and data retain their own licenses. See the
+repository's THIRD_PARTY_NOTICES.md and data-source documentation.

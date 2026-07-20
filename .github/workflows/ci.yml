@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+
+jobs:
+  javascript:
+    name: JavaScript and TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Check third-party notices
+        run: |
+          corepack pnpm licenses:generate
+          git diff --exit-code -- THIRD_PARTY_NOTICES.md
+
+      - name: Check formatting
+        run: corepack pnpm format:check
+
+      - name: Type-check
+        run: corepack pnpm check
+
+      - name: Lint
+        run: corepack pnpm lint
+
+      - name: Test
+        run: corepack pnpm test
+
+      - name: Build
+        run: corepack pnpm build
+
+      - name: Check patch integrity
+        run: git diff --check
+
+  native-ios:
+    name: Native iOS core
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Test Swift navigation core
+        run: swift test --package-path apps/mobile/modules/navoss-navigation

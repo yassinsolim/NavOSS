@@ -1,0 +1,25 @@
+changelog:
+  categories:
+    - title: Navigation and routing
+      labels:
+        - navigation
+        - route-quality
+    - title: Mobile experience
+      labels:
+        - mobile
+        - enhancement
+    - title: API and data
+      labels:
+        - api
+        - data
+    - title: Fixes
+      labels:
+        - bug
+    - title: Documentation and maintenance
+      labels:
+        - documentation
+        - dependencies
+        - maintenance
+    - title: Other changes
+      labels:
+        - '*'

@@ -4,6 +4,14 @@
   "private": true,
   "description": "Privacy-first, open-source navigation for Calgary.",
   "license": "SEE LICENSES/README.md",
+  "homepage": "https://github.com/yassinsolim/NavOSS#readme",
+  "bugs": {
+    "url": "https://github.com/yassinsolim/NavOSS/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yassinsolim/NavOSS.git"
+  },
   "packageManager": "pnpm@11.13.0",
   "engines": {
     "node": ">=24 <25",
@@ -14,6 +22,7 @@
     "check": "turbo run check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "licenses:generate": "node scripts/generate-third-party-notices.mjs",
     "lint": "turbo run lint",
     "test": "turbo run test"
   },

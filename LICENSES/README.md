@@ -1,7 +1,8 @@
 # NavOSS License Layout
 
-- Store-distributed mobile application files use MPL-2.0 unless a file states otherwise.
-- API, worker, operations, infrastructure, and data-pipeline files use AGPL-3.0-only unless a file states otherwise.
-- Third-party dependencies and data retain their own licenses and attribution requirements.
+- `apps/mobile` and `packages/contracts` use [MPL-2.0](MPL-2.0.txt) unless a file states otherwise.
+- `apps/api` and future hosted worker, operations, infrastructure, and data-pipeline files use [AGPL-3.0-only](AGPL-3.0-only.txt) unless a file states otherwise.
+- Documentation and brand assets remain all rights reserved unless their directory or file states otherwise.
+- Third-party dependencies, fonts, map data, and public datasets retain their own licenses and attribution requirements.
 
-Full license texts and a generated third-party inventory will be added before the first public source release.
+The repository root [LICENSE](../LICENSE) is the short-form map. Package metadata and package-level license pointers must stay consistent with this layout. A generated dependency inventory belongs in `THIRD_PARTY_NOTICES.md`; data attribution is maintained separately in `docs/data-sources.md`.

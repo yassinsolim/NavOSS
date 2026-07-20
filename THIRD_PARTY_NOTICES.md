@@ -1,0 +1,651 @@
+# Third-Party Notices
+
+This inventory is generated from production JavaScript dependencies in `pnpm-lock.yaml`.
+It excludes development-only packages, downloaded map/routing data, native build-tool dependencies,
+and external services. Those components retain their own licenses and attribution requirements.
+
+Lockfile SHA-256: `1cd1f6f503dbc0a7743fae08fc04ba8fe851e7faeadbbfd67d761b2f56cbe1e5`
+
+Regenerate with:
+
+```sh
+corepack pnpm licenses:generate
+```
+
+## (BSD-3-Clause OR GPL-2.0)
+
+- `node-forge` - `1.4.0` - <https://github.com/digitalbazaar/forge>
+
+## (MIT OR Apache-2.0)
+
+- `fb-dotslash` - `0.5.8` - <https://dotslash-cli.com/>
+
+## (MIT OR CC0-1.0)
+
+- `type-fest` - `0.21.3, 0.7.1` - <https://github.com/sindresorhus/type-fest#readme>
+
+## 0BSD
+
+- `jsc-safe-url` - `0.2.4` - <https://github.com/robhogan/jsc-safe-url#readme>
+- `tslib` - `2.8.1` - <https://www.typescriptlang.org/>
+
+## Apache-2.0
+
+- `aria-query` - `5.3.0, 5.3.2` - <https://github.com/A11yance/aria-query#readme>
+- `baseline-browser-mapping` - `2.10.43` - <https://github.com/web-platform-dx/baseline-browser-mapping#readme>
+- `bser` - `2.1.1` - <https://facebook.github.io/watchman/docs/bser.html>
+- `chrome-launcher` - `0.15.2` - <https://github.com/GoogleChrome/chrome-launcher#readme>
+- `chromium-edge-launcher` - `0.3.0` - <https://github.com/cezaraugusto/chromium-edge-launcher#readme>
+- `detect-libc` - `2.1.2` - <https://github.com/lovell/detect-libc#readme>
+- `exponential-backoff` - `3.1.3` - <https://github.com/coveooss/exponential-backoff#readme>
+- `fb-watchman` - `2.0.2` - <https://facebook.github.io/watchman/>
+- `lighthouse-logger` - `1.4.2`
+- `marky` - `1.3.0` - <https://github.com/nolanlawson/marky#readme>
+- `typescript` - `6.0.2` - <https://www.typescriptlang.org/>
+- `walker` - `1.0.8` - <https://github.com/daaku/nodejs-walker>
+- `xcode` - `3.0.1` - <https://github.com/apache/cordova-node-xcode#readme>
+
+## BlueOak-1.0.0
+
+- `glob` - `13.0.6` - <https://github.com/isaacs/node-glob#readme>
+- `lru-cache` - `11.5.2` - <https://github.com/isaacs/node-lru-cache#readme>
+- `minimatch` - `10.2.5` - <https://github.com/isaacs/minimatch#readme>
+- `minipass` - `7.1.3` - <https://github.com/isaacs/minipass#readme>
+- `path-scurry` - `2.0.2` - <https://github.com/isaacs/path-scurry#readme>
+- `sax` - `1.6.0` - <https://github.com/isaacs/sax-js#readme>
+
+## BSD-2-Clause
+
+- `@mapbox/unitbezier` - `0.0.1` - <https://github.com/mapbox/unitbezier>
+- `fontfaceobserver` - `2.3.0` - <https://fontfaceobserver.com/>
+- `regjsparser` - `0.13.2` - <https://github.com/jviereck/regjsparser>
+- `terser` - `5.49.0` - <https://terser.org>
+- `webidl-conversions` - `3.0.1` - <https://github.com/jsdom/webidl-conversions#readme>
+
+## BSD-3-Clause
+
+- `@expo/xcpretty` - `4.4.4` - <https://github.com/expo/expo-cli>
+- `@react-native/debugger-frontend` - `0.86.0` - <https://github.com/facebook/react-native/tree/HEAD/packages/debugger-frontend#readme>
+- `fast-uri` - `3.1.3, 4.1.0` - <https://github.com/fastify/fast-uri>
+- `hoist-non-react-statics` - `3.3.2` - <https://github.com/mridgway/hoist-non-react-statics#readme>
+- `hyphenate-style-name` - `1.1.0` - <https://github.com/rexxars/hyphenate-style-name#readme>
+- `light-my-request` - `6.6.0` - <https://github.com/fastify/light-my-request#readme>
+- `makeerror` - `1.0.12` - <https://github.com/daaku/nodejs-makeerror#readme>
+- `secure-json-parse` - `4.1.0` - <https://github.com/fastify/secure-json-parse#readme>
+- `source-map` - `0.5.7, 0.6.1` - <https://github.com/mozilla/source-map>
+- `source-map-js` - `1.2.1` - <https://github.com/7rulnik/source-map-js>
+- `tmpl` - `1.0.5` - <https://github.com/daaku/nodejs-tmpl>
+
+## CC-BY-4.0
+
+- `caniuse-lite` - `1.0.30001805` - <https://github.com/browserslist/caniuse-lite#readme>
+
+## ISC
+
+- `@isaacs/ttlcache` - `1.4.1` - <https://github.com/isaacs/ttlcache#readme>
+- `@maplibre/maplibre-gl-style-spec` - `24.8.5` - <https://maplibre.org/maplibre-style-spec/>
+- `@ungap/structured-clone` - `1.3.3` - <https://github.com/ungap/structured-clone#readme>
+- `cliui` - `8.0.1` - <https://github.com/yargs/cliui#readme>
+- `electron-to-chromium` - `1.5.389` - <https://github.com/Kilian/electron-to-chromium#readme>
+- `fastq` - `1.20.1` - <https://github.com/mcollina/fastq#readme>
+- `get-caller-file` - `2.0.5` - <https://github.com/stefanpenner/get-caller-file#readme>
+- `graceful-fs` - `4.2.11` - <https://github.com/isaacs/node-graceful-fs#readme>
+- `hosted-git-info` - `7.0.2` - <https://github.com/npm/hosted-git-info>
+- `inherits` - `2.0.4` - <https://github.com/isaacs/inherits#readme>
+- `isexe` - `2.0.0` - <https://github.com/isaacs/isexe#readme>
+- `lru-cache` - `10.4.3, 5.1.1` - <https://github.com/isaacs/node-lru-cache#readme>
+- `npm-package-arg` - `11.0.3` - <https://github.com/npm/npm-package-arg>
+- `picocolors` - `1.1.1` - <https://github.com/alexeyraspopov/picocolors#readme>
+- `proc-log` - `4.2.0` - <https://github.com/npm/proc-log#readme>
+- `quickselect` - `3.0.0` - <https://github.com/mourner/quickselect#readme>
+- `semver` - `6.3.1, 7.8.5` - <https://github.com/npm/node-semver#readme>
+- `setprototypeof` - `1.2.0` - <https://github.com/wesleytodd/setprototypeof>
+- `signal-exit` - `3.0.7` - <https://github.com/tapjs/signal-exit>
+- `split2` - `4.2.0` - <https://github.com/mcollina/split2#readme>
+- `tinyqueue` - `3.0.0` - <https://github.com/mourner/tinyqueue>
+- `validate-npm-package-name` - `5.0.1` - <https://github.com/npm/validate-npm-package-name>
+- `which` - `2.0.2` - <https://github.com/isaacs/node-which#readme>
+- `y18n` - `5.0.8` - <https://github.com/yargs/y18n>
+- `yallist` - `3.1.1` - <https://github.com/isaacs/yallist#readme>
+- `yaml` - `2.9.0` - <https://eemeli.org/yaml/>
+- `yargs-parser` - `21.1.1` - <https://github.com/yargs/yargs-parser#readme>
+
+## MIT
+
+- `@adobe/css-tools` - `4.5.0` - <https://github.com/adobe/css-tools#readme>
+- `@babel/code-frame` - `7.29.7` - <https://babel.dev/docs/en/next/babel-code-frame>
+- `@babel/compat-data` - `7.29.7` - <https://github.com/babel/babel#readme>
+- `@babel/core` - `7.29.7` - <https://babel.dev/docs/en/next/babel-core>
+- `@babel/generator` - `7.29.7` - <https://babel.dev/docs/en/next/babel-generator>
+- `@babel/helper-annotate-as-pure` - `7.29.7` - <https://babel.dev/docs/en/next/babel-helper-annotate-as-pure>
+- `@babel/helper-compilation-targets` - `7.29.7` - <https://github.com/babel/babel#readme>
+- `@babel/helper-create-class-features-plugin` - `7.29.7` - <https://github.com/babel/babel#readme>
+- `@babel/helper-create-regexp-features-plugin` - `7.29.7` - <https://github.com/babel/babel#readme>
+- `@babel/helper-define-polyfill-provider` - `0.6.8` - <https://github.com/babel/babel-polyfills#readme>
+- `@babel/helper-globals` - `7.29.7` - <https://github.com/babel/babel#readme>
+- `@babel/helper-member-expression-to-functions` - `7.29.7` - <https://babel.dev/docs/en/next/babel-helper-member-expression-to-functions>
+- `@babel/helper-module-imports` - `7.29.7` - <https://babel.dev/docs/en/next/babel-helper-module-imports>
+- `@babel/helper-module-transforms` - `7.29.7` - <https://babel.dev/docs/en/next/babel-helper-module-transforms>
+- `@babel/helper-optimise-call-expression` - `7.29.7` - <https://babel.dev/docs/en/next/babel-helper-optimise-call-expression>
+- `@babel/helper-plugin-utils` - `7.29.7` - <https://babel.dev/docs/en/next/babel-helper-plugin-utils>
+- `@babel/helper-remap-async-to-generator` - `7.29.7` - <https://babel.dev/docs/en/next/babel-helper-remap-async-to-generator>
+- `@babel/helper-replace-supers` - `7.29.7` - <https://babel.dev/docs/en/next/babel-helper-replace-supers>
+- `@babel/helper-skip-transparent-expression-wrappers` - `7.29.7` - <https://github.com/babel/babel#readme>
+- `@babel/helper-string-parser` - `7.29.7` - <https://babel.dev/docs/en/next/babel-helper-string-parser>
+- `@babel/helper-validator-identifier` - `7.29.7` - <https://github.com/babel/babel#readme>
+- `@babel/helper-validator-option` - `7.29.7` - <https://github.com/babel/babel#readme>
+- `@babel/helper-wrap-function` - `7.29.7` - <https://babel.dev/docs/en/next/babel-helper-wrap-function>
+- `@babel/helpers` - `7.29.7` - <https://babel.dev/docs/en/next/babel-helpers>
+- `@babel/parser` - `7.29.7` - <https://babel.dev/docs/en/next/babel-parser>
+- `@babel/plugin-proposal-decorators` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-proposal-decorators>
+- `@babel/plugin-proposal-export-default-from` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-proposal-export-default-from>
+- `@babel/plugin-syntax-decorators` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-syntax-decorators>
+- `@babel/plugin-syntax-dynamic-import` - `7.8.3` - <https://github.com/babel/babel/tree/master#readme>
+- `@babel/plugin-syntax-export-default-from` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-syntax-export-default-from>
+- `@babel/plugin-syntax-flow` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-syntax-flow>
+- `@babel/plugin-syntax-jsx` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-syntax-jsx>
+- `@babel/plugin-syntax-nullish-coalescing-operator` - `7.8.3` - <https://github.com/babel/babel/tree/master#readme>
+- `@babel/plugin-syntax-optional-chaining` - `7.8.3` - <https://github.com/babel/babel/tree/master#readme>
+- `@babel/plugin-syntax-typescript` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-syntax-typescript>
+- `@babel/plugin-transform-arrow-functions` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-arrow-functions>
+- `@babel/plugin-transform-async-generator-functions` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-async-generator-functions>
+- `@babel/plugin-transform-async-to-generator` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-async-to-generator>
+- `@babel/plugin-transform-block-scoping` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-block-scoping>
+- `@babel/plugin-transform-class-properties` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-class-properties>
+- `@babel/plugin-transform-class-static-block` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-class-static-block>
+- `@babel/plugin-transform-classes` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-classes>
+- `@babel/plugin-transform-destructuring` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-destructuring>
+- `@babel/plugin-transform-export-namespace-from` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-export-namespace-from>
+- `@babel/plugin-transform-flow-strip-types` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-flow-strip-types>
+- `@babel/plugin-transform-for-of` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-for-of>
+- `@babel/plugin-transform-logical-assignment-operators` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-logical-assignment-operators>
+- `@babel/plugin-transform-modules-commonjs` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-modules-commonjs>
+- `@babel/plugin-transform-named-capturing-groups-regex` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-named-capturing-groups-regex>
+- `@babel/plugin-transform-nullish-coalescing-operator` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-nullish-coalescing-operator>
+- `@babel/plugin-transform-object-rest-spread` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-object-rest-spread>
+- `@babel/plugin-transform-optional-catch-binding` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-optional-catch-binding>
+- `@babel/plugin-transform-optional-chaining` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-optional-chaining>
+- `@babel/plugin-transform-parameters` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-parameters>
+- `@babel/plugin-transform-private-methods` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-private-methods>
+- `@babel/plugin-transform-private-property-in-object` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-private-property-in-object>
+- `@babel/plugin-transform-react-display-name` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-react-display-name>
+- `@babel/plugin-transform-react-jsx` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-react-jsx>
+- `@babel/plugin-transform-react-jsx-development` - `7.29.7` - <https://github.com/babel/babel#readme>
+- `@babel/plugin-transform-react-jsx-self` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-react-jsx-self>
+- `@babel/plugin-transform-react-jsx-source` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-react-jsx-source>
+- `@babel/plugin-transform-react-pure-annotations` - `7.29.7` - <https://github.com/babel/babel#readme>
+- `@babel/plugin-transform-regenerator` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-regenerator>
+- `@babel/plugin-transform-runtime` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-runtime>
+- `@babel/plugin-transform-shorthand-properties` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-shorthand-properties>
+- `@babel/plugin-transform-template-literals` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-template-literals>
+- `@babel/plugin-transform-typescript` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-typescript>
+- `@babel/plugin-transform-unicode-regex` - `7.29.7` - <https://babel.dev/docs/en/next/babel-plugin-transform-unicode-regex>
+- `@babel/preset-typescript` - `7.29.7` - <https://babel.dev/docs/en/next/babel-preset-typescript>
+- `@babel/runtime` - `7.29.7` - <https://babel.dev/docs/en/next/babel-runtime>
+- `@babel/template` - `7.29.7` - <https://babel.dev/docs/en/next/babel-template>
+- `@babel/traverse` - `7.29.7` - <https://babel.dev/docs/en/next/babel-traverse>
+- `@babel/types` - `7.29.7` - <https://babel.dev/docs/en/next/babel-types>
+- `@egjs/hammerjs` - `2.0.17` - <http://naver.github.io/egjs>
+- `@expo/cli` - `57.0.6` - <https://github.com/expo/expo/tree/main/packages/@expo/cli>
+- `@expo/code-signing-certificates` - `0.0.6` - <https://github.com/expo/code-signing-certificates/tree/main#readme>
+- `@expo/config` - `57.0.3` - <https://github.com/expo/expo/tree/main/packages/@expo/config#readme>
+- `@expo/config-plugins` - `57.0.3` - <https://docs.expo.dev/guides/config-plugins/>
+- `@expo/config-types` - `57.0.1` - <https://github.com/expo/expo/tree/main/packages/@expo/config-types#readme>
+- `@expo/devcert` - `1.2.1` - <https://github.com/expo/devcert#readme>
+- `@expo/devtools` - `57.0.0` - <https://github.com/expo/expo/tree/main/packages/@expo/devtools#readme>
+- `@expo/dom-webview` - `57.0.0` - <https://github.com/expo/expo/tree/main/packages/@expo/dom-webview>
+- `@expo/env` - `2.4.1` - <https://github.com/expo/expo/tree/main/packages/@expo/env#readme>
+- `@expo/expo-modules-macros-plugin` - `0.3.0` - <https://github.com/expo/expo-modules-macros-plugin>
+- `@expo/fingerprint` - `0.20.3` - <https://github.com/expo/expo/tree/main/packages/@expo/fingerprint#readme>
+- `@expo/image-utils` - `0.11.1` - <https://github.com/expo/expo/tree/main/packages/%40expo/image-utils#readme>
+- `@expo/inline-modules` - `0.1.2` - <https://github.com/expo/expo#readme>
+- `@expo/json-file` - `11.0.0` - <https://github.com/expo/expo/tree/main/packages/@expo/json-file#readme>
+- `@expo/local-build-cache-provider` - `57.0.2` - <https://github.com/expo/expo/tree/main/packages/@expo/local-build-cache-provider#readme>
+- `@expo/log-box` - `57.0.0` - <https://github.com/expo/expo/tree/main/packages/@expo/log-box>
+- `@expo/metro` - `56.0.0` - <https://github.com/expo/expo-metro#readme>
+- `@expo/metro-config` - `57.0.3` - <https://github.com/expo/expo/tree/main/packages/@expo/metro-config#readme>
+- `@expo/metro-file-map` - `57.0.0` - <https://github.com/expo/expo/tree/main/packages/@expo/metro-file-map#readme>
+- `@expo/metro-runtime` - `57.0.3` - <https://github.com/expo/expo/tree/main/packages/@expo/metro-runtime>
+- `@expo/osascript` - `2.7.0` - <https://github.com/expo/expo/tree/main/packages/@expo/osascript#readme>
+- `@expo/package-manager` - `1.13.0` - <https://github.com/expo/expo/tree/main/packages/@expo/package-manager#readme>
+- `@expo/plist` - `0.8.0` - <https://github.com/expo/expo/tree/main/packages/@expo/plist#readme>
+- `@expo/prebuild-config` - `57.0.5` - <https://github.com/expo/expo/tree/main/packages/@expo/prebuild-config#readme>
+- `@expo/require-utils` - `57.0.1` - <https://github.com/expo/expo/tree/main/packages/@expo/require-utils#readme>
+- `@expo/router-server` - `57.0.2` - <https://docs.expo.dev/routing/introduction/>
+- `@expo/schema-utils` - `57.0.1` - <https://github.com/expo/expo/tree/main/packages/@expo/schema-utils#readme>
+- `@expo/sdk-runtime-versions` - `1.0.0`
+- `@expo/spawn-async` - `1.8.0` - <https://github.com/expo/spawn-async#readme>
+- `@expo/sudo-prompt` - `9.3.2` - <https://github.com/expo/sudo-prompt>
+- `@expo/ui` - `57.0.4` - <https://docs.expo.dev/versions/latest/sdk/ui/>
+- `@expo/ws-tunnel` - `2.0.0`
+- `@fastify/ajv-compiler` - `4.0.5` - <https://github.com/fastify/ajv-compiler#readme>
+- `@fastify/error` - `4.2.0` - <https://github.com/fastify/fastify-error#readme>
+- `@fastify/fast-json-stringify-compiler` - `5.1.0` - <https://github.com/fastify/fast-json-stringify-compiler#readme>
+- `@fastify/forwarded` - `3.0.1` - <https://github.com/fastify/forwarded#readme>
+- `@fastify/merge-json-schemas` - `0.2.1` - <https://github.com/fastify/merge-json-schemas#readme>
+- `@fastify/proxy-addr` - `5.1.0` - <https://github.com/fastify/proxy-addr#readme>
+- `@fastify/swagger` - `9.8.1` - <https://github.com/fastify/fastify-swagger#readme>
+- `@jest/schemas` - `29.6.3` - <https://github.com/jestjs/jest#readme>
+- `@jest/types` - `29.6.3` - <https://github.com/jestjs/jest#readme>
+- `@jridgewell/gen-mapping` - `0.3.13` - <https://github.com/jridgewell/sourcemaps/tree/main/packages/gen-mapping>
+- `@jridgewell/remapping` - `2.3.5` - <https://github.com/jridgewell/sourcemaps/tree/main/packages/remapping>
+- `@jridgewell/resolve-uri` - `3.1.2` - <https://github.com/jridgewell/resolve-uri#readme>
+- `@jridgewell/source-map` - `0.3.11` - <https://github.com/jridgewell/sourcemaps/tree/main/packages/source-map>
+- `@jridgewell/sourcemap-codec` - `1.5.5` - <https://github.com/jridgewell/sourcemaps/tree/main/packages/sourcemap-codec>
+- `@jridgewell/trace-mapping` - `0.3.31` - <https://github.com/jridgewell/sourcemaps/tree/main/packages/trace-mapping>
+- `@mapbox/jsonlint-lines-primitives` - `2.0.3` - <https://github.com/mapbox/jsonlint#readme>
+- `@maplibre/maplibre-react-native` - `11.3.6` - <https://github.com/maplibre/maplibre-react-native#readme>
+- `@pinojs/redact` - `0.4.0` - <https://github.com/pinojs/redact#readme>
+- `@radix-ui/primitive` - `1.1.5` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-collection` - `1.1.12` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-compose-refs` - `1.1.3` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-context` - `1.2.0` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-dialog` - `1.1.19` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-direction` - `1.1.2` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-dismissable-layer` - `1.1.15` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-focus-guards` - `1.1.4` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-focus-scope` - `1.1.12` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-id` - `1.1.2` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-portal` - `1.1.13` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-presence` - `1.1.7` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-primitive` - `2.1.7` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-roving-focus` - `1.1.15` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-slot` - `1.3.0` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-tabs` - `1.1.17` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-use-callback-ref` - `1.1.2` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-use-controllable-state` - `1.2.3` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-use-effect-event` - `0.0.3` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-use-is-hydrated` - `0.1.1` - <https://radix-ui.com/primitives>
+- `@radix-ui/react-use-layout-effect` - `1.1.2` - <https://radix-ui.com/primitives>
+- `@react-native-masked-view/masked-view` - `0.3.2` - <https://github.com/react-native-masked-view/masked-view#readme>
+- `@react-native/assets-registry` - `0.86.0` - <https://github.com/facebook/react-native/tree/HEAD/packages/assets#readme>
+- `@react-native/babel-plugin-codegen` - `0.86.0` - <https://github.com/facebook/react-native/tree/HEAD/packages/babel-plugin-codegen#readme>
+- `@react-native/babel-preset` - `0.86.0` - <https://github.com/facebook/react-native#readme>
+- `@react-native/codegen` - `0.86.0` - <https://github.com/facebook/react-native/tree/HEAD/packages/react-native-codegen#readme>
+- `@react-native/community-cli-plugin` - `0.86.0` - <https://github.com/facebook/react-native/tree/HEAD/packages/community-cli-plugin#readme>
+- `@react-native/debugger-shell` - `0.86.0` - <https://github.com/facebook/react-native/tree/HEAD/packages/debugger-shell#readme>
+- `@react-native/dev-middleware` - `0.86.0` - <https://github.com/facebook/react-native/tree/HEAD/packages/dev-middleware#readme>
+- `@react-native/gradle-plugin` - `0.86.0` - <https://github.com/facebook/react-native/tree/HEAD/packages/gradle-plugin#readme>
+- `@react-native/js-polyfills` - `0.86.0` - <https://github.com/facebook/react-native/tree/HEAD/packages/polyfills#readme>
+- `@react-native/metro-babel-transformer` - `0.86.0` - <https://github.com/facebook/react-native#readme>
+- `@react-native/metro-config` - `0.86.0` - <https://github.com/facebook/react-native/tree/HEAD/packages/metro-config#readme>
+- `@react-native/normalize-colors` - `0.74.89, 0.86.0` - <https://github.com/facebook/react-native/tree/HEAD/packages/normalize-color#readme>
+- `@react-native/virtualized-lists` - `0.86.0` - <https://github.com/facebook/react-native/tree/HEAD/packages/virtualized-lists#readme>
+- `@sinclair/typebox` - `0.27.10` - <https://github.com/sinclairzx81/typebox-legacy#readme>
+- `@testing-library/dom` - `10.4.1` - <https://github.com/testing-library/dom-testing-library#readme>
+- `@testing-library/jest-dom` - `6.9.1` - <https://github.com/testing-library/jest-dom#readme>
+- `@testing-library/user-event` - `14.6.1` - <https://github.com/testing-library/user-event#readme>
+- `@turf/distance` - `7.3.5` - <https://github.com/Turfjs/turf>
+- `@turf/helpers` - `7.3.5` - <https://github.com/Turfjs/turf>
+- `@turf/invariant` - `7.3.5` - <https://github.com/Turfjs/turf>
+- `@turf/length` - `7.3.5` - <https://github.com/Turfjs/turf>
+- `@turf/meta` - `7.3.5` - <https://github.com/Turfjs/turf>
+- `@turf/nearest-point-on-line` - `7.3.5` - <https://github.com/Turfjs/turf>
+- `@types/aria-query` - `5.0.4` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/aria-query>
+- `@types/geojson` - `7946.0.16` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/geojson>
+- `@types/hammerjs` - `2.0.46` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/hammerjs>
+- `@types/istanbul-lib-coverage` - `2.0.6` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-lib-coverage>
+- `@types/istanbul-lib-report` - `3.0.3` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-lib-report>
+- `@types/istanbul-reports` - `3.0.4` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-reports>
+- `@types/node` - `24.13.3` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node>
+- `@types/react` - `19.2.17` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react>
+- `@types/react-test-renderer` - `19.1.0` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react-test-renderer>
+- `@types/yargs` - `17.0.35` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/yargs>
+- `@types/yargs-parser` - `21.0.3` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/yargs-parser>
+- `@xmldom/xmldom` - `0.8.13, 0.9.10` - <https://github.com/xmldom/xmldom>
+- `abort-controller` - `3.0.0` - <https://github.com/mysticatea/abort-controller#readme>
+- `abstract-logging` - `2.0.1` - <https://github.com/jsumners/abstract-logging#readme>
+- `accepts` - `1.3.8, 2.0.0` - <https://github.com/jshttp/accepts#readme>
+- `acorn` - `8.17.0` - <https://github.com/acornjs/acorn>
+- `agent-base` - `7.1.4` - <https://github.com/TooTallNate/proxy-agents#readme>
+- `agent-cli-detector` - `0.1.2`
+- `ajv` - `8.20.0` - <https://ajv.js.org>
+- `ajv-formats` - `3.0.1` - <https://github.com/ajv-validator/ajv-formats#readme>
+- `anser` - `1.4.10` - <https://github.com/IonicaBizau/anser#readme>
+- `ansi-escapes` - `4.3.2` - <https://github.com/sindresorhus/ansi-escapes#readme>
+- `ansi-regex` - `4.1.1, 5.0.1` - <https://github.com/chalk/ansi-regex#readme>
+- `ansi-styles` - `3.2.1, 4.3.0, 5.2.0` - <https://github.com/chalk/ansi-styles#readme>
+- `arg` - `5.0.2` - <https://github.com/vercel/arg#readme>
+- `aria-hidden` - `1.2.6` - <https://github.com/theKashey/aria-hidden#readme>
+- `asap` - `2.0.6` - <https://github.com/kriskowal/asap#readme>
+- `atomic-sleep` - `1.0.0` - <https://github.com/davidmarkclements/atomic-sleep#readme>
+- `avvio` - `9.2.0` - <https://github.com/fastify/avvio#readme>
+- `babel-plugin-polyfill-corejs2` - `0.4.17` - <https://github.com/babel/babel-polyfills#readme>
+- `babel-plugin-polyfill-corejs3` - `0.13.0` - <https://github.com/babel/babel-polyfills#readme>
+- `babel-plugin-polyfill-regenerator` - `0.6.8` - <https://github.com/babel/babel-polyfills#readme>
+- `babel-plugin-react-compiler` - `1.0.0` - <https://github.com/facebook/react#readme>
+- `babel-plugin-react-native-web` - `0.21.2` - <https://github.com/necolas/react-native-web#readme>
+- `babel-plugin-syntax-hermes-parser` - `0.36.0, 0.36.1` - <https://github.com/facebook/hermes#readme>
+- `babel-plugin-transform-flow-enums` - `0.0.2` - <https://github.com/facebook/flow#readme>
+- `babel-preset-expo` - `57.0.2` - <https://github.com/expo/expo/tree/main/packages/babel-preset-expo#readme>
+- `balanced-match` - `4.0.4` - <https://github.com/juliangruber/balanced-match#readme>
+- `base64-js` - `1.5.1` - <https://github.com/beatgammit/base64-js>
+- `bplist-creator` - `0.1.0` - <https://github.com/nearinfinity/node-bplist-creator#readme>
+- `bplist-parser` - `0.3.1, 0.3.2` - <https://github.com/nearinfinity/node-bplist-parser>
+- `brace-expansion` - `5.0.7` - <https://github.com/juliangruber/brace-expansion#readme>
+- `braces` - `3.0.3` - <https://github.com/micromatch/braces>
+- `browserslist` - `4.28.6` - <https://github.com/browserslist/browserslist#readme>
+- `buffer-from` - `1.1.2` - <https://github.com/LinusU/buffer-from#readme>
+- `bytes` - `3.1.2` - <https://github.com/visionmedia/bytes.js#readme>
+- `camelcase` - `6.3.0` - <https://github.com/sindresorhus/camelcase#readme>
+- `chalk` - `2.4.2, 4.1.2` - <https://github.com/chalk/chalk#readme>
+- `ci-info` - `2.0.0, 3.9.0` - <https://github.com/watson/ci-info>
+- `cli-cursor` - `2.1.0` - <https://github.com/sindresorhus/cli-cursor#readme>
+- `cli-spinners` - `2.9.2` - <https://github.com/sindresorhus/cli-spinners#readme>
+- `client-only` - `0.0.1` - <https://reactjs.org/>
+- `clone` - `1.0.4` - <https://github.com/pvorb/node-clone#readme>
+- `color` - `4.2.3` - <https://github.com/Qix-/color#readme>
+- `color-convert` - `1.9.3, 2.0.1` - <https://github.com/Qix-/color-convert#readme>
+- `color-name` - `1.1.3, 1.1.4` - <https://github.com/colorjs/color-name>
+- `color-string` - `1.9.1` - <https://github.com/Qix-/color-string#readme>
+- `commander` - `12.1.0, 2.20.3, 7.2.0` - <https://github.com/tj/commander.js#readme>
+- `compressible` - `2.0.18` - <https://github.com/jshttp/compressible#readme>
+- `compression` - `1.8.1` - <https://github.com/expressjs/compression#readme>
+- `connect` - `3.7.0` - <https://github.com/senchalabs/connect#readme>
+- `convert-source-map` - `2.0.0` - <https://github.com/thlorenz/convert-source-map>
+- `cookie` - `1.1.1` - <https://github.com/jshttp/cookie#readme>
+- `core-js-compat` - `3.49.0` - <https://core-js.io>
+- `cross-fetch` - `3.2.0` - <https://github.com/lquixada/cross-fetch>
+- `cross-spawn` - `7.0.6` - <https://github.com/moxystudio/node-cross-spawn>
+- `css-in-js-utils` - `3.1.0` - <https://github.com/robinweser/css-in-js-utils#readme>
+- `css.escape` - `1.5.1` - <https://mths.be/cssescape>
+- `csstype` - `3.2.3` - <https://github.com/frenic/csstype#readme>
+- `debug` - `2.6.9, 3.2.7, 4.4.3` - <https://github.com/debug-js/debug#readme>
+- `decode-uri-component` - `0.2.2` - <https://github.com/SamVerschueren/decode-uri-component#readme>
+- `deepmerge` - `4.3.1` - <https://github.com/TehShrike/deepmerge>
+- `defaults` - `1.0.4` - <https://github.com/sindresorhus/node-defaults#readme>
+- `depd` - `2.0.0` - <https://github.com/dougwilson/nodejs-depd#readme>
+- `dequal` - `2.0.3` - <https://github.com/lukeed/dequal#readme>
+- `destroy` - `1.2.0` - <https://github.com/stream-utils/destroy#readme>
+- `detect-node-es` - `1.1.0` - <https://github.com/thekashey/detect-node>
+- `dnssd-advertise` - `1.1.6` - <https://github.com/kitten/dnssd-advertise#readme>
+- `dom-accessibility-api` - `0.5.16, 0.6.3` - <https://github.com/eps1lon/dom-accessibility-api#readme>
+- `ee-first` - `1.1.1` - <https://github.com/jonathanong/ee-first#readme>
+- `emoji-regex` - `8.0.0` - <https://mths.be/emoji-regex>
+- `encodeurl` - `1.0.2, 2.0.0` - <https://github.com/pillarjs/encodeurl#readme>
+- `error-stack-parser` - `2.1.4` - <https://www.stacktracejs.com>
+- `es-errors` - `1.3.0` - <https://github.com/ljharb/es-errors#readme>
+- `escalade` - `3.2.0` - <https://github.com/lukeed/escalade#readme>
+- `escape-html` - `1.0.3` - <https://github.com/component/escape-html#readme>
+- `escape-string-regexp` - `1.0.5, 4.0.0` - <https://github.com/sindresorhus/escape-string-regexp#readme>
+- `etag` - `1.8.1` - <https://github.com/jshttp/etag#readme>
+- `event-target-shim` - `5.0.1` - <https://github.com/mysticatea/event-target-shim>
+- `expo` - `57.0.4` - <https://github.com/expo/expo/tree/main/packages/expo>
+- `expo-asset` - `57.0.3` - <https://docs.expo.dev/versions/latest/sdk/asset/>
+- `expo-constants` - `57.0.3` - <https://docs.expo.dev/versions/latest/sdk/constants/>
+- `expo-dev-client` - `57.0.5` - <https://docs.expo.dev/versions/latest/sdk/dev-client/>
+- `expo-dev-launcher` - `57.0.5` - <https://docs.expo.dev>
+- `expo-dev-menu` - `57.0.5` - <https://docs.expo.dev>
+- `expo-dev-menu-interface` - `57.0.0` - <https://docs.expo.dev>
+- `expo-device` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/device/>
+- `expo-file-system` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/filesystem/>
+- `expo-font` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/font/>
+- `expo-glass-effect` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/glass-effect/>
+- `expo-image` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/image/>
+- `expo-json-utils` - `57.0.0` - <https://docs.expo.dev>
+- `expo-keep-awake` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/keep-awake/>
+- `expo-linking` - `57.0.2` - <https://docs.expo.dev/versions/latest/sdk/linking>
+- `expo-location` - `57.0.2` - <https://docs.expo.dev/versions/latest/sdk/location/>
+- `expo-manifests` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/manifests/>
+- `expo-modules-autolinking` - `57.0.5` - <https://github.com/expo/expo/tree/main/packages/expo-modules-autolinking#readme>
+- `expo-modules-core` - `57.0.3` - <https://github.com/expo/expo/tree/main/packages/expo-modules-core>
+- `expo-modules-jsi` - `57.0.1` - <https://github.com/expo/expo/tree/main/packages/expo-modules-jsi>
+- `expo-router` - `57.0.4` - <https://docs.expo.dev/routing/introduction/>
+- `expo-server` - `57.0.0` - <https://github.com/expo/expo/tree/main/packages/expo-server#readme>
+- `expo-splash-screen` - `57.0.2` - <https://docs.expo.dev/versions/latest/sdk/splash-screen/>
+- `expo-status-bar` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/status-bar/>
+- `expo-symbols` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/symbols/>
+- `expo-system-ui` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/system-ui>
+- `expo-updates-interface` - `57.0.0` - <https://docs.expo.dev>
+- `expo-web-browser` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/webbrowser/>
+- `fast-decode-uri-component` - `1.0.1` - <https://github.com/delvedor/fast-decode-uri-component#readme>
+- `fast-deep-equal` - `3.1.3` - <https://github.com/epoberezkin/fast-deep-equal#readme>
+- `fast-json-stringify` - `7.0.1` - <https://github.com/fastify/fast-json-stringify#readme>
+- `fast-querystring` - `1.1.2` - <https://github.com/anonrig/fast-querystring#readme>
+- `fastify` - `5.10.0` - <https://fastify.dev/>
+- `fastify-plugin` - `6.0.0` - <https://github.com/fastify/fastify-plugin#readme>
+- `fastify-type-provider-zod` - `7.0.0` - <https://github.com/turkerdev/fastify-type-provider-zod>
+- `fbjs` - `3.0.5` - <https://github.com/facebook/fbjs#readme>
+- `fbjs-css-vars` - `1.0.2` - <https://github.com/facebook/fbjs#readme>
+- `fdir` - `6.5.0` - <https://github.com/thecodrr/fdir#readme>
+- `fetch-nodeshim` - `0.4.10` - <https://github.com/kitten/fetch-nodeshim#readme>
+- `fill-range` - `7.1.1` - <https://github.com/jonschlinkert/fill-range>
+- `filter-obj` - `1.1.0` - <https://github.com/sindresorhus/filter-obj#readme>
+- `finalhandler` - `1.1.2` - <https://github.com/pillarjs/finalhandler#readme>
+- `find-my-way` - `9.6.0` - <https://github.com/delvedor/find-my-way#readme>
+- `flow-enums-runtime` - `0.0.6` - <https://github.com/facebook/flow#readme>
+- `fresh` - `0.5.2` - <https://github.com/jshttp/fresh#readme>
+- `function-bind` - `1.1.2` - <https://github.com/Raynos/function-bind>
+- `gensync` - `1.0.0-beta.2` - <https://github.com/loganfsmyth/gensync>
+- `get-nonce` - `1.0.1` - <https://github.com/theKashey/get-nonce>
+- `getenv` - `2.0.0` - <https://github.com/ctavan/node-getenv>
+- `has-flag` - `3.0.0, 4.0.0` - <https://github.com/sindresorhus/has-flag#readme>
+- `hasown` - `2.0.4` - <https://github.com/inspect-js/hasOwn#readme>
+- `hermes-compiler` - `250829098.0.14` - <https://github.com/facebook/hermes#readme>
+- `hermes-estree` - `0.35.0, 0.36.0, 0.36.1` - <https://github.com/facebook/hermes#readme>
+- `hermes-parser` - `0.35.0, 0.36.0, 0.36.1` - <https://github.com/facebook/hermes#readme>
+- `http-errors` - `2.0.1` - <https://github.com/jshttp/http-errors#readme>
+- `https-proxy-agent` - `7.0.6` - <https://github.com/TooTallNate/proxy-agents#readme>
+- `ignore` - `5.3.2` - <https://github.com/kaelzhang/node-ignore#readme>
+- `image-size` - `1.2.1` - <https://github.com/image-size/image-size#readme>
+- `indent-string` - `4.0.0` - <https://github.com/sindresorhus/indent-string#readme>
+- `inline-style-prefixer` - `7.0.1` - <https://github.com/robinweser/inline-style-prefixer#readme>
+- `invariant` - `2.2.4` - <https://github.com/zertosh/invariant#readme>
+- `ipaddr.js` - `2.4.0` - <https://github.com/whitequark/ipaddr.js#readme>
+- `is-arrayish` - `0.3.4` - <https://github.com/qix-/node-is-arrayish#readme>
+- `is-core-module` - `2.16.2` - <https://github.com/inspect-js/is-core-module>
+- `is-docker` - `2.2.1` - <https://github.com/sindresorhus/is-docker#readme>
+- `is-fullwidth-code-point` - `3.0.0` - <https://github.com/sindresorhus/is-fullwidth-code-point#readme>
+- `is-number` - `7.0.0` - <https://github.com/jonschlinkert/is-number>
+- `is-wsl` - `2.2.0` - <https://github.com/sindresorhus/is-wsl#readme>
+- `jest-get-type` - `29.6.3` - <https://github.com/jestjs/jest#readme>
+- `jest-util` - `29.7.0` - <https://github.com/jestjs/jest#readme>
+- `jest-validate` - `29.7.0` - <https://github.com/jestjs/jest#readme>
+- `jest-worker` - `29.7.0` - <https://github.com/jestjs/jest#readme>
+- `jimp-compact` - `0.16.1` - <https://github.com/nuxt-community/jimp-compact#readme>
+- `js-tokens` - `4.0.0` - <https://github.com/lydell/js-tokens#readme>
+- `js-yaml` - `4.3.0` - <https://github.com/nodeca/js-yaml#readme>
+- `jsesc` - `3.1.0` - <https://mths.be/jsesc>
+- `json-schema-ref-resolver` - `3.0.0` - <https://github.com/fastify/json-schema-ref-resolver#readme>
+- `json-schema-resolver` - `3.0.0` - <https://github.com/Eomm/json-schema-resolver#readme>
+- `json-schema-traverse` - `1.0.0` - <https://github.com/epoberezkin/json-schema-traverse#readme>
+- `json-stringify-pretty-compact` - `4.0.0` - <https://github.com/lydell/json-stringify-pretty-compact#readme>
+- `json5` - `2.2.3` - <http://json5.org/>
+- `kleur` - `3.0.3` - <https://github.com/lukeed/kleur#readme>
+- `lan-network` - `0.2.1` - <https://github.com/kitten/lan-network#readme>
+- `leven` - `3.1.0` - <https://github.com/sindresorhus/leven#readme>
+- `lodash.debounce` - `4.0.8` - <https://lodash.com/>
+- `lodash.throttle` - `4.1.1` - <https://lodash.com/>
+- `log-symbols` - `2.2.0` - <https://github.com/sindresorhus/log-symbols#readme>
+- `loose-envify` - `1.4.0` - <https://github.com/zertosh/loose-envify>
+- `lz-string` - `1.5.0` - <http://pieroxy.net/blog/pages/lz-string/index.html>
+- `memoize-one` - `5.2.1, 6.0.0` - <https://github.com/alexreardon/memoize-one#readme>
+- `merge-stream` - `2.0.0` - <https://github.com/grncdr/merge-stream#readme>
+- `metro` - `0.84.4` - <https://github.com/facebook/metro#readme>
+- `metro-babel-transformer` - `0.84.4` - <https://github.com/facebook/metro#readme>
+- `metro-cache` - `0.84.4` - <https://github.com/facebook/metro#readme>
+- `metro-cache-key` - `0.84.4` - <https://github.com/facebook/metro#readme>
+- `metro-config` - `0.84.4` - <https://github.com/facebook/metro#readme>
+- `metro-core` - `0.84.4` - <https://github.com/facebook/metro#readme>
+- `metro-file-map` - `0.84.4` - <https://github.com/facebook/metro#readme>
+- `metro-minify-terser` - `0.84.4` - <https://github.com/facebook/metro#readme>
+- `metro-resolver` - `0.84.4` - <https://github.com/facebook/metro#readme>
+- `metro-runtime` - `0.84.4` - <https://github.com/facebook/metro#readme>
+- `metro-source-map` - `0.84.4` - <https://github.com/facebook/metro#readme>
+- `metro-symbolicate` - `0.84.4` - <https://github.com/facebook/metro#readme>
+- `metro-transform-plugins` - `0.84.4` - <https://github.com/facebook/metro#readme>
+- `metro-transform-worker` - `0.84.4` - <https://github.com/facebook/metro#readme>
+- `micromatch` - `4.0.8` - <https://github.com/micromatch/micromatch>
+- `mime` - `1.6.0` - <https://github.com/broofa/node-mime#readme>
+- `mime-db` - `1.52.0, 1.54.0` - <https://github.com/jshttp/mime-db#readme>
+- `mime-types` - `2.1.35, 3.0.2` - <https://github.com/jshttp/mime-types#readme>
+- `mimic-fn` - `1.2.0` - <https://github.com/sindresorhus/mimic-fn#readme>
+- `min-indent` - `1.0.1` - <https://github.com/thejameskyle/min-indent#readme>
+- `minimist` - `1.2.8` - <https://github.com/minimistjs/minimist>
+- `mkdirp` - `1.0.4` - <https://github.com/isaacs/node-mkdirp#readme>
+- `ms` - `2.0.0, 2.1.3` - <https://github.com/vercel/ms#readme>
+- `multitars` - `1.0.0` - <https://github.com/kitten/multitars#readme>
+- `nanoid` - `3.3.16` - <https://github.com/ai/nanoid#readme>
+- `negotiator` - `0.6.3, 0.6.4, 1.0.0` - <https://github.com/jshttp/negotiator#readme>
+- `node-fetch` - `2.7.0` - <https://github.com/bitinn/node-fetch>
+- `node-int64` - `0.4.0` - <https://github.com/broofa/node-int64#readme>
+- `node-releases` - `2.0.51` - <https://github.com/chicoxyzzy/node-releases#readme>
+- `nullthrows` - `1.1.1` - <https://github.com/zertosh/nullthrows#readme>
+- `ob1` - `0.84.4` - <https://github.com/facebook/metro#readme>
+- `object-assign` - `4.1.1` - <https://github.com/sindresorhus/object-assign#readme>
+- `on-exit-leak-free` - `2.1.2` - <https://github.com/mcollina/on-exit-or-gc#readme>
+- `on-finished` - `2.3.0, 2.4.1` - <https://github.com/jshttp/on-finished#readme>
+- `on-headers` - `1.1.0` - <https://github.com/jshttp/on-headers#readme>
+- `onetime` - `2.0.1` - <https://github.com/sindresorhus/onetime#readme>
+- `open` - `7.4.2` - <https://github.com/sindresorhus/open#readme>
+- `openapi-types` - `12.1.3` - <https://github.com/kogosoftwarellc/open-api/tree/master/packages/openapi-types#readme>
+- `ora` - `3.4.0` - <https://github.com/sindresorhus/ora#readme>
+- `parse-png` - `2.1.0` - <https://github.com/kevva/parse-png#readme>
+- `parseurl` - `1.3.3` - <https://github.com/pillarjs/parseurl#readme>
+- `path-key` - `3.1.1` - <https://github.com/sindresorhus/path-key#readme>
+- `path-parse` - `1.0.7` - <https://github.com/jbgutierrez/path-parse#readme>
+- `picomatch` - `2.3.2, 4.0.5` - <https://github.com/micromatch/picomatch>
+- `pino` - `10.3.1` - <https://getpino.io>
+- `pino-abstract-transport` - `3.0.0` - <https://github.com/pinojs/pino-abstract-transport#readme>
+- `pino-std-serializers` - `7.1.0` - <https://github.com/pinojs/pino-std-serializers#readme>
+- `plist` - `3.1.1` - <https://github.com/TooTallNate/node-plist#readme>
+- `pngjs` - `3.4.0` - <https://github.com/lukeapage/pngjs>
+- `postcss` - `8.5.19` - <https://postcss.org/>
+- `postcss-value-parser` - `4.2.0` - <https://github.com/TrySound/postcss-value-parser>
+- `pretty-format` - `27.5.1, 29.7.0` - <https://github.com/jestjs/jest#readme>
+- `process-warning` - `4.0.1, 5.0.0` - <https://github.com/fastify/fastify-warning#readme>
+- `progress` - `2.0.3` - <https://github.com/visionmedia/node-progress#readme>
+- `promise` - `7.3.1, 8.3.0` - <https://github.com/then/promise#readme>
+- `prompts` - `2.4.2` - <https://github.com/terkelg/prompts#readme>
+- `query-string` - `7.1.3` - <https://github.com/sindresorhus/query-string#readme>
+- `queue` - `6.0.2` - <https://github.com/jessetane/queue#readme>
+- `quick-format-unescaped` - `4.0.4` - <https://github.com/davidmarkclements/quick-format#readme>
+- `range-parser` - `1.2.1` - <https://github.com/jshttp/range-parser#readme>
+- `react` - `19.2.3` - <https://react.dev/>
+- `react-devtools-core` - `6.1.5` - <https://github.com/facebook/react#readme>
+- `react-dom` - `19.2.3` - <https://react.dev/>
+- `react-fast-compare` - `3.2.2` - <https://github.com/FormidableLabs/react-fast-compare>
+- `react-freeze` - `1.0.4` - <https://github.com/software-mansion/react-freeze#readme>
+- `react-is` - `16.13.1, 17.0.2, 18.3.1, 19.2.7` - <https://react.dev/>
+- `react-native` - `0.86.0` - <https://reactnative.dev/>
+- `react-native-drawer-layout` - `4.2.7` - <https://reactnavigation.org/docs/drawer-layout/>
+- `react-native-gesture-handler` - `2.32.0` - <https://docs.swmansion.com/react-native-gesture-handler/>
+- `react-native-is-edge-to-edge` - `1.3.1` - <https://github.com/zoontek/react-native-edge-to-edge>
+- `react-native-reanimated` - `4.5.0` - <https://docs.swmansion.com/react-native-reanimated>
+- `react-native-safe-area-context` - `5.7.0` - <https://github.com/AppAndFlow/react-native-safe-area-context#readme>
+- `react-native-screens` - `4.25.2` - <https://github.com/software-mansion/react-native-screens#readme>
+- `react-native-web` - `0.21.2` - <https://github.com/necolas/react-native-web#readme>
+- `react-native-worklets` - `0.10.0` - <https://docs.swmansion.com/react-native-worklets>
+- `react-refresh` - `0.14.2` - <https://reactjs.org/>
+- `react-remove-scroll` - `2.7.2` - <https://github.com/theKashey/react-remove-scroll#readme>
+- `react-remove-scroll-bar` - `2.3.8` - <https://github.com/theKashey/react-remove-scroll-bar#readme>
+- `react-style-singleton` - `2.2.3` - <https://github.com/theKashey/react-style-singleton#readme>
+- `real-require` - `0.2.0, 1.0.0` - <https://github.com/pinojs/real-require>
+- `redent` - `3.0.0` - <https://github.com/sindresorhus/redent#readme>
+- `regenerate` - `1.4.2` - <https://mths.be/regenerate>
+- `regenerate-unicode-properties` - `10.2.2` - <https://github.com/mathiasbynens/regenerate-unicode-properties>
+- `regenerator-runtime` - `0.13.11` - <https://github.com/facebook/regenerator/tree/main#readme>
+- `regexpu-core` - `6.4.0` - <https://mths.be/regexpu>
+- `regjsgen` - `0.8.0` - <https://github.com/bnjmnt4n/regjsgen>
+- `require-directory` - `2.1.1` - <https://github.com/troygoode/node-require-directory/>
+- `require-from-string` - `2.0.2` - <https://github.com/floatdrop/require-from-string#readme>
+- `resolve` - `1.22.12` - <https://github.com/browserify/resolve#readme>
+- `resolve-from` - `5.0.0` - <https://github.com/sindresorhus/resolve-from#readme>
+- `resolve-workspace-root` - `2.0.1` - <https://github.com/byCedric/resolve-workspace-root#readme>
+- `restore-cursor` - `2.0.0` - <https://github.com/sindresorhus/restore-cursor#readme>
+- `ret` - `0.5.0` - <https://github.com/fent/ret.js#readme>
+- `reusify` - `1.1.0` - <https://github.com/mcollina/reusify#readme>
+- `rfdc` - `1.4.1` - <https://github.com/davidmarkclements/rfdc#readme>
+- `safe-buffer` - `5.2.1` - <https://github.com/feross/safe-buffer>
+- `safe-regex2` - `5.1.1` - <https://github.com/fastify/safe-regex2>
+- `safe-stable-stringify` - `2.5.0` - <https://github.com/BridgeAR/safe-stable-stringify#readme>
+- `scheduler` - `0.27.0` - <https://react.dev/>
+- `send` - `0.19.2` - <https://github.com/pillarjs/send#readme>
+- `serialize-error` - `2.1.0` - <https://github.com/sindresorhus/serialize-error#readme>
+- `serve-static` - `1.16.3` - <https://github.com/expressjs/serve-static#readme>
+- `server-only` - `0.0.1` - <https://reactjs.org/>
+- `set-cookie-parser` - `2.7.2` - <https://github.com/nfriedly/set-cookie-parser>
+- `setimmediate` - `1.0.5` - <https://github.com/YuzuJS/setImmediate#readme>
+- `sf-symbols-typescript` - `2.2.0` - <https://github.com/nandorojo/typescript-sf-symbols#readme>
+- `shallowequal` - `1.1.0` - <https://github.com/dashed/shallowequal#readme>
+- `shebang-command` - `2.0.0` - <https://github.com/kevva/shebang-command#readme>
+- `shebang-regex` - `3.0.0` - <https://github.com/sindresorhus/shebang-regex#readme>
+- `shell-quote` - `1.10.0` - <https://github.com/ljharb/shell-quote>
+- `simple-plist` - `1.3.1` - <https://github.com/wollardj/simple-plist.git>
+- `simple-swizzle` - `0.2.4` - <https://github.com/qix-/node-simple-swizzle#readme>
+- `sisteransi` - `1.0.5` - <https://github.com/terkelg/sisteransi#readme>
+- `slugify` - `1.6.9` - <https://github.com/simov/slugify>
+- `sonic-boom` - `4.2.1` - <https://github.com/pinojs/sonic-boom#readme>
+- `source-map-support` - `0.5.21` - <https://github.com/evanw/node-source-map-support#readme>
+- `split-on-first` - `1.1.0` - <https://github.com/sindresorhus/split-on-first#readme>
+- `stackframe` - `1.3.4` - <https://www.stacktracejs.com>
+- `stacktrace-parser` - `0.1.11` - <https://github.com/errwischt/stacktrace-parser>
+- `standard-navigation` - `0.0.5` - <https://github.com/react-navigation/standard-navigation#readme>
+- `statuses` - `1.5.0, 2.0.2` - <https://github.com/jshttp/statuses#readme>
+- `strict-uri-encode` - `2.0.0` - <https://github.com/kevva/strict-uri-encode#readme>
+- `string-width` - `4.2.3` - <https://github.com/sindresorhus/string-width#readme>
+- `strip-ansi` - `5.2.0, 6.0.1` - <https://github.com/chalk/strip-ansi#readme>
+- `strip-indent` - `3.0.0` - <https://github.com/sindresorhus/strip-indent#readme>
+- `structured-headers` - `0.4.1` - <https://github.com/evert/structured-header#readme>
+- `styleq` - `0.1.3` - <https://github.com/necolas/styleq#readme>
+- `supports-color` - `5.5.0, 7.2.0, 8.1.1` - <https://github.com/chalk/supports-color#readme>
+- `supports-hyperlinks` - `2.3.0` - <https://github.com/jamestalmage/supports-hyperlinks#readme>
+- `supports-preserve-symlinks-flag` - `1.0.0` - <https://github.com/inspect-js/node-supports-preserve-symlinks-flag#readme>
+- `terminal-link` - `2.1.1` - <https://github.com/sindresorhus/terminal-link#readme>
+- `thread-stream` - `4.2.0` - <https://github.com/mcollina/thread-stream#readme>
+- `throat` - `5.0.0` - <https://github.com/ForbesLindesay/throat#readme>
+- `tinyglobby` - `0.2.17` - <https://superchupu.dev/tinyglobby>
+- `to-regex-range` - `5.0.1` - <https://github.com/micromatch/to-regex-range>
+- `toad-cache` - `3.7.4` - <https://github.com/kibertoad/toad-cache>
+- `toidentifier` - `1.0.1` - <https://github.com/component/toidentifier#readme>
+- `toqr` - `0.1.1` - <https://github.com/kitten/toqr#readme>
+- `tr46` - `0.0.3` - <https://github.com/Sebmaster/tr46.js#readme>
+- `ua-parser-js` - `0.7.41, 1.0.41` - <https://uaparser.dev>
+- `undici-types` - `7.18.2` - <https://undici.nodejs.org>
+- `unicode-canonical-property-names-ecmascript` - `2.0.1` - <https://github.com/mathiasbynens/unicode-canonical-property-names-ecmascript>
+- `unicode-match-property-ecmascript` - `2.0.0` - <https://github.com/mathiasbynens/unicode-match-property-ecmascript>
+- `unicode-match-property-value-ecmascript` - `2.2.1` - <https://github.com/mathiasbynens/unicode-match-property-value-ecmascript>
+- `unicode-property-aliases-ecmascript` - `2.2.0` - <https://github.com/mathiasbynens/unicode-property-aliases-ecmascript>
+- `unpipe` - `1.0.0` - <https://github.com/stream-utils/unpipe#readme>
+- `update-browserslist-db` - `1.2.3` - <https://github.com/browserslist/update-db#readme>
+- `use-callback-ref` - `1.3.3` - <https://github.com/theKashey/use-callback-ref#readme>
+- `use-latest-callback` - `0.2.6` - <https://github.com/satya164/use-latest-callback#readme>
+- `use-sidecar` - `1.1.3` - <https://github.com/theKashey/use-sidecar>
+- `utils-merge` - `1.0.1` - <https://github.com/jaredhanson/utils-merge#readme>
+- `uuid` - `7.0.3` - <https://github.com/uuidjs/uuid#readme>
+- `vary` - `1.1.2` - <https://github.com/jshttp/vary#readme>
+- `vaul` - `1.1.2` - <https://vaul.emilkowal.ski/>
+- `vlq` - `1.0.1` - <https://github.com/Rich-Harris/vlq#readme>
+- `warn-once` - `0.1.1` - <https://github.com/satya164/warn-once#readme>
+- `wcwidth` - `1.0.1` - <https://github.com/timoxley/wcwidth#readme>
+- `whatwg-fetch` - `3.6.20` - <https://github.com/github/fetch#readme>
+- `whatwg-url` - `5.0.0` - <https://github.com/jsdom/whatwg-url#readme>
+- `whatwg-url-minimum` - `0.1.2` - <https://github.com/kitten/whatwg-url-minimum#readme>
+- `wrap-ansi` - `7.0.0` - <https://github.com/chalk/wrap-ansi#readme>
+- `ws` - `7.5.11, 8.21.0` - <https://github.com/websockets/ws>
+- `xml2js` - `0.6.0` - <https://github.com/Leonidas-from-XIV/node-xml2js>
+- `xmlbuilder` - `11.0.1, 15.1.1` - <http://github.com/oozcitak/xmlbuilder-js>
+- `yargs` - `17.7.3` - <https://yargs.js.org/>
+- `zod` - `3.25.76, 4.4.3` - <https://zod.dev>
+
+## MIT AND Apache-2.0
+
+- `@expo-google-fonts/material-symbols` - `0.4.38` - <https://github.com/expo/google-fonts/tree/master/font-packages/material-symbols#readme>
+
+## MIT AND OFL-1.1
+
+- `@expo-google-fonts/atkinson-hyperlegible-next` - `0.4.1` - <https://github.com/expo/google-fonts/tree/master/font-packages/atkinson-hyperlegible-next#readme>
+
+## MPL-2.0
+
+- `lightningcss` - `1.32.0` - <https://github.com/parcel-bundler/lightningcss#readme>
+- `lightningcss-darwin-arm64` - `1.32.0` - <https://github.com/parcel-bundler/lightningcss#readme>
+
+## Python-2.0
+
+- `argparse` - `2.0.1` - <https://github.com/nodeca/argparse#readme>
+
+## Unlicense
+
+- `big-integer` - `1.6.52` - <https://github.com/peterolson/BigInteger.js#readme>
+- `stream-buffers` - `2.2.0` - <https://github.com/samcday/node-stream-buffer#readme>

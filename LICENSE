@@ -1,0 +1,12 @@
+NavOSS uses a directory-based license split.
+
+- apps/mobile and packages/contracts are licensed under MPL-2.0.
+- apps/api and future hosted backend, worker, operations, infrastructure, and
+  data-pipeline code are licensed under AGPL-3.0-only unless a file or directory
+  states otherwise.
+- Documentation and brand assets remain all rights reserved unless their
+  directory or file states otherwise.
+- Third-party dependencies, fonts, map data, and public datasets retain their
+  own licenses and attribution requirements.
+
+Canonical license texts and additional details are in LICENSES/.

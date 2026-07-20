@@ -3,9 +3,12 @@ node_modules/
 .pnpm-store/
 
 # Build and test output
+.build/
+.swiftpm/
 .turbo/
 coverage/
 dist/
+dist-*/
 
 # Environment and secrets
 .env
@@ -16,6 +19,7 @@ dist/
 
 # Apple and editor output
 .DS_Store
+.serena/
 *.xcuserstate
 DerivedData/
 

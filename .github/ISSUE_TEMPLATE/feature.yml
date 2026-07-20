@@ -1,0 +1,35 @@
+name: Feature request
+description: Propose a focused improvement aligned with the Calgary beta.
+title: '[Feature]: '
+labels: ['enhancement', 'needs-triage']
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user or contributor problem should NavOSS solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe observable behavior, not only an implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Safety, privacy, data, and maintenance considerations
+      description: Note required providers, licenses, retention, distraction, or operational costs.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and the roadmap.
+          required: true
+        - label: This request does not depend on copying proprietary app behavior or data.
+          required: true

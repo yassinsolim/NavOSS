@@ -1,0 +1,64 @@
+name: Route quality report
+description: Report an unsafe, illegal, inaccessible, or unexpectedly poor Calgary route.
+title: '[Route]: '
+labels: ['route-quality', 'needs-triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Safety comes first. Do not operate multiple navigation apps while driving. Have a passenger collect comparisons or stop safely. Use neighborhoods or public landmarks instead of private addresses.
+  - type: input
+    id: corridor
+    attributes:
+      label: Approximate corridor
+      description: Use neighborhoods, public landmarks, or major intersections.
+      placeholder: Downtown Calgary to YYC Airport
+    validations:
+      required: true
+  - type: input
+    id: time
+    attributes:
+      label: Local date and time
+      placeholder: 2026-07-19 14:30 MDT
+    validations:
+      required: true
+  - type: dropdown
+    id: problem
+    attributes:
+      label: Problem type
+      options:
+        - Unsafe or illegal maneuver
+        - Closed or inaccessible road
+        - Wrong destination access
+        - Poor road choice
+        - Incorrect distance or ETA
+        - Missing or incorrect maneuver
+        - False or missed reroute
+        - Early or late arrival
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed and expected behavior
+      description: Name the unexpected public road or maneuver without including a private address.
+    validations:
+      required: true
+  - type: checkboxes
+    id: settings
+    attributes:
+      label: Route settings and comparison
+      options:
+        - label: Avoid highways was enabled.
+        - label: Apple Maps differed at the same time.
+        - label: Google Maps differed at the same time.
+        - label: A posted sign or closure contradicted the route.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: A passenger collected this report or the vehicle was safely stopped.
+          required: true
+        - label: I removed private addresses and personal trip history.
+          required: true

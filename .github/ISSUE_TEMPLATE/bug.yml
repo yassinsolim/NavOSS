@@ -1,0 +1,56 @@
+name: Bug report
+description: Report a reproducible NavOSS defect that is not a security vulnerability.
+title: '[Bug]: '
+labels: ['bug', 'needs-triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include credentials, private addresses, precise trip histories, or sensitive screenshots. Report security issues privately through SECURITY.md.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Open ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: NavOSS version/build
+      placeholder: 0.1.0 (1)
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Device and OS
+      placeholder: iPhone model, iOS version, or simulator
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Additional evidence
+      description: Add sanitized logs or screenshots that do not expose sensitive information.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true
+        - label: I removed precise personal location and credentials.
+          required: true
