@@ -41,9 +41,10 @@
     "vitest": "catalog:"
   },
   "scripts": {
-    "build": "expo export --platform ios --output-dir dist",
-    "build:release": "node ./scripts/validate-release-env.mjs && expo export --platform ios --output-dir dist-release",
+    "build": "corepack pnpm --filter @navoss/contracts build && expo export --platform ios --output-dir dist",
+    "build:release": "node ./scripts/validate-release-env.mjs && corepack pnpm --filter @navoss/contracts build && expo export --platform ios --output-dir dist-release",
     "check": "tsc -p tsconfig.json --noEmit",
+    "eas-build-post-install": "corepack pnpm --filter @navoss/contracts build",
     "eas-build-pre-install": "node ./scripts/validate-release-env.mjs",
     "start": "expo start --dev-client",
     "start:simulator": "EXPO_PUBLIC_API_URL=http://127.0.0.1:3001 expo start --dev-client --localhost",
