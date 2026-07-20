@@ -5,7 +5,7 @@ It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
 
-Lockfile SHA-256: `25d021d901ea9fa9bc2af40132fb137dee24f2d6db27316ee1b96c8f701d1aee`
+Lockfile SHA-256: `85dd2cf42d27755356cc62e2d6f9530a17b770b1b7f3196d884e7454be54fc34`
 
 Regenerate with:
 
@@ -95,6 +95,7 @@ corepack pnpm licenses:generate
 - `isexe` - `2.0.0` - <https://github.com/isaacs/isexe#readme>
 - `lru-cache` - `10.4.3, 5.1.1` - <https://github.com/isaacs/node-lru-cache#readme>
 - `npm-package-arg` - `11.0.3` - <https://github.com/npm/npm-package-arg>
+- `pg-int8` - `1.0.1` - <https://github.com/charmander/pg-int8#readme>
 - `picocolors` - `1.1.1` - <https://github.com/alexeyraspopov/picocolors#readme>
 - `proc-log` - `4.2.0` - <https://github.com/npm/proc-log#readme>
 - `quickselect` - `3.0.0` - <https://github.com/mourner/quickselect#readme>
@@ -504,6 +505,12 @@ corepack pnpm licenses:generate
 - `parseurl` - `1.3.3` - <https://github.com/pillarjs/parseurl#readme>
 - `path-key` - `3.1.1` - <https://github.com/sindresorhus/path-key#readme>
 - `path-parse` - `1.0.7` - <https://github.com/jbgutierrez/path-parse#readme>
+- `pg` - `8.16.3` - <https://github.com/brianc/node-postgres>
+- `pg-connection-string` - `2.14.0` - <https://github.com/brianc/node-postgres/tree/master/packages/pg-connection-string>
+- `pg-pool` - `3.14.0` - <https://github.com/brianc/node-postgres/tree/master/packages/pg-pool#readme>
+- `pg-protocol` - `1.15.0` - <https://github.com/brianc/node-postgres#readme>
+- `pg-types` - `2.2.0` - <https://github.com/brianc/node-pg-types>
+- `pgpass` - `1.0.5` - <https://github.com/hoegaarden/pgpass#readme>
 - `picomatch` - `2.3.2, 4.0.5` - <https://github.com/micromatch/picomatch>
 - `pino` - `10.3.1` - <https://getpino.io>
 - `pino-abstract-transport` - `3.0.0` - <https://github.com/pinojs/pino-abstract-transport#readme>
@@ -512,6 +519,10 @@ corepack pnpm licenses:generate
 - `pngjs` - `3.4.0` - <https://github.com/lukeapage/pngjs>
 - `postcss` - `8.5.19` - <https://postcss.org/>
 - `postcss-value-parser` - `4.2.0` - <https://github.com/TrySound/postcss-value-parser>
+- `postgres-array` - `2.0.0` - <https://github.com/bendrucker/postgres-array#readme>
+- `postgres-bytea` - `1.0.1` - <https://github.com/bendrucker/postgres-bytea#readme>
+- `postgres-date` - `1.0.7` - <https://github.com/bendrucker/postgres-date#readme>
+- `postgres-interval` - `1.2.0` - <https://github.com/bendrucker/postgres-interval#readme>
 - `pretty-format` - `27.5.1, 29.7.0` - <https://github.com/jestjs/jest#readme>
 - `process-warning` - `4.0.1, 5.0.0` - <https://github.com/fastify/fastify-warning#readme>
 - `progress` - `2.0.3` - <https://github.com/visionmedia/node-progress#readme>
@@ -625,6 +636,7 @@ corepack pnpm licenses:generate
 - `ws` - `7.5.11, 8.21.0` - <https://github.com/websockets/ws>
 - `xml2js` - `0.6.0` - <https://github.com/Leonidas-from-XIV/node-xml2js>
 - `xmlbuilder` - `11.0.1, 15.1.1` - <http://github.com/oozcitak/xmlbuilder-js>
+- `xtend` - `4.0.2` - <https://github.com/Raynos/xtend>
 - `yargs` - `17.7.3` - <https://yargs.js.org/>
 - `zod` - `3.25.76, 4.4.3` - <https://zod.dev>
 

@@ -4,13 +4,13 @@ This stack serves the Calgary/Alberta NavOSS API from the dedicated Proxmox VM.
 All geospatial and database services remain private. Caddy binds only to
 `127.0.0.1:8080`; Cloudflare Tunnel is the sole public ingress.
 
-Production status: all five containers are healthy, `navoss-stack.service` and
+Production status: all six containers are healthy, `navoss-stack.service` and
 the nightly backup timer are enabled, and public ingress is
 `https://navoss-api.yassin.app`.
 
 ## Storage
 
-- `/srv/navoss/state/postgres`: backed-up PostGIS state for community reports.
+- `/srv/navoss/state/postgres`: PostGIS state for the reproducible Calgary search index and future community reports. Logical backups exclude `calgary_search_*` tables.
 - `/srv/navoss/artifacts/valhalla`: reproducible Alberta routing graph.
 - `/srv/navoss/artifacts/nominatim/postgres`: reproducible Alberta search index.
 - `/srv/navoss/artifacts/docker`: Docker images, layers, and build cache.
@@ -51,10 +51,17 @@ sudo docker compose up -d nominatim
 sudo docker compose ps
 ```
 
-After Nominatim becomes healthy:
+After Nominatim becomes healthy, start the database and daily Calgary Open Data indexer:
 
 ```sh
-sudo docker compose up -d --build --wait --wait-timeout 300 reports-db api caddy
+sudo docker compose up -d --build reports-db search-indexer
+sudo docker compose ps
+```
+
+Wait for `search-indexer` to become healthy, then start the API and ingress:
+
+```sh
+sudo docker compose up -d --build --wait --wait-timeout 300 api caddy
 ./check-stack.sh
 ```
 
@@ -93,13 +100,16 @@ Do not start both initial imports simultaneously. During either import, monitor
 
 - Mobile search uses `POST /v1/search` with a JSON body; search text and optional
   proximity do not enter public URLs.
+- The indexer mirrors public Calgary business and parcel-address datasets independently;
+  live user queries are evaluated locally and never forwarded to Calgary Open Data.
 - Fastify automatic request logging is disabled.
 - Caddy access logging is not enabled.
 - Nominatim, Valhalla, and PostgreSQL have no host-published ports.
-- All five containers use journald; host journals are capped at seven days and
+- All six containers use journald; host journals are capped at seven days and
   512 MiB. SSH/firewall logs rotate daily within seven days.
 - The reports database disables statement/duration logging and suppresses SQL
   text and parameter values from error logs.
 - Cloudflare Tunnel forwards only the public API hostname to local Caddy.
 - Report-database dumps are mode 0640, compressed, and retained for 14 days.
-  They do not contain search, route, or trip data.
+  They exclude the reproducible public search index and do not contain user search,
+  route, or trip data.

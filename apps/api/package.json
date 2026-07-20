@@ -19,9 +19,11 @@
     "fastify": "catalog:",
     "fastify-type-provider-zod": "catalog:",
     "openapi-types": "catalog:",
+    "pg": "8.16.3",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@types/pg": "8.15.5",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

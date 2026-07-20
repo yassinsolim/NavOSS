@@ -18,7 +18,7 @@ The right next launch is a small **internal TestFlight technical beta**, not a p
 
 ### P0: required before any TestFlight invite
 
-- [x] Deploy `https://navoss-api.yassin.app` with self-hosted Alberta Valhalla/Nominatim, public OpenFreeMap rendering, and official Calgary camera data.
+- [x] Deploy `https://navoss-api.yassin.app` with self-hosted Alberta Valhalla/Nominatim, indexed Calgary business/parcel search, public OpenFreeMap rendering, and official Calgary camera data.
 - [x] Send search in a JSON POST body; disable routine access logging; enforce seven-day host logs and 14-day report-database backups; publish the verified policy.
 - [x] Configure App Store Connect app `NavOSS`, Apple ID `6792619727`, EAS production origin, distribution certificate, provisioning profile, and Submit ID.
 - [x] Verify the public privacy/support URLs and the Metro-independent production export.

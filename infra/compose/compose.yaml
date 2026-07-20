@@ -17,11 +17,18 @@ services:
       NODE_ENV: production
       NOMINATIM_DATASET_VERSION: ${NOMINATIM_DATASET_VERSION}
       NOMINATIM_URL: http://nominatim:8080/
+      PGDATABASE: navoss
+      PGHOST: reports-db
+      PGPASSWORD: ${REPORTS_POSTGRES_PASSWORD}
+      PGUSER: navoss
       PORT: 3000
+      SEARCH_DATABASE_ENABLED: '1'
       VALHALLA_STATUS_URL: http://valhalla:8002/status
       VALHALLA_URL: http://valhalla:8002/route
     depends_on:
       nominatim:
+        condition: service_healthy
+      reports-db:
         condition: service_healthy
       valhalla:
         condition: service_healthy
@@ -38,6 +45,45 @@ services:
       - no-new-privileges:true
     tmpfs:
       - /tmp:size=32m,mode=1777
+
+  search-indexer:
+    build:
+      context: ../..
+      dockerfile: infra/compose/api.Dockerfile
+    command: node dist/calgary-search-indexer.js
+    logging: *navoss-logging
+    restart: unless-stopped
+    environment:
+      PGDATABASE: navoss
+      PGHOST: reports-db
+      PGPASSWORD: ${REPORTS_POSTGRES_PASSWORD}
+      PGUSER: navoss
+      SEARCH_DATABASE_ENABLED: '1'
+    depends_on:
+      reports-db:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    cpus: 0.5
+    networks:
+      - backend
+      - egress
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "const{Pool}=require('pg');const p=new Pool();p.query('SELECT count(*) = 2 AS ready FROM calgary_search_metadata').then(r=>{if(!r.rows[0]?.ready)process.exitCode=1}).catch(()=>{process.exitCode=1}).finally(()=>p.end())"
+      interval: 30s
+      timeout: 5s
+      start_period: 15m
+      retries: 3
 
   caddy:
     image: caddy:2.10.2-alpine

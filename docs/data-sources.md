@@ -1,5 +1,42 @@
 # Official Data Sources
 
+## Calgary Place and Address Search
+
+NavOSS combines a local copy of two City of Calgary datasets with its self-hosted
+OpenStreetMap/Nominatim index. The local copy is refreshed every 24 hours and swapped
+atomically after a complete import, so user searches never query Calgary Open Data directly.
+
+### Business licences
+
+- Dataset: [Calgary Business Licenses](https://data.calgary.ca/d/vdjc-pybd)
+- Socrata dataset ID: `vdjc-pybd`
+- Supplier: The City of Calgary
+- Imported records: licensed businesses with a public location and `HOMEOCCIND = N`
+- Search fields: trade name, public business address, community, and licence types
+- Terms: [Calgary Open Data Terms of Use](https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa)
+
+Home-occupation records are deliberately excluded even when present in the public source.
+The dataset does not cover every Calgary organization: some activities do not require a
+municipal licence, names and locations can change between updates, and informal place names
+may exist only in OpenStreetMap or neither source.
+
+### Parcel addresses
+
+- Dataset: [Parcel Address and lat/long](https://data.calgary.ca/d/s8b3-j88p)
+- Socrata dataset ID: `s8b3-j88p`
+- Supplier: The City of Calgary
+- Search fields: house number and suffix, street name, street type, quadrant, and coordinates
+- Terms: [Calgary Open Data Terms of Use](https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa)
+
+Common long and abbreviated street forms are normalized consistently, such as `Trail`/`TR`
+and `Southeast`/`SE`. Rows without a street identity or valid coordinates are excluded rather
+than guessed. Parcel coordinates identify a civic parcel and are not guaranteed to represent
+an entrance, driveway, unit, or ideal vehicle arrival point.
+
+The production index stores public source records only. It does not store search text, search
+origins, selected results, routes, or user identities. Search results are ranked by exact text,
+prefix and word-prefix matches, typo similarity, and then optional proximity.
+
 ## Calgary Intersection Safety Cameras
 
 NavOSS uses The City of Calgary's official **Intersection Safety Cameras** dataset for fixed enforcement-camera markers and alerts.

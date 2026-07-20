@@ -59,6 +59,10 @@ function searchSourceLabel(source: SearchSource | undefined): string {
     return 'Calgary place search';
   }
 
+  if (source.id === 'calgary-hybrid-search' || source.id === 'calgary-open-data-index') {
+    return 'Calgary Open Data + OpenStreetMap';
+  }
+
   return source.freshness === 'static'
     ? 'Static Calgary fallback'
     : source.id === 'nominatim-self-hosted'

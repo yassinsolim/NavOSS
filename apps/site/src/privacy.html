@@ -51,8 +51,9 @@
         <p>
           Search text and, when available, an approximate search origin are sent in an encrypted
           request body to the NavOSS API. Route requests send origin and destination coordinates. An
-          automatic reroute sends the latest route origin and destination. Nominatim search and
-          Valhalla routing run on the operator-controlled server in Alberta.
+          automatic reroute sends the latest route origin and destination. Search uses self-hosted
+          Nominatim plus a local mirror of public Calgary business and parcel-address data; Valhalla
+          routing runs on the operator-controlled server in Alberta.
         </p>
         <p>
           These values are processed in memory for the response and then discarded. They are not
@@ -71,8 +72,9 @@
           The phone requests map styles, tiles, fonts, and sprites directly from
           <a href="https://openfreemap.org/privacy/">OpenFreeMap</a>. The requested resources can
           indicate the viewed map area. OpenFreeMap says regular logs omit IP addresses, while it
-          may retain incident IP logs for up to 30 days. Camera records come through NavOSS from
-          Calgary Open Data; the phone does not send location to the City of Calgary.
+          may retain incident IP logs for up to 30 days. Camera, business, and parcel-address
+          records are mirrored by the NavOSS server from Calgary Open Data. The phone and live
+          searches do not send location or search text to the City of Calgary.
         </p>
 
         <h2>Providers and retention</h2>
@@ -87,7 +89,8 @@
           NavOSS keeps operational, SSH, and firewall logs for no more than seven days. Routine HTTP
           access logging is disabled. Logs exclude request bodies, search text, and route
           coordinates. The currently disabled report database has 14-day backups; route and search
-          requests never enter those backups.
+          requests never enter those backups, and reproducible public search-index tables are
+          excluded.
         </p>
         <p>
           Operational logs may contain timestamps, service identity, severity, lifecycle or health

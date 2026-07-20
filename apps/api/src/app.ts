@@ -86,7 +86,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         { description: 'Official City of Calgary safety-camera locations', name: 'cameras' },
         { description: 'Application configuration', name: 'config' },
         { description: 'Driving route calculation and guidance', name: 'routes' },
-        { description: 'Fixture-backed Calgary place search', name: 'search' },
+        { description: 'Hybrid Calgary place and civic-address search', name: 'search' },
         { description: 'Service health and readiness', name: 'system' },
       ],
     },
@@ -296,7 +296,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     '/v1/search',
     {
       schema: {
-        description: 'Searches Calgary places and addresses with a deterministic fallback.',
+        description:
+          'Searches indexed Calgary businesses, civic addresses, and OpenStreetMap places with a deterministic fallback.',
         body: SearchQuerySchema,
         response: {
           200: SearchResponseSchema,

@@ -183,4 +183,60 @@ describe('Nominatim search provider', () => {
     expect(response.results[0]?.id).toBe('poi:yyc-airport');
     expect(response.source.id).toBe('calgary-alpha-fixtures');
   });
+
+  it('ranks an exact official Calgary address above a nearby OSM substitute', async () => {
+    const nominatimProvider = {
+      search: () =>
+        Promise.resolve({
+          degraded: false,
+          results: [
+            {
+              category: 'address' as const,
+              center: { latitude: 51.0452, longitude: -114.058 },
+              confidence: 0.55,
+              id: 'nominatim:way:200',
+              label: '750 Macleod Trail SE, Calgary, Alberta, Canada',
+              name: '750 Macleod Trail SE',
+            },
+          ],
+          source: {
+            datasetVersion: 'alberta',
+            freshness: 'fresh' as const,
+            id: 'nominatim-self-hosted',
+            updatedAt: '2026-07-20T12:00:00Z',
+          },
+        }),
+    };
+    const calgaryProvider = {
+      search: () =>
+        Promise.resolve({
+          degraded: false,
+          results: [
+            {
+              category: 'address' as const,
+              center: { latitude: 51.04539715854496, longitude: -114.05792721246195 },
+              confidence: 1,
+              id: 'calgary-address:800',
+              label: '800 Macleod Trail SE, Calgary, AB',
+              name: '800 Macleod Trail SE',
+            },
+          ],
+          source: {
+            datasetVersion: 's8b3-j88p',
+            freshness: 'fresh' as const,
+            id: 'calgary-open-data-index',
+            updatedAt: '2026-07-20T12:00:00Z',
+          },
+        }),
+    };
+    const provider = createProductionSearchProvider([], nominatimProvider, calgaryProvider);
+
+    const response = await provider.search({ limit: 8, q: '800 Macleod Trail Southeast' });
+
+    expect(response.results.map((result) => result.name)).toEqual([
+      '800 Macleod Trail SE',
+      '750 Macleod Trail SE',
+    ]);
+    expect(response.source.id).toBe('calgary-hybrid-search');
+  });
 });

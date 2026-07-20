@@ -1,8 +1,10 @@
 import type { SearchQuery, SearchResponse, SearchResult } from '@navoss/contracts';
 import { z } from 'zod/v4';
 
+import { createPostgresCalgarySearchProvider } from './calgary-search-provider.js';
 import { CALGARY_SEARCH_FIXTURES, type SearchFixture } from './fixtures.js';
 import { searchFixtures } from './search.js';
+import { normalizeSearchText } from './search-text.js';
 
 const DEFAULT_PHOTON_URL = 'https://photon.komoot.io/api/';
 const PHOTON_TIMEOUT_MS = 3_000;
@@ -68,34 +70,21 @@ export interface NominatimSearchProviderOptions {
   now?: () => Date;
 }
 
-function normalize(value: string): string {
-  return value
-    .normalize('NFKD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLocaleLowerCase('en-CA')
-    .replace(/[^\p{Letter}\p{Number}]+/gu, ' ')
-    .trim();
-}
-
 function categoryFor(
   properties: z.infer<typeof PhotonFeatureSchema>['properties'],
 ): SearchResult['category'] {
   if (properties.type === 'house' || properties.housenumber !== undefined) {
     return 'address';
   }
-
   if (properties.type === 'street') {
     return 'street';
   }
-
   if (['city', 'district', 'locality', 'suburb'].includes(properties.type ?? '')) {
     return 'neighborhood';
   }
-
   if (['amenity', 'aeroway', 'leisure', 'shop', 'tourism'].includes(properties.osm_key ?? '')) {
     return 'poi';
   }
-
   return properties.name === undefined ? 'address' : 'landmark';
 }
 
@@ -103,7 +92,6 @@ function displayName(properties: z.infer<typeof PhotonFeatureSchema>['properties
   if (properties.name !== undefined) {
     return properties.name;
   }
-
   const address = [properties.housenumber, properties.street].filter(Boolean).join(' ');
   return address.length > 0 ? address : 'Unnamed place';
 }
@@ -116,13 +104,15 @@ function displayLabel(properties: z.infer<typeof PhotonFeatureSchema>['propertie
     .join(', ');
   const parts = [name];
 
-  if (address.length > 0 && normalize(address) !== normalize(name)) {
+  if (address.length > 0 && normalizeSearchText(address) !== normalizeSearchText(name)) {
     parts.push(address);
   }
-  if (locality.length > 0 && !parts.some((part) => normalize(part) === normalize(locality))) {
+  if (
+    locality.length > 0 &&
+    !parts.some((part) => normalizeSearchText(part) === normalizeSearchText(locality))
+  ) {
     parts.push(locality);
   }
-
   return parts.join(', ');
 }
 
@@ -146,7 +136,10 @@ function normalizePhotonResults(
 function nominatimCategory(
   result: z.infer<typeof NominatimResultSchema>,
 ): SearchResult['category'] {
-  if (['house', 'building'].includes(result.addresstype ?? '')) {
+  if (
+    ['house', 'building'].includes(result.addresstype ?? '') ||
+    /^\s*\d/.test(result.name ?? result.display_name)
+  ) {
     return 'address';
   }
   if (['road', 'street', 'footway', 'path'].includes(result.addresstype ?? '')) {
@@ -165,16 +158,37 @@ function nominatimCategory(
 
 function normalizeNominatimResults(
   payload: z.infer<typeof NominatimResponseSchema>,
-  limit: number,
+  query: SearchQuery,
 ): SearchResult[] {
-  return payload.slice(0, limit).map((result, index) => ({
-    category: nominatimCategory(result),
-    center: { latitude: result.lat, longitude: result.lon },
-    confidence: Math.max(0.55, Math.min(0.95, result.importance ?? 0.9 - index * 0.06)),
-    id: `nominatim:${result.osm_type}:${String(result.osm_id)}`,
-    label: result.display_name,
-    name: result.name ?? result.display_name.split(',')[0]?.trim() ?? 'Unnamed place',
-  }));
+  const normalizedQuery = normalizeSearchText(query.q);
+  return payload.slice(0, query.limit).map((result) => {
+    const name = result.name ?? result.display_name.split(',')[0]?.trim() ?? 'Unnamed place';
+    const normalizedName = normalizeSearchText(name);
+    const normalizedLabel = normalizeSearchText(result.display_name);
+    const words = normalizedQuery.split(' ').filter(Boolean);
+    let confidence = 0.55;
+
+    if (normalizedName === normalizedQuery || normalizedLabel === normalizedQuery) {
+      confidence = 0.98;
+    } else if (normalizedName.startsWith(normalizedQuery)) {
+      confidence = 0.94;
+    } else if (normalizedLabel.startsWith(normalizedQuery)) {
+      confidence = 0.92;
+    } else if (normalizedName.includes(normalizedQuery)) {
+      confidence = 0.86;
+    } else if (words.every((word) => normalizedLabel.includes(word))) {
+      confidence = 0.8;
+    }
+
+    return {
+      category: nominatimCategory(result),
+      center: { latitude: result.lat, longitude: result.lon },
+      confidence,
+      id: `nominatim:${result.osm_type}:${String(result.osm_id)}`,
+      label: result.display_name,
+      name,
+    };
+  });
 }
 
 export function buildPhotonSearchUrl(query: SearchQuery, endpoint = DEFAULT_PHOTON_URL): string {
@@ -183,12 +197,10 @@ export function buildPhotonSearchUrl(query: SearchQuery, endpoint = DEFAULT_PHOT
   url.searchParams.set('lang', 'en');
   url.searchParams.set('limit', String(query.limit));
   url.searchParams.set('q', query.q);
-
   if (query.latitude !== undefined && query.longitude !== undefined) {
     url.searchParams.set('lat', String(query.latitude));
     url.searchParams.set('lon', String(query.longitude));
   }
-
   return url.toString();
 }
 
@@ -207,9 +219,7 @@ export function buildNominatimSearchUrl(query: SearchQuery, endpoint: string): s
 export function createFixtureSearchProvider(
   fixtures: readonly SearchFixture[] = CALGARY_SEARCH_FIXTURES,
 ): SearchProvider {
-  return {
-    search: (query) => Promise.resolve(searchFixtures(fixtures, query)),
-  };
+  return { search: (query) => Promise.resolve(searchFixtures(fixtures, query)) };
 }
 
 export function createPhotonSearchProvider(
@@ -228,9 +238,7 @@ export function createPhotonSearchProvider(
       if (!response.ok) {
         throw new Error(`Photon returned status ${String(response.status)}.`);
       }
-
-      const payload: unknown = await response.json();
-      const parsed = PhotonResponseSchema.parse(payload);
+      const parsed = PhotonResponseSchema.parse(await response.json());
       return {
         degraded: true,
         results: normalizePhotonResults(parsed, query.limit),
@@ -278,12 +286,10 @@ export function createNominatimSearchProvider(
       if (!response.ok) {
         throw new Error(`Nominatim returned status ${String(response.status)}.`);
       }
-
-      const payload: unknown = await response.json();
-      const parsed = NominatimResponseSchema.parse(payload);
+      const parsed = NominatimResponseSchema.parse(await response.json());
       return {
         degraded: false,
-        results: normalizeNominatimResults(parsed, query.limit),
+        results: normalizeNominatimResults(parsed, query),
         source: {
           datasetVersion,
           freshness: 'fresh',
@@ -295,22 +301,69 @@ export function createNominatimSearchProvider(
   };
 }
 
+function resultDistance(result: SearchResult, query: SearchQuery): number {
+  if (query.latitude === undefined || query.longitude === undefined) {
+    return 0;
+  }
+  return (
+    (result.center.latitude - query.latitude) ** 2 +
+    (result.center.longitude - query.longitude) ** 2
+  );
+}
+
+function samePlace(left: SearchResult, right: SearchResult): boolean {
+  return (
+    normalizeSearchText(left.name) === normalizeSearchText(right.name) &&
+    Math.abs(left.center.latitude - right.center.latitude) < 0.0003 &&
+    Math.abs(left.center.longitude - right.center.longitude) < 0.0004
+  );
+}
+
 function mergeResults(
-  fixtureResults: SearchResult[],
-  photonResults: SearchResult[],
+  resultGroups: SearchResult[][],
+  query: SearchQuery,
   limit: number,
 ): SearchResult[] {
-  const seenNames = new Set<string>();
-  return [...fixtureResults, ...photonResults]
-    .filter((result) => {
-      const key = normalize(result.name);
-      if (seenNames.has(key)) {
-        return false;
-      }
-      seenNames.add(key);
-      return true;
-    })
-    .slice(0, limit);
+  const ranked = resultGroups
+    .flat()
+    .sort(
+      (left, right) =>
+        right.confidence - left.confidence ||
+        resultDistance(left, query) - resultDistance(right, query) ||
+        left.label.localeCompare(right.label, 'en-CA') ||
+        left.id.localeCompare(right.id, 'en-CA'),
+    );
+  const deduplicated: SearchResult[] = [];
+  for (const result of ranked) {
+    if (!deduplicated.some((existing) => samePlace(existing, result))) {
+      deduplicated.push(result);
+    }
+    if (deduplicated.length === limit) {
+      break;
+    }
+  }
+  return deduplicated;
+}
+
+function combinedSource(responses: SearchResponse[]): SearchResponse['source'] {
+  const firstResponse = responses.at(0);
+  if (responses.length === 1 && firstResponse !== undefined) {
+    return firstResponse.source;
+  }
+  return {
+    datasetVersion: responses
+      .map((response) => `${response.source.id}:${response.source.datasetVersion}`)
+      .join('+'),
+    freshness: responses.some((response) => response.source.freshness === 'stale')
+      ? 'stale'
+      : responses.every((response) => response.source.freshness === 'static')
+        ? 'static'
+        : 'fresh',
+    id: 'calgary-hybrid-search',
+    updatedAt: new Date(
+      Math.min(...responses.map((response) => Date.parse(response.source.updatedAt))),
+    ).toISOString(),
+  };
 }
 
 export function createDevelopmentSearchProvider(
@@ -318,16 +371,18 @@ export function createDevelopmentSearchProvider(
   photonProvider: SearchProvider = createPhotonSearchProvider(),
 ): SearchProvider {
   const fixtureProvider = createFixtureSearchProvider(fixtures);
-
   return {
     async search(query) {
       const fixtureResponse = await fixtureProvider.search(query);
-
       try {
         const photonResponse = await photonProvider.search(query);
         return {
           degraded: true,
-          results: mergeResults(fixtureResponse.results, photonResponse.results, query.limit),
+          results: mergeResults(
+            [fixtureResponse.results, photonResponse.results],
+            query,
+            query.limit,
+          ),
           source: photonResponse.source,
         };
       } catch {
@@ -340,23 +395,50 @@ export function createDevelopmentSearchProvider(
 export function createProductionSearchProvider(
   fixtures: readonly SearchFixture[] = CALGARY_SEARCH_FIXTURES,
   productionProvider: SearchProvider = createNominatimSearchProvider({}),
+  calgaryProvider: SearchProvider | undefined = process.env.SEARCH_DATABASE_ENABLED !== '1'
+    ? undefined
+    : createPostgresCalgarySearchProvider(),
 ): SearchProvider {
   const fixtureProvider = createFixtureSearchProvider(fixtures);
-
   return {
-    isReady: () => productionProvider.isReady?.() ?? Promise.resolve(false),
+    async isReady() {
+      const providers = [
+        productionProvider,
+        ...(calgaryProvider === undefined ? [] : [calgaryProvider]),
+      ];
+      const readiness = await Promise.all(
+        providers.map((provider) => provider.isReady?.() ?? Promise.resolve(true)),
+      );
+      return readiness.every(Boolean);
+    },
     async search(query) {
       const fixtureResponse = await fixtureProvider.search(query);
-
-      try {
-        const productionResponse = await productionProvider.search(query);
-        return {
-          ...productionResponse,
-          results: mergeResults(fixtureResponse.results, productionResponse.results, query.limit),
-        };
-      } catch {
+      const providerQuery = { ...query, limit: Math.min(20, query.limit * 2) };
+      const providers = [
+        productionProvider,
+        ...(calgaryProvider === undefined ? [] : [calgaryProvider]),
+      ];
+      const settled = await Promise.allSettled(
+        providers.map((provider) => provider.search(providerQuery)),
+      );
+      const responses = settled
+        .filter(
+          (result): result is PromiseFulfilledResult<SearchResponse> =>
+            result.status === 'fulfilled',
+        )
+        .map((result) => result.value);
+      if (responses.length === 0) {
         return fixtureResponse;
       }
+      return {
+        degraded: settled.some((result) => result.status === 'rejected'),
+        results: mergeResults(
+          [fixtureResponse.results, ...responses.map((response) => response.results)],
+          query,
+          query.limit,
+        ),
+        source: combinedSource(responses),
+      };
     },
   };
 }

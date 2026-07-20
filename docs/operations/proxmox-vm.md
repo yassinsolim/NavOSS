@@ -2,7 +2,7 @@
 
 Status: production backend deployed; restore/rollback and soak exercises remain
 
-This VM hosts the Calgary/Alberta NavOSS production API, PostgreSQL/PostGIS, Valhalla, regional Nominatim search, Caddy, and Cloudflare Tunnel. The initial imports completed sequentially without swap or OOM activity. Future graph/index builds must remain resource-limited so serving traffic preserves at least 4 GiB of available guest memory with no sustained swap growth.
+This VM hosts the Calgary/Alberta NavOSS production API, PostgreSQL/PostGIS, the Calgary public-data search indexer, Valhalla, regional Nominatim search, Caddy, and Cloudflare Tunnel. The initial imports completed sequentially without swap or OOM activity. Future graph/index builds must remain resource-limited so serving traffic preserves at least 4 GiB of available guest memory with no sustained swap growth.
 
 ## Proxmox VM
 
@@ -86,6 +86,7 @@ These are hard starting limits, not targets to consume:
 | Nominatim/PostgreSQL                  |                               6 GiB container limit |
 | Valhalla                              |                               2 GiB container limit |
 | Reports PostgreSQL/PostGIS            |               768 MiB limit; 256 MiB shared buffers |
+| Calgary search indexer                |                             512 MiB container limit |
 | NavOSS API                            |                             768 MiB container limit |
 | Caddy                                 |                             192 MiB container limit |
 | OS, cloudflared, cache, safety margin | Remaining memory; 14 GiB available after deployment |
@@ -96,7 +97,7 @@ Build or import only one heavy artifact at a time. Prefer staging validated Valh
 
 - Include `scsi0` and `scsi1` in nightly Proxmox Backup Server or equivalent backups.
 - Exclude `scsi2`; its contents must be reproducible from versioned inputs.
-- Run compressed mode-0640 PostgreSQL logical backups to `/srv/navoss/state/backups/postgres` before the Proxmox backup window; retain 14 days.
+- Run compressed mode-0640 PostgreSQL logical backups to `/srv/navoss/state/backups/postgres` before the Proxmox backup window; retain 14 days. Exclude reproducible `calgary_search_*` tables.
 - Encrypt the Proxmox backup target/transport. The local gzip dump is not independently encrypted.
 - Retain configuration in Git without secret values.
 - Keep a documented restore command and perform a clean restore before external TestFlight.

@@ -24,13 +24,13 @@ Route requests send origin and destination coordinates to the NavOSS API. A rero
 
 ### Search text
 
-When you search, NavOSS sends the entered text and, when available, an approximate search origin to the NavOSS API in an encrypted request body. Nominatim search runs on the same operator-controlled server. Search text and coordinates are not placed in public request URLs.
+When you search, NavOSS sends the entered text and, when available, an approximate search origin to the NavOSS API in an encrypted request body. Search runs against self-hosted Nominatim and a local index of public City of Calgary business and parcel-address records on the same operator-controlled server. Search text and coordinates are not placed in public request URLs or written to the search index.
 
 ### Map and camera requests
 
 The phone requests map styles, tiles, fonts, and sprites directly from the public OpenFreeMap service. OpenFreeMap therefore receives ordinary network information and the requested map resources, which can indicate the viewed map area. Its policy says regular logs are anonymized without IP addresses, while IP logging may be enabled during a security incident for no more than 30 days.
 
-The phone obtains normalized safety-camera records from NavOSS. The NavOSS server refreshes the public City of Calgary Intersection Safety Cameras dataset every six hours. The phone does not send location, search text, or route data to Calgary Open Data.
+The phone obtains normalized safety-camera records from NavOSS. The NavOSS server refreshes the public City of Calgary Intersection Safety Cameras dataset every six hours and independently mirrors public business and parcel-address datasets every 24 hours. The phone and live search requests do not send location, search text, or route data to Calgary Open Data.
 
 ### Service and security data
 
@@ -46,29 +46,30 @@ NavOSS does not sell personal information or use it for advertising, marketing p
 
 ## Providers and processing locations
 
-| Provider                                                                                           | Purpose and data                                                                           | Location or policy                                                                  |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| NavOSS operator-controlled server                                                                  | API, Nominatim search, Valhalla routing, camera normalization, and operational security    | Alberta, Canada                                                                     |
-| [Cloudflare](https://www.cloudflare.com/privacypolicy/)                                            | DNS, TLS, traffic delivery, tunnel, and network security; processes IP and request traffic | Global network; Cloudflare describes international transfers in its policy          |
-| [OpenFreeMap](https://openfreemap.org/privacy/)                                                    | Direct map style, tile, font, and sprite delivery                                          | Hyperknot Software Kft. in Hungary, with infrastructure that may include Cloudflare |
-| [Apple](https://www.apple.com/legal/privacy/)                                                      | TestFlight distribution and tester feedback when used                                      | Under Apple's policy                                                                |
-| [GitHub](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement) | Public issues and private vulnerability reports initiated by a user                        | Under GitHub's policy                                                               |
+| Provider                                                                                           | Purpose and data                                                                                            | Location or policy                                                                  |
+| -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| NavOSS operator-controlled server                                                                  | API, Nominatim and indexed Calgary search, Valhalla routing, camera normalization, and operational security | Alberta, Canada                                                                     |
+| [Cloudflare](https://www.cloudflare.com/privacypolicy/)                                            | DNS, TLS, traffic delivery, tunnel, and network security; processes IP and request traffic                  | Global network; Cloudflare describes international transfers in its policy          |
+| [OpenFreeMap](https://openfreemap.org/privacy/)                                                    | Direct map style, tile, font, and sprite delivery                                                           | Hyperknot Software Kft. in Hungary, with infrastructure that may include Cloudflare |
+| [Apple](https://www.apple.com/legal/privacy/)                                                      | TestFlight distribution and tester feedback when used                                                       | Under Apple's policy                                                                |
+| [GitHub](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement) | Public issues and private vulnerability reports initiated by a user                                         | Under GitHub's policy                                                               |
 
-Map, search, and route data is derived from OpenStreetMap contributors. Safety-camera records come from the City of Calgary's public Intersection Safety Cameras dataset. Public Photon and FOSSGIS services are not used by the production API.
+Map and route data is derived from OpenStreetMap contributors. Search combines OpenStreetMap with the City of Calgary's public Business Licenses and Parcel Address datasets. Safety-camera records come from the City's public Intersection Safety Cameras dataset. Public Photon and FOSSGIS services are not used by the production API.
 
 ## Retention
 
-| Data                                           | NavOSS retention                                                                                                     |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Search text and search origin                  | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup        |
-| Route and reroute coordinates                  | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup        |
-| Trip progress and camera eligibility           | Processed on the phone and discarded when navigation ends; no trip-history database                                  |
-| API and service operational logs               | Maximum seven days; routine HTTP access logging is disabled                                                          |
-| Host authentication and firewall security logs | Maximum seven days; may contain timestamp, source IP and port, local account, action, and outcome                    |
-| Report database backups                        | Maximum 14 days; community reports are currently disabled, and these backups do not contain route or search requests |
-| Support messages                               | Controlled by Apple or GitHub according to the channel selected by the user and that provider's policy               |
+| Data                                            | NavOSS retention                                                                                                     |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Search text and search origin                   | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup        |
+| Route and reroute coordinates                   | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup        |
+| Trip progress and camera eligibility            | Processed on the phone and discarded when navigation ends; no trip-history database                                  |
+| Public Calgary business and parcel search index | Current local mirror refreshed every 24 hours; reproducible index tables are excluded from logical backups           |
+| API and service operational logs                | Maximum seven days; routine HTTP access logging is disabled                                                          |
+| Host authentication and firewall security logs  | Maximum seven days; may contain timestamp, source IP and port, local account, action, and outcome                    |
+| Report database backups                         | Maximum 14 days; community reports are currently disabled, and these backups do not contain route or search requests |
+| Support messages                                | Controlled by Apple or GitHub according to the channel selected by the user and that provider's policy               |
 
-NavOSS operational logs are limited to timestamps, service/container identity, severity, lifecycle events, health failures, error names, and random request IDs where needed. They exclude HTTP request and response bodies, search text, route coordinates, and normal HTTP access events. All five production containers write to the host journal, which enforces a seven-day and 512 MiB limit. Caddy access logs and automatic Fastify request logs are disabled.
+NavOSS operational logs are limited to timestamps, service/container identity, severity, lifecycle events, health failures, error names, and random request IDs where needed. They exclude HTTP request and response bodies, search text, route coordinates, and normal HTTP access events. All six production containers write to the host journal, which enforces a seven-day and 512 MiB limit. Caddy access logs and automatic Fastify request logs are disabled.
 
 Cloudflare and OpenFreeMap apply their own retention policies to data they process. Cloudflare's policy does not promise one fixed period for all end-user network/security data. OpenFreeMap states that anonymized logs may be retained indefinitely and incident IP logs for at most 30 days. These provider-controlled periods are not part of NavOSS's seven-day host limit.
 
