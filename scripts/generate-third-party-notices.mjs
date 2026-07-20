@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const inventory = JSON.parse(
-  execFileSync('corepack', ['pnpm', 'licenses', 'list', '--prod', '--json'], {
+  execFileSync('corepack', ['pnpm', 'licenses', 'list', '--prod', '--no-optional', '--json'], {
     cwd: repositoryRoot,
     encoding: 'utf8',
   }),
@@ -39,9 +39,10 @@ const sections = Object.entries(inventory)
 
 const notice = `# Third-Party Notices
 
-This inventory is generated from production JavaScript dependencies in \`pnpm-lock.yaml\`.
-It excludes development-only packages, downloaded map/routing data, native build-tool dependencies,
-and external services. Those components retain their own licenses and attribution requirements.
+This inventory is generated from required production JavaScript dependencies in \`pnpm-lock.yaml\`.
+It excludes development-only and optional packages, downloaded map/routing data,
+native build-tool dependencies, and external services. Those components retain
+their own licenses and attribution requirements.
 
 Lockfile SHA-256: \`${lockfileHash}\`
 

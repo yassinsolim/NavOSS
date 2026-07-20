@@ -1,8 +1,9 @@
 # Third-Party Notices
 
-This inventory is generated from production JavaScript dependencies in `pnpm-lock.yaml`.
-It excludes development-only packages, downloaded map/routing data, native build-tool dependencies,
-and external services. Those components retain their own licenses and attribution requirements.
+This inventory is generated from required production JavaScript dependencies in `pnpm-lock.yaml`.
+It excludes development-only and optional packages, downloaded map/routing data,
+native build-tool dependencies, and external services. Those components retain
+their own licenses and attribution requirements.
 
 Lockfile SHA-256: `25d021d901ea9fa9bc2af40132fb137dee24f2d6db27316ee1b96c8f701d1aee`
 
@@ -41,7 +42,6 @@ corepack pnpm licenses:generate
 - `fb-watchman` - `2.0.2` - <https://facebook.github.io/watchman/>
 - `lighthouse-logger` - `1.4.2`
 - `marky` - `1.3.0` - <https://github.com/nolanlawson/marky#readme>
-- `typescript` - `6.0.2` - <https://www.typescriptlang.org/>
 - `walker` - `1.0.8` - <https://github.com/daaku/nodejs-walker>
 - `xcode` - `3.0.1` - <https://github.com/apache/cordova-node-xcode#readme>
 
@@ -639,7 +639,6 @@ corepack pnpm licenses:generate
 ## MPL-2.0
 
 - `lightningcss` - `1.32.0` - <https://github.com/parcel-bundler/lightningcss#readme>
-- `lightningcss-darwin-arm64` - `1.32.0` - <https://github.com/parcel-bundler/lightningcss#readme>
 
 ## Python-2.0
 
