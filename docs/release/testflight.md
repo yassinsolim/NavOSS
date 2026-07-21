@@ -22,6 +22,7 @@ The right next launch is a small **internal TestFlight technical beta**, not a p
 - [x] Send search in a JSON POST body; disable routine access logging; enforce seven-day host logs and 14-day report-database backups; publish the verified policy.
 - [x] Configure App Store Connect app `NavOSS`, Apple ID `6792619727`, EAS production origin, distribution certificate, provisioning profile, and Submit ID.
 - [x] Verify the public privacy/support URLs and the Metro-independent production export.
+- [x] Validate matched-road heading-up navigation, persistent north-up compass override, local-only map presets/content controls, and route-color choices in the iOS simulator.
 - [ ] Classify Cloudflare/OpenFreeMap map and network metadata, then reconcile App Store Connect App Privacy, `PrivacyInfo.xcprivacy`, SDK manifests, and the hosted policy.
 - [ ] Complete the account-holder age-rating, content-rights, and export-compliance decisions.
 - [ ] Produce build 1, inspect/upload it, install it from TestFlight, disconnect Metro/the Mac, and repeat the physical-device smoke test.

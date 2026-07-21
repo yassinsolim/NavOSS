@@ -32,6 +32,8 @@ The phone requests map styles, tiles, fonts, and sprites directly from the publi
 
 The phone obtains normalized safety-camera records from NavOSS. The NavOSS server refreshes the public City of Calgary Intersection Safety Cameras dataset every six hours and independently mirrors public business and parcel-address datasets every 24 hours. The phone and live search requests do not send location, search text, or route data to Calgary Open Data.
 
+Map appearance choices, including style, navigation orientation, tilt, visible map content, safety-camera marker visibility, and route color, are stored only in the app on the device. These settings are not sent to NavOSS or used for analytics. Selecting a hosted map style changes which OpenFreeMap style resources the phone requests but does not add a new provider. Hiding camera markers does not disable active-navigation safety warnings.
+
 ### Service and security data
 
 NavOSS has no account, advertising, analytics, crash-reporting, data-broker, cross-app tracking, or runtime AI service. It does not use an advertising identifier or create a persistent user or device identifier.
@@ -63,6 +65,7 @@ Map and route data is derived from OpenStreetMap contributors. Search combines O
 | Search text and search origin                   | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup        |
 | Route and reroute coordinates                   | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup        |
 | Trip progress and camera eligibility            | Processed on the phone and discarded when navigation ends; no trip-history database                                  |
+| Map appearance preferences                      | Stored locally in app storage until the app is removed or the settings are changed; not transmitted to NavOSS        |
 | Public Calgary business and parcel search index | Current local mirror refreshed every 24 hours; reproducible index tables are excluded from logical backups           |
 | API and service operational logs                | Maximum seven days; routine HTTP access logging is disabled                                                          |
 | Host authentication and firewall security logs  | Maximum seven days; may contain timestamp, source IP and port, local account, action, and outcome                    |

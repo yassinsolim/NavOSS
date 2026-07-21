@@ -1,6 +1,7 @@
 appId: org.navoss.mobile
 ---
-- launchApp
+- launchApp:
+    clearState: true
 - extendedWaitUntil:
     visible: 'Search Calgary'
     timeout: 20000
@@ -19,3 +20,8 @@ appId: org.navoss.mobile
 - extendedWaitUntil:
     visible: 'Navigation status, on route.*'
     timeout: 20000
+- assertVisible: 'Switch map to north up'
+- tapOn: 'Switch map to north up'
+- assertVisible: 'Switch map to heading up'
+- tapOn: 'Switch map to heading up'
+- assertVisible: 'Switch map to north up'

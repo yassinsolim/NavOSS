@@ -1,0 +1,58 @@
+appId: org.navoss.mobile
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: 'Search Calgary'
+    timeout: 20000
+- tapOn: 'Map appearance'
+- assertVisible: 'Map appearance'
+- assertVisible: 'Auto'
+- assertVisible: 'Heading up'
+- assertVisible: 'Tilted'
+- tapOn: 'Night'
+- tapOn: 'Flat'
+- tapOn: 'Buildings'
+- tapOn: 'Camera markers'
+- tapOn: 'Blue route'
+- tapOn: 'Close map appearance'
+- assertVisible: 'Search Calgary'
+- tapOn: 'Map appearance'
+- assertVisible:
+    text: 'Night'
+    selected: true
+- assertVisible:
+    text: 'Flat'
+    selected: true
+- assertVisible:
+    text: 'Buildings'
+    checked: false
+- assertVisible:
+    text: 'Camera markers'
+    checked: false
+- assertVisible:
+    text: 'Blue route'
+    selected: true
+- tapOn: 'Close map appearance'
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: 'Search Calgary'
+    timeout: 20000
+- tapOn: 'Map appearance'
+- assertVisible:
+    text: 'Night'
+    selected: true
+- assertVisible:
+    text: 'Flat'
+    selected: true
+- assertVisible:
+    text: 'Buildings'
+    checked: false
+- assertVisible:
+    text: 'Camera markers'
+    checked: false
+- assertVisible:
+    text: 'Blue route'
+    selected: true
+- tapOn: 'Close map appearance'

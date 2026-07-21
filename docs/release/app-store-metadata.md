@@ -54,6 +54,8 @@ This copy is a future public-listing draft, not approval to submit the current t
 > NavOSS helps you search for Calgary places and plan driving routes without creating an account.
 >
 > Compare route choices, avoid highways when needed, and follow foreground route progress with automatic rerouting and arrival detection. NavOSS also displays fixed intersection safety cameras from the official City of Calgary open dataset and provides direction-aware route-ahead notices.
+
+> During active guidance, the map defaults to matched-road heading-up navigation so the road ahead stays at the top. Drivers can switch to north-up using the compass. Map style, tilt, visible places/buildings/transit/cameras, and route color can be customized and are stored only on the device.
 >
 > NavOSS is open source and built on OpenStreetMap-derived map, search, and routing data. Attribution and data-source details are available in the app and on the NavOSS website.
 >

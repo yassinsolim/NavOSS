@@ -5,7 +5,7 @@ It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
 
-Lockfile SHA-256: `85dd2cf42d27755356cc62e2d6f9530a17b770b1b7f3196d884e7454be54fc34`
+Lockfile SHA-256: `f98ee53a8903afa047485519911287c7cf8ae079fd0482143f18abce9f716fe3`
 
 Regenerate with:
 
@@ -258,6 +258,7 @@ corepack pnpm licenses:generate
 - `@radix-ui/react-use-effect-event` - `0.0.3` - <https://radix-ui.com/primitives>
 - `@radix-ui/react-use-is-hydrated` - `0.1.1` - <https://radix-ui.com/primitives>
 - `@radix-ui/react-use-layout-effect` - `1.1.2` - <https://radix-ui.com/primitives>
+- `@react-native-async-storage/async-storage` - `2.2.0` - <https://github.com/react-native-async-storage/async-storage#readme>
 - `@react-native-masked-view/masked-view` - `0.3.2` - <https://github.com/react-native-masked-view/masked-view#readme>
 - `@react-native/assets-registry` - `0.86.0` - <https://github.com/facebook/react-native/tree/HEAD/packages/assets#readme>
 - `@react-native/babel-plugin-codegen` - `0.86.0` - <https://github.com/facebook/react-native/tree/HEAD/packages/babel-plugin-codegen#readme>
@@ -438,6 +439,7 @@ corepack pnpm licenses:generate
 - `is-docker` - `2.2.1` - <https://github.com/sindresorhus/is-docker#readme>
 - `is-fullwidth-code-point` - `3.0.0` - <https://github.com/sindresorhus/is-fullwidth-code-point#readme>
 - `is-number` - `7.0.0` - <https://github.com/jonschlinkert/is-number>
+- `is-plain-obj` - `2.1.0` - <https://github.com/sindresorhus/is-plain-obj#readme>
 - `is-wsl` - `2.2.0` - <https://github.com/sindresorhus/is-wsl#readme>
 - `jest-get-type` - `29.6.3` - <https://github.com/jestjs/jest#readme>
 - `jest-util` - `29.7.0` - <https://github.com/jestjs/jest#readme>
@@ -461,6 +463,7 @@ corepack pnpm licenses:generate
 - `loose-envify` - `1.4.0` - <https://github.com/zertosh/loose-envify>
 - `lz-string` - `1.5.0` - <http://pieroxy.net/blog/pages/lz-string/index.html>
 - `memoize-one` - `5.2.1, 6.0.0` - <https://github.com/alexreardon/memoize-one#readme>
+- `merge-options` - `3.0.4` - <https://github.com/schnittstabil/merge-options#readme>
 - `merge-stream` - `2.0.0` - <https://github.com/grncdr/merge-stream#readme>
 - `metro` - `0.84.4` - <https://github.com/facebook/metro#readme>
 - `metro-babel-transformer` - `0.84.4` - <https://github.com/facebook/metro#readme>

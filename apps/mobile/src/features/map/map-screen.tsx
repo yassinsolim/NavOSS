@@ -6,6 +6,7 @@ import {
   UserLocation,
   type CameraRef,
   type MapRef,
+  type StyleSpecification,
 } from '@maplibre/maplibre-react-native';
 import type {
   Coordinate,
@@ -18,12 +19,30 @@ import type {
 } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
 import * as Location from 'expo-location';
-import { Keyboard, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import {
+  Keyboard,
+  Pressable,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { startTransition, useDeferredValue, useEffect, useRef, useState } from 'react';
 import type { FeatureCollection, LineString, Point } from 'geojson';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
+import {
+  DEFAULT_MAP_PREFERENCES,
+  loadCustomizedMapStyle,
+  loadMapPreferences,
+  type MapPreferences,
+  mapStyleUrl,
+  ROUTE_COLORS,
+  saveMapPreferences,
+} from '@/features/map/map-preferences';
+import { MapPreferencesPanel } from '@/features/map/map-preferences-panel';
 import {
   type ApiConnectionState,
   SearchPanel,
@@ -58,6 +77,10 @@ import {
   updateNavigationLocation,
 } from '@/features/navigation/native-navigation';
 import {
+  navigationCameraBearing,
+  toggleNavigationMapOrientation,
+} from '@/features/navigation/navigation-camera';
+import {
   type VehicleMatchStatus,
   VehiclePuck,
   type VehicleStyle,
@@ -72,7 +95,6 @@ import {
 } from '@/lib/api';
 
 const CALGARY_CENTER: [longitude: number, latitude: number] = [-114.0719, 51.0447];
-const DEVELOPMENT_MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 const REROUTE_RETRY_COOLDOWN_MS = 10_000;
 const EMPTY_FEATURE_COLLECTION: FeatureCollection<Point> = {
   features: [],
@@ -174,8 +196,15 @@ function routeBounds(
   );
 }
 
+function persistMapPreferences(preferences: MapPreferences): void {
+  void saveMapPreferences(preferences).catch(() => {
+    console.warn('Map preferences could not be saved locally.');
+  });
+}
+
 export function MapScreen() {
   const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme();
   const { height } = useWindowDimensions();
   const cameraRef = useRef<CameraRef>(null);
   const mapRef = useRef<MapRef>(null);
@@ -189,6 +218,11 @@ export function MapScreen() {
   const [coverageName, setCoverageName] = useState('Calgary alpha');
   const [locationState, setLocationState] = useState<LocationState>('idle');
   const [mapError, setMapError] = useState(false);
+  const [mapPreferences, setMapPreferences] = useState(DEFAULT_MAP_PREFERENCES);
+  const [mapStyle, setMapStyle] = useState<string | StyleSpecification>(
+    mapStyleUrl(DEFAULT_MAP_PREFERENCES.stylePreset, colorScheme),
+  );
+  const [isMapPreferencesVisible, setIsMapPreferencesVisible] = useState(false);
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -219,6 +253,37 @@ export function MapScreen() {
     latitude: number;
     longitude: number;
   }>();
+
+  useEffect(() => {
+    let active = true;
+    void loadMapPreferences().then((preferences) => {
+      if (active) {
+        setMapPreferences(preferences);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const fallbackStyle = mapStyleUrl(mapPreferences.stylePreset, colorScheme);
+    void loadCustomizedMapStyle(mapPreferences, colorScheme)
+      .then((style) => {
+        if (active) {
+          setMapStyle(style);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setMapStyle(fallbackStyle);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [colorScheme, mapPreferences]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -730,6 +795,22 @@ export function MapScreen() {
       : navigationSnapshot.isOffRoute
         ? 'off-route'
         : 'matched';
+  const navigationCameraCoordinate =
+    routeState.type === 'navigating'
+      ? (navigationSnapshot?.matchedCoordinate ?? userCoordinate)
+      : undefined;
+  const navigationCameraCenter: [longitude: number, latitude: number] | undefined =
+    navigationCameraCoordinate === undefined
+      ? undefined
+      : [navigationCameraCoordinate.longitude, navigationCameraCoordinate.latitude];
+  const navigationBearing =
+    routeState.type === 'navigating'
+      ? navigationCameraBearing(
+          mapPreferences.navigationOrientation,
+          navigationSnapshot?.matchedCourseDegrees,
+          userHeading,
+        )
+      : undefined;
 
   const handleStartNavigation = () => {
     if (routeState.type !== 'preview' || selectedRoute === undefined) {
@@ -823,12 +904,16 @@ export function MapScreen() {
   return (
     <View style={styles.container}>
       <Map
-        accessibilityLabel={`Map with ${String(safetyCameras.length)} official safety cameras`}
+        accessibilityLabel={
+          mapPreferences.showSafetyCameras
+            ? `Map with ${String(safetyCameras.length)} official safety cameras`
+            : 'Map with camera markers hidden'
+        }
         attribution={false}
-        compass
+        compass={routeState.type !== 'navigating'}
         compassPosition={{ right: 14, top: insets.top + 118 }}
         logo={false}
-        mapStyle={DEVELOPMENT_MAP_STYLE_URL}
+        mapStyle={mapStyle}
         onDidFailLoadingMap={() => {
           setMapError(true);
         }}
@@ -844,6 +929,8 @@ export function MapScreen() {
         tintColor={NavOssColors.asphalt}
       >
         <Camera
+          bearing={navigationBearing}
+          center={navigationCameraCenter}
           duration={routeState.type === 'navigating' ? 700 : undefined}
           easing={routeState.type === 'navigating' ? 'ease' : undefined}
           initialViewState={{
@@ -857,9 +944,14 @@ export function MapScreen() {
               ? { bottom: 120 + insets.bottom, left: 24, right: 24, top: 150 }
               : undefined
           }
-          pitch={routeState.type === 'navigating' ? 42 : undefined}
+          pitch={
+            routeState.type === 'navigating'
+              ? mapPreferences.navigationView === 'tilted'
+                ? 42
+                : 0
+              : undefined
+          }
           ref={cameraRef}
-          trackUserLocation={routeState.type === 'navigating' ? 'course' : undefined}
           zoom={routeState.type === 'navigating' ? 16 : undefined}
         />
         {locationState === 'visible' && routeState.type !== 'navigating' && (
@@ -918,12 +1010,12 @@ export function MapScreen() {
             <Layer
               id="selected-route-line"
               layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-              paint={{ 'line-color': NavOssColors.green, 'line-width': 6 }}
+              paint={{ 'line-color': ROUTE_COLORS[mapPreferences.routeColor], 'line-width': 6 }}
               type="line"
             />
           </GeoJSONSource>
         )}
-        {safetyCameras.length > 0 && (
+        {mapPreferences.showSafetyCameras && safetyCameras.length > 0 && (
           <GeoJSONSource data={safetyCameraFeatures(safetyCameras)} id="safety-cameras">
             <Layer
               id="safety-camera-markers"
@@ -946,6 +1038,78 @@ export function MapScreen() {
           </GeoJSONSource>
         )}
       </Map>
+
+      {routeState.type === 'navigating' && (
+        <Pressable
+          accessibilityHint="Toggles between keeping the road ahead at the top and keeping north at the top"
+          accessibilityLabel={
+            mapPreferences.navigationOrientation === 'heading-up'
+              ? 'Switch map to north up'
+              : 'Switch map to heading up'
+          }
+          onPress={() => {
+            const navigationOrientation = toggleNavigationMapOrientation(
+              mapPreferences.navigationOrientation,
+            );
+            const preferences = { ...mapPreferences, navigationOrientation };
+            setMapPreferences(preferences);
+            persistMapPreferences(preferences);
+          }}
+          style={({ pressed }) => [
+            styles.compassButton,
+            { top: insets.top + (safetyCameraAlert === undefined ? 100 : 174) },
+            mapPreferences.navigationOrientation === 'north-up' && styles.compassButtonSelected,
+            pressed && styles.controlPressed,
+          ]}
+        >
+          <View style={{ transform: [{ rotate: `${String(-mapBearing)}deg` }] }}>
+            <SymbolView
+              name={{ android: 'navigation', ios: 'location.north.line.fill' }}
+              size={23}
+              tintColor={
+                mapPreferences.navigationOrientation === 'north-up'
+                  ? NavOssColors.white
+                  : NavOssColors.asphalt
+              }
+            />
+          </View>
+        </Pressable>
+      )}
+
+      <Pressable
+        accessibilityLabel="Map appearance"
+        onPress={() => {
+          setIsMapPreferencesVisible(true);
+        }}
+        style={({ pressed }) => [
+          styles.mapPreferencesButton,
+          {
+            bottom:
+              routeState.type === 'navigating' || routeState.type === 'arrived'
+                ? selectedPanelHeight + 18
+                : controlBottom + 62,
+          },
+          pressed && styles.controlPressed,
+        ]}
+      >
+        <SymbolView
+          name={{ android: 'layers', ios: 'square.3.layers.3d' }}
+          size={22}
+          tintColor={NavOssColors.asphalt}
+        />
+      </Pressable>
+
+      <MapPreferencesPanel
+        onChange={(preferences) => {
+          setMapPreferences(preferences);
+          persistMapPreferences(preferences);
+        }}
+        onClose={() => {
+          setIsMapPreferencesVisible(false);
+        }}
+        preferences={mapPreferences}
+        visible={isMapPreferencesVisible}
+      />
 
       {routeState.type !== 'navigating' && routeState.type !== 'arrived' && (
         <View pointerEvents="box-none" style={[styles.topOverlay, { paddingTop: insets.top + 10 }]}>
@@ -1110,6 +1274,27 @@ const styles = StyleSheet.create({
     backgroundColor: NavOssColors.fog,
     flex: 1,
   },
+  compassButton: {
+    alignItems: 'center',
+    backgroundColor: NavOssColors.white,
+    borderColor: NavOssColors.border,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    height: 44,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 14,
+    shadowColor: '#000000',
+    shadowOffset: { height: 3, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    width: 44,
+    zIndex: 28,
+  },
+  compassButtonSelected: {
+    backgroundColor: NavOssColors.green,
+    borderColor: NavOssColors.green,
+  },
   controlPressed: {
     opacity: 0.72,
     transform: [{ scale: 0.97 }],
@@ -1129,6 +1314,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 10,
     width: 52,
+  },
+  mapPreferencesButton: {
+    alignItems: 'center',
+    backgroundColor: NavOssColors.white,
+    borderColor: NavOssColors.border,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    height: 44,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 18,
+    shadowColor: '#000000',
+    shadowOffset: { height: 3, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    width: 44,
+    zIndex: 27,
   },
   map: {
     flex: 1,
