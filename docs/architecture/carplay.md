@@ -1,6 +1,6 @@
 # CarPlay Navigation Architecture
 
-Status: Proposed, entitlement-gated
+Status: Apple-approved, implementation-gated
 
 ## Decision
 
@@ -25,9 +25,15 @@ CarPlay navigation is a managed Apple capability. The app needs the Boolean enti
 <true/>
 ```
 
-Apple must approve the capability for the app's explicit App ID before a matching provisioning profile can be created. The Account Holder of an enrolled Apple Developer Program team submits the capability request and accepts the CarPlay terms. The current Personal Team workflow is sufficient for the phone alpha, but not for provisioning this managed capability.
+Apple approved the CarPlay Navigation App capability for the explicit App ID `org.navoss.mobile` on 2026-07-21. The Developer portal now exposes `com.apple.developer.carplay-maps` for Development, Ad Hoc, and App Store Connect provisioning.
 
-Do not add the entitlement to the default Expo configuration before approval. An unapproved entitlement would break signed device builds without making the app appear in CarPlay.
+This removes the external approval blocker, but it does not make the current implementation release-ready. The native CarPlay scene still lacks route loading, a shared background navigation lifecycle, maneuvers, estimates, and reconnect continuity. Keep both `NAVOSS_CARPLAY_ENABLED` and `NAVOSS_CARPLAY_ENTITLEMENT_ENABLED` unset in normal production builds until those paths are complete and validated. A dedicated CarPlay build must regenerate its provisioning profile after enabling the approved capability.
+
+### Maps capability decision
+
+Do not enable the separate `com.apple.developer.maps` capability shown as **Maps** in the Developer portal. Apple documents that entitlement as deprecated, available only for macOS 10.9 through 10.11, and no longer required for using Maps. It does not connect NavOSS to the Apple Maps app and is unrelated to the CarPlay Navigation App entitlement.
+
+MapKit is a framework that can embed Apple map imagery, annotations, search, and other location features in an app. Modern iOS MapKit use does not require `com.apple.developer.maps`. NavOSS currently uses MapLibre and OpenFreeMap on the phone and in its native CarPlay spike, so enabling the deprecated Maps entitlement provides no benefit. Any future MapKit or Apple Maps URL integration should be evaluated as a separate product, data-source, privacy, and attribution decision.
 
 ## Why Foreground JavaScript Is Not Enough
 
@@ -146,7 +152,7 @@ apps/mobile/modules/navoss-navigation/
     withNavOSSCarPlay.js
 ```
 
-The config plugin will be idempotent and enabled only when `NAVOSS_CARPLAY_ENABLED=1`. After Apple approval it will:
+The config plugin is idempotent and enabled only when `NAVOSS_CARPLAY_ENABLED=1`. In a dedicated CarPlay build it will:
 
 - Add the navigation entitlement.
 - Add main CarPlay and Dashboard scene configurations to `Info.plist`.
@@ -158,11 +164,11 @@ The ignored generated `ios/` directory remains disposable. All native behavior a
 
 ## Implementation Order
 
-1. Enroll the release team and submit the CarPlay navigation capability request for `org.navoss.mobile`.
+1. Complete: Apple approved the CarPlay Navigation App capability for `org.navoss.mobile` on 2026-07-21.
 2. Complete the native navigation-core spike with matched location, background progress, rerouting, speech, and deterministic replay.
 3. Make the phone UI consume native snapshots and remove foreground JavaScript as the navigation source of truth.
 4. Add an entitlement-disabled native CarPlay scene unit and compile spike using MapLibre Native.
-5. After approval, enable the capability and provisioning profile in a dedicated CarPlay build configuration.
+5. Enable the approved capability and regenerate provisioning only in a dedicated CarPlay build configuration after route loading and background continuity are complete.
 6. Implement search, route preview, `CPNavigationSession`, maneuvers, estimates, and disconnect/reconnect behavior.
 7. Add Dashboard rendering and guarded cluster/HUD metadata.
 8. Validate in Simulator, a physical iPhone while locked, and at least one wired and one wireless real CarPlay system.

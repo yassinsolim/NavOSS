@@ -60,6 +60,7 @@ import {
 import { RerouteGate } from '@/features/navigation/reroute-gate';
 import {
   findNearestStepIndex,
+  getRemainingRouteGeometry,
   getRemainingRouteSummary,
 } from '@/features/navigation/route-progress';
 import {
@@ -246,6 +247,7 @@ export function MapScreen() {
     useState<NavigationRouteStatus>('tracking');
   const [rerouteCount, setRerouteCount] = useState(0);
   const [navigationStepIndex, setNavigationStepIndex] = useState(0);
+  const [isNavigationCameraFollowing, setIsNavigationCameraFollowing] = useState(true);
   const [userHeading, setUserHeading] = useState(0);
   const [mapBearing, setMapBearing] = useState(0);
   const [vehicleStyle, setVehicleStyle] = useState<VehicleStyle>('arrow');
@@ -508,6 +510,8 @@ export function MapScreen() {
             setNavigationRouteStatus('tracking');
             setNavigationStepIndex(0);
             setRerouteCount((currentCount) => currentCount + 1);
+            setIsNavigationCameraFollowing(true);
+            setNavigationSnapshot(undefined);
             setRouteTrafficStatus(response.source.traffic);
             setRouteState({
               destination: routeState.destination,
@@ -672,6 +676,7 @@ export function MapScreen() {
     rerouteAbortControllerRef.current?.abort();
     rerouteAbortControllerRef.current = null;
     rerouteGateRef.current.resetSession();
+    setIsNavigationCameraFollowing(true);
     setQuery('');
     setResults([]);
     setSearchState('idle');
@@ -739,6 +744,7 @@ export function MapScreen() {
     rerouteAbortControllerRef.current?.abort();
     rerouteAbortControllerRef.current = null;
     rerouteGateRef.current.resetSession();
+    setIsNavigationCameraFollowing(true);
     setRouteState({ type: 'idle' });
     setSelectedResult(undefined);
     setQuery('');
@@ -811,6 +817,19 @@ export function MapScreen() {
           userHeading,
         )
       : undefined;
+  const displayedSelectedRoute =
+    routeState.type === 'navigating' && selectedRoute !== undefined
+      ? {
+          ...selectedRoute,
+          geometry: getRemainingRouteGeometry(
+            selectedRoute,
+            navigationSnapshot?.routeProgress ?? 0,
+            navigationSnapshot?.matchedCoordinate,
+          ),
+        }
+      : routeState.type === 'arrived'
+        ? undefined
+        : selectedRoute;
 
   const handleStartNavigation = () => {
     if (routeState.type !== 'preview' || selectedRoute === undefined) {
@@ -828,6 +847,7 @@ export function MapScreen() {
     setNavigationStepIndex(0);
     setNavigationRouteStatus('tracking');
     setRerouteCount(0);
+    setIsNavigationCameraFollowing(true);
     rerouteGateRef.current.resetSession();
     setRouteState({
       destination: routeState.destination,
@@ -855,6 +875,7 @@ export function MapScreen() {
     setNavigationStepIndex(0);
     setNavigationRouteStatus('tracking');
     setRerouteCount(0);
+    setIsNavigationCameraFollowing(true);
     setRouteState({
       destination: routeState.destination,
       routes: routeState.routes,
@@ -883,6 +904,7 @@ export function MapScreen() {
     setNavigationStepIndex(0);
     setNavigationRouteStatus('tracking');
     setRerouteCount(0);
+    setIsNavigationCameraFollowing(true);
     setQuery('');
     setSelectedResult(undefined);
     setRouteState({ type: 'idle' });
@@ -922,6 +944,9 @@ export function MapScreen() {
         }}
         onRegionIsChanging={({ nativeEvent }) => {
           setMapBearing(nativeEvent.bearing);
+          if (routeState.type === 'navigating' && nativeEvent.userInteraction) {
+            setIsNavigationCameraFollowing(false);
+          }
         }}
         preferredFramesPerSecond={60}
         ref={mapRef}
@@ -929,8 +954,8 @@ export function MapScreen() {
         tintColor={NavOssColors.asphalt}
       >
         <Camera
-          bearing={navigationBearing}
-          center={navigationCameraCenter}
+          bearing={isNavigationCameraFollowing ? navigationBearing : undefined}
+          center={isNavigationCameraFollowing ? navigationCameraCenter : undefined}
           duration={routeState.type === 'navigating' ? 700 : undefined}
           easing={routeState.type === 'navigating' ? 'ease' : undefined}
           initialViewState={{
@@ -945,14 +970,14 @@ export function MapScreen() {
               : undefined
           }
           pitch={
-            routeState.type === 'navigating'
+            routeState.type === 'navigating' && isNavigationCameraFollowing
               ? mapPreferences.navigationView === 'tilted'
                 ? 42
                 : 0
               : undefined
           }
           ref={cameraRef}
-          zoom={routeState.type === 'navigating' ? 16 : undefined}
+          zoom={routeState.type === 'navigating' && isNavigationCameraFollowing ? 16 : undefined}
         />
         {locationState === 'visible' && routeState.type !== 'navigating' && (
           <UserLocation accuracy heading />
@@ -999,8 +1024,8 @@ export function MapScreen() {
             />
           </GeoJSONSource>
         )}
-        {selectedRoute !== undefined && (
-          <GeoJSONSource data={routeFeatures([selectedRoute])} id="selected-route">
+        {displayedSelectedRoute !== undefined && (
+          <GeoJSONSource data={routeFeatures([displayedSelectedRoute])} id="selected-route">
             <Layer
               id="selected-route-casing"
               layout={{ 'line-cap': 'round', 'line-join': 'round' }}
@@ -1073,6 +1098,26 @@ export function MapScreen() {
               }
             />
           </View>
+        </Pressable>
+      )}
+
+      {routeState.type === 'navigating' && !isNavigationCameraFollowing && (
+        <Pressable
+          accessibilityLabel="Recenter map on vehicle"
+          onPress={() => {
+            setIsNavigationCameraFollowing(true);
+          }}
+          style={({ pressed }) => [
+            styles.recenterButton,
+            { bottom: selectedPanelHeight + 70 },
+            pressed && styles.controlPressed,
+          ]}
+        >
+          <SymbolView
+            name={{ android: 'my_location', ios: 'location.fill' }}
+            size={22}
+            tintColor={NavOssColors.asphalt}
+          />
         </Pressable>
       )}
 
@@ -1331,6 +1376,23 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     width: 44,
     zIndex: 27,
+  },
+  recenterButton: {
+    alignItems: 'center',
+    backgroundColor: NavOssColors.white,
+    borderColor: NavOssColors.border,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    height: 44,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 18,
+    shadowColor: '#000000',
+    shadowOffset: { height: 3, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    width: 44,
+    zIndex: 28,
   },
   map: {
     flex: 1,

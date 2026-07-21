@@ -2,6 +2,16 @@
 
 Date prepared: 2026-07-20
 
+Status: Approved by Apple on 2026-07-21
+
+## Approval outcome
+
+Apple enabled the **CarPlay Navigation App** additional capability for `org.navoss.mobile`. The approved entitlement key is `com.apple.developer.carplay-maps`, with Development, Ad Hoc, and App Store Connect provisioning support.
+
+The approval is recorded, but CarPlay remains disabled in normal NavOSS builds. The current native scene is a compile spike whose destination actions still report that route loading is unavailable. Enable the scene and entitlement flags only in a dedicated build after native route loading, background navigation, maneuvers, estimates, and reconnect behavior are implemented and tested.
+
+The separate deprecated `com.apple.developer.maps` capability is not required for CarPlay, MapKit, or connecting to Apple Maps and should remain disabled.
+
 ## App Type
 
 Navigation (turn-by-turn directions)

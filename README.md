@@ -106,7 +106,7 @@ This is still an early native navigation-core slice, not production turn-by-turn
 
 ## CarPlay
 
-CarPlay navigation is feasible, but it must be a native scene in the same iPhone app rather than a second React Native screen. Apple must approve the managed `com.apple.developer.carplay-maps` capability before NavOSS can enable and provision it. The native navigation core must become the source of truth for route progress before CarPlay can work reliably while the phone is locked.
+Apple approved the managed CarPlay Navigation App capability for `org.navoss.mobile` on 2026-07-21. CarPlay must still be a native scene in the same iPhone app rather than a second React Native screen, and it remains disabled in normal builds until native route loading, background progress, maneuvers, estimates, and reconnect continuity are complete. The similarly named deprecated macOS `com.apple.developer.maps` capability is unrelated and is not enabled.
 
 The implementation boundary, entitlement gate, standard CarPlay flow, Dashboard support, cluster/HUD metadata, Expo prebuild strategy, and validation matrix are documented in [docs/architecture/carplay.md](docs/architecture/carplay.md).
 

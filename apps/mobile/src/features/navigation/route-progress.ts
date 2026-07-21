@@ -69,6 +69,51 @@ function remainingStepFraction(
   return Math.max(0, Math.min(1, (totalLength - completedLength) / totalLength));
 }
 
+export function getRemainingRouteGeometry(
+  route: RouteAlternative,
+  routeProgress: number,
+  matchedCoordinate?: Coordinate,
+): RouteAlternative['geometry'] {
+  const geometry = route.geometry;
+  const segmentLengths = geometry
+    .slice(0, -1)
+    .map((position, index) =>
+      distanceMeters({ latitude: position[1], longitude: position[0] }, geometry[index + 1]),
+    );
+  const totalLength = segmentLengths.reduce((sum, length) => sum + length, 0);
+  const completedLength = Math.max(0, Math.min(1, routeProgress)) * totalLength;
+  let traversedLength = 0;
+
+  for (let index = 0; index < segmentLengths.length; index += 1) {
+    const segmentLength = segmentLengths[index];
+    if (traversedLength + segmentLength < completedLength) {
+      traversedLength += segmentLength;
+      continue;
+    }
+
+    const start = geometry[index];
+    const end = geometry[index + 1];
+    const segmentProgress =
+      segmentLength === 0 ? 0 : (completedLength - traversedLength) / segmentLength;
+    const routePosition: [longitude: number, latitude: number] = [
+      start[0] + (end[0] - start[0]) * segmentProgress,
+      start[1] + (end[1] - start[1]) * segmentProgress,
+    ];
+    const firstPosition: [longitude: number, latitude: number] =
+      matchedCoordinate === undefined
+        ? routePosition
+        : [matchedCoordinate.longitude, matchedCoordinate.latitude];
+    return [firstPosition, ...geometry.slice(index + 1)];
+  }
+
+  const destination = geometry.at(-1) ?? [0, 0];
+  const firstPosition: [longitude: number, latitude: number] =
+    matchedCoordinate === undefined
+      ? destination
+      : [matchedCoordinate.longitude, matchedCoordinate.latitude];
+  return [firstPosition, destination];
+}
+
 export function findNearestStepIndex(route: RouteAlternative, coordinate: Coordinate): number {
   let nearestStepIndex = 0;
   let nearestDistance = Number.POSITIVE_INFINITY;

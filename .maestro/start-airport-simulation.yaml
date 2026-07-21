@@ -25,3 +25,12 @@ appId: org.navoss.mobile
 - assertVisible: 'Switch map to heading up'
 - tapOn: 'Switch map to heading up'
 - assertVisible: 'Switch map to north up'
+- swipe:
+    start: 50%, 55%
+    end: 20%, 55%
+    duration: 800
+- extendedWaitUntil:
+    visible: 'Recenter map on vehicle'
+    timeout: 5000
+- tapOn: 'Recenter map on vehicle'
+- assertNotVisible: 'Recenter map on vehicle'
