@@ -4,13 +4,13 @@ Date: 2026-07-20
 
 ## Current verdict
 
-| Stage                                     | Verdict | Reason                                                                                                                                                                                                         |
-| ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local simulator and physical-device alpha | GO      | Core, API, mobile, native, route-matrix, reroute, arrival, camera, and privacy-sheet checks pass.                                                                                                              |
-| Metro-independent iOS Release export      | GO      | A July 20 Hermes export embeds `https://navoss-api.yassin.app`, uses POST search, and contains no retired, localhost, or LAN endpoint. The earlier unsigned native archive also compiled successfully.         |
-| Internal TestFlight                       | NO-GO   | Backend, EAS origin, signing, App Store record, privacy policy, and release export are ready. App Privacy/provider classification, owner questionnaires, signed build/upload, and clean-device testing remain. |
-| External TestFlight                       | NO-GO   | Internal soak, reviewer-accessible Calgary route planning, Beta App Review metadata, on-road evidence, support operations, and the internal blockers are incomplete.                                           |
-| Public App Store                          | NO-GO   | Background guidance, spoken maneuvers, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                                                |
+| Stage                                     | Verdict | Reason                                                                                                                                                                                                 |
+| ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Local simulator and physical-device alpha | GO      | Core, API, mobile, native, route-matrix, reroute, arrival, camera, and privacy-sheet checks pass.                                                                                                      |
+| Metro-independent iOS Release export      | GO      | A July 20 Hermes export embeds `https://navoss-api.yassin.app`, uses POST search, and contains no retired, localhost, or LAN endpoint. The earlier unsigned native archive also compiled successfully. |
+| Internal TestFlight                       | NO-GO   | Build `0.1.0 (5)` is uploaded and processing at Apple. App Privacy/provider classification, owner questionnaires, and a clean-device build 5 smoke test remain.                                        |
+| External TestFlight                       | NO-GO   | Internal soak, reviewer-accessible Calgary route planning, Beta App Review metadata, on-road evidence, support operations, and the internal blockers are incomplete.                                   |
+| Public App Store                          | NO-GO   | Background guidance, spoken maneuvers, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                                        |
 
 The right next launch is a small **internal TestFlight technical beta**, not a public navigation release.
 
@@ -23,9 +23,10 @@ The right next launch is a small **internal TestFlight technical beta**, not a p
 - [x] Configure App Store Connect app `NavOSS`, Apple ID `6792619727`, EAS production origin, distribution certificate, provisioning profile, and Submit ID.
 - [x] Verify the public privacy/support URLs and the Metro-independent production export.
 - [x] Validate matched-road heading-up navigation, persistent north-up compass override, local-only map presets/content controls, and route-color choices in the iOS simulator.
+- [x] Build and upload store-signed `0.1.0 (5)` from commit `21e17c1` through EAS; Apple accepted the binary for processing.
 - [ ] Classify Cloudflare/OpenFreeMap map and network metadata, then reconcile App Store Connect App Privacy, `PrivacyInfo.xcprivacy`, SDK manifests, and the hosted policy.
 - [ ] Complete the account-holder age-rating, content-rights, and export-compliance decisions.
-- [ ] Produce build 1, inspect/upload it, install it from TestFlight, disconnect Metro/the Mac, and repeat the physical-device smoke test.
+- [ ] Install build 5 from TestFlight after processing, disconnect Metro/the Mac, and repeat the physical-device smoke test.
 
 ### P1: required before external testers
 
@@ -87,7 +88,9 @@ With local Xcode signing configured:
 
 Native Release compilation has already been exercised with signing disabled. The resulting arm64 archive used bundle ID `org.navoss.mobile`, version `0.1.0 (1)`, and a 3.0 MB embedded JavaScript bundle. That structural test archive is intentionally not uploadable. EAS now holds a valid Apple Distribution certificate and App Store provisioning profile for the production build.
 
-EAS project `@yassinsolim/navoss` is linked in app configuration. Its production environment contains the verified `EXPO_PUBLIC_API_URL=https://navoss-api.yassin.app`, and `submit.production.ios.ascAppId` is `6792619727`. The mobile package runs the release validator in EAS's pre-install hook. No production iOS build has been queued; keep it blocked until App Privacy and account-holder questionnaires are complete.
+EAS project `@yassinsolim/navoss` is linked in app configuration. Its production environment contains the verified `EXPO_PUBLIC_API_URL=https://navoss-api.yassin.app`, and `submit.production.ios.ascAppId` is `6792619727`. The mobile package runs the release validator in EAS's pre-install hook.
+
+Production build `0.1.0 (5)` was created from commit `21e17c1c1940ab38c8900d8c82602b082227ac31` as EAS build `db87e0c1-59b7-464f-833a-35ab73317af9`. EAS submission `642ea86b-356a-4fe1-89b9-4a1c4ac9a7b3` uploaded it successfully, and Apple accepted the binary for processing. CarPlay source and entitlement flags were unset, and the resolved iOS configuration contained no CarPlay entitlement.
 
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use the `production` profile for a store-signed build:
 
@@ -101,8 +104,8 @@ eas submit --platform ios --profile production
 1. Wait for Apple to process the uploaded build.
 2. Complete encryption/export-compliance prompts and verify the processed build details.
 3. Create an internal group with only App Store Connect users who are actively testing.
-4. Add build 1, paste the beta description and What to Test text, and invite the smallest useful group first.
-5. Install from TestFlight on a clean iPhone. Confirm the app starts without Metro, reaches the production API, requests only foreground location, searches, routes, reroutes, arrives, displays all current cameras, and submits TestFlight feedback.
+4. Add build 5, paste the beta description and What to Test text, and invite the smallest useful group first.
+5. Install build 5 from TestFlight on a clean iPhone. Confirm the app starts without Metro, reaches the production API, requests only foreground location, searches, routes, reroutes, arrives, displays all current cameras, and submits TestFlight feedback.
 6. Soak for 48 hours before adding more testers. Stop rollout on crashes, invalid routes, stale closures, backend saturation, or misleading camera alerts.
 
 Apple permits up to 100 internal testers associated with App Store Connect. Builds expire after 90 days.
