@@ -61,6 +61,37 @@ describe('SearchResponseSchema', () => {
 
     expect(result.success).toBe(true);
   });
+
+  it('accepts optional open-data place details', () => {
+    const result = SearchResponseSchema.safeParse({
+      degraded: false,
+      results: [
+        {
+          category: 'poi',
+          center: { latitude: 51.04427, longitude: -114.06309 },
+          confidence: 0.98,
+          details: {
+            address: '101 9 Avenue SW, Calgary, Alberta',
+            openingHours: 'Mo-Su 10:00-21:00',
+            phone: '+1 403 266 7171',
+            website: 'https://www.calgarytower.com',
+            wheelchair: 'yes',
+          },
+          id: 'nominatim:node:2359239747',
+          label: 'Calgary Tower, 101 9 Avenue SW, Calgary, Alberta',
+          name: 'Calgary Tower',
+        },
+      ],
+      source: {
+        datasetVersion: 'alberta-2026-07-20',
+        freshness: 'fresh',
+        id: 'nominatim-self-hosted',
+        updatedAt: '2026-07-20T12:00:00Z',
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
 });
 
 describe('SafetyCameraResponseSchema', () => {

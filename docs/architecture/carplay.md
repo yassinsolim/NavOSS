@@ -124,6 +124,14 @@ CarPlay Ultra is a vehicle and system integration. NavOSS can participate throug
 - Pause, resume, cancel, finish, and reroute through the matching CarPlay session APIs.
 - Coordinate spoken guidance with the vehicle audio session without taking over overall volume.
 
+### Share ETA and Contacts decision
+
+The phone experience uses the operating system share sheet for a static ETA message containing only the destination name, estimated arrival, remaining time, and remaining distance. It does not read Contacts, request Contacts permission, expose current coordinates or route geometry, create a tracking link, or maintain a recipient list. Apple's share sheet may suggest recent recipients without making those contacts available to NavOSS.
+
+Do not add a custom recent-contacts browser to the CarPlay navigation app. Contacts access would require a purpose string and explicit limited or full authorization, and arbitrary contact browsing is not an approved `CPMapTemplate` navigation surface. The current CarPlay scene cannot route yet, so it also has no truthful ETA to share.
+
+A CarPlay Share ETA control remains gated until the native route/background lifecycle is complete and Apple documentation or review confirms a template-compliant, low-distraction interaction. It must not direct a moving driver to complete the action on the phone. Prefer a system-owned communication flow that does not reveal contacts to NavOSS; otherwise omit the control from CarPlay and keep system sharing on the phone.
+
 ## Map Rendering
 
 MapLibre React Native 11.3.6 already links MapLibre Native 6.26.0 into the iOS application target using Swift Package Manager. The CarPlay scene can therefore import MapLibre and instantiate a native map view without adding a second map SDK.

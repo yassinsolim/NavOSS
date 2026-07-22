@@ -125,6 +125,7 @@ describe('Nominatim search provider', () => {
 
     expect(url.pathname).toBe('/search');
     expect(url.searchParams.get('bounded')).toBe('1');
+    expect(url.searchParams.get('extratags')).toBe('1');
     expect(url.searchParams.get('format')).toBe('jsonv2');
     expect(url.searchParams.get('viewbox')).toBe('-114.316,51.212,-113.859,50.842');
   });
@@ -141,6 +142,12 @@ describe('Nominatim search provider', () => {
                 addresstype: 'attraction',
                 category: 'tourism',
                 display_name: 'Calgary Tower, 101 9 Avenue SW, Calgary, Alberta, Canada',
+                extratags: {
+                  'contact:phone': '+1 403 266 7171',
+                  opening_hours: 'Mo-Su 10:00-21:00',
+                  website: 'https://www.calgarytower.com',
+                  wheelchair: 'yes',
+                },
                 importance: 0.8,
                 lat: '51.04427',
                 lon: '-114.06309',
@@ -156,7 +163,7 @@ describe('Nominatim search provider', () => {
       now: () => new Date('2026-07-20T12:00:00Z'),
     });
 
-    const response = await provider.search({ limit: 8, q: 'Calgary Tower' });
+    const response = await provider.search({ includeDetails: true, limit: 8, q: 'Calgary Tower' });
 
     expect(response.degraded).toBe(false);
     expect(response.source).toEqual({
@@ -168,6 +175,14 @@ describe('Nominatim search provider', () => {
     expect(response.results[0]).toMatchObject({
       category: 'poi',
       center: { latitude: 51.04427, longitude: -114.06309 },
+      details: {
+        address: 'Calgary Tower, 101 9 Avenue SW, Calgary, Alberta, Canada',
+        category: 'attraction',
+        openingHours: 'Mo-Su 10:00-21:00',
+        phone: '+1 403 266 7171',
+        website: 'https://www.calgarytower.com',
+        wheelchair: 'yes',
+      },
       name: 'Calgary Tower',
     });
   });
@@ -182,6 +197,74 @@ describe('Nominatim search provider', () => {
     expect(response.degraded).toBe(true);
     expect(response.results[0]?.id).toBe('poi:yyc-airport');
     expect(response.source.id).toBe('calgary-alpha-fixtures');
+  });
+
+  it('keeps the original result shape unless details are requested', async () => {
+    const provider = createNominatimSearchProvider({
+      endpoint: 'http://nominatim:8080/',
+      fetchImplementation: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                display_name: 'Test Cafe, Calgary, Alberta',
+                extratags: { phone: '+1 403 555 0100' },
+                lat: '51.0447',
+                lon: '-114.0719',
+                name: 'Test Cafe',
+                osm_id: 1,
+                osm_type: 'node',
+                type: 'cafe',
+              },
+            ]),
+            { status: 200 },
+          ),
+        ),
+    });
+
+    const response = await provider.search({ includeDetails: false, limit: 8, q: 'Test Cafe' });
+
+    expect(response.results[0]).not.toHaveProperty('details');
+  });
+
+  it('keeps open-data details when a higher-ranked local result is deduplicated', async () => {
+    const nominatimProvider = {
+      search: () =>
+        Promise.resolve({
+          degraded: false,
+          results: [
+            {
+              category: 'poi' as const,
+              center: { latitude: 51.04427, longitude: -114.06309 },
+              confidence: 0.98,
+              details: {
+                address: '101 9 Avenue SW, Calgary, Alberta',
+                openingHours: 'Mo-Su 10:00-21:00',
+              },
+              id: 'nominatim:node:2359239747',
+              label: 'Calgary Tower, 101 9 Avenue SW, Calgary, Alberta',
+              name: 'Calgary Tower',
+            },
+          ],
+          source: {
+            datasetVersion: 'alberta',
+            freshness: 'fresh' as const,
+            id: 'nominatim-self-hosted',
+            updatedAt: '2026-07-20T12:00:00Z',
+          },
+        }),
+    };
+    const provider = createProductionSearchProvider(undefined, nominatimProvider);
+
+    const response = await provider.search({ includeDetails: true, limit: 8, q: 'Calgary Tower' });
+
+    expect(response.results[0]).toMatchObject({
+      details: {
+        address: '101 9 Avenue SW, Calgary, Alberta',
+        openingHours: 'Mo-Su 10:00-21:00',
+      },
+      id: 'landmark:calgary-tower',
+    });
   });
 
   it('ranks an exact official Calgary address above a nearby OSM substitute', async () => {

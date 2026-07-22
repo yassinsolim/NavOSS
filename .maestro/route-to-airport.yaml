@@ -13,6 +13,6 @@ appId: org.navoss.mobile
 - assertVisible: '.*min'
 - tapOn: 'Start navigation'
 - assertVisible: 'End navigation'
-- assertVisible: '.*Drive.*'
+- assertVisible: 'Share ETA'
 - tapOn: 'End navigation'
 - assertVisible: 'Route preview'

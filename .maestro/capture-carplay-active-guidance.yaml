@@ -18,5 +18,5 @@ appId: org.navoss.mobile
 - extendedWaitUntil:
     visible: 'End navigation'
     timeout: 20000
-- assertVisible: '.*Drive.*'
+- assertVisible: 'Share ETA'
 - takeScreenshot: '/tmp/navoss-carplay-active-guidance'

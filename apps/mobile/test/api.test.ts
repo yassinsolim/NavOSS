@@ -56,6 +56,14 @@ describe('buildSearchRequest', () => {
 
     expect(request).toEqual({ q: 'library' });
   });
+
+  it('requests expanded details only when explicitly enabled', () => {
+    expect(buildSearchRequest('Coffee Shop', { includeDetails: true })).toEqual({
+      includeDetails: true,
+      q: 'Coffee Shop',
+    });
+    expect(buildSearchRequest('Coffee Shop')).toEqual({ q: 'Coffee Shop' });
+  });
 });
 
 describe('searchPlaces', () => {

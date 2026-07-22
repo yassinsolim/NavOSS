@@ -16,10 +16,16 @@ appId: org.navoss.mobile
 - tapOn: 'Use car navigation marker'
 - tapOn: 'Start navigation'
 - assertVisible: 'End navigation'
-- assertVisible: '.*Drive.*'
+- assertVisible: 'Share ETA'
 - extendedWaitUntil:
     visible: 'Navigation status, on route.*'
     timeout: 20000
+- tapOn: 'Share ETA'
+- extendedWaitUntil:
+    visible: 'Copy'
+    timeout: 10000
+- assertNotVisible: '.*Access Your Contacts.*'
+- tapOn: 'Copy'
 - assertVisible: 'Switch map to north up'
 - tapOn: 'Switch map to north up'
 - assertVisible: 'Switch map to heading up'

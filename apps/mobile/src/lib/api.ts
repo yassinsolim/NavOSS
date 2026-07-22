@@ -24,6 +24,7 @@ export class NavOssApiError extends Error {
 export interface SearchPlacesOptions {
   baseUrl?: string;
   fetchImplementation?: typeof fetch;
+  includeDetails?: boolean;
   latitude?: number;
   limit?: number;
   longitude?: number;
@@ -88,6 +89,7 @@ export function getApiBaseUrl(): string {
 
 export function buildSearchRequest(query: string, options: SearchPlacesOptions = {}) {
   return {
+    ...(options.includeDetails === true ? { includeDetails: true } : {}),
     ...(options.latitude !== undefined && options.longitude !== undefined
       ? { latitude: options.latitude, longitude: options.longitude }
       : {}),

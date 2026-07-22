@@ -152,6 +152,34 @@ function applyTextPalette(
   }
 }
 
+function applyDayRoadPalette(layer: StyleSpecification['layers'][number]): void {
+  if (layer.type !== 'line') {
+    return;
+  }
+
+  const paint = layerPaint(layer);
+  if (/(^|_)motorway(?:_|$)/.test(layer.id)) {
+    paint['line-color'] = layer.id.includes('casing')
+      ? '#3F7150'
+      : layer.id.includes('link')
+        ? '#9AC69D'
+        : '#72AD7B';
+    paint['line-opacity'] = 1;
+    return;
+  }
+
+  if (layer.id.includes('trunk_primary')) {
+    const existingColor = paint['line-color'] ?? '#F5D49B';
+    paint['line-color'] = [
+      'match',
+      ['get', 'class'],
+      'trunk',
+      layer.id.includes('casing') ? '#547A55' : '#A6C98C',
+      existingColor,
+    ];
+  }
+}
+
 function applyNightPalette(layer: StyleSpecification['layers'][number]): void {
   const paint = layerPaint(layer);
   const source = sourceLayer(layer);
@@ -254,6 +282,7 @@ export function customizeMapStyle(
   const resolvedPreset = resolvedMapStylePreset(preferences.stylePreset, colorScheme);
 
   for (const layer of customized.layers) {
+    if (resolvedPreset === 'day') applyDayRoadPalette(layer);
     if (resolvedPreset === 'night') applyNightPalette(layer);
     if (resolvedPreset === 'contrast') applyContrastPalette(layer);
     if (resolvedPreset === 'minimal') applyMinimalLandmarkPalette(layer);

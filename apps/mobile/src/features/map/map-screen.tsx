@@ -22,7 +22,9 @@ import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import {
   Keyboard,
+  Linking,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   useColorScheme,
@@ -35,6 +37,16 @@ import type { FeatureCollection, LineString, Point } from 'geojson';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
 import {
+  enrichMapPlace,
+  MAP_PLACE_LAYER_IDS,
+  mapPlaceFromRenderedFeatures,
+  placePhoneUrl,
+  placeReviewsUrl,
+  placeShareMessage,
+  placeWebsiteLabel,
+  placeWebsiteUrl,
+} from '@/features/map/map-place';
+import {
   DEFAULT_MAP_PREFERENCES,
   loadCustomizedMapStyle,
   loadMapPreferences,
@@ -44,6 +56,8 @@ import {
   saveMapPreferences,
 } from '@/features/map/map-preferences';
 import { MapPreferencesPanel } from '@/features/map/map-preferences-panel';
+import { PlaceSheet } from '@/features/map/place-sheet';
+import { approximateSearchCoordinate } from '@/features/map/search-proximity';
 import {
   type ApiConnectionState,
   SearchPanel,
@@ -60,9 +74,12 @@ import {
 } from '@/features/navigation/route-panels';
 import { RerouteGate } from '@/features/navigation/reroute-gate';
 import {
+  buildEtaShareMessage,
   findNearestStepIndex,
   getRemainingRouteGeometry,
   getRemainingRouteSummary,
+  getRemainingStepSummary,
+  getUpcomingGuidanceStep,
 } from '@/features/navigation/route-progress';
 import {
   findUpcomingSafetyCamera,
@@ -227,6 +244,8 @@ export function MapScreen() {
   const cameraAlertTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const rerouteGateRef = useRef(new RerouteGate(REROUTE_RETRY_COOLDOWN_MS));
   const routeAbortControllerRef = useRef<AbortController>(null);
+  const placeAbortControllerRef = useRef<AbortController>(null);
+  const placeInteractionRef = useRef(0);
   const rerouteAbortControllerRef = useRef<AbortController>(null);
   const safetyCamerasRef = useRef<readonly SafetyCamera[]>([]);
   const [apiConnection, setApiConnection] = useState<ApiConnectionState>('connecting');
@@ -238,6 +257,7 @@ export function MapScreen() {
     mapStyleUrl(DEFAULT_MAP_PREFERENCES.stylePreset, colorScheme),
   );
   const [isMapPreferencesVisible, setIsMapPreferencesVisible] = useState(false);
+  const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -269,6 +289,13 @@ export function MapScreen() {
     latitude: number;
     longitude: number;
   }>();
+
+  const invalidatePlaceInteraction = () => {
+    placeInteractionRef.current += 1;
+    placeAbortControllerRef.current?.abort();
+    placeAbortControllerRef.current = null;
+    setPlaceDetailsLoading(false);
+  };
 
   useEffect(() => {
     let active = true;
@@ -359,11 +386,12 @@ export function MapScreen() {
     const controller = new AbortController();
     const timeout = setTimeout(() => {
       setSearchState('loading');
+      const searchOrigin = approximateSearchCoordinate(userCoordinate);
 
       void searchPlaces(normalizedQuery, {
-        latitude: userCoordinate?.latitude,
+        latitude: searchOrigin?.latitude,
         limit: 8,
-        longitude: userCoordinate?.longitude,
+        longitude: searchOrigin?.longitude,
         signal: controller.signal,
       })
         .then((response) => {
@@ -399,6 +427,8 @@ export function MapScreen() {
       stopNavigationAnnouncements();
       rerouteGateRef.current.resetSession();
       routeAbortControllerRef.current?.abort();
+      placeInteractionRef.current += 1;
+      placeAbortControllerRef.current?.abort();
       rerouteAbortControllerRef.current?.abort();
     };
   }, []);
@@ -672,6 +702,7 @@ export function MapScreen() {
   };
 
   const handleChangeQuery = (value: string) => {
+    invalidatePlaceInteraction();
     setQuery(value);
     setSelectedResult(undefined);
 
@@ -690,6 +721,7 @@ export function MapScreen() {
     setSafetyCameraAlert(undefined);
     setCameraAnnouncementCount(0);
     stopNavigationAnnouncements();
+    invalidatePlaceInteraction();
     routeAbortControllerRef.current?.abort();
     rerouteAbortControllerRef.current?.abort();
     rerouteAbortControllerRef.current = null;
@@ -704,6 +736,7 @@ export function MapScreen() {
 
   const handleSelectResult = (result: SearchResult) => {
     Keyboard.dismiss();
+    invalidatePlaceInteraction();
     recordRecentDestination(result);
     setQuery(result.name);
     setResults([]);
@@ -725,12 +758,106 @@ export function MapScreen() {
     }
 
     Keyboard.dismiss();
+    invalidatePlaceInteraction();
     const destination = droppedPinResult(coordinate);
     setQuery('');
     setResults([]);
     setSearchState('idle');
     setSelectedResult(destination);
     void calculateRoute(destination);
+  };
+
+  const handleMapPress = async (point: [number, number], coordinate: Coordinate) => {
+    if (routeState.type !== 'idle' || !mapPreferences.showPlaces || mapRef.current === null) {
+      return;
+    }
+
+    const interactionId = placeInteractionRef.current + 1;
+    placeInteractionRef.current = interactionId;
+    placeAbortControllerRef.current?.abort();
+    placeAbortControllerRef.current = null;
+    setPlaceDetailsLoading(false);
+
+    try {
+      const tapRadius = 18;
+      const features = await mapRef.current.queryRenderedFeatures(
+        [
+          [point[0] - tapRadius, point[1] - tapRadius],
+          [point[0] + tapRadius, point[1] + tapRadius],
+        ],
+        { layers: [...MAP_PLACE_LAYER_IDS] },
+      );
+      if (placeInteractionRef.current !== interactionId) {
+        return;
+      }
+      const place = mapPlaceFromRenderedFeatures(features, coordinate);
+
+      if (place === undefined) {
+        setPlaceDetailsLoading(false);
+        setSelectedResult(undefined);
+        return;
+      }
+
+      Keyboard.dismiss();
+      setQuery('');
+      setResults([]);
+      setSearchState('idle');
+      setSelectedResult(place);
+      setPlaceDetailsLoading(true);
+
+      const controller = new AbortController();
+      placeAbortControllerRef.current = controller;
+      try {
+        const response = await searchPlaces(place.name, {
+          includeDetails: true,
+          latitude: place.center.latitude,
+          limit: 20,
+          longitude: place.center.longitude,
+          signal: controller.signal,
+        });
+        if (!controller.signal.aborted && placeInteractionRef.current === interactionId) {
+          setSelectedResult((current) =>
+            current?.id === place.id ? enrichMapPlace(place, response.results) : current,
+          );
+        }
+      } catch {
+        // The rendered map feature remains usable when optional metadata is unavailable.
+      } finally {
+        if (
+          placeAbortControllerRef.current === controller &&
+          placeInteractionRef.current === interactionId
+        ) {
+          placeAbortControllerRef.current = null;
+          setPlaceDetailsLoading(false);
+        }
+      }
+    } catch {
+      if (placeInteractionRef.current === interactionId) {
+        setPlaceDetailsLoading(false);
+      }
+    }
+  };
+
+  const handleClosePlace = () => {
+    invalidatePlaceInteraction();
+    setSelectedResult(undefined);
+  };
+
+  const handlePlaceDirections = () => {
+    if (selectedResult === undefined || routeState.type !== 'idle') {
+      return;
+    }
+
+    const destination = selectedResult;
+    invalidatePlaceInteraction();
+    recordRecentDestination(destination);
+    void calculateRoute(destination);
+  };
+
+  const openExternalPlaceUrl = (url: string) => {
+    void Linking.openURL(url).catch(() => {
+      console.warn('The external place link could not be opened.');
+    });
   };
 
   const handleLocate = async () => {
@@ -764,6 +891,7 @@ export function MapScreen() {
   };
 
   const handleCancelRoute = () => {
+    invalidatePlaceInteraction();
     announcedCameraIdsRef.current.clear();
     if (cameraAlertTimeoutRef.current !== undefined) {
       clearTimeout(cameraAlertTimeoutRef.current);
@@ -815,13 +943,21 @@ export function MapScreen() {
     routeState.type === 'preview' && selectedRoute !== undefined
       ? routeState.routes.filter((route) => route.id !== selectedRoute.id)
       : [];
-  const currentStep =
+  const guidanceStep =
     routeState.type === 'navigating'
-      ? routeState.route.steps[Math.min(navigationStepIndex, routeState.route.steps.length - 1)]
+      ? getUpcomingGuidanceStep(routeState.route, navigationStepIndex)
       : undefined;
   const remainingRoute =
     routeState.type === 'navigating'
       ? getRemainingRouteSummary(
+          routeState.route,
+          navigationStepIndex,
+          navigationSnapshot?.matchedCoordinate ?? userCoordinate,
+        )
+      : undefined;
+  const remainingStep =
+    routeState.type === 'navigating'
+      ? getRemainingStepSummary(
           routeState.route,
           navigationStepIndex,
           navigationSnapshot?.matchedCoordinate ?? userCoordinate,
@@ -889,6 +1025,21 @@ export function MapScreen() {
     });
   };
 
+  const handleShareEta = () => {
+    if (routeState.type !== 'navigating' || remainingRoute === undefined) {
+      return;
+    }
+
+    void Share.share({
+      message: buildEtaShareMessage(
+        routeState.destination.name,
+        remainingRoute.durationSeconds,
+        remainingRoute.distanceMeters,
+      ),
+      title: `ETA to ${routeState.destination.name}`,
+    });
+  };
+
   const handleEndNavigation = () => {
     if (routeState.type !== 'navigating') {
       return;
@@ -942,6 +1093,21 @@ export function MapScreen() {
     setRouteState({ type: 'idle' });
   };
 
+  const placeSheetVisible = routeState.type === 'idle' && selectedResult !== undefined;
+  const placeDetailRowCount =
+    selectedResult === undefined
+      ? 0
+      : [
+          selectedResult.details?.address,
+          selectedResult.details?.openingHours,
+          selectedResult.details?.phone,
+          selectedResult.details?.website,
+          selectedResult.details?.wheelchair,
+        ].filter((value) => value !== undefined).length;
+  const placeSheetHeight = Math.min(
+    height * 0.56,
+    242 + Math.max(1, placeDetailRowCount) * 48 + insets.bottom,
+  );
   const selectedPanelHeight =
     routeState.type === 'preview'
       ? 314 + insets.bottom
@@ -950,13 +1116,18 @@ export function MapScreen() {
         : routeState.type === 'arrived'
           ? 170 + insets.bottom
           : routeState.type === 'navigating'
-            ? 86 + insets.bottom
-            : 0;
+            ? 102 + insets.bottom
+            : placeSheetVisible
+              ? placeSheetHeight
+              : 0;
   const controlBottom = selectedPanelHeight + 18;
   const resultsHeight = Math.min(360, Math.max(180, height * 0.42));
   const darkMap =
     mapPreferences.stylePreset === 'night' ||
     (mapPreferences.stylePreset === 'automatic' && colorScheme === 'dark');
+  const selectedPlacePhoneUrl = placePhoneUrl(selectedResult?.details?.phone);
+  const selectedPlaceWebsiteUrl = placeWebsiteUrl(selectedResult?.details?.website);
+  const selectedPlaceWebsiteLabel = placeWebsiteLabel(selectedResult?.details?.website);
 
   return (
     <View style={styles.container}>
@@ -982,6 +1153,10 @@ export function MapScreen() {
           const [longitude, latitude] = nativeEvent.lngLat;
           handleMapLongPress({ latitude, longitude });
         }}
+        onPress={({ nativeEvent }) => {
+          const [longitude, latitude] = nativeEvent.lngLat;
+          void handleMapPress(nativeEvent.point, { latitude, longitude });
+        }}
         onRegionIsChanging={({ nativeEvent }) => {
           setMapBearing(nativeEvent.bearing);
           if (routeState.type === 'navigating' && nativeEvent.userInteraction) {
@@ -1006,7 +1181,7 @@ export function MapScreen() {
           minZoom={8}
           padding={
             routeState.type === 'navigating'
-              ? { bottom: 120 + insets.bottom, left: 24, right: 24, top: 150 }
+              ? { bottom: 138 + insets.bottom, left: 24, right: 24, top: 170 }
               : undefined
           }
           pitch={
@@ -1122,7 +1297,7 @@ export function MapScreen() {
           }}
           style={({ pressed }) => [
             styles.compassButton,
-            { top: insets.top + (safetyCameraAlert === undefined ? 100 : 174) },
+            { top: insets.top + (safetyCameraAlert === undefined ? 136 : 210) },
             mapPreferences.navigationOrientation === 'north-up' && styles.compassButtonSelected,
             pressed && styles.controlPressed,
           ]}
@@ -1195,6 +1370,41 @@ export function MapScreen() {
         preferences={mapPreferences}
         visible={isMapPreferencesVisible}
       />
+
+      {routeState.type === 'idle' && selectedResult !== undefined && (
+        <PlaceSheet
+          bottomInset={insets.bottom}
+          height={placeSheetHeight}
+          loading={placeDetailsLoading}
+          onClose={handleClosePlace}
+          onDirections={handlePlaceDirections}
+          onReviews={() => {
+            openExternalPlaceUrl(placeReviewsUrl(selectedResult));
+          }}
+          onShare={() => {
+            void Share.share({
+              message: placeShareMessage(selectedResult),
+              title: selectedResult.name,
+            });
+          }}
+          {...(selectedPlacePhoneUrl === undefined
+            ? {}
+            : {
+                onCall: () => {
+                  openExternalPlaceUrl(selectedPlacePhoneUrl);
+                },
+              })}
+          {...(selectedPlaceWebsiteUrl === undefined
+            ? {}
+            : {
+                onWebsite: () => {
+                  openExternalPlaceUrl(selectedPlaceWebsiteUrl);
+                },
+              })}
+          place={selectedResult}
+          websiteLabel={selectedPlaceWebsiteLabel}
+        />
+      )}
 
       {routeState.type !== 'navigating' && routeState.type !== 'arrived' && (
         <View pointerEvents="box-none" style={[styles.topOverlay, { paddingTop: insets.top + 10 }]}>
@@ -1298,13 +1508,15 @@ export function MapScreen() {
       )}
 
       {routeState.type === 'navigating' &&
-        currentStep !== undefined &&
-        remainingRoute !== undefined && (
+        guidanceStep !== undefined &&
+        remainingRoute !== undefined &&
+        remainingStep !== undefined && (
           <>
             <NavigationBanner
-              instruction={currentStep.instruction}
-              maneuverType={currentStep.maneuverType}
-              roadName={currentStep.roadName}
+              distanceMeters={remainingStep.distanceMeters}
+              instruction={guidanceStep.instruction}
+              maneuverType={guidanceStep.maneuverType}
+              roadName={guidanceStep.roadName}
               safeAreaTop={insets.top}
               status={navigationRouteStatus}
             />
@@ -1315,6 +1527,7 @@ export function MapScreen() {
               durationSeconds={remainingRoute.durationSeconds}
               matchStatus={vehicleMatchStatus}
               onEnd={handleEndNavigation}
+              onShare={handleShareEta}
               rerouteCount={rerouteCount}
             />
           </>

@@ -41,6 +41,7 @@ const NominatimResultSchema = z.looseObject({
   addresstype: z.string().optional(),
   category: z.string().optional(),
   display_name: z.string().min(1),
+  extratags: z.record(z.string(), z.string()).optional(),
   importance: z.number().optional(),
   lat: z.coerce.number().min(-90).max(90),
   lon: z.coerce.number().min(-180).max(180),
@@ -184,6 +185,26 @@ function normalizeNominatimResults(
       category: nominatimCategory(result),
       center: { latitude: result.lat, longitude: result.lon },
       confidence,
+      ...(query.includeDetails
+        ? {
+            details: {
+              address: result.display_name,
+              ...(result.type === undefined ? {} : { category: result.type }),
+              ...(result.extratags?.opening_hours === undefined
+                ? {}
+                : { openingHours: result.extratags.opening_hours }),
+              ...((result.extratags?.phone ?? result.extratags?.['contact:phone']) === undefined
+                ? {}
+                : { phone: result.extratags?.phone ?? result.extratags?.['contact:phone'] }),
+              ...((result.extratags?.website ?? result.extratags?.['contact:website']) === undefined
+                ? {}
+                : { website: result.extratags?.website ?? result.extratags?.['contact:website'] }),
+              ...(result.extratags?.wheelchair === undefined
+                ? {}
+                : { wheelchair: result.extratags.wheelchair }),
+            },
+          }
+        : {}),
       id: `nominatim:${result.osm_type}:${String(result.osm_id)}`,
       label: result.display_name,
       name,
@@ -209,6 +230,7 @@ export function buildNominatimSearchUrl(query: SearchQuery, endpoint: string): s
   url.searchParams.set('accept-language', 'en-CA,en');
   url.searchParams.set('addressdetails', '1');
   url.searchParams.set('bounded', '1');
+  url.searchParams.set('extratags', '1');
   url.searchParams.set('format', 'jsonv2');
   url.searchParams.set('limit', String(query.limit));
   url.searchParams.set('q', query.q);
@@ -336,8 +358,17 @@ function mergeResults(
     );
   const deduplicated: SearchResult[] = [];
   for (const result of ranked) {
-    if (!deduplicated.some((existing) => samePlace(existing, result))) {
+    const duplicateIndex = deduplicated.findIndex((existing) => samePlace(existing, result));
+    if (duplicateIndex === -1) {
       deduplicated.push(result);
+    } else if (result.details !== undefined) {
+      const existing = deduplicated[duplicateIndex];
+      if (existing !== undefined) {
+        deduplicated[duplicateIndex] = {
+          ...existing,
+          details: { ...result.details, ...existing.details },
+        };
+      }
     }
     if (deduplicated.length === limit) {
       break;

@@ -154,6 +154,29 @@ export function getRemainingRouteSummary(
   );
 }
 
+export function getRemainingStepSummary(
+  route: RouteAlternative,
+  stepIndex: number,
+  coordinate?: Coordinate,
+): { distanceMeters: number; durationSeconds: number } {
+  const currentStepIndex = Math.max(0, Math.min(stepIndex, route.steps.length - 1));
+  const currentStep = route.steps[currentStepIndex];
+  const remainingFraction =
+    coordinate === undefined ? 1 : remainingStepFraction(coordinate, currentStep.geometry);
+  return {
+    distanceMeters: currentStep.distanceMeters * remainingFraction,
+    durationSeconds: currentStep.durationSeconds * remainingFraction,
+  };
+}
+
+export function getUpcomingGuidanceStep(
+  route: RouteAlternative,
+  traversedStepIndex: number,
+): RouteAlternative['steps'][number] | undefined {
+  const currentStepIndex = Math.max(0, Math.min(traversedStepIndex, route.steps.length - 1));
+  return route.steps[Math.min(currentStepIndex + 1, route.steps.length - 1)];
+}
+
 export function formatDuration(durationSeconds: number): string {
   const minutes = Math.max(1, Math.round(durationSeconds / 60));
   if (minutes < 60) {
@@ -181,6 +204,15 @@ export function formatArrivalTime(durationSeconds: number, now: Date = new Date(
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+export function buildEtaShareMessage(
+  destinationName: string,
+  durationSeconds: number,
+  distanceMetersValue: number,
+  now: Date = new Date(),
+): string {
+  return `I'm heading to ${destinationName}. ETA ${formatArrivalTime(durationSeconds, now)}, with ${formatDuration(durationSeconds)} and ${formatDistance(distanceMetersValue)} remaining. Shared from NavOSS.`;
 }
 
 export function routeViaLabel(route: RouteAlternative): string {

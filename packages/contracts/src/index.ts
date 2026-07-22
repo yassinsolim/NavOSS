@@ -41,10 +41,17 @@ export type {
 } from './route.js';
 
 export {
+  PlaceDetailsSchema,
   SearchQuerySchema,
   SearchResponseSchema,
   SearchResultSchema,
   SearchSourceSchema,
   SourceFreshnessSchema,
 } from './search.js';
-export type { SearchQuery, SearchResponse, SearchResult, SearchSource } from './search.js';
+export type {
+  PlaceDetails,
+  SearchQuery,
+  SearchResponse,
+  SearchResult,
+  SearchSource,
+} from './search.js';

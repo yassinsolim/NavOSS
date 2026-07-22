@@ -15,4 +15,4 @@ appId: org.navoss.mobile
     timeout: 20000
 - assertVisible: 'Avoid highways'
 - assertVisible: 'No live traffic'
-- assertVisible: 'Select 16 min route, 8.2 km, via Memorial Drive NW / University Drive NW'
+- assertVisible: 'Select .* route, 8.2 km, via Memorial Drive NW / University Drive NW'

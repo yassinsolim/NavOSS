@@ -2,12 +2,15 @@ import type { RouteAlternative } from '@navoss/contracts';
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildEtaShareMessage,
   findNearestStepIndex,
   formatArrivalTime,
   formatDistance,
   formatDuration,
   getRemainingRouteGeometry,
   getRemainingRouteSummary,
+  getRemainingStepSummary,
+  getUpcomingGuidanceStep,
   routeViaLabel,
 } from '../src/features/navigation/route-progress.js';
 
@@ -73,6 +76,24 @@ describe('route progress', () => {
     expect(summary.durationSeconds).toBeCloseTo(150, 0);
   });
 
+  it('reports live distance to the next maneuver', () => {
+    const summary = getRemainingStepSummary(route, 0, {
+      latitude: 51.045,
+      longitude: -114.075,
+    });
+
+    expect(summary.distanceMeters).toBeCloseTo(250, 0);
+    expect(summary.durationSeconds).toBeCloseTo(30, 0);
+  });
+
+  it('pairs the traversed leg countdown with the upcoming maneuver', () => {
+    expect(getUpcomingGuidanceStep(route, 0)).toMatchObject({
+      instruction: 'Continue to the airport.',
+      roadName: 'Airport Trail NE',
+    });
+    expect(getUpcomingGuidanceStep(route, 1)).toBe(route.steps[1]);
+  });
+
   it('removes completed route geometry while preserving the destination', () => {
     const routeWithSegments: RouteAlternative = {
       ...route,
@@ -112,6 +133,21 @@ describe('route progress', () => {
     expect(formatDuration(1_215)).toBe('20 min');
     expect(formatDistance(19_660)).toBe('19.7 km');
     expect(formatArrivalTime(1_200, new Date(2026, 6, 15, 12, 0, 0))).toContain('12:20');
+  });
+
+  it('shares an ETA without coordinates or live tracking', () => {
+    const message = buildEtaShareMessage(
+      'Calgary Tower',
+      1_200,
+      19_660,
+      new Date(2026, 6, 15, 12, 0, 0),
+    );
+
+    expect(message).toContain('Calgary Tower');
+    expect(message).toContain('12:20');
+    expect(message).toContain('20 min');
+    expect(message).toContain('19.7 km');
+    expect(message).not.toMatch(/-114|51\.0|track/i);
   });
 
   it('summarizes the major roads used by an alternative', () => {

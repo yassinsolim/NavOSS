@@ -25,7 +25,7 @@
     </header>
     <main class="document-shell">
       <article class="document">
-        <p class="document__meta">Internal beta policy · Effective July 20, 2026</p>
+        <p class="document__meta">Internal beta policy · Effective July 21, 2026</p>
         <h1>Privacy without an account</h1>
         <p>
           NavOSS is operated by Yassin Soliman as an individual developer in Alberta, Canada. It is
@@ -49,11 +49,12 @@
 
         <h2>Search and routing</h2>
         <p>
-          Search text and, when available, an approximate search origin are sent in an encrypted
-          request body to the NavOSS API. Route requests send origin and destination coordinates. An
-          automatic reroute sends the latest route origin and destination. Search uses self-hosted
-          Nominatim plus a local mirror of public Calgary business and parcel-address data; Valhalla
-          routing runs on the operator-controlled server in Alberta.
+          Search text and, when available, a search origin rounded to three decimal places, or
+          roughly 100-meter granularity, are sent in an encrypted request body to the NavOSS API.
+          Route requests send precise origin and destination coordinates. An automatic reroute sends
+          the latest route origin and destination. Search uses self-hosted Nominatim plus a local
+          mirror of public Calgary business and parcel-address data; Valhalla routing runs on the
+          operator-controlled server in Alberta.
         </p>
         <p>
           These values are processed in memory for the response and then discarded. They are not
@@ -61,10 +62,34 @@
           eligibility run on the phone.
         </p>
         <p>
+          Tapping a named map place sends that public place name and map coordinate to the same
+          NavOSS API to find the nearest matching OpenStreetMap record. When available, the response
+          may include a public address, category, opening hours, business phone number, official
+          website, and wheelchair-access tag. The request is processed in memory and discarded like
+          typed search. NavOSS does not fetch or display Google review content in this lookup.
+        </p>
+        <p>
           Map style, navigation orientation, tilt, map-content visibility, safety-camera marker
           visibility, and route-color choices are stored only inside the app on the device. NavOSS
           does not receive these settings or use them for analytics. Hiding camera markers does not
           disable active-navigation safety warnings.
+        </p>
+
+        <h2>Sharing and external place actions</h2>
+        <p>
+          Place sharing and Share ETA use Apple's system share sheet. Place share text contains a
+          public place name, displayed address or category, and OpenStreetMap link. ETA share text
+          contains the chosen destination name, arrival estimate, remaining time, and remaining
+          distance. It does not contain the current coordinate, route geometry, live tracking, or
+          automatic updates. NavOSS does not read Contacts or request Contacts permission; it does
+          not receive or store the recent recipients Apple may suggest.
+        </p>
+        <p>
+          Call and website actions open an external system app only after the user chooses them.
+          Reviews opens an external Google Maps search and sends the selected public place name and
+          coordinate to Google at that time. NavOSS does not fetch, cache, scrape, or display Google
+          Places ratings or reviews inside the app. Google receives no map-tap or place-detail query
+          unless Reviews is chosen.
         </p>
 
         <h2>No advertising or cross-app tracking</h2>
@@ -89,7 +114,8 @@
           traffic delivery, and the outbound tunnel. It processes client IP and network/request
           metadata on its global network under its policy. NavOSS does not enable raw Cloudflare
           request-log export. Map delivery uses OpenFreeMap; TestFlight feedback uses Apple; and
-          user-initiated support may use GitHub.
+          user-initiated support may use GitHub. A user-selected Reviews action uses
+          <a href="https://policies.google.com/privacy">Google Maps under Google's policy</a>.
         </p>
         <p>
           NavOSS keeps operational, SSH, and firewall logs for no more than seven days. Routine HTTP
@@ -113,6 +139,11 @@
           routing and active guidance will be limited.
         </p>
         <p>
+          Sharing and Reviews are optional. Dismissing the system share sheet sends nothing to a
+          recipient, and not choosing Reviews sends no selected-place query to Google. NavOSS does
+          not ask for Contacts access.
+        </p>
+        <p>
           Because NavOSS has no account and does not retain search, route, or trip records, it
           normally has no history to export or delete. A rights request may identify a support
           message or recent security event, but NavOSS may be unable to associate a transient,
@@ -128,8 +159,9 @@
           where practical. No security measure can guarantee absolute protection.
         </p>
         <p>
-          The NavOSS origin is in Alberta. Cloudflare, OpenFreeMap, Apple, and GitHub may process
-          data outside Canada as described in their policies.
+          The NavOSS origin is in Alberta. Cloudflare, OpenFreeMap, Apple, Google when Reviews is
+          chosen, GitHub, and a user-selected share destination may process data outside Canada as
+          described in their policies.
         </p>
 
         <h2>Children and changes</h2>

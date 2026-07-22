@@ -4,6 +4,7 @@ import { CoordinateSchema, IsoDateTimeSchema, LatitudeSchema, LongitudeSchema } 
 
 export const SearchQuerySchema = z
   .object({
+    includeDetails: z.boolean().optional(),
     latitude: z.coerce.number().pipe(LatitudeSchema).optional(),
     limit: z.coerce.number().int().min(1).max(20).default(8),
     longitude: z.coerce.number().pipe(LongitudeSchema).optional(),
@@ -22,11 +23,25 @@ export const SearchQuerySchema = z
 
 export type SearchQuery = z.output<typeof SearchQuerySchema>;
 
+export const PlaceDetailsSchema = z
+  .object({
+    address: z.string().trim().min(1).optional(),
+    category: z.string().trim().min(1).optional(),
+    openingHours: z.string().trim().min(1).optional(),
+    phone: z.string().trim().min(1).optional(),
+    website: z.string().trim().min(1).optional(),
+    wheelchair: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+export type PlaceDetails = z.infer<typeof PlaceDetailsSchema>;
+
 export const SearchResultSchema = z
   .object({
     category: z.enum(['address', 'landmark', 'neighborhood', 'poi', 'street']),
     center: CoordinateSchema,
     confidence: z.number().min(0).max(1),
+    details: PlaceDetailsSchema.optional(),
     id: z.string().min(1),
     label: z.string().min(1),
     name: z.string().min(1),

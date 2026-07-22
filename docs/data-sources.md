@@ -40,6 +40,16 @@ The production index stores public source records only. It does not store search
 origins, selected results, routes, or user identities. Search results are ranked by exact text,
 prefix and word-prefix matches, typo similarity, and then optional proximity.
 
+Named places rendered in the map's OpenMapTiles layers are tappable. NavOSS uses the visible name
+and map coordinate to find the nearest same-name result through the self-hosted search service.
+Nominatim `extratags` may provide a public address, place category, opening hours, business phone,
+official website, and wheelchair-access tag. These community-maintained fields may be absent,
+outdated, or expressed in raw OpenStreetMap syntax. NavOSS does not infer missing values.
+
+OpenStreetMap does not provide a Google-style review corpus. NavOSS does not scrape reviews or mix
+Google Places content into its open-data result. The optional Reviews command is an explicit
+external Google Maps search; no Google place query occurs until the user chooses that command.
+
 ## Calgary Intersection Safety Cameras
 
 NavOSS uses The City of Calgary's official **Intersection Safety Cameras** dataset for fixed enforcement-camera markers and alerts.

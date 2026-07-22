@@ -26,14 +26,14 @@ NavOSS is an independently designed navigation project using OpenStreetMap-deriv
 
 ## Project Status
 
-| Area               | Current state                                                                                                          |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| iOS app            | Search, alternatives, route preview, foreground guidance, rerouting, arrival, and official camera alerts               |
-| Native core        | Swift course/continuity matching with accuracy-aware off-route and arrival hysteresis                                  |
-| API                | Public Fastify ingress with self-hosted Alberta Nominatim/Valhalla and Calgary camera data                             |
-| Automated evidence | Contract/API/mobile/Swift suites, simulator journeys, and a 17-variant Calgary route matrix                            |
-| TestFlight         | Not released; backend/signing/App Store setup are ready, while privacy decisions, build, and device tests remain gated |
-| Android            | Planned after the iOS navigation core is stable                                                                        |
+| Area               | Current state                                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- |
+| iOS app            | Tappable places, search, route choices, foreground guidance, ETA sharing, arrival, and official camera alerts |
+| Native core        | Swift course/continuity matching with accuracy-aware off-route and arrival hysteresis                         |
+| API                | Public Fastify ingress with self-hosted Alberta Nominatim/Valhalla and Calgary camera data                    |
+| Automated evidence | Contract/API/mobile/Swift suites, simulator journeys, and a 17-variant Calgary route matrix                   |
+| TestFlight         | Build 8 is accepted by Apple; current source changes still require a new build and clean-device validation    |
+| Android            | Planned after the iOS navigation core is stable                                                               |
 
 ## Architecture
 
@@ -54,7 +54,10 @@ The mobile client remains independent of provider-specific route models. Public 
 - Fastify 5 API with Calgary-bounded OpenStreetMap search and deterministic fixture fallback
 - Self-hosted Alberta Nominatim search and Valhalla routing behind provider-aware readiness checks
 - Expo SDK 57 iOS development client with a full-screen MapLibre Calgary map
+- Tappable rendered places with proximity-safe self-hosted OpenStreetMap details, Directions, Share, call/site actions, and an explicit external Reviews link
 - Frictionless destination flow: search, automatic route calculation, ETA/distance, alternatives, route preview, Start, live maneuver banner, and End
+- Privacy-minimal system-sheet place and ETA sharing without Contacts access, current coordinates, route geometry, or live tracking
+- Persistent map presets and content controls, including green Day/Auto-light highway emphasis and restored Night/Minimal landmarks
 - Foreground GPS progress with native iOS route projection, a map-matched puck, a course-following MapLibre camera, and explicit development/degraded source labels
 - All current official Calgary intersection-safety cameras on the map, with direction-safe route-ahead visual and spoken alerts
 - Runtime request and response validation plus generated OpenAPI 3.1
@@ -98,7 +101,7 @@ Fixed red-light and speed-on-green camera locations come from The City of Calgar
 
 ## Navigation Status
 
-The current technical-alpha slice supports route geometry, ETA, distance, available alternatives, avoid-highway routing, major-road summaries, a selectable arrow/car marker, written guidance, foreground GPS progress, automatic foreground rerouting, confirmed arrival, and Start/End navigation. On iOS, active guidance sends route geometry plus foreground coordinates, horizontal accuracy, and reliable movement course through the local `NavOSSNavigation` Swift module. The module scores route candidates by distance, course alignment, and continuity with the previously accepted route progress, preserves the raw coordinate in its typed snapshot, and supplies the matched coordinate for the puck and remaining-route calculations. Course is used only at 2 m/s or faster so stationary heading noise does not steer matching. Accuracy-aware hysteresis confirms a departure after three credible off-route fixes and recovery after two precise on-route fixes; confirmed state is emitted as `isOffRoute`.
+The current technical-alpha slice supports route geometry, ETA, distance, available alternatives, avoid-highway routing, major-road summaries, a selectable arrow/car marker, live distance to the next maneuver, foreground GPS progress, static ETA sharing, automatic foreground rerouting, confirmed arrival, and Start/End navigation. On iOS, active guidance sends route geometry plus foreground coordinates, horizontal accuracy, and reliable movement course through the local `NavOSSNavigation` Swift module. The module scores route candidates by distance, course alignment, and continuity with the previously accepted route progress, preserves the raw coordinate in its typed snapshot, and supplies the matched coordinate for the puck and remaining-route calculations. Course is used only at 2 m/s or faster so stationary heading noise does not steer matching. Accuracy-aware hysteresis confirms a departure after three credible off-route fixes and recovery after two precise on-route fixes; confirmed state is emitted as `isOffRoute`.
 
 Confirmed departures request a replacement route from the current raw location while preserving the destination and route preferences. Requests are deduplicated, retries are cooldown-limited, pending work is cancelled on recovery or End, and the existing route remains active when an update fails. Native arrival requires two consecutive accurate endpoint fixes, at least 98% route progress, and an accuracy-adjusted destination distance within 30 meters. Arrival is sticky until the trip ends and presents a dedicated destination/Done panel. During active guidance, official camera alerts require route proximity, forward progress, and direction alignment; each camera is announced at most once per trip.
 
@@ -107,6 +110,8 @@ This is still an early native navigation-core slice, not production turn-by-turn
 ## CarPlay
 
 Apple approved the managed CarPlay Navigation App capability for `org.navoss.mobile` on 2026-07-21. CarPlay must still be a native scene in the same iPhone app rather than a second React Native screen, and it remains disabled in normal builds until native route loading, background progress, maneuvers, estimates, and reconnect continuity are complete. The similarly named deprecated macOS `com.apple.developer.maps` capability is unrelated and is not enabled.
+
+Phone-side Share ETA uses the system share sheet and does not read Contacts. A custom recent-contacts browser is not an approved CarPlay navigation-template surface and will not be added; any future CarPlay sharing control remains gated on native navigation completion and explicit template-compliance review.
 
 The implementation boundary, entitlement gate, standard CarPlay flow, Dashboard support, cluster/HUD metadata, Expo prebuild strategy, and validation matrix are documented in [docs/architecture/carplay.md](docs/architecture/carplay.md).
 

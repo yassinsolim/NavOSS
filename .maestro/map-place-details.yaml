@@ -1,0 +1,38 @@
+appId: org.navoss.mobile
+---
+- stopApp
+- launchApp
+- tapOn:
+    text: 'Close'
+    optional: true
+- extendedWaitUntil:
+    visible: 'Search Calgary'
+    timeout: 20000
+- doubleTapOn:
+    point: 52%, 50%
+- doubleTapOn:
+    point: 52%, 50%
+- doubleTapOn:
+    point: 52%, 50%
+- doubleTapOn:
+    point: 52%, 50%
+- doubleTapOn:
+    point: 52%, 50%
+- tapOn:
+    point: 29%, 72%
+- extendedWaitUntil:
+    visible: 'Directions'
+    timeout: 10000
+- assertVisible: 'Share'
+- assertVisible: 'Reviews'
+- tapOn: 'Share'
+- extendedWaitUntil:
+    visible: 'Copy'
+    timeout: 10000
+- assertNotVisible: '.*Access Your Contacts.*'
+- tapOn: 'Copy'
+- tapOn: 'Directions'
+- extendedWaitUntil:
+    visible: 'Start navigation'
+    timeout: 20000
+- tapOn: 'Cancel route'

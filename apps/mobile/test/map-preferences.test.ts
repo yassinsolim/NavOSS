@@ -62,6 +62,27 @@ const style: StyleSpecification = {
       type: 'line',
     },
     {
+      id: 'road_motorway_casing',
+      paint: { 'line-color': '#e9ac77' },
+      source: 'openmaptiles',
+      'source-layer': 'transportation',
+      type: 'line',
+    },
+    {
+      id: 'road_motorway',
+      paint: { 'line-color': '#ffcc88' },
+      source: 'openmaptiles',
+      'source-layer': 'transportation',
+      type: 'line',
+    },
+    {
+      id: 'road_trunk_primary',
+      paint: { 'line-color': '#ffeeaa' },
+      source: 'openmaptiles',
+      'source-layer': 'transportation',
+      type: 'line',
+    },
+    {
       id: 'water_name',
       paint: { 'text-color': '#495e91', 'text-halo-color': '#ffffff' },
       source: 'openmaptiles',
@@ -136,6 +157,30 @@ describe('map preferences', () => {
 
     expect(visibility('poi_general', customized)).toBe('none');
     expect(visibility('poi_transit', customized)).toBeUndefined();
+  });
+
+  it('uses a green highway hierarchy in day and automatic light maps', () => {
+    const day = customizeMapStyle(style, {
+      ...DEFAULT_MAP_PREFERENCES,
+      stylePreset: 'day',
+    });
+    const automatic = customizeMapStyle(style, DEFAULT_MAP_PREFERENCES, 'light');
+    const minimal = customizeMapStyle(style, {
+      ...DEFAULT_MAP_PREFERENCES,
+      stylePreset: 'minimal',
+    });
+
+    expect(paint('road_motorway_casing', 'line-color', day)).toBe('#3F7150');
+    expect(paint('road_motorway', 'line-color', day)).toBe('#72AD7B');
+    expect(paint('road_motorway', 'line-color', automatic)).toBe('#72AD7B');
+    expect(paint('road_trunk_primary', 'line-color', day)).toEqual([
+      'match',
+      ['get', 'class'],
+      'trunk',
+      '#A6C98C',
+      '#ffeeaa',
+    ]);
+    expect(paint('road_motorway', 'line-color', minimal)).toBe('#ffcc88');
   });
 
   it('restores readable landmarks in night and minimal styles', () => {

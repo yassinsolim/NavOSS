@@ -263,7 +263,7 @@ export function SafetyCameraAlertBanner({
       accessibilityLabel={`Red light and speed camera ahead, ${distance}, ${camera.location}`}
       accessibilityLiveRegion="polite"
       accessible
-      style={[styles.cameraAlertBanner, { top: safeAreaTop + 100 }]}
+      style={[styles.cameraAlertBanner, { top: safeAreaTop + 136 }]}
     >
       <View style={styles.cameraAlertIcon}>
         <SymbolView
@@ -283,6 +283,7 @@ export function SafetyCameraAlertBanner({
 }
 
 interface NavigationBannerProps {
+  distanceMeters: number;
   instruction: string;
   maneuverType: string;
   roadName: string;
@@ -322,6 +323,7 @@ export function ArrivalPanel({ bottomInset, destination, onDone }: ArrivalPanelP
 }
 
 export function NavigationBanner({
+  distanceMeters,
   instruction,
   maneuverType,
   roadName,
@@ -341,10 +343,18 @@ export function NavigationBanner({
       : status === 'reroute-failed'
         ? 'Check your connection'
         : roadName;
+  const displayedDistance =
+    status === 'rerouting'
+      ? 'Rerouting'
+      : status === 'reroute-failed'
+        ? 'Route paused'
+        : formatDistance(distanceMeters);
 
   return (
     <View
+      accessibilityLabel={`${displayedDistance}, ${displayedInstruction}${displayedRoadName.length === 0 ? '' : `, ${displayedRoadName}`}`}
       accessibilityLiveRegion="polite"
+      accessible
       style={[styles.navigationBanner, { top: safeAreaTop + 8 }]}
     >
       <View style={styles.maneuverIcon}>
@@ -356,11 +366,14 @@ export function NavigationBanner({
                 ? { android: 'wifi_off', ios: 'wifi.slash' }
                 : maneuverSymbol(direction)
           }
-          size={29}
-          tintColor={NavOssColors.asphalt}
+          size={41}
+          tintColor={NavOssColors.white}
         />
       </View>
       <View style={styles.guidanceCopy}>
+        <Text numberOfLines={1} style={styles.guidanceDistance}>
+          {displayedDistance}
+        </Text>
         <Text numberOfLines={2} style={styles.guidanceInstruction}>
           {displayedInstruction}
         </Text>
@@ -398,6 +411,7 @@ interface NavigationStatusBarProps {
   durationSeconds: number;
   matchStatus: VehicleMatchStatus;
   onEnd: () => void;
+  onShare: () => void;
   rerouteCount: number;
 }
 
@@ -408,6 +422,7 @@ export function NavigationStatusBar({
   durationSeconds,
   matchStatus,
   onEnd,
+  onShare,
   rerouteCount,
 }: NavigationStatusBarProps) {
   const matchStatusLabel =
@@ -432,23 +447,64 @@ export function NavigationStatusBar({
   return (
     <View style={[styles.navigationStatus, { paddingBottom: Math.max(bottomInset, 10) }]}>
       <View
-        accessibilityLabel={`Navigation status, ${matchStatusLabel}, ${rerouteDetail}, ${cameraDetail}, ${formatDuration(durationSeconds)}, ${formatDistance(distanceMeters)}`}
+        accessibilityLabel={`Navigation status, ${matchStatusLabel}, ${rerouteDetail}, ${cameraDetail}, arrive ${formatArrivalTime(durationSeconds)}, ${formatDuration(durationSeconds)}, ${formatDistance(distanceMeters)}`}
         accessible
-        style={styles.navigationMetric}
+        style={styles.navigationMetrics}
       >
-        <Text style={styles.navigationEta}>{formatDuration(durationSeconds)}</Text>
-        <Text style={styles.navigationMeta}>
-          {formatDistance(distanceMeters)} · {formatArrivalTime(durationSeconds)}
-        </Text>
+        <View style={styles.navigationMetric}>
+          <Text numberOfLines={1} style={styles.navigationEta}>
+            {formatArrivalTime(durationSeconds)}
+          </Text>
+          <Text style={styles.navigationMeta}>arrival</Text>
+        </View>
+        <View style={styles.navigationDivider} />
+        <View style={styles.navigationMetric}>
+          <Text numberOfLines={1} style={styles.navigationValue}>
+            {formatDuration(durationSeconds)}
+          </Text>
+          <Text style={styles.navigationMeta}>remaining</Text>
+        </View>
+        <View style={styles.navigationDivider} />
+        <View style={styles.navigationMetric}>
+          <Text numberOfLines={1} style={styles.navigationValue}>
+            {formatDistance(distanceMeters)}
+          </Text>
+          <Text style={styles.navigationMeta}>distance</Text>
+        </View>
       </View>
-      <Pressable accessibilityLabel="End navigation" onPress={onEnd} style={styles.endButton}>
-        <SymbolView
-          name={{ android: 'stop_circle', ios: 'xmark.circle.fill' }}
-          size={22}
-          tintColor={NavOssColors.coral}
-        />
-        <Text style={styles.endText}>End</Text>
-      </Pressable>
+      <View style={styles.navigationActions}>
+        <Pressable
+          accessibilityHint="Opens the system share sheet without reading your contacts"
+          accessibilityLabel="Share ETA"
+          onPress={onShare}
+          style={({ pressed }) => [
+            styles.navigationAction,
+            styles.shareEtaButton,
+            pressed && styles.navigationActionPressed,
+          ]}
+        >
+          <SymbolView
+            name={{ android: 'share', ios: 'square.and.arrow.up' }}
+            size={20}
+            tintColor={NavOssColors.green}
+          />
+        </Pressable>
+        <Pressable
+          accessibilityLabel="End navigation"
+          onPress={onEnd}
+          style={({ pressed }) => [
+            styles.navigationAction,
+            styles.endButton,
+            pressed && styles.navigationActionPressed,
+          ]}
+        >
+          <SymbolView
+            name={{ android: 'close', ios: 'xmark' }}
+            size={20}
+            tintColor={NavOssColors.coral}
+          />
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -566,18 +622,7 @@ const styles = StyleSheet.create({
   endButton: {
     alignItems: 'center',
     backgroundColor: '#FCE9E5',
-    borderRadius: 7,
-    flexDirection: 'row',
-    gap: 6,
-    height: 46,
     justifyContent: 'center',
-    paddingHorizontal: 15,
-  },
-  endText: {
-    color: NavOssColors.coral,
-    fontFamily: NavOssFonts.semibold,
-    fontSize: 16,
-    letterSpacing: 0,
   },
   errorRow: {
     alignItems: 'center',
@@ -613,20 +658,27 @@ const styles = StyleSheet.create({
   },
   guidanceCopy: {
     flex: 1,
-    gap: 3,
+    gap: 1,
     minWidth: 0,
+  },
+  guidanceDistance: {
+    color: NavOssColors.white,
+    fontFamily: NavOssFonts.bold,
+    fontSize: 29,
+    letterSpacing: 0,
+    lineHeight: 32,
   },
   guidanceInstruction: {
     color: NavOssColors.white,
-    fontFamily: NavOssFonts.semibold,
-    fontSize: 20,
+    fontFamily: NavOssFonts.bold,
+    fontSize: 21,
     letterSpacing: 0,
-    lineHeight: 24,
+    lineHeight: 25,
   },
   guidanceRoad: {
-    color: '#C8D4D1',
-    fontFamily: NavOssFonts.regular,
-    fontSize: 14,
+    color: NavOssColors.sky,
+    fontFamily: NavOssFonts.medium,
+    fontSize: 15,
     letterSpacing: 0,
   },
   iconButton: {
@@ -637,23 +689,23 @@ const styles = StyleSheet.create({
   },
   maneuverIcon: {
     alignItems: 'center',
-    backgroundColor: NavOssColors.sun,
-    borderRadius: 7,
-    height: 54,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 8,
+    height: 76,
     justifyContent: 'center',
-    width: 54,
+    width: 76,
   },
   navigationBanner: {
     alignItems: 'center',
-    backgroundColor: NavOssColors.asphalt,
+    backgroundColor: NavOssColors.green,
     borderRadius: 8,
     flexDirection: 'row',
-    gap: 13,
-    left: 12,
-    minHeight: 82,
-    padding: 12,
+    gap: 14,
+    left: 10,
+    minHeight: 116,
+    padding: 14,
     position: 'absolute',
-    right: 12,
+    right: 10,
     shadowColor: '#000000',
     shadowOffset: { height: 4, width: 0 },
     shadowOpacity: 0.25,
@@ -663,18 +715,46 @@ const styles = StyleSheet.create({
   navigationEta: {
     color: NavOssColors.green,
     fontFamily: NavOssFonts.bold,
-    fontSize: 24,
+    fontSize: 19,
     letterSpacing: 0,
+  },
+  navigationAction: {
+    alignItems: 'center',
+    borderRadius: 22,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  navigationActionPressed: {
+    opacity: 0.68,
+    transform: [{ scale: 0.96 }],
+  },
+  navigationActions: {
+    flexDirection: 'row',
+    gap: 7,
+  },
+  navigationDivider: {
+    alignSelf: 'stretch',
+    backgroundColor: NavOssColors.border,
+    marginVertical: 4,
+    width: StyleSheet.hairlineWidth,
   },
   navigationMeta: {
     color: NavOssColors.muted,
     fontFamily: NavOssFonts.regular,
-    fontSize: 13,
+    fontSize: 11,
     letterSpacing: 0,
   },
   navigationMetric: {
     flex: 1,
-    gap: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  navigationMetrics: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 9,
+    minWidth: 0,
   },
   navigationStatus: {
     alignItems: 'center',
@@ -683,13 +763,19 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     bottom: 0,
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     left: 0,
-    minHeight: 86,
-    paddingHorizontal: 16,
-    paddingTop: 10,
+    minHeight: 102,
+    paddingHorizontal: 12,
+    paddingTop: 12,
     position: 'absolute',
     right: 0,
+  },
+  navigationValue: {
+    color: NavOssColors.asphalt,
+    fontFamily: NavOssFonts.bold,
+    fontSize: 17,
+    letterSpacing: 0,
   },
   optionButton: {
     alignItems: 'center',
@@ -810,6 +896,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
     maxWidth: 170,
     minHeight: 28,
+  },
+  shareEtaButton: {
+    backgroundColor: NavOssColors.sky,
   },
   sourceRow: {
     alignItems: 'center',
