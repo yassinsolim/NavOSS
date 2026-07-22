@@ -245,6 +245,112 @@ export function RoutePreviewPanel({
 
 export type NavigationRouteStatus = 'reroute-failed' | 'rerouting' | 'tracking';
 
+interface CarPlayCompanionPanelProps {
+  actionLabel: 'Done' | 'End';
+  bottomInset: number;
+  destinationName: string;
+  distanceMeters: number;
+  durationSeconds: number;
+  instruction: string;
+  maneuverType: string;
+  onAction: () => void;
+  remainingDistanceMeters: number;
+  roadName: string;
+  safeAreaTop: number;
+}
+
+export function CarPlayCompanionPanel({
+  actionLabel,
+  bottomInset,
+  destinationName,
+  distanceMeters,
+  durationSeconds,
+  instruction,
+  maneuverType,
+  onAction,
+  remainingDistanceMeters,
+  roadName,
+  safeAreaTop,
+}: CarPlayCompanionPanelProps) {
+  const direction = maneuverDirection(maneuverType, instruction);
+
+  return (
+    <View
+      style={[
+        styles.carPlayCompanion,
+        {
+          paddingBottom: Math.max(bottomInset, 20),
+          paddingTop: Math.max(safeAreaTop, 20),
+        },
+      ]}
+    >
+      <View style={styles.carPlayConnectionRow}>
+        <View style={styles.carPlayConnectionDot} />
+        <Text style={styles.carPlayConnectionText}>CarPlay</Text>
+      </View>
+
+      <View
+        accessibilityLabel={`CarPlay navigation, ${formatDistance(distanceMeters)}, ${instruction}${roadName.length === 0 ? '' : `, ${roadName}`}, arrive ${formatArrivalTime(durationSeconds)}`}
+        accessibilityLiveRegion="polite"
+        accessible
+        style={styles.carPlayGuidance}
+      >
+        <SymbolView name={maneuverSymbol(direction)} size={88} tintColor={NavOssColors.white} />
+        <Text
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+          numberOfLines={1}
+          style={styles.carPlayDistance}
+        >
+          {formatDistance(distanceMeters)}
+        </Text>
+        <Text numberOfLines={3} style={styles.carPlayInstruction}>
+          {instruction}
+        </Text>
+        {roadName.length > 0 && (
+          <Text numberOfLines={1} style={styles.carPlayRoad}>
+            {roadName}
+          </Text>
+        )}
+      </View>
+
+      <View style={styles.carPlayFooter}>
+        <View style={styles.carPlayTripSummary}>
+          <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            numberOfLines={1}
+            style={styles.carPlayEta}
+          >
+            {formatArrivalTime(durationSeconds)}
+          </Text>
+          <Text numberOfLines={1} style={styles.carPlayRemaining}>
+            {formatDuration(durationSeconds)} · {formatDistance(remainingDistanceMeters)}
+          </Text>
+          <Text numberOfLines={1} style={styles.carPlayDestination}>
+            {destinationName}
+          </Text>
+        </View>
+        <Pressable
+          accessibilityLabel={actionLabel === 'End' ? 'End navigation' : 'Finish navigation'}
+          onPress={onAction}
+          style={({ pressed }) => [
+            styles.carPlayEndButton,
+            pressed && styles.navigationActionPressed,
+          ]}
+        >
+          <SymbolView
+            name={{ android: 'close', ios: 'xmark' }}
+            size={26}
+            tintColor={NavOssColors.white}
+          />
+          <Text style={styles.carPlayEndText}>{actionLabel}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 interface SafetyCameraAlertBannerProps {
   camera: SafetyCamera;
   distanceAheadMeters: number;
@@ -606,6 +712,102 @@ const styles = StyleSheet.create({
     fontFamily: NavOssFonts.semibold,
     fontSize: 17,
     letterSpacing: 0,
+  },
+  carPlayCompanion: {
+    backgroundColor: NavOssColors.asphalt,
+    flex: 1,
+    paddingHorizontal: 24,
+  },
+  carPlayConnectionDot: {
+    backgroundColor: NavOssColors.green,
+    borderRadius: 5,
+    height: 10,
+    width: 10,
+  },
+  carPlayConnectionRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    minHeight: 34,
+  },
+  carPlayConnectionText: {
+    color: NavOssColors.sky,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 15,
+    letterSpacing: 0,
+  },
+  carPlayDestination: {
+    color: NavOssColors.sky,
+    fontFamily: NavOssFonts.medium,
+    fontSize: 14,
+    letterSpacing: 0,
+    marginTop: 4,
+  },
+  carPlayDistance: {
+    color: NavOssColors.white,
+    fontFamily: NavOssFonts.bold,
+    fontSize: 54,
+    letterSpacing: 0,
+    lineHeight: 60,
+  },
+  carPlayEndButton: {
+    alignItems: 'center',
+    backgroundColor: NavOssColors.coral,
+    borderRadius: 8,
+    gap: 2,
+    height: 68,
+    justifyContent: 'center',
+    width: 68,
+  },
+  carPlayEndText: {
+    color: NavOssColors.white,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 13,
+    letterSpacing: 0,
+  },
+  carPlayEta: {
+    color: NavOssColors.white,
+    fontFamily: NavOssFonts.bold,
+    fontSize: 27,
+    letterSpacing: 0,
+  },
+  carPlayFooter: {
+    alignItems: 'center',
+    borderTopColor: 'rgba(255,255,255,0.18)',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    gap: 16,
+    paddingTop: 18,
+  },
+  carPlayGuidance: {
+    flex: 1,
+    gap: 8,
+    justifyContent: 'center',
+    paddingBottom: 20,
+    paddingTop: 12,
+  },
+  carPlayInstruction: {
+    color: NavOssColors.white,
+    fontFamily: NavOssFonts.bold,
+    fontSize: 31,
+    letterSpacing: 0,
+    lineHeight: 37,
+  },
+  carPlayRemaining: {
+    color: NavOssColors.white,
+    fontFamily: NavOssFonts.medium,
+    fontSize: 16,
+    letterSpacing: 0,
+  },
+  carPlayRoad: {
+    color: NavOssColors.sky,
+    fontFamily: NavOssFonts.medium,
+    fontSize: 20,
+    letterSpacing: 0,
+  },
+  carPlayTripSummary: {
+    flex: 1,
+    minWidth: 0,
   },
   destinationName: {
     color: NavOssColors.asphalt,

@@ -32,7 +32,14 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { startTransition, useDeferredValue, useEffect, useRef, useState } from 'react';
+import {
+  startTransition,
+  useDeferredValue,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from 'react';
 import type { FeatureCollection, LineString, Point } from 'geojson';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
@@ -65,6 +72,7 @@ import {
 } from '@/features/map/search-panel';
 import {
   ArrivalPanel,
+  CarPlayCompanionPanel,
   NavigationBanner,
   type NavigationRouteStatus,
   NavigationStatusBar,
@@ -87,9 +95,14 @@ import {
 } from '@/features/navigation/safety-camera-alert';
 import {
   announceSafetyCamera,
+  clearCarPlayTrip,
   clearNavigationRoute,
+  getCarPlayState,
   type NativeNavigationSnapshot,
+  observeCarPlayNavigationEnded,
+  observeCarPlayState,
   observeNavigationSnapshots,
+  publishCarPlayGuidance,
   recordRecentDestination,
   setNavigationRoute,
   stopNavigationAnnouncements,
@@ -274,6 +287,7 @@ export function MapScreen() {
   const [routeTrafficStatus, setRouteTrafficStatus] =
     useState<RouteResponse['source']['traffic']>('unavailable');
   const [cameraAnnouncementCount, setCameraAnnouncementCount] = useState(0);
+  const [carPlayConnected, setCarPlayConnected] = useState(false);
   const [safetyCameraAlert, setSafetyCameraAlert] = useState<UpcomingSafetyCamera>();
   const [safetyCameras, setSafetyCameras] = useState<readonly SafetyCamera[]>([]);
   const [navigationSnapshot, setNavigationSnapshot] = useState<NativeNavigationSnapshot>();
@@ -424,6 +438,7 @@ export function MapScreen() {
       if (cameraAlertTimeoutRef.current !== undefined) {
         clearTimeout(cameraAlertTimeoutRef.current);
       }
+      clearCarPlayTrip();
       stopNavigationAnnouncements();
       rerouteGateRef.current.resetSession();
       routeAbortControllerRef.current?.abort();
@@ -445,7 +460,7 @@ export function MapScreen() {
     const rerouteGate = rerouteGateRef.current;
 
     setNavigationRouteStatus('tracking');
-    setNavigationSnapshot(setNavigationRoute(route));
+    setNavigationSnapshot(setNavigationRoute(route, routeState.destination));
 
     void Location.watchPositionAsync(
       {
@@ -1051,6 +1066,7 @@ export function MapScreen() {
     }
     setSafetyCameraAlert(undefined);
     setCameraAnnouncementCount(0);
+    clearCarPlayTrip();
     stopNavigationAnnouncements();
     rerouteAbortControllerRef.current?.abort();
     rerouteAbortControllerRef.current = null;
@@ -1082,6 +1098,7 @@ export function MapScreen() {
     }
     setSafetyCameraAlert(undefined);
     setCameraAnnouncementCount(0);
+    clearCarPlayTrip();
     stopNavigationAnnouncements();
     rerouteGateRef.current.resetSession();
     setNavigationStepIndex(0);
@@ -1092,6 +1109,65 @@ export function MapScreen() {
     setSelectedResult(undefined);
     setRouteState({ type: 'idle' });
   };
+
+  const handleCarPlayNavigationEnded = useEffectEvent(() => {
+    if (routeState.type === 'arrived') {
+      handleFinishArrival();
+      return;
+    }
+    handleEndNavigation();
+  });
+
+  useEffect(() => {
+    setCarPlayConnected(getCarPlayState().connected);
+    const stateSubscription = observeCarPlayState((state) => {
+      setCarPlayConnected(state.connected);
+    });
+    const endedSubscription = observeCarPlayNavigationEnded(() => {
+      handleCarPlayNavigationEnded();
+    });
+    return () => {
+      stateSubscription.remove();
+      endedSubscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      routeState.type === 'navigating' &&
+      guidanceStep !== undefined &&
+      remainingRoute !== undefined &&
+      remainingStep !== undefined
+    ) {
+      publishCarPlayGuidance({
+        distanceToManeuverMeters: remainingStep.distanceMeters,
+        durationToManeuverSeconds: remainingStep.durationSeconds,
+        instruction: guidanceStep.instruction,
+        maneuverType: guidanceStep.maneuverType,
+        phase: 'navigating',
+        remainingDistanceMeters: remainingRoute.distanceMeters,
+        remainingDurationSeconds: remainingRoute.durationSeconds,
+        roadName: guidanceStep.roadName,
+        stepIndex: navigationStepIndex,
+      });
+      return;
+    }
+
+    if (routeState.type === 'arrived') {
+      const arrivalStep = routeState.route.steps.at(-1);
+      publishCarPlayGuidance({
+        distanceToManeuverMeters: 0,
+        durationToManeuverSeconds: 0,
+        instruction: arrivalStep?.instruction ?? `Arrive at ${routeState.destination.name}`,
+        maneuverType: arrivalStep?.maneuverType ?? 'arrive',
+        phase: 'arrived',
+        remainingDistanceMeters: 0,
+        remainingDurationSeconds: 0,
+        roadName: arrivalStep?.roadName ?? '',
+        stepIndex: Math.max(0, routeState.route.steps.length - 1),
+      });
+    }
+  }, [guidanceStep, navigationStepIndex, remainingRoute, remainingStep, routeState]);
 
   const placeSheetVisible = routeState.type === 'idle' && selectedResult !== undefined;
   const placeDetailRowCount =
@@ -1128,6 +1204,54 @@ export function MapScreen() {
   const selectedPlacePhoneUrl = placePhoneUrl(selectedResult?.details?.phone);
   const selectedPlaceWebsiteUrl = placeWebsiteUrl(selectedResult?.details?.website);
   const selectedPlaceWebsiteLabel = placeWebsiteLabel(selectedResult?.details?.website);
+
+  if (
+    carPlayConnected &&
+    routeState.type === 'navigating' &&
+    guidanceStep !== undefined &&
+    remainingRoute !== undefined &&
+    remainingStep !== undefined
+  ) {
+    return (
+      <View style={styles.container}>
+        <StatusBar style="light" />
+        <CarPlayCompanionPanel
+          actionLabel="End"
+          bottomInset={insets.bottom}
+          destinationName={routeState.destination.name}
+          distanceMeters={remainingStep.distanceMeters}
+          durationSeconds={remainingRoute.durationSeconds}
+          instruction={guidanceStep.instruction}
+          maneuverType={guidanceStep.maneuverType}
+          onAction={handleEndNavigation}
+          remainingDistanceMeters={remainingRoute.distanceMeters}
+          roadName={guidanceStep.roadName}
+          safeAreaTop={insets.top}
+        />
+      </View>
+    );
+  }
+
+  if (carPlayConnected && routeState.type === 'arrived') {
+    return (
+      <View style={styles.container}>
+        <StatusBar style="light" />
+        <CarPlayCompanionPanel
+          actionLabel="Done"
+          bottomInset={insets.bottom}
+          destinationName={routeState.destination.name}
+          distanceMeters={0}
+          durationSeconds={0}
+          instruction="You've arrived"
+          maneuverType="arrive"
+          onAction={handleFinishArrival}
+          remainingDistanceMeters={0}
+          roadName={routeState.destination.name}
+          safeAreaTop={insets.top}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

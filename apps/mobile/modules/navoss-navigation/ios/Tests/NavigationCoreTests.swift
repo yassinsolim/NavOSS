@@ -2,6 +2,129 @@ import XCTest
 @testable import NavOSSNavigationCore
 
 final class NavigationCoreTests: XCTestCase {
+  func testCarPlayTripStorePublishesValidatedLifecycle() {
+    let notifications = NotificationCenter()
+    let store = NavOSSCarPlayTripStore(notificationCenter: notifications)
+    var changeCount = 0
+    var navigationEndCount = 0
+    let token = notifications.addObserver(
+      forName: .navOSSCarPlayStateDidChange,
+      object: store,
+      queue: nil
+    ) { _ in
+      changeCount += 1
+    }
+    let endToken = notifications.addObserver(
+      forName: .navOSSCarPlayNavigationDidEnd,
+      object: store,
+      queue: nil
+    ) { _ in
+      navigationEndCount += 1
+    }
+    defer {
+      notifications.removeObserver(token)
+      notifications.removeObserver(endToken)
+    }
+
+    let destination = NavOSSCarPlayDestination(
+      id: "airport",
+      label: "2000 Airport Road NE",
+      latitude: 51.13157,
+      longitude: -114.01055,
+      name: "Calgary International Airport"
+    )
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719),
+      NavOSSCarPlayCoordinate(latitude: 51.13157, longitude: -114.01055)
+    ]
+    let trip = NavOSSCarPlayTrip(
+      destination: destination,
+      distanceMeters: 19_700,
+      durationSeconds: 1_200,
+      geometry: geometry,
+      id: "route-1",
+      steps: [
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 19_700,
+          durationSeconds: 1_200,
+          geometry: geometry,
+          instruction: "Continue to the airport",
+          maneuverType: "continue",
+          roadName: "Airport Trail NE"
+        )
+      ]
+    )
+    let guidance = NavOSSCarPlayGuidance(
+      distanceToManeuverMeters: 350,
+      durationToManeuverSeconds: 45,
+      instruction: "Turn right",
+      maneuverType: "right",
+      phase: .navigating,
+      remainingDistanceMeters: 12_500,
+      remainingDurationSeconds: 780,
+      roadName: "Airport Trail NE",
+      stepIndex: 0
+    )
+
+    store.setConnected(true)
+    store.publishTrip(trip)
+    store.publishGuidance(guidance)
+
+    XCTAssertEqual(store.snapshot(), NavOSSCarPlayState(
+      connected: true,
+      guidance: guidance,
+      trip: trip
+    ))
+    XCTAssertEqual(changeCount, 3)
+
+    store.endTripFromCarPlay()
+    XCTAssertEqual(
+      store.snapshot(),
+      NavOSSCarPlayState(connected: true, guidance: nil, trip: nil)
+    )
+    XCTAssertEqual(changeCount, 4)
+    XCTAssertEqual(navigationEndCount, 1)
+  }
+
+  func testCarPlayTripStoreRejectsInvalidTripAndGuidance() {
+    let store = NavOSSCarPlayTripStore(notificationCenter: NotificationCenter())
+    let coordinate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08)
+    let invalidTrip = NavOSSCarPlayTrip(
+      destination: NavOSSCarPlayDestination(
+        id: "",
+        label: "Calgary",
+        latitude: 51.04,
+        longitude: -114.08,
+        name: "Invalid"
+      ),
+      distanceMeters: 0,
+      durationSeconds: 0,
+      geometry: [coordinate],
+      id: "",
+      steps: []
+    )
+
+    store.publishTrip(invalidTrip)
+    store.publishGuidance(
+      NavOSSCarPlayGuidance(
+        distanceToManeuverMeters: -.infinity,
+        durationToManeuverSeconds: 0,
+        instruction: "",
+        maneuverType: "",
+        phase: .navigating,
+        remainingDistanceMeters: 0,
+        remainingDurationSeconds: 0,
+        roadName: "",
+        stepIndex: -1
+      )
+    )
+
+    XCTAssertEqual(
+      store.snapshot(),
+      NavOSSCarPlayState(connected: false, guidance: nil, trip: nil)
+    )
+  }
+
   func testCarPlayDestinationCatalogDeduplicatesAndBoundsRecents() throws {
     let suiteName = "NavOSSNavigationCoreTests.\(UUID().uuidString)"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

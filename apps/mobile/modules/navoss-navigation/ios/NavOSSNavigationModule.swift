@@ -2,6 +2,8 @@ import AVFoundation
 import ExpoModulesCore
 
 private let navigationSnapshotEvent = "onNavigationSnapshot"
+private let carPlayStateEvent = "onCarPlayStateChanged"
+private let carPlayNavigationEndedEvent = "onCarPlayNavigationEnded"
 
 private struct NavigationCoordinateRecord: Record {
   @Field
@@ -64,19 +66,168 @@ private struct NavigationDestinationRecord: Record {
   }
 }
 
+private struct CarPlayRouteStepRecord: Record {
+  @Field
+  var distanceMeters: Double = 0
+
+  @Field
+  var durationSeconds: Double = 0
+
+  @Field
+  var geometry: [NavigationCoordinateRecord] = []
+
+  @Field
+  var instruction: String = ""
+
+  @Field
+  var maneuverType: String = ""
+
+  @Field
+  var roadName: String = ""
+
+  var step: NavOSSCarPlayRouteStep {
+    NavOSSCarPlayRouteStep(
+      distanceMeters: distanceMeters,
+      durationSeconds: durationSeconds,
+      geometry: geometry.map { coordinate in
+        NavOSSCarPlayCoordinate(
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude
+        )
+      },
+      instruction: instruction,
+      maneuverType: maneuverType,
+      roadName: roadName
+    )
+  }
+}
+
+private struct CarPlayTripRecord: Record {
+  @Field
+  var destination: NavigationDestinationRecord = NavigationDestinationRecord()
+
+  @Field
+  var distanceMeters: Double = 0
+
+  @Field
+  var durationSeconds: Double = 0
+
+  @Field
+  var geometry: [NavigationCoordinateRecord] = []
+
+  @Field
+  var id: String = ""
+
+  @Field
+  var steps: [CarPlayRouteStepRecord] = []
+
+  var trip: NavOSSCarPlayTrip {
+    NavOSSCarPlayTrip(
+      destination: destination.destination,
+      distanceMeters: distanceMeters,
+      durationSeconds: durationSeconds,
+      geometry: geometry.map { coordinate in
+        NavOSSCarPlayCoordinate(
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude
+        )
+      },
+      id: id,
+      steps: steps.map(\.step)
+    )
+  }
+}
+
+private struct CarPlayGuidanceRecord: Record {
+  @Field
+  var distanceToManeuverMeters: Double = 0
+
+  @Field
+  var durationToManeuverSeconds: Double = 0
+
+  @Field
+  var instruction: String = ""
+
+  @Field
+  var maneuverType: String = ""
+
+  @Field
+  var phase: String = NavOSSCarPlayGuidancePhase.navigating.rawValue
+
+  @Field
+  var remainingDistanceMeters: Double = 0
+
+  @Field
+  var remainingDurationSeconds: Double = 0
+
+  @Field
+  var roadName: String = ""
+
+  @Field
+  var stepIndex: Int = 0
+
+  var guidance: NavOSSCarPlayGuidance? {
+    guard let phase = NavOSSCarPlayGuidancePhase(rawValue: phase) else {
+      return nil
+    }
+    return NavOSSCarPlayGuidance(
+      distanceToManeuverMeters: distanceToManeuverMeters,
+      durationToManeuverSeconds: durationToManeuverSeconds,
+      instruction: instruction,
+      maneuverType: maneuverType,
+      phase: phase,
+      remainingDistanceMeters: remainingDistanceMeters,
+      remainingDurationSeconds: remainingDurationSeconds,
+      roadName: roadName,
+      stepIndex: stepIndex
+    )
+  }
+}
+
 public final class NavOSSNavigationModule: Module {
+  private var carPlayNavigationEndedObserver: NSObjectProtocol?
+  private var carPlayStateObserver: NSObjectProtocol?
   private let core = NavigationCore()
   private let speechSynthesizer = AVSpeechSynthesizer()
 
   public func definition() -> ModuleDefinition {
     Name("NavOSSNavigation")
 
-    Events(navigationSnapshotEvent)
+    Events(navigationSnapshotEvent, carPlayStateEvent, carPlayNavigationEndedEvent)
+
+    OnCreate {
+      self.carPlayStateObserver = NotificationCenter.default.addObserver(
+        forName: .navOSSCarPlayStateDidChange,
+        object: NavOSSCarPlayTripStore.shared,
+        queue: .main
+      ) { [weak self] _ in
+        self?.emitCarPlayState()
+      }
+      self.carPlayNavigationEndedObserver = NotificationCenter.default.addObserver(
+        forName: .navOSSCarPlayNavigationDidEnd,
+        object: NavOSSCarPlayTripStore.shared,
+        queue: .main
+      ) { [weak self] _ in
+        self?.sendEvent(carPlayNavigationEndedEvent, ["reason": "carplay"])
+      }
+    }
+
+    OnDestroy {
+      if let carPlayNavigationEndedObserver = self.carPlayNavigationEndedObserver {
+        NotificationCenter.default.removeObserver(carPlayNavigationEndedObserver)
+        self.carPlayNavigationEndedObserver = nil
+      }
+      if let carPlayStateObserver = self.carPlayStateObserver {
+        NotificationCenter.default.removeObserver(carPlayStateObserver)
+        self.carPlayStateObserver = nil
+      }
+    }
 
     Function("getCapabilities") { () -> [String: Any] in
       return [
         "arrivalDetection": true,
         "backgroundLocation": false,
+        "carPlayTripBridge": true,
         "courseMatching": true,
         "implementation": "native-ios",
         "offRouteDetection": true,
@@ -84,12 +235,16 @@ public final class NavOSSNavigationModule: Module {
         "routeContinuity": true,
         "routeMatching": true,
         "safetyCameraAnnouncements": true,
-        "version": 6
+        "version": 7
       ]
     }
 
     Function("getSnapshot") { () -> [String: Any] in
       return self.serialize(self.core.currentSnapshot())
+    }
+
+    Function("getCarPlayState") { () -> [String: Any] in
+      return self.serialize(NavOSSCarPlayTripStore.shared.snapshot())
     }
 
     Function("setRoute") { (geometry: [NavigationCoordinateRecord]) throws -> [String: Any] in
@@ -123,6 +278,21 @@ public final class NavOSSNavigationModule: Module {
       NavOSSCarPlayDestinationStore.shared.replaceFavorites(destinations.map(\.destination))
     }
 
+    Function("publishCarPlayTrip") { (trip: CarPlayTripRecord) in
+      NavOSSCarPlayTripStore.shared.publishTrip(trip.trip)
+    }
+
+    Function("publishCarPlayGuidance") { (guidance: CarPlayGuidanceRecord) in
+      guard let guidance = guidance.guidance else {
+        return
+      }
+      NavOSSCarPlayTripStore.shared.publishGuidance(guidance)
+    }
+
+    Function("clearCarPlayTrip") { () in
+      NavOSSCarPlayTripStore.shared.clearTrip()
+    }
+
     Function("announceSafetyCamera") { () in
       DispatchQueue.main.async {
         guard !self.speechSynthesizer.isSpeaking else {
@@ -146,6 +316,31 @@ public final class NavOSSNavigationModule: Module {
   private func emit(_ snapshot: NavigationSnapshot) -> [String: Any] {
     let payload = serialize(snapshot)
     sendEvent(navigationSnapshotEvent, payload)
+    return payload
+  }
+
+  private func emitCarPlayState() {
+    sendEvent(carPlayStateEvent, serialize(NavOSSCarPlayTripStore.shared.snapshot()))
+  }
+
+  private func serialize(_ state: NavOSSCarPlayState) -> [String: Any] {
+    var payload: [String: Any] = [
+      "connected": state.connected,
+      "hasActiveTrip": state.trip != nil
+    ]
+    if let guidance = state.guidance {
+      payload["guidance"] = [
+        "distanceToManeuverMeters": guidance.distanceToManeuverMeters,
+        "durationToManeuverSeconds": guidance.durationToManeuverSeconds,
+        "instruction": guidance.instruction,
+        "maneuverType": guidance.maneuverType,
+        "phase": guidance.phase.rawValue,
+        "remainingDistanceMeters": guidance.remainingDistanceMeters,
+        "remainingDurationSeconds": guidance.remainingDurationSeconds,
+        "roadName": guidance.roadName,
+        "stepIndex": guidance.stepIndex
+      ]
+    }
     return payload
   }
 

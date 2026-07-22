@@ -4,7 +4,11 @@ const { withEntitlementsPlist, withInfoPlist } = require('@expo/config-plugins')
 const { withBuildSourceFile } = require('@expo/config-plugins/build/ios/XcodeProjectFile');
 
 const sourceDirectory = path.join(__dirname, '..', 'carplay', 'ios');
-const sourceFiles = ['NavOSSCarPlayMapViewController.swift', 'NavOSSCarPlaySceneDelegate.swift'];
+const sourceFiles = [
+  'NavOSSCarPlayMapViewController.swift',
+  'NavOSSCarPlaySceneDelegate.swift',
+  'NavOSSPhoneSceneDelegate.swift',
+];
 
 function withNavOSSCarPlay(config) {
   if (process.env.NAVOSS_CARPLAY_ENABLED !== '1') {
@@ -22,6 +26,13 @@ function withNavOSSCarPlay(config) {
   config = withInfoPlist(config, (modConfig) => {
     const manifest = modConfig.modResults.UIApplicationSceneManifest ?? {};
     const configurations = manifest.UISceneConfigurations ?? {};
+    configurations.UIWindowSceneSessionRoleApplication ??= [
+      {
+        UISceneClassName: 'UIWindowScene',
+        UISceneConfigurationName: 'NavOSS Phone',
+        UISceneDelegateClassName: 'NavOSSPhoneSceneDelegate',
+      },
+    ];
     configurations.CPTemplateApplicationSceneSessionRoleApplication = [
       {
         UISceneClassName: 'CPTemplateApplicationScene',

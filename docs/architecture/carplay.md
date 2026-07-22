@@ -1,6 +1,6 @@
 # CarPlay Navigation Architecture
 
-Status: Apple-approved, implementation-gated
+Status: Apple-approved, foreground continuation implemented, production-gated
 
 ## Decision
 
@@ -27,7 +27,9 @@ CarPlay navigation is a managed Apple capability. The app needs the Boolean enti
 
 Apple approved the CarPlay Navigation App capability for the explicit App ID `org.navoss.mobile` on 2026-07-21. The Developer portal now exposes `com.apple.developer.carplay-maps` for Development, Ad Hoc, and App Store Connect provisioning.
 
-This removes the external approval blocker, but it does not make the current implementation release-ready. The native CarPlay scene still lacks route loading, a shared background navigation lifecycle, maneuvers, estimates, and reconnect continuity. Keep both `NAVOSS_CARPLAY_ENABLED` and `NAVOSS_CARPLAY_ENTITLEMENT_ENABLED` unset in normal production builds until those paths are complete and validated. A dedicated CarPlay build must regenerate its provisioning profile after enabling the approved capability.
+This removes the external approval blocker, but it does not make the current implementation release-ready. A dedicated build can now continue an active phone route onto the main CarPlay display with a native route line, `CPNavigationSession`, maneuvers, travel estimates, arrival, reconnect state, and vehicle-side cancellation. While that scene is connected, the phone replaces its interactive map with a low-distraction companion showing only the next maneuver, arrival summary, destination, and End or Done action.
+
+Foreground JavaScript still supplies location samples, advances guidance, and requests reroutes. Starting a route from CarPlay search, locked-phone background progression, Dashboard, cluster metadata, and real-vehicle validation remain incomplete. Keep both `NAVOSS_CARPLAY_ENABLED` and `NAVOSS_CARPLAY_ENTITLEMENT_ENABLED` unset in normal production builds until those paths are complete and validated. A dedicated CarPlay build must regenerate its provisioning profile after enabling the approved capability.
 
 ### Maps capability decision
 
@@ -49,11 +51,13 @@ The native navigation-core spike is therefore a prerequisite, not optional polis
 
 ## Native Components
 
-### Current spike status
+### Current continuation status
 
 The entitlement-free native slice now lives in `apps/mobile/modules/navoss-navigation`. It provides an autolinked iOS Expo module, deterministic Swift tests, route geometry ownership, course-aware and route-continuous segment scoring, raw and matched coordinates, route progress, horizontal-accuracy input, accuracy-aware off-route confirmation and recovery hysteresis, conservative endpoint arrival confirmation, and typed snapshot events. The phone UI uses its matched coordinate during active guidance and falls back to raw GPS after a departure is confirmed. Foreground JavaScript consumes that confirmed state, requests a cooldown-limited replacement route, and installs it without ending guidance. A sticky native `arrived` phase ends guidance and drives the phone completion panel.
 
-This slice deliberately does not enable CarPlay or background location. Foreground JavaScript still supplies location samples and owns maneuver progression and reroute requests. Native location lifecycle, road-topology matching, native reroute execution, speech, and background continuity remain prerequisites before this service can become the shared source of truth described below.
+The shared native trip store now accepts a validated route, destination, steps, and live guidance summaries from the phone. It owns CarPlay connection state and emits vehicle-side cancellation back to React Native. The main CarPlay scene observes this store, restores an active trip when the display reconnects, draws the route through MapLibre Native, starts `CPNavigationSession`, and updates structured maneuvers and travel estimates. The entitlement and scene remain build-time gated.
+
+This continuation slice deliberately does not enable background location in normal builds. Foreground JavaScript still supplies location samples and owns maneuver progression and reroute requests. Native location lifecycle, road-topology matching, native reroute execution, speech, and background continuity remain prerequisites before this service can become the shared source of truth described below.
 
 ### Navigation service
 
@@ -128,7 +132,7 @@ CarPlay Ultra is a vehicle and system integration. NavOSS can participate throug
 
 The phone experience uses the operating system share sheet for a static ETA message containing only the destination name, estimated arrival, remaining time, and remaining distance. It does not read Contacts, request Contacts permission, expose current coordinates or route geometry, create a tracking link, or maintain a recipient list. Apple's share sheet may suggest recent recipients without making those contacts available to NavOSS.
 
-Do not add a custom recent-contacts browser to the CarPlay navigation app. Contacts access would require a purpose string and explicit limited or full authorization, and arbitrary contact browsing is not an approved `CPMapTemplate` navigation surface. The current CarPlay scene cannot route yet, so it also has no truthful ETA to share.
+Do not add a custom recent-contacts browser to the CarPlay navigation app. Contacts access would require a purpose string and explicit limited or full authorization, and arbitrary contact browsing is not an approved `CPMapTemplate` navigation surface. The current CarPlay scene can display a truthful ETA for a route started on the phone, but it cannot start its own route yet. Share ETA remains omitted from the vehicle display to keep the first continuation slice focused and low-distraction.
 
 A CarPlay Share ETA control remains gated until the native route/background lifecycle is complete and Apple documentation or review confirms a template-compliant, low-distraction interaction. It must not direct a moving driver to complete the action on the phone. Prefer a system-owned communication flow that does not reveal contacts to NavOSS; otherwise omit the control from CarPlay and keep system sharing on the phone.
 
@@ -145,37 +149,39 @@ Each display owns its own map view and camera, but all displays consume the same
 
 ## Expo Integration
 
-Native source should live in a local Expo module, planned at:
+The implementation is split between a local Expo module and app-target source templates:
 
 ```text
 apps/mobile/modules/navoss-navigation/
   expo-module.config.json
+  index.ts
   ios/
     NavOSSNavigationModule.swift
-    NavOSSNavigationService.swift
-    NavOSSCarPlaySceneDelegate.swift
-    NavOSSCarPlayDashboardSceneDelegate.swift
+    Core/CarPlayTrip.swift
+
+apps/mobile/carplay/ios/
     NavOSSCarPlayMapViewController.swift
-  plugin/
-    withNavOSSCarPlay.js
+    NavOSSCarPlaySceneDelegate.swift
+    NavOSSPhoneSceneDelegate.swift
+
+apps/mobile/plugins/with-navoss-carplay.cjs
 ```
 
-The config plugin is idempotent and enabled only when `NAVOSS_CARPLAY_ENABLED=1`. In a dedicated CarPlay build it will:
+The config plugin is idempotent and enabled only when `NAVOSS_CARPLAY_ENABLED=1`. In a dedicated CarPlay build it:
 
-- Add the navigation entitlement.
-- Add main CarPlay and Dashboard scene configurations to `Info.plist`.
-- Set `CPSupportsDashboardNavigationScene`.
-- Add required Swift files to the application target.
-- Add background location configuration only with the matching permission, privacy, and App Store declarations.
+- Adds the main CarPlay scene and the Expo-compatible phone window scene to `Info.plist`.
+- Adds the required Swift templates to the application target.
+- Adds the navigation entitlement only when `NAVOSS_CARPLAY_ENTITLEMENT_ENABLED=1`.
+- Leaves Dashboard, instrument-cluster, and background-location configuration disabled until those implementations and disclosures are complete.
 
 The ignored generated `ios/` directory remains disposable. All native behavior and configuration must regenerate from the module and plugin.
 
 ## Implementation Order
 
 1. Complete: Apple approved the CarPlay Navigation App capability for `org.navoss.mobile` on 2026-07-21.
-2. Complete the native navigation-core spike with matched location, background progress, rerouting, speech, and deterministic replay.
-3. Make the phone UI consume native snapshots and remove foreground JavaScript as the navigation source of truth.
-4. Add an entitlement-disabled native CarPlay scene unit and compile spike using MapLibre Native.
+2. In progress: complete the native navigation core with matched location, background progress, rerouting, speech, and deterministic replay.
+3. In progress: the phone consumes native matching snapshots, but foreground JavaScript remains the guidance and reroute owner.
+4. Complete: add a gated native CarPlay scene, shared trip bridge, MapLibre route rendering, maneuvers, estimates, reconnect state, and a minimal phone companion for routes started on the phone.
 5. Enable the approved capability and regenerate provisioning only in a dedicated CarPlay build configuration after route loading and background continuity are complete.
 6. Implement search, route preview, `CPNavigationSession`, maneuvers, estimates, and disconnect/reconnect behavior.
 7. Add Dashboard rendering and guarded cluster/HUD metadata.
