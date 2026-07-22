@@ -70,6 +70,14 @@ export const RouteAlternativeSchema = z
 
 export type RouteAlternative = z.infer<typeof RouteAlternativeSchema>;
 
+export function compareRouteAlternatives(
+  left: Pick<RouteAlternative, 'distanceMeters' | 'durationSeconds'>,
+  right: Pick<RouteAlternative, 'distanceMeters' | 'durationSeconds'>,
+): number {
+  const durationDifference = left.durationSeconds - right.durationSeconds;
+  return durationDifference === 0 ? left.distanceMeters - right.distanceMeters : durationDifference;
+}
+
 export const RouteResponseSchema = z
   .object({
     degraded: z.literal(true),

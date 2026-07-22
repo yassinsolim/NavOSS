@@ -24,6 +24,7 @@ export {
 export type { SafetyCamera, SafetyCameraDirection, SafetyCameraResponse } from './safety-camera.js';
 
 export {
+  compareRouteAlternatives,
   RouteAlternativeSchema,
   RoutePositionSchema,
   RoutePreferencesSchema,

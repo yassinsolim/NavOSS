@@ -1,4 +1,9 @@
-import { RoutePositionSchema, type RouteAlternative, type RouteRequest } from '@navoss/contracts';
+import {
+  compareRouteAlternatives,
+  RoutePositionSchema,
+  type RouteAlternative,
+  type RouteRequest,
+} from '@navoss/contracts';
 import { z } from 'zod/v4';
 
 const DEFAULT_VALHALLA_URL = 'https://valhalla1.openstreetmap.de/route';
@@ -109,7 +114,7 @@ function normalizeRoutes(payload: z.infer<typeof ValhallaResponseSchema>): Route
         }),
       ),
     }))
-    .sort((left, right) => left.durationSeconds - right.durationSeconds)
+    .sort(compareRouteAlternatives)
     .map((route, index) => ({
       ...route,
       label: index === 0 ? ('fastest' as const) : ('alternative' as const),

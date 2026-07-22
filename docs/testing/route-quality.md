@@ -57,6 +57,18 @@ Observed geometry and step totals differed by at most 0.2%. Spoken-instruction c
 
 Apple and Google agreement is a useful signal, not ground truth. Posted signs, restrictions, and direct road observation take precedence.
 
+## Routing research and ranking policy
+
+NavOSS requests up to two Valhalla alternates for a route preview, producing up to three route choices when reasonable alternatives exist. Valhalla may return fewer than requested, and its official documentation says alternates are not supported for time-dependent routes. NavOSS therefore ranks the available free-flow routes by exact duration first and exact distance second. Rounded minute labels never determine ordering.
+
+This policy is comparable to the non-traffic baseline offered by larger routing products, but it cannot guarantee a faster real-world route than Google Maps or Apple Maps:
+
+- Google Routes supports `TRAFFIC_AWARE_OPTIMAL`, departure time, traffic speed intervals, and traffic-aware route duration. Those requests use a paid preferred tier.
+- Apple MapKit can request reasonable alternate routes. Apple documents `MKRoute.expectedTravelTime` as travel time under ideal conditions, while the consumer Apple Maps product may use additional proprietary signals.
+- Valhalla supports historical and live traffic when suitable traffic data is imported. The current NavOSS graph has neither feed, so its API correctly reports `traffic: unavailable`.
+
+The next route-speed milestone is not a larger highway preference: Valhalla's neutral `use_highways` default is already `0.5`. It is to acquire a licensed Calgary traffic source, import historical/live speeds and closures into Valhalla, then benchmark same-time route choices using the manual protocol above. Until then, route safety and legality take precedence over claiming competitor parity.
+
 ## Comparison worksheet
 
 Fill the blank cells after opening the links on the same device and at the same time.

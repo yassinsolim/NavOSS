@@ -1,0 +1,15 @@
+appId: org.navoss.mobile
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: 'Search Calgary'
+    timeout: 20000
+- longPressOn:
+    point: 78%,45%
+- extendedWaitUntil:
+    visible: 'Start navigation'
+    timeout: 20000
+- assertVisible: 'Dropped pin'
+- assertVisible: 'Select fastest .* route, .* km, .*'
+- assertVisible: 'Select alternative .* route, .* km, .*'

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AppConfigResponseSchema,
+  compareRouteAlternatives,
   GeographicBoundsSchema,
   SafetyCameraResponseSchema,
   RouteRequestSchema,
@@ -92,6 +93,20 @@ describe('SafetyCameraResponseSchema', () => {
 });
 
 describe('route contracts', () => {
+  it('ranks routes by duration first and distance second', () => {
+    const routes = [
+      { distanceMeters: 9_000, durationSeconds: 600 },
+      { distanceMeters: 8_000, durationSeconds: 600 },
+      { distanceMeters: 12_000, durationSeconds: 540 },
+    ];
+
+    expect([...routes].sort(compareRouteAlternatives)).toEqual([
+      { distanceMeters: 12_000, durationSeconds: 540 },
+      { distanceMeters: 8_000, durationSeconds: 600 },
+      { distanceMeters: 9_000, durationSeconds: 600 },
+    ]);
+  });
+
   it('applies safe driving defaults to a route request', () => {
     const request = RouteRequestSchema.parse({
       destination: { latitude: 51.13157, longitude: -114.01055 },

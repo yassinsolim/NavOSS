@@ -53,7 +53,7 @@ This copy is a future public-listing draft, not approval to submit the current t
 
 > NavOSS helps you search for Calgary places and plan driving routes without creating an account.
 >
-> Compare route choices, avoid highways when needed, and follow foreground route progress with automatic rerouting and arrival detection. NavOSS also displays fixed intersection safety cameras from the official City of Calgary open dataset and provides direction-aware route-ahead notices.
+> Search or long-press the map to choose a destination, compare route choices, avoid highways when needed, and follow foreground route progress with automatic rerouting and arrival detection. NavOSS also displays fixed intersection safety cameras from the official City of Calgary open dataset and provides direction-aware route-ahead notices.
 
 > During active guidance, the map defaults to matched-road heading-up navigation so the road ahead stays at the top. Drivers can switch to north-up using the compass. Map style, tilt, visible places/buildings/transit/cameras, and route color can be customized and are stored only on the device.
 >
@@ -67,19 +67,21 @@ Do not use “beta,” “alpha,” “technical preview,” “test,” or “h
 
 Beta language belongs here, not in a public App Store listing:
 
-> NavOSS is an account-free Calgary navigation technical beta. It provides Calgary place search, route choices, avoid-highways routing, foreground GPS progress, automatic rerouting, arrival detection, and official City of Calgary safety-camera markers and route-ahead notices.
+> NavOSS is an account-free Calgary navigation technical beta. It provides Calgary place search, long-press dropped-pin routing, fastest-first route choices, avoid-highways routing, foreground GPS progress, automatic rerouting, arrival detection, and official City of Calgary safety-camera markers and route-ahead notices.
 >
 > This build has no live traffic and does not provide background or spoken turn-by-turn guidance. Keep the app visible during a test trip and have a passenger operate it. Do not rely on this beta as the only navigation, road-closure, traffic, or safety source.
 
 ## What to Test
 
 1. Search for a Calgary landmark, business, or address and report missing or incorrect results.
-2. Compare the suggested route, distance, ETA, first maneuver, and major roads with current conditions.
-3. Toggle Avoid highways and confirm the route changes meaningfully.
-4. Start guidance with the phone mounted and a passenger operating it; report puck jumps, incorrect maneuvers, false reroutes, missed reroutes, or early/late arrival.
-5. On a lawful trip past an official camera, report missing, repeated, late, or wrong-direction notices.
-6. End navigation and confirm foreground location activity stops.
-7. Open About and privacy and confirm the hosted privacy and support links work.
+2. Long-press a road-accessible point on the map and confirm a dropped pin opens route choices.
+3. Confirm the fastest route appears first; when ETAs match, confirm the shorter-distance route appears first.
+4. Compare the suggested route, distance, ETA, first maneuver, and major roads with current conditions.
+5. Toggle Avoid highways and confirm the route changes meaningfully.
+6. Start guidance with the phone mounted and a passenger operating it; report puck jumps, incorrect maneuvers, false reroutes, missed reroutes, or early/late arrival.
+7. On a lawful trip past an official camera, report missing, repeated, late, or wrong-direction notices.
+8. End navigation and confirm foreground location activity stops.
+9. Open About and privacy and confirm the hosted privacy and support links work.
 
 Include the public start area, destination, local time, app build, iPhone model, and unexpected road or maneuver. Do not include a home address or precise personal trip history unless essential to reproduce a safety issue.
 

@@ -140,7 +140,7 @@ export function RoutePreviewPanel({
           const viaLabel = routeViaLabel(route);
           return (
             <Pressable
-              accessibilityLabel={`Select ${formatDuration(route.durationSeconds)} route, ${formatDistance(route.distanceMeters)}, ${viaLabel}`}
+              accessibilityLabel={`Select ${route.label} ${formatDuration(route.durationSeconds)} route, ${formatDistance(route.distanceMeters)}, ${viaLabel}`}
               key={route.id}
               onPress={() => {
                 onSelectRoute(route);
@@ -151,7 +151,9 @@ export function RoutePreviewPanel({
                 {formatDuration(route.durationSeconds)}
               </Text>
               <Text style={[styles.routeChoiceMeta, selected && styles.routeChoiceMetaSelected]}>
-                {index === 0 ? 'Fastest' : formatDistance(route.distanceMeters)}
+                {index === 0
+                  ? `Fastest · ${formatDistance(route.distanceMeters)}`
+                  : formatDistance(route.distanceMeters)}
               </Text>
               <Text
                 numberOfLines={2}

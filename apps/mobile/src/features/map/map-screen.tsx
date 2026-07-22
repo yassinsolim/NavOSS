@@ -160,6 +160,19 @@ function routeFeatures(routes: RouteAlternative[]): FeatureCollection<LineString
   };
 }
 
+function droppedPinResult(coordinate: Coordinate): SearchResult {
+  const latitude = coordinate.latitude.toFixed(5);
+  const longitude = coordinate.longitude.toFixed(5);
+  return {
+    category: 'landmark',
+    center: coordinate,
+    confidence: 1,
+    id: `dropped-pin:${latitude}:${longitude}`,
+    label: `${latitude}, ${longitude}`,
+    name: 'Dropped pin',
+  };
+}
+
 function safetyCameraFeatures(cameras: readonly SafetyCamera[]): FeatureCollection<Point> {
   return {
     features: cameras.map((camera) => ({
@@ -614,7 +627,7 @@ export function MapScreen() {
 
       const response = await fetchRoutes(
         {
-          alternatives: 1,
+          alternatives: 2,
           destination: destination.center,
           origin,
           preferences,
@@ -622,7 +635,11 @@ export function MapScreen() {
         { signal: controller.signal },
       );
       const fastestRoute = response.routes[0];
-      if (fastestRoute === undefined || controller.signal.aborted) {
+      if (controller.signal.aborted) {
+        return;
+      }
+      if (fastestRoute === undefined) {
+        setRouteState({ destination, message: 'No driving route was found.', type: 'error' });
         return;
       }
 
@@ -699,6 +716,20 @@ export function MapScreen() {
     if (firstResult !== undefined) {
       handleSelectResult(firstResult);
     }
+  };
+
+  const handleMapLongPress = (coordinate: Coordinate) => {
+    if (routeState.type === 'navigating' || routeState.type === 'arrived') {
+      return;
+    }
+
+    Keyboard.dismiss();
+    const destination = droppedPinResult(coordinate);
+    setQuery('');
+    setResults([]);
+    setSearchState('idle');
+    setSelectedResult(destination);
+    void calculateRoute(destination);
   };
 
   const handleLocate = async () => {
@@ -941,6 +972,10 @@ export function MapScreen() {
         }}
         onDidFinishLoadingMap={() => {
           setMapError(false);
+        }}
+        onLongPress={({ nativeEvent }) => {
+          const [longitude, latitude] = nativeEvent.lngLat;
+          handleMapLongPress({ latitude, longitude });
         }}
         onRegionIsChanging={({ nativeEvent }) => {
           setMapBearing(nativeEvent.bearing);
