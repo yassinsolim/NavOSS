@@ -1,16 +1,16 @@
 # TestFlight beta runbook
 
-Date: 2026-07-20
+Date: 2026-07-22
 
 ## Current verdict
 
-| Stage                                     | Verdict | Reason                                                                                                                                                                                                 |
-| ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Local simulator and physical-device alpha | GO      | Core, API, mobile, native, route-matrix, reroute, arrival, camera, and privacy-sheet checks pass.                                                                                                      |
-| Metro-independent iOS Release export      | GO      | A July 20 Hermes export embeds `https://navoss-api.yassin.app`, uses POST search, and contains no retired, localhost, or LAN endpoint. The earlier unsigned native archive also compiled successfully. |
-| Internal TestFlight                       | NO-GO   | Build `0.1.0 (8)` is uploaded and processing at Apple. App Privacy/provider classification, owner questionnaires, and a clean-device build 8 smoke test remain.                                        |
-| External TestFlight                       | NO-GO   | Internal soak, reviewer-accessible Calgary route planning, Beta App Review metadata, on-road evidence, support operations, and the internal blockers are incomplete.                                   |
-| Public App Store                          | NO-GO   | Background guidance, spoken maneuvers, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                                        |
+| Stage                                     | Verdict | Reason                                                                                                                                                                                                   |
+| ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local simulator and physical-device alpha | GO      | Core, API, mobile, native, route-matrix, places, ETA sharing, reroute, arrival, camera, privacy-sheet, and compact-screen checks pass.                                                                   |
+| Metro-independent iOS Release export      | GO      | A July 22 Hermes export embeds `https://navoss-api.yassin.app`; no retired, loopback, or LAN NavOSS API origin is present. Framework-only Expo localhost fallbacks are not used by the release API path. |
+| Internal TestFlight                       | NO-GO   | Audited build `0.1.0 (10)` is uploaded to App Store Connect. Apple processing, App Privacy/provider classification, owner questionnaires, and a clean-device build 10 smoke test remain.                 |
+| External TestFlight                       | NO-GO   | Internal soak, reviewer-accessible Calgary route planning, Beta App Review metadata, on-road evidence, support operations, and the internal blockers are incomplete.                                     |
+| Public App Store                          | NO-GO   | Background guidance, spoken maneuvers, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                                          |
 
 The right next launch is a small **internal TestFlight technical beta**, not a public navigation release.
 
@@ -25,9 +25,11 @@ The right next launch is a small **internal TestFlight technical beta**, not a p
 - [x] Validate matched-road heading-up navigation, persistent north-up compass override, local-only map presets/content controls, and route-color choices in the iOS simulator.
 - [x] Build and upload store-signed `0.1.0 (6)` from commit `71f0003` through EAS; Apple accepted the binary for processing.
 - [x] Build and upload `0.1.0 (7)` with dropped-pin routing and `0.1.0 (8)` with corrected map presets/landmarks; Apple accepted both binaries.
+- [x] Deploy place-detail API commit `96ca37a`, pass all 17 production route cases, and verify detail request payloads remain absent from logs.
+- [x] Build, audit, and upload `0.1.0 (10)` from compact-screen commit `ee10974`; build 9 was deliberately not submitted after simulator review found a truncated arrival value.
 - [ ] Classify Cloudflare/OpenFreeMap map and network metadata, then reconcile App Store Connect App Privacy, `PrivacyInfo.xcprivacy`, SDK manifests, and the hosted policy.
 - [ ] Complete the account-holder age-rating, content-rights, and export-compliance decisions.
-- [ ] Install build 8 from TestFlight after processing, disconnect Metro/the Mac, and repeat the physical-device smoke test.
+- [ ] Install build 10 from TestFlight after processing, disconnect Metro/the Mac, and repeat the physical-device smoke test.
 
 ### P1: required before external testers
 
@@ -97,6 +99,10 @@ Production build `0.1.0 (7)` was created from routing commit `c7356b74cb542be876
 
 Production build `0.1.0 (8)` was created from map-preset commit `001de31a85eb1f957b85983691c7a0a96ef23e09` as EAS build `7fcf71c3-fcab-4ccd-86f9-b9c857617250`. Submission `95b75664-67ea-4718-92d9-383005246d4c` uploaded the distinct Night/Contrast palettes, restored Night/Minimal landmarks, and Night-aware overlays/status bar. Apple accepted the binary for processing. CarPlay source and entitlement flags remained unset.
 
+Production build `0.1.0 (9)` was created from place-details commit `96ca37ae63bba2570b27f203ac77647e9bfa3297` as EAS build `2bd8ab5e-2076-4625-aa91-0b7d78783490`. It was deliberately not submitted after iPhone SE simulator review found the arrival-time metric truncating in the redesigned navigation tray.
+
+Production build `0.1.0 (10)` was created from compact-screen fix commit `ee10974b3d0d030e5cec8c7fa4db42fc5ce36d96` as EAS build `f8de57d9-43d3-433b-897e-3caf7c56847a`. The signed IPA passed bundle/version, signature, production-origin, foreground-location, Contacts/background-mode, and entitlement audits. The app signature asserts neither CarPlay nor deprecated Maps; its provisioning profile permits only the approved CarPlay navigation capability. EAS submission `4a8d0ddd-5ad9-4741-ba50-5fcb332f2603` successfully uploaded the binary to App Store Connect. Apple processing and clean-device TestFlight validation remain pending.
+
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use the `production` profile for a store-signed build:
 
 ```sh
@@ -109,8 +115,8 @@ eas submit --platform ios --profile production
 1. Wait for Apple to process the uploaded build.
 2. Complete encryption/export-compliance prompts and verify the processed build details.
 3. Create an internal group with only App Store Connect users who are actively testing.
-4. Add build 8, paste the beta description and What to Test text, and invite the smallest useful group first.
-5. Install build 8 from TestFlight on a clean iPhone. Confirm the app starts without Metro, reaches the production API, requests only foreground location, searches, long-presses to a dropped pin, shows ordered alternatives, preserves landmarks in every map preset, routes, reroutes, arrives, displays all current cameras, and submits TestFlight feedback.
+4. Add build 10, paste the beta description and What to Test text, and invite the smallest useful group first.
+5. Install build 10 from TestFlight on a clean iPhone. Confirm the app starts without Metro, reaches the production API, requests only foreground location, opens named-place details, shares a place and static ETA without a Contacts prompt, long-presses to a dropped pin, shows ordered alternatives, preserves landmarks in every map preset, routes, reroutes, arrives, displays all current cameras, and submits TestFlight feedback.
 6. Soak for 48 hours before adding more testers. Stop rollout on crashes, invalid routes, stale closures, backend saturation, or misleading camera alerts.
 
 Apple permits up to 100 internal testers associated with App Store Connect. Builds expire after 90 days.

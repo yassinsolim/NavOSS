@@ -32,7 +32,7 @@ NavOSS is an independently designed navigation project using OpenStreetMap-deriv
 | Native core        | Swift course/continuity matching with accuracy-aware off-route and arrival hysteresis                         |
 | API                | Public Fastify ingress with self-hosted Alberta Nominatim/Valhalla and Calgary camera data                    |
 | Automated evidence | Contract/API/mobile/Swift suites, simulator journeys, and a 17-variant Calgary route matrix                   |
-| TestFlight         | Build 8 is accepted by Apple; current source changes still require a new build and clean-device validation    |
+| TestFlight         | Build 10 is uploaded to App Store Connect; Apple processing and clean-device validation remain                |
 | Android            | Planned after the iOS navigation core is stable                                                               |
 
 ## Architecture
