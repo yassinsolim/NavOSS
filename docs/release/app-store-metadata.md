@@ -76,12 +76,13 @@ Beta language belongs here, not in a public App Store listing:
 1. Search for a Calgary landmark, business, or address and report missing or incorrect results.
 2. Long-press a road-accessible point on the map and confirm a dropped pin opens route choices.
 3. Confirm the fastest route appears first; when ETAs match, confirm the shorter-distance route appears first.
-4. Compare the suggested route, distance, ETA, first maneuver, and major roads with current conditions.
-5. Toggle Avoid highways and confirm the route changes meaningfully.
-6. Start guidance with the phone mounted and a passenger operating it; report puck jumps, incorrect maneuvers, false reroutes, missed reroutes, or early/late arrival.
-7. On a lawful trip past an official camera, report missing, repeated, late, or wrong-direction notices.
-8. End navigation and confirm foreground location activity stops.
-9. Open About and privacy and confirm the hosted privacy and support links work.
+4. Switch among Day, Night, Contrast, and Minimal map styles; confirm each is distinct and landmarks remain visible.
+5. Compare the suggested route, distance, ETA, first maneuver, and major roads with current conditions.
+6. Toggle Avoid highways and confirm the route changes meaningfully.
+7. Start guidance with the phone mounted and a passenger operating it; report puck jumps, incorrect maneuvers, false reroutes, missed reroutes, or early/late arrival.
+8. On a lawful trip past an official camera, report missing, repeated, late, or wrong-direction notices.
+9. End navigation and confirm foreground location activity stops.
+10. Open About and privacy and confirm the hosted privacy and support links work.
 
 Include the public start area, destination, local time, app build, iPhone model, and unexpected road or maneuver. Do not include a home address or precise personal trip history unless essential to reproduce a safety issue.
 

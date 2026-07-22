@@ -27,6 +27,7 @@ export type SearchState = 'idle' | 'loading' | 'success' | 'error';
 interface SearchPanelProps {
   apiConnection: ApiConnectionState;
   coverageName: string;
+  darkMap: boolean;
   maximumResultsHeight: number;
   onChangeQuery: (query: string) => void;
   onClear: () => void;
@@ -73,6 +74,7 @@ function searchSourceLabel(source: SearchSource | undefined): string {
 export function SearchPanel({
   apiConnection,
   coverageName,
+  darkMap,
   maximumResultsHeight,
   onChangeQuery,
   onClear,
@@ -101,10 +103,13 @@ export function SearchPanel({
           source={require('@/assets/images/icon.png')}
           style={styles.brandMark}
         />
-        <Text style={styles.brandName}>NavOSS</Text>
+        <Text style={[styles.brandName, darkMap && styles.brandNameDark]}>NavOSS</Text>
         <View style={styles.connectionStatus}>
           <View style={[styles.connectionDot, { backgroundColor: connectionColor }]} />
-          <Text numberOfLines={1} style={styles.connectionText}>
+          <Text
+            numberOfLines={1}
+            style={[styles.connectionText, darkMap && styles.connectionTextDark]}
+          >
             {connectionLabel(apiConnection, coverageName)}
           </Text>
         </View>
@@ -119,7 +124,7 @@ export function SearchPanel({
           <SymbolView
             name={{ android: 'info', ios: 'info.circle' }}
             size={20}
-            tintColor={NavOssColors.asphalt}
+            tintColor={darkMap ? NavOssColors.white : NavOssColors.asphalt}
           />
         </Pressable>
       </View>
@@ -439,6 +444,12 @@ const styles = StyleSheet.create({
     fontSize: 22,
     letterSpacing: 0,
   },
+  brandNameDark: {
+    color: NavOssColors.white,
+    textShadowColor: '#000000',
+    textShadowOffset: { height: 1, width: 0 },
+    textShadowRadius: 3,
+  },
   brandRow: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -477,6 +488,12 @@ const styles = StyleSheet.create({
     fontFamily: NavOssFonts.medium,
     fontSize: 12,
     letterSpacing: 0,
+  },
+  connectionTextDark: {
+    color: '#E3E8E5',
+    textShadowColor: '#000000',
+    textShadowOffset: { height: 1, width: 0 },
+    textShadowRadius: 3,
   },
   container: {
     gap: 10,

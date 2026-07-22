@@ -7,7 +7,6 @@ import {
 } from '@expo-google-fonts/atkinson-hyperlegible-next';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
 SplashScreen.preventAutoHideAsync();
@@ -30,10 +29,5 @@ export default function RootLayout() {
     return null;
   }
 
-  return (
-    <>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }} />
-    </>
-  );
+  return <Stack screenOptions={{ headerShown: false }} />;
 }

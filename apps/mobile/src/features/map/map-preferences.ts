@@ -102,6 +102,136 @@ export function mapStyleUrl(preset: MapStylePreset, colorScheme: ColorSchemeName
   return `${OPEN_FREE_MAP_STYLE_ROOT}/${slug}`;
 }
 
+function resolvedMapStylePreset(
+  preset: MapStylePreset,
+  colorScheme: ColorSchemeName,
+): Exclude<MapStylePreset, 'automatic'> {
+  return preset === 'automatic' ? (colorScheme === 'dark' ? 'night' : 'day') : preset;
+}
+
+function sourceLayer(layer: StyleSpecification['layers'][number]): string | undefined {
+  return 'source-layer' in layer ? layer['source-layer'] : undefined;
+}
+
+function isLandmarkLayer(layer: StyleSpecification['layers'][number]): boolean {
+  return layer.type === 'symbol' && sourceLayer(layer) === 'poi';
+}
+
+function hasLandmarkLayers(style: StyleSpecification): boolean {
+  return style.layers.some(isLandmarkLayer);
+}
+
+function restoreLandmarkLayers(style: StyleSpecification, landmarkStyle: StyleSpecification): void {
+  const existingLayerIds = new Set(style.layers.map((layer) => layer.id));
+  for (const layer of landmarkStyle.layers) {
+    if (isLandmarkLayer(layer) && !existingLayerIds.has(layer.id)) {
+      style.layers.push(JSON.parse(JSON.stringify(layer)) as typeof layer);
+    }
+  }
+}
+
+function layerPaint(layer: StyleSpecification['layers'][number]): Record<string, unknown> {
+  layer.paint ??= {};
+  return layer.paint;
+}
+
+function applyTextPalette(
+  layer: StyleSpecification['layers'][number],
+  textColor: string,
+  haloColor: string,
+): void {
+  if (layer.type !== 'symbol') {
+    return;
+  }
+
+  const paint = layerPaint(layer);
+  if ('text-color' in paint) {
+    paint['text-color'] = textColor;
+    paint['text-halo-color'] = haloColor;
+    paint['text-halo-width'] = 1.5;
+  }
+}
+
+function applyNightPalette(layer: StyleSpecification['layers'][number]): void {
+  const paint = layerPaint(layer);
+  const source = sourceLayer(layer);
+
+  if (layer.type === 'background') {
+    paint['background-color'] = '#172121';
+  } else if (source === 'water' || layer.id.startsWith('water')) {
+    if (layer.type === 'fill') paint['fill-color'] = '#173B4A';
+    if (layer.type === 'line') paint['line-color'] = '#2F7186';
+    applyTextPalette(layer, '#8ED8EE', '#172121');
+    return;
+  } else if (source === 'park' || /landcover|park|wood|grass/.test(layer.id)) {
+    if (layer.type === 'fill') paint['fill-color'] = '#1E3A32';
+    if (layer.type === 'line') paint['line-color'] = '#315A4A';
+  } else if (source === 'building' || layer.id.startsWith('building')) {
+    if (layer.type === 'fill') {
+      paint['fill-color'] = '#293535';
+      paint['fill-outline-color'] = '#3E4B4A';
+    }
+    if (layer.type === 'fill-extrusion') {
+      paint['fill-extrusion-color'] = '#293535';
+    }
+  } else if (layer.type === 'line' && /highway|road/.test(layer.id)) {
+    paint['line-color'] = layer.id.includes('casing')
+      ? '#0D1515'
+      : /motorway|trunk|primary/.test(layer.id)
+        ? '#C9A052'
+        : /secondary|tertiary|major/.test(layer.id)
+          ? '#8A8375'
+          : '#4E5A58';
+  }
+
+  applyTextPalette(layer, '#ECE8DF', '#172121');
+}
+
+function applyContrastPalette(layer: StyleSpecification['layers'][number]): void {
+  const paint = layerPaint(layer);
+  const source = sourceLayer(layer);
+
+  if (layer.type === 'background') {
+    paint['background-color'] = '#FFFFFF';
+  } else if (source === 'water' || layer.id.startsWith('water')) {
+    if (layer.type === 'fill') paint['fill-color'] = '#83CFEA';
+    if (layer.type === 'line') paint['line-color'] = '#08779C';
+    applyTextPalette(layer, '#064A63', '#FFFFFF');
+    return;
+  } else if (source === 'park' || /landcover|park|wood|grass/.test(layer.id)) {
+    if (layer.type === 'fill') {
+      paint['fill-color'] = '#B9E59D';
+      paint['fill-opacity'] = 1;
+    }
+    if (layer.type === 'line') paint['line-color'] = '#3C782A';
+  } else if (source === 'building' || layer.id.startsWith('building')) {
+    if (layer.type === 'fill') {
+      paint['fill-color'] = '#D8D8D3';
+      paint['fill-outline-color'] = '#656C69';
+    }
+    if (layer.type === 'fill-extrusion') {
+      paint['fill-extrusion-color'] = '#D8D8D3';
+    }
+  } else if (layer.type === 'line' && /highway|road/.test(layer.id)) {
+    paint['line-color'] = layer.id.includes('casing')
+      ? '#343B39'
+      : /motorway|trunk/.test(layer.id)
+        ? '#FFC928'
+        : /primary|secondary|tertiary|major/.test(layer.id)
+          ? '#FFF09A'
+          : '#FFFFFF';
+    paint['line-opacity'] = 1;
+  }
+
+  applyTextPalette(layer, '#101817', '#FFFFFF');
+}
+
+function applyMinimalLandmarkPalette(layer: StyleSpecification['layers'][number]): void {
+  if (isLandmarkLayer(layer)) {
+    applyTextPalette(layer, '#4B5554', 'rgba(255,255,255,0.9)');
+  }
+}
+
 function isTransitLayer(layer: StyleSpecification['layers'][number]): boolean {
   const sourceLayer = 'source-layer' in layer ? layer['source-layer'] : undefined;
   const filter = 'filter' in layer ? layer.filter : undefined;
@@ -116,19 +246,27 @@ function hideLayer(layer: StyleSpecification['layers'][number]): void {
 export function customizeMapStyle(
   style: StyleSpecification,
   preferences: MapPreferences,
+  colorScheme: ColorSchemeName = 'light',
+  landmarkStyle: StyleSpecification = style,
 ): StyleSpecification {
   const customized = JSON.parse(JSON.stringify(style)) as StyleSpecification;
+  restoreLandmarkLayers(customized, landmarkStyle);
+  const resolvedPreset = resolvedMapStylePreset(preferences.stylePreset, colorScheme);
 
   for (const layer of customized.layers) {
-    const sourceLayer = 'source-layer' in layer ? layer['source-layer'] : undefined;
+    if (resolvedPreset === 'night') applyNightPalette(layer);
+    if (resolvedPreset === 'contrast') applyContrastPalette(layer);
+    if (resolvedPreset === 'minimal') applyMinimalLandmarkPalette(layer);
+
+    const layerSource = sourceLayer(layer);
     const transit = isTransitLayer(layer);
-    if (!preferences.showBuildings && sourceLayer === 'building') {
+    if (!preferences.showBuildings && layerSource === 'building') {
       hideLayer(layer);
     }
     if (!preferences.showTransit && transit) {
       hideLayer(layer);
     }
-    if (!preferences.showPlaces && sourceLayer === 'poi' && !transit) {
+    if (!preferences.showPlaces && layerSource === 'poi' && !transit) {
       hideLayer(layer);
     }
   }
@@ -179,12 +317,10 @@ async function fetchMapStyle(
   return payload;
 }
 
-export async function loadCustomizedMapStyle(
-  preferences: MapPreferences,
-  colorScheme: ColorSchemeName,
-  fetchImplementation: typeof fetch = fetch,
+function loadHostedMapStyle(
+  url: string,
+  fetchImplementation: typeof fetch,
 ): Promise<StyleSpecification> {
-  const url = mapStyleUrl(preferences.stylePreset, colorScheme);
   let pendingStyle = styleCache.get(url);
   if (pendingStyle === undefined) {
     pendingStyle = fetchMapStyle(url, fetchImplementation);
@@ -193,5 +329,18 @@ export async function loadCustomizedMapStyle(
       styleCache.delete(url);
     });
   }
-  return customizeMapStyle(await pendingStyle, preferences);
+  return pendingStyle;
+}
+
+export async function loadCustomizedMapStyle(
+  preferences: MapPreferences,
+  colorScheme: ColorSchemeName,
+  fetchImplementation: typeof fetch = fetch,
+): Promise<StyleSpecification> {
+  const url = mapStyleUrl(preferences.stylePreset, colorScheme);
+  const style = await loadHostedMapStyle(url, fetchImplementation);
+  const landmarkStyle = hasLandmarkLayers(style)
+    ? style
+    : await loadHostedMapStyle(mapStyleUrl('day', colorScheme), fetchImplementation);
+  return customizeMapStyle(style, preferences, colorScheme, landmarkStyle);
 }

@@ -18,6 +18,7 @@ import type {
   SearchSource,
 } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
+import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import {
   Keyboard,
@@ -953,9 +954,13 @@ export function MapScreen() {
             : 0;
   const controlBottom = selectedPanelHeight + 18;
   const resultsHeight = Math.min(360, Math.max(180, height * 0.42));
+  const darkMap =
+    mapPreferences.stylePreset === 'night' ||
+    (mapPreferences.stylePreset === 'automatic' && colorScheme === 'dark');
 
   return (
     <View style={styles.container}>
+      <StatusBar style={darkMap ? 'light' : 'dark'} />
       <Map
         accessibilityLabel={
           mapPreferences.showSafetyCameras
@@ -1196,6 +1201,7 @@ export function MapScreen() {
           <SearchPanel
             apiConnection={apiConnection}
             coverageName={coverageName}
+            darkMap={darkMap}
             maximumResultsHeight={resultsHeight}
             onChangeQuery={handleChangeQuery}
             onClear={handleClear}
