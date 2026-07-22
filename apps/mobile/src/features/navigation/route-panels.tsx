@@ -452,21 +452,36 @@ export function NavigationStatusBar({
         style={styles.navigationMetrics}
       >
         <View style={styles.navigationMetric}>
-          <Text numberOfLines={1} style={styles.navigationEta}>
+          <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            numberOfLines={1}
+            style={styles.navigationEta}
+          >
             {formatArrivalTime(durationSeconds)}
           </Text>
           <Text style={styles.navigationMeta}>arrival</Text>
         </View>
         <View style={styles.navigationDivider} />
         <View style={styles.navigationMetric}>
-          <Text numberOfLines={1} style={styles.navigationValue}>
+          <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            numberOfLines={1}
+            style={styles.navigationValue}
+          >
             {formatDuration(durationSeconds)}
           </Text>
           <Text style={styles.navigationMeta}>remaining</Text>
         </View>
         <View style={styles.navigationDivider} />
         <View style={styles.navigationMetric}>
-          <Text numberOfLines={1} style={styles.navigationValue}>
+          <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            numberOfLines={1}
+            style={styles.navigationValue}
+          >
             {formatDistance(distanceMeters)}
           </Text>
           <Text style={styles.navigationMeta}>distance</Text>
