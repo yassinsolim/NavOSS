@@ -21,11 +21,29 @@
     "production": {
       "autoIncrement": true,
       "environment": "production",
+      "env": {
+        "NAVOSS_CARPLAY_ENABLED": "0",
+        "NAVOSS_CARPLAY_ENTITLEMENT_ENABLED": "0"
+      },
+      "extends": "base"
+    },
+    "production-carplay": {
+      "autoIncrement": true,
+      "environment": "production",
+      "env": {
+        "NAVOSS_CARPLAY_ENABLED": "1",
+        "NAVOSS_CARPLAY_ENTITLEMENT_ENABLED": "1"
+      },
       "extends": "base"
     }
   },
   "submit": {
     "production": {
+      "ios": {
+        "ascAppId": "6792619727"
+      }
+    },
+    "production-carplay": {
       "ios": {
         "ascAppId": "6792619727"
       }

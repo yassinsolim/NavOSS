@@ -31,6 +31,7 @@ interface SearchPanelProps {
   maximumResultsHeight: number;
   onChangeQuery: (query: string) => void;
   onClear: () => void;
+  onClearRecentDestinations: () => void;
   onSelectResult: (result: SearchResult) => void;
   onSubmit: () => void;
   query: string;
@@ -78,6 +79,7 @@ export function SearchPanel({
   maximumResultsHeight,
   onChangeQuery,
   onClear,
+  onClearRecentDestinations,
   onSelectResult,
   onSubmit,
   query,
@@ -270,15 +272,31 @@ export function SearchPanel({
             <View style={styles.aboutSection}>
               <Text style={styles.aboutSectionTitle}>Privacy</Text>
               <Text style={styles.aboutBody}>
-                Precise foreground location is used to show your position, match you to an active
-                route, detect reroutes and arrival, and warn about safety cameras. Search text and
-                route endpoints are sent to the NavOSS API and its configured OpenStreetMap-based
-                search and routing services. Rerouting sends your latest route origin.
+                Precise location is used to show your position, match you to an active route, detect
+                reroutes and arrival, and warn about safety cameras. During active navigation,
+                location continues while your phone is locked or connected to CarPlay and iOS shows
+                its background location indicator. Search text and route endpoints are sent to the
+                NavOSS API and its configured OpenStreetMap-based search and routing services.
+                Rerouting sends your latest route origin.
               </Text>
               <Text style={styles.aboutBody}>
-                NavOSS does not require an account, show ads, ask for background location, or save
-                trip history in the app.
+                NavOSS does not require an account, show ads, request Always location access, or
+                send destination history to its servers. Up to 12 recent destinations are stored
+                only on this device for CarPlay shortcuts. Ending navigation stops background
+                location and erases the transient active route.
               </Text>
+              <Pressable
+                accessibilityLabel="Clear recent destinations"
+                onPress={onClearRecentDestinations}
+                style={({ pressed }) => [styles.aboutLink, pressed && styles.aboutButtonPressed]}
+              >
+                <SymbolView
+                  name={{ android: 'delete', ios: 'trash' }}
+                  size={15}
+                  tintColor={NavOssColors.coral}
+                />
+                <Text style={styles.aboutDestructiveText}>Clear recent destinations</Text>
+              </Pressable>
               <Pressable
                 accessibilityLabel="Open NavOSS privacy policy"
                 accessibilityRole="link"
@@ -368,6 +386,12 @@ const styles = StyleSheet.create({
     paddingBottom: 44,
     paddingHorizontal: 24,
     paddingTop: 34,
+  },
+  aboutDestructiveText: {
+    color: NavOssColors.coral,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 16,
+    letterSpacing: 0,
   },
   aboutEyebrow: {
     color: NavOssColors.green,

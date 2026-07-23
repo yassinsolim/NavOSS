@@ -7,7 +7,7 @@ NavOSS does not publish an App Store update from every commit. Navigation change
 The delivery path is:
 
 1. Pull request or push to `main`: run formatting, type checks, lint, tests, builds, license-notice freshness, and native Swift tests.
-2. Publish an `ios-v<app-version>` GitHub release: queue an EAS production build and automatic TestFlight submission.
+2. Publish an `ios-v<app-version>` GitHub release: queue the EAS `production-carplay` build and automatic TestFlight submission.
 3. Test the processed build using the internal TestFlight group.
 4. Manually select the validated build in App Store Connect, complete metadata, and submit it for App Review.
 5. Choose manual, automatic-after-approval, or phased release in App Store Connect.
@@ -44,6 +44,8 @@ Apple credentials belong in EAS credential storage or App Store Connect, not in 
 5. Wait for App Store Connect processing and complete export-compliance prompts.
 6. Install from TestFlight with Metro disconnected and run the release smoke suite.
 7. Promote the tested build manually for external TestFlight or App Review.
+
+Before promotion, audit the signed IPA for the approved `com.apple.developer.carplay-maps` entitlement, the CarPlay template scene, the `location` background mode, and the production API origin.
 
 The workflow rejects a tag that does not match `apps/mobile/app.json`.
 

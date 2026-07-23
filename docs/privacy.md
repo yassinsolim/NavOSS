@@ -16,11 +16,11 @@ The direct address `navoss@yassin.app` is not yet verified and is not presented 
 
 ## Data used by the app
 
-### Foreground location
+### Location during active navigation
 
-When you grant location permission, NavOSS uses precise foreground location to display your position, choose a route origin, match your position to an active route, detect rerouting and arrival, and determine whether an official safety camera is ahead in the direction of travel.
+When you grant When in Use location permission, NavOSS uses precise location to display your position, choose a route origin, match your position to an active route, detect rerouting and arrival, and determine whether an official safety camera is ahead in the direction of travel. If you start turn-by-turn navigation, location updates continue while the phone is locked, another app is visible, or CarPlay is connected. iOS displays its blue background-location indicator while this active session continues. NavOSS does not request Always location access.
 
-Route requests send origin and destination coordinates to the NavOSS API. A reroute sends the latest route origin and destination. Valhalla routing runs on the same operator-controlled server as the API. Active route matching and camera eligibility run on the phone. The current beta does not request background location or maintain trip history.
+Route requests send origin and destination coordinates to the NavOSS API. A reroute sends the latest route origin and destination. Valhalla routing runs on the same operator-controlled server as the API. Active route matching and camera eligibility run on the phone. The current active route is stored transiently on the phone so navigation can recover after an operating-system restart, then erased when navigation ends or arrival is confirmed. Separately, the app stores up to 12 recent destination names, labels, and coordinates only on the device for CarPlay shortcuts. It does not store route geometry or trip progress as destination history or send that list to NavOSS.
 
 ### Search text and place details
 
@@ -71,18 +71,19 @@ Map and route data is derived from OpenStreetMap contributors. Search combines O
 
 ## Retention
 
-| Data                                              | NavOSS retention                                                                                                     |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Search text, tapped-place name, and search origin | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup        |
-| Route and reroute coordinates                     | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup        |
-| Trip progress and camera eligibility              | Processed on the phone and discarded when navigation ends; no trip-history database                                  |
-| Map appearance preferences                        | Stored locally in app storage until the app is removed or the settings are changed; not transmitted to NavOSS        |
-| Place and ETA share text                          | Created on the phone and not sent to NavOSS; controlled by Apple and the user-selected share destination             |
-| Public Calgary business and parcel search index   | Current local mirror refreshed every 24 hours; reproducible index tables are excluded from logical backups           |
-| API and service operational logs                  | Maximum seven days; routine HTTP access logging is disabled                                                          |
-| Host authentication and firewall security logs    | Maximum seven days; may contain timestamp, source IP and port, local account, action, and outcome                    |
-| Report database backups                           | Maximum 14 days; community reports are currently disabled, and these backups do not contain route or search requests |
-| Support messages                                  | Controlled by Apple or GitHub according to the channel selected by the user and that provider's policy               |
+| Data                                               | NavOSS retention                                                                                                                       |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Search text, tapped-place name, and search origin  | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup                          |
+| Route and reroute coordinates                      | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup                          |
+| Active route, trip progress and camera eligibility | Processed on the phone; the active route is erased when navigation ends or arrival is confirmed; no trip-history database              |
+| Recent destinations                                | Up to 12 destination names, labels, and coordinates stored only on the device until cleared in About and Privacy or the app is removed |
+| Map appearance preferences                         | Stored locally in app storage until the app is removed or the settings are changed; not transmitted to NavOSS                          |
+| Place and ETA share text                           | Created on the phone and not sent to NavOSS; controlled by Apple and the user-selected share destination                               |
+| Public Calgary business and parcel search index    | Current local mirror refreshed every 24 hours; reproducible index tables are excluded from logical backups                             |
+| API and service operational logs                   | Maximum seven days; routine HTTP access logging is disabled                                                                            |
+| Host authentication and firewall security logs     | Maximum seven days; may contain timestamp, source IP and port, local account, action, and outcome                                      |
+| Report database backups                            | Maximum 14 days; community reports are currently disabled, and these backups do not contain route or search requests                   |
+| Support messages                                   | Controlled by Apple or GitHub according to the channel selected by the user and that provider's policy                                 |
 
 NavOSS operational logs are limited to timestamps, service/container identity, severity, lifecycle events, health failures, error names, and random request IDs where needed. They exclude HTTP request and response bodies, search text, route coordinates, and normal HTTP access events. All six production containers write to the host journal, which enforces a seven-day and 512 MiB limit. Caddy access logs and automatic Fastify request logs are disabled.
 
@@ -90,11 +91,13 @@ Cloudflare and OpenFreeMap apply their own retention policies to data they proce
 
 ## Choices and deletion
 
-You can deny or revoke foreground location in iOS Settings. Search and map browsing remain available, but current-position routing and active navigation will be limited. You can stop an active trip using End navigation.
+You can deny or revoke location in iOS Settings. Search and map browsing remain available, but current-position routing and active navigation will be limited. You can stop an active trip using End navigation, which stops background location and erases the transient active route.
+
+You can erase the local CarPlay recent-destination list at any time using **Clear recent destinations** in the app's About and Privacy screen. Removing the app also removes this local list.
 
 You can use NavOSS without granting Contacts access because the app never asks for it. Share and Reviews are optional, user-initiated actions. Dismissing the system share sheet sends nothing to a recipient. Not choosing Reviews sends no selected-place query to Google.
 
-Because NavOSS has no account and does not retain search, route, or trip records, it normally has no history that can be exported or deleted. A rights request may identify a support message or a recent security event. Include only enough information to locate that record. NavOSS may be unable to associate an IP-only, transient request with a person. Requests about Cloudflare, OpenFreeMap, Apple, or GitHub data may also need to be directed to that provider.
+Because NavOSS has no account and does not retain server-side search, route, or trip records, it normally has no server history that can be exported or deleted. The local recent-destination list can be deleted in the app as described above. A rights request may identify a support message or a recent security event. Include only enough information to locate that record. NavOSS may be unable to associate an IP-only, transient request with a person. Requests about Cloudflare, OpenFreeMap, Apple, or GitHub data may also need to be directed to that provider.
 
 ## Children
 

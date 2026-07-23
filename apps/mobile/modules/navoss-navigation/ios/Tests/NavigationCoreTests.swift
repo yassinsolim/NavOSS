@@ -1,7 +1,172 @@
 import XCTest
+
 @testable import NavOSSNavigationCore
 
 final class NavigationCoreTests: XCTestCase {
+  func testNavigationSessionDerivesGuidanceFromMatchedProgress() throws {
+    let session = NavigationSession()
+    let trip = makeNavigationSessionTrip()
+
+    let initial = try session.start(trip)
+    XCTAssertEqual(initial.guidance?.instruction, "Turn right")
+    XCTAssertEqual(initial.guidance?.distanceToManeuverMeters, 500)
+    XCTAssertEqual(initial.guidance?.remainingDistanceMeters, 2_000)
+
+    let progressed = try session.updateLocation(
+      NavigationLocationSample(
+        coordinate: NavigationCoordinate(latitude: 51.045, longitude: -114.075),
+        courseDegrees: 32,
+        horizontalAccuracyMeters: 5
+      )
+    )
+
+    XCTAssertEqual(progressed.guidance?.instruction, "Turn right")
+    XCTAssertLessThan(progressed.guidance?.distanceToManeuverMeters ?? 500, 500)
+    XCTAssertLessThan(progressed.guidance?.remainingDurationSeconds ?? 180, 180)
+  }
+
+  func testNavigationSessionPublishesArrivalAndClears() throws {
+    let session = NavigationSession()
+    let trip = makeNavigationSessionTrip()
+    _ = try session.start(trip)
+    let destination = NavigationLocationSample(
+      coordinate: NavigationCoordinate(latitude: 51.13, longitude: -114.01),
+      courseDegrees: 32,
+      horizontalAccuracyMeters: 5
+    )
+
+    _ = try session.updateLocation(destination)
+    let arrived = try session.updateLocation(destination)
+
+    XCTAssertEqual(arrived.snapshot.phase, .arrived)
+    XCTAssertEqual(arrived.guidance?.phase, .arrived)
+    XCTAssertEqual(arrived.guidance?.remainingDistanceMeters, 0)
+    XCTAssertNil(session.clear().trip)
+    XCTAssertThrowsError(try session.updateLocation(destination)) { error in
+      XCTAssertEqual(error as? NavigationSessionError, .noActiveTrip)
+    }
+  }
+
+  func testNavigationSessionRetainsActiveTripWhenReplacementRouteIsRejected() throws {
+    let session = NavigationSession()
+    let activeTrip = makeNavigationSessionTrip()
+    _ = try session.start(activeTrip)
+    let duplicateCoordinate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08)
+    let invalidReplacement = NavOSSCarPlayTrip(
+      destination: activeTrip.destination,
+      distanceMeters: activeTrip.distanceMeters,
+      durationSeconds: activeTrip.durationSeconds,
+      geometry: [duplicateCoordinate, duplicateCoordinate],
+      id: "invalid-replacement",
+      preferences: activeTrip.preferences,
+      steps: activeTrip.steps
+    )
+
+    XCTAssertThrowsError(try session.start(invalidReplacement)) { error in
+      XCTAssertEqual(error as? NavigationCoreError, .invalidRoute)
+    }
+    XCTAssertEqual(session.currentUpdate().trip, activeTrip)
+    XCTAssertEqual(session.currentUpdate().snapshot.phase, .tracking)
+  }
+
+  func testManeuverSpeechWaitsForFreshLocationAndDistanceThresholds() {
+    let planner = NavigationSpeechPlanner()
+    let trip = makeNavigationSessionTrip()
+    let distant = makeGuidance(distance: 900, duration: 80)
+
+    XCTAssertNil(planner.prompt(trip: trip, guidance: distant, hasCurrentLocation: false))
+    XCTAssertNil(planner.prompt(trip: trip, guidance: distant, hasCurrentLocation: true))
+
+    let prepare = planner.prompt(
+      trip: trip,
+      guidance: makeGuidance(distance: 430, duration: 40),
+      hasCurrentLocation: true
+    )
+    XCTAssertEqual(prepare?.key, "route-1:1:prepare")
+    XCTAssertEqual(prepare?.text, "In 450 meters, Turn right")
+    XCTAssertNil(
+      planner.prompt(
+        trip: trip,
+        guidance: makeGuidance(distance: 420, duration: 38),
+        hasCurrentLocation: true
+      ))
+
+    let execute = planner.prompt(
+      trip: trip,
+      guidance: makeGuidance(distance: 60, duration: 8),
+      hasCurrentLocation: true
+    )
+    XCTAssertEqual(execute?.key, "route-1:1:execute")
+    XCTAssertEqual(execute?.text, "Turn right")
+    XCTAssertNil(
+      planner.prompt(
+        trip: trip,
+        guidance: makeGuidance(distance: 50, duration: 6),
+        hasCurrentLocation: true
+      ))
+  }
+
+  func testCarPlayTripStoreRejectsStaleNavigationPublications() {
+    let store = NavOSSCarPlayTripStore(notificationCenter: NotificationCenter())
+    let firstTrip = makeNavigationSessionTrip()
+    let secondTrip = makeNavigationSessionTrip(id: "route-2")
+    let firstGuidance = makeGuidance(distance: 300, duration: 30)
+    let secondGuidance = makeGuidance(distance: 200, duration: 20)
+
+    store.publishNavigationState(
+      trip: firstTrip,
+      guidance: firstGuidance,
+      generation: 4,
+      sequence: 10
+    )
+    store.clearTrip(generation: 5, sequence: 11)
+    store.publishNavigationState(
+      trip: firstTrip,
+      guidance: firstGuidance,
+      generation: 4,
+      sequence: 12
+    )
+    XCTAssertNil(store.snapshot().trip)
+
+    store.publishNavigationState(
+      trip: secondTrip,
+      guidance: secondGuidance,
+      generation: 6,
+      sequence: 20
+    )
+    store.publishNavigationState(
+      trip: firstTrip,
+      guidance: firstGuidance,
+      generation: 6,
+      sequence: 19
+    )
+    XCTAssertEqual(store.snapshot().trip, secondTrip)
+    XCTAssertEqual(store.snapshot().guidance, secondGuidance)
+  }
+
+  func testActiveTripStoreExpiresAndClearsTransientRoute() throws {
+    let suiteName = "NavOSSActiveTripStoreTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    var now = Date(timeIntervalSince1970: 1_000)
+    let store = NavOSSActiveTripStore(
+      defaults: defaults,
+      key: "active-trip",
+      expirationInterval: 60,
+      clock: { now }
+    )
+    let trip = makeNavigationSessionTrip()
+
+    store.save(trip)
+    XCTAssertEqual(store.load(), trip)
+    now = now.addingTimeInterval(61)
+    XCTAssertNil(store.load())
+
+    store.save(trip)
+    store.clear()
+    XCTAssertNil(store.load())
+  }
+
   func testCarPlayTripStorePublishesValidatedLifecycle() {
     let notifications = NotificationCenter()
     let store = NavOSSCarPlayTripStore(notificationCenter: notifications)
@@ -35,7 +200,7 @@ final class NavigationCoreTests: XCTestCase {
     )
     let geometry = [
       NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719),
-      NavOSSCarPlayCoordinate(latitude: 51.13157, longitude: -114.01055)
+      NavOSSCarPlayCoordinate(latitude: 51.13157, longitude: -114.01055),
     ]
     let trip = NavOSSCarPlayTrip(
       destination: destination,
@@ -70,11 +235,13 @@ final class NavigationCoreTests: XCTestCase {
     store.publishTrip(trip)
     store.publishGuidance(guidance)
 
-    XCTAssertEqual(store.snapshot(), NavOSSCarPlayState(
-      connected: true,
-      guidance: guidance,
-      trip: trip
-    ))
+    XCTAssertEqual(
+      store.snapshot(),
+      NavOSSCarPlayState(
+        connected: true,
+        guidance: guidance,
+        trip: trip
+      ))
     XCTAssertEqual(changeCount, 3)
 
     store.endTripFromCarPlay()
@@ -157,13 +324,29 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(catalog.recents.first?.id, "destination-5")
     XCTAssertEqual(catalog.recents.first?.name, "Updated Destination")
     XCTAssertEqual(catalog.recents.filter { $0.id == "destination-5" }.count, 1)
+
+    let favorite = NavOSSCarPlayDestination(
+      id: "favorite",
+      label: "Calgary",
+      latitude: 51.05,
+      longitude: -114.07,
+      name: "Favorite"
+    )
+    store.replaceFavorites([favorite])
+    store.setHome(favorite)
+    store.clearRecents()
+
+    let clearedCatalog = store.snapshot()
+    XCTAssertTrue(clearedCatalog.recents.isEmpty)
+    XCTAssertEqual(clearedCatalog.favorites, [favorite])
+    XCTAssertEqual(clearedCatalog.home, favorite)
   }
 
   func testProjectsLocationOntoRouteSegment() throws {
     let core = NavigationCore()
     try core.setRoute([
       NavigationCoordinate(latitude: 51.04, longitude: -114.08),
-      NavigationCoordinate(latitude: 51.04, longitude: -114.06)
+      NavigationCoordinate(latitude: 51.04, longitude: -114.06),
     ])
 
     let snapshot = try core.updateLocation(
@@ -185,7 +368,7 @@ final class NavigationCoreTests: XCTestCase {
     try core.setRoute([
       NavigationCoordinate(latitude: 51.04, longitude: -114.08),
       NavigationCoordinate(latitude: 51.05, longitude: -114.08),
-      NavigationCoordinate(latitude: 51.05, longitude: -114.06)
+      NavigationCoordinate(latitude: 51.05, longitude: -114.06),
     ])
 
     let snapshot = try core.updateLocation(
@@ -205,7 +388,7 @@ final class NavigationCoreTests: XCTestCase {
       NavigationCoordinate(latitude: 51.04, longitude: -114.08),
       NavigationCoordinate(latitude: 51.04, longitude: -114.06),
       NavigationCoordinate(latitude: 51.0402, longitude: -114.06),
-      NavigationCoordinate(latitude: 51.0402, longitude: -114.08)
+      NavigationCoordinate(latitude: 51.0402, longitude: -114.08),
     ]
     try eastboundCore.setRoute(route)
     try westboundCore.setRoute(route)
@@ -238,7 +421,7 @@ final class NavigationCoreTests: XCTestCase {
       NavigationCoordinate(latitude: 51.05, longitude: -114.06),
       NavigationCoordinate(latitude: 51.05, longitude: -114.08),
       NavigationCoordinate(latitude: 51.04, longitude: -114.08),
-      NavigationCoordinate(latitude: 51.03, longitude: -114.08)
+      NavigationCoordinate(latitude: 51.03, longitude: -114.08),
     ])
 
     _ = try core.updateLocation(
@@ -255,7 +438,7 @@ final class NavigationCoreTests: XCTestCase {
     let core = NavigationCore()
     try core.setRoute([
       NavigationCoordinate(latitude: 51.04, longitude: -114.08),
-      NavigationCoordinate(latitude: 51.04, longitude: -114.06)
+      NavigationCoordinate(latitude: 51.04, longitude: -114.06),
     ])
     let onRouteSample = NavigationLocationSample(
       coordinate: NavigationCoordinate(latitude: 51.04, longitude: -114.07),
@@ -292,7 +475,7 @@ final class NavigationCoreTests: XCTestCase {
     let core = NavigationCore()
     try core.setRoute([
       NavigationCoordinate(latitude: 51.04, longitude: -114.08),
-      NavigationCoordinate(latitude: 51.04, longitude: -114.06)
+      NavigationCoordinate(latitude: 51.04, longitude: -114.06),
     ])
     let uncertainSample = NavigationLocationSample(
       coordinate: NavigationCoordinate(latitude: 51.041, longitude: -114.07),
@@ -312,7 +495,7 @@ final class NavigationCoreTests: XCTestCase {
     let core = NavigationCore()
     try core.setRoute([
       NavigationCoordinate(latitude: 51.04, longitude: -114.08),
-      NavigationCoordinate(latitude: 51.04, longitude: -114.06)
+      NavigationCoordinate(latitude: 51.04, longitude: -114.06),
     ])
     let offRouteSample = NavigationLocationSample(
       coordinate: NavigationCoordinate(latitude: 51.041, longitude: -114.07),
@@ -337,7 +520,7 @@ final class NavigationCoreTests: XCTestCase {
     let core = NavigationCore()
     try core.setRoute([
       NavigationCoordinate(latitude: 51.04, longitude: -114.08),
-      NavigationCoordinate(latitude: 51.05, longitude: -114.08)
+      NavigationCoordinate(latitude: 51.05, longitude: -114.08),
     ])
     let arrivalSample = NavigationLocationSample(
       coordinate: NavigationCoordinate(latitude: 51.04995, longitude: -114.08),
@@ -357,7 +540,7 @@ final class NavigationCoreTests: XCTestCase {
     let core = NavigationCore()
     try core.setRoute([
       NavigationCoordinate(latitude: 51.04, longitude: -114.08),
-      NavigationCoordinate(latitude: 51.05, longitude: -114.08)
+      NavigationCoordinate(latitude: 51.05, longitude: -114.08),
     ])
     let uncertainEndpointSample = NavigationLocationSample(
       coordinate: NavigationCoordinate(latitude: 51.05, longitude: -114.08),
@@ -376,7 +559,7 @@ final class NavigationCoreTests: XCTestCase {
       NavigationCoordinate(latitude: 51.0599, longitude: -114.08),
       NavigationCoordinate(latitude: 51.04, longitude: -114.08),
       NavigationCoordinate(latitude: 51.04, longitude: -114.06),
-      NavigationCoordinate(latitude: 51.06, longitude: -114.08)
+      NavigationCoordinate(latitude: 51.06, longitude: -114.08),
     ])
     let earlyDestinationSample = NavigationLocationSample(
       coordinate: NavigationCoordinate(latitude: 51.0599, longitude: -114.08),
@@ -394,7 +577,7 @@ final class NavigationCoreTests: XCTestCase {
     let core = NavigationCore()
     try core.setRoute([
       NavigationCoordinate(latitude: 51.04, longitude: -114.08),
-      NavigationCoordinate(latitude: 51.05, longitude: -114.08)
+      NavigationCoordinate(latitude: 51.05, longitude: -114.08),
     ])
     let arrivalSample = NavigationLocationSample(
       coordinate: NavigationCoordinate(latitude: 51.05, longitude: -114.08),
@@ -426,7 +609,7 @@ final class NavigationCoreTests: XCTestCase {
 
     try core.setRoute([
       NavigationCoordinate(latitude: 51.04, longitude: -114.08),
-      NavigationCoordinate(latitude: 51.05, longitude: -114.08)
+      NavigationCoordinate(latitude: 51.05, longitude: -114.08),
     ])
     XCTAssertThrowsError(
       try core.updateLocation(NavigationCoordinate(latitude: 95, longitude: -114.08))
@@ -451,7 +634,7 @@ final class NavigationCoreTests: XCTestCase {
     let initialVersion = core.currentSnapshot().routeVersion
     try core.setRoute([
       NavigationCoordinate(latitude: 51.04, longitude: -114.08),
-      NavigationCoordinate(latitude: 51.05, longitude: -114.08)
+      NavigationCoordinate(latitude: 51.05, longitude: -114.08),
     ])
 
     let snapshot = core.clearRoute()
@@ -459,5 +642,63 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(snapshot.phase, .idle)
     XCTAssertNil(snapshot.matchedCoordinate)
     XCTAssertGreaterThan(snapshot.routeVersion, initialVersion)
+  }
+
+  private func makeGuidance(distance: Double, duration: Double) -> NavOSSCarPlayGuidance {
+    NavOSSCarPlayGuidance(
+      distanceToManeuverMeters: distance,
+      durationToManeuverSeconds: duration,
+      instruction: "Turn right",
+      maneuverType: "right",
+      phase: .navigating,
+      remainingDistanceMeters: distance + 1_000,
+      remainingDurationSeconds: duration + 100,
+      roadName: "Airport Trail NE",
+      stepIndex: 0
+    )
+  }
+
+  private func makeNavigationSessionTrip(id: String = "route-1") -> NavOSSCarPlayTrip {
+    NavOSSCarPlayTrip(
+      destination: NavOSSCarPlayDestination(
+        id: "airport",
+        label: "2000 Airport Road NE",
+        latitude: 51.13,
+        longitude: -114.01,
+        name: "Calgary International Airport"
+      ),
+      distanceMeters: 2_000,
+      durationSeconds: 180,
+      geometry: [
+        NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+        NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.07),
+        NavOSSCarPlayCoordinate(latitude: 51.13, longitude: -114.01),
+      ],
+      id: id,
+      steps: [
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 500,
+          durationSeconds: 60,
+          geometry: [
+            NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+            NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.07),
+          ],
+          instruction: "Head north",
+          maneuverType: "depart",
+          roadName: "Centre Street"
+        ),
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 1_500,
+          durationSeconds: 120,
+          geometry: [
+            NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.07),
+            NavOSSCarPlayCoordinate(latitude: 51.13, longitude: -114.01),
+          ],
+          instruction: "Turn right",
+          maneuverType: "right",
+          roadName: "Airport Trail NE"
+        ),
+      ]
+    )
   }
 }

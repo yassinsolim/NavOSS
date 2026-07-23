@@ -16,7 +16,7 @@ Issue tracker: <https://github.com/yassinsolim/NavOSS/issues>
 
 ## Before reporting a route issue
 
-NavOSS is a Calgary technical beta with foreground-only guidance and no live traffic. It must not be your only source for navigation, road closures, traffic, or safety-camera information. Follow posted signs and laws. Have a passenger operate the app while the vehicle is moving.
+NavOSS is a Calgary technical beta with active turn-by-turn guidance and no live traffic. It must not be your only source for navigation, road closures, traffic, or safety-camera information. Follow posted signs and laws. Mount the phone before driving and have a passenger handle any interaction that cannot be completed safely.
 
 ## Useful report details
 
@@ -35,10 +35,9 @@ Do not send a home address, precise trip history, or other sensitive information
 ## Known beta limitations
 
 - Calgary coverage only;
-- foreground, screen-on navigation only;
 - no live traffic or traffic-aware ETA;
-- no spoken turn-by-turn maneuvers;
-- no lane guidance, CarPlay, Android release, or offline routing;
+- no lane guidance, Android release, or offline routing;
+- CarPlay is available only in the dedicated tester build and has not completed real-vehicle validation;
 - place search and route quality are still being expanded; and
 - safety-camera records may be incomplete or change between monthly City updates.
 

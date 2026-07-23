@@ -1,13 +1,16 @@
-import type { Coordinate, RouteAlternative, SearchResult } from '@navoss/contracts';
+import type {
+  Coordinate,
+  RouteAlternative,
+  RoutePreferences,
+  SearchResult,
+} from '@navoss/contracts';
 
 import NavOSSNavigation, {
-  type NativeCarPlayGuidance,
   type NativeCarPlayState,
   type NativeNavigationSnapshot,
 } from '../../../modules/navoss-navigation';
 
 export type {
-  NativeCarPlayGuidance,
   NativeCarPlayState,
   NativeNavigationSnapshot,
 } from '../../../modules/navoss-navigation';
@@ -32,12 +35,17 @@ export function getCarPlayState(): NativeCarPlayState {
   return NavOSSNavigation.getCarPlayState();
 }
 
+export function getNavigationSnapshot(): NativeNavigationSnapshot {
+  return NavOSSNavigation.getSnapshot();
+}
+
 export function setNavigationRoute(
   route: RouteAlternative,
   destination: SearchResult,
+  preferences: RoutePreferences,
 ): NativeNavigationSnapshot {
   const coordinate = ([longitude, latitude]: [number, number]) => ({ latitude, longitude });
-  NavOSSNavigation.publishCarPlayTrip({
+  return NavOSSNavigation.setRoute({
     destination: {
       id: destination.id,
       label: destination.label,
@@ -49,6 +57,7 @@ export function setNavigationRoute(
     durationSeconds: route.durationSeconds,
     geometry: route.geometry.map(coordinate),
     id: route.id,
+    preferences,
     steps: route.steps.map((step) => ({
       distanceMeters: step.distanceMeters,
       durationSeconds: step.durationSeconds,
@@ -56,17 +65,19 @@ export function setNavigationRoute(
       instruction: step.instruction,
       maneuverType: step.maneuverType,
       roadName: step.roadName,
+      ...(step.spokenInstruction === undefined
+        ? {}
+        : { spokenInstruction: step.spokenInstruction }),
     })),
   });
-  return NavOSSNavigation.setRoute(route.geometry.map(coordinate));
-}
-
-export function publishCarPlayGuidance(guidance: NativeCarPlayGuidance): void {
-  NavOSSNavigation.publishCarPlayGuidance(guidance);
 }
 
 export function clearCarPlayTrip(): void {
   NavOSSNavigation.clearCarPlayTrip();
+}
+
+export function clearRecentDestinations(): void {
+  NavOSSNavigation.clearRecentDestinations();
 }
 
 export function recordRecentDestination(destination: SearchResult): void {

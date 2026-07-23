@@ -24,6 +24,25 @@ public struct NavOSSCarPlayCoordinate: Codable, Equatable, Sendable {
   }
 }
 
+public struct NavOSSRoutePreferences: Codable, Equatable, Sendable {
+  public let avoidFerries: Bool
+  public let avoidHighways: Bool
+  public let avoidTolls: Bool
+  public let avoidUnpaved: Bool
+
+  public init(
+    avoidFerries: Bool = false,
+    avoidHighways: Bool = false,
+    avoidTolls: Bool = false,
+    avoidUnpaved: Bool = false
+  ) {
+    self.avoidFerries = avoidFerries
+    self.avoidHighways = avoidHighways
+    self.avoidTolls = avoidTolls
+    self.avoidUnpaved = avoidUnpaved
+  }
+}
+
 public struct NavOSSCarPlayRouteStep: Codable, Equatable, Sendable {
   public let distanceMeters: Double
   public let durationSeconds: Double
@@ -31,6 +50,7 @@ public struct NavOSSCarPlayRouteStep: Codable, Equatable, Sendable {
   public let instruction: String
   public let maneuverType: String
   public let roadName: String
+  public let spokenInstruction: String?
 
   public init(
     distanceMeters: Double,
@@ -38,7 +58,8 @@ public struct NavOSSCarPlayRouteStep: Codable, Equatable, Sendable {
     geometry: [NavOSSCarPlayCoordinate],
     instruction: String,
     maneuverType: String,
-    roadName: String
+    roadName: String,
+    spokenInstruction: String? = nil
   ) {
     self.distanceMeters = distanceMeters
     self.durationSeconds = durationSeconds
@@ -46,6 +67,7 @@ public struct NavOSSCarPlayRouteStep: Codable, Equatable, Sendable {
     self.instruction = instruction
     self.maneuverType = maneuverType
     self.roadName = roadName
+    self.spokenInstruction = spokenInstruction
   }
 
   var isValid: Bool {
@@ -53,6 +75,8 @@ public struct NavOSSCarPlayRouteStep: Codable, Equatable, Sendable {
       && durationSeconds >= 0 && geometry.count >= 2 && geometry.allSatisfy(\.isValid)
       && !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
       && !maneuverType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      && (spokenInstruction?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        || spokenInstruction == nil)
   }
 }
 
@@ -62,6 +86,7 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
   public let durationSeconds: Double
   public let geometry: [NavOSSCarPlayCoordinate]
   public let id: String
+  public let preferences: NavOSSRoutePreferences
   public let steps: [NavOSSCarPlayRouteStep]
 
   public init(
@@ -70,6 +95,7 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
     durationSeconds: Double,
     geometry: [NavOSSCarPlayCoordinate],
     id: String,
+    preferences: NavOSSRoutePreferences = NavOSSRoutePreferences(),
     steps: [NavOSSCarPlayRouteStep]
   ) {
     self.destination = destination
@@ -77,13 +103,72 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
     self.durationSeconds = durationSeconds
     self.geometry = geometry
     self.id = id
+    self.preferences = preferences
     self.steps = steps
   }
 
   var isValid: Bool {
     destination.isValid && !id.isEmpty && distanceMeters.isFinite && distanceMeters > 0
       && durationSeconds.isFinite && durationSeconds > 0 && geometry.count >= 2
-      && geometry.allSatisfy(\.isValid) && !steps.isEmpty && steps.allSatisfy(\.isValid)
+      && geometry.allSatisfy(\.isValid) && geometry.contains { $0 != geometry[0] }
+      && !steps.isEmpty && steps.allSatisfy(\.isValid)
+  }
+}
+
+public final class NavOSSActiveTripStore: @unchecked Sendable {
+  private struct StoredTrip: Codable {
+    let expiresAt: Date
+    let trip: NavOSSCarPlayTrip
+  }
+
+  private let clock: () -> Date
+  private let defaults: UserDefaults
+  private let expirationInterval: TimeInterval
+  private let key: String
+  private let lock = NSLock()
+
+  public init(
+    defaults: UserDefaults = .standard,
+    key: String = "org.navoss.mobile.active-navigation-trip",
+    expirationInterval: TimeInterval = 12 * 60 * 60,
+    clock: @escaping () -> Date = Date.init
+  ) {
+    self.clock = clock
+    self.defaults = defaults
+    self.expirationInterval = expirationInterval
+    self.key = key
+  }
+
+  public func clear() {
+    lock.lock()
+    defaults.removeObject(forKey: key)
+    lock.unlock()
+  }
+
+  public func load() -> NavOSSCarPlayTrip? {
+    lock.lock()
+    defer { lock.unlock() }
+    guard let data = defaults.data(forKey: key),
+      let stored = try? JSONDecoder().decode(StoredTrip.self, from: data),
+      stored.expiresAt > clock()
+    else {
+      defaults.removeObject(forKey: key)
+      return nil
+    }
+    return stored.trip
+  }
+
+  public func save(_ trip: NavOSSCarPlayTrip) {
+    let stored = StoredTrip(
+      expiresAt: clock().addingTimeInterval(expirationInterval),
+      trip: trip
+    )
+    guard trip.isValid, let data = try? JSONEncoder().encode(stored) else {
+      return
+    }
+    lock.lock()
+    defaults.set(data, forKey: key)
+    lock.unlock()
   }
 }
 
@@ -158,6 +243,8 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
   private let lock = NSLock()
   private let notificationCenter: NotificationCenter
   private var state = NavOSSCarPlayState(connected: false, guidance: nil, trip: nil)
+  private var stateGeneration: UInt64 = 0
+  private var stateSequence = 0
 
   public init(notificationCenter: NotificationCenter = .default) {
     self.notificationCenter = notificationCenter
@@ -165,6 +252,12 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
 
   public func clearTrip() {
     update { current in
+      NavOSSCarPlayState(connected: current.connected, guidance: nil, trip: nil)
+    }
+  }
+
+  public func clearTrip(generation: UInt64, sequence: Int) {
+    update(generation: generation, sequence: sequence) { current in
       NavOSSCarPlayState(connected: current.connected, guidance: nil, trip: nil)
     }
   }
@@ -199,6 +292,24 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
     }
   }
 
+  public func publishNavigationState(
+    trip: NavOSSCarPlayTrip,
+    guidance: NavOSSCarPlayGuidance?,
+    generation: UInt64,
+    sequence: Int
+  ) {
+    guard trip.isValid, guidance?.isValid != false else {
+      return
+    }
+    update(generation: generation, sequence: sequence) { current in
+      NavOSSCarPlayState(
+        connected: current.connected,
+        guidance: guidance,
+        trip: trip
+      )
+    }
+  }
+
   public func setConnected(_ connected: Bool) {
     update { current in
       NavOSSCarPlayState(
@@ -215,8 +326,23 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
     return state
   }
 
-  private func update(_ transform: (NavOSSCarPlayState) -> NavOSSCarPlayState) {
+  private func update(
+    generation: UInt64? = nil,
+    sequence: Int? = nil,
+    _ transform: (NavOSSCarPlayState) -> NavOSSCarPlayState
+  ) {
     lock.lock()
+    if let generation, let sequence {
+      guard
+        generation > stateGeneration
+          || (generation == stateGeneration && sequence >= stateSequence)
+      else {
+        lock.unlock()
+        return
+      }
+      stateGeneration = generation
+      stateSequence = sequence
+    }
     let previous = state
     let next = transform(previous)
     state = next

@@ -2,7 +2,7 @@ import { NativeModule, requireNativeModule } from 'expo';
 
 export interface NativeNavigationCapabilities {
   arrivalDetection: true;
-  backgroundLocation: false;
+  backgroundLocation: boolean;
   carPlayTripBridge: true;
   courseMatching: true;
   implementation: 'native-ios';
@@ -11,7 +11,7 @@ export interface NativeNavigationCapabilities {
   routeContinuity: true;
   routeMatching: true;
   safetyCameraAnnouncements: true;
-  version: 7;
+  version: 8;
 }
 
 export interface NativeNavigationCoordinate {
@@ -38,9 +38,14 @@ export interface NativeNavigationSnapshot {
   matchedCourseDegrees?: number;
   phase: 'arrived' | 'idle' | 'tracking';
   rawCoordinate?: NativeNavigationCoordinate;
+  rerouteCount: number;
+  guidance?: NativeCarPlayGuidance;
   routeProgress: number;
+  routeStatus: 'reroute-failed' | 'rerouting' | 'tracking';
   routeVersion: number;
   sequence: number;
+  stateVersion: number;
+  trip?: NativeCarPlayTrip;
 }
 
 export type NativeCarPlayGuidancePhase = 'arrived' | 'navigating' | 'preview';
@@ -64,6 +69,14 @@ export interface NativeCarPlayRouteStep {
   instruction: string;
   maneuverType: string;
   roadName: string;
+  spokenInstruction?: string;
+}
+
+export interface NativeRoutePreferences {
+  avoidFerries: boolean;
+  avoidHighways: boolean;
+  avoidTolls: boolean;
+  avoidUnpaved: boolean;
 }
 
 export interface NativeCarPlayTrip {
@@ -72,6 +85,7 @@ export interface NativeCarPlayTrip {
   durationSeconds: number;
   geometry: NativeNavigationCoordinate[];
   id: string;
+  preferences: NativeRoutePreferences;
   steps: NativeCarPlayRouteStep[];
 }
 
@@ -90,16 +104,15 @@ type NavOSSNavigationEvents = {
 declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents> {
   announceSafetyCamera(): void;
   clearCarPlayTrip(): void;
+  clearRecentDestinations(): void;
   clearRoute(): NativeNavigationSnapshot;
   getCarPlayState(): NativeCarPlayState;
   getCapabilities(): NativeNavigationCapabilities;
   getSnapshot(): NativeNavigationSnapshot;
   recordRecentDestination(destination: NativeNavigationDestination): void;
-  publishCarPlayGuidance(guidance: NativeCarPlayGuidance): void;
-  publishCarPlayTrip(trip: NativeCarPlayTrip): void;
   replaceFavoriteDestinations(destinations: NativeNavigationDestination[]): void;
   setHomeDestination(destination: NativeNavigationDestination | null): void;
-  setRoute(geometry: NativeNavigationCoordinate[]): NativeNavigationSnapshot;
+  setRoute(trip: NativeCarPlayTrip): NativeNavigationSnapshot;
   setWorkDestination(destination: NativeNavigationDestination | null): void;
   stopAnnouncements(): void;
   updateLocation(location: NativeNavigationLocationSample): NativeNavigationSnapshot;

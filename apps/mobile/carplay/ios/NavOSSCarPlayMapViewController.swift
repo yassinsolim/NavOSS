@@ -3,7 +3,9 @@ internal import NavOSSNavigation
 import UIKit
 
 @MainActor
-final class NavOSSCarPlayMapViewController: UIViewController, MLNMapViewDelegate {
+final class NavOSSCarPlayMapViewController: UIViewController,
+  @preconcurrency MLNMapViewDelegate
+{
   private let calgaryCenter = CLLocationCoordinate2D(latitude: 51.0447, longitude: -114.0719)
   private let routeCasingLayerIdentifier = "navoss-carplay-route-casing"
   private let routeLayerIdentifier = "navoss-carplay-route"
@@ -116,7 +118,8 @@ final class NavOSSCarPlayMapViewController: UIViewController, MLNMapViewDelegate
       let route = MLNLineStyleLayer(identifier: routeLayerIdentifier, source: source)
       route.lineCap = NSExpression(forConstantValue: "round")
       route.lineJoin = NSExpression(forConstantValue: "round")
-      route.lineColor = NSExpression(forConstantValue: UIColor(red: 0.11, green: 0.49, blue: 0.31, alpha: 1))
+      route.lineColor = NSExpression(
+        forConstantValue: UIColor(red: 0.11, green: 0.49, blue: 0.31, alpha: 1))
       route.lineWidth = NSExpression(forConstantValue: 7)
       style.addLayer(route)
     }

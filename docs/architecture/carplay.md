@@ -1,6 +1,6 @@
 # CarPlay Navigation Architecture
 
-Status: Apple-approved, foreground continuation implemented, production-gated
+Status: Apple-approved, full tester flow implemented, physical validation gated
 
 ## Decision
 
@@ -29,7 +29,7 @@ Apple approved the CarPlay Navigation App capability for the explicit App ID `or
 
 This removes the external approval blocker, but it does not make the current implementation release-ready. A dedicated build can now continue an active phone route onto the main CarPlay display with a native route line, `CPNavigationSession`, maneuvers, travel estimates, arrival, reconnect state, and vehicle-side cancellation. While that scene is connected, the phone replaces its interactive map with a low-distraction companion showing only the next maneuver, arrival summary, destination, and End or Done action.
 
-Foreground JavaScript still supplies location samples, advances guidance, and requests reroutes. Starting a route from CarPlay search, locked-phone background progression, Dashboard, cluster metadata, and real-vehicle validation remain incomplete. Keep both `NAVOSS_CARPLAY_ENABLED` and `NAVOSS_CARPLAY_ENTITLEMENT_ENABLED` unset in normal production builds until those paths are complete and validated. A dedicated CarPlay build must regenerate its provisioning profile after enabling the approved capability.
+The native navigation service now owns active Core Location updates, map matching, maneuver progression, spoken guidance, background continuation, rerouting, arrival, and transient active-route recovery. CarPlay search uses the private NavOSS API, previews route alternatives with approved templates, and starts navigation without phone interaction. Dashboard, cluster metadata, and real-vehicle validation remain incomplete. Normal production builds remain unchanged; the dedicated `production-carplay` profile enables the scene, entitlement, native API URL, and location background mode for controlled testing.
 
 ### Maps capability decision
 
@@ -57,7 +57,7 @@ The entitlement-free native slice now lives in `apps/mobile/modules/navoss-navig
 
 The shared native trip store now accepts a validated route, destination, steps, and live guidance summaries from the phone. It owns CarPlay connection state and emits vehicle-side cancellation back to React Native. The main CarPlay scene observes this store, restores an active trip when the display reconnects, draws the route through MapLibre Native, starts `CPNavigationSession`, and updates structured maneuvers and travel estimates. The entitlement and scene remain build-time gated.
 
-This continuation slice deliberately does not enable background location in normal builds. Foreground JavaScript still supplies location samples and owns maneuver progression and reroute requests. Native location lifecycle, road-topology matching, native reroute execution, speech, and background continuity remain prerequisites before this service can become the shared source of truth described below.
+Normal builds omit the CarPlay scene and entitlement but retain active-navigation background location for phone guidance. Native location starts only during active navigation or, in the dedicated CarPlay build, while CarPlay needs a current origin. When in Use authorization and iOS's visible background indicator are used; Always authorization is not requested. The current active route is stored only for operating-system recovery and erased on End or confirmed arrival.
 
 ### Navigation service
 
@@ -167,23 +167,25 @@ apps/mobile/carplay/ios/
 apps/mobile/plugins/with-navoss-carplay.cjs
 ```
 
-The config plugin is idempotent and enabled only when `NAVOSS_CARPLAY_ENABLED=1`. In a dedicated CarPlay build it:
+The config plugin configures the native API URL and `location` background mode for every iOS navigation build. When `NAVOSS_CARPLAY_ENABLED=1`, it also:
 
 - Adds the main CarPlay scene and the Expo-compatible phone window scene to `Info.plist`.
 - Adds the required Swift templates to the application target.
 - Adds the navigation entitlement only when `NAVOSS_CARPLAY_ENTITLEMENT_ENABLED=1`.
-- Leaves Dashboard, instrument-cluster, and background-location configuration disabled until those implementations and disclosures are complete.
+- Leaves Dashboard and instrument-cluster integration disabled until those implementations are complete.
+
+When CarPlay is disabled, the plugin removes the CarPlay scene and entitlement. Background location is not a CarPlay entitlement: it supports an active trip on the phone and stops on End or confirmed arrival.
 
 The ignored generated `ios/` directory remains disposable. All native behavior and configuration must regenerate from the module and plugin.
 
 ## Implementation Order
 
 1. Complete: Apple approved the CarPlay Navigation App capability for `org.navoss.mobile` on 2026-07-21.
-2. In progress: complete the native navigation core with matched location, background progress, rerouting, speech, and deterministic replay.
-3. In progress: the phone consumes native matching snapshots, but foreground JavaScript remains the guidance and reroute owner.
+2. Complete for tester flow: native matched location, background progress, rerouting, speech, transient recovery, and deterministic replay.
+3. Complete: the phone consumes native snapshots and no longer owns a second active location/reroute loop.
 4. Complete: add a gated native CarPlay scene, shared trip bridge, MapLibre route rendering, maneuvers, estimates, reconnect state, and a minimal phone companion for routes started on the phone.
 5. Enable the approved capability and regenerate provisioning only in a dedicated CarPlay build configuration after route loading and background continuity are complete.
-6. Implement search, route preview, `CPNavigationSession`, maneuvers, estimates, and disconnect/reconnect behavior.
+6. Complete for main display: native search, route preview, `CPNavigationSession`, maneuvers, estimates, cancellation, and disconnect/reconnect behavior.
 7. Add Dashboard rendering and guarded cluster/HUD metadata.
 8. Validate in Simulator, a physical iPhone while locked, and at least one wired and one wireless real CarPlay system.
 

@@ -60,6 +60,6 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Queue production build and TestFlight submission
+      - name: Queue CarPlay production build and TestFlight submission
         working-directory: apps/mobile
-        run: eas build --platform ios --profile production --auto-submit --non-interactive --no-wait
+        run: eas build --platform ios --profile production-carplay --auto-submit --non-interactive --no-wait

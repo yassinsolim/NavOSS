@@ -10,7 +10,7 @@ Date: 2026-07-22
 | Metro-independent iOS Release export      | GO      | A July 22 Hermes export embeds `https://navoss-api.yassin.app`; no retired, loopback, or LAN NavOSS API origin is present. Framework-only Expo localhost fallbacks are not used by the release API path. |
 | Internal TestFlight                       | NO-GO   | Audited build `0.1.0 (10)` is uploaded to App Store Connect. Apple processing, App Privacy/provider classification, owner questionnaires, and a clean-device build 10 smoke test remain.                 |
 | External TestFlight                       | NO-GO   | Internal soak, reviewer-accessible Calgary route planning, Beta App Review metadata, on-road evidence, support operations, and the internal blockers are incomplete.                                     |
-| Public App Store                          | NO-GO   | Background guidance, spoken maneuvers, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                                          |
+| Public App Store                          | NO-GO   | Physical-device background/CarPlay evidence, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                                    |
 
 The right next launch is a small **internal TestFlight technical beta**, not a public navigation release.
 
@@ -40,7 +40,7 @@ The right next launch is a small **internal TestFlight technical beta**, not a p
 - Confirm map/search/routing data attribution and production usage rights in the shipped UI and hosted legal pages.
 - Add manual Calgary origin selection or a clearly visible route-preview path so Beta App Review can exercise routing from outside Calgary.
 - Activate and externally test `navoss@yassin.app` delivery and reply handling.
-- Verify the app remains usable for the stated beta scope when the screen locks or clearly constrain the beta to foreground, screen-on testing. Current guidance is foreground-only.
+- Verify active guidance, speech, rerouting, arrival, and End cleanup while the screen is locked. For the CarPlay profile, repeat the flow on wired and wireless systems and confirm the minimal phone companion remains non-distracting.
 
 ## Backend release gate
 
@@ -103,20 +103,22 @@ Production build `0.1.0 (9)` was created from place-details commit `96ca37ae63bb
 
 Production build `0.1.0 (10)` was created from compact-screen fix commit `ee10974b3d0d030e5cec8c7fa4db42fc5ce36d96` as EAS build `f8de57d9-43d3-433b-897e-3caf7c56847a`. The signed IPA passed bundle/version, signature, production-origin, foreground-location, Contacts/background-mode, and entitlement audits. The app signature asserts neither CarPlay nor deprecated Maps; its provisioning profile permits only the approved CarPlay navigation capability. EAS submission `4a8d0ddd-5ad9-4741-ba50-5fcb332f2603` successfully uploaded the binary to App Store Connect. Apple processing and clean-device TestFlight validation remain pending.
 
-The `preview` profile is an ad hoc production-like build, not TestFlight. Use the `production` profile for a store-signed build:
+The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a CarPlay tester build so the approved scene and entitlement are present:
 
 ```sh
-eas build --platform ios --profile production
-eas submit --platform ios --profile production
+eas build --platform ios --profile production-carplay
+eas submit --platform ios --profile production-carplay
 ```
+
+Before submitting the CarPlay candidate, inspect the signed IPA and confirm the app asserts `com.apple.developer.carplay-maps`, declares the `CPTemplateApplicationSceneSessionRoleApplication` scene and `location` background mode, and embeds `https://navoss-api.yassin.app`.
 
 ## Internal TestFlight
 
 1. Wait for Apple to process the uploaded build.
 2. Complete encryption/export-compliance prompts and verify the processed build details.
 3. Create an internal group with only App Store Connect users who are actively testing.
-4. Add build 10, paste the beta description and What to Test text, and invite the smallest useful group first.
-5. Install build 10 from TestFlight on a clean iPhone. Confirm the app starts without Metro, reaches the production API, requests only foreground location, opens named-place details, shares a place and static ETA without a Contacts prompt, long-presses to a dropped pin, shows ordered alternatives, preserves landmarks in every map preset, routes, reroutes, arrives, displays all current cameras, and submits TestFlight feedback.
+4. Add the latest audited `production-carplay` candidate, paste the beta description and What to Test text, and invite the smallest useful internal group first.
+5. Install that exact candidate from TestFlight on a clean iPhone. Confirm the app starts without Metro, reaches the production API, requests When in Use rather than Always location, continues active guidance while locked, stops location on End and arrival, opens named-place details, shares a place and static ETA without a Contacts prompt, long-presses to a dropped pin, shows ordered alternatives, preserves landmarks in every map preset, routes, speaks maneuvers, reroutes, arrives, displays all current cameras, connects to CarPlay, searches and starts a CarPlay route, and submits TestFlight feedback.
 6. Soak for 48 hours before adding more testers. Stop rollout on crashes, invalid routes, stale closures, backend saturation, or misleading camera alerts.
 
 Apple permits up to 100 internal testers associated with App Store Connect. Builds expire after 90 days.

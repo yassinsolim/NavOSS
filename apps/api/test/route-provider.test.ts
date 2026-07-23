@@ -71,6 +71,8 @@ describe('Valhalla route provider', () => {
     const routes = await provider.getRoutes(request);
 
     expect(requestPayload).toMatchObject({ alternates: 2, costing: 'auto' });
+    expect(new Set(routes.map((route) => route.id)).size).toBe(3);
+    expect(routes.every((route) => /^valhalla-\d+-[0-9a-f]{16}$/.test(route.id))).toBe(true);
     expect(
       routes.map(({ distanceMeters, durationSeconds, label }) => ({
         distanceMeters,
@@ -82,5 +84,38 @@ describe('Valhalla route provider', () => {
       { distanceMeters: 8_000, durationSeconds: 600, label: 'alternative' },
       { distanceMeters: 9_000, durationSeconds: 600, label: 'alternative' },
     ]);
+  });
+
+  it('changes route identity when provider route content changes', async () => {
+    const request: RouteRequest = {
+      alternatives: 0,
+      destination: { latitude: 51.13157, longitude: -114.01055 },
+      origin: { latitude: 51.0447, longitude: -114.0719 },
+      preferences: {
+        avoidFerries: false,
+        avoidHighways: false,
+        avoidTolls: false,
+        avoidUnpaved: false,
+      },
+    };
+    const routeIds = await Promise.all(
+      [0, 0.01].map(async (offset) => {
+        const provider = createValhallaRouteProvider({
+          endpoint: 'https://valhalla.test/route',
+          fetchImplementation: () =>
+            Promise.resolve(
+              new Response(
+                JSON.stringify({ code: 'Ok', routes: [valhallaRoute(9_000, 600, offset)] }),
+                { status: 200 },
+              ),
+            ),
+        });
+        return (await provider.getRoutes(request))[0]?.id;
+      }),
+    );
+
+    expect(routeIds[0]).toBeDefined();
+    expect(routeIds[1]).toBeDefined();
+    expect(routeIds[0]).not.toBe(routeIds[1]);
   });
 });

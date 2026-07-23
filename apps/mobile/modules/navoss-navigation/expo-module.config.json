@@ -1,6 +1,7 @@
 {
   "platforms": ["apple"],
   "apple": {
-    "modules": ["NavOSSNavigationModule"]
+    "modules": ["NavOSSNavigationModule"],
+    "appDelegateSubscribers": ["NavOSSNavigationAppDelegateSubscriber"]
   }
 }

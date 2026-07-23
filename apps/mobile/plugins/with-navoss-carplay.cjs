@@ -10,22 +10,38 @@ const sourceFiles = [
   'NavOSSPhoneSceneDelegate.swift',
 ];
 
-function withNavOSSCarPlay(config) {
-  if (process.env.NAVOSS_CARPLAY_ENABLED !== '1') {
-    return config;
+function configuredApiUrl() {
+  const value = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (value === undefined || value.length === 0) {
+    throw new Error('EXPO_PUBLIC_API_URL is required for an iOS navigation build.');
   }
+  const url = new URL(value);
+  if (url.protocol !== 'https:' && url.hostname !== '127.0.0.1' && url.hostname !== 'localhost') {
+    throw new Error('iOS navigation builds require an HTTPS API URL outside local development.');
+  }
+  return url.toString();
+}
 
-  for (const filePath of sourceFiles) {
-    config = withBuildSourceFile(config, {
-      contents: fs.readFileSync(path.join(sourceDirectory, filePath), 'utf8'),
-      filePath,
-      overwrite: true,
-    });
-  }
+function withNavOSSCarPlay(config) {
+  const carPlayEnabled = process.env.NAVOSS_CARPLAY_ENABLED === '1';
 
   config = withInfoPlist(config, (modConfig) => {
+    modConfig.modResults.NavOSSAPIURL = configuredApiUrl();
+    modConfig.modResults.UIBackgroundModes = [
+      ...new Set([...(modConfig.modResults.UIBackgroundModes ?? []), 'location']),
+    ];
+
     const manifest = modConfig.modResults.UIApplicationSceneManifest ?? {};
     const configurations = manifest.UISceneConfigurations ?? {};
+    if (!carPlayEnabled) {
+      delete configurations.CPTemplateApplicationSceneSessionRoleApplication;
+      if (manifest.UISceneConfigurations !== undefined) {
+        manifest.UISceneConfigurations = configurations;
+        modConfig.modResults.UIApplicationSceneManifest = manifest;
+      }
+      return modConfig;
+    }
+
     configurations.UIWindowSceneSessionRoleApplication ??= [
       {
         UISceneClassName: 'UIWindowScene',
@@ -46,10 +62,24 @@ function withNavOSSCarPlay(config) {
     return modConfig;
   });
 
-  if (process.env.NAVOSS_CARPLAY_ENTITLEMENT_ENABLED === '1') {
-    config = withEntitlementsPlist(config, (modConfig) => {
+  config = withEntitlementsPlist(config, (modConfig) => {
+    if (carPlayEnabled && process.env.NAVOSS_CARPLAY_ENTITLEMENT_ENABLED === '1') {
       modConfig.modResults['com.apple.developer.carplay-maps'] = true;
-      return modConfig;
+    } else {
+      delete modConfig.modResults['com.apple.developer.carplay-maps'];
+    }
+    return modConfig;
+  });
+
+  if (!carPlayEnabled) {
+    return config;
+  }
+
+  for (const filePath of sourceFiles) {
+    config = withBuildSourceFile(config, {
+      contents: fs.readFileSync(path.join(sourceDirectory, filePath), 'utf8'),
+      filePath,
+      overwrite: true,
     });
   }
 

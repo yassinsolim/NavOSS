@@ -12,12 +12,21 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private weak var interfaceController: CPInterfaceController?
   private var activeManeuver: CPManeuver?
   private var activeManeuverKey: String?
+  private var activeDestinationId: String?
   private var activeSystemTrip: CPTrip?
   private var activeTripId: String?
   private var mapTemplate: CPMapTemplate?
   private var mapViewController: NavOSSCarPlayMapViewController?
   private var navigationSession: CPNavigationSession?
+  private var routeRequestGeneration: UInt64 = 0
+  private var routeTask: Task<Void, Never>?
+  private var searchRequestGeneration: UInt64 = 0
+  private var searchTask: Task<Void, Never>?
+  private var destinationObserver: NSObjectProtocol?
+  private var placesTemplate: CPListTemplate?
   private var stateObserver: NSObjectProtocol?
+  private var routeChoicesByIdentifier: [String: NavOSSCarPlayTrip] = [:]
+  private var searchDestinationsByIdentifier: [String: NavOSSCarPlayDestination] = [:]
 
   func templateApplicationScene(
     _ templateApplicationScene: CPTemplateApplicationScene,
@@ -43,7 +52,17 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         self?.apply(NavOSSCarPlayTripStore.shared.snapshot())
       }
     }
+    destinationObserver = NotificationCenter.default.addObserver(
+      forName: .navOSSCarPlayDestinationCatalogDidChange,
+      object: NavOSSCarPlayDestinationStore.shared,
+      queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        self?.placesTemplate?.updateSections(self?.destinationSections() ?? [])
+      }
+    }
     NavOSSCarPlayTripStore.shared.setConnected(true)
+    NavOSSNavigationService.shared.setCarPlayConnected(true)
     apply(NavOSSCarPlayTripStore.shared.snapshot())
   }
 
@@ -56,13 +75,28 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       NotificationCenter.default.removeObserver(stateObserver)
       self.stateObserver = nil
     }
+    if let destinationObserver {
+      NotificationCenter.default.removeObserver(destinationObserver)
+      self.destinationObserver = nil
+    }
+    routeRequestGeneration &+= 1
+    routeTask?.cancel()
+    routeTask = nil
+    searchRequestGeneration &+= 1
+    searchTask?.cancel()
+    searchTask = nil
     navigationSession?.finishTrip()
     navigationSession = nil
     activeManeuver = nil
     activeManeuverKey = nil
+    activeDestinationId = nil
     activeSystemTrip = nil
     activeTripId = nil
+    routeChoicesByIdentifier = [:]
+    searchDestinationsByIdentifier = [:]
+    placesTemplate = nil
     NavOSSCarPlayTripStore.shared.setConnected(false)
+    NavOSSNavigationService.shared.setCarPlayConnected(false)
     self.interfaceController = nil
     carWindow = nil
     mapTemplate = nil
@@ -76,10 +110,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     template.automaticallyHidesNavigationBar = true
     template.hidesButtonsWithNavigationBar = false
 
-    let placesButton = CPBarButton(type: .text) { [weak self] _ in
+    let placesButton = CPBarButton(title: "Places") { [weak self] _ in
       self?.showPlaces()
     }
-    placesButton.title = "Places"
     template.leadingNavigationBarButtons = [placesButton]
 
     let recenterButton = CPMapButton { [weak self] _ in
@@ -104,6 +137,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       navigationSession = nil
       activeManeuver = nil
       activeManeuverKey = nil
+      activeDestinationId = nil
       activeSystemTrip = nil
       activeTripId = nil
       mapViewController?.clearRoute()
@@ -113,14 +147,19 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     let activeGuidance = state.guidance?.phase == .navigating || state.guidance?.phase == .arrived
     mapViewController?.display(route: trip.geometry, activeGuidance: activeGuidance)
 
-    if activeTripId != trip.id || activeSystemTrip == nil {
+    if activeGuidance
+      && (activeDestinationId != trip.destination.id || activeSystemTrip == nil)
+    {
       navigationSession?.finishTrip()
       activeManeuver = nil
       activeManeuverKey = nil
       let systemTrip = makeSystemTrip(trip)
+      activeDestinationId = trip.destination.id
       activeSystemTrip = systemTrip
       activeTripId = trip.id
       navigationSession = mapTemplate?.startNavigationSession(for: systemTrip)
+    } else if activeGuidance {
+      activeTripId = trip.id
     }
 
     guard let guidance = state.guidance else {
@@ -134,10 +173,12 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   }
 
   private func makeSystemTrip(_ trip: NavOSSCarPlayTrip) -> CPTrip {
-    let originCoordinate = trip.geometry.first ?? NavOSSCarPlayCoordinate(
-      latitude: trip.destination.latitude,
-      longitude: trip.destination.longitude
-    )
+    let originCoordinate =
+      trip.geometry.first
+      ?? NavOSSCarPlayCoordinate(
+        latitude: trip.destination.latitude,
+        longitude: trip.destination.longitude
+      )
     let origin = MKMapItem(
       placemark: MKPlacemark(
         coordinate: CLLocationCoordinate2D(
@@ -157,7 +198,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     )
     destination.name = trip.destination.name
     let routeChoice = CPRouteChoice(
-      summaryVariants: [trip.steps.first(where: { !$0.roadName.isEmpty })?.roadName ?? "Fastest route"],
+      summaryVariants: [
+        trip.steps.first(where: { !$0.roadName.isEmpty })?.roadName ?? "Fastest route"
+      ],
       additionalInformationVariants: [
         "\(formatDuration(trip.durationSeconds)) · \(formatDistance(trip.distanceMeters))"
       ],
@@ -183,6 +226,10 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
     if guidance.phase == .arrived {
       navigationSession.pauseTrip(for: .arrived, description: "You've arrived")
+      navigationSession.finishTrip()
+      self.navigationSession = nil
+      activeManeuver = nil
+      activeManeuverKey = nil
       return
     }
 
@@ -190,7 +237,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       String(guidance.stepIndex),
       guidance.instruction,
       guidance.maneuverType,
-      guidance.roadName
+      guidance.roadName,
     ].joined(separator: "|")
     let maneuver: CPManeuver
     if let activeManeuver, activeManeuverKey == maneuverKey {
@@ -203,7 +250,8 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       maneuver.symbolImage = UIImage(systemName: maneuverSymbolName(guidance.maneuverType))
       if #available(iOS 17.4, *) {
         maneuver.maneuverType = maneuverType(guidance.maneuverType, guidance.instruction)
-        maneuver.roadFollowingManeuverVariants = guidance.roadName.isEmpty
+        maneuver.roadFollowingManeuverVariants =
+          guidance.roadName.isEmpty
           ? nil
           : [guidance.roadName]
         navigationSession.add([maneuver])
@@ -217,10 +265,12 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     )
     maneuver.initialTravelEstimates = maneuverEstimates
     if #available(iOS 17.4, *) {
-      navigationSession.currentRoadNameVariants = guidance.roadName.isEmpty
+      navigationSession.currentRoadNameVariants =
+        guidance.roadName.isEmpty
         ? []
         : [guidance.roadName]
-      navigationSession.maneuverState = guidance.distanceToManeuverMeters < 60
+      navigationSession.maneuverState =
+        guidance.distanceToManeuverMeters < 60
         ? .execute
         : guidance.distanceToManeuverMeters < 500
           ? .prepare
@@ -257,7 +307,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     if normalized.contains("right") { return "arrow.turn.up.right" }
     if normalized.contains("roundabout") { return "arrow.triangle.2.circlepath" }
     if normalized.contains("uturn") || normalized.contains("u-turn") { return "arrow.uturn.up" }
-    if normalized.contains("arrive") || normalized.contains("destination") { return "flag.checkered" }
+    if normalized.contains("arrive") || normalized.contains("destination") {
+      return "flag.checkered"
+    }
     return "arrow.up"
   }
 
@@ -291,7 +343,17 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     guard let interfaceController else {
       return
     }
+    NavOSSNavigationService.shared.prepareForCarPlayRoutePlanning()
 
+    let listTemplate = CPListTemplate(
+      title: "Choose a destination",
+      sections: destinationSections()
+    )
+    placesTemplate = listTemplate
+    interfaceController.pushTemplate(listTemplate, animated: true, completion: nil)
+  }
+
+  private func destinationSections() -> [CPListSection] {
     let catalog = NavOSSCarPlayDestinationStore.shared.snapshot()
     var sections: [CPListSection] = []
     let shortcuts = [
@@ -328,9 +390,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       self?.interfaceController?.pushTemplate(searchTemplate, animated: true, completion: nil)
     }
     sections.insert(CPListSection(items: [searchItem]), at: 0)
-
-    let listTemplate = CPListTemplate(title: "Choose a destination", sections: sections)
-    interfaceController.pushTemplate(listTemplate, animated: true, completion: nil)
+    return sections
   }
 
   private func destinationItem(
@@ -339,20 +399,21 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   ) -> CPListItem {
     let title = prefix.map { "\($0) · \(destination.name)" } ?? destination.name
     let item = CPListItem(text: title, detailText: destination.label)
+    item.userInfo = destination.id
     item.handler = { [weak self] _, completion in
       completion()
-      self?.showRoutingUnavailableAlert(destination: destination)
+      self?.loadRoutes(to: destination)
     }
     return item
   }
 
-  private func showRoutingUnavailableAlert(destination: NavOSSCarPlayDestination) {
+  private func showNavigationAlert(title: String, subtitle: String) {
     guard let mapTemplate else {
       return
     }
     let alert = CPNavigationAlert(
-      titleVariants: [destination.name],
-      subtitleVariants: ["CarPlay route loading will be enabled after native routing is connected."],
+      titleVariants: [title],
+      subtitleVariants: [subtitle],
       image: nil,
       primaryAction: CPAlertAction(title: "OK", style: .default) { _ in },
       secondaryAction: nil,
@@ -361,14 +422,105 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     mapTemplate.present(navigationAlert: alert, animated: true)
   }
 
+  private func loadRoutes(to destination: NavOSSCarPlayDestination) {
+    let state = NavOSSCarPlayTripStore.shared.snapshot()
+    if state.guidance?.phase == .navigating {
+      showNavigationAlert(
+        title: "Navigation in progress",
+        subtitle: "End the current trip before choosing another destination."
+      )
+      return
+    }
+    routeRequestGeneration &+= 1
+    let requestGeneration = routeRequestGeneration
+    routeTask?.cancel()
+    routeTask = nil
+    routeChoicesByIdentifier = [:]
+    mapTemplate?.hideTripPreviews()
+    mapViewController?.clearRoute()
+    NavOSSNavigationService.shared.prepareForCarPlayRoutePlanning()
+    guard let origin = NavOSSNavigationService.shared.currentCoordinate() else {
+      showNavigationAlert(
+        title: "Current location unavailable",
+        subtitle: "Wait for a GPS position, then try again."
+      )
+      return
+    }
+    showNavigationAlert(title: destination.name, subtitle: "Finding routes…")
+    routeTask = Task { [weak self] in
+      do {
+        let client = try NavOSSNavigationAPIClient()
+        let routes = try await client.routes(
+          origin: origin,
+          destination: destination,
+          preferences: NavOSSRoutePreferences(),
+          alternatives: 2
+        )
+        guard !Task.isCancelled, let self,
+          requestGeneration == self.routeRequestGeneration
+        else {
+          return
+        }
+        self.routeTask = nil
+        _ = await self.mapTemplate?.dismissNavigationAlert(animated: true)
+        guard !Task.isCancelled,
+          requestGeneration == self.routeRequestGeneration
+        else {
+          return
+        }
+        self.showRoutePreviews(routes)
+      } catch {
+        guard !Task.isCancelled, let self,
+          requestGeneration == self.routeRequestGeneration
+        else {
+          return
+        }
+        self.routeTask = nil
+        self.showNavigationAlert(
+          title: "Route unavailable",
+          subtitle: "Check your connection and try again."
+        )
+      }
+    }
+  }
+
+  private func showRoutePreviews(_ routes: [NavOSSCarPlayTrip]) {
+    guard let mapTemplate, !routes.isEmpty,
+      NavOSSCarPlayTripStore.shared.snapshot().guidance?.phase != .navigating
+    else {
+      return
+    }
+    routeChoicesByIdentifier = Dictionary(uniqueKeysWithValues: routes.map { ($0.id, $0) })
+    let systemTrips = routes.map(makeSystemTrip)
+    if let firstRoute = routes.first {
+      mapViewController?.display(route: firstRoute.geometry, activeGuidance: false)
+    }
+    mapTemplate.showTripPreviews(systemTrips, textConfiguration: nil)
+    interfaceController?.popToRootTemplate(animated: true, completion: nil)
+  }
+
+  func mapTemplate(
+    _ mapTemplate: CPMapTemplate,
+    selectedPreviewFor trip: CPTrip,
+    using routeChoice: CPRouteChoice
+  ) {
+    guard let identifier = routeChoice.userInfo as? String,
+      let route = routeChoicesByIdentifier[identifier]
+    else {
+      return
+    }
+    mapViewController?.display(route: route.geometry, activeGuidance: false)
+  }
+
   func mapTemplateDidCancelNavigation(_ mapTemplate: CPMapTemplate) {
     navigationSession?.cancelTrip()
     navigationSession = nil
     activeManeuver = nil
     activeManeuverKey = nil
+    activeDestinationId = nil
     activeSystemTrip = nil
     activeTripId = nil
-    NavOSSCarPlayTripStore.shared.endTripFromCarPlay()
+    NavOSSNavigationService.shared.endNavigationFromCarPlay()
   }
 
   func mapTemplate(
@@ -376,8 +528,29 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     startedTrip trip: CPTrip,
     using routeChoice: CPRouteChoice
   ) {
-    navigationSession = mapTemplate.startNavigationSession(for: trip)
-    apply(NavOSSCarPlayTripStore.shared.snapshot())
+    guard let identifier = routeChoice.userInfo as? String,
+      let route = routeChoicesByIdentifier[identifier]
+    else {
+      return
+    }
+    do {
+      routeRequestGeneration &+= 1
+      routeTask?.cancel()
+      routeTask = nil
+      activeDestinationId = route.destination.id
+      activeSystemTrip = trip
+      activeTripId = route.id
+      try NavOSSNavigationService.shared.startNavigation(route)
+      navigationSession = mapTemplate.startNavigationSession(for: trip)
+      routeChoicesByIdentifier = [:]
+      apply(NavOSSCarPlayTripStore.shared.snapshot())
+    } catch {
+      activeDestinationId = nil
+      activeSystemTrip = nil
+      activeTripId = nil
+      navigationSession = nil
+      showNavigationAlert(title: "Navigation unavailable", subtitle: "Try another route.")
+    }
   }
 
   func searchTemplate(
@@ -386,18 +559,57 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     completionHandler: @escaping ([CPListItem]) -> Void
   ) {
     let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    searchRequestGeneration &+= 1
+    let requestGeneration = searchRequestGeneration
+    searchTask?.cancel()
     guard query.count >= 2 else {
+      searchTask = nil
+      searchDestinationsByIdentifier = [:]
       completionHandler([])
       return
     }
-    let matches = NavOSSCarPlayDestinationStore.shared.snapshot().searchableDestinations
-      .filter { destination in
-        destination.name.localizedCaseInsensitiveContains(query) ||
-          destination.label.localizedCaseInsensitiveContains(query)
+    searchTask = Task { [weak self] in
+      let localMatches = NavOSSCarPlayDestinationStore.shared.snapshot().searchableDestinations
+        .filter { destination in
+          destination.name.localizedCaseInsensitiveContains(query)
+            || destination.label.localizedCaseInsensitiveContains(query)
+        }
+      do {
+        let client = try NavOSSNavigationAPIClient()
+        let remoteMatches = try await client.search(
+          query: query,
+          proximity: NavOSSNavigationService.shared.currentCoordinate()
+        )
+        let matches = Array(
+          (localMatches + remoteMatches).reduce(into: [String: NavOSSCarPlayDestination]()) {
+            $0[$1.id] = $1
+          }.values.prefix(8))
+        guard !Task.isCancelled, let self,
+          requestGeneration == self.searchRequestGeneration
+        else {
+          completionHandler([])
+          return
+        }
+        self.searchTask = nil
+        self.searchDestinationsByIdentifier = Dictionary(
+          uniqueKeysWithValues: matches.map { ($0.id, $0) }
+        )
+        completionHandler(matches.map { self.destinationItem($0) })
+      } catch {
+        let matches = Array(localMatches.prefix(8))
+        guard !Task.isCancelled, let self,
+          requestGeneration == self.searchRequestGeneration
+        else {
+          completionHandler([])
+          return
+        }
+        self.searchTask = nil
+        self.searchDestinationsByIdentifier = Dictionary(
+          uniqueKeysWithValues: matches.map { ($0.id, $0) }
+        )
+        completionHandler(matches.map { self.destinationItem($0) })
       }
-      .prefix(8)
-      .map { destinationItem($0) }
-    completionHandler(Array(matches))
+    }
   }
 
   func searchTemplate(
@@ -405,7 +617,13 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     selectedResult item: CPListItem,
     completionHandler: @escaping () -> Void
   ) {
-    interfaceController?.popToRootTemplate(animated: true, completion: nil)
+    guard let identifier = item.userInfo as? String,
+      let destination = searchDestinationsByIdentifier[identifier]
+    else {
+      completionHandler()
+      return
+    }
+    loadRoutes(to: destination)
     completionHandler()
   }
 }

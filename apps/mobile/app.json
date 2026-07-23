@@ -51,8 +51,10 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "NavOSS uses your precise location while the app is open to show your position, provide navigation, reroute, detect arrival, and warn about official safety cameras ahead.",
-          "isIosBackgroundLocationEnabled": false,
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "locationWhenInUsePermission": "NavOSS uses your precise location to show your position and provide active turn-by-turn navigation, including while your phone is locked or connected to CarPlay. Location is not retained after navigation ends.",
+          "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": false
         }
       ]

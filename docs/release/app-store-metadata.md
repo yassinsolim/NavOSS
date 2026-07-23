@@ -45,7 +45,7 @@ Suggested keywords, under Apple's 100-character limit:
 navigation,Calgary,maps,routing,GPS,safety cameras,directions,route planner,open source
 ```
 
-Do not add competitor names, “best,” parity claims, live traffic, CarPlay, lane guidance, background navigation, spoken maneuvers, offline routing, or exhaustive-search claims.
+Do not add competitor names, “best,” parity claims, live traffic, lane guidance, offline routing, or exhaustive-search claims. Mention CarPlay, background navigation, and spoken guidance only for a build that includes and validates those capabilities.
 
 ## Public App Store description
 
@@ -53,13 +53,13 @@ This copy is a future public-listing draft, not approval to submit the current t
 
 > NavOSS helps you search for Calgary places and plan driving routes without creating an account.
 >
-> Search, tap a named map place, or long-press the map to choose a destination. Tapped places can show available OpenStreetMap address, hours, phone, website, and accessibility details. Compare route choices, avoid highways when needed, and follow foreground route progress with automatic rerouting and arrival detection. NavOSS also displays fixed intersection safety cameras from the official City of Calgary open dataset and provides direction-aware route-ahead notices.
+> Search, tap a named map place, or long-press the map to choose a destination. Tapped places can show available OpenStreetMap address, hours, phone, website, and accessibility details. Compare route choices, avoid highways when needed, and follow turn-by-turn guidance with spoken maneuvers, background continuation, automatic rerouting, arrival detection, and CarPlay. NavOSS also displays fixed intersection safety cameras from the official City of Calgary open dataset and provides direction-aware route-ahead notices.
 
 > During active guidance, the map defaults to matched-road heading-up navigation so the road ahead stays at the top. Drivers can switch to north-up using the compass and can share a static ETA through the system share sheet without giving NavOSS access to Contacts. Map style, tilt, visible places/buildings/transit/cameras, and route color can be customized and are stored only on the device.
 >
 > NavOSS is open source and built on OpenStreetMap-derived map, search, and routing data. Attribution and data-source details are available in the app and on the NavOSS website.
 >
-> Current coverage is Calgary, Alberta. This version does not include live traffic, background navigation, spoken maneuver instructions, lane guidance, CarPlay, or offline routing. Data and alerts may be incomplete or outdated. Always follow posted signs, road closures, and applicable laws.
+> Current coverage is Calgary, Alberta. This version does not include live traffic, lane guidance, or offline routing. Data and alerts may be incomplete or outdated. Always follow posted signs, road closures, and applicable laws.
 
 Do not use “beta,” “alpha,” “technical preview,” “test,” or “have a passenger report bugs” in the public description. If the shipped public product still requires foreground, screen-on use, state that limitation plainly rather than implying background turn-by-turn navigation.
 
@@ -67,9 +67,9 @@ Do not use “beta,” “alpha,” “technical preview,” “test,” or “h
 
 Beta language belongs here, not in a public App Store listing:
 
-> NavOSS is an account-free Calgary navigation technical beta. It provides tappable OpenStreetMap place details, Calgary place search, long-press dropped-pin routing, fastest-first route choices, avoid-highways routing, foreground GPS progress, static system-sheet ETA sharing, automatic rerouting, arrival detection, and official City of Calgary safety-camera markers and route-ahead notices.
+> NavOSS is an account-free Calgary navigation technical beta. It provides tappable OpenStreetMap place details, Calgary place search, long-press dropped-pin routing, fastest-first route choices, avoid-highways routing, spoken turn-by-turn guidance, locked-phone background continuation, CarPlay search and navigation, static system-sheet ETA sharing, automatic rerouting, arrival detection, and official City of Calgary safety-camera markers and route-ahead notices.
 >
-> This build has no live traffic and does not provide background or spoken turn-by-turn guidance. Keep the app visible during a test trip and have a passenger operate it. Do not rely on this beta as the only navigation, road-closure, traffic, or safety source.
+> This build has no live traffic, lane guidance, or offline routing. Keep the phone mounted and have a passenger operate controls while moving. Do not rely on this beta as the only navigation, road-closure, traffic, or safety source.
 
 ## What to Test
 
@@ -108,9 +108,9 @@ Do not paste this template into App Store Connect until the production build and
 >
 > To review search, tap Search Calgary, enter “Calgary Tower,” and select the result. To review routing from outside Calgary, [insert exact manual-origin or visible route-preview steps and labels]. The route preview shows distance, estimated time, route geometry, and the Avoid highways preference. Physical GPS progress, rerouting, arrival, and route-ahead camera notices require movement along the selected Calgary route.
 >
-> The app requests precise location only while open. It uses location for map position, route origin, route matching, rerouting, arrival detection, and direction-aware official safety-camera notices. It does not request background location. Search and map browsing remain available when location is denied; current-position routing and active navigation do not.
+> The app requests When in Use precise location for map position, route origin, route matching, rerouting, arrival detection, and direction-aware official safety-camera notices. After the user starts navigation, updates continue while the phone is locked or another app is visible, and iOS shows its background-location indicator. Updates stop on End or confirmed arrival. NavOSS never requests Always location. Search and map browsing remain available when location is denied; current-position routing and active navigation do not.
 >
-> NavOSS has no live traffic, background navigation, spoken maneuver guidance, lane guidance, CarPlay, advertising, analytics, tracking, account system, or in-app purchases. Search and route payloads are processed for each response and then discarded. Routine HTTP access logging is disabled; NavOSS operational/security logs retain no more than seven days and exclude request bodies. Cloudflare and OpenFreeMap practices are linked from the privacy policy.
+> NavOSS has no live traffic, lane guidance, advertising, analytics, tracking, account system, or in-app purchases. This dedicated build includes spoken maneuver guidance and CarPlay search, route preview, and navigation using Apple's navigation templates. Search and route payloads are processed for each response and then discarded. Routine HTTP access logging is disabled; NavOSS operational/security logs retain no more than seven days and exclude request bodies. Cloudflare and OpenFreeMap practices are linked from the privacy policy.
 >
 > Fixed camera records come from the Calgary Police Service Intersection Safety Cameras dataset published through Calgary Open Data. Notices are informational, direction-filtered, and supplementary to posted signs and laws. Map/search/routing data is OpenStreetMap-derived with visible attribution.
 >
@@ -146,12 +146,12 @@ The generated app privacy manifest currently declares no collected data and no t
 
 Current iOS purpose string:
 
-> NavOSS uses your precise location while the app is open to show your position, provide navigation, reroute, detect arrival, and warn about official safety cameras ahead.
+> NavOSS uses your precise location to show your position and provide active turn-by-turn navigation, including while your phone is locked or connected to CarPlay. Location is not retained after navigation ends.
 
 Before upload, confirm the signed archive has:
 
-- foreground When In Use location only;
-- no background location usage description or background location mode;
+- When in Use authorization with no Always location usage description;
+- `UIBackgroundModes` containing only `location` for active navigation;
 - no unrelated permission strings;
 - no Contacts usage description or Contacts authorization request;
 - permission requested only when the user invokes location-dependent functionality; and

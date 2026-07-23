@@ -80,7 +80,6 @@ import {
   RoutePreviewPanel,
   SafetyCameraAlertBanner,
 } from '@/features/navigation/route-panels';
-import { RerouteGate } from '@/features/navigation/reroute-gate';
 import {
   buildEtaShareMessage,
   findNearestStepIndex,
@@ -96,17 +95,17 @@ import {
 import {
   announceSafetyCamera,
   clearCarPlayTrip,
+  clearRecentDestinations,
   clearNavigationRoute,
+  getNavigationSnapshot,
   getCarPlayState,
   type NativeNavigationSnapshot,
   observeCarPlayNavigationEnded,
   observeCarPlayState,
   observeNavigationSnapshots,
-  publishCarPlayGuidance,
   recordRecentDestination,
   setNavigationRoute,
   stopNavigationAnnouncements,
-  updateNavigationLocation,
 } from '@/features/navigation/native-navigation';
 import {
   navigationCameraBearing,
@@ -127,7 +126,6 @@ import {
 } from '@/lib/api';
 
 const CALGARY_CENTER: [longitude: number, latitude: number] = [-114.0719, 51.0447];
-const REROUTE_RETRY_COOLDOWN_MS = 10_000;
 const EMPTY_FEATURE_COLLECTION: FeatureCollection<Point> = {
   features: [],
   type: 'FeatureCollection',
@@ -255,11 +253,10 @@ export function MapScreen() {
   const mapRef = useRef<MapRef>(null);
   const announcedCameraIdsRef = useRef(new Set<string>());
   const cameraAlertTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const rerouteGateRef = useRef(new RerouteGate(REROUTE_RETRY_COOLDOWN_MS));
   const routeAbortControllerRef = useRef<AbortController>(null);
+  const nativeStateVersionRef = useRef(-1);
   const placeAbortControllerRef = useRef<AbortController>(null);
   const placeInteractionRef = useRef(0);
-  const rerouteAbortControllerRef = useRef<AbortController>(null);
   const safetyCamerasRef = useRef<readonly SafetyCamera[]>([]);
   const [apiConnection, setApiConnection] = useState<ApiConnectionState>('connecting');
   const [coverageName, setCoverageName] = useState('Calgary alpha');
@@ -438,13 +435,82 @@ export function MapScreen() {
       if (cameraAlertTimeoutRef.current !== undefined) {
         clearTimeout(cameraAlertTimeoutRef.current);
       }
-      clearCarPlayTrip();
       stopNavigationAnnouncements();
-      rerouteGateRef.current.resetSession();
       routeAbortControllerRef.current?.abort();
       placeInteractionRef.current += 1;
       placeAbortControllerRef.current?.abort();
-      rerouteAbortControllerRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    const applyNativeSnapshot = (snapshot: NativeNavigationSnapshot) => {
+      if (snapshot.stateVersion < nativeStateVersionRef.current) {
+        return;
+      }
+      nativeStateVersionRef.current = snapshot.stateVersion;
+      setNavigationSnapshot(snapshot);
+      setNavigationRouteStatus(snapshot.routeStatus);
+      setRerouteCount(snapshot.rerouteCount);
+      if (snapshot.rawCoordinate !== undefined) {
+        setUserCoordinate(snapshot.rawCoordinate);
+      }
+      if (snapshot.matchedCourseDegrees !== undefined) {
+        setUserHeading(snapshot.matchedCourseDegrees);
+      }
+      setNavigationStepIndex(snapshot.guidance?.stepIndex ?? 0);
+      if (snapshot.trip === undefined) {
+        setRouteState((current) =>
+          current.type === 'navigating' || current.type === 'arrived' ? { type: 'idle' } : current,
+        );
+        return;
+      }
+      const route: RouteAlternative = {
+        distanceMeters: snapshot.trip.distanceMeters,
+        durationSeconds: snapshot.trip.durationSeconds,
+        geometry: snapshot.trip.geometry.map(({ latitude, longitude }) => [longitude, latitude]),
+        id: snapshot.trip.id,
+        label: 'fastest',
+        steps: snapshot.trip.steps.map((step) => ({
+          distanceMeters: step.distanceMeters,
+          durationSeconds: step.durationSeconds,
+          geometry: step.geometry.map(({ latitude, longitude }) => [longitude, latitude]),
+          instruction: step.instruction,
+          maneuverType: step.maneuverType,
+          roadName: step.roadName,
+          ...(step.spokenInstruction === undefined
+            ? {}
+            : { spokenInstruction: step.spokenInstruction }),
+        })),
+      };
+      const destination: SearchResult = {
+        category: 'landmark',
+        center: {
+          latitude: snapshot.trip.destination.latitude,
+          longitude: snapshot.trip.destination.longitude,
+        },
+        confidence: 1,
+        id: snapshot.trip.destination.id,
+        label: snapshot.trip.destination.label,
+        name: snapshot.trip.destination.name,
+      };
+      setRoutePreferences(snapshot.trip.preferences);
+      setRouteState((current) => {
+        if (
+          current.type === 'navigating' &&
+          current.route.id === route.id &&
+          snapshot.phase !== 'arrived'
+        ) {
+          return current;
+        }
+        return snapshot.phase === 'arrived'
+          ? { destination, route, routes: [route], type: 'arrived' }
+          : { destination, route, routes: [route], type: 'navigating' };
+      });
+    };
+    const subscription = observeNavigationSnapshots(applyNativeSnapshot);
+    applyNativeSnapshot(getNavigationSnapshot());
+    return () => {
+      subscription.remove();
     };
   }, []);
 
@@ -454,163 +520,48 @@ export function MapScreen() {
     }
 
     const route = routeState.route;
-    let cancelled = false;
-    let subscription: Location.LocationSubscription | undefined;
-    const nativeSubscription = observeNavigationSnapshots(setNavigationSnapshot);
-    const rerouteGate = rerouteGateRef.current;
-
-    setNavigationRouteStatus('tracking');
-    setNavigationSnapshot(setNavigationRoute(route, routeState.destination));
-
-    void Location.watchPositionAsync(
-      {
-        accuracy: Location.Accuracy.BestForNavigation,
-        distanceInterval: 5,
-      },
-      (location) => {
-        const coordinate = {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        };
-        setUserCoordinate(coordinate);
-        const courseDegrees =
-          location.coords.speed !== null &&
-          location.coords.speed >= 2 &&
-          location.coords.heading !== null &&
-          location.coords.heading >= 0 &&
-          location.coords.heading < 360
-            ? location.coords.heading
-            : undefined;
-        const snapshot = updateNavigationLocation(
-          coordinate,
-          location.coords.accuracy ?? undefined,
-          courseDegrees,
-        );
-        setNavigationSnapshot(snapshot);
-        setUserHeading(
-          (currentHeading) => snapshot.matchedCourseDegrees ?? courseDegrees ?? currentHeading,
-        );
-        const progressCoordinate = snapshot.matchedCoordinate ?? coordinate;
-        setNavigationStepIndex((currentStep) =>
-          Math.max(currentStep, findNearestStepIndex(route, progressCoordinate)),
-        );
-
-        if (snapshot.phase === 'arrived') {
-          if (cameraAlertTimeoutRef.current !== undefined) {
-            clearTimeout(cameraAlertTimeoutRef.current);
-          }
-          setSafetyCameraAlert(undefined);
-          stopNavigationAnnouncements();
-          rerouteAbortControllerRef.current?.abort();
-          rerouteAbortControllerRef.current = null;
-          rerouteGate.resetSession();
-          setNavigationStepIndex(Math.max(0, route.steps.length - 1));
-          setRouteState({
-            destination: routeState.destination,
-            route,
-            routes: routeState.routes,
-            type: 'arrived',
-          });
-          return;
+    const handleSnapshot = (snapshot: NativeNavigationSnapshot) => {
+      if (snapshot.phase === 'arrived') {
+        if (cameraAlertTimeoutRef.current !== undefined) {
+          clearTimeout(cameraAlertTimeoutRef.current);
         }
-
-        if (!snapshot.isOffRoute) {
-          const upcomingCamera = findUpcomingSafetyCamera(
-            safetyCamerasRef.current,
-            route,
-            snapshot.routeProgress,
-            announcedCameraIdsRef.current,
-          );
-          if (upcomingCamera !== undefined) {
-            announcedCameraIdsRef.current.add(upcomingCamera.camera.id);
-            setCameraAnnouncementCount((currentCount) => currentCount + 1);
-            setSafetyCameraAlert(upcomingCamera);
-            announceSafetyCamera();
-            if (cameraAlertTimeoutRef.current !== undefined) {
-              clearTimeout(cameraAlertTimeoutRef.current);
-            }
-            cameraAlertTimeoutRef.current = setTimeout(() => {
-              setSafetyCameraAlert(undefined);
-              cameraAlertTimeoutRef.current = undefined;
-            }, 6_000);
-          }
-
-          rerouteAbortControllerRef.current?.abort();
-          rerouteAbortControllerRef.current = null;
-          rerouteGate.completeRequest();
-          setNavigationRouteStatus('tracking');
-          return;
-        }
-
-        if (!rerouteGate.shouldRequest(true)) {
-          return;
-        }
-
-        const controller = new AbortController();
-        rerouteAbortControllerRef.current = controller;
-        setNavigationRouteStatus('rerouting');
-
-        void fetchRoutes(
-          {
-            alternatives: 1,
-            destination: routeState.destination.center,
-            origin: coordinate,
-            preferences: routePreferences,
-          },
-          { signal: controller.signal },
-        )
-          .then((response) => {
-            const replacementRoute = response.routes[0];
-            if (cancelled || controller.signal.aborted || replacementRoute === undefined) {
-              return;
-            }
-
-            setApiConnection('online');
-            setNavigationRouteStatus('tracking');
-            setNavigationStepIndex(0);
-            setRerouteCount((currentCount) => currentCount + 1);
-            setIsNavigationCameraFollowing(true);
-            setNavigationSnapshot(undefined);
-            setRouteTrafficStatus(response.source.traffic);
-            setRouteState({
-              destination: routeState.destination,
-              route: replacementRoute,
-              routes: response.routes,
-              type: 'navigating',
-            });
-          })
-          .catch(() => {
-            if (!cancelled && !controller.signal.aborted) {
-              setNavigationRouteStatus('reroute-failed');
-            }
-          })
-          .finally(() => {
-            if (rerouteAbortControllerRef.current === controller) {
-              rerouteAbortControllerRef.current = null;
-              rerouteGate.completeRequest();
-            }
-          });
-      },
-    ).then((locationSubscription) => {
-      if (cancelled) {
-        locationSubscription.remove();
+        setSafetyCameraAlert(undefined);
+        setNavigationStepIndex(Math.max(0, route.steps.length - 1));
+        setRouteState({
+          destination: routeState.destination,
+          route,
+          routes: routeState.routes,
+          type: 'arrived',
+        });
         return;
       }
 
-      subscription = locationSubscription;
-    });
-
-    return () => {
-      cancelled = true;
-      rerouteAbortControllerRef.current?.abort();
-      rerouteAbortControllerRef.current = null;
-      rerouteGate.completeRequest();
-      subscription?.remove();
-      nativeSubscription.remove();
-      clearNavigationRoute();
-      setNavigationSnapshot(undefined);
+      if (!snapshot.isOffRoute && snapshot.rawCoordinate !== undefined) {
+        const upcomingCamera = findUpcomingSafetyCamera(
+          safetyCamerasRef.current,
+          route,
+          snapshot.routeProgress,
+          announcedCameraIdsRef.current,
+        );
+        if (upcomingCamera !== undefined) {
+          announcedCameraIdsRef.current.add(upcomingCamera.camera.id);
+          setCameraAnnouncementCount((currentCount) => currentCount + 1);
+          setSafetyCameraAlert(upcomingCamera);
+          announceSafetyCamera();
+          if (cameraAlertTimeoutRef.current !== undefined) {
+            clearTimeout(cameraAlertTimeoutRef.current);
+          }
+          cameraAlertTimeoutRef.current = setTimeout(() => {
+            setSafetyCameraAlert(undefined);
+            cameraAlertTimeoutRef.current = undefined;
+          }, 6_000);
+        }
+      }
     };
-  }, [routePreferences, routeState]);
+    if (navigationSnapshot !== undefined) {
+      handleSnapshot(navigationSnapshot);
+    }
+  }, [navigationSnapshot, routeState]);
 
   const fitRoute = (route: RouteAlternative) => {
     cameraRef.current?.fitBounds(routeBounds(route), {
@@ -738,9 +689,6 @@ export function MapScreen() {
     stopNavigationAnnouncements();
     invalidatePlaceInteraction();
     routeAbortControllerRef.current?.abort();
-    rerouteAbortControllerRef.current?.abort();
-    rerouteAbortControllerRef.current = null;
-    rerouteGateRef.current.resetSession();
     setIsNavigationCameraFollowing(true);
     setQuery('');
     setResults([]);
@@ -916,9 +864,6 @@ export function MapScreen() {
     setCameraAnnouncementCount(0);
     stopNavigationAnnouncements();
     routeAbortControllerRef.current?.abort();
-    rerouteAbortControllerRef.current?.abort();
-    rerouteAbortControllerRef.current = null;
-    rerouteGateRef.current.resetSession();
     setIsNavigationCameraFollowing(true);
     setRouteState({ type: 'idle' });
     setSelectedResult(undefined);
@@ -1031,7 +976,9 @@ export function MapScreen() {
     setNavigationRouteStatus('tracking');
     setRerouteCount(0);
     setIsNavigationCameraFollowing(true);
-    rerouteGateRef.current.resetSession();
+    const snapshot = setNavigationRoute(selectedRoute, routeState.destination, routePreferences);
+    nativeStateVersionRef.current = Math.max(nativeStateVersionRef.current, snapshot.stateVersion);
+    setNavigationSnapshot(snapshot);
     setRouteState({
       destination: routeState.destination,
       route: selectedRoute,
@@ -1068,9 +1015,6 @@ export function MapScreen() {
     setCameraAnnouncementCount(0);
     clearCarPlayTrip();
     stopNavigationAnnouncements();
-    rerouteAbortControllerRef.current?.abort();
-    rerouteAbortControllerRef.current = null;
-    rerouteGateRef.current.resetSession();
     setNavigationStepIndex(0);
     setNavigationRouteStatus('tracking');
     setRerouteCount(0);
@@ -1100,7 +1044,6 @@ export function MapScreen() {
     setCameraAnnouncementCount(0);
     clearCarPlayTrip();
     stopNavigationAnnouncements();
-    rerouteGateRef.current.resetSession();
     setNavigationStepIndex(0);
     setNavigationRouteStatus('tracking');
     setRerouteCount(0);
@@ -1131,43 +1074,6 @@ export function MapScreen() {
       endedSubscription.remove();
     };
   }, []);
-
-  useEffect(() => {
-    if (
-      routeState.type === 'navigating' &&
-      guidanceStep !== undefined &&
-      remainingRoute !== undefined &&
-      remainingStep !== undefined
-    ) {
-      publishCarPlayGuidance({
-        distanceToManeuverMeters: remainingStep.distanceMeters,
-        durationToManeuverSeconds: remainingStep.durationSeconds,
-        instruction: guidanceStep.instruction,
-        maneuverType: guidanceStep.maneuverType,
-        phase: 'navigating',
-        remainingDistanceMeters: remainingRoute.distanceMeters,
-        remainingDurationSeconds: remainingRoute.durationSeconds,
-        roadName: guidanceStep.roadName,
-        stepIndex: navigationStepIndex,
-      });
-      return;
-    }
-
-    if (routeState.type === 'arrived') {
-      const arrivalStep = routeState.route.steps.at(-1);
-      publishCarPlayGuidance({
-        distanceToManeuverMeters: 0,
-        durationToManeuverSeconds: 0,
-        instruction: arrivalStep?.instruction ?? `Arrive at ${routeState.destination.name}`,
-        maneuverType: arrivalStep?.maneuverType ?? 'arrive',
-        phase: 'arrived',
-        remainingDistanceMeters: 0,
-        remainingDurationSeconds: 0,
-        roadName: arrivalStep?.roadName ?? '',
-        stepIndex: Math.max(0, routeState.route.steps.length - 1),
-      });
-    }
-  }, [guidanceStep, navigationStepIndex, remainingRoute, remainingStep, routeState]);
 
   const placeSheetVisible = routeState.type === 'idle' && selectedResult !== undefined;
   const placeDetailRowCount =
@@ -1539,6 +1445,7 @@ export function MapScreen() {
             maximumResultsHeight={resultsHeight}
             onChangeQuery={handleChangeQuery}
             onClear={handleClear}
+            onClearRecentDestinations={clearRecentDestinations}
             onSelectResult={handleSelectResult}
             onSubmit={handleSubmit}
             query={query}

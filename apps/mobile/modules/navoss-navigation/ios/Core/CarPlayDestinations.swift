@@ -1,5 +1,11 @@
 import Foundation
 
+extension Notification.Name {
+  public static let navOSSCarPlayDestinationCatalogDidChange = Notification.Name(
+    "org.navoss.mobile.carplay-destination-catalog-did-change"
+  )
+}
+
 public struct NavOSSCarPlayDestination: Codable, Equatable, Sendable {
   public let id: String
   public let label: String
@@ -16,8 +22,8 @@ public struct NavOSSCarPlayDestination: Codable, Equatable, Sendable {
   }
 
   var isValid: Bool {
-    !id.isEmpty && !name.isEmpty && latitude.isFinite && longitude.isFinite &&
-      (-90...90).contains(latitude) && (-180...180).contains(longitude)
+    !id.isEmpty && !name.isEmpty && latitude.isFinite && longitude.isFinite
+      && (-90...90).contains(latitude) && (-180...180).contains(longitude)
   }
 }
 
@@ -62,13 +68,16 @@ public final class NavOSSCarPlayDestinationStore: @unchecked Sendable {
   private let key: String
   private let lock = NSLock()
   private let maximumRecentCount = 12
+  private let notificationCenter: NotificationCenter
 
   public init(
     defaults: UserDefaults = .standard,
-    key: String = "org.navoss.mobile.carplay-destinations.v1"
+    key: String = "org.navoss.mobile.carplay-destinations.v1",
+    notificationCenter: NotificationCenter = .default
   ) {
     self.defaults = defaults
     self.key = key
+    self.notificationCenter = notificationCenter
   }
 
   public func recordRecent(_ destination: NavOSSCarPlayDestination) {
@@ -77,20 +86,26 @@ public final class NavOSSCarPlayDestinationStore: @unchecked Sendable {
     }
 
     lock.lock()
-    defer { lock.unlock() }
     var catalog = readCatalog()
     catalog.recents.removeAll { $0.id == destination.id }
     catalog.recents.insert(destination, at: 0)
     catalog.recents = Array(catalog.recents.prefix(maximumRecentCount))
     writeCatalog(catalog)
+    lock.unlock()
+    notifyCatalogChanged()
+  }
+
+  public func clearRecents() {
+    updateCatalog { $0.recents = [] }
   }
 
   public func replaceFavorites(_ favorites: [NavOSSCarPlayDestination]) {
     lock.lock()
-    defer { lock.unlock() }
     var catalog = readCatalog()
     catalog.favorites = Array(favorites.filter(\.isValid).prefix(20))
     writeCatalog(catalog)
+    lock.unlock()
+    notifyCatalogChanged()
   }
 
   public func setHome(_ destination: NavOSSCarPlayDestination?) {
@@ -109,7 +124,7 @@ public final class NavOSSCarPlayDestinationStore: @unchecked Sendable {
 
   private func readCatalog() -> NavOSSCarPlayDestinationCatalog {
     guard let data = defaults.data(forKey: key),
-          let catalog = try? JSONDecoder().decode(NavOSSCarPlayDestinationCatalog.self, from: data)
+      let catalog = try? JSONDecoder().decode(NavOSSCarPlayDestinationCatalog.self, from: data)
     else {
       return NavOSSCarPlayDestinationCatalog()
     }
@@ -118,10 +133,15 @@ public final class NavOSSCarPlayDestinationStore: @unchecked Sendable {
 
   private func updateCatalog(_ update: (inout NavOSSCarPlayDestinationCatalog) -> Void) {
     lock.lock()
-    defer { lock.unlock() }
     var catalog = readCatalog()
     update(&catalog)
     writeCatalog(catalog)
+    lock.unlock()
+    notifyCatalogChanged()
+  }
+
+  private func notifyCatalogChanged() {
+    notificationCenter.post(name: .navOSSCarPlayDestinationCatalogDidChange, object: self)
   }
 
   private func writeCatalog(_ catalog: NavOSSCarPlayDestinationCatalog) {

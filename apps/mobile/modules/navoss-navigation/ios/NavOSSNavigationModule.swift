@@ -1,4 +1,3 @@
-import AVFoundation
 import ExpoModulesCore
 
 private let navigationSnapshotEvent = "onNavigationSnapshot"
@@ -85,6 +84,9 @@ private struct CarPlayRouteStepRecord: Record {
   @Field
   var roadName: String = ""
 
+  @Field
+  var spokenInstruction: String?
+
   var step: NavOSSCarPlayRouteStep {
     NavOSSCarPlayRouteStep(
       distanceMeters: distanceMeters,
@@ -97,7 +99,31 @@ private struct CarPlayRouteStepRecord: Record {
       },
       instruction: instruction,
       maneuverType: maneuverType,
-      roadName: roadName
+      roadName: roadName,
+      spokenInstruction: spokenInstruction
+    )
+  }
+}
+
+private struct RoutePreferencesRecord: Record {
+  @Field
+  var avoidFerries: Bool = false
+
+  @Field
+  var avoidHighways: Bool = false
+
+  @Field
+  var avoidTolls: Bool = false
+
+  @Field
+  var avoidUnpaved: Bool = false
+
+  var preferences: NavOSSRoutePreferences {
+    NavOSSRoutePreferences(
+      avoidFerries: avoidFerries,
+      avoidHighways: avoidHighways,
+      avoidTolls: avoidTolls,
+      avoidUnpaved: avoidUnpaved
     )
   }
 }
@@ -119,6 +145,9 @@ private struct CarPlayTripRecord: Record {
   var id: String = ""
 
   @Field
+  var preferences: RoutePreferencesRecord = RoutePreferencesRecord()
+
+  @Field
   var steps: [CarPlayRouteStepRecord] = []
 
   var trip: NavOSSCarPlayTrip {
@@ -133,6 +162,7 @@ private struct CarPlayTripRecord: Record {
         )
       },
       id: id,
+      preferences: preferences.preferences,
       steps: steps.map(\.step)
     )
   }
@@ -187,8 +217,8 @@ private struct CarPlayGuidanceRecord: Record {
 public final class NavOSSNavigationModule: Module {
   private var carPlayNavigationEndedObserver: NSObjectProtocol?
   private var carPlayStateObserver: NSObjectProtocol?
-  private let core = NavigationCore()
-  private let speechSynthesizer = AVSpeechSynthesizer()
+  private var navigationSnapshotObserver: NSObjectProtocol?
+  private let service = NavOSSNavigationService.shared
 
   public func definition() -> ModuleDefinition {
     Name("NavOSSNavigation")
@@ -210,6 +240,16 @@ public final class NavOSSNavigationModule: Module {
       ) { [weak self] _ in
         self?.sendEvent(carPlayNavigationEndedEvent, ["reason": "carplay"])
       }
+      self.navigationSnapshotObserver = NotificationCenter.default.addObserver(
+        forName: .navOSSNavigationSnapshotDidChange,
+        object: self.service,
+        queue: .main
+      ) { [weak self] _ in
+        guard let self else {
+          return
+        }
+        self.sendEvent(navigationSnapshotEvent, self.serialize(self.service.currentState()))
+      }
     }
 
     OnDestroy {
@@ -221,12 +261,16 @@ public final class NavOSSNavigationModule: Module {
         NotificationCenter.default.removeObserver(carPlayStateObserver)
         self.carPlayStateObserver = nil
       }
+      if let navigationSnapshotObserver = self.navigationSnapshotObserver {
+        NotificationCenter.default.removeObserver(navigationSnapshotObserver)
+        self.navigationSnapshotObserver = nil
+      }
     }
 
     Function("getCapabilities") { () -> [String: Any] in
       return [
         "arrivalDetection": true,
-        "backgroundLocation": false,
+        "backgroundLocation": self.service.backgroundLocationEnabled,
         "carPlayTripBridge": true,
         "courseMatching": true,
         "implementation": "native-ios",
@@ -235,35 +279,40 @@ public final class NavOSSNavigationModule: Module {
         "routeContinuity": true,
         "routeMatching": true,
         "safetyCameraAnnouncements": true,
-        "version": 7
+        "version": 8,
       ]
     }
 
     Function("getSnapshot") { () -> [String: Any] in
-      return self.serialize(self.core.currentSnapshot())
+      return self.serialize(self.service.currentState())
     }
 
     Function("getCarPlayState") { () -> [String: Any] in
       return self.serialize(NavOSSCarPlayTripStore.shared.snapshot())
     }
 
-    Function("setRoute") { (geometry: [NavigationCoordinateRecord]) throws -> [String: Any] in
-      let snapshot = try self.core.setRoute(geometry.map(\.coordinate))
-      return self.emit(snapshot)
+    Function("setRoute") { (trip: CarPlayTripRecord) throws -> [String: Any] in
+      try self.service.startNavigation(trip.trip)
+      return self.serialize(self.service.currentState())
     }
 
     Function("clearRoute") { () -> [String: Any] in
-      return self.emit(self.core.clearRoute())
+      self.service.clearNavigation()
+      return self.serialize(self.service.currentState())
     }
 
     Function("updateLocation") {
       (location: NavigationLocationRecord) throws -> [String: Any] in
-      let snapshot = try self.core.updateLocation(location.sample)
-      return self.emit(snapshot)
+      _ = try self.service.ingest(location.sample)
+      return self.serialize(self.service.currentState())
     }
 
     Function("recordRecentDestination") { (destination: NavigationDestinationRecord) in
       NavOSSCarPlayDestinationStore.shared.recordRecent(destination.destination)
+    }
+
+    Function("clearRecentDestinations") { () in
+      NavOSSCarPlayDestinationStore.shared.clearRecents()
     }
 
     Function("setHomeDestination") { (destination: NavigationDestinationRecord?) in
@@ -278,45 +327,17 @@ public final class NavOSSNavigationModule: Module {
       NavOSSCarPlayDestinationStore.shared.replaceFavorites(destinations.map(\.destination))
     }
 
-    Function("publishCarPlayTrip") { (trip: CarPlayTripRecord) in
-      NavOSSCarPlayTripStore.shared.publishTrip(trip.trip)
-    }
-
-    Function("publishCarPlayGuidance") { (guidance: CarPlayGuidanceRecord) in
-      guard let guidance = guidance.guidance else {
-        return
-      }
-      NavOSSCarPlayTripStore.shared.publishGuidance(guidance)
-    }
-
     Function("clearCarPlayTrip") { () in
-      NavOSSCarPlayTripStore.shared.clearTrip()
+      self.service.clearNavigation()
     }
 
     Function("announceSafetyCamera") { () in
-      DispatchQueue.main.async {
-        guard !self.speechSynthesizer.isSpeaking else {
-          return
-        }
-
-        let utterance = AVSpeechUtterance(string: "Red light and speed camera ahead.")
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-CA")
-        self.speechSynthesizer.speak(utterance)
-      }
+      self.service.announceSafetyCamera()
     }
 
     Function("stopAnnouncements") { () in
-      DispatchQueue.main.async {
-        self.speechSynthesizer.stopSpeaking(at: .immediate)
-      }
+      self.service.stopAnnouncements()
     }
-  }
-
-  private func emit(_ snapshot: NavigationSnapshot) -> [String: Any] {
-    let payload = serialize(snapshot)
-    sendEvent(navigationSnapshotEvent, payload)
-    return payload
   }
 
   private func emitCarPlayState() {
@@ -326,31 +347,25 @@ public final class NavOSSNavigationModule: Module {
   private func serialize(_ state: NavOSSCarPlayState) -> [String: Any] {
     var payload: [String: Any] = [
       "connected": state.connected,
-      "hasActiveTrip": state.trip != nil
+      "hasActiveTrip": state.trip != nil,
     ]
     if let guidance = state.guidance {
-      payload["guidance"] = [
-        "distanceToManeuverMeters": guidance.distanceToManeuverMeters,
-        "durationToManeuverSeconds": guidance.durationToManeuverSeconds,
-        "instruction": guidance.instruction,
-        "maneuverType": guidance.maneuverType,
-        "phase": guidance.phase.rawValue,
-        "remainingDistanceMeters": guidance.remainingDistanceMeters,
-        "remainingDurationSeconds": guidance.remainingDurationSeconds,
-        "roadName": guidance.roadName,
-        "stepIndex": guidance.stepIndex
-      ]
+      payload["guidance"] = serialize(guidance)
     }
     return payload
   }
 
-  private func serialize(_ snapshot: NavigationSnapshot) -> [String: Any] {
+  private func serialize(_ state: NavOSSNavigationServiceState) -> [String: Any] {
+    let snapshot = state.navigation
     var payload: [String: Any] = [
       "isOffRoute": snapshot.isOffRoute,
       "phase": snapshot.phase.rawValue,
+      "rerouteCount": state.rerouteCount,
       "routeProgress": snapshot.routeProgress,
+      "routeStatus": state.routeStatus.rawValue,
       "routeVersion": snapshot.routeVersion,
-      "sequence": snapshot.sequence
+      "sequence": snapshot.sequence,
+      "stateVersion": state.stateVersion,
     ]
 
     if let rawCoordinate = snapshot.rawCoordinate {
@@ -368,14 +383,77 @@ public final class NavOSSNavigationModule: Module {
     if let horizontalAccuracyMeters = snapshot.horizontalAccuracyMeters {
       payload["horizontalAccuracyMeters"] = horizontalAccuracyMeters
     }
+    if snapshot.phase != .idle, let guidance = state.guidance {
+      payload["guidance"] = serialize(guidance)
+    }
+    if snapshot.phase != .idle, let trip = state.trip {
+      payload["trip"] = serialize(trip)
+    }
 
     return payload
+  }
+
+  private func serialize(_ guidance: NavOSSCarPlayGuidance) -> [String: Any] {
+    [
+      "distanceToManeuverMeters": guidance.distanceToManeuverMeters,
+      "durationToManeuverSeconds": guidance.durationToManeuverSeconds,
+      "instruction": guidance.instruction,
+      "maneuverType": guidance.maneuverType,
+      "phase": guidance.phase.rawValue,
+      "remainingDistanceMeters": guidance.remainingDistanceMeters,
+      "remainingDurationSeconds": guidance.remainingDurationSeconds,
+      "roadName": guidance.roadName,
+      "stepIndex": guidance.stepIndex,
+    ]
+  }
+
+  private func serialize(_ trip: NavOSSCarPlayTrip) -> [String: Any] {
+    [
+      "destination": [
+        "id": trip.destination.id,
+        "label": trip.destination.label,
+        "latitude": trip.destination.latitude,
+        "longitude": trip.destination.longitude,
+        "name": trip.destination.name,
+      ],
+      "distanceMeters": trip.distanceMeters,
+      "durationSeconds": trip.durationSeconds,
+      "geometry": trip.geometry.map { serialize($0) },
+      "id": trip.id,
+      "preferences": [
+        "avoidFerries": trip.preferences.avoidFerries,
+        "avoidHighways": trip.preferences.avoidHighways,
+        "avoidTolls": trip.preferences.avoidTolls,
+        "avoidUnpaved": trip.preferences.avoidUnpaved,
+      ],
+      "steps": trip.steps.map { step in
+        var payload: [String: Any] = [
+          "distanceMeters": step.distanceMeters,
+          "durationSeconds": step.durationSeconds,
+          "geometry": step.geometry.map { serialize($0) },
+          "instruction": step.instruction,
+          "maneuverType": step.maneuverType,
+          "roadName": step.roadName,
+        ]
+        if let spokenInstruction = step.spokenInstruction {
+          payload["spokenInstruction"] = spokenInstruction
+        }
+        return payload
+      },
+    ]
   }
 
   private func serialize(_ coordinate: NavigationCoordinate) -> [String: Double] {
     return [
       "latitude": coordinate.latitude,
-      "longitude": coordinate.longitude
+      "longitude": coordinate.longitude,
+    ]
+  }
+
+  private func serialize(_ coordinate: NavOSSCarPlayCoordinate) -> [String: Double] {
+    [
+      "latitude": coordinate.latitude,
+      "longitude": coordinate.longitude,
     ]
   }
 }

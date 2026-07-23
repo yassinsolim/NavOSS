@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   compareRouteAlternatives,
   RoutePositionSchema,
@@ -97,7 +99,10 @@ function normalizeRoutes(payload: z.infer<typeof ValhallaResponseSchema>): Route
       distanceMeters: route.distance,
       durationSeconds: route.duration,
       geometry: route.geometry.coordinates,
-      id: `valhalla-${String(index + 1)}-${String(Math.round(route.duration))}`,
+      id: `valhalla-${String(index + 1)}-${createHash('sha256')
+        .update(JSON.stringify(route))
+        .digest('hex')
+        .slice(0, 16)}`,
       label: 'alternative' as const,
       steps: route.legs.flatMap((leg) =>
         leg.steps.map((step) => {
