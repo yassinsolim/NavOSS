@@ -264,6 +264,34 @@ describe('routes', () => {
     expect(body.source.id).toBe('valhalla-development');
   });
 
+  it('reports configured self-hosted routing as production', async () => {
+    const app = await createTestApp({
+      routeProvider: {
+        getRoutes: () => Promise.resolve([route]),
+        source: {
+          degraded: false,
+          id: 'valhalla-self-hosted',
+          mode: 'production',
+        },
+      },
+    });
+    const response = await app.inject({
+      method: 'POST',
+      payload: {
+        destination: { latitude: 51.13157, longitude: -114.01055 },
+        origin: { latitude: 51.0447, longitude: -114.0719 },
+      },
+      url: '/v1/routes',
+    });
+    const body = RouteResponseSchema.parse(response.json());
+
+    expect(body.degraded).toBe(false);
+    expect(body.source).toMatchObject({
+      id: 'valhalla-self-hosted',
+      mode: 'production',
+    });
+  });
+
   it('returns a stable problem when the route provider is unavailable', async () => {
     const { RouteProviderError } = await import('../src/route-provider.js');
     const app = await createTestApp({

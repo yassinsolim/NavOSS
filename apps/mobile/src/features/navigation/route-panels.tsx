@@ -25,6 +25,7 @@ interface RoutePlanningPanelProps {
   destination: SearchResult;
   errorMessage?: string;
   onCancel: () => void;
+  onPreviewFromCalgary?: () => void;
   onRetry: () => void;
 }
 
@@ -33,6 +34,7 @@ export function RoutePlanningPanel({
   destination,
   errorMessage,
   onCancel,
+  onPreviewFromCalgary,
   onRetry,
 }: RoutePlanningPanelProps) {
   return (
@@ -61,16 +63,36 @@ export function RoutePlanningPanel({
           <Text style={styles.planningText}>Using your current location</Text>
         </View>
       ) : (
-        <View style={styles.errorRow}>
+        <View style={styles.errorContent}>
           <Text style={styles.errorText}>{errorMessage}</Text>
-          <Pressable accessibilityLabel="Retry route" onPress={onRetry} style={styles.retryButton}>
-            <SymbolView
-              name={{ android: 'refresh', ios: 'arrow.clockwise' }}
-              size={18}
-              tintColor={NavOssColors.white}
-            />
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
+          <View style={styles.errorActions}>
+            <Pressable
+              accessibilityLabel="Retry route"
+              onPress={onRetry}
+              style={styles.retryButton}
+            >
+              <SymbolView
+                name={{ android: 'refresh', ios: 'arrow.clockwise' }}
+                size={18}
+                tintColor={NavOssColors.white}
+              />
+              <Text style={styles.retryText}>Retry</Text>
+            </Pressable>
+            {onPreviewFromCalgary !== undefined && (
+              <Pressable
+                accessibilityLabel="Preview route from Calgary Tower"
+                onPress={onPreviewFromCalgary}
+                style={styles.previewFallbackButton}
+              >
+                <SymbolView
+                  name={{ android: 'map', ios: 'map.fill' }}
+                  size={18}
+                  tintColor={NavOssColors.green}
+                />
+                <Text style={styles.previewFallbackText}>Preview from Calgary Tower</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       )}
     </View>
@@ -85,7 +107,9 @@ interface RoutePreviewPanelProps {
   onSelectRoute: (route: RouteAlternative) => void;
   onStart: () => void;
   onToggleAvoidHighways: () => void;
+  onUseCurrentLocation: () => void;
   onVehicleStyleChange: (vehicleStyle: VehicleStyle) => void;
+  previewOriginLabel?: string;
   routes: RouteAlternative[];
   selectedRoute: RouteAlternative;
   trafficStatus: RouteResponse['source']['traffic'];
@@ -100,7 +124,9 @@ export function RoutePreviewPanel({
   onSelectRoute,
   onStart,
   onToggleAvoidHighways,
+  onUseCurrentLocation,
   onVehicleStyleChange,
+  previewOriginLabel,
   routes,
   selectedRoute,
   trafficStatus,
@@ -219,22 +245,53 @@ export function RoutePreviewPanel({
             {formatArrivalTime(selectedRoute.durationSeconds)}
           </Text>
         </View>
-        <Pressable
-          accessibilityLabel="Start navigation"
-          onPress={onStart}
-          style={styles.startButton}
-        >
-          <SymbolView
-            name={{ android: 'navigation', ios: 'location.north.fill' }}
-            size={21}
-            tintColor={NavOssColors.white}
-          />
-          <Text style={styles.startText}>Start</Text>
-        </Pressable>
+        {previewOriginLabel === undefined ? (
+          <Pressable
+            accessibilityLabel="Start navigation"
+            onPress={onStart}
+            style={styles.startButton}
+          >
+            <SymbolView
+              name={{ android: 'navigation', ios: 'location.north.fill' }}
+              size={21}
+              tintColor={NavOssColors.white}
+            />
+            <Text style={styles.startText}>Start</Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            accessibilityLabel="Use my location for navigation"
+            onPress={onUseCurrentLocation}
+            style={styles.useLocationButton}
+          >
+            <SymbolView
+              name={{ android: 'my_location', ios: 'location.fill' }}
+              size={19}
+              tintColor={NavOssColors.white}
+            />
+            <Text style={styles.useLocationText}>Use my location</Text>
+          </Pressable>
+        )}
       </View>
 
+      {previewOriginLabel !== undefined && (
+        <View
+          accessibilityLabel={`Preview only from ${previewOriginLabel}`}
+          style={styles.previewNotice}
+        >
+          <SymbolView
+            name={{ android: 'info', ios: 'info.circle.fill' }}
+            size={16}
+            tintColor={NavOssColors.green}
+          />
+          <Text style={styles.previewNoticeText}>
+            Preview only from {previewOriginLabel}. Live guidance always uses your real location.
+          </Text>
+        </View>
+      )}
+
       <View style={styles.sourceRow}>
-        <Text style={styles.developmentSource}>Valhalla + OpenStreetMap · Development</Text>
+        <Text style={styles.developmentSource}>Valhalla + OpenStreetMap</Text>
         <Text style={styles.trafficStatus}>
           {trafficStatus === 'unavailable' ? 'No live traffic' : trafficStatus}
         </Text>
@@ -847,6 +904,16 @@ const styles = StyleSheet.create({
     gap: 14,
     marginTop: 14,
   },
+  errorActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  errorContent: {
+    gap: 10,
+    marginTop: 12,
+  },
   errorText: {
     color: NavOssColors.muted,
     flex: 1,
@@ -1042,6 +1109,40 @@ const styles = StyleSheet.create({
   previewPanel: {
     minHeight: 314,
   },
+  previewFallbackButton: {
+    alignItems: 'center',
+    borderColor: NavOssColors.green,
+    borderRadius: 7,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: 12,
+  },
+  previewFallbackText: {
+    color: NavOssColors.green,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 14,
+    letterSpacing: 0,
+  },
+  previewNotice: {
+    alignItems: 'center',
+    backgroundColor: NavOssColors.fog,
+    borderRadius: 6,
+    flexDirection: 'row',
+    gap: 7,
+    marginTop: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  previewNoticeText: {
+    color: NavOssColors.muted,
+    flex: 1,
+    fontFamily: NavOssFonts.regular,
+    fontSize: 12,
+    letterSpacing: 0,
+    lineHeight: 16,
+  },
   previewSummary: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -1144,6 +1245,21 @@ const styles = StyleSheet.create({
     color: NavOssColors.coral,
     fontFamily: NavOssFonts.medium,
     fontSize: 11,
+    letterSpacing: 0,
+  },
+  useLocationButton: {
+    alignItems: 'center',
+    backgroundColor: NavOssColors.green,
+    borderRadius: 7,
+    flexDirection: 'row',
+    gap: 7,
+    minHeight: 50,
+    paddingHorizontal: 14,
+  },
+  useLocationText: {
+    color: NavOssColors.white,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 15,
     letterSpacing: 0,
   },
   vehicleButton: {

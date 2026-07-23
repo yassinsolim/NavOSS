@@ -198,6 +198,46 @@ describe('route contracts', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts self-hosted production routing metadata', () => {
+    const result = RouteResponseSchema.safeParse({
+      degraded: false,
+      generatedAt: '2026-07-23T12:00:00Z',
+      routes: [
+        {
+          distanceMeters: 1_000,
+          durationSeconds: 120,
+          geometry: [
+            [-114.0719, 51.0447],
+            [-114.0631, 51.0443],
+          ],
+          id: 'route-production',
+          label: 'fastest',
+          steps: [
+            {
+              distanceMeters: 1_000,
+              durationSeconds: 120,
+              geometry: [
+                [-114.0719, 51.0447],
+                [-114.0631, 51.0443],
+              ],
+              instruction: 'Continue east.',
+              maneuverType: 'continue',
+              roadName: '9 Avenue SW',
+            },
+          ],
+        },
+      ],
+      source: {
+        attribution: 'Routing by Valhalla using OpenStreetMap data',
+        id: 'valhalla-self-hosted',
+        mode: 'production',
+        traffic: 'unavailable',
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it('rejects a route whose origin and destination are identical', () => {
     const result = RouteRequestSchema.safeParse({
       destination: { latitude: 51.0447, longitude: -114.0719 },

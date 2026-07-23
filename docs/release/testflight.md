@@ -129,7 +129,7 @@ After the internal gate passes:
 
 1. Create an external group.
 2. Complete Test Information, including beta description, feedback email, privacy-policy URL, and What to Test.
-3. Verify the documented manual-origin or route-preview path from a device physically outside Calgary.
+3. From outside Calgary, search for Airport, select Calgary International Airport, tap **Preview from Calgary Tower**, and verify the **Preview only from Calgary Tower** route has no Start action until **Use my location** is chosen.
 4. Add the tested build and submit it for Beta App Review.
 5. Start with a small named cohort; do not begin with a public link.
 6. Expand only after service and route-quality thresholds remain stable.

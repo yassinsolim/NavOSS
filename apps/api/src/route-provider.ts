@@ -59,6 +59,11 @@ export class RouteProviderError extends Error {
 export interface RouteProvider {
   getRoutes(request: RouteRequest): Promise<RouteAlternative[]>;
   isReady?(): Promise<boolean>;
+  source?: {
+    degraded: boolean;
+    id: 'valhalla-development' | 'valhalla-self-hosted';
+    mode: 'development' | 'production';
+  };
 }
 
 export interface ValhallaRouteProviderOptions {
@@ -132,6 +137,7 @@ export function createValhallaRouteProvider(
   const endpoint = options.endpoint ?? process.env.VALHALLA_URL ?? DEFAULT_VALHALLA_URL;
   const fetchImplementation = options.fetchImplementation ?? fetch;
   const readinessEndpoint = options.readinessEndpoint ?? process.env.VALHALLA_STATUS_URL;
+  const development = endpoint === DEFAULT_VALHALLA_URL;
 
   return {
     async getRoutes(request) {
@@ -187,5 +193,8 @@ export function createValhallaRouteProvider(
             }
           },
         }),
+    source: development
+      ? { degraded: true, id: 'valhalla-development', mode: 'development' }
+      : { degraded: false, id: 'valhalla-self-hosted', mode: 'production' },
   };
 }

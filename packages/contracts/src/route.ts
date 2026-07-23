@@ -80,17 +80,34 @@ export function compareRouteAlternatives(
 
 export const RouteResponseSchema = z
   .object({
-    degraded: z.literal(true),
+    degraded: z.boolean(),
     generatedAt: IsoDateTimeSchema,
     routes: z.array(RouteAlternativeSchema).min(1).max(3),
     source: z
       .object({
         attribution: z.literal('Routing by Valhalla using OpenStreetMap data'),
-        id: z.literal('valhalla-development'),
-        mode: z.literal('development'),
+        id: z.enum(['valhalla-development', 'valhalla-self-hosted']),
+        mode: z.enum(['development', 'production']),
         traffic: z.literal('unavailable'),
       })
       .strict(),
+  })
+  .superRefine((response, context) => {
+    const production = response.source.mode === 'production';
+    if (response.degraded === production) {
+      context.addIssue({
+        code: 'custom',
+        message: 'production routes must not be degraded and development routes must be degraded',
+        path: ['degraded'],
+      });
+    }
+    if (production !== (response.source.id === 'valhalla-self-hosted')) {
+      context.addIssue({
+        code: 'custom',
+        message: 'route source id and mode must describe the same provider posture',
+        path: ['source', 'id'],
+      });
+    }
   })
   .strict();
 

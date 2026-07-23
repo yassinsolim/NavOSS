@@ -9,6 +9,7 @@ import {
   type StyleSpecification,
 } from '@maplibre/maplibre-react-native';
 import type {
+  AppConfigResponse,
   Coordinate,
   RouteAlternative,
   RoutePreferences,
@@ -88,6 +89,7 @@ import {
   getRemainingStepSummary,
   getUpcomingGuidanceStep,
 } from '@/features/navigation/route-progress';
+import { isCoordinateInCoverage } from '@/features/navigation/route-coverage';
 import {
   findUpcomingSafetyCamera,
   type UpcomingSafetyCamera,
@@ -126,6 +128,10 @@ import {
 } from '@/lib/api';
 
 const CALGARY_CENTER: [longitude: number, latitude: number] = [-114.0719, 51.0447];
+const CALGARY_TOWER_ROUTE_ORIGIN: Coordinate = {
+  latitude: 51.04427,
+  longitude: -114.06309,
+};
 const EMPTY_FEATURE_COLLECTION: FeatureCollection<Point> = {
   features: [],
   type: 'FeatureCollection',
@@ -138,6 +144,7 @@ type RouteUiState =
   | { destination: SearchResult; message: string; type: 'error' }
   | {
       destination: SearchResult;
+      previewOrigin?: Coordinate;
       routes: RouteAlternative[];
       selectedRouteId: string;
       type: 'preview';
@@ -260,6 +267,7 @@ export function MapScreen() {
   const safetyCamerasRef = useRef<readonly SafetyCamera[]>([]);
   const [apiConnection, setApiConnection] = useState<ApiConnectionState>('connecting');
   const [coverageName, setCoverageName] = useState('Calgary alpha');
+  const [coverageBounds, setCoverageBounds] = useState<AppConfigResponse['coverage']['bounds']>();
   const [locationState, setLocationState] = useState<LocationState>('idle');
   const [mapError, setMapError] = useState(false);
   const [mapPreferences, setMapPreferences] = useState(DEFAULT_MAP_PREFERENCES);
@@ -346,6 +354,7 @@ export function MapScreen() {
       .then((config) => {
         startTransition(() => {
           setApiConnection('online');
+          setCoverageBounds(config.coverage.bounds);
           setCoverageName(config.coverage.displayName);
         });
       })
@@ -603,6 +612,7 @@ export function MapScreen() {
   const calculateRoute = async (
     destination: SearchResult,
     preferences: RoutePreferences = routePreferences,
+    previewOrigin?: Coordinate,
   ) => {
     routeAbortControllerRef.current?.abort();
     const controller = new AbortController();
@@ -610,7 +620,7 @@ export function MapScreen() {
     setRouteState({ destination, type: 'loading' });
 
     try {
-      const origin = await getCurrentRouteOrigin();
+      const origin = previewOrigin ?? (await getCurrentRouteOrigin());
       if (origin === undefined || controller.signal.aborted) {
         if (!controller.signal.aborted) {
           setRouteState({
@@ -619,6 +629,25 @@ export function MapScreen() {
             type: 'error',
           });
         }
+        return;
+      }
+      let routeCoverageBounds = coverageBounds;
+      if (previewOrigin === undefined && routeCoverageBounds === undefined) {
+        const config = await fetchAppConfig(controller.signal);
+        routeCoverageBounds = config.coverage.bounds;
+        setCoverageBounds(routeCoverageBounds);
+        setCoverageName(config.coverage.displayName);
+      }
+      if (
+        previewOrigin === undefined &&
+        routeCoverageBounds !== undefined &&
+        !isCoordinateInCoverage(origin, routeCoverageBounds)
+      ) {
+        setRouteState({
+          destination,
+          message: 'Your current location is outside Calgary route coverage.',
+          type: 'error',
+        });
         return;
       }
 
@@ -644,6 +673,7 @@ export function MapScreen() {
       setRouteTrafficStatus(response.source.traffic);
       setRouteState({
         destination,
+        ...(previewOrigin === undefined ? {} : { previewOrigin }),
         routes: response.routes,
         selectedRouteId: fastestRoute.id,
         type: 'preview',
@@ -890,7 +920,7 @@ export function MapScreen() {
       avoidHighways: !routePreferences.avoidHighways,
     };
     setRoutePreferences(preferences);
-    void calculateRoute(routeState.destination, preferences);
+    void calculateRoute(routeState.destination, preferences, routeState.previewOrigin);
   };
 
   const selectedRoute =
@@ -960,7 +990,11 @@ export function MapScreen() {
         : selectedRoute;
 
   const handleStartNavigation = () => {
-    if (routeState.type !== 'preview' || selectedRoute === undefined) {
+    if (
+      routeState.type !== 'preview' ||
+      routeState.previewOrigin !== undefined ||
+      selectedRoute === undefined
+    ) {
       return;
     }
 
@@ -1092,16 +1126,18 @@ export function MapScreen() {
   );
   const selectedPanelHeight =
     routeState.type === 'preview'
-      ? 314 + insets.bottom
-      : routeState.type === 'loading' || routeState.type === 'error'
+      ? (routeState.previewOrigin === undefined ? 314 : 382) + insets.bottom
+      : routeState.type === 'loading'
         ? 156 + insets.bottom
-        : routeState.type === 'arrived'
-          ? 170 + insets.bottom
-          : routeState.type === 'navigating'
-            ? 102 + insets.bottom
-            : placeSheetVisible
-              ? placeSheetHeight
-              : 0;
+        : routeState.type === 'error'
+          ? 224 + insets.bottom
+          : routeState.type === 'arrived'
+            ? 170 + insets.bottom
+            : routeState.type === 'navigating'
+              ? 102 + insets.bottom
+              : placeSheetVisible
+                ? placeSheetHeight
+                : 0;
   const controlBottom = selectedPanelHeight + 18;
   const resultsHeight = Math.min(360, Math.max(180, height * 0.42));
   const darkMap =
@@ -1515,6 +1551,13 @@ export function MapScreen() {
           destination={routeState.destination}
           errorMessage={routeState.type === 'error' ? routeState.message : undefined}
           onCancel={handleCancelRoute}
+          onPreviewFromCalgary={() => {
+            void calculateRoute(
+              routeState.destination,
+              routePreferences,
+              CALGARY_TOWER_ROUTE_ORIGIN,
+            );
+          }}
           onRetry={() => {
             void calculateRoute(routeState.destination);
           }}
@@ -1530,7 +1573,11 @@ export function MapScreen() {
           onSelectRoute={handleSelectRoute}
           onStart={handleStartNavigation}
           onToggleAvoidHighways={handleToggleAvoidHighways}
+          onUseCurrentLocation={() => {
+            void calculateRoute(routeState.destination);
+          }}
           onVehicleStyleChange={setVehicleStyle}
+          previewOriginLabel={routeState.previewOrigin === undefined ? undefined : 'Calgary Tower'}
           routes={routeState.routes}
           selectedRoute={selectedRoute}
           trafficStatus={routeTrafficStatus}

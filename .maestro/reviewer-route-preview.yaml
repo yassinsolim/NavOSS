@@ -1,0 +1,20 @@
+appId: org.navoss.mobile
+---
+- launchApp
+- tapOn: 'Search Calgary'
+- eraseText
+- inputText: 'Airport'
+- assertVisible: 'Select Calgary International Airport'
+- tapOn: 'Select Calgary International Airport'
+- extendedWaitUntil:
+    visible: 'Preview route from Calgary Tower'
+    timeout: 20000
+- tapOn: 'Preview route from Calgary Tower'
+- extendedWaitUntil:
+    visible: 'Preview only from Calgary Tower'
+    timeout: 20000
+- assertVisible: 'Use my location for navigation'
+- assertNotVisible: 'Start navigation'
+- assertVisible: 'Route preview'
+- assertVisible: '.*min'
+- takeScreenshot: '/tmp/navoss-reviewer-route-preview'

@@ -326,14 +326,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     async (request, reply) => {
       try {
         const routes = await routeProvider.getRoutes(request.body);
+        const source = routeProvider.source ?? {
+          degraded: true,
+          id: 'valhalla-development' as const,
+          mode: 'development' as const,
+        };
         return {
-          degraded: true as const,
+          degraded: source.degraded,
           generatedAt: clock().toISOString(),
           routes,
           source: {
             attribution: 'Routing by Valhalla using OpenStreetMap data' as const,
-            id: 'valhalla-development' as const,
-            mode: 'development' as const,
+            id: source.id,
+            mode: source.mode,
             traffic: 'unavailable' as const,
           },
         };

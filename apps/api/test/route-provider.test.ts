@@ -71,6 +71,11 @@ describe('Valhalla route provider', () => {
     const routes = await provider.getRoutes(request);
 
     expect(requestPayload).toMatchObject({ alternates: 2, costing: 'auto' });
+    expect(provider.source).toEqual({
+      degraded: false,
+      id: 'valhalla-self-hosted',
+      mode: 'production',
+    });
     expect(new Set(routes.map((route) => route.id)).size).toBe(3);
     expect(routes.every((route) => /^valhalla-\d+-[0-9a-f]{16}$/.test(route.id))).toBe(true);
     expect(

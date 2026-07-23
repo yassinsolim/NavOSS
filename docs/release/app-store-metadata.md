@@ -106,7 +106,7 @@ Do not paste this template into App Store Connect until the production build and
 
 > NavOSS is an account-free navigation app with coverage intentionally limited to Calgary, Alberta, Canada. No sign-in, purchase, subscription, or demo credential is required.
 >
-> To review search, tap Search Calgary, enter “Calgary Tower,” and select the result. To review routing from outside Calgary, [insert exact manual-origin or visible route-preview steps and labels]. The route preview shows distance, estimated time, route geometry, and the Avoid highways preference. Physical GPS progress, rerouting, arrival, and route-ahead camera notices require movement along the selected Calgary route.
+> To review search, tap Search Calgary, enter “Calgary Tower,” and select the result. To review routing from outside Calgary, search for “Airport,” select Calgary International Airport, then tap **Preview from Calgary Tower** when current-location routing reports Route unavailable. The resulting screen is visibly labeled **Preview only from Calgary Tower** and shows distance, estimated time, route geometry, and the Avoid highways preference. It does not offer Start; **Use my location** returns to real-location routing. Physical GPS progress, rerouting, arrival, and route-ahead camera notices require movement along the selected Calgary route.
 >
 > The app requests When in Use precise location for map position, route origin, route matching, rerouting, arrival detection, and direction-aware official safety-camera notices. After the user starts navigation, updates continue while the phone is locked or another app is visible, and iOS shows its background-location indicator. Updates stop on End or confirmed arrival. NavOSS never requests Always location. Search and map browsing remain available when location is denied; current-position routing and active navigation do not.
 >
@@ -114,7 +114,7 @@ Do not paste this template into App Store Connect until the production build and
 >
 > Fixed camera records come from the Calgary Police Service Intersection Safety Cameras dataset published through Calgary Open Data. Notices are informational, direction-filtered, and supplementary to posted signs and laws. Map/search/routing data is OpenStreetMap-derived with visible attribution.
 >
-> Production service status during review: [insert monitored URL and escalation owner]. Support: `https://navoss.yassin.app/support`. Privacy: `https://navoss.yassin.app/privacy`.
+> Production readiness during review: `https://navoss-api.yassin.app/ready`. The individual developer, Yassin Soliman, owns escalation and can disable distribution if readiness fails. Support: `https://navoss.yassin.app/support`. Privacy: `https://navoss.yassin.app/privacy`.
 
 The current app has no AI feature or AI provider. App Store Connect has no general “AI-authored code” disclosure field. Do not add an irrelevant AI statement to the review notes. If runtime behavior changes, reassess Guideline 5.1.2(i) before submission.
 
