@@ -1,6 +1,6 @@
 # App Review readiness
 
-Assessment date: 2026-07-20
+Assessment date: 2026-07-23
 
 Status: **NO-GO for external TestFlight or App Store review.** Prepare a small internal TestFlight only after the P0 internal-build gates below pass.
 
@@ -16,7 +16,7 @@ The present rejection risks are concrete:
 
 1. The production backend is live, passes its release checks, and recovered from a controlled VM reboot, but it has not completed the required soak, PostgreSQL restore, or graph/index rollback exercises.
 2. Search and route requests are discarded after servicing, and NavOSS host logs are bounded, but App Store Connect still needs an account-holder decision for Cloudflare/OpenFreeMap network and map-request data.
-3. An App Review device outside Calgary cannot currently choose a Calgary origin. It can search Calgary, but route calculation always uses current device location. External Beta App Review needs a documented, reviewer-accessible route preview or manual origin flow.
+3. The reviewer-access blocker is resolved: a visible Calgary Tower preview uses the production route API, is documented in review notes, and disables Start until real-location routing is restored.
 4. The support email is not verified, App Privacy/age-rating/export-compliance answers are unfinished, and production screenshots are not captured.
 
 ## Distribution decision
@@ -24,8 +24,8 @@ The present rejection risks are concrete:
 | Channel                         | Current verdict        | Meaning                                                                                                                       |
 | ------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Local and physical-device alpha | GO                     | Existing automated and device checks can continue.                                                                            |
-| Internal TestFlight             | NO-GO pending P0 gates | Limit the first build to App Store Connect users. This is the next intended release.                                          |
-| External TestFlight             | NO-GO                  | Requires Beta App Review, reviewer-accessible functionality, final beta information, backend soak, and on-road evidence.      |
+| Internal TestFlight             | NO-GO pending P0 gates | Signed build 12 is processing at Apple; account-holder fields and clean physical-device validation remain.                    |
+| External TestFlight             | NO-GO                  | Reviewer access is complete; Beta App Review, final beta information, backend soak, support, and on-road evidence remain.     |
 | Public App Store                | NO-GO                  | A beta build and beta metadata do not belong on the public App Store. Reliability and public-release scope remain incomplete. |
 
 Internal TestFlight is a distribution step, not an exemption from the App Review Guidelines. Any build intended for public distribution should already be honest, safe, and privacy-compliant.
@@ -35,6 +35,7 @@ Internal TestFlight is a distribution step, not an exemption from the App Review
 The following statements are supported by the current app, repository, or live services:
 
 - Bundle ID `org.navoss.mobile`, version `0.1.0`, When in Use authorization, and active-navigation `location` background mode are present.
+- Signed build `0.1.0 (12)` and its provisioning profile assert the Apple-approved `com.apple.developer.carplay-maps` entitlement; its CarPlay template scene is present and the deprecated Maps entitlement is absent.
 - The location purpose string names map position, navigation, rerouting, arrival, and official safety-camera warnings.
 - No account, login, purchase, subscription, advertising SDK, analytics SDK, tracking SDK, or runtime AI dependency is present in the mobile package.
 - The app exposes in-app links to the privacy and support pages; the focused Maestro flow passes both below- and above-fold assertions.
