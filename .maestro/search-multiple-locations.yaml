@@ -13,10 +13,12 @@ appId: org.navoss.mobile
 - extendedWaitUntil:
     visible: 'Search Calgary'
     timeout: 20000
-- longPressOn:
-    point: 78%,45%
+- tapOn: 'Search Calgary'
+- eraseText
+- inputText: 'Starbucks'
 - extendedWaitUntil:
-    visible: 'Start navigation'
+    visible: 'Select Starbucks.*away.*'
     timeout: 20000
-- assertVisible: 'Dropped pin'
-- assertVisible: 'Select fastest .* route, .*, .*'
+- pressKey: Enter
+- assertVisible: 'Select Starbucks.*away.*'
+- takeScreenshot: '/tmp/navoss-search-multiple-locations'

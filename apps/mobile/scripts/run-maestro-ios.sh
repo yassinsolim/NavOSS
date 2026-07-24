@@ -26,8 +26,8 @@ fi
 curl --fail --silent --output /dev/null http://127.0.0.1:3001/health
 curl --fail --silent --output /dev/null http://127.0.0.1:8081/status
 
-xcrun simctl shutdown "$device_id" >/dev/null 2>&1 || true
-xcrun simctl boot "$device_id"
+xcrun simctl boot "$device_id" >/dev/null 2>&1 || true
+open -a Simulator --args -CurrentDeviceUDID "$device_id"
 xcrun simctl bootstatus "$device_id" -b
 xcrun simctl privacy "$device_id" grant location org.navoss.mobile
 xcrun simctl location "$device_id" set 51.0447,-114.0719

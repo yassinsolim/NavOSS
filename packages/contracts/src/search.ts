@@ -41,6 +41,7 @@ export const SearchResultSchema = z
     category: z.enum(['address', 'landmark', 'neighborhood', 'poi', 'street']),
     center: CoordinateSchema,
     confidence: z.number().min(0).max(1),
+    distanceMeters: z.number().nonnegative().optional(),
     details: PlaceDetailsSchema.optional(),
     id: z.string().min(1),
     label: z.string().min(1),

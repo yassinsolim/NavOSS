@@ -4,13 +4,13 @@ Date: 2026-07-23
 
 ## Current verdict
 
-| Stage                                     | Verdict | Reason                                                                                                                                                                               |
-| ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Local simulator and physical-device alpha | GO      | Core, API, mobile, native, route-matrix, places, ETA sharing, reroute, arrival, camera, privacy-sheet, compact-screen, and outside-Calgary reviewer-preview checks pass.             |
-| Metro-independent iOS Release export      | GO      | Signed build `0.1.0 (12)` embeds `https://navoss-api.yassin.app`, the approved CarPlay entitlement/scene, and only the `location` background mode.                                   |
-| Internal TestFlight                       | NO-GO   | Audited build `0.1.0 (12)` uploaded successfully at 2026-07-23 14:01 UTC. Apple processing, App Privacy/account-holder fields, and a clean-device physical smoke test remain.        |
-| External TestFlight                       | NO-GO   | Reviewer route preview is complete. Internal soak, App Privacy/account-holder fields, Beta App Review, on-road evidence, support operations, and real wired/wireless CarPlay remain. |
-| Public App Store                          | NO-GO   | Physical-device background/CarPlay evidence, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                |
+| Stage                                      | Verdict | Reason                                                                                                                                                                                        |
+| ------------------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local simulator and build-12 physical beta | GO      | Core, API, mobile, native, route-matrix, places, ETA sharing, reroute, arrival, camera, privacy-sheet, compact-screen, and outside-Calgary reviewer-preview checks pass.                      |
+| Metro-independent iOS Release export       | GO      | Signed build `0.1.0 (12)` passed entitlement/config audits; the feedback-fixed replacement also passes a local production export but is not signed yet.                                       |
+| Internal TestFlight                        | NO-GO   | Build 12 processed, installed through TestFlight, launched without Metro, and collected feedback. The feedback-fixed replacement still needs signing, processing, and physical smoke testing. |
+| External TestFlight                        | NO-GO   | Reviewer route preview is complete. Internal soak, App Privacy/account-holder fields, Beta App Review, on-road evidence, support operations, and real wired/wireless CarPlay remain.          |
+| Public App Store                           | NO-GO   | Physical-device background/CarPlay evidence, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                         |
 
 The right next launch is a small **internal TestFlight technical beta**, not a public navigation release.
 
@@ -30,7 +30,8 @@ The right next launch is a small **internal TestFlight technical beta**, not a p
 - [x] Build, audit, and upload CarPlay/reviewer candidate `0.1.0 (12)` from commit `931fe5b`; both its app signature and provisioning profile assert `com.apple.developer.carplay-maps`.
 - [ ] Classify Cloudflare/OpenFreeMap map and network metadata, then reconcile App Store Connect App Privacy, `PrivacyInfo.xcprivacy`, SDK manifests, and the hosted policy.
 - [ ] Complete the account-holder age-rating, content-rights, and export-compliance decisions.
-- [ ] Install build 12 from TestFlight after processing, disconnect Metro/the Mac, and repeat the physical-device and real-CarPlay smoke tests.
+- [x] Install build 12 from TestFlight after processing and verify launch, production search, and route preview without Metro.
+- [ ] Build, audit, process, and physically validate the feedback-fixed replacement candidate, including locked-phone guidance and real wired/wireless CarPlay.
 
 ### P1: required before external testers
 
@@ -106,7 +107,7 @@ Production build `0.1.0 (10)` was created from compact-screen fix commit `ee1097
 
 CarPlay build `0.1.0 (11)` was created from native-navigation commit `d3b891135adce524a211ca1c472eb54729692b20` as EAS build `fcc20e6f-69a1-453a-a620-9cb377ea7567`. It was the first signed CarPlay artifact and proved that the App Store profile and app signature both preserve `com.apple.developer.carplay-maps`.
 
-External-review candidate `0.1.0 (12)` was created from commit `931fe5b969203329bd1b17d7a67a46a3e24176d0` as EAS build `4de49ea0-c9f1-4074-a819-290cc542da75`. Its signed IPA passed bundle/version, code-signature, designated-requirement, production-origin, When in Use purpose-string, background-mode, CarPlay scene, app-entitlement, and provisioning-profile audits. The visible Calgary Tower preview path passed from a San Francisco simulator location on the iPhone 15 Pro Max and iPhone SE; Start is absent until **Use my location** returns to real-location routing. EAS submission `40721a3c-b8a3-4a73-aebf-8c033c8f16d0` uploaded the binary successfully to App Store Connect at 2026-07-23 14:01 UTC. Apple processing and physical-device validation remain pending.
+External-review candidate `0.1.0 (12)` was created from commit `931fe5b969203329bd1b17d7a67a46a3e24176d0` as EAS build `4de49ea0-c9f1-4074-a819-290cc542da75`. Its signed IPA passed bundle/version, code-signature, designated-requirement, production-origin, When in Use purpose-string, background-mode, CarPlay scene, app-entitlement, and provisioning-profile audits. The visible Calgary Tower preview path passed from a San Francisco simulator location on the iPhone 15 Pro Max and iPhone SE; Start is absent until **Use my location** returns to real-location routing. EAS submission `40721a3c-b8a3-4a73-aebf-8c033c8f16d0` uploaded the binary successfully to App Store Connect at 2026-07-23 14:01 UTC. Apple processed it, and it was installed through TestFlight for the internal physical smoke and feedback session. It remains a diagnostic build; the current feedback fixes require a replacement candidate.
 
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a CarPlay tester build so the approved scene and entitlement are present:
 
@@ -143,7 +144,7 @@ Apple permits up to 10,000 external testers, subject to Beta App Review.
 
 ## Public App Store gate
 
-Do not submit the current technical beta as a full navigation replacement. Before public release, NavOSS needs reliable background guidance, spoken turn instructions, production map/search/routing operations, explicit traffic limitations or a traffic feed, wider route and on-road coverage, support response targets, and completed privacy/legal review.
+Do not submit the current technical beta as a full navigation replacement. Before public release, NavOSS needs physical on-road and real-CarPlay evidence, wider route and search coverage, explicit traffic limitations or a traffic feed, support response targets, and completed privacy/legal review. Background guidance, spoken turn instructions, and production map/search/routing operations are implemented but still require sustained field evidence.
 
 ## Apple references
 

@@ -77,7 +77,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(fastifySwagger, {
     openapi: {
       info: {
-        description: 'Privacy-first navigation services for the Calgary technical alpha.',
+        description: 'Privacy-first navigation services for the Calgary technical beta.',
         title: 'NavOSS API',
         version: SERVICE_VERSION,
       },
@@ -184,7 +184,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     '/ready',
     {
       schema: {
-        description: 'Reports whether dependencies required by the technical alpha are ready.',
+        description: 'Reports whether dependencies required by the technical beta are ready.',
         response: {
           200: ReadinessResponseSchema,
           503: ReadinessResponseSchema,

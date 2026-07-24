@@ -3,8 +3,12 @@ appId: org.navoss.mobile
 - launchApp
 - tapOn: 'Search Calgary'
 - inputText: 'Calgary Tower'
-- assertVisible: 'Select Calgary Tower'
-- tapOn: 'Select Calgary Tower'
+- assertVisible: 'Select Calgary Tower.*'
+- tapOn: 'Select Calgary Tower.*'
+- extendedWaitUntil:
+    visible: 'Directions'
+    timeout: 10000
+- tapOn: 'Directions'
 - extendedWaitUntil:
     visible: 'Start navigation'
     timeout: 20000

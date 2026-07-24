@@ -1,5 +1,24 @@
 import Foundation
 
+private func destinationIdentityKey(_ id: String) -> String {
+  if id.hasPrefix("map-poi:") {
+    let osmId = id.dropFirst("map-poi:".count)
+    if !osmId.isEmpty && osmId.allSatisfy(\.isNumber) {
+      return "osm:\(osmId)"
+    }
+  }
+
+  let components = id.split(separator: ":", omittingEmptySubsequences: false)
+  if components.count == 3, components[0] == "nominatim" {
+    let osmId = components[2]
+    if !osmId.isEmpty && osmId.allSatisfy(\.isNumber) {
+      return "osm:\(osmId)"
+    }
+  }
+
+  return "id:\(id)"
+}
+
 extension Notification.Name {
   public static let navOSSCarPlayDestinationCatalogDidChange = Notification.Name(
     "org.navoss.mobile.carplay-destination-catalog-did-change"
@@ -57,7 +76,7 @@ public struct NavOSSCarPlayDestinationCatalog: Codable, Equatable, Sendable {
     destinations.append(contentsOf: favorites)
 
     var seenIds = Set<String>()
-    return destinations.filter { seenIds.insert($0.id).inserted }
+    return destinations.filter { seenIds.insert(destinationIdentityKey($0.id)).inserted }
   }
 }
 
@@ -87,7 +106,8 @@ public final class NavOSSCarPlayDestinationStore: @unchecked Sendable {
 
     lock.lock()
     var catalog = readCatalog()
-    catalog.recents.removeAll { $0.id == destination.id }
+    let identityKey = destinationIdentityKey(destination.id)
+    catalog.recents.removeAll { destinationIdentityKey($0.id) == identityKey }
     catalog.recents.insert(destination, at: 0)
     catalog.recents = Array(catalog.recents.prefix(maximumRecentCount))
     writeCatalog(catalog)
@@ -99,13 +119,58 @@ public final class NavOSSCarPlayDestinationStore: @unchecked Sendable {
     updateCatalog { $0.recents = [] }
   }
 
+  public func clearDestinations() {
+    lock.lock()
+    defaults.removeObject(forKey: key)
+    lock.unlock()
+    notifyCatalogChanged()
+  }
+
   public func replaceFavorites(_ favorites: [NavOSSCarPlayDestination]) {
     lock.lock()
     var catalog = readCatalog()
-    catalog.favorites = Array(favorites.filter(\.isValid).prefix(20))
+    var seenIds = Set<String>()
+    catalog.favorites = Array(
+      favorites.filter {
+        $0.isValid && seenIds.insert(destinationIdentityKey($0.id)).inserted
+      }.prefix(20)
+    )
     writeCatalog(catalog)
     lock.unlock()
     notifyCatalogChanged()
+  }
+
+  public func isFavorite(id: String) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    let identityKey = destinationIdentityKey(id)
+    return readCatalog().favorites.contains { destinationIdentityKey($0.id) == identityKey }
+  }
+
+  @discardableResult
+  public func toggleFavorite(_ destination: NavOSSCarPlayDestination) -> Bool {
+    guard destination.isValid else {
+      return false
+    }
+
+    lock.lock()
+    var catalog = readCatalog()
+    let identityKey = destinationIdentityKey(destination.id)
+    if let index = catalog.favorites.firstIndex(where: {
+      destinationIdentityKey($0.id) == identityKey
+    }) {
+      catalog.favorites.remove(at: index)
+      writeCatalog(catalog)
+      lock.unlock()
+      notifyCatalogChanged()
+      return false
+    }
+    catalog.favorites.insert(destination, at: 0)
+    catalog.favorites = Array(catalog.favorites.prefix(20))
+    writeCatalog(catalog)
+    lock.unlock()
+    notifyCatalogChanged()
+    return true
   }
 
   public func setHome(_ destination: NavOSSCarPlayDestination?) {

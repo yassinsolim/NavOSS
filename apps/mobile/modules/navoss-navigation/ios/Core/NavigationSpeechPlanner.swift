@@ -28,9 +28,12 @@ final class NavigationSpeechPlanner {
         text: "You've arrived at \(trip.destination.name)."
       )
     } else {
+      let currentStepIndex = min(guidance.stepIndex, trip.steps.count - 1)
       let guidanceIndex = min(guidance.stepIndex + 1, trip.steps.count - 1)
       let step = trip.steps[guidanceIndex]
-      let instruction = step.spokenInstruction ?? step.instruction
+      let instruction = spokenInstruction(
+        trip.steps[currentStepIndex].spokenInstruction ?? step.instruction
+      )
       if guidance.distanceToManeuverMeters <= 75
         || guidance.durationToManeuverSeconds <= 10
       {
@@ -54,6 +57,21 @@ final class NavigationSpeechPlanner {
       return nil
     }
     return prompt
+  }
+
+  private func spokenInstruction(_ instruction: String) -> String {
+    [
+      ("\\bNE\\b", "northeast"),
+      ("\\bNW\\b", "northwest"),
+      ("\\bSE\\b", "southeast"),
+      ("\\bSW\\b", "southwest"),
+    ].reduce(instruction) { result, replacement in
+      result.replacingOccurrences(
+        of: replacement.0,
+        with: replacement.1,
+        options: [.caseInsensitive, .regularExpression]
+      )
+    }
   }
 
   private func spokenDistance(_ meters: Double) -> String {

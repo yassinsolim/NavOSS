@@ -17,6 +17,7 @@ import {
 import { useState } from 'react';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
+import { formatSearchDistance, searchResultContext } from '@/features/map/search-proximity';
 
 const PRIVACY_POLICY_URL = 'https://navoss.yassin.app/privacy';
 const SUPPORT_URL = 'https://navoss.yassin.app/support';
@@ -31,7 +32,7 @@ interface SearchPanelProps {
   maximumResultsHeight: number;
   onChangeQuery: (query: string) => void;
   onClear: () => void;
-  onClearRecentDestinations: () => void;
+  onClearDestinationHistory: () => void;
   onSelectResult: (result: SearchResult) => void;
   onSubmit: () => void;
   query: string;
@@ -79,7 +80,7 @@ export function SearchPanel({
   maximumResultsHeight,
   onChangeQuery,
   onClear,
-  onClearRecentDestinations,
+  onClearDestinationHistory,
   onSelectResult,
   onSubmit,
   query,
@@ -197,32 +198,41 @@ export function SearchPanel({
               data={results}
               keyboardShouldPersistTaps="handled"
               keyExtractor={(result) => result.id}
-              renderItem={({ item }) => (
-                <Pressable
-                  accessibilityLabel={`Select ${item.name}`}
-                  onPress={() => {
-                    onSelectResult(item);
-                  }}
-                  style={({ pressed }) => [styles.resultRow, pressed && styles.resultRowPressed]}
-                >
-                  <View style={styles.resultIcon}>
-                    <SymbolView
-                      name={{ android: 'location_on', ios: 'mappin' }}
-                      size={20}
-                      tintColor={NavOssColors.coral}
-                    />
-                  </View>
-                  <View style={styles.resultCopy}>
-                    <Text numberOfLines={1} style={styles.resultName}>
-                      {item.name}
-                    </Text>
-                    <Text numberOfLines={1} style={styles.resultLabel}>
-                      {item.label}
-                    </Text>
-                  </View>
-                  <Text style={styles.category}>{categoryLabel(item.category)}</Text>
-                </Pressable>
-              )}
+              renderItem={({ item }) => {
+                const distance = formatSearchDistance(item.distanceMeters);
+                const context = searchResultContext(item);
+                return (
+                  <Pressable
+                    accessibilityLabel={`Select ${item.name}${distance === undefined ? '' : `, ${distance} away`}, ${context}`}
+                    onPress={() => {
+                      onSelectResult(item);
+                    }}
+                    style={({ pressed }) => [styles.resultRow, pressed && styles.resultRowPressed]}
+                  >
+                    <View style={styles.resultLead}>
+                      <SymbolView
+                        name={{ android: 'location_on', ios: 'mappin' }}
+                        size={17}
+                        tintColor={NavOssColors.coral}
+                      />
+                      {distance !== undefined && (
+                        <Text numberOfLines={1} style={styles.resultDistance}>
+                          {distance}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={styles.resultCopy}>
+                      <Text numberOfLines={1} style={styles.resultName}>
+                        {item.name}
+                      </Text>
+                      <Text numberOfLines={1} style={styles.resultLabel}>
+                        {context}
+                      </Text>
+                    </View>
+                    <Text style={styles.category}>{categoryLabel(item.category)}</Text>
+                  </Pressable>
+                );
+              }}
               showsVerticalScrollIndicator={false}
             />
           )}
@@ -281,13 +291,13 @@ export function SearchPanel({
               </Text>
               <Text style={styles.aboutBody}>
                 NavOSS does not require an account, show ads, request Always location access, or
-                send destination history to its servers. Up to 12 recent destinations are stored
-                only on this device for CarPlay shortcuts. Ending navigation stops background
-                location and erases the transient active route.
+                send destination history to its servers. Up to 12 recent destinations and 20 places
+                you save are stored only on this device for phone and CarPlay shortcuts. Ending
+                navigation stops background location and erases the transient active route.
               </Text>
               <Pressable
-                accessibilityLabel="Clear recent destinations"
-                onPress={onClearRecentDestinations}
+                accessibilityLabel="Clear saved and recent destinations"
+                onPress={onClearDestinationHistory}
                 style={({ pressed }) => [styles.aboutLink, pressed && styles.aboutButtonPressed]}
               >
                 <SymbolView
@@ -295,7 +305,7 @@ export function SearchPanel({
                   size={15}
                   tintColor={NavOssColors.coral}
                 />
-                <Text style={styles.aboutDestructiveText}>Clear recent destinations</Text>
+                <Text style={styles.aboutDestructiveText}>Clear saved and recent destinations</Text>
               </Pressable>
               <Pressable
                 accessibilityLabel="Open NavOSS privacy policy"
@@ -552,13 +562,20 @@ const styles = StyleSheet.create({
     gap: 2,
     minWidth: 0,
   },
-  resultIcon: {
+  resultDistance: {
+    color: NavOssColors.asphalt,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 10,
+    letterSpacing: 0,
+  },
+  resultLead: {
     alignItems: 'center',
     backgroundColor: '#FCE9E5',
     borderRadius: 8,
-    height: 38,
+    gap: 1,
+    height: 42,
     justifyContent: 'center',
-    width: 38,
+    width: 50,
   },
   resultLabel: {
     color: NavOssColors.muted,

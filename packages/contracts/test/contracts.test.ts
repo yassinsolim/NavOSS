@@ -70,6 +70,7 @@ describe('SearchResponseSchema', () => {
           category: 'poi',
           center: { latitude: 51.04427, longitude: -114.06309 },
           confidence: 0.98,
+          distanceMeters: 620,
           details: {
             address: '101 9 Avenue SW, Calgary, Alberta',
             openingHours: 'Mo-Su 10:00-21:00',
@@ -135,6 +136,20 @@ describe('route contracts', () => {
       { distanceMeters: 12_000, durationSeconds: 540 },
       { distanceMeters: 8_000, durationSeconds: 600 },
       { distanceMeters: 9_000, durationSeconds: 600 },
+    ]);
+  });
+
+  it('keeps the true fastest route first when ETAs display the same minute', () => {
+    const routes = [
+      { distanceMeters: 12_000, durationSeconds: 540 },
+      { distanceMeters: 6_000, durationSeconds: 559 },
+      { distanceMeters: 5_000, durationSeconds: 600 },
+    ];
+
+    expect([...routes].sort(compareRouteAlternatives)).toEqual([
+      { distanceMeters: 12_000, durationSeconds: 540 },
+      { distanceMeters: 6_000, durationSeconds: 559 },
+      { distanceMeters: 5_000, durationSeconds: 600 },
     ]);
   });
 

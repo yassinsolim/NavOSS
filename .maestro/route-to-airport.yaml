@@ -4,8 +4,12 @@ appId: org.navoss.mobile
 - tapOn: 'Search Calgary'
 - eraseText
 - inputText: 'Airport'
-- assertVisible: 'Select Calgary International Airport'
-- tapOn: 'Select Calgary International Airport'
+- assertVisible: 'Select Calgary International Airport.*'
+- tapOn: 'Select Calgary International Airport.*'
+- extendedWaitUntil:
+    visible: 'Directions'
+    timeout: 10000
+- tapOn: 'Directions'
 - extendedWaitUntil:
     visible: 'Start navigation'
     timeout: 20000

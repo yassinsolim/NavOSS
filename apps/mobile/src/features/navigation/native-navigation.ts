@@ -39,6 +39,10 @@ export function getNavigationSnapshot(): NativeNavigationSnapshot {
   return NavOSSNavigation.getSnapshot();
 }
 
+export function getRecentDestinationIds(): string[] {
+  return NavOSSNavigation.getRecentDestinationIds();
+}
+
 export function setNavigationRoute(
   route: RouteAlternative,
   destination: SearchResult,
@@ -80,8 +84,26 @@ export function clearRecentDestinations(): void {
   NavOSSNavigation.clearRecentDestinations();
 }
 
+export function clearDestinationHistory(): void {
+  NavOSSNavigation.clearDestinationHistory();
+}
+
 export function recordRecentDestination(destination: SearchResult): void {
   NavOSSNavigation.recordRecentDestination({
+    id: destination.id,
+    label: destination.label,
+    latitude: destination.center.latitude,
+    longitude: destination.center.longitude,
+    name: destination.name,
+  });
+}
+
+export function isFavoriteDestination(id: string): boolean {
+  return NavOSSNavigation.isFavoriteDestination(id);
+}
+
+export function toggleFavoriteDestination(destination: SearchResult): boolean {
+  return NavOSSNavigation.toggleFavoriteDestination({
     id: destination.id,
     label: destination.label,
     latitude: destination.center.latitude,

@@ -267,6 +267,63 @@ describe('Nominatim search provider', () => {
     });
   });
 
+  it('enriches visible Calgary results with details found beyond the result limit', async () => {
+    const source = {
+      datasetVersion: 'test',
+      freshness: 'fresh' as const,
+      id: 'test',
+      updatedAt: '2026-07-20T12:00:00Z',
+    };
+    const calgaryProvider = {
+      search: () =>
+        Promise.resolve({
+          degraded: false,
+          results: Array.from({ length: 8 }, (_, index) => ({
+            category: 'poi' as const,
+            center: { latitude: 51.0447 + index * 0.001, longitude: -114.0719 },
+            confidence: 0.97,
+            id: `calgary-business:${String(index)}`,
+            label: `${index === 0 ? 'Test Cafe' : `Result ${String(index)}`}, Calgary, AB`,
+            name: index === 0 ? 'Test Cafe' : `Result ${String(index)}`,
+          })),
+          source,
+        }),
+    };
+    const nominatimProvider = {
+      search: () =>
+        Promise.resolve({
+          degraded: false,
+          results: [
+            {
+              category: 'poi' as const,
+              center: { latitude: 51.0447, longitude: -114.0719 },
+              confidence: 0.86,
+              details: {
+                openingHours: 'Mo-Su 07:00-20:00',
+                phone: '+1 403 555 0100',
+              },
+              id: 'nominatim:node:1',
+              label: 'Test Cafe, Calgary, Alberta',
+              name: 'Test Cafe',
+            },
+          ],
+          source,
+        }),
+    };
+    const provider = createProductionSearchProvider([], nominatimProvider, calgaryProvider);
+
+    const response = await provider.search({ includeDetails: true, limit: 8, q: 'Test Cafe' });
+
+    expect(response.results).toHaveLength(8);
+    expect(response.results.find((result) => result.id === 'calgary-business:0')).toMatchObject({
+      details: {
+        openingHours: 'Mo-Su 07:00-20:00',
+        phone: '+1 403 555 0100',
+      },
+      id: 'calgary-business:0',
+    });
+  });
+
   it('ranks an exact official Calgary address above a nearby OSM substitute', async () => {
     const nominatimProvider = {
       search: () =>
@@ -323,7 +380,7 @@ describe('Nominatim search provider', () => {
     expect(response.source.id).toBe('calgary-hybrid-search');
   });
 
-  it('keeps distinct nearby branches from the same source', async () => {
+  it('keeps distinct branches, cleans store numbers, and ranks equal matches by distance', async () => {
     const source = {
       datasetVersion: 'vdjc-pybd',
       freshness: 'fresh' as const,
@@ -337,19 +394,19 @@ describe('Nominatim search provider', () => {
           results: [
             {
               category: 'poi' as const,
-              center: { latitude: 51.05, longitude: -114.08 },
+              center: { latitude: 51.06, longitude: -114.09 },
               confidence: 0.99,
               id: 'calgary-business:1',
-              label: 'Coffee Shop, Unit 1, Calgary, AB',
-              name: 'Coffee Shop',
+              label: 'Starbucks Coffee #22865, 555 8 Avenue SW, Calgary, AB',
+              name: 'Starbucks Coffee #22865',
             },
             {
               category: 'poi' as const,
-              center: { latitude: 51.0501, longitude: -114.0801 },
+              center: { latitude: 51.045, longitude: -114.072 },
               confidence: 0.99,
               id: 'calgary-business:2',
-              label: 'Coffee Shop, Unit 2, Calgary, AB',
-              name: 'Coffee Shop',
+              label: 'Starbucks Coffee #4412, 315 8 Avenue SW, Calgary, AB',
+              name: 'Starbucks Coffee #4412',
             },
           ],
           source,
@@ -357,12 +414,23 @@ describe('Nominatim search provider', () => {
     };
     const provider = createProductionSearchProvider([], calgaryProvider);
 
-    const response = await provider.search({ limit: 8, q: 'Coffee Shop' });
+    const response = await provider.search({
+      latitude: 51.0447,
+      limit: 8,
+      longitude: -114.0719,
+      q: 'Starbucks',
+    });
 
     expect(response.results.map((result) => result.id)).toEqual([
-      'calgary-business:1',
       'calgary-business:2',
+      'calgary-business:1',
     ]);
+    expect(response.results[0]).toMatchObject({
+      distanceMeters: 34,
+      label: 'Starbucks Coffee, 315 8 Avenue SW, Calgary, AB',
+      name: 'Starbucks Coffee',
+    });
+    expect(response.results[1]?.distanceMeters).toBeGreaterThan(1_000);
   });
 
   it('degrades to Nominatim when the Calgary index is unavailable', async () => {

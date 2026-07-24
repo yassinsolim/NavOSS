@@ -2,14 +2,26 @@ appId: org.navoss.mobile
 ---
 - launchApp:
     clearState: true
+- openLink: 'exp+navoss://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081'
+- waitForAnimationToEnd
+- tapOn:
+    text: 'Close'
+    optional: true
+- tapOn:
+    text: 'Reload'
+    optional: true
 - extendedWaitUntil:
     visible: 'Search Calgary'
     timeout: 20000
 - tapOn: 'Search Calgary'
 - eraseText
 - inputText: 'Airport'
-- assertVisible: 'Select Calgary International Airport'
-- tapOn: 'Select Calgary International Airport'
+- assertVisible: 'Select Calgary International Airport.*'
+- tapOn: 'Select Calgary International Airport.*'
+- extendedWaitUntil:
+    visible: 'Directions'
+    timeout: 10000
+- tapOn: 'Directions'
 - extendedWaitUntil:
     visible: 'Start navigation'
     timeout: 20000

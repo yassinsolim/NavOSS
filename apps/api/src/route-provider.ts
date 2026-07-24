@@ -111,7 +111,7 @@ function normalizeRoutes(payload: z.infer<typeof ValhallaResponseSchema>): Route
       label: 'alternative' as const,
       steps: route.legs.flatMap((leg) =>
         leg.steps.map((step) => {
-          const spokenInstruction = step.voiceInstructions?.[0]?.announcement;
+          const spokenInstruction = step.voiceInstructions?.at(-1)?.announcement;
           return {
             distanceMeters: step.distance,
             durationSeconds: step.duration,

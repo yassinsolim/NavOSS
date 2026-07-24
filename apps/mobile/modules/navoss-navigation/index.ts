@@ -104,17 +104,21 @@ type NavOSSNavigationEvents = {
 declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents> {
   announceSafetyCamera(): void;
   clearCarPlayTrip(): void;
+  clearDestinationHistory(): void;
   clearRecentDestinations(): void;
   clearRoute(): NativeNavigationSnapshot;
   getCarPlayState(): NativeCarPlayState;
   getCapabilities(): NativeNavigationCapabilities;
+  getRecentDestinationIds(): string[];
   getSnapshot(): NativeNavigationSnapshot;
+  isFavoriteDestination(id: string): boolean;
   recordRecentDestination(destination: NativeNavigationDestination): void;
   replaceFavoriteDestinations(destinations: NativeNavigationDestination[]): void;
   setHomeDestination(destination: NativeNavigationDestination | null): void;
   setRoute(trip: NativeCarPlayTrip): NativeNavigationSnapshot;
   setWorkDestination(destination: NativeNavigationDestination | null): void;
   stopAnnouncements(): void;
+  toggleFavoriteDestination(destination: NativeNavigationDestination): boolean;
   updateLocation(location: NativeNavigationLocationSample): NativeNavigationSnapshot;
 }
 

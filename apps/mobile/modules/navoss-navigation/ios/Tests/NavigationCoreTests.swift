@@ -106,6 +106,22 @@ final class NavigationCoreTests: XCTestCase {
       ))
   }
 
+  func testManeuverSpeechUsesCurrentSegmentVoiceInstruction() {
+    let planner = NavigationSpeechPlanner()
+    let trip = makeNavigationSessionTrip(
+      currentSpokenInstruction: "Turn right onto Aspen Glen Way SW",
+      nextSpokenInstruction: "Turn left onto Aspen Summit Drive SW"
+    )
+
+    let execute = planner.prompt(
+      trip: trip,
+      guidance: makeGuidance(distance: 60, duration: 8),
+      hasCurrentLocation: true
+    )
+
+    XCTAssertEqual(execute?.text, "Turn right onto Aspen Glen Way southwest")
+  }
+
   func testCarPlayTripStoreRejectsStaleNavigationPublications() {
     let store = NavOSSCarPlayTripStore(notificationCenter: NotificationCenter())
     let firstTrip = makeNavigationSessionTrip()
@@ -340,6 +356,76 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertTrue(clearedCatalog.recents.isEmpty)
     XCTAssertEqual(clearedCatalog.favorites, [favorite])
     XCTAssertEqual(clearedCatalog.home, favorite)
+  }
+
+  func testCarPlayDestinationStoreTogglesFavorite() throws {
+    let suiteName = "NavOSSNavigationCoreTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let store = NavOSSCarPlayDestinationStore(defaults: defaults, key: "catalog")
+    let favorite = NavOSSCarPlayDestination(
+      id: "favorite",
+      label: "101 9 Avenue SW",
+      latitude: 51.04427,
+      longitude: -114.06309,
+      name: "Calgary Tower"
+    )
+
+    XCTAssertFalse(store.isFavorite(id: favorite.id))
+    XCTAssertTrue(store.toggleFavorite(favorite))
+    XCTAssertTrue(store.isFavorite(id: favorite.id))
+    XCTAssertEqual(store.snapshot().searchableDestinations, [favorite])
+    XCTAssertFalse(store.toggleFavorite(favorite))
+    XCTAssertFalse(store.isFavorite(id: favorite.id))
+    XCTAssertTrue(store.snapshot().favorites.isEmpty)
+  }
+
+  func testCarPlayDestinationStoreRecognizesEquivalentOSMFavoriteIds() throws {
+    let suiteName = "NavOSSNavigationCoreTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let store = NavOSSCarPlayDestinationStore(defaults: defaults, key: "catalog")
+    let mapPlace = NavOSSCarPlayDestination(
+      id: "map-poi:42",
+      label: "101 Test Avenue SW",
+      latitude: 51.04427,
+      longitude: -114.06309,
+      name: "Test Cafe"
+    )
+    let searchPlace = NavOSSCarPlayDestination(
+      id: "nominatim:node:42",
+      label: "101 Test Avenue SW",
+      latitude: 51.04428,
+      longitude: -114.06308,
+      name: "Test Cafe"
+    )
+
+    XCTAssertTrue(store.toggleFavorite(mapPlace))
+    XCTAssertTrue(store.isFavorite(id: searchPlace.id))
+    XCTAssertFalse(store.toggleFavorite(searchPlace))
+    XCTAssertTrue(store.snapshot().favorites.isEmpty)
+  }
+
+  func testCarPlayDestinationStoreClearsAllLocalDestinations() throws {
+    let suiteName = "NavOSSNavigationCoreTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let store = NavOSSCarPlayDestinationStore(defaults: defaults, key: "catalog")
+    let destination = NavOSSCarPlayDestination(
+      id: "calgary-tower",
+      label: "101 9 Avenue SW",
+      latitude: 51.04427,
+      longitude: -114.06309,
+      name: "Calgary Tower"
+    )
+
+    store.recordRecent(destination)
+    store.replaceFavorites([destination])
+    store.setHome(destination)
+    store.setWork(destination)
+    store.clearDestinations()
+
+    XCTAssertEqual(store.snapshot(), NavOSSCarPlayDestinationCatalog())
   }
 
   func testProjectsLocationOntoRouteSegment() throws {
@@ -658,7 +744,11 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
-  private func makeNavigationSessionTrip(id: String = "route-1") -> NavOSSCarPlayTrip {
+  private func makeNavigationSessionTrip(
+    id: String = "route-1",
+    currentSpokenInstruction: String? = nil,
+    nextSpokenInstruction: String? = nil
+  ) -> NavOSSCarPlayTrip {
     NavOSSCarPlayTrip(
       destination: NavOSSCarPlayDestination(
         id: "airport",
@@ -685,7 +775,8 @@ final class NavigationCoreTests: XCTestCase {
           ],
           instruction: "Head north",
           maneuverType: "depart",
-          roadName: "Centre Street"
+          roadName: "Centre Street",
+          spokenInstruction: currentSpokenInstruction
         ),
         NavOSSCarPlayRouteStep(
           distanceMeters: 1_500,
@@ -696,7 +787,8 @@ final class NavigationCoreTests: XCTestCase {
           ],
           instruction: "Turn right",
           maneuverType: "right",
-          roadName: "Airport Trail NE"
+          roadName: "Airport Trail NE",
+          spokenInstruction: nextSpokenInstruction
         ),
       ]
     )

@@ -1,0 +1,56 @@
+appId: org.navoss.mobile
+---
+- launchApp:
+    clearState: true
+- openLink: 'exp+navoss://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081'
+- waitForAnimationToEnd
+- tapOn:
+    text: 'Close'
+    optional: true
+- tapOn:
+    text: 'Reload'
+    optional: true
+- extendedWaitUntil:
+    visible: 'Search Calgary'
+    timeout: 20000
+- tapOn: 'Search Calgary'
+- eraseText
+- inputText: 'Calgary Tower'
+- assertVisible: 'Select Calgary Tower.*'
+- tapOn: 'Select Calgary Tower.*'
+- extendedWaitUntil:
+    visible: 'Save'
+    timeout: 10000
+- tapOn: 'Save'
+- assertVisible: 'Saved'
+- stopApp
+- openLink: 'exp+navoss://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081'
+- waitForAnimationToEnd
+- tapOn:
+    text: 'Close'
+    optional: true
+- tapOn:
+    text: 'Reload'
+    optional: true
+- extendedWaitUntil:
+    visible: 'Search Calgary'
+    timeout: 20000
+- tapOn: 'Search Calgary'
+- eraseText
+- inputText: 'Calgary Tower'
+- assertVisible: 'Select Calgary Tower.*'
+- tapOn: 'Select Calgary Tower.*'
+- extendedWaitUntil:
+    visible: 'Saved'
+    timeout: 10000
+- tapOn: 'About and privacy'
+- scrollUntilVisible:
+    element:
+      text: 'Clear saved and recent destinations'
+    direction: DOWN
+- tapOn: 'Clear saved and recent destinations'
+- tapOn: 'Close about and privacy'
+- extendedWaitUntil:
+    visible: 'Save'
+    timeout: 10000
+- assertVisible: 'Save'

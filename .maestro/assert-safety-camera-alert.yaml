@@ -3,6 +3,6 @@ appId: org.navoss.mobile
 - extendedWaitUntil:
     visible: 'Navigation status, .*camera alert announced.*'
     timeout: 20000
-- assertVisible: 'Map with 57 official safety cameras'
+- assertVisible: 'Map with .* official safety camera symbols'
 - assertVisible: 'End navigation'
 - assertVisible: '.*(Drive|Turn|Continue).*'

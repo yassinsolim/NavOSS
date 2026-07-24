@@ -1,12 +1,36 @@
 appId: org.navoss.mobile
 ---
-- launchApp
-- assertVisible: 'About and privacy'
+- launchApp:
+    clearState: true
+- openLink: 'exp+navoss://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081'
+- waitForAnimationToEnd
+- tapOn:
+    text: 'Close'
+    optional: true
+- tapOn:
+    text: 'Reload'
+    optional: true
+- extendedWaitUntil:
+    visible: 'About and privacy'
+    timeout: 20000
 - tapOn: 'About and privacy'
 - assertVisible: 'Navigation without an account'
 - assertVisible: 'Privacy'
-- assertVisible: 'Support and feedback'
+- scrollUntilVisible:
+    element:
+      text: 'Clear saved and recent destinations'
+    direction: DOWN
+- assertVisible: 'Clear saved and recent destinations'
+- scrollUntilVisible:
+    element:
+      text: 'Open NavOSS privacy policy'
+    direction: DOWN
 - assertVisible: 'Open NavOSS privacy policy'
+- scrollUntilVisible:
+    element:
+      text: 'Support and feedback'
+    direction: DOWN
+- assertVisible: 'Support and feedback'
 - scrollUntilVisible:
     element:
       text: 'Open NavOSS support'

@@ -30,9 +30,24 @@ trap cleanup EXIT HUP INT TERM
 curl --fail --silent --output /dev/null http://127.0.0.1:3001/health
 curl --fail --silent --output /dev/null http://127.0.0.1:8081/status
 
-xcrun simctl install \
-  "$device_id" \
-  ./ios/build/Build/Products/Debug-iphonesimulator/NavOSS.app
+app_path="$(
+  xcodebuild \
+    -workspace ios/NavOSS.xcworkspace \
+    -scheme NavOSS \
+    -configuration Debug \
+    -sdk iphonesimulator \
+    -showBuildSettings 2>/dev/null |
+    awk -F ' = ' '/^[[:space:]]*TARGET_BUILD_DIR = / && $2 ~ /Debug-iphonesimulator$/ { print $2 "/NavOSS.app"; exit }'
+)"
+
+if [ ! -d "$app_path" ]; then
+  printf 'Simulator app not found: %s\n' "$app_path" >&2
+  exit 1
+fi
+
+xcrun simctl boot "$device_id" >/dev/null 2>&1 || true
+xcrun simctl bootstatus "$device_id" -b
+xcrun simctl install "$device_id" "$app_path"
 
 sh ./scripts/run-maestro-ios.sh ../../.maestro/start-airport-simulation.yaml
 

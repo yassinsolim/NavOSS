@@ -10,6 +10,7 @@ const DEFAULT_PHOTON_URL = 'https://photon.komoot.io/api/';
 const PHOTON_TIMEOUT_MS = 3_000;
 const CALGARY_BOUNDS = '-114.316,50.842,-113.859,51.212';
 const NOMINATIM_TIMEOUT_MS = 4_000;
+const EARTH_RADIUS_METERS = 6_371_000;
 
 const PhotonFeatureSchema = z.object({
   geometry: z.object({
@@ -323,14 +324,34 @@ export function createNominatimSearchProvider(
   };
 }
 
-function resultDistance(result: SearchResult, query: SearchQuery): number {
+function resultDistanceMeters(result: SearchResult, query: SearchQuery): number | undefined {
   if (query.latitude === undefined || query.longitude === undefined) {
-    return 0;
+    return undefined;
   }
-  return (
-    (result.center.latitude - query.latitude) ** 2 +
-    (result.center.longitude - query.longitude) ** 2
-  );
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+  const latitudeDelta = toRadians(result.center.latitude - query.latitude);
+  const longitudeDelta = toRadians(result.center.longitude - query.longitude);
+  const originLatitude = toRadians(query.latitude);
+  const resultLatitude = toRadians(result.center.latitude);
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(originLatitude) * Math.cos(resultLatitude) * Math.sin(longitudeDelta / 2) ** 2;
+  return Math.round(2 * EARTH_RADIUS_METERS * Math.asin(Math.sqrt(haversine)));
+}
+
+function presentSearchResult(result: SearchResult, query: SearchQuery): SearchResult {
+  const name = result.name.replace(/\s+#\d{2,}\s*$/u, '').trim();
+  const label =
+    name === result.name || !result.label.startsWith(`${result.name},`)
+      ? result.label
+      : `${name}${result.label.slice(result.name.length)}`;
+  const distanceMeters = resultDistanceMeters(result, query);
+  return {
+    ...result,
+    ...(distanceMeters === undefined ? {} : { distanceMeters }),
+    label,
+    name,
+  };
 }
 
 function samePlace(left: SearchResult, right: SearchResult): boolean {
@@ -349,10 +370,11 @@ function mergeResults(
 ): SearchResult[] {
   const ranked = resultGroups
     .flat()
+    .map((result) => presentSearchResult(result, query))
     .sort(
       (left, right) =>
         right.confidence - left.confidence ||
-        resultDistance(left, query) - resultDistance(right, query) ||
+        (left.distanceMeters ?? 0) - (right.distanceMeters ?? 0) ||
         left.label.localeCompare(right.label, 'en-CA') ||
         left.id.localeCompare(right.id, 'en-CA'),
     );
@@ -360,7 +382,9 @@ function mergeResults(
   for (const result of ranked) {
     const duplicateIndex = deduplicated.findIndex((existing) => samePlace(existing, result));
     if (duplicateIndex === -1) {
-      deduplicated.push(result);
+      if (deduplicated.length < limit) {
+        deduplicated.push(result);
+      }
     } else if (result.details !== undefined) {
       const existing = deduplicated[duplicateIndex];
       if (existing !== undefined) {
@@ -369,9 +393,6 @@ function mergeResults(
           details: { ...result.details, ...existing.details },
         };
       }
-    }
-    if (deduplicated.length === limit) {
-      break;
     }
   }
   return deduplicated;

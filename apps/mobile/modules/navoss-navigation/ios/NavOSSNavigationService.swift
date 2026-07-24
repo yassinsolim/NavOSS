@@ -536,8 +536,12 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
         }
       }
       let utterance = AVSpeechUtterance(string: text)
-      utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
-      utterance.voice = AVSpeechSynthesisVoice(language: "en-CA")
+      utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+      utterance.voice =
+        AVSpeechSynthesisVoice.speechVoices()
+        .filter { $0.language == "en-CA" }
+        .max { $0.quality.rawValue < $1.quality.rawValue }
+        ?? AVSpeechSynthesisVoice(language: "en-CA")
       if self.pendingUtteranceIds.isEmpty {
         let audioSession = AVAudioSession.sharedInstance()
         try? audioSession.setCategory(

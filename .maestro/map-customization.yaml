@@ -2,6 +2,14 @@ appId: org.navoss.mobile
 ---
 - launchApp:
     clearState: true
+- openLink: 'exp+navoss://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081'
+- waitForAnimationToEnd
+- tapOn:
+    text: 'Close'
+    optional: true
+- tapOn:
+    text: 'Reload'
+    optional: true
 - extendedWaitUntil:
     visible: 'Search Calgary'
     timeout: 20000
@@ -13,7 +21,15 @@ appId: org.navoss.mobile
 - tapOn: 'Night'
 - tapOn: 'Flat'
 - tapOn: 'Buildings'
+- scrollUntilVisible:
+    element:
+      text: 'Camera markers'
+    direction: DOWN
 - tapOn: 'Camera markers'
+- scrollUntilVisible:
+    element:
+      text: 'Blue route'
+    direction: DOWN
 - tapOn: 'Blue route'
 - tapOn: 'Close map appearance'
 - assertVisible: 'Search Calgary'
@@ -24,18 +40,39 @@ appId: org.navoss.mobile
 - assertVisible:
     text: 'Flat'
     selected: true
+- scrollUntilVisible:
+    element:
+      text: 'Buildings'
+    direction: DOWN
 - assertVisible:
     text: 'Buildings'
     checked: false
+- scrollUntilVisible:
+    element:
+      text: 'Camera markers'
+    direction: DOWN
 - assertVisible:
     text: 'Camera markers'
     checked: false
+- scrollUntilVisible:
+    element:
+      text: 'Blue route'
+    direction: DOWN
 - assertVisible:
     text: 'Blue route'
     selected: true
 - tapOn: 'Close map appearance'
 - stopApp
 - launchApp
+- tapOn:
+    text: '.*:8081'
+    optional: true
+- tapOn:
+    text: 'Close'
+    optional: true
+- tapOn:
+    text: 'Reload'
+    optional: true
 - extendedWaitUntil:
     visible: 'Search Calgary'
     timeout: 20000
@@ -46,12 +83,24 @@ appId: org.navoss.mobile
 - assertVisible:
     text: 'Flat'
     selected: true
+- scrollUntilVisible:
+    element:
+      text: 'Buildings'
+    direction: DOWN
 - assertVisible:
     text: 'Buildings'
     checked: false
+- scrollUntilVisible:
+    element:
+      text: 'Camera markers'
+    direction: DOWN
 - assertVisible:
     text: 'Camera markers'
     checked: false
+- scrollUntilVisible:
+    element:
+      text: 'Blue route'
+    direction: DOWN
 - assertVisible:
     text: 'Blue route'
     selected: true

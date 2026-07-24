@@ -291,6 +291,10 @@ public final class NavOSSNavigationModule: Module {
       return self.serialize(NavOSSCarPlayTripStore.shared.snapshot())
     }
 
+    Function("getRecentDestinationIds") { () -> [String] in
+      NavOSSCarPlayDestinationStore.shared.snapshot().recents.map(\.id)
+    }
+
     Function("setRoute") { (trip: CarPlayTripRecord) throws -> [String: Any] in
       try self.service.startNavigation(trip.trip)
       return self.serialize(self.service.currentState())
@@ -313,6 +317,18 @@ public final class NavOSSNavigationModule: Module {
 
     Function("clearRecentDestinations") { () in
       NavOSSCarPlayDestinationStore.shared.clearRecents()
+    }
+
+    Function("clearDestinationHistory") { () in
+      NavOSSCarPlayDestinationStore.shared.clearDestinations()
+    }
+
+    Function("isFavoriteDestination") { (id: String) -> Bool in
+      NavOSSCarPlayDestinationStore.shared.isFavorite(id: id)
+    }
+
+    Function("toggleFavoriteDestination") { (destination: NavigationDestinationRecord) -> Bool in
+      NavOSSCarPlayDestinationStore.shared.toggleFavorite(destination.destination)
     }
 
     Function("setHomeDestination") { (destination: NavigationDestinationRecord?) in

@@ -11,12 +11,7 @@ appId: org.navoss.mobile
     text: 'Reload'
     optional: true
 - extendedWaitUntil:
-    visible: 'Search Calgary'
+    visible: 'Map with .* official safety camera symbols'
     timeout: 20000
-- longPressOn:
-    point: 78%,45%
-- extendedWaitUntil:
-    visible: 'Start navigation'
-    timeout: 20000
-- assertVisible: 'Dropped pin'
-- assertVisible: 'Select fastest .* route, .*, .*'
+- assertVisible: 'Search Calgary'
+- takeScreenshot: '/tmp/navoss-camera-marker-icons'

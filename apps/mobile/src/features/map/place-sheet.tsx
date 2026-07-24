@@ -15,9 +15,11 @@ interface PlaceSheetProps {
   onClose: () => void;
   onDirections: () => void;
   onReviews: () => void;
+  onSave: () => void;
   onShare: () => void;
   onWebsite?: () => void;
   place: SearchResult;
+  saved: boolean;
   websiteLabel?: string;
 }
 
@@ -111,9 +113,11 @@ export function PlaceSheet({
   onClose,
   onDirections,
   onReviews,
+  onSave,
   onShare,
   onWebsite,
   place,
+  saved,
   websiteLabel,
 }: PlaceSheetProps) {
   const details = place.details;
@@ -152,15 +156,23 @@ export function PlaceSheet({
           onPress={onDirections}
         />
         <PlaceAction
-          icon={{ android: 'share', ios: 'square.and.arrow.up' }}
-          label="Share"
-          onPress={onShare}
+          icon={{
+            android: saved ? 'bookmark' : 'bookmark_border',
+            ios: saved ? 'bookmark.fill' : 'bookmark',
+          }}
+          label={saved ? 'Saved' : 'Save'}
+          onPress={onSave}
         />
         <PlaceAction
           accessibilityHint="Opens Google Maps; the place query is shared only after you choose this action"
           icon={{ android: 'star', ios: 'star.fill' }}
           label="Reviews"
           onPress={onReviews}
+        />
+        <PlaceAction
+          icon={{ android: 'share', ios: 'square.and.arrow.up' }}
+          label="Share"
+          onPress={onShare}
         />
       </View>
 
@@ -241,7 +253,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     paddingBottom: 14,
-    paddingHorizontal: 24,
+    paddingHorizontal: 12,
     paddingTop: 4,
   },
   category: {

@@ -1,8 +1,10 @@
 import {
   Camera,
   GeoJSONSource,
+  Images,
   Layer,
   Map,
+  Marker,
   UserLocation,
   type CameraRef,
   type MapRef,
@@ -65,7 +67,11 @@ import {
 } from '@/features/map/map-preferences';
 import { MapPreferencesPanel } from '@/features/map/map-preferences-panel';
 import { PlaceSheet } from '@/features/map/place-sheet';
-import { approximateSearchCoordinate } from '@/features/map/search-proximity';
+import {
+  approximateSearchCoordinate,
+  rankSearchResults,
+  searchResultBounds,
+} from '@/features/map/search-proximity';
 import {
   type ApiConnectionState,
   SearchPanel,
@@ -97,10 +103,12 @@ import {
 import {
   announceSafetyCamera,
   clearCarPlayTrip,
-  clearRecentDestinations,
+  clearDestinationHistory,
   clearNavigationRoute,
   getNavigationSnapshot,
   getCarPlayState,
+  getRecentDestinationIds,
+  isFavoriteDestination,
   type NativeNavigationSnapshot,
   observeCarPlayNavigationEnded,
   observeCarPlayState,
@@ -108,6 +116,7 @@ import {
   recordRecentDestination,
   setNavigationRoute,
   stopNavigationAnnouncements,
+  toggleFavoriteDestination,
 } from '@/features/navigation/native-navigation';
 import {
   navigationCameraBearing,
@@ -135,6 +144,9 @@ const CALGARY_TOWER_ROUTE_ORIGIN: Coordinate = {
 const EMPTY_FEATURE_COLLECTION: FeatureCollection<Point> = {
   features: [],
   type: 'FeatureCollection',
+};
+const MAP_IMAGES = {
+  'safety-camera': require('@/assets/images/camera-marker.png'),
 };
 
 type LocationState = 'idle' | 'locating' | 'visible' | 'denied' | 'error';
@@ -262,6 +274,7 @@ export function MapScreen() {
   const cameraAlertTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const routeAbortControllerRef = useRef<AbortController>(null);
   const nativeStateVersionRef = useRef(-1);
+  const hasCenteredOnUserRef = useRef(false);
   const placeAbortControllerRef = useRef<AbortController>(null);
   const placeInteractionRef = useRef(0);
   const safetyCamerasRef = useRef<readonly SafetyCamera[]>([]);
@@ -270,12 +283,14 @@ export function MapScreen() {
   const [coverageBounds, setCoverageBounds] = useState<AppConfigResponse['coverage']['bounds']>();
   const [locationState, setLocationState] = useState<LocationState>('idle');
   const [mapError, setMapError] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
   const [mapPreferences, setMapPreferences] = useState(DEFAULT_MAP_PREFERENCES);
   const [mapStyle, setMapStyle] = useState<string | StyleSpecification>(
     mapStyleUrl(DEFAULT_MAP_PREFERENCES.stylePreset, colorScheme),
   );
   const [isMapPreferencesVisible, setIsMapPreferencesVisible] = useState(false);
   const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
+  const [selectedPlaceSaved, setSelectedPlaceSaved] = useState(false);
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -372,6 +387,52 @@ export function MapScreen() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    void Location.getForegroundPermissionsAsync()
+      .then(async (permission) => {
+        if (!permission.granted || !active) return;
+        const lastKnown = await Location.getLastKnownPositionAsync({
+          maxAge: 60_000,
+          requiredAccuracy: 500,
+        });
+        const location =
+          lastKnown ??
+          (await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          }));
+        if (!active) return;
+        setUserCoordinate({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+        setLocationState('visible');
+      })
+      .catch(() => {
+        if (active) setLocationState('error');
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      !mapReady ||
+      userCoordinate === undefined ||
+      hasCenteredOnUserRef.current ||
+      routeState.type !== 'idle'
+    ) {
+      return;
+    }
+    hasCenteredOnUserRef.current = true;
+    cameraRef.current?.flyTo({
+      center: [userCoordinate.longitude, userCoordinate.latitude],
+      duration: 750,
+      zoom: 15,
+    });
+  }, [mapReady, routeState.type, userCoordinate]);
+
+  useEffect(() => {
     const controller = new AbortController();
 
     void fetchSafetyCameras({ signal: controller.signal })
@@ -417,7 +478,7 @@ export function MapScreen() {
         .then((response) => {
           startTransition(() => {
             setApiConnection('online');
-            setResults(response.results);
+            setResults(rankSearchResults(response.results, getRecentDestinationIds()));
             setSearchSource(response.source);
             setSearchState('success');
           });
@@ -730,19 +791,75 @@ export function MapScreen() {
   const handleSelectResult = (result: SearchResult) => {
     Keyboard.dismiss();
     invalidatePlaceInteraction();
-    recordRecentDestination(result);
+    routeAbortControllerRef.current?.abort();
+    setRouteState({ type: 'idle' });
     setQuery(result.name);
     setResults([]);
     setSearchState('idle');
     setSelectedResult(result);
-    void calculateRoute(result);
+    setSelectedPlaceSaved(isFavoriteDestination(result.id));
+    setPlaceDetailsLoading(true);
+    cameraRef.current?.flyTo({
+      center: [result.center.longitude, result.center.latitude],
+      duration: 650,
+      zoom: 16,
+    });
+
+    const interactionId = placeInteractionRef.current;
+    const controller = new AbortController();
+    placeAbortControllerRef.current = controller;
+    void searchPlaces(result.name, {
+      includeDetails: true,
+      latitude: result.center.latitude,
+      limit: 20,
+      longitude: result.center.longitude,
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!controller.signal.aborted && placeInteractionRef.current === interactionId) {
+          setSelectedResult((current) =>
+            current?.id === result.id ? enrichMapPlace(result, response.results) : current,
+          );
+        }
+      })
+      .catch(() => {
+        // The selected result remains usable when optional metadata is unavailable.
+      })
+      .finally(() => {
+        if (
+          placeAbortControllerRef.current === controller &&
+          placeInteractionRef.current === interactionId
+        ) {
+          placeAbortControllerRef.current = null;
+          setPlaceDetailsLoading(false);
+        }
+      });
   };
 
   const handleSubmit = () => {
-    const firstResult = results[0];
-    if (firstResult !== undefined) {
-      handleSelectResult(firstResult);
+    Keyboard.dismiss();
+    const bounds = searchResultBounds(results);
+    if (bounds === undefined) return;
+
+    invalidatePlaceInteraction();
+    routeAbortControllerRef.current?.abort();
+    setSelectedResult(undefined);
+    setRouteState({ type: 'idle' });
+    if (results.length === 1) {
+      const result = results[0];
+      if (result !== undefined) {
+        cameraRef.current?.flyTo({
+          center: [result.center.longitude, result.center.latitude],
+          duration: 650,
+          zoom: 15,
+        });
+      }
+      return;
     }
+    cameraRef.current?.fitBounds(bounds, {
+      duration: 700,
+      padding: { bottom: 120 + insets.bottom, left: 54, right: 54, top: 260 },
+    });
   };
 
   const handleMapLongPress = (coordinate: Coordinate) => {
@@ -796,6 +913,7 @@ export function MapScreen() {
       setResults([]);
       setSearchState('idle');
       setSelectedResult(place);
+      setSelectedPlaceSaved(isFavoriteDestination(place.id));
       setPlaceDetailsLoading(true);
 
       const controller = new AbortController();
@@ -834,6 +952,12 @@ export function MapScreen() {
   const handleClosePlace = () => {
     invalidatePlaceInteraction();
     setSelectedResult(undefined);
+    setSelectedPlaceSaved(false);
+  };
+
+  const handleClearDestinationHistory = () => {
+    clearDestinationHistory();
+    setSelectedPlaceSaved(false);
   };
 
   const handlePlaceDirections = () => {
@@ -1201,7 +1325,7 @@ export function MapScreen() {
       <Map
         accessibilityLabel={
           mapPreferences.showSafetyCameras
-            ? `Map with ${String(safetyCameras.length)} official safety cameras`
+            ? `Map with ${String(safetyCameras.length)} official safety camera symbols`
             : 'Map with camera markers hidden'
         }
         attribution={false}
@@ -1214,6 +1338,7 @@ export function MapScreen() {
         }}
         onDidFinishLoadingMap={() => {
           setMapError(false);
+          setMapReady(true);
         }}
         onLongPress={({ nativeEvent }) => {
           const [longitude, latitude] = nativeEvent.lngLat;
@@ -1234,6 +1359,7 @@ export function MapScreen() {
         style={styles.map}
         tintColor={NavOssColors.asphalt}
       >
+        <Images images={MAP_IMAGES} />
         <Camera
           bearing={isNavigationCameraFollowing ? navigationBearing : undefined}
           center={isNavigationCameraFollowing ? navigationCameraCenter : undefined}
@@ -1270,6 +1396,26 @@ export function MapScreen() {
             vehicleStyle={vehicleStyle}
           />
         )}
+        {routeState.type === 'idle' &&
+          results.map((result) => (
+            <Marker
+              anchor="bottom"
+              id={`search-result:${result.id}`}
+              key={result.id}
+              lngLat={[result.center.longitude, result.center.latitude]}
+              onPress={() => {
+                handleSelectResult(result);
+              }}
+            >
+              <View style={styles.searchResultMarker}>
+                <SymbolView
+                  name={{ android: 'location_on', ios: 'mappin.circle.fill' }}
+                  size={25}
+                  tintColor={NavOssColors.coral}
+                />
+              </View>
+            </Marker>
+          ))}
         <GeoJSONSource data={selectedFeature(selectedResult)} id="selected-place">
           <Layer
             id="selected-place-halo"
@@ -1324,22 +1470,14 @@ export function MapScreen() {
         {mapPreferences.showSafetyCameras && safetyCameras.length > 0 && (
           <GeoJSONSource data={safetyCameraFeatures(safetyCameras)} id="safety-cameras">
             <Layer
-              id="safety-camera-markers"
-              paint={{
-                'circle-color': NavOssColors.sun,
-                'circle-radius': 9,
-                'circle-stroke-color': NavOssColors.asphalt,
-                'circle-stroke-width': 2,
+              id="safety-camera-symbols"
+              layout={{
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+                'icon-image': 'safety-camera',
+                'icon-size': 0.5,
               }}
-              type="circle"
-            />
-            <Layer
-              id="safety-camera-centers"
-              paint={{
-                'circle-color': NavOssColors.coral,
-                'circle-radius': 3,
-              }}
-              type="circle"
+              type="symbol"
             />
           </GeoJSONSource>
         )}
@@ -1447,6 +1585,9 @@ export function MapScreen() {
           onReviews={() => {
             openExternalPlaceUrl(placeReviewsUrl(selectedResult));
           }}
+          onSave={() => {
+            setSelectedPlaceSaved(toggleFavoriteDestination(selectedResult));
+          }}
           onShare={() => {
             void Share.share({
               message: placeShareMessage(selectedResult),
@@ -1468,6 +1609,7 @@ export function MapScreen() {
                 },
               })}
           place={selectedResult}
+          saved={selectedPlaceSaved}
           websiteLabel={selectedPlaceWebsiteLabel}
         />
       )}
@@ -1481,7 +1623,7 @@ export function MapScreen() {
             maximumResultsHeight={resultsHeight}
             onChangeQuery={handleChangeQuery}
             onClear={handleClear}
-            onClearRecentDestinations={clearRecentDestinations}
+            onClearDestinationHistory={handleClearDestinationHistory}
             onSelectResult={handleSelectResult}
             onSubmit={handleSubmit}
             query={query}
@@ -1725,6 +1867,20 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     width: 44,
     zIndex: 28,
+  },
+  searchResultMarker: {
+    alignItems: 'center',
+    backgroundColor: NavOssColors.white,
+    borderColor: NavOssColors.border,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    height: 36,
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { height: 2, width: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    width: 36,
   },
   map: {
     flex: 1,

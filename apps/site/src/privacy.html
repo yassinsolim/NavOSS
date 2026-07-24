@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="How the NavOSS Calgary technical alpha handles location, search, routing, and support data."
+      content="How the NavOSS Calgary technical beta handles location, search, routing, and support data."
     />
     <meta name="theme-color" content="#1b2526" />
     <link rel="canonical" href="https://navoss.yassin.app/privacy" />
@@ -25,7 +25,7 @@
     </header>
     <main class="document-shell">
       <article class="document">
-        <p class="document__meta">Internal beta policy · Effective July 21, 2026</p>
+        <p class="document__meta">Internal beta policy · Effective July 23, 2026</p>
         <h1>Privacy without an account</h1>
         <p>
           NavOSS is operated by Yassin Soliman as an individual developer in Alberta, Canada. It is
@@ -36,15 +36,19 @@
           direct privacy and support email has been activated and tested.
         </div>
 
-        <h2>Foreground location</h2>
+        <h2>Location and active navigation</h2>
         <p>
-          When permission is granted, precise foreground location shows your position, chooses a
-          route origin, matches progress to an active route, detects rerouting and arrival, and
-          checks whether an official safety camera is ahead.
+          When you grant When in Use location permission, precise location shows your position,
+          chooses a route origin, matches progress to an active route, detects rerouting and
+          arrival, and checks whether an official safety camera is ahead.
         </p>
         <p>
-          The current alpha does not request background location and does not maintain an in-app
-          trip-history database.
+          After you start turn-by-turn navigation, location updates continue while the phone is
+          locked, another app is visible, or CarPlay is connected. iOS displays its background
+          location indicator. NavOSS does not request Always location. Updates stop on End or
+          confirmed arrival. The current active route is stored transiently on the phone for
+          operating-system recovery, then erased when navigation ends or arrival is confirmed;
+          NavOSS does not maintain a trip-history database.
         </p>
 
         <h2>Search and routing</h2>
@@ -139,16 +143,22 @@
           routing and active guidance will be limited.
         </p>
         <p>
+          NavOSS stores up to 12 recent destinations and 20 places you save, including their names,
+          labels, and coordinates, only on the device for phone and CarPlay shortcuts. Use
+          <strong>Clear saved and recent destinations</strong> in About and Privacy to erase both
+          local lists. Removing the app also removes them.
+        </p>
+        <p>
           Sharing and Reviews are optional. Dismissing the system share sheet sends nothing to a
           recipient, and not choosing Reviews sends no selected-place query to Google. NavOSS does
           not ask for Contacts access.
         </p>
         <p>
-          Because NavOSS has no account and does not retain search, route, or trip records, it
-          normally has no history to export or delete. A rights request may identify a support
-          message or recent security event, but NavOSS may be unable to associate a transient,
-          IP-only request with a person. Requests about provider-controlled data may also need to be
-          directed to that provider.
+          Because NavOSS has no account and does not retain server-side search, route, or trip
+          records, it normally has no server history to export or delete. A rights request may
+          identify a support message or recent security event, but NavOSS may be unable to associate
+          a transient, IP-only request with a person. Requests about provider-controlled data may
+          also need to be directed to that provider.
         </p>
 
         <h2>Security and international processing</h2>
