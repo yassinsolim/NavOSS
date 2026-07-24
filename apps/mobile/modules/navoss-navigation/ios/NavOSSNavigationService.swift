@@ -547,7 +547,10 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
         }
       }
       let utterance = AVSpeechUtterance(string: text)
-      utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+      utterance.pitchMultiplier = 1.02
+      utterance.preUtteranceDelay = 0.04
+      utterance.postUtteranceDelay = 0.12
+      utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.92
       utterance.voice =
         AVSpeechSynthesisVoice.speechVoices()
         .filter { $0.language == "en-CA" }
