@@ -11,7 +11,7 @@ test('homepage presents the product and honest beta posture', () => {
 
   assert.match(homepage, /<h1[^>]*>NavOSS<\/h1>/);
   assert.match(homepage, /Calgary now[\s\S]*North America next/);
-  assert.match(homepage, /Build 13/);
+  assert.match(homepage, /Build 14/);
   assert.match(homepage, /no\s+live\s+traffic/i);
   assert.match(styles, /navoss-map-current\.jpg/);
   assert.doesNotMatch(styles, /app-navigation\.jpg/);
