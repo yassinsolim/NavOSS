@@ -24,7 +24,7 @@ The present rejection risks are concrete:
 | Channel                         | Current verdict        | Meaning                                                                                                                       |
 | ------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Local and physical-device alpha | GO                     | Existing automated and device checks can continue.                                                                            |
-| Internal TestFlight             | NO-GO pending P0 gates | Signed build 13 is uploaded; Apple processing, account-holder fields, and clean physical-device/CarPlay validation remain.    |
+| Internal TestFlight             | NO-GO pending P0 gates | Build 13 is processed for internal testers; account-holder fields and clean physical-device/CarPlay validation remain.        |
 | External TestFlight             | NO-GO                  | Reviewer access is complete; Beta App Review, final beta information, backend soak, support, and on-road evidence remain.     |
 | Public App Store                | NO-GO                  | A beta build and beta metadata do not belong on the public App Store. Reliability and public-release scope remain incomplete. |
 
