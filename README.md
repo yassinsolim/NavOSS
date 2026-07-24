@@ -32,7 +32,7 @@ NavOSS is an independently designed navigation project using OpenStreetMap-deriv
 | Native core        | Swift route ownership, course/continuity matching, rerouting, speech, recovery, and arrival hysteresis                          |
 | API                | Public Fastify ingress with self-hosted Alberta Nominatim/Valhalla and Calgary camera data                                      |
 | Automated evidence | Contract/API/mobile/site/Swift suites, simulator journeys, two iPhone layouts, and a 17-variant Calgary route matrix            |
-| Current TestFlight | Build 12 is the internal diagnostic build; the feedback-fixed replacement still needs signing and physical validation           |
+| Current TestFlight | Build 13 is signed and uploaded; Apple processing, installation, and physical validation remain                                 |
 | Android            | Planned after the iOS navigation core is stable                                                                                 |
 
 ## Architecture
@@ -180,7 +180,7 @@ The API is intentionally exposed only for local development during this workflow
 
 ## Beta release readiness
 
-Build 12 is available only to the internal tester and supplied the feedback addressed by the current replacement candidate. The replacement is not yet available in TestFlight; it still needs a signed `production-carplay` build, Apple processing, clean-device/background/real-CarPlay validation, and Beta App Review before external invites.
+Build 12 remains the installed internal diagnostic build that supplied the latest feedback. The feedback-fixed build 13 is signed, audited, and uploaded to App Store Connect; it still needs Apple processing, clean-device/background/real-CarPlay validation, and Beta App Review before external invites.
 
 - [TestFlight beta runbook and GO/NO-GO gates](docs/release/testflight.md)
 - [App Store Connect metadata draft](docs/release/app-store-metadata.md)
