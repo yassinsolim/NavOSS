@@ -5,17 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="NavOSS is account-free, privacy-first navigation built in the open, beginning with Calgary."
+      content="NavOSS is private, account-free navigation built in Canada and tested openly in Calgary."
     />
     <meta name="theme-color" content="#1b2526" />
     <meta property="og:title" content="NavOSS" />
-    <meta property="og:description" content="Account-free, privacy-first navigation for Calgary." />
-    <meta property="og:image" content="https://navoss.yassin.app/assets/app-navigation.jpg" />
+    <meta
+      property="og:description"
+      content="Private navigation without an account. Calgary today, North America next."
+    />
+    <meta
+      property="og:image"
+      content="https://navoss.yassin.app/assets/navoss-social-preview.jpg"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="canonical" href="https://navoss.yassin.app/" />
     <link rel="icon" href="/assets/navoss-chevron.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
-    <title>NavOSS | Private Calgary navigation</title>
+    <title>NavOSS | Private navigation, built in Canada</title>
   </head>
   <body>
     <header class="site-header">
@@ -24,113 +33,144 @@
         <span>NavOSS</span>
       </a>
       <nav class="site-nav" aria-label="Primary navigation">
+        <a href="#why-navoss">Why NavOSS</a>
+        <a href="#coverage">Coverage</a>
         <a href="/privacy">Privacy</a>
         <a href="/support">Support</a>
-        <a href="/data-sources">Data</a>
         <a class="source-link" href="https://github.com/yassinsolim/NavOSS">View source</a>
       </nav>
     </header>
 
     <main>
-      <section class="hero" aria-label="NavOSS active navigation in Calgary">
+      <section class="hero" aria-label="NavOSS map centred on downtown Calgary">
         <div class="hero__content">
-          <p class="eyebrow reveal">Calgary technical beta</p>
+          <p class="eyebrow reveal">Private navigation, built in Canada</p>
           <h1 class="reveal reveal--2">NavOSS</h1>
           <p class="hero__lead reveal reveal--3">
-            Private navigation without an account. Built to be inspected, tested, and improved in
-            the open.
+            Know where you're going without giving an ad network a map of everywhere you've been.
+          </p>
+          <p class="hero__sublead reveal reveal--3">
+            Account-free search, spoken guidance, rerouting, and CarPlay. Now testing on Calgary
+            roads.
           </p>
           <div class="hero__actions reveal reveal--3">
-            <a class="button button--primary" href="https://github.com/yassinsolim/NavOSS"
-              >Explore the repository</a
+            <a class="button button--primary" href="#current-build">See the current build</a>
+            <a class="button button--secondary" href="https://github.com/yassinsolim/NavOSS"
+              >Inspect the source</a
             >
-            <a class="button button--secondary" href="#current-build">Current build</a>
           </div>
-          <p class="hero__status reveal reveal--3">
-            Tester candidate: background and CarPlay guidance · automatic rerouting · official
-            Calgary camera alerts · no live traffic
-          </p>
+          <div class="hero__proof reveal reveal--3">
+            <strong>Build 13</strong>
+            <span>Processed by Apple · internal road and CarPlay validation is next</span>
+          </div>
+        </div>
+        <p class="hero__caption">Current NavOSS app · Calgary, Alberta</p>
+      </section>
+
+      <section class="section evidence-band" aria-label="Verified NavOSS evidence">
+        <div class="section__inner">
+          <p class="evidence-band__label">Tested, not hand-waved</p>
+          <div class="metrics" aria-label="Current automated evidence">
+            <div class="metric"><strong>174</strong><span>automated checks passing</span></div>
+            <div class="metric"><strong>17/17</strong><span>Calgary route variants</span></div>
+            <div class="metric"><strong>0</strong><span>accounts required</span></div>
+            <div class="metric"><strong>100%</strong><span>source available to inspect</span></div>
+          </div>
         </div>
       </section>
 
-      <section class="section">
+      <section class="section" id="why-navoss">
         <div class="section__inner">
-          <p class="eyebrow">The operating principles</p>
-          <h2>Useful without surveillance.</h2>
+          <p class="eyebrow">Why NavOSS</p>
+          <h2>A navigator you can question.</h2>
           <p class="section__intro">
-            The first milestone is a focused Calgary navigation experience with transparent
-            providers and conservative safety behavior.
+            Trust comes from restrained data collection, visible sources, and release claims that
+            match the evidence.
           </p>
           <div class="principles">
             <article class="principle">
               <span class="principle__number">01</span>
-              <h3>Account-free</h3>
+              <h3>No account</h3>
               <p>
-                Search, route preview, and active guidance do not require a profile, social graph,
-                or advertising identifier.
+                Browse, search, preview routes, and navigate without a profile, advertising ID, or
+                social graph.
               </p>
             </article>
             <article class="principle">
               <span class="principle__number">02</span>
-              <h3>Calgary-first</h3>
+              <h3>Honest limits</h3>
               <p>
-                One city earns reliability before coverage expands. Route and search gaps become
-                repeatable tests.
+                Provider, coverage, traffic availability, and degraded states stay visible instead
+                of being hidden behind optimistic copy.
               </p>
             </article>
             <article class="principle">
               <span class="principle__number">03</span>
-              <h3>Inspectable</h3>
+              <h3>Open evidence</h3>
               <p>
-                Open contracts, visible attribution, explicit degraded states, and measured release
-                gates replace vague parity claims.
+                The contracts, clients, native navigation core, tests, and operating runbooks are
+                available for inspection.
               </p>
             </article>
           </div>
         </div>
       </section>
 
-      <section class="section evidence-band">
-        <div class="section__inner">
-          <p class="eyebrow">Verified locally</p>
-          <h2>Evidence before expansion.</h2>
-          <div class="metrics" aria-label="Current automated evidence">
-            <div class="metric">
-              <strong>17/17</strong><span>Calgary route variants passed</span>
-            </div>
-            <div class="metric">
-              <strong>159</strong><span>contract, API, mobile, site, and Swift tests</span>
-            </div>
-            <div class="metric"><strong>2</strong><span>validated iPhone layouts</span></div>
-            <div class="metric"><strong>57</strong><span>official safety-camera records</span></div>
+      <section class="section coverage-band" id="coverage">
+        <div class="section__inner coverage-layout">
+          <div>
+            <p class="eyebrow">Coverage</p>
+            <h2>Calgary now.<br />North America next.</h2>
+            <p class="section__intro">
+              A continent-wide navigation service is possible. We are expanding the routing, search,
+              and operations stack without pretending today's Calgary beta already covers it.
+            </p>
           </div>
+          <dl class="roadmap-list">
+            <div>
+              <dt>Available for testers</dt>
+              <dd>Driving search and guidance in Calgary, Alberta.</dd>
+            </div>
+            <div>
+              <dt>Expansion plan</dt>
+              <dd>Canada, the United States, and Mexico after regional quality gates pass.</dd>
+            </div>
+            <div>
+              <dt>Live traffic</dt>
+              <dd>
+                No live traffic yet. A licensed provider is under review; Google and Apple traffic
+                are not mixed into the open map, and no traffic claim ships before the contract and
+                road tests.
+              </dd>
+            </div>
+          </dl>
         </div>
       </section>
 
       <section class="section" id="current-build">
         <div class="section__inner">
-          <p class="eyebrow">Current build</p>
-          <h2>A beta with clear edges.</h2>
+          <p class="eyebrow">Build 13</p>
+          <h2>Real navigation, still earning its range.</h2>
           <dl class="status-list">
             <div class="status-row">
-              <dt>Implemented in the build 13 tester candidate</dt>
+              <dt>Ready now</dt>
               <dd>
                 Calgary search, saved places, route alternatives, avoid-highways routing, spoken
                 background guidance, rerouting, arrival, CarPlay, and official camera alerts.
               </dd>
             </div>
             <div class="status-row">
-              <dt>Not shipped</dt>
+              <dt>Next field gate</dt>
               <dd>
-                Live traffic, lane guidance, Android distribution, offline routing, and community
-                incident reports.
+                Install the next signed candidate through TestFlight, then repeat locked-phone,
+                on-road, voice, wired-CarPlay, and wireless-CarPlay validation.
               </dd>
             </div>
             <div class="status-row">
-              <dt>Distribution status</dt>
+              <dt>Not shipped</dt>
               <dd>
-                Build 13 is signed and uploaded. Apple processing, TestFlight installation, physical
-                validation, and Beta App Review remain before external testers.
+                North America coverage, licensed live traffic, lane guidance, Android, offline
+                routing, and community incident reports.
               </dd>
             </div>
           </dl>
@@ -140,10 +180,10 @@
       <section class="section notice-band">
         <div class="section__inner">
           <div>
-            <h2>Technical beta means technical beta.</h2>
+            <h2>Trust the road signs first.</h2>
             <p>
-              NavOSS is not a substitute for posted signs, road laws, closure notices, or a
-              production navigation service. Have a passenger operate test builds while moving.
+              NavOSS is pre-release software, not a substitute for posted signs, road laws, closure
+              notices, or good judgement. Have a passenger operate test builds while moving.
             </p>
           </div>
           <a class="button button--secondary" href="/support">Read support guidance</a>
@@ -153,7 +193,7 @@
 
     <footer class="site-footer">
       <div class="footer__inner">
-        <span>NavOSS · Calgary, Alberta</span>
+        <span>NavOSS · Built in Calgary, Alberta</span>
         <nav aria-label="Footer navigation">
           <a href="/privacy">Privacy</a>
           <a href="/support">Support</a>

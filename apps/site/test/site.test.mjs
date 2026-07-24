@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import test from 'node:test';
 
@@ -10,9 +10,15 @@ test('homepage presents the product and honest beta posture', () => {
   const styles = readFileSync(resolve(sourceRoot, 'styles.css'), 'utf8');
 
   assert.match(homepage, /<h1[^>]*>NavOSS<\/h1>/);
-  assert.match(homepage, /Calgary technical beta/);
+  assert.match(homepage, /Calgary now[\s\S]*North America next/);
+  assert.match(homepage, /Build 13/);
   assert.match(homepage, /no\s+live\s+traffic/i);
-  assert.match(styles, /app-navigation\.jpg/);
+  assert.match(styles, /navoss-map-current\.jpg/);
+  assert.doesNotMatch(styles, /app-navigation\.jpg/);
+  assert.ok(statSync(resolve(sourceRoot, 'assets', 'navoss-map-current.jpg')).size > 800_000);
+  assert.match(homepage, /navoss-social-preview\.jpg/);
+  assert.match(homepage, /og:image:width" content="1200"/);
+  assert.match(homepage, /og:image:height" content="630"/);
 });
 
 test('legal and support pages expose stable public routes', () => {

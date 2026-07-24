@@ -17,12 +17,12 @@
 :root {
   --asphalt: #1b2526;
   --asphalt-soft: #243536;
-  --border: #cbd3ce;
+  --border: #c5cec9;
   --coral: #e65342;
   --fog: #e9eeea;
   --green: #18796f;
-  --muted: #596463;
-  --paper: #f7f7f2;
+  --muted: #52605e;
+  --paper: #f4f5f0;
   --sky: #d8ecea;
   --sun: #f5c84c;
   --white: #ffffff;
@@ -60,7 +60,7 @@ img {
   color: var(--white);
   display: flex;
   gap: 28px;
-  min-height: 68px;
+  min-height: 72px;
   padding: 10px max(22px, calc((100% - var(--content)) / 2));
   position: relative;
   z-index: 10;
@@ -100,39 +100,48 @@ img {
 }
 
 .source-link {
-  border: 1px solid #607170;
+  border: 1px solid #6f807e;
   border-radius: 6px;
   padding: 9px 13px;
 }
 
 .hero {
   background-color: var(--asphalt);
-  background-image: url('/assets/app-navigation.jpg');
-  background-position: center 43%;
-  background-size: cover;
+  background-image: url('/assets/navoss-map-current.jpg');
+  background-position: right 42%;
+  background-repeat: no-repeat;
+  background-size: clamp(820px, 66vw, 1240px) auto;
   color: var(--white);
   display: grid;
-  height: min(82svh, 820px);
-  min-height: 610px;
+  height: min(76svh, 760px);
+  min-height: 620px;
   overflow: hidden;
   position: relative;
 }
 
-.hero::after {
-  background: rgba(18, 30, 31, 0.72);
+.hero::before {
+  background: rgba(14, 27, 28, 0.62);
   content: '';
   inset: 0;
   position: absolute;
 }
 
+.hero::after {
+  background: rgba(20, 34, 35, 0.9);
+  content: '';
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: min(62%, 880px);
+}
+
 .hero__content {
-  align-self: end;
+  align-self: center;
   margin: 0 auto;
   max-width: var(--content);
-  padding: 60px 22px 72px;
+  padding: 54px 22px 66px;
   position: relative;
   width: 100%;
-  z-index: 1;
+  z-index: 2;
 }
 
 .eyebrow {
@@ -145,18 +154,26 @@ img {
 }
 
 .hero h1 {
-  font-size: 76px;
+  font-size: 78px;
   letter-spacing: 0;
   line-height: 0.98;
   margin: 0;
 }
 
 .hero__lead {
-  color: #edf2ef;
-  font-size: 25px;
-  line-height: 1.35;
+  color: var(--white);
+  font-size: 27px;
+  line-height: 1.3;
   margin: 22px 0 0;
-  max-width: 620px;
+  max-width: 650px;
+}
+
+.hero__sublead {
+  color: #cfdbd6;
+  font-size: 18px;
+  line-height: 1.5;
+  margin: 18px 0 0;
+  max-width: 580px;
 }
 
 .hero__actions {
@@ -187,17 +204,34 @@ img {
   color: var(--white);
 }
 
-.hero__status {
+.hero__proof {
+  align-items: baseline;
   border-top: 1px solid rgba(255, 255, 255, 0.24);
   color: #d6dfdb;
+  display: flex;
   font-size: 15px;
+  gap: 14px;
   margin-top: 38px;
-  max-width: 720px;
+  max-width: 650px;
   padding-top: 18px;
 }
 
+.hero__proof strong {
+  color: var(--sun);
+}
+
+.hero__caption {
+  bottom: 18px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  margin: 0;
+  position: absolute;
+  right: max(22px, calc((100% - var(--content)) / 2));
+  z-index: 2;
+}
+
 .section {
-  padding: 78px 22px;
+  padding: 86px 22px;
 }
 
 .section__inner {
@@ -207,7 +241,7 @@ img {
 
 .section h2,
 .document h1 {
-  font-size: 42px;
+  font-size: 44px;
   letter-spacing: 0;
   line-height: 1.08;
   margin: 0;
@@ -226,12 +260,12 @@ img {
   border-top: 1px solid var(--border);
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  margin-top: 46px;
+  margin-top: 48px;
 }
 
 .principle {
-  min-height: 210px;
-  padding: 30px;
+  min-height: 228px;
+  padding: 32px;
 }
 
 .principle + .principle {
@@ -259,20 +293,29 @@ img {
 }
 
 .evidence-band {
-  background: var(--sky);
-  border-bottom: 1px solid #b9d4d0;
-  border-top: 1px solid #b9d4d0;
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 38px;
+  padding-top: 38px;
+}
+
+.evidence-band__label {
+  color: var(--green);
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 22px;
+  text-transform: uppercase;
 }
 
 .metrics {
   display: grid;
   gap: 0;
   grid-template-columns: repeat(4, 1fr);
-  margin-top: 42px;
+  margin-top: 0;
 }
 
 .metric {
-  border-left: 1px solid #a7c8c3;
+  border-left: 1px solid var(--border);
   padding: 8px 24px 8px 26px;
 }
 
@@ -288,10 +331,49 @@ img {
 }
 
 .metric span {
-  color: #405957;
+  color: var(--muted);
   display: block;
   line-height: 1.35;
   margin-top: 8px;
+}
+
+.coverage-band {
+  background: var(--asphalt-soft);
+  color: var(--white);
+}
+
+.coverage-layout {
+  display: grid;
+  gap: 72px;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+
+.coverage-band .section__intro {
+  color: #c9d5d1;
+}
+
+.roadmap-list {
+  border-top: 1px solid #536462;
+  margin: 0;
+}
+
+.roadmap-list > div {
+  border-bottom: 1px solid #536462;
+  display: grid;
+  gap: 22px;
+  grid-template-columns: 150px 1fr;
+  padding: 24px 0;
+}
+
+.roadmap-list dt {
+  color: var(--sun);
+  font-weight: 700;
+}
+
+.roadmap-list dd {
+  color: #dce4e1;
+  line-height: 1.55;
+  margin: 0;
 }
 
 .status-list {
@@ -459,13 +541,24 @@ img {
   }
 
   .hero {
-    background-position: center top;
-    height: 78svh;
-    min-height: 590px;
+    background-position: center 38%;
+    background-size: cover;
+    height: min(76svh, 690px);
+    min-height: 610px;
+  }
+
+  .hero::before {
+    background: rgba(13, 25, 26, 0.66);
+  }
+
+  .hero::after {
+    background: rgba(18, 31, 32, 0.72);
+    width: 100%;
   }
 
   .hero__content {
-    padding-bottom: 50px;
+    align-self: end;
+    padding-bottom: 54px;
   }
 
   .hero h1 {
@@ -474,6 +567,21 @@ img {
 
   .hero__lead {
     font-size: 21px;
+  }
+
+  .hero__sublead {
+    font-size: 16px;
+  }
+
+  .hero__proof {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 28px;
+  }
+
+  .hero__caption {
+    display: none;
   }
 
   .section {
@@ -486,8 +594,13 @@ img {
   }
 
   .principles,
-  .metrics {
+  .metrics,
+  .coverage-layout {
     grid-template-columns: 1fr;
+  }
+
+  .coverage-layout {
+    gap: 42px;
   }
 
   .principle + .principle,
@@ -504,6 +617,11 @@ img {
   .status-row {
     grid-template-columns: 1fr;
     gap: 8px;
+  }
+
+  .roadmap-list > div {
+    gap: 8px;
+    grid-template-columns: 1fr;
   }
 
   .notice-band .section__inner {
