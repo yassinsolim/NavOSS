@@ -33,6 +33,16 @@ chmod 600 .env
 Generate independent random passwords rather than copying the example values.
 Never commit `.env`.
 
+Live traffic remains disabled when `MAPBOX_ACCESS_TOKEN` is blank and
+`MAPBOX_VEHICLE_LICENSE_CONFIRMED=0`. Do not set the confirmation flag based on
+a standard self-service account: Mapbox's current pricing terms require a
+commercial application license for vehicle and in-vehicle use. After that
+license is executed, store the server token only in the mode-600 `.env`, set the
+confirmation flag to `1`, update the production privacy/App Store disclosures,
+and rerun the route-quality and physical CarPlay gates. A token without license
+confirmation, or confirmation without a token, intentionally prevents API
+startup.
+
 ## First import
 
 The two geospatial imports are intentionally sequential:

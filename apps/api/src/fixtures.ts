@@ -135,7 +135,11 @@ export const CALGARY_SEARCH_FIXTURES = [
   },
 ] as const satisfies readonly SearchFixture[];
 
-export function createAppConfig(generatedAt: string, productionSearch = false): AppConfigResponse {
+export function createAppConfig(
+  generatedAt: string,
+  productionSearch = false,
+  liveTraffic = false,
+): AppConfigResponse {
   return {
     apiVersion: 'v1',
     attribution: [
@@ -165,7 +169,7 @@ export function createAppConfig(generatedAt: string, productionSearch = false): 
     },
     features: {
       communityReports: false,
-      liveTraffic: false,
+      liveTraffic,
       officialSafetyCameras: true,
       productionSearch,
     },

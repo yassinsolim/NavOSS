@@ -190,6 +190,11 @@ export function formatDuration(durationSeconds: number): string {
     : `${String(hours)} hr ${String(remainingMinutes)} min`;
 }
 
+export function formatTrafficDelay(delaySeconds: number): string | undefined {
+  const minutes = Math.round(Math.max(0, delaySeconds) / 60);
+  return minutes < 1 ? undefined : `+${String(minutes)} min traffic`;
+}
+
 export function formatDistance(distanceMetersValue: number): string {
   if (distanceMetersValue < 1_000) {
     return `${String(Math.max(10, Math.round(distanceMetersValue / 10) * 10))} m`;

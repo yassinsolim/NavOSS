@@ -113,6 +113,8 @@ final class NavigationAPIClientTests: XCTestCase {
     XCTAssertEqual(routes.first?.geometry.first?.latitude, 51.04)
     XCTAssertEqual(routes.first?.geometry.first?.longitude, -114.08)
     XCTAssertEqual(routes.first?.preferences, preferences)
+    XCTAssertEqual(routes.first?.source, "valhalla-development")
+    XCTAssertNil(routes.first?.traffic)
     XCTAssertEqual(
       routes.first?.steps.first?.spokenInstruction,
       "Continue north on Airport Trail NE"

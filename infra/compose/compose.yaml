@@ -14,6 +14,8 @@ services:
     restart: unless-stopped
     environment:
       HOST: 0.0.0.0
+      MAPBOX_ACCESS_TOKEN: ${MAPBOX_ACCESS_TOKEN:-}
+      MAPBOX_VEHICLE_LICENSE_CONFIRMED: ${MAPBOX_VEHICLE_LICENSE_CONFIRMED:-0}
       NODE_ENV: production
       NOMINATIM_DATASET_VERSION: ${NOMINATIM_DATASET_VERSION}
       NOMINATIM_URL: http://nominatim:8080/

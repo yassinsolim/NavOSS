@@ -123,6 +123,25 @@ describe('client configuration', () => {
 
     expect(body.features.productionSearch).toBe(true);
   });
+
+  it('reports live traffic only for a configured live route provider', async () => {
+    const app = await createTestApp({
+      routeProvider: {
+        getRoutes: () => Promise.resolve([]),
+        source: {
+          attribution: 'Routing and traffic by Mapbox',
+          degraded: false,
+          id: 'mapbox-traffic',
+          mode: 'production',
+          traffic: 'live',
+        },
+      },
+    });
+    const response = await app.inject({ method: 'GET', url: '/v1/config' });
+    const body = AppConfigResponseSchema.parse(response.json());
+
+    expect(body.features.liveTraffic).toBe(true);
+  });
 });
 
 describe('safety cameras', () => {
@@ -269,9 +288,11 @@ describe('routes', () => {
       routeProvider: {
         getRoutes: () => Promise.resolve([route]),
         source: {
+          attribution: 'Routing by Valhalla using OpenStreetMap data',
           degraded: false,
           id: 'valhalla-self-hosted',
           mode: 'production',
+          traffic: 'unavailable',
         },
       },
     });
@@ -289,6 +310,49 @@ describe('routes', () => {
     expect(body.source).toMatchObject({
       id: 'valhalla-self-hosted',
       mode: 'production',
+    });
+  });
+
+  it('returns live traffic delay and provider attribution', async () => {
+    const trafficRoute: RouteAlternative = {
+      ...route,
+      durationSeconds: 1_515.354,
+      traffic: {
+        delaySeconds: 300,
+        typicalDurationSeconds: 1_215.354,
+      },
+    };
+    const app = await createTestApp({
+      routeProvider: {
+        getRoutes: () => Promise.resolve([trafficRoute]),
+        source: {
+          attribution: 'Routing and traffic by Mapbox',
+          degraded: false,
+          id: 'mapbox-traffic',
+          mode: 'production',
+          traffic: 'live',
+        },
+      },
+    });
+    const response = await app.inject({
+      method: 'POST',
+      payload: {
+        destination: { latitude: 51.13157, longitude: -114.01055 },
+        origin: { latitude: 51.0447, longitude: -114.0719 },
+      },
+      url: '/v1/routes',
+    });
+    const body = RouteResponseSchema.parse(response.json());
+
+    expect(body.routes[0]?.traffic).toEqual({
+      delaySeconds: 300,
+      typicalDurationSeconds: 1_215.354,
+    });
+    expect(body.source).toEqual({
+      attribution: 'Routing and traffic by Mapbox',
+      id: 'mapbox-traffic',
+      mode: 'production',
+      traffic: 'live',
     });
   });
 

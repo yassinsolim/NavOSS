@@ -122,16 +122,35 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(execute?.text, "Turn right onto Aspen Glen Way southwest")
   }
 
+  func testCarPlayDistanceMeasurementUsesDrivingScaleUnits() {
+    let nearby = navOSSCarPlayDistanceMeasurement(450)
+    XCTAssertEqual(nearby.unit, .meters)
+    XCTAssertEqual(nearby.value, 450)
+
+    let route = navOSSCarPlayDistanceMeasurement(12_500)
+    XCTAssertEqual(route.unit, .kilometers)
+    XCTAssertEqual(route.value, 12.5)
+  }
+
   func testCarPlayTripStoreRejectsStaleNavigationPublications() {
     let store = NavOSSCarPlayTripStore(notificationCenter: NotificationCenter())
     let firstTrip = makeNavigationSessionTrip()
     let secondTrip = makeNavigationSessionTrip(id: "route-2")
     let firstGuidance = makeGuidance(distance: 300, duration: 30)
     let secondGuidance = makeGuidance(distance: 200, duration: 20)
+    let firstPosition = NavOSSCarPlayPosition(
+      coordinate: NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      courseDegrees: 90
+    )
+    let secondPosition = NavOSSCarPlayPosition(
+      coordinate: NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.07),
+      courseDegrees: 45
+    )
 
     store.publishNavigationState(
       trip: firstTrip,
       guidance: firstGuidance,
+      position: firstPosition,
       generation: 4,
       sequence: 10
     )
@@ -139,6 +158,7 @@ final class NavigationCoreTests: XCTestCase {
     store.publishNavigationState(
       trip: firstTrip,
       guidance: firstGuidance,
+      position: firstPosition,
       generation: 4,
       sequence: 12
     )
@@ -147,17 +167,20 @@ final class NavigationCoreTests: XCTestCase {
     store.publishNavigationState(
       trip: secondTrip,
       guidance: secondGuidance,
+      position: secondPosition,
       generation: 6,
       sequence: 20
     )
     store.publishNavigationState(
       trip: firstTrip,
       guidance: firstGuidance,
+      position: firstPosition,
       generation: 6,
       sequence: 19
     )
     XCTAssertEqual(store.snapshot().trip, secondTrip)
     XCTAssertEqual(store.snapshot().guidance, secondGuidance)
+    XCTAssertEqual(store.snapshot().position, secondPosition)
   }
 
   func testActiveTripStoreExpiresAndClearsTransientRoute() throws {
@@ -447,6 +470,75 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(snapshot.distanceFromRouteMeters ?? 0, 111.2, accuracy: 0.5)
     XCTAssertEqual(snapshot.matchedCourseDegrees ?? 0, 90, accuracy: 0.1)
     XCTAssertEqual(snapshot.routeProgress, 0.5, accuracy: 0.001)
+  }
+
+  func testMatchedProgressDoesNotMoveBackwardWithGPSJitter() throws {
+    let core = NavigationCore()
+    try core.setRoute([
+      NavigationCoordinate(latitude: 51.04, longitude: -114.08),
+      NavigationCoordinate(latitude: 51.04, longitude: -114.06),
+    ])
+    let forward = try core.updateLocation(
+      NavigationLocationSample(
+        coordinate: NavigationCoordinate(latitude: 51.04, longitude: -114.07),
+        courseDegrees: 90,
+        horizontalAccuracyMeters: 5
+      )
+    )
+    let jitteredBackward = try core.updateLocation(
+      NavigationLocationSample(
+        coordinate: NavigationCoordinate(latitude: 51.04, longitude: -114.07005),
+        courseDegrees: 90,
+        horizontalAccuracyMeters: 5
+      )
+    )
+
+    XCTAssertEqual(jitteredBackward.routeProgress, forward.routeProgress, accuracy: 0.000_001)
+    XCTAssertEqual(jitteredBackward.matchedCoordinate, forward.matchedCoordinate)
+  }
+
+  func testSustainedBackwardTravelTriggersRerouteWithoutRewindingProgress() throws {
+    let core = NavigationCore()
+    try core.setRoute([
+      NavigationCoordinate(latitude: 51.04, longitude: -114.08),
+      NavigationCoordinate(latitude: 51.04, longitude: -114.06),
+    ])
+    let forward = try core.updateLocation(
+      NavigationLocationSample(
+        coordinate: NavigationCoordinate(latitude: 51.04, longitude: -114.07),
+        courseDegrees: 90,
+        horizontalAccuracyMeters: 5
+      )
+    )
+
+    var reversed = forward
+    for longitude in [-114.0705, -114.071, -114.0715] {
+      reversed = try core.updateLocation(
+        NavigationLocationSample(
+          coordinate: NavigationCoordinate(latitude: 51.04, longitude: longitude),
+          courseDegrees: 270,
+          horizontalAccuracyMeters: 5
+        )
+      )
+    }
+
+    XCTAssertTrue(reversed.isOffRoute)
+    XCTAssertNil(reversed.matchedCoordinate)
+    XCTAssertEqual(reversed.routeProgress, forward.routeProgress, accuracy: 0.000_001)
+
+    var backwardRecovery = reversed
+    for _ in 0..<2 {
+      backwardRecovery = try core.updateLocation(
+        NavigationLocationSample(
+          coordinate: NavigationCoordinate(latitude: 51.04, longitude: -114.07005),
+          courseDegrees: 90,
+          horizontalAccuracyMeters: 5
+        )
+      )
+    }
+    XCTAssertTrue(backwardRecovery.isOffRoute)
+    XCTAssertNil(backwardRecovery.matchedCoordinate)
+    XCTAssertEqual(backwardRecovery.routeProgress, forward.routeProgress, accuracy: 0.000_001)
   }
 
   func testSelectsNearestSegmentOnBentRoute() throws {

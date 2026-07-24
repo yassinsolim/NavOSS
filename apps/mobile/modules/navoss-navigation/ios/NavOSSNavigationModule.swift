@@ -148,7 +148,13 @@ private struct CarPlayTripRecord: Record {
   var preferences: RoutePreferencesRecord = RoutePreferencesRecord()
 
   @Field
+  var source: String?
+
+  @Field
   var steps: [CarPlayRouteStepRecord] = []
+
+  @Field
+  var traffic: CarPlayTrafficRecord?
 
   var trip: NavOSSCarPlayTrip {
     NavOSSCarPlayTrip(
@@ -163,7 +169,24 @@ private struct CarPlayTripRecord: Record {
       },
       id: id,
       preferences: preferences.preferences,
-      steps: steps.map(\.step)
+      source: source,
+      steps: steps.map(\.step),
+      traffic: traffic?.traffic
+    )
+  }
+}
+
+private struct CarPlayTrafficRecord: Record {
+  @Field
+  var delaySeconds: Double = 0
+
+  @Field
+  var typicalDurationSeconds: Double = 0
+
+  var traffic: NavOSSCarPlayTraffic {
+    NavOSSCarPlayTraffic(
+      delaySeconds: delaySeconds,
+      typicalDurationSeconds: typicalDurationSeconds
     )
   }
 }
@@ -424,7 +447,7 @@ public final class NavOSSNavigationModule: Module {
   }
 
   private func serialize(_ trip: NavOSSCarPlayTrip) -> [String: Any] {
-    [
+    var payload: [String: Any] = [
       "destination": [
         "id": trip.destination.id,
         "label": trip.destination.label,
@@ -457,6 +480,16 @@ public final class NavOSSNavigationModule: Module {
         return payload
       },
     ]
+    if let source = trip.source {
+      payload["source"] = source
+    }
+    if let traffic = trip.traffic {
+      payload["traffic"] = [
+        "delaySeconds": traffic.delaySeconds,
+        "typicalDurationSeconds": traffic.typicalDurationSeconds,
+      ]
+    }
+    return payload
   }
 
   private func serialize(_ coordinate: NavigationCoordinate) -> [String: Double] {

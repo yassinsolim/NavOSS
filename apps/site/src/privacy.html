@@ -57,8 +57,10 @@
           roughly 100-meter granularity, are sent in an encrypted request body to the NavOSS API.
           Route requests send precise origin and destination coordinates. An automatic reroute sends
           the latest route origin and destination. Search uses self-hosted Nominatim plus a local
-          mirror of public Calgary business and parcel-address data; Valhalla routing runs on the
-          operator-controlled server in Alberta.
+          mirror of public Calgary business and parcel-address data. Current production uses
+          Valhalla on the operator-controlled server in Alberta. A future licensed live-traffic
+          deployment may forward route endpoints and preferences to Mapbox Directions; that mode
+          remains disabled until its commercial vehicle-use license and release gates are complete.
         </p>
         <p>
           These values are processed in memory for the response and then discarded. They are not
@@ -120,6 +122,9 @@
           request-log export. Map delivery uses OpenFreeMap; TestFlight feedback uses Apple; and
           user-initiated support may use GitHub. A user-selected Reviews action uses
           <a href="https://policies.google.com/privacy">Google Maps under Google's policy</a>.
+          Optional licensed live-traffic routing may use
+          <a href="https://www.mapbox.com/legal/privacy/">Mapbox</a> and send route endpoints,
+          preferences, and request network metadata; it is disabled in current production.
         </p>
         <p>
           NavOSS keeps operational, SSH, and firewall logs for no more than seven days. Routine HTTP

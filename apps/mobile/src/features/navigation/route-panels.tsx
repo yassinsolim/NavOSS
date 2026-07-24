@@ -12,6 +12,7 @@ import {
   formatArrivalTime,
   formatDistance,
   formatDuration,
+  formatTrafficDelay,
   routeViaLabel,
 } from '@/features/navigation/route-progress';
 import {
@@ -112,7 +113,7 @@ interface RoutePreviewPanelProps {
   previewOriginLabel?: string;
   routes: RouteAlternative[];
   selectedRoute: RouteAlternative;
-  trafficStatus: RouteResponse['source']['traffic'];
+  routeSource?: RouteResponse['source'];
   vehicleStyle: VehicleStyle;
 }
 
@@ -129,9 +130,10 @@ export function RoutePreviewPanel({
   previewOriginLabel,
   routes,
   selectedRoute,
-  trafficStatus,
+  routeSource,
   vehicleStyle,
 }: RoutePreviewPanelProps) {
+  const selectedTrafficDelay = formatTrafficDelay(selectedRoute.traffic?.delaySeconds ?? 0);
   return (
     <View
       style={[
@@ -163,10 +165,11 @@ export function RoutePreviewPanel({
       >
         {routes.map((route, index) => {
           const selected = route.id === selectedRoute.id;
+          const trafficDelay = formatTrafficDelay(route.traffic?.delaySeconds ?? 0);
           const viaLabel = routeViaLabel(route);
           return (
             <Pressable
-              accessibilityLabel={`Select ${route.label} ${formatDuration(route.durationSeconds)} route, ${formatDistance(route.distanceMeters)}, ${viaLabel}`}
+              accessibilityLabel={`Select ${route.label} ${formatDuration(route.durationSeconds)} route, ${formatDistance(route.distanceMeters)}, ${viaLabel}${trafficDelay === undefined ? '' : `, ${trafficDelay}`}`}
               key={route.id}
               onPress={() => {
                 onSelectRoute(route);
@@ -178,8 +181,8 @@ export function RoutePreviewPanel({
               </Text>
               <Text style={[styles.routeChoiceMeta, selected && styles.routeChoiceMetaSelected]}>
                 {index === 0
-                  ? `Fastest · ${formatDistance(route.distanceMeters)}`
-                  : formatDistance(route.distanceMeters)}
+                  ? `Fastest · ${formatDistance(route.distanceMeters)}${trafficDelay === undefined ? '' : ` · ${trafficDelay}`}`
+                  : `${formatDistance(route.distanceMeters)}${trafficDelay === undefined ? '' : ` · ${trafficDelay}`}`}
               </Text>
               <Text
                 numberOfLines={2}
@@ -244,6 +247,9 @@ export function RoutePreviewPanel({
             {formatDistance(selectedRoute.distanceMeters)} · arrive{' '}
             {formatArrivalTime(selectedRoute.durationSeconds)}
           </Text>
+          {selectedTrafficDelay !== undefined && (
+            <Text style={styles.trafficStatus}>{selectedTrafficDelay}</Text>
+          )}
         </View>
         {previewOriginLabel === undefined ? (
           <Pressable
@@ -291,9 +297,13 @@ export function RoutePreviewPanel({
       )}
 
       <View style={styles.sourceRow}>
-        <Text style={styles.developmentSource}>Valhalla + OpenStreetMap</Text>
+        <Text style={styles.developmentSource}>
+          {routeSource?.attribution ?? 'Routing source unavailable'}
+        </Text>
         <Text style={styles.trafficStatus}>
-          {trafficStatus === 'unavailable' ? 'No live traffic' : trafficStatus}
+          {routeSource?.traffic === 'live'
+            ? (selectedTrafficDelay ?? 'Live traffic')
+            : 'No live traffic'}
         </Text>
       </View>
     </View>

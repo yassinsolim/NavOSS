@@ -86,7 +86,12 @@ export interface NativeCarPlayTrip {
   geometry: NativeNavigationCoordinate[];
   id: string;
   preferences: NativeRoutePreferences;
+  source?: string;
   steps: NativeCarPlayRouteStep[];
+  traffic?: {
+    delaySeconds: number;
+    typicalDurationSeconds: number;
+  };
 }
 
 export interface NativeCarPlayState {

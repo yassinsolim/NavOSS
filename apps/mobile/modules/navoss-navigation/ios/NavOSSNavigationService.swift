@@ -354,9 +354,20 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     }
     lock.unlock()
     if let trip = update.trip {
+      let carPlayCoordinate = (update.snapshot.matchedCoordinate ?? update.snapshot.rawCoordinate)
+        .map {
+          NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+        }
+      let carPlayPosition = carPlayCoordinate.map {
+        NavOSSCarPlayPosition(
+          coordinate: $0,
+          courseDegrees: update.snapshot.matchedCourseDegrees
+        )
+      }
       NavOSSCarPlayTripStore.shared.publishNavigationState(
         trip: trip,
         guidance: update.guidance,
+        position: carPlayPosition,
         generation: versionedUpdate.generation,
         sequence: update.snapshot.sequence
       )
@@ -547,7 +558,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
         try? audioSession.setCategory(
           .playback,
           mode: .voicePrompt,
-          options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers]
+          options: [.duckOthers]
         )
         try? audioSession.setActive(true)
       }

@@ -1,7 +1,11 @@
 import type { RouteRequest } from '@navoss/contracts';
 import { describe, expect, it } from 'vitest';
 
-import { createValhallaRouteProvider } from '../src/route-provider.js';
+import {
+  createConfiguredRouteProvider,
+  createMapboxTrafficRouteProvider,
+  createValhallaRouteProvider,
+} from '../src/route-provider.js';
 
 function valhallaRoute(
   distance: number,
@@ -78,9 +82,11 @@ describe('Valhalla route provider', () => {
 
     expect(requestPayload).toMatchObject({ alternates: 2, costing: 'auto' });
     expect(provider.source).toEqual({
+      attribution: 'Routing by Valhalla using OpenStreetMap data',
       degraded: false,
       id: 'valhalla-self-hosted',
       mode: 'production',
+      traffic: 'unavailable',
     });
     expect(new Set(routes.map((route) => route.id)).size).toBe(3);
     expect(routes.every((route) => /^valhalla-\d+-[0-9a-f]{16}$/.test(route.id))).toBe(true);
@@ -155,5 +161,121 @@ describe('Valhalla route provider', () => {
     expect(routeIds[0]).toBeDefined();
     expect(routeIds[1]).toBeDefined();
     expect(routeIds[0]).not.toBe(routeIds[1]);
+  });
+});
+
+describe('Mapbox live-traffic route provider', () => {
+  it('keeps Valhalla when traffic configuration is absent or blank', () => {
+    expect(createConfiguredRouteProvider({}).source?.id).toBe('valhalla-development');
+    expect(
+      createConfiguredRouteProvider({
+        MAPBOX_ACCESS_TOKEN: '  ',
+        MAPBOX_VEHICLE_LICENSE_CONFIRMED: '0',
+      }).source?.id,
+    ).toBe('valhalla-development');
+  });
+
+  it('rejects partial licensed traffic configuration', () => {
+    expect(() => createConfiguredRouteProvider({ MAPBOX_ACCESS_TOKEN: 'test-token' })).toThrow(
+      'vehicle-use license',
+    );
+    expect(() => createConfiguredRouteProvider({ MAPBOX_VEHICLE_LICENSE_CONFIRMED: '1' })).toThrow(
+      'access token',
+    );
+  });
+
+  it('selects Mapbox only with both licensed configuration values', () => {
+    expect(
+      createConfiguredRouteProvider({
+        MAPBOX_ACCESS_TOKEN: 'test-token',
+        MAPBOX_VEHICLE_LICENSE_CONFIRMED: '1',
+      }).source?.id,
+    ).toBe('mapbox-traffic');
+  });
+
+  it('requires explicit vehicle-use license confirmation', () => {
+    expect(() =>
+      createMapboxTrafficRouteProvider({
+        accessToken: 'test-token',
+        vehicleLicenseConfirmed: false,
+      }),
+    ).toThrow('vehicle-use license');
+  });
+
+  it('returns traffic-aware total ETA, typical ETA, and delay', async () => {
+    let requestUrl: URL | undefined;
+    const route = {
+      ...valhallaRoute(20_000, 1_800, 0, [
+        { announcement: 'Continue north.' },
+        { announcement: 'Turn right onto Airport Trail NE.' },
+      ]),
+      duration_typical: 1_500,
+    };
+    const provider = createMapboxTrafficRouteProvider({
+      accessToken: 'test-token',
+      endpoint: 'https://api.mapbox.test/directions/v5/mapbox/driving-traffic',
+      fetchImplementation: (input) => {
+        requestUrl = new URL(
+          input instanceof URL ? input : typeof input === 'string' ? input : input.url,
+        );
+        return Promise.resolve(new Response(JSON.stringify({ code: 'Ok', routes: [route] })));
+      },
+      now: () => new Date('2026-07-23T22:00:00Z'),
+      vehicleLicenseConfirmed: true,
+    });
+
+    const routes = await provider.getRoutes({
+      alternatives: 2,
+      destination: { latitude: 51.13157, longitude: -114.01055 },
+      origin: { latitude: 51.0447, longitude: -114.0719 },
+      preferences: {
+        avoidFerries: true,
+        avoidHighways: true,
+        avoidTolls: true,
+        avoidUnpaved: true,
+      },
+    });
+
+    expect(requestUrl?.pathname).toContain('-114.0719,51.0447;-114.01055,51.13157');
+    expect(requestUrl?.searchParams.get('access_token')).toBe('test-token');
+    expect(requestUrl?.searchParams.get('alternatives')).toBe('true');
+    expect(requestUrl?.searchParams.get('depart_at')).toBe('2026-07-23T22:00:00.000Z');
+    expect(requestUrl?.searchParams.get('exclude')).toBe('ferry,motorway,toll,unpaved');
+    expect(routes[0]).toMatchObject({
+      durationSeconds: 1_800,
+      label: 'fastest',
+      traffic: { delaySeconds: 300, typicalDurationSeconds: 1_500 },
+    });
+    expect(routes[0]?.steps[0]?.spokenInstruction).toBe('Turn right onto Airport Trail NE.');
+    expect(provider.source).toEqual({
+      attribution: 'Routing and traffic by Mapbox',
+      degraded: false,
+      id: 'mapbox-traffic',
+      mode: 'production',
+      traffic: 'live',
+    });
+  });
+
+  it('fails readiness for rejected credentials and caches the result', async () => {
+    let requestCount = 0;
+    let currentTime = 1_000;
+    const provider = createMapboxTrafficRouteProvider({
+      accessToken: 'invalid-token',
+      clock: () => currentTime,
+      fetchImplementation: () => {
+        requestCount += 1;
+        return Promise.resolve(new Response('{}', { status: 401 }));
+      },
+      readinessCacheMs: 300_000,
+      vehicleLicenseConfirmed: true,
+    });
+
+    await expect(provider.isReady?.()).resolves.toBe(false);
+    await expect(provider.isReady?.()).resolves.toBe(false);
+    expect(requestCount).toBe(1);
+
+    currentTime += 300_001;
+    await expect(provider.isReady?.()).resolves.toBe(false);
+    expect(requestCount).toBe(2);
   });
 });

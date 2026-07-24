@@ -253,6 +253,50 @@ describe('route contracts', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts licensed live-traffic routing metadata and delay', () => {
+    const result = RouteResponseSchema.safeParse({
+      degraded: false,
+      generatedAt: '2026-07-23T22:00:00Z',
+      routes: [
+        {
+          distanceMeters: 20_000,
+          durationSeconds: 1_800,
+          geometry: [
+            [-114.08, 51.04],
+            [-114.01, 51.13],
+          ],
+          id: 'mapbox-traffic-1',
+          label: 'fastest',
+          steps: [
+            {
+              distanceMeters: 20_000,
+              durationSeconds: 1_800,
+              geometry: [
+                [-114.08, 51.04],
+                [-114.01, 51.13],
+              ],
+              instruction: 'Continue north.',
+              maneuverType: 'continue',
+              roadName: 'Deerfoot Trail',
+            },
+          ],
+          traffic: {
+            delaySeconds: 300,
+            typicalDurationSeconds: 1_500,
+          },
+        },
+      ],
+      source: {
+        attribution: 'Routing and traffic by Mapbox',
+        id: 'mapbox-traffic',
+        mode: 'production',
+        traffic: 'live',
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it('rejects a route whose origin and destination are identical', () => {
     const result = RouteRequestSchema.safeParse({
       destination: { latitude: 51.0447, longitude: -114.0719 },

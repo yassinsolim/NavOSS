@@ -119,6 +119,7 @@ import {
   toggleFavoriteDestination,
 } from '@/features/navigation/native-navigation';
 import {
+  NAVIGATION_CAMERA_TRANSITION,
   navigationCameraBearing,
   toggleNavigationMapOrientation,
 } from '@/features/navigation/navigation-camera';
@@ -147,6 +148,8 @@ const EMPTY_FEATURE_COLLECTION: FeatureCollection<Point> = {
 };
 const MAP_IMAGES = {
   'safety-camera': require('@/assets/images/camera-marker.png'),
+  'vehicle-arrow': require('@/assets/images/vehicle-arrow.png'),
+  'vehicle-car': require('@/assets/images/vehicle-car.png'),
 };
 
 type LocationState = 'idle' | 'locating' | 'visible' | 'denied' | 'error';
@@ -304,8 +307,7 @@ export function MapScreen() {
     avoidTolls: false,
     avoidUnpaved: false,
   });
-  const [routeTrafficStatus, setRouteTrafficStatus] =
-    useState<RouteResponse['source']['traffic']>('unavailable');
+  const [routeSource, setRouteSource] = useState<RouteResponse['source']>();
   const [cameraAnnouncementCount, setCameraAnnouncementCount] = useState(0);
   const [carPlayConnected, setCarPlayConnected] = useState(false);
   const [safetyCameraAlert, setSafetyCameraAlert] = useState<UpcomingSafetyCamera>();
@@ -551,6 +553,7 @@ export function MapScreen() {
             ? {}
             : { spokenInstruction: step.spokenInstruction }),
         })),
+        ...(snapshot.trip.traffic === undefined ? {} : { traffic: snapshot.trip.traffic }),
       };
       const destination: SearchResult = {
         category: 'landmark',
@@ -564,6 +567,30 @@ export function MapScreen() {
         name: snapshot.trip.destination.name,
       };
       setRoutePreferences(snapshot.trip.preferences);
+      if (snapshot.trip.source === 'mapbox-traffic') {
+        setRouteSource({
+          attribution: 'Routing and traffic by Mapbox',
+          id: 'mapbox-traffic',
+          mode: 'production',
+          traffic: 'live',
+        });
+      } else if (snapshot.trip.source === 'valhalla-self-hosted') {
+        setRouteSource({
+          attribution: 'Routing by Valhalla using OpenStreetMap data',
+          id: 'valhalla-self-hosted',
+          mode: 'production',
+          traffic: 'unavailable',
+        });
+      } else if (snapshot.trip.source === 'valhalla-development') {
+        setRouteSource({
+          attribution: 'Routing by Valhalla using OpenStreetMap data',
+          id: 'valhalla-development',
+          mode: 'development',
+          traffic: 'unavailable',
+        });
+      } else {
+        setRouteSource(undefined);
+      }
       setRouteState((current) => {
         if (
           current.type === 'navigating' &&
@@ -731,7 +758,7 @@ export function MapScreen() {
       }
 
       setApiConnection('online');
-      setRouteTrafficStatus(response.source.traffic);
+      setRouteSource(response.source);
       setRouteState({
         destination,
         ...(previewOrigin === undefined ? {} : { previewOrigin }),
@@ -1134,7 +1161,13 @@ export function MapScreen() {
     setNavigationRouteStatus('tracking');
     setRerouteCount(0);
     setIsNavigationCameraFollowing(true);
-    const snapshot = setNavigationRoute(selectedRoute, routeState.destination, routePreferences);
+    const snapshot = setNavigationRoute(
+      selectedRoute,
+      routeState.destination,
+      routePreferences,
+      routeSource?.id,
+      selectedRoute.traffic,
+    );
     nativeStateVersionRef.current = Math.max(nativeStateVersionRef.current, snapshot.stateVersion);
     setNavigationSnapshot(snapshot);
     setRouteState({
@@ -1363,8 +1396,12 @@ export function MapScreen() {
         <Camera
           bearing={isNavigationCameraFollowing ? navigationBearing : undefined}
           center={isNavigationCameraFollowing ? navigationCameraCenter : undefined}
-          duration={routeState.type === 'navigating' ? 700 : undefined}
-          easing={routeState.type === 'navigating' ? 'ease' : undefined}
+          duration={
+            routeState.type === 'navigating' ? NAVIGATION_CAMERA_TRANSITION.duration : undefined
+          }
+          easing={
+            routeState.type === 'navigating' ? NAVIGATION_CAMERA_TRANSITION.easing : undefined
+          }
           initialViewState={{
             center: CALGARY_CENTER,
             zoom: 11.2,
@@ -1722,7 +1759,7 @@ export function MapScreen() {
           previewOriginLabel={routeState.previewOrigin === undefined ? undefined : 'Calgary Tower'}
           routes={routeState.routes}
           selectedRoute={selectedRoute}
-          trafficStatus={routeTrafficStatus}
+          routeSource={routeSource}
           vehicleStyle={vehicleStyle}
         />
       )}

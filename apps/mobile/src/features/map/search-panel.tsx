@@ -286,8 +286,9 @@ export function SearchPanel({
                 reroutes and arrival, and warn about safety cameras. During active navigation,
                 location continues while your phone is locked or connected to CarPlay and iOS shows
                 its background location indicator. Search text and route endpoints are sent to the
-                NavOSS API and its configured OpenStreetMap-based search and routing services.
-                Rerouting sends your latest route origin.
+                NavOSS API and its configured search and routing provider. Current production uses
+                self-hosted OpenStreetMap services; a licensed live-traffic deployment may send
+                route endpoints to Mapbox. Rerouting sends your latest route origin.
               </Text>
               <Text style={styles.aboutBody}>
                 NavOSS does not require an account, show ads, request Always location access, or
@@ -352,9 +353,9 @@ export function SearchPanel({
               <Text style={styles.aboutSectionTitle}>Data and safety</Text>
               <Text style={styles.aboutBody}>
                 Map and search data comes from OpenStreetMap contributors. Safety-camera data comes
-                from City of Calgary Open Data. Routes come from the configured Valhalla service.
-                Data and alerts may be incomplete or outdated; always follow posted signs and road
-                laws.
+                from City of Calgary Open Data. Routes come from self-hosted Valhalla unless a
+                licensed Mapbox traffic provider is explicitly enabled and attributed. Data and
+                alerts may be incomplete or outdated; always follow posted signs and road laws.
               </Text>
             </View>
           </ScrollView>

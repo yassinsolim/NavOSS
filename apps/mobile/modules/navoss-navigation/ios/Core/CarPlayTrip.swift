@@ -1,5 +1,14 @@
 import Foundation
 
+public func navOSSCarPlayDistanceMeasurement(
+  _ distanceMeters: Double
+) -> Measurement<UnitLength> {
+  let distance = max(0, distanceMeters)
+  return distance >= 1_000
+    ? Measurement(value: distance / 1_000, unit: .kilometers)
+    : Measurement(value: distance, unit: .meters)
+}
+
 extension Notification.Name {
   public static let navOSSCarPlayNavigationDidEnd = Notification.Name(
     "org.navoss.mobile.carplay-navigation-did-end"
@@ -80,6 +89,21 @@ public struct NavOSSCarPlayRouteStep: Codable, Equatable, Sendable {
   }
 }
 
+public struct NavOSSCarPlayTraffic: Codable, Equatable, Sendable {
+  public let delaySeconds: Double
+  public let typicalDurationSeconds: Double
+
+  public init(delaySeconds: Double, typicalDurationSeconds: Double) {
+    self.delaySeconds = delaySeconds
+    self.typicalDurationSeconds = typicalDurationSeconds
+  }
+
+  var isValid: Bool {
+    delaySeconds.isFinite && delaySeconds >= 0
+      && typicalDurationSeconds.isFinite && typicalDurationSeconds > 0
+  }
+}
+
 public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
   public let destination: NavOSSCarPlayDestination
   public let distanceMeters: Double
@@ -87,7 +111,9 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
   public let geometry: [NavOSSCarPlayCoordinate]
   public let id: String
   public let preferences: NavOSSRoutePreferences
+  public let source: String?
   public let steps: [NavOSSCarPlayRouteStep]
+  public let traffic: NavOSSCarPlayTraffic?
 
   public init(
     destination: NavOSSCarPlayDestination,
@@ -96,7 +122,9 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
     geometry: [NavOSSCarPlayCoordinate],
     id: String,
     preferences: NavOSSRoutePreferences = NavOSSRoutePreferences(),
-    steps: [NavOSSCarPlayRouteStep]
+    source: String? = nil,
+    steps: [NavOSSCarPlayRouteStep],
+    traffic: NavOSSCarPlayTraffic? = nil
   ) {
     self.destination = destination
     self.distanceMeters = distanceMeters
@@ -104,14 +132,16 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
     self.geometry = geometry
     self.id = id
     self.preferences = preferences
+    self.source = source
     self.steps = steps
+    self.traffic = traffic
   }
 
   var isValid: Bool {
     destination.isValid && !id.isEmpty && distanceMeters.isFinite && distanceMeters > 0
       && durationSeconds.isFinite && durationSeconds > 0 && geometry.count >= 2
       && geometry.allSatisfy(\.isValid) && geometry.contains { $0 != geometry[0] }
-      && !steps.isEmpty && steps.allSatisfy(\.isValid)
+      && !steps.isEmpty && steps.allSatisfy(\.isValid) && traffic?.isValid != false
   }
 }
 
@@ -178,6 +208,24 @@ public enum NavOSSCarPlayGuidancePhase: String, Codable, Equatable, Sendable {
   case preview
 }
 
+public struct NavOSSCarPlayPosition: Equatable, Sendable {
+  public let coordinate: NavOSSCarPlayCoordinate
+  public let courseDegrees: Double?
+
+  public init(
+    coordinate: NavOSSCarPlayCoordinate,
+    courseDegrees: Double?
+  ) {
+    self.coordinate = coordinate
+    self.courseDegrees = courseDegrees
+  }
+
+  var isValid: Bool {
+    coordinate.isValid
+      && courseDegrees.map { $0.isFinite && (0..<360).contains($0) } != false
+  }
+}
+
 public struct NavOSSCarPlayGuidance: Codable, Equatable, Sendable {
   public let distanceToManeuverMeters: Double
   public let durationToManeuverSeconds: Double
@@ -224,15 +272,18 @@ public struct NavOSSCarPlayGuidance: Codable, Equatable, Sendable {
 public struct NavOSSCarPlayState: Equatable, Sendable {
   public let connected: Bool
   public let guidance: NavOSSCarPlayGuidance?
+  public let position: NavOSSCarPlayPosition?
   public let trip: NavOSSCarPlayTrip?
 
   public init(
     connected: Bool,
     guidance: NavOSSCarPlayGuidance?,
+    position: NavOSSCarPlayPosition? = nil,
     trip: NavOSSCarPlayTrip?
   ) {
     self.connected = connected
     self.guidance = guidance
+    self.position = position
     self.trip = trip
   }
 }
@@ -252,13 +303,13 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
 
   public func clearTrip() {
     update { current in
-      NavOSSCarPlayState(connected: current.connected, guidance: nil, trip: nil)
+      NavOSSCarPlayState(connected: current.connected, guidance: nil, position: nil, trip: nil)
     }
   }
 
   public func clearTrip(generation: UInt64, sequence: Int) {
     update(generation: generation, sequence: sequence) { current in
-      NavOSSCarPlayState(connected: current.connected, guidance: nil, trip: nil)
+      NavOSSCarPlayState(connected: current.connected, guidance: nil, position: nil, trip: nil)
     }
   }
 
@@ -278,6 +329,7 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
       return NavOSSCarPlayState(
         connected: current.connected,
         guidance: guidance,
+        position: current.position,
         trip: current.trip
       )
     }
@@ -288,23 +340,30 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
       return
     }
     update { current in
-      NavOSSCarPlayState(connected: current.connected, guidance: nil, trip: trip)
+      NavOSSCarPlayState(
+        connected: current.connected,
+        guidance: nil,
+        position: current.position,
+        trip: trip
+      )
     }
   }
 
   public func publishNavigationState(
     trip: NavOSSCarPlayTrip,
     guidance: NavOSSCarPlayGuidance?,
+    position: NavOSSCarPlayPosition? = nil,
     generation: UInt64,
     sequence: Int
   ) {
-    guard trip.isValid, guidance?.isValid != false else {
+    guard trip.isValid, guidance?.isValid != false, position?.isValid != false else {
       return
     }
     update(generation: generation, sequence: sequence) { current in
       NavOSSCarPlayState(
         connected: current.connected,
         guidance: guidance,
+        position: position,
         trip: trip
       )
     }
@@ -315,6 +374,7 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
       NavOSSCarPlayState(
         connected: connected,
         guidance: current.guidance,
+        position: current.position,
         trip: current.trip
       )
     }

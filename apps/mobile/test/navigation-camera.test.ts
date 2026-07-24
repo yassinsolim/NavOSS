@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  NAVIGATION_CAMERA_TRANSITION,
   navigationCameraBearing,
   toggleNavigationMapOrientation,
 } from '../src/features/navigation/navigation-camera.js';
 
 describe('navigation camera', () => {
+  it('interpolates linearly across the normal GPS sample interval', () => {
+    expect(NAVIGATION_CAMERA_TRANSITION).toEqual({ duration: 1_000, easing: 'linear' });
+  });
+
   it('faces up along the matched road instead of raw device course', () => {
     expect(navigationCameraBearing('heading-up', 92, 78)).toBe(92);
   });

@@ -24,7 +24,7 @@ import {
 import { CALGARY_SEARCH_FIXTURES, createAppConfig, type SearchFixture } from './fixtures.js';
 import { createProblem } from './problem.js';
 import {
-  createValhallaRouteProvider,
+  createConfiguredRouteProvider,
   RouteProviderError,
   type RouteProvider,
 } from './route-provider.js';
@@ -60,7 +60,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const cameraProvider = options.cameraProvider ?? createCalgarySafetyCameraProvider();
   const fixtures = options.searchFixtures ?? CALGARY_SEARCH_FIXTURES;
   const productionSearch = options.productionSearch ?? process.env.NOMINATIM_URL !== undefined;
-  const routeProvider = options.routeProvider ?? createValhallaRouteProvider();
+  const routeProvider = options.routeProvider ?? createConfiguredRouteProvider();
+  const liveTraffic = routeProvider.source?.traffic === 'live';
   const searchProvider =
     options.searchProvider ??
     (productionSearch
@@ -289,7 +290,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         tags: ['config'],
       },
     },
-    () => createAppConfig(clock().toISOString(), productionSearch),
+    () => createAppConfig(clock().toISOString(), productionSearch, liveTraffic),
   );
 
   typedApp.post(
@@ -327,19 +328,21 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       try {
         const routes = await routeProvider.getRoutes(request.body);
         const source = routeProvider.source ?? {
+          attribution: 'Routing by Valhalla using OpenStreetMap data' as const,
           degraded: true,
           id: 'valhalla-development' as const,
           mode: 'development' as const,
+          traffic: 'unavailable' as const,
         };
         return {
           degraded: source.degraded,
           generatedAt: clock().toISOString(),
           routes,
           source: {
-            attribution: 'Routing by Valhalla using OpenStreetMap data' as const,
+            attribution: source.attribution,
             id: source.id,
             mode: source.mode,
-            traffic: 'unavailable' as const,
+            traffic: source.traffic,
           },
         };
       } catch (error: unknown) {

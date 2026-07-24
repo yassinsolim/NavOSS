@@ -15,6 +15,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private var activeDestinationId: String?
   private var activeSystemTrip: CPTrip?
   private var activeTripId: String?
+  private var isPreviewingRoutes = false
   private var mapTemplate: CPMapTemplate?
   private var mapViewController: NavOSSCarPlayMapViewController?
   private var navigationSession: CPNavigationSession?
@@ -39,6 +40,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     let mapViewController = NavOSSCarPlayMapViewController()
     self.mapViewController = mapViewController
     window.rootViewController = mapViewController
+    mapViewController.recenter()
 
     let mapTemplate = makeMapTemplate()
     self.mapTemplate = mapTemplate
@@ -140,12 +142,21 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       activeDestinationId = nil
       activeSystemTrip = nil
       activeTripId = nil
+      isPreviewingRoutes = false
+      mapTemplate?.automaticallyHidesNavigationBar = true
+      mapTemplate?.trailingNavigationBarButtons = []
       mapViewController?.clearRoute()
       return
     }
 
     let activeGuidance = state.guidance?.phase == .navigating || state.guidance?.phase == .arrived
-    mapViewController?.display(route: trip.geometry, activeGuidance: activeGuidance)
+    configureRouteAttribution(source: trip.source)
+    mapViewController?.display(
+      route: trip.geometry,
+      routeId: trip.id,
+      activeGuidance: activeGuidance,
+      position: state.position
+    )
 
     if activeGuidance
       && (activeDestinationId != trip.destination.id || activeSystemTrip == nil)
@@ -215,6 +226,15 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     return systemTrip
   }
 
+  private func configureRouteAttribution(source: String?) {
+    let mapboxTraffic = source == "mapbox-traffic"
+    mapTemplate?.automaticallyHidesNavigationBar = !mapboxTraffic
+    mapTemplate?.trailingNavigationBarButtons =
+      mapboxTraffic
+      ? [CPBarButton(title: "Traffic: Mapbox") { _ in }]
+      : []
+  }
+
   private func updateGuidance(_ guidance: NavOSSCarPlayGuidance) {
     guard let navigationSession else {
       return
@@ -240,8 +260,10 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       guidance.roadName,
     ].joined(separator: "|")
     let maneuver: CPManeuver
+    let maneuverChanged: Bool
     if let activeManeuver, activeManeuverKey == maneuverKey {
       maneuver = activeManeuver
+      maneuverChanged = false
     } else {
       maneuver = CPManeuver()
       maneuver.instructionVariants = [guidance.instruction]
@@ -258,12 +280,15 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       }
       activeManeuver = maneuver
       activeManeuverKey = maneuverKey
+      maneuverChanged = true
     }
     let maneuverEstimates = travelEstimates(
       distanceMeters: guidance.distanceToManeuverMeters,
       durationSeconds: guidance.durationToManeuverSeconds
     )
-    maneuver.initialTravelEstimates = maneuverEstimates
+    if maneuverChanged {
+      maneuver.initialTravelEstimates = maneuverEstimates
+    }
     if #available(iOS 17.4, *) {
       navigationSession.currentRoadNameVariants =
         guidance.roadName.isEmpty
@@ -276,7 +301,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
           ? .prepare
           : .initial
     }
-    navigationSession.upcomingManeuvers = [maneuver]
+    if maneuverChanged {
+      navigationSession.upcomingManeuvers = [maneuver]
+    }
     navigationSession.updateEstimates(maneuverEstimates, for: maneuver)
   }
 
@@ -296,7 +323,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     durationSeconds: Double
   ) -> CPTravelEstimates {
     CPTravelEstimates(
-      distanceRemaining: Measurement(value: max(0, distanceMeters), unit: UnitLength.meters),
+      distanceRemaining: navOSSCarPlayDistanceMeasurement(distanceMeters),
       timeRemaining: max(0, durationSeconds)
     )
   }
@@ -402,9 +429,21 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     item.userInfo = destination.id
     item.handler = { [weak self] _, completion in
       completion()
-      self?.loadRoutes(to: destination)
+      self?.returnToMapAndLoadRoutes(to: destination)
     }
     return item
+  }
+
+  private func returnToMapAndLoadRoutes(to destination: NavOSSCarPlayDestination) {
+    guard let interfaceController else {
+      return
+    }
+    interfaceController.popToRootTemplate(animated: true) { [weak self] _, error in
+      guard error == nil else {
+        return
+      }
+      self?.loadRoutes(to: destination)
+    }
   }
 
   private func showNavigationAlert(title: String, subtitle: String) {
@@ -436,6 +475,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     routeTask?.cancel()
     routeTask = nil
     routeChoicesByIdentifier = [:]
+    isPreviewingRoutes = false
     mapTemplate?.hideTripPreviews()
     mapViewController?.clearRoute()
     NavOSSNavigationService.shared.prepareForCarPlayRoutePlanning()
@@ -485,18 +525,25 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   }
 
   private func showRoutePreviews(_ routes: [NavOSSCarPlayTrip]) {
-    guard let mapTemplate, !routes.isEmpty,
+    guard mapTemplate != nil, !routes.isEmpty,
       NavOSSCarPlayTripStore.shared.snapshot().guidance?.phase != .navigating
     else {
       return
     }
     routeChoicesByIdentifier = Dictionary(uniqueKeysWithValues: routes.map { ($0.id, $0) })
+    isPreviewingRoutes = true
     let systemTrips = routes.map(makeSystemTrip)
     if let firstRoute = routes.first {
-      mapViewController?.display(route: firstRoute.geometry, activeGuidance: false)
+      configureRouteAttribution(source: firstRoute.source)
+      mapViewController?.display(
+        route: firstRoute.geometry,
+        routeId: firstRoute.id,
+        activeGuidance: false
+      )
     }
-    mapTemplate.showTripPreviews(systemTrips, textConfiguration: nil)
-    interfaceController?.popToRootTemplate(animated: true, completion: nil)
+    interfaceController?.popToRootTemplate(animated: true) { [weak self] _, _ in
+      self?.mapTemplate?.showTripPreviews(systemTrips, textConfiguration: nil)
+    }
   }
 
   func mapTemplate(
@@ -509,10 +556,27 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     else {
       return
     }
-    mapViewController?.display(route: route.geometry, activeGuidance: false)
+    configureRouteAttribution(source: route.source)
+    mapViewController?.display(route: route.geometry, routeId: route.id, activeGuidance: false)
   }
 
   func mapTemplateDidCancelNavigation(_ mapTemplate: CPMapTemplate) {
+    if isPreviewingRoutes {
+      routeRequestGeneration &+= 1
+      routeTask?.cancel()
+      routeTask = nil
+      routeChoicesByIdentifier = [:]
+      isPreviewingRoutes = false
+      mapTemplate.hideTripPreviews()
+      let state = NavOSSCarPlayTripStore.shared.snapshot()
+      if state.guidance?.phase == .navigating || state.guidance?.phase == .arrived {
+        apply(state)
+      } else {
+        configureRouteAttribution(source: nil)
+        mapViewController?.clearRoute()
+      }
+      return
+    }
     navigationSession?.cancelTrip()
     navigationSession = nil
     activeManeuver = nil
@@ -540,6 +604,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       activeDestinationId = route.destination.id
       activeSystemTrip = trip
       activeTripId = route.id
+      isPreviewingRoutes = false
       try NavOSSNavigationService.shared.startNavigation(route)
       navigationSession = mapTemplate.startNavigationSession(for: trip)
       routeChoicesByIdentifier = [:]
@@ -623,7 +688,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       completionHandler()
       return
     }
-    loadRoutes(to: destination)
     completionHandler()
+    returnToMapAndLoadRoutes(to: destination)
   }
 }

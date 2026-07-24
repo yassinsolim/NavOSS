@@ -10,6 +10,11 @@ import NavOSSNavigation, {
   type NativeNavigationSnapshot,
 } from '../../../modules/navoss-navigation';
 
+interface NativeTrafficInput {
+  delaySeconds: number;
+  typicalDurationSeconds: number;
+}
+
 export type {
   NativeCarPlayState,
   NativeNavigationSnapshot,
@@ -47,6 +52,8 @@ export function setNavigationRoute(
   route: RouteAlternative,
   destination: SearchResult,
   preferences: RoutePreferences,
+  source?: string,
+  traffic?: NativeTrafficInput,
 ): NativeNavigationSnapshot {
   const coordinate = ([longitude, latitude]: [number, number]) => ({ latitude, longitude });
   return NavOSSNavigation.setRoute({
@@ -62,6 +69,7 @@ export function setNavigationRoute(
     geometry: route.geometry.map(coordinate),
     id: route.id,
     preferences,
+    ...(source === undefined ? {} : { source }),
     steps: route.steps.map((step) => ({
       distanceMeters: step.distanceMeters,
       durationSeconds: step.durationSeconds,
@@ -73,6 +81,14 @@ export function setNavigationRoute(
         ? {}
         : { spokenInstruction: step.spokenInstruction }),
     })),
+    ...(traffic === undefined
+      ? {}
+      : {
+          traffic: {
+            delaySeconds: traffic.delaySeconds,
+            typicalDurationSeconds: traffic.typicalDurationSeconds,
+          },
+        }),
   });
 }
 

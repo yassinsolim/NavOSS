@@ -65,6 +65,13 @@ export const RouteAlternativeSchema = z
     id: z.string().min(1),
     label: z.enum(['fastest', 'alternative']),
     steps: z.array(RouteStepSchema).min(1),
+    traffic: z
+      .object({
+        delaySeconds: z.number().nonnegative(),
+        typicalDurationSeconds: z.number().positive(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -85,15 +92,19 @@ export const RouteResponseSchema = z
     routes: z.array(RouteAlternativeSchema).min(1).max(3),
     source: z
       .object({
-        attribution: z.literal('Routing by Valhalla using OpenStreetMap data'),
-        id: z.enum(['valhalla-development', 'valhalla-self-hosted']),
+        attribution: z.enum([
+          'Routing by Valhalla using OpenStreetMap data',
+          'Routing and traffic by Mapbox',
+        ]),
+        id: z.enum(['mapbox-traffic', 'valhalla-development', 'valhalla-self-hosted']),
         mode: z.enum(['development', 'production']),
-        traffic: z.literal('unavailable'),
+        traffic: z.enum(['live', 'unavailable']),
       })
       .strict(),
   })
   .superRefine((response, context) => {
     const production = response.source.mode === 'production';
+    const mapboxTraffic = response.source.id === 'mapbox-traffic';
     if (response.degraded === production) {
       context.addIssue({
         code: 'custom',
@@ -101,13 +112,46 @@ export const RouteResponseSchema = z
         path: ['degraded'],
       });
     }
-    if (production !== (response.source.id === 'valhalla-self-hosted')) {
+    if (production !== (response.source.id !== 'valhalla-development')) {
       context.addIssue({
         code: 'custom',
         message: 'route source id and mode must describe the same provider posture',
         path: ['source', 'id'],
       });
     }
+    if (
+      mapboxTraffic !== (response.source.traffic === 'live') ||
+      mapboxTraffic !== (response.source.attribution === 'Routing and traffic by Mapbox')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'route source traffic and attribution must describe the selected provider',
+        path: ['source', 'traffic'],
+      });
+    }
+    response.routes.forEach((route, index) => {
+      if (mapboxTraffic !== (route.traffic !== undefined)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'live routes require traffic detail and unavailable routes must omit it',
+          path: ['routes', index, 'traffic'],
+        });
+        return;
+      }
+      if (route.traffic !== undefined) {
+        const expectedDelay = Math.max(
+          0,
+          route.durationSeconds - route.traffic.typicalDurationSeconds,
+        );
+        if (Math.abs(route.traffic.delaySeconds - expectedDelay) > 0.001) {
+          context.addIssue({
+            code: 'custom',
+            message: 'traffic delay must equal total duration above typical duration',
+            path: ['routes', index, 'traffic', 'delaySeconds'],
+          });
+        }
+      }
+    });
   })
   .strict();
 

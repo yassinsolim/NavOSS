@@ -38,6 +38,11 @@ private struct RouteRequest: Encodable {
 
 private struct RouteResponse: Decodable {
   let routes: [Route]
+  let source: RouteSource
+}
+
+private struct RouteSource: Decodable {
+  let id: String
 }
 
 private struct Route: Decodable {
@@ -46,6 +51,12 @@ private struct Route: Decodable {
   let geometry: [[Double]]
   let id: String
   let steps: [RouteStep]
+  let traffic: RouteTraffic?
+}
+
+private struct RouteTraffic: Decodable {
+  let delaySeconds: Double
+  let typicalDurationSeconds: Double
 }
 
 private struct RouteStep: Decodable {
@@ -128,6 +139,7 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
         geometry: try coordinates(route.geometry),
         id: route.id,
         preferences: preferences,
+        source: response.source.id,
         steps: try route.steps.map { step in
           NavOSSCarPlayRouteStep(
             distanceMeters: step.distanceMeters,
@@ -137,6 +149,12 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
             maneuverType: step.maneuverType,
             roadName: step.roadName,
             spokenInstruction: step.spokenInstruction
+          )
+        },
+        traffic: route.traffic.map {
+          NavOSSCarPlayTraffic(
+            delaySeconds: $0.delaySeconds,
+            typicalDurationSeconds: $0.typicalDurationSeconds
           )
         }
       )

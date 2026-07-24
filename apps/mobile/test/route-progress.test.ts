@@ -7,6 +7,7 @@ import {
   formatArrivalTime,
   formatDistance,
   formatDuration,
+  formatTrafficDelay,
   getRemainingRouteGeometry,
   getRemainingRouteSummary,
   getRemainingStepSummary,
@@ -133,6 +134,11 @@ describe('route progress', () => {
     expect(formatDuration(1_215)).toBe('20 min');
     expect(formatDistance(19_660)).toBe('19.7 km');
     expect(formatArrivalTime(1_200, new Date(2026, 6, 15, 12, 0, 0))).toContain('12:20');
+  });
+
+  it('shows meaningful live traffic delay without sub-minute noise', () => {
+    expect(formatTrafficDelay(300)).toBe('+5 min traffic');
+    expect(formatTrafficDelay(29)).toBeUndefined();
   });
 
   it('shares an ETA without coordinates or live tracking', () => {

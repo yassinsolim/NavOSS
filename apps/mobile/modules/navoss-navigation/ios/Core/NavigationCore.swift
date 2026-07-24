@@ -6,6 +6,7 @@ private let arrivalConfirmationSampleCount = 2
 private let arrivalDistanceThresholdMeters = 30.0
 private let arrivalProgressThreshold = 0.98
 private let backwardProgressPenaltyFactor = 0.5
+private let backwardProgressToleranceMeters = 15.0
 private let continuityPenaltyFactor = 0.25
 private let continuityToleranceMeters = 75.0
 private let maximumCoursePenaltyMeters = 50.0
@@ -368,10 +369,16 @@ final class NavigationCore {
     }
 
     let accuracyAllowanceMeters = sample.horizontalAccuracyMeters ?? 0
+    let backwardProgressMeters = max(
+      0,
+      (snapshot.routeProgress - projection.progress) * route.totalDistanceMeters
+    )
+    let isBackwardTravelSample = backwardProgressMeters >
+      backwardProgressToleranceMeters + accuracyAllowanceMeters
     let isDepartureSample = projection.distanceMeters >
-      offRouteDistanceThresholdMeters + accuracyAllowanceMeters
+      offRouteDistanceThresholdMeters + accuracyAllowanceMeters || isBackwardTravelSample
     let isRecoverySample = projection.distanceMeters + accuracyAllowanceMeters <=
-      onRouteRecoveryDistanceThresholdMeters
+      onRouteRecoveryDistanceThresholdMeters && projection.progress >= snapshot.routeProgress
 
     if isOffRoute {
       departureSampleCount = 0
@@ -417,7 +424,9 @@ final class NavigationCore {
       return snapshot
     }
 
-    let shouldAcceptProjection = !isOffRoute && !isDepartureSample
+    let isBackwardProjection = snapshot.rawCoordinate != nil
+      && projection.progress < snapshot.routeProgress
+    let shouldAcceptProjection = !isOffRoute && !isDepartureSample && !isBackwardProjection
     let previousMatchedCoordinate = snapshot.matchedCoordinate
     let previousMatchedCourseDegrees = snapshot.matchedCourseDegrees
     let provisionalMatchedCoordinate = previousMatchedCoordinate ?? projection.coordinate

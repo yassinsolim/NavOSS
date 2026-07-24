@@ -50,6 +50,37 @@ OpenStreetMap does not provide a Google-style review corpus. NavOSS does not scr
 Google Places content into its open-data result. The optional Reviews command is an explicit
 external Google Maps search; no Google place query occurs until the user chooses that command.
 
+## Live Traffic Routing
+
+NavOSS keeps live traffic disabled until a provider contract permits use in an
+open-source MapLibre app with CarPlay. The provider review reached these
+conclusions on July 23, 2026:
+
+- [Google Routes API terms](https://cloud.google.com/maps-platform/terms/maps-service-terms)
+  prohibit Routes content in conjunction with a non-Google map, so Google traffic
+  cannot be layered onto NavOSS's MapLibre map.
+- Apple's `MKDirections` exposes an expected travel time, but not a comparable
+  free-flow/typical duration or delay for the selected NavOSS route. Mixing an
+  Apple ETA with different Valhalla geometry would misstate route-specific delay.
+- TomTom's portal terms exclude navigation functionality and CarPlay/automotive
+  usage without a separate written agreement. HERE's Base Plan excludes locating
+  or routing a person/vehicle as an asset-management use case.
+- [Mapbox Directions](https://docs.mapbox.com/api/navigation/directions/) with
+  `mapbox/driving-traffic` returns route geometry, current traffic-aware duration,
+  typical duration, instructions, and Canadian traffic coverage. Its
+  [pricing terms](https://www.mapbox.com/pricing/) require a commercial
+  application license for vehicle or in-vehicle use.
+
+The API includes a disabled-by-default Mapbox adapter. It activates only when a
+server-side access token and explicit vehicle-license confirmation are both
+present. When active, the route's `durationSeconds` is the live total ETA and
+`traffic.delaySeconds` is the nonnegative difference from typical conditions.
+NavOSS displays that as, for example, `30 min` and `+5 min traffic`. It does not
+send the provider token to the app or cache route responses. Production must not
+enable this adapter until the license, privacy disclosure, attribution, cost
+controls, same-time route-quality gate, and physical phone/CarPlay validation are
+complete.
+
 ## Calgary Intersection Safety Cameras
 
 NavOSS uses The City of Calgary's official **Intersection Safety Cameras** dataset for fixed enforcement-camera markers and alerts.
