@@ -4,6 +4,11 @@ This stack serves the Calgary/Alberta NavOSS API from the dedicated Proxmox VM.
 All geospatial and database services remain private. Caddy binds only to
 `127.0.0.1:8080`; Cloudflare Tunnel is the sole public ingress.
 
+This VM is not sized for a North America Nominatim import or blue/green continent datasets. The
+capacity and rollout decision is documented in
+[`docs/architecture/north-america.md`](../../docs/architecture/north-america.md). Build and validate
+continent artifacts on dedicated import infrastructure before changing production extracts.
+
 Production status: all six containers are healthy, `navoss-stack.service` and
 the nightly backup timer are enabled, and public ingress is
 `https://navoss-api.yassin.app`.

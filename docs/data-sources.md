@@ -52,6 +52,11 @@ external Google Maps search; no Google place query occurs until the user chooses
 
 ## Live Traffic Routing
 
+The North America coverage, infrastructure, and provider decision is recorded in
+[`architecture/north-america.md`](architecture/north-america.md). It keeps Calgary as the only
+current production claim while defining the staged Canada, United States, Mexico, and licensed
+traffic gates.
+
 NavOSS keeps live traffic disabled until a provider contract permits use in an
 open-source MapLibre app with CarPlay. The provider review reached these
 conclusions on July 23, 2026:
