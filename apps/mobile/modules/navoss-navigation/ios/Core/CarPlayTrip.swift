@@ -273,19 +273,85 @@ public struct NavOSSCarPlayState: Equatable, Sendable {
   public let connected: Bool
   public let guidance: NavOSSCarPlayGuidance?
   public let position: NavOSSCarPlayPosition?
+  public let routeProgress: Double
   public let trip: NavOSSCarPlayTrip?
 
   public init(
     connected: Bool,
     guidance: NavOSSCarPlayGuidance?,
     position: NavOSSCarPlayPosition? = nil,
+    routeProgress: Double = 0,
     trip: NavOSSCarPlayTrip?
   ) {
     self.connected = connected
     self.guidance = guidance
     self.position = position
+    self.routeProgress = min(1, max(0, routeProgress.isFinite ? routeProgress : 0))
     self.trip = trip
   }
+}
+
+public struct NavOSSCarPlayControlState: Equatable, Sendable {
+  public let endNavigationVisible: Bool
+  public let returnToRootFromSearch: Bool
+
+  public init(hasActiveTrip: Bool, searchVisible: Bool) {
+    endNavigationVisible = hasActiveTrip
+    returnToRootFromSearch = hasActiveTrip && searchVisible
+  }
+}
+
+public func navOSSRemainingRouteGeometry(
+  _ geometry: [NavOSSCarPlayCoordinate],
+  routeProgress: Double,
+  matchedCoordinate: NavOSSCarPlayCoordinate? = nil
+) -> [NavOSSCarPlayCoordinate] {
+  guard geometry.count >= 2 else {
+    return geometry
+  }
+  let segmentLengths = zip(geometry, geometry.dropFirst()).map { start, end in
+    navOSSCarPlayCoordinateDistance(from: start, to: end)
+  }
+  let totalLength = segmentLengths.reduce(0, +)
+  let progress = min(1, max(0, routeProgress.isFinite ? routeProgress : 0))
+  let completedLength = progress * totalLength
+  var traversedLength = 0.0
+
+  for (index, segmentLength) in segmentLengths.enumerated() {
+    if traversedLength + segmentLength < completedLength {
+      traversedLength += segmentLength
+      continue
+    }
+    let start = geometry[index]
+    let end = geometry[index + 1]
+    let segmentProgress =
+      segmentLength == 0
+      ? 0
+      : (completedLength - traversedLength) / segmentLength
+    let routePosition = NavOSSCarPlayCoordinate(
+      latitude: start.latitude + (end.latitude - start.latitude) * segmentProgress,
+      longitude: start.longitude + (end.longitude - start.longitude) * segmentProgress
+    )
+    return [matchedCoordinate ?? routePosition] + geometry.dropFirst(index + 1)
+  }
+
+  let destination = geometry[geometry.count - 1]
+  return [matchedCoordinate ?? destination, destination]
+}
+
+private func navOSSCarPlayCoordinateDistance(
+  from start: NavOSSCarPlayCoordinate,
+  to end: NavOSSCarPlayCoordinate
+) -> Double {
+  let latitudeDelta = (end.latitude - start.latitude) * .pi / 180
+  let longitudeDelta = (end.longitude - start.longitude) * .pi / 180
+  let startLatitude = start.latitude * .pi / 180
+  let endLatitude = end.latitude * .pi / 180
+  let haversine =
+    sin(latitudeDelta / 2) * sin(latitudeDelta / 2)
+    + cos(startLatitude) * cos(endLatitude)
+    * sin(longitudeDelta / 2) * sin(longitudeDelta / 2)
+  return 2 * 6_371_000 * asin(sqrt(haversine))
 }
 
 public final class NavOSSCarPlayTripStore: @unchecked Sendable {
@@ -303,13 +369,25 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
 
   public func clearTrip() {
     update { current in
-      NavOSSCarPlayState(connected: current.connected, guidance: nil, position: nil, trip: nil)
+      NavOSSCarPlayState(
+        connected: current.connected,
+        guidance: nil,
+        position: nil,
+        routeProgress: 0,
+        trip: nil
+      )
     }
   }
 
   public func clearTrip(generation: UInt64, sequence: Int) {
     update(generation: generation, sequence: sequence) { current in
-      NavOSSCarPlayState(connected: current.connected, guidance: nil, position: nil, trip: nil)
+      NavOSSCarPlayState(
+        connected: current.connected,
+        guidance: nil,
+        position: nil,
+        routeProgress: 0,
+        trip: nil
+      )
     }
   }
 
@@ -330,6 +408,7 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
         connected: current.connected,
         guidance: guidance,
         position: current.position,
+        routeProgress: current.routeProgress,
         trip: current.trip
       )
     }
@@ -344,6 +423,7 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
         connected: current.connected,
         guidance: nil,
         position: current.position,
+        routeProgress: 0,
         trip: trip
       )
     }
@@ -353,10 +433,13 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
     trip: NavOSSCarPlayTrip,
     guidance: NavOSSCarPlayGuidance?,
     position: NavOSSCarPlayPosition? = nil,
+    routeProgress: Double = 0,
     generation: UInt64,
     sequence: Int
   ) {
-    guard trip.isValid, guidance?.isValid != false, position?.isValid != false else {
+    guard trip.isValid, guidance?.isValid != false, position?.isValid != false,
+      routeProgress.isFinite, (0...1).contains(routeProgress)
+    else {
       return
     }
     update(generation: generation, sequence: sequence) { current in
@@ -364,6 +447,7 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
         connected: current.connected,
         guidance: guidance,
         position: position,
+        routeProgress: routeProgress,
         trip: trip
       )
     }
@@ -375,6 +459,7 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
         connected: connected,
         guidance: current.guidance,
         position: current.position,
+        routeProgress: current.routeProgress,
         trip: current.trip
       )
     }

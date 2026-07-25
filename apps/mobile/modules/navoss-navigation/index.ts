@@ -20,9 +20,17 @@ export interface NativeNavigationCoordinate {
 }
 
 export interface NativeNavigationDestination extends NativeNavigationCoordinate {
+  category?: 'address' | 'landmark' | 'neighborhood' | 'poi' | 'street';
   id: string;
   label: string;
   name: string;
+}
+
+export interface NativeDestinationCatalog {
+  favorites: NativeNavigationDestination[];
+  home?: NativeNavigationDestination;
+  recents: NativeNavigationDestination[];
+  work?: NativeNavigationDestination;
 }
 
 export interface NativeNavigationLocationSample extends NativeNavigationCoordinate {
@@ -114,9 +122,12 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   clearRoute(): NativeNavigationSnapshot;
   getCarPlayState(): NativeCarPlayState;
   getCapabilities(): NativeNavigationCapabilities;
+  getDestinationCatalog(): NativeDestinationCatalog;
+  getGooglePlacesOpenSourceLicenseInfo(): string | null;
   getRecentDestinationIds(): string[];
   getSnapshot(): NativeNavigationSnapshot;
   isFavoriteDestination(id: string): boolean;
+  isGooglePlaceRatingAvailable(): boolean;
   recordRecentDestination(destination: NativeNavigationDestination): void;
   replaceFavoriteDestinations(destinations: NativeNavigationDestination[]): void;
   setHomeDestination(destination: NativeNavigationDestination | null): void;

@@ -4,6 +4,7 @@ import type { ComponentProps } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
+import { GooglePlaceRating } from '@/features/map/google-place-rating';
 
 type SymbolName = ComponentProps<typeof SymbolView>['name'];
 
@@ -14,11 +15,12 @@ interface PlaceSheetProps {
   onCall?: () => void;
   onClose: () => void;
   onDirections: () => void;
-  onReviews: () => void;
+  onReadReviews: () => void;
   onSave: () => void;
   onShare: () => void;
   onWebsite?: () => void;
   place: SearchResult;
+  ratingAvailable: boolean;
   saved: boolean;
   websiteLabel?: string;
 }
@@ -112,11 +114,12 @@ export function PlaceSheet({
   onCall,
   onClose,
   onDirections,
-  onReviews,
+  onReadReviews,
   onSave,
   onShare,
   onWebsite,
   place,
+  ratingAvailable,
   saved,
   websiteLabel,
 }: PlaceSheetProps) {
@@ -163,12 +166,13 @@ export function PlaceSheet({
           label={saved ? 'Saved' : 'Save'}
           onPress={onSave}
         />
-        <PlaceAction
-          accessibilityHint="Opens Google Maps; the place query is shared only after you choose this action"
-          icon={{ android: 'star', ios: 'star.fill' }}
-          label="Reviews"
-          onPress={onReviews}
-        />
+        {onCall !== undefined && (
+          <PlaceAction
+            icon={{ android: 'call', ios: 'phone.fill' }}
+            label="Call"
+            onPress={onCall}
+          />
+        )}
         <PlaceAction
           icon={{ android: 'share', ios: 'square.and.arrow.up' }}
           label="Share"
@@ -184,6 +188,42 @@ export function PlaceSheet({
           <View accessibilityLiveRegion="polite" style={styles.loadingRow}>
             <ActivityIndicator color={NavOssColors.green} size="small" />
             <Text style={styles.loadingText}>Loading open place details</Text>
+          </View>
+        )}
+        {place.category === 'poi' && (
+          <View style={styles.ratingSection}>
+            <View style={styles.ratingHeading}>
+              <SymbolView
+                name={{ android: 'star', ios: 'star.fill' }}
+                size={19}
+                tintColor={NavOssColors.sun}
+              />
+              <Text style={styles.ratingTitle}>Google rating</Text>
+            </View>
+            {ratingAvailable ? (
+              <GooglePlaceRating
+                latitude={place.center.latitude}
+                longitude={place.center.longitude}
+                name={place.name}
+                style={styles.ratingView}
+              />
+            ) : (
+              <Text style={styles.ratingUnavailable}>Google rating unavailable</Text>
+            )}
+            <Pressable
+              accessibilityHint="Opens Google Maps; the place query is shared only after you choose this action"
+              accessibilityLabel="Read reviews on Google Maps"
+              accessibilityRole="link"
+              onPress={onReadReviews}
+              style={({ pressed }) => [styles.reviewsLink, pressed && styles.pressed]}
+            >
+              <Text style={styles.reviewsLinkText}>Read reviews on Google Maps</Text>
+              <SymbolView
+                name={{ android: 'open_in_new', ios: 'arrow.up.right' }}
+                size={14}
+                tintColor={NavOssColors.green}
+              />
+            </Pressable>
           </View>
         )}
         {details?.address !== undefined && (
@@ -347,6 +387,47 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.7,
     transform: [{ scale: 0.97 }],
+  },
+  ratingHeading: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 7,
+  },
+  ratingSection: {
+    borderBottomColor: NavOssColors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+    paddingBottom: 12,
+    paddingTop: 10,
+  },
+  ratingTitle: {
+    color: NavOssColors.asphalt,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 15,
+    letterSpacing: 0,
+  },
+  ratingUnavailable: {
+    color: NavOssColors.muted,
+    fontFamily: NavOssFonts.regular,
+    fontSize: 14,
+    letterSpacing: 0,
+  },
+  ratingView: {
+    alignSelf: 'stretch',
+    minHeight: 56,
+  },
+  reviewsLink: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    gap: 6,
+    minHeight: 32,
+  },
+  reviewsLinkText: {
+    color: NavOssColors.green,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 14,
+    letterSpacing: 0,
   },
   source: {
     color: NavOssColors.muted,

@@ -7,6 +7,8 @@ import type {
 
 import NavOSSNavigation, {
   type NativeCarPlayState,
+  type NativeDestinationCatalog,
+  type NativeNavigationDestination,
   type NativeNavigationSnapshot,
 } from '../../../modules/navoss-navigation';
 
@@ -17,6 +19,7 @@ interface NativeTrafficInput {
 
 export type {
   NativeCarPlayState,
+  NativeDestinationCatalog,
   NativeNavigationSnapshot,
 } from '../../../modules/navoss-navigation';
 
@@ -48,6 +51,65 @@ export function getRecentDestinationIds(): string[] {
   return NavOSSNavigation.getRecentDestinationIds();
 }
 
+export function getDestinationCatalog(): NativeDestinationCatalog {
+  return NavOSSNavigation.getDestinationCatalog();
+}
+
+export function isGooglePlaceRatingAvailable(): boolean {
+  return NavOSSNavigation.isGooglePlaceRatingAvailable();
+}
+
+export function getGooglePlacesOpenSourceLicenseInfo(): string | undefined {
+  return NavOSSNavigation.getGooglePlacesOpenSourceLicenseInfo() ?? undefined;
+}
+
+export function nativeDestinationToSearchResult(
+  destination: NativeNavigationDestination,
+): SearchResult {
+  const category: SearchResult['category'] =
+    destination.category === 'address' ||
+    destination.category === 'landmark' ||
+    destination.category === 'neighborhood' ||
+    destination.category === 'poi' ||
+    destination.category === 'street'
+      ? destination.category
+      : 'landmark';
+  return {
+    category,
+    center: {
+      latitude: destination.latitude,
+      longitude: destination.longitude,
+    },
+    confidence: 1,
+    id: destination.id,
+    label: destination.label,
+    name: destination.name,
+  };
+}
+
+function nativeDestination(destination: SearchResult): NativeNavigationDestination {
+  return {
+    category: destination.category,
+    id: destination.id,
+    label: destination.label,
+    latitude: destination.center.latitude,
+    longitude: destination.center.longitude,
+    name: destination.name,
+  };
+}
+
+export function setHomeDestination(destination: SearchResult | undefined): void {
+  NavOSSNavigation.setHomeDestination(
+    destination === undefined ? null : nativeDestination(destination),
+  );
+}
+
+export function setWorkDestination(destination: SearchResult | undefined): void {
+  NavOSSNavigation.setWorkDestination(
+    destination === undefined ? null : nativeDestination(destination),
+  );
+}
+
 export function setNavigationRoute(
   route: RouteAlternative,
   destination: SearchResult,
@@ -57,13 +119,7 @@ export function setNavigationRoute(
 ): NativeNavigationSnapshot {
   const coordinate = ([longitude, latitude]: [number, number]) => ({ latitude, longitude });
   return NavOSSNavigation.setRoute({
-    destination: {
-      id: destination.id,
-      label: destination.label,
-      latitude: destination.center.latitude,
-      longitude: destination.center.longitude,
-      name: destination.name,
-    },
+    destination: nativeDestination(destination),
     distanceMeters: route.distanceMeters,
     durationSeconds: route.durationSeconds,
     geometry: route.geometry.map(coordinate),
@@ -105,13 +161,7 @@ export function clearDestinationHistory(): void {
 }
 
 export function recordRecentDestination(destination: SearchResult): void {
-  NavOSSNavigation.recordRecentDestination({
-    id: destination.id,
-    label: destination.label,
-    latitude: destination.center.latitude,
-    longitude: destination.center.longitude,
-    name: destination.name,
-  });
+  NavOSSNavigation.recordRecentDestination(nativeDestination(destination));
 }
 
 export function isFavoriteDestination(id: string): boolean {
@@ -119,13 +169,7 @@ export function isFavoriteDestination(id: string): boolean {
 }
 
 export function toggleFavoriteDestination(destination: SearchResult): boolean {
-  return NavOSSNavigation.toggleFavoriteDestination({
-    id: destination.id,
-    label: destination.label,
-    latitude: destination.center.latitude,
-    longitude: destination.center.longitude,
-    name: destination.name,
-  });
+  return NavOSSNavigation.toggleFavoriteDestination(nativeDestination(destination));
 }
 
 export function updateNavigationLocation(

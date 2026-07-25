@@ -5,6 +5,7 @@ public final class NavOSSNavigationAppDelegateSubscriber: ExpoAppDelegateSubscri
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
+    NavOSSGooglePlacesConfiguration.configure()
     NavOSSNavigationService.shared.resumePersistedNavigation()
     return true
   }

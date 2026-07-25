@@ -40,6 +40,9 @@ private struct NavigationLocationRecord: Record {
 
 private struct NavigationDestinationRecord: Record {
   @Field
+  var category: String?
+
+  @Field
   var id: String = ""
 
   @Field
@@ -56,6 +59,7 @@ private struct NavigationDestinationRecord: Record {
 
   var destination: NavOSSCarPlayDestination {
     NavOSSCarPlayDestination(
+      category: category,
       id: id,
       label: label,
       latitude: latitude,
@@ -246,6 +250,21 @@ public final class NavOSSNavigationModule: Module {
   public func definition() -> ModuleDefinition {
     Name("NavOSSNavigation")
 
+    View(NavOSSGooglePlaceRatingView.self) {
+      Prop("latitude") { (view, value: Double) in
+        view.setLatitude(value)
+      }
+      Prop("longitude") { (view, value: Double) in
+        view.setLongitude(value)
+      }
+      Prop("name") { (view, value: String) in
+        view.setName(value)
+      }
+      OnViewDidUpdateProps { view in
+        view.updateContent()
+      }
+    }
+
     Events(navigationSnapshotEvent, carPlayStateEvent, carPlayNavigationEndedEvent)
 
     OnCreate {
@@ -306,6 +325,14 @@ public final class NavOSSNavigationModule: Module {
       ]
     }
 
+    Function("isGooglePlaceRatingAvailable") { () -> Bool in
+      NavOSSGooglePlacesConfiguration.isAvailable
+    }
+
+    Function("getGooglePlacesOpenSourceLicenseInfo") { () -> String? in
+      NavOSSGooglePlacesConfiguration.openSourceLicenseInfo
+    }
+
     Function("getSnapshot") { () -> [String: Any] in
       return self.serialize(self.service.currentState())
     }
@@ -316,6 +343,10 @@ public final class NavOSSNavigationModule: Module {
 
     Function("getRecentDestinationIds") { () -> [String] in
       NavOSSCarPlayDestinationStore.shared.snapshot().recents.map(\.id)
+    }
+
+    Function("getDestinationCatalog") { () -> [String: Any] in
+      self.serialize(NavOSSCarPlayDestinationStore.shared.snapshot())
     }
 
     Function("setRoute") { (trip: CarPlayTripRecord) throws -> [String: Any] in
@@ -381,6 +412,34 @@ public final class NavOSSNavigationModule: Module {
 
   private func emitCarPlayState() {
     sendEvent(carPlayStateEvent, serialize(NavOSSCarPlayTripStore.shared.snapshot()))
+  }
+
+  private func serialize(_ catalog: NavOSSCarPlayDestinationCatalog) -> [String: Any] {
+    func destination(_ value: NavOSSCarPlayDestination) -> [String: Any] {
+      var payload: [String: Any] = [
+        "id": value.id,
+        "label": value.label,
+        "latitude": value.latitude,
+        "longitude": value.longitude,
+        "name": value.name,
+      ]
+      if let category = value.category {
+        payload["category"] = category
+      }
+      return payload
+    }
+
+    var payload: [String: Any] = [
+      "favorites": catalog.favorites.map(destination),
+      "recents": catalog.recents.map(destination),
+    ]
+    if let home = catalog.home {
+      payload["home"] = destination(home)
+    }
+    if let work = catalog.work {
+      payload["work"] = destination(work)
+    }
+    return payload
   }
 
   private func serialize(_ state: NavOSSCarPlayState) -> [String: Any] {

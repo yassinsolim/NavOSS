@@ -132,6 +132,40 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(route.value, 12.5)
   }
 
+  func testCarPlayEndControlsFollowActiveTripAcrossTemplates() {
+    let inactive = NavOSSCarPlayControlState(hasActiveTrip: false, searchVisible: false)
+    XCTAssertFalse(inactive.endNavigationVisible)
+    XCTAssertFalse(inactive.returnToRootFromSearch)
+
+    let activeMap = NavOSSCarPlayControlState(hasActiveTrip: true, searchVisible: false)
+    XCTAssertTrue(activeMap.endNavigationVisible)
+    XCTAssertFalse(activeMap.returnToRootFromSearch)
+
+    let activeSearch = NavOSSCarPlayControlState(hasActiveTrip: true, searchVisible: true)
+    XCTAssertTrue(activeSearch.endNavigationVisible)
+    XCTAssertTrue(activeSearch.returnToRootFromSearch)
+  }
+
+  func testCarPlayRemainingRouteGeometryDeletesTravelledTrail() throws {
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.10),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.06),
+    ]
+    let matchedCoordinate = NavOSSCarPlayCoordinate(latitude: 51.0401, longitude: -114.079)
+
+    let remaining = navOSSRemainingRouteGeometry(
+      geometry,
+      routeProgress: 0.6,
+      matchedCoordinate: matchedCoordinate
+    )
+
+    XCTAssertEqual(remaining.first, matchedCoordinate)
+    XCTAssertEqual(remaining.last, geometry.last)
+    XCTAssertEqual(remaining.count, 2)
+    XCTAssertFalse(remaining.contains(geometry[0]))
+  }
+
   func testCarPlayTripStoreRejectsStaleNavigationPublications() {
     let store = NavOSSCarPlayTripStore(notificationCenter: NotificationCenter())
     let firstTrip = makeNavigationSessionTrip()
@@ -151,6 +185,7 @@ final class NavigationCoreTests: XCTestCase {
       trip: firstTrip,
       guidance: firstGuidance,
       position: firstPosition,
+      routeProgress: 0.25,
       generation: 4,
       sequence: 10
     )
@@ -159,6 +194,7 @@ final class NavigationCoreTests: XCTestCase {
       trip: firstTrip,
       guidance: firstGuidance,
       position: firstPosition,
+      routeProgress: 0.5,
       generation: 4,
       sequence: 12
     )
@@ -168,6 +204,7 @@ final class NavigationCoreTests: XCTestCase {
       trip: secondTrip,
       guidance: secondGuidance,
       position: secondPosition,
+      routeProgress: 0.75,
       generation: 6,
       sequence: 20
     )
@@ -175,12 +212,14 @@ final class NavigationCoreTests: XCTestCase {
       trip: firstTrip,
       guidance: firstGuidance,
       position: firstPosition,
+      routeProgress: 0.5,
       generation: 6,
       sequence: 19
     )
     XCTAssertEqual(store.snapshot().trip, secondTrip)
     XCTAssertEqual(store.snapshot().guidance, secondGuidance)
     XCTAssertEqual(store.snapshot().position, secondPosition)
+    XCTAssertEqual(store.snapshot().routeProgress, 0.75)
   }
 
   func testActiveTripStoreExpiresAndClearsTransientRoute() throws {
@@ -387,6 +426,7 @@ final class NavigationCoreTests: XCTestCase {
     defer { defaults.removePersistentDomain(forName: suiteName) }
     let store = NavOSSCarPlayDestinationStore(defaults: defaults, key: "catalog")
     let favorite = NavOSSCarPlayDestination(
+      category: "poi",
       id: "favorite",
       label: "101 9 Avenue SW",
       latitude: 51.04427,
@@ -398,6 +438,7 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertTrue(store.toggleFavorite(favorite))
     XCTAssertTrue(store.isFavorite(id: favorite.id))
     XCTAssertEqual(store.snapshot().searchableDestinations, [favorite])
+    XCTAssertEqual(store.snapshot().favorites.first?.category, "poi")
     XCTAssertFalse(store.toggleFavorite(favorite))
     XCTAssertFalse(store.isFavorite(id: favorite.id))
     XCTAssertTrue(store.snapshot().favorites.isEmpty)

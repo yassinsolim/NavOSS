@@ -16,10 +16,14 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
+  if ENV['NAVOSS_GOOGLE_PLACES_ENABLED'] == '1'
+    s.dependency 'GooglePlacesSwift', '10.15.0'
+  end
 
   s.source_files = '*.swift', 'Core/**/*.swift'
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
-    'SWIFT_COMPILATION_MODE' => 'wholemodule'
+    'SWIFT_COMPILATION_MODE' => 'wholemodule',
+    'SWIFT_ACTIVE_COMPILATION_CONDITIONS' => "$(inherited)#{ENV['NAVOSS_GOOGLE_PLACES_ENABLED'] == '1' ? ' NAVOSS_GOOGLE_PLACES' : ''}"
   }
 end

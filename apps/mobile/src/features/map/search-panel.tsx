@@ -14,10 +14,11 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
 import { formatSearchDistance, searchResultContext } from '@/features/map/search-proximity';
+import { getGooglePlacesOpenSourceLicenseInfo } from '@/features/navigation/native-navigation';
 
 const PRIVACY_POLICY_URL = 'https://navoss.yassin.app/privacy';
 const SUPPORT_URL = 'https://navoss.yassin.app/support';
@@ -29,6 +30,7 @@ interface SearchPanelProps {
   apiConnection: ApiConnectionState;
   coverageName: string;
   darkMap: boolean;
+  discoveryActions?: ReactNode;
   maximumResultsHeight: number;
   onChangeQuery: (query: string) => void;
   onClear: () => void;
@@ -37,6 +39,7 @@ interface SearchPanelProps {
   onSubmit: () => void;
   query: string;
   results: SearchResult[];
+  searchPlaceholder?: string;
   searchSource: SearchSource | undefined;
   searchState: SearchState;
 }
@@ -77,6 +80,7 @@ export function SearchPanel({
   apiConnection,
   coverageName,
   darkMap,
+  discoveryActions,
   maximumResultsHeight,
   onChangeQuery,
   onClear,
@@ -85,10 +89,13 @@ export function SearchPanel({
   onSubmit,
   query,
   results,
+  searchPlaceholder = 'Where to?',
   searchSource,
   searchState,
 }: SearchPanelProps) {
   const [isAboutVisible, setIsAboutVisible] = useState(false);
+  const [isGoogleLicensesVisible, setIsGoogleLicensesVisible] = useState(false);
+  const [googlePlacesLicenseInfo] = useState(() => getGooglePlacesOpenSourceLicenseInfo());
   const showResults = query.trim().length >= 2 && (searchState !== 'idle' || results.length > 0);
   const connectionColor =
     apiConnection === 'online'
@@ -139,13 +146,15 @@ export function SearchPanel({
           tintColor={NavOssColors.asphalt}
         />
         <TextInput
-          accessibilityLabel="Search Calgary"
+          accessibilityLabel={
+            searchPlaceholder === 'Where to?' ? 'Search Calgary' : searchPlaceholder
+          }
           autoCapitalize="words"
           autoCorrect={false}
           enterKeyHint="search"
           onChangeText={onChangeQuery}
           onSubmitEditing={onSubmit}
-          placeholder="Where to?"
+          placeholder={searchPlaceholder}
           placeholderTextColor={NavOssColors.muted}
           returnKeyType="search"
           style={styles.input}
@@ -166,6 +175,8 @@ export function SearchPanel({
           </Pressable>
         )}
       </View>
+
+      {discoveryActions}
 
       {showResults && (
         <View style={[styles.resultsPanel, { maxHeight: maximumResultsHeight }]}>
@@ -296,6 +307,18 @@ export function SearchPanel({
                 you save are stored only on this device for phone and CarPlay shortcuts. Ending
                 navigation stops background location and erases the transient active route.
               </Text>
+              {googlePlacesLicenseInfo !== undefined && (
+                <Text style={styles.aboutBody}>
+                  When a point-of-interest sheet opens, its coordinate is sent directly to Google
+                  Places so Google's own component can render the current star rating, rating count,
+                  and attribution. NavOSS does not receive, store, combine, or send that Google data
+                  to its server. GooglePlacesSwift 10.15.0's embedded privacy manifest also declares
+                  Google collection of precise and coarse location, device ID, other data,
+                  performance data, product interaction, and search history for analytics and/or app
+                  functionality, but not tracking. Reviews open in Google Maps only after you choose
+                  the external link.
+                </Text>
+              )}
               <Pressable
                 accessibilityLabel="Clear saved and recent destinations"
                 onPress={onClearDestinationHistory}
@@ -357,7 +380,60 @@ export function SearchPanel({
                 licensed Mapbox traffic provider is explicitly enabled and attributed. Data and
                 alerts may be incomplete or outdated; always follow posted signs and road laws.
               </Text>
+              {googlePlacesLicenseInfo !== undefined && (
+                <Pressable
+                  accessibilityLabel="Open Google Places open-source licences"
+                  onPress={() => {
+                    setIsGoogleLicensesVisible(true);
+                  }}
+                  style={styles.aboutLink}
+                >
+                  <Text style={styles.aboutLinkText}>Google Places licences</Text>
+                  <SymbolView
+                    name={{ android: 'chevron_right', ios: 'chevron.right' }}
+                    size={15}
+                    tintColor={NavOssColors.green}
+                  />
+                </Pressable>
+              )}
             </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
+        animationType="slide"
+        onRequestClose={() => {
+          setIsGoogleLicensesVisible(false);
+        }}
+        presentationStyle="pageSheet"
+        visible={isGoogleLicensesVisible}
+      >
+        <SafeAreaView style={styles.aboutScreen}>
+          <View style={styles.aboutHeader}>
+            <Text style={styles.aboutHeaderTitle}>Google Places licences</Text>
+            <Pressable
+              accessibilityLabel="Close Google Places licences"
+              hitSlop={8}
+              onPress={() => {
+                setIsGoogleLicensesVisible(false);
+              }}
+              style={({ pressed }) => [
+                styles.aboutCloseButton,
+                pressed && styles.aboutButtonPressed,
+              ]}
+            >
+              <SymbolView
+                name={{ android: 'close', ios: 'xmark' }}
+                size={20}
+                tintColor={NavOssColors.asphalt}
+              />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={styles.licenseContent}>
+            <Text selectable style={styles.licenseText}>
+              {googlePlacesLicenseInfo ?? 'No Google Places licences in this build.'}
+            </Text>
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -557,6 +633,18 @@ const styles = StyleSheet.create({
     height: 52,
     letterSpacing: 0,
     paddingVertical: 0,
+  },
+  licenseContent: {
+    paddingBottom: 44,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+  },
+  licenseText: {
+    color: NavOssColors.asphalt,
+    fontFamily: NavOssFonts.regular,
+    fontSize: 13,
+    letterSpacing: 0,
+    lineHeight: 19,
   },
   resultCopy: {
     flex: 1,

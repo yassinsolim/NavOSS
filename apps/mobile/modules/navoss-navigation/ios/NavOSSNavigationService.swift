@@ -368,6 +368,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
         trip: trip,
         guidance: update.guidance,
         position: carPlayPosition,
+        routeProgress: update.snapshot.routeProgress,
         generation: versionedUpdate.generation,
         sequence: update.snapshot.sequence
       )

@@ -26,13 +26,22 @@ extension Notification.Name {
 }
 
 public struct NavOSSCarPlayDestination: Codable, Equatable, Sendable {
+  public let category: String?
   public let id: String
   public let label: String
   public let latitude: Double
   public let longitude: Double
   public let name: String
 
-  public init(id: String, label: String, latitude: Double, longitude: Double, name: String) {
+  public init(
+    category: String? = nil,
+    id: String,
+    label: String,
+    latitude: Double,
+    longitude: Double,
+    name: String
+  ) {
+    self.category = category
     self.id = id
     self.label = label
     self.latitude = latitude

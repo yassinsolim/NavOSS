@@ -1,9 +1,15 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { withEntitlementsPlist, withInfoPlist } = require('@expo/config-plugins');
+const {
+  IOSConfig,
+  withEntitlementsPlist,
+  withInfoPlist,
+  withXcodeProject,
+} = require('@expo/config-plugins');
 const { withBuildSourceFile } = require('@expo/config-plugins/build/ios/XcodeProjectFile');
 
 const sourceDirectory = path.join(__dirname, '..', 'carplay', 'ios');
+const vehicleArrowSource = path.join(__dirname, '..', 'assets', 'images', 'vehicle-arrow.png');
 const sourceFiles = [
   'NavOSSCarPlayMapViewController.swift',
   'NavOSSCarPlaySceneDelegate.swift',
@@ -22,11 +28,28 @@ function configuredApiUrl() {
   return url.toString();
 }
 
+function googlePlacesBuildConfiguration(environment = process.env) {
+  const enabled = environment.NAVOSS_GOOGLE_PLACES_ENABLED === '1';
+  const apiKey = environment.GOOGLE_PLACES_IOS_API_KEY?.trim();
+  if (enabled && (apiKey === undefined || apiKey.length === 0)) {
+    throw new Error('GOOGLE_PLACES_IOS_API_KEY is required when NAVOSS_GOOGLE_PLACES_ENABLED=1.');
+  }
+  return { enabled, ...(enabled ? { apiKey } : {}) };
+}
+
 function withNavOSSCarPlay(config) {
   const carPlayEnabled = process.env.NAVOSS_CARPLAY_ENABLED === '1';
+  const googlePlaces = googlePlacesBuildConfiguration();
 
   config = withInfoPlist(config, (modConfig) => {
     modConfig.modResults.NavOSSAPIURL = configuredApiUrl();
+    if (googlePlaces.enabled) {
+      modConfig.modResults.NavOSSGooglePlacesEnabled = true;
+      modConfig.modResults.NavOSSGooglePlacesAPIKey = googlePlaces.apiKey;
+    } else {
+      delete modConfig.modResults.NavOSSGooglePlacesEnabled;
+      delete modConfig.modResults.NavOSSGooglePlacesAPIKey;
+    }
     modConfig.modResults.UIBackgroundModes = [
       ...new Set([...(modConfig.modResults.UIBackgroundModes ?? []), 'location']),
     ];
@@ -83,7 +106,26 @@ function withNavOSSCarPlay(config) {
     });
   }
 
+  config = withXcodeProject(config, (modConfig) => {
+    const resourceDirectory = path.join(modConfig.modRequest.platformProjectRoot, 'Resources');
+    const resourcePath = path.join(resourceDirectory, 'vehicle-arrow.png');
+    fs.mkdirSync(resourceDirectory, { recursive: true });
+    fs.copyFileSync(vehicleArrowSource, resourcePath);
+    IOSConfig.XcodeUtils.ensureGroupRecursively(modConfig.modResults, 'Resources');
+    if (!modConfig.modResults.hasFile('Resources/vehicle-arrow.png')) {
+      IOSConfig.XcodeUtils.addResourceFileToGroup({
+        filepath: 'Resources/vehicle-arrow.png',
+        groupName: 'Resources',
+        isBuildFile: true,
+        project: modConfig.modResults,
+        verbose: true,
+      });
+    }
+    return modConfig;
+  });
+
   return config;
 }
 
 module.exports = withNavOSSCarPlay;
+module.exports.googlePlacesBuildConfiguration = googlePlacesBuildConfiguration;

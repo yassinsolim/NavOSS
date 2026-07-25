@@ -15,6 +15,8 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private var activeDestinationId: String?
   private var activeSystemTrip: CPTrip?
   private var activeTripId: String?
+  private var activeTripControlsVisible = false
+  private var endNavigationMapButton: CPMapButton?
   private var isPreviewingRoutes = false
   private var mapTemplate: CPMapTemplate?
   private var mapViewController: NavOSSCarPlayMapViewController?
@@ -26,6 +28,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private var destinationObserver: NSObjectProtocol?
   private var placesTemplate: CPListTemplate?
   private var stateObserver: NSObjectProtocol?
+  private var standardMapButtons: [CPMapButton] = []
   private var routeChoicesByIdentifier: [String: NavOSSCarPlayTrip] = [:]
   private var searchDestinationsByIdentifier: [String: NavOSSCarPlayDestination] = [:]
 
@@ -94,6 +97,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     activeDestinationId = nil
     activeSystemTrip = nil
     activeTripId = nil
+    activeTripControlsVisible = false
+    endNavigationMapButton = nil
+    standardMapButtons = []
     routeChoicesByIdentifier = [:]
     searchDestinationsByIdentifier = [:]
     placesTemplate = nil
@@ -129,12 +135,19 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       self?.mapViewController?.zoom(by: -1)
     }
     zoomOutButton.image = UIImage(systemName: "minus.magnifyingglass")
-    template.mapButtons = [recenterButton, zoomInButton, zoomOutButton]
+    let endNavigationButton = CPMapButton { [weak self] _ in
+      self?.endNavigation()
+    }
+    endNavigationButton.image = UIImage(systemName: "xmark.circle.fill")
+    endNavigationMapButton = endNavigationButton
+    standardMapButtons = [recenterButton, zoomInButton, zoomOutButton]
+    template.mapButtons = standardMapButtons
     return template
   }
 
   private func apply(_ state: NavOSSCarPlayState) {
     guard let trip = state.trip else {
+      updateActiveTripControls(visible: false)
       navigationSession?.cancelTrip()
       navigationSession = nil
       activeManeuver = nil
@@ -149,13 +162,15 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       return
     }
 
+    updateActiveTripControls(visible: true)
     let activeGuidance = state.guidance?.phase == .navigating || state.guidance?.phase == .arrived
     configureRouteAttribution(source: trip.source)
     mapViewController?.display(
       route: trip.geometry,
       routeId: trip.id,
       activeGuidance: activeGuidance,
-      position: state.position
+      position: state.position,
+      routeProgress: state.routeProgress
     )
 
     if activeGuidance
@@ -370,17 +385,38 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     guard let interfaceController else {
       return
     }
-    NavOSSNavigationService.shared.prepareForCarPlayRoutePlanning()
+    let hasActiveTrip = NavOSSCarPlayTripStore.shared.snapshot().trip != nil
+    if !hasActiveTrip {
+      NavOSSNavigationService.shared.prepareForCarPlayRoutePlanning()
+    }
 
     let listTemplate = CPListTemplate(
-      title: "Choose a destination",
+      title: hasActiveTrip ? "Current trip" : "Choose a destination",
       sections: destinationSections()
     )
+    listTemplate.trailingNavigationBarButtons =
+      hasActiveTrip
+      ? [makeEndNavigationBarButton()]
+      : []
     placesTemplate = listTemplate
     interfaceController.pushTemplate(listTemplate, animated: true, completion: nil)
   }
 
   private func destinationSections() -> [CPListSection] {
+    if let trip = NavOSSCarPlayTripStore.shared.snapshot().trip {
+      let endItem = CPListItem(
+        text: "End navigation",
+        detailText: "Stop guidance to \(trip.destination.name)"
+      )
+      endItem.handler = { [weak self] _, completion in
+        completion()
+        self?.endNavigation()
+      }
+      return [
+        CPListSection(items: [endItem], header: "Current trip", sectionIndexTitle: nil)
+      ]
+    }
+
     let catalog = NavOSSCarPlayDestinationStore.shared.snapshot()
     var sections: [CPListSection] = []
     let shortcuts = [
@@ -418,6 +454,69 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     }
     sections.insert(CPListSection(items: [searchItem]), at: 0)
     return sections
+  }
+
+  private func makeEndNavigationBarButton() -> CPBarButton {
+    let button = CPBarButton(title: "End") { [weak self] _ in
+      self?.endNavigation()
+    }
+    button.buttonStyle = .rounded
+    return button
+  }
+
+  private func updateActiveTripControls(visible: Bool) {
+    guard activeTripControlsVisible != visible else {
+      return
+    }
+    activeTripControlsVisible = visible
+    let controlState = NavOSSCarPlayControlState(
+      hasActiveTrip: visible,
+      searchVisible: interfaceController?.topTemplate is CPSearchTemplate
+    )
+    if controlState.endNavigationVisible, let endNavigationMapButton {
+      mapTemplate?.mapButtons = [endNavigationMapButton] + standardMapButtons
+      if controlState.returnToRootFromSearch {
+        interfaceController?.popToRootTemplate(animated: true, completion: nil)
+      }
+    } else {
+      mapTemplate?.mapButtons = standardMapButtons
+    }
+    if let placesTemplate {
+      placesTemplate.trailingNavigationBarButtons =
+        visible
+        ? [makeEndNavigationBarButton()]
+        : []
+      placesTemplate.updateSections(destinationSections())
+    }
+  }
+
+  private func endNavigation() {
+    guard NavOSSCarPlayTripStore.shared.snapshot().trip != nil || navigationSession != nil else {
+      return
+    }
+    routeRequestGeneration &+= 1
+    routeTask?.cancel()
+    routeTask = nil
+    searchRequestGeneration &+= 1
+    searchTask?.cancel()
+    searchTask = nil
+    routeChoicesByIdentifier = [:]
+    searchDestinationsByIdentifier = [:]
+    isPreviewingRoutes = false
+    mapTemplate?.dismissNavigationAlert(animated: false) { _ in }
+    mapTemplate?.hideTripPreviews()
+    navigationSession?.cancelTrip()
+    navigationSession = nil
+    activeManeuver = nil
+    activeManeuverKey = nil
+    activeDestinationId = nil
+    activeSystemTrip = nil
+    activeTripId = nil
+    placesTemplate = nil
+    configureRouteAttribution(source: nil)
+    mapViewController?.clearRoute()
+    interfaceController?.popToRootTemplate(animated: true, completion: nil)
+    NavOSSNavigationService.shared.endNavigationFromCarPlay()
   }
 
   private func destinationItem(
@@ -538,7 +637,8 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       mapViewController?.display(
         route: firstRoute.geometry,
         routeId: firstRoute.id,
-        activeGuidance: false
+        activeGuidance: false,
+        alternateRoute: routes.dropFirst().first?.geometry
       )
     }
     interfaceController?.popToRootTemplate(animated: true) { [weak self] _, _ in
@@ -557,7 +657,13 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       return
     }
     configureRouteAttribution(source: route.source)
-    mapViewController?.display(route: route.geometry, routeId: route.id, activeGuidance: false)
+    let alternateRoute = routeChoicesByIdentifier.values.first { $0.id != route.id }
+    mapViewController?.display(
+      route: route.geometry,
+      routeId: route.id,
+      activeGuidance: false,
+      alternateRoute: alternateRoute?.geometry
+    )
   }
 
   func mapTemplateDidCancelNavigation(_ mapTemplate: CPMapTemplate) {
@@ -577,14 +683,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       }
       return
     }
-    navigationSession?.cancelTrip()
-    navigationSession = nil
-    activeManeuver = nil
-    activeManeuverKey = nil
-    activeDestinationId = nil
-    activeSystemTrip = nil
-    activeTripId = nil
-    NavOSSNavigationService.shared.endNavigationFromCarPlay()
+    endNavigation()
   }
 
   func mapTemplate(

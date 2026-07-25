@@ -23,6 +23,7 @@ private struct SearchResponse: Decodable {
 }
 
 private struct SearchResult: Decodable {
+  let category: String
   let center: NavOSSCarPlayCoordinate
   let id: String
   let label: String
@@ -106,6 +107,7 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     let response: SearchResponse = try await post(path: "v1/search", body: request)
     return response.results.map {
       NavOSSCarPlayDestination(
+        category: $0.category,
         id: $0.id,
         label: $0.label,
         latitude: $0.center.latitude,

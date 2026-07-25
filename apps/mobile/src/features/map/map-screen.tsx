@@ -46,6 +46,11 @@ import {
 import type { FeatureCollection, LineString, Point } from 'geojson';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
+import { APP_TAB_BAR_HEIGHT, AppTabBar, type AppTab } from '@/features/map/app-tab-bar';
+import { ContributeScreen } from '@/features/map/contribute-screen';
+import { ExploreCategoryBar } from '@/features/map/explore-category-bar';
+import type { ExploreCategory } from '@/features/map/explore-categories';
+import { createLatestRequestGate } from '@/features/map/latest-request-gate';
 import {
   enrichMapPlace,
   MAP_PLACE_LAYER_IDS,
@@ -67,6 +72,7 @@ import {
 } from '@/features/map/map-preferences';
 import { MapPreferencesPanel } from '@/features/map/map-preferences-panel';
 import { PlaceSheet } from '@/features/map/place-sheet';
+import { SavedPlacesScreen } from '@/features/map/saved-places-screen';
 import {
   approximateSearchCoordinate,
   rankSearchResults,
@@ -105,16 +111,23 @@ import {
   clearCarPlayTrip,
   clearDestinationHistory,
   clearNavigationRoute,
+  clearRecentDestinations,
+  getDestinationCatalog,
   getNavigationSnapshot,
   getCarPlayState,
   getRecentDestinationIds,
   isFavoriteDestination,
+  isGooglePlaceRatingAvailable,
+  nativeDestinationToSearchResult,
+  type NativeDestinationCatalog,
   type NativeNavigationSnapshot,
   observeCarPlayNavigationEnded,
   observeCarPlayState,
   observeNavigationSnapshots,
   recordRecentDestination,
   setNavigationRoute,
+  setHomeDestination,
+  setWorkDestination,
   stopNavigationAnnouncements,
   toggleFavoriteDestination,
 } from '@/features/navigation/native-navigation';
@@ -280,8 +293,12 @@ export function MapScreen() {
   const hasCenteredOnUserRef = useRef(false);
   const placeAbortControllerRef = useRef<AbortController>(null);
   const placeInteractionRef = useRef(0);
+  const searchAbortControllerRef = useRef<AbortController>(null);
+  const searchRequestGateRef = useRef(createLatestRequestGate());
+  const categorySearchActiveRef = useRef(false);
   const safetyCamerasRef = useRef<readonly SafetyCamera[]>([]);
   const [apiConnection, setApiConnection] = useState<ApiConnectionState>('connecting');
+  const [activeTab, setActiveTab] = useState<AppTab>('explore');
   const [coverageName, setCoverageName] = useState('Calgary alpha');
   const [coverageBounds, setCoverageBounds] = useState<AppConfigResponse['coverage']['bounds']>();
   const [locationState, setLocationState] = useState<LocationState>('idle');
@@ -292,7 +309,9 @@ export function MapScreen() {
     mapStyleUrl(DEFAULT_MAP_PREFERENCES.stylePreset, colorScheme),
   );
   const [isMapPreferencesVisible, setIsMapPreferencesVisible] = useState(false);
+  const [isMoreCategoriesVisible, setIsMoreCategoriesVisible] = useState(false);
   const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
+  const [googlePlaceRatingAvailable] = useState(() => isGooglePlaceRatingAvailable());
   const [selectedPlaceSaved, setSelectedPlaceSaved] = useState(false);
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
@@ -300,6 +319,11 @@ export function MapScreen() {
   const [searchSource, setSearchSource] = useState<SearchSource>();
   const [searchState, setSearchState] = useState<SearchState>('idle');
   const [selectedResult, setSelectedResult] = useState<SearchResult>();
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>();
+  const [shortcutBeingSet, setShortcutBeingSet] = useState<'home' | 'work'>();
+  const [destinationCatalog, setDestinationCatalog] = useState<NativeDestinationCatalog>(() =>
+    getDestinationCatalog(),
+  );
   const [routeState, setRouteState] = useState<RouteUiState>({ type: 'idle' });
   const [routePreferences, setRoutePreferences] = useState<RoutePreferences>({
     avoidFerries: false,
@@ -331,6 +355,81 @@ export function MapScreen() {
     placeAbortControllerRef.current?.abort();
     placeAbortControllerRef.current = null;
     setPlaceDetailsLoading(false);
+  };
+
+  const refreshDestinationCatalog = () => {
+    setDestinationCatalog(getDestinationCatalog());
+  };
+
+  const invalidateSearchRequest = (): number => {
+    const requestGeneration = searchRequestGateRef.current.advance();
+    searchAbortControllerRef.current?.abort();
+    searchAbortControllerRef.current = null;
+    return requestGeneration;
+  };
+
+  const runPlaceSearch = (normalizedQuery: string, fitResults: boolean): AbortController => {
+    const requestGeneration = invalidateSearchRequest();
+    const controller = new AbortController();
+    searchAbortControllerRef.current = controller;
+    setSearchState('loading');
+    const searchOrigin = approximateSearchCoordinate(userCoordinate);
+
+    void searchPlaces(normalizedQuery, {
+      latitude: searchOrigin?.latitude,
+      limit: 8,
+      longitude: searchOrigin?.longitude,
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (
+          controller.signal.aborted ||
+          !searchRequestGateRef.current.isCurrent(requestGeneration)
+        ) {
+          return;
+        }
+        const rankedResults = rankSearchResults(response.results, getRecentDestinationIds());
+        startTransition(() => {
+          setApiConnection('online');
+          setResults(rankedResults);
+          setSearchSource(response.source);
+          setSearchState('success');
+        });
+        if (fitResults) {
+          const bounds = searchResultBounds(rankedResults);
+          if (bounds !== undefined) {
+            requestAnimationFrame(() => {
+              cameraRef.current?.fitBounds(bounds, {
+                duration: 700,
+                padding: {
+                  bottom: APP_TAB_BAR_HEIGHT + insets.bottom + 34,
+                  left: 54,
+                  right: 54,
+                  top: 282,
+                },
+              });
+            });
+          }
+        }
+      })
+      .catch(() => {
+        if (
+          !controller.signal.aborted &&
+          searchRequestGateRef.current.isCurrent(requestGeneration)
+        ) {
+          startTransition(() => {
+            setApiConnection('offline');
+            setResults([]);
+            setSearchState('error');
+          });
+        }
+      })
+      .finally(() => {
+        if (searchAbortControllerRef.current === controller) {
+          searchAbortControllerRef.current = null;
+        }
+      });
+    return controller;
   };
 
   useEffect(() => {
@@ -460,45 +559,21 @@ export function MapScreen() {
     const normalizedQuery = deferredQuery.trim();
 
     if (
+      categorySearchActiveRef.current ||
       normalizedQuery.length < 2 ||
       normalizedQuery.toLocaleLowerCase('en-CA') === selectedResult?.name.toLocaleLowerCase('en-CA')
     ) {
       return;
     }
 
-    const controller = new AbortController();
+    let searchController: AbortController | undefined;
     const timeout = setTimeout(() => {
-      setSearchState('loading');
-      const searchOrigin = approximateSearchCoordinate(userCoordinate);
-
-      void searchPlaces(normalizedQuery, {
-        latitude: searchOrigin?.latitude,
-        limit: 8,
-        longitude: searchOrigin?.longitude,
-        signal: controller.signal,
-      })
-        .then((response) => {
-          startTransition(() => {
-            setApiConnection('online');
-            setResults(rankSearchResults(response.results, getRecentDestinationIds()));
-            setSearchSource(response.source);
-            setSearchState('success');
-          });
-        })
-        .catch((error: unknown) => {
-          if (!controller.signal.aborted) {
-            startTransition(() => {
-              setApiConnection('offline');
-              setResults([]);
-              setSearchState('error');
-            });
-          }
-        });
+      searchController = runPlaceSearch(normalizedQuery, false);
     }, 250);
 
     return () => {
       clearTimeout(timeout);
-      controller.abort();
+      searchController?.abort();
     };
   }, [deferredQuery, selectedResult?.name, userCoordinate?.latitude, userCoordinate?.longitude]);
 
@@ -509,6 +584,7 @@ export function MapScreen() {
       }
       stopNavigationAnnouncements();
       routeAbortControllerRef.current?.abort();
+      invalidateSearchRequest();
       placeInteractionRef.current += 1;
       placeAbortControllerRef.current?.abort();
     };
@@ -786,7 +862,9 @@ export function MapScreen() {
   };
 
   const handleChangeQuery = (value: string) => {
+    categorySearchActiveRef.current = false;
     invalidatePlaceInteraction();
+    setSelectedCategoryId(undefined);
     setQuery(value);
     setSelectedResult(undefined);
 
@@ -805,25 +883,41 @@ export function MapScreen() {
     setSafetyCameraAlert(undefined);
     setCameraAnnouncementCount(0);
     stopNavigationAnnouncements();
+    categorySearchActiveRef.current = false;
+    invalidateSearchRequest();
     invalidatePlaceInteraction();
     routeAbortControllerRef.current?.abort();
     setIsNavigationCameraFollowing(true);
     setQuery('');
     setResults([]);
     setSearchState('idle');
+    setSelectedCategoryId(undefined);
+    setShortcutBeingSet(undefined);
     setSelectedResult(undefined);
     setRouteState({ type: 'idle' });
   };
 
   const handleSelectResult = (result: SearchResult) => {
     Keyboard.dismiss();
+    categorySearchActiveRef.current = false;
+    invalidateSearchRequest();
     invalidatePlaceInteraction();
     routeAbortControllerRef.current?.abort();
     setRouteState({ type: 'idle' });
     setQuery(result.name);
     setResults([]);
     setSearchState('idle');
+    setSelectedCategoryId(undefined);
     setSelectedResult(result);
+    if (shortcutBeingSet === 'home') {
+      setHomeDestination(result);
+      refreshDestinationCatalog();
+      setShortcutBeingSet(undefined);
+    } else if (shortcutBeingSet === 'work') {
+      setWorkDestination(result);
+      refreshDestinationCatalog();
+      setShortcutBeingSet(undefined);
+    }
     setSelectedPlaceSaved(isFavoriteDestination(result.id));
     setPlaceDetailsLoading(true);
     cameraRef.current?.flyTo({
@@ -861,6 +955,44 @@ export function MapScreen() {
           setPlaceDetailsLoading(false);
         }
       });
+  };
+
+  const handleCategoryPress = (category: ExploreCategory) => {
+    Keyboard.dismiss();
+    categorySearchActiveRef.current = true;
+    invalidatePlaceInteraction();
+    routeAbortControllerRef.current?.abort();
+    setActiveTab('explore');
+    setIsMoreCategoriesVisible(false);
+    setShortcutBeingSet(undefined);
+    setSelectedCategoryId(category.id);
+    setSelectedResult(undefined);
+    setRouteState({ type: 'idle' });
+    setQuery(category.label);
+    setResults([]);
+    runPlaceSearch(category.query, true);
+  };
+
+  const beginShortcutSetup = (shortcut: 'home' | 'work') => {
+    categorySearchActiveRef.current = false;
+    invalidateSearchRequest();
+    setActiveTab('explore');
+    setIsMoreCategoriesVisible(false);
+    setSelectedCategoryId(undefined);
+    setSelectedResult(undefined);
+    setQuery('');
+    setResults([]);
+    setSearchState('idle');
+    setShortcutBeingSet(shortcut);
+  };
+
+  const handleWorkPress = () => {
+    if (destinationCatalog.work === undefined) {
+      beginShortcutSetup('work');
+      return;
+    }
+    setActiveTab('explore');
+    handleSelectResult(nativeDestinationToSearchResult(destinationCatalog.work));
   };
 
   const handleSubmit = () => {
@@ -985,6 +1117,7 @@ export function MapScreen() {
   const handleClearDestinationHistory = () => {
     clearDestinationHistory();
     setSelectedPlaceSaved(false);
+    refreshDestinationCatalog();
   };
 
   const handlePlaceDirections = () => {
@@ -1267,6 +1400,8 @@ export function MapScreen() {
   }, []);
 
   const placeSheetVisible = routeState.type === 'idle' && selectedResult !== undefined;
+  const appShellVisible = routeState.type === 'idle' && selectedResult === undefined;
+  const appTabBarHeight = appShellVisible ? APP_TAB_BAR_HEIGHT + insets.bottom : 0;
   const placeDetailRowCount =
     selectedResult === undefined
       ? 0
@@ -1279,7 +1414,10 @@ export function MapScreen() {
         ].filter((value) => value !== undefined).length;
   const placeSheetHeight = Math.min(
     height * 0.56,
-    242 + Math.max(1, placeDetailRowCount) * 48 + insets.bottom,
+    242 +
+      Math.max(1, placeDetailRowCount) * 48 +
+      (selectedResult?.category === 'poi' ? 122 : 0) +
+      insets.bottom,
   );
   const selectedPanelHeight =
     routeState.type === 'preview'
@@ -1295,7 +1433,7 @@ export function MapScreen() {
               : placeSheetVisible
                 ? placeSheetHeight
                 : 0;
-  const controlBottom = selectedPanelHeight + 18;
+  const controlBottom = selectedPanelHeight + appTabBarHeight + 18;
   const resultsHeight = Math.min(360, Math.max(180, height * 0.42));
   const darkMap =
     mapPreferences.stylePreset === 'night' ||
@@ -1354,18 +1492,20 @@ export function MapScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar style={darkMap ? 'light' : 'dark'} />
+      <StatusBar style={activeTab === 'explore' && darkMap ? 'light' : 'dark'} />
       <Map
         accessibilityLabel={
           mapPreferences.showSafetyCameras
             ? `Map with ${String(safetyCameras.length)} official safety camera symbols`
             : 'Map with camera markers hidden'
         }
+        accessibilityElementsHidden={activeTab !== 'explore'}
         attribution={false}
         compass={routeState.type !== 'navigating'}
         compassPosition={{ right: 14, top: insets.top + 118 }}
         logo={false}
         mapStyle={mapStyle}
+        importantForAccessibility={activeTab === 'explore' ? 'auto' : 'no-hide-descendants'}
         onDidFailLoadingMap={() => {
           setMapError(true);
         }}
@@ -1577,28 +1717,30 @@ export function MapScreen() {
         </Pressable>
       )}
 
-      <Pressable
-        accessibilityLabel="Map appearance"
-        onPress={() => {
-          setIsMapPreferencesVisible(true);
-        }}
-        style={({ pressed }) => [
-          styles.mapPreferencesButton,
-          {
-            bottom:
-              routeState.type === 'navigating' || routeState.type === 'arrived'
-                ? selectedPanelHeight + 18
-                : controlBottom + 62,
-          },
-          pressed && styles.controlPressed,
-        ]}
-      >
-        <SymbolView
-          name={{ android: 'layers', ios: 'square.3.layers.3d' }}
-          size={22}
-          tintColor={NavOssColors.asphalt}
-        />
-      </Pressable>
+      {(activeTab === 'explore' || !appShellVisible) && (
+        <Pressable
+          accessibilityLabel="Map appearance"
+          onPress={() => {
+            setIsMapPreferencesVisible(true);
+          }}
+          style={({ pressed }) => [
+            styles.mapPreferencesButton,
+            {
+              bottom:
+                routeState.type === 'navigating' || routeState.type === 'arrived'
+                  ? selectedPanelHeight + 18
+                  : controlBottom + 62,
+            },
+            pressed && styles.controlPressed,
+          ]}
+        >
+          <SymbolView
+            name={{ android: 'layers', ios: 'square.3.layers.3d' }}
+            size={22}
+            tintColor={NavOssColors.asphalt}
+          />
+        </Pressable>
+      )}
 
       <MapPreferencesPanel
         onChange={(preferences) => {
@@ -1619,11 +1761,12 @@ export function MapScreen() {
           loading={placeDetailsLoading}
           onClose={handleClosePlace}
           onDirections={handlePlaceDirections}
-          onReviews={() => {
+          onReadReviews={() => {
             openExternalPlaceUrl(placeReviewsUrl(selectedResult));
           }}
           onSave={() => {
             setSelectedPlaceSaved(toggleFavoriteDestination(selectedResult));
+            refreshDestinationCatalog();
           }}
           onShare={() => {
             void Share.share({
@@ -1646,83 +1789,159 @@ export function MapScreen() {
                 },
               })}
           place={selectedResult}
+          ratingAvailable={googlePlaceRatingAvailable}
           saved={selectedPlaceSaved}
           websiteLabel={selectedPlaceWebsiteLabel}
         />
       )}
 
-      {routeState.type !== 'navigating' && routeState.type !== 'arrived' && (
-        <View pointerEvents="box-none" style={[styles.topOverlay, { paddingTop: insets.top + 10 }]}>
-          <SearchPanel
-            apiConnection={apiConnection}
-            coverageName={coverageName}
-            darkMap={darkMap}
-            maximumResultsHeight={resultsHeight}
-            onChangeQuery={handleChangeQuery}
-            onClear={handleClear}
-            onClearDestinationHistory={handleClearDestinationHistory}
-            onSelectResult={handleSelectResult}
-            onSubmit={handleSubmit}
-            query={query}
-            results={results}
-            searchSource={searchSource}
-            searchState={searchState}
-          />
-        </View>
-      )}
+      {routeState.type !== 'navigating' &&
+        routeState.type !== 'arrived' &&
+        activeTab === 'explore' && (
+          <View
+            pointerEvents="box-none"
+            style={[styles.topOverlay, { paddingTop: insets.top + 10 }]}
+          >
+            <SearchPanel
+              apiConnection={apiConnection}
+              coverageName={coverageName}
+              darkMap={darkMap}
+              discoveryActions={
+                appShellVisible ? (
+                  <ExploreCategoryBar
+                    onCategoryPress={handleCategoryPress}
+                    onCloseMore={() => {
+                      setIsMoreCategoriesVisible(false);
+                    }}
+                    onOpenMore={() => {
+                      setIsMoreCategoriesVisible(true);
+                    }}
+                    onWorkPress={handleWorkPress}
+                    selectedCategoryId={selectedCategoryId}
+                    settingWork={shortcutBeingSet === 'work'}
+                    showMore={isMoreCategoriesVisible}
+                    workSaved={destinationCatalog.work !== undefined}
+                  />
+                ) : undefined
+              }
+              maximumResultsHeight={resultsHeight}
+              onChangeQuery={handleChangeQuery}
+              onClear={handleClear}
+              onClearDestinationHistory={handleClearDestinationHistory}
+              onSelectResult={handleSelectResult}
+              onSubmit={handleSubmit}
+              query={query}
+              results={results}
+              searchPlaceholder={
+                shortcutBeingSet === undefined
+                  ? 'Where to?'
+                  : `Search to set ${shortcutBeingSet === 'home' ? 'Home' : 'Work'}`
+              }
+              searchSource={searchSource}
+              searchState={searchState}
+            />
+          </View>
+        )}
 
-      {(mapError ||
-        (routeState.type === 'idle' &&
-          (locationState === 'denied' || locationState === 'error'))) && (
-        <View style={[styles.notice, { bottom: controlBottom + 66 }]}>
-          <SymbolView
-            name={{ android: 'warning', ios: 'exclamationmark.triangle.fill' }}
-            size={17}
-            tintColor={NavOssColors.coral}
-          />
-          <Text style={styles.noticeText}>
-            {mapError
-              ? 'Basemap unavailable'
-              : locationState === 'denied'
-                ? 'Location access is off'
-                : 'Current location unavailable'}
-          </Text>
-        </View>
-      )}
-
-      {routeState.type !== 'navigating' && routeState.type !== 'arrived' && (
-        <Pressable
-          accessibilityLabel="Center map on my location"
-          disabled={locationState === 'locating'}
-          onPress={() => {
-            void handleLocate();
+      {appShellVisible && activeTab === 'saved' && (
+        <SavedPlacesScreen
+          bottomInset={insets.bottom}
+          catalog={destinationCatalog}
+          onChoose={(place) => {
+            setActiveTab('explore');
+            handleSelectResult(place);
           }}
-          style={({ pressed }) => [
-            styles.locationButton,
-            { bottom: controlBottom },
-            pressed && styles.controlPressed,
-          ]}
+          onChangeHome={() => {
+            beginShortcutSetup('home');
+          }}
+          onChangeWork={() => {
+            beginShortcutSetup('work');
+          }}
+          onClearHistory={() => {
+            clearRecentDestinations();
+            refreshDestinationCatalog();
+          }}
+          onRemoveHome={() => {
+            setHomeDestination(undefined);
+            refreshDestinationCatalog();
+          }}
+          onRemoveWork={() => {
+            setWorkDestination(undefined);
+            refreshDestinationCatalog();
+          }}
+          onSetHome={() => {
+            beginShortcutSetup('home');
+          }}
+          onSetWork={() => {
+            beginShortcutSetup('work');
+          }}
+          safeAreaTop={insets.top}
+        />
+      )}
+
+      {appShellVisible && activeTab === 'contribute' && (
+        <ContributeScreen bottomInset={insets.bottom} safeAreaTop={insets.top} />
+      )}
+
+      {activeTab === 'explore' &&
+        (mapError ||
+          (routeState.type === 'idle' &&
+            (locationState === 'denied' || locationState === 'error'))) && (
+          <View style={[styles.notice, { bottom: controlBottom + 66 }]}>
+            <SymbolView
+              name={{ android: 'warning', ios: 'exclamationmark.triangle.fill' }}
+              size={17}
+              tintColor={NavOssColors.coral}
+            />
+            <Text style={styles.noticeText}>
+              {mapError
+                ? 'Basemap unavailable'
+                : locationState === 'denied'
+                  ? 'Location access is off'
+                  : 'Current location unavailable'}
+            </Text>
+          </View>
+        )}
+
+      {activeTab === 'explore' &&
+        routeState.type !== 'navigating' &&
+        routeState.type !== 'arrived' && (
+          <Pressable
+            accessibilityLabel="Center map on my location"
+            disabled={locationState === 'locating'}
+            onPress={() => {
+              void handleLocate();
+            }}
+            style={({ pressed }) => [
+              styles.locationButton,
+              { bottom: controlBottom },
+              pressed && styles.controlPressed,
+            ]}
+          >
+            <SymbolView
+              animationSpec={
+                locationState === 'locating' ? { effect: { type: 'pulse' } } : undefined
+              }
+              name={{ android: 'my_location', ios: 'location.fill' }}
+              size={23}
+              tintColor={NavOssColors.asphalt}
+            />
+          </Pressable>
+        )}
+
+      {(activeTab === 'explore' || !appShellVisible) && (
+        <Pressable
+          accessibilityLabel="Map attribution"
+          onPress={() => {
+            void mapRef.current?.showAttribution();
+          }}
+          style={[styles.attribution, { bottom: selectedPanelHeight + appTabBarHeight + 8 }]}
         >
-          <SymbolView
-            animationSpec={locationState === 'locating' ? { effect: { type: 'pulse' } } : undefined}
-            name={{ android: 'my_location', ios: 'location.fill' }}
-            size={23}
-            tintColor={NavOssColors.asphalt}
-          />
+          <Text style={styles.attributionText}>
+            © OpenMapTiles · © OpenStreetMap · © City of Calgary
+          </Text>
         </Pressable>
       )}
-
-      <Pressable
-        accessibilityLabel="Map attribution"
-        onPress={() => {
-          void mapRef.current?.showAttribution();
-        }}
-        style={[styles.attribution, { bottom: selectedPanelHeight + 8 }]}
-      >
-        <Text style={styles.attributionText}>
-          © OpenMapTiles · © OpenStreetMap · © City of Calgary
-        </Text>
-      </Pressable>
 
       {(routeState.type === 'loading' || routeState.type === 'error') && (
         <RoutePlanningPanel
@@ -1803,6 +2022,27 @@ export function MapScreen() {
           bottomInset={insets.bottom}
           destination={routeState.destination}
           onDone={handleFinishArrival}
+        />
+      )}
+
+      {appShellVisible && (
+        <AppTabBar
+          activeTab={activeTab}
+          bottomInset={insets.bottom}
+          onSelect={(tab) => {
+            Keyboard.dismiss();
+            if (tab !== 'explore') {
+              categorySearchActiveRef.current = false;
+              invalidateSearchRequest();
+            }
+            setActiveTab(tab);
+            if (tab !== 'explore') {
+              setShortcutBeingSet(undefined);
+            }
+            if (tab === 'saved') {
+              refreshDestinationCatalog();
+            }
+          }}
         />
       )}
     </View>

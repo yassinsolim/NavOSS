@@ -1,4 +1,6 @@
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+const googlePlacesEnabled = process.env.NAVOSS_GOOGLE_PLACES_ENABLED === '1';
+const googlePlacesApiKey = process.env.GOOGLE_PLACES_IOS_API_KEY?.trim();
 
 function fail(message) {
   console.error(`Release configuration error: ${message}`);
@@ -7,6 +9,10 @@ function fail(message) {
 
 if (!configuredApiUrl) {
   fail('EXPO_PUBLIC_API_URL is required.');
+}
+
+if (googlePlacesEnabled && !googlePlacesApiKey) {
+  fail('GOOGLE_PLACES_IOS_API_KEY is required when NAVOSS_GOOGLE_PLACES_ENABLED=1.');
 }
 
 let apiUrl;
