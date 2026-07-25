@@ -75,6 +75,7 @@ import { PlaceSheet } from '@/features/map/place-sheet';
 import { SavedPlacesScreen } from '@/features/map/saved-places-screen';
 import {
   approximateSearchCoordinate,
+  rankCategoryResults,
   rankSearchResults,
   searchResultBounds,
 } from '@/features/map/search-proximity';
@@ -368,7 +369,11 @@ export function MapScreen() {
     return requestGeneration;
   };
 
-  const runPlaceSearch = (normalizedQuery: string, fitResults: boolean): AbortController => {
+  const runPlaceSearch = (
+    normalizedQuery: string,
+    fitResults: boolean,
+    nearestFirst = false,
+  ): AbortController => {
     const requestGeneration = invalidateSearchRequest();
     const controller = new AbortController();
     searchAbortControllerRef.current = controller;
@@ -377,9 +382,10 @@ export function MapScreen() {
 
     void searchPlaces(normalizedQuery, {
       latitude: searchOrigin?.latitude,
-      limit: 8,
+      limit: nearestFirst ? 20 : 8,
       longitude: searchOrigin?.longitude,
       signal: controller.signal,
+      sort: nearestFirst && searchOrigin !== undefined ? 'distance' : undefined,
     })
       .then((response) => {
         if (
@@ -388,7 +394,9 @@ export function MapScreen() {
         ) {
           return;
         }
-        const rankedResults = rankSearchResults(response.results, getRecentDestinationIds());
+        const rankedResults = nearestFirst
+          ? rankCategoryResults(response.results, userCoordinate)
+          : rankSearchResults(response.results, getRecentDestinationIds());
         startTransition(() => {
           setApiConnection('online');
           setResults(rankedResults);
@@ -970,7 +978,7 @@ export function MapScreen() {
     setRouteState({ type: 'idle' });
     setQuery(category.label);
     setResults([]);
-    runPlaceSearch(category.query, true);
+    runPlaceSearch(category.query, true, true);
   };
 
   const beginShortcutSetup = (shortcut: 'home' | 'work') => {

@@ -368,16 +368,25 @@ function mergeResults(
   query: SearchQuery,
   limit: number,
 ): SearchResult[] {
+  const compareDistance = (left: SearchResult, right: SearchResult): number => {
+    if (left.distanceMeters === undefined) return right.distanceMeters === undefined ? 0 : 1;
+    if (right.distanceMeters === undefined) return -1;
+    return left.distanceMeters - right.distanceMeters;
+  };
   const ranked = resultGroups
     .flat()
     .map((result) => presentSearchResult(result, query))
-    .sort(
-      (left, right) =>
-        right.confidence - left.confidence ||
-        (left.distanceMeters ?? 0) - (right.distanceMeters ?? 0) ||
+    .sort((left, right) => {
+      const distanceDelta = compareDistance(left, right);
+      const confidenceDelta = right.confidence - left.confidence;
+      return (
+        (query.sort === 'distance'
+          ? distanceDelta || confidenceDelta
+          : confidenceDelta || distanceDelta) ||
         left.label.localeCompare(right.label, 'en-CA') ||
-        left.id.localeCompare(right.id, 'en-CA'),
-    );
+        left.id.localeCompare(right.id, 'en-CA')
+      );
+    });
   const deduplicated: SearchResult[] = [];
   for (const result of ranked) {
     const duplicateIndex = deduplicated.findIndex((existing) => samePlace(existing, result));

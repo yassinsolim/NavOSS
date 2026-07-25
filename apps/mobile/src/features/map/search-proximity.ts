@@ -3,6 +3,19 @@ import type { SearchResult } from '@navoss/contracts';
 
 const SEARCH_PROXIMITY_DECIMAL_PLACES = 3;
 const SEARCH_PROXIMITY_SCALE = 10 ** SEARCH_PROXIMITY_DECIMAL_PLACES;
+const EARTH_RADIUS_METERS = 6_371_000;
+
+function coordinateDistanceMeters(left: Coordinate, right: Coordinate): number {
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+  const latitudeDelta = toRadians(right.latitude - left.latitude);
+  const longitudeDelta = toRadians(right.longitude - left.longitude);
+  const leftLatitude = toRadians(left.latitude);
+  const rightLatitude = toRadians(right.latitude);
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(leftLatitude) * Math.cos(rightLatitude) * Math.sin(longitudeDelta / 2) ** 2;
+  return 2 * EARTH_RADIUS_METERS * Math.asin(Math.sqrt(haversine));
+}
 
 export function approximateSearchCoordinate(
   coordinate: Coordinate | undefined,
@@ -64,4 +77,32 @@ export function rankSearchResults(
     if (rightRank === undefined) return -1;
     return leftRank - rightRank;
   });
+}
+
+export function rankCategoryResults(
+  results: readonly SearchResult[],
+  origin: Coordinate | undefined,
+  limit = 8,
+): SearchResult[] {
+  return results
+    .map((result) =>
+      origin === undefined
+        ? result
+        : {
+            ...result,
+            distanceMeters: Math.round(coordinateDistanceMeters(origin, result.center)),
+          },
+    )
+    .sort((left, right) => {
+      if (left.distanceMeters === undefined) {
+        return right.distanceMeters === undefined ? 0 : 1;
+      }
+      if (right.distanceMeters === undefined) return -1;
+      return (
+        left.distanceMeters - right.distanceMeters ||
+        right.confidence - left.confidence ||
+        left.name.localeCompare(right.name, 'en-CA')
+      );
+    })
+    .slice(0, limit);
 }

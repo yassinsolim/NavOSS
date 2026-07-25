@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   approximateSearchCoordinate,
   formatSearchDistance,
+  rankCategoryResults,
   rankSearchResults,
   searchResultBounds,
   searchResultContext,
@@ -82,5 +83,45 @@ describe('search proximity', () => {
       'recent',
       'far',
     ]);
+  });
+
+  it('orders category results by closest distance and leaves unknown distances last', () => {
+    const result = (id: string, distanceMeters?: number) => ({
+      category: 'poi' as const,
+      center: { latitude: 51.045, longitude: -114.072 },
+      confidence: 0.99,
+      ...(distanceMeters === undefined ? {} : { distanceMeters }),
+      id,
+      label: `Restaurant, ${id}`,
+      name: id,
+    });
+
+    expect(
+      rankCategoryResults(
+        [result('far', 2_000), result('unknown'), result('nearest', 80), result('middle', 600)],
+        undefined,
+        3,
+      ).map(({ id }) => id),
+    ).toEqual(['nearest', 'middle', 'far']);
+  });
+
+  it('uses exact on-device geometry instead of approximate server distances', () => {
+    const result = (id: string, longitude: number, distanceMeters: number) => ({
+      category: 'poi' as const,
+      center: { latitude: 51.045, longitude },
+      confidence: 0.99,
+      distanceMeters,
+      id,
+      label: `Cafe, ${id}`,
+      name: id,
+    });
+
+    const ranked = rankCategoryResults(
+      [result('server-nearest', -114.074, 20), result('actually-nearest', -114.0721, 200)],
+      { latitude: 51.045, longitude: -114.072 },
+    );
+
+    expect(ranked.map(({ id }) => id)).toEqual(['actually-nearest', 'server-nearest']);
+    expect(ranked[0]?.distanceMeters).toBeLessThan(ranked[1]?.distanceMeters ?? 0);
   });
 });

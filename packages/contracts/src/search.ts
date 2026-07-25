@@ -9,6 +9,7 @@ export const SearchQuerySchema = z
     limit: z.coerce.number().int().min(1).max(20).default(8),
     longitude: z.coerce.number().pipe(LongitudeSchema).optional(),
     q: z.string().trim().min(2).max(120),
+    sort: z.enum(['distance', 'relevance']).optional(),
   })
   .strict()
   .superRefine((query, context) => {
@@ -17,6 +18,13 @@ export const SearchQuerySchema = z
         code: 'custom',
         message: 'latitude and longitude must be provided together',
         path: query.latitude === undefined ? ['latitude'] : ['longitude'],
+      });
+    }
+    if (query.sort === 'distance' && query.latitude === undefined) {
+      context.addIssue({
+        code: 'custom',
+        message: 'distance sorting requires latitude and longitude',
+        path: ['sort'],
       });
     }
   });

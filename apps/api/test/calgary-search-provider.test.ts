@@ -63,13 +63,43 @@ describe('Calgary indexed search provider', () => {
       8,
       null,
       null,
+      false,
     ]);
-    expect(query.mock.calls[2]?.[1]).toEqual(['cosmos collisions', 8, null, null, 0.58]);
+    expect(query.mock.calls[2]?.[1]).toEqual(['cosmos collisions', 8, null, null, 0.58, false]);
     expect(response.results[0]).toMatchObject({
       center: { latitude: 50.9722075, longitude: -114.074147 },
       name: 'Cosmos Collision',
     });
     expect(response.source.id).toBe('calgary-open-data-index');
+  });
+
+  it('requests distance-first indexed results for category searches', async () => {
+    const query = vi
+      .fn<DatabaseQuery>()
+      .mockResolvedValueOnce({ rows: metadataRows })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    const provider = createPostgresCalgarySearchProvider({ database: { query } });
+
+    await provider.search({
+      latitude: 51.0447,
+      limit: 20,
+      longitude: -114.0719,
+      q: 'restaurant',
+      sort: 'distance',
+    });
+
+    expect(query.mock.calls[1]?.[1]).toEqual([
+      'restaurant',
+      'restaurant:*',
+      20,
+      51.0447,
+      -114.0719,
+      true,
+    ]);
+    expect(query.mock.calls[1]?.[0]).toContain('WHEN $6::boolean');
+    expect(query.mock.calls[2]?.[1]).toEqual(['restaurant', 20, 51.0447, -114.0719, 0.58, true]);
+    expect(query.mock.calls[2]?.[0]).toContain('WHEN $6::boolean');
   });
 
   it('normalizes an exact long-form public address before querying', async () => {

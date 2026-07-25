@@ -61,11 +61,17 @@ const PRIMARY_SEARCH_SQL = `
     OR normalized_name LIKE $1 || '%'
     OR search_vector @@ to_tsquery('simple', $2)
   ORDER BY
+    CASE
+      WHEN $6::boolean AND $4::double precision IS NOT NULL AND $5::double precision IS NOT NULL
+        THEN power(latitude - $4, 2) + power(longitude - $5, 2)
+      ELSE NULL
+    END ASC NULLS LAST,
     confidence DESC,
     CASE
-      WHEN $4::double precision IS NULL OR $5::double precision IS NULL THEN 0
-      ELSE power(latitude - $4, 2) + power(longitude - $5, 2)
-    END ASC,
+      WHEN NOT $6::boolean AND $4::double precision IS NOT NULL AND $5::double precision IS NOT NULL
+        THEN power(latitude - $4, 2) + power(longitude - $5, 2)
+      ELSE NULL
+    END ASC NULLS LAST,
     name ASC,
     id ASC
   LIMIT $3
@@ -91,11 +97,17 @@ const FUZZY_SEARCH_SQL = `
       similarity(normalized_label, $1)
     ) >= $5
   ORDER BY
+    CASE
+      WHEN $6::boolean AND $3::double precision IS NOT NULL AND $4::double precision IS NOT NULL
+        THEN power(latitude - $3, 2) + power(longitude - $4, 2)
+      ELSE NULL
+    END ASC NULLS LAST,
     confidence DESC,
     CASE
-      WHEN $3::double precision IS NULL OR $4::double precision IS NULL THEN 0
-      ELSE power(latitude - $3, 2) + power(longitude - $4, 2)
-    END ASC,
+      WHEN NOT $6::boolean AND $3::double precision IS NOT NULL AND $4::double precision IS NOT NULL
+        THEN power(latitude - $3, 2) + power(longitude - $4, 2)
+      ELSE NULL
+    END ASC NULLS LAST,
     name ASC,
     id ASC
   LIMIT $2
@@ -216,6 +228,7 @@ export function createPostgresCalgarySearchProvider(
         query.limit,
         query.latitude ?? null,
         query.longitude ?? null,
+        query.sort === 'distance',
       ]);
       const rows =
         response.rows.length > 0 || normalizedQuery.length < 4
@@ -227,6 +240,7 @@ export function createPostgresCalgarySearchProvider(
                 query.latitude ?? null,
                 query.longitude ?? null,
                 fuzzyThreshold(normalizedQuery),
+                query.sort === 'distance',
               ])
             ).rows;
       const results: SearchResult[] = z

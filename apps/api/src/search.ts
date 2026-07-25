@@ -85,13 +85,17 @@ export function searchFixtures(
       };
     })
     .filter((fixture): fixture is RankedFixture => fixture !== undefined)
-    .sort(
-      (left, right) =>
-        right.confidence - left.confidence ||
-        left.distance - right.distance ||
+    .sort((left, right) => {
+      const distanceDelta = left.distance - right.distance;
+      const confidenceDelta = right.confidence - left.confidence;
+      return (
+        (query.sort === 'distance'
+          ? distanceDelta || confidenceDelta
+          : confidenceDelta || distanceDelta) ||
         left.fixture.result.label.localeCompare(right.fixture.result.label, 'en-CA') ||
-        left.fixture.result.id.localeCompare(right.fixture.result.id, 'en-CA'),
-    )
+        left.fixture.result.id.localeCompare(right.fixture.result.id, 'en-CA')
+      );
+    })
     .slice(0, query.limit)
     .map(toSearchResult);
 

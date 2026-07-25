@@ -64,6 +64,21 @@ describe('buildSearchRequest', () => {
     });
     expect(buildSearchRequest('Coffee Shop')).toEqual({ q: 'Coffee Shop' });
   });
+
+  it('requests distance ordering only when explicitly enabled', () => {
+    expect(
+      buildSearchRequest('restaurant', {
+        latitude: 51.0447,
+        longitude: -114.0719,
+        sort: 'distance',
+      }),
+    ).toEqual({
+      latitude: 51.0447,
+      longitude: -114.0719,
+      q: 'restaurant',
+      sort: 'distance',
+    });
+  });
 });
 
 describe('searchPlaces', () => {

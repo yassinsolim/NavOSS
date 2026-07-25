@@ -433,6 +433,66 @@ describe('Nominatim search provider', () => {
     expect(response.results[1]?.distanceMeters).toBeGreaterThan(1_000);
   });
 
+  it('ranks category matches by distance before confidence across providers', async () => {
+    const source = {
+      datasetVersion: 'category-test',
+      freshness: 'fresh' as const,
+      updatedAt: '2026-07-20T12:00:00Z',
+    };
+    const farHighConfidenceProvider: SearchProvider = {
+      search: () =>
+        Promise.resolve({
+          degraded: false,
+          results: [
+            {
+              category: 'poi' as const,
+              center: { latitude: 51.15, longitude: -114.2 },
+              confidence: 1,
+              id: 'nominatim:far-restaurant',
+              label: 'Restaurant, northwest Calgary',
+              name: 'Restaurant',
+            },
+          ],
+          source: { ...source, id: 'nominatim-self-hosted' },
+        }),
+    };
+    const nearLowerConfidenceProvider: SearchProvider = {
+      search: () =>
+        Promise.resolve({
+          degraded: false,
+          results: [
+            {
+              category: 'poi' as const,
+              center: { latitude: 51.045, longitude: -114.072 },
+              confidence: 0.8,
+              id: 'calgary-business:near-restaurant',
+              label: 'Local Restaurant, downtown Calgary',
+              name: 'Local Restaurant',
+            },
+          ],
+          source: { ...source, id: 'calgary-open-data-index' },
+        }),
+    };
+    const provider = createProductionSearchProvider(
+      [],
+      farHighConfidenceProvider,
+      nearLowerConfidenceProvider,
+    );
+
+    const response = await provider.search({
+      latitude: 51.0447,
+      limit: 8,
+      longitude: -114.0719,
+      q: 'restaurant',
+      sort: 'distance',
+    });
+
+    expect(response.results.map(({ id }) => id)).toEqual([
+      'calgary-business:near-restaurant',
+      'nominatim:far-restaurant',
+    ]);
+  });
+
   it('degrades to Nominatim when the Calgary index is unavailable', async () => {
     const source = {
       datasetVersion: 'alberta',

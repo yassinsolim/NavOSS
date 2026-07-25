@@ -44,6 +44,18 @@ describe('SearchQuerySchema', () => {
 
     expect(result.success).toBe(false);
   });
+
+  it('requires proximity when sorting search results by distance', () => {
+    expect(SearchQuerySchema.safeParse({ q: 'restaurant', sort: 'distance' }).success).toBe(false);
+    expect(
+      SearchQuerySchema.safeParse({
+        latitude: 51.0447,
+        longitude: -114.0719,
+        q: 'restaurant',
+        sort: 'distance',
+      }).success,
+    ).toBe(true);
+  });
 });
 
 describe('SearchResponseSchema', () => {

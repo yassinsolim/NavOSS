@@ -8,6 +8,7 @@ import {
   type RouteRequest,
   type RouteResponse,
   type SafetyCameraResponse,
+  type SearchQuery,
   type SearchResponse,
 } from '@navoss/contracts';
 
@@ -29,6 +30,7 @@ export interface SearchPlacesOptions {
   limit?: number;
   longitude?: number;
   signal?: AbortSignal;
+  sort?: SearchQuery['sort'];
 }
 
 export interface FetchRoutesOptions {
@@ -95,6 +97,7 @@ export function buildSearchRequest(query: string, options: SearchPlacesOptions =
       : {}),
     ...(options.limit === undefined ? {} : { limit: options.limit }),
     q: query,
+    ...(options.sort === undefined ? {} : { sort: options.sort }),
   };
 }
 
