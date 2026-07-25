@@ -58,6 +58,18 @@ EXPO_PUBLIC_API_URL=https://navoss-api.yassin.app \
 
 The validator rejects missing, non-HTTPS, loopback, `.local`, and private-network origins.
 
+Google Places ratings are a separate opt-in build path. Before enabling them, create a
+billing-enabled Google Cloud project, enable Places UI Kit, restrict the iOS key to
+`org.navoss.mobile` and the required API, store it as the EAS secret
+`GOOGLE_PLACES_IOS_API_KEY`, set `NAVOSS_GOOGLE_PLACES_ENABLED=1`, and reconcile App Privacy and
+the hosted policy. GooglePlacesSwift 10.15.0's underlying SDK privacy manifest declares precise and
+coarse location, linked Device ID, linked Other Data, unlinked performance data, unlinked product
+interaction, and unlinked search history for analytics and/or app functionality, with no tracking.
+An enabled artifact must use matching App Store Connect answers and review notes. The release
+validator and config plugin fail closed when the flag has no key. Checked-in production profiles
+explicitly set `NAVOSS_GOOGLE_PLACES_ENABLED=0`; disabled builds do not link GooglePlacesSwift or
+make rating requests.
+
 Before creating a build, verify:
 
 ```sh

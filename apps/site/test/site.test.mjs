@@ -23,11 +23,23 @@ test('homepage presents the product and honest beta posture', () => {
 
 test('legal and support pages expose stable public routes', () => {
   const privacy = readFileSync(resolve(sourceRoot, 'privacy.html'), 'utf8');
+  const dataSources = readFileSync(resolve(sourceRoot, 'data-sources.html'), 'utf8');
   const support = readFileSync(resolve(sourceRoot, 'support.html'), 'utf8');
 
   assert.match(privacy, /Location and active navigation/);
   assert.match(privacy, /Clear saved and recent destinations/);
   assert.match(privacy, /No advertising or cross-app tracking/);
+  assert.match(
+    privacy,
+    /selected\s+public\s+name\s+and\s+coordinate\s+directly\s+to\s+Google\s+Places/,
+  );
+  assert.match(privacy, /Read reviews on Google Maps/);
+  assert.match(privacy, /up to 25 private correction drafts/);
+  assert.doesNotMatch(privacy, /does not fetch, cache, scrape, or display Google Places ratings/);
+  assert.match(
+    dataSources,
+    /Builds\s+without\s+the\s+restricted\s+Google\s+key\s+make\s+no\s+Google\s+rating\s+request/,
+  );
   assert.match(support, /GitHub Issues/);
   assert.match(support, /not an emergency service/);
 });

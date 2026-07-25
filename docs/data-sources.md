@@ -46,9 +46,15 @@ Nominatim `extratags` may provide a public address, place category, opening hour
 official website, and wheelchair-access tag. These community-maintained fields may be absent,
 outdated, or expressed in raw OpenStreetMap syntax. NavOSS does not infer missing values.
 
-OpenStreetMap does not provide a Google-style review corpus. NavOSS does not scrape reviews or mix
-Google Places content into its open-data result. The optional Reviews command is an explicit
-external Google Maps search; no Google place query occurs until the user chooses that command.
+OpenStreetMap does not provide a Google-style review corpus. NavOSS does not scrape reviews or add
+Google values to its open-data result or shared contracts. An optional, key-gated Google Places UI
+Kit component may receive a selected POI name and coordinate and render only Google's current rating, rating
+count, and attribution in its own native view. NavOSS does not read or persist those values. The
+separate **Read reviews on Google Maps** command is an explicit external search and opens only after
+the user chooses it. An enabled build links GooglePlacesSwift 10.15.0; its underlying SDK privacy
+manifest declares location, Device ID, Other Data, performance, product interaction, and search
+history collection for analytics and/or app functionality, with no tracking. Builds without the
+Google key make no Google rating request and do not link that SDK.
 
 ## Live Traffic Routing
 

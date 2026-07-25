@@ -54,7 +54,8 @@ The mobile client remains independent of provider-specific route models. Public 
 - Fastify 5 API with Calgary-bounded OpenStreetMap search and deterministic fixture fallback
 - Self-hosted Alberta Nominatim search and Valhalla routing behind provider-aware readiness checks
 - Expo SDK 57 iOS development client with a full-screen MapLibre Calgary map
-- Tappable rendered places with proximity-safe self-hosted OpenStreetMap details, Directions, Share, call/site actions, and an explicit external Reviews link
+- Tappable rendered places with proximity-safe self-hosted OpenStreetMap details, Directions, Share, call/site actions, optional Google-rendered rating/count attribution, and an explicit external reviews link
+- Explore quick categories plus grouped More categories, native local Home/Work/favourites/recents, and private on-device contribution drafts
 - Details-first destination flow with explicit Directions, ETA/distance, alternatives, route preview, Start, live maneuver banner, and End
 - Privacy-minimal system-sheet place and ETA sharing without Contacts access, current coordinates, route geometry, or live tracking
 - Persistent map presets and content controls, including green Day/Auto-light highway emphasis and restored Night/Minimal landmarks

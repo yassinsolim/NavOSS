@@ -25,7 +25,7 @@
     </header>
     <main class="document-shell">
       <article class="document">
-        <p class="document__meta">Internal beta policy · Effective July 23, 2026</p>
+        <p class="document__meta">Internal beta policy · Effective July 24, 2026</p>
         <h1>Privacy without an account</h1>
         <p>
           NavOSS is operated by Yassin Soliman as an individual developer in Alberta, Canada. It is
@@ -72,7 +72,24 @@
           NavOSS API to find the nearest matching OpenStreetMap record. When available, the response
           may include a public address, category, opening hours, business phone number, official
           website, and wheelchair-access tag. The request is processed in memory and discarded like
-          typed search. NavOSS does not fetch or display Google review content in this lookup.
+          typed search. NavOSS does not fetch Google review content in this lookup.
+        </p>
+        <p>
+          In a build where Google Places ratings are explicitly enabled, opening a point-of-interest
+          sheet also sends that selected public name and coordinate directly to Google Places.
+          Google's Places UI Kit chooses the place and renders the star rating, rating count, and
+          required Google attribution inside its own component. NavOSS does not receive, combine,
+          cache, or send those values to its server. A build without the restricted Google key makes
+          no rating request and shows that the Google rating is unavailable.
+        </p>
+        <p>
+          An enabled build links GooglePlacesSwift 10.15.0 and its underlying Google Places SDK. The
+          SDK's embedded Apple privacy manifest declares Google collection of precise and coarse
+          location for analytics and app functionality; device ID linked to identity for analytics
+          and app functionality; other data linked to identity for analytics; and unlinked
+          performance data, product interaction, and search history for analytics. It declares no
+          tracking. These are Google-controlled SDK declarations beyond the rating values NavOSS
+          requests or receives, and enabled-build App Privacy answers must include them.
         </p>
         <p>
           Map style, navigation orientation, tilt, map-content visibility, safety-camera marker
@@ -92,16 +109,26 @@
         </p>
         <p>
           Call and website actions open an external system app only after the user chooses them.
-          Reviews opens an external Google Maps search and sends the selected public place name and
-          coordinate to Google at that time. NavOSS does not fetch, cache, scrape, or display Google
-          Places ratings or reviews inside the app. Google receives no map-tap or place-detail query
-          unless Reviews is chosen.
+          <strong>Read reviews on Google Maps</strong> is a separate external action and sends the
+          selected public place name and coordinate to Google only when chosen. NavOSS does not
+          fetch, cache, or scrape review text. In a Google-enabled build, the rating-only request
+          described above can occur when a point-of-interest sheet opens; the external Google Maps
+          search still occurs only after the user chooses it.
+        </p>
+        <p>
+          Contribute stores up to 25 private correction drafts on the device. A draft can contain a
+          description, optional place or road label, report type, and creation date. Drafts are not
+          public or sent to NavOSS or a third party. They can be deleted individually and are
+          removed when the app is removed.
         </p>
 
         <h2>No advertising or cross-app tracking</h2>
         <p>
-          NavOSS has no account system, ads, advertising identifier, data broker integration, or
-          cross-app tracking. Location is not used for advertising or user profiling.
+          The default Google-disabled build has no account system, ads, analytics SDK, advertising
+          identifier, data broker integration, or cross-app tracking. Location is not used by NavOSS
+          for advertising or user profiling. A separately enabled Google rating build links the
+          Google Places SDK and is subject to the SDK declarations above; NavOSS does not receive or
+          operate that Google analytics data.
         </p>
 
         <h2>Map and camera data</h2>
@@ -120,9 +147,10 @@
           traffic delivery, and the outbound tunnel. It processes client IP and network/request
           metadata on its global network under its policy. NavOSS does not enable raw Cloudflare
           request-log export. Map delivery uses OpenFreeMap; TestFlight feedback uses Apple; and
-          user-initiated support may use GitHub. A user-selected Reviews action uses
-          <a href="https://policies.google.com/privacy">Google Maps under Google's policy</a>.
-          Optional licensed live-traffic routing may use
+          user-initiated support may use GitHub. Optional Google-rendered ratings and a
+          user-selected external reviews action use
+          <a href="https://policies.google.com/privacy">Google under Google's policy</a>. Optional
+          licensed live-traffic routing may use
           <a href="https://www.mapbox.com/legal/privacy/">Mapbox</a> and send route endpoints,
           preferences, and request network metadata; it is disabled in current production.
         </p>
@@ -151,12 +179,14 @@
           NavOSS stores up to 12 recent destinations and 20 places you save, including their names,
           labels, and coordinates, only on the device for phone and CarPlay shortcuts. Use
           <strong>Clear saved and recent destinations</strong> in About and Privacy to erase both
-          local lists. Removing the app also removes them.
+          local lists. Private contribution drafts can be deleted individually on Contribute.
+          Removing the app also removes all of these local records.
         </p>
         <p>
-          Sharing and Reviews are optional. Dismissing the system share sheet sends nothing to a
-          recipient, and not choosing Reviews sends no selected-place query to Google. NavOSS does
-          not ask for Contacts access.
+          Sharing and the external reviews link are optional. Dismissing the system share sheet
+          sends nothing to a recipient. In a Google-enabled build, opening a POI sheet can send its
+          public coordinate for the Google-rendered rating; not choosing the external link sends no
+          Google Maps review search. NavOSS does not ask for Contacts access.
         </p>
         <p>
           Because NavOSS has no account and does not retain server-side search, route, or trip
@@ -174,9 +204,9 @@
           where practical. No security measure can guarantee absolute protection.
         </p>
         <p>
-          The NavOSS origin is in Alberta. Cloudflare, OpenFreeMap, Apple, Google when Reviews is
-          chosen, GitHub, and a user-selected share destination may process data outside Canada as
-          described in their policies.
+          The NavOSS origin is in Alberta. Cloudflare, OpenFreeMap, Apple, Google when ratings are
+          enabled or the external reviews link is chosen, GitHub, and a user-selected share
+          destination may process data outside Canada as described in their policies.
         </p>
 
         <h2>Children and changes</h2>

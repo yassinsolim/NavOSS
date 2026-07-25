@@ -57,6 +57,8 @@ The entitlement-free native slice lives in `apps/mobile/modules/navoss-navigatio
 
 The shared native trip store now accepts a validated route, destination, steps, and live guidance summaries from the phone. It owns CarPlay connection state and emits vehicle-side cancellation back to React Native. The main CarPlay scene observes this store, restores an active trip when the display reconnects, draws the route through MapLibre Native, starts `CPNavigationSession`, and updates structured maneuvers and travel estimates. The entitlement and scene remain build-time gated.
 
+The main-display renderer now consumes the same monotonic native route progress as the phone. During active guidance it removes travelled geometry, anchors the remaining route at the matched road position, renders the shared NavOSS vehicle arrow instead of a generic dot, follows matched course with a forward-biased tilted camera, and clears stale route or vehicle layers on arrival, cancellation, preview, and reconnect transitions. Route previews show the selected green route, a muted alternate, and the destination marker. The basemap follows CarPlay light and dark appearance using the same Liberty and Dark OpenFreeMap styles as the phone.
+
 Normal builds omit the CarPlay scene and entitlement but retain active-navigation background location for phone guidance. Native location starts only during active navigation or, in the dedicated CarPlay build, while CarPlay needs a current origin. When in Use authorization and iOS's visible background indicator are used; Always authorization is not requested. The current active route is stored only for operating-system recovery and erased on End or confirmed arrival.
 
 ### Navigation service
@@ -127,6 +129,15 @@ CarPlay Ultra is a vehicle and system integration. NavOSS can participate throug
 - Pause, resume, cancel, finish, and reroute through the matching CarPlay session APIs.
 - Coordinate spoken guidance with the vehicle audio session without taking over overall volume.
 
+An active native trip always exposes an explicit End action. The root map places an
+`xmark.circle.fill` control first in its four-button map control list, so it remains available when
+CarPlay hides the navigation bar or reduces the visible controls. The Places screen becomes a
+Current trip screen with both an **End** bar button and an **End navigation** row. If a trip starts
+from the phone while CarPlay search is open, CarPlay returns to the root map so the End control is
+immediately reachable. These controls and Apple's built-in cancel callback share one idempotent
+teardown path that cancels route/search work, clears previews, maneuvers, map overlays, and native
+navigation state, stops background guidance, and notifies the phone.
+
 ### Share ETA and Contacts decision
 
 The phone experience uses the operating system share sheet for a static ETA message containing only the destination name, estimated arrival, remaining time, and remaining distance. It does not read Contacts, request Contacts permission, expose current coordinates or route geometry, create a tracking link, or maintain a recipient list. Apple's share sheet may suggest recent recipients without making those contacts available to NavOSS.
@@ -145,6 +156,8 @@ Each display owns its own map view and camera, but all displays consume the same
 - Standard, portrait, minimum-size, and ultrawide displays.
 - High contrast in direct sunlight and at night.
 - Stable route casing, congestion patterns when real traffic exists, and a clearly visible matched-location puck.
+
+The checked-in Expo plugin packages the same `vehicle-arrow.png` used by the phone into the native app target. Simulator builds compile and link the CarPlay scene, but Xcode 26.6 strips the restricted CarPlay entitlement from ordinary ad hoc simulator signatures on this machine. Final moving-map screenshots therefore require either Xcode's entitled CarPlay run path or the signed TestFlight/device build; source-level tests and an unsigned Release link are not substitutes for that visual check.
 
 ## Expo Integration
 

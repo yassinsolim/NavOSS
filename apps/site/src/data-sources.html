@@ -66,6 +66,16 @@
           Maps, Waze, or other proprietary navigation products. Manual comparisons are evidence for
           testing, not a source database.
         </p>
+        <p>
+          An optional Google Places UI Kit component can receive the selected public POI name and
+          coordinate and render Google's rating, rating count, and attribution in its own native
+          view. NavOSS does not add those values to its OpenStreetMap result, read them into shared
+          contracts, or retain them. GooglePlacesSwift 10.15.0's underlying SDK privacy manifest
+          declares location, Device ID, Other Data, performance, product interaction, and search
+          history collection for analytics and/or app functionality, with no tracking. The separate
+          external reviews link opens Google Maps only after the user chooses it. Builds without the
+          restricted Google key make no Google rating request and do not link that SDK.
+        </p>
 
         <h2>Detailed registry</h2>
         <p>

@@ -29,6 +29,7 @@ Complete these steps after Apple Developer Program enrollment is active:
 4. Configure the App Store Connect API key through `eas credentials --platform ios`.
 5. Add the numeric App Store Connect Apple ID as `submit.production.ios.ascAppId` in `apps/mobile/eas.json`.
 6. `EXPO_PUBLIC_API_URL=https://navoss-api.yassin.app` is stored in the EAS `production` environment and passes the release gate. Keep production builds blocked until App Privacy and account-holder questionnaires are complete.
+   Google ratings remain disabled by default, and checked-in production profiles explicitly set `NAVOSS_GOOGLE_PLACES_ENABLED=0`. To test them, store a bundle-ID-restricted `GOOGLE_PLACES_IOS_API_KEY` in EAS and set `NAVOSS_GOOGLE_PLACES_ENABLED=1`; the build fails if the flag is set without the key. An enabled artifact embeds Google Places SDK privacy declarations for location, Device ID, Other Data, performance, product interaction, and search history for analytics and/or app functionality. Reconcile App Store Connect, review notes, and the hosted policy before distribution. Never print or commit the key.
 7. Create an Expo access token at <https://expo.dev/settings/access-tokens>.
 8. In GitHub, create an `app-store-production` environment and add `EXPO_TOKEN` as an environment secret. Add protection rules before other maintainers receive release access.
 9. Run the `iOS TestFlight` workflow manually once before relying on GitHub release triggers.
