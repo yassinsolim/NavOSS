@@ -208,7 +208,7 @@ export function PlaceSheet({
                 style={styles.ratingView}
               />
             ) : (
-              <Text style={styles.ratingUnavailable}>Google rating unavailable</Text>
+              <Text style={styles.ratingUnavailable}>View the current rating in Google Maps</Text>
             )}
             <Pressable
               accessibilityHint="Opens Google Maps; the place query is shared only after you choose this action"

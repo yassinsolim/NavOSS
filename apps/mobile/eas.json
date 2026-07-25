@@ -37,6 +37,16 @@
         "NAVOSS_GOOGLE_PLACES_ENABLED": "0"
       },
       "extends": "base"
+    },
+    "production-carplay-google": {
+      "autoIncrement": true,
+      "environment": "production",
+      "env": {
+        "NAVOSS_CARPLAY_ENABLED": "1",
+        "NAVOSS_CARPLAY_ENTITLEMENT_ENABLED": "1",
+        "NAVOSS_GOOGLE_PLACES_ENABLED": "1"
+      },
+      "extends": "base"
     }
   },
   "submit": {
@@ -46,6 +56,11 @@
       }
     },
     "production-carplay": {
+      "ios": {
+        "ascAppId": "6792619727"
+      }
+    },
+    "production-carplay-google": {
       "ios": {
         "ascAppId": "6792619727"
       }
