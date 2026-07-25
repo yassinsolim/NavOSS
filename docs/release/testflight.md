@@ -1,14 +1,14 @@
 # TestFlight beta runbook
 
-Date: 2026-07-24
+Date: 2026-07-25
 
 ## Current verdict
 
 | Stage                                      | Verdict | Reason                                                                                                                                                                               |
 | ------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Local simulator and build-12 physical beta | GO      | Core, API, mobile, native, route-matrix, places, ETA sharing, reroute, arrival, camera, privacy-sheet, compact-screen, and outside-Calgary reviewer-preview checks pass.             |
-| Metro-independent iOS Release export       | GO      | Signed voice-tuned build `0.1.0 (14)` passed identity, signature, entitlement, production-origin, privacy, CarPlay-scene, and architecture audits.                                   |
-| Internal TestFlight                        | NO-GO   | Build 12 remains the installed diagnostic build. Build 14 is uploaded and still needs Apple processing, TestFlight installation, and physical smoke testing.                         |
+| Metro-independent iOS Release export       | GO      | Signed discovery and CarPlay build `0.1.0 (15)` passed identity, signature, entitlement, production-origin, privacy, CarPlay-scene, architecture, asset, and shipped-feature audits. |
+| Internal TestFlight                        | NO-GO   | Build 12 remains the installed diagnostic build. Build 15 is uploaded for `testers` and still needs Apple processing, TestFlight installation, and physical smoke testing.           |
 | External TestFlight                        | NO-GO   | Reviewer route preview is complete. Internal soak, App Privacy/account-holder fields, Beta App Review, on-road evidence, support operations, and real wired/wireless CarPlay remain. |
 | Public App Store                           | NO-GO   | Physical-device background/CarPlay evidence, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                |
 
@@ -34,7 +34,8 @@ The right next launch is a small **internal TestFlight technical beta**, not a p
 - [x] Build, audit, and upload feedback-fixed replacement `0.1.0 (13)` from commit `eb8d997`.
 - [x] Confirm build 13 is processed, Ready to Submit, and attached to the internal `testers` group.
 - [x] Build, audit, and upload voice-tuned candidate `0.1.0 (14)` from commit `35afb26`.
-- [ ] Wait for Apple to process build 14, install it through TestFlight, and physically validate locked-phone guidance and real wired/wireless CarPlay.
+- [x] Build, audit, and upload discovery and CarPlay candidate `0.1.0 (15)` from commit `fa10bfe` for the internal `testers` group.
+- [ ] Wait for Apple to process build 15, install it through TestFlight, and physically validate the discovery shell, locked-phone guidance, and real wired/wireless CarPlay.
 
 ### P1: required before external testers
 
@@ -127,6 +128,8 @@ External-review candidate `0.1.0 (12)` was created from commit `931fe5b969203329
 Feedback-fixed candidate `0.1.0 (13)` was created from navigation commit `eb8d997b11c547f2a53ee13f96c43ffbc9816c89` as EAS build `723d6f3e-7feb-41c9-bf3b-97f9f77af5d5`. The signed IPA has SHA-256 `0747ced3468a2ebcce52669a30348755977caf09aeba77cc6e8009fdb4523f10` and passed bundle/version, strict code-signature, designated-requirement, production-origin, When in Use purpose-string, background-mode, CarPlay scene, app-entitlement, provisioning-profile, privacy-manifest, arm64, and packaged-vehicle-asset audits. EAS submission `885f4b87-7a7a-4934-a703-df60556a732f` uploaded it successfully to App Store Connect at 2026-07-24 08:59 UTC. Apple processed it, marked it Ready to Submit, and attached it to the internal `testers` group. Physical TestFlight validation remains pending.
 
 Voice-tuned candidate `0.1.0 (14)` was created from commit `35afb269a655b364b9e524e4d4404f19b63f2eb8` as EAS build `c3517f62-7566-43b6-8ab6-a4f2e71a3f25`. The signed IPA has SHA-256 `ba48954ea6fd81f2fbd9ea33c2beff2762e318fd4a3f0acd51fcf1c35f73b9e6` and passed bundle/version, strict code-signature, designated-requirement, production-origin, When in Use purpose-string, background-mode, CarPlay scene, app-entitlement, provisioning-profile, privacy-manifest, and arm64 audits. Its native executable differs from build 13 and EAS ties it to the exact voice-tuned source commit. EAS submission `a13489b8-8a45-4f9f-a537-9e5cf98fd002` uploaded it successfully to App Store Connect at 2026-07-24 10:25 UTC. Apple processing and physical TestFlight validation remain pending.
+
+Discovery and CarPlay candidate `0.1.0 (15)` was created from commit `fa10bfeec7fe3bc3bf256217947b3e7f3f710cf4` as EAS build `630e78d6-6beb-4738-92f1-2834ee1733fa`. The signed IPA has SHA-256 `827d5017f36690a36bcc4e4f1dc1edb0986eac244256aaaf2ccd90c4ac494a97` and passed bundle/version, strict code-signature, production-origin, When in Use purpose-string, location-only background-mode, CarPlay scene, app-entitlement, provisioning-profile, privacy-manifest, arm64, packaged 64-by-64 vehicle-arrow, Google-disabled packaging, discovery-label, rating-fallback, and native CarPlay End-control audits. EAS submission `8365a1f6-568d-44d8-bac1-578f83fb95d8` uploaded it successfully to App Store Connect at 2026-07-25 05:24 UTC and targeted the internal `testers` group. Apple processing, TestFlight installation, and physical validation remain pending.
 
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a CarPlay tester build so the approved scene and entitlement are present:
 

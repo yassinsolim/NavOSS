@@ -1,6 +1,6 @@
 # App Review readiness
 
-Assessment date: 2026-07-24
+Assessment date: 2026-07-25
 
 Status: **NO-GO for external TestFlight or App Store review.** Prepare a small internal TestFlight only after the P0 internal-build gates below pass.
 
@@ -21,12 +21,12 @@ The present rejection risks are concrete:
 
 ## Distribution decision
 
-| Channel                         | Current verdict        | Meaning                                                                                                                       |
-| ------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Local and physical-device alpha | GO                     | Existing automated and device checks can continue.                                                                            |
-| Internal TestFlight             | NO-GO pending P0 gates | Voice-tuned build 14 is uploaded; Apple processing, account-holder fields, and physical-device/CarPlay validation remain.     |
-| External TestFlight             | NO-GO                  | Reviewer access is complete; Beta App Review, final beta information, backend soak, support, and on-road evidence remain.     |
-| Public App Store                | NO-GO                  | A beta build and beta metadata do not belong on the public App Store. Reliability and public-release scope remain incomplete. |
+| Channel                         | Current verdict        | Meaning                                                                                                                             |
+| ------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Local and physical-device alpha | GO                     | Existing automated and device checks can continue.                                                                                  |
+| Internal TestFlight             | NO-GO pending P0 gates | Discovery and CarPlay build 15 is uploaded; Apple processing, account-holder fields, and physical-device/CarPlay validation remain. |
+| External TestFlight             | NO-GO                  | Reviewer access is complete; Beta App Review, final beta information, backend soak, support, and on-road evidence remain.           |
+| Public App Store                | NO-GO                  | A beta build and beta metadata do not belong on the public App Store. Reliability and public-release scope remain incomplete.       |
 
 Internal TestFlight is a distribution step, not an exemption from the App Review Guidelines. Any build intended for public distribution should already be honest, safe, and privacy-compliant.
 
@@ -35,7 +35,7 @@ Internal TestFlight is a distribution step, not an exemption from the App Review
 The following statements are supported by the current app, repository, or live services:
 
 - Bundle ID `org.navoss.mobile`, version `0.1.0`, When in Use authorization, and active-navigation `location` background mode are present.
-- Signed build `0.1.0 (14)` and its provisioning profile assert the Apple-approved `com.apple.developer.carplay-maps` entitlement; its CarPlay template scene is present and the deprecated Maps entitlement is absent.
+- Signed build `0.1.0 (15)` and its provisioning profile assert the Apple-approved `com.apple.developer.carplay-maps` entitlement; its CarPlay template scene is present and the deprecated Maps entitlement is absent.
 - The location purpose string names map position, navigation, rerouting, arrival, and official safety-camera warnings.
 - The checked-in production profiles explicitly disable Google Places and contain no account, login, purchase, subscription, advertising SDK, analytics SDK, tracking SDK, or runtime AI dependency. A separately enabled Google rating build does not satisfy the analytics-SDK part of this statement.
 - The app exposes in-app links to the privacy and support pages; the focused Maestro flow passes both below- and above-fold assertions.
