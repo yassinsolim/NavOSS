@@ -110,10 +110,26 @@ Safety cameras, parking, closures, and municipal place enrichment remain source-
 must publish their individual coverage and freshness rather than treating a Calgary dataset as a
 North America feature.
 
+The first selected expansion is Toronto/GTA, not all of Ontario at once. Start with a separate
+Ontario Valhalla and Nominatim staging deployment, Toronto/GTA route and search quality cases, and
+the City of Toronto's active red-light-camera feed. Keep the current `/v1` Calgary contract stable;
+regional clients use additive versioned endpoints until a migration build is broadly installed.
+
+The first code milestone provides a validated `/v2/cameras?region=toronto-on` feed and loads its
+markers only when the phone is inside Toronto bounds. It is not deployed and does not change the
+current Calgary production-coverage claim. Ontario search and routing remain blocked on the staging
+imports and quality gates above.
+
+Toronto's red-light-camera dataset identifies intersections but not enforced approach direction.
+Those records may be displayed as official red-light-camera markers, but they must not trigger the
+current direction-aware spoken alert. Ontario's municipal automated-speed-enforcement dataset is
+historical after the provincial ban in November 2025 and must not be published as an active overlay.
+
 ## Staged rollout
 
-1. **Provider and capacity benchmark:** obtain Mapbox and TomTom written proposals; benchmark Canada
-   and North America graph/search imports on dedicated NVMe infrastructure.
+1. **Toronto/GTA internal coverage:** benchmark an Ontario import, deploy isolated staging
+   routing/search, validate GTA routes and addresses, and expose source-labelled Toronto red-light
+   cameras through a versioned endpoint.
 2. **Canada internal coverage:** generalize the coverage contract, deploy Canadian routing/search,
    and add cross-province, bilingual, rural, ferry, winter-road, and border-adjacent route cases.
 3. **United States internal coverage:** add TIGER/postcode search enrichment, interstate/toll/express

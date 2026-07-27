@@ -21,12 +21,12 @@ The present rejection risks are concrete:
 
 ## Distribution decision
 
-| Channel                         | Current verdict        | Meaning                                                                                                                             |
-| ------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Local and physical-device alpha | GO                     | Existing automated and device checks can continue.                                                                                  |
-| Internal TestFlight             | NO-GO pending P0 gates | Discovery and CarPlay build 15 is uploaded; Apple processing, account-holder fields, and physical-device/CarPlay validation remain. |
-| External TestFlight             | NO-GO                  | Reviewer access is complete; Beta App Review, final beta information, backend soak, support, and on-road evidence remain.           |
-| Public App Store                | NO-GO                  | A beta build and beta metadata do not belong on the public App Store. Reliability and public-release scope remain incomplete.       |
+| Channel                         | Current verdict        | Meaning                                                                                                                                                                                 |
+| ------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local and physical-device alpha | GO                     | Existing automated and device checks can continue.                                                                                                                                      |
+| Internal TestFlight             | NO-GO pending P0 gates | EAS reports discovery/CarPlay build 15 submitted, but Apple showed build 14 as newest on July 27; reconciliation, account-holder fields, and physical-device/CarPlay validation remain. |
+| External TestFlight             | NO-GO                  | Reviewer access is complete; Beta App Review, final beta information, backend soak, support, and on-road evidence remain.                                                               |
+| Public App Store                | NO-GO                  | A beta build and beta metadata do not belong on the public App Store. Reliability and public-release scope remain incomplete.                                                           |
 
 Internal TestFlight is a distribution step, not an exemption from the App Review Guidelines. Any build intended for public distribution should already be honest, safe, and privacy-compliant.
 
@@ -169,7 +169,8 @@ In addition to the internal gate:
 - [ ] Complete passenger-operated Calgary road tests and the manual Apple/Google comparison worksheet.
 - [ ] Prepare Beta App Review contact information, notes, privacy URL, beta description, and What to Test.
 - [ ] Keep the review backend and monitoring staffed throughout Beta App Review.
-- [ ] Start with a named cohort rather than a public TestFlight link.
+- [ ] After Beta App Review approval, create a public TestFlight link capped at 10 testers, share it
+      only with the intended friend cohort, and verify that disabling the link stops new joins.
 
 ## Public App Store gate
 

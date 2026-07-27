@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildSearchRequest,
+  fetchOfficialSafetyCameras,
   fetchRoutes,
   fetchSafetyCameras,
   NavOssApiError,
@@ -248,5 +249,47 @@ describe('fetchSafetyCameras', () => {
 
     expect(response.cameras[0]?.direction).toBe('northbound');
     expect(response.source.updatedAt).toBe('2026-07-01T08:33:43.000Z');
+  });
+});
+
+describe('fetchOfficialSafetyCameras', () => {
+  it('requests and validates direction-unknown Toronto red-light cameras', async () => {
+    const response = await fetchOfficialSafetyCameras({
+      baseUrl: 'http://127.0.0.1:3001/',
+      fetchImplementation: (input) => {
+        expect(input).toBe('http://127.0.0.1:3001/v2/cameras?region=toronto-on');
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              cameras: [
+                {
+                  coordinate: { latitude: 43.646383, longitude: -79.384099 },
+                  enforcement: ['red-light'],
+                  id: 'toronto-rlc:6098',
+                  jurisdiction: 'City of Toronto',
+                  location: 'University Ave And Wellington St W',
+                  regionId: 'toronto-on',
+                },
+              ],
+              generatedAt: '2026-07-27T12:00:00Z',
+              source: {
+                attribution: 'City of Toronto',
+                datasetId: '9fcff3e1-3737-43cf-b410-05acd615e27b',
+                datasetUrl: 'https://open.toronto.ca/dataset/red-light-cameras/',
+                licenseUrl: 'https://open.toronto.ca/open-data-licence/',
+                regionId: 'toronto-on',
+                updateFrequency: 'daily',
+                updatedAt: '2026-07-25T05:03:56.013Z',
+              },
+            }),
+            { headers: { 'content-type': 'application/json' }, status: 200 },
+          ),
+        );
+      },
+      region: 'toronto-on',
+    });
+
+    expect(response.cameras[0]).not.toHaveProperty('direction');
+    expect(response.cameras[0]?.enforcement).toEqual(['red-light']);
   });
 });

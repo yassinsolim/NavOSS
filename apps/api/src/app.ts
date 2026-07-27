@@ -2,6 +2,8 @@ import fastifySwagger from '@fastify/swagger';
 import {
   AppConfigResponseSchema,
   HealthResponseSchema,
+  OfficialSafetyCameraQuerySchema,
+  OfficialSafetyCameraResponseSchema,
   ProblemDetailsSchema,
   ReadinessResponseSchema,
   RouteRequestSchema,
@@ -38,6 +40,11 @@ import {
   createCalgarySafetyCameraProvider,
   type SafetyCameraProvider,
 } from './safety-camera-provider.js';
+import {
+  createTorontoSafetyCameraProvider,
+  TorontoCameraProviderError,
+  type TorontoSafetyCameraProvider,
+} from './toronto-safety-camera-provider.js';
 
 const SERVICE_VERSION = '0.0.0';
 
@@ -53,6 +60,7 @@ export interface BuildAppOptions {
   routeProvider?: RouteProvider;
   searchProvider?: SearchProvider;
   searchFixtures?: readonly SearchFixture[];
+  torontoCameraProvider?: TorontoSafetyCameraProvider;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -67,6 +75,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     (productionSearch
       ? createProductionSearchProvider(fixtures)
       : createDevelopmentSearchProvider(fixtures));
+  const torontoCameraProvider =
+    options.torontoCameraProvider ?? createTorontoSafetyCameraProvider();
   const app = Fastify({
     logController: new LogController({ disableRequestLogging: true }),
     logger: options.logger ?? false,
@@ -84,7 +94,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
       openapi: '3.1.0',
       tags: [
-        { description: 'Official City of Calgary safety-camera locations', name: 'cameras' },
+        { description: 'Official municipal safety-camera locations', name: 'cameras' },
         { description: 'Application configuration', name: 'config' },
         { description: 'Driving route calculation and guidance', name: 'routes' },
         { description: 'Hybrid Calgary place and civic-address search', name: 'search' },
@@ -291,6 +301,40 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
     },
     () => createAppConfig(clock().toISOString(), productionSearch, liveTraffic),
+  );
+
+  typedApp.get(
+    '/v2/cameras',
+    {
+      schema: {
+        description:
+          'Returns official regional safety-camera locations with source-specific enforcement and direction fields.',
+        querystring: OfficialSafetyCameraQuerySchema,
+        response: {
+          200: OfficialSafetyCameraResponseSchema,
+          503: ProblemDetailsSchema,
+        },
+        tags: ['cameras'],
+      },
+    },
+    async (request, reply) => {
+      try {
+        return await torontoCameraProvider.getCameras();
+      } catch (error: unknown) {
+        if (error instanceof TorontoCameraProviderError) {
+          reply.status(503).type('application/problem+json');
+          return createProblem(
+            request,
+            503,
+            'service_unavailable',
+            'Camera data unavailable',
+            'Official Toronto red-light-camera data could not be loaded right now.',
+          );
+        }
+
+        throw error;
+      }
+    },
   );
 
   typedApp.post(

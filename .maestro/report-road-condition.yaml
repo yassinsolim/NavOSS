@@ -1,0 +1,37 @@
+appId: org.navoss.mobile
+---
+- launchApp:
+    clearState: true
+- openLink: 'exp+navoss://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081'
+- waitForAnimationToEnd
+- tapOn:
+    text: 'Close'
+    optional: true
+- tapOn:
+    text: 'Reload'
+    optional: true
+- extendedWaitUntil:
+    visible: 'Search Calgary'
+    timeout: 20000
+- longPressOn:
+    point: 78%,45%
+- extendedWaitUntil:
+    visible: 'Start navigation'
+    timeout: 20000
+- assertVisible: 'Dropped pin'
+- tapOn: 'Start navigation'
+- assertVisible: 'Report road condition'
+- tapOn: 'Report road condition'
+- assertVisible: 'What did you pass?'
+- assertVisible: 'Report Crash'
+- assertVisible: 'Report Road closed'
+- assertVisible: 'Report Road hazard'
+- assertVisible: 'Report Stopped vehicle'
+- assertVisible: '.*not shown to other drivers yet.*'
+- tapOn: 'Report Road hazard'
+- assertVisible: 'Saved for testing'
+- assertVisible: '.*not shown to other drivers yet.*'
+- tapOn: 'OK'
+- assertVisible: 'End navigation'
+- tapOn: 'End navigation'
+- assertVisible: 'Route preview'

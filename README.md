@@ -55,7 +55,7 @@ The mobile client remains independent of provider-specific route models. Public 
 - Self-hosted Alberta Nominatim search and Valhalla routing behind provider-aware readiness checks
 - Expo SDK 57 iOS development client with a full-screen MapLibre Calgary map
 - Tappable rendered places with proximity-safe self-hosted OpenStreetMap details, Directions, Share, call/site actions, optional Google-rendered rating/count attribution, and an explicit external reviews link
-- Explore quick categories plus grouped More categories, native local Home/Work/favourites/recents, and private on-device contribution drafts
+- Explore quick categories plus grouped More categories, native local Home/Work/favourites/recents, private correction drafts, and structured two-hour road-report interaction tests stored only on the device
 - Details-first destination flow with explicit Directions, ETA/distance, alternatives, route preview, Start, live maneuver banner, and End
 - Privacy-minimal system-sheet place and ETA sharing without Contacts access, current coordinates, route geometry, or live tracking
 - Persistent map presets and content controls, including green Day/Auto-light highway emphasis and restored Night/Minimal landmarks
@@ -80,6 +80,7 @@ The API binds to `127.0.0.1:3000` by default. Set `HOST` or `PORT` to override i
 - `GET /ready`
 - `GET /v1/config`
 - `GET /v1/cameras`
+- `GET /v2/cameras?region=toronto-on`
 - `POST /v1/search` with a JSON body
 - `POST /v1/routes`
 - `GET /openapi.json`
@@ -107,7 +108,7 @@ The replacement candidate supports route geometry, ETA, distance, alternatives, 
 
 Accuracy-aware hysteresis confirms a departure after three credible off-route fixes and recovery after two precise on-route fixes. Native reroutes preserve destination and preferences, cancel stale work, and keep the existing route active when an update fails. Arrival requires two consecutive accurate endpoint fixes, at least 98% route progress, and an accuracy-adjusted destination distance within 30 meters. Camera alerts require route proximity, forward progress, and direction alignment, and each camera is announced at most once per trip.
 
-This is still a technical beta, not full turn-by-turn parity. The geometric matcher does not yet use road-network topology or speed/time-based transition probabilities. Lane presentation, live traffic, traffic-aware ETA, offline routing, and community incident reports remain unavailable. Background guidance and spoken instructions are implemented but still require sustained on-road evidence.
+This is still a technical beta, not full turn-by-turn parity. The geometric matcher does not yet use road-network topology or speed/time-based transition probabilities. Lane presentation, live traffic, traffic-aware ETA, offline routing, and driver-visible community incident reports remain unavailable. The report control currently records only expiring local interaction-test drafts; it does not submit or publish them. Background guidance and spoken instructions are implemented but still require sustained on-road evidence.
 
 ## CarPlay
 

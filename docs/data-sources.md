@@ -117,3 +117,24 @@ During active guidance, an alert is eligible only when the camera:
 - has not already been announced during the current trip.
 
 Eligible cameras produce a visible alert and the native iOS phrase, “Red light and speed camera ahead.” These alerts are informational. Drivers remain responsible for obeying posted signs, signals, and speed limits, and the official dataset may change between monthly updates.
+
+## Toronto Red Light Cameras
+
+NavOSS's first Ontario data integration uses the City of Toronto's official active **Red Light
+Cameras** dataset.
+
+- Dataset: [Red Light Cameras](https://open.toronto.ca/dataset/red-light-cameras/)
+- Dataset ID: `9fcff3e1-3737-43cf-b410-05acd615e27b`
+- Supplier: City of Toronto Transportation Services
+- Update frequency: daily
+- Geometry: WGS84 multipoints
+- Terms: [Open Government Licence - Toronto](https://open.toronto.ca/open-data-licence/)
+
+The API validates and caches the source for six hours and exposes it only through the additive
+regional camera contract. The source identifies camera intersections but does not identify the
+enforced approach direction, so Toronto records are red-light-only map markers and do not receive
+direction-aware spoken warnings.
+
+Toronto's Automated Speed Enforcement dataset is excluded from active NavOSS camera responses. The
+City marks it as no longer updated because Ontario banned municipal speed cameras in November 2025;
+raw historical rows that still say `Active` are not evidence of current enforcement.

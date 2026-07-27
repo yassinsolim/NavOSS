@@ -1,6 +1,7 @@
 import {
   AppConfigResponseSchema,
   HealthResponseSchema,
+  OfficialSafetyCameraResponseSchema,
   ProblemDetailsSchema,
   ReadinessResponseSchema,
   RouteResponseSchema,
@@ -16,6 +17,7 @@ import { buildApp } from '../src/app.js';
 import { CALGARY_SEARCH_FIXTURES } from '../src/fixtures.js';
 import { createFixtureSearchProvider } from '../src/search-provider.js';
 import { CameraProviderError } from '../src/safety-camera-provider.js';
+import { TorontoCameraProviderError } from '../src/toronto-safety-camera-provider.js';
 
 const FIXED_DATE = new Date('2026-07-15T12:00:00Z');
 const apps: FastifyInstance[] = [];
@@ -177,6 +179,60 @@ describe('safety cameras', () => {
     expect(response.statusCode).toBe(200);
     expect(body.cameras[0]?.direction).toBe('northbound');
     expect(body.source.datasetId).toBe('dv2f-necx');
+  });
+
+  it('returns additive Toronto red-light cameras without changing the Calgary endpoint', async () => {
+    const torontoResponse = OfficialSafetyCameraResponseSchema.parse({
+      cameras: [
+        {
+          coordinate: { latitude: 43.646383, longitude: -79.384099 },
+          enforcement: ['red-light'],
+          id: 'toronto-rlc:6098',
+          jurisdiction: 'City of Toronto',
+          location: 'University Ave And Wellington St W',
+          regionId: 'toronto-on',
+        },
+      ],
+      generatedAt: '2026-07-15T12:00:00Z',
+      source: {
+        attribution: 'City of Toronto',
+        datasetId: '9fcff3e1-3737-43cf-b410-05acd615e27b',
+        datasetUrl: 'https://open.toronto.ca/dataset/red-light-cameras/',
+        licenseUrl: 'https://open.toronto.ca/open-data-licence/',
+        regionId: 'toronto-on',
+        updateFrequency: 'daily',
+        updatedAt: '2026-07-15T05:03:56Z',
+      },
+    });
+    const app = await createTestApp({
+      torontoCameraProvider: { getCameras: () => Promise.resolve(torontoResponse) },
+    });
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v2/cameras?region=toronto-on',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(OfficialSafetyCameraResponseSchema.parse(response.json())).toEqual(torontoResponse);
+  });
+
+  it('returns a stable problem when Toronto camera data is unavailable', async () => {
+    const app = await createTestApp({
+      torontoCameraProvider: {
+        getCameras: () => Promise.reject(new TorontoCameraProviderError('offline')),
+      },
+    });
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v2/cameras?region=toronto-on',
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(ProblemDetailsSchema.parse(response.json())).toMatchObject({
+      code: 'service_unavailable',
+      status: 503,
+      title: 'Camera data unavailable',
+    });
   });
 
   it('returns a stable problem when official camera data is unavailable', async () => {
@@ -396,6 +452,7 @@ describe('OpenAPI', () => {
     expect(document.paths).toHaveProperty('/v1/cameras');
     expect(document.paths).toHaveProperty('/v1/routes');
     expect(document.paths).toHaveProperty('/v1/search');
+    expect(document.paths).toHaveProperty('/v2/cameras');
     expect(document.paths).not.toHaveProperty('/openapi.json');
   });
 });

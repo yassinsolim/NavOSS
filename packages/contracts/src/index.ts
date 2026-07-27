@@ -17,6 +17,20 @@ export { ProblemCodeSchema, ProblemDetailsSchema } from './problem.js';
 export type { ProblemCode, ProblemDetails } from './problem.js';
 
 export {
+  OfficialSafetyCameraEnforcementSchema,
+  OfficialSafetyCameraQuerySchema,
+  OfficialSafetyCameraRegionSchema,
+  OfficialSafetyCameraResponseSchema,
+  OfficialSafetyCameraSchema,
+} from './official-safety-camera.js';
+export type {
+  OfficialSafetyCamera,
+  OfficialSafetyCameraQuery,
+  OfficialSafetyCameraRegion,
+  OfficialSafetyCameraResponse,
+} from './official-safety-camera.js';
+
+export {
   SafetyCameraDirectionSchema,
   SafetyCameraResponseSchema,
   SafetyCameraSchema,

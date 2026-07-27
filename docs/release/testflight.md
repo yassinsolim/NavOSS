@@ -4,13 +4,13 @@ Date: 2026-07-25
 
 ## Current verdict
 
-| Stage                                      | Verdict | Reason                                                                                                                                                                               |
-| ------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Local simulator and build-12 physical beta | GO      | Core, API, mobile, native, route-matrix, places, ETA sharing, reroute, arrival, camera, privacy-sheet, compact-screen, and outside-Calgary reviewer-preview checks pass.             |
-| Metro-independent iOS Release export       | GO      | Signed discovery and CarPlay build `0.1.0 (15)` passed identity, signature, entitlement, production-origin, privacy, CarPlay-scene, architecture, asset, and shipped-feature audits. |
-| Internal TestFlight                        | NO-GO   | Build 12 remains the installed diagnostic build. Build 15 is uploaded for `testers` and still needs Apple processing, TestFlight installation, and physical smoke testing.           |
-| External TestFlight                        | NO-GO   | Reviewer route preview is complete. Internal soak, App Privacy/account-holder fields, Beta App Review, on-road evidence, support operations, and real wired/wireless CarPlay remain. |
-| Public App Store                           | NO-GO   | Physical-device background/CarPlay evidence, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                |
+| Stage                                      | Verdict | Reason                                                                                                                                                                                         |
+| ------------------------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local simulator and build-12 physical beta | GO      | Core, API, mobile, native, route-matrix, places, ETA sharing, reroute, arrival, camera, privacy-sheet, compact-screen, and outside-Calgary reviewer-preview checks pass.                       |
+| Metro-independent iOS Release export       | GO      | Signed discovery and CarPlay build `0.1.0 (15)` passed identity, signature, entitlement, production-origin, privacy, CarPlay-scene, architecture, asset, and shipped-feature audits.           |
+| Internal TestFlight                        | NO-GO   | Build 12 remains the installed diagnostic build. EAS reports build 15 submitted, but Apple showed build 14 as newest; build 15 needs reconciliation, installation, and physical smoke testing. |
+| External TestFlight                        | NO-GO   | Reviewer route preview is complete. Internal soak, App Privacy/account-holder fields, Beta App Review, on-road evidence, support operations, and real wired/wireless CarPlay remain.           |
+| Public App Store                           | NO-GO   | Physical-device background/CarPlay evidence, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                          |
 
 The right next launch is a small **internal TestFlight technical beta**, not a public navigation release.
 
@@ -34,8 +34,9 @@ The right next launch is a small **internal TestFlight technical beta**, not a p
 - [x] Build, audit, and upload feedback-fixed replacement `0.1.0 (13)` from commit `eb8d997`.
 - [x] Confirm build 13 is processed, Ready to Submit, and attached to the internal `testers` group.
 - [x] Build, audit, and upload voice-tuned candidate `0.1.0 (14)` from commit `35afb26`.
-- [x] Build, audit, and upload discovery and CarPlay candidate `0.1.0 (15)` from commit `fa10bfe` for the internal `testers` group.
-- [ ] Wait for Apple to process build 15, install it through TestFlight, and physically validate the discovery shell, locked-phone guidance, and real wired/wireless CarPlay.
+- [x] Build and audit discovery and CarPlay candidate `0.1.0 (15)` from commit `fa10bfe`; EAS reports its submission completed.
+- [ ] Confirm build 15 reaches App Store Connect, attach it to `testers`, install it through TestFlight, and physically validate the discovery shell, locked-phone guidance, and real wired/wireless CarPlay.
+- [ ] Resolve the build-record discrepancy: EAS reports submission `8365a1f6-568d-44d8-bac1-578f83fb95d8` uploaded build 15, but App Store Connect showed build 14 as the newest processed build on July 27, 2026.
 
 ### P1: required before external testers
 
@@ -161,10 +162,16 @@ After the internal gate passes:
 2. Complete Test Information, including beta description, feedback email, privacy-policy URL, and What to Test.
 3. From outside Calgary, search for Airport, select Calgary International Airport, tap **Preview from Calgary Tower**, and verify the **Preview only from Calgary Tower** route has no Start action until **Use my location** is chosen.
 4. Add the tested build and submit it for Beta App Review.
-5. Start with a small named cohort; do not begin with a public link.
+5. After Beta App Review approval, enable the external group's public link with an initial limit of
+   10 testers. Share it only with the intended friend cohort and disable the link if it spreads
+   beyond that group.
 6. Expand only after service and route-quality thresholds remain stable.
 
 Apple permits up to 10,000 external testers, subject to Beta App Review.
+
+As of July 27, 2026, App Store Connect has only the internal `testers` group. No external group or
+public TestFlight link exists yet. Do not publish the direct EAS IPA artifact URL as a TestFlight
+link; it is not a friend-install invitation.
 
 ## Public App Store gate
 

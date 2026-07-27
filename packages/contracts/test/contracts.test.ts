@@ -4,6 +4,7 @@ import {
   AppConfigResponseSchema,
   compareRouteAlternatives,
   GeographicBoundsSchema,
+  OfficialSafetyCameraResponseSchema,
   SafetyCameraResponseSchema,
   RouteRequestSchema,
   RouteResponseSchema,
@@ -350,6 +351,35 @@ describe('AppConfigResponseSchema', () => {
       generatedAt: '2026-07-15T12:00:00Z',
       minimumAppVersion: '0.0.0',
       style: { id: 'navoss-alpha', version: 'fixture-v1' },
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('OfficialSafetyCameraResponseSchema', () => {
+  it('accepts a direction-unknown Toronto red-light camera with explicit provenance', () => {
+    const result = OfficialSafetyCameraResponseSchema.safeParse({
+      cameras: [
+        {
+          coordinate: { latitude: 43.646383, longitude: -79.384099 },
+          enforcement: ['red-light'],
+          id: 'toronto-rlc:6098',
+          jurisdiction: 'City of Toronto',
+          location: 'University Ave and Wellington St W',
+          regionId: 'toronto-on',
+        },
+      ],
+      generatedAt: '2026-07-27T12:00:00Z',
+      source: {
+        attribution: 'City of Toronto',
+        datasetId: '9fcff3e1-3737-43cf-b410-05acd615e27b',
+        datasetUrl: 'https://open.toronto.ca/dataset/red-light-cameras/',
+        licenseUrl: 'https://open.toronto.ca/open-data-licence/',
+        regionId: 'toronto-on',
+        updateFrequency: 'daily',
+        updatedAt: '2026-07-25T05:03:56.000Z',
+      },
     });
 
     expect(result.success).toBe(true);

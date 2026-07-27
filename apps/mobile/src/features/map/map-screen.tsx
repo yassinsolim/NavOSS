@@ -13,6 +13,8 @@ import {
 import type {
   AppConfigResponse,
   Coordinate,
+  GeographicBounds,
+  OfficialSafetyCamera,
   RouteAlternative,
   RoutePreferences,
   RouteResponse,
@@ -24,6 +26,7 @@ import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import {
+  Alert,
   Keyboard,
   Linking,
   Pressable,
@@ -72,6 +75,13 @@ import {
 } from '@/features/map/map-preferences';
 import { MapPreferencesPanel } from '@/features/map/map-preferences-panel';
 import { PlaceSheet } from '@/features/map/place-sheet';
+import {
+  createRoadReportDraft,
+  loadRoadReportDrafts,
+  saveRoadReportDrafts,
+  type RoadReportType,
+} from '@/features/map/road-report-drafts';
+import { RoadReportSheet } from '@/features/map/road-report-sheet';
 import { SavedPlacesScreen } from '@/features/map/saved-places-screen';
 import {
   approximateSearchCoordinate,
@@ -145,6 +155,7 @@ import {
 import { mapRelativeHeadingDegrees } from '@/features/navigation/vehicle-heading';
 import {
   fetchAppConfig,
+  fetchOfficialSafetyCameras,
   fetchRoutes,
   fetchSafetyCameras,
   NavOssApiError,
@@ -155,6 +166,10 @@ const CALGARY_CENTER: [longitude: number, latitude: number] = [-114.0719, 51.044
 const CALGARY_TOWER_ROUTE_ORIGIN: Coordinate = {
   latitude: 51.04427,
   longitude: -114.06309,
+};
+const TORONTO_CAMERA_BOUNDS: GeographicBounds = {
+  northEast: { latitude: 43.86, longitude: -79.1 },
+  southWest: { latitude: 43.58, longitude: -79.64 },
 };
 const EMPTY_FEATURE_COLLECTION: FeatureCollection<Point> = {
   features: [],
@@ -238,7 +253,10 @@ function droppedPinResult(coordinate: Coordinate): SearchResult {
   };
 }
 
-function safetyCameraFeatures(cameras: readonly SafetyCamera[]): FeatureCollection<Point> {
+function safetyCameraFeatures(
+  cameras: readonly (Pick<SafetyCamera, 'coordinate' | 'id' | 'location'> &
+    Partial<Pick<SafetyCamera, 'direction'>>)[],
+): FeatureCollection<Point> {
   return {
     features: cameras.map((camera) => ({
       geometry: {
@@ -246,7 +264,7 @@ function safetyCameraFeatures(cameras: readonly SafetyCamera[]): FeatureCollecti
         type: 'Point',
       },
       properties: {
-        direction: camera.direction,
+        ...(camera.direction === undefined ? {} : { direction: camera.direction }),
         id: camera.id,
         location: camera.location,
       },
@@ -311,6 +329,8 @@ export function MapScreen() {
   );
   const [isMapPreferencesVisible, setIsMapPreferencesVisible] = useState(false);
   const [isMoreCategoriesVisible, setIsMoreCategoriesVisible] = useState(false);
+  const [isRoadReportSaving, setIsRoadReportSaving] = useState(false);
+  const [isRoadReportVisible, setIsRoadReportVisible] = useState(false);
   const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
   const [googlePlaceRatingAvailable] = useState(() => isGooglePlaceRatingAvailable());
   const [selectedPlaceSaved, setSelectedPlaceSaved] = useState(false);
@@ -337,6 +357,9 @@ export function MapScreen() {
   const [carPlayConnected, setCarPlayConnected] = useState(false);
   const [safetyCameraAlert, setSafetyCameraAlert] = useState<UpcomingSafetyCamera>();
   const [safetyCameras, setSafetyCameras] = useState<readonly SafetyCamera[]>([]);
+  const [torontoSafetyCameras, setTorontoSafetyCameras] = useState<readonly OfficialSafetyCamera[]>(
+    [],
+  );
   const [navigationSnapshot, setNavigationSnapshot] = useState<NativeNavigationSnapshot>();
   const [navigationRouteStatus, setNavigationRouteStatus] =
     useState<NavigationRouteStatus>('tracking');
@@ -451,6 +474,38 @@ export function MapScreen() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    void loadRoadReportDrafts()
+      .then((reports) => saveRoadReportDrafts(reports))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (
+      userCoordinate === undefined ||
+      !isCoordinateInCoverage(userCoordinate, TORONTO_CAMERA_BOUNDS)
+    ) {
+      setTorontoSafetyCameras([]);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    void fetchOfficialSafetyCameras({ region: 'toronto-on', signal: controller.signal })
+      .then((response) => {
+        startTransition(() => {
+          setTorontoSafetyCameras(response.cameras);
+        });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setTorontoSafetyCameras([]);
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [userCoordinate]);
 
   useEffect(() => {
     let active = true;
@@ -1334,6 +1389,34 @@ export function MapScreen() {
     });
   };
 
+  const handleOpenRoadReport = () => {
+    if (navigationSnapshot?.matchedCoordinate === undefined && userCoordinate === undefined) {
+      Alert.alert('Location unavailable', 'Wait for your location before recording a report.');
+      return;
+    }
+    setIsRoadReportVisible(true);
+  };
+
+  const handleSaveRoadReport = async (type: RoadReportType) => {
+    const coordinate = navigationSnapshot?.matchedCoordinate ?? userCoordinate;
+    if (coordinate === undefined || isRoadReportSaving) return;
+
+    setIsRoadReportSaving(true);
+    try {
+      const currentReports = await loadRoadReportDrafts();
+      await saveRoadReportDrafts([createRoadReportDraft(type, coordinate), ...currentReports]);
+      setIsRoadReportVisible(false);
+      Alert.alert(
+        'Saved for testing',
+        'This report stays on this phone and is not shown to other drivers yet.',
+      );
+    } catch {
+      Alert.alert('Report not saved', 'The report could not be stored on this phone.');
+    } finally {
+      setIsRoadReportSaving(false);
+    }
+  };
+
   const handleEndNavigation = () => {
     if (routeState.type !== 'navigating') {
       return;
@@ -1666,6 +1749,23 @@ export function MapScreen() {
             />
           </GeoJSONSource>
         )}
+        {mapPreferences.showSafetyCameras && torontoSafetyCameras.length > 0 && (
+          <GeoJSONSource
+            data={safetyCameraFeatures(torontoSafetyCameras)}
+            id="toronto-safety-cameras"
+          >
+            <Layer
+              id="toronto-safety-camera-symbols"
+              layout={{
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+                'icon-image': 'safety-camera',
+                'icon-size': 0.5,
+              }}
+              type="symbol"
+            />
+          </GeoJSONSource>
+        )}
       </Map>
 
       {routeState.type === 'navigating' && (
@@ -1947,6 +2047,7 @@ export function MapScreen() {
         >
           <Text style={styles.attributionText}>
             © OpenMapTiles · © OpenStreetMap · © City of Calgary
+            {torontoSafetyCameras.length > 0 ? ' · © City of Toronto' : ''}
           </Text>
         </Pressable>
       )}
@@ -2011,11 +2112,24 @@ export function MapScreen() {
               durationSeconds={remainingRoute.durationSeconds}
               matchStatus={vehicleMatchStatus}
               onEnd={handleEndNavigation}
+              onReport={handleOpenRoadReport}
               onShare={handleShareEta}
               rerouteCount={rerouteCount}
             />
           </>
         )}
+
+      <RoadReportSheet
+        bottomInset={insets.bottom}
+        isSaving={isRoadReportSaving}
+        onCancel={() => {
+          if (!isRoadReportSaving) setIsRoadReportVisible(false);
+        }}
+        onSelect={(type) => {
+          void handleSaveRoadReport(type);
+        }}
+        visible={isRoadReportVisible}
+      />
 
       {routeState.type === 'navigating' && safetyCameraAlert !== undefined && (
         <SafetyCameraAlertBanner

@@ -2,7 +2,7 @@
 
 Status: **ready for internal TestFlight**. A direct privacy/support email must be activated before external beta testing.
 
-Effective date: July 24, 2026
+Effective date: July 27, 2026
 
 NavOSS is an account-free navigation application beginning with a Calgary technical beta. This policy explains how NavOSS uses data when you view the map, inspect or search for a place, request a route, navigate, share a place or ETA, open an external link, or ask for support.
 
@@ -50,6 +50,8 @@ Call and website actions open the phone dialer or an external browser/app only a
 
 The Contribute screen stores up to 25 correction drafts on the device. A draft can contain a user-entered description, optional place or road label, report type, and creation date. Drafts are not public and are not sent to NavOSS or a third party. They can be deleted individually and are removed when the app is removed. NavOSS will not describe these drafts as submitted until a reviewed server and moderation workflow exists.
 
+During active navigation, the report button can store up to 25 structured road-report test drafts on the device. Each draft contains one of four fixed report types, the current precise coordinate, its creation time, and a two-hour expiry time. It contains no free text, photo, account, or public user name. These test drafts are not sent to NavOSS or a third party and are not shown to other drivers. Expired drafts are discarded when the local list is next read or written, and removing the app removes all remaining drafts.
+
 ### Service and security data
 
 The default Google-disabled build has no account, advertising, analytics, crash-reporting, data-broker, cross-app tracking, or runtime AI service. It does not use an advertising identifier or create a persistent user or device identifier. A separately enabled Google rating build links the Google Places SDK and is subject to the SDK declarations described above; NavOSS does not receive or operate that Google analytics data.
@@ -86,6 +88,7 @@ Map and route data is derived from OpenStreetMap contributors. Search combines O
 | Recent and saved destinations                      | Up to 12 recent and 20 saved destination names, labels, and coordinates stored only on the device until cleared in About and Privacy or the app is removed                                                                           |
 | Map appearance preferences                         | Stored locally in app storage until the app is removed or the settings are changed; not transmitted to NavOSS                                                                                                                        |
 | Private contribution drafts                        | Up to 25 descriptions, optional place/road labels, types, and dates stored only on the device until individually deleted or the app is removed                                                                                       |
+| Road-report test drafts                            | Up to 25 structured report types, precise coordinates, creation times, and expiry times stored only on the device; each expires after two hours and all are removed with the app                                                     |
 | Google-enabled place component                     | Selected public POI name and coordinate sent directly to Google; response not retained by NavOSS. Google's embedded manifest separately declares the SDK data categories and purposes listed above under Google's retention controls |
 | Place and ETA share text                           | Created on the phone and not sent to NavOSS; controlled by Apple and the user-selected share destination                                                                                                                             |
 | Public Calgary business and parcel search index    | Current local mirror refreshed every 24 hours; reproducible index tables are excluded from logical backups                                                                                                                           |
@@ -102,7 +105,7 @@ Cloudflare and OpenFreeMap apply their own retention policies to data they proce
 
 You can deny or revoke location in iOS Settings. Search and map browsing remain available, but current-position routing and active navigation will be limited. You can stop an active trip using End navigation, which stops background location and erases the transient active route.
 
-You can erase all locally stored recent and saved destinations at any time using **Clear saved and recent destinations** in the app's About and Privacy screen. Private contribution drafts can be deleted individually on the Contribute screen. Removing the app removes all of these local records.
+You can erase all locally stored recent and saved destinations at any time using **Clear saved and recent destinations** in the app's About and Privacy screen. Private contribution drafts can be deleted individually on the Contribute screen. Road-report test drafts expire after two hours. Removing the app removes all of these local records.
 
 You can use NavOSS without granting Contacts access because the app never asks for it. Sharing and the external reviews link are optional, user-initiated actions. Dismissing the system share sheet sends nothing to a recipient. In a Google-enabled build, opening a POI sheet can send its public coordinate for the Google-rendered rating; choosing no external reviews link sends no Google Maps search.
 

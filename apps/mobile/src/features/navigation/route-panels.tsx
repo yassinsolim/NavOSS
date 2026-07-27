@@ -584,6 +584,7 @@ interface NavigationStatusBarProps {
   durationSeconds: number;
   matchStatus: VehicleMatchStatus;
   onEnd: () => void;
+  onReport: () => void;
   onShare: () => void;
   rerouteCount: number;
 }
@@ -595,6 +596,7 @@ export function NavigationStatusBar({
   durationSeconds,
   matchStatus,
   onEnd,
+  onReport,
   onShare,
   rerouteCount,
 }: NavigationStatusBarProps) {
@@ -661,6 +663,22 @@ export function NavigationStatusBar({
         </View>
       </View>
       <View style={styles.navigationActions}>
+        <Pressable
+          accessibilityHint="Choose a road condition to record at your current location"
+          accessibilityLabel="Report road condition"
+          onPress={onReport}
+          style={({ pressed }) => [
+            styles.navigationAction,
+            styles.reportButton,
+            pressed && styles.navigationActionPressed,
+          ]}
+        >
+          <SymbolView
+            name={{ android: 'add_alert', ios: 'exclamationmark.bubble.fill' }}
+            size={20}
+            tintColor={NavOssColors.asphalt}
+          />
+        </Pressable>
         <Pressable
           accessibilityHint="Opens the system share sheet without reading your contacts"
           accessibilityLabel="Share ETA"
@@ -1215,6 +1233,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  reportButton: {
+    backgroundColor: NavOssColors.sun,
   },
   routeVia: {
     color: NavOssColors.muted,

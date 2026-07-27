@@ -1,10 +1,13 @@
 import {
   AppConfigResponseSchema,
+  OfficialSafetyCameraResponseSchema,
   ProblemDetailsSchema,
   RouteResponseSchema,
   SafetyCameraResponseSchema,
   SearchResponseSchema,
   type AppConfigResponse,
+  type OfficialSafetyCameraRegion,
+  type OfficialSafetyCameraResponse,
   type RouteRequest,
   type RouteResponse,
   type SafetyCameraResponse,
@@ -43,6 +46,10 @@ export interface FetchSafetyCamerasOptions {
   baseUrl?: string;
   fetchImplementation?: typeof fetch;
   signal?: AbortSignal;
+}
+
+export interface FetchOfficialSafetyCamerasOptions extends FetchSafetyCamerasOptions {
+  region: OfficialSafetyCameraRegion;
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -168,4 +175,15 @@ export async function fetchSafetyCameras(
     options.signal === undefined ? undefined : { signal: options.signal },
   );
   return SafetyCameraResponseSchema.parse(await parseResponse(response));
+}
+
+export async function fetchOfficialSafetyCameras(
+  options: FetchOfficialSafetyCamerasOptions,
+): Promise<OfficialSafetyCameraResponse> {
+  const fetchImplementation = options.fetchImplementation ?? fetch;
+  const response = await fetchImplementation(
+    `${normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl())}/v2/cameras?region=${encodeURIComponent(options.region)}`,
+    options.signal === undefined ? undefined : { signal: options.signal },
+  );
+  return OfficialSafetyCameraResponseSchema.parse(await parseResponse(response));
 }
