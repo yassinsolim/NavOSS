@@ -17,16 +17,16 @@ The present rejection risks are concrete:
 1. The production backend is live, passes its release checks, and recovered from a controlled VM reboot, but it has not completed the required soak, PostgreSQL restore, or graph/index rollback exercises.
 2. Search and route requests are discarded after servicing, and NavOSS host logs are bounded, but App Store Connect still needs an account-holder decision for Cloudflare/OpenFreeMap network and map-request data.
 3. The reviewer-access blocker is resolved: a visible Calgary Tower preview uses the production route API, is documented in review notes, and disables Start until real-location routing is restored.
-4. Build 16 is attached to the external `NavOSS Friends` group with saved private review contact and beta metadata. Beta App Review is `WAITING_FOR_REVIEW`; App Privacy/age-rating/export-compliance answers, public support email, physical evidence, and production screenshots remain unfinished.
+4. Build 16 is attached to the external `NavOSS Friends` group with saved private review contact and beta metadata. Beta App Review remains submitted; build 17 now has stationary physical-iPhone evidence and production screenshots. App Privacy/age-rating/export-compliance answers, public support email, moving-road evidence, and real CarPlay evidence remain unfinished.
 
 ## Distribution decision
 
-| Channel                         | Current verdict        | Meaning                                                                                                                                                  |
-| ------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local and physical-device alpha | GO                     | Existing automated and device checks can continue.                                                                                                       |
-| Internal TestFlight             | NO-GO pending P0 gates | Builds 15 and 16 are processed and attached to `testers`; account-holder fields, a clean build-16 install, and physical phone/CarPlay validation remain. |
-| External TestFlight             | WAITING                | Build 16 is attached to `NavOSS Friends`; Beta App Review is `WAITING_FOR_REVIEW`. The 10-person public link exists but is blocked until approval.       |
-| Public App Store                | NO-GO                  | A beta build and beta metadata do not belong on the public App Store. Reliability and public-release scope remain incomplete.                            |
+| Channel                         | Current verdict       | Meaning                                                                                                                                             |
+| ------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local and physical-device alpha | GO                    | Automated checks and stationary physical build-17 discovery, routing, guidance, lock recovery, reporting, and End checks pass.                      |
+| Internal TestFlight             | GO for technical beta | Build 17 is installed and physically smoke-tested; moving-road, Toronto, account-holder, and real CarPlay gates remain before broader distribution. |
+| External TestFlight             | WAITING               | Build 16 is attached to `NavOSS Friends`; Beta App Review is `WAITING_FOR_REVIEW`. The 10-person public link exists but is blocked until approval.  |
+| Public App Store                | NO-GO                 | A beta build and beta metadata do not belong on the public App Store. Reliability and public-release scope remain incomplete.                       |
 
 Internal TestFlight is a distribution step, not an exemption from the App Review Guidelines. Any build intended for public distribution should already be honest, safe, and privacy-compliant.
 

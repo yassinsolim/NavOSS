@@ -12,12 +12,26 @@ import {
   createRoadReportDraft,
   loadRoadReportDrafts,
   normalizeRoadReportDrafts,
+  ROAD_REPORT_TYPES,
   saveRoadReportDrafts,
 } from '../src/features/map/road-report-drafts.js';
 
 describe('local road-report shadow drafts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('offers specific road conditions without police reporting', () => {
+    expect(ROAD_REPORT_TYPES.map(({ id }) => id)).toEqual([
+      'collision',
+      'road-closure',
+      'slow-traffic',
+      'construction',
+      'pothole',
+      'object-on-road',
+      'road-hazard',
+      'stalled-vehicle',
+    ]);
   });
 
   it('creates an expiring structured report without free text', () => {

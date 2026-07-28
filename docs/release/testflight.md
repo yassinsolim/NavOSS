@@ -4,13 +4,13 @@ Date: 2026-07-28
 
 ## Current verdict
 
-| Stage                                      | Verdict | Reason                                                                                                                                                                               |
-| ------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Local simulator and build-12 physical beta | GO      | Core, API, mobile, native, route-matrix, places, ETA sharing, reroute, arrival, camera, privacy-sheet, compact-screen, and outside-Calgary reviewer-preview checks pass.             |
-| Metro-independent iOS Release export       | GO      | Signed discovery and CarPlay build `0.1.0 (15)` passed identity, signature, entitlement, production-origin, privacy, CarPlay-scene, architecture, asset, and shipped-feature audits. |
-| Internal TestFlight                        | NO-GO   | Builds 15 and 16 are processed, Ready to Submit, and attached to `testers`; build 16 still needs a clean TestFlight install and physical phone/CarPlay smoke testing.                |
-| External TestFlight                        | WAITING | Build 16 is attached to `NavOSS Friends` and Beta App Review is `WAITING_FOR_REVIEW`. Its capped public link is enabled but cannot accept testers until Apple approves the build.    |
-| Public App Store                           | NO-GO   | Physical-device background/CarPlay evidence, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                |
+| Stage                                      | Verdict | Reason                                                                                                                                                                                                    |
+| ------------------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local simulator and build-12 physical beta | GO      | Core, API, mobile, native, route-matrix, places, ETA sharing, reroute, arrival, camera, privacy-sheet, compact-screen, and outside-Calgary reviewer-preview checks pass.                                  |
+| Metro-independent iOS Release export       | GO      | Signed discovery and CarPlay build `0.1.0 (15)` passed identity, signature, entitlement, production-origin, privacy, CarPlay-scene, architecture, asset, and shipped-feature audits.                      |
+| Internal TestFlight                        | GO      | Build 17 is installed on the physical iPhone and passed stationary discovery, place, route, guidance, lock recovery, report-sheet, and End checks. Real on-road and CarPlay testing remain release gates. |
+| External TestFlight                        | WAITING | Build 16 is attached to `NavOSS Friends` and Beta App Review is `WAITING_FOR_REVIEW`. Its capped public link is enabled but cannot accept testers until Apple approves the build.                         |
+| Public App Store                           | NO-GO   | Physical-device background/CarPlay evidence, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                                     |
 
 The right next launch is a small **internal TestFlight technical beta**, not a public navigation release.
 
@@ -37,7 +37,8 @@ The right next launch is a small **internal TestFlight technical beta**, not a p
 - [x] Build and audit discovery and CarPlay candidate `0.1.0 (15)` from commit `fa10bfe`; EAS reports its submission completed.
 - [x] Confirm build 15 reaches App Store Connect and is attached to `testers`.
 - [x] Confirm build 16 is processed, Ready to Submit, and attached to `testers` in App Store Connect.
-- [ ] Install build 16 through TestFlight and physically validate Toronto camera rendering, report-draft capture, the discovery shell, locked-phone guidance, and real wired/wireless CarPlay.
+- [x] Install build 17 through TestFlight and physically validate the discovery shell, nearest-first Gas results, place details, route alternatives, stationary guidance, locked-phone recovery, report-sheet safety copy, and End cleanup.
+- [ ] Physically validate Toronto camera rendering, a lawful local report draft, moving guidance, arrival/rerouting, and real wired/wireless CarPlay.
 
 ### P1: required before external testers
 
@@ -142,6 +143,8 @@ Discovery and CarPlay candidate `0.1.0 (15)` was created from commit `fa10bfeec7
 Toronto/reporting candidate `0.1.0 (16)` was uploaded on July 27, 2026 after commit `112cae172fd90f6ed84e5524e32692c9f71e4a51` as EAS build `cbcf7876-5bc9-4fa4-bffc-122df48253d6`; EAS submission `d7e313c6-3856-46f7-9de2-efbd081f8562` completed successfully. App Store Connect processed it and attached it to the internal `testers` group. On July 28, its beta description, build notes, private reviewer contact, no-sign-in posture, reviewer notes, and external `NavOSS Friends` group were verified. Build 16 was submitted for Beta App Review and Apple returned `WAITING_FOR_REVIEW`. Its clean TestFlight installation and physical navigation/CarPlay checks remain pending.
 
 Nearest-search candidate `0.1.0 (17)` was created from commit `323cd943e5fa8b850368a7511269d1b7587ca617` as EAS build `78d3f5de-2c5b-406b-8884-400b2b8f2a93`; EAS submission `9fd3437c-1eeb-4cb1-a586-cad1ad446b04` completed successfully. Its signed IPA has SHA-256 `27a5503aee894c3d9b85393f2a5d8c9c11c5e14630cff8761a1a38d71a08d612` and passed bundle/version, strict signature, CarPlay app/profile entitlement, scene, permission, production-origin, privacy-manifest, arm64, vehicle-arrow, and Google-disabled audits. App Store Connect processed it and attached it to the internal `testers` group. Build 17 remains internal-only while build 16 is in external Beta App Review. Production API commit `b149058` restores non-degraded Calgary/OpenStreetMap hybrid results by accepting valid nullable Nominatim extra tags.
+
+On July 28, build 17 was installed from TestFlight on an iPhone 15 Pro Max running iOS 26.5.2. XCUITest confirmed nearest-first Gas results, the attributed Shell place sheet and Google Maps review handoff, a selected 650 m route plus 890 m alternative, stationary active guidance, lock/background recovery, private report safety copy, End cleanup, and return to route preview. The same destination produced an approximately 644 m Waze route. This is strong phone evidence, but it is not a moving-road, arrival/reroute, Toronto, or real wired/wireless CarPlay pass.
 
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a keyless CarPlay tester build so the approved scene and entitlement are present. After the restricted EAS Google key and matching App Privacy answers are ready, use `production-carplay-google` for the rating-enabled candidate:
 

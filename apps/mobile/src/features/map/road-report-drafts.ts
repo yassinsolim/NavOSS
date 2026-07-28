@@ -18,9 +18,29 @@ export const ROAD_REPORT_TYPES = [
     label: 'Road closed',
   },
   {
+    icon: { android: 'traffic', ios: 'car.2.fill' },
+    id: 'slow-traffic',
+    label: 'Slow traffic',
+  },
+  {
+    icon: { android: 'construction', ios: 'hammer.fill' },
+    id: 'construction',
+    label: 'Construction',
+  },
+  {
+    icon: { android: 'report_problem', ios: 'exclamationmark.triangle.fill' },
+    id: 'pothole',
+    label: 'Pothole',
+  },
+  {
+    icon: { android: 'deployed_code', ios: 'shippingbox.fill' },
+    id: 'object-on-road',
+    label: 'Object on road',
+  },
+  {
     icon: { android: 'warning', ios: 'exclamationmark.triangle.fill' },
     id: 'road-hazard',
-    label: 'Road hazard',
+    label: 'Other hazard',
   },
   {
     icon: { android: 'car_repair', ios: 'car.side.fill' },
