@@ -26,6 +26,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var routeId: String?
   private var styleSlug = "liberty"
   private(set) var mapView: MLNMapView!
+  var onStyleLoaded: (() -> Void)?
+  var requestsUserLocation = true
 
   override func loadView() {
     styleSlug = traitCollection.userInterfaceStyle == .dark ? "dark" : "liberty"
@@ -38,7 +40,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     mapView.isZoomEnabled = false
     mapView.logoView.isHidden = true
     mapView.delegate = self
-    mapView.showsUserLocation = true
+    mapView.showsUserLocation = requestsUserLocation
     mapView.setCenter(calgaryCenter, zoomLevel: 10.5, animated: false)
     self.mapView = mapView
     view = mapView
@@ -80,7 +82,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     self.activeGuidance = activeGuidance
     latestDestination = route.last
     latestPosition = position
-    mapView.showsUserLocation = !activeGuidance
+    mapView.showsUserLocation = requestsUserLocation && !activeGuidance
     self.routeId = routeId
     let displayedRoute =
       activeGuidance
@@ -120,7 +122,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     routeId = nil
     alternateRouteCoordinates = []
     routeCoordinates = []
-    mapView.showsUserLocation = true
+    mapView.showsUserLocation = requestsUserLocation
     if let source = mapView.style?.source(withIdentifier: routeSourceIdentifier)
       as? MLNShapeSource
     {
@@ -170,6 +172,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     } else {
       fitRoute(animated: false)
     }
+    onStyleLoaded?()
   }
 
   private func fitRoute(animated: Bool) {

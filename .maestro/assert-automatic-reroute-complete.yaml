@@ -5,3 +5,4 @@ appId: org.navoss.mobile
     timeout: 20000
 - assertVisible: 'End navigation'
 - assertVisible: '.*(Drive|Turn).*'
+- takeScreenshot: '/tmp/navoss-validation-phone-reroute'

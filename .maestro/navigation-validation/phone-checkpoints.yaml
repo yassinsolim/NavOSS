@@ -13,29 +13,36 @@ appId: org.navoss.mobile
 - extendedWaitUntil:
     visible: 'Search Calgary'
     timeout: 20000
-- longPressOn:
-    point: 78%,45%
+- tapOn: 'Search Calgary'
+- eraseText
+- inputText: 'Airport'
+- extendedWaitUntil:
+    visible: 'Select Calgary International Airport.*'
+    timeout: 20000
+- tapOn: 'Select Calgary International Airport.*'
+- extendedWaitUntil:
+    visible: 'Directions'
+    timeout: 10000
+- tapOn: 'Directions'
 - extendedWaitUntil:
     visible: 'Start navigation'
     timeout: 20000
-- assertVisible: 'Dropped pin'
+- assertVisible: 'Route preview'
+- takeScreenshot: '/tmp/navoss-validation-phone-preview'
 - tapOn: 'Start navigation'
-- assertVisible: 'Report road condition'
+- extendedWaitUntil:
+    visible: 'End navigation'
+    timeout: 20000
+- assertVisible: 'Share ETA'
+- takeScreenshot: '/tmp/navoss-validation-phone-guidance'
 - tapOn: 'Report road condition'
-- assertVisible: 'What did you pass?'
-- assertVisible: 'Report Crash'
-- assertVisible: 'Report Road closed'
 - assertVisible: 'Report Slow traffic'
 - assertVisible: 'Report Construction'
 - assertVisible: 'Report Pothole'
 - assertVisible: 'Report Object on road'
 - assertVisible: 'Report Other hazard'
-- assertVisible: 'Report Stopped vehicle'
 - assertVisible: '.*not shown to other drivers yet.*'
-- tapOn: 'Report Construction'
-- assertVisible: 'Saved for testing'
-- assertVisible: '.*not shown to other drivers yet.*'
-- tapOn: 'OK'
-- assertVisible: 'End navigation'
+- takeScreenshot: '/tmp/navoss-validation-phone-report'
+- tapOn: 'Cancel report'
 - tapOn: 'End navigation'
 - assertVisible: 'Route preview'

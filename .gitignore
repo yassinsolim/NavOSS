@@ -9,6 +9,7 @@ node_modules/
 coverage/
 dist/
 dist-*/
+artifacts/
 
 # Environment and secrets
 .env

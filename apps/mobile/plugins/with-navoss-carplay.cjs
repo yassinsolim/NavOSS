@@ -13,6 +13,7 @@ const vehicleArrowSource = path.join(__dirname, '..', 'assets', 'images', 'vehic
 const sourceFiles = [
   'NavOSSCarPlayMapViewController.swift',
   'NavOSSCarPlaySceneDelegate.swift',
+  'NavOSSCarPlayVisualHarnessViewController.swift',
   'NavOSSPhoneSceneDelegate.swift',
 ];
 
@@ -129,3 +130,4 @@ function withNavOSSCarPlay(config) {
 
 module.exports = withNavOSSCarPlay;
 module.exports.googlePlacesBuildConfiguration = googlePlacesBuildConfiguration;
+module.exports.sourceFiles = sourceFiles;

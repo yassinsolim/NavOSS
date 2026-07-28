@@ -5,6 +5,7 @@ appId: org.navoss.mobile
     timeout: 20000
 - assertVisible: 'Calgary International Airport'
 - assertVisible: 'Finish navigation'
+- takeScreenshot: '/tmp/navoss-validation-phone-arrival'
 - tapOn: 'Finish navigation'
 - extendedWaitUntil:
     visible: 'Search Calgary'

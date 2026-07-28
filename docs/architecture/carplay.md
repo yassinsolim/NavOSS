@@ -157,7 +157,9 @@ Each display owns its own map view and camera, but all displays consume the same
 - High contrast in direct sunlight and at night.
 - Stable route casing, congestion patterns when real traffic exists, and a clearly visible matched-location puck.
 
-The checked-in Expo plugin packages the same `vehicle-arrow.png` used by the phone into the native app target. Simulator builds compile and link the CarPlay scene, but Xcode 26.6 strips the restricted CarPlay entitlement from ordinary ad hoc simulator signatures on this machine. Final moving-map screenshots therefore require either Xcode's entitled CarPlay run path or the signed TestFlight/device build; source-level tests and an unsigned Release link are not substitutes for that visual check.
+The checked-in Expo plugin packages the same `vehicle-arrow.png` used by the phone into the native app target. Simulator builds compile and link the CarPlay scene, but Xcode 26.6 strips the restricted CarPlay entitlement from ordinary ad hoc simulator signatures on this machine. The automated navigation harness therefore mounts the exact production `NavOSSCarPlayMapViewController` in a simulator-only phone window and captures deterministic preview, progress, appearance, and cleanup states. Vision OCR, pixel metrics, hashes, and perceptual comparisons reject blank, duplicated, stale, or permission-obscured frames. The visual entrypoint is compiler-gated to Simulator and absent from device binaries.
+
+This renderer simulation complements rather than replaces CarPlay framework testing. Native tests validate shared trip state, route trimming, controls, and lifecycle; a signed TestFlight build and a real wired or wireless CarPlay system remain required to validate `CPMapTemplate` chrome, vehicle input, connection/reconnection, and head-unit-specific behavior.
 
 ## Expo Integration
 

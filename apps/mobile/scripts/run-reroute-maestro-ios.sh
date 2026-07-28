@@ -28,7 +28,7 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 curl --fail --silent --output /dev/null http://127.0.0.1:3001/health
-curl --fail --silent --output /dev/null http://127.0.0.1:8081/status
+curl --fail --silent --output /dev/null http://localhost:8081/status
 
 sh ./scripts/run-maestro-ios.sh ../../.maestro/start-airport-simulation.yaml
 

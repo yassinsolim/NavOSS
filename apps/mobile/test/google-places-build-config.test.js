@@ -4,7 +4,10 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { googlePlacesBuildConfiguration } = require('../plugins/with-navoss-carplay.cjs');
+const {
+  googlePlacesBuildConfiguration,
+  sourceFiles,
+} = require('../plugins/with-navoss-carplay.cjs');
 
 describe('Google Places build configuration', () => {
   it('is disabled and keyless by default', () => {
@@ -33,5 +36,26 @@ describe('Google Places build configuration', () => {
     expect(eas.build['production-carplay'].env.NAVOSS_GOOGLE_PLACES_ENABLED).toBe('0');
     expect(eas.build['production-carplay-google'].env.NAVOSS_GOOGLE_PLACES_ENABLED).toBe('1');
     expect(eas.submit['production-carplay-google'].ios.ascAppId).toBe('6792619727');
+  });
+
+  it('packages the visual host behind simulator compiler guards', () => {
+    expect(sourceFiles).toContain('NavOSSCarPlayVisualHarnessViewController.swift');
+
+    const visualHarness = readFileSync(
+      resolve(
+        import.meta.dirname,
+        '..',
+        'carplay/ios/NavOSSCarPlayVisualHarnessViewController.swift',
+      ),
+      'utf8',
+    );
+    const phoneScene = readFileSync(
+      resolve(import.meta.dirname, '..', 'carplay/ios/NavOSSPhoneSceneDelegate.swift'),
+      'utf8',
+    );
+
+    expect(visualHarness).toContain('#if targetEnvironment(simulator)');
+    expect(phoneScene).toContain('#if targetEnvironment(simulator)');
+    expect(phoneScene).toContain('NAVOSS_CARPLAY_VISUAL_SCENARIO');
   });
 });

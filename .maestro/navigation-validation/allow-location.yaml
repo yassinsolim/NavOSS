@@ -1,0 +1,9 @@
+appId: org.navoss.mobile
+---
+- launchApp
+- tapOn:
+    text: 'Allow While Using App'
+    optional: true
+- tapOn:
+    text: 'Allow'
+    optional: true

@@ -24,7 +24,8 @@
     "format:check": "prettier --check .",
     "licenses:generate": "node scripts/generate-third-party-notices.mjs",
     "lint": "turbo run lint",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "validate:navigation:ios": "corepack pnpm --filter @navoss/mobile validate:navigation:ios"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

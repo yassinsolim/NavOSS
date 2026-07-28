@@ -24,7 +24,7 @@ if [ -z "$device_id" ]; then
 fi
 
 curl --fail --silent --output /dev/null http://127.0.0.1:3001/health
-curl --fail --silent --output /dev/null http://127.0.0.1:8081/status
+curl --fail --silent --output /dev/null http://localhost:8081/status
 
 xcrun simctl boot "$device_id" >/dev/null 2>&1 || true
 open -a Simulator --args -CurrentDeviceUDID "$device_id"
@@ -35,6 +35,6 @@ xcrun simctl spawn "$device_id" defaults write org.navoss.mobile EXDevMenuIsOnbo
 xcrun simctl launch "$device_id" org.navoss.mobile >/dev/null
 xcrun simctl openurl \
   "$device_id" \
-  'exp+navoss://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081'
+  'exp+navoss://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081'
 
 maestro --device "$device_id" test "$1"
