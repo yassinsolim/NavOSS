@@ -42,7 +42,10 @@ const NominatimResultSchema = z.looseObject({
   addresstype: z.string().optional(),
   category: z.string().optional(),
   display_name: z.string().min(1),
-  extratags: z.record(z.string(), z.string()).optional(),
+  extratags: z
+    .record(z.string(), z.string())
+    .nullish()
+    .transform((value) => value ?? undefined),
   importance: z.number().optional(),
   lat: z.coerce.number().min(-90).max(90),
   lon: z.coerce.number().min(-180).max(180),

@@ -187,6 +187,38 @@ describe('Nominatim search provider', () => {
     });
   });
 
+  it('accepts null extra tags from self-hosted Nominatim', async () => {
+    const provider = createNominatimSearchProvider({
+      endpoint: 'http://nominatim:8080/',
+      fetchImplementation: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                addresstype: 'amenity',
+                category: 'amenity',
+                display_name: 'Shell, Calgary, Alberta, Canada',
+                extratags: null,
+                importance: 0.4,
+                lat: '51.041',
+                lon: '-114.211',
+                name: 'Shell',
+                osm_id: 123,
+                osm_type: 'node',
+                type: 'fuel',
+              },
+            ]),
+            { status: 200 },
+          ),
+        ),
+    });
+
+    const response = await provider.search({ limit: 8, q: 'Shell' });
+
+    expect(response.degraded).toBe(false);
+    expect(response.results[0]).toMatchObject({ name: 'Shell' });
+  });
+
   it('falls back to fixtures when self-hosted search is unavailable', async () => {
     const provider = createProductionSearchProvider(undefined, {
       search: () => Promise.reject(new Error('offline')),
