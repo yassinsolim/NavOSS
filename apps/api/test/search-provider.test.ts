@@ -636,4 +636,50 @@ describe('Nominatim search provider', () => {
     expect(calgarySearchCount).toBe(0);
     expect(response.results.map(({ id }) => id)).toEqual(['nominatim:way:park']);
   });
+
+  it('expands grocery discovery to major Calgary chains without admitting liquor stores', async () => {
+    const queries: string[] = [];
+    const source = {
+      datasetVersion: 'alberta',
+      freshness: 'fresh' as const,
+      id: 'nominatim-self-hosted',
+      updatedAt: '2026-07-20T12:00:00Z',
+    };
+    const result = (id: string, name: string, category: string) => ({
+      category: 'poi' as const,
+      center: { latitude: 51.045, longitude: -114.072 },
+      confidence: 0.9,
+      details: { category },
+      id,
+      label: `${name}, Calgary`,
+      name,
+    });
+    const productionProvider = {
+      search: (query: { q: string }) => {
+        queries.push(query.q);
+        const results =
+          query.q === 'Safeway'
+            ? [
+                result('safeway', 'Safeway', 'supermarket'),
+                result('safeway-liquor', 'Safeway Liquor', 'alcohol'),
+              ]
+            : query.q === 'Sobeys'
+              ? [result('sobeys', 'Sobeys', 'supermarket')]
+              : query.q === 'Calgary Co-op'
+                ? [result('calgary-coop', 'Calgary Co-op', 'supermarket')]
+                : [result('generic', 'Tops Supermarket', 'supermarket')];
+        return Promise.resolve({ degraded: false, results, source });
+      },
+    };
+    const provider = createProductionSearchProvider([], productionProvider);
+
+    const response = await provider.search({ category: 'grocery', limit: 20, q: 'Groceries' });
+
+    expect(queries).toEqual(['Groceries', 'Safeway', 'Sobeys', 'Calgary Co-op']);
+    expect(new Set(response.results.map(({ name }) => name))).toEqual(
+      new Set(['Tops Supermarket', 'Safeway', 'Sobeys', 'Calgary Co-op']),
+    );
+    expect(response.results.some(({ name }) => name.includes('Liquor'))).toBe(false);
+    expect(response.source.id).toBe('nominatim-self-hosted');
+  });
 });

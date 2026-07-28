@@ -451,7 +451,14 @@ function matchesSearchCategory(result: SearchResult, query: SearchQuery): boolea
 
 function combinedSource(responses: SearchResponse[]): SearchResponse['source'] {
   const firstResponse = responses.at(0);
-  if (responses.length === 1 && firstResponse !== undefined) {
+  if (
+    firstResponse !== undefined &&
+    responses.every(
+      (response) =>
+        response.source.id === firstResponse.source.id &&
+        response.source.datasetVersion === firstResponse.source.datasetVersion,
+    )
+  ) {
     return firstResponse.source;
   }
   return {
@@ -522,13 +529,23 @@ export function createProductionSearchProvider(
         includeDetails: query.includeDetails === true || query.category !== undefined,
         limit: Math.min(20, query.limit * 2),
       };
-      const providers = [
-        productionProvider,
-        ...(calgaryProvider === undefined || query.category !== undefined ? [] : [calgaryProvider]),
+      const providerQueryWithoutCategory = { ...providerQuery };
+      delete providerQueryWithoutCategory.category;
+      const productionQueries: SearchQuery[] = [
+        providerQuery,
+        ...(query.category === 'grocery'
+          ? ['Safeway', 'Sobeys', 'Calgary Co-op'].map((q) => ({
+              ...providerQueryWithoutCategory,
+              q,
+            }))
+          : []),
       ];
-      const settled = await Promise.allSettled(
-        providers.map((provider) => provider.search(providerQuery)),
-      );
+      const settled = await Promise.allSettled([
+        ...productionQueries.map((productionQuery) => productionProvider.search(productionQuery)),
+        ...(calgaryProvider === undefined || query.category !== undefined
+          ? []
+          : [calgaryProvider.search(providerQuery)]),
+      ]);
       const responses = settled
         .filter(
           (result): result is PromiseFulfilledResult<SearchResponse> =>
