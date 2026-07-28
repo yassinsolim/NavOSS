@@ -27,6 +27,20 @@ export function approximateSearchCoordinate(
   };
 }
 
+export function searchProximityOptions(origin: Coordinate | undefined) {
+  const approximateOrigin = approximateSearchCoordinate(origin);
+  return {
+    ...(approximateOrigin === undefined
+      ? {}
+      : {
+          latitude: approximateOrigin.latitude,
+          longitude: approximateOrigin.longitude,
+          sort: 'distance' as const,
+        }),
+    limit: approximateOrigin === undefined ? 8 : 20,
+  };
+}
+
 export function formatSearchDistance(distanceMeters: number | undefined): string | undefined {
   if (distanceMeters === undefined) return undefined;
   if (distanceMeters < 1_000) {
@@ -68,15 +82,36 @@ export function searchResultBounds(
 export function rankSearchResults(
   results: readonly SearchResult[],
   recentDestinationIds: readonly string[],
+  origin?: Coordinate,
+  limit = 8,
 ): SearchResult[] {
   const recentRank = new Map(recentDestinationIds.map((id, index) => [id, index]));
-  return [...results].sort((left, right) => {
-    const leftRank = recentRank.get(left.id);
-    const rightRank = recentRank.get(right.id);
-    if (leftRank === undefined) return rightRank === undefined ? 0 : 1;
-    if (rightRank === undefined) return -1;
-    return leftRank - rightRank;
-  });
+  return results
+    .map((result) =>
+      origin === undefined
+        ? result
+        : {
+            ...result,
+            distanceMeters: Math.round(coordinateDistanceMeters(origin, result.center)),
+          },
+    )
+    .sort((left, right) => {
+      if (origin !== undefined) {
+        if (left.distanceMeters === undefined) {
+          return right.distanceMeters === undefined ? 0 : 1;
+        }
+        if (right.distanceMeters === undefined) return -1;
+        const distanceDelta = left.distanceMeters - right.distanceMeters;
+        if (distanceDelta !== 0) return distanceDelta;
+      }
+
+      const leftRank = recentRank.get(left.id);
+      const rightRank = recentRank.get(right.id);
+      if (leftRank === undefined) return rightRank === undefined ? 0 : 1;
+      if (rightRank === undefined) return -1;
+      return leftRank - rightRank;
+    })
+    .slice(0, limit);
 }
 
 export function rankCategoryResults(

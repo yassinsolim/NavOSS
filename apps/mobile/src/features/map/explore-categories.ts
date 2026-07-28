@@ -238,7 +238,7 @@ export const EXPLORE_CATEGORY_GROUPS: ExploreCategoryGroup[] = [
         icon: { android: 'local_gas_station', ios: 'fuelpump.fill' },
         id: 'gas',
         label: 'Gas',
-        query: 'gas station',
+        query: 'fuel',
       },
       {
         icon: { android: 'local_hospital', ios: 'cross.case.fill' },

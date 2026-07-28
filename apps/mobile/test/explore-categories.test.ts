@@ -36,6 +36,7 @@ describe('explore categories', () => {
 
   it('resolves categories for quick actions and the More sheet', () => {
     expect(exploreCategoryById('coffee')).toMatchObject({ label: 'Coffee', query: 'cafe' });
+    expect(exploreCategoryById('gas')).toMatchObject({ label: 'Gas', query: 'fuel' });
     expect(exploreCategoryById('missing')).toBeUndefined();
   });
 });

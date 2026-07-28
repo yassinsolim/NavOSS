@@ -84,9 +84,9 @@ import {
 import { RoadReportSheet } from '@/features/map/road-report-sheet';
 import { SavedPlacesScreen } from '@/features/map/saved-places-screen';
 import {
-  approximateSearchCoordinate,
   rankCategoryResults,
   rankSearchResults,
+  searchProximityOptions,
   searchResultBounds,
 } from '@/features/map/search-proximity';
 import {
@@ -401,14 +401,11 @@ export function MapScreen() {
     const controller = new AbortController();
     searchAbortControllerRef.current = controller;
     setSearchState('loading');
-    const searchOrigin = approximateSearchCoordinate(userCoordinate);
+    const proximityOptions = searchProximityOptions(userCoordinate);
 
     void searchPlaces(normalizedQuery, {
-      latitude: searchOrigin?.latitude,
-      limit: nearestFirst ? 20 : 8,
-      longitude: searchOrigin?.longitude,
+      ...proximityOptions,
       signal: controller.signal,
-      sort: nearestFirst && searchOrigin !== undefined ? 'distance' : undefined,
     })
       .then((response) => {
         if (
@@ -419,7 +416,7 @@ export function MapScreen() {
         }
         const rankedResults = nearestFirst
           ? rankCategoryResults(response.results, userCoordinate)
-          : rankSearchResults(response.results, getRecentDestinationIds());
+          : rankSearchResults(response.results, getRecentDestinationIds(), userCoordinate);
         startTransition(() => {
           setApiConnection('online');
           setResults(rankedResults);

@@ -5,6 +5,7 @@ import {
   formatSearchDistance,
   rankCategoryResults,
   rankSearchResults,
+  searchProximityOptions,
   searchResultBounds,
   searchResultContext,
 } from '../src/features/map/search-proximity.js';
@@ -19,6 +20,16 @@ describe('search proximity', () => {
 
   it('preserves an unavailable search origin', () => {
     expect(approximateSearchCoordinate(undefined)).toBeUndefined();
+  });
+
+  it('requests a wider distance-sorted pool whenever location is available', () => {
+    expect(searchProximityOptions({ latitude: 51.0447312, longitude: -114.0719234 })).toEqual({
+      latitude: 51.045,
+      limit: 20,
+      longitude: -114.072,
+      sort: 'distance',
+    });
+    expect(searchProximityOptions(undefined)).toEqual({ limit: 8 });
   });
 
   it('formats proximity for compact result rows', () => {
@@ -83,6 +94,26 @@ describe('search proximity', () => {
       'recent',
       'far',
     ]);
+  });
+
+  it('orders typed results by exact distance before recent destinations', () => {
+    const result = (id: string, longitude: number, distanceMeters: number) => ({
+      category: 'poi' as const,
+      center: { latitude: 51.045, longitude },
+      confidence: 0.99,
+      distanceMeters,
+      id,
+      label: `Shell, ${id}`,
+      name: 'Shell',
+    });
+
+    expect(
+      rankSearchResults(
+        [result('recent-far', -114.08, 20), result('closest', -114.0721, 500)],
+        ['recent-far'],
+        { latitude: 51.045, longitude: -114.072 },
+      ).map(({ id }) => id),
+    ).toEqual(['closest', 'recent-far']);
   });
 
   it('orders category results by closest distance and leaves unknown distances last', () => {
