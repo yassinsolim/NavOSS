@@ -17,10 +17,13 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private var activeTripId: String?
   private var activeTripControlsVisible = false
   private var endNavigationMapButton: CPMapButton?
+  private var idleMapButtons: [CPMapButton] = []
   private var isPreviewingRoutes = false
   private var mapTemplate: CPMapTemplate?
   private var mapViewController: NavOSSCarPlayMapViewController?
+  private var muteGuidanceMapButton: CPMapButton?
   private var navigationSession: CPNavigationSession?
+  private var overviewMapButton: CPMapButton?
   private var routeRequestGeneration: UInt64 = 0
   private var routeTask: Task<Void, Never>?
   private var searchRequestGeneration: UInt64 = 0
@@ -28,7 +31,6 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private var destinationObserver: NSObjectProtocol?
   private var placesTemplate: CPListTemplate?
   private var stateObserver: NSObjectProtocol?
-  private var standardMapButtons: [CPMapButton] = []
   private var routeChoicesByIdentifier: [String: NavOSSCarPlayTrip] = [:]
   private var searchDestinationsByIdentifier: [String: NavOSSCarPlayDestination] = [:]
 
@@ -99,7 +101,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     activeTripId = nil
     activeTripControlsVisible = false
     endNavigationMapButton = nil
-    standardMapButtons = []
+    idleMapButtons = []
+    muteGuidanceMapButton = nil
+    overviewMapButton = nil
     routeChoicesByIdentifier = [:]
     searchDestinationsByIdentifier = [:]
     placesTemplate = nil
@@ -139,9 +143,34 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       self?.endNavigation()
     }
     endNavigationButton.image = UIImage(systemName: "xmark.circle.fill")
+    let overviewButton = CPMapButton { [weak self] button in
+      guard let self else {
+        return
+      }
+      let overviewVisible = self.mapViewController?.toggleRouteOverview() ?? false
+      button.image = UIImage(systemName: overviewVisible ? "location.fill" : "map")
+    }
+    overviewButton.image = UIImage(systemName: "map")
+    let muteGuidanceButton = CPMapButton { [weak self] button in
+      guard let self else {
+        return
+      }
+      let muted = !NavOSSNavigationService.shared.announcementsAreMuted()
+      NavOSSNavigationService.shared.setAnnouncementsMuted(muted)
+      button.image = UIImage(
+        systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill"
+      )
+    }
+    muteGuidanceButton.image = UIImage(
+      systemName: NavOSSNavigationService.shared.announcementsAreMuted()
+        ? "speaker.slash.fill"
+        : "speaker.wave.2.fill"
+    )
     endNavigationMapButton = endNavigationButton
-    standardMapButtons = [recenterButton, zoomInButton, zoomOutButton]
-    template.mapButtons = standardMapButtons
+    overviewMapButton = overviewButton
+    muteGuidanceMapButton = muteGuidanceButton
+    idleMapButtons = [recenterButton, zoomInButton, zoomOutButton]
+    template.mapButtons = idleMapButtons
     return template
   }
 
@@ -170,7 +199,8 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       routeId: trip.id,
       activeGuidance: activeGuidance,
       position: state.position,
-      routeProgress: state.routeProgress
+      routeProgress: state.routeProgress,
+      distanceToManeuverMeters: state.guidance?.distanceToManeuverMeters
     )
 
     if activeGuidance
@@ -473,13 +503,23 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       hasActiveTrip: visible,
       searchVisible: interfaceController?.topTemplate is CPSearchTemplate
     )
-    if controlState.endNavigationVisible, let endNavigationMapButton {
-      mapTemplate?.mapButtons = [endNavigationMapButton] + standardMapButtons
+    if controlState.drivingControlsVisible, let endNavigationMapButton,
+      let overviewMapButton, let muteGuidanceMapButton
+    {
+      overviewMapButton.image = UIImage(systemName: "map")
+      muteGuidanceMapButton.image = UIImage(
+        systemName: NavOSSNavigationService.shared.announcementsAreMuted()
+          ? "speaker.slash.fill"
+          : "speaker.wave.2.fill"
+      )
+      mapTemplate?.mapButtons = [
+        endNavigationMapButton, overviewMapButton, muteGuidanceMapButton,
+      ]
       if controlState.returnToRootFromSearch {
         interfaceController?.popToRootTemplate(animated: true, completion: nil)
       }
     } else {
-      mapTemplate?.mapButtons = standardMapButtons
+      mapTemplate?.mapButtons = idleMapButtons
     }
     if let placesTemplate {
       placesTemplate.trailingNavigationBarButtons =

@@ -461,6 +461,7 @@ try {
         ['carplay-preview-dark', 'preview', 'dark'],
         ['carplay-progress-05', 'progress-05', 'light'],
         ['carplay-progress-60', 'progress-60', 'light'],
+        ['carplay-overview', 'overview', 'light'],
         ['carplay-clear', 'clear', 'light'],
       ]) {
         await captureCarPlayScenario(name, scenario, appearance);
@@ -506,10 +507,27 @@ try {
       throw new Error('Two screenshot checkpoints are byte-identical.');
     }
     const metricsByName = new Map(metrics.map((metric) => [basename(metric.path), metric]));
+    const routeVisibleMetrics = [
+      metricsByName.get('carplay-preview-light.png'),
+      metricsByName.get('carplay-progress-05.png'),
+      metricsByName.get('carplay-overview.png'),
+    ].filter((metric) => metric !== undefined);
+    if (routeVisibleMetrics.some((metric) => metric.routeGreenRatio < 0.003)) {
+      throw new Error('A CarPlay route scenario does not contain enough route-green pixels.');
+    }
+    const previewMetric = metricsByName.get('carplay-preview-light.png');
+    const clearMetric = metricsByName.get('carplay-clear.png');
+    if (
+      previewMetric !== undefined &&
+      clearMetric !== undefined &&
+      clearMetric.routeGreenRatio > previewMetric.routeGreenRatio * 0.35
+    ) {
+      throw new Error('CarPlay clear scenario retained the route overlay.');
+    }
     for (const [first, second] of [
       ['carplay-preview-light.png', 'carplay-preview-dark.png'],
       ['carplay-progress-05.png', 'carplay-progress-60.png'],
-      ['carplay-preview-light.png', 'carplay-clear.png'],
+      ['carplay-progress-05.png', 'carplay-overview.png'],
     ]) {
       const firstMetric = metricsByName.get(first);
       const secondMetric = metricsByName.get(second);

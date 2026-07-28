@@ -105,6 +105,33 @@ CarPlay Ultra is a vehicle and system integration. NavOSS can participate throug
 
 ## User Flows
 
+### Google Maps and Waze comparison
+
+Physical phone comparisons and the live wireless CarPlay session show that NavOSS now has the
+essential Apple navigation lifecycle, but not yet the information density or data breadth of mature
+navigation products. The comparison is used to prioritize driving decisions, not to copy branded
+UI or bypass CarPlay templates.
+
+NavOSS matches the core interaction contract with native search, route alternatives, Start/End,
+remaining-route trimming, matched heading, maneuver estimates, rerouting, arrival, and reconnect
+continuity. The driving map also provides follow and full-route overview modes, adaptive camera
+distance near maneuvers, guidance mute, automatic light/dark styles, and reduced 3D building clutter
+during guidance. Persistent zoom controls remain available only while idle or previewing; active
+guidance reserves its limited map-button surface for End, overview/follow, and sound.
+
+The remaining gaps are primarily data and platform capabilities:
+
+- live traffic, incident-aware ETA, closures, and traffic-coloured routes require a licensed feed;
+- lane guidance, junction views, speed limits, and signpost text require normalized provider data
+  that is not present in the current route contract;
+- public crowd reports require the planned trust, moderation, expiry, and anti-abuse backend;
+- richer place imagery, ratings, entrances, and parking context require separately licensed data;
+- Dashboard, cluster, HUD, and CarPlay Ultra surfaces remain vehicle- and entitlement-dependent.
+
+NavOSS must not invent any of these signals. Until their source and quality gates exist, the
+CarPlay experience should stay quieter than Google Maps or Waze rather than imply unavailable
+traffic, lane, speed, or incident knowledge.
+
 ### Destination search
 
 - Use `CPSearchTemplate` for bounded destination search.

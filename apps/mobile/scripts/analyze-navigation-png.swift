@@ -14,6 +14,7 @@ struct Metrics: Codable {
   let perceptualSignature: [Int]
   let quantizedColorCount: Int
   let recognizedText: [String]
+  let routeGreenRatio: Double
   let width: Int
 }
 
@@ -47,6 +48,7 @@ func analyze(path: String) throws -> Metrics {
   var luminanceSquaredSum = 0.0
   var sampleCount = 0
   var nearBackgroundCount = 0
+  var routeGreenCount = 0
 
   for y in Swift.stride(from: 0, to: height, by: stride) {
     for x in Swift.stride(from: 0, to: width, by: stride) {
@@ -61,6 +63,9 @@ func analyze(path: String) throws -> Metrics {
       luminanceSquaredSum += luminance * luminance
       if max(red, green, blue) - min(red, green, blue) < 5 && (luminance < 10 || luminance > 245) {
         nearBackgroundCount += 1
+      }
+      if Int(green) > 80 && Int(green) > Int(red) + 35 && Int(green) > Int(blue) + 20 {
+        routeGreenCount += 1
       }
       sampleCount += 1
     }
@@ -98,6 +103,7 @@ func analyze(path: String) throws -> Metrics {
     perceptualSignature: perceptualSignature,
     quantizedColorCount: colors.count,
     recognizedText: recognizedText,
+    routeGreenRatio: Double(routeGreenCount) / Double(sampleCount),
     width: width
   )
 }

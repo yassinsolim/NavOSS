@@ -70,6 +70,16 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         position: NavOSSCarPlayPosition(coordinate: route[7], courseDegrees: 50),
         routeProgress: 0.60
       )
+    case "overview":
+      mapViewController.display(
+        route: route,
+        routeId: "visual-guidance",
+        activeGuidance: true,
+        position: NavOSSCarPlayPosition(coordinate: route[5], courseDegrees: 42),
+        routeProgress: 0.40,
+        distanceToManeuverMeters: 1_200
+      )
+      _ = mapViewController.toggleRouteOverview()
     case "clear":
       mapViewController.display(
         route: route,

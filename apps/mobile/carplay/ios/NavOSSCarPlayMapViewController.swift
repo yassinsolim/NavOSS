@@ -21,6 +21,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var latestDestination: NavOSSCarPlayCoordinate?
   private var latestPosition: NavOSSCarPlayPosition?
   private var navigationViewingDistance = 850.0
+  private var presentsRouteOverview = false
+  private var guidanceHiddenLayerIdentifiers: Set<String> = []
   private var alternateRouteCoordinates: [CLLocationCoordinate2D] = []
   private var routeCoordinates: [CLLocationCoordinate2D] = []
   private var routeId: String?
@@ -60,6 +62,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   }
 
   func recenter() {
+    presentsRouteOverview = false
     guard let latestPosition else {
       if activeGuidance {
         fitRoute(animated: true)
@@ -71,17 +74,31 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     follow(latestPosition, duration: 0.35)
   }
 
+  func toggleRouteOverview() -> Bool {
+    presentsRouteOverview.toggle()
+    if presentsRouteOverview {
+      fitRoute(animated: true)
+    } else {
+      recenter()
+    }
+    return presentsRouteOverview
+  }
+
   func display(
     route: [NavOSSCarPlayCoordinate],
     routeId: String,
     activeGuidance: Bool,
     position: NavOSSCarPlayPosition? = nil,
     routeProgress: Double = 0,
-    alternateRoute: [NavOSSCarPlayCoordinate]? = nil
+    alternateRoute: [NavOSSCarPlayCoordinate]? = nil,
+    distanceToManeuverMeters: Double? = nil
   ) {
     self.activeGuidance = activeGuidance
     latestDestination = route.last
     latestPosition = position
+    if activeGuidance && !presentsRouteOverview {
+      navigationViewingDistance = navOSSCarPlayViewingDistance(distanceToManeuverMeters)
+    }
     mapView.showsUserLocation = requestsUserLocation && !activeGuidance
     self.routeId = routeId
     let displayedRoute =
@@ -105,8 +122,13 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     installRouteOverlayIfReady()
     installDestinationOverlayIfReady()
     installPositionOverlayIfReady()
+    updateGuidanceDeclutter()
     if activeGuidance, let position {
-      follow(position, duration: 0.35)
+      if presentsRouteOverview {
+        fitRoute(animated: false)
+      } else {
+        follow(position, duration: 0.35)
+      }
     } else if activeGuidance {
       fitRoute(animated: true)
     } else if !activeGuidance {
@@ -119,6 +141,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     latestDestination = nil
     latestPosition = nil
     navigationViewingDistance = 850
+    presentsRouteOverview = false
     routeId = nil
     alternateRouteCoordinates = []
     routeCoordinates = []
@@ -163,8 +186,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     installRouteOverlayIfReady()
     installDestinationOverlayIfReady()
     installPositionOverlayIfReady()
+    updateGuidanceDeclutter()
     if activeGuidance {
-      if latestPosition != nil {
+      if presentsRouteOverview {
+        fitRoute(animated: false)
+      } else if latestPosition != nil {
         recenter()
       } else {
         fitRoute(animated: false)
@@ -215,6 +241,23 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       withDuration: duration,
       animationTimingFunction: CAMediaTimingFunction(name: .linear)
     )
+  }
+
+  private func updateGuidanceDeclutter() {
+    guard let style = mapView.style else {
+      return
+    }
+    if activeGuidance {
+      for layer in style.layers where layer is MLNFillExtrusionStyleLayer && layer.isVisible {
+        guidanceHiddenLayerIdentifiers.insert(layer.identifier)
+        layer.isVisible = false
+      }
+    } else {
+      for identifier in guidanceHiddenLayerIdentifiers {
+        style.layer(withIdentifier: identifier)?.isVisible = true
+      }
+      guidanceHiddenLayerIdentifiers.removeAll()
+    }
   }
 
   private func installRouteOverlayIfReady() {

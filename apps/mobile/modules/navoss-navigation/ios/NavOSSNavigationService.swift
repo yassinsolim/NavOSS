@@ -34,6 +34,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   public static let shared = NavOSSNavigationService()
 
   private let activeTripStore: NavOSSActiveTripStore
+  private var announcementState = NavOSSCarPlayAudioState()
   private var backgroundActivitySession: AnyObject?
   private var carPlayConnected = false
   private let lock = NSRecursiveLock()
@@ -67,8 +68,28 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   public func announceSafetyCamera() {
     lock.lock()
     let generation = navigationGeneration
+    let muted = announcementState.isMuted
     lock.unlock()
+    guard !muted else {
+      return
+    }
     speak("Red light and speed camera ahead.", expectedGeneration: generation)
+  }
+
+  public func announcementsAreMuted() -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return announcementState.isMuted
+  }
+
+  public func setAnnouncementsMuted(_ muted: Bool) {
+    lock.lock()
+    announcementState.setMuted(muted)
+    let generation = navigationGeneration
+    lock.unlock()
+    if muted {
+      cancelNavigationSpeech(expectedGeneration: generation)
+    }
   }
 
   public func clearNavigation() {
@@ -343,15 +364,17 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       return
     }
     let update = versionedUpdate.update
-    let speechPrompt = update.trip.flatMap { trip in
-      update.guidance.flatMap { guidance in
-        speechPlanner.prompt(
-          trip: trip,
-          guidance: guidance,
-          hasCurrentLocation: update.snapshot.rawCoordinate != nil
-        )
+    let speechPrompt = announcementState.isMuted
+      ? nil
+      : update.trip.flatMap { trip in
+        update.guidance.flatMap { guidance in
+          speechPlanner.prompt(
+            trip: trip,
+            guidance: guidance,
+            hasCurrentLocation: update.snapshot.rawCoordinate != nil
+          )
+        }
       }
-    }
     lock.unlock()
     if let trip = update.trip {
       let carPlayCoordinate = (update.snapshot.matchedCoordinate ?? update.snapshot.rawCoordinate)

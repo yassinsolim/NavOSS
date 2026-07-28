@@ -132,18 +132,38 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(route.value, 12.5)
   }
 
+  func testCarPlayCameraAdaptsToManeuverDistance() {
+    XCTAssertEqual(navOSSCarPlayViewingDistance(nil), 850)
+    XCTAssertEqual(navOSSCarPlayViewingDistance(50), 450)
+    XCTAssertEqual(navOSSCarPlayViewingDistance(300), 650)
+    XCTAssertEqual(navOSSCarPlayViewingDistance(1_000), 900)
+    XCTAssertEqual(navOSSCarPlayViewingDistance(3_000), 1_200)
+  }
+
   func testCarPlayEndControlsFollowActiveTripAcrossTemplates() {
     let inactive = NavOSSCarPlayControlState(hasActiveTrip: false, searchVisible: false)
+    XCTAssertFalse(inactive.drivingControlsVisible)
     XCTAssertFalse(inactive.endNavigationVisible)
     XCTAssertFalse(inactive.returnToRootFromSearch)
 
     let activeMap = NavOSSCarPlayControlState(hasActiveTrip: true, searchVisible: false)
+    XCTAssertTrue(activeMap.drivingControlsVisible)
     XCTAssertTrue(activeMap.endNavigationVisible)
     XCTAssertFalse(activeMap.returnToRootFromSearch)
 
     let activeSearch = NavOSSCarPlayControlState(hasActiveTrip: true, searchVisible: true)
     XCTAssertTrue(activeSearch.endNavigationVisible)
     XCTAssertTrue(activeSearch.returnToRootFromSearch)
+  }
+
+  func testNavigationAnnouncementsCanRemainMutedAcrossUpdates() {
+    var state = NavOSSCarPlayAudioState()
+
+    XCTAssertFalse(state.isMuted)
+    state.setMuted(true)
+    XCTAssertTrue(state.isMuted)
+    state.setMuted(false)
+    XCTAssertFalse(state.isMuted)
   }
 
   func testCarPlayRemainingRouteGeometryDeletesTravelledTrail() throws {

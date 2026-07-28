@@ -9,6 +9,16 @@ public func navOSSCarPlayDistanceMeasurement(
     : Measurement(value: distance, unit: .meters)
 }
 
+public func navOSSCarPlayViewingDistance(_ distanceToManeuverMeters: Double?) -> Double {
+  guard let distanceToManeuverMeters, distanceToManeuverMeters.isFinite else {
+    return 850
+  }
+  if distanceToManeuverMeters < 120 { return 450 }
+  if distanceToManeuverMeters < 500 { return 650 }
+  if distanceToManeuverMeters < 2_000 { return 900 }
+  return 1_200
+}
+
 extension Notification.Name {
   public static let navOSSCarPlayNavigationDidEnd = Notification.Name(
     "org.navoss.mobile.carplay-navigation-did-end"
@@ -296,12 +306,26 @@ public struct NavOSSCarPlayState: Equatable, Sendable {
 }
 
 public struct NavOSSCarPlayControlState: Equatable, Sendable {
+  public let drivingControlsVisible: Bool
   public let endNavigationVisible: Bool
   public let returnToRootFromSearch: Bool
 
   public init(hasActiveTrip: Bool, searchVisible: Bool) {
+    drivingControlsVisible = hasActiveTrip
     endNavigationVisible = hasActiveTrip
     returnToRootFromSearch = hasActiveTrip && searchVisible
+  }
+}
+
+public struct NavOSSCarPlayAudioState: Equatable, Sendable {
+  public private(set) var isMuted: Bool
+
+  public init(isMuted: Bool = false) {
+    self.isMuted = isMuted
+  }
+
+  public mutating func setMuted(_ muted: Bool) {
+    isMuted = muted
   }
 }
 
