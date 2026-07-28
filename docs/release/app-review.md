@@ -1,6 +1,6 @@
 # App Review readiness
 
-Assessment date: 2026-07-25
+Assessment date: 2026-07-28
 
 Status: **NO-GO for external TestFlight or App Store review.** Prepare a small internal TestFlight only after the P0 internal-build gates below pass.
 
@@ -17,16 +17,16 @@ The present rejection risks are concrete:
 1. The production backend is live, passes its release checks, and recovered from a controlled VM reboot, but it has not completed the required soak, PostgreSQL restore, or graph/index rollback exercises.
 2. Search and route requests are discarded after servicing, and NavOSS host logs are bounded, but App Store Connect still needs an account-holder decision for Cloudflare/OpenFreeMap network and map-request data.
 3. The reviewer-access blocker is resolved: a visible Calgary Tower preview uses the production route API, is documented in review notes, and disables Start until real-location routing is restored.
-4. The support email is not verified, App Privacy/age-rating/export-compliance answers are unfinished, and production screenshots are not captured.
+4. Build 16 is attached to the external `NavOSS Friends` group with saved private review contact and beta metadata. Beta App Review is `WAITING_FOR_REVIEW`; App Privacy/age-rating/export-compliance answers, public support email, physical evidence, and production screenshots remain unfinished.
 
 ## Distribution decision
 
-| Channel                         | Current verdict        | Meaning                                                                                                                                                                                 |
-| ------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local and physical-device alpha | GO                     | Existing automated and device checks can continue.                                                                                                                                      |
-| Internal TestFlight             | NO-GO pending P0 gates | EAS reports discovery/CarPlay build 15 submitted, but Apple showed build 14 as newest on July 27; reconciliation, account-holder fields, and physical-device/CarPlay validation remain. |
-| External TestFlight             | NO-GO                  | Reviewer access is complete; Beta App Review, final beta information, backend soak, support, and on-road evidence remain.                                                               |
-| Public App Store                | NO-GO                  | A beta build and beta metadata do not belong on the public App Store. Reliability and public-release scope remain incomplete.                                                           |
+| Channel                         | Current verdict        | Meaning                                                                                                                                                  |
+| ------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local and physical-device alpha | GO                     | Existing automated and device checks can continue.                                                                                                       |
+| Internal TestFlight             | NO-GO pending P0 gates | Builds 15 and 16 are processed and attached to `testers`; account-holder fields, a clean build-16 install, and physical phone/CarPlay validation remain. |
+| External TestFlight             | WAITING                | Build 16 is attached to `NavOSS Friends`; Beta App Review is `WAITING_FOR_REVIEW`. The 10-person public link exists but is blocked until approval.       |
+| Public App Store                | NO-GO                  | A beta build and beta metadata do not belong on the public App Store. Reliability and public-release scope remain incomplete.                            |
 
 Internal TestFlight is a distribution step, not an exemption from the App Review Guidelines. Any build intended for public distribution should already be honest, safe, and privacy-compliant.
 
@@ -164,13 +164,16 @@ All items are required before inviting internal testers:
 In addition to the internal gate:
 
 - [x] Add and test the visible Calgary Tower route-preview path from an outside-coverage simulator location.
+- [x] Create the external TestFlight group `NavOSS Friends`.
 - [ ] Activate and externally test `navoss@yassin.app` delivery and reply handling.
+- [x] Enter private reviewer contact details and attach build 16 to `NavOSS Friends`.
 - [ ] Complete a minimum 24-hour backend soak with alerts and rollback.
 - [ ] Complete passenger-operated Calgary road tests and the manual Apple/Google comparison worksheet.
-- [ ] Prepare Beta App Review contact information, notes, privacy URL, beta description, and What to Test.
+- [x] Prepare and save Beta App Review contact information, notes, privacy URL, beta description, and What to Test.
+- [x] Submit build 16 for Beta App Review; Apple returned `WAITING_FOR_REVIEW` on July 28, 2026.
 - [ ] Keep the review backend and monitoring staffed throughout Beta App Review.
-- [ ] After Beta App Review approval, create a public TestFlight link capped at 10 testers, share it
-      only with the intended friend cohort, and verify that disabling the link stops new joins.
+- [x] Create a public TestFlight link capped at 10 testers. Do not share it until review approval;
+      afterward, verify that disabling the link stops new joins.
 
 ## Public App Store gate
 

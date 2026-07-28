@@ -1,16 +1,16 @@
 # TestFlight beta runbook
 
-Date: 2026-07-25
+Date: 2026-07-28
 
 ## Current verdict
 
-| Stage                                      | Verdict | Reason                                                                                                                                                                                         |
-| ------------------------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local simulator and build-12 physical beta | GO      | Core, API, mobile, native, route-matrix, places, ETA sharing, reroute, arrival, camera, privacy-sheet, compact-screen, and outside-Calgary reviewer-preview checks pass.                       |
-| Metro-independent iOS Release export       | GO      | Signed discovery and CarPlay build `0.1.0 (15)` passed identity, signature, entitlement, production-origin, privacy, CarPlay-scene, architecture, asset, and shipped-feature audits.           |
-| Internal TestFlight                        | NO-GO   | Build 12 remains the installed diagnostic build. EAS reports build 15 submitted, but Apple showed build 14 as newest; build 15 needs reconciliation, installation, and physical smoke testing. |
-| External TestFlight                        | NO-GO   | Reviewer route preview is complete. Internal soak, App Privacy/account-holder fields, Beta App Review, on-road evidence, support operations, and real wired/wireless CarPlay remain.           |
-| Public App Store                           | NO-GO   | Physical-device background/CarPlay evidence, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                          |
+| Stage                                      | Verdict | Reason                                                                                                                                                                               |
+| ------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Local simulator and build-12 physical beta | GO      | Core, API, mobile, native, route-matrix, places, ETA sharing, reroute, arrival, camera, privacy-sheet, compact-screen, and outside-Calgary reviewer-preview checks pass.             |
+| Metro-independent iOS Release export       | GO      | Signed discovery and CarPlay build `0.1.0 (15)` passed identity, signature, entitlement, production-origin, privacy, CarPlay-scene, architecture, asset, and shipped-feature audits. |
+| Internal TestFlight                        | NO-GO   | Builds 15 and 16 are processed, Ready to Submit, and attached to `testers`; build 16 still needs a clean TestFlight install and physical phone/CarPlay smoke testing.                |
+| External TestFlight                        | WAITING | Build 16 is attached to `NavOSS Friends` and Beta App Review is `WAITING_FOR_REVIEW`. Its capped public link is enabled but cannot accept testers until Apple approves the build.    |
+| Public App Store                           | NO-GO   | Physical-device background/CarPlay evidence, traffic-aware ETA, production service operations, and broader safety/quality evidence remain incomplete.                                |
 
 The right next launch is a small **internal TestFlight technical beta**, not a public navigation release.
 
@@ -35,8 +35,9 @@ The right next launch is a small **internal TestFlight technical beta**, not a p
 - [x] Confirm build 13 is processed, Ready to Submit, and attached to the internal `testers` group.
 - [x] Build, audit, and upload voice-tuned candidate `0.1.0 (14)` from commit `35afb26`.
 - [x] Build and audit discovery and CarPlay candidate `0.1.0 (15)` from commit `fa10bfe`; EAS reports its submission completed.
-- [ ] Confirm build 15 reaches App Store Connect, attach it to `testers`, install it through TestFlight, and physically validate the discovery shell, locked-phone guidance, and real wired/wireless CarPlay.
-- [ ] Resolve the build-record discrepancy: EAS reports submission `8365a1f6-568d-44d8-bac1-578f83fb95d8` uploaded build 15, but App Store Connect showed build 14 as the newest processed build on July 27, 2026.
+- [x] Confirm build 15 reaches App Store Connect and is attached to `testers`.
+- [x] Confirm build 16 is processed, Ready to Submit, and attached to `testers` in App Store Connect.
+- [ ] Install build 16 through TestFlight and physically validate Toronto camera rendering, report-draft capture, the discovery shell, locked-phone guidance, and real wired/wireless CarPlay.
 
 ### P1: required before external testers
 
@@ -46,7 +47,12 @@ The right next launch is a small **internal TestFlight technical beta**, not a p
 - Add crash diagnostics or document the privacy-preserving alternative and support triage process.
 - Confirm map/search/routing data attribution and production usage rights in the shipped UI and hosted legal pages.
 - [x] Add and validate the visible, preview-only Calgary Tower origin path so Beta App Review can exercise routing from outside Calgary.
+- [x] Create the external TestFlight group `NavOSS Friends`.
 - Activate and externally test `navoss@yassin.app` delivery and reply handling.
+- [x] Save reachable private review contact details and attach build 16 to `NavOSS Friends`.
+- [x] Save the beta description, live URLs, build 16 What to Test, no-sign-in posture, and reviewer notes.
+- [x] Submit build 16 for Beta App Review; Apple returned `WAITING_FOR_REVIEW` on July 28, 2026.
+- [x] Create the public link with a hard limit of 10 testers. Do not share it until Apple approves build 16.
 - Verify active guidance, speech, rerouting, arrival, and End cleanup while the screen is locked. For the CarPlay profile, repeat the flow on wired and wireless systems and confirm the minimal phone companion remains non-distracting.
 
 ## Backend release gate
@@ -132,6 +138,8 @@ Voice-tuned candidate `0.1.0 (14)` was created from commit `35afb269a655b364b9e5
 
 Discovery and CarPlay candidate `0.1.0 (15)` was created from commit `fa10bfeec7fe3bc3bf256217947b3e7f3f710cf4` as EAS build `630e78d6-6beb-4738-92f1-2834ee1733fa`. The signed IPA has SHA-256 `827d5017f36690a36bcc4e4f1dc1edb0986eac244256aaaf2ccd90c4ac494a97` and passed bundle/version, strict code-signature, production-origin, When in Use purpose-string, location-only background-mode, CarPlay scene, app-entitlement, provisioning-profile, privacy-manifest, arm64, packaged 64-by-64 vehicle-arrow, Google-disabled packaging, discovery-label, rating-fallback, and native CarPlay End-control audits. EAS submission `8365a1f6-568d-44d8-bac1-578f83fb95d8` uploaded it successfully to App Store Connect at 2026-07-25 05:24 UTC and targeted the internal `testers` group. Apple processing, TestFlight installation, and physical validation remain pending.
 
+Toronto/reporting candidate `0.1.0 (16)` was uploaded on July 27, 2026 after commit `112cae172fd90f6ed84e5524e32692c9f71e4a51` as EAS build `cbcf7876-5bc9-4fa4-bffc-122df48253d6`; EAS submission `d7e313c6-3856-46f7-9de2-efbd081f8562` completed successfully. App Store Connect processed it and attached it to the internal `testers` group. On July 28, its beta description, build notes, private reviewer contact, no-sign-in posture, reviewer notes, and external `NavOSS Friends` group were verified. Build 16 was submitted for Beta App Review and Apple returned `WAITING_FOR_REVIEW`. Its clean TestFlight installation and physical navigation/CarPlay checks remain pending.
+
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a keyless CarPlay tester build so the approved scene and entitlement are present. After the restricted EAS Google key and matching App Privacy answers are ready, use `production-carplay-google` for the rating-enabled candidate:
 
 ```sh
@@ -162,16 +170,17 @@ After the internal gate passes:
 2. Complete Test Information, including beta description, feedback email, privacy-policy URL, and What to Test.
 3. From outside Calgary, search for Airport, select Calgary International Airport, tap **Preview from Calgary Tower**, and verify the **Preview only from Calgary Tower** route has no Start action until **Use my location** is chosen.
 4. Add the tested build and submit it for Beta App Review.
-5. After Beta App Review approval, enable the external group's public link with an initial limit of
-   10 testers. Share it only with the intended friend cohort and disable the link if it spreads
-   beyond that group.
+5. After Beta App Review approval, share the already-enabled public link with the intended friend
+   cohort. Its hard limit is 10 testers; disable the link if it spreads beyond that group.
 6. Expand only after service and route-quality thresholds remain stable.
 
 Apple permits up to 10,000 external testers, subject to Beta App Review.
 
-As of July 27, 2026, App Store Connect has only the internal `testers` group. No external group or
-public TestFlight link exists yet. Do not publish the direct EAS IPA artifact URL as a TestFlight
-link; it is not a friend-install invitation.
+As of July 28, 2026, build 16 is attached to both the internal `testers` group and external `NavOSS
+Friends` group. Beta App Review is `WAITING_FOR_REVIEW`. The external group has zero testers and a
+hard public-link limit of 10. Its link is `https://testflight.apple.com/join/KyZPPD4m`; Apple shows
+that it is not accepting new testers until review approval. Do not publish the direct EAS IPA
+artifact URL as a TestFlight link; it is not a friend-install invitation.
 
 ## Public App Store gate
 
