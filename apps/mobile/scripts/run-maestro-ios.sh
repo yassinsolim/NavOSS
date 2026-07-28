@@ -33,6 +33,7 @@ xcrun simctl privacy "$device_id" grant location org.navoss.mobile
 xcrun simctl location "$device_id" set 51.0447,-114.0719
 xcrun simctl spawn "$device_id" defaults write org.navoss.mobile EXDevMenuIsOnboardingFinished -bool YES
 xcrun simctl launch "$device_id" org.navoss.mobile >/dev/null
+xcrun simctl location "$device_id" set 51.0447,-114.0719
 xcrun simctl openurl \
   "$device_id" \
   'exp+navoss://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081'

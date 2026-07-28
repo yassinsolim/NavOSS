@@ -416,7 +416,11 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
           ),
           destination: trip.destination,
           preferences: trip.preferences,
-          alternatives: 0
+          alternatives: 0,
+          waypoints: self.remainingWaypoints(
+            in: trip,
+            after: update.snapshot.routeProgress
+          )
         )
         guard !Task.isCancelled, let replacement = routes.first else {
           throw NavOSSNavigationAPIError.invalidResponse
@@ -444,6 +448,59 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     }
     lock.unlock()
     notificationCenter.post(name: .navOSSNavigationSnapshotDidChange, object: self)
+  }
+
+  private func remainingWaypoints(
+    in trip: NavOSSCarPlayTrip,
+    after routeProgress: Double
+  ) -> [NavOSSCarPlayDestination] {
+    guard let waypoints = trip.waypoints, !waypoints.isEmpty else {
+      return trip.waypoints ?? []
+    }
+    return waypoints.filter { waypoint in
+      waypointProgress(waypoint, along: trip.geometry) > routeProgress + 0.002
+    }
+  }
+
+  private func waypointProgress(
+    _ waypoint: NavOSSCarPlayDestination,
+    along geometry: [NavOSSCarPlayCoordinate]
+  ) -> Double {
+    guard geometry.count >= 2 else {
+      return 1
+    }
+    var cumulativeDistances = [0.0]
+    for index in 1..<geometry.count {
+      cumulativeDistances.append(
+        cumulativeDistances[index - 1]
+          + Self.distanceMeters(from: geometry[index - 1], to: geometry[index])
+      )
+    }
+    guard let totalDistance = cumulativeDistances.last, totalDistance > 0 else {
+      return 1
+    }
+    let nearestIndex = geometry.indices.min { leftIndex, rightIndex in
+      let coordinate = NavOSSCarPlayCoordinate(
+        latitude: waypoint.latitude,
+        longitude: waypoint.longitude
+      )
+      return Self.distanceMeters(from: geometry[leftIndex], to: coordinate)
+        < Self.distanceMeters(from: geometry[rightIndex], to: coordinate)
+    } ?? geometry.index(before: geometry.endIndex)
+    return cumulativeDistances[nearestIndex] / totalDistance
+  }
+
+  private static func distanceMeters(
+    from origin: NavOSSCarPlayCoordinate,
+    to destination: NavOSSCarPlayCoordinate
+  ) -> Double {
+    let latitudeDelta = (destination.latitude - origin.latitude) * .pi / 180
+    let longitudeDelta = (destination.longitude - origin.longitude) * .pi / 180
+    let originLatitude = origin.latitude * .pi / 180
+    let destinationLatitude = destination.latitude * .pi / 180
+    let haversine = pow(sin(latitudeDelta / 2), 2)
+      + cos(originLatitude) * cos(destinationLatitude) * pow(sin(longitudeDelta / 2), 2)
+    return 12_742_000 * asin(sqrt(haversine))
   }
 
   private func installReroute(

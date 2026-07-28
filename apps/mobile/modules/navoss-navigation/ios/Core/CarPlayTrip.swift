@@ -114,6 +114,7 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
   public let source: String?
   public let steps: [NavOSSCarPlayRouteStep]
   public let traffic: NavOSSCarPlayTraffic?
+  public let waypoints: [NavOSSCarPlayDestination]?
 
   public init(
     destination: NavOSSCarPlayDestination,
@@ -124,7 +125,8 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
     preferences: NavOSSRoutePreferences = NavOSSRoutePreferences(),
     source: String? = nil,
     steps: [NavOSSCarPlayRouteStep],
-    traffic: NavOSSCarPlayTraffic? = nil
+    traffic: NavOSSCarPlayTraffic? = nil,
+    waypoints: [NavOSSCarPlayDestination]? = nil
   ) {
     self.destination = destination
     self.distanceMeters = distanceMeters
@@ -135,6 +137,7 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
     self.source = source
     self.steps = steps
     self.traffic = traffic
+    self.waypoints = waypoints
   }
 
   var isValid: Bool {
@@ -142,6 +145,7 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
       && durationSeconds.isFinite && durationSeconds > 0 && geometry.count >= 2
       && geometry.allSatisfy(\.isValid) && geometry.contains { $0 != geometry[0] }
       && !steps.isEmpty && steps.allSatisfy(\.isValid) && traffic?.isValid != false
+      && waypoints?.allSatisfy(\.isValid) != false
   }
 }
 

@@ -385,12 +385,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       position.iconRotationAlignment = NSExpression(forConstantValue: "map")
       style.addLayer(position)
     }
-    let mapRelativeCourse =
-      latestPosition.courseDegrees.map {
-        (($0 - mapView.direction).truncatingRemainder(dividingBy: 360) + 360)
-          .truncatingRemainder(dividingBy: 360)
-      } ?? 0
-    position.iconRotation = NSExpression(forConstantValue: mapRelativeCourse)
+    position.iconRotation = NSExpression(forConstantValue: latestPosition.courseDegrees ?? 0)
   }
 
   private func coordinate(

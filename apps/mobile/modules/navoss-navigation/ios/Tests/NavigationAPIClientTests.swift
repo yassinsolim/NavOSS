@@ -63,6 +63,9 @@ final class NavigationAPIClientTests: XCTestCase {
       )
       let preferences = try XCTUnwrap(payload["preferences"] as? [String: Any])
       XCTAssertEqual(preferences["avoidHighways"] as? Bool, true)
+      let waypoints = try XCTUnwrap(payload["waypoints"] as? [[String: Any]])
+      XCTAssertEqual(waypoints.first?["latitude"] as? Double, 51.08)
+      XCTAssertEqual(waypoints.first?["longitude"] as? Double, -114.05)
       return Self.response(
         request: request,
         json: """
@@ -107,12 +110,22 @@ final class NavigationAPIClientTests: XCTestCase {
         longitude: -114.01,
         name: "Calgary International Airport"
       ),
-      preferences: preferences
+      preferences: preferences,
+      waypoints: [
+        NavOSSCarPlayDestination(
+          id: "groceries",
+          label: "Calgary Co-op",
+          latitude: 51.08,
+          longitude: -114.05,
+          name: "Calgary Co-op"
+        )
+      ]
     )
 
     XCTAssertEqual(routes.first?.geometry.first?.latitude, 51.04)
     XCTAssertEqual(routes.first?.geometry.first?.longitude, -114.08)
     XCTAssertEqual(routes.first?.preferences, preferences)
+    XCTAssertEqual(routes.first?.waypoints?.first?.id, "groceries")
     XCTAssertEqual(routes.first?.source, "valhalla-development")
     XCTAssertNil(routes.first?.traffic)
     XCTAssertEqual(

@@ -185,6 +185,29 @@ describe('route contracts', () => {
     });
   });
 
+  it('accepts ordered intermediate stops and rejects duplicate consecutive locations', () => {
+    const request = RouteRequestSchema.parse({
+      destination: { latitude: 51.13157, longitude: -114.01055 },
+      origin: { latitude: 51.0447, longitude: -114.0719 },
+      waypoints: [
+        { latitude: 51.05, longitude: -114.08 },
+        { latitude: 51.08, longitude: -114.04 },
+      ],
+    });
+
+    expect(request.waypoints).toEqual([
+      { latitude: 51.05, longitude: -114.08 },
+      { latitude: 51.08, longitude: -114.04 },
+    ]);
+    expect(
+      RouteRequestSchema.safeParse({
+        destination: { latitude: 51.13157, longitude: -114.01055 },
+        origin: { latitude: 51.0447, longitude: -114.0719 },
+        waypoints: [{ latitude: 51.0447, longitude: -114.0719 }],
+      }).success,
+    ).toBe(false);
+  });
+
   it('accepts normalized route geometry and guidance', () => {
     const result = RouteResponseSchema.safeParse({
       degraded: true,

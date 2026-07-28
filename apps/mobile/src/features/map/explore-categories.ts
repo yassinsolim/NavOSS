@@ -1,4 +1,5 @@
 import type { ComponentProps } from 'react';
+import type { SearchQuery } from '@navoss/contracts';
 
 import type { SymbolView } from 'expo-symbols';
 
@@ -9,6 +10,7 @@ export interface ExploreCategory {
   id: string;
   label: string;
   query: string;
+  searchCategory?: SearchQuery['category'];
 }
 
 export interface ExploreCategoryGroup {
@@ -26,6 +28,7 @@ export const EXPLORE_CATEGORY_GROUPS: ExploreCategoryGroup[] = [
         id: 'restaurants',
         label: 'Restaurants',
         query: 'restaurant',
+        searchCategory: 'restaurant',
       },
       {
         icon: { android: 'local_bar', ios: 'wineglass' },
@@ -81,6 +84,7 @@ export const EXPLORE_CATEGORY_GROUPS: ExploreCategoryGroup[] = [
         id: 'parks',
         label: 'Parks',
         query: 'park',
+        searchCategory: 'park',
       },
       {
         icon: { android: 'fitness_center', ios: 'dumbbell.fill' },
@@ -136,6 +140,7 @@ export const EXPLORE_CATEGORY_GROUPS: ExploreCategoryGroup[] = [
         id: 'groceries',
         label: 'Groceries',
         query: 'supermarket',
+        searchCategory: 'grocery',
       },
       {
         icon: { android: 'spa', ios: 'sparkles' },

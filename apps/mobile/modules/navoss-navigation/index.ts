@@ -100,6 +100,7 @@ export interface NativeCarPlayTrip {
     delaySeconds: number;
     typicalDurationSeconds: number;
   };
+  waypoints?: NativeNavigationDestination[];
 }
 
 export interface NativeCarPlayState {

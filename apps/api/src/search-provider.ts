@@ -9,8 +9,38 @@ import { normalizeSearchText } from './search-text.js';
 const DEFAULT_PHOTON_URL = 'https://photon.komoot.io/api/';
 const PHOTON_TIMEOUT_MS = 3_000;
 const CALGARY_BOUNDS = '-114.316,50.842,-113.859,51.212';
+const CALGARY_EAST = -113.859;
+const CALGARY_NORTH = 51.212;
+const CALGARY_SOUTH = 50.842;
+const CALGARY_WEST = -114.316;
 const NOMINATIM_TIMEOUT_MS = 4_000;
 const EARTH_RADIUS_METERS = 6_371_000;
+
+const SEARCH_CATEGORY_TYPES = {
+  grocery: new Set(['grocery', 'supermarket']),
+  park: new Set(['garden', 'nature_reserve', 'park', 'playground', 'recreation_ground']),
+  restaurant: new Set(['fast_food', 'food_court', 'restaurant']),
+} as const;
+const NOMINATIM_CATEGORY_QUERIES = {
+  grocery: '[supermarket]',
+  park: '[park]',
+  restaurant: '[restaurant]',
+} as const;
+
+function nominatimViewbox(query: SearchQuery): string {
+  if (
+    query.category === undefined ||
+    query.latitude === undefined ||
+    query.longitude === undefined
+  ) {
+    return '-114.316,51.212,-113.859,50.842';
+  }
+  const west = Math.max(CALGARY_WEST, query.longitude - 0.08);
+  const north = Math.min(CALGARY_NORTH, query.latitude + 0.06);
+  const east = Math.min(CALGARY_EAST, query.longitude + 0.08);
+  const south = Math.max(CALGARY_SOUTH, query.latitude - 0.06);
+  return [west, north, east, south].map((value) => String(Number(value.toFixed(3)))).join(',');
+}
 
 const PhotonFeatureSchema = z.object({
   geometry: z.object({
@@ -237,8 +267,11 @@ export function buildNominatimSearchUrl(query: SearchQuery, endpoint: string): s
   url.searchParams.set('extratags', '1');
   url.searchParams.set('format', 'jsonv2');
   url.searchParams.set('limit', String(query.limit));
-  url.searchParams.set('q', query.q);
-  url.searchParams.set('viewbox', '-114.316,51.212,-113.859,50.842');
+  url.searchParams.set(
+    'q',
+    query.category === undefined ? query.q : NOMINATIM_CATEGORY_QUERIES[query.category],
+  );
+  url.searchParams.set('viewbox', nominatimViewbox(query));
   return url.toString();
 }
 
@@ -410,6 +443,12 @@ function mergeResults(
   return deduplicated;
 }
 
+function matchesSearchCategory(result: SearchResult, query: SearchQuery): boolean {
+  if (query.category === undefined) return true;
+  const category = result.details?.category?.toLocaleLowerCase('en-CA');
+  return category !== undefined && SEARCH_CATEGORY_TYPES[query.category].has(category);
+}
+
 function combinedSource(responses: SearchResponse[]): SearchResponse['source'] {
   const firstResponse = responses.at(0);
   if (responses.length === 1 && firstResponse !== undefined) {
@@ -478,10 +517,14 @@ export function createProductionSearchProvider(
     },
     async search(query) {
       const fixtureResponse = await fixtureProvider.search(query);
-      const providerQuery = { ...query, limit: Math.min(20, query.limit * 2) };
+      const providerQuery = {
+        ...query,
+        includeDetails: query.includeDetails === true || query.category !== undefined,
+        limit: Math.min(20, query.limit * 2),
+      };
       const providers = [
         productionProvider,
-        ...(calgaryProvider === undefined ? [] : [calgaryProvider]),
+        ...(calgaryProvider === undefined || query.category !== undefined ? [] : [calgaryProvider]),
       ];
       const settled = await Promise.allSettled(
         providers.map((provider) => provider.search(providerQuery)),
@@ -500,7 +543,9 @@ export function createProductionSearchProvider(
           settled.some((result) => result.status === 'rejected') ||
           responses.some((response) => response.degraded),
         results: mergeResults(
-          [fixtureResponse.results, ...responses.map((response) => response.results)],
+          [fixtureResponse.results, ...responses.map((response) => response.results)].map(
+            (results) => results.filter((result) => matchesSearchCategory(result, query)),
+          ),
           query,
           query.limit,
         ),

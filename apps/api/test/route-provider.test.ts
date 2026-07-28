@@ -76,11 +76,20 @@ describe('Valhalla route provider', () => {
         avoidTolls: false,
         avoidUnpaved: false,
       },
+      waypoints: [{ latitude: 51.065, longitude: -114.08 }],
     };
 
     const routes = await provider.getRoutes(request);
 
-    expect(requestPayload).toMatchObject({ alternates: 2, costing: 'auto' });
+    expect(requestPayload).toMatchObject({
+      alternates: 2,
+      costing: 'auto',
+      locations: [
+        { lat: 51.0447, lon: -114.0719 },
+        { lat: 51.065, lon: -114.08 },
+        { lat: 51.13157, lon: -114.01055 },
+      ],
+    });
     expect(provider.source).toEqual({
       attribution: 'Routing by Valhalla using OpenStreetMap data',
       degraded: false,
@@ -277,5 +286,76 @@ describe('Mapbox live-traffic route provider', () => {
     currentTime += 300_001;
     await expect(provider.isReady?.()).resolves.toBe(false);
     expect(requestCount).toBe(2);
+  });
+
+  it('preserves intermediate waypoint order in the directions URL', async () => {
+    let requestedUrl = '';
+    const provider = createMapboxTrafficRouteProvider({
+      accessToken: 'test-token',
+      fetchImplementation: (input) => {
+        requestedUrl =
+          typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              code: 'Ok',
+              routes: [
+                {
+                  distance: 1_000,
+                  duration: 120,
+                  duration_typical: 110,
+                  geometry: {
+                    coordinates: [
+                      [-114.0719, 51.0447],
+                      [-114.08, 51.065],
+                      [-114.01055, 51.13157],
+                    ],
+                    type: 'LineString',
+                  },
+                  legs: [
+                    {
+                      steps: [
+                        {
+                          distance: 1_000,
+                          duration: 120,
+                          geometry: {
+                            coordinates: [
+                              [-114.0719, 51.0447],
+                              [-114.01055, 51.13157],
+                            ],
+                            type: 'LineString',
+                          },
+                          maneuver: { instruction: 'Continue.', type: 'continue' },
+                          name: 'Test Road',
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+              waypoints: [],
+            }),
+          ),
+        );
+      },
+      vehicleLicenseConfirmed: true,
+    });
+
+    await provider.getRoutes({
+      alternatives: 0,
+      destination: { latitude: 51.13157, longitude: -114.01055 },
+      origin: { latitude: 51.0447, longitude: -114.0719 },
+      preferences: {
+        avoidFerries: false,
+        avoidHighways: false,
+        avoidTolls: false,
+        avoidUnpaved: false,
+      },
+      waypoints: [{ latitude: 51.065, longitude: -114.08 }],
+    });
+
+    expect(decodeURIComponent(new URL(requestedUrl).pathname)).toContain(
+      '-114.0719,51.0447;-114.08,51.065;-114.01055,51.13157',
+    );
   });
 });

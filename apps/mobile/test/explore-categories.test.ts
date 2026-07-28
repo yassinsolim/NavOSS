@@ -39,4 +39,10 @@ describe('explore categories', () => {
     expect(exploreCategoryById('gas')).toMatchObject({ label: 'Gas', query: 'fuel' });
     expect(exploreCategoryById('missing')).toBeUndefined();
   });
+
+  it('sends typed intent for categories that require strict result filtering', () => {
+    expect(exploreCategoryById('restaurants')?.searchCategory).toBe('restaurant');
+    expect(exploreCategoryById('groceries')?.searchCategory).toBe('grocery');
+    expect(exploreCategoryById('parks')?.searchCategory).toBe('park');
+  });
 });

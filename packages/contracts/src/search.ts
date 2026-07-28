@@ -4,6 +4,7 @@ import { CoordinateSchema, IsoDateTimeSchema, LatitudeSchema, LongitudeSchema } 
 
 export const SearchQuerySchema = z
   .object({
+    category: z.enum(['grocery', 'park', 'restaurant']).optional(),
     includeDetails: z.boolean().optional(),
     latitude: z.coerce.number().pipe(LatitudeSchema).optional(),
     limit: z.coerce.number().int().min(1).max(20).default(8),

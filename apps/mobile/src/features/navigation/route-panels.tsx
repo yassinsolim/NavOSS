@@ -105,6 +105,7 @@ interface RoutePreviewPanelProps {
   bottomInset: number;
   destination: SearchResult;
   onCancel: () => void;
+  onEditStops: () => void;
   onSelectRoute: (route: RouteAlternative) => void;
   onStart: () => void;
   onToggleAvoidHighways: () => void;
@@ -115,6 +116,7 @@ interface RoutePreviewPanelProps {
   selectedRoute: RouteAlternative;
   routeSource?: RouteResponse['source'];
   vehicleStyle: VehicleStyle;
+  waypoints: SearchResult[];
 }
 
 export function RoutePreviewPanel({
@@ -122,6 +124,7 @@ export function RoutePreviewPanel({
   bottomInset,
   destination,
   onCancel,
+  onEditStops,
   onSelectRoute,
   onStart,
   onToggleAvoidHighways,
@@ -132,6 +135,7 @@ export function RoutePreviewPanel({
   selectedRoute,
   routeSource,
   vehicleStyle,
+  waypoints,
 }: RoutePreviewPanelProps) {
   const selectedTrafficDelay = formatTrafficDelay(selectedRoute.traffic?.delaySeconds ?? 0);
   return (
@@ -194,6 +198,31 @@ export function RoutePreviewPanel({
           );
         })}
       </ScrollView>
+
+      <Pressable
+        accessibilityLabel="Edit route stops"
+        onPress={onEditStops}
+        style={styles.stopsButton}
+      >
+        <SymbolView
+          name={{
+            android: 'alt_route',
+            ios: 'point.bottomleft.forward.to.point.topright.scurvepath',
+          }}
+          size={18}
+          tintColor={NavOssColors.green}
+        />
+        <Text numberOfLines={1} style={styles.stopsButtonText}>
+          {waypoints.length === 0
+            ? 'Add or edit stops'
+            : `${String(waypoints.length)} ${waypoints.length === 1 ? 'stop' : 'stops'} · Edit order`}
+        </Text>
+        <SymbolView
+          name={{ android: 'chevron_right', ios: 'chevron.right' }}
+          size={16}
+          tintColor={NavOssColors.muted}
+        />
+      </Pressable>
 
       <View style={styles.routeOptions}>
         <Pressable
@@ -752,6 +781,22 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     position: 'absolute',
     right: 0,
+  },
+  stopsButton: {
+    alignItems: 'center',
+    backgroundColor: NavOssColors.fog,
+    borderRadius: 8,
+    flexDirection: 'row',
+    gap: 9,
+    minHeight: 42,
+    paddingHorizontal: 12,
+  },
+  stopsButtonText: {
+    color: NavOssColors.asphalt,
+    flex: 1,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 15,
+    letterSpacing: 0,
   },
   cameraAlertBanner: {
     alignItems: 'center',

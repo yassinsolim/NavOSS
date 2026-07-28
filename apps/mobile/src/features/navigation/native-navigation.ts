@@ -116,6 +116,7 @@ export function setNavigationRoute(
   preferences: RoutePreferences,
   source?: string,
   traffic?: NativeTrafficInput,
+  waypoints: SearchResult[] = [],
 ): NativeNavigationSnapshot {
   const coordinate = ([longitude, latitude]: [number, number]) => ({ latitude, longitude });
   return NavOSSNavigation.setRoute({
@@ -145,6 +146,9 @@ export function setNavigationRoute(
             typicalDurationSeconds: traffic.typicalDurationSeconds,
           },
         }),
+    ...(waypoints.length === 0
+      ? {}
+      : { waypoints: waypoints.map((waypoint) => nativeDestination(waypoint)) }),
   });
 }
 

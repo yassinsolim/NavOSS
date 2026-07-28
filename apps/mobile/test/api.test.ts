@@ -80,6 +80,15 @@ describe('buildSearchRequest', () => {
       sort: 'distance',
     });
   });
+
+  it('includes explicit category intent without changing the visible query', () => {
+    expect(
+      buildSearchRequest('Groceries', {
+        category: 'grocery',
+        includeDetails: true,
+      }),
+    ).toEqual({ category: 'grocery', includeDetails: true, q: 'Groceries' });
+  });
 });
 
 describe('searchPlaces', () => {

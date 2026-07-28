@@ -6,6 +6,6 @@ export function normalizeHeadingDegrees(heading: number): number {
   return ((heading % 360) + 360) % 360;
 }
 
-export function mapRelativeHeadingDegrees(course: number, mapBearing: number): number {
-  return normalizeHeadingDegrees(course - mapBearing);
+export function mapAlignedHeadingDegrees(course: number): number {
+  return normalizeHeadingDegrees(course);
 }

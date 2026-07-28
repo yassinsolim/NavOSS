@@ -28,6 +28,24 @@ appId: org.navoss.mobile
     visible: 'Start navigation'
     timeout: 20000
 - assertVisible: 'Route preview'
+- tapOn: 'Edit route stops'
+- assertVisible: 'Edit stops'
+- assertVisible: 'My location'
+- assertVisible: 'Calgary International Airport'
+- tapOn: 'Search for a stop'
+- inputText: 'Central Library'
+- tapOn: 'Search stops'
+- extendedWaitUntil:
+    visible: 'Add Central Library as a stop'
+    timeout: 20000
+- tapOn: 'Add Central Library as a stop'
+- assertVisible: 'Move Central Library up'
+- tapOn: 'Move Central Library up'
+- tapOn: 'Apply route stops'
+- extendedWaitUntil:
+    visible: 'Start navigation'
+    timeout: 20000
+- assertVisible: 'Edit route stops'
 - takeScreenshot: '/tmp/navoss-validation-phone-preview'
 - tapOn: 'Start navigation'
 - extendedWaitUntil:

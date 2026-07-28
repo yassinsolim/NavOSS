@@ -24,6 +24,7 @@ export const RouteRequestSchema = z
       avoidTolls: false,
       avoidUnpaved: false,
     }),
+    waypoints: z.array(CoordinateSchema).max(8).optional(),
   })
   .strict()
   .superRefine((request, context) => {
@@ -36,6 +37,19 @@ export const RouteRequestSchema = z
         message: 'origin and destination must be different',
         path: ['destination'],
       });
+    }
+    const waypoints = request.waypoints ?? [];
+    const locations = [request.origin, ...waypoints, request.destination];
+    for (let index = 1; index < locations.length; index += 1) {
+      const previous = locations[index - 1];
+      const current = locations[index];
+      if (previous?.latitude === current?.latitude && previous?.longitude === current?.longitude) {
+        context.addIssue({
+          code: 'custom',
+          message: 'consecutive route locations must be different',
+          path: index <= waypoints.length ? ['waypoints', index - 1] : ['destination'],
+        });
+      }
     }
   });
 

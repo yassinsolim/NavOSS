@@ -35,6 +35,7 @@ private struct RouteRequest: Encodable {
   let destination: NavOSSCarPlayCoordinate
   let origin: NavOSSCarPlayCoordinate
   let preferences: NavOSSRoutePreferences
+  let waypoints: [NavOSSCarPlayCoordinate]?
 }
 
 private struct RouteResponse: Decodable {
@@ -121,7 +122,8 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     origin: NavOSSCarPlayCoordinate,
     destination: NavOSSCarPlayDestination,
     preferences: NavOSSRoutePreferences,
-    alternatives: Int = 2
+    alternatives: Int = 2,
+    waypoints: [NavOSSCarPlayDestination] = []
   ) async throws -> [NavOSSCarPlayTrip] {
     let request = RouteRequest(
       alternatives: alternatives,
@@ -130,7 +132,12 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
         longitude: destination.longitude
       ),
       origin: origin,
-      preferences: preferences
+      preferences: preferences,
+      waypoints: waypoints.isEmpty
+        ? nil
+        : waypoints.map {
+          NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+        }
     )
     let response: RouteResponse = try await post(path: "v1/routes", body: request)
     return try response.routes.map { route in
@@ -158,7 +165,8 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
             delaySeconds: $0.delaySeconds,
             typicalDurationSeconds: $0.typicalDurationSeconds
           )
-        }
+        },
+        waypoints: waypoints.isEmpty ? nil : waypoints
       )
     }
   }

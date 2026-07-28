@@ -133,10 +133,9 @@ function buildValhallaRequest(request: RouteRequest): unknown {
     },
     format: 'osrm',
     language: 'en-US',
-    locations: [
-      { lat: request.origin.latitude, lon: request.origin.longitude },
-      { lat: request.destination.latitude, lon: request.destination.longitude },
-    ],
+    locations: [request.origin, ...(request.waypoints ?? []), request.destination].map(
+      ({ latitude, longitude }) => ({ lat: latitude, lon: longitude }),
+    ),
     shape_format: 'geojson',
     turn_lanes: true,
     units: 'kilometers',
@@ -183,7 +182,7 @@ function buildMapboxTrafficUrl(
   accessToken: string,
   departureTime: Date,
 ): URL {
-  const coordinates = [request.origin, request.destination]
+  const coordinates = [request.origin, ...(request.waypoints ?? []), request.destination]
     .map(({ latitude, longitude }) => `${String(longitude)},${String(latitude)}`)
     .join(';');
   const url = new URL(`${endpoint.replace(/\/$/, '')}/${coordinates}`);

@@ -104,6 +104,7 @@ import {
   RoutePreviewPanel,
   SafetyCameraAlertBanner,
 } from '@/features/navigation/route-panels';
+import { RouteStopsEditor } from '@/features/navigation/route-stops-editor';
 import {
   buildEtaShareMessage,
   findNearestStepIndex,
@@ -152,7 +153,7 @@ import {
   VehiclePuck,
   type VehicleStyle,
 } from '@/features/navigation/vehicle-puck';
-import { mapRelativeHeadingDegrees } from '@/features/navigation/vehicle-heading';
+import { mapAlignedHeadingDegrees } from '@/features/navigation/vehicle-heading';
 import {
   fetchAppConfig,
   fetchOfficialSafetyCameras,
@@ -184,26 +185,40 @@ const MAP_IMAGES = {
 type LocationState = 'idle' | 'locating' | 'visible' | 'denied' | 'error';
 type RouteUiState =
   | { type: 'idle' }
-  | { destination: SearchResult; type: 'loading' }
-  | { destination: SearchResult; message: string; type: 'error' }
+  | {
+      destination: SearchResult;
+      previewOrigin?: Coordinate;
+      type: 'loading';
+      waypoints: SearchResult[];
+    }
+  | {
+      destination: SearchResult;
+      message: string;
+      previewOrigin?: Coordinate;
+      type: 'error';
+      waypoints: SearchResult[];
+    }
   | {
       destination: SearchResult;
       previewOrigin?: Coordinate;
       routes: RouteAlternative[];
       selectedRouteId: string;
       type: 'preview';
+      waypoints: SearchResult[];
     }
   | {
       destination: SearchResult;
       route: RouteAlternative;
       routes: RouteAlternative[];
       type: 'navigating';
+      waypoints: SearchResult[];
     }
   | {
       destination: SearchResult;
       route: RouteAlternative;
       routes: RouteAlternative[];
       type: 'arrived';
+      waypoints: SearchResult[];
     };
 
 function selectedFeature(result: SearchResult | undefined): FeatureCollection<Point> {
@@ -331,6 +346,7 @@ export function MapScreen() {
   const [isMoreCategoriesVisible, setIsMoreCategoriesVisible] = useState(false);
   const [isRoadReportSaving, setIsRoadReportSaving] = useState(false);
   const [isRoadReportVisible, setIsRoadReportVisible] = useState(false);
+  const [isRouteStopsVisible, setIsRouteStopsVisible] = useState(false);
   const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
   const [googlePlaceRatingAvailable] = useState(() => isGooglePlaceRatingAvailable());
   const [selectedPlaceSaved, setSelectedPlaceSaved] = useState(false);
@@ -396,6 +412,7 @@ export function MapScreen() {
     normalizedQuery: string,
     fitResults: boolean,
     nearestFirst = false,
+    category?: ExploreCategory,
   ): AbortController => {
     const requestGeneration = invalidateSearchRequest();
     const controller = new AbortController();
@@ -403,24 +420,42 @@ export function MapScreen() {
     setSearchState('loading');
     const proximityOptions = searchProximityOptions(userCoordinate);
 
-    void searchPlaces(normalizedQuery, {
-      ...proximityOptions,
-      signal: controller.signal,
-    })
-      .then((response) => {
+    const categoryQueries = [normalizedQuery];
+    void Promise.all(
+      categoryQueries.map((query) =>
+        searchPlaces(query, {
+          ...proximityOptions,
+          ...(category?.searchCategory === undefined
+            ? {}
+            : { category: category.searchCategory, includeDetails: true }),
+          signal: controller.signal,
+        }),
+      ),
+    )
+      .then((responses) => {
         if (
           controller.signal.aborted ||
           !searchRequestGateRef.current.isCurrent(requestGeneration)
         ) {
           return;
         }
+        const firstResponse = responses[0];
+        if (firstResponse === undefined) return;
+        const seenResultIds = new Set<string>();
+        const mergedResults = responses
+          .flatMap((response) => response.results)
+          .filter((result) => {
+            if (seenResultIds.has(result.id)) return false;
+            seenResultIds.add(result.id);
+            return true;
+          });
         const rankedResults = nearestFirst
-          ? rankCategoryResults(response.results, userCoordinate)
-          : rankSearchResults(response.results, getRecentDestinationIds(), userCoordinate);
+          ? rankCategoryResults(mergedResults, userCoordinate)
+          : rankSearchResults(mergedResults, getRecentDestinationIds(), userCoordinate);
         startTransition(() => {
           setApiConnection('online');
           setResults(rankedResults);
-          setSearchSource(response.source);
+          setSearchSource(firstResponse.source);
           setSearchState('success');
         });
         if (fitResults) {
@@ -702,6 +737,7 @@ export function MapScreen() {
         label: snapshot.trip.destination.label,
         name: snapshot.trip.destination.name,
       };
+      const waypoints = (snapshot.trip.waypoints ?? []).map(nativeDestinationToSearchResult);
       setRoutePreferences(snapshot.trip.preferences);
       if (snapshot.trip.source === 'mapbox-traffic') {
         setRouteSource({
@@ -736,8 +772,8 @@ export function MapScreen() {
           return current;
         }
         return snapshot.phase === 'arrived'
-          ? { destination, route, routes: [route], type: 'arrived' }
-          : { destination, route, routes: [route], type: 'navigating' };
+          ? { destination, route, routes: [route], type: 'arrived', waypoints }
+          : { destination, route, routes: [route], type: 'navigating', waypoints };
       });
     };
     const subscription = observeNavigationSnapshots(applyNativeSnapshot);
@@ -765,6 +801,7 @@ export function MapScreen() {
           route,
           routes: routeState.routes,
           type: 'arrived',
+          waypoints: routeState.waypoints,
         });
         return;
       }
@@ -837,11 +874,17 @@ export function MapScreen() {
     destination: SearchResult,
     preferences: RoutePreferences = routePreferences,
     previewOrigin?: Coordinate,
+    waypoints: SearchResult[] = [],
   ) => {
     routeAbortControllerRef.current?.abort();
     const controller = new AbortController();
     routeAbortControllerRef.current = controller;
-    setRouteState({ destination, type: 'loading' });
+    setRouteState({
+      destination,
+      ...(previewOrigin === undefined ? {} : { previewOrigin }),
+      type: 'loading',
+      waypoints,
+    });
 
     try {
       const origin = previewOrigin ?? (await getCurrentRouteOrigin());
@@ -850,7 +893,9 @@ export function MapScreen() {
           setRouteState({
             destination,
             message: 'Location access is needed to calculate a driving route.',
+            ...(previewOrigin === undefined ? {} : { previewOrigin }),
             type: 'error',
+            waypoints,
           });
         }
         return;
@@ -870,7 +915,9 @@ export function MapScreen() {
         setRouteState({
           destination,
           message: 'Your current location is outside Calgary route coverage.',
+          ...(previewOrigin === undefined ? {} : { previewOrigin }),
           type: 'error',
+          waypoints,
         });
         return;
       }
@@ -881,6 +928,9 @@ export function MapScreen() {
           destination: destination.center,
           origin,
           preferences,
+          ...(waypoints.length === 0
+            ? {}
+            : { waypoints: waypoints.map((waypoint) => waypoint.center) }),
         },
         { signal: controller.signal },
       );
@@ -889,7 +939,13 @@ export function MapScreen() {
         return;
       }
       if (fastestRoute === undefined) {
-        setRouteState({ destination, message: 'No driving route was found.', type: 'error' });
+        setRouteState({
+          destination,
+          message: 'No driving route was found.',
+          ...(previewOrigin === undefined ? {} : { previewOrigin }),
+          type: 'error',
+          waypoints,
+        });
         return;
       }
 
@@ -901,6 +957,7 @@ export function MapScreen() {
         routes: response.routes,
         selectedRouteId: fastestRoute.id,
         type: 'preview',
+        waypoints,
       });
       requestAnimationFrame(() => {
         fitRoute(fastestRoute);
@@ -916,7 +973,9 @@ export function MapScreen() {
           error instanceof NavOssApiError
             ? error.message
             : 'A route could not be calculated. Check the connection and try again.',
+        ...(previewOrigin === undefined ? {} : { previewOrigin }),
         type: 'error',
+        waypoints,
       });
     }
   };
@@ -1030,7 +1089,7 @@ export function MapScreen() {
     setRouteState({ type: 'idle' });
     setQuery(category.label);
     setResults([]);
-    runPlaceSearch(category.query, true, true);
+    runPlaceSearch(category.query, true, true, category);
   };
 
   const beginShortcutSetup = (shortcut: 'home' | 'work') => {
@@ -1264,7 +1323,20 @@ export function MapScreen() {
       avoidHighways: !routePreferences.avoidHighways,
     };
     setRoutePreferences(preferences);
-    void calculateRoute(routeState.destination, preferences, routeState.previewOrigin);
+    void calculateRoute(
+      routeState.destination,
+      preferences,
+      routeState.previewOrigin,
+      routeState.waypoints,
+    );
+  };
+
+  const handleApplyRouteStops = (destinations: SearchResult[]) => {
+    const destination = destinations.at(-1);
+    if (routeState.type !== 'preview' || destination === undefined) return;
+    const waypoints = destinations.slice(0, -1);
+    setIsRouteStopsVisible(false);
+    void calculateRoute(destination, routePreferences, routeState.previewOrigin, waypoints);
   };
 
   const selectedRoute =
@@ -1360,6 +1432,7 @@ export function MapScreen() {
       routePreferences,
       routeSource?.id,
       selectedRoute.traffic,
+      routeState.waypoints,
     );
     nativeStateVersionRef.current = Math.max(nativeStateVersionRef.current, snapshot.stateVersion);
     setNavigationSnapshot(snapshot);
@@ -1368,6 +1441,7 @@ export function MapScreen() {
       route: selectedRoute,
       routes: routeState.routes,
       type: 'navigating',
+      waypoints: routeState.waypoints,
     });
   };
 
@@ -1436,6 +1510,7 @@ export function MapScreen() {
       routes: routeState.routes,
       selectedRouteId: routeState.route.id,
       type: 'preview',
+      waypoints: routeState.waypoints,
     });
     requestAnimationFrame(() => {
       fitRoute(routeState.route);
@@ -1509,7 +1584,7 @@ export function MapScreen() {
   );
   const selectedPanelHeight =
     routeState.type === 'preview'
-      ? (routeState.previewOrigin === undefined ? 314 : 382) + insets.bottom
+      ? (routeState.previewOrigin === undefined ? 360 : 428) + insets.bottom
       : routeState.type === 'loading'
         ? 156 + insets.bottom
         : routeState.type === 'error'
@@ -1657,7 +1732,7 @@ export function MapScreen() {
         {routeState.type === 'navigating' && userCoordinate !== undefined && (
           <VehiclePuck
             coordinate={navigationSnapshot?.matchedCoordinate ?? userCoordinate}
-            heading={mapRelativeHeadingDegrees(userHeading, mapBearing)}
+            heading={mapAlignedHeadingDegrees(userHeading)}
             vehicleStyle={vehicleStyle}
           />
         )}
@@ -2060,10 +2135,16 @@ export function MapScreen() {
               routeState.destination,
               routePreferences,
               CALGARY_TOWER_ROUTE_ORIGIN,
+              routeState.waypoints,
             );
           }}
           onRetry={() => {
-            void calculateRoute(routeState.destination);
+            void calculateRoute(
+              routeState.destination,
+              routePreferences,
+              routeState.previewOrigin,
+              routeState.waypoints,
+            );
           }}
         />
       )}
@@ -2074,11 +2155,19 @@ export function MapScreen() {
           bottomInset={insets.bottom}
           destination={routeState.destination}
           onCancel={handleCancelRoute}
+          onEditStops={() => {
+            setIsRouteStopsVisible(true);
+          }}
           onSelectRoute={handleSelectRoute}
           onStart={handleStartNavigation}
           onToggleAvoidHighways={handleToggleAvoidHighways}
           onUseCurrentLocation={() => {
-            void calculateRoute(routeState.destination);
+            void calculateRoute(
+              routeState.destination,
+              routePreferences,
+              undefined,
+              routeState.waypoints,
+            );
           }}
           onVehicleStyleChange={setVehicleStyle}
           previewOriginLabel={routeState.previewOrigin === undefined ? undefined : 'Calgary Tower'}
@@ -2086,6 +2175,19 @@ export function MapScreen() {
           selectedRoute={selectedRoute}
           routeSource={routeSource}
           vehicleStyle={vehicleStyle}
+          waypoints={routeState.waypoints}
+        />
+      )}
+
+      {routeState.type === 'preview' && (
+        <RouteStopsEditor
+          destinations={[...routeState.waypoints, routeState.destination]}
+          onApply={handleApplyRouteStops}
+          onClose={() => {
+            setIsRouteStopsVisible(false);
+          }}
+          origin={userCoordinate}
+          visible={isRouteStopsVisible}
         />
       )}
 

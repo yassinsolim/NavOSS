@@ -130,6 +130,29 @@ describe('Nominatim search provider', () => {
     expect(url.searchParams.get('viewbox')).toBe('-114.316,51.212,-113.859,50.842');
   });
 
+  it('uses Nominatim special phrases for typed category discovery', () => {
+    for (const [category, expectedQuery] of [
+      ['grocery', '[supermarket]'],
+      ['park', '[park]'],
+      ['restaurant', '[restaurant]'],
+    ] as const) {
+      const url = new URL(
+        buildNominatimSearchUrl(
+          {
+            category,
+            latitude: 51.045,
+            limit: 20,
+            longitude: -114.072,
+            q: 'user-facing label',
+          },
+          'http://nominatim:8080/',
+        ),
+      );
+      expect(url.searchParams.get('q')).toBe(expectedQuery);
+      expect(url.searchParams.get('viewbox')).toBe('-114.152,51.105,-113.992,50.985');
+    }
+  });
+
   it('normalizes self-hosted results as production search', async () => {
     const provider = createNominatimSearchProvider({
       datasetVersion: 'alberta-2026-07-20',
@@ -559,5 +582,58 @@ describe('Nominatim search provider', () => {
     expect(response.degraded).toBe(true);
     expect(response.results[0]?.id).toBe('nominatim:node:2359239747');
     expect(response.source.id).toBe('nominatim-self-hosted');
+  });
+
+  it('uses typed OSM results and bypasses untyped businesses for category search', async () => {
+    let calgarySearchCount = 0;
+    let receivedQuery: unknown;
+    const source = {
+      datasetVersion: 'alberta',
+      freshness: 'fresh' as const,
+      id: 'nominatim-self-hosted',
+      updatedAt: '2026-07-20T12:00:00Z',
+    };
+    const nominatimProvider = {
+      search: (query: unknown) => {
+        receivedQuery = query;
+        return Promise.resolve({
+          degraded: false,
+          results: [
+            {
+              category: 'poi' as const,
+              center: { latitude: 51.047, longitude: -114.07 },
+              confidence: 0.9,
+              details: { category: 'park' },
+              id: 'nominatim:way:park',
+              label: 'Memorial Park, Calgary',
+              name: 'Memorial Park',
+            },
+            {
+              category: 'poi' as const,
+              center: { latitude: 51.046, longitude: -114.071 },
+              confidence: 0.95,
+              details: { category: 'restaurant' },
+              id: 'nominatim:node:restaurant',
+              label: 'Park Restaurant, Calgary',
+              name: 'Park Restaurant',
+            },
+          ],
+          source,
+        });
+      },
+    };
+    const calgaryProvider = {
+      search: () => {
+        calgarySearchCount += 1;
+        return Promise.reject(new Error('Category search must not use untyped businesses.'));
+      },
+    };
+    const provider = createProductionSearchProvider([], nominatimProvider, calgaryProvider);
+
+    const response = await provider.search({ category: 'park', limit: 8, q: 'park' });
+
+    expect(receivedQuery).toMatchObject({ category: 'park', includeDetails: true });
+    expect(calgarySearchCount).toBe(0);
+    expect(response.results.map(({ id }) => id)).toEqual(['nominatim:way:park']);
   });
 });

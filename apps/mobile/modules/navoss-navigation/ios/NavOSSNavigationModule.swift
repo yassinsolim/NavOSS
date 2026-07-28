@@ -160,6 +160,9 @@ private struct CarPlayTripRecord: Record {
   @Field
   var traffic: CarPlayTrafficRecord?
 
+  @Field
+  var waypoints: [NavigationDestinationRecord] = []
+
   var trip: NavOSSCarPlayTrip {
     NavOSSCarPlayTrip(
       destination: destination.destination,
@@ -175,7 +178,8 @@ private struct CarPlayTripRecord: Record {
       preferences: preferences.preferences,
       source: source,
       steps: steps.map(\.step),
-      traffic: traffic?.traffic
+      traffic: traffic?.traffic,
+      waypoints: waypoints.isEmpty ? nil : waypoints.map(\.destination)
     )
   }
 }
@@ -547,6 +551,21 @@ public final class NavOSSNavigationModule: Module {
         "delaySeconds": traffic.delaySeconds,
         "typicalDurationSeconds": traffic.typicalDurationSeconds,
       ]
+    }
+    if let waypoints = trip.waypoints {
+      payload["waypoints"] = waypoints.map { waypoint in
+        var destination: [String: Any] = [
+          "id": waypoint.id,
+          "label": waypoint.label,
+          "latitude": waypoint.latitude,
+          "longitude": waypoint.longitude,
+          "name": waypoint.name,
+        ]
+        if let category = waypoint.category {
+          destination["category"] = category
+        }
+        return destination
+      }
     }
     return payload
   }
