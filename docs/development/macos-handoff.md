@@ -22,6 +22,13 @@ Clone the latest `origin/main`; it includes the release checkpoint and this hand
 3. Authenticate separately with GitHub, Expo/EAS, Apple Developer/Xcode, App Store Connect, and the production VM. Do not copy tokens or private keys through Git.
 4. Clone and bootstrap:
 
+Install oh-my-pi using its official Homebrew tap and verify the CLI:
+
+```sh
+brew install can1357/tap/omp
+omp --version
+```
+
 ```sh
 gh auth login
 gh repo clone yassinsolim/NavOSS
