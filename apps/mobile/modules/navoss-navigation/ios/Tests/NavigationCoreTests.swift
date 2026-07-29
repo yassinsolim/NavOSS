@@ -144,12 +144,20 @@ final class NavigationCoreTests: XCTestCase {
     let inactive = NavOSSCarPlayControlState(hasActiveTrip: false, searchVisible: false)
     XCTAssertFalse(inactive.drivingControlsVisible)
     XCTAssertFalse(inactive.endNavigationVisible)
+    XCTAssertFalse(inactive.reportVisible)
     XCTAssertFalse(inactive.returnToRootFromSearch)
+    XCTAssertTrue(inactive.searchVisible)
+    XCTAssertTrue(inactive.settingsVisible)
+    XCTAssertFalse(inactive.soundSettingsVisible)
 
     let activeMap = NavOSSCarPlayControlState(hasActiveTrip: true, searchVisible: false)
     XCTAssertTrue(activeMap.drivingControlsVisible)
     XCTAssertTrue(activeMap.endNavigationVisible)
+    XCTAssertTrue(activeMap.reportVisible)
     XCTAssertFalse(activeMap.returnToRootFromSearch)
+    XCTAssertFalse(activeMap.searchVisible)
+    XCTAssertFalse(activeMap.settingsVisible)
+    XCTAssertTrue(activeMap.soundSettingsVisible)
 
     let activeSearch = NavOSSCarPlayControlState(hasActiveTrip: true, searchVisible: true)
     XCTAssertTrue(activeSearch.endNavigationVisible)
@@ -159,11 +167,53 @@ final class NavigationCoreTests: XCTestCase {
   func testNavigationAnnouncementsCanRemainMutedAcrossUpdates() {
     var state = NavOSSCarPlayAudioState()
 
-    XCTAssertFalse(state.isMuted)
-    state.setMuted(true)
-    XCTAssertTrue(state.isMuted)
-    state.setMuted(false)
-    XCTAssertFalse(state.isMuted)
+    XCTAssertTrue(state.allowsAlerts)
+    XCTAssertTrue(state.allowsManeuverGuidance)
+    state.setMode(.alertsOnly)
+    XCTAssertTrue(state.allowsAlerts)
+    XCTAssertFalse(state.allowsManeuverGuidance)
+    state.setMode(.muted)
+    XCTAssertFalse(state.allowsAlerts)
+    XCTAssertFalse(state.allowsManeuverGuidance)
+  }
+
+  func testCarPlayPreferencesPersistAppearanceAndAudioMode() throws {
+    let suiteName = "NavOSSNavigationCoreTests.preferences.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let store = NavOSSCarPlayPreferencesStore(defaults: defaults)
+
+    XCTAssertEqual(store.load(), NavOSSCarPlayPreferences())
+    store.setAppearance(.light)
+    store.setAudioMode(.alertsOnly)
+
+    XCTAssertEqual(
+      store.load(),
+      NavOSSCarPlayPreferences(appearance: .light, audioMode: .alertsOnly)
+    )
+  }
+
+  func testCarPlayReportsStayPrivateBoundedAndExpire() throws {
+    let suiteName = "NavOSSNavigationCoreTests.reports.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let store = NavOSSCarPlayReportStore(
+      defaults: defaults,
+      expirationInterval: 120,
+      maximumDrafts: 2
+    )
+    let now = Date(timeIntervalSince1970: 1_000)
+    let coordinate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.07)
+
+    XCTAssertNotNil(store.record(.collision, coordinate: coordinate, now: now))
+    XCTAssertNotNil(store.record(.pothole, coordinate: coordinate, now: now.addingTimeInterval(1)))
+    XCTAssertNotNil(
+      store.record(.slowTraffic, coordinate: coordinate, now: now.addingTimeInterval(2))
+    )
+    XCTAssertEqual(store.load(now: now.addingTimeInterval(3)).map(\.type), [
+      .slowTraffic, .pothole,
+    ])
+    XCTAssertTrue(store.load(now: now.addingTimeInterval(123)).isEmpty)
   }
 
   func testCarPlayRemainingRouteGeometryDeletesTravelledTrail() throws {

@@ -308,24 +308,40 @@ public struct NavOSSCarPlayState: Equatable, Sendable {
 public struct NavOSSCarPlayControlState: Equatable, Sendable {
   public let drivingControlsVisible: Bool
   public let endNavigationVisible: Bool
+  public let reportVisible: Bool
   public let returnToRootFromSearch: Bool
+  public let searchVisible: Bool
+  public let settingsVisible: Bool
+  public let soundSettingsVisible: Bool
 
   public init(hasActiveTrip: Bool, searchVisible: Bool) {
     drivingControlsVisible = hasActiveTrip
     endNavigationVisible = hasActiveTrip
+    reportVisible = hasActiveTrip
     returnToRootFromSearch = hasActiveTrip && searchVisible
+    self.searchVisible = !hasActiveTrip
+    settingsVisible = !hasActiveTrip
+    soundSettingsVisible = hasActiveTrip
   }
 }
 
 public struct NavOSSCarPlayAudioState: Equatable, Sendable {
-  public private(set) var isMuted: Bool
+  public private(set) var mode: NavOSSCarPlayAudioMode
 
-  public init(isMuted: Bool = false) {
-    self.isMuted = isMuted
+  public init(mode: NavOSSCarPlayAudioMode = .allGuidance) {
+    self.mode = mode
   }
 
-  public mutating func setMuted(_ muted: Bool) {
-    isMuted = muted
+  public var allowsAlerts: Bool {
+    mode != .muted
+  }
+
+  public var allowsManeuverGuidance: Bool {
+    mode == .allGuidance
+  }
+
+  public mutating func setMode(_ mode: NavOSSCarPlayAudioMode) {
+    self.mode = mode
   }
 }
 

@@ -18,6 +18,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private let routeLayerIdentifier = "navoss-carplay-route"
   private let routeSourceIdentifier = "navoss-carplay-route-source"
   private var activeGuidance = false
+  private var appearance = NavOSSCarPlayAppearance.automatic
   private var latestDestination: NavOSSCarPlayCoordinate?
   private var latestPosition: NavOSSCarPlayPosition?
   private var navigationViewingDistance = 850.0
@@ -32,7 +33,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   var requestsUserLocation = true
 
   override func loadView() {
-    styleSlug = traitCollection.userInterfaceStyle == .dark ? "dark" : "liberty"
+    styleSlug = resolvedStyleSlug()
     let styleURL = URL(string: "https://tiles.openfreemap.org/styles/\(styleSlug)")
     let mapView = MLNMapView(frame: .zero, styleURL: styleURL)
     mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -53,12 +54,45 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) else {
       return
     }
-    let nextStyleSlug = traitCollection.userInterfaceStyle == .dark ? "dark" : "liberty"
+    guard appearance == .automatic else {
+      return
+    }
+    let nextStyleSlug = resolvedStyleSlug()
     guard nextStyleSlug != styleSlug else {
       return
     }
     styleSlug = nextStyleSlug
     mapView.styleURL = URL(string: "https://tiles.openfreemap.org/styles/\(nextStyleSlug)")
+  }
+
+  func applyAppearance(_ appearance: NavOSSCarPlayAppearance) {
+    self.appearance = appearance
+    overrideUserInterfaceStyle =
+      switch appearance {
+      case .automatic: .unspecified
+      case .dark: .dark
+      case .light: .light
+      }
+    guard isViewLoaded else {
+      return
+    }
+    let nextStyleSlug = resolvedStyleSlug()
+    guard nextStyleSlug != styleSlug else {
+      return
+    }
+    styleSlug = nextStyleSlug
+    mapView.styleURL = URL(string: "https://tiles.openfreemap.org/styles/\(nextStyleSlug)")
+  }
+
+  private func resolvedStyleSlug() -> String {
+    switch appearance {
+    case .automatic:
+      traitCollection.userInterfaceStyle == .dark ? "dark" : "liberty"
+    case .dark:
+      "dark"
+    case .light:
+      "liberty"
+    }
   }
 
   func recenter() {
@@ -291,7 +325,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       let casing = MLNLineStyleLayer(identifier: routeCasingLayerIdentifier, source: source)
       casing.lineCap = NSExpression(forConstantValue: "round")
       casing.lineJoin = NSExpression(forConstantValue: "round")
-      casing.lineColor = NSExpression(forConstantValue: UIColor.white)
+      casing.lineColor = NSExpression(
+        forConstantValue: styleSlug == "dark"
+          ? UIColor(red: 0.04, green: 0.08, blue: 0.08, alpha: 1)
+          : UIColor.white
+      )
       casing.lineOpacity = NSExpression(forConstantValue: 0.96)
       casing.lineWidth = NSExpression(forConstantValue: 11)
       style.addLayer(casing)
@@ -301,7 +339,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       route.lineCap = NSExpression(forConstantValue: "round")
       route.lineJoin = NSExpression(forConstantValue: "round")
       route.lineColor = NSExpression(
-        forConstantValue: UIColor(red: 0.11, green: 0.49, blue: 0.31, alpha: 1))
+        forConstantValue: styleSlug == "dark"
+          ? UIColor(red: 0.20, green: 0.78, blue: 0.55, alpha: 1)
+          : UIColor(red: 0.11, green: 0.49, blue: 0.31, alpha: 1)
+      )
       route.lineWidth = NSExpression(forConstantValue: 7)
       style.addLayer(route)
     }

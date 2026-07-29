@@ -119,6 +119,18 @@ distance near maneuvers, guidance mute, automatic light/dark styles, and reduced
 during guidance. Persistent zoom controls remain available only while idle or previewing; active
 guidance reserves its limited map-button surface for End, overview/follow, and sound.
 
+Search and Settings are direct map controls while idle or parked, so neither depends on a navigation
+bar that CarPlay may hide. Settings persists Automatic, Light, or Dark map appearance and one of
+three audio modes: All guidance speaks maneuvers and camera alerts; Alerts only suppresses maneuver
+speech but keeps camera alerts; Muted suppresses both. Active guidance exposes End,
+overview/follow, sound settings, and Report.
+
+CarPlay reports use the same eight safety-oriented labels as the phone. They are bounded native
+drafts with precise coordinate, creation time, and two-hour expiry. They remain private on the
+device and are not shown to other drivers; no police/checkpoint option or free text exists. This is
+an explicit testing state until the trust, moderation, rate-limit, confirmation, and expiry backend
+is implemented.
+
 The remaining gaps are primarily data and platform capabilities:
 
 - live traffic, incident-aware ETA, closures, and traffic-coloured routes require a licensed feed;

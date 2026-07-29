@@ -24,6 +24,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private var muteGuidanceMapButton: CPMapButton?
   private var navigationSession: CPNavigationSession?
   private var overviewMapButton: CPMapButton?
+  private let preferencesStore = NavOSSCarPlayPreferencesStore.shared
+  private var reportMapButton: CPMapButton?
+  private let reportStore = NavOSSCarPlayReportStore.shared
   private var routeRequestGeneration: UInt64 = 0
   private var routeTask: Task<Void, Never>?
   private var searchRequestGeneration: UInt64 = 0
@@ -31,6 +34,8 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private var destinationObserver: NSObjectProtocol?
   private var placesTemplate: CPListTemplate?
   private var stateObserver: NSObjectProtocol?
+  private var settingsAudioOnly = false
+  private var settingsTemplate: CPListTemplate?
   private var routeChoicesByIdentifier: [String: NavOSSCarPlayTrip] = [:]
   private var searchDestinationsByIdentifier: [String: NavOSSCarPlayDestination] = [:]
 
@@ -43,6 +48,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     carWindow = window
 
     let mapViewController = NavOSSCarPlayMapViewController()
+    let preferences = preferencesStore.load()
+    mapViewController.applyAppearance(preferences.appearance)
+    NavOSSNavigationService.shared.setAudioMode(preferences.audioMode)
     self.mapViewController = mapViewController
     window.rootViewController = mapViewController
     mapViewController.recenter()
@@ -104,9 +112,11 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     idleMapButtons = []
     muteGuidanceMapButton = nil
     overviewMapButton = nil
+    reportMapButton = nil
     routeChoicesByIdentifier = [:]
     searchDestinationsByIdentifier = [:]
     placesTemplate = nil
+    settingsTemplate = nil
     NavOSSCarPlayTripStore.shared.setConnected(false)
     NavOSSNavigationService.shared.setCarPlayConnected(false)
     self.interfaceController = nil
@@ -119,7 +129,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     let template = CPMapTemplate()
     template.mapDelegate = self
     template.guidanceBackgroundColor = UIColor(red: 0.08, green: 0.38, blue: 0.24, alpha: 1)
-    template.automaticallyHidesNavigationBar = true
+    template.automaticallyHidesNavigationBar = false
     template.hidesButtonsWithNavigationBar = false
 
     let placesButton = CPBarButton(title: "Places") { [weak self] _ in
@@ -131,14 +141,14 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       self?.mapViewController?.recenter()
     }
     recenterButton.image = UIImage(systemName: "location.fill")
-    let zoomInButton = CPMapButton { [weak self] _ in
-      self?.mapViewController?.zoom(by: 1)
+    let searchButton = CPMapButton { [weak self] _ in
+      self?.showSearch()
     }
-    zoomInButton.image = UIImage(systemName: "plus.magnifyingglass")
-    let zoomOutButton = CPMapButton { [weak self] _ in
-      self?.mapViewController?.zoom(by: -1)
+    searchButton.image = UIImage(systemName: "magnifyingglass")
+    let settingsButton = CPMapButton { [weak self] _ in
+      self?.showSettings(audioOnly: false)
     }
-    zoomOutButton.image = UIImage(systemName: "minus.magnifyingglass")
+    settingsButton.image = UIImage(systemName: "gearshape.fill")
     let endNavigationButton = CPMapButton { [weak self] _ in
       self?.endNavigation()
     }
@@ -151,25 +161,19 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       button.image = UIImage(systemName: overviewVisible ? "location.fill" : "map")
     }
     overviewButton.image = UIImage(systemName: "map")
-    let muteGuidanceButton = CPMapButton { [weak self] button in
-      guard let self else {
-        return
-      }
-      let muted = !NavOSSNavigationService.shared.announcementsAreMuted()
-      NavOSSNavigationService.shared.setAnnouncementsMuted(muted)
-      button.image = UIImage(
-        systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill"
-      )
+    let muteGuidanceButton = CPMapButton { [weak self] _ in
+      self?.showSettings(audioOnly: true)
     }
-    muteGuidanceButton.image = UIImage(
-      systemName: NavOSSNavigationService.shared.announcementsAreMuted()
-        ? "speaker.slash.fill"
-        : "speaker.wave.2.fill"
-    )
+    muteGuidanceButton.image = audioModeImage(preferencesStore.load().audioMode)
+    let reportButton = CPMapButton { [weak self] _ in
+      self?.showReports()
+    }
+    reportButton.image = UIImage(systemName: "exclamationmark.bubble.fill")
     endNavigationMapButton = endNavigationButton
     overviewMapButton = overviewButton
     muteGuidanceMapButton = muteGuidanceButton
-    idleMapButtons = [recenterButton, zoomInButton, zoomOutButton]
+    reportMapButton = reportButton
+    idleMapButtons = [searchButton, recenterButton, settingsButton]
     template.mapButtons = idleMapButtons
     return template
   }
@@ -185,7 +189,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       activeSystemTrip = nil
       activeTripId = nil
       isPreviewingRoutes = false
-      mapTemplate?.automaticallyHidesNavigationBar = true
+      mapTemplate?.automaticallyHidesNavigationBar = false
       mapTemplate?.trailingNavigationBarButtons = []
       mapViewController?.clearRoute()
       return
@@ -193,6 +197,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
     updateActiveTripControls(visible: true)
     let activeGuidance = state.guidance?.phase == .navigating || state.guidance?.phase == .arrived
+    mapTemplate?.automaticallyHidesNavigationBar = activeGuidance
     configureRouteAttribution(source: trip.source)
     mapViewController?.display(
       route: trip.geometry,
@@ -273,7 +278,6 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   private func configureRouteAttribution(source: String?) {
     let mapboxTraffic = source == "mapbox-traffic"
-    mapTemplate?.automaticallyHidesNavigationBar = !mapboxTraffic
     mapTemplate?.trailingNavigationBarButtons =
       mapboxTraffic
       ? [CPBarButton(title: "Traffic: Mapbox") { _ in }]
@@ -411,6 +415,160 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       : String(format: "%.1f km", meters / 1_000)
   }
 
+  private func audioModeImage(_ mode: NavOSSCarPlayAudioMode) -> UIImage? {
+    switch mode {
+    case .alertsOnly:
+      UIImage(systemName: "bell.fill")
+    case .allGuidance:
+      UIImage(systemName: "speaker.wave.2.fill")
+    case .muted:
+      UIImage(systemName: "speaker.slash.fill")
+    }
+  }
+
+  private func audioModeDetail(_ mode: NavOSSCarPlayAudioMode) -> String {
+    switch mode {
+    case .alertsOnly:
+      return "Camera alerts without turn-by-turn speech"
+    case .allGuidance:
+      return "Maneuvers and camera alerts"
+    case .muted:
+      return "No spoken guidance or camera alerts"
+    }
+  }
+
+  private func selectedTitle(_ title: String, selected: Bool) -> String {
+    selected ? "Selected · \(title)" : title
+  }
+
+  private func showSearch() {
+    guard let interfaceController else {
+      return
+    }
+    let state = NavOSSCarPlayTripStore.shared.snapshot()
+    guard state.guidance?.phase != .navigating else {
+      showNavigationAlert(
+        title: "Navigation in progress",
+        subtitle: "End the current trip before searching for another destination."
+      )
+      return
+    }
+    NavOSSNavigationService.shared.prepareForCarPlayRoutePlanning()
+    let searchTemplate = CPSearchTemplate()
+    searchTemplate.delegate = self
+    interfaceController.pushTemplate(searchTemplate, animated: true, completion: nil)
+  }
+
+  private func showSettings(audioOnly: Bool) {
+    guard let interfaceController else {
+      return
+    }
+    settingsAudioOnly = audioOnly
+    let template = CPListTemplate(
+      title: audioOnly ? "Guidance sound" : "Settings",
+      sections: settingsSections(audioOnly: audioOnly)
+    )
+    settingsTemplate = template
+    interfaceController.pushTemplate(template, animated: true, completion: nil)
+  }
+
+  private func settingsSections(audioOnly: Bool) -> [CPListSection] {
+    let preferences = preferencesStore.load()
+    let audioItems = NavOSSCarPlayAudioMode.allCases.map { mode in
+      let item = CPListItem(
+        text: selectedTitle(mode.label, selected: preferences.audioMode == mode),
+        detailText: audioModeDetail(mode)
+      )
+      item.handler = { [weak self] _, completion in
+        completion()
+        guard let self else {
+          return
+        }
+        self.preferencesStore.setAudioMode(mode)
+        NavOSSNavigationService.shared.setAudioMode(mode)
+        self.muteGuidanceMapButton?.image = self.audioModeImage(mode)
+        self.settingsTemplate?.updateSections(
+          self.settingsSections(audioOnly: self.settingsAudioOnly)
+        )
+      }
+      return item
+    }
+    var sections = [
+      CPListSection(items: audioItems, header: "Sound", sectionIndexTitle: nil)
+    ]
+    if !audioOnly {
+      let appearanceItems = NavOSSCarPlayAppearance.allCases.map { appearance in
+        let item = CPListItem(
+          text: selectedTitle(
+            appearance.label,
+            selected: preferences.appearance == appearance
+          ),
+          detailText: nil
+        )
+        item.handler = { [weak self] _, completion in
+          completion()
+          guard let self else {
+            return
+          }
+          self.preferencesStore.setAppearance(appearance)
+          self.mapViewController?.applyAppearance(appearance)
+          self.settingsTemplate?.updateSections(self.settingsSections(audioOnly: false))
+        }
+        return item
+      }
+      sections.insert(
+        CPListSection(items: appearanceItems, header: "Map appearance", sectionIndexTitle: nil),
+        at: 0
+      )
+    }
+    return sections
+  }
+
+  private func showReports() {
+    guard let interfaceController else {
+      return
+    }
+    let items = NavOSSCarPlayReportType.allCases.map { type in
+      let item = CPListItem(text: type.label, detailText: nil)
+      item.handler = { [weak self] _, completion in
+        completion()
+        self?.saveReport(type)
+      }
+      return item
+    }
+    let template = CPListTemplate(
+      title: "Report road condition",
+      sections: [
+        CPListSection(
+          items: items,
+          header: "Private testing · expires in 2 hours",
+          sectionIndexTitle: nil
+        )
+      ]
+    )
+    interfaceController.pushTemplate(template, animated: true, completion: nil)
+  }
+
+  private func saveReport(_ type: NavOSSCarPlayReportType) {
+    guard let coordinate = NavOSSNavigationService.shared.currentCoordinate() else {
+      showNavigationAlert(
+        title: "Location unavailable",
+        subtitle: "Wait for a GPS position, then try again."
+      )
+      return
+    }
+    guard reportStore.record(type, coordinate: coordinate) != nil else {
+      showNavigationAlert(title: "Report not saved", subtitle: "Try again in a moment.")
+      return
+    }
+    interfaceController?.popToRootTemplate(animated: true) { [weak self] _, _ in
+      self?.showNavigationAlert(
+        title: "Saved for testing",
+        subtitle: "This private draft is not shown to other drivers."
+      )
+    }
+  }
+
   private func showPlaces() {
     guard let interfaceController else {
       return
@@ -478,9 +636,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     let searchItem = CPListItem(text: "Search Calgary", detailText: "Places and addresses")
     searchItem.handler = { [weak self] _, completion in
       completion()
-      let searchTemplate = CPSearchTemplate()
-      searchTemplate.delegate = self
-      self?.interfaceController?.pushTemplate(searchTemplate, animated: true, completion: nil)
+      self?.showSearch()
     }
     sections.insert(CPListSection(items: [searchItem]), at: 0)
     return sections
@@ -504,16 +660,15 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       searchVisible: interfaceController?.topTemplate is CPSearchTemplate
     )
     if controlState.drivingControlsVisible, let endNavigationMapButton,
-      let overviewMapButton, let muteGuidanceMapButton
+      let overviewMapButton, let muteGuidanceMapButton, let reportMapButton
     {
       overviewMapButton.image = UIImage(systemName: "map")
-      muteGuidanceMapButton.image = UIImage(
-        systemName: NavOSSNavigationService.shared.announcementsAreMuted()
-          ? "speaker.slash.fill"
-          : "speaker.wave.2.fill"
+      muteGuidanceMapButton.image = audioModeImage(
+        NavOSSNavigationService.shared.audioMode()
       )
       mapTemplate?.mapButtons = [
         endNavigationMapButton, overviewMapButton, muteGuidanceMapButton,
+        reportMapButton,
       ]
       if controlState.returnToRootFromSearch {
         interfaceController?.popToRootTemplate(animated: true, completion: nil)

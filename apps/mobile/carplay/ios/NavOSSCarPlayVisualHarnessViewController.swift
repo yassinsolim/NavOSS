@@ -21,9 +21,10 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = .black
-    overrideUserInterfaceStyle = ProcessInfo.processInfo.environment[
+    let darkAppearance = ProcessInfo.processInfo.environment[
       "NAVOSS_CARPLAY_VISUAL_APPEARANCE"
-    ] == "dark" ? .dark : .light
+    ] == "dark"
+    mapViewController.applyAppearance(darkAppearance ? .dark : .light)
 
     mapViewController.requestsUserLocation = false
     addChild(mapViewController)

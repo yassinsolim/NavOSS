@@ -68,26 +68,26 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   public func announceSafetyCamera() {
     lock.lock()
     let generation = navigationGeneration
-    let muted = announcementState.isMuted
+    let allowsAlerts = announcementState.allowsAlerts
     lock.unlock()
-    guard !muted else {
+    guard allowsAlerts else {
       return
     }
     speak("Red light and speed camera ahead.", expectedGeneration: generation)
   }
 
-  public func announcementsAreMuted() -> Bool {
+  public func audioMode() -> NavOSSCarPlayAudioMode {
     lock.lock()
     defer { lock.unlock() }
-    return announcementState.isMuted
+    return announcementState.mode
   }
 
-  public func setAnnouncementsMuted(_ muted: Bool) {
+  public func setAudioMode(_ mode: NavOSSCarPlayAudioMode) {
     lock.lock()
-    announcementState.setMuted(muted)
+    announcementState.setMode(mode)
     let generation = navigationGeneration
     lock.unlock()
-    if muted {
+    if mode != .allGuidance {
       cancelNavigationSpeech(expectedGeneration: generation)
     }
   }
@@ -364,7 +364,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       return
     }
     let update = versionedUpdate.update
-    let speechPrompt = announcementState.isMuted
+    let speechPrompt = !announcementState.allowsManeuverGuidance
       ? nil
       : update.trip.flatMap { trip in
         update.guidance.flatMap { guidance in
