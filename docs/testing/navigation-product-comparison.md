@@ -9,6 +9,9 @@ identify original, lawful product improvements. It is not a claim of feature
 parity and does not authorize copying interfaces, assets, map data, reviews, or
 private APIs.
 
+The follow-up [navigation feature demand synthesis](navigation-feature-demand.md) adds Apple Maps,
+public user-request evidence, a ranked top ten, and a phased NavOSS implementation decision.
+
 ## Test boundary
 
 A direct App Store comparison cannot be completed in iOS Simulator. The
