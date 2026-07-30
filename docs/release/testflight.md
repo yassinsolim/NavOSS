@@ -297,6 +297,15 @@ events near ten cities from Windsor to Thunder Bay, 301 in-bounds Toronto camera
 that a Toronto category request is rejected rather than returning Calgary results. Repository gates
 passed with 23 contract, 88 API, 104 mobile, and three site tests.
 
+Regional-coverage candidate `0.1.0 (32)` was built locally from release-record commit `2e0bdd5`
+with the `production-carplay` profile. The signed IPA has SHA-256
+`fc6ce1a236ce3c19d2bc622ff34eb6fd8fb73fb66fc2998e95a41791ca23658a`; its Store
+signature, arm64 binary, production API, location-only background mode, CarPlay app/profile
+entitlement and scene, Google-disabled packaging, and simulator-hook absence passed audit. EAS
+submission `8d00249f-c7da-478e-b74b-1e3b5b2c93a0` uploaded it successfully to App Store Connect on
+July 30, 2026. Apple processing, internal `testers` attachment, focused test notes, and physical
+validation remain pending.
+
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a keyless CarPlay tester build so the approved scene and entitlement are present. After the restricted EAS Google key and matching App Privacy answers are ready, use `production-carplay-google` for the rating-enabled candidate:
 
 ```sh
