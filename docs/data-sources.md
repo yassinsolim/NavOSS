@@ -40,6 +40,13 @@ The production index stores public source records only. It does not store search
 origins, selected results, routes, or user identities. Search results are ranked by exact text,
 prefix and word-prefix matches, typo similarity, and then optional proximity.
 
+Restaurants, Groceries, and Parks use a checked-in set of Nominatim special phrases that map the
+visible category to explicit OpenStreetMap tags. This prevents category discovery from requiring
+words such as `restaurant` or `park` to appear in the place name. Location-aware category searches
+query three concentric Calgary-bounded viewboxes, merge and deduplicate the candidate pools, compute
+exact distances, and return the nearest valid OSM types first. The phrase import is additive and is
+reapplied after any replacement of the persistent Nominatim database.
+
 Named places rendered in the map's OpenMapTiles layers are tappable. NavOSS uses the visible name
 and map coordinate to find the nearest same-name result through the self-hosted search service.
 Nominatim `extratags` may provide a public address, place category, opening hours, business phone,

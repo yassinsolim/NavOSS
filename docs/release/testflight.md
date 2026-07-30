@@ -209,6 +209,22 @@ non-exempt encryption **No**, arm64, `get-task-allow: false`, beta reports activ
 CarPlay maps entitlement. Physical phone/CarPlay validation of the new road-event overlays remains
 pending.
 
+Restaurant proximity was repaired server-side after build 29 processing; no replacement binary is
+required. The self-hosted Nominatim database had no category special phrases, so `[restaurant]` was
+treated as literal name text and omitted nearby places whose names did not contain “Restaurant.”
+Commit `e82addd9213473fc2232b9623d39e90046c3c6ea` adds deterministic phrases for restaurant,
+fast-food, food-court, supermarket, and park tags, plus a repeatable service-account import. The API
+now merges three concentric category searches, deduplicates identical OSM IDs, and ranks the complete
+candidate pool by exact distance. Production is deployed at that commit with rollback
+`/home/navoss/NavOSS.pre-e82addd-20260730T2153Z`.
+
+Public Aspen validation improved the first result from 2.2 km away to 560 m and returned nearby
+Freshii, Kabuku, Original Joe's, Redwater Grill, and Mucho Burrito within 681 m. Downtown results
+started at 358 m. Both probes returned 20 strictly distance-sorted records with only validated
+restaurant, fast-food, and food-court types. The full stack smoke passed; the API was healthy with
+zero restarts and no recent errors. Full repository gates passed with 23 contract, 84 API, 100 mobile,
+and three site tests.
+
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a keyless CarPlay tester build so the approved scene and entitlement are present. After the restricted EAS Google key and matching App Privacy answers are ready, use `production-carplay-google` for the rating-enabled candidate:
 
 ```sh
