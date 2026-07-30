@@ -168,6 +168,41 @@ Build 28 renames the root Places action to Search, adds nearby phone-aligned cat
 
 All 39 native tests, 18 contract tests, 69 API tests, 98 mobile tests, full repository check/lint/test/build/format gates, generated-source/resource parity, full iOS compilation, and the clean six-scenario CarPlay visual suite passed. The signed IPA has SHA-256 `6050eae1b632f71fa2519266356d300156a4c18776d352e6f0f222112d71742a`; strict signature, arm64, production API, location-only background mode, CarPlay app/profile entitlement and scene, arrow/car assets, Google-disabled packaging, and simulator-hook absence passed audit. EAS submission `1342c249-fc5c-4b63-aa4f-31aad64fa5a3` uploaded it successfully to App Store Connect on July 30, 2026. Apple processing, internal `testers` attachment, and physical validation of speed, marker smoothness, Search categories, settings, and head-unit layout remain pending.
 
+Continuous road-context candidate `0.1.0 (29)` was built locally from commit
+`d203112b60676f69add7f7eb313965b62bb460c2` with the Google-disabled
+`production-carplay` profile. The backend now polls validated City of Calgary construction and
+incident feeds every five minutes even without client requests. It also exposes official Ontario
+511 construction, closure, and incident points through `GET /v2/events?region=ontario`; the phone
+switches event sources by region, keeps source-specific confidence language visible, and does not
+use these overlays for routing, ETA, rerouting, or speech. Police patrol, checkpoint, and speed-trap
+tracking remain excluded.
+
+The first production activation of feature commit `c64d1a0` failed because a Fastify `onClose` hook
+was registered after the thenable app had finalized startup. The preserved release was immediately
+restored and rebuilt at `7efac72`; production returned healthy with zero restarts. Corrective commit
+`d203112` moves lifecycle registration inside app construction and adds a listen-and-close regression
+test. A compiled-server smoke test then returned health 200 and a contract-valid Ontario response
+before redeployment. Disposable BuildKit cache had also filled the 37 GiB root filesystem; the failed
+release tree was preserved under `/srv/navoss/artifacts/deploy-failures`, and pruning only BuildKit
+cache recovered 24 GiB. No database, routing graph, search index, image, or validated rollback tree
+was removed.
+
+Production is deployed at `d203112b60676f69add7f7eb313965b62bb460c2` with rollback
+`/home/navoss/NavOSS.pre-d203112-20260730T2128Z`. The full stack smoke passed. Public contract probes
+returned 303 Calgary events and 613 official Ontario points, including 602 construction events, 10
+incidents, and one closure, with valid bounds and fresh source metadata. Both Calgary and Ontario
+`generatedAt` values advanced independently across the next five-minute boundary, proving the
+server-owned pollers were active. The API container remained healthy with zero restarts and no recent
+error log entries.
+
+All 23 contract tests, 83 API tests, 100 mobile tests, repository check/lint/test/build/format gates,
+compiled-server startup, and iOS export passed. The signed build 29 IPA has SHA-256
+`1bbcc2c8ad72d4462effed9e027a401aa818163510114e1e0a31ffcf7987b28a`; strict signature,
+arm64 Store profile, production API, location-only background mode, CarPlay app/profile entitlement
+and scene, Google-disabled packaging, and simulator-hook absence passed audit. EAS submission
+`a458bce8-cd70-4b1b-80ce-ee54edc05ee6` uploaded it successfully to App Store Connect on July 30, 2026. Apple processing, internal `testers` attachment, and physical phone/CarPlay validation of the
+new road-event overlays remain pending.
+
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a keyless CarPlay tester build so the approved scene and entitlement are present. After the restricted EAS Google key and matching App Privacy answers are ready, use `production-carplay-google` for the rating-enabled candidate:
 
 ```sh
