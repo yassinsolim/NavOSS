@@ -99,6 +99,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     logger: options.logger ?? false,
   });
 
+  app.addHook('onClose', () => {
+    eventProvider.stop?.();
+    ontarioEventProvider.stop?.();
+  });
+
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 

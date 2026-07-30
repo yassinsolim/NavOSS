@@ -19,11 +19,6 @@ const eventProvider = createCalgaryRoadEventProvider();
 const ontarioEventProvider = createOntarioRoadEventProvider();
 const app = await buildApp({ eventProvider, logger: true, ontarioEventProvider });
 
-app.addHook('onClose', () => {
-  eventProvider.stop?.();
-  ontarioEventProvider.stop?.();
-});
-
 try {
   await app.listen({ host: environment.HOST, port: environment.PORT });
   eventProvider.start?.();

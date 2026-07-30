@@ -13,7 +13,7 @@ import {
   type SafetyCameraResponse,
 } from '@navoss/contracts';
 import type { FastifyInstance } from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../src/app.js';
 import { CalgaryRoadEventProviderError } from '../src/calgary-road-event-provider.js';
@@ -40,6 +40,30 @@ async function createTestApp(
 
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
+});
+
+describe('provider lifecycle', () => {
+  it('registers poller cleanup before the Fastify instance starts listening', async () => {
+    const stopCalgary = vi.fn();
+    const stopOntario = vi.fn();
+    const app = await buildApp({
+      eventProvider: {
+        getRoadEvents: () => Promise.reject(new Error('not requested')),
+        stop: stopCalgary,
+      },
+      ontarioEventProvider: {
+        getRoadEvents: () => Promise.reject(new Error('not requested')),
+        stop: stopOntario,
+      },
+      searchProvider: createFixtureSearchProvider(CALGARY_SEARCH_FIXTURES),
+    });
+
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    await app.close();
+
+    expect(stopCalgary).toHaveBeenCalledOnce();
+    expect(stopOntario).toHaveBeenCalledOnce();
+  });
 });
 
 describe('system routes', () => {
