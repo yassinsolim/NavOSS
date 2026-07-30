@@ -1,4 +1,4 @@
-import type { SearchQuery, SearchResponse, SearchResult } from '@navoss/contracts';
+import type { SearchCategory, SearchQuery, SearchResponse, SearchResult } from '@navoss/contracts';
 import { z } from 'zod/v4';
 
 import { createPostgresCalgarySearchProvider } from './calgary-search-provider.js';
@@ -16,16 +16,84 @@ const CALGARY_WEST = -114.316;
 const NOMINATIM_TIMEOUT_MS = 4_000;
 const EARTH_RADIUS_METERS = 6_371_000;
 
-const SEARCH_CATEGORY_TYPES = {
-  grocery: new Set(['grocery', 'supermarket']),
+export const SEARCH_CATEGORY_TYPES = {
+  apparel: new Set(['clothes']),
+  art: new Set(['gallery']),
+  atm: new Set(['atm']),
+  attraction: new Set(['attraction', 'theme_park']),
+  bar: new Set(['bar', 'biergarten', 'pub']),
+  'beauty-salon': new Set(['beauty', 'hairdresser']),
+  'beauty-supply': new Set(['cosmetics', 'perfumery']),
+  brunch: new Set(['cafe', 'restaurant']),
+  cafe: new Set(['cafe']),
+  'car-dealer': new Set(['car']),
+  'car-repair': new Set(['car_repair', 'tyres']),
+  'car-wash': new Set(['car_wash']),
+  'charging-station': new Set(['charging_station']),
+  cinema: new Set(['cinema']),
+  convenience: new Set(['convenience']),
+  delivery: new Set(['fast_food', 'restaurant']),
+  dessert: new Set(['confectionery', 'ice_cream', 'pastry']),
+  'dry-cleaning': new Set(['dry_cleaning']),
+  electronics: new Set(['computer', 'electronics', 'mobile_phone']),
+  fuel: new Set(['fuel']),
+  grocery: new Set(['supermarket']),
+  gym: new Set(['fitness_centre', 'sports_centre']),
+  healthcare: new Set(['clinic', 'hospital']),
+  'home-garden': new Set(['doityourself', 'garden_centre', 'hardware']),
+  hotel: new Set(['hotel', 'motel']),
+  library: new Set(['library']),
+  'live-music': new Set(['music_venue']),
+  museum: new Set(['museum']),
+  nightlife: new Set(['nightclub']),
   park: new Set(['garden', 'nature_reserve', 'park', 'playground', 'recreation_ground']),
+  parking: new Set(['parking']),
+  pharmacy: new Set(['pharmacy']),
+  'post-office': new Set(['post_office']),
   restaurant: new Set(['fast_food', 'food_court', 'restaurant']),
-} as const;
-const NOMINATIM_CATEGORY_QUERIES = {
-  grocery: '[supermarket]',
+  'shopping-centre': new Set(['mall', 'retail']),
+  'sporting-goods': new Set(['sports']),
+  takeout: new Set(['fast_food']),
+} as const satisfies Record<SearchCategory, ReadonlySet<string>>;
+export const NOMINATIM_CATEGORY_QUERIES = {
+  apparel: '[apparel]',
+  art: '[art]',
+  atm: '[atm]',
+  attraction: '[attraction]',
+  bar: '[bar]',
+  'beauty-salon': '[beauty-salon]',
+  'beauty-supply': '[beauty-supply]',
+  brunch: '[brunch]',
+  cafe: '[cafe]',
+  'car-dealer': '[car-dealer]',
+  'car-repair': '[car-repair]',
+  'car-wash': '[car-wash]',
+  'charging-station': '[charging-station]',
+  cinema: '[cinema]',
+  convenience: '[convenience]',
+  delivery: '[delivery]',
+  dessert: '[dessert]',
+  'dry-cleaning': '[dry-cleaning]',
+  electronics: '[electronics]',
+  fuel: '[fuel]',
+  grocery: '[grocery]',
+  gym: '[gym]',
+  healthcare: '[healthcare]',
+  'home-garden': '[home-garden]',
+  hotel: '[hotel]',
+  library: '[library]',
+  'live-music': '[live-music]',
+  museum: '[museum]',
+  nightlife: '[nightlife]',
   park: '[park]',
+  parking: '[parking]',
+  pharmacy: '[pharmacy]',
+  'post-office': '[post-office]',
   restaurant: '[restaurant]',
-} as const;
+  'shopping-centre': '[shopping-centre]',
+  'sporting-goods': '[sporting-goods]',
+  takeout: '[takeout]',
+} as const satisfies Record<SearchCategory, string>;
 const NOMINATIM_CATEGORY_VIEWBOX_RADII = [
   { latitude: 0.012, longitude: 0.015 },
   { latitude: 0.03, longitude: 0.04 },
@@ -200,59 +268,95 @@ function nominatimCategory(
   return 'landmark';
 }
 
+function hasTagValue(value: string | undefined, accepted: ReadonlySet<string>): boolean {
+  return (
+    value
+      ?.toLocaleLowerCase('en-CA')
+      .split(/[;,]/u)
+      .some((part) => accepted.has(part.trim())) ?? false
+  );
+}
+
+function matchesNominatimCategoryMetadata(
+  result: z.infer<typeof NominatimResultSchema>,
+  category: SearchCategory | undefined,
+): boolean {
+  if (category === 'brunch') {
+    const text = normalizeSearchText(`${result.name ?? ''} ${result.display_name}`);
+    return (
+      text.includes('brunch') ||
+      hasTagValue(result.extratags?.breakfast, new Set(['only', 'yes'])) ||
+      hasTagValue(result.extratags?.cuisine, new Set(['breakfast', 'brunch']))
+    );
+  }
+  if (category === 'delivery') {
+    const text = normalizeSearchText(`${result.name ?? ''} ${result.display_name}`);
+    return (
+      text.includes('delivery') || hasTagValue(result.extratags?.delivery, new Set(['only', 'yes']))
+    );
+  }
+  return true;
+}
+
 function normalizeNominatimResults(
   payload: z.infer<typeof NominatimResponseSchema>,
   query: SearchQuery,
 ): SearchResult[] {
   const normalizedQuery = normalizeSearchText(query.q);
-  return payload.slice(0, query.limit).map((result) => {
-    const name = result.name ?? result.display_name.split(',')[0]?.trim() ?? 'Unnamed place';
-    const normalizedName = normalizeSearchText(name);
-    const normalizedLabel = normalizeSearchText(result.display_name);
-    const words = normalizedQuery.split(' ').filter(Boolean);
-    let confidence = 0.55;
+  return payload
+    .filter((result) => matchesNominatimCategoryMetadata(result, query.category))
+    .slice(0, query.limit)
+    .map((result) => {
+      const name = result.name ?? result.display_name.split(',')[0]?.trim() ?? 'Unnamed place';
+      const normalizedName = normalizeSearchText(name);
+      const normalizedLabel = normalizeSearchText(result.display_name);
+      const words = normalizedQuery.split(' ').filter(Boolean);
+      let confidence = 0.55;
 
-    if (normalizedName === normalizedQuery || normalizedLabel === normalizedQuery) {
-      confidence = 0.98;
-    } else if (normalizedName.startsWith(normalizedQuery)) {
-      confidence = 0.94;
-    } else if (normalizedLabel.startsWith(normalizedQuery)) {
-      confidence = 0.92;
-    } else if (normalizedName.includes(normalizedQuery)) {
-      confidence = 0.86;
-    } else if (words.every((word) => normalizedLabel.includes(word))) {
-      confidence = 0.8;
-    }
+      if (normalizedName === normalizedQuery || normalizedLabel === normalizedQuery) {
+        confidence = 0.98;
+      } else if (normalizedName.startsWith(normalizedQuery)) {
+        confidence = 0.94;
+      } else if (normalizedLabel.startsWith(normalizedQuery)) {
+        confidence = 0.92;
+      } else if (normalizedName.includes(normalizedQuery)) {
+        confidence = 0.86;
+      } else if (words.every((word) => normalizedLabel.includes(word))) {
+        confidence = 0.8;
+      }
 
-    return {
-      category: nominatimCategory(result),
-      center: { latitude: result.lat, longitude: result.lon },
-      confidence,
-      ...(query.includeDetails
-        ? {
-            details: {
-              address: result.display_name,
-              ...(result.type === undefined ? {} : { category: result.type }),
-              ...(result.extratags?.opening_hours === undefined
-                ? {}
-                : { openingHours: result.extratags.opening_hours }),
-              ...((result.extratags?.phone ?? result.extratags?.['contact:phone']) === undefined
-                ? {}
-                : { phone: result.extratags?.phone ?? result.extratags?.['contact:phone'] }),
-              ...((result.extratags?.website ?? result.extratags?.['contact:website']) === undefined
-                ? {}
-                : { website: result.extratags?.website ?? result.extratags?.['contact:website'] }),
-              ...(result.extratags?.wheelchair === undefined
-                ? {}
-                : { wheelchair: result.extratags.wheelchair }),
-            },
-          }
-        : {}),
-      id: `nominatim:${result.osm_type}:${String(result.osm_id)}`,
-      label: result.display_name,
-      name,
-    };
-  });
+      return {
+        category: nominatimCategory(result),
+        center: { latitude: result.lat, longitude: result.lon },
+        confidence,
+        ...(query.includeDetails
+          ? {
+              details: {
+                address: result.display_name,
+                ...(result.type === undefined ? {} : { category: result.type }),
+                ...(result.extratags?.opening_hours === undefined
+                  ? {}
+                  : { openingHours: result.extratags.opening_hours }),
+                ...((result.extratags?.phone ?? result.extratags?.['contact:phone']) === undefined
+                  ? {}
+                  : { phone: result.extratags?.phone ?? result.extratags?.['contact:phone'] }),
+                ...((result.extratags?.website ?? result.extratags?.['contact:website']) ===
+                undefined
+                  ? {}
+                  : {
+                      website: result.extratags?.website ?? result.extratags?.['contact:website'],
+                    }),
+                ...(result.extratags?.wheelchair === undefined
+                  ? {}
+                  : { wheelchair: result.extratags.wheelchair }),
+              },
+            }
+          : {}),
+        id: `nominatim:${result.osm_type}:${String(result.osm_id)}`,
+        label: result.display_name,
+        name,
+      };
+    });
 }
 
 export function buildPhotonSearchUrl(query: SearchQuery, endpoint = DEFAULT_PHOTON_URL): string {

@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { SearchCategorySchema } from '@navoss/contracts';
 
 import {
   buildNominatimSearchUrl,
@@ -7,6 +10,8 @@ import {
   createNominatimSearchProvider,
   createPhotonSearchProvider,
   createProductionSearchProvider,
+  NOMINATIM_CATEGORY_QUERIES,
+  SEARCH_CATEGORY_TYPES,
   type SearchProvider,
 } from '../src/search-provider.js';
 
@@ -131,11 +136,7 @@ describe('Nominatim search provider', () => {
   });
 
   it('uses Nominatim special phrases for typed category discovery', () => {
-    for (const [category, expectedQuery] of [
-      ['grocery', '[supermarket]'],
-      ['park', '[park]'],
-      ['restaurant', '[restaurant]'],
-    ] as const) {
+    for (const category of SearchCategorySchema.options) {
       const url = new URL(
         buildNominatimSearchUrl(
           {
@@ -148,8 +149,31 @@ describe('Nominatim search provider', () => {
           'http://nominatim:8080/',
         ),
       );
-      expect(url.searchParams.get('q')).toBe(expectedQuery);
+      expect(url.searchParams.get('q')).toBe(NOMINATIM_CATEGORY_QUERIES[category]);
       expect(url.searchParams.get('viewbox')).toBe('-114.152,51.105,-113.992,50.985');
+    }
+  });
+
+  it('keeps the checked-in phrase source aligned with every category allowlist', () => {
+    const rows = readFileSync(
+      resolve(process.cwd(), '../../infra/compose/nominatim-special-phrases.csv'),
+      'utf8',
+    )
+      .trim()
+      .split('\n')
+      .slice(1)
+      .map((row) => row.split(','));
+    const mappedTypes = new Map<string, string[]>();
+    for (const [phrase, , type] of rows) {
+      if (phrase === undefined || type === undefined) continue;
+      mappedTypes.set(phrase, [...(mappedTypes.get(phrase) ?? []), type]);
+    }
+
+    expect([...mappedTypes.keys()].sort()).toEqual([...SearchCategorySchema.options].sort());
+    for (const category of SearchCategorySchema.options) {
+      expect([...new Set(mappedTypes.get(category))].sort()).toEqual(
+        [...SEARCH_CATEGORY_TYPES[category]].sort(),
+      );
     }
   });
 
@@ -202,6 +226,58 @@ describe('Nominatim search provider', () => {
     expect(response.results[0]?.distanceMeters).toBeLessThan(
       response.results[1]?.distanceMeters ?? 0,
     );
+  });
+
+  it('requires metadata evidence for brunch and delivery filters', async () => {
+    const result = (id: number, name: string, extratags: Record<string, string> | null = null) => ({
+      addresstype: 'amenity',
+      category: 'amenity',
+      display_name: `${name}, Calgary, Alberta, Canada`,
+      extratags,
+      importance: 0.1,
+      lat: '51.045',
+      lon: '-114.205',
+      name,
+      osm_id: id,
+      osm_type: 'node',
+      type: 'restaurant',
+    });
+    const provider = createNominatimSearchProvider({
+      endpoint: 'http://nominatim:8080/',
+      fetchImplementation: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify([
+              result(1, 'Generic Kitchen'),
+              result(2, 'Sunday Brunch'),
+              result(3, 'Breakfast House', { breakfast: 'yes' }),
+              result(4, 'Delivery Kitchen'),
+              result(5, 'Courier Cafe', { delivery: 'only' }),
+            ]),
+            { status: 200 },
+          ),
+        ),
+    });
+
+    const search = (category: 'brunch' | 'delivery') =>
+      provider.search({
+        category,
+        includeDetails: true,
+        latitude: 51.045,
+        limit: 20,
+        longitude: -114.205,
+        q: category,
+        sort: 'distance',
+      });
+
+    expect((await search('brunch')).results.map(({ name }) => name)).toEqual([
+      'Sunday Brunch',
+      'Breakfast House',
+    ]);
+    expect((await search('delivery')).results.map(({ name }) => name)).toEqual([
+      'Delivery Kitchen',
+      'Courier Cafe',
+    ]);
   });
 
   it('normalizes self-hosted results as production search', async () => {
@@ -597,6 +673,62 @@ describe('Nominatim search provider', () => {
       'calgary-business:near-restaurant',
       'nominatim:far-restaurant',
     ]);
+  });
+
+  it('rejects cross-category leakage for every Explore filter', async () => {
+    const source = {
+      datasetVersion: 'category-allowlist-test',
+      freshness: 'fresh' as const,
+      id: 'nominatim-self-hosted',
+      updatedAt: '2026-07-20T12:00:00Z',
+    };
+
+    for (const category of SearchCategorySchema.options) {
+      const allowedType = SEARCH_CATEGORY_TYPES[category].values().next().value;
+      expect(allowedType).toBeDefined();
+      const productionProvider: SearchProvider = {
+        search: () =>
+          Promise.resolve({
+            degraded: false,
+            results: [
+              {
+                category: 'poi',
+                center: { latitude: 51.045, longitude: -114.205 },
+                confidence: 0.8,
+                details: { category: allowedType ?? 'invalid' },
+                id: `nominatim:allowed:${category}`,
+                label: `Allowed ${category}, Calgary`,
+                name: `Allowed ${category}`,
+              },
+              {
+                category: 'poi',
+                center: { latitude: 51.046, longitude: -114.205 },
+                confidence: 1,
+                details: { category: 'barber' },
+                id: `nominatim:leak:${category}`,
+                label: `Leaking barber for ${category}, Calgary`,
+                name: `Leaking barber for ${category}`,
+              },
+            ],
+            source,
+          }),
+      };
+      const provider = createProductionSearchProvider([], productionProvider, undefined);
+
+      const response = await provider.search({
+        category,
+        latitude: 51.045,
+        limit: 8,
+        longitude: -114.205,
+        q: category,
+        sort: 'distance',
+      });
+
+      expect(
+        response.results.map(({ id }) => id),
+        category,
+      ).toEqual([`nominatim:allowed:${category}`]);
+    }
   });
 
   it('degrades to Nominatim when the Calgary index is unavailable', async () => {

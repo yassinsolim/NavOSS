@@ -2,9 +2,51 @@ import { z } from 'zod/v4';
 
 import { CoordinateSchema, IsoDateTimeSchema, LatitudeSchema, LongitudeSchema } from './common.js';
 
+export const SearchCategorySchema = z.enum([
+  'apparel',
+  'art',
+  'atm',
+  'attraction',
+  'bar',
+  'beauty-salon',
+  'beauty-supply',
+  'brunch',
+  'cafe',
+  'car-dealer',
+  'car-repair',
+  'car-wash',
+  'charging-station',
+  'cinema',
+  'convenience',
+  'delivery',
+  'dessert',
+  'dry-cleaning',
+  'electronics',
+  'fuel',
+  'grocery',
+  'gym',
+  'healthcare',
+  'home-garden',
+  'hotel',
+  'library',
+  'live-music',
+  'museum',
+  'nightlife',
+  'park',
+  'parking',
+  'pharmacy',
+  'post-office',
+  'restaurant',
+  'shopping-centre',
+  'sporting-goods',
+  'takeout',
+]);
+
+export type SearchCategory = z.infer<typeof SearchCategorySchema>;
+
 export const SearchQuerySchema = z
   .object({
-    category: z.enum(['grocery', 'park', 'restaurant']).optional(),
+    category: SearchCategorySchema.optional(),
     includeDetails: z.boolean().optional(),
     latitude: z.coerce.number().pipe(LatitudeSchema).optional(),
     limit: z.coerce.number().int().min(1).max(20).default(8),

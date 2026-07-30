@@ -83,6 +83,7 @@ export type {
 
 export {
   PlaceDetailsSchema,
+  SearchCategorySchema,
   SearchQuerySchema,
   SearchResponseSchema,
   SearchResultSchema,
@@ -91,6 +92,7 @@ export {
 } from './search.js';
 export type {
   PlaceDetails,
+  SearchCategory,
   SearchQuery,
   SearchResponse,
   SearchResult,

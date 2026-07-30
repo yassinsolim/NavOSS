@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SearchCategorySchema } from '@navoss/contracts';
 
 import {
   EXPLORE_CATEGORY_GROUPS,
@@ -40,9 +41,10 @@ describe('explore categories', () => {
     expect(exploreCategoryById('missing')).toBeUndefined();
   });
 
-  it('sends typed intent for categories that require strict result filtering', () => {
-    expect(exploreCategoryById('restaurants')?.searchCategory).toBe('restaurant');
-    expect(exploreCategoryById('groceries')?.searchCategory).toBe('grocery');
-    expect(exploreCategoryById('parks')?.searchCategory).toBe('park');
+  it('sends typed intent for every supported filter exactly once', () => {
+    const categories = EXPLORE_CATEGORY_GROUPS.flatMap((group) => group.categories);
+    expect(categories.map(({ searchCategory }) => searchCategory).sort()).toEqual(
+      [...SearchCategorySchema.options].sort(),
+    );
   });
 });
