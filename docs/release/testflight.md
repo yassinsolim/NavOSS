@@ -283,6 +283,20 @@ Google-disabled packaging, and simulator-hook absence passed audit. EAS submissi
 `9d3646df-f486-46d0-9aa3-e26634158d99` uploaded it successfully to App Store Connect on July 30, 2026. Apple processing, internal `testers` attachment, focused test notes, and physical validation
 remain pending.
 
+Regional-coverage guard `de99092b8a276a3a40351339b95a0c4ec7b24980` prevents typed nearby
+category searches outside Calgary from returning distant Alberta places. The API returns a stable
+coverage error, and the phone blocks Explore outside the covered bounds while retaining honest
+Ontario road events and Toronto camera display. Production is deployed at that exact commit with
+rollback `/home/navoss/NavOSS.pre-de99092-20260730T2330Z`.
+
+The checked-in live certification passed with zero failures across all 35 categories at 12 Calgary
+locations, including downtown, all four quadrants, suburban edges, and the airport industrial area.
+Sparse categories returned empty honestly; all returned results passed status, OSM-type, exact
+distance-order, contract, and barber-leak checks. The same run found 603 fresh official Ontario road
+events near ten cities from Windsor to Thunder Bay, 301 in-bounds Toronto cameras, and confirmed
+that a Toronto category request is rejected rather than returning Calgary results. Repository gates
+passed with 23 contract, 88 API, 104 mobile, and three site tests.
+
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a keyless CarPlay tester build so the approved scene and entitlement are present. After the restricted EAS Google key and matching App Privacy answers are ready, use `production-carplay-google` for the rating-enabled candidate:
 
 ```sh
