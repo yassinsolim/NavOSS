@@ -200,8 +200,14 @@ compiled-server startup, and iOS export passed. The signed build 29 IPA has SHA-
 `1bbcc2c8ad72d4462effed9e027a401aa818163510114e1e0a31ffcf7987b28a`; strict signature,
 arm64 Store profile, production API, location-only background mode, CarPlay app/profile entitlement
 and scene, Google-disabled packaging, and simulator-hook absence passed audit. EAS submission
-`a458bce8-cd70-4b1b-80ce-ee54edc05ee6` uploaded it successfully to App Store Connect on July 30, 2026. Apple processing, internal `testers` attachment, and physical phone/CarPlay validation of the
-new road-event overlays remain pending.
+`a458bce8-cd70-4b1b-80ce-ee54edc05ee6` uploaded it successfully to App Store Connect on July 30, 2026. Apple processed build UUID `8679668f-247d-4a59-919a-b4dbdfc47a46` to **Ready to Submit** and
+attached it to the internal `testers` group (`19f370cc-daee-4d76-b52e-acc4f0da2a84`, one tester).
+Focused What to Test notes are saved for Calgary and Ontario marker confidence, event details,
+Road events visibility, delayed refresh retention, non-interference with route/ETA/speech, and
+Search/navigation/CarPlay regressions. App Store Connect reports binary state **Validated**,
+non-exempt encryption **No**, arm64, `get-task-allow: false`, beta reports active, and the approved
+CarPlay maps entitlement. Physical phone/CarPlay validation of the new road-event overlays remains
+pending.
 
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a keyless CarPlay tester build so the approved scene and entitlement are present. After the restricted EAS Google key and matching App Privacy answers are ready, use `production-carplay-google` for the rating-enabled candidate:
 
