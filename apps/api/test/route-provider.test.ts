@@ -83,7 +83,12 @@ describe('Valhalla route provider', () => {
 
     expect(requestPayload).toMatchObject({
       alternates: 2,
+      annotations: ['maxspeed'],
       costing: 'auto',
+      filters: {
+        action: 'include',
+        attributes: ['shape_attributes.speed_limit'],
+      },
       locations: [
         { lat: 51.0447, lon: -114.0719 },
         { lat: 51.065, lon: -114.08 },
@@ -110,6 +115,48 @@ describe('Valhalla route provider', () => {
       { distanceMeters: 8_000, durationSeconds: 600, label: 'alternative' },
       { distanceMeters: 9_000, durationSeconds: 600, label: 'alternative' },
     ]);
+  });
+
+  it('preserves only geometry-aligned known and unknown speed limits', async () => {
+    const route = valhallaRoute(1_000, 120, 0);
+    const alignedRoute = {
+      ...route,
+      geometry: {
+        ...route.geometry,
+        coordinates: [
+          route.geometry.coordinates[0],
+          [-114.04, 51.08],
+          route.geometry.coordinates[1],
+        ],
+      },
+      legs: [
+        {
+          ...route.legs[0],
+          annotation: {
+            maxspeed: [{ unknown: true }, { speed: 50, unit: 'km/h' }],
+          },
+        },
+      ],
+    };
+    const provider = createValhallaRouteProvider({
+      endpoint: 'https://valhalla.test/route',
+      fetchImplementation: () =>
+        Promise.resolve(new Response(JSON.stringify({ code: 'Ok', routes: [alignedRoute] }))),
+    });
+
+    const routes = await provider.getRoutes({
+      alternatives: 0,
+      destination: { latitude: 51.13157, longitude: -114.01055 },
+      origin: { latitude: 51.0447, longitude: -114.0719 },
+      preferences: {
+        avoidFerries: false,
+        avoidHighways: false,
+        avoidTolls: false,
+        avoidUnpaved: false,
+      },
+    });
+
+    expect(routes[0]?.speedLimitsKph).toEqual([0, 50]);
   });
 
   it('keeps the final voice instruction for the maneuver at the end of a step', async () => {

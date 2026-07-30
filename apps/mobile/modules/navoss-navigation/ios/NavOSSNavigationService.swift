@@ -382,9 +382,13 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
           NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
         }
       let carPlayPosition = carPlayCoordinate.map {
-        NavOSSCarPlayPosition(
+        let speed = self.lock.withLock {
+          self.latestLocation.flatMap { $0.speed >= 0 ? $0.speed : nil }
+        }
+        return NavOSSCarPlayPosition(
           coordinate: $0,
-          courseDegrees: update.snapshot.matchedCourseDegrees
+          courseDegrees: update.snapshot.matchedCourseDegrees,
+          speedMetersPerSecond: speed
         )
       }
       NavOSSCarPlayTripStore.shared.publishNavigationState(

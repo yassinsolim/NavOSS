@@ -155,6 +155,9 @@ private struct CarPlayTripRecord: Record {
   var source: String?
 
   @Field
+  var speedLimitsKph: [Int]?
+
+  @Field
   var steps: [CarPlayRouteStepRecord] = []
 
   @Field
@@ -177,6 +180,7 @@ private struct CarPlayTripRecord: Record {
       id: id,
       preferences: preferences.preferences,
       source: source,
+      speedLimitsKph: speedLimitsKph,
       steps: steps.map(\.step),
       traffic: traffic?.traffic,
       waypoints: waypoints.isEmpty ? nil : waypoints.map(\.destination)
@@ -545,6 +549,9 @@ public final class NavOSSNavigationModule: Module {
     ]
     if let source = trip.source {
       payload["source"] = source
+    }
+    if let speedLimitsKph = trip.speedLimitsKph {
+      payload["speedLimitsKph"] = speedLimitsKph
     }
     if let traffic = trip.traffic {
       payload["traffic"] = [

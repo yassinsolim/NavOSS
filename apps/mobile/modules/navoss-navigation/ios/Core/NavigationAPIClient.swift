@@ -11,11 +11,13 @@ public enum NavOSSNavigationAPIError: Error {
 }
 
 private struct SearchRequest: Encodable {
+  let category: String?
   let includeDetails = false
   let latitude: Double?
   let limit: Int
   let longitude: Double?
   let q: String
+  let sort: String?
 }
 
 private struct SearchResponse: Decodable {
@@ -52,6 +54,7 @@ private struct Route: Decodable {
   let durationSeconds: Double
   let geometry: [[Double]]
   let id: String
+  let speedLimitsKph: [Int]?
   let steps: [RouteStep]
   let traffic: RouteTraffic?
 }
@@ -91,7 +94,8 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
   public func search(
     query: String,
     proximity: NavOSSCarPlayCoordinate?,
-    limit: Int = 8
+    limit: Int = 8,
+    category: String? = nil
   ) async throws -> [NavOSSCarPlayDestination] {
     let roundedProximity = proximity.map {
       NavOSSCarPlayCoordinate(
@@ -100,10 +104,12 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
       )
     }
     let request = SearchRequest(
+      category: category,
       latitude: roundedProximity?.latitude,
       limit: limit,
       longitude: roundedProximity?.longitude,
-      q: query
+      q: query,
+      sort: roundedProximity == nil ? nil : "distance"
     )
     let response: SearchResponse = try await post(path: "v1/search", body: request)
     return response.results.map {
@@ -149,6 +155,7 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
         id: route.id,
         preferences: preferences,
         source: response.source.id,
+        speedLimitsKph: route.speedLimitsKph,
         steps: try route.steps.map { step in
           NavOSSCarPlayRouteStep(
             distanceMeters: step.distanceMeters,

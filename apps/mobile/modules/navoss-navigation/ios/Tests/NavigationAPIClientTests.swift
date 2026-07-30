@@ -21,6 +21,7 @@ final class NavigationAPIClientTests: XCTestCase {
       XCTAssertEqual(payload["q"] as? String, "Airport")
       XCTAssertEqual(payload["latitude"] as? Double, 51.123)
       XCTAssertEqual(payload["longitude"] as? Double, -114.988)
+      XCTAssertEqual(payload["sort"] as? String, "distance")
       return Self.response(
         request: request,
         json: """
@@ -78,6 +79,7 @@ final class NavigationAPIClientTests: XCTestCase {
               "geometry": [[-114.08, 51.04], [-114.01, 51.13]],
               "id": "route-1",
               "label": "fastest",
+              "speedLimitsKph": [0],
               "steps": [{
                 "distanceMeters": 1000,
                 "durationSeconds": 120,
@@ -127,6 +129,7 @@ final class NavigationAPIClientTests: XCTestCase {
     XCTAssertEqual(routes.first?.preferences, preferences)
     XCTAssertEqual(routes.first?.waypoints?.first?.id, "groceries")
     XCTAssertEqual(routes.first?.source, "valhalla-development")
+    XCTAssertEqual(routes.first?.speedLimitsKph, [0])
     XCTAssertNil(routes.first?.traffic)
     XCTAssertEqual(
       routes.first?.steps.first?.spokenInstruction,

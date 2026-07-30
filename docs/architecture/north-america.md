@@ -72,6 +72,39 @@ Mapbox should quote two products separately:
 2. enterprise Traffic Data in OSM/OpenLR form, which could feed a custom Valhalla pipeline and reduce
    route-provider lock-in at substantially higher engineering and operations cost.
 
+### Self-hosted traffic pipeline
+
+Valhalla already supports the server-side structures NavOSS needs, but it does not supply the
+observations. A legitimate feed must be mapped to directed Valhalla edges before optimization can
+begin:
+
+1. ingest provider flow observations with source timestamp, direction, current speed, free-flow
+   speed, confidence, and stable segment identifier;
+2. conflate provider segments to the exact immutable Valhalla graph revision, preferably through
+   licensed OSM/OpenLR references rather than coordinate proximity alone;
+3. reject stale, low-confidence, direction-ambiguous, or graph-mismatched observations;
+4. write live speeds into the fixed-size `traffic.tar` overlay and atomically publish it without
+   rebuilding the base graph;
+5. aggregate retained licensed observations into per-edge weekly 5-minute profiles and import them
+   with `valhalla_add_predicted_traffic` during immutable graph builds;
+6. route with current departure time, report feed coverage/freshness, and fall back explicitly to
+   historical or free-flow speeds when live observations are absent; and
+7. compare same-time routes and ETAs against held-out drives before exposing traffic colours or
+   traffic-aware claims.
+
+Public OSM `maxspeed` is suitable for known posted-limit display but is not a traffic feed. NavOSS
+must not derive congestion from road class, speed limit, anecdotal drive times, or unconsented user
+traces. Until a licensed source is contracted, the current `traffic: unavailable` response remains
+correct.
+
+### Location refinement
+
+Place quality work should improve the existing self-hosted pipeline rather than scrape commercial
+maps. Priorities are Nominatim replication freshness, entrance/driveway-aware arrival points,
+Calgary business-to-OSM deduplication, category purity, closed-place suppression, address/unit
+normalization, exact proximity ordering, and explicit source/freshness metadata. Add query and
+destination fixtures for every reported bad result before changing ranking weights.
+
 ## Expansion architecture
 
 ### Routing

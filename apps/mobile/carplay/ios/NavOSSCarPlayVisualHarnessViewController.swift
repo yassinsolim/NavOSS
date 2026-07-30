@@ -60,16 +60,27 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         route: route,
         routeId: "visual-guidance",
         activeGuidance: true,
-        position: NavOSSCarPlayPosition(coordinate: route[1], courseDegrees: 24),
-        routeProgress: 0.05
+        position: NavOSSCarPlayPosition(
+          coordinate: route[1],
+          courseDegrees: 24,
+          speedMetersPerSecond: 15
+        ),
+        routeProgress: 0.05,
+        speedLimitKph: 50
       )
     case "progress-60":
+      mapViewController.applyMapPreferences(showsPointsOfInterest: true, vehicleMarker: .car)
       mapViewController.display(
         route: route,
         routeId: "visual-guidance",
         activeGuidance: true,
-        position: NavOSSCarPlayPosition(coordinate: route[7], courseDegrees: 50),
-        routeProgress: 0.60
+        position: NavOSSCarPlayPosition(
+          coordinate: route[7],
+          courseDegrees: 50,
+          speedMetersPerSecond: 20
+        ),
+        routeProgress: 0.60,
+        speedLimitKph: 80
       )
     case "overview":
       mapViewController.display(

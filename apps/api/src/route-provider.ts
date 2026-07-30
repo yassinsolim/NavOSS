@@ -33,6 +33,12 @@ const ValhallaStepSchema = z.object({
     .optional(),
 });
 
+const ValhallaMaxspeedSchema = z.union([
+  z.object({ speed: z.number().int().positive().max(250), unit: z.literal('km/h') }).strict(),
+  z.object({ none: z.literal(true) }).strict(),
+  z.object({ unknown: z.literal(true) }).strict(),
+]);
+
 const ValhallaResponseSchema = z.object({
   code: z.literal('Ok'),
   routes: z
@@ -44,7 +50,17 @@ const ValhallaResponseSchema = z.object({
           coordinates: z.array(RoutePositionSchema).min(2),
           type: z.literal('LineString'),
         }),
-        legs: z.array(z.object({ steps: z.array(ValhallaStepSchema).min(1) })).min(1),
+        legs: z
+          .array(
+            z.object({
+              annotation: z
+                .object({ maxspeed: z.array(ValhallaMaxspeedSchema) })
+                .strict()
+                .optional(),
+              steps: z.array(ValhallaStepSchema).min(1),
+            }),
+          )
+          .min(1),
       }),
     )
     .min(1),
@@ -132,6 +148,11 @@ function buildValhallaRequest(request: RouteRequest): unknown {
       },
     },
     format: 'osrm',
+    annotations: ['maxspeed'],
+    filters: {
+      action: 'include',
+      attributes: ['shape_attributes.speed_limit'],
+    },
     language: 'en-US',
     locations: [request.origin, ...(request.waypoints ?? []), request.destination].map(
       ({ latitude, longitude }) => ({ lat: latitude, lon: longitude }),
@@ -145,30 +166,39 @@ function buildValhallaRequest(request: RouteRequest): unknown {
 
 function normalizeRoutes(payload: z.infer<typeof ValhallaResponseSchema>): RouteAlternative[] {
   return payload.routes
-    .map((route, index) => ({
-      distanceMeters: route.distance,
-      durationSeconds: route.duration,
-      geometry: route.geometry.coordinates,
-      id: `valhalla-${String(index + 1)}-${createHash('sha256')
-        .update(JSON.stringify(route))
-        .digest('hex')
-        .slice(0, 16)}`,
-      label: 'alternative' as const,
-      steps: route.legs.flatMap((leg) =>
-        leg.steps.map((step) => {
-          const spokenInstruction = step.voiceInstructions?.at(-1)?.announcement;
-          return {
-            distanceMeters: step.distance,
-            durationSeconds: step.duration,
-            geometry: step.geometry.coordinates,
-            instruction: step.maneuver.instruction,
-            maneuverType: step.maneuver.type,
-            roadName: step.name,
-            ...(spokenInstruction === undefined ? {} : { spokenInstruction }),
-          };
-        }),
-      ),
-    }))
+    .map((route, index) => {
+      const speedLimitsKph = route.legs.flatMap(
+        (leg) =>
+          leg.annotation?.maxspeed.map((limit) => ('speed' in limit ? limit.speed : 0)) ?? [],
+      );
+      return {
+        distanceMeters: route.distance,
+        durationSeconds: route.duration,
+        geometry: route.geometry.coordinates,
+        id: `valhalla-${String(index + 1)}-${createHash('sha256')
+          .update(JSON.stringify(route))
+          .digest('hex')
+          .slice(0, 16)}`,
+        label: 'alternative' as const,
+        ...(speedLimitsKph.length === route.geometry.coordinates.length - 1
+          ? { speedLimitsKph }
+          : {}),
+        steps: route.legs.flatMap((leg) =>
+          leg.steps.map((step) => {
+            const spokenInstruction = step.voiceInstructions?.at(-1)?.announcement;
+            return {
+              distanceMeters: step.distance,
+              durationSeconds: step.duration,
+              geometry: step.geometry.coordinates,
+              instruction: step.maneuver.instruction,
+              maneuverType: step.maneuver.type,
+              roadName: step.name,
+              ...(spokenInstruction === undefined ? {} : { spokenInstruction }),
+            };
+          }),
+        ),
+      };
+    })
     .sort(compareRouteAlternatives)
     .map((route, index) => ({
       ...route,

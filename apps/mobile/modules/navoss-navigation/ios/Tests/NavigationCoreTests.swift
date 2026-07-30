@@ -177,7 +177,7 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertFalse(state.allowsManeuverGuidance)
   }
 
-  func testCarPlayPreferencesPersistAppearanceAndAudioMode() throws {
+  func testCarPlayPreferencesPersistMapAndAudioChoices() throws {
     let suiteName = "NavOSSNavigationCoreTests.preferences.\(UUID().uuidString)"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
     defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -186,10 +186,81 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(store.load(), NavOSSCarPlayPreferences())
     store.setAppearance(.light)
     store.setAudioMode(.alertsOnly)
+    store.setShowsPointsOfInterest(false)
+    store.setVehicleMarker(.car)
 
     XCTAssertEqual(
       store.load(),
-      NavOSSCarPlayPreferences(appearance: .light, audioMode: .alertsOnly)
+      NavOSSCarPlayPreferences(
+        appearance: .light,
+        audioMode: .alertsOnly,
+        showsPointsOfInterest: false,
+        vehicleMarker: .car
+      )
+    )
+  }
+
+  func testCarPlayPositionValidatesCurrentSpeed() {
+    let coordinate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08)
+
+    XCTAssertTrue(
+      NavOSSCarPlayPosition(
+        coordinate: coordinate,
+        courseDegrees: 90,
+        speedMetersPerSecond: 13.5
+      ).isValid
+    )
+    XCTAssertFalse(
+      NavOSSCarPlayPosition(
+        coordinate: coordinate,
+        courseDegrees: 90,
+        speedMetersPerSecond: -1
+      ).isValid
+    )
+  }
+
+  func testCarPlaySpeedLimitUsesCurrentGeometrySegmentAndHidesUnknown() {
+    let speedLimits = [0, 50, 40]
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.10),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.099),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.08),
+    ]
+
+    XCTAssertNil(
+      navOSSCarPlaySpeedLimit(
+        speedLimits,
+        geometry: geometry,
+        matchedCoordinate: geometry[0],
+        routeProgress: 0.2
+      )
+    )
+    XCTAssertEqual(
+      navOSSCarPlaySpeedLimit(
+        speedLimits,
+        geometry: geometry,
+        matchedCoordinate: NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.09),
+        routeProgress: 0.95
+      ),
+      50
+    )
+    XCTAssertEqual(
+      navOSSCarPlaySpeedLimit(
+        speedLimits,
+        geometry: geometry,
+        matchedCoordinate: nil,
+        routeProgress: 1
+      ),
+      40
+    )
+    XCTAssertNil(
+      navOSSCarPlaySpeedLimit(
+        nil,
+        geometry: geometry,
+        matchedCoordinate: nil,
+        routeProgress: 0.5
+      )
     )
   }
 

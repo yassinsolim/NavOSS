@@ -10,6 +10,7 @@ const { withBuildSourceFile } = require('@expo/config-plugins/build/ios/XcodePro
 
 const sourceDirectory = path.join(__dirname, '..', 'carplay', 'ios');
 const vehicleArrowSource = path.join(__dirname, '..', 'assets', 'images', 'vehicle-arrow.png');
+const vehicleCarSource = path.join(__dirname, '..', 'assets', 'images', 'vehicle-car.png');
 const sourceFiles = [
   'NavOSSCarPlayMapViewController.swift',
   'NavOSSCarPlaySceneDelegate.swift',
@@ -110,12 +111,23 @@ function withNavOSSCarPlay(config) {
   config = withXcodeProject(config, (modConfig) => {
     const resourceDirectory = path.join(modConfig.modRequest.platformProjectRoot, 'Resources');
     const resourcePath = path.join(resourceDirectory, 'vehicle-arrow.png');
+    const carResourcePath = path.join(resourceDirectory, 'vehicle-car.png');
     fs.mkdirSync(resourceDirectory, { recursive: true });
     fs.copyFileSync(vehicleArrowSource, resourcePath);
+    fs.copyFileSync(vehicleCarSource, carResourcePath);
     IOSConfig.XcodeUtils.ensureGroupRecursively(modConfig.modResults, 'Resources');
     if (!modConfig.modResults.hasFile('Resources/vehicle-arrow.png')) {
       IOSConfig.XcodeUtils.addResourceFileToGroup({
         filepath: 'Resources/vehicle-arrow.png',
+        groupName: 'Resources',
+        isBuildFile: true,
+        project: modConfig.modResults,
+        verbose: true,
+      });
+    }
+    if (!modConfig.modResults.hasFile('Resources/vehicle-car.png')) {
+      IOSConfig.XcodeUtils.addResourceFileToGroup({
+        filepath: 'Resources/vehicle-car.png',
         groupName: 'Resources',
         isBuildFile: true,
         project: modConfig.modResults,

@@ -147,6 +147,11 @@ traffic, lane, speed, or incident knowledge.
 ### Destination search
 
 - Use `CPSearchTemplate` for bounded destination search.
+- Label the root destination action **Search**, not Places.
+- The Search list mirrors the phone's useful discovery groups with nearby Restaurants, Coffee,
+  Bars, Gas, Groceries, Parking, Pharmacies, Parks, Shopping, Hotels, Attractions, Hospitals and
+  clinics, Charging stations, Car repair, and Car wash. Typed category intent is preserved for
+  restaurants, groceries, and parks so strict server filtering still applies.
 - Show recents and locally stored favorites without requiring phone interaction.
 - Keep result rows concise and provide clear no-network and degraded-provider states in CarPlay.
 - Do not direct a moving driver to finish setup on the phone.
@@ -158,6 +163,20 @@ traffic, lane, speed, or incident knowledge.
 - Draw selected and alternate route geometry in the native MapLibre view.
 - Include real duration, distance, and major-road summaries.
 - Continue to state that live traffic is unavailable until a real traffic source exists.
+
+### Driving map
+
+- Current speed comes directly from valid Core Location speed and is shown in km/h during active
+  guidance.
+- Posted speed limits come from geometry-aligned Valhalla/OpenStreetMap `maxspeed` annotations.
+  NavOSS selects the nearest matched route segment and hides the sign for unknown or unlimited
+  values rather than inferring a limit from road class.
+- The CarPlay compass ornament is hidden because heading-up guidance and the explicit overview/follow
+  control already provide orientation without colliding with template controls.
+- Vehicle position and course interpolate only between received matched GPS updates. NavOSS does not
+  extrapolate or predict movement beyond the latest real position.
+- Settings persist Automatic/Light/Dark appearance, All guidance/Alerts only/Muted audio, visible or
+  hidden basemap points of interest, and Arrow/Car vehicle marker choices.
 
 ### Active guidance
 

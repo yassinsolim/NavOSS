@@ -222,6 +222,7 @@ describe('route contracts', () => {
           ],
           id: 'route-1',
           label: 'fastest',
+          speedLimitsKph: [50],
           steps: [
             {
               distanceMeters: 57.692,
@@ -247,6 +248,48 @@ describe('route contracts', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it('rejects speed limits that do not align with route geometry segments', () => {
+    const result = RouteResponseSchema.safeParse({
+      degraded: true,
+      generatedAt: '2026-07-15T12:00:00Z',
+      routes: [
+        {
+          distanceMeters: 1_000,
+          durationSeconds: 120,
+          geometry: [
+            [-114.08, 51.04],
+            [-114.07, 51.05],
+            [-114.06, 51.06],
+          ],
+          id: 'route-speed-limits',
+          label: 'fastest',
+          speedLimitsKph: [50],
+          steps: [
+            {
+              distanceMeters: 1_000,
+              durationSeconds: 120,
+              geometry: [
+                [-114.08, 51.04],
+                [-114.06, 51.06],
+              ],
+              instruction: 'Continue north.',
+              maneuverType: 'continue',
+              roadName: 'Test Road',
+            },
+          ],
+        },
+      ],
+      source: {
+        attribution: 'Routing by Valhalla using OpenStreetMap data',
+        id: 'valhalla-development',
+        mode: 'development',
+        traffic: 'unavailable',
+      },
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it('accepts self-hosted production routing metadata', () => {

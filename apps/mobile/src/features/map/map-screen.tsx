@@ -713,6 +713,9 @@ export function MapScreen() {
         geometry: snapshot.trip.geometry.map(({ latitude, longitude }) => [longitude, latitude]),
         id: snapshot.trip.id,
         label: 'fastest',
+        ...(snapshot.trip.speedLimitsKph === undefined
+          ? {}
+          : { speedLimitsKph: snapshot.trip.speedLimitsKph }),
         steps: snapshot.trip.steps.map((step) => ({
           distanceMeters: step.distanceMeters,
           durationSeconds: step.durationSeconds,

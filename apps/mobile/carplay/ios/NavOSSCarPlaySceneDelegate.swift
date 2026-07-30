@@ -8,6 +8,38 @@ import UIKit
 final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate,
   CPMapTemplateDelegate, CPSearchTemplateDelegate
 {
+  private struct SearchCategory {
+    let category: String?
+    let label: String
+    let query: String
+  }
+
+  private let searchCategoryGroups: [(String, [SearchCategory])] = [
+    ("Food & Drink", [
+      SearchCategory(category: "restaurant", label: "Restaurants", query: "restaurant"),
+      SearchCategory(category: nil, label: "Coffee", query: "cafe"),
+      SearchCategory(category: nil, label: "Bars", query: "bar"),
+    ]),
+    ("Everyday", [
+      SearchCategory(category: nil, label: "Gas", query: "fuel"),
+      SearchCategory(category: "grocery", label: "Groceries", query: "supermarket"),
+      SearchCategory(category: nil, label: "Parking", query: "parking"),
+      SearchCategory(category: nil, label: "Pharmacies", query: "pharmacy"),
+    ]),
+    ("Explore", [
+      SearchCategory(category: "park", label: "Parks", query: "park"),
+      SearchCategory(category: nil, label: "Shopping", query: "shopping centre"),
+      SearchCategory(category: nil, label: "Hotels", query: "hotel"),
+      SearchCategory(category: nil, label: "Attractions", query: "attraction"),
+    ]),
+    ("Services", [
+      SearchCategory(category: nil, label: "Hospitals and clinics", query: "hospital clinic"),
+      SearchCategory(category: nil, label: "Charging stations", query: "charging station"),
+      SearchCategory(category: nil, label: "Car repair", query: "car repair"),
+      SearchCategory(category: nil, label: "Car wash", query: "car wash"),
+    ]),
+  ]
+
   private weak var carWindow: CPWindow?
   private weak var interfaceController: CPInterfaceController?
   private var activeManeuver: CPManeuver?
@@ -50,6 +82,10 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     let mapViewController = NavOSSCarPlayMapViewController()
     let preferences = preferencesStore.load()
     mapViewController.applyAppearance(preferences.appearance)
+    mapViewController.applyMapPreferences(
+      showsPointsOfInterest: preferences.showsPointsOfInterest,
+      vehicleMarker: preferences.vehicleMarker
+    )
     NavOSSNavigationService.shared.setAudioMode(preferences.audioMode)
     self.mapViewController = mapViewController
     window.rootViewController = mapViewController
@@ -100,6 +136,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     searchRequestGeneration &+= 1
     searchTask?.cancel()
     searchTask = nil
+    mapViewController?.clearRoute()
     navigationSession?.finishTrip()
     navigationSession = nil
     activeManeuver = nil
@@ -132,7 +169,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     template.automaticallyHidesNavigationBar = false
     template.hidesButtonsWithNavigationBar = false
 
-    let placesButton = CPBarButton(title: "Places") { [weak self] _ in
+    let placesButton = CPBarButton(title: "Search") { [weak self] _ in
       self?.showPlaces()
     }
     template.leadingNavigationBarButtons = [placesButton]
@@ -162,9 +199,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     }
     overviewButton.image = UIImage(systemName: "map")
     let muteGuidanceButton = CPMapButton { [weak self] _ in
-      self?.showSettings(audioOnly: true)
+      self?.showSettings(audioOnly: false)
     }
-    muteGuidanceButton.image = audioModeImage(preferencesStore.load().audioMode)
+    muteGuidanceButton.image = UIImage(systemName: "gearshape.fill")
     let reportButton = CPMapButton { [weak self] _ in
       self?.showReports()
     }
@@ -205,7 +242,13 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       activeGuidance: activeGuidance,
       position: state.position,
       routeProgress: state.routeProgress,
-      distanceToManeuverMeters: state.guidance?.distanceToManeuverMeters
+      distanceToManeuverMeters: state.guidance?.distanceToManeuverMeters,
+      speedLimitKph: navOSSCarPlaySpeedLimit(
+        trip.speedLimitsKph,
+        geometry: trip.geometry,
+        matchedCoordinate: state.position?.coordinate,
+        routeProgress: state.routeProgress
+      )
     )
 
     if activeGuidance
@@ -486,7 +529,6 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         }
         self.preferencesStore.setAudioMode(mode)
         NavOSSNavigationService.shared.setAudioMode(mode)
-        self.muteGuidanceMapButton?.image = self.audioModeImage(mode)
         self.settingsTemplate?.updateSections(
           self.settingsSections(audioOnly: self.settingsAudioOnly)
         )
@@ -519,6 +561,52 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       sections.insert(
         CPListSection(items: appearanceItems, header: "Map appearance", sectionIndexTitle: nil),
         at: 0
+      )
+      let markerItems = NavOSSCarPlayVehicleMarker.allCases.map { marker in
+        let item = CPListItem(
+          text: selectedTitle(marker.label, selected: preferences.vehicleMarker == marker),
+          detailText: marker == .car
+            ? "Show a car on the route"
+            : "Show the NavOSS direction arrow"
+        )
+        item.handler = { [weak self] _, completion in
+          completion()
+          guard let self else { return }
+          self.preferencesStore.setVehicleMarker(marker)
+          let updated = self.preferencesStore.load()
+          self.mapViewController?.applyMapPreferences(
+            showsPointsOfInterest: updated.showsPointsOfInterest,
+            vehicleMarker: marker
+          )
+          self.settingsTemplate?.updateSections(self.settingsSections(audioOnly: false))
+        }
+        return item
+      }
+      let poiItem = CPListItem(
+        text: selectedTitle(
+          "Show points of interest",
+          selected: preferences.showsPointsOfInterest
+        ),
+        detailText: preferences.showsPointsOfInterest
+          ? "Visible on the map"
+          : "Hidden from the map"
+      )
+      poiItem.handler = { [weak self] _, completion in
+        completion()
+        guard let self else { return }
+        self.preferencesStore.setShowsPointsOfInterest(!preferences.showsPointsOfInterest)
+        let updated = self.preferencesStore.load()
+        self.mapViewController?.applyMapPreferences(
+          showsPointsOfInterest: updated.showsPointsOfInterest,
+          vehicleMarker: updated.vehicleMarker
+        )
+        self.settingsTemplate?.updateSections(self.settingsSections(audioOnly: false))
+      }
+      sections.append(
+        CPListSection(items: markerItems, header: "Vehicle marker", sectionIndexTitle: nil)
+      )
+      sections.append(
+        CPListSection(items: [poiItem], header: "Map content", sectionIndexTitle: nil)
       )
     }
     return sections
@@ -579,7 +667,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     }
 
     let listTemplate = CPListTemplate(
-      title: hasActiveTrip ? "Current trip" : "Choose a destination",
+      title: hasActiveTrip ? "Current trip" : "Search",
       sections: destinationSections()
     )
     listTemplate.trailingNavigationBarButtons =
@@ -633,13 +721,67 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       )
     }
 
-    let searchItem = CPListItem(text: "Search Calgary", detailText: "Places and addresses")
+    let searchItem = CPListItem(text: "Type a destination", detailText: "Places and addresses")
     searchItem.handler = { [weak self] _, completion in
       completion()
       self?.showSearch()
     }
     sections.insert(CPListSection(items: [searchItem]), at: 0)
+    for (header, categories) in searchCategoryGroups.reversed() {
+      let items = categories.map { category in
+        let item = CPListItem(text: category.label, detailText: "Nearby")
+        item.handler = { [weak self] _, completion in
+          completion()
+          self?.showCategoryResults(category)
+        }
+        return item
+      }
+      sections.insert(
+        CPListSection(items: items, header: header, sectionIndexTitle: nil),
+        at: 1
+      )
+    }
     return sections
+  }
+
+  private func showCategoryResults(_ category: SearchCategory) {
+    guard let interfaceController else { return }
+    showNavigationAlert(title: category.label, subtitle: "Finding nearby places…")
+    searchRequestGeneration &+= 1
+    let requestGeneration = searchRequestGeneration
+    searchTask?.cancel()
+    searchTask = Task { [weak self] in
+      do {
+        let client = try NavOSSNavigationAPIClient()
+        let matches = try await client.search(
+          query: category.query,
+          proximity: NavOSSNavigationService.shared.currentCoordinate(),
+          category: category.category
+        )
+        guard !Task.isCancelled, let self,
+          requestGeneration == self.searchRequestGeneration
+        else { return }
+        self.searchTask = nil
+        self.searchDestinationsByIdentifier = Dictionary(
+          uniqueKeysWithValues: matches.map { ($0.id, $0) }
+        )
+        _ = await self.mapTemplate?.dismissNavigationAlert(animated: true)
+        let template = CPListTemplate(
+          title: category.label,
+          sections: [CPListSection(items: matches.map { self.destinationItem($0) })]
+        )
+        interfaceController.pushTemplate(template, animated: true, completion: nil)
+      } catch {
+        guard !Task.isCancelled, let self,
+          requestGeneration == self.searchRequestGeneration
+        else { return }
+        self.searchTask = nil
+        self.showNavigationAlert(
+          title: "Search unavailable",
+          subtitle: "Check your connection and try again."
+        )
+      }
+    }
   }
 
   private func makeEndNavigationBarButton() -> CPBarButton {
@@ -663,9 +805,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       let overviewMapButton, let muteGuidanceMapButton, let reportMapButton
     {
       overviewMapButton.image = UIImage(systemName: "map")
-      muteGuidanceMapButton.image = audioModeImage(
-        NavOSSNavigationService.shared.audioMode()
-      )
+      muteGuidanceMapButton.image = UIImage(systemName: "gearshape.fill")
       mapTemplate?.mapButtons = [
         endNavigationMapButton, overviewMapButton, muteGuidanceMapButton,
         reportMapButton,
@@ -726,6 +866,14 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       self?.returnToMapAndLoadRoutes(to: destination)
     }
     return item
+  }
+
+  private func uniqueDestinations(
+    _ destinations: [NavOSSCarPlayDestination],
+    limit: Int = 8
+  ) -> [NavOSSCarPlayDestination] {
+    var seen: Set<String> = []
+    return destinations.filter { seen.insert($0.id).inserted }.prefix(limit).map { $0 }
   }
 
   private func returnToMapAndLoadRoutes(to destination: NavOSSCarPlayDestination) {
@@ -939,10 +1087,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
           query: query,
           proximity: NavOSSNavigationService.shared.currentCoordinate()
         )
-        let matches = Array(
-          (localMatches + remoteMatches).reduce(into: [String: NavOSSCarPlayDestination]()) {
-            $0[$1.id] = $1
-          }.values.prefix(8))
+        let matches = self?.uniqueDestinations(localMatches + remoteMatches) ?? []
         guard !Task.isCancelled, let self,
           requestGeneration == self.searchRequestGeneration
         else {

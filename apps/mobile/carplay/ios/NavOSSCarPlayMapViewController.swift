@@ -11,6 +11,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private let destinationSourceIdentifier = "navoss-carplay-destination-source"
   private let alternateRouteLayerIdentifier = "navoss-carplay-alternate-route"
   private let alternateRouteSourceIdentifier = "navoss-carplay-alternate-route-source"
+  private let carImageIdentifier = "navoss-carplay-vehicle-car"
   private let positionImageIdentifier = "navoss-carplay-vehicle-arrow"
   private let positionLayerIdentifier = "navoss-carplay-position"
   private let positionSourceIdentifier = "navoss-carplay-position-source"
@@ -19,16 +20,25 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private let routeSourceIdentifier = "navoss-carplay-route-source"
   private var activeGuidance = false
   private var appearance = NavOSSCarPlayAppearance.automatic
+  private var displayLink: CADisplayLink?
+  private var interpolationFromPosition: NavOSSCarPlayPosition?
+  private var interpolationStartedAt: CFTimeInterval = 0
+  private let interpolationDuration: CFTimeInterval = 0.9
   private var latestDestination: NavOSSCarPlayCoordinate?
   private var latestPosition: NavOSSCarPlayPosition?
+  private var renderedPosition: NavOSSCarPlayPosition?
   private var navigationViewingDistance = 850.0
   private var presentsRouteOverview = false
   private var guidanceHiddenLayerIdentifiers: Set<String> = []
   private var alternateRouteCoordinates: [CLLocationCoordinate2D] = []
   private var routeCoordinates: [CLLocationCoordinate2D] = []
   private var routeId: String?
+  private var showsPointsOfInterest = true
   private var styleSlug = "liberty"
+  private var vehicleMarker = NavOSSCarPlayVehicleMarker.arrow
   private(set) var mapView: MLNMapView!
+  private let speedLabel = UILabel()
+  private let speedLimitLabel = UILabel()
   var onStyleLoaded: (() -> Void)?
   var requestsUserLocation = true
 
@@ -41,12 +51,53 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     mapView.isRotateEnabled = false
     mapView.isScrollEnabled = false
     mapView.isZoomEnabled = false
+    mapView.compassView.isHidden = true
     mapView.logoView.isHidden = true
     mapView.delegate = self
     mapView.showsUserLocation = requestsUserLocation
     mapView.setCenter(calgaryCenter, zoomLevel: 10.5, animated: false)
     self.mapView = mapView
-    view = mapView
+    let container = UIView(frame: .zero)
+    container.addSubview(mapView)
+    speedLabel.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.94)
+    speedLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 17, weight: .bold)
+    speedLabel.layer.cornerRadius = 8
+    speedLabel.clipsToBounds = true
+    speedLabel.numberOfLines = 2
+    speedLabel.textAlignment = .center
+    speedLabel.textColor = .label
+    speedLabel.translatesAutoresizingMaskIntoConstraints = false
+    speedLabel.isHidden = true
+    container.addSubview(speedLabel)
+    speedLimitLabel.backgroundColor = .white
+    speedLimitLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 20, weight: .bold)
+    speedLimitLabel.layer.borderColor = UIColor.black.cgColor
+    speedLimitLabel.layer.borderWidth = 2
+    speedLimitLabel.layer.cornerRadius = 8
+    speedLimitLabel.clipsToBounds = true
+    speedLimitLabel.numberOfLines = 2
+    speedLimitLabel.textAlignment = .center
+    speedLimitLabel.textColor = .black
+    speedLimitLabel.translatesAutoresizingMaskIntoConstraints = false
+    speedLimitLabel.isHidden = true
+    container.addSubview(speedLimitLabel)
+    NSLayoutConstraint.activate([
+      speedLabel.leadingAnchor.constraint(
+        equalTo: container.safeAreaLayoutGuide.leadingAnchor,
+        constant: 16
+      ),
+      speedLabel.bottomAnchor.constraint(
+        equalTo: container.safeAreaLayoutGuide.bottomAnchor,
+        constant: -16
+      ),
+      speedLabel.widthAnchor.constraint(equalToConstant: 58),
+      speedLabel.heightAnchor.constraint(equalToConstant: 52),
+      speedLimitLabel.leadingAnchor.constraint(equalTo: speedLabel.trailingAnchor, constant: 8),
+      speedLimitLabel.bottomAnchor.constraint(equalTo: speedLabel.bottomAnchor),
+      speedLimitLabel.widthAnchor.constraint(equalToConstant: 58),
+      speedLimitLabel.heightAnchor.constraint(equalToConstant: 52),
+    ])
+    view = container
   }
 
   override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -63,6 +114,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
     styleSlug = nextStyleSlug
     mapView.styleURL = URL(string: "https://tiles.openfreemap.org/styles/\(nextStyleSlug)")
+  }
+
+  override func viewDidLayoutSubviews() {
+    super.viewDidLayoutSubviews()
+    mapView.frame = view.bounds
   }
 
   func applyAppearance(_ appearance: NavOSSCarPlayAppearance) {
@@ -82,6 +138,17 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
     styleSlug = nextStyleSlug
     mapView.styleURL = URL(string: "https://tiles.openfreemap.org/styles/\(nextStyleSlug)")
+  }
+
+  func applyMapPreferences(
+    showsPointsOfInterest: Bool,
+    vehicleMarker: NavOSSCarPlayVehicleMarker
+  ) {
+    self.showsPointsOfInterest = showsPointsOfInterest
+    self.vehicleMarker = vehicleMarker
+    guard isViewLoaded else { return }
+    updatePointOfInterestVisibility()
+    installPositionOverlayIfReady()
   }
 
   private func resolvedStyleSlug() -> String {
@@ -125,11 +192,17 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     position: NavOSSCarPlayPosition? = nil,
     routeProgress: Double = 0,
     alternateRoute: [NavOSSCarPlayCoordinate]? = nil,
-    distanceToManeuverMeters: Double? = nil
+    distanceToManeuverMeters: Double? = nil,
+    speedLimitKph: Int? = nil
   ) {
     self.activeGuidance = activeGuidance
     latestDestination = route.last
-    latestPosition = position
+    if let position {
+      updateTargetPosition(position)
+    } else {
+      latestPosition = nil
+      renderedPosition = nil
+    }
     if activeGuidance && !presentsRouteOverview {
       navigationViewingDistance = navOSSCarPlayViewingDistance(distanceToManeuverMeters)
     }
@@ -156,12 +229,14 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     installRouteOverlayIfReady()
     installDestinationOverlayIfReady()
     installPositionOverlayIfReady()
+    updateSpeedDisplay(position?.speedMetersPerSecond)
+    updateSpeedLimitDisplay(speedLimitKph)
     updateGuidanceDeclutter()
     if activeGuidance, let position {
       if presentsRouteOverview {
         fitRoute(animated: false)
-      } else {
-        follow(position, duration: 0.35)
+      } else if renderedPosition == nil {
+        follow(position, duration: 0)
       }
     } else if activeGuidance {
       fitRoute(animated: true)
@@ -174,6 +249,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     activeGuidance = false
     latestDestination = nil
     latestPosition = nil
+    renderedPosition = nil
+    displayLink?.invalidate()
+    displayLink = nil
+    speedLabel.isHidden = true
+    speedLimitLabel.isHidden = true
     navigationViewingDistance = 850
     presentsRouteOverview = false
     routeId = nil
@@ -221,6 +301,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     installDestinationOverlayIfReady()
     installPositionOverlayIfReady()
     updateGuidanceDeclutter()
+    updatePointOfInterestVisibility()
     if activeGuidance {
       if presentsRouteOverview {
         fitRoute(animated: false)
@@ -275,6 +356,92 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       withDuration: duration,
       animationTimingFunction: CAMediaTimingFunction(name: .linear)
     )
+  }
+
+  private func updateTargetPosition(_ position: NavOSSCarPlayPosition) {
+    interpolationFromPosition = renderedPosition ?? latestPosition ?? position
+    latestPosition = position
+    interpolationStartedAt = CACurrentMediaTime()
+    if renderedPosition == nil {
+      renderedPosition = position
+      installPositionOverlayIfReady()
+    }
+    if displayLink == nil {
+      let link = CADisplayLink(target: self, selector: #selector(renderPositionFrame))
+      link.preferredFrameRateRange = CAFrameRateRange(
+        minimum: 20,
+        maximum: 30,
+        preferred: 30
+      )
+      link.add(to: .main, forMode: .common)
+      displayLink = link
+    }
+  }
+
+  @objc private func renderPositionFrame() {
+    guard activeGuidance, let target = latestPosition, let start = interpolationFromPosition else {
+      displayLink?.invalidate()
+      displayLink = nil
+      return
+    }
+    let progress = min(
+      1,
+      max(0, (CACurrentMediaTime() - interpolationStartedAt) / interpolationDuration)
+    )
+    renderedPosition = NavOSSCarPlayPosition(
+      coordinate: NavOSSCarPlayCoordinate(
+        latitude: start.coordinate.latitude
+          + (target.coordinate.latitude - start.coordinate.latitude) * progress,
+        longitude: start.coordinate.longitude
+          + (target.coordinate.longitude - start.coordinate.longitude) * progress
+      ),
+      courseDegrees: interpolatedCourse(
+        from: start.courseDegrees,
+        to: target.courseDegrees,
+        progress: progress
+      ),
+      speedMetersPerSecond: target.speedMetersPerSecond
+    )
+    installPositionOverlayIfReady()
+    if !presentsRouteOverview, let renderedPosition {
+      follow(renderedPosition, duration: 0)
+    }
+    if progress >= 1 {
+      displayLink?.invalidate()
+      displayLink = nil
+    }
+  }
+
+  private func interpolatedCourse(from: Double?, to: Double?, progress: Double) -> Double? {
+    guard let target = to else { return from }
+    guard let start = from else { return target }
+    let delta = (target - start + 540).truncatingRemainder(dividingBy: 360) - 180
+    return (start + delta * progress + 360).truncatingRemainder(dividingBy: 360)
+  }
+
+  private func updateSpeedDisplay(_ speedMetersPerSecond: Double?) {
+    guard activeGuidance, let speedMetersPerSecond else {
+      speedLabel.isHidden = true
+      return
+    }
+    speedLabel.text = "\(Int((speedMetersPerSecond * 3.6).rounded()))\nkm/h"
+    speedLabel.isHidden = false
+  }
+
+  private func updateSpeedLimitDisplay(_ speedLimitKph: Int?) {
+    guard activeGuidance, let speedLimitKph else {
+      speedLimitLabel.isHidden = true
+      return
+    }
+    speedLimitLabel.text = "MAX\n\(speedLimitKph)"
+    speedLimitLabel.isHidden = false
+  }
+
+  private func updatePointOfInterestVisibility() {
+    guard let style = mapView.style else { return }
+    for layer in style.layers where layer.identifier.lowercased().contains("poi") {
+      layer.isVisible = showsPointsOfInterest
+    }
   }
 
   private func updateGuidanceDeclutter() {
@@ -429,7 +596,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard let style = mapView.style else {
       return
     }
-    guard activeGuidance, let latestPosition else {
+    guard activeGuidance, let latestPosition = renderedPosition ?? latestPosition else {
       (style.source(withIdentifier: positionSourceIdentifier) as? MLNShapeSource)?.shape = nil
       return
     }
@@ -454,6 +621,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     {
       style.setImage(vehicleArrow, forName: positionImageIdentifier)
     }
+    if style.image(forName: carImageIdentifier) == nil,
+      let vehicleCar = UIImage(named: "vehicle-car")
+    {
+      style.setImage(vehicleCar, forName: carImageIdentifier)
+    }
 
     let position: MLNSymbolStyleLayer
     if let existingLayer = style.layer(withIdentifier: positionLayerIdentifier)
@@ -462,13 +634,15 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       position = existingLayer
     } else {
       position = MLNSymbolStyleLayer(identifier: positionLayerIdentifier, source: source)
-      position.iconImageName = NSExpression(forConstantValue: positionImageIdentifier)
       position.iconScale = NSExpression(forConstantValue: 0.72)
       position.iconAllowsOverlap = NSExpression(forConstantValue: true)
       position.iconIgnoresPlacement = NSExpression(forConstantValue: true)
       position.iconRotationAlignment = NSExpression(forConstantValue: "map")
       style.addLayer(position)
     }
+    position.iconImageName = NSExpression(
+      forConstantValue: vehicleMarker == .car ? carImageIdentifier : positionImageIdentifier
+    )
     position.iconRotation = NSExpression(forConstantValue: latestPosition.courseDegrees ?? 0)
   }
 

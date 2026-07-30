@@ -78,6 +78,7 @@ export const RouteAlternativeSchema = z
     geometry: z.array(RoutePositionSchema).min(2),
     id: z.string().min(1),
     label: z.enum(['fastest', 'alternative']),
+    speedLimitsKph: z.array(z.number().int().min(0).max(250)).min(1).optional(),
     steps: z.array(RouteStepSchema).min(1),
     traffic: z
       .object({
@@ -87,7 +88,19 @@ export const RouteAlternativeSchema = z
       .strict()
       .optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((route, context) => {
+    if (
+      route.speedLimitsKph !== undefined &&
+      route.speedLimitsKph.length !== route.geometry.length - 1
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'speed limits must align with route geometry segments',
+        path: ['speedLimitsKph'],
+      });
+    }
+  });
 
 export type RouteAlternative = z.infer<typeof RouteAlternativeSchema>;
 

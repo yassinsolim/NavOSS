@@ -95,6 +95,7 @@ export interface NativeCarPlayTrip {
   id: string;
   preferences: NativeRoutePreferences;
   source?: string;
+  speedLimitsKph?: number[];
   steps: NativeCarPlayRouteStep[];
   traffic?: {
     delaySeconds: number;

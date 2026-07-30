@@ -19,6 +19,57 @@ public func navOSSCarPlayViewingDistance(_ distanceToManeuverMeters: Double?) ->
   return 1_200
 }
 
+public func navOSSCarPlaySpeedLimit(
+  _ speedLimitsKph: [Int]?,
+  geometry: [NavOSSCarPlayCoordinate],
+  matchedCoordinate: NavOSSCarPlayCoordinate?,
+  routeProgress: Double
+) -> Int? {
+  guard let speedLimitsKph, speedLimitsKph.count == geometry.count - 1,
+    !speedLimitsKph.isEmpty, routeProgress.isFinite
+  else {
+    return nil
+  }
+  let index = matchedCoordinate.flatMap { coordinate in
+    geometry.indices.dropLast().min { left, right in
+      navOSSCarPlayDistanceToSegment(
+        coordinate,
+        start: geometry[left],
+        end: geometry[left + 1]
+      ) < navOSSCarPlayDistanceToSegment(
+        coordinate,
+        start: geometry[right],
+        end: geometry[right + 1]
+      )
+    }
+  } ?? min(
+    speedLimitsKph.count - 1,
+    Int(floor(min(1, max(0, routeProgress)) * Double(speedLimitsKph.count)))
+  )
+  let speedLimit = speedLimitsKph[index]
+  return speedLimit > 0 ? speedLimit : nil
+}
+
+private func navOSSCarPlayDistanceToSegment(
+  _ coordinate: NavOSSCarPlayCoordinate,
+  start: NavOSSCarPlayCoordinate,
+  end: NavOSSCarPlayCoordinate
+) -> Double {
+  let latitudeScale = 111_320.0
+  let longitudeScale = latitudeScale * cos(coordinate.latitude * .pi / 180)
+  let startX = (start.longitude - coordinate.longitude) * longitudeScale
+  let startY = (start.latitude - coordinate.latitude) * latitudeScale
+  let endX = (end.longitude - coordinate.longitude) * longitudeScale
+  let endY = (end.latitude - coordinate.latitude) * latitudeScale
+  let deltaX = endX - startX
+  let deltaY = endY - startY
+  let squaredLength = deltaX * deltaX + deltaY * deltaY
+  let projection = squaredLength == 0
+    ? 0
+    : min(1, max(0, -(startX * deltaX + startY * deltaY) / squaredLength))
+  return hypot(startX + projection * deltaX, startY + projection * deltaY)
+}
+
 extension Notification.Name {
   public static let navOSSCarPlayNavigationDidEnd = Notification.Name(
     "org.navoss.mobile.carplay-navigation-did-end"
@@ -122,6 +173,7 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
   public let id: String
   public let preferences: NavOSSRoutePreferences
   public let source: String?
+  public let speedLimitsKph: [Int]?
   public let steps: [NavOSSCarPlayRouteStep]
   public let traffic: NavOSSCarPlayTraffic?
   public let waypoints: [NavOSSCarPlayDestination]?
@@ -134,6 +186,7 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
     id: String,
     preferences: NavOSSRoutePreferences = NavOSSRoutePreferences(),
     source: String? = nil,
+    speedLimitsKph: [Int]? = nil,
     steps: [NavOSSCarPlayRouteStep],
     traffic: NavOSSCarPlayTraffic? = nil,
     waypoints: [NavOSSCarPlayDestination]? = nil
@@ -145,6 +198,7 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
     self.id = id
     self.preferences = preferences
     self.source = source
+    self.speedLimitsKph = speedLimitsKph
     self.steps = steps
     self.traffic = traffic
     self.waypoints = waypoints
@@ -154,6 +208,9 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
     destination.isValid && !id.isEmpty && distanceMeters.isFinite && distanceMeters > 0
       && durationSeconds.isFinite && durationSeconds > 0 && geometry.count >= 2
       && geometry.allSatisfy(\.isValid) && geometry.contains { $0 != geometry[0] }
+      && speedLimitsKph.map {
+        $0.count == geometry.count - 1 && $0.allSatisfy { (0...250).contains($0) }
+      } != false
       && !steps.isEmpty && steps.allSatisfy(\.isValid) && traffic?.isValid != false
       && waypoints?.allSatisfy(\.isValid) != false
   }
@@ -225,18 +282,22 @@ public enum NavOSSCarPlayGuidancePhase: String, Codable, Equatable, Sendable {
 public struct NavOSSCarPlayPosition: Equatable, Sendable {
   public let coordinate: NavOSSCarPlayCoordinate
   public let courseDegrees: Double?
+  public let speedMetersPerSecond: Double?
 
   public init(
     coordinate: NavOSSCarPlayCoordinate,
-    courseDegrees: Double?
+    courseDegrees: Double?,
+    speedMetersPerSecond: Double? = nil
   ) {
     self.coordinate = coordinate
     self.courseDegrees = courseDegrees
+    self.speedMetersPerSecond = speedMetersPerSecond
   }
 
   var isValid: Bool {
     coordinate.isValid
       && courseDegrees.map { $0.isFinite && (0..<360).contains($0) } != false
+      && speedMetersPerSecond.map { $0.isFinite && $0 >= 0 && $0 <= 100 } != false
   }
 }
 
