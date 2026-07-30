@@ -80,6 +80,17 @@ sudo docker compose up -d --build --wait --wait-timeout 300 api caddy
 ./check-stack.sh
 ```
 
+Import the checked-in Nominatim category phrases after the initial Nominatim import and after any
+replacement of its persistent database. The import is additive and safe to repeat:
+
+```sh
+./refresh-nominatim-special-phrases.sh
+```
+
+These phrases make Restaurants, Groceries, and Parks query OSM tags rather than requiring the
+category word to appear in a place name. The API still validates each returned OSM type and ranks
+the final candidates by distance.
+
 Indexer health requires both expected sources, bounded record counts, and a successful import
 within the previous 36 hours. A failed refresh keeps the current and previous accepted indexes;
 the API can fall back to Nominatim with an explicit degraded response while the index is repaired.

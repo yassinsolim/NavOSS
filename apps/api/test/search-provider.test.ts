@@ -153,6 +153,57 @@ describe('Nominatim search provider', () => {
     }
   });
 
+  it('merges concentric category searches before ranking exact distance', async () => {
+    const requestedViewboxes: string[] = [];
+    const result = (id: number, name: string, latitude: number, longitude: number) => ({
+      addresstype: 'amenity',
+      category: 'amenity',
+      display_name: `${name}, Calgary, Alberta, Canada`,
+      extratags: null,
+      importance: 0.1,
+      lat: String(latitude),
+      lon: String(longitude),
+      name,
+      osm_id: id,
+      osm_type: 'node',
+      type: 'restaurant',
+    });
+    const provider = createNominatimSearchProvider({
+      endpoint: 'http://nominatim:8080/',
+      fetchImplementation: (input) => {
+        const url =
+          input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
+        const viewbox = url.searchParams.get('viewbox') ?? '';
+        requestedViewboxes.push(viewbox);
+        const payload =
+          viewbox === '-114.22,51.057,-114.19,51.033'
+            ? [result(1, 'Nearby Kitchen', 51.039, -114.208)]
+            : [result(2, 'Distant Dining', 51.063, -114.195)];
+        return Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }));
+      },
+    });
+
+    const response = await provider.search({
+      category: 'restaurant',
+      includeDetails: true,
+      latitude: 51.045,
+      limit: 20,
+      longitude: -114.205,
+      q: 'restaurant',
+      sort: 'distance',
+    });
+
+    expect(requestedViewboxes).toEqual([
+      '-114.22,51.057,-114.19,51.033',
+      '-114.245,51.075,-114.165,51.015',
+      '-114.285,51.105,-114.125,50.985',
+    ]);
+    expect(response.results.map(({ name }) => name)).toEqual(['Nearby Kitchen', 'Distant Dining']);
+    expect(response.results[0]?.distanceMeters).toBeLessThan(
+      response.results[1]?.distanceMeters ?? 0,
+    );
+  });
+
   it('normalizes self-hosted results as production search', async () => {
     const provider = createNominatimSearchProvider({
       datasetVersion: 'alberta-2026-07-20',

@@ -1,0 +1,13 @@
+phrase,class,type,operator,plural
+restaurant,amenity,restaurant,-,N
+restaurants,amenity,restaurant,-,Y
+restaurant,amenity,fast_food,-,N
+restaurants,amenity,fast_food,-,Y
+restaurant,amenity,food_court,-,N
+restaurants,amenity,food_court,-,Y
+supermarket,shop,supermarket,-,N
+supermarkets,shop,supermarket,-,Y
+grocery,shop,supermarket,-,N
+groceries,shop,supermarket,-,Y
+park,leisure,park,-,N
+parks,leisure,park,-,Y

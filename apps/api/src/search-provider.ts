@@ -26,19 +26,28 @@ const NOMINATIM_CATEGORY_QUERIES = {
   park: '[park]',
   restaurant: '[restaurant]',
 } as const;
+const NOMINATIM_CATEGORY_VIEWBOX_RADII = [
+  { latitude: 0.012, longitude: 0.015 },
+  { latitude: 0.03, longitude: 0.04 },
+  { latitude: 0.06, longitude: 0.08 },
+] as const;
 
-function nominatimViewbox(query: SearchQuery): string {
+function nominatimViewbox(
+  query: SearchQuery,
+  radius = NOMINATIM_CATEGORY_VIEWBOX_RADII.at(-1),
+): string {
   if (
     query.category === undefined ||
     query.latitude === undefined ||
-    query.longitude === undefined
+    query.longitude === undefined ||
+    radius === undefined
   ) {
     return '-114.316,51.212,-113.859,50.842';
   }
-  const west = Math.max(CALGARY_WEST, query.longitude - 0.08);
-  const north = Math.min(CALGARY_NORTH, query.latitude + 0.06);
-  const east = Math.min(CALGARY_EAST, query.longitude + 0.08);
-  const south = Math.max(CALGARY_SOUTH, query.latitude - 0.06);
+  const west = Math.max(CALGARY_WEST, query.longitude - radius.longitude);
+  const north = Math.min(CALGARY_NORTH, query.latitude + radius.latitude);
+  const east = Math.min(CALGARY_EAST, query.longitude + radius.longitude);
+  const south = Math.max(CALGARY_SOUTH, query.latitude - radius.latitude);
   return [west, north, east, south].map((value) => String(Number(value.toFixed(3)))).join(',');
 }
 
@@ -259,7 +268,11 @@ export function buildPhotonSearchUrl(query: SearchQuery, endpoint = DEFAULT_PHOT
   return url.toString();
 }
 
-export function buildNominatimSearchUrl(query: SearchQuery, endpoint: string): string {
+export function buildNominatimSearchUrl(
+  query: SearchQuery,
+  endpoint: string,
+  categoryRadius?: (typeof NOMINATIM_CATEGORY_VIEWBOX_RADII)[number],
+): string {
   const url = new URL('search', endpoint.endsWith('/') ? endpoint : `${endpoint}/`);
   url.searchParams.set('accept-language', 'en-CA,en');
   url.searchParams.set('addressdetails', '1');
@@ -271,7 +284,7 @@ export function buildNominatimSearchUrl(query: SearchQuery, endpoint: string): s
     'q',
     query.category === undefined ? query.q : NOMINATIM_CATEGORY_QUERIES[query.category],
   );
-  url.searchParams.set('viewbox', nominatimViewbox(query));
+  url.searchParams.set('viewbox', nominatimViewbox(query, categoryRadius));
   return url.toString();
 }
 
@@ -338,17 +351,35 @@ export function createNominatimSearchProvider(
       }
     },
     async search(query) {
-      const response = await fetchImplementation(buildNominatimSearchUrl(query, endpoint), {
-        headers: { accept: 'application/json', 'user-agent': 'NavOSS/0.1' },
-        signal: AbortSignal.timeout(NOMINATIM_TIMEOUT_MS),
-      });
-      if (!response.ok) {
-        throw new Error(`Nominatim returned status ${String(response.status)}.`);
+      const categoryRadii =
+        query.category !== undefined &&
+        query.latitude !== undefined &&
+        query.longitude !== undefined
+          ? NOMINATIM_CATEGORY_VIEWBOX_RADII
+          : [undefined];
+      const urls = [
+        ...new Set(categoryRadii.map((radius) => buildNominatimSearchUrl(query, endpoint, radius))),
+      ];
+      const responses = await Promise.all(
+        urls.map((url) =>
+          fetchImplementation(url, {
+            headers: { accept: 'application/json', 'user-agent': 'NavOSS/0.1' },
+            signal: AbortSignal.timeout(NOMINATIM_TIMEOUT_MS),
+          }),
+        ),
+      );
+      const failedResponse = responses.find((response) => !response.ok);
+      if (failedResponse !== undefined) {
+        throw new Error(`Nominatim returned status ${String(failedResponse.status)}.`);
       }
-      const parsed = NominatimResponseSchema.parse(await response.json());
+      const resultGroups = await Promise.all(
+        responses.map(async (response) =>
+          normalizeNominatimResults(NominatimResponseSchema.parse(await response.json()), query),
+        ),
+      );
       return {
         degraded: false,
-        results: normalizeNominatimResults(parsed, query),
+        results: mergeResults(resultGroups, query, query.limit),
         source: {
           datasetVersion,
           freshness: 'fresh',
@@ -391,6 +422,7 @@ function presentSearchResult(result: SearchResult, query: SearchQuery): SearchRe
 }
 
 function samePlace(left: SearchResult, right: SearchResult): boolean {
+  if (left.id === right.id) return true;
   return (
     left.id.split(':', 1)[0] !== right.id.split(':', 1)[0] &&
     normalizeSearchText(left.name) === normalizeSearchText(right.name) &&
