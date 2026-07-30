@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   CalgaryRoadEventProviderError,
@@ -100,5 +100,33 @@ describe('Calgary road event provider', () => {
     expect(await provider.getRoadEvents()).toMatchObject({ degraded: true, stale: true });
     now += 10_001;
     await expect(provider.getRoadEvents()).rejects.toBeInstanceOf(CalgaryRoadEventProviderError);
+  });
+
+  it('refreshes independently of client requests and stops cleanly', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-30T20:30:00Z'));
+    let requestCount = 0;
+    const provider = createCalgaryRoadEventProvider({
+      cacheTtlMs: 0,
+      fetchImplementation: (input) => {
+        requestCount += 1;
+        return Promise.resolve(upstream(input));
+      },
+      refreshIntervalMs: 1_000,
+    });
+
+    try {
+      provider.start?.();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(requestCount).toBe(4);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(requestCount).toBe(8);
+      provider.stop?.();
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(requestCount).toBe(8);
+    } finally {
+      provider.stop?.();
+      vi.useRealTimers();
+    }
   });
 });

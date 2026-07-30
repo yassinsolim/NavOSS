@@ -1,6 +1,7 @@
 import {
   AppConfigResponseSchema,
   HealthResponseSchema,
+  OfficialRoadEventResponseSchema,
   OfficialSafetyCameraResponseSchema,
   ProblemDetailsSchema,
   ReadinessResponseSchema,
@@ -17,6 +18,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { CalgaryRoadEventProviderError } from '../src/calgary-road-event-provider.js';
 import { CALGARY_SEARCH_FIXTURES } from '../src/fixtures.js';
+import { OntarioRoadEventProviderError } from '../src/ontario-road-event-provider.js';
 import { createFixtureSearchProvider } from '../src/search-provider.js';
 import { CameraProviderError } from '../src/safety-camera-provider.js';
 import { TorontoCameraProviderError } from '../src/toronto-safety-camera-provider.js';
@@ -208,6 +210,79 @@ describe('Calgary road events', () => {
       },
     });
     const response = await app.inject({ method: 'GET', url: '/v1/events' });
+
+    expect(response.statusCode).toBe(503);
+    expect(ProblemDetailsSchema.parse(response.json())).toMatchObject({
+      code: 'service_unavailable',
+      status: 503,
+      title: 'Road data unavailable',
+    });
+  });
+});
+
+describe('Ontario road events', () => {
+  const roadEventResponse = OfficialRoadEventResponseSchema.parse({
+    degraded: false,
+    events: [
+      {
+        confidence: 'official',
+        coordinate: { latitude: 43.63599, longitude: -79.668724 },
+        description: 'Construction on HWY 401 Eastbound. One alternating lane.',
+        direction: 'Eastbound',
+        endsAt: '2026-08-24T05:00:00.000Z',
+        id: 'ontario-511:1963:222249',
+        isFullClosure: false,
+        regionId: 'ontario',
+        reportedAt: '2026-07-15T10:00:00.000Z',
+        roadwayName: 'HWY 401',
+        sourceId: 'ontario-511-events',
+        startsAt: '2026-07-15T10:00:00.000Z',
+        title: 'Construction on HWY 401',
+        type: 'construction',
+        updatedAt: '2026-07-15T11:50:00.000Z',
+      },
+    ],
+    generatedAt: '2026-07-15T12:00:00.000Z',
+    regionId: 'ontario',
+    source: {
+      apiDocumentationUrl: 'https://511on.ca/developers/doc',
+      attribution:
+        'Contains information licensed under the Open Government Licence \u2013 Ontario.',
+      confidence: 'official',
+      licenseUrl: 'https://www.ontario.ca/page/open-government-licence-ontario',
+      refreshIntervalSeconds: 300,
+      sourceId: 'ontario-511-events',
+      updatedAt: '2026-07-15T11:50:00.000Z',
+    },
+    stale: false,
+  });
+
+  it('returns contract-valid official Ontario events', async () => {
+    const app = await createTestApp({
+      ontarioEventProvider: { getRoadEvents: () => Promise.resolve(roadEventResponse) },
+    });
+    const response = await app.inject({ method: 'GET', url: '/v2/events?region=ontario' });
+
+    expect(response.statusCode).toBe(200);
+    expect(OfficialRoadEventResponseSchema.parse(response.json())).toEqual(roadEventResponse);
+  });
+
+  it('rejects missing or unsupported regions', async () => {
+    const app = await createTestApp();
+
+    expect((await app.inject({ method: 'GET', url: '/v2/events' })).statusCode).toBe(400);
+    expect(
+      (await app.inject({ method: 'GET', url: '/v2/events?region=calgary-ab' })).statusCode,
+    ).toBe(400);
+  });
+
+  it('returns a stable problem when Ontario road data is unavailable', async () => {
+    const app = await createTestApp({
+      ontarioEventProvider: {
+        getRoadEvents: () => Promise.reject(new OntarioRoadEventProviderError('offline')),
+      },
+    });
+    const response = await app.inject({ method: 'GET', url: '/v2/events?region=ontario' });
 
     expect(response.statusCode).toBe(503);
     expect(ProblemDetailsSchema.parse(response.json())).toMatchObject({
@@ -525,6 +600,7 @@ describe('OpenAPI', () => {
     expect(document.paths).toHaveProperty('/v1/routes');
     expect(document.paths).toHaveProperty('/v1/search');
     expect(document.paths).toHaveProperty('/v2/cameras');
+    expect(document.paths).toHaveProperty('/v2/events');
     expect(document.paths).not.toHaveProperty('/openapi.json');
   });
 });

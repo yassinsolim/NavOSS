@@ -14,6 +14,8 @@ import type {
   AppConfigResponse,
   Coordinate,
   GeographicBounds,
+  OfficialRoadEvent,
+  OfficialRoadEventResponse,
   OfficialSafetyCamera,
   RoadEvent,
   RoadEventResponse,
@@ -158,6 +160,7 @@ import {
 import { mapAlignedHeadingDegrees } from '@/features/navigation/vehicle-heading';
 import {
   fetchAppConfig,
+  fetchOfficialRoadEvents,
   fetchOfficialSafetyCameras,
   fetchRoadEvents,
   fetchRoutes,
@@ -171,6 +174,10 @@ const CALGARY_TOWER_ROUTE_ORIGIN: Coordinate = {
   latitude: 51.04427,
   longitude: -114.06309,
 };
+const ONTARIO_EVENT_BOUNDS: GeographicBounds = {
+  northEast: { latitude: 56.9, longitude: -74.32 },
+  southWest: { latitude: 41.67, longitude: -95.16 },
+};
 const TORONTO_CAMERA_BOUNDS: GeographicBounds = {
   northEast: { latitude: 43.86, longitude: -79.1 },
   southWest: { latitude: 43.58, longitude: -79.64 },
@@ -182,7 +189,8 @@ const EMPTY_FEATURE_COLLECTION: FeatureCollection<Point> = {
 const ROAD_EVENT_REFRESH_INTERVAL_MS = 5 * 60 * 1_000;
 const ROAD_EVENT_LAYER_IDS = [
   'official-construction-events',
-  'unverified-incident-events',
+  'road-closure-events',
+  'road-incident-events',
 ] as const;
 const MAP_IMAGES = {
   'safety-camera': require('@/assets/images/camera-marker.png'),
@@ -191,6 +199,8 @@ const MAP_IMAGES = {
 };
 
 type LocationState = 'idle' | 'locating' | 'visible' | 'denied' | 'error';
+type MapRoadEvent = RoadEvent | OfficialRoadEvent;
+type RoadEventRegion = 'calgary' | 'ontario';
 type RouteUiState =
   | { type: 'idle' }
   | {
@@ -298,8 +308,8 @@ function safetyCameraFeatures(
 }
 
 function roadEventFeatures(
-  events: readonly RoadEvent[],
-  type: RoadEvent['type'],
+  events: readonly MapRoadEvent[],
+  type: MapRoadEvent['type'],
 ): FeatureCollection<Point> {
   return {
     features: events
@@ -316,7 +326,12 @@ function roadEventFeatures(
   };
 }
 
-function roadEventAlertMessage(event: RoadEvent): string {
+function roadEventAlertMessage(event: MapRoadEvent): string {
+  if ('regionId' in event) {
+    const end = event.endsAt === undefined ? '' : `\nEnds: ${event.endsAt.replace('T', ' ')}`;
+    return `Official Ontario 511 road information\n\n${event.description}\n\nStarts: ${event.startsAt.replace('T', ' ')}${end}`;
+  }
+
   const confidence =
     event.confidence === 'official'
       ? 'Official City of Calgary construction information'
@@ -411,6 +426,8 @@ export function MapScreen() {
   const [safetyCameraAlert, setSafetyCameraAlert] = useState<UpcomingSafetyCamera>();
   const [safetyCameras, setSafetyCameras] = useState<readonly SafetyCamera[]>([]);
   const [roadEventResponse, setRoadEventResponse] = useState<RoadEventResponse>();
+  const [officialRoadEventResponse, setOfficialRoadEventResponse] =
+    useState<OfficialRoadEventResponse>();
   const [roadEventRefreshDelayed, setRoadEventRefreshDelayed] = useState(false);
   const [torontoSafetyCameras, setTorontoSafetyCameras] = useState<readonly OfficialSafetyCamera[]>(
     [],
@@ -428,6 +445,13 @@ export function MapScreen() {
     latitude: number;
     longitude: number;
   }>();
+  const roadEventRegion: RoadEventRegion =
+    userCoordinate !== undefined && isCoordinateInCoverage(userCoordinate, ONTARIO_EVENT_BOUNDS)
+      ? 'ontario'
+      : 'calgary';
+  const roadEventSnapshot =
+    roadEventRegion === 'ontario' ? officialRoadEventResponse : roadEventResponse;
+  const roadEvents: readonly MapRoadEvent[] = roadEventSnapshot?.events ?? [];
 
   const invalidatePlaceInteraction = () => {
     placeInteractionRef.current += 1;
@@ -626,17 +650,29 @@ export function MapScreen() {
       return;
     }
 
+    setRoadEventRefreshDelayed(false);
     let controller: AbortController | undefined;
     const refresh = () => {
       controller?.abort();
       const requestController = new AbortController();
       controller = requestController;
-      void fetchRoadEvents({ signal: requestController.signal })
-        .then((response) => {
-          startTransition(() => {
-            setRoadEventResponse(response);
-            setRoadEventRefreshDelayed(false);
-          });
+      const request =
+        roadEventRegion === 'ontario'
+          ? fetchOfficialRoadEvents({ region: 'ontario', signal: requestController.signal }).then(
+              (response) => {
+                startTransition(() => {
+                  setOfficialRoadEventResponse(response);
+                });
+              },
+            )
+          : fetchRoadEvents({ signal: requestController.signal }).then((response) => {
+              startTransition(() => {
+                setRoadEventResponse(response);
+              });
+            });
+      void request
+        .then(() => {
+          setRoadEventRefreshDelayed(false);
         })
         .catch(() => {
           if (!requestController.signal.aborted) {
@@ -651,7 +687,7 @@ export function MapScreen() {
       clearInterval(interval);
       controller?.abort();
     };
-  }, [mapPreferences.showRoadEvents]);
+  }, [mapPreferences.showRoadEvents, roadEventRegion]);
 
   useEffect(() => {
     let active = true;
@@ -1238,7 +1274,7 @@ export function MapScreen() {
       return;
     }
 
-    if (mapPreferences.showRoadEvents && roadEventResponse !== undefined) {
+    if (mapPreferences.showRoadEvents && roadEventSnapshot !== undefined) {
       try {
         const tapRadius = 18;
         const features = await mapRef.current.queryRenderedFeatures(
@@ -1251,7 +1287,7 @@ export function MapScreen() {
         const eventId = features
           .map((feature) => feature.properties?.id)
           .find((id): id is string => typeof id === 'string');
-        const event = roadEventResponse.events.find((candidate) => candidate.id === eventId);
+        const event = roadEvents.find((candidate) => candidate.id === eventId);
         if (event !== undefined) {
           Keyboard.dismiss();
           Alert.alert(event.title, roadEventAlertMessage(event), [{ text: 'Close' }]);
@@ -1710,7 +1746,6 @@ export function MapScreen() {
   const selectedPlacePhoneUrl = placePhoneUrl(selectedResult?.details?.phone);
   const selectedPlaceWebsiteUrl = placeWebsiteUrl(selectedResult?.details?.website);
   const selectedPlaceWebsiteLabel = placeWebsiteLabel(selectedResult?.details?.website);
-  const roadEvents = roadEventResponse?.events ?? [];
 
   if (
     carPlayConnected &&
@@ -1941,7 +1976,7 @@ export function MapScreen() {
             />
           </GeoJSONSource>
         )}
-        {mapPreferences.showRoadEvents && roadEventResponse !== undefined && (
+        {mapPreferences.showRoadEvents && roadEventSnapshot !== undefined && (
           <>
             <GeoJSONSource
               data={roadEventFeatures(roadEvents, 'construction')}
@@ -1960,11 +1995,27 @@ export function MapScreen() {
               />
             </GeoJSONSource>
             <GeoJSONSource
-              data={roadEventFeatures(roadEvents, 'incident')}
-              id="unverified-incident-events-source"
+              data={roadEventFeatures(roadEvents, 'closure')}
+              id="road-closure-events-source"
             >
               <Layer
-                id="unverified-incident-events"
+                id="road-closure-events"
+                paint={{
+                  'circle-color': NavOssColors.asphalt,
+                  'circle-opacity': 0.95,
+                  'circle-radius': 8,
+                  'circle-stroke-color': NavOssColors.white,
+                  'circle-stroke-width': 3,
+                }}
+                type="circle"
+              />
+            </GeoJSONSource>
+            <GeoJSONSource
+              data={roadEventFeatures(roadEvents, 'incident')}
+              id="road-incident-events-source"
+            >
+              <Layer
+                id="road-incident-events"
                 paint={{
                   'circle-color': NavOssColors.coral,
                   'circle-opacity': 0.82,
@@ -2063,7 +2114,7 @@ export function MapScreen() {
 
       {(activeTab === 'explore' || !appShellVisible) &&
         mapPreferences.showRoadEvents &&
-        (roadEventResponse !== undefined || roadEventRefreshDelayed) && (
+        (roadEventSnapshot !== undefined || roadEventRefreshDelayed) && (
           <View
             pointerEvents="none"
             style={[
@@ -2072,9 +2123,9 @@ export function MapScreen() {
             ]}
           >
             <Text style={styles.roadEventAttributionText}>
-              {roadEventResponse === undefined
+              {roadEventSnapshot === undefined
                 ? 'Road events unavailable'
-                : `Road events · City of Calgary · Incidents unverified${roadEventResponse.stale ? ' · Stale snapshot' : ''}${roadEventRefreshDelayed ? ' · Refresh delayed' : ''}`}
+                : `${roadEventRegion === 'ontario' ? 'Road events · Ontario 511 · Official' : 'Road events · City of Calgary · Incidents unverified'}${roadEventSnapshot.stale ? ' · Stale snapshot' : ''}${roadEventRefreshDelayed ? ' · Refresh delayed' : ''}`}
             </Text>
           </View>
         )}
@@ -2277,6 +2328,7 @@ export function MapScreen() {
           <Text style={styles.attributionText}>
             © OpenMapTiles · © OpenStreetMap · © City of Calgary
             {torontoSafetyCameras.length > 0 ? ' · © City of Toronto' : ''}
+            {roadEventRegion === 'ontario' ? ' · Ontario 511' : ''}
           </Text>
         </Pressable>
       )}

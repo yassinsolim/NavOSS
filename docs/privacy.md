@@ -2,7 +2,7 @@
 
 Status: **ready for internal TestFlight**. A direct privacy/support email must be activated before external beta testing.
 
-Effective date: July 27, 2026
+Effective date: July 30, 2026
 
 NavOSS is an account-free navigation application beginning with a Calgary technical beta. This policy explains how NavOSS uses data when you view the map, inspect or search for a place, request a route, navigate, share a place or ETA, open an external link, or ask for support.
 
@@ -32,11 +32,17 @@ In a build where Google Places ratings are explicitly enabled, opening a point-o
 
 An enabled build links GooglePlacesSwift 10.15.0 and its underlying Google Places SDK. The SDK's embedded Apple privacy manifest declares Google collection of precise and coarse location for analytics and app functionality; device ID linked to identity for analytics and app functionality; other data linked to identity for analytics; and unlinked performance data, product interaction, and search history for analytics. The manifest declares no tracking. These are Google-controlled SDK declarations beyond the rating values NavOSS requests or receives, and enabled-build App Privacy answers must include them.
 
-### Map and camera requests
+### Map, road-event, and camera requests
 
 The phone requests map styles, tiles, fonts, and sprites directly from the public OpenFreeMap service. OpenFreeMap therefore receives ordinary network information and the requested map resources, which can indicate the viewed map area. Its policy says regular logs are anonymized without IP addresses, while IP logging may be enabled during a security incident for no more than 30 days.
 
 The phone obtains normalized safety-camera records from NavOSS. The NavOSS server refreshes the public City of Calgary Intersection Safety Cameras dataset every six hours and independently mirrors public business and parcel-address datasets every 24 hours. The phone and live search requests do not send location, search text, or route data to Calgary Open Data.
+
+When road-event markers are enabled, the phone requests either Calgary or Ontario event records
+from NavOSS based on whether its current coordinate is inside Ontario. The request identifies only
+the region and does not send the coordinate. The NavOSS server polls public City of Calgary road
+events and official Ontario 511 events every five minutes. It does not forward phone location,
+search text, routes, or user identifiers to either public-data service.
 
 Map appearance choices, including style, navigation orientation, tilt, visible map content, safety-camera marker visibility, and route color, are stored only in the app on the device. These settings are not sent to NavOSS or used for analytics. Selecting a hosted map style changes which OpenFreeMap style resources the phone requests but does not add a new provider. Hiding camera markers does not disable active-navigation safety warnings.
 
@@ -60,7 +66,7 @@ Cloudflare provides public DNS, TLS termination, denial-of-service protection, a
 
 ## Purposes
 
-NavOSS uses data only to provide map rendering, place details, search, routing, navigation, rerouting, arrival detection, safety-camera notices, user-requested sharing and external actions, service reliability, abuse prevention, security, and user-requested support.
+NavOSS uses data only to provide map rendering, road-event awareness, place details, search, routing, navigation, rerouting, arrival detection, safety-camera notices, user-requested sharing and external actions, service reliability, abuse prevention, security, and user-requested support.
 
 NavOSS does not sell personal information or use it for advertising, marketing profiles, or cross-app tracking.
 
@@ -71,12 +77,13 @@ NavOSS does not sell personal information or use it for advertising, marketing p
 | NavOSS operator-controlled server                                                                  | API, Nominatim and indexed Calgary search, Valhalla routing, camera normalization, and operational security                                                                                                             | Alberta, Canada                                                                     |
 | [Cloudflare](https://www.cloudflare.com/privacypolicy/)                                            | DNS, TLS, traffic delivery, tunnel, and network security; processes IP and request traffic                                                                                                                              | Global network; Cloudflare describes international transfers in its policy          |
 | [OpenFreeMap](https://openfreemap.org/privacy/)                                                    | Direct map style, tile, font, and sprite delivery                                                                                                                                                                       | Hyperknot Software Kft. in Hungary, with infrastructure that may include Cloudflare |
+| [Ontario 511](https://511on.ca/developers/doc)                                                     | Official construction, closure, and incident data polled by the NavOSS server; receives no phone location or user data                                                                                                  | Government of Ontario                                                               |
 | [Mapbox](https://www.mapbox.com/legal/privacy/)                                                    | Optional licensed live-traffic routing; receives route endpoints, preferences, and request network metadata only when explicitly enabled                                                                                | Global infrastructure; disabled in current production                               |
 | [Apple](https://www.apple.com/legal/privacy/)                                                      | TestFlight distribution, tester feedback, and the user-invoked system share sheet                                                                                                                                       | Under Apple's policy                                                                |
 | [Google Places and Google Maps](https://policies.google.com/privacy)                               | Optional rating/count in an enabled build; Google SDK manifest declares location, device ID, other data, performance, interaction, and search-history collection; external review search only after the user chooses it | Under Google's policy                                                               |
 | [GitHub](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement) | Public issues and private vulnerability reports initiated by a user                                                                                                                                                     | Under GitHub's policy                                                               |
 
-Map and route data is derived from OpenStreetMap contributors. Search combines OpenStreetMap with the City of Calgary's public Business Licenses and Parcel Address datasets. Safety-camera records come from the City's public Intersection Safety Cameras dataset. Public Photon and FOSSGIS services are not used by the production API.
+Map and route data is derived from OpenStreetMap contributors. Search combines OpenStreetMap with the City of Calgary's public Business Licenses and Parcel Address datasets. Safety-camera records come from public Calgary and Toronto datasets. Road events come from public City of Calgary data and official Ontario 511. Public Photon and FOSSGIS services are not used by the production API.
 
 ## Retention
 

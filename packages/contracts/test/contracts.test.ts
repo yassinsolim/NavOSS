@@ -4,6 +4,7 @@ import {
   AppConfigResponseSchema,
   compareRouteAlternatives,
   GeographicBoundsSchema,
+  OfficialRoadEventResponseSchema,
   OfficialSafetyCameraResponseSchema,
   RoadEventResponseSchema,
   SafetyCameraResponseSchema,
@@ -135,6 +136,64 @@ describe('SafetyCameraResponseSchema', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+});
+
+describe('OfficialRoadEventResponseSchema', () => {
+  const response = {
+    degraded: false,
+    events: [
+      {
+        confidence: 'official',
+        coordinate: { latitude: 43.63599, longitude: -79.668724 },
+        description: 'Construction on Highway 401. One alternating lane.',
+        direction: 'Eastbound',
+        endsAt: '2026-08-24T05:00:00.000Z',
+        id: 'ontario-511:1963:222249',
+        isFullClosure: false,
+        regionId: 'ontario',
+        reportedAt: '2026-07-30T04:00:00.000Z',
+        roadwayName: 'HWY 401',
+        sourceId: 'ontario-511-events',
+        startsAt: '2026-07-30T04:00:00.000Z',
+        title: 'Construction on HWY 401',
+        type: 'construction',
+        updatedAt: '2026-07-30T20:00:00.000Z',
+      },
+    ],
+    generatedAt: '2026-07-30T20:32:00.000Z',
+    regionId: 'ontario',
+    source: {
+      apiDocumentationUrl: 'https://511on.ca/developers/doc',
+      attribution:
+        'Contains information licensed under the Open Government Licence \u2013 Ontario.',
+      confidence: 'official',
+      licenseUrl: 'https://www.ontario.ca/page/open-government-licence-ontario',
+      refreshIntervalSeconds: 300,
+      sourceId: 'ontario-511-events',
+      updatedAt: '2026-07-30T20:00:00.000Z',
+    },
+    stale: false,
+  };
+
+  it('accepts official Ontario 511 events with UTC source timestamps', () => {
+    expect(OfficialRoadEventResponseSchema.safeParse(response).success).toBe(true);
+  });
+
+  it('rejects out-of-province events and inconsistent stale posture', () => {
+    expect(
+      OfficialRoadEventResponseSchema.safeParse({
+        ...response,
+        degraded: false,
+        events: [
+          {
+            ...response.events[0],
+            coordinate: { latitude: 51.04, longitude: -114.07 },
+          },
+        ],
+        stale: true,
+      }).success,
+    ).toBe(false);
   });
 });
 

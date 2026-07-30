@@ -159,12 +159,14 @@ Those records may be displayed as official red-light-camera markers, but they mu
 current direction-aware spoken alert. Ontario's municipal automated-speed-enforcement dataset is
 historical after the provincial ban in November 2025 and must not be published as an active overlay.
 
-Ontario 511's official developer API is the preferred next regional overlay source. Its Open
-Government Licence feed provides traffic events, construction, road conditions, roadside cameras,
-and alerts, with a documented throttle of 10 calls per 60 seconds. A production integration must
-fetch and cache these records server-side, normalize source timestamps and closure severity, expose
-bounded versioned contracts, and keep Ontario 511 attribution visible. On July 30, 2026, direct
-official probes returned 626 events, 546 road-condition records, and 948 roadside cameras.
+The first Ontario 511 integration is implemented through `GET /v2/events?region=ontario`. The server
+polls the official event feed every five minutes within the documented 10-calls-per-60-seconds
+limit, normalizes source timestamps and closure state, filters expired or out-of-province points,
+and retains a bounded 24-hour in-memory stale snapshot. The phone switches to this feed only when
+its current coordinate is in Ontario and keeps Ontario 511 attribution visible. A July 30, 2026
+production-equivalent probe normalized 602 construction events, 11 incidents, and one closure.
+Road-condition polylines, roadside camera imagery, and province-wide alerts remain separate future
+contracts rather than being silently flattened into point events.
 
 Ontario 511 events and conditions are not a reusable directed-edge speed-flow feed. They can support
 closure, construction, incident, condition, and camera overlays, but they must not be presented as
@@ -175,7 +177,8 @@ licensed flow pipeline described above.
 
 1. **Toronto/GTA internal coverage:** benchmark an Ontario import, deploy isolated staging
    routing/search, validate GTA routes and addresses, retain source-labelled Toronto red-light
-   cameras, and add cached Ontario 511 events/conditions through versioned endpoints.
+   cameras, retain the cached Ontario 511 event endpoint, and add road-condition polylines only
+   after separate map and freshness validation.
 2. **Canada internal coverage:** generalize the coverage contract, deploy Canadian routing/search,
    and add cross-province, bilingual, rural, ferry, winter-road, and border-adjacent route cases.
 3. **United States internal coverage:** add TIGER/postcode search enrichment, interstate/toll/express

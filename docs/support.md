@@ -34,14 +34,15 @@ Do not send a home address, precise trip history, or other sensitive information
 
 ## Known beta limitations
 
-- Calgary coverage only;
+- Calgary search and routing only; Ontario currently has official road-event and Toronto red-light-camera overlays;
 - no live traffic or traffic-aware ETA;
 - no lane guidance, Android release, or offline routing;
 - CarPlay is available only in the dedicated tester build and has not completed real-vehicle validation;
 - place search and route quality are still being expanded; and
-- safety-camera records may be incomplete or change between monthly City updates; and
+- safety-camera records may be incomplete or change between source updates; and
 - road-event markers are informational, construction updates twice daily, current incidents are
-  explicitly unverified, and neither source provides live traffic or traffic-aware routing.
+  explicitly unverified in Calgary, Ontario 511 events are official, and neither regional feed
+  provides live congestion or traffic-aware routing.
 
 ## Urgent safety issues
 

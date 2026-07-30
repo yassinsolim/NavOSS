@@ -2,6 +2,8 @@ import fastifySwagger from '@fastify/swagger';
 import {
   AppConfigResponseSchema,
   HealthResponseSchema,
+  OfficialRoadEventQuerySchema,
+  OfficialRoadEventResponseSchema,
   OfficialSafetyCameraQuerySchema,
   OfficialSafetyCameraResponseSchema,
   ProblemDetailsSchema,
@@ -30,6 +32,11 @@ import {
   createCalgaryRoadEventProvider,
   type CalgaryRoadEventProvider,
 } from './calgary-road-event-provider.js';
+import {
+  createOntarioRoadEventProvider,
+  OntarioRoadEventProviderError,
+  type OntarioRoadEventProvider,
+} from './ontario-road-event-provider.js';
 import { createProblem } from './problem.js';
 import {
   createConfiguredRouteProvider,
@@ -63,6 +70,7 @@ export interface BuildAppOptions {
   clock?: () => Date;
   eventProvider?: CalgaryRoadEventProvider;
   logger?: FastifyServerOptions['logger'];
+  ontarioEventProvider?: OntarioRoadEventProvider;
   productionSearch?: boolean;
   routeProvider?: RouteProvider;
   searchProvider?: SearchProvider;
@@ -75,6 +83,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const cameraProvider = options.cameraProvider ?? createCalgarySafetyCameraProvider();
   const eventProvider = options.eventProvider ?? createCalgaryRoadEventProvider();
   const fixtures = options.searchFixtures ?? CALGARY_SEARCH_FIXTURES;
+  const ontarioEventProvider = options.ontarioEventProvider ?? createOntarioRoadEventProvider();
   const productionSearch = options.productionSearch ?? process.env.NOMINATIM_URL !== undefined;
   const routeProvider = options.routeProvider ?? createConfiguredRouteProvider();
   const liveTraffic = routeProvider.source?.traffic === 'live';
@@ -325,6 +334,39 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             'service_unavailable',
             'Road data unavailable',
             'Official Calgary road-event data could not be loaded right now.',
+          );
+        }
+        throw error;
+      }
+    },
+  );
+
+  typedApp.get(
+    '/v2/events',
+    {
+      schema: {
+        description:
+          'Returns official Ontario 511 construction, closure, and incident points with freshness metadata.',
+        querystring: OfficialRoadEventQuerySchema,
+        response: {
+          200: OfficialRoadEventResponseSchema,
+          503: ProblemDetailsSchema,
+        },
+        tags: ['events'],
+      },
+    },
+    async (request, reply) => {
+      try {
+        return await ontarioEventProvider.getRoadEvents();
+      } catch (error: unknown) {
+        if (error instanceof OntarioRoadEventProviderError) {
+          reply.status(503).type('application/problem+json');
+          return createProblem(
+            request,
+            503,
+            'service_unavailable',
+            'Road data unavailable',
+            'Official Ontario 511 road-event data could not be loaded right now.',
           );
         }
         throw error;

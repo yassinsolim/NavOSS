@@ -1,5 +1,6 @@
 import {
   AppConfigResponseSchema,
+  OfficialRoadEventResponseSchema,
   OfficialSafetyCameraResponseSchema,
   ProblemDetailsSchema,
   RoadEventResponseSchema,
@@ -7,6 +8,8 @@ import {
   SafetyCameraResponseSchema,
   SearchResponseSchema,
   type AppConfigResponse,
+  type OfficialRoadEventRegion,
+  type OfficialRoadEventResponse,
   type OfficialSafetyCameraRegion,
   type OfficialSafetyCameraResponse,
   type RouteRequest,
@@ -49,6 +52,10 @@ export interface FetchSafetyCamerasOptions {
   baseUrl?: string;
   fetchImplementation?: typeof fetch;
   signal?: AbortSignal;
+}
+
+export interface FetchOfficialRoadEventsOptions extends FetchSafetyCamerasOptions {
+  region: OfficialRoadEventRegion;
 }
 
 export interface FetchOfficialSafetyCamerasOptions extends FetchSafetyCamerasOptions {
@@ -190,6 +197,18 @@ export async function fetchRoadEvents(
     options.signal === undefined ? undefined : { signal: options.signal },
   );
   return RoadEventResponseSchema.parse(await parseResponse(response));
+}
+
+export async function fetchOfficialRoadEvents(
+  options: FetchOfficialRoadEventsOptions,
+): Promise<OfficialRoadEventResponse> {
+  const fetchImplementation = options.fetchImplementation ?? fetch;
+  const searchParameters = new URLSearchParams({ region: options.region });
+  const response = await fetchImplementation(
+    `${normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl())}/v2/events?${searchParameters.toString()}`,
+    options.signal === undefined ? undefined : { signal: options.signal },
+  );
+  return OfficialRoadEventResponseSchema.parse(await parseResponse(response));
 }
 
 export async function fetchOfficialSafetyCameras(

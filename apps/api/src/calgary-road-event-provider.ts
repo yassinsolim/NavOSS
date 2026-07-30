@@ -56,6 +56,8 @@ export class CalgaryRoadEventProviderError extends Error {
 
 export interface CalgaryRoadEventProvider {
   getRoadEvents(): Promise<RoadEventResponse>;
+  start?(): void;
+  stop?(): void;
 }
 
 interface CalgaryRoadEventProviderOptions {
@@ -67,6 +69,7 @@ interface CalgaryRoadEventProviderOptions {
   incidentDataUrl?: string;
   incidentMetadataUrl?: string;
   maximumStaleMs?: number;
+  refreshIntervalMs?: number;
   requestTimeoutMs?: number;
 }
 
@@ -210,71 +213,97 @@ export function createCalgaryRoadEventProvider(
   const incidentMetadataUrl =
     options.incidentMetadataUrl ?? `https://data.calgary.ca/api/views/${INCIDENT_DATASET_ID}`;
   const maximumStaleMs = options.maximumStaleMs ?? DEFAULT_MAXIMUM_STALE_MS;
+  const refreshIntervalMs = options.refreshIntervalMs ?? cacheTtlMs;
   const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   let cached: { expiresAt: number; loadedAt: number; value: RoadEventResponse } | undefined;
+  let interval: ReturnType<typeof setInterval> | undefined;
+  let refreshing: Promise<RoadEventResponse> | undefined;
 
-  return {
-    async getRoadEvents(): Promise<RoadEventResponse> {
-      const now = clock();
-      if (cached !== undefined && now < cached.expiresAt) return cached.value;
+  const loadRoadEvents = async (): Promise<RoadEventResponse> => {
+    const now = clock();
+    if (cached !== undefined && now < cached.expiresAt) return cached.value;
 
-      try {
-        const [
-          constructionPayload,
-          constructionMetadataPayload,
-          incidentPayload,
-          incidentMetadataPayload,
-        ] = await Promise.all([
-          fetchJson(fetchImplementation, constructionDataUrl, requestTimeoutMs),
-          fetchJson(fetchImplementation, constructionMetadataUrl, requestTimeoutMs),
-          fetchJson(fetchImplementation, incidentDataUrl, requestTimeoutMs),
-          fetchJson(fetchImplementation, incidentMetadataUrl, requestTimeoutMs),
-        ]);
-        const constructions = ConstructionRowsSchema.parse(constructionPayload);
-        const constructionMetadata = DatasetMetadataSchema.parse(constructionMetadataPayload);
-        const incidents = IncidentRowsSchema.parse(incidentPayload);
-        const incidentMetadata = DatasetMetadataSchema.parse(incidentMetadataPayload);
-        const currentLocalDateTime = calgaryLocalDateTime(now);
-        const events = [
-          ...constructions.flatMap((row) => {
-            const event = normalizeConstruction(row, currentLocalDateTime);
-            return event === undefined ? [] : [event];
-          }),
-          ...incidents.flatMap((row) => {
-            const incident = IncidentRowSchema.safeParse(row);
-            return incident.success ? [normalizeIncident(incident.data)] : [];
-          }),
-        ].sort((left, right) =>
-          left.startsAtLocal === right.startsAtLocal
-            ? left.id.localeCompare(right.id, 'en-CA')
-            : left.startsAtLocal.localeCompare(right.startsAtLocal, 'en-CA'),
-        );
-        const value = RoadEventResponseSchema.parse({
-          degraded: false,
-          events,
+    try {
+      const [
+        constructionPayload,
+        constructionMetadataPayload,
+        incidentPayload,
+        incidentMetadataPayload,
+      ] = await Promise.all([
+        fetchJson(fetchImplementation, constructionDataUrl, requestTimeoutMs),
+        fetchJson(fetchImplementation, constructionMetadataUrl, requestTimeoutMs),
+        fetchJson(fetchImplementation, incidentDataUrl, requestTimeoutMs),
+        fetchJson(fetchImplementation, incidentMetadataUrl, requestTimeoutMs),
+      ]);
+      const constructions = ConstructionRowsSchema.parse(constructionPayload);
+      const constructionMetadata = DatasetMetadataSchema.parse(constructionMetadataPayload);
+      const incidents = IncidentRowsSchema.parse(incidentPayload);
+      const incidentMetadata = DatasetMetadataSchema.parse(incidentMetadataPayload);
+      const currentLocalDateTime = calgaryLocalDateTime(now);
+      const events = [
+        ...constructions.flatMap((row) => {
+          const event = normalizeConstruction(row, currentLocalDateTime);
+          return event === undefined ? [] : [event];
+        }),
+        ...incidents.flatMap((row) => {
+          const incident = IncidentRowSchema.safeParse(row);
+          return incident.success ? [normalizeIncident(incident.data)] : [];
+        }),
+      ].sort((left, right) =>
+        left.startsAtLocal === right.startsAtLocal
+          ? left.id.localeCompare(right.id, 'en-CA')
+          : left.startsAtLocal.localeCompare(right.startsAtLocal, 'en-CA'),
+      );
+      const value = RoadEventResponseSchema.parse({
+        degraded: false,
+        events,
+        generatedAt: new Date(now).toISOString(),
+        sources: [
+          source('calgary-construction-detours', constructionMetadata.rowsUpdatedAt),
+          source('calgary-current-incidents', incidentMetadata.rowsUpdatedAt),
+        ],
+        stale: false,
+      });
+      cached = { expiresAt: now + cacheTtlMs, loadedAt: now, value };
+      return value;
+    } catch (error: unknown) {
+      if (cached !== undefined && now - cached.loadedAt <= maximumStaleMs) {
+        return RoadEventResponseSchema.parse({
+          ...cached.value,
+          degraded: true,
           generatedAt: new Date(now).toISOString(),
-          sources: [
-            source('calgary-construction-detours', constructionMetadata.rowsUpdatedAt),
-            source('calgary-current-incidents', incidentMetadata.rowsUpdatedAt),
-          ],
-          stale: false,
-        });
-        cached = { expiresAt: now + cacheTtlMs, loadedAt: now, value };
-        return value;
-      } catch (error: unknown) {
-        if (cached !== undefined && now - cached.loadedAt <= maximumStaleMs) {
-          return RoadEventResponseSchema.parse({
-            ...cached.value,
-            degraded: true,
-            generatedAt: new Date(now).toISOString(),
-            stale: true,
-          });
-        }
-        if (error instanceof CalgaryRoadEventProviderError) throw error;
-        throw new CalgaryRoadEventProviderError('Official Calgary road data could not be loaded.', {
-          cause: error,
+          stale: true,
         });
       }
+      if (error instanceof CalgaryRoadEventProviderError) throw error;
+      throw new CalgaryRoadEventProviderError('Official Calgary road data could not be loaded.', {
+        cause: error,
+      });
+    }
+  };
+
+  const getRoadEvents = (): Promise<RoadEventResponse> => {
+    if (refreshing !== undefined) return refreshing;
+    refreshing = loadRoadEvents().finally(() => {
+      refreshing = undefined;
+    });
+    return refreshing;
+  };
+
+  return {
+    getRoadEvents,
+    start(): void {
+      if (interval !== undefined) return;
+      void getRoadEvents().catch(() => undefined);
+      interval = setInterval(() => {
+        void getRoadEvents().catch(() => undefined);
+      }, refreshIntervalMs);
+      interval.unref();
+    },
+    stop(): void {
+      if (interval === undefined) return;
+      clearInterval(interval);
+      interval = undefined;
     },
   };
 }

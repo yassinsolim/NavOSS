@@ -109,12 +109,14 @@ frequency, dataset links, and attribution are returned with every API response. 
 and end values are source-local civil times tagged as `America/Edmonton`; NavOSS does not reinterpret
 them as UTC. Expired construction records and malformed rows are excluded rather than guessed.
 
-The API caches a complete validated snapshot for five minutes. If Calgary Open Data is temporarily
-unavailable, it may return the last successful snapshot for no more than 24 hours with both `stale`
-and `degraded` set to `true`. After that bound, or before any valid snapshot exists, the endpoint
+The production API polls both feeds every five minutes even when no phone requests the endpoint and
+deduplicates overlapping refreshes. It also caches a complete validated snapshot for five minutes.
+If Calgary Open Data is temporarily unavailable, the API may return the last successful in-memory
+snapshot for no more than 24 hours with both `stale` and `degraded` set to `true`. After that bound,
+before any valid snapshot exists, or after an API restart during an upstream outage, the endpoint
 fails closed. The phone refreshes every five minutes, keeps its last validated response through a
-transient request failure, and visibly identifies a stale server snapshot. Phones do not send user
-location to Calgary Open Data.
+transient request failure, and visibly identifies a stale or delayed snapshot. Phones do not send
+user location to Calgary Open Data.
 
 Road-event markers are awareness information only. They do not change route selection, trigger
 rerouting or speech, alter ETA, or represent road speeds or congestion. NavOSS still has no live
@@ -176,16 +178,25 @@ search, spoken camera alerts, CarPlay camera overlays, and traffic-aware ETA are
 Ontario 511 publishes an official developer API under the
 [Open Government Licence - Ontario](https://www.ontario.ca/page/open-government-licence-ontario).
 The documented resources include traffic events, construction, road conditions, roadside cameras,
-and alerts. The service is throttled to 10 calls per 60 seconds, so NavOSS must access it through a
-server-side cache rather than having every phone poll Ontario directly.
+and alerts. The service is throttled to 10 calls per 60 seconds. NavOSS therefore polls the official
+event endpoint server-side once every five minutes, deduplicates overlapping requests, and exposes
+the normalized result at `GET /v2/events?region=ontario`. Phones never contact Ontario 511 directly
+or send their coordinates to it.
 
-Direct official probes on July 30, 2026 returned 626 events, 546 road-condition records, and 948
-roadside cameras. These counts are observations, not fixed expectations. A future provider must
-validate coordinates, timestamps, event type, closure status, direction, and source identifiers;
-retain the last valid snapshot during transient upstream failures; reject stale or malformed data;
-and publish source freshness and attribution.
+The provider accepts only the documented `roadwork`, `closures`, and `accidentsAndIncidents`
+taxonomy, maps those values to construction, closure, and incident markers, rejects malformed or
+unknown source structures, removes expired records, and excludes points outside Ontario bounds. It
+publishes source freshness, official confidence, API documentation, licence attribution, and stale
+state. A last successful in-memory snapshot may be served for no more than 24 hours during an
+upstream failure; after that bound or an API restart during an outage, the endpoint fails closed.
+
+A direct production-equivalent probe on July 30, 2026 returned 623 source events and normalized 614
+active in-province points: 602 construction events, 11 incidents, and one closure. It also returned
+546 road-condition segments and 948 roadside cameras, which are not part of this first point-event
+contract. These counts are observations, not fixed expectations.
 
 Ontario 511 does not expose a general directed-edge current-speed feed through these documented
-resources. NavOSS may use it for official incident, construction, closure, condition, alert, and
-camera overlays, but not to represent congestion speed or produce traffic-aware ETA. That remains
-gated on a licensed flow source integrated with Valhalla.
+resources. The current phone overlay uses official construction, closure, and incident points only.
+It does not alter route selection, trigger rerouting or speech, represent congestion speed, or
+produce traffic-aware ETA. Ontario search and routing remain unavailable. Traffic-aware routing
+remains gated on a licensed flow source integrated with Valhalla.
