@@ -277,6 +277,11 @@ function hasTagValue(value: string | undefined, accepted: ReadonlySet<string>): 
   );
 }
 
+function nonEmptyText(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized === '' ? undefined : normalized;
+}
+
 function matchesNominatimCategoryMetadata(
   result: z.infer<typeof NominatimResultSchema>,
   category: SearchCategory | undefined,
@@ -307,7 +312,9 @@ function normalizeNominatimResults(
     .filter((result) => matchesNominatimCategoryMetadata(result, query.category))
     .slice(0, query.limit)
     .map((result) => {
-      const name = result.name ?? result.display_name.split(',')[0]?.trim() ?? 'Unnamed place';
+      const sourceName = nonEmptyText(result.name);
+      const displayName = nonEmptyText(result.display_name.split(',')[0]);
+      const name = sourceName ?? displayName ?? 'Unnamed place';
       const normalizedName = normalizeSearchText(name);
       const normalizedLabel = normalizeSearchText(result.display_name);
       const words = normalizedQuery.split(' ').filter(Boolean);
@@ -325,6 +332,13 @@ function normalizeNominatimResults(
         confidence = 0.8;
       }
 
+      const openingHours = nonEmptyText(result.extratags?.opening_hours);
+      const phone = nonEmptyText(result.extratags?.phone ?? result.extratags?.['contact:phone']);
+      const website = nonEmptyText(
+        result.extratags?.website ?? result.extratags?.['contact:website'],
+      );
+      const wheelchair = nonEmptyText(result.extratags?.wheelchair);
+
       return {
         category: nominatimCategory(result),
         center: { latitude: result.lat, longitude: result.lon },
@@ -334,21 +348,10 @@ function normalizeNominatimResults(
               details: {
                 address: result.display_name,
                 ...(result.type === undefined ? {} : { category: result.type }),
-                ...(result.extratags?.opening_hours === undefined
-                  ? {}
-                  : { openingHours: result.extratags.opening_hours }),
-                ...((result.extratags?.phone ?? result.extratags?.['contact:phone']) === undefined
-                  ? {}
-                  : { phone: result.extratags?.phone ?? result.extratags?.['contact:phone'] }),
-                ...((result.extratags?.website ?? result.extratags?.['contact:website']) ===
-                undefined
-                  ? {}
-                  : {
-                      website: result.extratags?.website ?? result.extratags?.['contact:website'],
-                    }),
-                ...(result.extratags?.wheelchair === undefined
-                  ? {}
-                  : { wheelchair: result.extratags.wheelchair }),
+                ...(openingHours ? { openingHours } : {}),
+                ...(phone ? { phone } : {}),
+                ...(website ? { website } : {}),
+                ...(wheelchair ? { wheelchair } : {}),
               },
             }
           : {}),

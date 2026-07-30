@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { SearchCategorySchema } from '@navoss/contracts';
+import { SearchCategorySchema, SearchResponseSchema } from '@navoss/contracts';
 
 import {
   buildNominatimSearchUrl,
@@ -367,6 +367,49 @@ describe('Nominatim search provider', () => {
 
     expect(response.degraded).toBe(false);
     expect(response.results[0]).toMatchObject({ name: 'Shell' });
+  });
+
+  it('falls back for unnamed features and omits empty optional details', async () => {
+    const provider = createNominatimSearchProvider({
+      endpoint: 'http://nominatim:8080/',
+      fetchImplementation: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                addresstype: 'leisure',
+                category: 'leisure',
+                display_name: 'Aspen Woods Park, Calgary, Alberta, Canada',
+                extratags: { opening_hours: '', phone: ' ', website: '', wheelchair: '' },
+                importance: 0.1,
+                lat: '51.045',
+                lon: '-114.205',
+                name: '',
+                osm_id: 456,
+                osm_type: 'way',
+                type: 'park',
+              },
+            ]),
+            { status: 200 },
+          ),
+        ),
+    });
+
+    const response = await provider.search({
+      category: 'park',
+      includeDetails: true,
+      latitude: 51.045,
+      limit: 8,
+      longitude: -114.205,
+      q: 'park',
+      sort: 'distance',
+    });
+
+    expect(response.results[0]).toMatchObject({
+      details: { address: 'Aspen Woods Park, Calgary, Alberta, Canada', category: 'park' },
+      name: 'Aspen Woods Park',
+    });
+    expect(SearchResponseSchema.parse(response)).toEqual(response);
   });
 
   it('falls back to fixtures when self-hosted search is unavailable', async () => {
