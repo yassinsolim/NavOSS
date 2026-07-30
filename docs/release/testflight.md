@@ -225,6 +225,35 @@ restaurant, fast-food, and food-court types. The full stack smoke passed; the AP
 zero restarts and no recent errors. Full repository gates passed with 23 contract, 84 API, 100 mobile,
 and three site tests.
 
+Automatic-location and road-symbol candidate `0.1.0 (30)` was built locally from commit
+`3d65ea8`. Fresh installs now request foreground location on startup, automatically centre after a
+grant, reuse existing permission without prompting, and avoid repeatedly prompting after iOS blocks
+another request. The recenter button remains available for an explicit high-accuracy refresh. A
+dedicated simulator flow reset location privacy, launched without tapping recenter, and verified a
+distance-labelled Calgary International Airport result plus no location-unavailable warning.
+
+Construction now uses an amber work-zone sign, closures a red no-entry sign, and incidents a coral
+warning sign. MapLibre collision placement prevents the roughly 300 Calgary construction symbols
+from overlapping into an unreadable field. Live simulator evidence showed the new construction
+symbols rendered separately from the existing safety-camera icon. NavOSS still has no police
+patrol, checkpoint, or speed-trap feed and therefore does not show a police-location symbol.
+
+Full repository check/lint/test/build/format gates passed with 23 contract, 84 API, 103 mobile, and
+three site tests. A clean native simulator build passed and Metro exported all 47 assets. The
+integrated reuse-build phone run passed the new automatic-location checkpoint, phone
+preview/guidance/report checkpoints, automatic rerouting, and pixel validation. Its unchanged final
+arrival launch timed out because Expo's development menu covered the app; the arrival implementation
+was not changed, and its previous deterministic validation remains the release evidence for that
+slice.
+
+The signed build 30 IPA has SHA-256
+`af8ebee668107b6b934f3c478f768ecfc2ec88be9831ed87408bd1206321444b`. Strict
+signature, arm64 Store profile, production API, location-only background mode, CarPlay app/profile
+entitlement and scene, all three road-event marker assets, Google-disabled packaging, and
+simulator-hook absence passed audit. EAS submission
+`f2b7c935-9a83-421b-b2ce-c07ced46cffc` uploaded it successfully to App Store Connect on July 30, 2026. Apple processing, internal `testers` attachment, focused What to Test notes, and physical
+phone/CarPlay validation remain pending.
+
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a keyless CarPlay tester build so the approved scene and entitlement are present. After the restricted EAS Google key and matching App Privacy answers are ready, use `production-carplay-google` for the rating-enabled candidate:
 
 ```sh
