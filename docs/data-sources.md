@@ -41,11 +41,19 @@ origins, selected results, routes, or user identities. Search results are ranked
 prefix and word-prefix matches, typo similarity, and then optional proximity.
 
 Restaurants, Groceries, and Parks use a checked-in set of Nominatim special phrases that map the
-visible category to explicit OpenStreetMap tags. This prevents category discovery from requiring
-words such as `restaurant` or `park` to appear in the place name. Location-aware category searches
-query three concentric Calgary-bounded viewboxes, merge and deduplicate the candidate pools, compute
-exact distances, and return the nearest valid OSM types first. The phrase import is additive and is
-reapplied after any replacement of the persistent Nominatim database.
+visible category to explicit OpenStreetMap tags. The same strict mapping covers all 35 Explore
+filters: every phone button has a shared contract category, every category has an exact server
+allowlist, and every allowlist is checked against the repeatable Nominatim phrase source. This
+prevents text collisions such as Bars matching barbershops or Car repair matching car washes.
+Location-aware category searches query three concentric Calgary-bounded viewboxes, merge and
+deduplicate the candidate pools, compute exact distances, and return the nearest valid OSM types
+first. Empty upstream names fall back to the first display-label component, and empty optional OSM
+details are omitted so unnamed parks and parking features remain contract-valid. The phrase import
+is additive and is reapplied after any replacement of the persistent Nominatim database.
+
+Brunch and Delivery are not exposed as Explore filters because current open data does not identify
+those attributes consistently enough to support accurate results. Users may still type those words
+as ordinary searches, but NavOSS does not label the results as a verified category.
 
 Named places rendered in the map's OpenMapTiles layers are tappable. NavOSS uses the visible name
 and map coordinate to find the nearest same-name result through the self-hosted search service.

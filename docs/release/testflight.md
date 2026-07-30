@@ -254,6 +254,35 @@ simulator-hook absence passed audit. EAS submission
 `f2b7c935-9a83-421b-b2ce-c07ced46cffc` uploaded it successfully to App Store Connect on July 30, 2026. Apple processing, internal `testers` attachment, focused What to Test notes, and physical
 phone/CarPlay validation remain pending.
 
+Exhaustive Explore-filter candidate `0.1.0 (31)` was built locally from commits `9f237fd`,
+`c3c7836`, and `5b58eba`. The previous app sent typed intent only for Restaurants, Parks, and
+Groceries; every other filter was plain text, causing Bars to return barbershops, Car repair to
+return car washes, ATMs to match “Atmosphere,” and many filters to return nothing. All 35 supported
+filters now use shared typed intent, checked-in Nominatim phrase mappings, strict OSM-type
+allowlists, concentric proximity pools, identical-ID deduplication, and exact-distance ranking.
+Brunch and Delivery were removed because OSM does not identify those attributes consistently enough
+for a trustworthy filter.
+
+The first exhaustive API deployment exposed a second production issue during the two-location
+acceptance matrix: dense categories containing unnamed OSM features, including Parks and Parking,
+failed response serialization because an empty source name was preserved. The API now falls back to
+the display label and drops empty optional detail strings. Production is deployed at
+`5b58eba83c9dd7820d4d207c83ea0724c2a857fd` with rollback
+`/home/navoss/NavOSS.pre-5b58eba-20260730T2307Z`. The complete 35-filter matrix passed at Aspen and
+downtown with zero non-200 responses, type leaks, barber matches, ordering errors, or contract
+failures. Aspen Parks began at 502 m and Bars returned only `bar`/`pub`; downtown Parks began at
+288 m and all 35 filters were nonempty. The full stack smoke passed, the API remained healthy with
+zero restarts, and no recent errors were logged.
+
+All repository check/lint/test/build/format gates passed with 23 contract, 87 API, 103 mobile, and
+three site tests. Exhaustive tests prove phone/contract category equality, phrase/allowlist equality,
+and cross-category leak rejection for every filter. The signed build 31 IPA has SHA-256
+`85cb7209dfa42558e03e10a606400250330b8099a8617662996ee35b1092c437`; Store signature,
+arm64, production API, location-only background mode, CarPlay app/profile entitlement and scene,
+Google-disabled packaging, and simulator-hook absence passed audit. EAS submission
+`9d3646df-f486-46d0-9aa3-e26634158d99` uploaded it successfully to App Store Connect on July 30, 2026. Apple processing, internal `testers` attachment, focused test notes, and physical validation
+remain pending.
+
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a keyless CarPlay tester build so the approved scene and entitlement are present. After the restricted EAS Google key and matching App Privacy answers are ready, use `production-carplay-google` for the rating-enabled candidate:
 
 ```sh
