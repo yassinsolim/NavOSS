@@ -127,7 +127,9 @@ user location to Calgary Open Data.
 
 Road-event markers are awareness information only. They do not change route selection, trigger
 rerouting or speech, alter ETA, or represent road speeds or congestion. NavOSS still has no live
-traffic or traffic-aware ETA.
+traffic or traffic-aware ETA. Construction uses an amber work-zone symbol, closures use a red
+no-entry symbol, and incidents use a coral warning symbol. NavOSS does not ingest or display police
+patrol, checkpoint, or speed-trap locations; there is therefore no police-location marker.
 
 ## Calgary Intersection Safety Cameras
 

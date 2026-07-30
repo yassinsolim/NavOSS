@@ -18,6 +18,10 @@ Issue tracker: <https://github.com/yassinsolim/NavOSS/issues>
 
 NavOSS is a Calgary technical beta with active turn-by-turn guidance and no live traffic. It must not be your only source for navigation, road closures, traffic, or safety-camera information. Follow posted signs and laws. Mount the phone before driving and have a passenger handle any interaction that cannot be completed safely.
 
+On first launch, NavOSS asks for foreground location access and automatically centres the map after
+permission is granted. Later launches reuse the existing grant without prompting. If access was
+denied or disabled in iOS Settings, the location button remains available after access is restored.
+
 ## Useful report details
 
 - App version and build number;
@@ -42,7 +46,8 @@ Do not send a home address, precise trip history, or other sensitive information
 - safety-camera records may be incomplete or change between source updates; and
 - road-event markers are informational, construction updates twice daily, current incidents are
   explicitly unverified in Calgary, Ontario 511 events are official, and neither regional feed
-  provides live congestion or traffic-aware routing.
+  provides live congestion or traffic-aware routing; and
+- NavOSS does not show police patrol, checkpoint, or speed-trap locations.
 
 ## Urgent safety issues
 

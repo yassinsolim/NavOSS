@@ -58,6 +58,7 @@ import { ContributeScreen } from '@/features/map/contribute-screen';
 import { ExploreCategoryBar } from '@/features/map/explore-category-bar';
 import type { ExploreCategory } from '@/features/map/explore-categories';
 import { createLatestRequestGate } from '@/features/map/latest-request-gate';
+import { ensureForegroundLocationPermission } from '@/features/map/map-location';
 import {
   enrichMapPlace,
   MAP_PLACE_LAYER_IDS,
@@ -193,6 +194,9 @@ const ROAD_EVENT_LAYER_IDS = [
   'road-incident-events',
 ] as const;
 const MAP_IMAGES = {
+  'road-closure': require('@/assets/images/road-closure-marker.png'),
+  'road-construction': require('@/assets/images/road-construction-marker.png'),
+  'road-incident': require('@/assets/images/road-incident-marker.png'),
   'safety-camera': require('@/assets/images/camera-marker.png'),
   'vehicle-arrow': require('@/assets/images/vehicle-arrow.png'),
   'vehicle-car': require('@/assets/images/vehicle-car.png'),
@@ -691,9 +695,17 @@ export function MapScreen() {
 
   useEffect(() => {
     let active = true;
-    void Location.getForegroundPermissionsAsync()
-      .then(async (permission) => {
-        if (!permission.granted || !active) return;
+    setLocationState('locating');
+    void ensureForegroundLocationPermission(
+      Location.getForegroundPermissionsAsync,
+      Location.requestForegroundPermissionsAsync,
+    )
+      .then(async (granted) => {
+        if (!active) return;
+        if (!granted) {
+          setLocationState('denied');
+          return;
+        }
         const lastKnown = await Location.getLastKnownPositionAsync({
           maxAge: 60_000,
           requiredAccuracy: 500,
@@ -956,8 +968,11 @@ export function MapScreen() {
     }
 
     setLocationState('locating');
-    const permission = await Location.requestForegroundPermissionsAsync();
-    if (!permission.granted) {
+    const granted = await ensureForegroundLocationPermission(
+      Location.getForegroundPermissionsAsync,
+      Location.requestForegroundPermissionsAsync,
+    );
+    if (!granted) {
       setLocationState('denied');
       return undefined;
     }
@@ -1402,8 +1417,11 @@ export function MapScreen() {
     setLocationState('locating');
 
     try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (!permission.granted) {
+      const granted = await ensureForegroundLocationPermission(
+        Location.getForegroundPermissionsAsync,
+        Location.requestForegroundPermissionsAsync,
+      );
+      if (!granted) {
         setLocationState('denied');
         return;
       }
@@ -1984,14 +2002,13 @@ export function MapScreen() {
             >
               <Layer
                 id="official-construction-events"
-                paint={{
-                  'circle-color': NavOssColors.sun,
-                  'circle-opacity': 0.95,
-                  'circle-radius': 8,
-                  'circle-stroke-color': NavOssColors.asphalt,
-                  'circle-stroke-width': 2,
+                layout={{
+                  'icon-allow-overlap': false,
+                  'icon-ignore-placement': false,
+                  'icon-image': 'road-construction',
+                  'icon-size': 0.58,
                 }}
-                type="circle"
+                type="symbol"
               />
             </GeoJSONSource>
             <GeoJSONSource
@@ -2000,14 +2017,13 @@ export function MapScreen() {
             >
               <Layer
                 id="road-closure-events"
-                paint={{
-                  'circle-color': NavOssColors.asphalt,
-                  'circle-opacity': 0.95,
-                  'circle-radius': 8,
-                  'circle-stroke-color': NavOssColors.white,
-                  'circle-stroke-width': 3,
+                layout={{
+                  'icon-allow-overlap': false,
+                  'icon-ignore-placement': false,
+                  'icon-image': 'road-closure',
+                  'icon-size': 0.58,
                 }}
-                type="circle"
+                type="symbol"
               />
             </GeoJSONSource>
             <GeoJSONSource
@@ -2016,14 +2032,13 @@ export function MapScreen() {
             >
               <Layer
                 id="road-incident-events"
-                paint={{
-                  'circle-color': NavOssColors.coral,
-                  'circle-opacity': 0.82,
-                  'circle-radius': 6,
-                  'circle-stroke-color': NavOssColors.white,
-                  'circle-stroke-width': 2,
+                layout={{
+                  'icon-allow-overlap': false,
+                  'icon-ignore-placement': false,
+                  'icon-image': 'road-incident',
+                  'icon-size': 0.58,
                 }}
-                type="circle"
+                type="symbol"
               />
             </GeoJSONSource>
           </>

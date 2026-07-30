@@ -353,9 +353,12 @@ try {
         }
         await run(
           'xcrun',
-          ['simctl', 'privacy', simulatorId, 'grant', 'location', 'org.navoss.mobile'],
+          ['simctl', 'privacy', simulatorId, 'reset', 'location', 'org.navoss.mobile'],
           { timeoutMs: 30_000 },
         );
+        await run('xcrun', ['simctl', 'location', simulatorId, 'set', '51.04427,-114.06309'], {
+          timeoutMs: 30_000,
+        });
         startService('api', 'corepack', ['pnpm', '--filter', '@navoss/api', 'dev'], rootDirectory, {
           PORT: '3001',
         });
@@ -381,6 +384,24 @@ try {
           waitForUrl('http://127.0.0.1:3001/health'),
           waitForUrl('http://localhost:8081/status'),
         ]);
+        await run(
+          'maestro',
+          [
+            '--device',
+            simulatorId,
+            'test',
+            resolve(rootDirectory, '.maestro/navigation-validation/automatic-location.yaml'),
+          ],
+          {
+            logPath: join(logsDirectory, 'automatic-location.log'),
+            timeoutMs: 90_000,
+          },
+        );
+        await run(
+          'xcrun',
+          ['simctl', 'privacy', simulatorId, 'grant', 'location', 'org.navoss.mobile'],
+          { timeoutMs: 30_000 },
+        );
         await run(
           'sh',
           [
