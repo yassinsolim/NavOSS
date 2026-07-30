@@ -138,3 +138,26 @@ direction-aware spoken warnings.
 Toronto's Automated Speed Enforcement dataset is excluded from active NavOSS camera responses. The
 City marks it as no longer updated because Ontario banned municipal speed cameras in November 2025;
 raw historical rows that still say `Active` are not evidence of current enforcement.
+
+As of July 30, 2026, the production endpoint returns 301 Toronto red-light cameras with a source
+refresh timestamp from the same day. These are currently phone map markers only. Ontario routing,
+search, spoken camera alerts, CarPlay camera overlays, and traffic-aware ETA are not enabled.
+
+## Ontario 511 Road Information
+
+Ontario 511 publishes an official developer API under the
+[Open Government Licence - Ontario](https://www.ontario.ca/page/open-government-licence-ontario).
+The documented resources include traffic events, construction, road conditions, roadside cameras,
+and alerts. The service is throttled to 10 calls per 60 seconds, so NavOSS must access it through a
+server-side cache rather than having every phone poll Ontario directly.
+
+Direct official probes on July 30, 2026 returned 626 events, 546 road-condition records, and 948
+roadside cameras. These counts are observations, not fixed expectations. A future provider must
+validate coordinates, timestamps, event type, closure status, direction, and source identifiers;
+retain the last valid snapshot during transient upstream failures; reject stale or malformed data;
+and publish source freshness and attribution.
+
+Ontario 511 does not expose a general directed-edge current-speed feed through these documented
+resources. NavOSS may use it for official incident, construction, closure, condition, alert, and
+camera overlays, but not to represent congestion speed or produce traffic-aware ETA. That remains
+gated on a licensed flow source integrated with Valhalla.

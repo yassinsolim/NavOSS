@@ -148,21 +148,34 @@ Ontario Valhalla and Nominatim staging deployment, Toronto/GTA route and search 
 the City of Toronto's active red-light-camera feed. Keep the current `/v1` Calgary contract stable;
 regional clients use additive versioned endpoints until a migration build is broadly installed.
 
-The first code milestone provides a validated `/v2/cameras?region=toronto-on` feed and loads its
-markers only when the phone is inside Toronto bounds. It is not deployed and does not change the
-current Calgary production-coverage claim. Ontario search and routing remain blocked on the staging
-imports and quality gates above.
+The first code milestone provides a validated and deployed `/v2/cameras?region=toronto-on` feed and
+loads its markers only when the phone is inside Toronto bounds. On July 30, 2026, production returned
+301 daily-refreshed red-light-camera locations. This does not change the current Calgary
+production-coverage claim. Ontario search and routing remain blocked on the staging imports and
+quality gates above.
 
 Toronto's red-light-camera dataset identifies intersections but not enforced approach direction.
 Those records may be displayed as official red-light-camera markers, but they must not trigger the
 current direction-aware spoken alert. Ontario's municipal automated-speed-enforcement dataset is
 historical after the provincial ban in November 2025 and must not be published as an active overlay.
 
+Ontario 511's official developer API is the preferred next regional overlay source. Its Open
+Government Licence feed provides traffic events, construction, road conditions, roadside cameras,
+and alerts, with a documented throttle of 10 calls per 60 seconds. A production integration must
+fetch and cache these records server-side, normalize source timestamps and closure severity, expose
+bounded versioned contracts, and keep Ontario 511 attribution visible. On July 30, 2026, direct
+official probes returned 626 events, 546 road-condition records, and 948 roadside cameras.
+
+Ontario 511 events and conditions are not a reusable directed-edge speed-flow feed. They can support
+closure, construction, incident, condition, and camera overlays, but they must not be presented as
+live congestion speeds or used to claim traffic-aware ETA. Traffic-aware routing still requires the
+licensed flow pipeline described above.
+
 ## Staged rollout
 
 1. **Toronto/GTA internal coverage:** benchmark an Ontario import, deploy isolated staging
-   routing/search, validate GTA routes and addresses, and expose source-labelled Toronto red-light
-   cameras through a versioned endpoint.
+   routing/search, validate GTA routes and addresses, retain source-labelled Toronto red-light
+   cameras, and add cached Ontario 511 events/conditions through versioned endpoints.
 2. **Canada internal coverage:** generalize the coverage contract, deploy Canadian routing/search,
    and add cross-province, bilingual, rural, ferry, winter-road, and border-adjacent route cases.
 3. **United States internal coverage:** add TIGER/postcode search enrichment, interstate/toll/express
