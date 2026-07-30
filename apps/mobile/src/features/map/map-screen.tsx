@@ -91,6 +91,7 @@ import { SavedPlacesScreen } from '@/features/map/saved-places-screen';
 import {
   rankCategoryResults,
   rankSearchResults,
+  searchOriginWithinBounds,
   searchProximityOptions,
   searchResultBounds,
 } from '@/features/map/search-proximity';
@@ -171,6 +172,10 @@ import {
 } from '@/lib/api';
 
 const CALGARY_CENTER: [longitude: number, latitude: number] = [-114.0719, 51.0447];
+const CALGARY_SEARCH_BOUNDS: GeographicBounds = {
+  northEast: { latitude: 51.212, longitude: -113.859 },
+  southWest: { latitude: 50.842, longitude: -114.316 },
+};
 const CALGARY_TOWER_ROUTE_ORIGIN: Coordinate = {
   latitude: 51.04427,
   longitude: -114.06309,
@@ -456,6 +461,10 @@ export function MapScreen() {
   const roadEventSnapshot =
     roadEventRegion === 'ontario' ? officialRoadEventResponse : roadEventResponse;
   const roadEvents: readonly MapRoadEvent[] = roadEventSnapshot?.events ?? [];
+  const searchOrigin = searchOriginWithinBounds(
+    userCoordinate,
+    coverageBounds ?? CALGARY_SEARCH_BOUNDS,
+  );
 
   const invalidatePlaceInteraction = () => {
     placeInteractionRef.current += 1;
@@ -485,7 +494,7 @@ export function MapScreen() {
     const controller = new AbortController();
     searchAbortControllerRef.current = controller;
     setSearchState('loading');
-    const proximityOptions = searchProximityOptions(userCoordinate);
+    const proximityOptions = searchProximityOptions(searchOrigin);
 
     const categoryQueries = [normalizedQuery];
     void Promise.all(
@@ -517,8 +526,8 @@ export function MapScreen() {
             return true;
           });
         const rankedResults = nearestFirst
-          ? rankCategoryResults(mergedResults, userCoordinate)
-          : rankSearchResults(mergedResults, getRecentDestinationIds(), userCoordinate);
+          ? rankCategoryResults(mergedResults, searchOrigin)
+          : rankSearchResults(mergedResults, getRecentDestinationIds(), searchOrigin);
         startTransition(() => {
           setApiConnection('online');
           setResults(rankedResults);
@@ -789,7 +798,7 @@ export function MapScreen() {
       clearTimeout(timeout);
       searchController?.abort();
     };
-  }, [deferredQuery, selectedResult?.name, userCoordinate?.latitude, userCoordinate?.longitude]);
+  }, [deferredQuery, searchOrigin?.latitude, searchOrigin?.longitude, selectedResult?.name]);
 
   useEffect(() => {
     return () => {
@@ -1202,6 +1211,14 @@ export function MapScreen() {
   };
 
   const handleCategoryPress = (category: ExploreCategory) => {
+    if (userCoordinate !== undefined && searchOrigin === undefined) {
+      Alert.alert(
+        'Explore is available in Calgary',
+        'Nearby place categories are not available at your current location yet.',
+        [{ text: 'Close' }],
+      );
+      return;
+    }
     Keyboard.dismiss();
     categorySearchActiveRef.current = true;
     invalidatePlaceInteraction();

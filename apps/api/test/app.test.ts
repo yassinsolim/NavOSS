@@ -463,6 +463,29 @@ describe('search', () => {
       title: 'Invalid request',
     });
   });
+
+  it('rejects nearby category searches outside Calgary coverage', async () => {
+    const app = await createTestApp();
+    const response = await app.inject({
+      method: 'POST',
+      payload: {
+        category: 'restaurant',
+        latitude: 43.6532,
+        longitude: -79.3832,
+        q: 'restaurant',
+        sort: 'distance',
+      },
+      url: '/v1/search',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(ProblemDetailsSchema.parse(response.json())).toMatchObject({
+      code: 'invalid_request',
+      detail: 'Nearby categories are currently available only in Calgary.',
+      status: 400,
+      title: 'Search outside coverage',
+    });
+  });
 });
 
 describe('routes', () => {

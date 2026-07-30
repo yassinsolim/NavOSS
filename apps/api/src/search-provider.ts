@@ -16,6 +16,18 @@ const CALGARY_WEST = -114.316;
 const NOMINATIM_TIMEOUT_MS = 4_000;
 const EARTH_RADIUS_METERS = 6_371_000;
 
+export function isCalgarySearchCoordinate(coordinate: {
+  latitude: number;
+  longitude: number;
+}): boolean {
+  return (
+    coordinate.latitude >= CALGARY_SOUTH &&
+    coordinate.latitude <= CALGARY_NORTH &&
+    coordinate.longitude >= CALGARY_WEST &&
+    coordinate.longitude <= CALGARY_EAST
+  );
+}
+
 export const SEARCH_CATEGORY_TYPES = {
   apparel: new Set(['clothes']),
   art: new Set(['gallery']),

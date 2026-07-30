@@ -1,9 +1,22 @@
-import type { Coordinate } from '@navoss/contracts';
+import type { Coordinate, GeographicBounds } from '@navoss/contracts';
 import type { SearchResult } from '@navoss/contracts';
 
 const SEARCH_PROXIMITY_DECIMAL_PLACES = 3;
 const SEARCH_PROXIMITY_SCALE = 10 ** SEARCH_PROXIMITY_DECIMAL_PLACES;
 const EARTH_RADIUS_METERS = 6_371_000;
+
+export function searchOriginWithinBounds(
+  origin: Coordinate | undefined,
+  bounds: GeographicBounds,
+): Coordinate | undefined {
+  if (origin === undefined) return undefined;
+  return origin.latitude >= bounds.southWest.latitude &&
+    origin.latitude <= bounds.northEast.latitude &&
+    origin.longitude >= bounds.southWest.longitude &&
+    origin.longitude <= bounds.northEast.longitude
+    ? origin
+    : undefined;
+}
 
 function coordinateDistanceMeters(left: Coordinate, right: Coordinate): number {
   const toRadians = (degrees: number) => (degrees * Math.PI) / 180;

@@ -45,6 +45,7 @@ import {
 } from './route-provider.js';
 import {
   createDevelopmentSearchProvider,
+  isCalgarySearchCoordinate,
   createProductionSearchProvider,
   type SearchProvider,
 } from './search-provider.js';
@@ -439,7 +440,25 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         tags: ['search'],
       },
     },
-    (request) => searchProvider.search(request.body),
+    (request, reply) => {
+      const { category, latitude, longitude } = request.body;
+      if (
+        category !== undefined &&
+        latitude !== undefined &&
+        longitude !== undefined &&
+        !isCalgarySearchCoordinate({ latitude, longitude })
+      ) {
+        reply.status(400).type('application/problem+json');
+        return createProblem(
+          request,
+          400,
+          'invalid_request',
+          'Search outside coverage',
+          'Nearby categories are currently available only in Calgary.',
+        );
+      }
+      return searchProvider.search(request.body);
+    },
   );
 
   typedApp.post(

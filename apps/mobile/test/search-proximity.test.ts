@@ -6,11 +6,25 @@ import {
   rankCategoryResults,
   rankSearchResults,
   searchProximityOptions,
+  searchOriginWithinBounds,
   searchResultBounds,
   searchResultContext,
 } from '../src/features/map/search-proximity.js';
 
 describe('search proximity', () => {
+  const calgaryBounds = {
+    northEast: { latitude: 51.212, longitude: -113.859 },
+    southWest: { latitude: 50.842, longitude: -114.316 },
+  };
+
+  it('uses Calgary origins but excludes Ontario origins from proximity ranking', () => {
+    expect(
+      searchOriginWithinBounds({ latitude: 51.0447, longitude: -114.0719 }, calgaryBounds),
+    ).toEqual({ latitude: 51.0447, longitude: -114.0719 });
+    expect(
+      searchOriginWithinBounds({ latitude: 43.6532, longitude: -79.3832 }, calgaryBounds),
+    ).toBeUndefined();
+  });
   it('rounds precise user location before typed place search', () => {
     expect(approximateSearchCoordinate({ latitude: 51.0447312, longitude: -114.0719234 })).toEqual({
       latitude: 51.045,

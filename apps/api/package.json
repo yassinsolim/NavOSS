@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "start": "node dist/server.js",
     "test": "vitest run",
+    "test:search:live": "node ./scripts/search-quality.mjs",
     "test:routes:live": "node ./scripts/route-quality.mjs"
   },
   "dependencies": {
