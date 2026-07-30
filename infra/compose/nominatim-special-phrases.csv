@@ -11,8 +11,6 @@ beauty-salon,shop,beauty,-,N
 beauty-salon,shop,hairdresser,-,N
 beauty-supply,shop,cosmetics,-,N
 beauty-supply,shop,perfumery,-,N
-brunch,amenity,cafe,-,N
-brunch,amenity,restaurant,-,N
 cafe,amenity,cafe,-,N
 car-dealer,shop,car,-,N
 car-repair,shop,car_repair,-,N
@@ -21,8 +19,6 @@ car-wash,amenity,car_wash,-,N
 charging-station,amenity,charging_station,-,N
 cinema,amenity,cinema,-,N
 convenience,shop,convenience,-,N
-delivery,amenity,restaurant,-,N
-delivery,amenity,fast_food,-,N
 dessert,shop,confectionery,-,N
 dessert,shop,pastry,-,N
 dessert,shop,ice_cream,-,N

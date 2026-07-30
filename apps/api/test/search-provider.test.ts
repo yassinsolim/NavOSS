@@ -228,58 +228,6 @@ describe('Nominatim search provider', () => {
     );
   });
 
-  it('requires metadata evidence for brunch and delivery filters', async () => {
-    const result = (id: number, name: string, extratags: Record<string, string> | null = null) => ({
-      addresstype: 'amenity',
-      category: 'amenity',
-      display_name: `${name}, Calgary, Alberta, Canada`,
-      extratags,
-      importance: 0.1,
-      lat: '51.045',
-      lon: '-114.205',
-      name,
-      osm_id: id,
-      osm_type: 'node',
-      type: 'restaurant',
-    });
-    const provider = createNominatimSearchProvider({
-      endpoint: 'http://nominatim:8080/',
-      fetchImplementation: () =>
-        Promise.resolve(
-          new Response(
-            JSON.stringify([
-              result(1, 'Generic Kitchen'),
-              result(2, 'Sunday Brunch'),
-              result(3, 'Breakfast House', { breakfast: 'yes' }),
-              result(4, 'Delivery Kitchen'),
-              result(5, 'Courier Cafe', { delivery: 'only' }),
-            ]),
-            { status: 200 },
-          ),
-        ),
-    });
-
-    const search = (category: 'brunch' | 'delivery') =>
-      provider.search({
-        category,
-        includeDetails: true,
-        latitude: 51.045,
-        limit: 20,
-        longitude: -114.205,
-        q: category,
-        sort: 'distance',
-      });
-
-    expect((await search('brunch')).results.map(({ name }) => name)).toEqual([
-      'Sunday Brunch',
-      'Breakfast House',
-    ]);
-    expect((await search('delivery')).results.map(({ name }) => name)).toEqual([
-      'Delivery Kitchen',
-      'Courier Cafe',
-    ]);
-  });
-
   it('normalizes self-hosted results as production search', async () => {
     const provider = createNominatimSearchProvider({
       datasetVersion: 'alberta-2026-07-20',

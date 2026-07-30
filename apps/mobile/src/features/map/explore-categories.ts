@@ -45,13 +45,6 @@ export const EXPLORE_CATEGORY_GROUPS: ExploreCategoryGroup[] = [
         searchCategory: 'cafe',
       },
       {
-        icon: { android: 'brunch_dining', ios: 'takeoutbag.and.cup.and.straw.fill' },
-        id: 'brunch',
-        label: 'Brunch',
-        query: 'brunch restaurant',
-        searchCategory: 'brunch',
-      },
-      {
         icon: { android: 'cake', ios: 'birthday.cake.fill' },
         id: 'dessert',
         label: 'Dessert',
@@ -64,13 +57,6 @@ export const EXPLORE_CATEGORY_GROUPS: ExploreCategoryGroup[] = [
         label: 'Takeout',
         query: 'takeaway',
         searchCategory: 'takeout',
-      },
-      {
-        icon: { android: 'delivery_dining', ios: 'bicycle' },
-        id: 'delivery',
-        label: 'Delivery',
-        query: 'food delivery',
-        searchCategory: 'delivery',
       },
     ],
     icon: { android: 'restaurant', ios: 'fork.knife' },
