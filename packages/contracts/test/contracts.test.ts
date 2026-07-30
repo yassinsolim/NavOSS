@@ -5,6 +5,7 @@ import {
   compareRouteAlternatives,
   GeographicBoundsSchema,
   OfficialSafetyCameraResponseSchema,
+  RoadEventResponseSchema,
   SafetyCameraResponseSchema,
   RouteRequestSchema,
   RouteResponseSchema,
@@ -134,6 +135,105 @@ describe('SafetyCameraResponseSchema', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+});
+
+describe('RoadEventResponseSchema', () => {
+  const sources = [
+    {
+      attribution: 'The City of Calgary',
+      confidence: 'official',
+      datasetId: 'w8zq-79bq',
+      datasetUrl: 'https://data.calgary.ca/d/w8zq-79bq',
+      licenseUrl: 'https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa',
+      sourceId: 'calgary-construction-detours',
+      updateFrequency: 'twice daily',
+      updatedAt: '2026-07-30T11:00:39Z',
+    },
+    {
+      attribution: 'The City of Calgary',
+      confidence: 'unverified',
+      datasetId: '4jah-h97u',
+      datasetUrl: 'https://data.calgary.ca/d/4jah-h97u',
+      licenseUrl: 'https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa',
+      sourceId: 'calgary-current-incidents',
+      updateFrequency: '10 minutes',
+      updatedAt: '2026-07-30T20:31:01Z',
+    },
+  ];
+
+  it('accepts source-labelled Calgary road events with local civil time', () => {
+    expect(
+      RoadEventResponseSchema.safeParse({
+        degraded: false,
+        events: [
+          {
+            confidence: 'official',
+            coordinate: { latitude: 51.167619, longitude: -114.146788 },
+            description: 'Eastbound right lane closure.',
+            endsAtLocal: '2026-09-30T15:00:00.000',
+            id: 'calgary-construction:test',
+            sourceId: 'calgary-construction-detours',
+            startsAtLocal: '2026-06-15T09:00:00.000',
+            timeZone: 'America/Edmonton',
+            title: 'Symons Valley Parkway and Kincora Gate NW',
+            type: 'construction',
+          },
+        ],
+        generatedAt: '2026-07-30T20:32:00Z',
+        sources,
+        stale: false,
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects hidden confidence changes and inconsistent stale posture', () => {
+    const invalid = {
+      degraded: false,
+      events: [
+        {
+          confidence: 'official',
+          coordinate: { latitude: 51.04, longitude: -114.07 },
+          description: 'Unverified collision.',
+          id: 'calgary-incident:test',
+          sourceId: 'calgary-current-incidents',
+          startsAtLocal: '2026-07-30T12:00:00.000',
+          timeZone: 'America/Edmonton',
+          title: 'Traffic incident',
+          type: 'incident',
+        },
+      ],
+      generatedAt: '2026-07-30T20:32:00Z',
+      sources,
+      stale: true,
+    };
+
+    expect(RoadEventResponseSchema.safeParse(invalid).success).toBe(false);
+  });
+
+  it('rejects swapped source metadata and events outside Calgary coverage', () => {
+    const invalidSources = [{ ...sources[0], confidence: 'unverified' }, sources[1]];
+    const invalid = {
+      degraded: false,
+      events: [
+        {
+          confidence: 'official',
+          coordinate: { latitude: 43.65, longitude: -79.38 },
+          description: 'Lane closure.',
+          id: 'calgary-construction:test',
+          sourceId: 'calgary-construction-detours',
+          startsAtLocal: '2026-07-30T12:00:00.000',
+          timeZone: 'America/Edmonton',
+          title: 'Construction',
+          type: 'construction',
+        },
+      ],
+      generatedAt: '2026-07-30T20:32:00Z',
+      sources: invalidSources,
+      stale: false,
+    };
+
+    expect(RoadEventResponseSchema.safeParse(invalid).success).toBe(false);
   });
 });
 

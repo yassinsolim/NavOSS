@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSearchRequest,
   fetchOfficialSafetyCameras,
+  fetchRoadEvents,
   fetchRoutes,
   fetchSafetyCameras,
   NavOssApiError,
@@ -258,6 +259,66 @@ describe('fetchSafetyCameras', () => {
 
     expect(response.cameras[0]?.direction).toBe('northbound');
     expect(response.source.updatedAt).toBe('2026-07-01T08:33:43.000Z');
+  });
+});
+
+describe('fetchRoadEvents', () => {
+  it('requests and validates source-qualified Calgary road events', async () => {
+    const response = await fetchRoadEvents({
+      baseUrl: 'http://127.0.0.1:3001/',
+      fetchImplementation: (input) => {
+        expect(input).toBe('http://127.0.0.1:3001/v1/events');
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              degraded: false,
+              events: [
+                {
+                  confidence: 'official',
+                  coordinate: { latitude: 51.167619, longitude: -114.146788 },
+                  description: 'Eastbound right lane closure.',
+                  endsAtLocal: '2026-09-30T15:00:00.000',
+                  id: 'calgary-construction:test',
+                  sourceId: 'calgary-construction-detours',
+                  startsAtLocal: '2026-06-15T09:00:00.000',
+                  timeZone: 'America/Edmonton',
+                  title: 'Symons Valley Parkway and Kincora Gate NW',
+                  type: 'construction',
+                },
+              ],
+              generatedAt: '2026-07-30T20:32:00Z',
+              sources: [
+                {
+                  attribution: 'The City of Calgary',
+                  confidence: 'official',
+                  datasetId: 'w8zq-79bq',
+                  datasetUrl: 'https://data.calgary.ca/d/w8zq-79bq',
+                  licenseUrl: 'https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa',
+                  sourceId: 'calgary-construction-detours',
+                  updateFrequency: 'twice daily',
+                  updatedAt: '2026-07-30T11:00:39Z',
+                },
+                {
+                  attribution: 'The City of Calgary',
+                  confidence: 'unverified',
+                  datasetId: '4jah-h97u',
+                  datasetUrl: 'https://data.calgary.ca/d/4jah-h97u',
+                  licenseUrl: 'https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa',
+                  sourceId: 'calgary-current-incidents',
+                  updateFrequency: '10 minutes',
+                  updatedAt: '2026-07-30T20:31:01Z',
+                },
+              ],
+              stale: false,
+            }),
+            { headers: { 'content-type': 'application/json' }, status: 200 },
+          ),
+        );
+      },
+    });
+
+    expect(response.events[0]?.confidence).toBe('official');
+    expect(response.stale).toBe(false);
   });
 });
 

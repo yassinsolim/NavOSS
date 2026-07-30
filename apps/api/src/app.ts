@@ -6,6 +6,7 @@ import {
   OfficialSafetyCameraResponseSchema,
   ProblemDetailsSchema,
   ReadinessResponseSchema,
+  RoadEventResponseSchema,
   RouteRequestSchema,
   RouteResponseSchema,
   SafetyCameraResponseSchema,
@@ -24,6 +25,11 @@ import {
 } from 'fastify-type-provider-zod';
 
 import { CALGARY_SEARCH_FIXTURES, createAppConfig, type SearchFixture } from './fixtures.js';
+import {
+  CalgaryRoadEventProviderError,
+  createCalgaryRoadEventProvider,
+  type CalgaryRoadEventProvider,
+} from './calgary-road-event-provider.js';
 import { createProblem } from './problem.js';
 import {
   createConfiguredRouteProvider,
@@ -55,6 +61,7 @@ function errorName(error: unknown): string {
 export interface BuildAppOptions {
   cameraProvider?: SafetyCameraProvider;
   clock?: () => Date;
+  eventProvider?: CalgaryRoadEventProvider;
   logger?: FastifyServerOptions['logger'];
   productionSearch?: boolean;
   routeProvider?: RouteProvider;
@@ -66,6 +73,7 @@ export interface BuildAppOptions {
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const clock = options.clock ?? (() => new Date());
   const cameraProvider = options.cameraProvider ?? createCalgarySafetyCameraProvider();
+  const eventProvider = options.eventProvider ?? createCalgaryRoadEventProvider();
   const fixtures = options.searchFixtures ?? CALGARY_SEARCH_FIXTURES;
   const productionSearch = options.productionSearch ?? process.env.NOMINATIM_URL !== undefined;
   const routeProvider = options.routeProvider ?? createConfiguredRouteProvider();
@@ -96,6 +104,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       tags: [
         { description: 'Official municipal safety-camera locations', name: 'cameras' },
         { description: 'Application configuration', name: 'config' },
+        { description: 'Official and source-qualified road events', name: 'events' },
         { description: 'Driving route calculation and guidance', name: 'routes' },
         { description: 'Hybrid Calgary place and civic-address search', name: 'search' },
         { description: 'Service health and readiness', name: 'system' },
@@ -286,6 +295,38 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           );
         }
 
+        throw error;
+      }
+    },
+  );
+
+  typedApp.get(
+    '/v1/events',
+    {
+      schema: {
+        description:
+          'Returns source-qualified Calgary construction and current traffic incidents with freshness metadata.',
+        response: {
+          200: RoadEventResponseSchema,
+          503: ProblemDetailsSchema,
+        },
+        tags: ['events'],
+      },
+    },
+    async (request, reply) => {
+      try {
+        return await eventProvider.getRoadEvents();
+      } catch (error: unknown) {
+        if (error instanceof CalgaryRoadEventProviderError) {
+          reply.status(503).type('application/problem+json');
+          return createProblem(
+            request,
+            503,
+            'service_unavailable',
+            'Road data unavailable',
+            'Official Calgary road-event data could not be loaded right now.',
+          );
+        }
         throw error;
       }
     },

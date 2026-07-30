@@ -4,6 +4,7 @@ import {
   OfficialSafetyCameraResponseSchema,
   ProblemDetailsSchema,
   ReadinessResponseSchema,
+  RoadEventResponseSchema,
   RouteResponseSchema,
   SafetyCameraResponseSchema,
   SearchResponseSchema,
@@ -14,6 +15,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../src/app.js';
+import { CalgaryRoadEventProviderError } from '../src/calgary-road-event-provider.js';
 import { CALGARY_SEARCH_FIXTURES } from '../src/fixtures.js';
 import { createFixtureSearchProvider } from '../src/search-provider.js';
 import { CameraProviderError } from '../src/safety-camera-provider.js';
@@ -143,6 +145,76 @@ describe('client configuration', () => {
     const body = AppConfigResponseSchema.parse(response.json());
 
     expect(body.features.liveTraffic).toBe(true);
+  });
+});
+
+describe('Calgary road events', () => {
+  const roadEventResponse = RoadEventResponseSchema.parse({
+    degraded: false,
+    events: [
+      {
+        confidence: 'official',
+        coordinate: { latitude: 51.167619, longitude: -114.146788 },
+        description: 'Eastbound right lane closure.',
+        endsAtLocal: '2026-09-30T15:00:00.000',
+        id: 'calgary-construction:test',
+        sourceId: 'calgary-construction-detours',
+        startsAtLocal: '2026-06-15T09:00:00.000',
+        timeZone: 'America/Edmonton',
+        title: 'Symons Valley Parkway and Kincora Gate NW',
+        type: 'construction',
+      },
+    ],
+    generatedAt: '2026-07-15T12:00:00Z',
+    sources: [
+      {
+        attribution: 'The City of Calgary',
+        confidence: 'official',
+        datasetId: 'w8zq-79bq',
+        datasetUrl: 'https://data.calgary.ca/d/w8zq-79bq',
+        licenseUrl: 'https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa',
+        sourceId: 'calgary-construction-detours',
+        updateFrequency: 'twice daily',
+        updatedAt: '2026-07-15T11:00:00Z',
+      },
+      {
+        attribution: 'The City of Calgary',
+        confidence: 'unverified',
+        datasetId: '4jah-h97u',
+        datasetUrl: 'https://data.calgary.ca/d/4jah-h97u',
+        licenseUrl: 'https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa',
+        sourceId: 'calgary-current-incidents',
+        updateFrequency: '10 minutes',
+        updatedAt: '2026-07-15T11:50:00Z',
+      },
+    ],
+    stale: false,
+  });
+
+  it('returns contract-valid Calgary road events', async () => {
+    const app = await createTestApp({
+      eventProvider: { getRoadEvents: () => Promise.resolve(roadEventResponse) },
+    });
+    const response = await app.inject({ method: 'GET', url: '/v1/events' });
+
+    expect(response.statusCode).toBe(200);
+    expect(RoadEventResponseSchema.parse(response.json())).toEqual(roadEventResponse);
+  });
+
+  it('returns a stable problem when Calgary road data is unavailable', async () => {
+    const app = await createTestApp({
+      eventProvider: {
+        getRoadEvents: () => Promise.reject(new CalgaryRoadEventProviderError('offline')),
+      },
+    });
+    const response = await app.inject({ method: 'GET', url: '/v1/events' });
+
+    expect(response.statusCode).toBe(503);
+    expect(ProblemDetailsSchema.parse(response.json())).toMatchObject({
+      code: 'service_unavailable',
+      status: 503,
+      title: 'Road data unavailable',
+    });
   });
 });
 

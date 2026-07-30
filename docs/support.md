@@ -39,7 +39,9 @@ Do not send a home address, precise trip history, or other sensitive information
 - no lane guidance, Android release, or offline routing;
 - CarPlay is available only in the dedicated tester build and has not completed real-vehicle validation;
 - place search and route quality are still being expanded; and
-- safety-camera records may be incomplete or change between monthly City updates.
+- safety-camera records may be incomplete or change between monthly City updates; and
+- road-event markers are informational, construction updates twice daily, current incidents are
+  explicitly unverified, and neither source provides live traffic or traffic-aware routing.
 
 ## Urgent safety issues
 

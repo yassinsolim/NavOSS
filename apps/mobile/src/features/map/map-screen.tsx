@@ -15,6 +15,8 @@ import type {
   Coordinate,
   GeographicBounds,
   OfficialSafetyCamera,
+  RoadEvent,
+  RoadEventResponse,
   RouteAlternative,
   RoutePreferences,
   RouteResponse,
@@ -157,6 +159,7 @@ import { mapAlignedHeadingDegrees } from '@/features/navigation/vehicle-heading'
 import {
   fetchAppConfig,
   fetchOfficialSafetyCameras,
+  fetchRoadEvents,
   fetchRoutes,
   fetchSafetyCameras,
   NavOssApiError,
@@ -176,6 +179,11 @@ const EMPTY_FEATURE_COLLECTION: FeatureCollection<Point> = {
   features: [],
   type: 'FeatureCollection',
 };
+const ROAD_EVENT_REFRESH_INTERVAL_MS = 5 * 60 * 1_000;
+const ROAD_EVENT_LAYER_IDS = [
+  'official-construction-events',
+  'unverified-incident-events',
+] as const;
 const MAP_IMAGES = {
   'safety-camera': require('@/assets/images/camera-marker.png'),
   'vehicle-arrow': require('@/assets/images/vehicle-arrow.png'),
@@ -289,6 +297,35 @@ function safetyCameraFeatures(
   };
 }
 
+function roadEventFeatures(
+  events: readonly RoadEvent[],
+  type: RoadEvent['type'],
+): FeatureCollection<Point> {
+  return {
+    features: events
+      .filter((event) => event.type === type)
+      .map((event) => ({
+        geometry: {
+          coordinates: [event.coordinate.longitude, event.coordinate.latitude],
+          type: 'Point',
+        },
+        properties: { id: event.id },
+        type: 'Feature',
+      })),
+    type: 'FeatureCollection',
+  };
+}
+
+function roadEventAlertMessage(event: RoadEvent): string {
+  const confidence =
+    event.confidence === 'official'
+      ? 'Official City of Calgary construction information'
+      : 'Unverified current incident information';
+  const end =
+    event.endsAtLocal === undefined ? '' : `\nEnds: ${event.endsAtLocal.replace('T', ' ')}`;
+  return `${confidence}\n\n${event.description}\n\nStarts: ${event.startsAtLocal.replace('T', ' ')}${end}\nTime zone: America/Edmonton`;
+}
+
 function routeBounds(
   route: RouteAlternative,
 ): [west: number, south: number, east: number, north: number] {
@@ -373,6 +410,8 @@ export function MapScreen() {
   const [carPlayConnected, setCarPlayConnected] = useState(false);
   const [safetyCameraAlert, setSafetyCameraAlert] = useState<UpcomingSafetyCamera>();
   const [safetyCameras, setSafetyCameras] = useState<readonly SafetyCamera[]>([]);
+  const [roadEventResponse, setRoadEventResponse] = useState<RoadEventResponse>();
+  const [roadEventRefreshDelayed, setRoadEventRefreshDelayed] = useState(false);
   const [torontoSafetyCameras, setTorontoSafetyCameras] = useState<readonly OfficialSafetyCamera[]>(
     [],
   );
@@ -581,6 +620,38 @@ export function MapScreen() {
       controller.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (!mapPreferences.showRoadEvents) {
+      return;
+    }
+
+    let controller: AbortController | undefined;
+    const refresh = () => {
+      controller?.abort();
+      const requestController = new AbortController();
+      controller = requestController;
+      void fetchRoadEvents({ signal: requestController.signal })
+        .then((response) => {
+          startTransition(() => {
+            setRoadEventResponse(response);
+            setRoadEventRefreshDelayed(false);
+          });
+        })
+        .catch(() => {
+          if (!requestController.signal.aborted) {
+            setRoadEventRefreshDelayed(true);
+          }
+        });
+    };
+
+    refresh();
+    const interval = setInterval(refresh, ROAD_EVENT_REFRESH_INTERVAL_MS);
+    return () => {
+      clearInterval(interval);
+      controller?.abort();
+    };
+  }, [mapPreferences.showRoadEvents]);
 
   useEffect(() => {
     let active = true;
@@ -1159,7 +1230,39 @@ export function MapScreen() {
   };
 
   const handleMapPress = async (point: [number, number], coordinate: Coordinate) => {
-    if (routeState.type !== 'idle' || !mapPreferences.showPlaces || mapRef.current === null) {
+    if (
+      routeState.type !== 'idle' ||
+      (!mapPreferences.showPlaces && !mapPreferences.showRoadEvents) ||
+      mapRef.current === null
+    ) {
+      return;
+    }
+
+    if (mapPreferences.showRoadEvents && roadEventResponse !== undefined) {
+      try {
+        const tapRadius = 18;
+        const features = await mapRef.current.queryRenderedFeatures(
+          [
+            [point[0] - tapRadius, point[1] - tapRadius],
+            [point[0] + tapRadius, point[1] + tapRadius],
+          ],
+          { layers: [...ROAD_EVENT_LAYER_IDS] },
+        );
+        const eventId = features
+          .map((feature) => feature.properties?.id)
+          .find((id): id is string => typeof id === 'string');
+        const event = roadEventResponse.events.find((candidate) => candidate.id === eventId);
+        if (event !== undefined) {
+          Keyboard.dismiss();
+          Alert.alert(event.title, roadEventAlertMessage(event), [{ text: 'Close' }]);
+          return;
+        }
+      } catch {
+        // Continue to place hit-testing while map event layers reload.
+      }
+    }
+
+    if (!mapPreferences.showPlaces) {
       return;
     }
 
@@ -1607,6 +1710,7 @@ export function MapScreen() {
   const selectedPlacePhoneUrl = placePhoneUrl(selectedResult?.details?.phone);
   const selectedPlaceWebsiteUrl = placeWebsiteUrl(selectedResult?.details?.website);
   const selectedPlaceWebsiteLabel = placeWebsiteLabel(selectedResult?.details?.website);
+  const roadEvents = roadEventResponse?.events ?? [];
 
   if (
     carPlayConnected &&
@@ -1660,11 +1764,7 @@ export function MapScreen() {
     <View style={styles.container}>
       <StatusBar style={activeTab === 'explore' && darkMap ? 'light' : 'dark'} />
       <Map
-        accessibilityLabel={
-          mapPreferences.showSafetyCameras
-            ? `Map with ${String(safetyCameras.length)} official safety camera symbols`
-            : 'Map with camera markers hidden'
-        }
+        accessibilityLabel={`Map with ${String(mapPreferences.showSafetyCameras ? safetyCameras.length : 0)} official safety camera symbols and ${String(mapPreferences.showRoadEvents ? roadEvents.length : 0)} road events`}
         accessibilityElementsHidden={activeTab !== 'explore'}
         attribution={false}
         compass={routeState.type !== 'navigating'}
@@ -1841,6 +1941,42 @@ export function MapScreen() {
             />
           </GeoJSONSource>
         )}
+        {mapPreferences.showRoadEvents && roadEventResponse !== undefined && (
+          <>
+            <GeoJSONSource
+              data={roadEventFeatures(roadEvents, 'construction')}
+              id="official-construction-events-source"
+            >
+              <Layer
+                id="official-construction-events"
+                paint={{
+                  'circle-color': NavOssColors.sun,
+                  'circle-opacity': 0.95,
+                  'circle-radius': 8,
+                  'circle-stroke-color': NavOssColors.asphalt,
+                  'circle-stroke-width': 2,
+                }}
+                type="circle"
+              />
+            </GeoJSONSource>
+            <GeoJSONSource
+              data={roadEventFeatures(roadEvents, 'incident')}
+              id="unverified-incident-events-source"
+            >
+              <Layer
+                id="unverified-incident-events"
+                paint={{
+                  'circle-color': NavOssColors.coral,
+                  'circle-opacity': 0.82,
+                  'circle-radius': 6,
+                  'circle-stroke-color': NavOssColors.white,
+                  'circle-stroke-width': 2,
+                }}
+                type="circle"
+              />
+            </GeoJSONSource>
+          </>
+        )}
       </Map>
 
       {routeState.type === 'navigating' && (
@@ -1924,6 +2060,24 @@ export function MapScreen() {
           />
         </Pressable>
       )}
+
+      {(activeTab === 'explore' || !appShellVisible) &&
+        mapPreferences.showRoadEvents &&
+        (roadEventResponse !== undefined || roadEventRefreshDelayed) && (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.roadEventAttribution,
+              { bottom: selectedPanelHeight + appTabBarHeight + 34 },
+            ]}
+          >
+            <Text style={styles.roadEventAttributionText}>
+              {roadEventResponse === undefined
+                ? 'Road events unavailable'
+                : `Road events · City of Calgary · Incidents unverified${roadEventResponse.stale ? ' · Stale snapshot' : ''}${roadEventRefreshDelayed ? ' · Refresh delayed' : ''}`}
+            </Text>
+          </View>
+        )}
 
       <MapPreferencesPanel
         onChange={(preferences) => {
@@ -2287,6 +2441,22 @@ const styles = StyleSheet.create({
   attributionText: {
     color: NavOssColors.muted,
     fontFamily: NavOssFonts.medium,
+    fontSize: 10,
+    letterSpacing: 0,
+  },
+  roadEventAttribution: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderBottomRightRadius: 4,
+    borderTopRightRadius: 4,
+    left: 0,
+    maxWidth: 310,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    position: 'absolute',
+  },
+  roadEventAttributionText: {
+    color: NavOssColors.asphalt,
+    fontFamily: NavOssFonts.semibold,
     fontSize: 10,
     letterSpacing: 0,
   },

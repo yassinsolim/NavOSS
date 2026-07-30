@@ -209,6 +209,13 @@ export function MapPreferencesPanel({
               value={preferences.showTransit}
             />
             <PreferenceSwitch
+              label="Road events"
+              onValueChange={(showRoadEvents) => {
+                onChange({ ...preferences, showRoadEvents });
+              }}
+              value={preferences.showRoadEvents}
+            />
+            <PreferenceSwitch
               label="Camera markers"
               onValueChange={(showSafetyCameras) => {
                 onChange({ ...preferences, showSafetyCameras });

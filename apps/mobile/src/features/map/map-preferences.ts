@@ -18,6 +18,7 @@ export interface MapPreferences {
   routeColor: RouteColor;
   showBuildings: boolean;
   showPlaces: boolean;
+  showRoadEvents: boolean;
   showSafetyCameras: boolean;
   showTransit: boolean;
   stylePreset: MapStylePreset;
@@ -29,6 +30,7 @@ export const DEFAULT_MAP_PREFERENCES: MapPreferences = {
   routeColor: 'green',
   showBuildings: true,
   showPlaces: true,
+  showRoadEvents: true,
   showSafetyCameras: true,
   showTransit: true,
   stylePreset: 'automatic',
@@ -78,6 +80,9 @@ export function normalizeMapPreferences(value: unknown): MapPreferences {
     showPlaces: isBoolean(candidate.showPlaces)
       ? candidate.showPlaces
       : DEFAULT_MAP_PREFERENCES.showPlaces,
+    showRoadEvents: isBoolean(candidate.showRoadEvents)
+      ? candidate.showRoadEvents
+      : DEFAULT_MAP_PREFERENCES.showRoadEvents,
     showSafetyCameras: isBoolean(candidate.showSafetyCameras)
       ? candidate.showSafetyCameras
       : DEFAULT_MAP_PREFERENCES.showSafetyCameras,

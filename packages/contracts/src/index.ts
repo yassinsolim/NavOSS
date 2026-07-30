@@ -17,6 +17,16 @@ export { ProblemCodeSchema, ProblemDetailsSchema } from './problem.js';
 export type { ProblemCode, ProblemDetails } from './problem.js';
 
 export {
+  RoadEventConfidenceSchema,
+  RoadEventResponseSchema,
+  RoadEventSchema,
+  RoadEventSourceIdSchema,
+  RoadEventSourceSchema,
+  RoadEventTypeSchema,
+} from './road-event.js';
+export type { RoadEvent, RoadEventResponse, RoadEventSource, RoadEventType } from './road-event.js';
+
+export {
   OfficialSafetyCameraEnforcementSchema,
   OfficialSafetyCameraQuerySchema,
   OfficialSafetyCameraRegionSchema,

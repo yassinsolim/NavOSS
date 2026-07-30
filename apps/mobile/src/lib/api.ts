@@ -2,6 +2,7 @@ import {
   AppConfigResponseSchema,
   OfficialSafetyCameraResponseSchema,
   ProblemDetailsSchema,
+  RoadEventResponseSchema,
   RouteResponseSchema,
   SafetyCameraResponseSchema,
   SearchResponseSchema,
@@ -10,6 +11,7 @@ import {
   type OfficialSafetyCameraResponse,
   type RouteRequest,
   type RouteResponse,
+  type RoadEventResponse,
   type SafetyCameraResponse,
   type SearchQuery,
   type SearchResponse,
@@ -177,6 +179,17 @@ export async function fetchSafetyCameras(
     options.signal === undefined ? undefined : { signal: options.signal },
   );
   return SafetyCameraResponseSchema.parse(await parseResponse(response));
+}
+
+export async function fetchRoadEvents(
+  options: FetchSafetyCamerasOptions = {},
+): Promise<RoadEventResponse> {
+  const fetchImplementation = options.fetchImplementation ?? fetch;
+  const response = await fetchImplementation(
+    `${normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl())}/v1/events`,
+    options.signal === undefined ? undefined : { signal: options.signal },
+  );
+  return RoadEventResponseSchema.parse(await parseResponse(response));
 }
 
 export async function fetchOfficialSafetyCameras(

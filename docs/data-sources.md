@@ -92,6 +92,34 @@ enable this adapter until the license, privacy disclosure, attribution, cost
 controls, same-time route-quality gate, and physical phone/CarPlay validation are
 complete.
 
+## Calgary Road Events
+
+NavOSS combines two City of Calgary Open Data feeds for informational phone-map overlays:
+
+- [Calgary Construction Detours](https://data.calgary.ca/d/w8zq-79bq), dataset ID
+  `w8zq-79bq`, is official City construction information updated twice daily.
+- [Current Traffic Incidents](https://data.calgary.ca/d/4jah-h97u), dataset ID
+  `4jah-h97u`, is refreshed on a 10-minute cadence, but the City describes the information as
+  unofficial and unverified. NavOSS preserves that posture in the API and labels incident markers
+  as unverified.
+
+Both sources use the [Calgary Open Data Terms of
+Use](https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa). Source timestamps, confidence, update
+frequency, dataset links, and attribution are returned with every API response. Construction start
+and end values are source-local civil times tagged as `America/Edmonton`; NavOSS does not reinterpret
+them as UTC. Expired construction records and malformed rows are excluded rather than guessed.
+
+The API caches a complete validated snapshot for five minutes. If Calgary Open Data is temporarily
+unavailable, it may return the last successful snapshot for no more than 24 hours with both `stale`
+and `degraded` set to `true`. After that bound, or before any valid snapshot exists, the endpoint
+fails closed. The phone refreshes every five minutes, keeps its last validated response through a
+transient request failure, and visibly identifies a stale server snapshot. Phones do not send user
+location to Calgary Open Data.
+
+Road-event markers are awareness information only. They do not change route selection, trigger
+rerouting or speech, alter ETA, or represent road speeds or congestion. NavOSS still has no live
+traffic or traffic-aware ETA.
+
 ## Calgary Intersection Safety Cameras
 
 NavOSS uses The City of Calgary's official **Intersection Safety Cameras** dataset for fixed enforcement-camera markers and alerts.
