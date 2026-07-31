@@ -1,6 +1,7 @@
 import fastifySwagger from '@fastify/swagger';
 import {
   AppConfigResponseSchema,
+  GooglePlaceQueryGrantResponseSchema,
   HealthResponseSchema,
   OfficialRoadEventQuerySchema,
   OfficialRoadEventResponseSchema,
@@ -27,6 +28,10 @@ import {
 } from 'fastify-type-provider-zod';
 
 import { CALGARY_SEARCH_FIXTURES, createAppConfig, type SearchFixture } from './fixtures.js';
+import {
+  createConfiguredGooglePlaceQueryBudget,
+  type GooglePlaceQueryBudget,
+} from './google-place-query-budget.js';
 import {
   CalgaryRoadEventProviderError,
   createCalgaryRoadEventProvider,
@@ -70,6 +75,7 @@ export interface BuildAppOptions {
   cameraProvider?: SafetyCameraProvider;
   clock?: () => Date;
   eventProvider?: CalgaryRoadEventProvider;
+  googlePlaceQueryBudget?: GooglePlaceQueryBudget;
   logger?: FastifyServerOptions['logger'];
   ontarioEventProvider?: OntarioRoadEventProvider;
   productionSearch?: boolean;
@@ -84,6 +90,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const cameraProvider = options.cameraProvider ?? createCalgarySafetyCameraProvider();
   const eventProvider = options.eventProvider ?? createCalgaryRoadEventProvider();
   const fixtures = options.searchFixtures ?? CALGARY_SEARCH_FIXTURES;
+  const googlePlaceQueryBudget =
+    options.googlePlaceQueryBudget ?? createConfiguredGooglePlaceQueryBudget({ clock });
   const ontarioEventProvider = options.ontarioEventProvider ?? createOntarioRoadEventProvider();
   const productionSearch = options.productionSearch ?? process.env.NOMINATIM_URL !== undefined;
   const routeProvider = options.routeProvider ?? createConfiguredRouteProvider();
@@ -103,6 +111,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.addHook('onClose', () => {
     eventProvider.stop?.();
     ontarioEventProvider.stop?.();
+    return googlePlaceQueryBudget.close?.();
   });
 
   app.setValidatorCompiler(validatorCompiler);
@@ -120,6 +129,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         { description: 'Official municipal safety-camera locations', name: 'cameras' },
         { description: 'Application configuration', name: 'config' },
         { description: 'Official and source-qualified road events', name: 'events' },
+        { description: 'Privacy-preserving optional place enrichment', name: 'places' },
         { description: 'Driving route calculation and guidance', name: 'routes' },
         { description: 'Hybrid Calgary place and civic-address search', name: 'search' },
         { description: 'Service health and readiness', name: 'system' },
@@ -390,6 +400,35 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
     },
     () => createAppConfig(clock().toISOString(), productionSearch, liveTraffic),
+  );
+
+  typedApp.post(
+    '/v1/google-place-query-grants',
+    {
+      schema: {
+        description:
+          'Atomically reserves one anonymous Google Places UI Kit query under the monthly no-charge safety cap.',
+        response: {
+          200: GooglePlaceQueryGrantResponseSchema,
+          503: ProblemDetailsSchema,
+        },
+        tags: ['places'],
+      },
+    },
+    async (request, reply) => {
+      try {
+        return await googlePlaceQueryBudget.reserve();
+      } catch {
+        reply.status(503).type('application/problem+json');
+        return createProblem(
+          request,
+          503,
+          'service_unavailable',
+          'Place details unavailable',
+          'The optional Google place-details budget could not be reserved right now.',
+        );
+      }
+    },
   );
 
   typedApp.get(

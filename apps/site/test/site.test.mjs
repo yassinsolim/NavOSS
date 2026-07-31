@@ -35,6 +35,8 @@ test('legal and support pages expose stable public routes', () => {
   );
   assert.match(privacy, /More reviews on Google Maps/);
   assert.match(privacy, /photos,[\s\S]*rating count,[\s\S]*review text/);
+  assert.match(privacy, /denies grants after 8,000 in a month/);
+  assert.match(privacy, /no place name, coordinate, account,[\s\S]*device identifier/);
   assert.match(privacy, /up to 25 private correction drafts/);
   assert.doesNotMatch(privacy, /does not fetch, cache, scrape, or display Google Places ratings/);
   assert.match(

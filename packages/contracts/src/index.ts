@@ -13,6 +13,9 @@ export type { AppConfigResponse } from './config.js';
 export { HealthResponseSchema, ReadinessCheckSchema, ReadinessResponseSchema } from './health.js';
 export type { HealthResponse, ReadinessResponse } from './health.js';
 
+export { GooglePlaceQueryGrantResponseSchema } from './google-place-query-grant.js';
+export type { GooglePlaceQueryGrantResponse } from './google-place-query-grant.js';
+
 export { ProblemCodeSchema, ProblemDetailsSchema } from './problem.js';
 export type { ProblemCode, ProblemDetails } from './problem.js';
 

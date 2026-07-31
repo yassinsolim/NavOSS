@@ -85,6 +85,14 @@
           place-details request and shows that Google photos, ratings, and reviews are unavailable.
         </p>
         <p>
+          Before an enabled phone opens Google's component, it asks the NavOSS API to reserve one
+          anonymous monthly query grant. That request contains no place name, coordinate, account,
+          device identifier, or search text. NavOSS stores only the UTC month, an aggregate used
+          count, and its last update time. The server denies grants after 8,000 in a month, below
+          Google's current 10,000-event no-charge allowance, and fails closed if the counter is
+          unavailable.
+        </p>
+        <p>
           An enabled build links GooglePlacesSwift 10.15.0 and its underlying Google Places SDK. The
           SDK's embedded Apple privacy manifest declares Google collection of precise and coarse
           location for analytics and app functionality; device ID linked to identity for analytics
@@ -157,7 +165,7 @@
           traffic delivery, and the outbound tunnel. It processes client IP and network/request
           metadata on its global network under its policy. NavOSS does not enable raw Cloudflare
           request-log export. Map delivery uses OpenFreeMap; TestFlight feedback uses Apple; and
-          user-initiated support may use GitHub. Optional Google-rendered ratings and a
+          user-initiated support may use GitHub. Optional Google-rendered place details and a
           user-selected external reviews action use
           <a href="https://policies.google.com/privacy">Google under Google's policy</a>. Optional
           licensed live-traffic routing may use
@@ -169,7 +177,8 @@
           access logging is disabled. Logs exclude request bodies, search text, and route
           coordinates. The currently disabled report database has 14-day backups; route and search
           requests never enter those backups, and reproducible public search-index tables are
-          excluded.
+          excluded. The Google query safety counter stores only the UTC month, aggregate used count,
+          and last update time.
         </p>
         <p>
           Operational logs may contain timestamps, service identity, severity, lifecycle or health
@@ -215,8 +224,8 @@
           where practical. No security measure can guarantee absolute protection.
         </p>
         <p>
-          The NavOSS origin is in Alberta. Cloudflare, OpenFreeMap, Apple, Google when ratings are
-          enabled or the external reviews link is chosen, GitHub, and a user-selected share
+          The NavOSS origin is in Alberta. Cloudflare, OpenFreeMap, Apple, Google when place details
+          are enabled or the external reviews link is chosen, GitHub, and a user-selected share
           destination may process data outside Canada as described in their policies.
         </p>
 

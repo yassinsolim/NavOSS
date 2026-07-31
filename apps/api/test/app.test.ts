@@ -1,5 +1,6 @@
 import {
   AppConfigResponseSchema,
+  GooglePlaceQueryGrantResponseSchema,
   HealthResponseSchema,
   OfficialRoadEventResponseSchema,
   OfficialSafetyCameraResponseSchema,
@@ -171,6 +172,45 @@ describe('client configuration', () => {
     const body = AppConfigResponseSchema.parse(response.json());
 
     expect(body.features.liveTraffic).toBe(true);
+  });
+});
+
+describe('Google place query grants', () => {
+  it('returns the anonymous monthly budget reservation', async () => {
+    const app = await createTestApp({
+      googlePlaceQueryBudget: {
+        reserve: () =>
+          Promise.resolve({
+            granted: true,
+            limit: 8_000,
+            period: '2026-07',
+            remaining: 7_999,
+            resetsAt: '2026-08-01T00:00:00.000Z',
+          }),
+      },
+    });
+    const response = await app.inject({ method: 'POST', url: '/v1/google-place-query-grants' });
+
+    expect(response.statusCode).toBe(200);
+    expect(GooglePlaceQueryGrantResponseSchema.parse(response.json())).toEqual({
+      granted: true,
+      limit: 8_000,
+      period: '2026-07',
+      remaining: 7_999,
+      resetsAt: '2026-08-01T00:00:00.000Z',
+    });
+  });
+
+  it('fails closed when the durable budget is unavailable', async () => {
+    const app = await createTestApp({
+      googlePlaceQueryBudget: {
+        reserve: () => Promise.reject(new Error('database unavailable')),
+      },
+    });
+    const response = await app.inject({ method: 'POST', url: '/v1/google-place-query-grants' });
+
+    expect(response.statusCode).toBe(503);
+    expect(ProblemDetailsSchema.parse(response.json()).detail).toContain('could not be reserved');
   });
 });
 
@@ -643,6 +683,7 @@ describe('OpenAPI', () => {
     expect(document.paths).toHaveProperty('/health');
     expect(document.paths).toHaveProperty('/ready');
     expect(document.paths).toHaveProperty('/v1/config');
+    expect(document.paths).toHaveProperty('/v1/google-place-query-grants');
     expect(document.paths).toHaveProperty('/v1/cameras');
     expect(document.paths).toHaveProperty('/v1/routes');
     expect(document.paths).toHaveProperty('/v1/search');

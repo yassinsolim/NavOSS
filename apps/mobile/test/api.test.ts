@@ -8,6 +8,7 @@ import {
   fetchRoutes,
   fetchSafetyCameras,
   NavOssApiError,
+  reserveGooglePlaceQuery,
   resolveApiBaseUrl,
   searchPlaces,
 } from '../src/lib/api.js';
@@ -154,6 +155,34 @@ describe('NavOssApiError', () => {
       name: 'NavOssApiError',
       status: 503,
     });
+  });
+});
+
+describe('reserveGooglePlaceQuery', () => {
+  it('reserves one anonymous query grant without a request body', async () => {
+    let capturedRequest: RequestInit | undefined;
+    const response = await reserveGooglePlaceQuery({
+      baseUrl: 'https://navoss-api.yassin.app/',
+      fetchImplementation: (input, init) => {
+        expect(input).toBe('https://navoss-api.yassin.app/v1/google-place-query-grants');
+        capturedRequest = init;
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              granted: true,
+              limit: 8_000,
+              period: '2026-07',
+              remaining: 7_999,
+              resetsAt: '2026-08-01T00:00:00.000Z',
+            }),
+            { headers: { 'content-type': 'application/json' }, status: 200 },
+          ),
+        );
+      },
+    });
+
+    expect(capturedRequest).toEqual({ method: 'POST' });
+    expect(response).toMatchObject({ granted: true, limit: 8_000, remaining: 7_999 });
   });
 });
 

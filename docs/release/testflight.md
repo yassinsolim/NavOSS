@@ -79,7 +79,9 @@ An enabled artifact must use matching App Store Connect answers and review notes
 validator and config plugin fail closed when the flag has no key. Checked-in production profiles
 explicitly set `NAVOSS_GOOGLE_PLACES_ENABLED=0`; disabled builds do not link GooglePlacesSwift or
 make place-details requests. Enabled builds use the standard Places UI Kit query rather than its
-higher-priced advanced component; set conservative daily quotas and billing alerts before release.
+higher-priced advanced component. Every enabled query must first receive an anonymous grant from
+the durable NavOSS counter, which hard-stops at 8,000 grants per UTC month and fails closed. Keep
+Google-side quota limits and billing alerts as an independent second layer before release.
 
 Before creating a build, verify:
 

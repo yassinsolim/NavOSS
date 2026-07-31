@@ -1,5 +1,6 @@
 import {
   AppConfigResponseSchema,
+  GooglePlaceQueryGrantResponseSchema,
   OfficialRoadEventResponseSchema,
   OfficialSafetyCameraResponseSchema,
   ProblemDetailsSchema,
@@ -8,6 +9,7 @@ import {
   SafetyCameraResponseSchema,
   SearchResponseSchema,
   type AppConfigResponse,
+  type GooglePlaceQueryGrantResponse,
   type OfficialRoadEventRegion,
   type OfficialRoadEventResponse,
   type OfficialSafetyCameraRegion,
@@ -49,6 +51,12 @@ export interface FetchRoutesOptions {
 }
 
 export interface FetchSafetyCamerasOptions {
+  baseUrl?: string;
+  fetchImplementation?: typeof fetch;
+  signal?: AbortSignal;
+}
+
+export interface ReserveGooglePlaceQueryOptions {
   baseUrl?: string;
   fetchImplementation?: typeof fetch;
   signal?: AbortSignal;
@@ -141,6 +149,20 @@ export async function fetchAppConfig(signal?: AbortSignal): Promise<AppConfigRes
     signal === undefined ? undefined : { signal },
   );
   return AppConfigResponseSchema.parse(await parseResponse(response));
+}
+
+export async function reserveGooglePlaceQuery(
+  options: ReserveGooglePlaceQueryOptions = {},
+): Promise<GooglePlaceQueryGrantResponse> {
+  const fetchImplementation = options.fetchImplementation ?? fetch;
+  const response = await fetchImplementation(
+    `${normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl())}/v1/google-place-query-grants`,
+    {
+      method: 'POST',
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    },
+  );
+  return GooglePlaceQueryGrantResponseSchema.parse(await parseResponse(response));
 }
 
 export async function searchPlaces(

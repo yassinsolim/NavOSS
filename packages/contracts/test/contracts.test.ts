@@ -4,6 +4,7 @@ import {
   AppConfigResponseSchema,
   compareRouteAlternatives,
   GeographicBoundsSchema,
+  GooglePlaceQueryGrantResponseSchema,
   OfficialRoadEventResponseSchema,
   OfficialSafetyCameraResponseSchema,
   RoadEventResponseSchema,
@@ -22,6 +23,20 @@ describe('GeographicBoundsSchema', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe('GooglePlaceQueryGrantResponseSchema', () => {
+  it('accepts the bounded anonymous monthly grant state', () => {
+    expect(
+      GooglePlaceQueryGrantResponseSchema.parse({
+        granted: true,
+        limit: 8_000,
+        period: '2026-07',
+        remaining: 7_999,
+        resetsAt: '2026-08-01T00:00:00.000Z',
+      }),
+    ).toMatchObject({ granted: true, limit: 8_000, remaining: 7_999 });
   });
 });
 
