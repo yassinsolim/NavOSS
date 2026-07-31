@@ -42,7 +42,7 @@ Do not send a home address, precise trip history, or other sensitive information
 
 ## Known beta limitations
 
-- Calgary search and routing only; Kelowna and Ontario currently provide selected official overlays;
+- Calgary and Kelowna search and routing; Ontario currently provides selected official overlays only;
 - no live traffic or traffic-aware ETA;
 - no lane guidance, Android release, or offline routing;
 - CarPlay is available only in the dedicated tester build and has not completed real-vehicle validation;

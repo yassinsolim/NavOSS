@@ -52,11 +52,11 @@ test('legal and support pages expose stable public routes', () => {
   );
   assert.match(
     dataSources,
-    /regional OpenStreetMap search and routing import is staged for Kelowna/,
+    /Kelowna search and driving routes use the live,[\s\S]*regional\s+OpenStreetMap import/,
   );
   assert.match(support, /GitHub Issues/);
   assert.match(support, /not an emergency service/);
-  assert.match(support, /Search and driving routes are currently live only in Calgary/);
+  assert.match(support, /Search and driving routes are live in Calgary and Kelowna/);
   assert.doesNotMatch(support, /Calgary coverage only/);
 });
 

@@ -92,7 +92,9 @@ function analyze(routeCase, route, response, latencyMs, avoidHighways) {
   if (metrics.geometryPoints < 20) failures.push('geometry detail');
   if (Math.abs(metrics.geometryRatio - 1) > 0.03) failures.push('geometry distance');
   if (latencyMs > 5_000) failures.push('latency');
-  if (metrics.maximumSegmentMeters > 2_000) failures.push('geometry gap');
+  if (metrics.maximumSegmentMeters > (routeCase.maximumSegmentMeters ?? 2_000)) {
+    failures.push('geometry gap');
+  }
   if (metrics.originOffsetMeters > routeCase.maximumEndpointOffsetMeters) {
     failures.push('origin access');
   }

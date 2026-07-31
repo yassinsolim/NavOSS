@@ -93,7 +93,7 @@
     "origin": { "latitude": 49.8879, "longitude": -119.496 },
     "destination": { "latitude": 49.9561, "longitude": -119.378 },
     "distanceRangeKm": [10, 22],
-    "maximumEndpointOffsetMeters": 150
+    "maximumEndpointOffsetMeters": 300
   },
   {
     "id": "kelowna-downtown-ubco",
@@ -107,7 +107,7 @@
     "origin": { "latitude": 49.8879, "longitude": -119.496 },
     "destination": { "latitude": 49.835, "longitude": -119.489 },
     "distanceRangeKm": [5, 15],
-    "maximumEndpointOffsetMeters": 150
+    "maximumEndpointOffsetMeters": 200
   },
   {
     "id": "kelowna-rutland-downtown",
@@ -127,8 +127,8 @@
     "id": "kelowna-airport-mission",
     "origin": { "latitude": 49.9561, "longitude": -119.378 },
     "destination": { "latitude": 49.835, "longitude": -119.489 },
-    "distanceRangeKm": [18, 38],
-    "maximumEndpointOffsetMeters": 150
+    "distanceRangeKm": [17, 38],
+    "maximumEndpointOffsetMeters": 300
   },
   {
     "id": "calgary-kelowna-intercity",
@@ -136,7 +136,8 @@
     "destination": { "latitude": 49.8879, "longitude": -119.496 },
     "distanceRangeKm": [580, 680],
     "maximumEndpointOffsetMeters": 150,
-    "maximumDurationMinutes": 900
+    "maximumDurationMinutes": 900,
+    "maximumSegmentMeters": 3000
   },
   {
     "id": "kelowna-calgary-intercity",

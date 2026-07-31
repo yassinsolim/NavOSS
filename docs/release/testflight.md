@@ -344,6 +344,32 @@ submission `8d00249f-c7da-478e-b74b-1e3b5b2c93a0` uploaded it successfully to Ap
 July 30, 2026. Apple processing, internal `testers` attachment, focused test notes, and physical
 validation remain pending.
 
+## Kelowna backend deployment certificate
+
+Production deployed commit `d3dd12d88f7fbd2e353a29b773e478aa37522ab0` on July 31, 2026,
+with rollback tree `/home/navoss/NavOSS.pre-a743cfb-20260731T161935Z`. Nominatim and Valhalla use
+the same checksum-verified Geofabrik `260730` Alberta and British Columbia release through versioned
+artifact directories. The final Nominatim database is 6.0 GiB; the Valhalla graph is 2.8 GiB with
+3,344 tiles. Production retained 13 GiB available RAM and zero meaningful swap use after cutover.
+
+The live search gate passed with zero failures across all 35 categories at 12 Calgary and five
+Kelowna locations. Kelowna locations returned 28–34 nonempty categories each; every essential
+category was present somewhere in the service area, responses used the self-hosted regional source,
+and no Calgary fixture or civic-index result leaked into Kelowna searches. Ontario 511 and Toronto
+camera checks remained healthy.
+
+The live route gate passed 25 variants at 243 ms p95: all existing Calgary routes, six Kelowna local
+routes, and both Calgary–Kelowna intercity directions. Calgary to Kelowna was 608.9 km and Kelowna
+to Calgary was 617.9 km. Every response remained nondegraded self-hosted Valhalla with no live
+traffic claim.
+
+Live Kelowna context returned one current DriveBC event, four ordinary traffic webcams with
+`enforcement: false`, and exactly two fixed RCMP public facilities. Anonymous contribution
+submission was accepted through public ingress, verified in PostgreSQL, and the certification row
+was deleted. Existing signed builds remain compatible through the unchanged strict Calgary
+`/v1/config`; the new regional client uses `/v2/config`. A replacement signed build is required
+before TestFlight users can access the Kelowna UI and unrestricted map changes.
+
 The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a keyless CarPlay tester build so the approved scene and entitlement are present. After the restricted EAS Google key and matching App Privacy answers are ready, use `production-carplay-google` for the rating-enabled candidate:
 
 ```sh

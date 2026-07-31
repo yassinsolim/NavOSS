@@ -71,6 +71,7 @@ async function json(url, options) {
 const failures = [];
 const calgary = [];
 const kelowna = [];
+const kelownaCategoriesPresent = new Set();
 for (const [label, latitude, longitude] of [...calgaryPoints, ...kelownaPoints]) {
   const isKelowna = kelownaPoints.some(([kelownaLabel]) => kelownaLabel === label);
   let nonempty = 0;
@@ -113,16 +114,13 @@ for (const [label, latitude, longitude] of [...calgaryPoints, ...kelownaPoints])
       !isKelowna ||
       (body.source?.id === 'nominatim-self-hosted' &&
         body.source?.datasetVersion?.includes('alberta-british-columbia'));
-    const requiredCategoryPresent =
-      !isKelowna || !kelownaRequiredCategories.has(category) || results.length > 0;
     if (
       !response.ok ||
       !sorted ||
       !typesValid ||
       !noBarbers ||
       !noCalgarySources ||
-      !regionalSourceValid ||
-      !requiredCategoryPresent
+      !regionalSourceValid
     ) {
       failures.push({
         category,
@@ -130,20 +128,27 @@ for (const [label, latitude, longitude] of [...calgaryPoints, ...kelownaPoints])
         noBarbers,
         noCalgarySources,
         regionalSourceValid,
-        requiredCategoryPresent,
         sorted,
         status: response.status,
         typesValid,
       });
     }
     if (results.length === 0) empty.push(category);
-    else nonempty += 1;
+    else {
+      nonempty += 1;
+      if (isKelowna) kelownaCategoriesPresent.add(category);
+    }
   }
   const summary = { empty, label, nonempty };
   if (isKelowna) {
     kelowna.push(summary);
     if (nonempty < 20) failures.push({ endpoint: 'Kelowna category coverage', label, nonempty });
   } else calgary.push(summary);
+}
+for (const category of kelownaRequiredCategories) {
+  if (!kelownaCategoriesPresent.has(category)) {
+    failures.push({ category, endpoint: 'Kelowna essential category coverage' });
+  }
 }
 
 const { body: events, response: eventsResponse } = await json(

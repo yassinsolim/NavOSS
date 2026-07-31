@@ -231,8 +231,8 @@ fails closed on unknown source structures. A validated in-memory snapshot may be
 stale for no more than 24 hours.
 
 These events are informational map overlays. They do not alter route selection, ETA, rerouting, or
-speech. Alberta and British Columbia Nominatim and Valhalla replacements are staged, but Kelowna
-place search and driving routes remain unavailable until live certification passes.
+speech. Kelowna place search and driving routes use the separately certified live Alberta and
+British Columbia Nominatim and Valhalla imports; event data never changes those routes.
 
 ## DriveBC Kelowna Traffic Webcams
 

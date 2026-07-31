@@ -59,7 +59,7 @@ This copy is a future public-listing draft, not approval to submit the current t
 >
 > NavOSS is open source and built on OpenStreetMap-derived map, search, and routing data. Attribution and data-source details are available in the app and on the NavOSS website.
 >
-> Current search and routing coverage is Calgary, Alberta. Kelowna infrastructure is staged but not included until live certification passes. This version does not include live traffic, lane guidance, or offline routing. Data and alerts may be incomplete or outdated. Always follow posted signs, road closures, and applicable laws.
+> Current backend search and routing coverage includes Calgary and Kelowna, with intercity routing tested between them. This version does not include live traffic, lane guidance, or offline routing. Data and alerts may be incomplete or outdated. Always follow posted signs, road closures, and applicable laws.
 
 Do not use “beta,” “alpha,” “technical preview,” “test,” or “have a passenger report bugs” in the public description. If the shipped public product still requires foreground, screen-on use, state that limitation plainly rather than implying background turn-by-turn navigation.
 
@@ -67,7 +67,7 @@ Do not use “beta,” “alpha,” “technical preview,” “test,” or “h
 
 Beta language belongs here, not in a public App Store listing:
 
-> NavOSS is an account-free regional navigation technical beta. It currently provides Calgary place search and routing, fastest-first route choices, avoid-highways routing, spoken turn-by-turn guidance, locked-phone background continuation, CarPlay search and navigation, static system-sheet ETA sharing, automatic rerouting, arrival detection, and official regional road context. Kelowna search and routing remain staged pending live certification.
+> NavOSS is an account-free regional navigation technical beta. Its live backend provides Calgary and Kelowna place search, tested intercity routing, fastest-first route choices, avoid-highways routing, spoken turn-by-turn guidance, locked-phone background continuation, CarPlay search and navigation, static system-sheet ETA sharing, automatic rerouting, arrival detection, and official regional road context.
 >
 > This build has no live traffic, lane guidance, or offline routing. Keep the phone mounted and have a passenger operate controls while moving. Do not rely on this beta as the only navigation, road-closure, traffic, or safety source.
 
@@ -104,7 +104,7 @@ Include the public start area, destination, local time, app build, iPhone model,
 
 Do not paste this template into App Store Connect until the production build and reviewer-access path are complete.
 
-> NavOSS is an account-free navigation app with current search and routing coverage in Calgary, Alberta. Kelowna infrastructure is staged but not enabled in this build until live certification passes. No sign-in, purchase, subscription, or demo credential is required.
+> NavOSS is an account-free navigation app with live backend search and routing coverage in Calgary and Kelowna. A replacement signed build is required before reviewers can use the new Kelowna regional UI. No sign-in, purchase, subscription, or demo credential is required.
 >
 > To review search, tap Search, enter “Calgary Tower” or “Kelowna City Park,” and select the result. From outside coverage, use **Preview a supported route** when current-location routing reports Route unavailable. The preview shows distance, estimated time, route geometry, and route preferences but does not offer Start. **Use my location** returns to real-location routing. Physical GPS progress, rerouting, arrival, and route-ahead notices require movement along a selected supported route.
 >
