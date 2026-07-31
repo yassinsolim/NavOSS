@@ -13,6 +13,8 @@ test('homepage presents the product and honest beta posture', () => {
   assert.match(homepage, /Calgary and Kelowna[\s\S]*Regional context/);
   assert.match(homepage, /Calgary and Kelowna routes/);
   assert.match(homepage, /25\/25[\s\S]*regional route variants/);
+  assert.match(homepage, /Backend live[\s\S]*intercity routes are certified/);
+  assert.match(homepage, /Existing signed builds remain Calgary-compatible/);
   assert.doesNotMatch(homepage, /Build 15/);
   assert.match(homepage, /no\s+live\s+traffic/i);
   assert.match(styles, /navoss-map-current\.jpg/);
