@@ -13,7 +13,7 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
   private var name = ""
 
   #if NAVOSS_GOOGLE_PLACES
-  private var hostingController: UIHostingController<GoogleRatingContent>?
+  private var hostingController: UIHostingController<GooglePlaceDetailsContent>?
   private var renderedCoordinate: CLLocationCoordinate2D?
   private let stateLabel = UILabel()
   #endif
@@ -58,7 +58,7 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
     tearDownContent()
 
     let controller = UIHostingController(
-      rootView: GoogleRatingContent(
+      rootView: GooglePlaceDetailsContent(
         coordinate: coordinate,
         onResult: { [weak self] result in
           guard let self else { return }
@@ -178,7 +178,7 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
   }
 
   private func showLoadingState() {
-    stateLabel.text = "Loading Google rating"
+    stateLabel.text = "Loading Google photos and reviews"
     stateLabel.frame = bounds
     if stateLabel.superview == nil {
       addSubview(stateLabel)
@@ -186,7 +186,7 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
   }
 
   private func showUnavailableState() {
-    stateLabel.text = "Google rating unavailable"
+    stateLabel.text = "Google place details unavailable"
     stateLabel.frame = bounds
     if stateLabel.superview == nil {
       addSubview(stateLabel)
@@ -210,11 +210,11 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
 }
 
 #if NAVOSS_GOOGLE_PLACES
-private struct GoogleRatingContent: View {
+private struct GooglePlaceDetailsContent: View {
   @State private var query: PlaceDetailsQuery
   private let onResult: (PlaceDetailsResult) -> Void
-  private let configuration = PlaceDetailsCompactConfiguration(
-    content: [.rating()],
+  private let configuration = PlaceDetailsConfiguration(
+    content: [.media(), .rating(), .reviews()],
     theme: PlacesMaterialTheme()
   )
 
@@ -227,8 +227,7 @@ private struct GoogleRatingContent: View {
   }
 
   var body: some View {
-    PlaceDetailsCompactView(
-      orientation: .horizontal,
+    GooglePlacesSwift.PlaceDetailsView(
       query: $query,
       configuration: configuration,
       placeDetailsCallback: onResult

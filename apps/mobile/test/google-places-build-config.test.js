@@ -38,6 +38,21 @@ describe('Google Places build configuration', () => {
     expect(eas.submit['production-carplay-google'].ios.ascAppId).toBe('6792619727');
   });
 
+  it('renders photos, rating count, and reviews in the standard Google place details view', () => {
+    const nativeView = readFileSync(
+      resolve(
+        import.meta.dirname,
+        '..',
+        'modules/navoss-navigation/ios/NavOSSGooglePlaceRatingView.swift',
+      ),
+      'utf8',
+    );
+
+    expect(nativeView).toContain('GooglePlacesSwift.PlaceDetailsView(');
+    expect(nativeView).toContain('content: [.media(), .rating(), .reviews()]');
+    expect(nativeView).not.toContain('AdvancedPlaceDetailsView(');
+  });
+
   it('packages the visual host behind simulator compiler guards', () => {
     expect(sourceFiles).toContain('NavOSSCarPlayVisualHarnessViewController.swift');
 

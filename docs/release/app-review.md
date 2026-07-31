@@ -37,7 +37,7 @@ The following statements are supported by the current app, repository, or live s
 - Bundle ID `org.navoss.mobile`, version `0.1.0`, When in Use authorization, and active-navigation `location` background mode are present.
 - Signed build `0.1.0 (15)` and its provisioning profile assert the Apple-approved `com.apple.developer.carplay-maps` entitlement; its CarPlay template scene is present and the deprecated Maps entitlement is absent.
 - The location purpose string names map position, navigation, rerouting, arrival, and official safety-camera warnings.
-- The checked-in production profiles explicitly disable Google Places and contain no account, login, purchase, subscription, advertising SDK, analytics SDK, tracking SDK, or runtime AI dependency. A separately enabled Google rating build does not satisfy the analytics-SDK part of this statement.
+- The checked-in production profiles explicitly disable Google Places and contain no account, login, purchase, subscription, advertising SDK, analytics SDK, tracking SDK, or runtime AI dependency. A separately enabled Google place-details build does not satisfy the analytics-SDK part of this statement.
 - The app exposes in-app links to the privacy and support pages; the focused Maestro flow passes both below- and above-fold assertions.
 - `https://navoss.yassin.app`, `/privacy`, and `/support` return HTTP 200 over HTTPS.
 - The source repository is public at `https://github.com/yassinsolim/NavOSS`.

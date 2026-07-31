@@ -198,7 +198,7 @@ export function PlaceSheet({
                 size={19}
                 tintColor={NavOssColors.sun}
               />
-              <Text style={styles.ratingTitle}>Google rating</Text>
+              <Text style={styles.ratingTitle}>Photos & reviews</Text>
             </View>
             {ratingAvailable ? (
               <GooglePlaceRating
@@ -208,16 +208,18 @@ export function PlaceSheet({
                 style={styles.ratingView}
               />
             ) : (
-              <Text style={styles.ratingUnavailable}>View the current rating in Google Maps</Text>
+              <Text style={styles.ratingUnavailable}>
+                Google photos, ratings, and reviews are unavailable in this build
+              </Text>
             )}
             <Pressable
               accessibilityHint="Opens Google Maps; the place query is shared only after you choose this action"
-              accessibilityLabel="Read reviews on Google Maps"
+              accessibilityLabel="More reviews on Google Maps"
               accessibilityRole="link"
               onPress={onReadReviews}
               style={({ pressed }) => [styles.reviewsLink, pressed && styles.pressed]}
             >
-              <Text style={styles.reviewsLinkText}>Read reviews on Google Maps</Text>
+              <Text style={styles.reviewsLinkText}>More reviews on Google Maps</Text>
               <SymbolView
                 name={{ android: 'open_in_new', ios: 'arrow.up.right' }}
                 size={14}
@@ -414,7 +416,7 @@ const styles = StyleSheet.create({
   },
   ratingView: {
     alignSelf: 'stretch',
-    minHeight: 56,
+    minHeight: 320,
   },
   reviewsLink: {
     alignItems: 'center',

@@ -75,12 +75,14 @@
           typed search. NavOSS does not fetch Google review content in this lookup.
         </p>
         <p>
-          In a build where Google Places ratings are explicitly enabled, opening a point-of-interest
+          In a build where Google Places details are explicitly enabled, opening a point-of-interest
           sheet also sends that selected public name and coordinate directly to Google Places.
-          Google's Places UI Kit chooses the place and renders the star rating, rating count, and
-          required Google attribution inside its own component. NavOSS does not receive, combine,
-          cache, or send those values to its server. A build without the restricted Google key makes
-          no rating request and shows that the Google rating is unavailable.
+          Google's Places UI Kit chooses the place and renders available photos, the star rating and
+          rating count, review text, and required Google attribution inside its own visually
+          separated component. NavOSS reads only the returned display name and coordinate to reject
+          a mismatched place; it does not read, persist, combine, or send the photo, rating, count,
+          or review values to its server. A build without the restricted Google key makes no
+          place-details request and shows that Google photos, ratings, and reviews are unavailable.
         </p>
         <p>
           An enabled build links GooglePlacesSwift 10.15.0 and its underlying Google Places SDK. The
@@ -88,8 +90,8 @@
           location for analytics and app functionality; device ID linked to identity for analytics
           and app functionality; other data linked to identity for analytics; and unlinked
           performance data, product interaction, and search history for analytics. It declares no
-          tracking. These are Google-controlled SDK declarations beyond the rating values NavOSS
-          requests or receives, and enabled-build App Privacy answers must include them.
+          tracking. These are Google-controlled SDK declarations beyond the place details NavOSS
+          displays, and enabled-build App Privacy answers must include them.
         </p>
         <p>
           Map style, navigation orientation, tilt, map-content visibility, safety-camera marker
@@ -109,9 +111,9 @@
         </p>
         <p>
           Call and website actions open an external system app only after the user chooses them.
-          <strong>Read reviews on Google Maps</strong> is a separate external action and sends the
+          <strong>More reviews on Google Maps</strong> is a separate external action and sends the
           selected public place name and coordinate to Google only when chosen. NavOSS does not
-          fetch, cache, or scrape review text. In a Google-enabled build, the rating-only request
+          scrape or cache review text. In a Google-enabled build, the place-details request
           described above can occur when a point-of-interest sheet opens; the external Google Maps
           search still occurs only after the user chooses it.
         </p>
@@ -134,9 +136,9 @@
         <p>
           The default Google-disabled build has no account system, ads, analytics SDK, advertising
           identifier, data broker integration, or cross-app tracking. Location is not used by NavOSS
-          for advertising or user profiling. A separately enabled Google rating build links the
-          Google Places SDK and is subject to the SDK declarations above; NavOSS does not receive or
-          operate that Google analytics data.
+          for advertising or user profiling. A separately enabled Google place-details build links
+          the Google Places SDK and is subject to the SDK declarations above; NavOSS does not
+          receive or operate that Google analytics data.
         </p>
 
         <h2>Map and camera data</h2>
@@ -194,8 +196,8 @@
         <p>
           Sharing and the external reviews link are optional. Dismissing the system share sheet
           sends nothing to a recipient. In a Google-enabled build, opening a POI sheet can send its
-          public coordinate for the Google-rendered rating; not choosing the external link sends no
-          Google Maps review search. NavOSS does not ask for Contacts access.
+          public coordinate for Google-rendered photos, ratings, and reviews; not choosing the
+          external link sends no Google Maps review search. NavOSS does not ask for Contacts access.
         </p>
         <p>
           Because NavOSS has no account and does not retain server-side search, route, or trip

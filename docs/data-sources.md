@@ -63,13 +63,15 @@ outdated, or expressed in raw OpenStreetMap syntax. NavOSS does not infer missin
 
 OpenStreetMap does not provide a Google-style review corpus. NavOSS does not scrape reviews or add
 Google values to its open-data result or shared contracts. An optional, key-gated Google Places UI
-Kit component may receive a selected POI name and coordinate and render only Google's current rating, rating
-count, and attribution in its own native view. NavOSS does not read or persist those values. The
-separate **Read reviews on Google Maps** command is an explicit external search and opens only after
-the user chooses it. An enabled build links GooglePlacesSwift 10.15.0; its underlying SDK privacy
-manifest declares location, Device ID, Other Data, performance, product interaction, and search
-history collection for analytics and/or app functionality, with no tracking. Builds without the
-Google key make no Google rating request and do not link that SDK.
+Kit component may receive a selected POI name and coordinate and render Google's photos, current
+rating and rating count, review text, and required attribution in its own visually separated native
+view. NavOSS checks the returned name and coordinate to prevent a mismatched place, but does not read
+or persist the photo, rating, count, or review values. The separate **More reviews on Google Maps**
+command is an explicit external search and opens only after the user chooses it. An enabled build
+links GooglePlacesSwift 10.15.0; its underlying SDK privacy manifest declares location, Device ID,
+Other Data, performance, product interaction, and search history collection for analytics and/or app
+functionality, with no tracking. Builds without the Google key make no Google place-details request
+and do not link that SDK.
 
 ## Live Traffic Routing
 

@@ -1753,10 +1753,10 @@ export function MapScreen() {
           selectedResult.details?.wheelchair,
         ].filter((value) => value !== undefined).length;
   const placeSheetHeight = Math.min(
-    height * 0.56,
+    height * (selectedResult?.category === 'poi' && googlePlaceRatingAvailable ? 0.72 : 0.56),
     242 +
       Math.max(1, placeDetailRowCount) * 48 +
-      (selectedResult?.category === 'poi' ? 122 : 0) +
+      (selectedResult?.category === 'poi' ? (googlePlaceRatingAvailable ? 386 : 122) : 0) +
       insets.bottom,
   );
   const selectedPanelHeight =

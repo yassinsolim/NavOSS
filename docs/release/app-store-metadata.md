@@ -75,7 +75,7 @@ Beta language belongs here, not in a public App Store listing:
 
 1. Search for a Calgary landmark, business, or address and report missing or incorrect results.
 2. Tap visible named places such as a cafe, landmark, or gas station. Confirm the correct place sheet opens and report incorrect address, hours, phone, website, or accessibility data.
-3. Open a public POI and confirm a configured build shows Google's star rating, rating count, and attribution without leaving NavOSS. Then choose **Read reviews on Google Maps** and confirm only that explicit action opens Google Maps. An unconfigured build must show the rating as unavailable.
+3. Open a public POI and confirm a configured build shows the matching Google place's photos, star rating, rating count, review text, and attribution without leaving NavOSS. Then choose **More reviews on Google Maps** and confirm only that explicit action opens Google Maps. An unconfigured build must show that Google photos, ratings, and reviews are unavailable.
 4. Long-press a road-accessible point on the map and confirm a dropped pin opens route choices.
 5. Confirm the fastest route appears first; when ETAs match, confirm the shorter-distance route appears first.
 6. Switch among Day, Night, Contrast, and Minimal map styles; confirm each is distinct, Day highways are green, and landmarks remain visible.
