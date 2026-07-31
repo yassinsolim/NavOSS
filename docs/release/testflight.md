@@ -83,6 +83,13 @@ higher-priced advanced component. Every enabled query must first receive an anon
 the durable NavOSS counter, which hard-stops at 8,000 grants per UTC month and fails closed. Keep
 Google-side quota limits and billing alerts as an independent second layer before release.
 
+The anonymous grant counter is deployed at `a743cfb512b69b15da54a60aeeab93190187de4a` with
+rollback `/home/navoss/NavOSS.pre-a743cfb-20260731T041459Z`. Two production probes returned 7,999
+then 7,998 remaining grants for July 2026. The durable row contained only period `2026-07` and used
+count `2`; its table has only `period`, `used`, and `updated_at` columns. The post-deploy live
+certificate passed all 35 categories at 12 Calgary points, 601 current Ontario events near ten
+cities, 301 Toronto cameras, and out-of-coverage rejection with zero failures.
+
 Before creating a build, verify:
 
 ```sh
