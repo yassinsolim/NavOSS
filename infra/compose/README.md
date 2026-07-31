@@ -111,12 +111,12 @@ sudo docker create --name navoss-nominatim-stage --env-file "$stage_env" \
   --cpus 2.5 --memory 6g --shm-size 2g -p 127.0.0.1:18080:8080 \
   -e FREEZE=true -e GUNICORN_WORKERS=2 -e IMPORT_SECONDARY_WIKIPEDIA=false \
   -e IMPORT_STYLE=full -e IMPORT_WIKIPEDIA=false \
-  -e PBF_PATH="/regional-data/alberta-british-columbia-${version}.osm.pbf" \
+  -e PBF_PATH=/regional-data/regional.osm.pbf \
   -e POSTGRES_AUTOVACUUM_WORK_MEM=256MB -e POSTGRES_EFFECTIVE_CACHE_SIZE=6GB \
   -e POSTGRES_MAINTENANCE_WORK_MEM=2GB -e POSTGRES_MAX_CONNECTIONS=30 \
   -e POSTGRES_MAX_WAL_SIZE=2GB -e POSTGRES_SHARED_BUFFERS=1GB \
   -e POSTGRES_WORK_MEM=32MB -e THREADS=2 -e UPDATE_MODE=none \
-  -v /srv/navoss/artifacts/imports:/regional-data:ro \
+  -v "/srv/navoss/artifacts/imports/alberta-british-columbia-${version}.osm.pbf:/regional-data/regional.osm.pbf:ro" \
   -v "$nominatim_stage:/var/lib/postgresql/16/main" \
   mediagis/nominatim:5.3
 rm -f "$stage_env"
@@ -136,7 +136,7 @@ printing environment values.
 
 Probe both staging services directly. After Calgary, Kelowna, and both intercity directions pass,
 record the previous four `.env` values, set `VALHALLA_DATA_DIR`, `NOMINATIM_DATA_DIR`,
-`NOMINATIM_PBF_FILE`, and `NOMINATIM_DATASET_VERSION` to the staged release, validate
+`NOMINATIM_PBF_PATH`, and `NOMINATIM_DATASET_VERSION` to the staged release, validate
 `sudo docker compose config --quiet`,
 and prebuild the exact API image before touching live services. Then cut over all dependent services:
 
