@@ -2,7 +2,7 @@
   "name": "navoss",
   "version": "0.0.0",
   "private": true,
-  "description": "Privacy-first, open-source navigation for Calgary.",
+  "description": "Privacy-first, open-source regional navigation.",
   "license": "SEE LICENSES/README.md",
   "homepage": "https://github.com/yassinsolim/NavOSS#readme",
   "bugs": {

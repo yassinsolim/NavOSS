@@ -23,6 +23,7 @@ import {
   normalizeContributionDrafts,
   saveContributionDrafts,
 } from '@/features/map/contribution-drafts';
+import { submitContribution } from '@/lib/api';
 
 interface ContributeScreenProps {
   bottomInset: number;
@@ -41,6 +42,7 @@ export function ContributeScreen({ bottomInset, safeAreaTop }: ContributeScreenP
   const [isSaving, setIsSaving] = useState(false);
   const [location, setLocation] = useState('');
   const [selectedType, setSelectedType] = useState<ContributionType>('missing-place');
+  const [submittingDraftId, setSubmittingDraftId] = useState<string>();
 
   useEffect(() => {
     let active = true;
@@ -80,19 +82,47 @@ export function ContributeScreen({ bottomInset, safeAreaTop }: ContributeScreenP
     }
   };
 
-  const handleSave = async () => {
+  const submitDraft = async (draft: ContributionDraft): Promise<string | undefined> => {
+    if (submittingDraftId !== undefined) return undefined;
+    setSubmittingDraftId(draft.id);
+    try {
+      const accepted = await submitContribution({
+        createdAt: draft.createdAt,
+        description: draft.description,
+        draftId: draft.id,
+        ...(draft.location === undefined ? {} : { locationLabel: draft.location }),
+        type: draft.type,
+      });
+      await persistDrafts((current) => current.filter((candidate) => candidate.id !== draft.id));
+      return accepted.submissionId;
+    } catch {
+      Alert.alert(
+        'Saved for retry',
+        'NavOSS could not receive this feedback right now. The pending submission remains only on this device until you retry or delete it.',
+      );
+      return undefined;
+    } finally {
+      setSubmittingDraftId(undefined);
+    }
+  };
+
+  const handleSubmit = async () => {
     if (description.trim().length < 5) {
       Alert.alert('Add a little more detail', 'Describe the change in at least five characters.');
       return;
     }
-    const saved = await persistDrafts((current) => [
-      createContributionDraft(selectedType, description, location),
-      ...current,
-    ]);
+    const draft = createContributionDraft(selectedType, description, location);
+    const saved = await persistDrafts((current) => [draft, ...current]);
     if (!saved) return;
     setDescription('');
     setLocation('');
-    Alert.alert('Saved privately', 'This draft stays on this device and has not been submitted.');
+    const submissionId = await submitDraft(draft);
+    if (submissionId !== undefined) {
+      Alert.alert(
+        'Feedback submitted',
+        `NavOSS received this anonymous beta feedback for review. Reference: ${submissionId}`,
+      );
+    }
   };
 
   return (
@@ -104,7 +134,9 @@ export function ContributeScreen({ bottomInset, safeAreaTop }: ContributeScreenP
       <View style={styles.header}>
         <Text style={styles.eyebrow}>HELP IMPROVE NAVOSS</Text>
         <Text style={styles.title}>Contribute</Text>
-        <Text style={styles.subtitle}>Record a local draft for a place or route correction.</Text>
+        <Text style={styles.subtitle}>
+          Send a place, road, or route correction to the beta team.
+        </Text>
       </View>
       <ScrollView
         contentContainerStyle={[
@@ -121,8 +153,10 @@ export function ContributeScreen({ bottomInset, safeAreaTop }: ContributeScreenP
             tintColor={NavOssColors.green}
           />
           <Text style={styles.noticeText}>
-            Drafts stay on this device. They are not public or sent to NavOSS until a reviewed
-            submission service is available.
+            Submissions contain the type, your description, optional place or road label, and time.
+            They contain no account, device identifier, or precise coordinate. NavOSS retains
+            accepted beta feedback for up to 90 days. Failed submissions stay only on this device
+            for retry.
           </Text>
         </View>
 
@@ -185,30 +219,32 @@ export function ContributeScreen({ bottomInset, safeAreaTop }: ContributeScreenP
           />
 
           <Pressable
-            accessibilityLabel="Save private draft"
-            disabled={!isHydrated || isSaving}
+            accessibilityLabel="Submit feedback"
+            disabled={!isHydrated || isSaving || submittingDraftId !== undefined}
             onPress={() => {
-              void handleSave();
+              void handleSubmit();
             }}
             style={({ pressed }) => [
               styles.saveButton,
-              (!isHydrated || isSaving) && styles.disabled,
+              (!isHydrated || isSaving || submittingDraftId !== undefined) && styles.disabled,
               pressed && styles.pressed,
             ]}
           >
             <SymbolView
-              name={{ android: 'save', ios: 'square.and.arrow.down.fill' }}
+              name={{ android: 'send', ios: 'paperplane.fill' }}
               size={19}
               tintColor={NavOssColors.white}
             />
-            <Text style={styles.saveButtonText}>Save private draft</Text>
+            <Text style={styles.saveButtonText}>
+              {submittingDraftId === undefined ? 'Submit feedback' : 'Submitting'}
+            </Text>
           </Pressable>
         </View>
 
         <View style={styles.draftSection}>
-          <Text style={styles.sectionTitle}>Private drafts</Text>
+          <Text style={styles.sectionTitle}>Pending submissions</Text>
           {drafts.length === 0 ? (
-            <Text style={styles.emptyText}>No drafts saved on this device.</Text>
+            <Text style={styles.emptyText}>No feedback is waiting to be submitted.</Text>
           ) : (
             <View style={styles.draftList}>
               {drafts.map((draft) => (
@@ -225,23 +261,47 @@ export function ContributeScreen({ bottomInset, safeAreaTop }: ContributeScreenP
                       )}
                     </Text>
                   </View>
-                  <Pressable
-                    accessibilityLabel={`Delete ${contributionLabel(draft.type)} draft: ${draft.description.slice(0, 60)}`}
-                    disabled={isSaving}
-                    hitSlop={8}
-                    onPress={() => {
-                      void persistDrafts((current) =>
-                        current.filter((candidate) => candidate.id !== draft.id),
-                      );
-                    }}
-                    style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}
-                  >
-                    <SymbolView
-                      name={{ android: 'delete', ios: 'trash' }}
-                      size={18}
-                      tintColor={NavOssColors.coral}
-                    />
-                  </Pressable>
+                  <View style={styles.draftActions}>
+                    <Pressable
+                      accessibilityLabel={`Retry ${contributionLabel(draft.type)} submission`}
+                      disabled={isSaving || submittingDraftId !== undefined}
+                      hitSlop={8}
+                      onPress={() => {
+                        void submitDraft(draft).then((submissionId) => {
+                          if (submissionId !== undefined) {
+                            Alert.alert(
+                              'Feedback submitted',
+                              `NavOSS received it. Reference: ${submissionId}`,
+                            );
+                          }
+                        });
+                      }}
+                      style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}
+                    >
+                      <SymbolView
+                        name={{ android: 'refresh', ios: 'arrow.clockwise' }}
+                        size={18}
+                        tintColor={NavOssColors.green}
+                      />
+                    </Pressable>
+                    <Pressable
+                      accessibilityLabel={`Delete ${contributionLabel(draft.type)} pending submission: ${draft.description.slice(0, 60)}`}
+                      disabled={isSaving || submittingDraftId !== undefined}
+                      hitSlop={8}
+                      onPress={() => {
+                        void persistDrafts((current) =>
+                          current.filter((candidate) => candidate.id !== draft.id),
+                        );
+                      }}
+                      style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}
+                    >
+                      <SymbolView
+                        name={{ android: 'delete', ios: 'trash' }}
+                        size={18}
+                        tintColor={NavOssColors.coral}
+                      />
+                    </Pressable>
+                  </View>
                 </View>
               ))}
             </View>
@@ -275,6 +335,9 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 3,
     minWidth: 0,
+  },
+  draftActions: {
+    flexDirection: 'row',
   },
   draftDescription: {
     color: NavOssColors.asphalt,

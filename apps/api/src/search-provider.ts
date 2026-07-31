@@ -8,11 +8,19 @@ import { normalizeSearchText } from './search-text.js';
 
 const DEFAULT_PHOTON_URL = 'https://photon.komoot.io/api/';
 const PHOTON_TIMEOUT_MS = 3_000;
-const CALGARY_BOUNDS = '-114.316,50.842,-113.859,51.212';
+const SEARCH_BOUNDS = '-119.65,49.7,-113.8,51.25';
+const SEARCH_EAST = -113.8;
+const SEARCH_NORTH = 51.25;
+const SEARCH_SOUTH = 49.7;
+const SEARCH_WEST = -119.65;
 const CALGARY_EAST = -113.859;
 const CALGARY_NORTH = 51.212;
 const CALGARY_SOUTH = 50.842;
 const CALGARY_WEST = -114.316;
+const KELOWNA_EAST = -119.2;
+const KELOWNA_NORTH = 50.15;
+const KELOWNA_SOUTH = 49.7;
+const KELOWNA_WEST = -119.65;
 const NOMINATIM_TIMEOUT_MS = 4_000;
 const EARTH_RADIUS_METERS = 6_371_000;
 
@@ -25,6 +33,19 @@ export function isCalgarySearchCoordinate(coordinate: {
     coordinate.latitude <= CALGARY_NORTH &&
     coordinate.longitude >= CALGARY_WEST &&
     coordinate.longitude <= CALGARY_EAST
+  );
+}
+
+export function isSupportedSearchCoordinate(coordinate: {
+  latitude: number;
+  longitude: number;
+}): boolean {
+  return (
+    isCalgarySearchCoordinate(coordinate) ||
+    (coordinate.latitude >= KELOWNA_SOUTH &&
+      coordinate.latitude <= KELOWNA_NORTH &&
+      coordinate.longitude >= KELOWNA_WEST &&
+      coordinate.longitude <= KELOWNA_EAST)
   );
 }
 
@@ -118,12 +139,12 @@ function nominatimViewbox(
     query.longitude === undefined ||
     radius === undefined
   ) {
-    return '-114.316,51.212,-113.859,50.842';
+    return '-119.65,51.25,-113.8,49.7';
   }
-  const west = Math.max(CALGARY_WEST, query.longitude - radius.longitude);
-  const north = Math.min(CALGARY_NORTH, query.latitude + radius.latitude);
-  const east = Math.min(CALGARY_EAST, query.longitude + radius.longitude);
-  const south = Math.max(CALGARY_SOUTH, query.latitude - radius.latitude);
+  const west = Math.max(SEARCH_WEST, query.longitude - radius.longitude);
+  const north = Math.min(SEARCH_NORTH, query.latitude + radius.latitude);
+  const east = Math.min(SEARCH_EAST, query.longitude + radius.longitude);
+  const south = Math.max(SEARCH_SOUTH, query.latitude - radius.latitude);
   return [west, north, east, south].map((value) => String(Number(value.toFixed(3)))).join(',');
 }
 
@@ -339,7 +360,7 @@ function normalizeNominatimResults(
 
 export function buildPhotonSearchUrl(query: SearchQuery, endpoint = DEFAULT_PHOTON_URL): string {
   const url = new URL(endpoint);
-  url.searchParams.set('bbox', CALGARY_BOUNDS);
+  url.searchParams.set('bbox', SEARCH_BOUNDS);
   url.searchParams.set('lang', 'en');
   url.searchParams.set('limit', String(query.limit));
   url.searchParams.set('q', query.q);
@@ -415,7 +436,9 @@ export function createNominatimSearchProvider(
     throw new Error('NOMINATIM_URL is required for production search.');
   }
   const datasetVersion =
-    options.datasetVersion ?? process.env.NOMINATIM_DATASET_VERSION ?? 'alberta-geofabrik';
+    options.datasetVersion ??
+    process.env.NOMINATIM_DATASET_VERSION ??
+    'alberta-british-columbia-geofabrik';
   const fetchImplementation = options.fetchImplementation ?? fetch;
   const now = options.now ?? (() => new Date());
 
@@ -598,7 +621,22 @@ export function createDevelopmentSearchProvider(
   const fixtureProvider = createFixtureSearchProvider(fixtures);
   return {
     async search(query) {
-      const fixtureResponse = await fixtureProvider.search(query);
+      const useCalgarySources =
+        query.latitude === undefined ||
+        query.longitude === undefined ||
+        isCalgarySearchCoordinate({ latitude: query.latitude, longitude: query.longitude });
+      const fixtureResponse = useCalgarySources
+        ? await fixtureProvider.search(query)
+        : {
+            degraded: true,
+            results: [],
+            source: {
+              datasetVersion: 'not-applicable',
+              freshness: 'static' as const,
+              id: 'regional-empty-fixtures',
+              updatedAt: new Date(0).toISOString(),
+            },
+          };
       try {
         const photonResponse = await photonProvider.search(query);
         return {
@@ -637,7 +675,22 @@ export function createProductionSearchProvider(
       return readiness.every(Boolean);
     },
     async search(query) {
-      const fixtureResponse = await fixtureProvider.search(query);
+      const useCalgarySources =
+        query.latitude === undefined ||
+        query.longitude === undefined ||
+        isCalgarySearchCoordinate({ latitude: query.latitude, longitude: query.longitude });
+      const fixtureResponse = useCalgarySources
+        ? await fixtureProvider.search(query)
+        : {
+            degraded: true,
+            results: [],
+            source: {
+              datasetVersion: 'not-applicable',
+              freshness: 'static' as const,
+              id: 'regional-empty-fixtures',
+              updatedAt: new Date(0).toISOString(),
+            },
+          };
       const providerQuery = {
         ...query,
         includeDetails: query.includeDetails === true || query.category !== undefined,
@@ -647,7 +700,7 @@ export function createProductionSearchProvider(
       delete providerQueryWithoutCategory.category;
       const productionQueries: SearchQuery[] = [
         providerQuery,
-        ...(query.category === 'grocery'
+        ...(query.category === 'grocery' && useCalgarySources
           ? ['Safeway', 'Sobeys', 'Calgary Co-op'].map((q) => ({
               ...providerQueryWithoutCategory,
               q,
@@ -656,7 +709,7 @@ export function createProductionSearchProvider(
       ];
       const settled = await Promise.allSettled([
         ...productionQueries.map((productionQuery) => productionProvider.search(productionQuery)),
-        ...(calgaryProvider === undefined || query.category !== undefined
+        ...(calgaryProvider === undefined || query.category !== undefined || !useCalgarySources
           ? []
           : [calgaryProvider.search(providerQuery)]),
       ]);
@@ -680,7 +733,10 @@ export function createProductionSearchProvider(
           query,
           query.limit,
         ),
-        source: combinedSource(responses),
+        source:
+          useCalgarySources || responses[0] === undefined
+            ? combinedSource(responses)
+            : responses[0].source,
       };
     },
   };

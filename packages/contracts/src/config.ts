@@ -7,10 +7,25 @@ export const AppConfigResponseSchema = z
     apiVersion: z.literal('v1'),
     coverage: z
       .object({
-        id: z.literal('calgary-ab'),
-        displayName: z.literal('Calgary, Alberta'),
-        bounds: GeographicBoundsSchema,
+        id: z.literal('calgary-kelowna-service-areas'),
+        displayName: z.literal('Calgary and Kelowna service areas'),
         modes: z.array(z.literal('driving')).min(1),
+        serviceAreas: z.tuple([
+          z
+            .object({
+              bounds: GeographicBoundsSchema,
+              displayName: z.literal('Calgary, Alberta'),
+              id: z.literal('calgary-ab'),
+            })
+            .strict(),
+          z
+            .object({
+              bounds: GeographicBoundsSchema,
+              displayName: z.literal('Kelowna, British Columbia'),
+              id: z.literal('kelowna-bc'),
+            })
+            .strict(),
+        ]),
       })
       .strict(),
     endpoints: z

@@ -39,6 +39,7 @@ interface SearchPanelProps {
   onSubmit: () => void;
   query: string;
   results: SearchResult[];
+  searchEnabled?: boolean;
   searchPlaceholder?: string;
   searchSource: SearchSource | undefined;
   searchState: SearchState;
@@ -53,7 +54,7 @@ function connectionLabel(state: ApiConnectionState, coverageName: string): strin
     return 'Connecting';
   }
 
-  return coverageName;
+  return 'Service online';
 }
 
 function categoryLabel(category: SearchResult['category']): string {
@@ -89,6 +90,7 @@ export function SearchPanel({
   onSubmit,
   query,
   results,
+  searchEnabled = true,
   searchPlaceholder = 'Where to?',
   searchSource,
   searchState,
@@ -146,15 +148,14 @@ export function SearchPanel({
           tintColor={NavOssColors.asphalt}
         />
         <TextInput
-          accessibilityLabel={
-            searchPlaceholder === 'Where to?' ? 'Search Calgary' : searchPlaceholder
-          }
+          accessibilityLabel={searchEnabled ? 'Search places' : 'Place search unavailable here'}
           autoCapitalize="words"
           autoCorrect={false}
           enterKeyHint="search"
           onChangeText={onChangeQuery}
           onSubmitEditing={onSubmit}
-          placeholder={searchPlaceholder}
+          editable={searchEnabled}
+          placeholder={searchEnabled ? searchPlaceholder : 'Place search unavailable here'}
           placeholderTextColor={NavOssColors.muted}
           returnKeyType="search"
           style={styles.input}
@@ -183,7 +184,7 @@ export function SearchPanel({
           {searchState === 'loading' && (
             <View style={styles.stateRow}>
               <ActivityIndicator color={NavOssColors.green} size="small" />
-              <Text style={styles.stateText}>Searching Calgary</Text>
+              <Text style={styles.stateText}>Searching places</Text>
             </View>
           )}
 
@@ -284,11 +285,20 @@ export function SearchPanel({
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={styles.aboutContent}>
-            <Text style={styles.aboutEyebrow}>CALGARY COVERAGE</Text>
+            <Text style={styles.aboutEyebrow}>CURRENT COVERAGE</Text>
             <Text style={styles.aboutTitle}>Navigation without an account</Text>
             <Text style={styles.aboutLead}>
-              NavOSS is account-free, privacy-first navigation for Calgary.
+              NavOSS is account-free, privacy-first navigation with regional official road context.
             </Text>
+
+            <View style={styles.aboutSection}>
+              <Text style={styles.aboutSectionTitle}>Search and routing</Text>
+              <Text style={styles.aboutBody}>
+                Current place search and driving-route coverage: {coverageName}. Regional road
+                events, traffic cameras, and public safety facilities may be available elsewhere
+                without implying route coverage.
+              </Text>
+            </View>
 
             <View style={styles.aboutSection}>
               <Text style={styles.aboutSectionTitle}>Privacy</Text>
@@ -310,13 +320,13 @@ export function SearchPanel({
               {googlePlacesLicenseInfo !== undefined && (
                 <Text style={styles.aboutBody}>
                   When a point-of-interest sheet opens, its coordinate is sent directly to Google
-                  Places so Google's own component can render the current star rating, rating count,
-                  and attribution. NavOSS does not receive, store, combine, or send that Google data
-                  to its server. GooglePlacesSwift 10.15.0's embedded privacy manifest also declares
-                  Google collection of precise and coarse location, device ID, other data,
-                  performance data, product interaction, and search history for analytics and/or app
-                  functionality, but not tracking. Reviews open in Google Maps only after you choose
-                  the external link.
+                  Places so Google's own component can render available photos, rating and rating
+                  count, reviews, and attribution. NavOSS does not retain that Google content.
+                  GooglePlacesSwift 10.15.0's embedded privacy manifest also declares Google
+                  collection of precise and coarse location, device ID, other data, performance
+                  data, product interaction, and search history for analytics and/or app
+                  functionality, but not tracking. More reviews open in Google Maps only after you
+                  choose the external link.
                 </Text>
               )}
               <Pressable
@@ -375,10 +385,12 @@ export function SearchPanel({
             <View style={styles.aboutSection}>
               <Text style={styles.aboutSectionTitle}>Data and safety</Text>
               <Text style={styles.aboutBody}>
-                Map and search data comes from OpenStreetMap contributors. Safety-camera data comes
-                from City of Calgary Open Data. Routes come from self-hosted Valhalla unless a
-                licensed Mapbox traffic provider is explicitly enabled and attributed. Data and
-                alerts may be incomplete or outdated; always follow posted signs and road laws.
+                Map and search data comes from OpenStreetMap contributors. Regional context can
+                include official municipal or provincial road events, enforcement cameras, ordinary
+                traffic webcams, and fixed public safety facilities; each is labelled by source and
+                type. Routes come from self-hosted Valhalla unless a licensed Mapbox traffic
+                provider is explicitly enabled and attributed. Data and alerts may be incomplete or
+                outdated; always follow posted signs and road laws.
               </Text>
               {googlePlacesLicenseInfo !== undefined && (
                 <Pressable

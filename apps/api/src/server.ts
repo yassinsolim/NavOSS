@@ -2,6 +2,8 @@ import { z } from 'zod/v4';
 
 import { buildApp } from './app.js';
 import { createCalgaryRoadEventProvider } from './calgary-road-event-provider.js';
+import { createDriveBcRoadEventProvider } from './drivebc-road-event-provider.js';
+import { createDriveBcTrafficCameraProvider } from './drivebc-traffic-camera-provider.js';
 import { createOntarioRoadEventProvider } from './ontario-road-event-provider.js';
 
 const ServerEnvironmentSchema = z
@@ -16,11 +18,21 @@ const environment = ServerEnvironmentSchema.parse({
   PORT: process.env.PORT,
 });
 const eventProvider = createCalgaryRoadEventProvider();
+const driveBcEventProvider = createDriveBcRoadEventProvider();
+const driveBcTrafficCameraProvider = createDriveBcTrafficCameraProvider();
 const ontarioEventProvider = createOntarioRoadEventProvider();
-const app = await buildApp({ eventProvider, logger: true, ontarioEventProvider });
+const app = await buildApp({
+  driveBcEventProvider,
+  driveBcTrafficCameraProvider,
+  eventProvider,
+  logger: true,
+  ontarioEventProvider,
+});
 
 try {
   await app.listen({ host: environment.HOST, port: environment.PORT });
+  driveBcEventProvider.start?.();
+  driveBcTrafficCameraProvider.start?.();
   eventProvider.start?.();
   ontarioEventProvider.start?.();
 } catch (error: unknown) {

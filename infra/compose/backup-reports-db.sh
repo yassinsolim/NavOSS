@@ -22,6 +22,6 @@ docker compose exec -T reports-db pg_dump \
 
 chmod 0640 "$temporary_file"
 mv "$temporary_file" "$final_file"
-find "$backup_dir" -type f -name 'navoss-*.sql.gz' -mtime +14 -delete
+find "$backup_dir" -type f -name 'navoss-*.sql.gz' -mmin +17280 -delete
 
 printf 'Created %s\n' "$final_file"

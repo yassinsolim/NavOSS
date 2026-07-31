@@ -17,5 +17,7 @@
     Referrer-Policy no-referrer
   }
 
-  reverse_proxy api:3000
+  reverse_proxy api:3000 {
+    header_up X-Forwarded-For {http.request.header.Cf-Connecting-Ip}
+  }
 }

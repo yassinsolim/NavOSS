@@ -10,8 +10,9 @@ test('homepage presents the product and honest beta posture', () => {
   const styles = readFileSync(resolve(sourceRoot, 'styles.css'), 'utf8');
 
   assert.match(homepage, /<h1[^>]*>NavOSS<\/h1>/);
-  assert.match(homepage, /Calgary now[\s\S]*North America next/);
-  assert.match(homepage, /Build 15/);
+  assert.match(homepage, /Calgary and Kelowna[\s\S]*Regional context/);
+  assert.match(homepage, /Ontario and Kelowna official regional context/);
+  assert.doesNotMatch(homepage, /Build 15/);
   assert.match(homepage, /no\s+live\s+traffic/i);
   assert.match(styles, /navoss-map-current\.jpg/);
   assert.doesNotMatch(styles, /app-navigation\.jpg/);
@@ -37,14 +38,26 @@ test('legal and support pages expose stable public routes', () => {
   assert.match(privacy, /photos,[\s\S]*rating count,[\s\S]*review text/);
   assert.match(privacy, /denies grants after 8,000 in a month/);
   assert.match(privacy, /no place name, coordinate, account,[\s\S]*device identifier/);
-  assert.match(privacy, /up to 25 private correction drafts/);
+  assert.match(
+    privacy,
+    /Accepted submissions[\s\S]*scheduled\s+for\s+deletion\s+from\s+the\s+live\s+database\s+after\s+90\s+days/,
+  );
+  assert.match(privacy, /DriveBC webcams are not enforcement\s+cameras/);
+  assert.match(privacy, /parcel-address data used only for Calgary searches/);
+  assert.doesNotMatch(privacy, /Calgary navigation technical beta/);
   assert.doesNotMatch(privacy, /does not fetch, cache, scrape, or display Google Places ratings/);
   assert.match(
     dataSources,
     /Builds\s+without\s+the\s+restricted\s+Google\s+key\s+make\s+no\s+Google\s+place-details\s+request/,
   );
+  assert.match(
+    dataSources,
+    /regional OpenStreetMap search and routing import is staged for Kelowna/,
+  );
   assert.match(support, /GitHub Issues/);
   assert.match(support, /not an emergency service/);
+  assert.match(support, /Search and driving routes are currently live only in Calgary/);
+  assert.doesNotMatch(support, /Calgary coverage only/);
 });
 
 test('every page carries the shared chevron identity', () => {

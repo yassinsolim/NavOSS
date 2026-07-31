@@ -20,6 +20,25 @@ const calgaryPoints = [
   ['Mahogany', 50.9, -113.95],
   ['Seton', 50.87, -113.96],
 ];
+const kelownaPoints = [
+  ['Downtown Kelowna', 49.8879, -119.496],
+  ['Rutland', 49.891, -119.386],
+  ['Lower Mission', 49.835, -119.489],
+  ['Kelowna Airport', 49.9561, -119.378],
+  ['West Kelowna', 49.8625, -119.583],
+];
+const kelownaRequiredCategories = new Set([
+  'cafe',
+  'charging-station',
+  'fuel',
+  'grocery',
+  'healthcare',
+  'hotel',
+  'park',
+  'parking',
+  'pharmacy',
+  'restaurant',
+]);
 const ontarioCities = [
   ['Toronto', 43.6532, -79.3832],
   ['Mississauga', 43.589, -79.6441],
@@ -51,7 +70,9 @@ async function json(url, options) {
 
 const failures = [];
 const calgary = [];
-for (const [label, latitude, longitude] of calgaryPoints) {
+const kelowna = [];
+for (const [label, latitude, longitude] of [...calgaryPoints, ...kelownaPoints]) {
+  const isKelowna = kelownaPoints.some(([kelownaLabel]) => kelownaLabel === label);
   let nonempty = 0;
   const empty = [];
   for (const category of SearchCategorySchema.options) {
@@ -81,13 +102,48 @@ for (const [label, latitude, longitude] of calgaryPoints) {
     const noBarbers =
       category !== 'bar' ||
       results.every((result) => !result.name.toLocaleLowerCase('en-CA').includes('barber'));
-    if (!response.ok || !sorted || !typesValid || !noBarbers) {
-      failures.push({ category, label, noBarbers, sorted, status: response.status, typesValid });
+    const noCalgarySources =
+      !isKelowna ||
+      results.every(
+        (result) =>
+          !result.id.startsWith('calgary-') &&
+          !result.label.toLocaleLowerCase('en-CA').includes('calgary, alberta'),
+      );
+    const regionalSourceValid =
+      !isKelowna ||
+      (body.source?.id === 'nominatim-self-hosted' &&
+        body.source?.datasetVersion?.includes('alberta-british-columbia'));
+    const requiredCategoryPresent =
+      !isKelowna || !kelownaRequiredCategories.has(category) || results.length > 0;
+    if (
+      !response.ok ||
+      !sorted ||
+      !typesValid ||
+      !noBarbers ||
+      !noCalgarySources ||
+      !regionalSourceValid ||
+      !requiredCategoryPresent
+    ) {
+      failures.push({
+        category,
+        label,
+        noBarbers,
+        noCalgarySources,
+        regionalSourceValid,
+        requiredCategoryPresent,
+        sorted,
+        status: response.status,
+        typesValid,
+      });
     }
     if (results.length === 0) empty.push(category);
     else nonempty += 1;
   }
-  calgary.push({ empty, label, nonempty });
+  const summary = { empty, label, nonempty };
+  if (isKelowna) {
+    kelowna.push(summary);
+    if (nonempty < 20) failures.push({ endpoint: 'Kelowna category coverage', label, nonempty });
+  } else calgary.push(summary);
 }
 
 const { body: events, response: eventsResponse } = await json(
@@ -150,6 +206,7 @@ console.log(
       calgary,
       categoryCount: SearchCategorySchema.options.length,
       failures,
+      kelowna,
       ontario,
       ontarioEventCount: events.events?.length,
       torontoCameraCount: cameras.cameras?.length,

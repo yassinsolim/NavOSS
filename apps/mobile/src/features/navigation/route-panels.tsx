@@ -26,7 +26,7 @@ interface RoutePlanningPanelProps {
   destination: SearchResult;
   errorMessage?: string;
   onCancel: () => void;
-  onPreviewFromCalgary?: () => void;
+  onPreviewSupportedRoute?: () => void;
   onRetry: () => void;
 }
 
@@ -35,7 +35,7 @@ export function RoutePlanningPanel({
   destination,
   errorMessage,
   onCancel,
-  onPreviewFromCalgary,
+  onPreviewSupportedRoute,
   onRetry,
 }: RoutePlanningPanelProps) {
   return (
@@ -79,10 +79,10 @@ export function RoutePlanningPanel({
               />
               <Text style={styles.retryText}>Retry</Text>
             </Pressable>
-            {onPreviewFromCalgary !== undefined && (
+            {onPreviewSupportedRoute !== undefined && (
               <Pressable
-                accessibilityLabel="Preview route from Calgary Tower"
-                onPress={onPreviewFromCalgary}
+                accessibilityLabel="Preview a supported route"
+                onPress={onPreviewSupportedRoute}
                 style={styles.previewFallbackButton}
               >
                 <SymbolView
@@ -90,7 +90,7 @@ export function RoutePlanningPanel({
                   size={18}
                   tintColor={NavOssColors.green}
                 />
-                <Text style={styles.previewFallbackText}>Preview from Calgary Tower</Text>
+                <Text style={styles.previewFallbackText}>Preview a supported route</Text>
               </Pressable>
             )}
           </View>

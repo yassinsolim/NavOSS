@@ -9,29 +9,40 @@ const ONTARIO_BOUNDS = {
   west: -95.16,
 } as const;
 
-export const OfficialRoadEventRegionSchema = z.literal('ontario');
+const KELOWNA_BOUNDS = {
+  east: -119.2,
+  north: 50.15,
+  south: 49.7,
+  west: -119.65,
+} as const;
+
+export const OfficialRoadEventRegionSchema = z.enum(['ontario', 'kelowna-bc']);
 export const OfficialRoadEventTypeSchema = z.enum(['construction', 'closure', 'incident']);
 export const OfficialRoadEventQuerySchema = z
   .object({ region: OfficialRoadEventRegionSchema })
   .strict();
 
-export const OfficialRoadEventSchema = z
+const OfficialRoadEventBaseShape = {
+  confidence: z.literal('official'),
+  coordinate: CoordinateSchema,
+  description: z.string().trim().min(1).max(4_000),
+  direction: z.string().trim().min(1).max(80),
+  endsAt: IsoDateTimeSchema.optional(),
+  id: z.string().min(1).max(160),
+  isFullClosure: z.boolean(),
+  reportedAt: IsoDateTimeSchema,
+  roadwayName: z.string().trim().min(1).max(160),
+  startsAt: IsoDateTimeSchema,
+  title: z.string().trim().min(1).max(240),
+  type: OfficialRoadEventTypeSchema,
+  updatedAt: IsoDateTimeSchema,
+} as const;
+
+const OntarioRoadEventSchema = z
   .object({
-    confidence: z.literal('official'),
-    coordinate: CoordinateSchema,
-    description: z.string().trim().min(1).max(4_000),
-    direction: z.string().trim().min(1).max(80),
-    endsAt: IsoDateTimeSchema.optional(),
-    id: z.string().min(1).max(160),
-    isFullClosure: z.boolean(),
-    regionId: OfficialRoadEventRegionSchema,
-    reportedAt: IsoDateTimeSchema,
-    roadwayName: z.string().trim().min(1).max(160),
+    ...OfficialRoadEventBaseShape,
+    regionId: z.literal('ontario'),
     sourceId: z.literal('ontario-511-events'),
-    startsAt: IsoDateTimeSchema,
-    title: z.string().trim().min(1).max(240),
-    type: OfficialRoadEventTypeSchema,
-    updatedAt: IsoDateTimeSchema,
   })
   .strict()
   .superRefine((event, context) => {
@@ -56,7 +67,38 @@ export const OfficialRoadEventSchema = z
     }
   });
 
-export const OfficialRoadEventSourceSchema = z
+const KelownaRoadEventSchema = z
+  .object({
+    ...OfficialRoadEventBaseShape,
+    regionId: z.literal('kelowna-bc'),
+    sourceId: z.literal('drivebc-open511-events'),
+  })
+  .strict()
+  .superRefine((event, context) => {
+    if (
+      event.coordinate.latitude < KELOWNA_BOUNDS.south ||
+      event.coordinate.latitude > KELOWNA_BOUNDS.north ||
+      event.coordinate.longitude < KELOWNA_BOUNDS.west ||
+      event.coordinate.longitude > KELOWNA_BOUNDS.east
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Kelowna road events must remain within regional bounds',
+        path: ['coordinate'],
+      });
+    }
+    if (event.endsAt !== undefined && event.endsAt < event.startsAt) {
+      context.addIssue({
+        code: 'custom',
+        message: 'road-event end time cannot precede its start time',
+        path: ['endsAt'],
+      });
+    }
+  });
+
+export const OfficialRoadEventSchema = z.union([OntarioRoadEventSchema, KelownaRoadEventSchema]);
+
+const OntarioRoadEventSourceSchema = z
   .object({
     apiDocumentationUrl: z.literal('https://511on.ca/developers/doc'),
     attribution: z.literal(
@@ -70,16 +112,56 @@ export const OfficialRoadEventSourceSchema = z
   })
   .strict();
 
-export const OfficialRoadEventResponseSchema = z
+const DriveBcRoadEventSourceSchema = z
   .object({
-    degraded: z.boolean(),
-    events: z.array(OfficialRoadEventSchema).max(2_000),
-    generatedAt: IsoDateTimeSchema,
-    regionId: OfficialRoadEventRegionSchema,
-    source: OfficialRoadEventSourceSchema,
-    stale: z.boolean(),
+    apiDocumentationUrl: z.literal('https://api.open511.gov.bc.ca/help'),
+    attribution: z.literal(
+      'Contains information licensed under the Open Government Licence \u2013 British Columbia.',
+    ),
+    confidence: z.literal('official'),
+    dataUrl: z.literal(
+      'https://api.open511.gov.bc.ca/events?format=json&status=ACTIVE&bbox=-119.65,49.70,-119.20,50.15&limit=500',
+    ),
+    licenseUrl: z.literal(
+      'https://www2.gov.bc.ca/gov/content/data/open-data/open-government-license-bc',
+    ),
+    refreshIntervalSeconds: z.literal(300),
+    sourceId: z.literal('drivebc-open511-events'),
+    updatedAt: IsoDateTimeSchema.optional(),
   })
-  .strict()
+  .strict();
+
+export const OfficialRoadEventSourceSchema = z.union([
+  OntarioRoadEventSourceSchema,
+  DriveBcRoadEventSourceSchema,
+]);
+
+const OfficialRoadEventResponseBaseShape = {
+  degraded: z.boolean(),
+  generatedAt: IsoDateTimeSchema,
+  stale: z.boolean(),
+} as const;
+
+const OntarioRoadEventResponseSchema = z
+  .object({
+    ...OfficialRoadEventResponseBaseShape,
+    events: z.array(OntarioRoadEventSchema).max(2_000),
+    regionId: z.literal('ontario'),
+    source: OntarioRoadEventSourceSchema,
+  })
+  .strict();
+
+const KelownaRoadEventResponseSchema = z
+  .object({
+    ...OfficialRoadEventResponseBaseShape,
+    events: z.array(KelownaRoadEventSchema).max(500),
+    regionId: z.literal('kelowna-bc'),
+    source: DriveBcRoadEventSourceSchema,
+  })
+  .strict();
+
+export const OfficialRoadEventResponseSchema = z
+  .union([OntarioRoadEventResponseSchema, KelownaRoadEventResponseSchema])
   .superRefine((response, context) => {
     if (response.degraded !== response.stale) {
       context.addIssue({

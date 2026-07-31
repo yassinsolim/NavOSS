@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="How the NavOSS Calgary technical beta handles location, search, routing, and support data."
+      content="How the NavOSS navigation technical beta handles location, search, routing, regional overlays, and support data."
     />
     <meta name="theme-color" content="#1b2526" />
     <link rel="canonical" href="https://navoss.yassin.app/privacy" />
@@ -25,11 +25,13 @@
     </header>
     <main class="document-shell">
       <article class="document">
-        <p class="document__meta">Internal beta policy · Effective July 27, 2026</p>
+        <p class="document__meta">Internal beta policy · Effective July 31, 2026</p>
         <h1>Privacy without an account</h1>
         <p>
           NavOSS is operated by Yassin Soliman as an individual developer in Alberta, Canada. It is
-          an account-free Calgary navigation technical beta.
+          an account-free navigation technical beta with Calgary search and routing plus selected
+          official regional overlays. Kelowna search and routing infrastructure is staged but not
+          yet live.
         </p>
         <div class="callout">
           This policy is ready for internal TestFlight. External testing remains blocked until a
@@ -56,11 +58,12 @@
           Search text and, when available, a search origin rounded to three decimal places, or
           roughly 100-meter granularity, are sent in an encrypted request body to the NavOSS API.
           Route requests send precise origin and destination coordinates. An automatic reroute sends
-          the latest route origin and destination. Search uses self-hosted Nominatim plus a local
-          mirror of public Calgary business and parcel-address data. Current production uses
-          Valhalla on the operator-controlled server in Alberta. A future licensed live-traffic
-          deployment may forward route endpoints and preferences to Mapbox Directions; that mode
-          remains disabled until its commercial vehicle-use license and release gates are complete.
+          the latest route origin and destination. Search uses self-hosted Alberta and British
+          Columbia OpenStreetMap data plus a local mirror of public Calgary business and
+          parcel-address data used only for Calgary searches. Current production uses Valhalla on
+          the operator-controlled server in Alberta. A future licensed live-traffic deployment may
+          forward route endpoints and preferences to Mapbox Directions; that mode remains disabled
+          until its commercial vehicle-use license and release gates are complete.
         </p>
         <p>
           These values are processed in memory for the response and then discarded. They are not
@@ -126,10 +129,14 @@
           search still occurs only after the user chooses it.
         </p>
         <p>
-          Contribute stores up to 25 private correction drafts on the device. A draft can contain a
-          description, optional place or road label, report type, and creation date. Drafts are not
-          public or sent to NavOSS or a third party. They can be deleted individually and are
-          removed when the app is removed.
+          Contribute sends private beta feedback to NavOSS without an account, device identifier, or
+          precise coordinate. To limit abuse, the API keeps a salted, process-local fingerprint of
+          the source network address for up to one hour; it is not logged or stored in PostgreSQL.
+          Accepted submissions contain a fixed type, description, optional place or road label,
+          timestamps, random identifiers, and review status. They are not public and are scheduled
+          for deletion from the live database after 90 days; bounded backups may retain a deleted
+          row for up to 14 additional days. Failed submissions remain only on the device for retry,
+          up to 25 attempts.
         </p>
         <p>
           During active navigation, the report button can store up to 25 structured road-report test
@@ -154,9 +161,11 @@
           The phone requests map styles, tiles, fonts, and sprites directly from
           <a href="https://openfreemap.org/privacy/">OpenFreeMap</a>. The requested resources can
           indicate the viewed map area. OpenFreeMap says regular logs omit IP addresses, while it
-          may retain incident IP logs for up to 30 days. Camera, business, and parcel-address
-          records are mirrored by the NavOSS server from Calgary Open Data. The phone and live
-          searches do not send location or search text to the City of Calgary.
+          may retain incident IP logs for up to 30 days. Regional data can include Calgary and
+          Toronto enforcement cameras, Ontario 511 and DriveBC road events, DriveBC ordinary traffic
+          webcams, and fixed public Kelowna RCMP facilities. The phone selects a region locally and
+          sends only the region identifier for those requests. DriveBC webcams are not enforcement
+          cameras, and RCMP facilities are not live police locations.
         </p>
 
         <h2>Providers and retention</h2>
@@ -175,10 +184,10 @@
         <p>
           NavOSS keeps operational, SSH, and firewall logs for no more than seven days. Routine HTTP
           access logging is disabled. Logs exclude request bodies, search text, and route
-          coordinates. The currently disabled report database has 14-day backups; route and search
-          requests never enter those backups, and reproducible public search-index tables are
-          excluded. The Google query safety counter stores only the UTC month, aggregate used count,
-          and last update time.
+          coordinates. The report database has 14-day backups that may contain accepted private beta
+          feedback; route and search requests never enter those backups, and reproducible public
+          search-index tables are excluded. The Google query safety counter stores only the UTC
+          month, aggregate used count, and last update time.
         </p>
         <p>
           Operational logs may contain timestamps, service identity, severity, lifecycle or health
@@ -198,9 +207,10 @@
           NavOSS stores up to 12 recent destinations and 20 places you save, including their names,
           labels, and coordinates, only on the device for phone and CarPlay shortcuts. Use
           <strong>Clear saved and recent destinations</strong> in About and Privacy to erase both
-          local lists. Private contribution drafts can be deleted individually on Contribute.
-          Road-report test drafts expire after two hours. Removing the app also removes all of these
-          local records.
+          local lists. Pending contribution retries can be deleted individually on Contribute.
+          Accepted feedback expires automatically after 90 days; its displayed random reference can
+          be provided to support for earlier deletion. Road-report test drafts expire after two
+          hours. Removing the app removes the remaining local records.
         </p>
         <p>
           Sharing and the external reviews link are optional. Dismissing the system share sheet

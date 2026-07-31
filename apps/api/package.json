@@ -17,6 +17,7 @@
   "dependencies": {
     "@fastify/swagger": "catalog:",
     "@navoss/contracts": "workspace:*",
+    "csv-parse": "6.1.0",
     "fastify": "catalog:",
     "fastify-type-provider-zod": "catalog:",
     "openapi-types": "catalog:",

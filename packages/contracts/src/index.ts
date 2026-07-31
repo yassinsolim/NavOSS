@@ -10,6 +10,17 @@ export type { Coordinate, GeographicBounds } from './common.js';
 export { AppConfigResponseSchema } from './config.js';
 export type { AppConfigResponse } from './config.js';
 
+export {
+  ContributionSubmissionRequestSchema,
+  ContributionSubmissionResponseSchema,
+  ContributionTypeSchema,
+} from './contribution.js';
+export type {
+  ContributionSubmissionRequest,
+  ContributionSubmissionResponse,
+  ContributionType,
+} from './contribution.js';
+
 export { HealthResponseSchema, ReadinessCheckSchema, ReadinessResponseSchema } from './health.js';
 export type { HealthResponse, ReadinessResponse } from './health.js';
 
@@ -47,6 +58,19 @@ export {
 export type { RoadEvent, RoadEventResponse, RoadEventSource, RoadEventType } from './road-event.js';
 
 export {
+  SafetyFacilityQuerySchema,
+  SafetyFacilityRegionSchema,
+  SafetyFacilityResponseSchema,
+  SafetyFacilitySchema,
+} from './safety-facility.js';
+export type {
+  SafetyFacility,
+  SafetyFacilityQuery,
+  SafetyFacilityRegion,
+  SafetyFacilityResponse,
+} from './safety-facility.js';
+
+export {
   OfficialSafetyCameraEnforcementSchema,
   OfficialSafetyCameraQuerySchema,
   OfficialSafetyCameraRegionSchema,
@@ -66,6 +90,21 @@ export {
   SafetyCameraSchema,
 } from './safety-camera.js';
 export type { SafetyCamera, SafetyCameraDirection, SafetyCameraResponse } from './safety-camera.js';
+
+export {
+  TrafficCameraQuerySchema,
+  TrafficCameraRegionSchema,
+  TrafficCameraResponseSchema,
+  TrafficCameraSchema,
+  TrafficCameraSourceSchema,
+} from './traffic-camera.js';
+export type {
+  TrafficCamera,
+  TrafficCameraQuery,
+  TrafficCameraRegion,
+  TrafficCameraResponse,
+  TrafficCameraSource,
+} from './traffic-camera.js';
 
 export {
   compareRouteAlternatives,

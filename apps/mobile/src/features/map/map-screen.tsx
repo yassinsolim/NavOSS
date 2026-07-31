@@ -23,8 +23,10 @@ import type {
   RoutePreferences,
   RouteResponse,
   SafetyCamera,
+  SafetyFacility,
   SearchResult,
   SearchSource,
+  TrafficCamera,
 } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
@@ -59,6 +61,12 @@ import { ExploreCategoryBar } from '@/features/map/explore-category-bar';
 import type { ExploreCategory } from '@/features/map/explore-categories';
 import { createLatestRequestGate } from '@/features/map/latest-request-gate';
 import { ensureForegroundLocationPermission } from '@/features/map/map-location';
+import {
+  CALGARY_REGION_BOUNDS,
+  KELOWNA_REGION_BOUNDS,
+  mapRegionForCoordinate,
+  TORONTO_CAMERA_BOUNDS,
+} from '@/features/map/map-region';
 import {
   enrichMapPlace,
   MAP_PLACE_LAYER_IDS,
@@ -166,27 +174,17 @@ import {
   fetchOfficialSafetyCameras,
   fetchRoadEvents,
   fetchRoutes,
+  fetchSafetyFacilities,
   fetchSafetyCameras,
+  fetchTrafficCameras,
   NavOssApiError,
   searchPlaces,
 } from '@/lib/api';
 
-const CALGARY_CENTER: [longitude: number, latitude: number] = [-114.0719, 51.0447];
-const CALGARY_SEARCH_BOUNDS: GeographicBounds = {
-  northEast: { latitude: 51.212, longitude: -113.859 },
-  southWest: { latitude: 50.842, longitude: -114.316 },
-};
+const CANADA_CENTER: [longitude: number, latitude: number] = [-106.3468, 56.1304];
 const CALGARY_TOWER_ROUTE_ORIGIN: Coordinate = {
   latitude: 51.04427,
   longitude: -114.06309,
-};
-const ONTARIO_EVENT_BOUNDS: GeographicBounds = {
-  northEast: { latitude: 56.9, longitude: -74.32 },
-  southWest: { latitude: 41.67, longitude: -95.16 },
-};
-const TORONTO_CAMERA_BOUNDS: GeographicBounds = {
-  northEast: { latitude: 43.86, longitude: -79.1 },
-  southWest: { latitude: 43.58, longitude: -79.64 },
 };
 const EMPTY_FEATURE_COLLECTION: FeatureCollection<Point> = {
   features: [],
@@ -209,7 +207,7 @@ const MAP_IMAGES = {
 
 type LocationState = 'idle' | 'locating' | 'visible' | 'denied' | 'error';
 type MapRoadEvent = RoadEvent | OfficialRoadEvent;
-type RoadEventRegion = 'calgary' | 'ontario';
+type RoadEventRegion = 'calgary' | 'kelowna-bc' | 'ontario';
 type RouteUiState =
   | { type: 'idle' }
   | {
@@ -338,7 +336,8 @@ function roadEventFeatures(
 function roadEventAlertMessage(event: MapRoadEvent): string {
   if ('regionId' in event) {
     const end = event.endsAt === undefined ? '' : `\nEnds: ${event.endsAt.replace('T', ' ')}`;
-    return `Official Ontario 511 road information\n\n${event.description}\n\nStarts: ${event.startsAt.replace('T', ' ')}${end}`;
+    const source = event.regionId === 'ontario' ? 'Ontario 511' : 'DriveBC Open511';
+    return `Official ${source} road information\n\n${event.description}\n\nStarts: ${event.startsAt.replace('T', ' ')}${end}`;
   }
 
   const confidence =
@@ -394,8 +393,7 @@ export function MapScreen() {
   const safetyCamerasRef = useRef<readonly SafetyCamera[]>([]);
   const [apiConnection, setApiConnection] = useState<ApiConnectionState>('connecting');
   const [activeTab, setActiveTab] = useState<AppTab>('explore');
-  const [coverageName, setCoverageName] = useState('Calgary alpha');
-  const [coverageBounds, setCoverageBounds] = useState<AppConfigResponse['coverage']['bounds']>();
+  const [coverageName, setCoverageName] = useState('Loading route coverage');
   const [locationState, setLocationState] = useState<LocationState>('idle');
   const [mapError, setMapError] = useState(false);
   const [mapReady, setMapReady] = useState(false);
@@ -441,6 +439,10 @@ export function MapScreen() {
   const [torontoSafetyCameras, setTorontoSafetyCameras] = useState<readonly OfficialSafetyCamera[]>(
     [],
   );
+  const [kelownaTrafficCameras, setKelownaTrafficCameras] = useState<readonly TrafficCamera[]>([]);
+  const [kelownaSafetyFacilities, setKelownaSafetyFacilities] = useState<readonly SafetyFacility[]>(
+    [],
+  );
   const [navigationSnapshot, setNavigationSnapshot] = useState<NativeNavigationSnapshot>();
   const [navigationRouteStatus, setNavigationRouteStatus] =
     useState<NavigationRouteStatus>('tracking');
@@ -454,17 +456,29 @@ export function MapScreen() {
     latitude: number;
     longitude: number;
   }>();
-  const roadEventRegion: RoadEventRegion =
-    userCoordinate !== undefined && isCoordinateInCoverage(userCoordinate, ONTARIO_EVENT_BOUNDS)
-      ? 'ontario'
-      : 'calgary';
+  const mapRegion = mapRegionForCoordinate(userCoordinate);
+  const roadEventRegion: RoadEventRegion | undefined =
+    mapRegion === 'calgary-ab'
+      ? 'calgary'
+      : mapRegion === 'ontario' || mapRegion === 'kelowna-bc'
+        ? mapRegion
+        : undefined;
   const roadEventSnapshot =
-    roadEventRegion === 'ontario' ? officialRoadEventResponse : roadEventResponse;
+    roadEventRegion === 'calgary'
+      ? roadEventResponse
+      : roadEventRegion !== undefined && officialRoadEventResponse?.regionId === roadEventRegion
+        ? officialRoadEventResponse
+        : undefined;
   const roadEvents: readonly MapRoadEvent[] = roadEventSnapshot?.events ?? [];
-  const searchOrigin = searchOriginWithinBounds(
-    userCoordinate,
-    coverageBounds ?? CALGARY_SEARCH_BOUNDS,
-  );
+  const searchOrigin =
+    mapRegion === 'calgary-ab' || mapRegion === 'kelowna-bc'
+      ? searchOriginWithinBounds(
+          userCoordinate,
+          mapRegion === 'calgary-ab' ? CALGARY_REGION_BOUNDS : KELOWNA_REGION_BOUNDS,
+        )
+      : undefined;
+  const searchEnabled = true;
+  const nearbySearchEnabled = searchOrigin !== undefined;
 
   const invalidatePlaceInteraction = () => {
     placeInteractionRef.current += 1;
@@ -616,6 +630,36 @@ export function MapScreen() {
   }, [userCoordinate]);
 
   useEffect(() => {
+    if (mapRegion !== 'kelowna-bc') {
+      setKelownaTrafficCameras([]);
+      setKelownaSafetyFacilities([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    void Promise.all([
+      fetchTrafficCameras({ region: 'kelowna-bc', signal: controller.signal }),
+      fetchSafetyFacilities({ region: 'kelowna-bc', signal: controller.signal }),
+    ])
+      .then(([cameraResponse, facilityResponse]) => {
+        startTransition(() => {
+          setKelownaTrafficCameras(cameraResponse.cameras);
+          setKelownaSafetyFacilities(facilityResponse.facilities);
+        });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setKelownaTrafficCameras([]);
+          setKelownaSafetyFacilities([]);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [mapRegion]);
+
+  useEffect(() => {
     let active = true;
     const fallbackStyle = mapStyleUrl(mapPreferences.stylePreset, colorScheme);
     void loadCustomizedMapStyle(mapPreferences, colorScheme)
@@ -641,7 +685,6 @@ export function MapScreen() {
       .then((config) => {
         startTransition(() => {
           setApiConnection('online');
-          setCoverageBounds(config.coverage.bounds);
           setCoverageName(config.coverage.displayName);
         });
       })
@@ -659,7 +702,8 @@ export function MapScreen() {
   }, []);
 
   useEffect(() => {
-    if (!mapPreferences.showRoadEvents) {
+    if (!mapPreferences.showRoadEvents || roadEventRegion === undefined) {
+      setRoadEventRefreshDelayed(false);
       return;
     }
 
@@ -670,14 +714,15 @@ export function MapScreen() {
       const requestController = new AbortController();
       controller = requestController;
       const request =
-        roadEventRegion === 'ontario'
-          ? fetchOfficialRoadEvents({ region: 'ontario', signal: requestController.signal }).then(
-              (response) => {
-                startTransition(() => {
-                  setOfficialRoadEventResponse(response);
-                });
-              },
-            )
+        roadEventRegion !== 'calgary'
+          ? fetchOfficialRoadEvents({
+              region: roadEventRegion,
+              signal: requestController.signal,
+            }).then((response) => {
+              startTransition(() => {
+                setOfficialRoadEventResponse(response);
+              });
+            })
           : fetchRoadEvents({ signal: requestController.signal }).then((response) => {
               startTransition(() => {
                 setRoadEventResponse(response);
@@ -740,6 +785,31 @@ export function MapScreen() {
   }, []);
 
   useEffect(() => {
+    if (locationState !== 'visible' || routeState.type !== 'idle') return;
+    let active = true;
+    let subscription: Location.LocationSubscription | undefined;
+    void Location.watchPositionAsync(
+      { accuracy: Location.Accuracy.Balanced, distanceInterval: 1_000 },
+      (position) => {
+        if (!active) return;
+        setUserCoordinate({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      },
+    )
+      .then((nextSubscription) => {
+        if (active) subscription = nextSubscription;
+        else nextSubscription.remove();
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      subscription?.remove();
+    };
+  }, [locationState, routeState.type]);
+
+  useEffect(() => {
     if (
       !mapReady ||
       userCoordinate === undefined ||
@@ -757,6 +827,12 @@ export function MapScreen() {
   }, [mapReady, routeState.type, userCoordinate]);
 
   useEffect(() => {
+    if (mapRegion !== 'calgary-ab') {
+      safetyCamerasRef.current = [];
+      setSafetyCameras([]);
+      return;
+    }
+
     const controller = new AbortController();
 
     void fetchSafetyCameras({ signal: controller.signal })
@@ -776,12 +852,13 @@ export function MapScreen() {
     return () => {
       controller.abort();
     };
-  }, []);
+  }, [mapRegion]);
 
   useEffect(() => {
     const normalizedQuery = deferredQuery.trim();
 
     if (
+      !searchEnabled ||
       categorySearchActiveRef.current ||
       normalizedQuery.length < 2 ||
       normalizedQuery.toLocaleLowerCase('en-CA') === selectedResult?.name.toLocaleLowerCase('en-CA')
@@ -798,7 +875,13 @@ export function MapScreen() {
       clearTimeout(timeout);
       searchController?.abort();
     };
-  }, [deferredQuery, searchOrigin?.latitude, searchOrigin?.longitude, selectedResult?.name]);
+  }, [
+    deferredQuery,
+    searchEnabled,
+    searchOrigin?.latitude,
+    searchOrigin?.longitude,
+    selectedResult?.name,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -1034,21 +1117,18 @@ export function MapScreen() {
         }
         return;
       }
-      let routeCoverageBounds = coverageBounds;
-      if (previewOrigin === undefined && routeCoverageBounds === undefined) {
-        const config = await fetchAppConfig(controller.signal);
-        routeCoverageBounds = config.coverage.bounds;
-        setCoverageBounds(routeCoverageBounds);
-        setCoverageName(config.coverage.displayName);
-      }
       if (
         previewOrigin === undefined &&
-        routeCoverageBounds !== undefined &&
-        !isCoordinateInCoverage(origin, routeCoverageBounds)
+        [origin, ...waypoints.map((waypoint) => waypoint.center), destination.center].some(
+          (coordinate) => {
+            const region = mapRegionForCoordinate(coordinate);
+            return region !== 'calgary-ab' && region !== 'kelowna-bc';
+          },
+        )
       ) {
         setRouteState({
           destination,
-          message: 'Your current location is outside Calgary route coverage.',
+          message: 'This route includes a location outside current driving coverage.',
           ...(previewOrigin === undefined ? {} : { previewOrigin }),
           type: 'error',
           waypoints,
@@ -1115,6 +1195,7 @@ export function MapScreen() {
   };
 
   const handleChangeQuery = (value: string) => {
+    if (!searchEnabled) return;
     categorySearchActiveRef.current = false;
     invalidatePlaceInteraction();
     setSelectedCategoryId(undefined);
@@ -1211,9 +1292,9 @@ export function MapScreen() {
   };
 
   const handleCategoryPress = (category: ExploreCategory) => {
-    if (userCoordinate !== undefined && searchOrigin === undefined) {
+    if (!nearbySearchEnabled) {
       Alert.alert(
-        'Explore is available in Calgary',
+        'Nearby search is unavailable here',
         'Nearby place categories are not available at your current location yet.',
         [{ text: 'Close' }],
       );
@@ -1478,7 +1559,14 @@ export function MapScreen() {
     setRouteState({ type: 'idle' });
     setSelectedResult(undefined);
     setQuery('');
-    cameraRef.current?.flyTo({ center: CALGARY_CENTER, duration: 650, zoom: 11.2 });
+    cameraRef.current?.flyTo({
+      center:
+        userCoordinate === undefined
+          ? CANADA_CENTER
+          : [userCoordinate.longitude, userCoordinate.latitude],
+      duration: 650,
+      zoom: userCoordinate === undefined ? 3.2 : 13,
+    });
   };
 
   const handleSelectRoute = (route: RouteAlternative) => {
@@ -1879,11 +1967,11 @@ export function MapScreen() {
             routeState.type === 'navigating' ? NAVIGATION_CAMERA_TRANSITION.easing : undefined
           }
           initialViewState={{
-            center: CALGARY_CENTER,
-            zoom: 11.2,
+            center: CANADA_CENTER,
+            zoom: 3.2,
           }}
           maxZoom={19}
-          minZoom={8}
+          minZoom={0}
           padding={
             routeState.type === 'navigating'
               ? { bottom: 138 + insets.bottom, left: 24, right: 24, top: 170 }
@@ -1925,6 +2013,70 @@ export function MapScreen() {
                   name={{ android: 'location_on', ios: 'mappin.circle.fill' }}
                   size={25}
                   tintColor={NavOssColors.coral}
+                />
+              </View>
+            </Marker>
+          ))}
+        {mapPreferences.showSafetyCameras &&
+          kelownaTrafficCameras.map((camera) => (
+            <Marker
+              anchor="bottom"
+              id={`traffic-camera:${camera.id}`}
+              key={camera.id}
+              lngLat={[camera.coordinate.longitude, camera.coordinate.latitude]}
+              onPress={() => {
+                Alert.alert(
+                  `${camera.name} · Traffic webcam`,
+                  `${camera.caption}\n\nThis is a DriveBC traffic webcam, not an enforcement camera.`,
+                  [
+                    { text: 'Close' },
+                    {
+                      onPress: () => {
+                        void Linking.openURL(camera.pageUrl);
+                      },
+                      text: 'View camera',
+                    },
+                  ],
+                );
+              }}
+            >
+              <View style={styles.regionalMarker}>
+                <SymbolView
+                  name={{ android: 'videocam', ios: 'video.fill' }}
+                  size={21}
+                  tintColor={NavOssColors.green}
+                />
+              </View>
+            </Marker>
+          ))}
+        {mapPreferences.showPlaces &&
+          kelownaSafetyFacilities.map((facility) => (
+            <Marker
+              anchor="bottom"
+              id={`safety-facility:${facility.id}`}
+              key={facility.id}
+              lngLat={[facility.coordinate.longitude, facility.coordinate.latitude]}
+              onPress={() => {
+                Alert.alert(
+                  `${facility.name} · RCMP facility`,
+                  `${facility.address}\n${facility.phone}\n\nFixed public facility. This is not a live police location.`,
+                  [
+                    { text: 'Close' },
+                    {
+                      onPress: () => {
+                        void Linking.openURL(facility.pageUrl);
+                      },
+                      text: 'Official details',
+                    },
+                  ],
+                );
+              }}
+            >
+              <View style={styles.regionalMarker}>
+                <SymbolView
+                  name={{ android: 'local_police', ios: 'building.2.fill' }}
+                  size={21}
+                  tintColor={NavOssColors.asphalt}
                 />
               </View>
             </Marker>
@@ -2157,7 +2309,7 @@ export function MapScreen() {
             <Text style={styles.roadEventAttributionText}>
               {roadEventSnapshot === undefined
                 ? 'Road events unavailable'
-                : `${roadEventRegion === 'ontario' ? 'Road events · Ontario 511 · Official' : 'Road events · City of Calgary · Incidents unverified'}${roadEventSnapshot.stale ? ' · Stale snapshot' : ''}${roadEventRefreshDelayed ? ' · Refresh delayed' : ''}`}
+                : `${roadEventRegion === 'ontario' ? 'Road events · Ontario 511 · Official' : roadEventRegion === 'kelowna-bc' ? 'Road events · DriveBC · Official' : 'Road events · City of Calgary · Incidents unverified'}${roadEventSnapshot.stale ? ' · Stale snapshot' : ''}${roadEventRefreshDelayed ? ' · Refresh delayed' : ''}`}
             </Text>
           </View>
         )}
@@ -2252,6 +2404,7 @@ export function MapScreen() {
               onSubmit={handleSubmit}
               query={query}
               results={results}
+              searchEnabled={searchEnabled}
               searchPlaceholder={
                 shortcutBeingSet === undefined
                   ? 'Where to?'
@@ -2358,9 +2511,11 @@ export function MapScreen() {
           style={[styles.attribution, { bottom: selectedPanelHeight + appTabBarHeight + 8 }]}
         >
           <Text style={styles.attributionText}>
-            © OpenMapTiles · © OpenStreetMap · © City of Calgary
+            © OpenMapTiles · © OpenStreetMap
+            {roadEventRegion === 'calgary' ? ' · © City of Calgary' : ''}
             {torontoSafetyCameras.length > 0 ? ' · © City of Toronto' : ''}
             {roadEventRegion === 'ontario' ? ' · Ontario 511' : ''}
+            {mapRegion === 'kelowna-bc' ? ' · DriveBC · RCMP' : ''}
           </Text>
         </Pressable>
       )}
@@ -2371,7 +2526,7 @@ export function MapScreen() {
           destination={routeState.destination}
           errorMessage={routeState.type === 'error' ? routeState.message : undefined}
           onCancel={handleCancelRoute}
-          onPreviewFromCalgary={() => {
+          onPreviewSupportedRoute={() => {
             void calculateRoute(
               routeState.destination,
               routePreferences,
@@ -2411,7 +2566,9 @@ export function MapScreen() {
             );
           }}
           onVehicleStyleChange={setVehicleStyle}
-          previewOriginLabel={routeState.previewOrigin === undefined ? undefined : 'Calgary Tower'}
+          previewOriginLabel={
+            routeState.previewOrigin === undefined ? undefined : 'Supported route demo'
+          }
           routes={routeState.routes}
           selectedRoute={selectedRoute}
           routeSource={routeSource}
@@ -2622,6 +2779,20 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     width: 44,
     zIndex: 28,
+  },
+  regionalMarker: {
+    alignItems: 'center',
+    backgroundColor: NavOssColors.white,
+    borderColor: NavOssColors.border,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    height: 36,
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { height: 2, width: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    width: 36,
   },
   searchResultMarker: {
     alignItems: 'center',

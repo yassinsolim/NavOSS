@@ -219,3 +219,35 @@ resources. The current phone overlay uses official construction, closure, and in
 It does not alter route selection, trigger rerouting or speech, represent congestion speed, or
 produce traffic-aware ETA. Ontario search and routing remain unavailable. Traffic-aware routing
 remains gated on a licensed flow source integrated with Valhalla.
+
+## Kelowna and Central Okanagan Road Information
+
+DriveBC publishes active road events through its official Open511 API under the
+[Open Government Licence - British Columbia](https://www2.gov.bc.ca/gov/content/data/open-data/open-government-license-bc).
+NavOSS requests the documented Kelowna-area bounding box every five minutes and exposes normalized
+construction, closure, and incident markers at `GET /v2/events?region=kelowna-bc`. The provider
+strictly validates Point and LineString geometry, uses an actual in-bounds geometry vertex, and
+fails closed on unknown source structures. A validated in-memory snapshot may be served as marked
+stale for no more than 24 hours.
+
+These events are informational map overlays. They do not alter route selection, ETA, rerouting, or
+speech. Alberta and British Columbia Nominatim and Valhalla replacements are staged, but Kelowna
+place search and driving routes remain unavailable until live certification passes.
+
+## DriveBC Kelowna Traffic Webcams
+
+The Province publishes the [DriveBC HighwayCams](https://catalogue.data.gov.bc.ca/dataset/6b39a910-6c77-476f-ac96-7b4f18849b1c)
+catalogue under OGL-BC. NavOSS refreshes the monthly catalogue every six hours, validates its URLs
+and coordinates, and returns only cameras in the published Kelowna regional bounds at
+`GET /v2/traffic-cameras?region=kelowna-bc`. Multiple orientations at one site remain separate.
+
+These are ordinary traffic webcams with links to current DriveBC imagery. They are explicitly not
+red-light, speed, or other enforcement cameras and never produce spoken enforcement alerts.
+
+## Kelowna RCMP Public Facilities
+
+The official [Kelowna RCMP contact page](https://rcmp.ca/en/bc/kelowna/contact) publishes fixed
+public addresses and coordinates. NavOSS includes the Kelowna Main Detachment and Rutland Community
+Police Office at `GET /v2/safety-facilities?region=kelowna-bc`. These markers identify public
+service facilities only. NavOSS does not collect or display patrol, officer, checkpoint, dispatch,
+or live police locations.

@@ -1,6 +1,8 @@
 import fastifySwagger from '@fastify/swagger';
 import {
   AppConfigResponseSchema,
+  ContributionSubmissionRequestSchema,
+  ContributionSubmissionResponseSchema,
   GooglePlaceQueryGrantResponseSchema,
   HealthResponseSchema,
   OfficialRoadEventQuerySchema,
@@ -10,11 +12,15 @@ import {
   ProblemDetailsSchema,
   ReadinessResponseSchema,
   RoadEventResponseSchema,
+  SafetyFacilityQuerySchema,
+  SafetyFacilityResponseSchema,
   RouteRequestSchema,
   RouteResponseSchema,
   SafetyCameraResponseSchema,
   SearchQuerySchema,
   SearchResponseSchema,
+  TrafficCameraQuerySchema,
+  TrafficCameraResponseSchema,
   type ReadinessResponse,
 } from '@navoss/contracts';
 import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions } from 'fastify';
@@ -29,6 +35,15 @@ import {
 
 import { CALGARY_SEARCH_FIXTURES, createAppConfig, type SearchFixture } from './fixtures.js';
 import {
+  ContributionProviderError,
+  createConfiguredContributionProvider,
+  type ContributionProvider,
+} from './contribution-provider.js';
+import {
+  createContributionRateLimiter,
+  type ContributionRateLimiter,
+} from './contribution-rate-limiter.js';
+import {
   createConfiguredGooglePlaceQueryBudget,
   type GooglePlaceQueryBudget,
 } from './google-place-query-budget.js';
@@ -42,6 +57,21 @@ import {
   OntarioRoadEventProviderError,
   type OntarioRoadEventProvider,
 } from './ontario-road-event-provider.js';
+import {
+  createDriveBcRoadEventProvider,
+  DriveBcRoadEventProviderError,
+  type DriveBcRoadEventProvider,
+} from './drivebc-road-event-provider.js';
+import {
+  createDriveBcTrafficCameraProvider,
+  DriveBcTrafficCameraProviderError,
+  type DriveBcTrafficCameraProvider,
+} from './drivebc-traffic-camera-provider.js';
+import {
+  createKelownaSafetyFacilityProvider,
+  KelownaSafetyFacilityProviderError,
+  type KelownaSafetyFacilityProvider,
+} from './kelowna-safety-facility-provider.js';
 import { createProblem } from './problem.js';
 import {
   createConfiguredRouteProvider,
@@ -50,7 +80,7 @@ import {
 } from './route-provider.js';
 import {
   createDevelopmentSearchProvider,
-  isCalgarySearchCoordinate,
+  isSupportedSearchCoordinate,
   createProductionSearchProvider,
   type SearchProvider,
 } from './search-provider.js';
@@ -74,9 +104,14 @@ function errorName(error: unknown): string {
 export interface BuildAppOptions {
   cameraProvider?: SafetyCameraProvider;
   clock?: () => Date;
+  contributionProvider?: ContributionProvider;
+  contributionRateLimiter?: ContributionRateLimiter;
+  driveBcEventProvider?: DriveBcRoadEventProvider;
+  driveBcTrafficCameraProvider?: DriveBcTrafficCameraProvider;
   eventProvider?: CalgaryRoadEventProvider;
   googlePlaceQueryBudget?: GooglePlaceQueryBudget;
   logger?: FastifyServerOptions['logger'];
+  kelownaSafetyFacilityProvider?: KelownaSafetyFacilityProvider;
   ontarioEventProvider?: OntarioRoadEventProvider;
   productionSearch?: boolean;
   routeProvider?: RouteProvider;
@@ -88,11 +123,21 @@ export interface BuildAppOptions {
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const clock = options.clock ?? (() => new Date());
   const cameraProvider = options.cameraProvider ?? createCalgarySafetyCameraProvider();
+  const contributionProvider =
+    options.contributionProvider ?? createConfiguredContributionProvider({ clock });
+  const contributionRateLimiter =
+    options.contributionRateLimiter ??
+    createContributionRateLimiter({ clock: () => clock().getTime() });
+  const driveBcEventProvider = options.driveBcEventProvider ?? createDriveBcRoadEventProvider();
+  const driveBcTrafficCameraProvider =
+    options.driveBcTrafficCameraProvider ?? createDriveBcTrafficCameraProvider();
   const eventProvider = options.eventProvider ?? createCalgaryRoadEventProvider();
   const fixtures = options.searchFixtures ?? CALGARY_SEARCH_FIXTURES;
   const googlePlaceQueryBudget =
     options.googlePlaceQueryBudget ?? createConfiguredGooglePlaceQueryBudget({ clock });
   const ontarioEventProvider = options.ontarioEventProvider ?? createOntarioRoadEventProvider();
+  const kelownaSafetyFacilityProvider =
+    options.kelownaSafetyFacilityProvider ?? createKelownaSafetyFacilityProvider();
   const productionSearch = options.productionSearch ?? process.env.NOMINATIM_URL !== undefined;
   const routeProvider = options.routeProvider ?? createConfiguredRouteProvider();
   const liveTraffic = routeProvider.source?.traffic === 'live';
@@ -106,12 +151,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const app = Fastify({
     logController: new LogController({ disableRequestLogging: true }),
     logger: options.logger ?? false,
+    trustProxy: 'loopback, linklocal, uniquelocal',
   });
 
-  app.addHook('onClose', () => {
+  app.addHook('onClose', async () => {
+    driveBcEventProvider.stop?.();
+    driveBcTrafficCameraProvider.stop?.();
     eventProvider.stop?.();
     ontarioEventProvider.stop?.();
-    return googlePlaceQueryBudget.close?.();
+    await Promise.all([contributionProvider.close?.(), googlePlaceQueryBudget.close?.()]);
+  });
+
+  app.addHook('onReady', () => {
+    contributionProvider.start?.();
   });
 
   app.setValidatorCompiler(validatorCompiler);
@@ -120,7 +172,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(fastifySwagger, {
     openapi: {
       info: {
-        description: 'Privacy-first navigation services for the Calgary technical beta.',
+        description: 'Privacy-first navigation services for the NavOSS technical beta.',
         title: 'NavOSS API',
         version: SERVICE_VERSION,
       },
@@ -128,10 +180,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       tags: [
         { description: 'Official municipal safety-camera locations', name: 'cameras' },
         { description: 'Application configuration', name: 'config' },
+        { description: 'Anonymous bounded beta feedback submissions', name: 'contributions' },
         { description: 'Official and source-qualified road events', name: 'events' },
+        { description: 'Fixed official public safety facilities', name: 'facilities' },
         { description: 'Privacy-preserving optional place enrichment', name: 'places' },
         { description: 'Driving route calculation and guidance', name: 'routes' },
-        { description: 'Hybrid Calgary place and civic-address search', name: 'search' },
+        { description: 'Regional OpenStreetMap search with Calgary civic data', name: 'search' },
         { description: 'Service health and readiness', name: 'system' },
       ],
     },
@@ -362,7 +416,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     {
       schema: {
         description:
-          'Returns official Ontario 511 construction, closure, and incident points with freshness metadata.',
+          'Returns official Ontario 511 or DriveBC Open511 construction, closure, and incident points with freshness metadata.',
         querystring: OfficialRoadEventQuerySchema,
         response: {
           200: OfficialRoadEventResponseSchema,
@@ -373,7 +427,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
     async (request, reply) => {
       try {
-        return await ontarioEventProvider.getRoadEvents();
+        return request.query.region === 'ontario'
+          ? await ontarioEventProvider.getRoadEvents()
+          : await driveBcEventProvider.getRoadEvents();
       } catch (error: unknown) {
         if (error instanceof OntarioRoadEventProviderError) {
           reply.status(503).type('application/problem+json');
@@ -383,6 +439,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             'service_unavailable',
             'Road data unavailable',
             'Official Ontario 511 road-event data could not be loaded right now.',
+          );
+        }
+        if (error instanceof DriveBcRoadEventProviderError) {
+          reply.status(503).type('application/problem+json');
+          return createProblem(
+            request,
+            503,
+            'service_unavailable',
+            'Road data unavailable',
+            'Official DriveBC Open511 road-event data could not be loaded right now.',
           );
         }
         throw error;
@@ -431,6 +497,54 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   );
 
+  typedApp.post(
+    '/v1/contributions',
+    {
+      schema: {
+        body: ContributionSubmissionRequestSchema,
+        description:
+          'Accepts anonymous bounded beta feedback without accounts, device identifiers, or precise coordinates.',
+        response: {
+          202: ContributionSubmissionResponseSchema,
+          429: ProblemDetailsSchema,
+          503: ProblemDetailsSchema,
+        },
+        tags: ['contributions'],
+      },
+    },
+    async (request, reply) => {
+      if (!contributionRateLimiter.consume(request.ip)) {
+        reply.status(429).header('retry-after', '3600').type('application/problem+json');
+        return createProblem(
+          request,
+          429,
+          'rate_limited',
+          'Feedback submission rate limited',
+          'Too many beta feedback submissions were received. Keep the local draft and try again later.',
+        );
+      }
+      try {
+        const accepted = await contributionProvider.submit(request.body);
+        reply.status(202);
+        return accepted;
+      } catch (error: unknown) {
+        if (error instanceof ContributionProviderError) {
+          reply.status(503).type('application/problem+json');
+          return createProblem(
+            request,
+            503,
+            'service_unavailable',
+            'Feedback submission unavailable',
+            error.reason === 'full'
+              ? 'The beta feedback queue is temporarily full. Keep the local draft and try again later.'
+              : 'The beta feedback could not be stored right now. Keep the local draft and try again later.',
+          );
+        }
+        throw error;
+      }
+    },
+  );
+
   typedApp.get(
     '/v2/cameras',
     {
@@ -465,12 +579,78 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   );
 
+  typedApp.get(
+    '/v2/traffic-cameras',
+    {
+      schema: {
+        description:
+          'Returns ordinary DriveBC HighwayCams traffic imagery locations. These are not enforcement cameras.',
+        querystring: TrafficCameraQuerySchema,
+        response: {
+          200: TrafficCameraResponseSchema,
+          503: ProblemDetailsSchema,
+        },
+        tags: ['cameras'],
+      },
+    },
+    async (request, reply) => {
+      try {
+        return await driveBcTrafficCameraProvider.getCameras();
+      } catch (error: unknown) {
+        if (error instanceof DriveBcTrafficCameraProviderError) {
+          reply.status(503).type('application/problem+json');
+          return createProblem(
+            request,
+            503,
+            'service_unavailable',
+            'Traffic camera data unavailable',
+            'Official DriveBC HighwayCams data could not be loaded right now.',
+          );
+        }
+        throw error;
+      }
+    },
+  );
+
+  typedApp.get(
+    '/v2/safety-facilities',
+    {
+      schema: {
+        description:
+          'Returns fixed official public RCMP facility locations in Kelowna. This is not live police or checkpoint data.',
+        querystring: SafetyFacilityQuerySchema,
+        response: {
+          200: SafetyFacilityResponseSchema,
+          503: ProblemDetailsSchema,
+        },
+        tags: ['facilities'],
+      },
+    },
+    async (request, reply) => {
+      try {
+        return await kelownaSafetyFacilityProvider.getFacilities();
+      } catch (error: unknown) {
+        if (error instanceof KelownaSafetyFacilityProviderError) {
+          reply.status(503).type('application/problem+json');
+          return createProblem(
+            request,
+            503,
+            'service_unavailable',
+            'Safety facility data unavailable',
+            'Official Kelowna RCMP facility data could not be loaded right now.',
+          );
+        }
+        throw error;
+      }
+    },
+  );
+
   typedApp.post(
     '/v1/search',
     {
       schema: {
         description:
-          'Searches indexed Calgary businesses, civic addresses, and OpenStreetMap places with a deterministic fallback.',
+          'Searches regional OpenStreetMap places plus indexed Calgary businesses and civic addresses.',
         body: SearchQuerySchema,
         response: {
           200: SearchResponseSchema,
@@ -481,11 +661,21 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
     (request, reply) => {
       const { category, latitude, longitude } = request.body;
+      if (category !== undefined && (latitude === undefined || longitude === undefined)) {
+        reply.status(400).type('application/problem+json');
+        return createProblem(
+          request,
+          400,
+          'invalid_request',
+          'Nearby search needs a location',
+          'Nearby categories require a supported search origin.',
+        );
+      }
       if (
         category !== undefined &&
         latitude !== undefined &&
         longitude !== undefined &&
-        !isCalgarySearchCoordinate({ latitude, longitude })
+        !isSupportedSearchCoordinate({ latitude, longitude })
       ) {
         reply.status(400).type('application/problem+json');
         return createProblem(
@@ -493,7 +683,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           400,
           'invalid_request',
           'Search outside coverage',
-          'Nearby categories are currently available only in Calgary.',
+          'Nearby categories are currently available only in the Calgary and Kelowna service areas.',
         );
       }
       return searchProvider.search(request.body);
@@ -515,6 +705,21 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
     },
     async (request, reply) => {
+      const routeCoordinates = [
+        request.body.origin,
+        ...(request.body.waypoints ?? []),
+        request.body.destination,
+      ];
+      if (routeCoordinates.some((coordinate) => !isSupportedSearchCoordinate(coordinate))) {
+        reply.status(400).type('application/problem+json');
+        return createProblem(
+          request,
+          400,
+          'invalid_request',
+          'Route outside coverage',
+          'Driving routes are currently available only between supported Calgary and Kelowna area locations.',
+        );
+      }
       try {
         const routes = await routeProvider.getRoutes(request.body);
         const source = routeProvider.source ?? {

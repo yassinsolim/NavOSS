@@ -3,16 +3,19 @@ import { describe, expect, it } from 'vitest';
 import {
   AppConfigResponseSchema,
   compareRouteAlternatives,
+  ContributionSubmissionRequestSchema,
   GeographicBoundsSchema,
   GooglePlaceQueryGrantResponseSchema,
   OfficialRoadEventResponseSchema,
   OfficialSafetyCameraResponseSchema,
   RoadEventResponseSchema,
+  SafetyFacilityResponseSchema,
   SafetyCameraResponseSchema,
   RouteRequestSchema,
   RouteResponseSchema,
   SearchQuerySchema,
   SearchResponseSchema,
+  TrafficCameraResponseSchema,
 } from '../src/index.js';
 
 describe('GeographicBoundsSchema', () => {
@@ -23,6 +26,21 @@ describe('GeographicBoundsSchema', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe('ContributionSubmissionRequestSchema', () => {
+  it('accepts bounded anonymous beta feedback without coordinates or identity', () => {
+    const submission = ContributionSubmissionRequestSchema.parse({
+      createdAt: '2026-07-30T23:00:00.000Z',
+      description: 'The entrance pin is on the wrong side of the building.',
+      draftId: '2026-07-30T23:00:00.000Z:abc123',
+      locationLabel: 'Downtown Kelowna',
+      type: 'place-correction',
+    });
+
+    expect(submission).not.toHaveProperty('coordinate');
+    expect(submission).not.toHaveProperty('userId');
   });
 });
 
@@ -195,6 +213,64 @@ describe('OfficialRoadEventResponseSchema', () => {
     expect(OfficialRoadEventResponseSchema.safeParse(response).success).toBe(true);
   });
 
+  it('accepts official DriveBC Open511 events in the Kelowna region', () => {
+    expect(
+      OfficialRoadEventResponseSchema.safeParse({
+        degraded: false,
+        events: [
+          {
+            confidence: 'official',
+            coordinate: { latitude: 49.888, longitude: -119.496 },
+            description: 'Utility work. Expect delays.',
+            direction: 'Both directions',
+            endsAt: '2026-08-02T06:00:00.000Z',
+            id: 'drivebc-open511:kelowna-1',
+            isFullClosure: false,
+            regionId: 'kelowna-bc',
+            reportedAt: '2026-07-30T18:00:00.000Z',
+            roadwayName: 'Harvey Avenue',
+            sourceId: 'drivebc-open511-events',
+            startsAt: '2026-07-30T18:00:00.000Z',
+            title: 'Construction on Harvey Avenue',
+            type: 'construction',
+            updatedAt: '2026-07-30T20:00:00.000Z',
+          },
+        ],
+        generatedAt: '2026-07-30T20:32:00.000Z',
+        regionId: 'kelowna-bc',
+        source: {
+          apiDocumentationUrl: 'https://api.open511.gov.bc.ca/help',
+          attribution:
+            'Contains information licensed under the Open Government Licence \u2013 British Columbia.',
+          confidence: 'official',
+          dataUrl:
+            'https://api.open511.gov.bc.ca/events?format=json&status=ACTIVE&bbox=-119.65,49.70,-119.20,50.15&limit=500',
+          licenseUrl:
+            'https://www2.gov.bc.ca/gov/content/data/open-data/open-government-license-bc',
+          refreshIntervalSeconds: 300,
+          sourceId: 'drivebc-open511-events',
+          updatedAt: '2026-07-30T20:00:00.000Z',
+        },
+        stale: false,
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects mixed Ontario and DriveBC region/source metadata', () => {
+    expect(
+      OfficialRoadEventResponseSchema.safeParse({
+        ...response,
+        regionId: 'kelowna-bc',
+      }).success,
+    ).toBe(false);
+    expect(
+      OfficialRoadEventResponseSchema.safeParse({
+        ...response,
+        events: [{ ...response.events[0], regionId: 'kelowna-bc' }],
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects out-of-province events and inconsistent stale posture', () => {
     expect(
       OfficialRoadEventResponseSchema.safeParse({
@@ -207,6 +283,176 @@ describe('OfficialRoadEventResponseSchema', () => {
           },
         ],
         stale: true,
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('TrafficCameraResponseSchema', () => {
+  it('accepts ordinary DriveBC traffic cameras and preserves orientation identity', () => {
+    const result = TrafficCameraResponseSchema.safeParse({
+      cameras: [
+        {
+          cameraType: 'traffic',
+          caption: 'Highway 97 in Lake Country by Wood Lake, looking north.',
+          coordinate: { latitude: 50.057111, longitude: -119.407653 },
+          enforcement: false,
+          highway: '97',
+          id: 'drivebc-highwaycam:532',
+          imageUrl: 'https://images.drivebc.ca/bchighwaycam/pub/cameras/532.jpg',
+          name: 'Lake Country - N',
+          orientation: 'N',
+          pageUrl: 'https://images.drivebc.ca/bchighwaycam/pub/html/www/532.html',
+          regionId: 'kelowna-bc',
+          thumbnailUrl: 'https://images.drivebc.ca/bchighwaycam/pub/cameras/tn/532.jpg',
+        },
+        {
+          cameraType: 'traffic',
+          caption: 'Highway 97 in Lake Country by Wood Lake, looking south.',
+          coordinate: { latitude: 50.057111, longitude: -119.407653 },
+          enforcement: false,
+          highway: '97',
+          id: 'drivebc-highwaycam:533',
+          imageUrl: 'https://images.drivebc.ca/bchighwaycam/pub/cameras/533.jpg',
+          name: 'Lake Country - S',
+          orientation: 'S',
+          pageUrl: 'https://images.drivebc.ca/bchighwaycam/pub/html/www/533.html',
+          regionId: 'kelowna-bc',
+          thumbnailUrl: 'https://images.drivebc.ca/bchighwaycam/pub/cameras/tn/533.jpg',
+        },
+      ],
+      degraded: false,
+      generatedAt: '2026-07-30T20:32:00.000Z',
+      source: {
+        attribution:
+          'Contains information licensed under the Open Government Licence \u2013 British Columbia.',
+        catalogueUrl:
+          'https://catalogue.data.gov.bc.ca/dataset/6b39a910-6c77-476f-ac96-7b4f18849b1c',
+        datasetId: '6b39a910-6c77-476f-ac96-7b4f18849b1c',
+        dataUrl:
+          'https://catalogue.data.gov.bc.ca/dataset/6b39a910-6c77-476f-ac96-7b4f18849b1c/resource/a9d52d85-8402-4ce7-b2ac-a2779837c48a/download/webcams.csv',
+        licenseUrl: 'https://www2.gov.bc.ca/gov/content?id=A519A56BC2BF44E4A008B33FCF527F61',
+        regionId: 'kelowna-bc',
+        resourceId: 'a9d52d85-8402-4ce7-b2ac-a2779837c48a',
+        sourceId: 'drivebc-highwaycams',
+        updateFrequency: 'monthly',
+        updatedAt: '2026-06-05T16:31:00.000Z',
+      },
+      stale: false,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.cameras).toHaveLength(2);
+  });
+
+  it('rejects enforcement relabelling and inconsistent stale posture', () => {
+    expect(
+      TrafficCameraResponseSchema.safeParse({
+        cameras: [],
+        degraded: false,
+        generatedAt: '2026-07-30T20:32:00.000Z',
+        source: {
+          attribution:
+            'Contains information licensed under the Open Government Licence \u2013 British Columbia.',
+          catalogueUrl:
+            'https://catalogue.data.gov.bc.ca/dataset/6b39a910-6c77-476f-ac96-7b4f18849b1c',
+          datasetId: '6b39a910-6c77-476f-ac96-7b4f18849b1c',
+          dataUrl:
+            'https://catalogue.data.gov.bc.ca/dataset/6b39a910-6c77-476f-ac96-7b4f18849b1c/resource/a9d52d85-8402-4ce7-b2ac-a2779837c48a/download/webcams.csv',
+          licenseUrl: 'https://www2.gov.bc.ca/gov/content?id=A519A56BC2BF44E4A008B33FCF527F61',
+          regionId: 'kelowna-bc',
+          resourceId: 'a9d52d85-8402-4ce7-b2ac-a2779837c48a',
+          sourceId: 'drivebc-highwaycams',
+          updateFrequency: 'monthly',
+        },
+        stale: true,
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('SafetyFacilityResponseSchema', () => {
+  it('accepts only fixed, official Kelowna RCMP facilities', () => {
+    expect(
+      SafetyFacilityResponseSchema.safeParse({
+        facilities: [
+          {
+            address: '1190 Richter St',
+            coordinate: { latitude: 49.89385756349143, longitude: -119.48887718651372 },
+            id: 'kelowna-rcmp:main-detachment',
+            kind: 'facility',
+            name: 'Main Detachment',
+            pageUrl: 'https://rcmp.ca/en/bc/kelowna/contact',
+            phone: '250-762-3300',
+            regionId: 'kelowna-bc',
+            type: 'police-station',
+          },
+          {
+            address: '115 McIntosh Rd',
+            coordinate: { latitude: 49.891982880689184, longitude: -119.38777082090141 },
+            id: 'kelowna-rcmp:rutland-community-police-office',
+            kind: 'facility',
+            name: 'Rutland Community Police Office',
+            pageUrl: 'https://rcmp.ca/en/bc/kelowna/contact',
+            phone: '250-765-6355',
+            regionId: 'kelowna-bc',
+            type: 'police-station',
+          },
+        ],
+        generatedAt: '2026-07-30T20:32:00.000Z',
+        source: {
+          attribution: 'Royal Canadian Mounted Police',
+          dateModified: '2024-12-19',
+          regionId: 'kelowna-bc',
+          sourceId: 'kelowna-rcmp-public-facilities',
+          sourceUrl: 'https://rcmp.ca/en/bc/kelowna/contact',
+        },
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects live-police or checkpoint semantics', () => {
+    expect(
+      SafetyFacilityResponseSchema.safeParse({
+        facilities: [
+          { kind: 'live-police', type: 'checkpoint' },
+          { kind: 'live-police', type: 'patrol' },
+        ],
+        generatedAt: '2026-07-30T20:32:00.000Z',
+        source: {
+          attribution: 'Royal Canadian Mounted Police',
+          dateModified: '2024-12-19',
+          regionId: 'kelowna-bc',
+          sourceId: 'kelowna-rcmp-public-facilities',
+          sourceUrl: 'https://rcmp.ca/en/bc/kelowna/contact',
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects duplicate or substituted facilities', () => {
+    const main = {
+      address: '1190 Richter St',
+      coordinate: { latitude: 49.89385756349143, longitude: -119.48887718651372 },
+      id: 'kelowna-rcmp:main-detachment',
+      kind: 'facility',
+      name: 'Main Detachment',
+      pageUrl: 'https://rcmp.ca/en/bc/kelowna/contact',
+      phone: '250-762-3300',
+      regionId: 'kelowna-bc',
+      type: 'police-station',
+    };
+    expect(
+      SafetyFacilityResponseSchema.safeParse({
+        facilities: [main, main],
+        generatedAt: '2026-07-30T20:32:00.000Z',
+        source: {
+          attribution: 'Royal Canadian Mounted Police',
+          dateModified: '2024-12-19',
+          regionId: 'kelowna-bc',
+          sourceId: 'kelowna-rcmp-public-facilities',
+          sourceUrl: 'https://rcmp.ca/en/bc/kelowna/contact',
+        },
       }).success,
     ).toBe(false);
   });
@@ -568,13 +814,27 @@ describe('AppConfigResponseSchema', () => {
         { label: 'OpenStreetMap contributors', url: 'https://www.openstreetmap.org/copyright' },
       ],
       coverage: {
-        bounds: {
-          northEast: { latitude: 51.212, longitude: -113.859 },
-          southWest: { latitude: 50.842, longitude: -114.316 },
-        },
-        displayName: 'Calgary, Alberta',
-        id: 'calgary-ab',
+        displayName: 'Calgary and Kelowna service areas',
+        id: 'calgary-kelowna-service-areas',
         modes: ['driving'],
+        serviceAreas: [
+          {
+            bounds: {
+              northEast: { latitude: 51.212, longitude: -113.859 },
+              southWest: { latitude: 50.842, longitude: -114.316 },
+            },
+            displayName: 'Calgary, Alberta',
+            id: 'calgary-ab',
+          },
+          {
+            bounds: {
+              northEast: { latitude: 50.15, longitude: -119.2 },
+              southWest: { latitude: 49.7, longitude: -119.65 },
+            },
+            displayName: 'Kelowna, British Columbia',
+            id: 'kelowna-bc',
+          },
+        ],
       },
       endpoints: {
         cameras: '/v1/cameras',

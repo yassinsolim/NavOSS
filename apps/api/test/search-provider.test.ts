@@ -16,7 +16,7 @@ import {
 } from '../src/search-provider.js';
 
 describe('Photon search provider', () => {
-  it('builds a Calgary-bounded, proximity-biased query', () => {
+  it('builds a corridor-bounded, proximity-biased query', () => {
     const url = new URL(
       buildPhotonSearchUrl({
         latitude: 51.0447,
@@ -27,7 +27,7 @@ describe('Photon search provider', () => {
     );
 
     expect(url.hostname).toBe('photon.komoot.io');
-    expect(url.searchParams.get('bbox')).toBe('-114.316,50.842,-113.859,51.212');
+    expect(url.searchParams.get('bbox')).toBe('-119.65,49.7,-113.8,51.25');
     expect(url.searchParams.get('lat')).toBe('51.0447');
     expect(url.searchParams.get('lon')).toBe('-114.0719');
     expect(url.searchParams.get('q')).toBe('University of Calgary');
@@ -123,7 +123,7 @@ describe('Photon search provider', () => {
 });
 
 describe('Nominatim search provider', () => {
-  it('builds a Calgary-bounded production query', () => {
+  it('builds a corridor-bounded production query', () => {
     const url = new URL(
       buildNominatimSearchUrl({ limit: 8, q: 'Calgary Tower' }, 'http://nominatim:8080/'),
     );
@@ -132,7 +132,7 @@ describe('Nominatim search provider', () => {
     expect(url.searchParams.get('bounded')).toBe('1');
     expect(url.searchParams.get('extratags')).toBe('1');
     expect(url.searchParams.get('format')).toBe('jsonv2');
-    expect(url.searchParams.get('viewbox')).toBe('-114.316,51.212,-113.859,50.842');
+    expect(url.searchParams.get('viewbox')).toBe('-119.65,51.25,-113.8,49.7');
   });
 
   it('uses Nominatim special phrases for typed category discovery', () => {
@@ -720,6 +720,54 @@ describe('Nominatim search provider', () => {
         category,
       ).toEqual([`nominatim:allowed:${category}`]);
     }
+  });
+
+  it('keeps Calgary-only sources out of Kelowna-origin searches', async () => {
+    let calgaryQueries = 0;
+    const source = {
+      datasetVersion: 'ab-bc',
+      freshness: 'fresh' as const,
+      id: 'nominatim-self-hosted',
+      updatedAt: '2026-07-31T12:00:00Z',
+    };
+    const provider = createProductionSearchProvider(
+      undefined,
+      {
+        search: () =>
+          Promise.resolve({
+            degraded: false,
+            results: [
+              {
+                category: 'poi',
+                center: { latitude: 49.888, longitude: -119.496 },
+                confidence: 0.9,
+                id: 'nominatim:kelowna-city-park',
+                label: 'City Park, Kelowna, British Columbia',
+                name: 'City Park',
+              },
+            ],
+            source,
+          }),
+      },
+      {
+        search: () => {
+          calgaryQueries += 1;
+          return Promise.reject(new Error('Calgary provider must not run'));
+        },
+      },
+    );
+
+    const response = await provider.search({
+      latitude: 49.888,
+      limit: 8,
+      longitude: -119.496,
+      q: 'City Park',
+      sort: 'distance',
+    });
+
+    expect(calgaryQueries).toBe(0);
+    expect(response.results.map(({ id }) => id)).toEqual(['nominatim:kelowna-city-park']);
+    expect(response.results.some(({ id }) => id.startsWith('poi:'))).toBe(false);
   });
 
   it('degrades to Nominatim when the Calgary index is unavailable', async () => {

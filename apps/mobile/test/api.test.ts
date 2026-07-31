@@ -7,10 +7,13 @@ import {
   fetchRoadEvents,
   fetchRoutes,
   fetchSafetyCameras,
+  fetchSafetyFacilities,
+  fetchTrafficCameras,
   NavOssApiError,
   reserveGooglePlaceQuery,
   resolveApiBaseUrl,
   searchPlaces,
+  submitContribution,
 } from '../src/lib/api.js';
 
 describe('resolveApiBaseUrl', () => {
@@ -183,6 +186,43 @@ describe('reserveGooglePlaceQuery', () => {
 
     expect(capturedRequest).toEqual({ method: 'POST' });
     expect(response).toMatchObject({ granted: true, limit: 8_000, remaining: 7_999 });
+  });
+});
+
+describe('submitContribution', () => {
+  it('posts only bounded anonymous beta feedback', async () => {
+    let capturedRequest: RequestInit | undefined;
+    const response = await submitContribution(
+      {
+        createdAt: '2026-07-30T23:00:00.000Z',
+        description: 'The entrance marker is on the wrong side.',
+        draftId: 'draft-1',
+        locationLabel: 'Downtown Kelowna',
+        type: 'place-correction',
+      },
+      {
+        baseUrl: 'https://navoss-api.yassin.app/',
+        fetchImplementation: (input, init) => {
+          expect(input).toBe('https://navoss-api.yassin.app/v1/contributions');
+          capturedRequest = init;
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                acceptedAt: '2026-07-30T23:01:00.000Z',
+                status: 'accepted',
+                submissionId: 'fbe6f7cf-8176-499d-8f73-0fcf858d85f0',
+              }),
+              { headers: { 'content-type': 'application/json' }, status: 202 },
+            ),
+          );
+        },
+      },
+    );
+
+    expect(capturedRequest).toMatchObject({ method: 'POST' });
+    expect(JSON.parse(String(capturedRequest?.body))).not.toHaveProperty('coordinate');
+    expect(JSON.parse(String(capturedRequest?.body))).not.toHaveProperty('userId');
+    expect(response.status).toBe('accepted');
   });
 });
 
@@ -446,5 +486,112 @@ describe('fetchOfficialSafetyCameras', () => {
 
     expect(response.cameras[0]).not.toHaveProperty('direction');
     expect(response.cameras[0]?.enforcement).toEqual(['red-light']);
+  });
+});
+
+describe('Kelowna regional context', () => {
+  it('requests ordinary DriveBC traffic cameras separately from enforcement cameras', async () => {
+    const response = await fetchTrafficCameras({
+      baseUrl: 'https://navoss-api.yassin.app/',
+      fetchImplementation: (input) => {
+        expect(input).toBe('https://navoss-api.yassin.app/v2/traffic-cameras?region=kelowna-bc');
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              cameras: [
+                {
+                  cameraType: 'traffic',
+                  caption: 'Highway 97 at Highway 33, looking north.',
+                  coordinate: { latitude: 49.889277, longitude: -119.421082 },
+                  enforcement: false,
+                  highway: '97',
+                  id: 'drivebc-highwaycam:127',
+                  imageUrl: 'https://images.drivebc.ca/bchighwaycam/pub/cameras/127.jpg',
+                  name: 'Kelowna - N',
+                  orientation: 'N',
+                  pageUrl: 'https://images.drivebc.ca/bchighwaycam/pub/html/www/127.html',
+                  regionId: 'kelowna-bc',
+                  thumbnailUrl: 'https://images.drivebc.ca/bchighwaycam/pub/cameras/tn/127.jpg',
+                },
+              ],
+              degraded: false,
+              generatedAt: '2026-07-30T23:00:00.000Z',
+              source: {
+                attribution:
+                  'Contains information licensed under the Open Government Licence – British Columbia.',
+                catalogueUrl:
+                  'https://catalogue.data.gov.bc.ca/dataset/6b39a910-6c77-476f-ac96-7b4f18849b1c',
+                dataUrl:
+                  'https://catalogue.data.gov.bc.ca/dataset/6b39a910-6c77-476f-ac96-7b4f18849b1c/resource/a9d52d85-8402-4ce7-b2ac-a2779837c48a/download/webcams.csv',
+                datasetId: '6b39a910-6c77-476f-ac96-7b4f18849b1c',
+                licenseUrl:
+                  'https://www2.gov.bc.ca/gov/content?id=A519A56BC2BF44E4A008B33FCF527F61',
+                regionId: 'kelowna-bc',
+                resourceId: 'a9d52d85-8402-4ce7-b2ac-a2779837c48a',
+                sourceId: 'drivebc-highwaycams',
+                updateFrequency: 'monthly',
+              },
+              stale: false,
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      },
+      region: 'kelowna-bc',
+    });
+
+    expect(response.cameras[0]?.enforcement).toBe(false);
+  });
+
+  it('requests fixed public RCMP facilities without live police data', async () => {
+    const response = await fetchSafetyFacilities({
+      baseUrl: 'https://navoss-api.yassin.app/',
+      fetchImplementation: (input) => {
+        expect(input).toBe('https://navoss-api.yassin.app/v2/safety-facilities?region=kelowna-bc');
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              facilities: [
+                {
+                  address: '1190 Richter St',
+                  coordinate: { latitude: 49.89385756349143, longitude: -119.48887718651372 },
+                  id: 'kelowna-rcmp:main-detachment',
+                  kind: 'facility',
+                  name: 'Main Detachment',
+                  pageUrl: 'https://rcmp.ca/en/bc/kelowna/contact',
+                  phone: '250-762-3300',
+                  regionId: 'kelowna-bc',
+                  type: 'police-station',
+                },
+                {
+                  address: '115 McIntosh Rd',
+                  coordinate: { latitude: 49.891982880689184, longitude: -119.38777082090141 },
+                  id: 'kelowna-rcmp:rutland-community-police-office',
+                  kind: 'facility',
+                  name: 'Rutland Community Police Office',
+                  pageUrl: 'https://rcmp.ca/en/bc/kelowna/contact',
+                  phone: '250-765-6355',
+                  regionId: 'kelowna-bc',
+                  type: 'police-station',
+                },
+              ],
+              generatedAt: '2026-07-30T23:00:00.000Z',
+              source: {
+                attribution: 'Royal Canadian Mounted Police',
+                dateModified: '2024-12-19',
+                regionId: 'kelowna-bc',
+                sourceId: 'kelowna-rcmp-public-facilities',
+                sourceUrl: 'https://rcmp.ca/en/bc/kelowna/contact',
+              },
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      },
+      region: 'kelowna-bc',
+    });
+
+    expect(response.facilities).toHaveLength(2);
+    expect(response.facilities[0]?.kind).toBe('facility');
   });
 });

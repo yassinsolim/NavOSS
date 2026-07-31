@@ -153,13 +153,27 @@ export function createAppConfig(
       },
     ],
     coverage: {
-      bounds: {
-        northEast: { latitude: 51.212, longitude: -113.859 },
-        southWest: { latitude: 50.842, longitude: -114.316 },
-      },
-      displayName: 'Calgary, Alberta',
-      id: 'calgary-ab',
+      displayName: 'Calgary and Kelowna service areas',
+      id: 'calgary-kelowna-service-areas',
       modes: ['driving'],
+      serviceAreas: [
+        {
+          bounds: {
+            northEast: { latitude: 51.212, longitude: -113.859 },
+            southWest: { latitude: 50.842, longitude: -114.316 },
+          },
+          displayName: 'Calgary, Alberta',
+          id: 'calgary-ab',
+        },
+        {
+          bounds: {
+            northEast: { latitude: 50.15, longitude: -119.2 },
+            southWest: { latitude: 49.7, longitude: -119.65 },
+          },
+          displayName: 'Kelowna, British Columbia',
+          id: 'kelowna-bc',
+        },
+      ],
     },
     endpoints: {
       cameras: '/v1/cameras',

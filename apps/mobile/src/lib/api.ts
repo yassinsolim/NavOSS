@@ -1,5 +1,6 @@
 import {
   AppConfigResponseSchema,
+  ContributionSubmissionResponseSchema,
   GooglePlaceQueryGrantResponseSchema,
   OfficialRoadEventResponseSchema,
   OfficialSafetyCameraResponseSchema,
@@ -7,8 +8,12 @@ import {
   RoadEventResponseSchema,
   RouteResponseSchema,
   SafetyCameraResponseSchema,
+  SafetyFacilityResponseSchema,
   SearchResponseSchema,
+  TrafficCameraResponseSchema,
   type AppConfigResponse,
+  type ContributionSubmissionRequest,
+  type ContributionSubmissionResponse,
   type GooglePlaceQueryGrantResponse,
   type OfficialRoadEventRegion,
   type OfficialRoadEventResponse,
@@ -18,8 +23,12 @@ import {
   type RouteResponse,
   type RoadEventResponse,
   type SafetyCameraResponse,
+  type SafetyFacilityRegion,
+  type SafetyFacilityResponse,
   type SearchQuery,
   type SearchResponse,
+  type TrafficCameraRegion,
+  type TrafficCameraResponse,
 } from '@navoss/contracts';
 
 export class NavOssApiError extends Error {
@@ -62,12 +71,26 @@ export interface ReserveGooglePlaceQueryOptions {
   signal?: AbortSignal;
 }
 
+export interface SubmitContributionOptions {
+  baseUrl?: string;
+  fetchImplementation?: typeof fetch;
+  signal?: AbortSignal;
+}
+
 export interface FetchOfficialRoadEventsOptions extends FetchSafetyCamerasOptions {
   region: OfficialRoadEventRegion;
 }
 
 export interface FetchOfficialSafetyCamerasOptions extends FetchSafetyCamerasOptions {
   region: OfficialSafetyCameraRegion;
+}
+
+export interface FetchTrafficCamerasOptions extends FetchSafetyCamerasOptions {
+  region: TrafficCameraRegion;
+}
+
+export interface FetchSafetyFacilitiesOptions extends FetchSafetyCamerasOptions {
+  region: SafetyFacilityRegion;
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -165,6 +188,23 @@ export async function reserveGooglePlaceQuery(
   return GooglePlaceQueryGrantResponseSchema.parse(await parseResponse(response));
 }
 
+export async function submitContribution(
+  request: ContributionSubmissionRequest,
+  options: SubmitContributionOptions = {},
+): Promise<ContributionSubmissionResponse> {
+  const fetchImplementation = options.fetchImplementation ?? fetch;
+  const response = await fetchImplementation(
+    `${normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl())}/v1/contributions`,
+    {
+      body: JSON.stringify(request),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    },
+  );
+  return ContributionSubmissionResponseSchema.parse(await parseResponse(response));
+}
+
 export async function searchPlaces(
   query: string,
   options: SearchPlacesOptions = {},
@@ -242,4 +282,28 @@ export async function fetchOfficialSafetyCameras(
     options.signal === undefined ? undefined : { signal: options.signal },
   );
   return OfficialSafetyCameraResponseSchema.parse(await parseResponse(response));
+}
+
+export async function fetchTrafficCameras(
+  options: FetchTrafficCamerasOptions,
+): Promise<TrafficCameraResponse> {
+  const fetchImplementation = options.fetchImplementation ?? fetch;
+  const query = new URLSearchParams({ region: options.region });
+  const response = await fetchImplementation(
+    `${normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl())}/v2/traffic-cameras?${query.toString()}`,
+    options.signal === undefined ? undefined : { signal: options.signal },
+  );
+  return TrafficCameraResponseSchema.parse(await parseResponse(response));
+}
+
+export async function fetchSafetyFacilities(
+  options: FetchSafetyFacilitiesOptions,
+): Promise<SafetyFacilityResponse> {
+  const fetchImplementation = options.fetchImplementation ?? fetch;
+  const query = new URLSearchParams({ region: options.region });
+  const response = await fetchImplementation(
+    `${normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl())}/v2/safety-facilities?${query.toString()}`,
+    options.signal === undefined ? undefined : { signal: options.signal },
+  );
+  return SafetyFacilityResponseSchema.parse(await parseResponse(response));
 }

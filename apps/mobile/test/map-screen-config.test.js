@@ -1,0 +1,42 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+describe('map screen configuration', () => {
+  it('allows zooming out to the global map', () => {
+    const mapScreen = readFileSync(
+      resolve(import.meta.dirname, '..', 'src/features/map/map-screen.tsx'),
+      'utf8',
+    );
+
+    expect(mapScreen).toContain('minZoom={0}');
+    expect(mapScreen).not.toContain('minZoom={8}');
+  });
+
+  it('loads Calgary overlays only for a known Calgary location', () => {
+    const mapScreen = readFileSync(
+      resolve(import.meta.dirname, '..', 'src/features/map/map-screen.tsx'),
+      'utf8',
+    );
+
+    expect(mapScreen).toMatch(/mapRegion === 'calgary-ab'\s+\? 'calgary'/);
+    expect(mapScreen).toContain(
+      'if (!mapPreferences.showRoadEvents || roadEventRegion === undefined)',
+    );
+    expect(mapScreen).toContain("if (mapRegion !== 'calgary-ab')");
+    expect(mapScreen).not.toContain(": 'calgary';");
+  });
+
+  it('requires a current supported coordinate for search and refreshes idle regional context', () => {
+    const mapScreen = readFileSync(
+      resolve(import.meta.dirname, '..', 'src/features/map/map-screen.tsx'),
+      'utf8',
+    );
+
+    expect(mapScreen).toContain('const searchEnabled = true;');
+    expect(mapScreen).toContain('const nearbySearchEnabled = searchOrigin !== undefined;');
+    expect(mapScreen).toContain('Location.watchPositionAsync(');
+    expect(mapScreen).toContain('distanceInterval: 1_000');
+    expect(mapScreen).toContain("locationState !== 'visible' || routeState.type !== 'idle'");
+  });
+});

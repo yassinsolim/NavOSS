@@ -17,7 +17,7 @@ services:
       MAPBOX_ACCESS_TOKEN: ${MAPBOX_ACCESS_TOKEN:-}
       MAPBOX_VEHICLE_LICENSE_CONFIRMED: ${MAPBOX_VEHICLE_LICENSE_CONFIRMED:-0}
       NODE_ENV: production
-      NOMINATIM_DATASET_VERSION: ${NOMINATIM_DATASET_VERSION}
+      NOMINATIM_DATASET_VERSION: ${NOMINATIM_DATASET_VERSION:?Set NOMINATIM_DATASET_VERSION to the staged regional release}
       NOMINATIM_URL: http://nominatim:8080/
       PGDATABASE: navoss
       PGHOST: reports-db
@@ -125,7 +125,7 @@ services:
       build_time_zones: 'True'
       force_rebuild: 'False'
       server_threads: '2'
-      tile_urls: https://download.geofabrik.de/north-america/canada/alberta-latest.osm.pbf
+      tile_urls: ''
       traffic_name: ''
       use_default_speeds_config: 'True'
       use_tiles_ignore_pbf: 'True'
@@ -139,7 +139,7 @@ services:
     security_opt:
       - no-new-privileges:true
     volumes:
-      - /srv/navoss/artifacts/valhalla:/custom_files
+      - ${VALHALLA_DATA_DIR:?Set VALHALLA_DATA_DIR to a versioned artifact directory}:/custom_files
     healthcheck:
       test:
         - CMD-SHELL
@@ -155,14 +155,14 @@ services:
     restart: unless-stopped
     shm_size: 2g
     environment:
-      FREEZE: 'false'
+      FREEZE: 'true'
       GUNICORN_CMD_ARGS: --no-control-socket
       GUNICORN_WORKERS: '2'
       IMPORT_SECONDARY_WIKIPEDIA: 'false'
       IMPORT_STYLE: full
       IMPORT_WIKIPEDIA: 'false'
       NOMINATIM_PASSWORD: ${NOMINATIM_PASSWORD}
-      PBF_URL: https://download.geofabrik.de/north-america/canada/alberta-latest.osm.pbf
+      PBF_PATH: /nominatim/data/${NOMINATIM_PBF_FILE:?Set NOMINATIM_PBF_FILE to the checksum-verified dated regional PBF}
       POSTGRES_AUTOVACUUM_WORK_MEM: 256MB
       POSTGRES_EFFECTIVE_CACHE_SIZE: 6GB
       POSTGRES_MAINTENANCE_WORK_MEM: 2GB
@@ -170,11 +170,8 @@ services:
       POSTGRES_MAX_WAL_SIZE: 2GB
       POSTGRES_SHARED_BUFFERS: 1GB
       POSTGRES_WORK_MEM: 32MB
-      REPLICATION_RECHECK_INTERVAL: '900'
-      REPLICATION_UPDATE_INTERVAL: '86400'
-      REPLICATION_URL: https://download.geofabrik.de/north-america/canada/alberta-updates/
       THREADS: '2'
-      UPDATE_MODE: continuous
+      UPDATE_MODE: none
       WARMUP_ON_STARTUP: 'false'
     cpus: 2.5
     mem_limit: 6g
@@ -184,7 +181,8 @@ services:
     security_opt:
       - no-new-privileges:true
     volumes:
-      - /srv/navoss/artifacts/nominatim/postgres:/var/lib/postgresql/16/main
+      - /srv/navoss/artifacts/imports:/nominatim/data:ro
+      - ${NOMINATIM_DATA_DIR:?Set NOMINATIM_DATA_DIR to a versioned artifact directory}:/var/lib/postgresql/16/main
     healthcheck:
       test:
         - CMD-SHELL

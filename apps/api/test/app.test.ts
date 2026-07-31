@@ -1,5 +1,6 @@
 import {
   AppConfigResponseSchema,
+  ContributionSubmissionResponseSchema,
   GooglePlaceQueryGrantResponseSchema,
   HealthResponseSchema,
   OfficialRoadEventResponseSchema,
@@ -8,8 +9,10 @@ import {
   ReadinessResponseSchema,
   RoadEventResponseSchema,
   RouteResponseSchema,
+  SafetyFacilityResponseSchema,
   SafetyCameraResponseSchema,
   SearchResponseSchema,
+  TrafficCameraResponseSchema,
   type RouteAlternative,
   type SafetyCameraResponse,
 } from '@navoss/contracts';
@@ -18,8 +21,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../src/app.js';
 import { CalgaryRoadEventProviderError } from '../src/calgary-road-event-provider.js';
+import { DriveBcRoadEventProviderError } from '../src/drivebc-road-event-provider.js';
+import { DriveBcTrafficCameraProviderError } from '../src/drivebc-traffic-camera-provider.js';
 import { CALGARY_SEARCH_FIXTURES } from '../src/fixtures.js';
 import { OntarioRoadEventProviderError } from '../src/ontario-road-event-provider.js';
+import { KelownaSafetyFacilityProviderError } from '../src/kelowna-safety-facility-provider.js';
 import { createFixtureSearchProvider } from '../src/search-provider.js';
 import { CameraProviderError } from '../src/safety-camera-provider.js';
 import { TorontoCameraProviderError } from '../src/toronto-safety-camera-provider.js';
@@ -46,8 +52,18 @@ afterEach(async () => {
 describe('provider lifecycle', () => {
   it('registers poller cleanup before the Fastify instance starts listening', async () => {
     const stopCalgary = vi.fn();
+    const stopDriveBcCameras = vi.fn();
+    const stopDriveBcEvents = vi.fn();
     const stopOntario = vi.fn();
     const app = await buildApp({
+      driveBcEventProvider: {
+        getRoadEvents: () => Promise.reject(new Error('not requested')),
+        stop: stopDriveBcEvents,
+      },
+      driveBcTrafficCameraProvider: {
+        getCameras: () => Promise.reject(new Error('not requested')),
+        stop: stopDriveBcCameras,
+      },
       eventProvider: {
         getRoadEvents: () => Promise.reject(new Error('not requested')),
         stop: stopCalgary,
@@ -63,6 +79,8 @@ describe('provider lifecycle', () => {
     await app.close();
 
     expect(stopCalgary).toHaveBeenCalledOnce();
+    expect(stopDriveBcCameras).toHaveBeenCalledOnce();
+    expect(stopDriveBcEvents).toHaveBeenCalledOnce();
     expect(stopOntario).toHaveBeenCalledOnce();
   });
 });
@@ -133,7 +151,9 @@ describe('client configuration', () => {
     const body = AppConfigResponseSchema.parse(response.json());
 
     expect(response.statusCode).toBe(200);
-    expect(body.coverage.id).toBe('calgary-ab');
+    expect(body.coverage.id).toBe('calgary-kelowna-service-areas');
+    expect(body.coverage.displayName).toBe('Calgary and Kelowna service areas');
+    expect(body.coverage.serviceAreas.map(({ id }) => id)).toEqual(['calgary-ab', 'kelowna-bc']);
     expect(body.features).toEqual({
       communityReports: false,
       liveTraffic: false,
@@ -211,6 +231,120 @@ describe('Google place query grants', () => {
 
     expect(response.statusCode).toBe(503);
     expect(ProblemDetailsSchema.parse(response.json()).detail).toContain('could not be reserved');
+  });
+});
+
+describe('anonymous beta contributions', () => {
+  it('accepts a bounded contribution without identity or coordinates', async () => {
+    const app = await createTestApp({
+      contributionProvider: {
+        submit: (submission) => {
+          expect(submission).not.toHaveProperty('coordinate');
+          expect(submission).not.toHaveProperty('userId');
+          return Promise.resolve({
+            acceptedAt: '2026-07-15T12:00:00.000Z',
+            status: 'accepted',
+            submissionId: 'fbe6f7cf-8176-499d-8f73-0fcf858d85f0',
+          });
+        },
+      },
+    });
+    const response = await app.inject({
+      method: 'POST',
+      payload: {
+        createdAt: '2026-07-15T11:55:00.000Z',
+        description: 'The entrance marker is on the wrong side.',
+        draftId: 'draft-1',
+        locationLabel: 'Downtown Kelowna',
+        type: 'place-correction',
+      },
+      url: '/v1/contributions',
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(ContributionSubmissionResponseSchema.parse(response.json()).status).toBe('accepted');
+  });
+
+  it('rejects precise coordinates and unexpected identity fields', async () => {
+    const app = await createTestApp();
+    const response = await app.inject({
+      method: 'POST',
+      payload: {
+        coordinate: { latitude: 49.888, longitude: -119.496 },
+        createdAt: '2026-07-15T11:55:00.000Z',
+        description: 'The entrance marker is on the wrong side.',
+        draftId: 'draft-1',
+        type: 'place-correction',
+        userId: 'unexpected',
+      },
+      url: '/v1/contributions',
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('rate limits submission abuse before writing to the provider', async () => {
+    const app = await createTestApp({
+      contributionProvider: {
+        submit: () => Promise.reject(new Error('provider must not be called')),
+      },
+      contributionRateLimiter: { consume: () => false },
+    });
+    const response = await app.inject({
+      method: 'POST',
+      payload: {
+        createdAt: '2026-07-15T11:55:00.000Z',
+        description: 'The entrance marker is on the wrong side.',
+        draftId: 'draft-1',
+        type: 'place-correction',
+      },
+      url: '/v1/contributions',
+    });
+
+    expect(response.statusCode).toBe(429);
+    expect(response.headers['retry-after']).toBe('3600');
+    expect(ProblemDetailsSchema.parse(response.json()).code).toBe('rate_limited');
+  });
+
+  it('uses the trusted proxy client address for contribution limits', async () => {
+    const sourceAddresses: string[] = [];
+    const app = await createTestApp({
+      contributionProvider: {
+        submit: () =>
+          Promise.resolve({
+            acceptedAt: '2026-07-15T12:00:00.000Z',
+            status: 'accepted',
+            submissionId: 'fbe6f7cf-8176-499d-8f73-0fcf858d85f0',
+          }),
+      },
+      contributionRateLimiter: {
+        consume: (sourceAddress) => {
+          sourceAddresses.push(sourceAddress);
+          return true;
+        },
+      },
+    });
+    const payload = {
+      createdAt: '2026-07-15T11:55:00.000Z',
+      description: 'The entrance marker is on the wrong side.',
+      draftId: 'draft-1',
+      type: 'place-correction',
+    };
+
+    await app.inject({
+      headers: { 'x-forwarded-for': '198.51.100.1' },
+      method: 'POST',
+      payload,
+      url: '/v1/contributions',
+    });
+    await app.inject({
+      headers: { 'x-forwarded-for': '198.51.100.2' },
+      method: 'POST',
+      payload: { ...payload, draftId: 'draft-2' },
+      url: '/v1/contributions',
+    });
+
+    expect(sourceAddresses).toEqual(['198.51.100.1', '198.51.100.2']);
   });
 });
 
@@ -353,6 +487,185 @@ describe('Ontario road events', () => {
       code: 'service_unavailable',
       status: 503,
       title: 'Road data unavailable',
+    });
+  });
+
+  it('dispatches Kelowna events to DriveBC without changing Ontario', async () => {
+    const kelownaResponse = OfficialRoadEventResponseSchema.parse({
+      degraded: false,
+      events: [],
+      generatedAt: '2026-07-15T12:00:00.000Z',
+      regionId: 'kelowna-bc',
+      source: {
+        apiDocumentationUrl: 'https://api.open511.gov.bc.ca/help',
+        attribution:
+          'Contains information licensed under the Open Government Licence \u2013 British Columbia.',
+        confidence: 'official',
+        dataUrl:
+          'https://api.open511.gov.bc.ca/events?format=json&status=ACTIVE&bbox=-119.65,49.70,-119.20,50.15&limit=500',
+        licenseUrl: 'https://www2.gov.bc.ca/gov/content/data/open-data/open-government-license-bc',
+        refreshIntervalSeconds: 300,
+        sourceId: 'drivebc-open511-events',
+      },
+      stale: false,
+    });
+    const app = await createTestApp({
+      driveBcEventProvider: { getRoadEvents: () => Promise.resolve(kelownaResponse) },
+      ontarioEventProvider: { getRoadEvents: () => Promise.resolve(roadEventResponse) },
+    });
+
+    const kelowna = await app.inject({ method: 'GET', url: '/v2/events?region=kelowna-bc' });
+    const ontario = await app.inject({ method: 'GET', url: '/v2/events?region=ontario' });
+
+    expect(OfficialRoadEventResponseSchema.parse(kelowna.json())).toEqual(kelownaResponse);
+    expect(OfficialRoadEventResponseSchema.parse(ontario.json())).toEqual(roadEventResponse);
+  });
+
+  it('returns a stable problem when DriveBC road data is unavailable', async () => {
+    const app = await createTestApp({
+      driveBcEventProvider: {
+        getRoadEvents: () => Promise.reject(new DriveBcRoadEventProviderError('offline')),
+      },
+    });
+    const response = await app.inject({ method: 'GET', url: '/v2/events?region=kelowna-bc' });
+
+    expect(response.statusCode).toBe(503);
+    expect(ProblemDetailsSchema.parse(response.json())).toMatchObject({
+      code: 'service_unavailable',
+      status: 503,
+      title: 'Road data unavailable',
+    });
+  });
+});
+
+describe('Kelowna regional context', () => {
+  const trafficCameraResponse = TrafficCameraResponseSchema.parse({
+    cameras: [
+      {
+        cameraType: 'traffic',
+        caption: 'Highway 97 in Lake Country by Wood Lake, looking north.',
+        coordinate: { latitude: 50.057111, longitude: -119.407653 },
+        enforcement: false,
+        highway: '97',
+        id: 'drivebc-highwaycam:532',
+        imageUrl: 'https://images.drivebc.ca/bchighwaycam/pub/cameras/532.jpg',
+        name: 'Lake Country - N',
+        orientation: 'N',
+        pageUrl: 'https://images.drivebc.ca/bchighwaycam/pub/html/www/532.html',
+        regionId: 'kelowna-bc',
+        thumbnailUrl: 'https://images.drivebc.ca/bchighwaycam/pub/cameras/tn/532.jpg',
+      },
+    ],
+    degraded: false,
+    generatedAt: '2026-07-15T12:00:00.000Z',
+    source: {
+      attribution:
+        'Contains information licensed under the Open Government Licence \u2013 British Columbia.',
+      catalogueUrl: 'https://catalogue.data.gov.bc.ca/dataset/6b39a910-6c77-476f-ac96-7b4f18849b1c',
+      datasetId: '6b39a910-6c77-476f-ac96-7b4f18849b1c',
+      dataUrl:
+        'https://catalogue.data.gov.bc.ca/dataset/6b39a910-6c77-476f-ac96-7b4f18849b1c/resource/a9d52d85-8402-4ce7-b2ac-a2779837c48a/download/webcams.csv',
+      licenseUrl: 'https://www2.gov.bc.ca/gov/content?id=A519A56BC2BF44E4A008B33FCF527F61',
+      regionId: 'kelowna-bc',
+      resourceId: 'a9d52d85-8402-4ce7-b2ac-a2779837c48a',
+      sourceId: 'drivebc-highwaycams',
+      updateFrequency: 'monthly',
+    },
+    stale: false,
+  });
+  const facilityResponse = SafetyFacilityResponseSchema.parse({
+    facilities: [
+      {
+        address: '1190 Richter St',
+        coordinate: { latitude: 49.89385756349143, longitude: -119.48887718651372 },
+        id: 'kelowna-rcmp:main-detachment',
+        kind: 'facility',
+        name: 'Main Detachment',
+        pageUrl: 'https://rcmp.ca/en/bc/kelowna/contact',
+        phone: '250-762-3300',
+        regionId: 'kelowna-bc',
+        type: 'police-station',
+      },
+      {
+        address: '115 McIntosh Rd',
+        coordinate: { latitude: 49.891982880689184, longitude: -119.38777082090141 },
+        id: 'kelowna-rcmp:rutland-community-police-office',
+        kind: 'facility',
+        name: 'Rutland Community Police Office',
+        pageUrl: 'https://rcmp.ca/en/bc/kelowna/contact',
+        phone: '250-765-6355',
+        regionId: 'kelowna-bc',
+        type: 'police-station',
+      },
+    ],
+    generatedAt: '2026-07-15T12:00:00.000Z',
+    source: {
+      attribution: 'Royal Canadian Mounted Police',
+      dateModified: '2024-12-19',
+      regionId: 'kelowna-bc',
+      sourceId: 'kelowna-rcmp-public-facilities',
+      sourceUrl: 'https://rcmp.ca/en/bc/kelowna/contact',
+    },
+  });
+
+  it('returns ordinary traffic cameras separately from enforcement cameras', async () => {
+    const app = await createTestApp({
+      driveBcTrafficCameraProvider: {
+        getCameras: () => Promise.resolve(trafficCameraResponse),
+      },
+    });
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v2/traffic-cameras?region=kelowna-bc',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(TrafficCameraResponseSchema.parse(response.json())).toEqual(trafficCameraResponse);
+  });
+
+  it('returns only fixed official public safety facilities', async () => {
+    const app = await createTestApp({
+      kelownaSafetyFacilityProvider: {
+        getFacilities: () => Promise.resolve(facilityResponse),
+      },
+    });
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v2/safety-facilities?region=kelowna-bc',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(SafetyFacilityResponseSchema.parse(response.json())).toEqual(facilityResponse);
+  });
+
+  it('returns stable 503 problems for unavailable Kelowna context providers', async () => {
+    const app = await createTestApp({
+      driveBcTrafficCameraProvider: {
+        getCameras: () => Promise.reject(new DriveBcTrafficCameraProviderError('offline')),
+      },
+      kelownaSafetyFacilityProvider: {
+        getFacilities: () => Promise.reject(new KelownaSafetyFacilityProviderError('offline')),
+      },
+    });
+
+    const cameras = await app.inject({
+      method: 'GET',
+      url: '/v2/traffic-cameras?region=kelowna-bc',
+    });
+    const facilities = await app.inject({
+      method: 'GET',
+      url: '/v2/safety-facilities?region=kelowna-bc',
+    });
+
+    expect(cameras.statusCode).toBe(503);
+    expect(ProblemDetailsSchema.parse(cameras.json())).toMatchObject({
+      status: 503,
+      title: 'Traffic camera data unavailable',
+    });
+    expect(facilities.statusCode).toBe(503);
+    expect(ProblemDetailsSchema.parse(facilities.json())).toMatchObject({
+      status: 503,
+      title: 'Safety facility data unavailable',
     });
   });
 });
@@ -504,7 +817,7 @@ describe('search', () => {
     });
   });
 
-  it('rejects nearby category searches outside Calgary coverage', async () => {
+  it('rejects nearby category searches outside corridor coverage', async () => {
     const app = await createTestApp();
     const response = await app.inject({
       method: 'POST',
@@ -521,10 +834,73 @@ describe('search', () => {
     expect(response.statusCode).toBe(400);
     expect(ProblemDetailsSchema.parse(response.json())).toMatchObject({
       code: 'invalid_request',
-      detail: 'Nearby categories are currently available only in Calgary.',
+      detail:
+        'Nearby categories are currently available only in the Calgary and Kelowna service areas.',
       status: 400,
       title: 'Search outside coverage',
     });
+  });
+
+  it('rejects mountain coordinates between the two supported service areas', async () => {
+    let searchCalls = 0;
+    let routeCalls = 0;
+    const app = await createTestApp({
+      routeProvider: {
+        getRoutes: () => {
+          routeCalls += 1;
+          return Promise.resolve([]);
+        },
+      },
+      searchProvider: {
+        search: () => {
+          searchCalls += 1;
+          return Promise.reject(new Error('search must not run'));
+        },
+      },
+    });
+    const searchResponse = await app.inject({
+      method: 'POST',
+      payload: {
+        category: 'restaurant',
+        latitude: 50.5,
+        longitude: -117,
+        q: 'restaurant',
+      },
+      url: '/v1/search',
+    });
+    const routeResponse = await app.inject({
+      method: 'POST',
+      payload: {
+        destination: { latitude: 50.5, longitude: -117 },
+        origin: { latitude: 49.888, longitude: -119.496 },
+      },
+      url: '/v1/routes',
+    });
+
+    expect(searchResponse.statusCode).toBe(400);
+    expect(routeResponse.statusCode).toBe(400);
+    expect(searchCalls).toBe(0);
+    expect(routeCalls).toBe(0);
+  });
+
+  it('rejects locationless nearby categories but permits locationless typed search', async () => {
+    const app = await createTestApp();
+    const categoryResponse = await app.inject({
+      method: 'POST',
+      payload: { category: 'restaurant', q: 'restaurant' },
+      url: '/v1/search',
+    });
+    const typedResponse = await app.inject({
+      method: 'POST',
+      payload: { q: 'Kelowna City Park' },
+      url: '/v1/search',
+    });
+
+    expect(categoryResponse.statusCode).toBe(400);
+    expect(ProblemDetailsSchema.parse(categoryResponse.json()).title).toBe(
+      'Nearby search needs a location',
+    );
+    expect(typedResponse.statusCode).toBe(200);
   });
 });
 
@@ -553,6 +929,35 @@ describe('routes', () => {
       },
     ],
   };
+
+  it('rejects destinations outside supported service areas before routing', async () => {
+    let providerCalls = 0;
+    const app = await createTestApp({
+      routeProvider: {
+        getRoutes: () => {
+          providerCalls += 1;
+          return Promise.resolve([route]);
+        },
+      },
+    });
+    const response = await app.inject({
+      method: 'POST',
+      payload: {
+        destination: { latitude: 43.6532, longitude: -79.3832 },
+        origin: { latitude: 49.888, longitude: -119.496 },
+      },
+      url: '/v1/routes',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(providerCalls).toBe(0);
+    expect(ProblemDetailsSchema.parse(response.json())).toMatchObject({
+      code: 'invalid_request',
+      detail:
+        'Driving routes are currently available only between supported Calgary and Kelowna area locations.',
+      title: 'Route outside coverage',
+    });
+  });
 
   it('returns normalized route alternatives from the injected provider', async () => {
     const app = await createTestApp({
@@ -683,12 +1088,15 @@ describe('OpenAPI', () => {
     expect(document.paths).toHaveProperty('/health');
     expect(document.paths).toHaveProperty('/ready');
     expect(document.paths).toHaveProperty('/v1/config');
+    expect(document.paths).toHaveProperty('/v1/contributions');
     expect(document.paths).toHaveProperty('/v1/google-place-query-grants');
     expect(document.paths).toHaveProperty('/v1/cameras');
     expect(document.paths).toHaveProperty('/v1/routes');
     expect(document.paths).toHaveProperty('/v1/search');
     expect(document.paths).toHaveProperty('/v2/cameras');
     expect(document.paths).toHaveProperty('/v2/events');
+    expect(document.paths).toHaveProperty('/v2/safety-facilities');
+    expect(document.paths).toHaveProperty('/v2/traffic-cameras');
     expect(document.paths).not.toHaveProperty('/openapi.json');
   });
 });

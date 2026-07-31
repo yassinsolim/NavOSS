@@ -85,7 +85,10 @@ function analyze(routeCase, route, response, latencyMs, avoidHighways) {
   if (metrics.distanceKm < minimumDistanceKm || metrics.distanceKm > maximumDistanceKm) {
     failures.push('distance range');
   }
-  if (metrics.durationMinutes < 3 || metrics.durationMinutes > 90) failures.push('duration range');
+  const maximumDurationMinutes = routeCase.maximumDurationMinutes ?? 90;
+  if (metrics.durationMinutes < 3 || metrics.durationMinutes > maximumDurationMinutes) {
+    failures.push('duration range');
+  }
   if (metrics.geometryPoints < 20) failures.push('geometry detail');
   if (Math.abs(metrics.geometryRatio - 1) > 0.03) failures.push('geometry distance');
   if (latencyMs > 5_000) failures.push('latency');
@@ -99,6 +102,9 @@ function analyze(routeCase, route, response, latencyMs, avoidHighways) {
   if (metrics.spokenCoverage < 0.75) failures.push('spoken instruction coverage');
   if (Math.abs(metrics.stepRatio - 1) > 0.03) failures.push('step distance');
   if (response.source.traffic !== 'unavailable') failures.push('traffic posture');
+  if (response.degraded !== false) failures.push('degraded route source');
+  if (response.source.id !== 'valhalla-self-hosted') failures.push('route source');
+  if (response.source.mode !== 'production') failures.push('route mode');
 
   return {
     avoidHighways,

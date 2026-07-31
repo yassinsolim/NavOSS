@@ -87,5 +87,63 @@
     "destination": { "latitude": 51.06534, "longitude": -114.13308 },
     "distanceRangeKm": [6, 14],
     "maximumEndpointOffsetMeters": 100
+  },
+  {
+    "id": "kelowna-downtown-airport",
+    "origin": { "latitude": 49.8879, "longitude": -119.496 },
+    "destination": { "latitude": 49.9561, "longitude": -119.378 },
+    "distanceRangeKm": [10, 22],
+    "maximumEndpointOffsetMeters": 150
+  },
+  {
+    "id": "kelowna-downtown-ubco",
+    "origin": { "latitude": 49.8879, "longitude": -119.496 },
+    "destination": { "latitude": 49.9398, "longitude": -119.396 },
+    "distanceRangeKm": [8, 20],
+    "maximumEndpointOffsetMeters": 150
+  },
+  {
+    "id": "kelowna-downtown-mission",
+    "origin": { "latitude": 49.8879, "longitude": -119.496 },
+    "destination": { "latitude": 49.835, "longitude": -119.489 },
+    "distanceRangeKm": [5, 15],
+    "maximumEndpointOffsetMeters": 150
+  },
+  {
+    "id": "kelowna-rutland-downtown",
+    "origin": { "latitude": 49.891, "longitude": -119.386 },
+    "destination": { "latitude": 49.8879, "longitude": -119.496 },
+    "distanceRangeKm": [7, 18],
+    "maximumEndpointOffsetMeters": 150
+  },
+  {
+    "id": "kelowna-downtown-west-kelowna",
+    "origin": { "latitude": 49.8879, "longitude": -119.496 },
+    "destination": { "latitude": 49.8625, "longitude": -119.583 },
+    "distanceRangeKm": [8, 22],
+    "maximumEndpointOffsetMeters": 200
+  },
+  {
+    "id": "kelowna-airport-mission",
+    "origin": { "latitude": 49.9561, "longitude": -119.378 },
+    "destination": { "latitude": 49.835, "longitude": -119.489 },
+    "distanceRangeKm": [18, 38],
+    "maximumEndpointOffsetMeters": 150
+  },
+  {
+    "id": "calgary-kelowna-intercity",
+    "origin": { "latitude": 51.04427, "longitude": -114.06309 },
+    "destination": { "latitude": 49.8879, "longitude": -119.496 },
+    "distanceRangeKm": [580, 680],
+    "maximumEndpointOffsetMeters": 150,
+    "maximumDurationMinutes": 900
+  },
+  {
+    "id": "kelowna-calgary-intercity",
+    "origin": { "latitude": 49.8879, "longitude": -119.496 },
+    "destination": { "latitude": 51.04427, "longitude": -114.06309 },
+    "distanceRangeKm": [580, 680],
+    "maximumEndpointOffsetMeters": 150,
+    "maximumDurationMinutes": 900
   }
 ]

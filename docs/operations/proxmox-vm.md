@@ -2,7 +2,7 @@
 
 Status: production backend deployed; restore/rollback and soak exercises remain
 
-This VM hosts the Calgary/Alberta NavOSS production API, PostgreSQL/PostGIS, the Calgary public-data search indexer, Valhalla, regional Nominatim search, Caddy, and Cloudflare Tunnel. The initial imports completed sequentially without swap or OOM activity. Future graph/index builds must remain resource-limited so serving traffic preserves at least 4 GiB of available guest memory with no sustained swap growth.
+This VM hosts the Calgary NavOSS production API and is staging Alberta and British Columbia Valhalla/Nominatim replacements for Kelowna certification. It also hosts PostgreSQL/PostGIS, the Calgary public-data search indexer, Caddy, and Cloudflare Tunnel. Geospatial imports run sequentially and must preserve at least 4 GiB of available guest memory with no sustained swap growth.
 
 ## Proxmox VM
 

@@ -59,7 +59,7 @@ This copy is a future public-listing draft, not approval to submit the current t
 >
 > NavOSS is open source and built on OpenStreetMap-derived map, search, and routing data. Attribution and data-source details are available in the app and on the NavOSS website.
 >
-> Current coverage is Calgary, Alberta. This version does not include live traffic, lane guidance, or offline routing. Data and alerts may be incomplete or outdated. Always follow posted signs, road closures, and applicable laws.
+> Current search and routing coverage is Calgary, Alberta. Kelowna infrastructure is staged but not included until live certification passes. This version does not include live traffic, lane guidance, or offline routing. Data and alerts may be incomplete or outdated. Always follow posted signs, road closures, and applicable laws.
 
 Do not use “beta,” “alpha,” “technical preview,” “test,” or “have a passenger report bugs” in the public description. If the shipped public product still requires foreground, screen-on use, state that limitation plainly rather than implying background turn-by-turn navigation.
 
@@ -67,7 +67,7 @@ Do not use “beta,” “alpha,” “technical preview,” “test,” or “h
 
 Beta language belongs here, not in a public App Store listing:
 
-> NavOSS is an account-free Calgary navigation technical beta. It provides tappable OpenStreetMap place details, Calgary place search, long-press dropped-pin routing, fastest-first route choices, avoid-highways routing, spoken turn-by-turn guidance, locked-phone background continuation, CarPlay search and navigation, static system-sheet ETA sharing, automatic rerouting, arrival detection, and official City of Calgary safety-camera markers and route-ahead notices.
+> NavOSS is an account-free regional navigation technical beta. It currently provides Calgary place search and routing, fastest-first route choices, avoid-highways routing, spoken turn-by-turn guidance, locked-phone background continuation, CarPlay search and navigation, static system-sheet ETA sharing, automatic rerouting, arrival detection, and official regional road context. Kelowna search and routing remain staged pending live certification.
 >
 > This build has no live traffic, lane guidance, or offline routing. Keep the phone mounted and have a passenger operate controls while moving. Do not rely on this beta as the only navigation, road-closure, traffic, or safety source.
 
@@ -104,9 +104,9 @@ Include the public start area, destination, local time, app build, iPhone model,
 
 Do not paste this template into App Store Connect until the production build and reviewer-access path are complete.
 
-> NavOSS is an account-free navigation app with coverage intentionally limited to Calgary, Alberta, Canada. No sign-in, purchase, subscription, or demo credential is required.
+> NavOSS is an account-free navigation app with current search and routing coverage in Calgary, Alberta. Kelowna infrastructure is staged but not enabled in this build until live certification passes. No sign-in, purchase, subscription, or demo credential is required.
 >
-> To review search, tap Search Calgary, enter “Calgary Tower,” and select the result. To review routing from outside Calgary, search for “Airport,” select Calgary International Airport, then tap **Preview from Calgary Tower** when current-location routing reports Route unavailable. The resulting screen is visibly labeled **Preview only from Calgary Tower** and shows distance, estimated time, route geometry, and the Avoid highways preference. It does not offer Start; **Use my location** returns to real-location routing. Physical GPS progress, rerouting, arrival, and route-ahead camera notices require movement along the selected Calgary route.
+> To review search, tap Search, enter “Calgary Tower” or “Kelowna City Park,” and select the result. From outside coverage, use **Preview a supported route** when current-location routing reports Route unavailable. The preview shows distance, estimated time, route geometry, and route preferences but does not offer Start. **Use my location** returns to real-location routing. Physical GPS progress, rerouting, arrival, and route-ahead notices require movement along a selected supported route.
 >
 > The app requests When in Use precise location for map position, route origin, route matching, rerouting, arrival detection, and direction-aware official safety-camera notices. After the user starts navigation, updates continue while the phone is locked or another app is visible, and iOS shows its background-location indicator. Updates stop on End or confirmed arrival. NavOSS never requests Always location. Search and map browsing remain available when location is denied; current-position routing and active navigation do not.
 >
