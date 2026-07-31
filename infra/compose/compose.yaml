@@ -122,7 +122,7 @@ services:
       build_admins: 'True'
       build_elevation: 'False'
       build_tar: 'True'
-      build_time_zones: 'True'
+      build_time_zones: 'False'
       force_rebuild: 'False'
       server_threads: '2'
       tile_urls: ''

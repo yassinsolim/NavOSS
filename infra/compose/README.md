@@ -80,6 +80,7 @@ cd /srv/navoss/artifacts/imports
 sha256sum --check "SHA256SUMS-${version}"
 cp --reflink=auto "alberta-${version}.osm.pbf" "$valhalla_stage/"
 cp --reflink=auto "british-columbia-${version}.osm.pbf" "$valhalla_stage/"
+cp --reflink=auto /srv/navoss/artifacts/valhalla/timezones.sqlite "$valhalla_stage/"
 ```
 
 Run one isolated import at a time without invoking `docker compose up` for the live services. The
@@ -89,7 +90,7 @@ staging containers have no API/ingress network and use different names and host 
 sudo docker run --rm --name navoss-valhalla-stage \
   --cpus 2 --memory 2g -p 127.0.0.1:18002:8002 \
   -e build_admins=True -e build_elevation=False -e build_tar=True \
-  -e build_time_zones=True -e force_rebuild=False -e server_threads=2 \
+  -e build_time_zones=False -e force_rebuild=False -e server_threads=2 \
   -e tile_urls= \
   -e traffic_name= -e use_default_speeds_config=True -e use_tiles_ignore_pbf=True \
   -v "$valhalla_stage:/custom_files" \
