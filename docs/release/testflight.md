@@ -106,6 +106,18 @@ Canadian tier at about CAD $14.18 per 1,000; exchange-rate pricing can change. G
 Check as unnecessary for private or experimental apps, so enforcement remains deferred during the
 private TestFlight beta; add it and monitor valid-token adoption before public distribution.
 
+Google place-details candidate `0.1.0 (35)` was built locally from release-record commit `efabe16`
+with the `production-carplay-google` profile. Build 33 was consumed by a local pre-install failure
+after a development HTTP origin overrode the production environment, and build 34 was consumed by
+an interrupted archive; neither produced an IPA. The signed build 35 IPA has SHA-256
+`e2944541dbc80d8540b154c6b76f2c1f954d7e979b2a1edbb652fc3c23afe70a`. Strict
+signature, arm64 Store profile, production API, location-only background mode, CarPlay app/profile
+entitlement and scene, Google-enabled flag and resources, 14 privacy manifests, and simulator-hook
+absence passed audit. EAS submission `0994d6b7-9fd6-4f47-bdd5-88d1306e5d36` uploaded it
+successfully to App Store Connect on July 30, 2026. Apple processing, enabled-build App Privacy
+answers, internal `testers` attachment, live Google-content validation, and physical validation
+remain pending.
+
 Before creating a build, verify:
 
 ```sh
