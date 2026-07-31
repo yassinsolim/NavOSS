@@ -168,7 +168,7 @@ async function parseResponse(response: Response): Promise<unknown> {
 
 export async function fetchAppConfig(signal?: AbortSignal): Promise<AppConfigResponse> {
   const response = await fetch(
-    `${getApiBaseUrl()}/v1/config`,
+    `${getApiBaseUrl()}/v2/config`,
     signal === undefined ? undefined : { signal },
   );
   return AppConfigResponseSchema.parse(await parseResponse(response));

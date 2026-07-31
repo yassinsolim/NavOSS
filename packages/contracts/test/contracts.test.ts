@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AppConfigResponseSchema,
+  LegacyAppConfigResponseSchema,
   compareRouteAlternatives,
   ContributionSubmissionRequestSchema,
   GeographicBoundsSchema,
@@ -809,7 +810,7 @@ describe('route contracts', () => {
 describe('AppConfigResponseSchema', () => {
   it('accepts the technical-alpha feature posture', () => {
     const result = AppConfigResponseSchema.safeParse({
-      apiVersion: 'v1',
+      apiVersion: 'v2',
       attribution: [
         { label: 'OpenStreetMap contributors', url: 'https://www.openstreetmap.org/copyright' },
       ],
@@ -854,6 +855,41 @@ describe('AppConfigResponseSchema', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it('preserves the strict Calgary v1 response for existing builds', () => {
+    expect(
+      LegacyAppConfigResponseSchema.safeParse({
+        apiVersion: 'v1',
+        attribution: [
+          { label: 'OpenStreetMap contributors', url: 'https://www.openstreetmap.org/copyright' },
+        ],
+        coverage: {
+          bounds: {
+            northEast: { latitude: 51.212, longitude: -113.859 },
+            southWest: { latitude: 50.842, longitude: -114.316 },
+          },
+          displayName: 'Calgary, Alberta',
+          id: 'calgary-ab',
+          modes: ['driving'],
+        },
+        endpoints: {
+          cameras: '/v1/cameras',
+          events: '/v1/events',
+          routes: '/v1/routes',
+          search: '/v1/search',
+        },
+        features: {
+          communityReports: false,
+          liveTraffic: false,
+          officialSafetyCameras: true,
+          productionSearch: true,
+        },
+        generatedAt: '2026-07-31T12:00:00Z',
+        minimumAppVersion: '0.0.0',
+        style: { id: 'navoss-alpha', version: 'fixture-v1' },
+      }).success,
+    ).toBe(true);
   });
 });
 

@@ -6,7 +6,7 @@ base_url="${NAVOSS_BASE_URL:-http://127.0.0.1:8080}"
 
 curl --fail --silent --show-error "$base_url/health" >/dev/null
 curl --fail --silent --show-error "$base_url/ready" >/dev/null
-curl --fail --silent --show-error "$base_url/v1/config" |
+curl --fail --silent --show-error "$base_url/v2/config" |
   jq -e '.features.productionSearch == true and .coverage.id == "calgary-kelowna-service-areas" and (.coverage.serviceAreas | map(.id) == ["calgary-ab", "kelowna-bc"])' >/dev/null
 curl --fail --silent --show-error \
   --header 'content-type: application/json' \

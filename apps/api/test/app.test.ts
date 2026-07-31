@@ -1,5 +1,6 @@
 import {
   AppConfigResponseSchema,
+  LegacyAppConfigResponseSchema,
   ContributionSubmissionResponseSchema,
   GooglePlaceQueryGrantResponseSchema,
   HealthResponseSchema,
@@ -145,9 +146,19 @@ describe('system routes', () => {
 });
 
 describe('client configuration', () => {
-  it('returns Calgary technical-alpha capabilities', async () => {
+  it('preserves the strict legacy Calgary contract for existing builds', async () => {
     const app = await createTestApp();
     const response = await app.inject({ method: 'GET', url: '/v1/config' });
+    const body = LegacyAppConfigResponseSchema.parse(response.json());
+
+    expect(response.statusCode).toBe(200);
+    expect(body.coverage.id).toBe('calgary-ab');
+    expect(body.coverage.displayName).toBe('Calgary, Alberta');
+  });
+
+  it('returns regional service areas to updated clients', async () => {
+    const app = await createTestApp();
+    const response = await app.inject({ method: 'GET', url: '/v2/config' });
     const body = AppConfigResponseSchema.parse(response.json());
 
     expect(response.statusCode).toBe(200);
@@ -169,7 +180,7 @@ describe('client configuration', () => {
 
   it('reports production search only when explicitly configured', async () => {
     const app = await createTestApp({ productionSearch: true });
-    const response = await app.inject({ method: 'GET', url: '/v1/config' });
+    const response = await app.inject({ method: 'GET', url: '/v2/config' });
     const body = AppConfigResponseSchema.parse(response.json());
 
     expect(body.features.productionSearch).toBe(true);
@@ -188,7 +199,7 @@ describe('client configuration', () => {
         },
       },
     });
-    const response = await app.inject({ method: 'GET', url: '/v1/config' });
+    const response = await app.inject({ method: 'GET', url: '/v2/config' });
     const body = AppConfigResponseSchema.parse(response.json());
 
     expect(body.features.liveTraffic).toBe(true);
@@ -1088,6 +1099,7 @@ describe('OpenAPI', () => {
     expect(document.paths).toHaveProperty('/health');
     expect(document.paths).toHaveProperty('/ready');
     expect(document.paths).toHaveProperty('/v1/config');
+    expect(document.paths).toHaveProperty('/v2/config');
     expect(document.paths).toHaveProperty('/v1/contributions');
     expect(document.paths).toHaveProperty('/v1/google-place-query-grants');
     expect(document.paths).toHaveProperty('/v1/cameras');

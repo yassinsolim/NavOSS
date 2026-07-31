@@ -1,6 +1,7 @@
 import fastifySwagger from '@fastify/swagger';
 import {
   AppConfigResponseSchema,
+  LegacyAppConfigResponseSchema,
   ContributionSubmissionRequestSchema,
   ContributionSubmissionResponseSchema,
   GooglePlaceQueryGrantResponseSchema,
@@ -33,7 +34,12 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 
-import { CALGARY_SEARCH_FIXTURES, createAppConfig, type SearchFixture } from './fixtures.js';
+import {
+  CALGARY_SEARCH_FIXTURES,
+  createAppConfig,
+  createLegacyAppConfig,
+  type SearchFixture,
+} from './fixtures.js';
 import {
   ContributionProviderError,
   createConfiguredContributionProvider,
@@ -461,6 +467,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     {
       schema: {
         description: 'Returns mobile-client coverage, feature, and attribution configuration.',
+        response: { 200: LegacyAppConfigResponseSchema },
+        tags: ['config'],
+      },
+    },
+    () => createLegacyAppConfig(clock().toISOString(), productionSearch, liveTraffic),
+  );
+
+  typedApp.get(
+    '/v2/config',
+    {
+      schema: {
+        description: 'Returns regional mobile-client coverage and feature configuration.',
         response: { 200: AppConfigResponseSchema },
         tags: ['config'],
       },

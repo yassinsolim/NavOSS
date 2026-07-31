@@ -1,4 +1,9 @@
-import type { AppConfigResponse, SearchResult, SearchSource } from '@navoss/contracts';
+import type {
+  AppConfigResponse,
+  LegacyAppConfigResponse,
+  SearchResult,
+  SearchSource,
+} from '@navoss/contracts';
 
 export const SEARCH_SOURCE = {
   datasetVersion: 'fixture-v1',
@@ -141,7 +146,7 @@ export function createAppConfig(
   liveTraffic = false,
 ): AppConfigResponse {
   return {
-    apiVersion: 'v1',
+    apiVersion: 'v2',
     attribution: [
       {
         label: 'OpenStreetMap contributors',
@@ -190,5 +195,26 @@ export function createAppConfig(
     generatedAt,
     minimumAppVersion: '0.0.0',
     style: { id: 'navoss-alpha', version: 'fixture-v1' },
+  };
+}
+
+export function createLegacyAppConfig(
+  generatedAt: string,
+  productionSearch = false,
+  liveTraffic = false,
+): LegacyAppConfigResponse {
+  const regional = createAppConfig(generatedAt, productionSearch, liveTraffic);
+  return {
+    ...regional,
+    apiVersion: 'v1',
+    coverage: {
+      bounds: {
+        northEast: { latitude: 51.212, longitude: -113.859 },
+        southWest: { latitude: 50.842, longitude: -114.316 },
+      },
+      displayName: 'Calgary, Alberta',
+      id: 'calgary-ab',
+      modes: ['driving'],
+    },
   };
 }

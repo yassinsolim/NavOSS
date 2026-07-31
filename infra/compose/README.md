@@ -114,6 +114,7 @@ sudo docker create --name navoss-nominatim-stage --env-file "$stage_env" \
   -e PBF_PATH=/regional-data/regional.osm.pbf \
   -e POSTGRES_AUTOVACUUM_WORK_MEM=256MB -e POSTGRES_EFFECTIVE_CACHE_SIZE=6GB \
   -e POSTGRES_MAINTENANCE_WORK_MEM=2GB -e POSTGRES_MAX_CONNECTIONS=30 \
+  -e POSTGRES_MAX_LOCKS_PER_TRANSACTION=256 \
   -e POSTGRES_MAX_WAL_SIZE=2GB -e POSTGRES_SHARED_BUFFERS=1GB \
   -e POSTGRES_WORK_MEM=32MB -e THREADS=2 -e UPDATE_MODE=none \
   -v "/srv/navoss/artifacts/imports/alberta-british-columbia-${version}.osm.pbf:/regional-data/regional.osm.pbf:ro" \
@@ -124,6 +125,7 @@ unset NOMINATIM_PASSWORD
 init_script=$(mktemp)
 sudo docker cp navoss-nominatim-stage:/app/init.sh "$init_script"
 sudo sed -i '1s|#!/bin/bash -ex|#!/bin/bash -e|' "$init_script"
+sudo sed -i '/cp \/etc\/postgresql\/16\/main\/conf.d\/postgres-import.conf.disabled/a sed -i "s/^#max_locks_per_transaction = 64/max_locks_per_transaction = ${POSTGRES_MAX_LOCKS_PER_TRANSACTION}/" /etc/postgresql/16/main/postgresql.conf' "$init_script"
 sudo docker cp "$init_script" navoss-nominatim-stage:/app/init.sh
 sudo rm -f "$init_script"
 sudo docker start navoss-nominatim-stage

@@ -7,8 +7,8 @@ export {
 } from './common.js';
 export type { Coordinate, GeographicBounds } from './common.js';
 
-export { AppConfigResponseSchema } from './config.js';
-export type { AppConfigResponse } from './config.js';
+export { AppConfigResponseSchema, LegacyAppConfigResponseSchema } from './config.js';
+export type { AppConfigResponse, LegacyAppConfigResponse } from './config.js';
 
 export {
   ContributionSubmissionRequestSchema,
