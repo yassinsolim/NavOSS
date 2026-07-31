@@ -90,6 +90,22 @@ count `2`; its table has only `period`, `used`, and `updated_at` columns. The po
 certificate passed all 35 categories at 12 Calgary points, 601 current Ontario events near ten
 cities, 301 Toronto cameras, and out-of-coverage rejection with zero failures.
 
+The dedicated `navoss-mobile-6792619727` project is linked to billing and has only Places UI Kit
+enabled for this feature. Exactly one active API key remains: `NavOSS iOS Places UI Kit`, restricted
+to iOS bundle `org.navoss.mobile` and one API. All onboarding-generated 35-API keys are deleted, and
+the restricted value is stored only as the secret EAS production variable
+`GOOGLE_PLACES_IOS_API_KEY`. Google quotas are 250 standard queries/day, 30/minute, and
+10/minute/user; unused Advanced and Session paths are limited to 1/day and 1/minute. This bounds a
+31-day month to 7,750 standard queries before the independent NavOSS 8,000/month counter.
+
+An 80% standard daily-quota alert sends to the `NavOSS Google Cloud alerts` email channel. A CAD $1
+monthly budget scoped only to the NavOSS project and Places UI Kit alerts billing admins, project
+owners, and that channel at 50%, 75%, 90%, and 100%. Budgets are delayed alerts, not hard caps. As
+of July 30, 2026, Google lists the first 10,000 monthly UI Kit queries at no charge and the next
+Canadian tier at about CAD $14.18 per 1,000; exchange-rate pricing can change. Google documents App
+Check as unnecessary for private or experimental apps, so enforcement remains deferred during the
+private TestFlight beta; add it and monitor valid-token adoption before public distribution.
+
 Before creating a build, verify:
 
 ```sh
