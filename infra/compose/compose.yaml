@@ -162,7 +162,7 @@ services:
       IMPORT_STYLE: full
       IMPORT_WIKIPEDIA: 'false'
       NOMINATIM_PASSWORD: ${NOMINATIM_PASSWORD}
-      PBF_PATH: /nominatim/data/${NOMINATIM_PBF_FILE:?Set NOMINATIM_PBF_FILE to the checksum-verified dated regional PBF}
+      PBF_PATH: /regional-data/${NOMINATIM_PBF_FILE:?Set NOMINATIM_PBF_FILE to the checksum-verified dated regional PBF}
       POSTGRES_AUTOVACUUM_WORK_MEM: 256MB
       POSTGRES_EFFECTIVE_CACHE_SIZE: 6GB
       POSTGRES_MAINTENANCE_WORK_MEM: 2GB
@@ -181,7 +181,7 @@ services:
     security_opt:
       - no-new-privileges:true
     volumes:
-      - /srv/navoss/artifacts/imports:/nominatim/data:ro
+      - /srv/navoss/artifacts/imports:/regional-data:ro
       - ${NOMINATIM_DATA_DIR:?Set NOMINATIM_DATA_DIR to a versioned artifact directory}:/var/lib/postgresql/16/main
     healthcheck:
       test:

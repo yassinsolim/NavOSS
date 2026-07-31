@@ -104,20 +104,35 @@ After the Valhalla process is healthy on port `18002`, stop it and stage Nominat
 set -a
 . ./.env
 set +a
-sudo docker run --rm --name navoss-nominatim-stage \
+stage_env=$(mktemp)
+chmod 0600 "$stage_env"
+printf 'NOMINATIM_PASSWORD=%s\n' "$NOMINATIM_PASSWORD" >"$stage_env"
+sudo docker create --name navoss-nominatim-stage --env-file "$stage_env" \
   --cpus 2.5 --memory 6g --shm-size 2g -p 127.0.0.1:18080:8080 \
   -e FREEZE=true -e GUNICORN_WORKERS=2 -e IMPORT_SECONDARY_WIKIPEDIA=false \
   -e IMPORT_STYLE=full -e IMPORT_WIKIPEDIA=false \
-  -e NOMINATIM_PASSWORD -e PBF_PATH="/nominatim/data/alberta-british-columbia-${version}.osm.pbf" \
+  -e PBF_PATH="/regional-data/alberta-british-columbia-${version}.osm.pbf" \
   -e POSTGRES_AUTOVACUUM_WORK_MEM=256MB -e POSTGRES_EFFECTIVE_CACHE_SIZE=6GB \
   -e POSTGRES_MAINTENANCE_WORK_MEM=2GB -e POSTGRES_MAX_CONNECTIONS=30 \
   -e POSTGRES_MAX_WAL_SIZE=2GB -e POSTGRES_SHARED_BUFFERS=1GB \
   -e POSTGRES_WORK_MEM=32MB -e THREADS=2 -e UPDATE_MODE=none \
-  -v /srv/navoss/artifacts/imports:/nominatim/data:ro \
+  -v /srv/navoss/artifacts/imports:/regional-data:ro \
   -v "$nominatim_stage:/var/lib/postgresql/16/main" \
   mediagis/nominatim:5.3
+rm -f "$stage_env"
 unset NOMINATIM_PASSWORD
+init_script=$(mktemp)
+sudo docker cp navoss-nominatim-stage:/app/init.sh "$init_script"
+sudo sed -i '1s|#!/bin/bash -ex|#!/bin/bash -e|' "$init_script"
+sudo docker cp "$init_script" navoss-nominatim-stage:/app/init.sh
+sudo rm -f "$init_script"
+sudo docker start navoss-nominatim-stage
 ```
+
+The one-off script patch disables upstream import-command tracing before startup; otherwise the
+image prints its internal database password while creating roles. Follow progress with
+`sudo docker logs --tail 100 navoss-nominatim-stage` and inspect the versioned database size without
+printing environment values.
 
 Probe both staging services directly. After Calgary, Kelowna, and both intercity directions pass,
 record the previous four `.env` values, set `VALHALLA_DATA_DIR`, `NOMINATIM_DATA_DIR`,
