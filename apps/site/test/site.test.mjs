@@ -11,7 +11,8 @@ test('homepage presents the product and honest beta posture', () => {
 
   assert.match(homepage, /<h1[^>]*>NavOSS<\/h1>/);
   assert.match(homepage, /Calgary and Kelowna[\s\S]*Regional context/);
-  assert.match(homepage, /Ontario and Kelowna official regional context/);
+  assert.match(homepage, /Calgary and Kelowna routes/);
+  assert.match(homepage, /25\/25[\s\S]*regional route variants/);
   assert.doesNotMatch(homepage, /Build 15/);
   assert.match(homepage, /no\s+live\s+traffic/i);
   assert.match(styles, /navoss-map-current\.jpg/);
@@ -50,6 +51,7 @@ test('legal and support pages expose stable public routes', () => {
     dataSources,
     /Builds\s+without\s+the\s+restricted\s+Google\s+key\s+make\s+no\s+Google\s+place-details\s+request/,
   );
+  assert.match(dataSources, /Production routes are calculated by self-hosted Valhalla/);
   assert.match(
     dataSources,
     /Kelowna search and driving routes use the live,[\s\S]*regional\s+OpenStreetMap import/,
