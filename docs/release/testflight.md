@@ -126,6 +126,28 @@ curl --fail https://navoss-api.yassin.app/ready
 curl --fail https://navoss-api.yassin.app/v1/config
 ```
 
+### App Privacy reconciliation for the regional contribution build
+
+The app-level privacy manifest now declares **Other User Content**, linked to identity
+conservatively because free-form text may identify a person, used for **App Functionality**, and not
+used for tracking. Apply the same answer in App Store Connect before attaching a replacement build:
+
+1. Open **App Privacy** under the app's Distribution page and edit data collection.
+2. Add **User Content → Other User Content**.
+3. Select **App Functionality** as the only NavOSS purpose.
+4. Answer that the data is linked to the user's identity conservatively.
+5. Answer that the data is not used for tracking.
+
+For a Google-disabled replacement build, do not add Google SDK declarations. For a
+`production-carplay-google` build, also add the exact embedded Google Places declarations already
+recorded above: precise/coarse location for Analytics and App Functionality; linked Device ID for
+Analytics and App Functionality; linked Other Data for Analytics; unlinked Performance Data,
+Product Interaction, and Search History for Analytics; no tracking.
+
+The July 31 App Store Connect browser session redirected to login when opening Distribution, so no
+account answer was saved. Reauthenticate as the account holder and record the saved state before
+building or attaching the regional client.
+
 Run a release export to prove the JavaScript bundle embeds the backend origin:
 
 ```sh

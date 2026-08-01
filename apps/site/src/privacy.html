@@ -138,6 +138,16 @@
           up to 25 attempts.
         </p>
         <p>
+          NavOSS does not automatically transmit raw feedback descriptions to an AI provider.
+          Operator policy requires reviewing raw text outside an AI conversation. After manually
+          removing names, private addresses, contact details, exact personal trips, credentials, and
+          unnecessary timestamps, the operator may create a separate deidentified engineering
+          summary stored in an ignored local workspace artifact. Only when the operator explicitly
+          invokes AI-assisted triage is that summary transmitted to the configured coding-assistant
+          provider under its terms, to group reports, draft issues, or help implement a
+          human-approved item. The summary contains no account or contributor identifier.
+        </p>
+        <p>
           During active navigation, the report button can store up to 25 structured road-report test
           drafts on the device. Each contains one of four fixed report types, the current precise
           coordinate, creation time, and a two-hour expiry time. Test drafts contain no free text,

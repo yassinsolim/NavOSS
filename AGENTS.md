@@ -7,6 +7,10 @@
 - Never invent route, traffic, closure, camera, place, or safety data. Fail conservatively.
 - Never log search text, route coordinates, raw location, or private trip history.
 - Driving tests must be passenger-operated or performed while safely parked.
+- AI agents must never run the raw beta-feedback redaction command or query raw contribution text,
+  labels, draft IDs, or timestamps. Only aggregate counts and the human-approved deidentified inbox
+  under `artifacts/feedback/approved/` may enter AI context. The workspace PreToolUse hook enforces
+  this boundary.
 
 ## Architecture
 

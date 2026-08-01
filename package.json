@@ -22,9 +22,12 @@
     "check": "turbo run check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "feedback:counts": "node scripts/feedback-review.mjs counts",
+    "feedback:redact": "node scripts/feedback-review.mjs redact",
+    "feedback:status": "node scripts/feedback-review.mjs status",
     "licenses:generate": "node scripts/generate-third-party-notices.mjs",
     "lint": "turbo run lint",
-    "test": "turbo run test",
+    "test": "node --test scripts/feedback-workflow.test.mjs scripts/feedback-agent-guard.test.mjs && turbo run test",
     "validate:navigation:ios": "corepack pnpm --filter @navoss/mobile validate:navigation:ios"
   },
   "devDependencies": {

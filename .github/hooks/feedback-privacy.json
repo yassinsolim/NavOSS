@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "node scripts/block-private-feedback-tools.mjs",
+        "timeout": 5
+      }
+    ]
+  }
+}
