@@ -18,6 +18,16 @@
       "environment": "preview",
       "extends": "base"
     },
+    "internal-carplay": {
+      "distribution": "internal",
+      "environment": "production",
+      "env": {
+        "NAVOSS_CARPLAY_ENABLED": "1",
+        "NAVOSS_CARPLAY_ENTITLEMENT_ENABLED": "1",
+        "NAVOSS_GOOGLE_PLACES_ENABLED": "0"
+      },
+      "extends": "base"
+    },
     "production": {
       "autoIncrement": true,
       "environment": "production",

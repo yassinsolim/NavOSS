@@ -33,6 +33,15 @@ describe('Google Places build configuration', () => {
     const eas = JSON.parse(readFileSync(resolve(import.meta.dirname, '..', 'eas.json'), 'utf8'));
 
     expect(eas.build.production.env.NAVOSS_GOOGLE_PLACES_ENABLED).toBe('0');
+    expect(eas.build['internal-carplay']).toMatchObject({
+      distribution: 'internal',
+      environment: 'production',
+      env: {
+        NAVOSS_CARPLAY_ENABLED: '1',
+        NAVOSS_CARPLAY_ENTITLEMENT_ENABLED: '1',
+        NAVOSS_GOOGLE_PLACES_ENABLED: '0',
+      },
+    });
     expect(eas.build['production-carplay'].env.NAVOSS_GOOGLE_PLACES_ENABLED).toBe('0');
     expect(eas.build['production-carplay-google'].env.NAVOSS_GOOGLE_PLACES_ENABLED).toBe('1');
     expect(eas.submit['production-carplay-google'].ios.ascAppId).toBe('6792619727');
