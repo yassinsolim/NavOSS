@@ -35,6 +35,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
 
   private let activeTripStore: NavOSSActiveTripStore
   private var announcementState = NavOSSCarPlayAudioState()
+  private var audioSessionNeedsDeactivation = false
   private var backgroundActivitySession: AnyObject?
   private var carPlayConnected = false
   private let lock = NSRecursiveLock()
@@ -55,10 +56,12 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
 
   init(
     activeTripStore: NavOSSActiveTripStore = NavOSSActiveTripStore(),
+    preferencesStore: NavOSSCarPlayPreferencesStore = NavOSSCarPlayPreferencesStore.shared,
     navigationSession: NavigationSession = NavigationSession(),
     notificationCenter: NotificationCenter = .default
   ) {
     self.activeTripStore = activeTripStore
+    announcementState = navOSSInitialCarPlayAudioState(preferencesStore: preferencesStore)
     self.navigationSession = navigationSession
     self.notificationCenter = notificationCenter
     super.init()
@@ -84,6 +87,10 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
 
   public func setAudioMode(_ mode: NavOSSCarPlayAudioMode) {
     lock.lock()
+    guard announcementState.mode != mode else {
+      lock.unlock()
+      return
+    }
     announcementState.setMode(mode)
     let generation = navigationGeneration
     lock.unlock()
@@ -117,19 +124,22 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   }
 
   public func currentCoordinate() -> NavOSSCarPlayCoordinate? {
+    currentRouteOrigin()?.coordinate
+  }
+
+  public func currentRouteOrigin() -> NavOSSNavigationRouteOrigin? {
     lock.lock()
     defer { lock.unlock() }
-    guard let latestLocation,
-      latestLocation.horizontalAccuracy >= 0,
-      latestLocation.horizontalAccuracy <= 100,
-      Date().timeIntervalSince(latestLocation.timestamp) >= -5,
-      Date().timeIntervalSince(latestLocation.timestamp) <= 30
-    else {
-      return nil
-    }
-    return NavOSSCarPlayCoordinate(
-      latitude: latestLocation.coordinate.latitude,
-      longitude: latestLocation.coordinate.longitude
+    guard let latestLocation else { return nil }
+    return navOSSNavigationRouteOrigin(
+      coordinate: NavOSSCarPlayCoordinate(
+        latitude: latestLocation.coordinate.latitude,
+        longitude: latestLocation.coordinate.longitude
+      ),
+      courseDegrees: latestLocation.course,
+      speedMetersPerSecond: latestLocation.speed,
+      horizontalAccuracyMeters: latestLocation.horizontalAccuracy,
+      ageSeconds: Date().timeIntervalSince(latestLocation.timestamp)
     )
   }
 
@@ -235,6 +245,14 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       return
     }
     lock.lock()
+    guard navOSSShouldAcceptNavigationLocation(
+      candidateTimestamp: location.timestamp.timeIntervalSinceReferenceDate,
+      latestTimestamp: latestLocation?.timestamp.timeIntervalSinceReferenceDate,
+      nowTimestamp: Date().timeIntervalSinceReferenceDate
+    ) else {
+      lock.unlock()
+      return
+    }
     latestLocation = location
     lock.unlock()
     let course =
@@ -324,7 +342,19 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       }
       let manager = self.configureLocationManager()
       self.lock.lock()
-      if let location = manager.location, location.horizontalAccuracy >= 0 {
+      if let location = manager.location,
+        navOSSNavigationRouteOrigin(
+          coordinate: NavOSSCarPlayCoordinate(
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude
+          ),
+          courseDegrees: location.course,
+          speedMetersPerSecond: location.speed,
+          horizontalAccuracyMeters: location.horizontalAccuracy,
+          ageSeconds: Date().timeIntervalSince(location.timestamp)
+        ) != nil,
+        self.latestLocation.map({ $0.timestamp <= location.timestamp }) ?? true
+      {
         self.latestLocation = location
       }
       self.lock.unlock()
@@ -364,7 +394,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       return
     }
     let update = versionedUpdate.update
-    let speechPrompt = !announcementState.allowsManeuverGuidance
+    let speechPrompt =
+      !announcementState.allowsManeuverGuidance
       ? nil
       : update.trip.flatMap { trip in
         update.guidance.flatMap { guidance in
@@ -427,6 +458,18 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       return
     }
     let requestId = UUID()
+    let rerouteOrigin = latestLocation.flatMap {
+      navOSSNavigationRouteOrigin(
+        coordinate: NavOSSCarPlayCoordinate(
+          latitude: rawCoordinate.latitude,
+          longitude: rawCoordinate.longitude
+        ),
+        courseDegrees: $0.course,
+        speedMetersPerSecond: $0.speed,
+        horizontalAccuracyMeters: $0.horizontalAccuracy,
+        ageSeconds: Date().timeIntervalSince($0.timestamp)
+      )
+    }
     rerouteRequestId = requestId
     routeStatus = .rerouting
     stateVersion &+= 1
@@ -441,10 +484,12 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
             latitude: rawCoordinate.latitude,
             longitude: rawCoordinate.longitude
           ),
+          originHeadingDegrees: rerouteOrigin?.headingDegrees,
+          originHorizontalAccuracyMeters: rerouteOrigin?.horizontalAccuracyMeters,
           destination: trip.destination,
           preferences: trip.preferences,
           alternatives: 0,
-          waypoints: self.remainingWaypoints(
+          waypoints: navOSSRemainingWaypoints(
             in: trip,
             after: update.snapshot.routeProgress
           )
@@ -477,46 +522,6 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     notificationCenter.post(name: .navOSSNavigationSnapshotDidChange, object: self)
   }
 
-  private func remainingWaypoints(
-    in trip: NavOSSCarPlayTrip,
-    after routeProgress: Double
-  ) -> [NavOSSCarPlayDestination] {
-    guard let waypoints = trip.waypoints, !waypoints.isEmpty else {
-      return trip.waypoints ?? []
-    }
-    return waypoints.filter { waypoint in
-      waypointProgress(waypoint, along: trip.geometry) > routeProgress + 0.002
-    }
-  }
-
-  private func waypointProgress(
-    _ waypoint: NavOSSCarPlayDestination,
-    along geometry: [NavOSSCarPlayCoordinate]
-  ) -> Double {
-    guard geometry.count >= 2 else {
-      return 1
-    }
-    var cumulativeDistances = [0.0]
-    for index in 1..<geometry.count {
-      cumulativeDistances.append(
-        cumulativeDistances[index - 1]
-          + Self.distanceMeters(from: geometry[index - 1], to: geometry[index])
-      )
-    }
-    guard let totalDistance = cumulativeDistances.last, totalDistance > 0 else {
-      return 1
-    }
-    let nearestIndex = geometry.indices.min { leftIndex, rightIndex in
-      let coordinate = NavOSSCarPlayCoordinate(
-        latitude: waypoint.latitude,
-        longitude: waypoint.longitude
-      )
-      return Self.distanceMeters(from: geometry[leftIndex], to: coordinate)
-        < Self.distanceMeters(from: geometry[rightIndex], to: coordinate)
-    } ?? geometry.index(before: geometry.endIndex)
-    return cumulativeDistances[nearestIndex] / totalDistance
-  }
-
   private static func distanceMeters(
     from origin: NavOSSCarPlayCoordinate,
     to destination: NavOSSCarPlayCoordinate
@@ -525,7 +530,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     let longitudeDelta = (destination.longitude - origin.longitude) * .pi / 180
     let originLatitude = origin.latitude * .pi / 180
     let destinationLatitude = destination.latitude * .pi / 180
-    let haversine = pow(sin(latitudeDelta / 2), 2)
+    let haversine =
+      pow(sin(latitudeDelta / 2), 2)
       + cos(originLatitude) * cos(destinationLatitude) * pow(sin(longitudeDelta / 2), 2)
     return 12_742_000 * asin(sqrt(haversine))
   }
@@ -648,7 +654,12 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
           mode: .voicePrompt,
           options: [.duckOthers]
         )
-        try? audioSession.setActive(true)
+        do {
+          try audioSession.setActive(true)
+          self.audioSessionNeedsDeactivation = true
+        } catch {
+          self.audioSessionNeedsDeactivation = false
+        }
       }
       self.pendingUtteranceIds.insert(ObjectIdentifier(utterance))
       self.speechSynthesizer.speak(utterance)
@@ -657,21 +668,38 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
 
   private func completeSpeechUtterance(_ utterance: AVSpeechUtterance) {
     DispatchQueue.main.async { [weak self] in
-      guard let self,
-        self.pendingUtteranceIds.remove(ObjectIdentifier(utterance)) != nil,
-        self.pendingUtteranceIds.isEmpty
-      else {
-        return
+      guard let self else { return }
+      self.pendingUtteranceIds.remove(ObjectIdentifier(utterance))
+      if !self.speechSynthesizer.isSpeaking {
+        self.pendingUtteranceIds.removeAll()
       }
+      guard self.pendingUtteranceIds.isEmpty else { return }
       self.deactivateAudioSession()
     }
   }
 
-  private func deactivateAudioSession() {
-    try? AVAudioSession.sharedInstance().setActive(
-      false,
-      options: .notifyOthersOnDeactivation
-    )
+  private func deactivateAudioSession(attempt: Int = 0) {
+    guard audioSessionNeedsDeactivation, pendingUtteranceIds.isEmpty else { return }
+    guard !speechSynthesizer.isSpeaking else {
+      scheduleAudioSessionDeactivationRetry(attempt: attempt)
+      return
+    }
+    do {
+      try AVAudioSession.sharedInstance().setActive(
+        false,
+        options: .notifyOthersOnDeactivation
+      )
+      audioSessionNeedsDeactivation = false
+    } catch {
+      scheduleAudioSessionDeactivationRetry(attempt: attempt)
+    }
+  }
+
+  private func scheduleAudioSessionDeactivationRetry(attempt: Int) {
+    guard attempt < 4 else { return }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+      self?.deactivateAudioSession(attempt: attempt + 1)
+    }
   }
 
   private func startAuthorizedLocationUpdates(_ manager: CLLocationManager) {

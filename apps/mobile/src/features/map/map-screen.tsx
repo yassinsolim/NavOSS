@@ -10,6 +10,13 @@ import {
   type MapRef,
   type StyleSpecification,
 } from '@maplibre/maplibre-react-native';
+import {
+  newestValidRouteOriginSample,
+  routeOriginSampleFromLocation,
+  routeRequestOriginFromSample,
+  type RouteOriginSample,
+  type RouteRequestOrigin,
+} from '@/features/navigation/route-origin';
 import type {
   AppConfigResponse,
   Coordinate,
@@ -139,7 +146,11 @@ import {
   clearNavigationRoute,
   clearRecentDestinations,
   getDestinationCatalog,
+  getNavigationAudioMode,
+  getNavigationPreferences,
+  getNavigationRoutePreferences,
   getNavigationSnapshot,
+  isCarPlayVisualHarness,
   getCarPlayState,
   getRecentDestinationIds,
   isFavoriteDestination,
@@ -150,8 +161,12 @@ import {
   observeCarPlayNavigationEnded,
   observeCarPlayState,
   observeNavigationSnapshots,
+  observeNavigationPreferences,
   recordRecentDestination,
+  type NavigationAudioMode,
   setNavigationRoute,
+  setNavigationAudioMode,
+  setNavigationRoutePreferences,
   setHomeDestination,
   setWorkDestination,
   stopNavigationAnnouncements,
@@ -377,12 +392,13 @@ function persistMapPreferences(preferences: MapPreferences): void {
 export function MapScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
-  const { height } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const cameraRef = useRef<CameraRef>(null);
   const mapRef = useRef<MapRef>(null);
   const announcedCameraIdsRef = useRef(new Set<string>());
   const cameraAlertTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const routeAbortControllerRef = useRef<AbortController>(null);
+  const routeOriginSampleRef = useRef<RouteOriginSample | undefined>(undefined);
   const nativeStateVersionRef = useRef(-1);
   const hasCenteredOnUserRef = useRef(false);
   const placeAbortControllerRef = useRef<AbortController>(null);
@@ -421,12 +437,12 @@ export function MapScreen() {
     getDestinationCatalog(),
   );
   const [routeState, setRouteState] = useState<RouteUiState>({ type: 'idle' });
-  const [routePreferences, setRoutePreferences] = useState<RoutePreferences>({
-    avoidFerries: false,
-    avoidHighways: false,
-    avoidTolls: false,
-    avoidUnpaved: false,
-  });
+  const [routePreferences, setRoutePreferences] = useState<RoutePreferences>(() =>
+    getNavigationRoutePreferences(),
+  );
+  const [navigationAudioMode, setNavigationAudioModeState] = useState<NavigationAudioMode>(() =>
+    getNavigationAudioMode(),
+  );
   const [routeSource, setRouteSource] = useState<RouteResponse['source']>();
   const [cameraAnnouncementCount, setCameraAnnouncementCount] = useState(0);
   const [carPlayConnected, setCarPlayConnected] = useState(false);
@@ -586,6 +602,7 @@ export function MapScreen() {
   };
 
   useEffect(() => {
+    if (isCarPlayVisualHarness()) return;
     let active = true;
     void loadMapPreferences().then((preferences) => {
       if (active) {
@@ -770,10 +787,10 @@ export function MapScreen() {
             accuracy: Location.Accuracy.Balanced,
           }));
         if (!active) return;
-        setUserCoordinate({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
+        const sample = routeOriginSampleFromLocation(location);
+        routeOriginSampleRef.current = sample;
+        setUserCoordinate(sample.coordinate);
+        if (sample.headingDegrees !== undefined) setUserHeading(sample.headingDegrees);
         setLocationState('visible');
       })
       .catch(() => {
@@ -789,13 +806,13 @@ export function MapScreen() {
     let active = true;
     let subscription: Location.LocationSubscription | undefined;
     void Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.Balanced, distanceInterval: 1_000 },
+      { accuracy: Location.Accuracy.Balanced, distanceInterval: 25 },
       (position) => {
         if (!active) return;
-        setUserCoordinate({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
+        const sample = routeOriginSampleFromLocation(position);
+        routeOriginSampleRef.current = sample;
+        setUserCoordinate(sample.coordinate);
+        if (sample.headingDegrees !== undefined) setUserHeading(sample.headingDegrees);
       },
     )
       .then((nextSubscription) => {
@@ -952,7 +969,6 @@ export function MapScreen() {
         name: snapshot.trip.destination.name,
       };
       const waypoints = (snapshot.trip.waypoints ?? []).map(nativeDestinationToSearchResult);
-      setRoutePreferences(snapshot.trip.preferences);
       if (snapshot.trip.source === 'mapbox-traffic') {
         setRouteSource({
           attribution: 'Routing and traffic by Mapbox',
@@ -1054,37 +1070,44 @@ export function MapScreen() {
     });
   };
 
-  const getCurrentRouteOrigin = async (): Promise<Coordinate | undefined> => {
-    if (userCoordinate !== undefined) {
-      return userCoordinate;
-    }
+  const getCurrentRouteOrigin = async (
+    signal: AbortSignal,
+  ): Promise<RouteRequestOrigin | undefined> => {
+    if (signal.aborted) return undefined;
+    const cachedOrigin = routeRequestOriginFromSample(routeOriginSampleRef.current);
+    if (cachedOrigin !== undefined) return cachedOrigin;
 
     setLocationState('locating');
     const granted = await ensureForegroundLocationPermission(
       Location.getForegroundPermissionsAsync,
       Location.requestForegroundPermissionsAsync,
     );
+    if (signal.aborted) return undefined;
     if (!granted) {
       setLocationState('denied');
       return undefined;
     }
 
     const lastKnown = await Location.getLastKnownPositionAsync({
-      maxAge: 30_000,
-      requiredAccuracy: 250,
+      maxAge: 15_000,
+      requiredAccuracy: 100,
     });
     const location =
       lastKnown ??
       (await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       }));
-    const coordinate = {
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-    };
-    setUserCoordinate(coordinate);
+    if (signal.aborted) return undefined;
+    const sample = routeOriginSampleFromLocation(location);
+    const selectedSample = newestValidRouteOriginSample(sample, routeOriginSampleRef.current);
+    const routeOrigin = routeRequestOriginFromSample(selectedSample);
+    if (selectedSample === undefined || routeOrigin === undefined) return undefined;
+    if (signal.aborted) return undefined;
+    routeOriginSampleRef.current = selectedSample;
+    setUserCoordinate(selectedSample.coordinate);
+    if (selectedSample.headingDegrees !== undefined) setUserHeading(selectedSample.headingDegrees);
     setLocationState('visible');
-    return coordinate;
+    return routeOrigin;
   };
 
   const calculateRoute = async (
@@ -1104,8 +1127,11 @@ export function MapScreen() {
     });
 
     try {
-      const origin = previewOrigin ?? (await getCurrentRouteOrigin());
-      if (origin === undefined || controller.signal.aborted) {
+      const routeOrigin =
+        previewOrigin === undefined
+          ? await getCurrentRouteOrigin(controller.signal)
+          : { origin: previewOrigin };
+      if (routeOrigin === undefined || controller.signal.aborted) {
         if (!controller.signal.aborted) {
           setRouteState({
             destination,
@@ -1117,6 +1143,7 @@ export function MapScreen() {
         }
         return;
       }
+      const origin = routeOrigin.origin;
       if (
         previewOrigin === undefined &&
         [origin, ...waypoints.map((waypoint) => waypoint.center), destination.center].some(
@@ -1140,7 +1167,7 @@ export function MapScreen() {
         {
           alternatives: 2,
           destination: destination.center,
-          origin,
+          ...routeOrigin,
           preferences,
           ...(waypoints.length === 0
             ? {}
@@ -1578,16 +1605,17 @@ export function MapScreen() {
     fitRoute(route);
   };
 
-  const handleToggleAvoidHighways = () => {
+  const handleToggleRoutePreference = (preference: keyof RoutePreferences) => {
     if (routeState.type !== 'preview') {
       return;
     }
 
     const preferences = {
       ...routePreferences,
-      avoidHighways: !routePreferences.avoidHighways,
+      [preference]: !routePreferences[preference],
     };
     setRoutePreferences(preferences);
+    setNavigationRoutePreferences(preferences);
     void calculateRoute(
       routeState.destination,
       preferences,
@@ -1602,6 +1630,34 @@ export function MapScreen() {
     const waypoints = destinations.slice(0, -1);
     setIsRouteStopsVisible(false);
     void calculateRoute(destination, routePreferences, routeState.previewOrigin, waypoints);
+  };
+
+  const handleOpenNavigationAudioMode = () => {
+    const chooseMode = (mode: NavigationAudioMode) => {
+      setNavigationAudioMode(mode);
+      setNavigationAudioModeState(mode);
+    };
+    Alert.alert('Guidance sound', 'Choose what NavOSS speaks during navigation.', [
+      {
+        text: 'All guidance',
+        onPress: () => {
+          chooseMode('all-guidance');
+        },
+      },
+      {
+        text: 'Alerts only',
+        onPress: () => {
+          chooseMode('alerts-only');
+        },
+      },
+      {
+        text: 'Muted',
+        onPress: () => {
+          chooseMode('muted');
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   const selectedRoute =
@@ -1814,15 +1870,24 @@ export function MapScreen() {
   });
 
   useEffect(() => {
-    setCarPlayConnected(getCarPlayState().connected);
+    const initialCarPlayState = getCarPlayState();
+    const initialPreferences = getNavigationPreferences();
+    setCarPlayConnected(initialCarPlayState.connected);
+    setNavigationAudioModeState(initialPreferences.audioMode);
+    setRoutePreferences(initialPreferences.routePreferences);
     const stateSubscription = observeCarPlayState((state) => {
       setCarPlayConnected(state.connected);
+    });
+    const preferencesSubscription = observeNavigationPreferences((preferences) => {
+      setNavigationAudioModeState(preferences.audioMode);
+      setRoutePreferences(preferences.routePreferences);
     });
     const endedSubscription = observeCarPlayNavigationEnded(() => {
       handleCarPlayNavigationEnded();
     });
     return () => {
       stateSubscription.remove();
+      preferencesSubscription.remove();
       endedSubscription.remove();
     };
   }, []);
@@ -1849,7 +1914,7 @@ export function MapScreen() {
   );
   const selectedPanelHeight =
     routeState.type === 'preview'
-      ? (routeState.previewOrigin === undefined ? 360 : 428) + insets.bottom
+      ? (routeState.previewOrigin === undefined ? 416 : 484) + insets.bottom
       : routeState.type === 'loading'
         ? 156 + insets.bottom
         : routeState.type === 'error'
@@ -1857,7 +1922,7 @@ export function MapScreen() {
           : routeState.type === 'arrived'
             ? 170 + insets.bottom
             : routeState.type === 'navigating'
-              ? 102 + insets.bottom
+              ? (width < 390 ? 154 : 102) + insets.bottom
               : placeSheetVisible
                 ? placeSheetHeight
                 : 0;
@@ -1917,6 +1982,8 @@ export function MapScreen() {
       </View>
     );
   }
+
+  if (isCarPlayVisualHarness()) return null;
 
   return (
     <View style={styles.container}>
@@ -2547,7 +2614,6 @@ export function MapScreen() {
 
       {routeState.type === 'preview' && selectedRoute !== undefined && (
         <RoutePreviewPanel
-          avoidHighways={routePreferences.avoidHighways}
           bottomInset={insets.bottom}
           destination={routeState.destination}
           onCancel={handleCancelRoute}
@@ -2556,7 +2622,7 @@ export function MapScreen() {
           }}
           onSelectRoute={handleSelectRoute}
           onStart={handleStartNavigation}
-          onToggleAvoidHighways={handleToggleAvoidHighways}
+          onToggleRoutePreference={handleToggleRoutePreference}
           onUseCurrentLocation={() => {
             void calculateRoute(
               routeState.destination,
@@ -2572,6 +2638,7 @@ export function MapScreen() {
           routes={routeState.routes}
           selectedRoute={selectedRoute}
           routeSource={routeSource}
+          routePreferences={routePreferences}
           vehicleStyle={vehicleStyle}
           waypoints={routeState.waypoints}
         />
@@ -2603,12 +2670,14 @@ export function MapScreen() {
               status={navigationRouteStatus}
             />
             <NavigationStatusBar
+              audioMode={navigationAudioMode}
               bottomInset={insets.bottom}
               cameraAnnouncementCount={cameraAnnouncementCount}
               distanceMeters={remainingRoute.distanceMeters}
               durationSeconds={remainingRoute.durationSeconds}
               matchStatus={vehicleMatchStatus}
               onEnd={handleEndNavigation}
+              onSound={handleOpenNavigationAudioMode}
               onReport={handleOpenRoadReport}
               onShare={handleShareEta}
               rerouteCount={rerouteCount}

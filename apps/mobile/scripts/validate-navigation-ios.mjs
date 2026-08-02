@@ -2,10 +2,15 @@
 
 import { createHash } from 'node:crypto';
 import { createWriteStream, existsSync } from 'node:fs';
-import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+
+import {
+  isRetryableMaestroInfrastructureFailure,
+  readMaestroDebugOutput,
+} from './maestro-retry.mjs';
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const mobileDirectory = resolve(scriptDirectory, '..');
@@ -18,6 +23,8 @@ const temporaryArtifacts = `${finalArtifacts}.tmp`;
 const logsDirectory = join(temporaryArtifacts, 'logs');
 const screenshotsDirectory = join(temporaryArtifacts, 'screenshots');
 const pixelsDirectory = join(temporaryArtifacts, 'pixels');
+const stagedAppDirectory = resolve(`/tmp/navoss-navigation-validation-app-${String(process.pid)}`);
+const stagedAppPath = join(stagedAppDirectory, 'NavOSS.app');
 const simulatorName = process.env.NAVOSS_SIMULATOR_NAME ?? 'NavOSS iPhone 15 Pro Max';
 const developerDirectory =
   process.env.DEVELOPER_DIR ?? '/Applications/Xcode.app/Contents/Developer';
@@ -30,6 +37,7 @@ const children = new Set();
 const startedAt = new Date();
 let simulatorId;
 let appPath;
+let cleanupPromise;
 
 const environment = {
   ...process.env,
@@ -37,6 +45,7 @@ const environment = {
   EXPO_PUBLIC_API_URL: 'http://127.0.0.1:3001',
   MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED: 'true',
   MAESTRO_CLI_NO_ANALYTICS: '1',
+  MAESTRO_DRIVER_STARTUP_TIMEOUT: '120000',
   NAVOSS_API_URL: 'http://127.0.0.1:3001',
   NAVOSS_CARPLAY_ENABLED: '1',
   NAVOSS_CARPLAY_ENTITLEMENT_ENABLED: '0',
@@ -76,31 +85,59 @@ async function run(command, args, options = {}) {
     children.add(child);
     let stdout = '';
     let stderr = '';
+    let timedOut = false;
+    let terminatedForOutput = false;
+    let forceKillTimer;
     const timer = setTimeout(() => {
+      timedOut = true;
       terminateProcessGroup(child);
-      rejectRun(
-        new Error(
-          `Timed out after ${String(options.timeoutMs ?? 300_000)} ms: ${commandString(command, args)}`,
-        ),
-      );
+      forceKillTimer = setTimeout(() => terminateProcessGroup(child, 'SIGKILL'), 5_000);
     }, options.timeoutMs ?? 300_000);
     child.stdout.on('data', (chunk) => {
       stdout += chunk;
       log?.write(chunk);
       if (options.echo) process.stdout.write(chunk);
+      if (!terminatedForOutput && options.terminateOnOutput?.(`${stdout}\n${stderr}`)) {
+        terminatedForOutput = true;
+        terminateProcessGroup(child);
+        forceKillTimer = setTimeout(() => terminateProcessGroup(child, 'SIGKILL'), 5_000);
+      }
     });
     child.stderr.on('data', (chunk) => {
       stderr += chunk;
       log?.write(chunk);
       if (options.echo) process.stderr.write(chunk);
+      if (!terminatedForOutput && options.terminateOnOutput?.(`${stdout}\n${stderr}`)) {
+        terminatedForOutput = true;
+        terminateProcessGroup(child);
+        forceKillTimer = setTimeout(() => terminateProcessGroup(child, 'SIGKILL'), 5_000);
+      }
     });
     child.on('error', rejectRun);
-    child.on('close', (code, signal) => {
+    child.on('exit', (code, signal) => {
       clearTimeout(timer);
+      if (timedOut || terminatedForOutput) terminateProcessGroup(child, 'SIGKILL');
+      if (forceKillTimer !== undefined) clearTimeout(forceKillTimer);
       children.delete(child);
       log?.end();
       const result = { code: code ?? 1, durationMs: Date.now() - started, signal, stderr, stdout };
-      if (code === 0) resolveRun(result);
+      if (timedOut) {
+        rejectRun(
+          Object.assign(
+            new Error(
+              `Timed out after ${String(options.timeoutMs ?? 300_000)} ms: ${commandString(command, args)}`,
+            ),
+            { result },
+          ),
+        );
+      } else if (terminatedForOutput) {
+        rejectRun(
+          Object.assign(
+            new Error(`${commandString(command, args)} terminated after infrastructure failure`),
+            { result },
+          ),
+        );
+      } else if (code === 0) resolveRun(result);
       else
         rejectRun(
           Object.assign(
@@ -182,6 +219,94 @@ async function screenshot(name) {
   return destination;
 }
 
+async function setLocationPrivacy(action) {
+  const command = ['simctl', 'privacy', simulatorId, action, 'location', 'org.navoss.mobile'];
+  try {
+    await run('xcrun', command, { timeoutMs: 30_000 });
+  } catch {
+    await run('xcrun', ['simctl', 'shutdown', simulatorId], { timeoutMs: 30_000 }).catch(
+      () => undefined,
+    );
+    await run(
+      'xcrun',
+      ['simctl', 'terminate', simulatorId, 'dev.mobile.maestro-driver-iosUITests.xctrunner'],
+      { timeoutMs: 30_000 },
+    ).catch(() => undefined);
+    await run('xcrun', ['simctl', 'boot', simulatorId], { timeoutMs: 30_000 });
+    await run('xcrun', ['simctl', 'bootstatus', simulatorId, '-b'], { timeoutMs: 120_000 });
+    await run('xcrun', command, { timeoutMs: 30_000 });
+  }
+  if (action === 'grant') {
+    await run(
+      'xcrun',
+      ['simctl', 'privacy', simulatorId, 'grant', 'location-always', 'org.navoss.mobile'],
+      { timeoutMs: 30_000 },
+    );
+  }
+}
+
+async function installSimulatorApp() {
+  const command = ['simctl', 'install', simulatorId, appPath];
+  try {
+    await run('xcrun', command, { timeoutMs: 60_000 });
+  } catch {
+    await run('xcrun', ['simctl', 'shutdown', simulatorId], { timeoutMs: 30_000 }).catch(
+      () => undefined,
+    );
+    await run('xcrun', ['simctl', 'boot', simulatorId], { timeoutMs: 30_000 });
+    await run('xcrun', ['simctl', 'bootstatus', simulatorId, '-b'], { timeoutMs: 120_000 });
+    await run('xcrun', command, { timeoutMs: 60_000 });
+  }
+}
+
+async function resetSimulatorApp() {
+  await run('xcrun', ['simctl', 'terminate', simulatorId, 'org.navoss.mobile'], {
+    timeoutMs: 15_000,
+  }).catch(() => undefined);
+  await run('xcrun', ['simctl', 'uninstall', simulatorId, 'org.navoss.mobile'], {
+    timeoutMs: 30_000,
+  }).catch(() => undefined);
+  await installSimulatorApp();
+  await run('xcrun', ['simctl', 'launch', simulatorId, 'org.navoss.mobile'], {
+    timeoutMs: 30_000,
+  });
+}
+
+async function runMaestroFlow(flowPath, logPath, timeoutMs) {
+  const debugPath = `${logPath}.debug`;
+  const args = ['--device', simulatorId, 'test', '--debug-output', debugPath, flowPath];
+  const options = {
+    logPath,
+    terminateOnOutput: isRetryableMaestroInfrastructureFailure,
+    timeoutMs,
+  };
+  try {
+    await rm(debugPath, { force: true, recursive: true });
+    await run('maestro', args, options);
+  } catch (error) {
+    const logOutput = await readFile(logPath, 'utf8').catch(() => '');
+    const debugOutput = await readMaestroDebugOutput(debugPath);
+    const output = `${error.result?.stdout ?? ''}\n${error.result?.stderr ?? ''}\n${logOutput}\n${debugOutput}`;
+    if (!isRetryableMaestroInfrastructureFailure(output)) throw error;
+    await run('xcrun', ['simctl', 'shutdown', simulatorId], { timeoutMs: 30_000 }).catch(
+      () => undefined,
+    );
+    await run('killall', ['-9', 'com.apple.CoreSimulator.CoreSimulatorService'], {
+      timeoutMs: 30_000,
+    }).catch(() => undefined);
+    await run('open', ['-a', 'Simulator', '--args', '-CurrentDeviceUDID', simulatorId], {
+      timeoutMs: 30_000,
+    });
+    await run('xcrun', ['simctl', 'boot', simulatorId], { timeoutMs: 30_000 });
+    await run('xcrun', ['simctl', 'bootstatus', simulatorId, '-b'], { timeoutMs: 120_000 });
+    await run('xcrun', ['simctl', 'launch', simulatorId, 'org.navoss.mobile'], {
+      timeoutMs: 30_000,
+    });
+    await rm(debugPath, { force: true, recursive: true });
+    await run('maestro', args, options);
+  }
+}
+
 async function captureCarPlayScenario(name, scenario, appearance) {
   await run('xcrun', ['simctl', 'terminate', simulatorId, 'org.navoss.mobile'], {
     logPath: join(logsDirectory, 'carplay.log'),
@@ -208,14 +333,35 @@ async function sha256(path) {
   return createHash('sha256').update(data).digest('hex');
 }
 
-async function cleanup() {
-  if (simulatorId !== undefined) {
-    spawnSync('xcrun', ['simctl', 'location', simulatorId, 'clear'], { env: environment });
-    spawnSync('xcrun', ['simctl', 'terminate', simulatorId, 'org.navoss.mobile'], {
-      env: environment,
-    });
-  }
-  for (const child of children) terminateProcessGroup(child);
+function cleanup() {
+  cleanupPromise ??= (async () => {
+    if (simulatorId !== undefined) {
+      spawnSync('xcrun', ['simctl', 'location', simulatorId, 'clear'], { env: environment });
+      spawnSync('xcrun', ['simctl', 'terminate', simulatorId, 'org.navoss.mobile'], {
+        env: environment,
+      });
+      spawnSync(
+        'xcrun',
+        ['simctl', 'terminate', simulatorId, 'dev.mobile.maestro-driver-iosUITests.xctrunner'],
+        { env: environment },
+      );
+    }
+    const activeChildren = [...children];
+    for (const child of activeChildren) terminateProcessGroup(child);
+    if (activeChildren.length > 0) await delay(5_000);
+    for (const child of activeChildren) terminateProcessGroup(child, 'SIGKILL');
+    await rm(stagedAppDirectory, { force: true, recursive: true });
+  })();
+  return cleanupPromise;
+}
+
+for (const [signal, exitCode] of [
+  ['SIGINT', 130],
+  ['SIGTERM', 143],
+]) {
+  process.once(signal, () => {
+    void cleanup().finally(() => process.exit(exitCode));
+  });
 }
 
 await rm(temporaryArtifacts, { force: true, recursive: true });
@@ -281,6 +427,10 @@ try {
         if (installedApp.status !== 0 || !existsSync(appPath)) {
           throw new Error('Cannot reuse build because NavOSS is not installed on the simulator.');
         }
+        await rm(stagedAppDirectory, { force: true, recursive: true });
+        await mkdir(stagedAppDirectory, { recursive: true });
+        await cp(appPath, stagedAppPath, { recursive: true });
+        appPath = stagedAppPath;
         return;
       }
       await run(
@@ -329,6 +479,10 @@ try {
         logPath: join(logsDirectory, 'codesign.log'),
         timeoutMs: 60_000,
       });
+      await rm(stagedAppDirectory, { force: true, recursive: true });
+      await mkdir(stagedAppDirectory, { recursive: true });
+      await cp(appPath, stagedAppPath, { recursive: true });
+      appPath = stagedAppPath;
       await run('xcrun', ['simctl', 'boot', simulatorId], { timeoutMs: 30_000 }).catch(
         () => undefined,
       );
@@ -348,14 +502,8 @@ try {
         await run('xcrun', ['simctl', 'bootstatus', simulatorId, '-b'], {
           timeoutMs: 120_000,
         });
-        if (!reuseBuild) {
-          await run('xcrun', ['simctl', 'install', simulatorId, appPath], { timeoutMs: 60_000 });
-        }
-        await run(
-          'xcrun',
-          ['simctl', 'privacy', simulatorId, 'reset', 'location', 'org.navoss.mobile'],
-          { timeoutMs: 30_000 },
-        );
+        await resetSimulatorApp();
+        await setLocationPrivacy('reset');
         await run('xcrun', ['simctl', 'location', simulatorId, 'set', '51.04427,-114.06309'], {
           timeoutMs: 30_000,
         });
@@ -384,24 +532,12 @@ try {
           waitForUrl('http://127.0.0.1:3001/health'),
           waitForUrl('http://localhost:8081/status'),
         ]);
-        await run(
-          'maestro',
-          [
-            '--device',
-            simulatorId,
-            'test',
-            resolve(rootDirectory, '.maestro/navigation-validation/automatic-location.yaml'),
-          ],
-          {
-            logPath: join(logsDirectory, 'automatic-location.log'),
-            timeoutMs: 90_000,
-          },
+        await runMaestroFlow(
+          resolve(rootDirectory, '.maestro/navigation-validation/automatic-location.yaml'),
+          join(logsDirectory, 'automatic-location.log'),
+          240_000,
         );
-        await run(
-          'xcrun',
-          ['simctl', 'privacy', simulatorId, 'grant', 'location', 'org.navoss.mobile'],
-          { timeoutMs: 30_000 },
-        );
+        await setLocationPrivacy('grant');
         await run(
           'sh',
           [
@@ -455,28 +591,9 @@ try {
   if (!phoneOnly) {
     await phase('carplay-visuals', async () => {
       if (carPlayOnly && !reuseBuild) {
-        await run('xcrun', ['simctl', 'install', simulatorId, appPath], { timeoutMs: 60_000 });
+        await installSimulatorApp();
       }
-      await run(
-        'xcrun',
-        ['simctl', 'privacy', simulatorId, 'grant', 'location', 'org.navoss.mobile'],
-        {
-          timeoutMs: 30_000,
-        },
-      );
-      await run(
-        'maestro',
-        [
-          '--device',
-          simulatorId,
-          'test',
-          resolve(rootDirectory, '.maestro/navigation-validation/allow-location.yaml'),
-        ],
-        {
-          logPath: join(logsDirectory, 'allow-location.log'),
-          timeoutMs: 90_000,
-        },
-      );
+      await setLocationPrivacy('grant');
       for (const [name, scenario, appearance] of [
         ['carplay-preview-light', 'preview', 'light'],
         ['carplay-preview-dark', 'preview', 'dark'],

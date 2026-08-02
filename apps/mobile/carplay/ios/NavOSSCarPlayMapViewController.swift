@@ -26,6 +26,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private let interpolationDuration: CFTimeInterval = 0.9
   private var latestDestination: NavOSSCarPlayCoordinate?
   private var latestPosition: NavOSSCarPlayPosition?
+  private var mapOrientation = NavOSSCarPlayMapOrientation.headingUp
   private var renderedPosition: NavOSSCarPlayPosition?
   private var navigationViewingDistance = 850.0
   private var presentsRouteOverview = false
@@ -53,15 +54,25 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     mapView.isZoomEnabled = false
     mapView.compassView.isHidden = true
     mapView.logoView.isHidden = true
+    mapView.attributionButton.isHidden = true
     mapView.delegate = self
     mapView.showsUserLocation = requestsUserLocation
     mapView.setCenter(calgaryCenter, zoomLevel: 10.5, animated: false)
     self.mapView = mapView
     let container = UIView(frame: .zero)
     container.addSubview(mapView)
+    let attributionLabel = UILabel()
+    attributionLabel.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.78)
+    attributionLabel.font = UIFont.systemFont(ofSize: 9, weight: .medium)
+    attributionLabel.layer.cornerRadius = 3
+    attributionLabel.clipsToBounds = true
+    attributionLabel.text = "  © OpenStreetMap contributors  "
+    attributionLabel.textColor = .secondaryLabel
+    attributionLabel.translatesAutoresizingMaskIntoConstraints = false
+    container.addSubview(attributionLabel)
     speedLabel.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.94)
-    speedLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 17, weight: .bold)
-    speedLabel.layer.cornerRadius = 8
+    speedLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
+    speedLabel.layer.cornerRadius = 5
     speedLabel.clipsToBounds = true
     speedLabel.numberOfLines = 2
     speedLabel.textAlignment = .center
@@ -70,10 +81,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     speedLabel.isHidden = true
     container.addSubview(speedLabel)
     speedLimitLabel.backgroundColor = .white
-    speedLimitLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 20, weight: .bold)
+    speedLimitLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .bold)
     speedLimitLabel.layer.borderColor = UIColor.black.cgColor
-    speedLimitLabel.layer.borderWidth = 2
-    speedLimitLabel.layer.cornerRadius = 8
+    speedLimitLabel.layer.borderWidth = 1.5
+    speedLimitLabel.layer.cornerRadius = 5
     speedLimitLabel.clipsToBounds = true
     speedLimitLabel.numberOfLines = 2
     speedLimitLabel.textAlignment = .center
@@ -82,20 +93,29 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     speedLimitLabel.isHidden = true
     container.addSubview(speedLimitLabel)
     NSLayoutConstraint.activate([
-      speedLabel.leadingAnchor.constraint(
+      attributionLabel.leadingAnchor.constraint(
         equalTo: container.safeAreaLayoutGuide.leadingAnchor,
-        constant: 16
+        constant: 8
       ),
-      speedLabel.bottomAnchor.constraint(
+      attributionLabel.bottomAnchor.constraint(
         equalTo: container.safeAreaLayoutGuide.bottomAnchor,
-        constant: -16
+        constant: -6
       ),
-      speedLabel.widthAnchor.constraint(equalToConstant: 58),
-      speedLabel.heightAnchor.constraint(equalToConstant: 52),
-      speedLimitLabel.leadingAnchor.constraint(equalTo: speedLabel.trailingAnchor, constant: 8),
-      speedLimitLabel.bottomAnchor.constraint(equalTo: speedLabel.bottomAnchor),
-      speedLimitLabel.widthAnchor.constraint(equalToConstant: 58),
-      speedLimitLabel.heightAnchor.constraint(equalToConstant: 52),
+      attributionLabel.heightAnchor.constraint(equalToConstant: 18),
+      speedLimitLabel.trailingAnchor.constraint(
+        equalTo: container.safeAreaLayoutGuide.trailingAnchor,
+        constant: -8
+      ),
+      speedLimitLabel.topAnchor.constraint(
+        equalTo: container.safeAreaLayoutGuide.topAnchor,
+        constant: 8
+      ),
+      speedLimitLabel.widthAnchor.constraint(equalToConstant: 38),
+      speedLimitLabel.heightAnchor.constraint(equalToConstant: 36),
+      speedLabel.trailingAnchor.constraint(equalTo: speedLimitLabel.leadingAnchor, constant: -4),
+      speedLabel.topAnchor.constraint(equalTo: speedLimitLabel.topAnchor),
+      speedLabel.widthAnchor.constraint(equalToConstant: 38),
+      speedLabel.heightAnchor.constraint(equalToConstant: 36),
     ])
     view = container
   }
@@ -151,6 +171,12 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     installPositionOverlayIfReady()
   }
 
+  func applyMapOrientation(_ mapOrientation: NavOSSCarPlayMapOrientation) {
+    self.mapOrientation = mapOrientation
+    guard isViewLoaded else { return }
+    recenter()
+  }
+
   private func resolvedStyleSlug() -> String {
     switch appearance {
     case .automatic:
@@ -168,7 +194,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       if activeGuidance {
         fitRoute(animated: true)
       } else {
-        mapView.setUserTrackingMode(.followWithCourse, animated: true, completionHandler: nil)
+        let trackingMode: MLNUserTrackingMode =
+          mapOrientation == .northUp
+          ? .follow
+          : .followWithCourse
+        mapView.setUserTrackingMode(trackingMode, animated: true, completionHandler: nil)
       }
       return
     }
@@ -232,6 +262,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     updateSpeedDisplay(position?.speedMetersPerSecond)
     updateSpeedLimitDisplay(speedLimitKph)
     updateGuidanceDeclutter()
+    updatePointOfInterestVisibility()
     if activeGuidance, let position {
       if presentsRouteOverview {
         fitRoute(animated: false)
@@ -280,6 +311,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     {
       source.shape = nil
     }
+    updatePointOfInterestVisibility()
     recenter()
   }
 
@@ -310,8 +342,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       } else {
         fitRoute(animated: false)
       }
-    } else {
+    } else if routeCoordinates.count >= 2 {
       fitRoute(animated: false)
+    } else {
+      recenter()
     }
     onStyleLoaded?()
   }
@@ -338,17 +372,17 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       latitude: position.coordinate.latitude,
       longitude: position.coordinate.longitude
     )
-    let heading = position.courseDegrees ?? mapView.direction
+    let movementHeading = position.courseDegrees ?? mapView.direction
     let lookAheadCenter = coordinate(
       from: center,
       distanceMeters: navigationViewingDistance * 0.16,
-      bearingDegrees: heading
+      bearingDegrees: movementHeading
     )
     let camera = MLNMapCamera(
       lookingAtCenter: lookAheadCenter,
       acrossDistance: navigationViewingDistance,
       pitch: 38,
-      heading: heading
+      heading: mapOrientation == .northUp ? 0 : movementHeading
     )
     mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
     mapView.setCamera(
@@ -440,7 +474,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private func updatePointOfInterestVisibility() {
     guard let style = mapView.style else { return }
     for layer in style.layers where layer.identifier.lowercased().contains("poi") {
-      layer.isVisible = showsPointsOfInterest
+      layer.isVisible = showsPointsOfInterest && !activeGuidance
     }
   }
 
@@ -621,10 +655,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     {
       style.setImage(vehicleArrow, forName: positionImageIdentifier)
     }
-    if style.image(forName: carImageIdentifier) == nil,
-      let vehicleCar = UIImage(named: "vehicle-car")
-    {
-      style.setImage(vehicleCar, forName: carImageIdentifier)
+    if style.image(forName: carImageIdentifier) == nil {
+      style.setImage(carMarkerImage(), forName: carImageIdentifier)
     }
 
     let position: MLNSymbolStyleLayer
@@ -634,7 +666,6 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       position = existingLayer
     } else {
       position = MLNSymbolStyleLayer(identifier: positionLayerIdentifier, source: source)
-      position.iconScale = NSExpression(forConstantValue: 0.72)
       position.iconAllowsOverlap = NSExpression(forConstantValue: true)
       position.iconIgnoresPlacement = NSExpression(forConstantValue: true)
       position.iconRotationAlignment = NSExpression(forConstantValue: "map")
@@ -643,7 +674,76 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     position.iconImageName = NSExpression(
       forConstantValue: vehicleMarker == .car ? carImageIdentifier : positionImageIdentifier
     )
+    position.iconScale = NSExpression(forConstantValue: vehicleMarker == .car ? 0.82 : 0.72)
     position.iconRotation = NSExpression(forConstantValue: latestPosition.courseDegrees ?? 0)
+  }
+
+  private func carMarkerImage() -> UIImage {
+    let renderer = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64))
+    return renderer.image { context in
+      let graphics = context.cgContext
+      graphics.saveGState()
+      graphics.setShadow(offset: CGSize(width: 0, height: 4), blur: 5, color: UIColor.black.cgColor)
+      UIColor.black.withAlphaComponent(0.28).setFill()
+      UIBezierPath(ovalIn: CGRect(x: 16, y: 47, width: 32, height: 10)).fill()
+      graphics.restoreGState()
+
+      UIColor(red: 0.04, green: 0.11, blue: 0.16, alpha: 0.9).setFill()
+      UIBezierPath(roundedRect: CGRect(x: 12, y: 17, width: 8, height: 29), cornerRadius: 4).fill()
+      UIBezierPath(roundedRect: CGRect(x: 44, y: 17, width: 8, height: 29), cornerRadius: 4).fill()
+
+      let body = UIBezierPath(
+        roundedRect: CGRect(x: 17, y: 5, width: 30, height: 51),
+        cornerRadius: 12
+      )
+      graphics.saveGState()
+      body.addClip()
+      let colors =
+        [
+          UIColor(red: 0.45, green: 0.93, blue: 0.98, alpha: 1).cgColor,
+          UIColor(red: 0.03, green: 0.48, blue: 0.65, alpha: 1).cgColor,
+          UIColor(red: 0.01, green: 0.19, blue: 0.31, alpha: 1).cgColor,
+        ] as CFArray
+      let locations: [CGFloat] = [0, 0.48, 1]
+      if let gradient = CGGradient(
+        colorsSpace: CGColorSpaceCreateDeviceRGB(),
+        colors: colors,
+        locations: locations
+      ) {
+        graphics.drawLinearGradient(
+          gradient,
+          start: CGPoint(x: 18, y: 5),
+          end: CGPoint(x: 46, y: 56),
+          options: []
+        )
+      }
+      graphics.restoreGState()
+
+      UIColor.white.withAlphaComponent(0.24).setStroke()
+      body.lineWidth = 1.5
+      body.stroke()
+
+      let windshield = UIBezierPath()
+      windshield.move(to: CGPoint(x: 23, y: 18))
+      windshield.addLine(to: CGPoint(x: 41, y: 18))
+      windshield.addLine(to: CGPoint(x: 38, y: 31))
+      windshield.addLine(to: CGPoint(x: 26, y: 31))
+      windshield.close()
+      UIColor(red: 0.03, green: 0.12, blue: 0.2, alpha: 0.92).setFill()
+      windshield.fill()
+      UIColor.white.withAlphaComponent(0.28).setStroke()
+      windshield.lineWidth = 1
+      windshield.stroke()
+
+      UIColor(red: 0.04, green: 0.14, blue: 0.22, alpha: 0.9).setFill()
+      UIBezierPath(roundedRect: CGRect(x: 24, y: 36, width: 16, height: 10), cornerRadius: 4).fill()
+      UIColor.white.withAlphaComponent(0.7).setFill()
+      UIBezierPath(roundedRect: CGRect(x: 21, y: 8, width: 6, height: 3), cornerRadius: 1.5).fill()
+      UIBezierPath(roundedRect: CGRect(x: 37, y: 8, width: 6, height: 3), cornerRadius: 1.5).fill()
+      UIColor.red.withAlphaComponent(0.88).setFill()
+      UIBezierPath(roundedRect: CGRect(x: 21, y: 50, width: 6, height: 3), cornerRadius: 1.5).fill()
+      UIBezierPath(roundedRect: CGRect(x: 37, y: 50, width: 6, height: 3), cornerRadius: 1.5).fill()
+    }
   }
 
   private func coordinate(

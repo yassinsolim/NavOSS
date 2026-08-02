@@ -135,10 +135,25 @@ export interface ValhallaRouteProviderOptions {
 }
 
 function buildValhallaRequest(request: RouteRequest): unknown {
+  const originRadius =
+    request.originHorizontalAccuracyMeters === undefined
+      ? undefined
+      : Math.ceil(Math.min(100, Math.max(15, request.originHorizontalAccuracyMeters * 2)));
+  const locations = [request.origin, ...(request.waypoints ?? []), request.destination].map(
+    ({ latitude, longitude }, index) => ({
+      lat: latitude,
+      lon: longitude,
+      ...(index === 0 && request.originHeadingDegrees !== undefined
+        ? { heading: request.originHeadingDegrees, heading_tolerance: 45 }
+        : {}),
+      ...(index === 0 && originRadius !== undefined ? { radius: originRadius } : {}),
+    }),
+  );
   return {
     alternates: request.alternatives,
     banner_instructions: true,
     costing: 'auto',
+    ...(request.alternatives === 0 ? { date_time: { type: 0 } } : {}),
     costing_options: {
       auto: {
         exclude_unpaved: request.preferences.avoidUnpaved,
@@ -154,9 +169,7 @@ function buildValhallaRequest(request: RouteRequest): unknown {
       attributes: ['shape_attributes.speed_limit'],
     },
     language: 'en-US',
-    locations: [request.origin, ...(request.waypoints ?? []), request.destination].map(
-      ({ latitude, longitude }) => ({ lat: latitude, lon: longitude }),
-    ),
+    locations,
     shape_format: 'geojson',
     turn_lanes: true,
     units: 'kilometers',

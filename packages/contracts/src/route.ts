@@ -18,6 +18,8 @@ export const RouteRequestSchema = z
     alternatives: z.number().int().min(0).max(2).default(1),
     destination: CoordinateSchema,
     origin: CoordinateSchema,
+    originHeadingDegrees: z.number().min(0).lt(360).optional(),
+    originHorizontalAccuracyMeters: z.number().nonnegative().max(1_000).optional(),
     preferences: RoutePreferencesSchema.default({
       avoidFerries: false,
       avoidHighways: false,

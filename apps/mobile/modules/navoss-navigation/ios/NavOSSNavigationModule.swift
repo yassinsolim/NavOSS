@@ -1,6 +1,7 @@
 import ExpoModulesCore
 
 private let navigationSnapshotEvent = "onNavigationSnapshot"
+private let navigationPreferencesEvent = "onNavigationPreferencesChanged"
 private let carPlayStateEvent = "onCarPlayStateChanged"
 private let carPlayNavigationEndedEvent = "onCarPlayNavigationEnded"
 
@@ -251,6 +252,7 @@ private struct CarPlayGuidanceRecord: Record {
 
 public final class NavOSSNavigationModule: Module {
   private var carPlayNavigationEndedObserver: NSObjectProtocol?
+  private var carPlayPreferencesObserver: NSObjectProtocol?
   private var carPlayStateObserver: NSObjectProtocol?
   private var navigationSnapshotObserver: NSObjectProtocol?
   private let service = NavOSSNavigationService.shared
@@ -273,7 +275,12 @@ public final class NavOSSNavigationModule: Module {
       }
     }
 
-    Events(navigationSnapshotEvent, carPlayStateEvent, carPlayNavigationEndedEvent)
+    Events(
+      navigationSnapshotEvent,
+      navigationPreferencesEvent,
+      carPlayStateEvent,
+      carPlayNavigationEndedEvent
+    )
 
     OnCreate {
       self.carPlayStateObserver = NotificationCenter.default.addObserver(
@@ -289,6 +296,17 @@ public final class NavOSSNavigationModule: Module {
         queue: .main
       ) { [weak self] _ in
         self?.sendEvent(carPlayNavigationEndedEvent, ["reason": "carplay"])
+      }
+      self.carPlayPreferencesObserver = NotificationCenter.default.addObserver(
+        forName: .navOSSCarPlayPreferencesDidChange,
+        object: NavOSSCarPlayPreferencesStore.shared,
+        queue: .main
+      ) { [weak self] _ in
+        guard let self else { return }
+        self.sendEvent(
+          navigationPreferencesEvent,
+          self.serialize(NavOSSCarPlayPreferencesStore.shared.load())
+        )
       }
       self.navigationSnapshotObserver = NotificationCenter.default.addObserver(
         forName: .navOSSNavigationSnapshotDidChange,
@@ -310,6 +328,10 @@ public final class NavOSSNavigationModule: Module {
       if let carPlayStateObserver = self.carPlayStateObserver {
         NotificationCenter.default.removeObserver(carPlayStateObserver)
         self.carPlayStateObserver = nil
+      }
+      if let carPlayPreferencesObserver = self.carPlayPreferencesObserver {
+        NotificationCenter.default.removeObserver(carPlayPreferencesObserver)
+        self.carPlayPreferencesObserver = nil
       }
       if let navigationSnapshotObserver = self.navigationSnapshotObserver {
         NotificationCenter.default.removeObserver(navigationSnapshotObserver)
@@ -337,6 +359,14 @@ public final class NavOSSNavigationModule: Module {
       NavOSSGooglePlacesConfiguration.isAvailable
     }
 
+    Function("isCarPlayVisualHarness") { () -> Bool in
+      #if targetEnvironment(simulator)
+        return ProcessInfo.processInfo.environment["NAVOSS_CARPLAY_VISUAL_SCENARIO"] != nil
+      #else
+        return false
+      #endif
+    }
+
     Function("getGooglePlacesOpenSourceLicenseInfo") { () -> String? in
       NavOSSGooglePlacesConfiguration.openSourceLicenseInfo
     }
@@ -349,8 +379,26 @@ public final class NavOSSNavigationModule: Module {
       return self.serialize(NavOSSCarPlayTripStore.shared.snapshot())
     }
 
+    Function("getNavigationPreferences") { () -> [String: Any] in
+      self.serialize(NavOSSCarPlayPreferencesStore.shared.load())
+    }
+
+    Function("getAudioMode") { () -> String in
+      self.service.audioMode().rawValue
+    }
+
     Function("getRecentDestinationIds") { () -> [String] in
       NavOSSCarPlayDestinationStore.shared.snapshot().recents.map(\.id)
+    }
+
+    Function("getRoutePreferences") { () -> [String: Bool] in
+      let preferences = NavOSSCarPlayPreferencesStore.shared.load().routePreferences
+      return [
+        "avoidFerries": preferences.avoidFerries,
+        "avoidHighways": preferences.avoidHighways,
+        "avoidTolls": preferences.avoidTolls,
+        "avoidUnpaved": preferences.avoidUnpaved,
+      ]
     }
 
     Function("getDestinationCatalog") { () -> [String: Any] in
@@ -360,6 +408,10 @@ public final class NavOSSNavigationModule: Module {
     Function("setRoute") { (trip: CarPlayTripRecord) throws -> [String: Any] in
       try self.service.startNavigation(trip.trip)
       return self.serialize(self.service.currentState())
+    }
+
+    Function("setRoutePreferences") { (record: RoutePreferencesRecord) in
+      NavOSSCarPlayPreferencesStore.shared.setRoutePreferences(record.preferences)
     }
 
     Function("clearRoute") { () -> [String: Any] in
@@ -399,6 +451,12 @@ public final class NavOSSNavigationModule: Module {
 
     Function("setWorkDestination") { (destination: NavigationDestinationRecord?) in
       NavOSSCarPlayDestinationStore.shared.setWork(destination?.destination)
+    }
+
+    Function("setAudioMode") { (rawValue: String) in
+      guard let mode = NavOSSCarPlayAudioMode(rawValue: rawValue) else { return }
+      NavOSSCarPlayPreferencesStore.shared.setAudioMode(mode)
+      self.service.setAudioMode(mode)
     }
 
     Function("replaceFavoriteDestinations") { (destinations: [NavigationDestinationRecord]) in
@@ -459,6 +517,18 @@ public final class NavOSSNavigationModule: Module {
       payload["guidance"] = serialize(guidance)
     }
     return payload
+  }
+
+  private func serialize(_ preferences: NavOSSCarPlayPreferences) -> [String: Any] {
+    [
+      "audioMode": preferences.audioMode.rawValue,
+      "routePreferences": [
+        "avoidFerries": preferences.routePreferences.avoidFerries,
+        "avoidHighways": preferences.routePreferences.avoidHighways,
+        "avoidTolls": preferences.routePreferences.avoidTolls,
+        "avoidUnpaved": preferences.routePreferences.avoidUnpaved,
+      ],
+    ]
   }
 
   private func serialize(_ state: NavOSSNavigationServiceState) -> [String: Any] {

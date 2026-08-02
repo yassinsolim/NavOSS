@@ -36,7 +36,11 @@ describe('map screen configuration', () => {
     expect(mapScreen).toContain('const searchEnabled = true;');
     expect(mapScreen).toContain('const nearbySearchEnabled = searchOrigin !== undefined;');
     expect(mapScreen).toContain('Location.watchPositionAsync(');
-    expect(mapScreen).toContain('distanceInterval: 1_000');
+    expect(mapScreen).toContain('distanceInterval: 25');
+    expect(mapScreen).toMatch(
+      /useEffect\(\(\) => \{\s+if \(isCarPlayVisualHarness\(\)\) return;\s+let active = true;/,
+    );
+    expect(mapScreen).toContain('if (isCarPlayVisualHarness()) return null;');
     expect(mapScreen).toContain("locationState !== 'visible' || routeState.type !== 'idle'");
   });
 });

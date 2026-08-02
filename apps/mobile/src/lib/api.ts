@@ -227,15 +227,25 @@ export async function fetchRoutes(
   options: FetchRoutesOptions = {},
 ): Promise<RouteResponse> {
   const fetchImplementation = options.fetchImplementation ?? fetch;
-  const response = await fetchImplementation(
-    `${normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl())}/v1/routes`,
-    {
-      body: JSON.stringify(request),
+  const url = `${normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl())}/v1/routes`;
+  const send = (body: RouteRequest) =>
+    fetchImplementation(url, {
+      body: JSON.stringify(body),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
       ...(options.signal === undefined ? {} : { signal: options.signal }),
-    },
-  );
+    });
+  let response = await send(request);
+  if (
+    response.status === 400 &&
+    (request.originHeadingDegrees !== undefined ||
+      request.originHorizontalAccuracyMeters !== undefined)
+  ) {
+    const fallback = { ...request };
+    delete fallback.originHeadingDegrees;
+    delete fallback.originHorizontalAccuracyMeters;
+    response = await send(fallback);
+  }
   return RouteResponseSchema.parse(await parseResponse(response));
 }
 

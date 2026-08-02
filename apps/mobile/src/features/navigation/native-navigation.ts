@@ -9,6 +9,8 @@ import NavOSSNavigation, {
   type NativeCarPlayState,
   type NativeDestinationCatalog,
   type NativeNavigationDestination,
+  type NativeNavigationAudioMode,
+  type NativeNavigationPreferences,
   type NativeNavigationSnapshot,
 } from '../../../modules/navoss-navigation';
 
@@ -16,6 +18,39 @@ interface NativeTrafficInput {
   delaySeconds: number;
   typicalDurationSeconds: number;
 }
+
+interface NativeNavigationPreferencesModule {
+  getAudioMode(): NativeNavigationAudioMode;
+  getNavigationPreferences(): NativeNavigationPreferences;
+  getRoutePreferences(): RoutePreferences;
+  setAudioMode(mode: NativeNavigationAudioMode): void;
+  setRoutePreferences(preferences: RoutePreferences): void;
+}
+
+interface NativeNavigationHarnessModule {
+  isCarPlayVisualHarness(): boolean;
+}
+
+const nativeNavigationPreferences = NavOSSNavigation as NativeNavigationPreferencesModule;
+const nativeNavigationHarness = NavOSSNavigation as NativeNavigationHarnessModule;
+
+export function getNavigationAudioMode(): NativeNavigationAudioMode {
+  return nativeNavigationPreferences.getAudioMode();
+}
+
+export function getNavigationRoutePreferences(): RoutePreferences {
+  return nativeNavigationPreferences.getRoutePreferences();
+}
+
+export function setNavigationRoutePreferences(preferences: RoutePreferences): void {
+  nativeNavigationPreferences.setRoutePreferences(preferences);
+}
+
+export function setNavigationAudioMode(mode: NativeNavigationAudioMode): void {
+  nativeNavigationPreferences.setAudioMode(mode);
+}
+
+export type NavigationAudioMode = NativeNavigationAudioMode;
 
 export type {
   NativeCarPlayState,
@@ -31,6 +66,12 @@ export function observeNavigationSnapshots(listener: (snapshot: NativeNavigation
   return NavOSSNavigation.addListener('onNavigationSnapshot', listener);
 }
 
+export function observeNavigationPreferences(
+  listener: (preferences: NativeNavigationPreferences) => void,
+) {
+  return NavOSSNavigation.addListener('onNavigationPreferencesChanged', listener);
+}
+
 export function observeCarPlayState(listener: (state: NativeCarPlayState) => void) {
   return NavOSSNavigation.addListener('onCarPlayStateChanged', listener);
 }
@@ -41,6 +82,10 @@ export function observeCarPlayNavigationEnded(listener: () => void) {
 
 export function getCarPlayState(): NativeCarPlayState {
   return NavOSSNavigation.getCarPlayState();
+}
+
+export function getNavigationPreferences(): NativeNavigationPreferences {
+  return nativeNavigationPreferences.getNavigationPreferences();
 }
 
 export function getNavigationSnapshot(): NativeNavigationSnapshot {
@@ -57,6 +102,10 @@ export function getDestinationCatalog(): NativeDestinationCatalog {
 
 export function isGooglePlaceRatingAvailable(): boolean {
   return NavOSSNavigation.isGooglePlaceRatingAvailable();
+}
+
+export function isCarPlayVisualHarness(): boolean {
+  return nativeNavigationHarness.isCarPlayVisualHarness();
 }
 
 export function getGooglePlacesOpenSourceLicenseInfo(): string | undefined {

@@ -13,6 +13,10 @@ Production status: all six containers are healthy, `navoss-stack.service` and
 the nightly backup timer are enabled, and public ingress is
 `https://navoss-api.yassin.app`.
 
+The active routing artifact is `valhalla-alberta-british-columbia-260730-ca-parent`, with hybrid
+profile SHA-256 `0a3f87cfabf76c2428ee851e1d5b61f90ef21d6952e9a4a1d4759887713931d7`. The
+previous `valhalla-alberta-british-columbia-260730` artifact remains available for rollback.
+
 ## Storage
 
 - `/srv/navoss/state/postgres`: PostGIS state for the reproducible Calgary search index and future community reports. Logical backups exclude `calgary_search_*` tables.
@@ -81,10 +85,13 @@ sha256sum --check "SHA256SUMS-${version}"
 cp --reflink=auto "alberta-${version}.osm.pbf" "$valhalla_stage/"
 cp --reflink=auto "british-columbia-${version}.osm.pbf" "$valhalla_stage/"
 cp --reflink=auto /srv/navoss/artifacts/valhalla/timezones.sqlite "$valhalla_stage/"
+./prepare-valhalla-speeds.sh "$valhalla_stage"
 ```
 
 Run one isolated import at a time without invoking `docker compose up` for the live services. The
-staging containers have no API/ingress network and use different names and host ports:
+staging containers have no API/ingress network and use different names and host ports. The profile
+generator pins the OpenStreetMapSpeeds input to its immutable upstream commit, verifies SHA-256, and
+atomically creates the validated Alberta hybrid. Do not replace it with the mutable `master` URL:
 
 ```sh
 sudo docker run --rm --name navoss-valhalla-stage \
@@ -93,11 +100,37 @@ sudo docker run --rm --name navoss-valhalla-stage \
   -e build_time_zones=False -e force_rebuild=False -e server_threads=2 \
   -e tile_urls= \
   -e traffic_name= -e use_default_speeds_config=True -e use_tiles_ignore_pbf=True \
+  -e default_speeds_config_url=https://raw.githubusercontent.com/OpenStreetMapSpeeds/schema/c9c6872d5ec656f5d290944b44eb1a103ed539fa/default_speeds.json \
   -v "$valhalla_stage:/custom_files" \
   ghcr.io/valhalla/valhalla-scripted:3.8.2
 ```
 
-After the Valhalla process is healthy on port `18002`, stop it and stage Nominatim. Read
+The province extracts omit enough of the Canada boundary relation for Valhalla to skip the
+admin-level-2 country polygon. Without a country parent, graph enhancement cannot resolve `CA.AB`
+or `CA.BC` and silently applies the global speed profile. After the first process is healthy, stop
+it, repair only the staged admin database, and rebuild the graph so speed assignment uses the
+province records:
+
+```sh
+sudo -n ./repair-valhalla-admins.sh "$valhalla_stage"
+
+sudo docker run --rm --name navoss-valhalla-stage \
+  --cpus 2 --memory 2g -p 127.0.0.1:18002:8002 \
+  -e build_admins=False -e build_elevation=False -e build_tar=True \
+  -e build_time_zones=False -e force_rebuild=True -e server_threads=2 \
+  -e tile_urls= \
+  -e traffic_name= -e use_default_speeds_config=True -e use_tiles_ignore_pbf=False \
+  -e default_speeds_config_url=https://raw.githubusercontent.com/OpenStreetMapSpeeds/schema/c9c6872d5ec656f5d290944b44eb1a103ed539fa/default_speeds.json \
+  -v "$valhalla_stage:/custom_files" \
+  ghcr.io/valhalla/valhalla-scripted:3.8.2
+```
+
+The repair is idempotent, fails closed on missing or invalid province geometry, and preserves
+`admins.pre-country-parent.sqlite` for rollback. Do not set `build_admins=True` on the second run;
+that would replace the repaired database before graph enhancement. Verify the rebuilt service on
+port `18002` and run the 50-route Calgary gate before changing `VALHALLA_DATA_DIR`.
+
+After the rebuilt Valhalla process is healthy, stop it and stage Nominatim. Read
 `NOMINATIM_PASSWORD` from the mode-600 production environment without printing it:
 
 ```sh

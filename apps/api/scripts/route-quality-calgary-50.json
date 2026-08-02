@@ -1,0 +1,459 @@
+{
+  "schemaVersion": 1,
+  "benchmarkId": "calgary-directed-od-v1",
+  "expectedCaseCount": 50,
+  "anchors": {
+    "central-library": {
+      "label": "Calgary Central Library",
+      "kind": "downtown",
+      "accessKind": "public-place",
+      "coordinate": { "latitude": 51.0455213, "longitude": -114.0550679 }
+    },
+    "sunalta": {
+      "label": "Sunalta LRT Station",
+      "kind": "transit",
+      "accessKind": "public-place",
+      "coordinate": { "latitude": 51.0444006, "longitude": -114.099728 }
+    },
+    "sait": {
+      "label": "SAIT",
+      "kind": "campus",
+      "accessKind": "public-road-access",
+      "coordinate": { "latitude": 51.0643, "longitude": -114.088 }
+    },
+    "university": {
+      "label": "University of Calgary",
+      "kind": "campus",
+      "accessKind": "public-road-access",
+      "coordinate": { "latitude": 51.07795, "longitude": -114.13073 }
+    },
+    "inglewood": {
+      "label": "Inglewood Opportunity Hub",
+      "kind": "community",
+      "accessKind": "public-place",
+      "coordinate": { "latitude": 51.0380528, "longitude": -114.0295288 }
+    },
+    "kensington": {
+      "label": "Kensington",
+      "kind": "community",
+      "accessKind": "public-place",
+      "coordinate": { "latitude": 51.0525289, "longitude": -114.0856443 }
+    },
+    "bridgeland": {
+      "label": "Bridgeland-Riverside Community Hall",
+      "kind": "community",
+      "accessKind": "public-place",
+      "coordinate": { "latitude": 51.0520472, "longitude": -114.040714 }
+    },
+    "stampede": {
+      "label": "Stampede Park",
+      "kind": "venue",
+      "accessKind": "public-road-access",
+      "coordinate": { "latitude": 51.03746, "longitude": -114.05193 }
+    },
+    "legacy": {
+      "label": "Legacy",
+      "kind": "community",
+      "accessKind": "community-center",
+      "coordinate": { "latitude": 50.8615129, "longitude": -114.0195358 }
+    },
+    "silverado": {
+      "label": "Silverado",
+      "kind": "community",
+      "accessKind": "public-address",
+      "coordinate": { "latitude": 50.8896387, "longitude": -114.0745115 }
+    },
+    "downtown": {
+      "label": "Calgary Tower",
+      "kind": "downtown",
+      "accessKind": "public-place",
+      "coordinate": { "latitude": 51.04427, "longitude": -114.06309 }
+    },
+    "airport": {
+      "label": "Calgary International Airport Domestic Terminal",
+      "kind": "airport",
+      "accessKind": "terminal",
+      "coordinate": { "latitude": 51.1308592, "longitude": -114.010689 }
+    },
+    "chinook": {
+      "label": "Chinook Centre",
+      "kind": "mall",
+      "accessKind": "public-road-access",
+      "coordinate": { "latitude": 50.99865, "longitude": -114.07367 }
+    },
+    "east-hills": {
+      "label": "East Hills Shopping Centre",
+      "kind": "mall",
+      "accessKind": "public-road-access",
+      "coordinate": { "latitude": 51.04112, "longitude": -113.9132 }
+    },
+    "canada-olympic-park": {
+      "label": "Canada Olympic Park",
+      "kind": "venue",
+      "accessKind": "public-road-access",
+      "coordinate": { "latitude": 51.0809235, "longitude": -114.2164025 }
+    },
+    "south-health": {
+      "label": "South Health Campus",
+      "kind": "hospital",
+      "accessKind": "public-road-access",
+      "coordinate": { "latitude": 50.8822452, "longitude": -113.9526766 }
+    },
+    "peter-lougheed": {
+      "label": "Peter Lougheed Centre",
+      "kind": "hospital",
+      "accessKind": "public-road-access",
+      "coordinate": { "latitude": 51.0792148, "longitude": -113.9845974 }
+    },
+    "foothills-medical": {
+      "label": "Foothills Medical Centre",
+      "kind": "hospital",
+      "accessKind": "public-road-access",
+      "coordinate": { "latitude": 51.06534, "longitude": -114.13308 }
+    },
+    "mount-royal": {
+      "label": "Mount Royal University",
+      "kind": "campus",
+      "accessKind": "public-road-access",
+      "coordinate": { "latitude": 51.0116203, "longitude": -114.1307018 }
+    },
+    "market-mall": {
+      "label": "Market Mall",
+      "kind": "mall",
+      "accessKind": "public-road-access",
+      "coordinate": { "latitude": 51.0846865, "longitude": -114.1553522 }
+    },
+    "airport-industrial": {
+      "label": "Airport Industrial",
+      "kind": "industrial",
+      "accessKind": "public-road",
+      "coordinate": { "latitude": 51.12, "longitude": -114.0 }
+    },
+    "foothills-industrial": {
+      "label": "Foothills Industrial",
+      "kind": "industrial",
+      "accessKind": "public-road",
+      "coordinate": { "latitude": 50.99, "longitude": -113.96 }
+    },
+    "shepard-industrial": {
+      "label": "Shepard Industrial",
+      "kind": "industrial",
+      "accessKind": "public-road",
+      "coordinate": { "latitude": 50.9621559, "longitude": -113.9912477 }
+    },
+    "manchester": {
+      "label": "Manchester Industrial",
+      "kind": "industrial",
+      "accessKind": "public-road",
+      "coordinate": { "latitude": 51.011507, "longitude": -114.0566438 }
+    },
+    "mckenzie-towne": {
+      "label": "McKenzie Towne",
+      "kind": "community",
+      "accessKind": "public-road",
+      "coordinate": { "latitude": 50.9164994, "longitude": -113.9643527 }
+    },
+    "skyview-ranch": {
+      "label": "Skyview Ranch",
+      "kind": "community",
+      "accessKind": "community-center",
+      "coordinate": { "latitude": 51.160534, "longitude": -113.958135 }
+    },
+    "forest-lawn": {
+      "label": "Forest Lawn",
+      "kind": "community",
+      "accessKind": "community-center",
+      "coordinate": { "latitude": 51.0377203, "longitude": -113.9709091 }
+    },
+    "crowfoot": {
+      "label": "Crowfoot LRT Station",
+      "kind": "transit",
+      "accessKind": "public-place",
+      "coordinate": { "latitude": 51.1233461, "longitude": -114.2074393 }
+    },
+    "saddletowne": {
+      "label": "Saddletowne LRT Station",
+      "kind": "transit",
+      "accessKind": "public-place",
+      "coordinate": { "latitude": 51.12075, "longitude": -113.94678 }
+    },
+    "westhills": {
+      "label": "Westhills Towne Centre",
+      "kind": "mall",
+      "accessKind": "public-road-access",
+      "coordinate": { "latitude": 51.0157721, "longitude": -114.1693872 }
+    },
+    "tuscany": {
+      "label": "Tuscany",
+      "kind": "community",
+      "accessKind": "community-center",
+      "coordinate": { "latitude": 51.1253802, "longitude": -114.2448425 }
+    },
+    "seton": {
+      "label": "Seton",
+      "kind": "community",
+      "accessKind": "community-center",
+      "coordinate": { "latitude": 50.8748779, "longitude": -113.9489154 }
+    },
+    "sage-hill": {
+      "label": "Sage Hill",
+      "kind": "community",
+      "accessKind": "community-center",
+      "coordinate": { "latitude": 51.1789747, "longitude": -114.1458678 }
+    },
+    "mahogany": {
+      "label": "Mahogany",
+      "kind": "community",
+      "accessKind": "community-center",
+      "coordinate": { "latitude": 50.8953359, "longitude": -113.9252877 }
+    },
+    "sunridge": {
+      "label": "Sunridge Mall",
+      "kind": "mall",
+      "accessKind": "public-road-access",
+      "coordinate": { "latitude": 51.0740348, "longitude": -113.9855362 }
+    },
+    "rockyview": {
+      "label": "Rockyview General Hospital",
+      "kind": "hospital",
+      "accessKind": "public-road-access",
+      "coordinate": { "latitude": 50.9908499, "longitude": -114.0971138 }
+    }
+  },
+  "corridors": [
+    {
+      "id": "central-library-sunalta",
+      "originAnchorId": "central-library",
+      "destinationAnchorId": "sunalta",
+      "lengthBand": "short",
+      "tags": ["downtown-grid", "one-way-streets"],
+      "minimumGeometryPoints": 10,
+      "maximumEndpointOffsetMeters": 100,
+      "maximumCircuity": 3.5
+    },
+    {
+      "id": "sait-university",
+      "originAnchorId": "sait",
+      "destinationAnchorId": "university",
+      "lengthBand": "short",
+      "tags": ["campus", "crowchild-trail"],
+      "minimumGeometryPoints": 10,
+      "maximumEndpointOffsetMeters": 120,
+      "maximumCircuity": 3.5
+    },
+    {
+      "id": "inglewood-kensington",
+      "originAnchorId": "inglewood",
+      "destinationAnchorId": "kensington",
+      "lengthBand": "short",
+      "tags": ["river-crossing", "inner-city"],
+      "minimumGeometryPoints": 10,
+      "maximumEndpointOffsetMeters": 120,
+      "maximumCircuity": 3.5
+    },
+    {
+      "id": "bridgeland-stampede",
+      "originAnchorId": "bridgeland",
+      "destinationAnchorId": "stampede",
+      "lengthBand": "short",
+      "tags": ["river-crossing", "downtown-grid"],
+      "minimumGeometryPoints": 10,
+      "maximumEndpointOffsetMeters": 120,
+      "maximumCircuity": 3.5
+    },
+    {
+      "id": "legacy-silverado",
+      "originAnchorId": "legacy",
+      "destinationAnchorId": "silverado",
+      "lengthBand": "short",
+      "tags": ["edge-community", "ring-road-access"],
+      "minimumGeometryPoints": 10,
+      "maximumEndpointOffsetMeters": 150,
+      "maximumCircuity": 3.5
+    },
+    {
+      "id": "downtown-airport",
+      "originAnchorId": "downtown",
+      "destinationAnchorId": "airport",
+      "lengthBand": "medium",
+      "tags": ["airport", "deerfoot-trail", "terminal-access"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "downtown-university",
+      "originAnchorId": "downtown",
+      "destinationAnchorId": "university",
+      "lengthBand": "medium",
+      "tags": ["campus", "river-crossing"],
+      "maximumEndpointOffsetMeters": 120,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "downtown-chinook",
+      "originAnchorId": "downtown",
+      "destinationAnchorId": "chinook",
+      "lengthBand": "medium",
+      "tags": ["mall", "macleod-trail"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "downtown-east-hills",
+      "originAnchorId": "downtown",
+      "destinationAnchorId": "east-hills",
+      "lengthBand": "medium",
+      "tags": ["mall", "east-west", "ring-road-access"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "downtown-canada-olympic-park",
+      "originAnchorId": "downtown",
+      "destinationAnchorId": "canada-olympic-park",
+      "lengthBand": "medium",
+      "tags": ["venue", "trans-canada-highway"],
+      "maximumEndpointOffsetMeters": 250,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "peter-lougheed-foothills-medical",
+      "originAnchorId": "peter-lougheed",
+      "destinationAnchorId": "foothills-medical",
+      "lengthBand": "medium",
+      "tags": ["hospital", "river-crossing", "sixteenth-avenue"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "university-mount-royal",
+      "originAnchorId": "university",
+      "destinationAnchorId": "mount-royal",
+      "lengthBand": "medium",
+      "tags": ["campus", "crowchild-trail"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "market-mall-chinook",
+      "originAnchorId": "market-mall",
+      "destinationAnchorId": "chinook",
+      "lengthBand": "medium",
+      "tags": ["mall", "north-south", "crowchild-trail"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "airport-industrial-foothills-industrial",
+      "originAnchorId": "airport-industrial",
+      "destinationAnchorId": "foothills-industrial",
+      "lengthBand": "medium",
+      "tags": ["industrial", "deerfoot-trail"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "shepard-industrial-manchester",
+      "originAnchorId": "shepard-industrial",
+      "destinationAnchorId": "manchester",
+      "lengthBand": "medium",
+      "tags": ["industrial", "goods-movement"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "mckenzie-towne-chinook",
+      "originAnchorId": "mckenzie-towne",
+      "destinationAnchorId": "chinook",
+      "lengthBand": "medium",
+      "tags": ["community", "deerfoot-trail", "macleod-trail"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "skyview-ranch-forest-lawn",
+      "originAnchorId": "skyview-ranch",
+      "destinationAnchorId": "forest-lawn",
+      "lengthBand": "medium",
+      "tags": ["northeast", "east-calgary", "deerfoot-trail"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "downtown-south-health",
+      "originAnchorId": "downtown",
+      "destinationAnchorId": "south-health",
+      "lengthBand": "long",
+      "tags": ["hospital", "deerfoot-trail", "north-south"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "crowfoot-saddletowne",
+      "originAnchorId": "crowfoot",
+      "destinationAnchorId": "saddletowne",
+      "lengthBand": "long",
+      "tags": ["ring-road", "north-calgary", "east-west"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "east-hills-westhills",
+      "originAnchorId": "east-hills",
+      "destinationAnchorId": "westhills",
+      "lengthBand": "long",
+      "tags": ["ring-road", "east-west", "mall"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "tuscany-seton",
+      "originAnchorId": "tuscany",
+      "destinationAnchorId": "seton",
+      "lengthBand": "long",
+      "tags": ["ring-road", "northwest-southeast", "edge-community"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumDurationMinutes": 120,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "sage-hill-mahogany",
+      "originAnchorId": "sage-hill",
+      "destinationAnchorId": "mahogany",
+      "lengthBand": "long",
+      "tags": ["ring-road", "north-south", "edge-community"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumDurationMinutes": 120,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "airport-south-health",
+      "originAnchorId": "airport",
+      "destinationAnchorId": "south-health",
+      "lengthBand": "long",
+      "tags": ["airport", "hospital", "deerfoot-trail"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumDurationMinutes": 120,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "sunridge-westhills",
+      "originAnchorId": "sunridge",
+      "destinationAnchorId": "westhills",
+      "lengthBand": "long",
+      "tags": ["east-west", "mall", "river-crossing"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumCircuity": 2.5
+    },
+    {
+      "id": "airport-rockyview",
+      "originAnchorId": "airport",
+      "destinationAnchorId": "rockyview",
+      "lengthBand": "long",
+      "tags": ["airport", "hospital", "deerfoot-trail"],
+      "maximumEndpointOffsetMeters": 150,
+      "maximumDurationMinutes": 120,
+      "maximumCircuity": 2.5
+    }
+  ]
+}

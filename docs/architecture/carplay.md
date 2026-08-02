@@ -119,11 +119,20 @@ distance near maneuvers, guidance mute, automatic light/dark styles, and reduced
 during guidance. Persistent zoom controls remain available only while idle or previewing; active
 guidance reserves its limited map-button surface for End, overview/follow, and sound.
 
+The **Trip** screen exposes Add stop and View routes without replacing guidance immediately. Both
+flows calculate alternatives from the current position, preserve route preferences and unvisited
+waypoints, and keep the original trip active until the driver confirms **Go**. Cancel restores the
+unchanged active trip.
+
 Search and Settings are direct map controls while idle or parked, so neither depends on a navigation
-bar that CarPlay may hide. Settings persists Automatic, Light, or Dark map appearance and one of
-three audio modes: All guidance speaks maneuvers and camera alerts; Alerts only suppresses maneuver
-speech but keeps camera alerts; Muted suppresses both. Active guidance exposes End,
-overview/follow, sound settings, and Report.
+bar that CarPlay may hide. Settings persists Automatic, Light, or Dark map appearance, North up or
+Heading up orientation, avoid-highways/tolls/ferries/unpaved route preferences, and one of three
+audio modes: All guidance speaks maneuvers and camera alerts; Alerts only suppresses maneuver speech
+but keeps camera alerts; Muted suppresses both. Active guidance exposes End, overview/follow, sound
+settings, and Report.
+
+Phone and CarPlay controls read the same native preference store and receive local change events.
+Future-route defaults remain separate from the preferences captured by an already active trip.
 
 CarPlay reports use the same eight safety-oriented labels as the phone. They are bounded native
 drafts with precise coordinate, creation time, and two-hour expiry. They remain private on the
@@ -134,8 +143,9 @@ is implemented.
 The remaining gaps are primarily data and platform capabilities:
 
 - live traffic, incident-aware ETA, closures, and traffic-coloured routes require a licensed feed;
-- lane guidance, junction views, speed limits, and signpost text require normalized provider data
-  that is not present in the current route contract;
+- lane guidance, junction views, and signpost text require normalized provider data that is not
+  present in the current route contract; posted speed limits already use geometry-aligned
+  Valhalla/OpenStreetMap annotations and hide unknown values;
 - public crowd reports require the planned trust, moderation, expiry, and anti-abuse backend;
 - richer place imagery, ratings, entrances, and parking context require separately licensed data;
 - Dashboard, cluster, HUD, and CarPlay Ultra surfaces remain vehicle- and entitlement-dependent.

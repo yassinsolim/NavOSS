@@ -2,6 +2,14 @@ import type { SearchResult } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
 import type { ComponentProps } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeInUp,
+  FadeOut,
+  FadeOutDown,
+  LinearTransition,
+  ReduceMotion,
+} from 'react-native-reanimated';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
 import { GooglePlaceRating } from '@/features/map/google-place-rating';
@@ -41,29 +49,37 @@ function wheelchairLabel(value: string): string {
 
 function PlaceAction({
   accessibilityHint,
+  animationDelay,
   icon,
   label,
   onPress,
 }: {
   accessibilityHint?: string;
+  animationDelay: number;
   icon: SymbolName;
   label: string;
   onPress: () => void;
 }) {
   return (
-    <Pressable
-      accessibilityHint={accessibilityHint}
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={({ pressed }) => [styles.action, pressed && styles.pressed]}
+    <Animated.View
+      entering={FadeInUp.duration(200).delay(animationDelay).reduceMotion(ReduceMotion.System)}
+      layout={LinearTransition.duration(160).reduceMotion(ReduceMotion.System)}
+      style={styles.action}
     >
-      <View style={styles.actionIcon}>
-        <SymbolView name={icon} size={23} tintColor={NavOssColors.green} />
-      </View>
-      <Text numberOfLines={1} style={styles.actionLabel}>
-        {label}
-      </Text>
-    </Pressable>
+      <Pressable
+        accessibilityHint={accessibilityHint}
+        accessibilityLabel={label}
+        onPress={onPress}
+        style={({ pressed }) => [styles.actionPressable, pressed && styles.pressed]}
+      >
+        <View style={styles.actionIcon}>
+          <SymbolView name={icon} size={23} tintColor={NavOssColors.green} />
+        </View>
+        <Text numberOfLines={1} style={styles.actionLabel}>
+          {label}
+        </Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -127,7 +143,12 @@ export function PlaceSheet({
   const category = displayCategory(details?.category ?? place.label);
 
   return (
-    <View style={[styles.panel, { height }]}>
+    <Animated.View
+      entering={FadeInUp.duration(260).reduceMotion(ReduceMotion.System)}
+      exiting={FadeOutDown.duration(180).reduceMotion(ReduceMotion.System)}
+      layout={LinearTransition.duration(200).reduceMotion(ReduceMotion.System)}
+      style={[styles.panel, { height }]}
+    >
       <View style={styles.handle} />
       <View style={styles.header}>
         <View style={styles.titleCopy}>
@@ -154,11 +175,13 @@ export function PlaceSheet({
 
       <View style={styles.actions}>
         <PlaceAction
+          animationDelay={20}
           icon={{ android: 'directions', ios: 'arrow.triangle.turn.up.right.diamond.fill' }}
           label="Directions"
           onPress={onDirections}
         />
         <PlaceAction
+          animationDelay={55}
           icon={{
             android: saved ? 'bookmark' : 'bookmark_border',
             ios: saved ? 'bookmark.fill' : 'bookmark',
@@ -168,12 +191,14 @@ export function PlaceSheet({
         />
         {onCall !== undefined && (
           <PlaceAction
+            animationDelay={90}
             icon={{ android: 'call', ios: 'phone.fill' }}
             label="Call"
             onPress={onCall}
           />
         )}
         <PlaceAction
+          animationDelay={onCall === undefined ? 90 : 125}
           icon={{ android: 'share', ios: 'square.and.arrow.up' }}
           label="Share"
           onPress={onShare}
@@ -185,10 +210,15 @@ export function PlaceSheet({
         showsVerticalScrollIndicator={false}
       >
         {loading && (
-          <View accessibilityLiveRegion="polite" style={styles.loadingRow}>
+          <Animated.View
+            accessibilityLiveRegion="polite"
+            entering={FadeIn.duration(160).reduceMotion(ReduceMotion.System)}
+            exiting={FadeOut.duration(120).reduceMotion(ReduceMotion.System)}
+            style={styles.loadingRow}
+          >
             <ActivityIndicator color={NavOssColors.green} size="small" />
             <Text style={styles.loadingText}>Loading open place details</Text>
-          </View>
+          </Animated.View>
         )}
         {place.category === 'poi' && (
           <View style={styles.ratingSection}>
@@ -265,16 +295,22 @@ export function PlaceSheet({
         )}
         <Text style={styles.source}>Place data from OpenStreetMap contributors</Text>
       </ScrollView>
-    </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   action: {
+    flex: 1,
+    minHeight: 76,
+    minWidth: 72,
+  },
+  actionPressable: {
     alignItems: 'center',
     flex: 1,
     gap: 6,
-    minWidth: 72,
+    justifyContent: 'flex-start',
+    width: '100%',
   },
   actionIcon: {
     alignItems: 'center',

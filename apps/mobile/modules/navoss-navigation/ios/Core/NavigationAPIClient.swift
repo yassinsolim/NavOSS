@@ -6,6 +6,7 @@ import Foundation
 
 public enum NavOSSNavigationAPIError: Error {
   case invalidConfiguration
+  case invalidRequest
   case invalidResponse
   case serviceUnavailable
 }
@@ -36,8 +37,66 @@ private struct RouteRequest: Encodable {
   let alternatives: Int
   let destination: NavOSSCarPlayCoordinate
   let origin: NavOSSCarPlayCoordinate
+  let originHeadingDegrees: Double?
+  let originHorizontalAccuracyMeters: Double?
   let preferences: NavOSSRoutePreferences
   let waypoints: [NavOSSCarPlayCoordinate]?
+}
+
+public struct NavOSSNavigationRouteOrigin: Sendable {
+  public let coordinate: NavOSSCarPlayCoordinate
+  public let headingDegrees: Double?
+  public let horizontalAccuracyMeters: Double?
+
+  public init(
+    coordinate: NavOSSCarPlayCoordinate,
+    headingDegrees: Double? = nil,
+    horizontalAccuracyMeters: Double? = nil
+  ) {
+    self.coordinate = coordinate
+    self.headingDegrees = headingDegrees
+    self.horizontalAccuracyMeters = horizontalAccuracyMeters
+  }
+}
+
+public func navOSSNavigationRouteOrigin(
+  coordinate: NavOSSCarPlayCoordinate,
+  courseDegrees: Double?,
+  speedMetersPerSecond: Double?,
+  horizontalAccuracyMeters: Double,
+  ageSeconds: TimeInterval
+) -> NavOSSNavigationRouteOrigin? {
+  guard horizontalAccuracyMeters.isFinite,
+    (0...100).contains(horizontalAccuracyMeters),
+    ageSeconds >= -5,
+    ageSeconds <= 15
+  else {
+    return nil
+  }
+  let headingDegrees: Double? =
+    if let courseDegrees, let speedMetersPerSecond,
+      courseDegrees.isFinite, (0..<360).contains(courseDegrees),
+      speedMetersPerSecond.isFinite, speedMetersPerSecond >= 2
+    {
+      courseDegrees
+    } else {
+      nil
+    }
+  return NavOSSNavigationRouteOrigin(
+    coordinate: coordinate,
+    headingDegrees: headingDegrees,
+    horizontalAccuracyMeters: horizontalAccuracyMeters
+  )
+}
+
+public func navOSSShouldAcceptNavigationLocation(
+  candidateTimestamp: TimeInterval,
+  latestTimestamp: TimeInterval?,
+  nowTimestamp: TimeInterval
+) -> Bool {
+  let ageSeconds = nowTimestamp - candidateTimestamp
+  return ageSeconds >= -5 && ageSeconds <= 15
+    && latestTimestamp.map { $0 <= candidateTimestamp } ?? true
 }
 
 private struct RouteResponse: Decodable {
@@ -126,6 +185,8 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
 
   public func routes(
     origin: NavOSSCarPlayCoordinate,
+    originHeadingDegrees: Double? = nil,
+    originHorizontalAccuracyMeters: Double? = nil,
     destination: NavOSSCarPlayDestination,
     preferences: NavOSSRoutePreferences,
     alternatives: Int = 2,
@@ -138,6 +199,8 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
         longitude: destination.longitude
       ),
       origin: origin,
+      originHeadingDegrees: originHeadingDegrees,
+      originHorizontalAccuracyMeters: originHorizontalAccuracyMeters,
       preferences: preferences,
       waypoints: waypoints.isEmpty
         ? nil
@@ -145,7 +208,23 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
           NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
         }
     )
-    let response: RouteResponse = try await post(path: "v1/routes", body: request)
+    let response: RouteResponse
+    do {
+      response = try await post(path: "v1/routes", body: request)
+    } catch NavOSSNavigationAPIError.invalidRequest
+      where originHeadingDegrees != nil || originHorizontalAccuracyMeters != nil
+    {
+      let fallback = RouteRequest(
+        alternatives: alternatives,
+        destination: request.destination,
+        origin: origin,
+        originHeadingDegrees: nil,
+        originHorizontalAccuracyMeters: nil,
+        preferences: preferences,
+        waypoints: request.waypoints
+      )
+      response = try await post(path: "v1/routes", body: fallback)
+    }
     return try response.routes.map { route in
       NavOSSCarPlayTrip(
         destination: destination,
@@ -200,6 +279,9 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     let (data, urlResponse) = try await session.data(for: request)
     guard let response = urlResponse as? HTTPURLResponse else {
       throw NavOSSNavigationAPIError.invalidResponse
+    }
+    guard response.statusCode != 400 else {
+      throw NavOSSNavigationAPIError.invalidRequest
     }
     guard (200..<300).contains(response.statusCode) else {
       throw NavOSSNavigationAPIError.serviceUnavailable

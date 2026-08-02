@@ -606,6 +606,25 @@ describe('route contracts', () => {
     });
   });
 
+  it('accepts bounded origin correlation metadata', () => {
+    const request = RouteRequestSchema.parse({
+      destination: { latitude: 51.13157, longitude: -114.01055 },
+      origin: { latitude: 51.0447, longitude: -114.0719 },
+      originHeadingDegrees: 359.9,
+      originHorizontalAccuracyMeters: 12,
+    });
+
+    expect(request.originHeadingDegrees).toBe(359.9);
+    expect(request.originHorizontalAccuracyMeters).toBe(12);
+    expect(
+      RouteRequestSchema.safeParse({
+        destination: { latitude: 51.13157, longitude: -114.01055 },
+        origin: { latitude: 51.0447, longitude: -114.0719 },
+        originHeadingDegrees: 360,
+      }).success,
+    ).toBe(false);
+  });
+
   it('accepts ordered intermediate stops and rejects duplicate consecutive locations', () => {
     const request = RouteRequestSchema.parse({
       destination: { latitude: 51.13157, longitude: -114.01055 },

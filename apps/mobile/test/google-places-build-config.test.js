@@ -56,6 +56,14 @@ describe('Google Places build configuration', () => {
   it('packages the visual host behind simulator compiler guards', () => {
     expect(sourceFiles).toContain('NavOSSCarPlayVisualHarnessViewController.swift');
 
+    const carPlayScene = readFileSync(
+      resolve(import.meta.dirname, '..', 'carplay/ios/NavOSSCarPlaySceneDelegate.swift'),
+      'utf8',
+    );
+    const carPlayMap = readFileSync(
+      resolve(import.meta.dirname, '..', 'carplay/ios/NavOSSCarPlayMapViewController.swift'),
+      'utf8',
+    );
     const visualHarness = readFileSync(
       resolve(
         import.meta.dirname,
@@ -68,8 +76,93 @@ describe('Google Places build configuration', () => {
       resolve(import.meta.dirname, '..', 'carplay/ios/NavOSSPhoneSceneDelegate.swift'),
       'utf8',
     );
+    const navigationModule = readFileSync(
+      resolve(
+        import.meta.dirname,
+        '..',
+        'modules/navoss-navigation/ios/NavOSSNavigationModule.swift',
+      ),
+      'utf8',
+    );
+    const navigationTypes = readFileSync(
+      resolve(import.meta.dirname, '..', 'modules/navoss-navigation/index.ts'),
+      'utf8',
+    );
+    const navigationSnapshotContract = navigationTypes.slice(
+      navigationTypes.indexOf('export interface NativeNavigationSnapshot'),
+      navigationTypes.indexOf('export type NativeCarPlayGuidancePhase'),
+    );
 
     expect(visualHarness).toContain('#if targetEnvironment(simulator)');
+    expect(carPlayScene).toMatch(
+      /SearchCategory\(\s*category: "fuel",\s*label: "Gas",\s*query: "fuel",\s*systemImageName: "fuelpump\.fill"\s*\)/,
+    );
+    expect(carPlayScene).not.toContain('SearchCategory(category: nil');
+    expect(carPlayScene).toContain('image: UIImage(systemName: category.systemImageName)');
+    expect(carPlayScene).toContain('item.accessoryType = .disclosureIndicator');
+    expect(carPlayScene).toContain('image: audioModeImage(mode)');
+    expect(carPlayScene).toContain('image: appearanceImage(appearance)');
+    expect(carPlayScene).toContain('image: vehicleMarkerImage(marker)');
+    expect(carPlayScene).toContain('title: "Search"');
+    expect(carPlayScene).toContain('titleVariants: ["Recent searches", "Recents"]');
+    expect(carPlayScene).toContain('titleVariants: ["Gas stations", "Gas"]');
+    expect(carPlayScene).toContain('titleVariants: ["Restaurants", "Food"]');
+    expect(carPlayScene).toContain('CPBarButton(image: carPlayImage("keyboard"))');
+    expect(carPlayScene).toContain('CPBarButton(image: carPlayImage("mic.fill"))');
+    expect(carPlayScene).toContain('let template = CPGridTemplate(\n        title: "Settings"');
+    for (const [category, title] of [
+      ['routeOptions', 'Route options'],
+      ['alertOptions', 'Alert options'],
+      ['mapColors', 'Map colors'],
+      ['mapOrientation', 'Map orientation'],
+      ['mapDisplay', 'Map display'],
+      ['volume', 'Volume'],
+      ['drivingAvatar', 'Driving avatar'],
+    ]) {
+      expect(carPlayScene).toContain(`case .${category}: "${title}"`);
+    }
+    expect(carPlayScene).toContain('header: "Route options"');
+    expect(carPlayScene).toContain('header: "Map orientation"');
+    expect(carPlayScene).toContain(
+      'mapViewController?.applyMapOrientation(preferences.mapOrientation)',
+    );
+    expect(carPlayScene).toContain('self.preferencesStore.setRoutePreferences(updated)');
+    expect(carPlayScene).toContain('preferences: routePreferences');
+    expect(carPlayScene).not.toContain('preferences: NavOSSRoutePreferences(),');
+    expect(carPlayScene).toContain('text: "Add stop"');
+    expect(carPlayScene).toContain('text: "View routes"');
+    expect(carPlayScene).toContain('self?.returnToMapAndLoadActiveRouteAlternatives()');
+    expect(carPlayScene).toContain('self.showRoutePreviews(routes, replacingActiveTrip: true)');
+    expect(carPlayScene).toContain('waypoints: waypoints');
+    expect(carPlayScene).toContain('previousNavigationSession?.cancelTrip()');
+    expect(carPlayScene).toContain('navigationSession = previousNavigationSession');
+    expect(carPlayScene).toMatch(
+      /navigationSession = nil[\s\S]*?try NavOSSNavigationService\.shared\.startNavigation\(route\)[\s\S]*?previousNavigationSession\?\.cancelTrip\(\)[\s\S]*?navigationSession = mapTemplate\.startNavigationSession\(for: trip\)[\s\S]*?activeManeuver = nil[\s\S]*?apply\(NavOSSCarPlayTripStore\.shared\.snapshot\(\)\)/,
+    );
+    expect(navigationModule).toContain('onNavigationPreferencesChanged');
+    expect(navigationSnapshotContract).not.toContain('audioMode');
+    expect(navigationTypes).toMatch(
+      /interface NativeCarPlayState \{\s+connected: boolean;\s+guidance\?: NativeCarPlayGuidance;\s+hasActiveTrip: boolean;\s+\}/,
+    );
+    expect(navigationTypes).toMatch(
+      /interface NativeNavigationPreferences \{\s+audioMode: NativeNavigationAudioMode;\s+routePreferences: NativeRoutePreferences;\s+\}/,
+    );
+    expect(carPlayScene).toContain('routeChoicesByIdentifier = [:]');
+    expect(carPlayScene).toContain('mapTemplate?.hideTripPreviews()');
+    expect(carPlayScene).toContain('func sceneDidBecomeActive(_ scene: UIScene)');
+    expect(carPlayScene).toContain(
+      'interfaceController.popToRootTemplate(animated: false, completion: nil)',
+    );
+    expect(carPlayScene).toContain('mapViewController?.recenter()');
+    expect(carPlayMap).toMatch(
+      /else if routeCoordinates\.count >= 2 \{\s*fitRoute\(animated: false\)\s*\} else \{\s*recenter\(\)/,
+    );
+    expect(carPlayMap).toContain('speedLimitLabel.widthAnchor.constraint(equalToConstant: 38)');
+    expect(carPlayMap).toContain('speedLabel.widthAnchor.constraint(equalToConstant: 38)');
+    expect(carPlayMap).toContain('style.setImage(carMarkerImage(), forName: carImageIdentifier)');
+    expect(carPlayMap).toContain('private func carMarkerImage() -> UIImage');
+    expect(carPlayMap).toContain('mapView.attributionButton.isHidden = true');
+    expect(carPlayMap).toContain('© OpenStreetMap contributors');
     expect(phoneScene).toContain('#if targetEnvironment(simulator)');
     expect(phoneScene).toContain('NAVOSS_CARPLAY_VISUAL_SCENARIO');
   });

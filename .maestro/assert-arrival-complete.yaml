@@ -8,5 +8,5 @@ appId: org.navoss.mobile
 - takeScreenshot: '/tmp/navoss-validation-phone-arrival'
 - tapOn: 'Finish navigation'
 - extendedWaitUntil:
-    visible: 'Search Calgary'
+    visible: 'Search places'
     timeout: 10000

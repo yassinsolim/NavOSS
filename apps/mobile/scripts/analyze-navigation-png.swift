@@ -64,7 +64,9 @@ func analyze(path: String) throws -> Metrics {
       if max(red, green, blue) - min(red, green, blue) < 5 && (luminance < 10 || luminance > 245) {
         nearBackgroundCount += 1
       }
-      if Int(green) > 80 && Int(green) > Int(red) + 35 && Int(green) > Int(blue) + 20 {
+      if Int(green) > 80 && Int(green) > Int(red) + 35 && Int(green) > Int(blue) + 20
+        && Int(blue) > Int(red) + 30
+      {
         routeGreenCount += 1
       }
       sampleCount += 1

@@ -1,11 +1,67 @@
 #!/usr/bin/env node
 
-import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+
+import { resolveInputPath } from './resolve-input-path.mjs';
 
 const apiUrl = process.env.NAVOSS_API_URL ?? 'http://127.0.0.1:3001';
-const cases = JSON.parse(
-  await readFile(new URL('./route-quality-cases.json', import.meta.url), 'utf8'),
-);
+const outputPath =
+  process.env.ROUTE_QUALITY_OUTPUT === undefined
+    ? undefined
+    : resolve(process.env.INIT_CWD ?? process.cwd(), process.env.ROUTE_QUALITY_OUTPUT);
+const casesPath =
+  process.env.ROUTE_QUALITY_CASES === undefined
+    ? new URL('./route-quality-cases.json', import.meta.url)
+    : await resolveInputPath(process.env.ROUTE_QUALITY_CASES);
+const casesText = await readFile(casesPath, 'utf8');
+const casesPayload = JSON.parse(casesText);
+const benchmarkDefinitionHash = createHash('sha256').update(casesText).digest('hex');
+
+function expandCases(payload) {
+  if (Array.isArray(payload)) return payload;
+  const anchors = payload.anchors ?? {};
+  return (payload.corridors ?? []).flatMap((corridor) => {
+    const origin = anchors[corridor.originAnchorId]?.coordinate;
+    const destination = anchors[corridor.destinationAnchorId]?.coordinate;
+    if (origin === undefined || destination === undefined) {
+      throw new Error(`Unknown benchmark anchor in corridor ${corridor.id}`);
+    }
+    const shared = {
+      ...corridor,
+      reciprocalGroup: corridor.id,
+    };
+    return [
+      {
+        ...shared,
+        destination,
+        id: `${corridor.originAnchorId}-to-${corridor.destinationAnchorId}`,
+        origin,
+      },
+      {
+        ...shared,
+        destination: origin,
+        id: `${corridor.destinationAnchorId}-to-${corridor.originAnchorId}`,
+        origin: destination,
+      },
+    ];
+  });
+}
+
+const cases = expandCases(casesPayload);
+const benchmarkId = Array.isArray(casesPayload)
+  ? 'regional-route-quality'
+  : casesPayload.benchmarkId;
+if (
+  !Array.isArray(casesPayload) &&
+  casesPayload.expectedCaseCount !== undefined &&
+  cases.length !== casesPayload.expectedCaseCount
+) {
+  throw new Error(
+    `Benchmark ${benchmarkId} expected ${String(casesPayload.expectedCaseCount)} cases; found ${String(cases.length)}`,
+  );
+}
 
 function toRadians(degrees) {
   return (degrees * Math.PI) / 180;
@@ -39,6 +95,7 @@ function manualComparisonLinks(routeCase) {
 }
 
 function analyze(routeCase, route, response, latencyMs, avoidHighways) {
+  const straightLineDistanceKm = distanceMeters(routeCase.origin, routeCase.destination) / 1_000;
   const geometryDistanceMeters = route.geometry
     .slice(1)
     .reduce(
@@ -62,6 +119,7 @@ function analyze(routeCase, route, response, latencyMs, avoidHighways) {
   const metrics = {
     alternatives: response.routes.length,
     averageKph: (route.distanceMeters / route.durationSeconds) * 3.6,
+    circuity: route.distanceMeters / 1_000 / straightLineDistanceKm,
     destinationOffsetMeters: distanceMeters(
       positionCoordinate(route.geometry.at(-1)),
       routeCase.destination,
@@ -76,20 +134,34 @@ function analyze(routeCase, route, response, latencyMs, avoidHighways) {
     spokenCoverage: spokenStepCount / route.steps.length,
     stepRatio: stepDistanceMeters / route.distanceMeters,
     steps: route.steps.length,
+    straightLineDistanceKm,
+    uniqueAlternatives: new Set(
+      response.routes.map((alternative) =>
+        createHash('sha256').update(JSON.stringify(alternative.geometry)).digest('hex'),
+      ),
+    ).size,
   };
   const failures = [];
-  const [minimumDistanceKm, maximumDistanceKm] = routeCase.distanceRangeKm;
+  const warnings = [];
 
   if (metrics.alternatives < 1 || metrics.alternatives > 3) failures.push('alternative count');
+  if (metrics.uniqueAlternatives !== metrics.alternatives) failures.push('duplicate alternatives');
   if (metrics.averageKph < 8 || metrics.averageKph > 110) failures.push('average speed');
-  if (metrics.distanceKm < minimumDistanceKm || metrics.distanceKm > maximumDistanceKm) {
-    failures.push('distance range');
+  if (routeCase.distanceRangeKm === undefined) {
+    if (metrics.circuity > (routeCase.maximumCircuity ?? 2.5)) failures.push('circuity');
+  } else {
+    const [minimumDistanceKm, maximumDistanceKm] = routeCase.distanceRangeKm;
+    if (metrics.distanceKm < minimumDistanceKm || metrics.distanceKm > maximumDistanceKm) {
+      failures.push('distance range');
+    }
   }
   const maximumDurationMinutes = routeCase.maximumDurationMinutes ?? 90;
-  if (metrics.durationMinutes < 3 || metrics.durationMinutes > maximumDurationMinutes) {
+  if (metrics.durationMinutes < 1 || metrics.durationMinutes > maximumDurationMinutes) {
     failures.push('duration range');
   }
-  if (metrics.geometryPoints < 20) failures.push('geometry detail');
+  if (metrics.geometryPoints < (routeCase.minimumGeometryPoints ?? 20)) {
+    failures.push('geometry detail');
+  }
   if (Math.abs(metrics.geometryRatio - 1) > 0.03) failures.push('geometry distance');
   if (latencyMs > 5_000) failures.push('latency');
   if (metrics.maximumSegmentMeters > (routeCase.maximumSegmentMeters ?? 2_000)) {
@@ -107,14 +179,23 @@ function analyze(routeCase, route, response, latencyMs, avoidHighways) {
   if (response.degraded !== false) failures.push('degraded route source');
   if (response.source.id !== 'valhalla-self-hosted') failures.push('route source');
   if (response.source.mode !== 'production') failures.push('route mode');
+  if (metrics.alternatives < 2) warnings.push('no alternate route');
+  if (metrics.circuity > (routeCase.reviewCircuity ?? 1.8)) warnings.push('high circuity');
+  if (metrics.originOffsetMeters > 50) warnings.push('origin entrance review');
+  if (metrics.destinationOffsetMeters > 50) warnings.push('destination entrance review');
 
   return {
     avoidHighways,
     failures,
     id: routeCase.id,
+    lengthBand: routeCase.lengthBand,
     links: avoidHighways ? undefined : manualComparisonLinks(routeCase),
     metrics,
-    routeFingerprint: JSON.stringify(route.geometry),
+    primaryRoads: [...new Set(route.steps.map((step) => step.roadName).filter(Boolean))],
+    reciprocalGroup: routeCase.reciprocalGroup,
+    routeFingerprint: createHash('sha256').update(JSON.stringify(route.geometry)).digest('hex'),
+    tags: routeCase.tags,
+    warnings,
   };
 }
 
@@ -176,6 +257,29 @@ for (const routeCase of cases) {
   }
 }
 
+const reciprocalGroups = Map.groupBy(
+  results.filter((result) => !result.avoidHighways && result.reciprocalGroup !== undefined),
+  (result) => result.reciprocalGroup,
+);
+for (const reciprocalResults of reciprocalGroups.values()) {
+  if (reciprocalResults.length !== 2) continue;
+  const [first, second] = reciprocalResults;
+  const distanceRatio =
+    Math.max(first.metrics.distanceKm, second.metrics.distanceKm) /
+    Math.min(first.metrics.distanceKm, second.metrics.distanceKm);
+  const durationRatio =
+    Math.max(first.metrics.durationMinutes, second.metrics.durationMinutes) /
+    Math.min(first.metrics.durationMinutes, second.metrics.durationMinutes);
+  if (distanceRatio > 1.35) {
+    first.warnings.push('reciprocal distance asymmetry');
+    second.warnings.push('reciprocal distance asymmetry');
+  }
+  if (durationRatio > 1.5) {
+    first.warnings.push('reciprocal duration asymmetry');
+    second.warnings.push('reciprocal duration asymmetry');
+  }
+}
+
 for (const result of results) {
   const mode = result.avoidHighways ? 'avoid-highways' : 'default';
   const verdict = result.failures.length === 0 ? 'PASS' : `FAIL: ${result.failures.join(', ')}`;
@@ -193,21 +297,28 @@ const latencies = results
   .filter((value) => Number.isFinite(value))
   .sort((left, right) => left - right);
 const percentileIndex = Math.max(0, Math.ceil(latencies.length * 0.95) - 1);
-console.log(
-  JSON.stringify(
-    {
-      failed: failures.length,
-      manualComparisons: results
-        .filter((result) => result.links !== undefined)
-        .map(({ id, links, metrics }) => ({ id, links, metrics })),
-      passed: results.length - failures.length,
-      p95LatencyMs: latencies[percentileIndex],
-      total: results.length,
-    },
-    null,
-    2,
-  ),
-);
+const benchmarkResults = results.map((result) => {
+  const sanitized = { ...result, geometryHash: result.routeFingerprint };
+  delete sanitized.links;
+  delete sanitized.routeFingerprint;
+  return sanitized;
+});
+const summary = {
+  apiUrl,
+  benchmarkDefinitionHash,
+  benchmarkId,
+  failed: failures.length,
+  generatedAt: new Date().toISOString(),
+  passed: results.length - failures.length,
+  p95LatencyMs: latencies[percentileIndex],
+  results: benchmarkResults,
+  total: results.length,
+};
+console.log(JSON.stringify(summary, null, 2));
+if (outputPath !== undefined) {
+  await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, `${JSON.stringify(summary, null, 2)}\n`);
+}
 
 if (failures.length > 0) {
   process.exitCode = 1;

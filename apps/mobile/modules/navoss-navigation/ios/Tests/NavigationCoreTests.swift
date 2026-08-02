@@ -177,6 +177,18 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertFalse(state.allowsManeuverGuidance)
   }
 
+  func testInitialAudioStateRestoresPersistedModeWithoutCarPlay() throws {
+    let suiteName = "NavOSSNavigationCoreTests.service-audio.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let preferencesStore = NavOSSCarPlayPreferencesStore(defaults: defaults)
+    preferencesStore.setAudioMode(.muted)
+
+    let state = navOSSInitialCarPlayAudioState(preferencesStore: preferencesStore)
+
+    XCTAssertEqual(state.mode, .muted)
+  }
+
   func testCarPlayPreferencesPersistMapAndAudioChoices() throws {
     let suiteName = "NavOSSNavigationCoreTests.preferences.\(UUID().uuidString)"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -186,6 +198,15 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(store.load(), NavOSSCarPlayPreferences())
     store.setAppearance(.light)
     store.setAudioMode(.alertsOnly)
+    store.setRoutePreferences(
+      NavOSSRoutePreferences(
+        avoidFerries: true,
+        avoidHighways: true,
+        avoidTolls: true,
+        avoidUnpaved: true
+      )
+    )
+    store.setMapOrientation(.northUp)
     store.setShowsPointsOfInterest(false)
     store.setVehicleMarker(.car)
 
@@ -194,10 +215,38 @@ final class NavigationCoreTests: XCTestCase {
       NavOSSCarPlayPreferences(
         appearance: .light,
         audioMode: .alertsOnly,
+        routePreferences: NavOSSRoutePreferences(
+          avoidFerries: true,
+          avoidHighways: true,
+          avoidTolls: true,
+          avoidUnpaved: true
+        ),
+        mapOrientation: .northUp,
         showsPointsOfInterest: false,
         vehicleMarker: .car
       )
     )
+  }
+
+  func testCarPlayPreferencesNotifyObserversAfterMutation() throws {
+    let suiteName = "NavOSSNavigationCoreTests.preference-events.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let notificationCenter = NotificationCenter()
+    let store = NavOSSCarPlayPreferencesStore(
+      defaults: defaults,
+      notificationCenter: notificationCenter
+    )
+    let expectation = expectation(
+      forNotification: .navOSSCarPlayPreferencesDidChange,
+      object: store,
+      notificationCenter: notificationCenter
+    )
+
+    store.setRoutePreferences(NavOSSRoutePreferences(avoidTolls: true))
+
+    wait(for: [expectation], timeout: 0.1)
+    XCTAssertTrue(store.load().routePreferences.avoidTolls)
   }
 
   func testCarPlayPositionValidatesCurrentSpeed() {
@@ -216,6 +265,69 @@ final class NavigationCoreTests: XCTestCase {
         courseDegrees: 90,
         speedMetersPerSecond: -1
       ).isValid
+    )
+  }
+
+  func testNavigationRouteOriginRequiresFreshAccurateMovementForHeading() {
+    let coordinate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08)
+    let moving = navOSSNavigationRouteOrigin(
+      coordinate: coordinate,
+      courseDegrees: 25,
+      speedMetersPerSecond: 8,
+      horizontalAccuracyMeters: 8,
+      ageSeconds: 15
+    )
+    let stationary = navOSSNavigationRouteOrigin(
+      coordinate: coordinate,
+      courseDegrees: 25,
+      speedMetersPerSecond: 0,
+      horizontalAccuracyMeters: 8,
+      ageSeconds: 0
+    )
+
+    XCTAssertEqual(moving?.headingDegrees, 25)
+    XCTAssertNil(stationary?.headingDegrees)
+    XCTAssertNil(
+      navOSSNavigationRouteOrigin(
+        coordinate: coordinate,
+        courseDegrees: 25,
+        speedMetersPerSecond: 8,
+        horizontalAccuracyMeters: 8,
+        ageSeconds: 15.01
+      )
+    )
+    XCTAssertNil(
+      navOSSNavigationRouteOrigin(
+        coordinate: coordinate,
+        courseDegrees: 25,
+        speedMetersPerSecond: 8,
+        horizontalAccuracyMeters: 100.01,
+        ageSeconds: 0
+      )
+    )
+  }
+
+  func testNavigationLocationRejectsStaleAndOutOfOrderCallbacks() {
+    XCTAssertTrue(
+      navOSSShouldAcceptNavigationLocation(
+        candidateTimestamp: 995,
+        latestTimestamp: 990,
+        nowTimestamp: 1_000
+      )
+    )
+    XCTAssertFalse(
+      navOSSShouldAcceptNavigationLocation(
+        candidateTimestamp: 984.99,
+        latestTimestamp: nil,
+        nowTimestamp: 1_000
+      )
+    )
+    XCTAssertFalse(
+      navOSSShouldAcceptNavigationLocation(
+        candidateTimestamp: 995,
+        latestTimestamp: 996,
+        nowTimestamp: 1_000
+      )
     )
   }
 
@@ -281,9 +393,11 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertNotNil(
       store.record(.slowTraffic, coordinate: coordinate, now: now.addingTimeInterval(2))
     )
-    XCTAssertEqual(store.load(now: now.addingTimeInterval(3)).map(\.type), [
-      .slowTraffic, .pothole,
-    ])
+    XCTAssertEqual(
+      store.load(now: now.addingTimeInterval(3)).map(\.type),
+      [
+        .slowTraffic, .pothole,
+      ])
     XCTAssertTrue(store.load(now: now.addingTimeInterval(123)).isEmpty)
   }
 
@@ -305,6 +419,83 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(remaining.last, geometry.last)
     XCTAssertEqual(remaining.count, 2)
     XCTAssertFalse(remaining.contains(geometry[0]))
+  }
+
+  func testCarPlayRemainingRouteGeometryKeepsVisibleFinalSegmentAtCompletion() {
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.10),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.06),
+    ]
+
+    let remaining = navOSSRemainingRouteGeometry(geometry, routeProgress: 1)
+
+    XCTAssertEqual(remaining, Array(geometry.suffix(2)))
+    XCTAssertNotEqual(remaining.first, remaining.last)
+  }
+
+  func testCarPlayRemainingWaypointsDropsVisitedStops() {
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.10),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.06),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.04),
+    ]
+    let visited = NavOSSCarPlayDestination(
+      id: "visited",
+      label: "Visited stop",
+      latitude: 51.04,
+      longitude: -114.08,
+      name: "Visited"
+    )
+    let upcoming = NavOSSCarPlayDestination(
+      id: "upcoming",
+      label: "Upcoming stop",
+      latitude: 51.04,
+      longitude: -114.04,
+      name: "Upcoming"
+    )
+    let trip = makeNavigationSessionTrip(geometry: geometry, waypoints: [visited, upcoming])
+
+    XCTAssertEqual(navOSSRemainingWaypoints(in: trip, after: 0.5), [upcoming])
+  }
+
+  func testCarPlayRemainingWaypointsKeepsStopUntilProgressReachesIt() {
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.10),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.06),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.04),
+    ]
+    let firstStop = NavOSSCarPlayDestination(
+      id: "first-stop",
+      label: "First stop",
+      latitude: 51.04,
+      longitude: -114.08,
+      name: "First stop"
+    )
+    let trip = makeNavigationSessionTrip(geometry: geometry, waypoints: [firstStop])
+
+    XCTAssertEqual(navOSSRemainingWaypoints(in: trip, after: 0.3315), [firstStop])
+    XCTAssertTrue(navOSSRemainingWaypoints(in: trip, after: 0.334).isEmpty)
+  }
+
+  func testCarPlayRemainingWaypointsProjectsOffRoadStopOntoSparseSegment() {
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.10),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.00),
+    ]
+    let midpointStop = NavOSSCarPlayDestination(
+      id: "midpoint",
+      label: "Off-road midpoint stop",
+      latitude: 51.041,
+      longitude: -114.05,
+      name: "Midpoint"
+    )
+    let trip = makeNavigationSessionTrip(geometry: geometry, waypoints: [midpointStop])
+
+    XCTAssertEqual(navOSSRemainingWaypoints(in: trip, after: 0.4), [midpointStop])
+    XCTAssertTrue(navOSSRemainingWaypoints(in: trip, after: 0.6).isEmpty)
   }
 
   func testCarPlayTripStoreRejectsStaleNavigationPublications() {
@@ -1021,7 +1212,9 @@ final class NavigationCoreTests: XCTestCase {
   private func makeNavigationSessionTrip(
     id: String = "route-1",
     currentSpokenInstruction: String? = nil,
-    nextSpokenInstruction: String? = nil
+    nextSpokenInstruction: String? = nil,
+    geometry: [NavOSSCarPlayCoordinate]? = nil,
+    waypoints: [NavOSSCarPlayDestination]? = nil
   ) -> NavOSSCarPlayTrip {
     NavOSSCarPlayTrip(
       destination: NavOSSCarPlayDestination(
@@ -1033,7 +1226,7 @@ final class NavigationCoreTests: XCTestCase {
       ),
       distanceMeters: 2_000,
       durationSeconds: 180,
-      geometry: [
+      geometry: geometry ?? [
         NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
         NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.07),
         NavOSSCarPlayCoordinate(latitude: 51.13, longitude: -114.01),
@@ -1064,7 +1257,8 @@ final class NavigationCoreTests: XCTestCase {
           roadName: "Airport Trail NE",
           spokenInstruction: nextSpokenInstruction
         ),
-      ]
+      ],
+      waypoints: waypoints
     )
   }
 }

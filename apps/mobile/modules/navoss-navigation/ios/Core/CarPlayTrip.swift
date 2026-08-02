@@ -30,22 +30,25 @@ public func navOSSCarPlaySpeedLimit(
   else {
     return nil
   }
-  let index = matchedCoordinate.flatMap { coordinate in
-    geometry.indices.dropLast().min { left, right in
-      navOSSCarPlayDistanceToSegment(
-        coordinate,
-        start: geometry[left],
-        end: geometry[left + 1]
-      ) < navOSSCarPlayDistanceToSegment(
-        coordinate,
-        start: geometry[right],
-        end: geometry[right + 1]
-      )
+  let index =
+    matchedCoordinate.flatMap { coordinate in
+      geometry.indices.dropLast().min { left, right in
+        navOSSCarPlayDistanceToSegment(
+          coordinate,
+          start: geometry[left],
+          end: geometry[left + 1]
+        )
+          < navOSSCarPlayDistanceToSegment(
+            coordinate,
+            start: geometry[right],
+            end: geometry[right + 1]
+          )
+      }
     }
-  } ?? min(
-    speedLimitsKph.count - 1,
-    Int(floor(min(1, max(0, routeProgress)) * Double(speedLimitsKph.count)))
-  )
+    ?? min(
+      speedLimitsKph.count - 1,
+      Int(floor(min(1, max(0, routeProgress)) * Double(speedLimitsKph.count)))
+    )
   let speedLimit = speedLimitsKph[index]
   return speedLimit > 0 ? speedLimit : nil
 }
@@ -64,7 +67,8 @@ private func navOSSCarPlayDistanceToSegment(
   let deltaX = endX - startX
   let deltaY = endY - startY
   let squaredLength = deltaX * deltaX + deltaY * deltaY
-  let projection = squaredLength == 0
+  let projection =
+    squaredLength == 0
     ? 0
     : min(1, max(0, -(startX * deltaX + startY * deltaY) / squaredLength))
   return hypot(startX + projection * deltaX, startY + projection * deltaY)
@@ -437,11 +441,97 @@ public func navOSSRemainingRouteGeometry(
       latitude: start.latitude + (end.latitude - start.latitude) * segmentProgress,
       longitude: start.longitude + (end.longitude - start.longitude) * segmentProgress
     )
-    return [matchedCoordinate ?? routePosition] + geometry.dropFirst(index + 1)
+    return navOSSVisibleRouteTail(
+      [matchedCoordinate ?? routePosition] + geometry.dropFirst(index + 1),
+      fullGeometry: geometry
+    )
   }
 
   let destination = geometry[geometry.count - 1]
-  return [matchedCoordinate ?? destination, destination]
+  return navOSSVisibleRouteTail(
+    [matchedCoordinate ?? destination, destination],
+    fullGeometry: geometry
+  )
+}
+
+private func navOSSVisibleRouteTail(
+  _ remaining: [NavOSSCarPlayCoordinate],
+  fullGeometry: [NavOSSCarPlayCoordinate]
+) -> [NavOSSCarPlayCoordinate] {
+  guard let first = remaining.first,
+    !remaining.dropFirst().contains(where: { $0 != first }),
+    let destination = fullGeometry.last,
+    let anchor = fullGeometry.dropLast().last(where: { $0 != destination })
+  else {
+    return remaining
+  }
+  return [anchor, destination]
+}
+
+public func navOSSRemainingWaypoints(
+  in trip: NavOSSCarPlayTrip,
+  after routeProgress: Double
+) -> [NavOSSCarPlayDestination] {
+  guard let waypoints = trip.waypoints, !waypoints.isEmpty else {
+    return []
+  }
+  return waypoints.filter { waypoint in
+    navOSSWaypointProgress(waypoint, along: trip.geometry) > routeProgress
+  }
+}
+
+private func navOSSWaypointProgress(
+  _ waypoint: NavOSSCarPlayDestination,
+  along geometry: [NavOSSCarPlayCoordinate]
+) -> Double {
+  guard geometry.count >= 2 else { return 1 }
+  var cumulativeDistances = [0.0]
+  for index in 1..<geometry.count {
+    cumulativeDistances.append(
+      cumulativeDistances[index - 1]
+        + navOSSCarPlayCoordinateDistance(from: geometry[index - 1], to: geometry[index])
+    )
+  }
+  guard let totalDistance = cumulativeDistances.last, totalDistance > 0 else { return 1 }
+  let coordinate = NavOSSCarPlayCoordinate(
+    latitude: waypoint.latitude,
+    longitude: waypoint.longitude
+  )
+  var bestDistance = Double.infinity
+  var bestProgress = 1.0
+  for index in geometry.indices.dropLast() {
+    let projection = navOSSCarPlaySegmentProjection(
+      coordinate,
+      start: geometry[index],
+      end: geometry[index + 1]
+    )
+    guard projection.distanceMeters < bestDistance else { continue }
+    bestDistance = projection.distanceMeters
+    let segmentLength = cumulativeDistances[index + 1] - cumulativeDistances[index]
+    bestProgress =
+      (cumulativeDistances[index] + segmentLength * projection.fraction) / totalDistance
+  }
+  return bestProgress
+}
+
+private func navOSSCarPlaySegmentProjection(
+  _ coordinate: NavOSSCarPlayCoordinate,
+  start: NavOSSCarPlayCoordinate,
+  end: NavOSSCarPlayCoordinate
+) -> (distanceMeters: Double, fraction: Double) {
+  let latitudeScale = 111_320.0
+  let longitudeScale = latitudeScale * cos(coordinate.latitude * .pi / 180)
+  let startX = (start.longitude - coordinate.longitude) * longitudeScale
+  let startY = (start.latitude - coordinate.latitude) * latitudeScale
+  let endX = (end.longitude - coordinate.longitude) * longitudeScale
+  let endY = (end.latitude - coordinate.latitude) * latitudeScale
+  let deltaX = endX - startX
+  let deltaY = endY - startY
+  let squaredLength = deltaX * deltaX + deltaY * deltaY
+  let fraction = squaredLength == 0
+    ? 0
+    : min(1, max(0, -(startX * deltaX + startY * deltaY) / squaredLength))
+  return (hypot(startX + fraction * deltaX, startY + fraction * deltaY), fraction)
 }
 
 private func navOSSCarPlayCoordinateDistance(

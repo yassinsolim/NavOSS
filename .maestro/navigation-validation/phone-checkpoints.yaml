@@ -1,19 +1,56 @@
 appId: org.navoss.mobile
 ---
-- launchApp:
-    clearState: true
 - openLink: 'exp+navoss://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081'
 - waitForAnimationToEnd
-- tapOn:
-    text: 'Close'
-    optional: true
+- extendedWaitUntil:
+    visible: 'Open|Bundling.*|Search places|Close|Continue'
+    timeout: 10000
+- runFlow:
+    when:
+      visible: 'Open'
+    commands:
+      - tapOn: 'Open'
+- extendedWaitUntil:
+    notVisible: 'Bundling.*'
+    timeout: 60000
+- runFlow:
+    when:
+      visible: 'Close'
+    commands:
+      - tapOn:
+          point: '95%,7%'
+- runFlow:
+    when:
+      visible: 'Continue'
+    commands:
+      - tapOn: 'Continue'
+- runFlow:
+    when:
+      visible: 'Close'
+    commands:
+      - tapOn:
+          point: '95%,7%'
 - tapOn:
     text: 'Reload'
     optional: true
 - extendedWaitUntil:
-    visible: 'Search Calgary'
+    visible: 'Continue|Search places'
     timeout: 20000
-- tapOn: 'Search Calgary'
+- runFlow:
+    when:
+      visible: 'Continue'
+    commands:
+      - tapOn: 'Continue'
+- runFlow:
+    when:
+      visible: 'Close'
+    commands:
+      - tapOn:
+          point: '95%,7%'
+- extendedWaitUntil:
+    visible: 'Search places'
+    timeout: 20000
+- tapOn: 'Search places'
 - eraseText
 - inputText: 'Airport'
 - extendedWaitUntil:
@@ -54,11 +91,14 @@ appId: org.navoss.mobile
 - assertVisible: 'Share ETA'
 - takeScreenshot: '/tmp/navoss-validation-phone-guidance'
 - tapOn: 'Report road condition'
+- assertVisible: 'Report Crash'
+- assertVisible: 'Report Road closed'
 - assertVisible: 'Report Slow traffic'
 - assertVisible: 'Report Construction'
 - assertVisible: 'Report Pothole'
 - assertVisible: 'Report Object on road'
 - assertVisible: 'Report Other hazard'
+- assertVisible: 'Report Stopped vehicle'
 - assertVisible: '.*not shown to other drivers yet.*'
 - takeScreenshot: '/tmp/navoss-validation-phone-report'
 - tapOn: 'Cancel report'

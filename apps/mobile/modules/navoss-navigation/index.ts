@@ -14,6 +14,8 @@ export interface NativeNavigationCapabilities {
   version: 8;
 }
 
+export type NativeNavigationAudioMode = 'alerts-only' | 'all-guidance' | 'muted';
+
 export interface NativeNavigationCoordinate {
   latitude: number;
   longitude: number;
@@ -110,9 +112,15 @@ export interface NativeCarPlayState {
   hasActiveTrip: boolean;
 }
 
+export interface NativeNavigationPreferences {
+  audioMode: NativeNavigationAudioMode;
+  routePreferences: NativeRoutePreferences;
+}
+
 type NavOSSNavigationEvents = {
   onCarPlayNavigationEnded(event: { reason: 'carplay' }): void;
   onCarPlayStateChanged(state: NativeCarPlayState): void;
+  onNavigationPreferencesChanged(preferences: NativeNavigationPreferences): void;
   onNavigationSnapshot(snapshot: NativeNavigationSnapshot): void;
 };
 
@@ -123,17 +131,23 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   clearRecentDestinations(): void;
   clearRoute(): NativeNavigationSnapshot;
   getCarPlayState(): NativeCarPlayState;
+  getAudioMode(): NativeNavigationAudioMode;
   getCapabilities(): NativeNavigationCapabilities;
   getDestinationCatalog(): NativeDestinationCatalog;
   getGooglePlacesOpenSourceLicenseInfo(): string | null;
+  getNavigationPreferences(): NativeNavigationPreferences;
   getRecentDestinationIds(): string[];
+  getRoutePreferences(): NativeRoutePreferences;
   getSnapshot(): NativeNavigationSnapshot;
   isFavoriteDestination(id: string): boolean;
+  isCarPlayVisualHarness(): boolean;
   isGooglePlaceRatingAvailable(): boolean;
   recordRecentDestination(destination: NativeNavigationDestination): void;
   replaceFavoriteDestinations(destinations: NativeNavigationDestination[]): void;
   setHomeDestination(destination: NativeNavigationDestination | null): void;
+  setAudioMode(mode: NativeNavigationAudioMode): void;
   setRoute(trip: NativeCarPlayTrip): NativeNavigationSnapshot;
+  setRoutePreferences(preferences: NativeRoutePreferences): void;
   setWorkDestination(destination: NativeNavigationDestination | null): void;
   stopAnnouncements(): void;
   toggleFavoriteDestination(destination: NativeNavigationDestination): boolean;

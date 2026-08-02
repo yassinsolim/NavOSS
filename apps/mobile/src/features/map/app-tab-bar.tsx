@@ -1,5 +1,11 @@
 import { SymbolView } from 'expo-symbols';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  ReduceMotion,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
 
@@ -25,6 +31,55 @@ const TABS = [
 
 export const APP_TAB_BAR_HEIGHT = 62;
 
+function TabButton({
+  onPress,
+  selected,
+  tab,
+}: {
+  onPress: () => void;
+  selected: boolean;
+  tab: (typeof TABS)[number];
+}) {
+  const animatedIconStyle = useAnimatedStyle(
+    () => ({
+      backgroundColor: withTiming(selected ? NavOssColors.sky : 'rgba(255,255,255,0)', {
+        duration: 160,
+        reduceMotion: ReduceMotion.System,
+      }),
+      transform: [
+        {
+          scale: withSpring(selected ? 1 : 0.9, {
+            damping: 17,
+            mass: 0.65,
+            reduceMotion: ReduceMotion.System,
+            stiffness: 240,
+          }),
+        },
+      ],
+    }),
+    [selected],
+  );
+
+  return (
+    <Pressable
+      accessibilityLabel={tab.label}
+      accessibilityRole="tab"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={({ pressed }) => [styles.tab, pressed && styles.pressed]}
+    >
+      <Animated.View style={[styles.iconWell, animatedIconStyle]}>
+        <SymbolView
+          name={tab.icon}
+          size={21}
+          tintColor={selected ? NavOssColors.green : NavOssColors.muted}
+        />
+      </Animated.View>
+      <Text style={[styles.label, selected && styles.labelSelected]}>{tab.label}</Text>
+    </Pressable>
+  );
+}
+
 export function AppTabBar({
   activeTab,
   bottomInset,
@@ -41,25 +96,14 @@ export function AppTabBar({
       {TABS.map((tab) => {
         const selected = tab.id === activeTab;
         return (
-          <Pressable
-            accessibilityLabel={tab.label}
-            accessibilityRole="tab"
-            accessibilityState={{ selected }}
+          <TabButton
             key={tab.id}
             onPress={() => {
               onSelect(tab.id);
             }}
-            style={({ pressed }) => [styles.tab, pressed && styles.pressed]}
-          >
-            <View style={[styles.iconWell, selected && styles.iconWellSelected]}>
-              <SymbolView
-                name={tab.icon}
-                size={21}
-                tintColor={selected ? NavOssColors.green : NavOssColors.muted}
-              />
-            </View>
-            <Text style={[styles.label, selected && styles.labelSelected]}>{tab.label}</Text>
-          </Pressable>
+            selected={selected}
+            tab={tab}
+          />
         );
       })}
     </View>
@@ -89,9 +133,6 @@ const styles = StyleSheet.create({
     height: 30,
     justifyContent: 'center',
     width: 50,
-  },
-  iconWellSelected: {
-    backgroundColor: NavOssColors.sky,
   },
   label: {
     color: NavOssColors.muted,

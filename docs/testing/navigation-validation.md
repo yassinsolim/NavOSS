@@ -54,7 +54,7 @@ The phone suite validates:
 - confirmed arrival after replaying the final route segment;
 - screenshot decoding, nonblank content, OCR overlay detection, and uniqueness.
 
-The native suite validates 33 navigation and CarPlay core behaviors, including trip lifecycle, stable publication, End controls, remaining-route geometry, route matching, rerouting, arrival, maneuver speech, destination persistence, API decoding, and driving-scale units.
+The native suite validates 48 navigation and CarPlay core behaviors, including trip lifecycle, stable publication, End controls, remaining-route geometry, route matching, rerouting, arrival, maneuver speech, destination persistence, API decoding, and driving-scale units.
 
 The CarPlay visual suite mounts the exact production `NavOSSCarPlayMapViewController` in a simulator-only phone window and validates:
 

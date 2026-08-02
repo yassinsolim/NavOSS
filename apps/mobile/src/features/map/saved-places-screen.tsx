@@ -2,6 +2,7 @@ import type { SearchResult } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
 import type { ComponentProps } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInRight, FadeOutLeft, ReduceMotion } from 'react-native-reanimated';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
 import { APP_TAB_BAR_HEIGHT } from '@/features/map/app-tab-bar';
@@ -185,7 +186,11 @@ export function SavedPlacesScreen({
   const recents = catalog.recents.map(nativeDestinationToSearchResult);
 
   return (
-    <View style={[styles.screen, { paddingTop: safeAreaTop }]}>
+    <Animated.View
+      entering={FadeInRight.duration(220).reduceMotion(ReduceMotion.System)}
+      exiting={FadeOutLeft.duration(150).reduceMotion(ReduceMotion.System)}
+      style={[styles.screen, { paddingTop: safeAreaTop }]}
+    >
       <View style={styles.header}>
         <Text style={styles.eyebrow}>YOUR PLACES</Text>
         <Text style={styles.title}>Saved places</Text>
@@ -284,7 +289,7 @@ export function SavedPlacesScreen({
           )}
         </View>
       </ScrollView>
-    </View>
+    </Animated.View>
   );
 }
 

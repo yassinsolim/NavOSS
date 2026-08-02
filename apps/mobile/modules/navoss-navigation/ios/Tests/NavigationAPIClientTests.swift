@@ -64,6 +64,8 @@ final class NavigationAPIClientTests: XCTestCase {
       )
       let preferences = try XCTUnwrap(payload["preferences"] as? [String: Any])
       XCTAssertEqual(preferences["avoidHighways"] as? Bool, true)
+      XCTAssertEqual(payload["originHeadingDegrees"] as? Double, 25)
+      XCTAssertEqual(payload["originHorizontalAccuracyMeters"] as? Double, 8)
       let waypoints = try XCTUnwrap(payload["waypoints"] as? [[String: Any]])
       XCTAssertEqual(waypoints.first?["latitude"] as? Double, 51.08)
       XCTAssertEqual(waypoints.first?["longitude"] as? Double, -114.05)
@@ -105,6 +107,8 @@ final class NavigationAPIClientTests: XCTestCase {
 
     let routes = try await client.routes(
       origin: NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      originHeadingDegrees: 25,
+      originHorizontalAccuracyMeters: 8,
       destination: NavOSSCarPlayDestination(
         id: "airport",
         label: "2000 Airport Road NE",
@@ -135,6 +139,69 @@ final class NavigationAPIClientTests: XCTestCase {
       routes.first?.steps.first?.spokenInstruction,
       "Continue north on Airport Trail NE"
     )
+  }
+
+  func testRoutesRetryWithoutOriginMetadataAfterInvalidRequest() async throws {
+    var payloads: [[String: Any]] = []
+    NavigationURLProtocol.handler = { request in
+      let payload = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: Self.requestBody(request)) as? [String: Any]
+      )
+      payloads.append(payload)
+      if payloads.count == 1 {
+        return Self.response(request: request, json: "{}", statusCode: 400)
+      }
+      return Self.response(
+        request: request,
+        json: """
+          {
+            "degraded": true,
+            "generatedAt": "2026-07-22T00:00:00.000Z",
+            "routes": [{
+              "distanceMeters": 1000,
+              "durationSeconds": 120,
+              "geometry": [[-114.08, 51.04], [-114.01, 51.13]],
+              "id": "route-1",
+              "label": "fastest",
+              "steps": [{
+                "distanceMeters": 1000,
+                "durationSeconds": 120,
+                "geometry": [[-114.08, 51.04], [-114.01, 51.13]],
+                "instruction": "Continue north",
+                "maneuverType": "continue",
+                "roadName": "Test Road"
+              }]
+            }],
+            "source": {
+              "attribution": "Routing by Valhalla using OpenStreetMap data",
+              "id": "valhalla-development",
+              "mode": "development",
+              "traffic": "unavailable"
+            }
+          }
+          """
+      )
+    }
+    let client = try makeClient()
+
+    _ = try await client.routes(
+      origin: NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      originHeadingDegrees: 25,
+      originHorizontalAccuracyMeters: 8,
+      destination: NavOSSCarPlayDestination(
+        id: "airport",
+        label: "Airport Road",
+        latitude: 51.13,
+        longitude: -114.01,
+        name: "Airport"
+      ),
+      preferences: NavOSSRoutePreferences()
+    )
+
+    XCTAssertEqual(payloads.count, 2)
+    XCTAssertEqual(payloads.first?["originHeadingDegrees"] as? Double, 25)
+    XCTAssertNil(payloads.last?["originHeadingDegrees"])
+    XCTAssertNil(payloads.last?["originHorizontalAccuracyMeters"])
   }
 
   private func makeClient() throws -> NavOSSNavigationAPIClient {
@@ -170,11 +237,12 @@ final class NavigationAPIClientTests: XCTestCase {
 
   private static func response(
     request: URLRequest,
-    json: String
+    json: String,
+    statusCode: Int = 200
   ) -> (HTTPURLResponse, Data) {
     let response = HTTPURLResponse(
       url: request.url!,
-      statusCode: 200,
+      statusCode: statusCode,
       httpVersion: nil,
       headerFields: ["content-type": "application/json"]
     )!

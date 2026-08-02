@@ -70,6 +70,8 @@ describe('Valhalla route provider', () => {
       alternatives: 2,
       destination: { latitude: 51.13157, longitude: -114.01055 },
       origin: { latitude: 51.0447, longitude: -114.0719 },
+      originHeadingDegrees: 25,
+      originHorizontalAccuracyMeters: 8,
       preferences: {
         avoidFerries: false,
         avoidHighways: false,
@@ -90,11 +92,12 @@ describe('Valhalla route provider', () => {
         attributes: ['shape_attributes.speed_limit'],
       },
       locations: [
-        { lat: 51.0447, lon: -114.0719 },
+        { heading: 25, heading_tolerance: 45, lat: 51.0447, lon: -114.0719, radius: 16 },
         { lat: 51.065, lon: -114.08 },
         { lat: 51.13157, lon: -114.01055 },
       ],
     });
+    expect(requestPayload).not.toHaveProperty('date_time');
     expect(provider.source).toEqual({
       attribution: 'Routing by Valhalla using OpenStreetMap data',
       degraded: false,
@@ -118,6 +121,7 @@ describe('Valhalla route provider', () => {
   });
 
   it('preserves only geometry-aligned known and unknown speed limits', async () => {
+    let requestPayload: unknown;
     const route = valhallaRoute(1_000, 120, 0);
     const alignedRoute = {
       ...route,
@@ -140,8 +144,13 @@ describe('Valhalla route provider', () => {
     };
     const provider = createValhallaRouteProvider({
       endpoint: 'https://valhalla.test/route',
-      fetchImplementation: () =>
-        Promise.resolve(new Response(JSON.stringify({ code: 'Ok', routes: [alignedRoute] }))),
+      fetchImplementation: (_input, init) => {
+        if (typeof init?.body !== 'string') throw new Error('Expected JSON request body.');
+        requestPayload = JSON.parse(init.body);
+        return Promise.resolve(
+          new Response(JSON.stringify({ code: 'Ok', routes: [alignedRoute] })),
+        );
+      },
     });
 
     const routes = await provider.getRoutes({
@@ -157,6 +166,7 @@ describe('Valhalla route provider', () => {
     });
 
     expect(routes[0]?.speedLimitsKph).toEqual([0, 50]);
+    expect(requestPayload).toMatchObject({ date_time: { type: 0 } });
   });
 
   it('keeps the final voice instruction for the maneuver at the end of a step', async () => {

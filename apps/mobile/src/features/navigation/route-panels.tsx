@@ -1,11 +1,34 @@
 import type {
   RouteAlternative,
+  RoutePreferences,
   RouteResponse,
   SafetyCamera,
   SearchResult,
 } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInRight,
+  FadeInUp,
+  FadeOut,
+  FadeOutDown,
+  FadeOutUp,
+  LinearTransition,
+  ReduceMotion,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
 import {
@@ -20,6 +43,7 @@ import {
   type ManeuverDirection,
 } from '@/features/navigation/maneuver-direction';
 import type { VehicleMatchStatus, VehicleStyle } from '@/features/navigation/vehicle-puck';
+import type { NavigationAudioMode } from '@/features/navigation/native-navigation';
 
 interface RoutePlanningPanelProps {
   bottomInset: number;
@@ -39,7 +63,12 @@ export function RoutePlanningPanel({
   onRetry,
 }: RoutePlanningPanelProps) {
   return (
-    <View style={[styles.bottomPanel, { paddingBottom: Math.max(bottomInset, 14) }]}>
+    <Animated.View
+      entering={FadeInUp.duration(240).reduceMotion(ReduceMotion.System)}
+      exiting={FadeOutDown.duration(170).reduceMotion(ReduceMotion.System)}
+      layout={LinearTransition.duration(180).reduceMotion(ReduceMotion.System)}
+      style={[styles.bottomPanel, { paddingBottom: Math.max(bottomInset, 14) }]}
+    >
       <View style={styles.panelHeader}>
         <View style={styles.panelTitleCopy}>
           <Text numberOfLines={1} style={styles.eyebrow}>
@@ -59,12 +88,20 @@ export function RoutePlanningPanel({
       </View>
 
       {errorMessage === undefined ? (
-        <View style={styles.planningRow}>
+        <Animated.View
+          entering={FadeIn.duration(160).reduceMotion(ReduceMotion.System)}
+          exiting={FadeOut.duration(120).reduceMotion(ReduceMotion.System)}
+          style={styles.planningRow}
+        >
           <ActivityIndicator color={NavOssColors.green} size="small" />
           <Text style={styles.planningText}>Using your current location</Text>
-        </View>
+        </Animated.View>
       ) : (
-        <View style={styles.errorContent}>
+        <Animated.View
+          entering={FadeIn.duration(180).reduceMotion(ReduceMotion.System)}
+          exiting={FadeOut.duration(120).reduceMotion(ReduceMotion.System)}
+          style={styles.errorContent}
+        >
           <Text style={styles.errorText}>{errorMessage}</Text>
           <View style={styles.errorActions}>
             <Pressable
@@ -94,52 +131,124 @@ export function RoutePlanningPanel({
               </Pressable>
             )}
           </View>
-        </View>
+        </Animated.View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
 interface RoutePreviewPanelProps {
-  avoidHighways: boolean;
   bottomInset: number;
   destination: SearchResult;
   onCancel: () => void;
   onEditStops: () => void;
   onSelectRoute: (route: RouteAlternative) => void;
   onStart: () => void;
-  onToggleAvoidHighways: () => void;
+  onToggleRoutePreference: (preference: keyof RoutePreferences) => void;
   onUseCurrentLocation: () => void;
   onVehicleStyleChange: (vehicleStyle: VehicleStyle) => void;
   previewOriginLabel?: string;
   routes: RouteAlternative[];
   selectedRoute: RouteAlternative;
   routeSource?: RouteResponse['source'];
+  routePreferences: RoutePreferences;
   vehicleStyle: VehicleStyle;
   waypoints: SearchResult[];
 }
 
+function RouteChoiceCard({
+  index,
+  onSelect,
+  route,
+  selected,
+}: {
+  index: number;
+  onSelect: () => void;
+  route: RouteAlternative;
+  selected: boolean;
+}) {
+  const trafficDelay = formatTrafficDelay(route.traffic?.delaySeconds ?? 0);
+  const viaLabel = routeViaLabel(route);
+  const animatedStyle = useAnimatedStyle(
+    () => ({
+      opacity: withTiming(selected ? 1 : 0.92, {
+        duration: 140,
+        reduceMotion: ReduceMotion.System,
+      }),
+      transform: [
+        {
+          scale: withSpring(selected ? 1 : 0.965, {
+            damping: 18,
+            mass: 0.65,
+            reduceMotion: ReduceMotion.System,
+            stiffness: 240,
+          }),
+        },
+      ],
+    }),
+    [selected],
+  );
+
+  return (
+    <Animated.View
+      entering={FadeInRight.duration(210)
+        .delay(Math.min(index, 4) * 35)
+        .reduceMotion(ReduceMotion.System)}
+      layout={LinearTransition.duration(170).reduceMotion(ReduceMotion.System)}
+      style={animatedStyle}
+    >
+      <Pressable
+        accessibilityLabel={`Select ${route.label} ${formatDuration(route.durationSeconds)} route, ${formatDistance(route.distanceMeters)}, ${viaLabel}${trafficDelay === undefined ? '' : `, ${trafficDelay}`}`}
+        onPress={onSelect}
+        style={({ pressed }) => [
+          styles.routeChoice,
+          selected && styles.routeChoiceSelected,
+          pressed && styles.routeChoicePressed,
+        ]}
+      >
+        <Text style={[styles.routeChoiceEta, selected && styles.routeChoiceEtaSelected]}>
+          {formatDuration(route.durationSeconds)}
+        </Text>
+        <Text style={[styles.routeChoiceMeta, selected && styles.routeChoiceMetaSelected]}>
+          {index === 0
+            ? `Fastest · ${formatDistance(route.distanceMeters)}${trafficDelay === undefined ? '' : ` · ${trafficDelay}`}`
+            : `${formatDistance(route.distanceMeters)}${trafficDelay === undefined ? '' : ` · ${trafficDelay}`}`}
+        </Text>
+        <Text
+          numberOfLines={2}
+          style={[styles.routeVia, selected && styles.routeChoiceMetaSelected]}
+        >
+          {viaLabel}
+        </Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 export function RoutePreviewPanel({
-  avoidHighways,
   bottomInset,
   destination,
   onCancel,
   onEditStops,
   onSelectRoute,
   onStart,
-  onToggleAvoidHighways,
+  onToggleRoutePreference,
   onUseCurrentLocation,
   onVehicleStyleChange,
   previewOriginLabel,
   routes,
   selectedRoute,
   routeSource,
+  routePreferences,
   vehicleStyle,
   waypoints,
 }: RoutePreviewPanelProps) {
   const selectedTrafficDelay = formatTrafficDelay(selectedRoute.traffic?.delaySeconds ?? 0);
   return (
-    <View
+    <Animated.View
+      entering={FadeInUp.duration(260).reduceMotion(ReduceMotion.System)}
+      exiting={FadeOutDown.duration(180).reduceMotion(ReduceMotion.System)}
+      layout={LinearTransition.duration(200).reduceMotion(ReduceMotion.System)}
       style={[
         styles.bottomPanel,
         styles.previewPanel,
@@ -169,32 +278,16 @@ export function RoutePreviewPanel({
       >
         {routes.map((route, index) => {
           const selected = route.id === selectedRoute.id;
-          const trafficDelay = formatTrafficDelay(route.traffic?.delaySeconds ?? 0);
-          const viaLabel = routeViaLabel(route);
           return (
-            <Pressable
-              accessibilityLabel={`Select ${route.label} ${formatDuration(route.durationSeconds)} route, ${formatDistance(route.distanceMeters)}, ${viaLabel}${trafficDelay === undefined ? '' : `, ${trafficDelay}`}`}
+            <RouteChoiceCard
+              index={index}
               key={route.id}
-              onPress={() => {
+              onSelect={() => {
                 onSelectRoute(route);
               }}
-              style={[styles.routeChoice, selected && styles.routeChoiceSelected]}
-            >
-              <Text style={[styles.routeChoiceEta, selected && styles.routeChoiceEtaSelected]}>
-                {formatDuration(route.durationSeconds)}
-              </Text>
-              <Text style={[styles.routeChoiceMeta, selected && styles.routeChoiceMetaSelected]}>
-                {index === 0
-                  ? `Fastest · ${formatDistance(route.distanceMeters)}${trafficDelay === undefined ? '' : ` · ${trafficDelay}`}`
-                  : `${formatDistance(route.distanceMeters)}${trafficDelay === undefined ? '' : ` · ${trafficDelay}`}`}
-              </Text>
-              <Text
-                numberOfLines={2}
-                style={[styles.routeVia, selected && styles.routeChoiceMetaSelected]}
-              >
-                {viaLabel}
-              </Text>
-            </Pressable>
+              route={route}
+              selected={selected}
+            />
           );
         })}
       </ScrollView>
@@ -224,24 +317,50 @@ export function RoutePreviewPanel({
         />
       </Pressable>
 
-      <View style={styles.routeOptions}>
-        <Pressable
-          accessibilityLabel="Avoid highways"
-          accessibilityRole="switch"
-          accessibilityState={{ checked: avoidHighways }}
-          onPress={onToggleAvoidHighways}
-          style={[styles.optionButton, avoidHighways && styles.optionButtonSelected]}
-        >
-          <SymbolView
-            name={{ android: 'alt_route', ios: 'arrow.triangle.branch' }}
-            size={17}
-            tintColor={avoidHighways ? NavOssColors.white : NavOssColors.asphalt}
-          />
-          <Text style={[styles.optionText, avoidHighways && styles.optionTextSelected]}>
-            Avoid highways
-          </Text>
-        </Pressable>
+      <ScrollView
+        contentContainerStyle={styles.routePreferenceOptions}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+      >
+        {(
+          [
+            ['avoidHighways', 'Highways', { android: 'alt_route', ios: 'road.lanes' }],
+            ['avoidTolls', 'Tolls', { android: 'toll', ios: 'dollarsign.circle.fill' }],
+            ['avoidFerries', 'Ferries', { android: 'directions_boat', ios: 'ferry.fill' }],
+            ['avoidUnpaved', 'Unpaved', { android: 'landscape', ios: 'mountain.2.fill' }],
+          ] as const
+        ).map(([preference, label, icon]) => {
+          const selected = routePreferences[preference];
+          return (
+            <Pressable
+              accessibilityLabel={`Avoid ${label.toLowerCase()}`}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: selected }}
+              key={preference}
+              onPress={() => {
+                onToggleRoutePreference(preference);
+              }}
+              style={[styles.optionButton, selected && styles.optionButtonSelected]}
+            >
+              <SymbolView
+                name={icon}
+                size={17}
+                tintColor={selected ? NavOssColors.white : NavOssColors.asphalt}
+              />
+              <Text
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                numberOfLines={1}
+                style={[styles.optionText, selected && styles.optionTextSelected]}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
 
+      <View style={styles.routeOptions}>
         <View accessibilityLabel="Navigation marker" style={styles.vehiclePicker}>
           {(['arrow', 'car'] as const).map((style) => {
             const selected = style === vehicleStyle;
@@ -269,7 +388,12 @@ export function RoutePreviewPanel({
         </View>
       </View>
 
-      <View style={styles.previewSummary}>
+      <Animated.View
+        key={selectedRoute.id}
+        entering={FadeIn.duration(180).reduceMotion(ReduceMotion.System)}
+        layout={LinearTransition.duration(160).reduceMotion(ReduceMotion.System)}
+        style={styles.previewSummary}
+      >
         <View style={styles.etaBlock}>
           <Text style={styles.eta}>{formatDuration(selectedRoute.durationSeconds)}</Text>
           <Text style={styles.arrival}>
@@ -307,7 +431,7 @@ export function RoutePreviewPanel({
             <Text style={styles.useLocationText}>Use my location</Text>
           </Pressable>
         )}
-      </View>
+      </Animated.View>
 
       {previewOriginLabel !== undefined && (
         <View
@@ -326,7 +450,7 @@ export function RoutePreviewPanel({
       )}
 
       <View style={styles.sourceRow}>
-        <Text style={styles.developmentSource}>
+        <Text numberOfLines={1} style={styles.developmentSource}>
           {routeSource?.attribution ?? 'Routing source unavailable'}
         </Text>
         <Text style={styles.trafficStatus}>
@@ -335,7 +459,7 @@ export function RoutePreviewPanel({
             : 'No live traffic'}
         </Text>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -371,7 +495,9 @@ export function CarPlayCompanionPanel({
   const direction = maneuverDirection(maneuverType, instruction);
 
   return (
-    <View
+    <Animated.View
+      entering={FadeIn.duration(220).reduceMotion(ReduceMotion.System)}
+      exiting={FadeOut.duration(150).reduceMotion(ReduceMotion.System)}
       style={[
         styles.carPlayCompanion,
         {
@@ -443,7 +569,7 @@ export function CarPlayCompanionPanel({
           <Text style={styles.carPlayEndText}>{actionLabel}</Text>
         </Pressable>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -461,10 +587,12 @@ export function SafetyCameraAlertBanner({
   const distance = formatDistance(distanceAheadMeters);
 
   return (
-    <View
+    <Animated.View
       accessibilityLabel={`Red light and speed camera ahead, ${distance}, ${camera.location}`}
       accessibilityLiveRegion="polite"
       accessible
+      entering={FadeInDown.duration(220).reduceMotion(ReduceMotion.System)}
+      exiting={FadeOutUp.duration(150).reduceMotion(ReduceMotion.System)}
       style={[styles.cameraAlertBanner, { top: safeAreaTop + 136 }]}
     >
       <View style={styles.cameraAlertIcon}>
@@ -480,7 +608,7 @@ export function SafetyCameraAlertBanner({
           {distance} · {camera.location}
         </Text>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -501,7 +629,11 @@ interface ArrivalPanelProps {
 
 export function ArrivalPanel({ bottomInset, destination, onDone }: ArrivalPanelProps) {
   return (
-    <View style={[styles.bottomPanel, { paddingBottom: Math.max(bottomInset, 14) }]}>
+    <Animated.View
+      entering={FadeInUp.duration(260).reduceMotion(ReduceMotion.System)}
+      exiting={FadeOutDown.duration(170).reduceMotion(ReduceMotion.System)}
+      style={[styles.bottomPanel, { paddingBottom: Math.max(bottomInset, 14) }]}
+    >
       <View style={styles.arrivalSummary}>
         <View style={styles.arrivalIcon}>
           <SymbolView
@@ -520,7 +652,7 @@ export function ArrivalPanel({ bottomInset, destination, onDone }: ArrivalPanelP
       <Pressable accessibilityLabel="Finish navigation" onPress={onDone} style={styles.doneButton}>
         <Text style={styles.doneText}>Done</Text>
       </Pressable>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -553,10 +685,12 @@ export function NavigationBanner({
         : formatDistance(distanceMeters);
 
   return (
-    <View
+    <Animated.View
       accessibilityLabel={`${displayedDistance}, ${displayedInstruction}${displayedRoadName.length === 0 ? '' : `, ${displayedRoadName}`}`}
       accessibilityLiveRegion="polite"
       accessible
+      entering={FadeInDown.duration(230).reduceMotion(ReduceMotion.System)}
+      exiting={FadeOutUp.duration(160).reduceMotion(ReduceMotion.System)}
       style={[styles.navigationBanner, { top: safeAreaTop + 8 }]}
     >
       <View style={styles.maneuverIcon}>
@@ -585,7 +719,7 @@ export function NavigationBanner({
           </Text>
         )}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -607,28 +741,46 @@ function maneuverSymbol(direction: ManeuverDirection) {
 }
 
 interface NavigationStatusBarProps {
+  audioMode: NavigationAudioMode;
   bottomInset: number;
   cameraAnnouncementCount: number;
   distanceMeters: number;
   durationSeconds: number;
   matchStatus: VehicleMatchStatus;
   onEnd: () => void;
+  onSound: () => void;
   onReport: () => void;
   onShare: () => void;
   rerouteCount: number;
 }
 
 export function NavigationStatusBar({
+  audioMode,
   bottomInset,
   cameraAnnouncementCount,
   distanceMeters,
   durationSeconds,
   matchStatus,
   onEnd,
+  onSound,
   onReport,
   onShare,
   rerouteCount,
 }: NavigationStatusBarProps) {
+  const { width } = useWindowDimensions();
+  const compact = width < 390;
+  const soundLabel =
+    audioMode === 'all-guidance'
+      ? 'All guidance'
+      : audioMode === 'alerts-only'
+        ? 'Alerts only'
+        : 'Muted';
+  const soundIcon =
+    audioMode === 'all-guidance'
+      ? ({ android: 'volume_up', ios: 'speaker.wave.2.fill' } as const)
+      : audioMode === 'alerts-only'
+        ? ({ android: 'notifications', ios: 'bell.fill' } as const)
+        : ({ android: 'volume_off', ios: 'speaker.slash.fill' } as const);
   const matchStatusLabel =
     matchStatus === 'matched'
       ? 'on route'
@@ -649,7 +801,15 @@ export function NavigationStatusBar({
         : `${String(cameraAnnouncementCount)} camera alerts announced`;
 
   return (
-    <View style={[styles.navigationStatus, { paddingBottom: Math.max(bottomInset, 10) }]}>
+    <Animated.View
+      entering={FadeInUp.duration(250).reduceMotion(ReduceMotion.System)}
+      exiting={FadeOutDown.duration(170).reduceMotion(ReduceMotion.System)}
+      style={[
+        styles.navigationStatus,
+        compact && styles.navigationStatusCompact,
+        { paddingBottom: Math.max(bottomInset, 10) },
+      ]}
+    >
       <View
         accessibilityLabel={`Navigation status, ${matchStatusLabel}, ${rerouteDetail}, ${cameraDetail}, arrive ${formatArrivalTime(durationSeconds)}, ${formatDuration(durationSeconds)}, ${formatDistance(distanceMeters)}`}
         accessible
@@ -691,7 +851,18 @@ export function NavigationStatusBar({
           <Text style={styles.navigationMeta}>distance</Text>
         </View>
       </View>
-      <View style={styles.navigationActions}>
+      <View style={[styles.navigationActions, compact && styles.navigationActionsCompact]}>
+        <Pressable
+          accessibilityHint="Choose maneuver and safety-alert speech"
+          accessibilityLabel={`Guidance sound, ${soundLabel}`}
+          onPress={onSound}
+          style={({ pressed }) => [
+            styles.navigationAction,
+            pressed && styles.navigationActionPressed,
+          ]}
+        >
+          <SymbolView name={soundIcon} size={20} tintColor={NavOssColors.green} />
+        </Pressable>
         <Pressable
           accessibilityHint="Choose a road condition to record at your current location"
           accessibilityLabel="Report road condition"
@@ -740,7 +911,7 @@ export function NavigationStatusBar({
           />
         </Pressable>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -1090,6 +1261,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 7,
   },
+  navigationActionsCompact: {
+    alignSelf: 'flex-end',
+  },
   navigationDivider: {
     alignSelf: 'stretch',
     backgroundColor: NavOssColors.border,
@@ -1128,6 +1302,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
   },
+  navigationStatusCompact: {
+    alignItems: 'stretch',
+    flexDirection: 'column',
+    gap: 8,
+    minHeight: 154,
+    paddingTop: 10,
+  },
   navigationValue: {
     color: NavOssColors.asphalt,
     fontFamily: NavOssFonts.bold,
@@ -1141,7 +1322,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     gap: 6,
-    height: 36,
+    height: 44,
     paddingHorizontal: 12,
   },
   optionButtonSelected: {
@@ -1180,7 +1361,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   previewPanel: {
-    minHeight: 314,
+    minHeight: 370,
   },
   previewFallbackButton: {
     alignItems: 'center',
@@ -1266,6 +1447,9 @@ const styles = StyleSheet.create({
   routeChoiceMetaSelected: {
     color: '#D7E8E5',
   },
+  routeChoicePressed: {
+    opacity: 0.78,
+  },
   routeChoiceSelected: {
     backgroundColor: NavOssColors.green,
     borderColor: NavOssColors.green,
@@ -1277,7 +1461,11 @@ const styles = StyleSheet.create({
   routeOptions: {
     alignItems: 'center',
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
+  },
+  routePreferenceOptions: {
+    gap: 8,
+    paddingBottom: 10,
   },
   reportButton: {
     backgroundColor: NavOssColors.sun,

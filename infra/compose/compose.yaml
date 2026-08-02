@@ -127,6 +127,7 @@ services:
       server_threads: '2'
       tile_urls: ''
       traffic_name: ''
+      default_speeds_config_url: https://raw.githubusercontent.com/OpenStreetMapSpeeds/schema/c9c6872d5ec656f5d290944b44eb1a103ed539fa/default_speeds.json
       use_default_speeds_config: 'True'
       use_tiles_ignore_pbf: 'True'
     cap_drop:

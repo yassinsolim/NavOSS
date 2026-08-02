@@ -234,6 +234,8 @@ describe('fetchRoutes', () => {
         alternatives: 1,
         destination: { latitude: 51.13157, longitude: -114.01055 },
         origin: { latitude: 51.0447, longitude: -114.0719 },
+        originHeadingDegrees: 25,
+        originHorizontalAccuracyMeters: 8,
         preferences: {
           avoidFerries: false,
           avoidHighways: false,
@@ -289,7 +291,80 @@ describe('fetchRoutes', () => {
     );
 
     expect(capturedRequest).toMatchObject({ method: 'POST' });
+    expect(JSON.parse(String(capturedRequest?.body))).toMatchObject({
+      originHeadingDegrees: 25,
+      originHorizontalAccuracyMeters: 8,
+    });
     expect(response.routes[0]?.durationSeconds).toBe(1_215.354);
+  });
+
+  it('retries once without origin metadata when an older API rejects it', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const responsePayload = {
+      degraded: true,
+      generatedAt: '2026-07-15T12:00:00Z',
+      routes: [
+        {
+          distanceMeters: 1_000,
+          durationSeconds: 120,
+          geometry: [
+            [-114.08, 51.04],
+            [-114.01, 51.13],
+          ],
+          id: 'route-1',
+          label: 'fastest',
+          steps: [
+            {
+              distanceMeters: 1_000,
+              durationSeconds: 120,
+              geometry: [
+                [-114.08, 51.04],
+                [-114.01, 51.13],
+              ],
+              instruction: 'Continue north.',
+              maneuverType: 'continue',
+              roadName: 'Test Road',
+            },
+          ],
+        },
+      ],
+      source: {
+        attribution: 'Routing by Valhalla using OpenStreetMap data',
+        id: 'valhalla-development',
+        mode: 'development',
+        traffic: 'unavailable',
+      },
+    };
+
+    await fetchRoutes(
+      {
+        alternatives: 1,
+        destination: { latitude: 51.13, longitude: -114.01 },
+        origin: { latitude: 51.04, longitude: -114.08 },
+        originHeadingDegrees: 25,
+        originHorizontalAccuracyMeters: 8,
+        preferences: {
+          avoidFerries: false,
+          avoidHighways: false,
+          avoidTolls: false,
+          avoidUnpaved: false,
+        },
+      },
+      {
+        baseUrl: 'http://127.0.0.1:3001/',
+        fetchImplementation: async (_input, init) => {
+          bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+          return bodies.length === 1
+            ? new Response(JSON.stringify({ detail: 'Invalid request' }), { status: 400 })
+            : new Response(JSON.stringify(responsePayload), { status: 200 });
+        },
+      },
+    );
+
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]).toMatchObject({ originHeadingDegrees: 25 });
+    expect(bodies[1]).not.toHaveProperty('originHeadingDegrees');
+    expect(bodies[1]).not.toHaveProperty('originHorizontalAccuracyMeters');
   });
 });
 

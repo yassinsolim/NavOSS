@@ -27,7 +27,7 @@
     "feedback:status": "node scripts/feedback-review.mjs status",
     "licenses:generate": "node scripts/generate-third-party-notices.mjs",
     "lint": "turbo run lint",
-    "test": "node --test scripts/feedback-workflow.test.mjs scripts/feedback-agent-guard.test.mjs && turbo run test",
+    "test": "node --test scripts/feedback-workflow.test.mjs scripts/feedback-agent-guard.test.mjs scripts/valhalla-admin-repair.test.mjs scripts/valhalla-speed-profile.test.mjs && turbo run test",
     "validate:navigation:ios": "corepack pnpm --filter @navoss/mobile validate:navigation:ios"
   },
   "devDependencies": {

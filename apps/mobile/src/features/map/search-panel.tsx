@@ -15,6 +15,19 @@ import {
   View,
 } from 'react-native';
 import { type ReactNode, useState } from 'react';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeOut,
+  FadeOutUp,
+  LinearTransition,
+  ReduceMotion,
+  interpolate,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
 import { formatSearchDistance, searchResultContext } from '@/features/map/search-proximity';
@@ -98,6 +111,16 @@ export function SearchPanel({
   const [isAboutVisible, setIsAboutVisible] = useState(false);
   const [isGoogleLicensesVisible, setIsGoogleLicensesVisible] = useState(false);
   const [googlePlacesLicenseInfo] = useState(() => getGooglePlacesOpenSourceLicenseInfo());
+  const searchFocus = useSharedValue(0);
+  const animatedSearchBarStyle = useAnimatedStyle(() => ({
+    borderColor: interpolateColor(
+      searchFocus.value,
+      [0, 1],
+      [NavOssColors.border, NavOssColors.green],
+    ),
+    shadowOpacity: interpolate(searchFocus.value, [0, 1], [0.16, 0.22]),
+    transform: [{ scale: interpolate(searchFocus.value, [0, 1], [1, 1.012]) }],
+  }));
   const showResults = query.trim().length >= 2 && (searchState !== 'idle' || results.length > 0);
   const connectionColor =
     apiConnection === 'online'
@@ -141,7 +164,7 @@ export function SearchPanel({
         </Pressable>
       </View>
 
-      <View style={styles.searchBar}>
+      <Animated.View style={[styles.searchBar, animatedSearchBarStyle]}>
         <SymbolView
           name={{ android: 'search', ios: 'magnifyingglass' }}
           size={22}
@@ -153,6 +176,18 @@ export function SearchPanel({
           autoCorrect={false}
           enterKeyHint="search"
           onChangeText={onChangeQuery}
+          onBlur={() => {
+            searchFocus.value = withTiming(0, {
+              duration: 150,
+              reduceMotion: ReduceMotion.System,
+            });
+          }}
+          onFocus={() => {
+            searchFocus.value = withTiming(1, {
+              duration: 170,
+              reduceMotion: ReduceMotion.System,
+            });
+          }}
           onSubmitEditing={onSubmit}
           editable={searchEnabled}
           placeholder={searchEnabled ? searchPlaceholder : 'Place search unavailable here'}
@@ -162,47 +197,69 @@ export function SearchPanel({
           value={query}
         />
         {query.length > 0 && (
-          <Pressable
-            accessibilityLabel="Clear search"
-            hitSlop={10}
-            onPress={onClear}
-            style={styles.clearButton}
+          <Animated.View
+            entering={FadeIn.duration(140).reduceMotion(ReduceMotion.System)}
+            exiting={FadeOut.duration(100).reduceMotion(ReduceMotion.System)}
           >
-            <SymbolView
-              name={{ android: 'close', ios: 'xmark' }}
-              size={17}
-              tintColor={NavOssColors.muted}
-            />
-          </Pressable>
+            <Pressable
+              accessibilityLabel="Clear search"
+              hitSlop={10}
+              onPress={onClear}
+              style={styles.clearButton}
+            >
+              <SymbolView
+                name={{ android: 'close', ios: 'xmark' }}
+                size={17}
+                tintColor={NavOssColors.muted}
+              />
+            </Pressable>
+          </Animated.View>
         )}
-      </View>
+      </Animated.View>
 
       {discoveryActions}
 
       {showResults && (
-        <View style={[styles.resultsPanel, { maxHeight: maximumResultsHeight }]}>
+        <Animated.View
+          entering={FadeInDown.duration(220).reduceMotion(ReduceMotion.System)}
+          exiting={FadeOutUp.duration(160).reduceMotion(ReduceMotion.System)}
+          layout={LinearTransition.duration(180).reduceMotion(ReduceMotion.System)}
+          style={[styles.resultsPanel, { maxHeight: maximumResultsHeight }]}
+        >
           {searchState === 'loading' && (
-            <View style={styles.stateRow}>
+            <Animated.View
+              entering={FadeIn.duration(150).reduceMotion(ReduceMotion.System)}
+              exiting={FadeOut.duration(100).reduceMotion(ReduceMotion.System)}
+              style={styles.stateRow}
+            >
               <ActivityIndicator color={NavOssColors.green} size="small" />
               <Text style={styles.stateText}>Searching places</Text>
-            </View>
+            </Animated.View>
           )}
 
           {searchState === 'error' && (
-            <View style={styles.stateRow}>
+            <Animated.View
+              entering={FadeIn.duration(150).reduceMotion(ReduceMotion.System)}
+              exiting={FadeOut.duration(100).reduceMotion(ReduceMotion.System)}
+              style={styles.stateRow}
+            >
               <SymbolView
                 name={{ android: 'wifi_off', ios: 'network.slash' }}
                 size={20}
                 tintColor={NavOssColors.coral}
               />
               <Text style={styles.stateText}>Search service unavailable</Text>
-            </View>
+            </Animated.View>
           )}
 
           {searchState === 'success' && results.length === 0 && (
-            <View style={styles.stateRow}>
+            <Animated.View
+              entering={FadeIn.duration(150).reduceMotion(ReduceMotion.System)}
+              exiting={FadeOut.duration(100).reduceMotion(ReduceMotion.System)}
+              style={styles.stateRow}
+            >
               <Text style={styles.stateText}>No places found</Text>
-            </View>
+            </Animated.View>
           )}
 
           {results.length > 0 && (
@@ -210,39 +267,49 @@ export function SearchPanel({
               data={results}
               keyboardShouldPersistTaps="handled"
               keyExtractor={(result) => result.id}
-              renderItem={({ item }) => {
+              renderItem={({ index, item }) => {
                 const distance = formatSearchDistance(item.distanceMeters);
                 const context = searchResultContext(item);
                 return (
-                  <Pressable
-                    accessibilityLabel={`Select ${item.name}${distance === undefined ? '' : `, ${distance} away`}, ${context}`}
-                    onPress={() => {
-                      onSelectResult(item);
-                    }}
-                    style={({ pressed }) => [styles.resultRow, pressed && styles.resultRowPressed]}
+                  <Animated.View
+                    entering={FadeInDown.duration(180)
+                      .delay(Math.min(index, 5) * 28)
+                      .reduceMotion(ReduceMotion.System)}
+                    layout={LinearTransition.duration(160).reduceMotion(ReduceMotion.System)}
                   >
-                    <View style={styles.resultLead}>
-                      <SymbolView
-                        name={{ android: 'location_on', ios: 'mappin' }}
-                        size={17}
-                        tintColor={NavOssColors.coral}
-                      />
-                      {distance !== undefined && (
-                        <Text numberOfLines={1} style={styles.resultDistance}>
-                          {distance}
+                    <Pressable
+                      accessibilityLabel={`Select ${item.name}${distance === undefined ? '' : `, ${distance} away`}, ${context}`}
+                      onPress={() => {
+                        onSelectResult(item);
+                      }}
+                      style={({ pressed }) => [
+                        styles.resultRow,
+                        pressed && styles.resultRowPressed,
+                      ]}
+                    >
+                      <View style={styles.resultLead}>
+                        <SymbolView
+                          name={{ android: 'location_on', ios: 'mappin' }}
+                          size={17}
+                          tintColor={NavOssColors.coral}
+                        />
+                        {distance !== undefined && (
+                          <Text numberOfLines={1} style={styles.resultDistance}>
+                            {distance}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={styles.resultCopy}>
+                        <Text numberOfLines={1} style={styles.resultName}>
+                          {item.name}
                         </Text>
-                      )}
-                    </View>
-                    <View style={styles.resultCopy}>
-                      <Text numberOfLines={1} style={styles.resultName}>
-                        {item.name}
-                      </Text>
-                      <Text numberOfLines={1} style={styles.resultLabel}>
-                        {context}
-                      </Text>
-                    </View>
-                    <Text style={styles.category}>{categoryLabel(item.category)}</Text>
-                  </Pressable>
+                        <Text numberOfLines={1} style={styles.resultLabel}>
+                          {context}
+                        </Text>
+                      </View>
+                      <Text style={styles.category}>{categoryLabel(item.category)}</Text>
+                    </Pressable>
+                  </Animated.View>
                 );
               }}
               showsVerticalScrollIndicator={false}
@@ -252,7 +319,7 @@ export function SearchPanel({
           <View style={styles.fixtureFooter}>
             <Text style={styles.fixtureText}>{searchSourceLabel(searchSource)}</Text>
           </View>
-        </View>
+        </Animated.View>
       )}
 
       <Modal
