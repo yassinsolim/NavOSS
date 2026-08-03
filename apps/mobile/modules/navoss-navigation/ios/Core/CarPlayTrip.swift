@@ -305,6 +305,10 @@ public struct NavOSSCarPlayPosition: Equatable, Sendable {
   }
 }
 
+public func navOSSCarPlayIsSpeeding(speedKph: Int, speedLimitKph: Int?) -> Bool {
+  speedLimitKph.map { speedKph >= $0 + 5 } ?? false
+}
+
 public struct NavOSSCarPlayGuidance: Codable, Equatable, Sendable {
   public let distanceToManeuverMeters: Double
   public let durationToManeuverSeconds: Double

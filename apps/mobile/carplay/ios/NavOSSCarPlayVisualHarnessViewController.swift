@@ -77,7 +77,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         position: NavOSSCarPlayPosition(
           coordinate: route[7],
           courseDegrees: 50,
-          speedMetersPerSecond: 20
+          speedMetersPerSecond: 24
         ),
         routeProgress: 0.60,
         speedLimitKph: 80

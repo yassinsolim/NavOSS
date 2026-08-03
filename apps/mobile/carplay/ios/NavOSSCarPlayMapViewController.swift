@@ -75,6 +75,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     container.addSubview(attributionLabel)
     speedLabel.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.94)
     speedLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
+    speedLabel.layer.borderColor = UIColor.black.withAlphaComponent(0.65).cgColor
+    speedLabel.layer.borderWidth = 1.5
     speedLabel.layer.cornerRadius = 5
     speedLabel.clipsToBounds = true
     speedLabel.numberOfLines = 2
@@ -228,6 +230,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     distanceToManeuverMeters: Double? = nil,
     speedLimitKph: Int? = nil
   ) {
+    let shouldEnterFollowMode = activeGuidance && (!self.activeGuidance || renderedPosition == nil)
     self.activeGuidance = activeGuidance
     latestDestination = route.last
     if let position {
@@ -262,14 +265,14 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     installRouteOverlayIfReady()
     installDestinationOverlayIfReady()
     installPositionOverlayIfReady()
-    updateSpeedDisplay(position?.speedMetersPerSecond)
+    updateSpeedDisplay(position?.speedMetersPerSecond, speedLimitKph: speedLimitKph)
     updateSpeedLimitDisplay(speedLimitKph)
     updateGuidanceDeclutter()
     updatePointOfInterestVisibility()
     if activeGuidance, let position {
       if presentsRouteOverview {
         fitRoute(animated: false)
-      } else if renderedPosition == nil {
+      } else if shouldEnterFollowMode {
         follow(position, duration: 0)
       }
     } else if activeGuidance {
@@ -495,12 +498,29 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     return (start + delta * progress + 360).truncatingRemainder(dividingBy: 360)
   }
 
-  private func updateSpeedDisplay(_ speedMetersPerSecond: Double?) {
+  private func updateSpeedDisplay(
+    _ speedMetersPerSecond: Double?,
+    speedLimitKph: Int?
+  ) {
     guard activeGuidance, let speedMetersPerSecond else {
       speedLabel.isHidden = true
       return
     }
-    speedLabel.text = "\(Int((speedMetersPerSecond * 3.6).rounded()))\nkm/h"
+    let speedKph = Int((speedMetersPerSecond * 3.6).rounded())
+    let isSpeeding = navOSSCarPlayIsSpeeding(
+      speedKph: speedKph,
+      speedLimitKph: speedLimitKph
+    )
+    speedLabel.backgroundColor =
+      isSpeeding
+      ? UIColor.systemRed.withAlphaComponent(0.88)
+      : UIColor.secondarySystemBackground.withAlphaComponent(0.94)
+    speedLabel.layer.borderColor =
+      isSpeeding
+      ? UIColor.systemRed.withAlphaComponent(1).cgColor
+      : UIColor.black.withAlphaComponent(0.65).cgColor
+    speedLabel.textColor = isSpeeding ? .white : .label
+    speedLabel.text = "\(speedKph)\nkm/h"
     speedLabel.isHidden = false
   }
 

@@ -169,6 +169,9 @@ describe('Google Places build configuration', () => {
     );
     expect(carPlayMap).toContain('speedLimitLabel.widthAnchor.constraint(equalToConstant: 38)');
     expect(carPlayMap).toContain('speedLabel.widthAnchor.constraint(equalToConstant: 38)');
+    expect(carPlayMap).toContain('shouldEnterFollowMode');
+    expect(carPlayMap).toContain('navOSSCarPlayIsSpeeding(');
+    expect(carPlayMap).toContain('UIColor.systemRed.withAlphaComponent(0.88)');
     expect(carPlayMap).toContain('style.setImage(carMarkerImage(), forName: carImageIdentifier)');
     expect(carPlayMap).toContain('private func carMarkerImage() -> UIImage');
     expect(carPlayMap).toContain('mapView.attributionButton.isHidden = true');

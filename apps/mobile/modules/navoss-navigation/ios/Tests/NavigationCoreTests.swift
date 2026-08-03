@@ -311,6 +311,12 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
+  func testCarPlaySpeedingStartsAtFiveOverKnownLimit() {
+    XCTAssertFalse(navOSSCarPlayIsSpeeding(speedKph: 54, speedLimitKph: 50))
+    XCTAssertTrue(navOSSCarPlayIsSpeeding(speedKph: 55, speedLimitKph: 50))
+    XCTAssertFalse(navOSSCarPlayIsSpeeding(speedKph: 120, speedLimitKph: nil))
+  }
+
   func testNavigationRouteOriginRequiresFreshAccurateMovementForHeading() {
     let coordinate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08)
     let moving = navOSSNavigationRouteOrigin(
