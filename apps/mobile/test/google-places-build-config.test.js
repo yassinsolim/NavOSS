@@ -142,6 +142,13 @@ describe('Google Places build configuration', () => {
     expect(carPlayScene).toContain('text: "View routes"');
     expect(carPlayScene).toContain('self?.returnToMapAndLoadActiveRouteAlternatives()');
     expect(carPlayScene).toContain('self.showRoutePreviews(routes, replacingActiveTrip: true)');
+    expect(carPlayScene).toContain('let systemTrip = makeSystemTrip(routes)');
+    expect(carPlayScene).toContain(
+      'showRouteChoicesPreview(for: systemTrip, textConfiguration: nil)',
+    );
+    expect(carPlayScene).toContain('let routeChoices = routes.enumerated().map');
+    expect(carPlayScene).toContain('additionalInformationVariants: [estimates]');
+    expect(carPlayScene).toContain('selectionSummaryVariants: ["\\(summary) · \\(estimates)"');
     expect(carPlayScene).toContain('waypoints: waypoints');
     expect(carPlayScene).toContain('previousNavigationSession?.cancelTrip()');
     expect(carPlayScene).toContain('navigationSession = previousNavigationSession');
@@ -166,6 +173,9 @@ describe('Google Places build configuration', () => {
     expect(carPlayScene).toContain('interfaceController.topTemplate !== mapTemplate');
     expect(carPlayMap).toMatch(
       /else if routeCoordinates\.count >= 2 \{\s*fitRoute\(animated: false\)\s*\} else \{\s*recenter\(\)/,
+    );
+    expect(carPlayMap).toContain(
+      'UIEdgeInsets(top: 64, left: 64, bottom: 168, right: 64)',
     );
     expect(carPlayMap).toContain('speedLimitLabel.widthAnchor.constraint(equalToConstant: 38)');
     expect(carPlayMap).toContain('speedLabel.widthAnchor.constraint(equalToConstant: 38)');

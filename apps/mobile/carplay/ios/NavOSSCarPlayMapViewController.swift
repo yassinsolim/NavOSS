@@ -440,6 +440,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard routeCoordinates.count >= 2 else {
       return
     }
+    let edgePadding =
+      activeGuidance
+      ? UIEdgeInsets(top: 56, left: 48, bottom: 96, right: 48)
+      : UIEdgeInsets(top: 64, left: 64, bottom: 168, right: 64)
     routeCoordinates.withUnsafeBufferPointer { coordinates in
       guard let baseAddress = coordinates.baseAddress else {
         return
@@ -447,7 +451,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       mapView.setVisibleCoordinates(
         baseAddress,
         count: UInt(coordinates.count),
-        edgePadding: UIEdgeInsets(top: 56, left: 48, bottom: 96, right: 48),
+        edgePadding: edgePadding,
         animated: animated
       )
     }

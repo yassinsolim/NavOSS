@@ -481,6 +481,12 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   }
 
   private func makeSystemTrip(_ trip: NavOSSCarPlayTrip) -> CPTrip {
+    makeSystemTrip([trip])
+  }
+
+  private func makeSystemTrip(_ routes: [NavOSSCarPlayTrip]) -> CPTrip {
+    precondition(!routes.isEmpty)
+    let trip = routes[0]
     let originCoordinate =
       trip.geometry.first
       ?? NavOSSCarPlayCoordinate(
@@ -505,17 +511,22 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       )
     )
     destination.name = trip.destination.name
-    let routeChoice = CPRouteChoice(
-      summaryVariants: [
-        trip.steps.first(where: { !$0.roadName.isEmpty })?.roadName ?? "Fastest route"
-      ],
-      additionalInformationVariants: [
-        "\(formatDuration(trip.durationSeconds)) · \(formatDistance(trip.distanceMeters))"
-      ],
-      selectionSummaryVariants: [trip.destination.name]
-    )
-    routeChoice.userInfo = trip.id
-    let systemTrip = CPTrip(origin: origin, destination: destination, routeChoices: [routeChoice])
+    let routeChoices = routes.enumerated().map { index, route in
+      let roadName = route.steps.first(where: { !$0.roadName.isEmpty })?.roadName
+      let routeName = index == 0 ? "Fastest route" : "Alternative \(index)"
+      let summary = roadName.map { "\(routeName) via \($0)" } ?? routeName
+      let duration = formatDuration(route.durationSeconds)
+      let distance = formatDistance(route.distanceMeters)
+      let estimates = "\(duration) · \(distance)"
+      let routeChoice = CPRouteChoice(
+        summaryVariants: [summary, routeName],
+        additionalInformationVariants: [estimates],
+        selectionSummaryVariants: ["\(summary) · \(estimates)", estimates]
+      )
+      routeChoice.userInfo = route.id
+      return routeChoice
+    }
+    let systemTrip = CPTrip(origin: origin, destination: destination, routeChoices: routeChoices)
     if #available(iOS 17.4, *) {
       systemTrip.destinationNameVariants = [trip.destination.name]
     }
@@ -1606,7 +1617,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     routeChoicesByIdentifier = Dictionary(uniqueKeysWithValues: routes.map { ($0.id, $0) })
     isPreviewingRoutes = true
     routePreviewReplacesActiveTrip = replacingActiveTrip
-    let systemTrips = routes.map(makeSystemTrip)
+    let systemTrip = makeSystemTrip(routes)
     if let firstRoute = routes.first {
       configureRouteAttribution(source: firstRoute.source)
       mapViewController?.display(
@@ -1617,7 +1628,16 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       )
     }
     interfaceController?.popToRootTemplate(animated: true) { [weak self] _, _ in
-      self?.mapTemplate?.showTripPreviews(systemTrips, textConfiguration: nil)
+      guard let self else { return }
+      self.mapTemplate?.showRouteChoicesPreview(for: systemTrip, textConfiguration: nil)
+      if let firstRoute = routes.first {
+        self.mapViewController?.display(
+          route: firstRoute.geometry,
+          routeId: firstRoute.id,
+          activeGuidance: false,
+          alternateRoute: routes.dropFirst().first?.geometry
+        )
+      }
     }
   }
 
@@ -1632,7 +1652,12 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       return
     }
     configureRouteAttribution(source: route.source)
-    let alternateRoute = routeChoicesByIdentifier.values.first { $0.id != route.id }
+    let alternateRoute = trip.routeChoices.lazy.compactMap { choice -> NavOSSCarPlayTrip? in
+      guard let choiceIdentifier = choice.userInfo as? String,
+        choiceIdentifier != route.id
+      else { return nil }
+      return self.routeChoicesByIdentifier[choiceIdentifier]
+    }.first
     mapViewController?.display(
       route: route.geometry,
       routeId: route.id,
