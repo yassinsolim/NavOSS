@@ -601,6 +601,7 @@ try {
         ['carplay-progress-60', 'progress-60', 'light'],
         ['carplay-overview', 'overview', 'light'],
         ['carplay-clear', 'clear', 'light'],
+        ['carplay-idle-location', 'idle-location', 'light'],
       ]) {
         await captureCarPlayScenario(name, scenario, appearance);
       }
@@ -634,6 +635,12 @@ try {
         throw new Error(`Screenshot appears blank or stale: ${basename(metric.path)}`);
       }
       const recognizedText = metric.recognizedText.join(' ').toLowerCase();
+      if (
+        recognizedText.includes('development build') ||
+        recognizedText.includes('development servers')
+      ) {
+        throw new Error(`Development launcher obscures screenshot: ${basename(metric.path)}`);
+      }
       if (recognizedText.includes('allow') && recognizedText.includes('location')) {
         throw new Error(`Permission dialog obscures screenshot: ${basename(metric.path)}`);
       }

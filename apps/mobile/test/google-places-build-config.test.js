@@ -170,6 +170,9 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('speedLimitLabel.widthAnchor.constraint(equalToConstant: 38)');
     expect(carPlayMap).toContain('speedLabel.widthAnchor.constraint(equalToConstant: 38)');
     expect(carPlayMap).toContain('shouldEnterFollowMode');
+    expect(carPlayMap).toContain('didUpdate userLocation: MLNUserLocation?');
+    expect(carPlayMap).toContain('zoomLevel: 15.5');
+    expect(visualHarness).toContain('case "idle-location"');
     expect(carPlayMap).toContain('navOSSCarPlayIsSpeeding(');
     expect(carPlayMap).toContain('UIColor.systemRed.withAlphaComponent(0.88)');
     expect(carPlayMap).toContain('style.setImage(carMarkerImage(), forName: carImageIdentifier)');
@@ -181,5 +184,6 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('deadline: .now() + 8');
     expect(phoneScene).toContain('#if targetEnvironment(simulator)');
     expect(phoneScene).toContain('NAVOSS_CARPLAY_VISUAL_SCENARIO');
+    expect(phoneScene).toContain('"idle-location"');
   });
 });

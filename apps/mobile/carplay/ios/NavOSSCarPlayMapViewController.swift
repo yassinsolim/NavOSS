@@ -27,6 +27,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var latestDestination: NavOSSCarPlayCoordinate?
   private var latestPosition: NavOSSCarPlayPosition?
   private var mapOrientation = NavOSSCarPlayMapOrientation.headingUp
+  private var needsIdleLocationRecenter = true
   private var renderedPosition: NavOSSCarPlayPosition?
   private var navigationViewingDistance = 850.0
   private var presentsRouteOverview = false
@@ -198,7 +199,18 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard let latestPosition else {
       if activeGuidance {
         fitRoute(animated: true)
+      } else if let location = mapView.userLocation?.location,
+        location.horizontalAccuracy >= 0
+      {
+        displayIdleLocation(
+          NavOSSCarPlayCoordinate(
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude
+          ),
+          animated: true
+        )
       } else {
+        needsIdleLocationRecenter = true
         let trackingMode: MLNUserTrackingMode =
           mapOrientation == .northUp
           ? .follow
@@ -208,6 +220,22 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       return
     }
     follow(latestPosition, duration: 0.35)
+  }
+
+  func displayIdleLocation(
+    _ coordinate: NavOSSCarPlayCoordinate,
+    animated: Bool
+  ) {
+    guard !activeGuidance, coordinate.latitude.isFinite, coordinate.longitude.isFinite,
+      (-90...90).contains(coordinate.latitude), (-180...180).contains(coordinate.longitude)
+    else { return }
+    needsIdleLocationRecenter = false
+    mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
+    mapView.setCenter(
+      CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude),
+      zoomLevel: 15.5,
+      animated: animated
+    )
   }
 
   func toggleRouteOverview() -> Bool {
@@ -357,6 +385,19 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       recenter()
     }
     onStyleLoaded?()
+  }
+
+  func mapView(_ mapView: MLNMapView, didUpdate userLocation: MLNUserLocation?) {
+    guard needsIdleLocationRecenter, !activeGuidance, requestsUserLocation,
+      let location = userLocation?.location, location.horizontalAccuracy >= 0
+    else { return }
+    displayIdleLocation(
+      NavOSSCarPlayCoordinate(
+        latitude: location.coordinate.latitude,
+        longitude: location.coordinate.longitude
+      ),
+      animated: true
+    )
   }
 
   func mapViewDidFailLoadingMap(_ mapView: MLNMapView, withError error: Error) {

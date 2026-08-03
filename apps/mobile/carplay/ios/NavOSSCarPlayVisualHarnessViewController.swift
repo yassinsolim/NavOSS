@@ -48,6 +48,11 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     }
 
     switch scenario {
+    case "idle-location":
+      mapViewController.displayIdleLocation(
+        NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07190),
+        animated: false
+      )
     case "preview":
       mapViewController.display(
         route: route,
