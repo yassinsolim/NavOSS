@@ -144,6 +144,27 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     )
   }
 
+  public func awaitCurrentRouteOrigin(
+    timeoutSeconds: TimeInterval = 5
+  ) async -> NavOSSNavigationRouteOrigin? {
+    prepareForCarPlayRoutePlanning()
+    if let origin = currentRouteOrigin() {
+      return origin
+    }
+    let deadline = Date().addingTimeInterval(timeoutSeconds)
+    while Date() < deadline {
+      do {
+        try await Task.sleep(nanoseconds: 100_000_000)
+      } catch {
+        return nil
+      }
+      if let origin = currentRouteOrigin() {
+        return origin
+      }
+    }
+    return nil
+  }
+
   func currentState() -> NavOSSNavigationServiceState {
     lock.lock()
     defer { lock.unlock() }
@@ -258,11 +279,13 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       return
     }
     lock.lock()
-    guard navOSSShouldAcceptNavigationLocation(
-      candidateTimestamp: location.timestamp.timeIntervalSinceReferenceDate,
-      latestTimestamp: latestLocation?.timestamp.timeIntervalSinceReferenceDate,
-      nowTimestamp: Date().timeIntervalSinceReferenceDate
-    ) else {
+    guard
+      navOSSShouldAcceptNavigationLocation(
+        candidateTimestamp: location.timestamp.timeIntervalSinceReferenceDate,
+        latestTimestamp: latestLocation?.timestamp.timeIntervalSinceReferenceDate,
+        nowTimestamp: Date().timeIntervalSinceReferenceDate
+      )
+    else {
       lock.unlock()
       return
     }

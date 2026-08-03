@@ -93,6 +93,14 @@ describe('Google Places build configuration', () => {
       ),
       'utf8',
     );
+    const navigationService = readFileSync(
+      resolve(
+        import.meta.dirname,
+        '..',
+        'modules/navoss-navigation/ios/NavOSSNavigationService.swift',
+      ),
+      'utf8',
+    );
     const navigationTypes = readFileSync(
       resolve(import.meta.dirname, '..', 'modules/navoss-navigation/index.ts'),
       'utf8',
@@ -142,6 +150,10 @@ describe('Google Places build configuration', () => {
     expect(carPlayScene).toContain('text: "View routes"');
     expect(carPlayScene).toContain('self?.returnToMapAndLoadActiveRouteAlternatives()');
     expect(carPlayScene).toContain('self.showRoutePreviews(routes, replacingActiveTrip: true)');
+    expect(carPlayScene.match(/awaitCurrentRouteOrigin\(\)/g)).toHaveLength(3);
+    expect(carPlayScene).toContain('Check Location access on your iPhone, then try again.');
+    expect(navigationService).toContain('public func awaitCurrentRouteOrigin(');
+    expect(navigationService).toContain('try await Task.sleep(nanoseconds: 100_000_000)');
     expect(carPlayScene).toContain('let systemTrip = makeSystemTrip(routes)');
     expect(carPlayScene).toContain(
       'showRouteChoicesPreview(for: systemTrip, textConfiguration: nil)',

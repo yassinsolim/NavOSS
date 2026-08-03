@@ -1417,13 +1417,6 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       )
       return
     }
-    guard let origin = NavOSSNavigationService.shared.currentRouteOrigin() else {
-      showNavigationAlert(
-        title: "Current location unavailable",
-        subtitle: "Wait for a GPS position, then try again."
-      )
-      return
-    }
     let waypoints = [stop] + remainingWaypoints.filter { $0.id != stop.id }
     routeRequestGeneration &+= 1
     let requestGeneration = routeRequestGeneration
@@ -1431,6 +1424,18 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     showNavigationAlert(title: stop.name, subtitle: "Finding routes with this stop…")
     routeTask = Task { [weak self] in
       do {
+        guard let origin = await NavOSSNavigationService.shared.awaitCurrentRouteOrigin()
+        else {
+          guard !Task.isCancelled, let self,
+            requestGeneration == self.routeRequestGeneration
+          else { return }
+          self.routeTask = nil
+          self.showNavigationAlert(
+            title: "Current location unavailable",
+            subtitle: "Check Location access on your iPhone, then try again."
+          )
+          return
+        }
         let client = try NavOSSNavigationAPIClient()
         let routes = try await client.routes(
           origin: origin.coordinate,
@@ -1469,19 +1474,24 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       showNavigationAlert(title: "Trip unavailable", subtitle: "Start navigation and try again.")
       return
     }
-    guard let origin = NavOSSNavigationService.shared.currentRouteOrigin() else {
-      showNavigationAlert(
-        title: "Current location unavailable",
-        subtitle: "Wait for a GPS position, then try again."
-      )
-      return
-    }
     routeRequestGeneration &+= 1
     let requestGeneration = routeRequestGeneration
     routeTask?.cancel()
     showNavigationAlert(title: "Alternate routes", subtitle: "Finding routes from here…")
     routeTask = Task { [weak self] in
       do {
+        guard let origin = await NavOSSNavigationService.shared.awaitCurrentRouteOrigin()
+        else {
+          guard !Task.isCancelled, let self,
+            requestGeneration == self.routeRequestGeneration
+          else { return }
+          self.routeTask = nil
+          self.showNavigationAlert(
+            title: "Current location unavailable",
+            subtitle: "Check Location access on your iPhone, then try again."
+          )
+          return
+        }
         let client = try NavOSSNavigationAPIClient()
         let routes = try await client.routes(
           origin: origin.coordinate,
@@ -1555,17 +1565,22 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     mapTemplate?.hideTripPreviews()
     mapViewController?.clearRoute()
     NavOSSNavigationService.shared.prepareForCarPlayRoutePlanning()
-    guard let origin = NavOSSNavigationService.shared.currentRouteOrigin() else {
-      showNavigationAlert(
-        title: "Current location unavailable",
-        subtitle: "Wait for a GPS position, then try again."
-      )
-      return
-    }
     showNavigationAlert(title: destination.name, subtitle: "Finding routes…")
     let routePreferences = preferencesStore.load().routePreferences
     routeTask = Task { [weak self] in
       do {
+        guard let origin = await NavOSSNavigationService.shared.awaitCurrentRouteOrigin()
+        else {
+          guard !Task.isCancelled, let self,
+            requestGeneration == self.routeRequestGeneration
+          else { return }
+          self.routeTask = nil
+          self.showNavigationAlert(
+            title: "Current location unavailable",
+            subtitle: "Check Location access on your iPhone, then try again."
+          )
+          return
+        }
         let client = try NavOSSNavigationAPIClient()
         let routes = try await client.routes(
           origin: origin.coordinate,
