@@ -779,6 +779,16 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     )
     position.iconScale = NSExpression(forConstantValue: vehicleMarker == .car ? 0.82 : 0.72)
     position.iconRotation = NSExpression(forConstantValue: latestPosition.courseDegrees ?? 0)
+    bringPositionLayerToFront(position, in: style)
+  }
+
+  private func bringPositionLayerToFront(
+    _ positionLayer: MLNSymbolStyleLayer,
+    in style: MLNStyle
+  ) {
+    guard style.layers.last?.identifier != positionLayerIdentifier else { return }
+    style.removeLayer(positionLayer)
+    style.addLayer(positionLayer)
   }
 
   private func carMarkerImage() -> UIImage {

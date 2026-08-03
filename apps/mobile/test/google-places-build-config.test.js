@@ -174,6 +174,9 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('zoomLevel: 15.5');
     expect(visualHarness).toContain('case "idle-location"');
     expect(carPlayMap).toContain('navOSSCarPlayIsSpeeding(');
+    expect(carPlayMap).toContain('bringPositionLayerToFront(position, in: style)');
+    expect(carPlayMap).toContain('style.removeLayer(positionLayer)');
+    expect(carPlayMap).toContain('style.addLayer(positionLayer)');
     expect(carPlayMap).toContain('UIColor.systemRed.withAlphaComponent(0.88)');
     expect(carPlayMap).toContain('style.setImage(carMarkerImage(), forName: carImageIdentifier)');
     expect(carPlayMap).toContain('private func carMarkerImage() -> UIImage');
