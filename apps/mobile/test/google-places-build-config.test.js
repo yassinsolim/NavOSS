@@ -174,8 +174,9 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toMatch(
       /else if routeCoordinates\.count >= 2 \{\s*fitRoute\(animated: false\)\s*\} else \{\s*recenter\(\)/,
     );
+    expect(carPlayMap).toContain('mapView.bounds.width * 0.60');
     expect(carPlayMap).toContain(
-      'UIEdgeInsets(top: 64, left: 64, bottom: 168, right: 64)',
+      'UIEdgeInsets(top: 56, left: previewSheetInset, bottom: 56, right: 48)',
     );
     expect(carPlayMap).toContain('speedLimitLabel.widthAnchor.constraint(equalToConstant: 38)');
     expect(carPlayMap).toContain('speedLabel.widthAnchor.constraint(equalToConstant: 38)');

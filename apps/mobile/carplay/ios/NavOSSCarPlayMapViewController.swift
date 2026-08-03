@@ -440,10 +440,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard routeCoordinates.count >= 2 else {
       return
     }
+    let previewSheetInset = max(64, mapView.bounds.width * 0.60)
     let edgePadding =
       activeGuidance
       ? UIEdgeInsets(top: 56, left: 48, bottom: 96, right: 48)
-      : UIEdgeInsets(top: 64, left: 64, bottom: 168, right: 64)
+      : UIEdgeInsets(top: 56, left: previewSheetInset, bottom: 56, right: 48)
     routeCoordinates.withUnsafeBufferPointer { coordinates in
       guard let baseAddress = coordinates.baseAddress else {
         return
