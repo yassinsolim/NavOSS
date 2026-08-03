@@ -720,11 +720,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         source: source
       )
       destinationLayer.circleColor = NSExpression(
-        forConstantValue: UIColor(red: 0.93, green: 0.33, blue: 0.26, alpha: 1)
+        forConstantValue: UIColor.systemBlue
       )
-      destinationLayer.circleRadius = NSExpression(forConstantValue: 8)
+      destinationLayer.circleRadius = NSExpression(forConstantValue: 6)
       destinationLayer.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
-      destinationLayer.circleStrokeWidth = NSExpression(forConstantValue: 3)
+      destinationLayer.circleStrokeWidth = NSExpression(forConstantValue: 2)
       style.addLayer(destinationLayer)
     }
   }

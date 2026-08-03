@@ -177,6 +177,9 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('bringPositionLayerToFront(position, in: style)');
     expect(carPlayMap).toContain('style.removeLayer(positionLayer)');
     expect(carPlayMap).toContain('style.addLayer(positionLayer)');
+    expect(carPlayMap).toContain('forConstantValue: UIColor.systemBlue');
+    expect(carPlayMap).toContain('circleRadius = NSExpression(forConstantValue: 6)');
+    expect(carPlayMap).toContain('circleStrokeWidth = NSExpression(forConstantValue: 2)');
     expect(carPlayMap).toContain('UIColor.systemRed.withAlphaComponent(0.88)');
     expect(carPlayMap).toContain('style.setImage(carMarkerImage(), forName: carImageIdentifier)');
     expect(carPlayMap).toContain('private func carMarkerImage() -> UIImage');
