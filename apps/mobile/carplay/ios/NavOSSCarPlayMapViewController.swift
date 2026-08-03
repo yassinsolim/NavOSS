@@ -440,12 +440,16 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard routeCoordinates.count >= 2 else {
       return
     }
+    let fittedCoordinates =
+      activeGuidance
+      ? routeCoordinates
+      : previewCoordinatesWithBreathingRoom(routeCoordinates)
     let previewSheetInset = max(64, mapView.bounds.width * 0.60)
     let edgePadding =
       activeGuidance
       ? UIEdgeInsets(top: 56, left: 48, bottom: 96, right: 48)
       : UIEdgeInsets(top: 56, left: previewSheetInset, bottom: 56, right: 48)
-    routeCoordinates.withUnsafeBufferPointer { coordinates in
+    fittedCoordinates.withUnsafeBufferPointer { coordinates in
       guard let baseAddress = coordinates.baseAddress else {
         return
       }
@@ -456,6 +460,28 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         animated: animated
       )
     }
+  }
+
+  private func previewCoordinatesWithBreathingRoom(
+    _ coordinates: [CLLocationCoordinate2D]
+  ) -> [CLLocationCoordinate2D] {
+    let latitudes = coordinates.map(\.latitude)
+    let longitudes = coordinates.map(\.longitude)
+    guard let minimumLatitude = latitudes.min(), let maximumLatitude = latitudes.max(),
+      let minimumLongitude = longitudes.min(), let maximumLongitude = longitudes.max()
+    else { return coordinates }
+    let latitudeMargin = max((maximumLatitude - minimumLatitude) * 0.12, 0.001)
+    let longitudeMargin = max((maximumLongitude - minimumLongitude) * 0.12, 0.001)
+    return coordinates + [
+      CLLocationCoordinate2D(
+        latitude: minimumLatitude - latitudeMargin,
+        longitude: minimumLongitude - longitudeMargin
+      ),
+      CLLocationCoordinate2D(
+        latitude: maximumLatitude + latitudeMargin,
+        longitude: maximumLongitude + longitudeMargin
+      ),
+    ]
   }
 
   private func follow(_ position: NavOSSCarPlayPosition, duration: TimeInterval) {
