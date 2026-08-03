@@ -3,6 +3,49 @@ import XCTest
 @testable import NavOSSNavigationCore
 
 final class NavigationCoreTests: XCTestCase {
+  func testPersistedNavigationWaitsForValidatedLocation() {
+    XCTAssertEqual(
+      navOSSPersistedNavigationDecision(
+        distanceFromRouteMeters: nil,
+        horizontalAccuracyMeters: nil,
+        isOffRoute: false
+      ),
+      .wait
+    )
+    XCTAssertEqual(
+      navOSSPersistedNavigationDecision(
+        distanceFromRouteMeters: 80,
+        horizontalAccuracyMeters: 80,
+        isOffRoute: false
+      ),
+      .wait
+    )
+    XCTAssertEqual(
+      navOSSPersistedNavigationDecision(
+        distanceFromRouteMeters: 10,
+        horizontalAccuracyMeters: 5,
+        isOffRoute: false
+      ),
+      .publish
+    )
+    XCTAssertEqual(
+      navOSSPersistedNavigationDecision(
+        distanceFromRouteMeters: 80,
+        horizontalAccuracyMeters: 5,
+        isOffRoute: false
+      ),
+      .discard
+    )
+    XCTAssertEqual(
+      navOSSPersistedNavigationDecision(
+        distanceFromRouteMeters: 10,
+        horizontalAccuracyMeters: 5,
+        isOffRoute: true
+      ),
+      .discard
+    )
+  }
+
   func testNavigationSessionDerivesGuidanceFromMatchedProgress() throws {
     let session = NavigationSession()
     let trip = makeNavigationSessionTrip()

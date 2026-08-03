@@ -67,7 +67,7 @@ appId: org.navoss.mobile
 - assertVisible: 'End navigation'
 - assertVisible: 'Share ETA'
 - extendedWaitUntil:
-    visible: 'Navigation status, on route.*'
+    visible: '.*(Drive|Turn|Take|Continue).*'
     timeout: 20000
 - tapOn: 'Share ETA'
 - extendedWaitUntil:

@@ -15,6 +15,30 @@ private let offRouteDistanceThresholdMeters = 35.0
 private let onRouteRecoveryDistanceThresholdMeters = 20.0
 private let onRouteRecoverySampleCount = 2
 
+enum NavOSSPersistedNavigationDecision: Equatable {
+  case discard
+  case publish
+  case wait
+}
+
+func navOSSPersistedNavigationDecision(
+  distanceFromRouteMeters: Double?,
+  horizontalAccuracyMeters: Double?,
+  isOffRoute: Bool
+) -> NavOSSPersistedNavigationDecision {
+  guard let distanceFromRouteMeters, let horizontalAccuracyMeters,
+    horizontalAccuracyMeters <= 50
+  else {
+    return .wait
+  }
+  if isOffRoute || distanceFromRouteMeters > offRouteDistanceThresholdMeters
+    + horizontalAccuracyMeters
+  {
+    return .discard
+  }
+  return .publish
+}
+
 enum NavigationCoreError: Error, Equatable {
   case invalidCoordinate
   case invalidRoute

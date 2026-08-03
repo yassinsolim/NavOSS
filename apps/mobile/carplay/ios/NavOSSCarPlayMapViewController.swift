@@ -35,6 +35,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var routeCoordinates: [CLLocationCoordinate2D] = []
   private var routeId: String?
   private var showsPointsOfInterest = true
+  private var styleLoadRetryCount = 0
+  private var styleLoadWatchdog: DispatchWorkItem?
   private var styleSlug = "liberty"
   private var vehicleMarker = NavOSSCarPlayVehicleMarker.arrow
   private(set) var mapView: MLNMapView!
@@ -59,6 +61,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     mapView.showsUserLocation = requestsUserLocation
     mapView.setCenter(calgaryCenter, zoomLevel: 10.5, animated: false)
     self.mapView = mapView
+    scheduleStyleLoadWatchdog()
     let container = UIView(frame: .zero)
     container.addSubview(mapView)
     let attributionLabel = UILabel()
@@ -133,7 +136,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       return
     }
     styleSlug = nextStyleSlug
-    mapView.styleURL = URL(string: "https://tiles.openfreemap.org/styles/\(nextStyleSlug)")
+    loadStyle(resetRetryCount: true)
   }
 
   override func viewDidLayoutSubviews() {
@@ -157,7 +160,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       return
     }
     styleSlug = nextStyleSlug
-    mapView.styleURL = URL(string: "https://tiles.openfreemap.org/styles/\(nextStyleSlug)")
+    loadStyle(resetRetryCount: true)
   }
 
   func applyMapPreferences(
@@ -328,6 +331,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   }
 
   func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
+    styleLoadWatchdog?.cancel()
+    styleLoadWatchdog = nil
+    styleLoadRetryCount = 0
     installAlternateRouteOverlayIfReady()
     installRouteOverlayIfReady()
     installDestinationOverlayIfReady()
@@ -348,6 +354,42 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       recenter()
     }
     onStyleLoaded?()
+  }
+
+  func mapViewDidFailLoadingMap(_ mapView: MLNMapView, withError error: Error) {
+    retryStyleLoad()
+  }
+
+  private func loadStyle(resetRetryCount: Bool) {
+    if resetRetryCount {
+      styleLoadRetryCount = 0
+    }
+    styleLoadWatchdog?.cancel()
+    mapView.styleURL = URL(string: "https://tiles.openfreemap.org/styles/\(styleSlug)")
+    scheduleStyleLoadWatchdog()
+  }
+
+  private func scheduleStyleLoadWatchdog() {
+    styleLoadWatchdog?.cancel()
+    let workItem = DispatchWorkItem { [weak self] in
+      self?.retryStyleLoad()
+    }
+    styleLoadWatchdog = workItem
+    DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: workItem)
+  }
+
+  private func retryStyleLoad() {
+    guard styleLoadRetryCount < 2 else {
+      styleLoadWatchdog?.cancel()
+      styleLoadWatchdog = nil
+      return
+    }
+    styleLoadRetryCount += 1
+    styleLoadWatchdog?.cancel()
+    mapView.styleURL = nil
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+      self?.loadStyle(resetRetryCount: false)
+    }
   }
 
   private func fitRoute(animated: Bool) {

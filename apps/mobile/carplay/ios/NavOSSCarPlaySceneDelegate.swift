@@ -1331,7 +1331,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     placesTemplate = nil
     configureRouteAttribution(source: nil)
     mapViewController?.clearRoute()
-    interfaceController?.popToRootTemplate(animated: true, completion: nil)
+    if let interfaceController, interfaceController.topTemplate !== mapTemplate {
+      interfaceController.popToRootTemplate(animated: true, completion: nil)
+    }
     NavOSSNavigationService.shared.endNavigationFromCarPlay()
   }
 

@@ -53,6 +53,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private let speechPlanner = NavigationSpeechPlanner()
   private let speechSynthesizer = AVSpeechSynthesizer()
   private var stateVersion: UInt64 = 0
+  private var validatesPersistedNavigation = false
 
   init(
     activeTripStore: NavOSSActiveTripStore = NavOSSActiveTripStore(),
@@ -194,8 +195,15 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       throw error
     }
     lock.unlock()
-    publish(versionedUpdate)
-    evaluateReroute(for: versionedUpdate)
+    switch persistedNavigationDecision(versionedUpdate) {
+    case .discard:
+      clearNavigation()
+    case .publish:
+      publish(versionedUpdate)
+      evaluateReroute(for: versionedUpdate)
+    case .wait:
+      break
+    }
     return versionedUpdate.update.snapshot
   }
 
@@ -204,7 +212,12 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       return
     }
     do {
-      try startNavigation(trip, persist: false)
+      try startNavigation(
+        trip,
+        persist: false,
+        publishInitialUpdate: false,
+        validatesPersistedNavigation: true
+      )
     } catch {
       activeTripStore.clear()
     }
@@ -273,8 +286,15 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     else {
       return
     }
-    publish(versionedUpdate)
-    evaluateReroute(for: versionedUpdate)
+    switch persistedNavigationDecision(versionedUpdate) {
+    case .discard:
+      clearNavigation()
+    case .publish:
+      publish(versionedUpdate)
+      evaluateReroute(for: versionedUpdate)
+    case .wait:
+      break
+    }
   }
 
   public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
@@ -385,6 +405,29 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     }
     stateVersion &+= 1
     return VersionedNavigationUpdate(generation: navigationGeneration, update: update)
+  }
+
+  private func persistedNavigationDecision(
+    _ versionedUpdate: VersionedNavigationUpdate
+  ) -> NavOSSPersistedNavigationDecision {
+    lock.lock()
+    defer { lock.unlock() }
+    guard isCurrentLocked(versionedUpdate) else {
+      return .wait
+    }
+    guard validatesPersistedNavigation else {
+      return .publish
+    }
+    let snapshot = versionedUpdate.update.snapshot
+    let decision = navOSSPersistedNavigationDecision(
+      distanceFromRouteMeters: snapshot.distanceFromRouteMeters,
+      horizontalAccuracyMeters: snapshot.horizontalAccuracyMeters,
+      isOffRoute: snapshot.isOffRoute
+    )
+    if decision != .wait {
+      validatesPersistedNavigation = false
+    }
+    return decision
   }
 
   private func publish(_ versionedUpdate: VersionedNavigationUpdate) {
@@ -717,7 +760,12 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     manager.startUpdatingLocation()
   }
 
-  private func startNavigation(_ trip: NavOSSCarPlayTrip, persist: Bool) throws {
+  private func startNavigation(
+    _ trip: NavOSSCarPlayTrip,
+    persist: Bool,
+    publishInitialUpdate: Bool = true,
+    validatesPersistedNavigation: Bool = false
+  ) throws {
     let update: NavigationSessionUpdate
     lock.lock()
     do {
@@ -730,6 +778,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       rerouteCount = 0
       routeStatus = .tracking
       speechPlanner.reset()
+      self.validatesPersistedNavigation = validatesPersistedNavigation
       stateVersion &+= 1
       if persist {
         activeTripStore.save(trip)
@@ -744,7 +793,9 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     )
     lock.unlock()
     cancelNavigationSpeech(expectedGeneration: versionedUpdate.generation)
-    publish(versionedUpdate)
+    if publishInitialUpdate {
+      publish(versionedUpdate)
+    }
     ensureLocationUpdates()
   }
 

@@ -163,6 +163,7 @@ describe('Google Places build configuration', () => {
       'interfaceController.popToRootTemplate(animated: false, completion: nil)',
     );
     expect(carPlayScene).toContain('mapViewController?.recenter()');
+    expect(carPlayScene).toContain('interfaceController.topTemplate !== mapTemplate');
     expect(carPlayMap).toMatch(
       /else if routeCoordinates\.count >= 2 \{\s*fitRoute\(animated: false\)\s*\} else \{\s*recenter\(\)/,
     );
@@ -172,6 +173,9 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('private func carMarkerImage() -> UIImage');
     expect(carPlayMap).toContain('mapView.attributionButton.isHidden = true');
     expect(carPlayMap).toContain('© OpenStreetMap contributors');
+    expect(carPlayMap).toContain('func mapViewDidFailLoadingMap(');
+    expect(carPlayMap).toContain('styleLoadRetryCount < 2');
+    expect(carPlayMap).toContain('deadline: .now() + 8');
     expect(phoneScene).toContain('#if targetEnvironment(simulator)');
     expect(phoneScene).toContain('NAVOSS_CARPLAY_VISUAL_SCENARIO');
   });

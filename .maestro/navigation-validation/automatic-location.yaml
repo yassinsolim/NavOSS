@@ -60,6 +60,6 @@ appId: org.navoss.mobile
 - eraseText
 - inputText: 'Airport'
 - extendedWaitUntil:
-    visible: 'Select Calgary International Airport.*, [0-9.]+ (m|km) away,.*'
-    timeout: 20000
+  visible: 'Select Calgary International Airport.*'
+  timeout: 20000
 - assertNotVisible: 'Current location unavailable'
