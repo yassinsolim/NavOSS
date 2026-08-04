@@ -118,6 +118,27 @@ successfully to App Store Connect on July 30, 2026. Apple processing, enabled-bu
 answers, internal `testers` attachment, live Google-content validation, and physical validation
 remain pending.
 
+CarPlay/search regression candidate `0.1.0 (39)` was built locally from commit `c62e4a8` with the
+Google-disabled `production-carplay` profile. It expands route-preview context while preserving
+route visibility, keeps the interpolated arrow/car and green route start synchronized, retains the
+bounded cold-start GPS wait, and expands cinema queries so `chinook theater` and `cineplex chinook`
+rank Scotiabank Theatre Chinook first. The signed IPA has SHA-256
+`ac94e6672ed57c49b38c26689d966aae1481d9e93ee592dc453eef107c330291`. Build 39 passed
+strict signature, arm64 App Store profile, CarPlay entitlement, production origin, privacy
+manifest, Google-disabled packaging, 122 API tests, 50 native tests, and the seven-state CarPlay
+visual/pixel suite. Apple processed build 39 successfully. EAS submission
+`ccc484a5-729d-492b-92f6-df1c3b457617` requested internal group `testers`; Fastlane then returned
+its known `Cannot add internal group to a build` false failure after processing and distribution.
+The matching upstream issue reports that affected builds are nevertheless assigned correctly.
+Independent portal confirmation remains pending because the App Store Connect web session expired.
+Build 38, SHA-256 `8a2515b73f47a538984c2578bf38a58450cfecb75c86da5c31fd3dcd2386a871`,
+was also uploaded successfully but is superseded by build 39.
+
+The paired production search rollout is active at `c62e4a8`, with rollback snapshot
+`/home/navoss/NavOSS.pre-c62e4a8-20260804T085214Z`. Public probes confirm `chinook theatre`,
+`chinook theater`, `cineplex chinook`, and the full venue name all return Scotiabank Theatre
+Chinook; the Cineplex alias ranks the venue ahead of mall escalator objects.
+
 Before creating a build, verify:
 
 ```sh
