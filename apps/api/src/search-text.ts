@@ -30,3 +30,12 @@ export function prefixTsQuery(value: string): string {
     .map((token) => `${token}:*`)
     .join(' & ');
 }
+
+export function placeSearchQueryVariants(value: string): string[] {
+  const original = value.trim();
+  const theatreSpelling = original.replace(/\btheaters?\b/giu, (match) =>
+    match.toLocaleLowerCase('en-CA').endsWith('s') ? 'theatres' : 'theatre',
+  );
+  const genericTheatre = theatreSpelling.replace(/\bcineplex\b/giu, 'theatre');
+  return [...new Set([original, theatreSpelling, genericTheatre].filter(Boolean))];
+}

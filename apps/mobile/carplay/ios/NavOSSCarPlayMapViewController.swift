@@ -277,7 +277,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       ? navOSSRemainingRouteGeometry(
         route,
         routeProgress: routeProgress,
-        matchedCoordinate: position?.courseDegrees == nil ? nil : position?.coordinate
+        matchedCoordinate: (renderedPosition ?? position)?.coordinate
       )
       : route
     routeCoordinates = displayedRoute.map {
@@ -470,8 +470,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard let minimumLatitude = latitudes.min(), let maximumLatitude = latitudes.max(),
       let minimumLongitude = longitudes.min(), let maximumLongitude = longitudes.max()
     else { return coordinates }
-    let latitudeMargin = max((maximumLatitude - minimumLatitude) * 0.12, 0.001)
-    let longitudeMargin = max((maximumLongitude - minimumLongitude) * 0.12, 0.001)
+    let latitudeMargin = max((maximumLatitude - minimumLatitude) * 0.25, 0.002)
+    let longitudeMargin = max((maximumLongitude - minimumLongitude) * 0.25, 0.002)
     return coordinates + [
       CLLocationCoordinate2D(
         latitude: minimumLatitude - latitudeMargin,
@@ -553,6 +553,13 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       ),
       speedMetersPerSecond: target.speedMetersPerSecond
     )
+    if let renderedPosition, routeCoordinates.count >= 2 {
+      routeCoordinates[0] = CLLocationCoordinate2D(
+        latitude: renderedPosition.coordinate.latitude,
+        longitude: renderedPosition.coordinate.longitude
+      )
+      installRouteOverlayIfReady()
+    }
     installPositionOverlayIfReady()
     if !presentsRouteOverview, let renderedPosition {
       follow(renderedPosition, duration: 0)
@@ -666,7 +673,6 @@ final class NavOSSCarPlayMapViewController: UIViewController,
           : UIColor.white
       )
       casing.lineOpacity = NSExpression(forConstantValue: 0.96)
-      casing.lineWidth = NSExpression(forConstantValue: 11)
       style.addLayer(casing)
     }
     if style.layer(withIdentifier: routeLayerIdentifier) == nil {
@@ -678,9 +684,12 @@ final class NavOSSCarPlayMapViewController: UIViewController,
           ? UIColor(red: 0.20, green: 0.78, blue: 0.55, alpha: 1)
           : UIColor(red: 0.11, green: 0.49, blue: 0.31, alpha: 1)
       )
-      route.lineWidth = NSExpression(forConstantValue: 7)
       style.addLayer(route)
     }
+    (style.layer(withIdentifier: routeCasingLayerIdentifier) as? MLNLineStyleLayer)?.lineWidth =
+      NSExpression(forConstantValue: activeGuidance ? 11 : 13)
+    (style.layer(withIdentifier: routeLayerIdentifier) as? MLNLineStyleLayer)?.lineWidth =
+      NSExpression(forConstantValue: activeGuidance ? 7 : 9)
   }
 
   private func installAlternateRouteOverlayIfReady() {

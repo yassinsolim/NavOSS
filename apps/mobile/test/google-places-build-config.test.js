@@ -188,8 +188,12 @@ describe('Google Places build configuration', () => {
     );
     expect(carPlayMap).toContain('mapView.bounds.width * 0.60');
     expect(carPlayMap).toContain('previewCoordinatesWithBreathingRoom(routeCoordinates)');
-    expect(carPlayMap).toContain('(maximumLatitude - minimumLatitude) * 0.12');
-    expect(carPlayMap).toContain('(maximumLongitude - minimumLongitude) * 0.12');
+    expect(carPlayMap).toContain('(maximumLatitude - minimumLatitude) * 0.25');
+    expect(carPlayMap).toContain('(maximumLongitude - minimumLongitude) * 0.25');
+    expect(carPlayMap).toContain('matchedCoordinate: (renderedPosition ?? position)?.coordinate');
+    expect(carPlayMap).toContain('routeCoordinates[0] = CLLocationCoordinate2D(');
+    expect(carPlayMap).toContain('NSExpression(forConstantValue: activeGuidance ? 11 : 13)');
+    expect(carPlayMap).toContain('NSExpression(forConstantValue: activeGuidance ? 7 : 9)');
     expect(carPlayMap).toContain(
       'UIEdgeInsets(top: 56, left: previewSheetInset, bottom: 56, right: 48)',
     );

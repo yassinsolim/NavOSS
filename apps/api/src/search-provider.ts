@@ -4,7 +4,7 @@ import { z } from 'zod/v4';
 import { createPostgresCalgarySearchProvider } from './calgary-search-provider.js';
 import { CALGARY_SEARCH_FIXTURES, type SearchFixture } from './fixtures.js';
 import { searchFixtures } from './search.js';
-import { normalizeSearchText } from './search-text.js';
+import { normalizeSearchText, placeSearchQueryVariants } from './search-text.js';
 
 const DEFAULT_PHOTON_URL = 'https://photon.komoot.io/api/';
 const PHOTON_TIMEOUT_MS = 3_000;
@@ -699,7 +699,9 @@ export function createProductionSearchProvider(
       const providerQueryWithoutCategory = { ...providerQuery };
       delete providerQueryWithoutCategory.category;
       const productionQueries: SearchQuery[] = [
-        providerQuery,
+        ...(query.category === undefined
+          ? placeSearchQueryVariants(query.q).map((q) => ({ ...providerQuery, q }))
+          : [providerQuery]),
         ...(query.category === 'grocery' && useCalgarySources
           ? ['Safeway', 'Sobeys', 'Calgary Co-op'].map((q) => ({
               ...providerQueryWithoutCategory,

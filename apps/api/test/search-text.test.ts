@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeSearchText, prefixTsQuery } from '../src/search-text.js';
+import {
+  normalizeSearchText,
+  placeSearchQueryVariants,
+  prefixTsQuery,
+} from '../src/search-text.js';
 
 describe('Calgary search text', () => {
   it('normalizes long and abbreviated Calgary addresses to the same key', () => {
@@ -15,5 +19,16 @@ describe('Calgary search text', () => {
 
   it('builds a prefix query from normalized words', () => {
     expect(prefixTsQuery('800 Macleod Trail SE')).toBe('800:* & macleod:* & tr:* & se:*');
+  });
+
+  it('expands Canadian theatre spelling and cinema-brand queries', () => {
+    expect(placeSearchQueryVariants('chinook theater')).toEqual([
+      'chinook theater',
+      'chinook theatre',
+    ]);
+    expect(placeSearchQueryVariants('cineplex chinook')).toEqual([
+      'cineplex chinook',
+      'theatre chinook',
+    ]);
   });
 });

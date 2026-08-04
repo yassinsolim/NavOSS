@@ -806,6 +806,43 @@ describe('Nominatim search provider', () => {
     expect(response.source.id).toBe('nominatim-self-hosted');
   });
 
+  it('queries theatre aliases and keeps the best matching cinema result', async () => {
+    const queries: string[] = [];
+    const source = {
+      datasetVersion: 'alberta',
+      freshness: 'fresh' as const,
+      id: 'nominatim-self-hosted',
+      updatedAt: '2026-07-20T12:00:00Z',
+    };
+    const provider = createProductionSearchProvider([], {
+      search: (query) => {
+        queries.push(query.q);
+        return Promise.resolve({
+          degraded: false,
+          results:
+            query.q === 'theatre chinook'
+              ? [
+                  {
+                    category: 'poi' as const,
+                    center: { latitude: 50.997, longitude: -114.074 },
+                    confidence: 0.86,
+                    id: 'nominatim:node:2541877447',
+                    label: 'Scotiabank Theatre Chinook, Calgary',
+                    name: 'Scotiabank Theatre Chinook',
+                  },
+                ]
+              : [],
+          source,
+        });
+      },
+    });
+
+    const response = await provider.search({ limit: 8, q: 'cineplex chinook' });
+
+    expect(queries).toEqual(['cineplex chinook', 'theatre chinook']);
+    expect(response.results[0]?.name).toBe('Scotiabank Theatre Chinook');
+  });
+
   it('uses typed OSM results and bypasses untyped businesses for category search', async () => {
     let calgarySearchCount = 0;
     let receivedQuery: unknown;
