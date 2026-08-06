@@ -44,6 +44,24 @@ func navOSSShouldTrackLocation(
   hasActiveNavigation || isCarPlayRoutePlanning
 }
 
+func navOSSCarPlayPublishedPosition(
+  matchedCoordinate: NavigationCoordinate?,
+  rawCoordinate: NavigationCoordinate?,
+  matchedCourseDegrees: Double?,
+  speedMetersPerSecond: Double?,
+  fallback: NavOSSCarPlayPosition?
+) -> NavOSSCarPlayPosition? {
+  guard let coordinate = matchedCoordinate ?? rawCoordinate else { return fallback }
+  return NavOSSCarPlayPosition(
+    coordinate: NavOSSCarPlayCoordinate(
+      latitude: coordinate.latitude,
+      longitude: coordinate.longitude
+    ),
+    courseDegrees: matchedCourseDegrees,
+    speedMetersPerSecond: speedMetersPerSecond
+  )
+}
+
 enum NavOSSPersistedNavigationDecision: Equatable {
   case discard
   case publish

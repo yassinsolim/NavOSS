@@ -245,7 +245,7 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('mapView.bounds.width * 0.60');
     expect(carPlayMap).toContain('override func viewDidLayoutSubviews()');
     expect(carPlayMap).toContain('mapSize != lastLaidOutMapSize');
-    expect(carPlayMap).toContain('reservesRouteChoiceSheet ? 10.5 : 12.5');
+    expect(carPlayMap).toContain('reservesRouteChoiceSheet ? 10.0 : 12.5');
     expect(carPlayMap).toContain('duration: animated ? 0.35 : 0');
     expect(carPlayMap).toContain('self.routeFitGeneration == fitGeneration');
     expect(carPlayMap).toContain('UIEdgeInsets(top: 32, left: 32, bottom: 32, right: 32)');
@@ -254,8 +254,11 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('(maximumLongitude - minimumLongitude) * 0.25');
     expect(carPlayMap).toContain('matchedCoordinate: (renderedPosition ?? position)?.coordinate');
     expect(carPlayMap).toContain('routeCoordinates[0] = CLLocationCoordinate2D(');
-    expect(carPlayMap).toContain('NSExpression(forConstantValue: activeGuidance ? 11 : 13)');
-    expect(carPlayMap).toContain('NSExpression(forConstantValue: activeGuidance ? 7 : 9)');
+    expect(carPlayMap).toContain('NSExpression(forConstantValue: activeGuidance ? 11 : 9)');
+    expect(carPlayMap).toContain('NSExpression(forConstantValue: activeGuidance ? 7 : 6)');
+    expect(navigationService).toContain('let latestCarPlayPosition = latestLocation.flatMap');
+    expect(navigationService).toContain('let carPlayPosition = navOSSCarPlayPublishedPosition(');
+    expect(navigationService).toContain('fallback: latestCarPlayPosition');
     expect(carPlayMap).toContain(
       'UIEdgeInsets(top: 56, left: previewSheetInset, bottom: 56, right: 48)',
     );

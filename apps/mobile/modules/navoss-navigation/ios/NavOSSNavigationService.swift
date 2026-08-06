@@ -494,6 +494,25 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       return
     }
     let update = versionedUpdate.update
+    let latestCarPlayPosition = latestLocation.flatMap { location -> NavOSSCarPlayPosition? in
+      guard
+        let origin = navOSSNavigationRouteOrigin(
+          coordinate: NavOSSCarPlayCoordinate(
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude
+          ),
+          courseDegrees: location.course,
+          speedMetersPerSecond: location.speed,
+          horizontalAccuracyMeters: location.horizontalAccuracy,
+          ageSeconds: Date().timeIntervalSince(location.timestamp)
+        )
+      else { return nil }
+      return NavOSSCarPlayPosition(
+        coordinate: origin.coordinate,
+        courseDegrees: origin.headingDegrees,
+        speedMetersPerSecond: location.speed >= 0 ? location.speed : nil
+      )
+    }
     let speechPrompt =
       !announcementState.allowsManeuverGuidance
       ? nil
@@ -508,20 +527,16 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       }
     lock.unlock()
     if let trip = update.trip {
-      let carPlayCoordinate = (update.snapshot.matchedCoordinate ?? update.snapshot.rawCoordinate)
-        .map {
-          NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
-        }
-      let carPlayPosition = carPlayCoordinate.map {
-        let speed = self.lock.withLock {
-          self.latestLocation.flatMap { $0.speed >= 0 ? $0.speed : nil }
-        }
-        return NavOSSCarPlayPosition(
-          coordinate: $0,
-          courseDegrees: update.snapshot.matchedCourseDegrees,
-          speedMetersPerSecond: speed
-        )
+      let speed = self.lock.withLock {
+        self.latestLocation.flatMap { $0.speed >= 0 ? $0.speed : nil }
       }
+      let carPlayPosition = navOSSCarPlayPublishedPosition(
+        matchedCoordinate: update.snapshot.matchedCoordinate,
+        rawCoordinate: update.snapshot.rawCoordinate,
+        matchedCourseDegrees: update.snapshot.matchedCourseDegrees,
+        speedMetersPerSecond: speed,
+        fallback: latestCarPlayPosition
+      )
       NavOSSCarPlayTripStore.shared.publishNavigationState(
         trip: trip,
         guidance: update.guidance,

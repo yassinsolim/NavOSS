@@ -36,6 +36,25 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertFalse(leases.isActive)
   }
 
+  func testCarPlayPublishUsesFreshFallbackBeforeFirstNavigationUpdate() {
+    let fallback = NavOSSCarPlayPosition(
+      coordinate: NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719),
+      courseDegrees: 270,
+      speedMetersPerSecond: 0
+    )
+
+    XCTAssertEqual(
+      navOSSCarPlayPublishedPosition(
+        matchedCoordinate: nil,
+        rawCoordinate: nil,
+        matchedCourseDegrees: nil,
+        speedMetersPerSecond: nil,
+        fallback: fallback
+      ),
+      fallback
+    )
+  }
+
   func testPersistedNavigationWaitsForValidatedLocation() {
     XCTAssertEqual(
       navOSSPersistedNavigationDecision(

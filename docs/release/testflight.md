@@ -170,8 +170,9 @@ regional context. The signed IPA has SHA-256
 arm64, App Store profile, CarPlay entitlement, Dashboard scene, production origin, privacy
 manifest, and Google-disabled packaging audits. EAS submission
 `13b91d30-8a30-425f-80b2-697499fd15f6` completed successfully, and App Store Connect reports build
-43 `VALID` and `IN_BETA_TESTING`. Physical installation and route-preview confirmation remain
-pending.
+43 `VALID` and `IN_BETA_TESTING`. Physical screenshots then showed the preview route was still too
+thick and active guidance could remain in overview until another GPS callback. Build 43 is
+superseded before physical installation by the balanced preview and immediate-follow replacement.
 
 CarPlay does not expose an API that lets NavOSS force itself into the Dashboard navigation widget,
 and Canada's iOS Default Apps settings do not offer the region-limited Navigation default. The

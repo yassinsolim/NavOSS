@@ -526,7 +526,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         guard let self, self.routeFitGeneration == fitGeneration, !self.activeGuidance else {
           return
         }
-        let maximumZoomLevel = self.reservesRouteChoiceSheet ? 10.5 : 12.5
+        let maximumZoomLevel = self.reservesRouteChoiceSheet ? 10.0 : 12.5
         if self.mapView.zoomLevel > maximumZoomLevel {
           self.mapView.setZoomLevel(maximumZoomLevel, animated: false)
         }
@@ -759,9 +759,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       style.addLayer(route)
     }
     (style.layer(withIdentifier: routeCasingLayerIdentifier) as? MLNLineStyleLayer)?.lineWidth =
-      NSExpression(forConstantValue: activeGuidance ? 11 : 13)
+      NSExpression(forConstantValue: activeGuidance ? 11 : 9)
     (style.layer(withIdentifier: routeLayerIdentifier) as? MLNLineStyleLayer)?.lineWidth =
-      NSExpression(forConstantValue: activeGuidance ? 7 : 9)
+      NSExpression(forConstantValue: activeGuidance ? 7 : 6)
   }
 
   private func installAlternateRouteOverlayIfReady() {

@@ -185,8 +185,9 @@ traffic, lane, speed, or incident knowledge.
 - Convert normalized alternatives into `CPTrip` and `CPRouteChoice` objects.
 - Use `CPMapTemplate.showTripPreviews` for route selection.
 - Draw selected and alternate route geometry in the native MapLibre view.
-- Fit the full selected route with the route-choice sheet reserved and cap preview zoom at 10.5 so
-  the physical 800×480 display retains regional context.
+- Fit the full selected route with the route-choice sheet reserved, cap preview zoom at 10.0, and
+  use a 6-point route with a 9-point casing so the physical 800×480 display retains regional
+  context without obscuring road choices.
 - Include real duration, distance, and major-road summaries.
 - Continue to state that live traffic is unavailable until a real traffic source exists.
 
@@ -205,6 +206,9 @@ traffic, lane, speed, or incident knowledge.
   hidden basemap points of interest, and Arrow/Car vehicle marker choices.
 
 ### Active guidance
+
+- Seed the first active CarPlay position from the same fresh Core Location sample used to request
+  routes, so tapping Go enters follow mode immediately instead of waiting for another GPS callback.
 
 - Start a `CPNavigationSession` from the selected `CPTrip`.
 - Keep at least one `CPManeuver` in `upcomingManeuvers`.
