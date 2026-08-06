@@ -526,7 +526,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         guard let self, self.routeFitGeneration == fitGeneration, !self.activeGuidance else {
           return
         }
-        let maximumZoomLevel = self.reservesRouteChoiceSheet ? 11.5 : 12.5
+        let maximumZoomLevel = self.reservesRouteChoiceSheet ? 10.5 : 12.5
         if self.mapView.zoomLevel > maximumZoomLevel {
           self.mapView.setZoomLevel(maximumZoomLevel, animated: false)
         }

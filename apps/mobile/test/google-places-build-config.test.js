@@ -245,7 +245,7 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('mapView.bounds.width * 0.60');
     expect(carPlayMap).toContain('override func viewDidLayoutSubviews()');
     expect(carPlayMap).toContain('mapSize != lastLaidOutMapSize');
-    expect(carPlayMap).toContain('reservesRouteChoiceSheet ? 11.5 : 12.5');
+    expect(carPlayMap).toContain('reservesRouteChoiceSheet ? 10.5 : 12.5');
     expect(carPlayMap).toContain('duration: animated ? 0.35 : 0');
     expect(carPlayMap).toContain('self.routeFitGeneration == fitGeneration');
     expect(carPlayMap).toContain('UIEdgeInsets(top: 32, left: 32, bottom: 32, right: 32)');
