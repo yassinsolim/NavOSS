@@ -152,10 +152,13 @@ Google-disabled packaging, and phone/main CarPlay/Dashboard scene registration. 
 52 native tests, 6 source-contract tests, all root gates (34 contracts, 122 API, 135 mobile, and 3
 site tests), and the clean eight-state CarPlay OCR/pixel suite including viewport resize. Simulator
 launch/terminate removed the process and left no blue location indicator. EAS submission
-`b39219c2-cb3d-410b-9033-0ad88a339c50` is queued for App Store Connect with internal group
-`testers`; Apple acceptance, processing, group assignment, and physical Dashboard validation
-remain pending. Local build 40 was superseded before upload after independent review found
-lifecycle races, and local build 41 was interrupted before producing an IPA; neither was submitted.
+`b39219c2-cb3d-410b-9033-0ad88a339c50` uploaded the binary before Fastlane returned its known
+post-upload unknown error. App Store Connect independently reports build 42 `VALID`,
+`IN_BETA_TESTING`, and ready for external beta submission. TestFlight build 42 was installed on
+the paired iPhone 15 Pro Max and CoreDevice confirmed bundle version 42. Physical CarPlay Dashboard
+tile selection and shortcut behavior remain pending. Local build 40 was superseded before upload
+after independent review found lifecycle races, and local build 41 was interrupted before producing
+an IPA; neither was submitted.
 
 Before creating a build, verify:
 
