@@ -191,6 +191,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private var settingsCategory: SettingsCategory?
   private var settingsTemplate: CPListTemplate?
   private var routeChoicesByIdentifier: [String: NavOSSCarPlayTrip] = [:]
+  private var routePreviewLocationLease: UUID?
   private var searchDestinationsByIdentifier: [String: NavOSSCarPlayDestination] = [:]
 
   func sceneDidBecomeActive(_ scene: UIScene) {
@@ -206,6 +207,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     routeTask = nil
     routeChoicesByIdentifier = [:]
     let discardedPreview = isPreviewingRoutes
+    finishRoutePreviewLocationLease()
     isPreviewingRoutes = false
     routePreviewReplacesActiveTrip = false
     if discardedPreview {
@@ -228,7 +230,11 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   func sceneWillResignActive(_ scene: UIScene) {
     if NavOSSCarPlayTripStore.shared.snapshot().trip == nil {
+      routeRequestGeneration &+= 1
+      routeTask?.cancel()
+      routeTask = nil
       mapViewController?.setIdleLocationTrackingEnabled(false)
+      finishRoutePreviewLocationLease()
       NavOSSNavigationService.shared.finishCarPlayRoutePlanning()
     }
   }
@@ -325,6 +331,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     searchRequestGeneration &+= 1
     searchTask?.cancel()
     searchTask = nil
+    finishRoutePreviewLocationLease()
     mapViewController?.clearRoute()
     mapViewController?.deactivate()
     navigationSession?.finishTrip()
@@ -429,6 +436,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       routeRequestGeneration &+= 1
       routeTask?.cancel()
       routeTask = nil
+      finishRoutePreviewLocationLease()
       routeChoicesByIdentifier = [:]
       destinationSelectionMode = .newTrip
       routePreviewReplacesActiveTrip = false
@@ -1365,6 +1373,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     searchRequestGeneration &+= 1
     searchTask?.cancel()
     searchTask = nil
+    finishRoutePreviewLocationLease()
     routeChoicesByIdentifier = [:]
     searchDestinationsByIdentifier = [:]
     isPreviewingRoutes = false
@@ -1600,6 +1609,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     let requestGeneration = routeRequestGeneration
     routeTask?.cancel()
     routeTask = nil
+    finishRoutePreviewLocationLease()
     routeChoicesByIdentifier = [:]
     isPreviewingRoutes = false
     mapTemplate?.hideTripPreviews()
@@ -1668,6 +1678,8 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       replacingActiveTrip
         || NavOSSCarPlayTripStore.shared.snapshot().guidance?.phase != .navigating
     else { return }
+    finishRoutePreviewLocationLease()
+    routePreviewLocationLease = NavOSSNavigationService.shared.beginCarPlayRoutePlanning()
     routeChoicesByIdentifier = Dictionary(uniqueKeysWithValues: routes.map { ($0.id, $0) })
     isPreviewingRoutes = true
     routePreviewReplacesActiveTrip = replacingActiveTrip
@@ -1725,6 +1737,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       routeRequestGeneration &+= 1
       routeTask?.cancel()
       routeTask = nil
+      finishRoutePreviewLocationLease()
       routeChoicesByIdentifier = [:]
       isPreviewingRoutes = false
       routePreviewReplacesActiveTrip = false
@@ -1775,6 +1788,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         activeManeuverKey = nil
       }
       try NavOSSNavigationService.shared.startNavigation(route)
+      finishRoutePreviewLocationLease()
       if replacesActiveTrip {
         previousNavigationSession?.cancelTrip()
       }
@@ -1784,6 +1798,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       routeChoicesByIdentifier = [:]
       apply(NavOSSCarPlayTripStore.shared.snapshot())
     } catch {
+      finishRoutePreviewLocationLease()
       activeDestinationId = previousActiveDestinationId
       activeSystemTrip = previousActiveSystemTrip
       activeTripId = previousActiveTripId
@@ -1794,6 +1809,12 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       apply(NavOSSCarPlayTripStore.shared.snapshot())
       showNavigationAlert(title: "Navigation unavailable", subtitle: "Try another route.")
     }
+  }
+
+  private func finishRoutePreviewLocationLease() {
+    guard let routePreviewLocationLease else { return }
+    self.routePreviewLocationLease = nil
+    NavOSSNavigationService.shared.finishCarPlayRoutePlanning(routePreviewLocationLease)
   }
 
   func searchTemplate(

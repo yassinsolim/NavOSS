@@ -187,7 +187,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     NavOSSCarPlayTripStore.shared.endTripFromCarPlay()
   }
 
-  private func beginCarPlayRoutePlanning() -> UUID? {
+  public func beginCarPlayRoutePlanning() -> UUID? {
     lock.lock()
     guard carPlayConnected else {
       lock.unlock()
@@ -207,7 +207,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     stopLocationUpdates(expectedGeneration: generation)
   }
 
-  private func finishCarPlayRoutePlanning(_ leaseIdentifier: UUID) {
+  public func finishCarPlayRoutePlanning(_ leaseIdentifier: UUID) {
     lock.lock()
     carPlayRoutePlanningLeases.release(leaseIdentifier)
     let generation = navigationGeneration

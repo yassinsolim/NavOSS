@@ -174,6 +174,23 @@ manifest, and Google-disabled packaging audits. EAS submission
 thick and active guidance could remain in overview until another GPS callback. Build 43 is
 superseded before physical installation by the balanced preview and immediate-follow replacement.
 
+Balanced CarPlay replacement `0.1.0 (44)` was built locally from commit `e690299` with the
+Google-disabled `production-carplay` profile. Route-choice previews use a 10.0 zoom ceiling, a
+6-point selected route, and a 9-point casing. The clean nine-state visual suite retained long and
+resized route-green ratios of `0.00222` and `0.00232`; the short-route regression remained visible
+at `0.000104` with both endpoint markers and city context. Active guidance now seeds its initial
+CarPlay position from the same fresh Core Location sample used for route planning, so tapping Go
+enters follow mode without waiting for another GPS callback. The native package has 53 passing
+tests including that fallback contract. The signed IPA has SHA-256
+`6955c9780803dcf27d604c1f0dc35afe409343ec4baef5f02736fd149b3ed6c7` and passed strict signature,
+arm64, App Store profile, CarPlay entitlement, Dashboard scene, production origin, privacy
+manifest, and Google-disabled packaging audits. EAS submission
+`2239008c-ea3f-4183-b71e-bbc7979944b9` uploaded successfully. Build 44 is superseded before
+physical installation: if the route-choice sheet remained open for more than 15 seconds, its
+cached route-origin sample could expire before Go and guidance could still wait for another GPS
+callback. The replacement holds an independent location lease for the lifetime of the preview and
+cancels pending route work when the CarPlay scene resigns.
+
 CarPlay does not expose an API that lets NavOSS force itself into the Dashboard navigation widget,
 and Canada's iOS Default Apps settings do not offer the region-limited Navigation default. The
 route-choice sheet is preview state: NavOSS starts `CPNavigationSession` only after the user taps

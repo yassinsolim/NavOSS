@@ -193,6 +193,7 @@ describe('Google Places build configuration', () => {
     expect(navigationService).toContain('public func awaitCurrentRouteOrigin(');
     expect(navigationService).toContain('try await Task.sleep(nanoseconds: 100_000_000)');
     expect(navigationService).toContain('let leaseIdentifier = beginCarPlayRoutePlanning()');
+    expect(navigationService).toContain('public func beginCarPlayRoutePlanning() -> UUID?');
     expect(navigationService).toContain('finishCarPlayRoutePlanning(leaseIdentifier)');
     expect(navigationService).toContain('carPlayRoutePlanningLeases.release(leaseIdentifier)');
     expect(navigationService).toContain(
@@ -205,6 +206,10 @@ describe('Google Places build configuration', () => {
     expect(carPlayScene).not.toContain(
       'NavOSSNavigationService.shared.prepareForCarPlayRoutePlanning()',
     );
+    expect(carPlayScene).toContain(
+      'routePreviewLocationLease = NavOSSNavigationService.shared.beginCarPlayRoutePlanning()',
+    );
+    expect(carPlayScene).toContain('private func finishRoutePreviewLocationLease()');
     expect(navigationAppDelegateSubscriber).not.toContain(
       'public func applicationWillTerminate(_ application: UIApplication)',
     );
@@ -233,6 +238,9 @@ describe('Google Places build configuration', () => {
     expect(carPlayScene).toContain('mapTemplate?.hideTripPreviews()');
     expect(carPlayScene).toContain('func sceneDidBecomeActive(_ scene: UIScene)');
     expect(carPlayScene).toContain('func sceneWillResignActive(_ scene: UIScene)');
+    expect(carPlayScene).toMatch(
+      /func sceneWillResignActive[\s\S]*?routeRequestGeneration &\+= 1[\s\S]*?routeTask\?\.cancel\(\)[\s\S]*?finishRoutePreviewLocationLease\(\)/,
+    );
     expect(carPlayScene).toContain('mapViewController?.setIdleLocationTrackingEnabled(false)');
     expect(carPlayScene).toContain(
       'interfaceController.popToRootTemplate(animated: false, completion: nil)',
