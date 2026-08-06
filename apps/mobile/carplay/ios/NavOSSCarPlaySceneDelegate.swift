@@ -1262,13 +1262,33 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     searchTask?.cancel()
     searchTask = Task { [weak self] in
       do {
+        guard let self else { return }
+        let proximity: NavOSSCarPlayCoordinate?
+        if let currentLocation = self.mapViewController?.currentLocationCoordinate() {
+          proximity = currentLocation
+        } else {
+          proximity = await NavOSSNavigationService.shared.awaitCurrentRouteOrigin(
+            timeoutSeconds: 2
+          )?.coordinate
+        }
+        guard !Task.isCancelled,
+          requestGeneration == self.searchRequestGeneration
+        else { return }
+        guard let proximity else {
+          self.searchTask = nil
+          self.showNavigationAlert(
+            title: "Current location unavailable",
+            subtitle: "Check Location access on your iPhone, then try again."
+          )
+          return
+        }
         let client = try NavOSSNavigationAPIClient()
         let matches = try await client.search(
           query: category.query,
-          proximity: NavOSSNavigationService.shared.currentCoordinate(),
+          proximity: proximity,
           category: category.category
         )
-        guard !Task.isCancelled, let self,
+        guard !Task.isCancelled,
           requestGeneration == self.searchRequestGeneration
         else { return }
         self.searchTask = nil
@@ -1792,19 +1812,25 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       return
     }
     searchTask = Task { [weak self] in
+      guard let self else {
+        completionHandler([])
+        return
+      }
       let localMatches = NavOSSCarPlayDestinationStore.shared.snapshot().searchableDestinations
         .filter { destination in
           destination.name.localizedCaseInsensitiveContains(query)
             || destination.label.localizedCaseInsensitiveContains(query)
         }
       do {
+        let proximity = self.mapViewController?.currentLocationCoordinate()
+          ?? NavOSSNavigationService.shared.currentCoordinate()
         let client = try NavOSSNavigationAPIClient()
         let remoteMatches = try await client.search(
           query: query,
-          proximity: NavOSSNavigationService.shared.currentCoordinate()
+          proximity: proximity
         )
-        let matches = self?.uniqueDestinations(localMatches + remoteMatches) ?? []
-        guard !Task.isCancelled, let self,
+        let matches = self.uniqueDestinations(localMatches + remoteMatches)
+        guard !Task.isCancelled,
           requestGeneration == self.searchRequestGeneration
         else {
           completionHandler([])
@@ -1817,7 +1843,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         completionHandler(matches.map { self.destinationItem($0) })
       } catch {
         let matches = Array(localMatches.prefix(8))
-        guard !Task.isCancelled, let self,
+        guard !Task.isCancelled,
           requestGeneration == self.searchRequestGeneration
         else {
           completionHandler([])

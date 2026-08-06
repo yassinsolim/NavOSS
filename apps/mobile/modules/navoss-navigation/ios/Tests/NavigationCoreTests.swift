@@ -24,6 +24,18 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
+  func testLocationTrackingLeasesReleaseIndependently() {
+    var leases = NavOSSLocationTrackingLeases()
+    let first = leases.acquire()
+    let second = leases.acquire()
+
+    leases.release(first)
+    XCTAssertTrue(leases.isActive)
+
+    leases.release(second)
+    XCTAssertFalse(leases.isActive)
+  }
+
   func testPersistedNavigationWaitsForValidatedLocation() {
     XCTAssertEqual(
       navOSSPersistedNavigationDecision(

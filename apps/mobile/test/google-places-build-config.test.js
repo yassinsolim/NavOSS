@@ -185,18 +185,27 @@ describe('Google Places build configuration', () => {
     expect(carPlayScene).toContain('text: "View routes"');
     expect(carPlayScene).toContain('self?.returnToMapAndLoadActiveRouteAlternatives()');
     expect(carPlayScene).toContain('self.showRoutePreviews(routes, replacingActiveTrip: true)');
-    expect(carPlayScene.match(/awaitCurrentRouteOrigin\(\)/g)).toHaveLength(3);
+    expect(carPlayScene.match(/awaitCurrentRouteOrigin\(/g)).toHaveLength(4);
+    expect(carPlayScene.match(/timeoutSeconds: 2/g)).toHaveLength(1);
+    expect(carPlayScene.match(/currentLocationCoordinate\(\)/g)).toHaveLength(2);
+    expect(carPlayScene).toContain('guard let proximity else');
     expect(carPlayScene).toContain('Check Location access on your iPhone, then try again.');
     expect(navigationService).toContain('public func awaitCurrentRouteOrigin(');
     expect(navigationService).toContain('try await Task.sleep(nanoseconds: 100_000_000)');
-    expect(navigationService).toContain('defer { finishCarPlayRoutePlanning() }');
-    expect(navigationService).toContain('isCarPlayRoutePlanning: carPlayRoutePlanning');
+    expect(navigationService).toContain('let leaseIdentifier = beginCarPlayRoutePlanning()');
+    expect(navigationService).toContain('finishCarPlayRoutePlanning(leaseIdentifier)');
+    expect(navigationService).toContain('carPlayRoutePlanningLeases.release(leaseIdentifier)');
+    expect(navigationService).toContain(
+      'isCarPlayRoutePlanning: carPlayRoutePlanningLeases.isActive',
+    );
     expect(navigationService.match(/navOSSShouldTrackLocation\(/g)).toHaveLength(3);
-    expect(navigationService).toContain('if !connected {\n      carPlayRoutePlanning = false');
+    expect(navigationService).toContain(
+      'if !connected {\n      carPlayRoutePlanningLeases.removeAll()',
+    );
     expect(carPlayScene).not.toContain(
       'NavOSSNavigationService.shared.prepareForCarPlayRoutePlanning()',
     );
-    expect(navigationAppDelegateSubscriber).toContain(
+    expect(navigationAppDelegateSubscriber).not.toContain(
       'public func applicationWillTerminate(_ application: UIApplication)',
     );
     expect(carPlayScene).toContain('let systemTrip = makeSystemTrip(routes)');
@@ -254,6 +263,7 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('speedLabel.widthAnchor.constraint(equalToConstant: 38)');
     expect(carPlayMap).toContain('shouldEnterFollowMode');
     expect(carPlayMap).toContain('didUpdate userLocation: MLNUserLocation?');
+    expect(carPlayMap).toContain('func currentLocationCoordinate()');
     expect(carPlayMap).toContain('zoomLevel: 15.5');
     expect(visualHarness).toContain('case "idle-location"');
     expect(visualHarness).toContain('case "preview-resize"');
@@ -269,6 +279,7 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('style.setImage(carMarkerImage(), forName: carImageIdentifier)');
     expect(carPlayMap).toContain('func deactivate()');
     expect(carPlayMap).toContain('func setIdleLocationTrackingEnabled(_ enabled: Bool)');
+    expect(carPlayMap.match(/routeFitGeneration &\+= 1/g)).toHaveLength(3);
     expect(carPlayMap).toContain('else if !requestsUserLocation');
     expect(carPlayMap).toContain('mapView.showsUserLocation = false');
     expect(carPlayScene).toContain('mapViewController?.deactivate()');

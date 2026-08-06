@@ -265,6 +265,25 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     )
   }
 
+  func currentLocationCoordinate() -> NavOSSCarPlayCoordinate? {
+    guard let location = mapView.userLocation?.location,
+      navOSSNavigationRouteOrigin(
+        coordinate: NavOSSCarPlayCoordinate(
+          latitude: location.coordinate.latitude,
+          longitude: location.coordinate.longitude
+        ),
+        courseDegrees: location.course,
+        speedMetersPerSecond: location.speed,
+        horizontalAccuracyMeters: location.horizontalAccuracy,
+        ageSeconds: Date().timeIntervalSince(location.timestamp)
+      ) != nil
+    else { return nil }
+    return NavOSSCarPlayCoordinate(
+      latitude: location.coordinate.latitude,
+      longitude: location.coordinate.longitude
+    )
+  }
+
   func toggleRouteOverview() -> Bool {
     presentsRouteOverview.toggle()
     if presentsRouteOverview {
@@ -338,6 +357,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   }
 
   func clearRoute() {
+    routeFitGeneration &+= 1
     activeGuidance = false
     latestDestination = nil
     latestPosition = nil
@@ -377,6 +397,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   }
 
   func deactivate() {
+    routeFitGeneration &+= 1
     displayLink?.invalidate()
     displayLink = nil
     latestPosition = nil

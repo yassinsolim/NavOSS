@@ -15,6 +15,28 @@ private let offRouteDistanceThresholdMeters = 35.0
 private let onRouteRecoveryDistanceThresholdMeters = 20.0
 private let onRouteRecoverySampleCount = 2
 
+struct NavOSSLocationTrackingLeases {
+  private var identifiers: Set<UUID> = []
+
+  var isActive: Bool {
+    !identifiers.isEmpty
+  }
+
+  mutating func acquire() -> UUID {
+    let identifier = UUID()
+    identifiers.insert(identifier)
+    return identifier
+  }
+
+  mutating func release(_ identifier: UUID) {
+    identifiers.remove(identifier)
+  }
+
+  mutating func removeAll() {
+    identifiers.removeAll()
+  }
+}
+
 func navOSSShouldTrackLocation(
   hasActiveNavigation: Bool,
   isCarPlayRoutePlanning: Bool
