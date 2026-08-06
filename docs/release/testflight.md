@@ -139,6 +139,24 @@ The paired production search rollout is active at `c62e4a8`, with rollback snaps
 `chinook theater`, `cineplex chinook`, and the full venue name all return Scotiabank Theatre
 Chinook; the Cineplex alias ranks the venue ahead of mall escalator objects.
 
+CarPlay Dashboard and idle-location candidate `0.1.0 (42)` was built locally from milestone
+commits `813b312` and `fae9401` with the Google-disabled `production-carplay` profile. It stops
+native Core Location when CarPlay is idle, scopes route-origin acquisition with independent
+leases, preserves active-route recovery, registers the CarPlay Dashboard scene, renders shared
+guidance there without a second navigation session, adds Go and Voice shortcuts, and refits route
+previews after viewport changes. Apple controls which navigation app occupies the Dashboard tile;
+Voice opens NavOSS search and is not a custom Siri recognizer. The signed IPA has SHA-256
+`30a4f8477b4b9181d8317d11a758e9d7e039dc6d2cbd114c71c0e71e64367e4f`. Its strict Store audit
+passed arm64, App Store profile, CarPlay entitlement, production origin, privacy manifest,
+Google-disabled packaging, and phone/main CarPlay/Dashboard scene registration. Validation passed
+52 native tests, 6 source-contract tests, all root gates (34 contracts, 122 API, 135 mobile, and 3
+site tests), and the clean eight-state CarPlay OCR/pixel suite including viewport resize. Simulator
+launch/terminate removed the process and left no blue location indicator. EAS submission
+`b39219c2-cb3d-410b-9033-0ad88a339c50` is queued for App Store Connect with internal group
+`testers`; Apple acceptance, processing, group assignment, and physical Dashboard validation
+remain pending. Local build 40 was superseded before upload after independent review found
+lifecycle races, and local build 41 was interrupted before producing an IPA; neither was submitted.
+
 Before creating a build, verify:
 
 ```sh
