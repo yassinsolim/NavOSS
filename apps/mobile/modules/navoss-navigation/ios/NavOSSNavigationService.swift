@@ -38,6 +38,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private var audioSessionNeedsDeactivation = false
   private var backgroundActivitySession: AnyObject?
   private var carPlayConnected = false
+  private var carPlayRoutePlanning = false
   private let lock = NSRecursiveLock()
   private var locationManager: CLLocationManager?
   private var latestLocation: CLLocation?
@@ -148,6 +149,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     timeoutSeconds: TimeInterval = 5
   ) async -> NavOSSNavigationRouteOrigin? {
     prepareForCarPlayRoutePlanning()
+    defer { finishCarPlayRoutePlanning() }
     if let origin = currentRouteOrigin() {
       return origin
     }
@@ -184,23 +186,40 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   public func prepareForCarPlayRoutePlanning() {
     lock.lock()
     let shouldPrepare = carPlayConnected
+    if shouldPrepare {
+      carPlayRoutePlanning = true
+    }
     lock.unlock()
     if shouldPrepare {
       ensureLocationUpdates()
     }
   }
 
+  public func finishCarPlayRoutePlanning() {
+    lock.lock()
+    carPlayRoutePlanning = false
+    let generation = navigationGeneration
+    lock.unlock()
+    stopLocationUpdates(expectedGeneration: generation)
+  }
+
   public func setCarPlayConnected(_ connected: Bool) {
     lock.lock()
     carPlayConnected = connected
+    if !connected {
+      carPlayRoutePlanning = false
+    }
     let update = navigationSession.currentUpdate()
     let hasActiveNavigation = update.trip != nil && update.snapshot.phase != .arrived
-    let shouldTrackWhenConnected = update.snapshot.phase != .arrived
+    let shouldTrack = navOSSShouldTrackLocation(
+      hasActiveNavigation: hasActiveNavigation,
+      isCarPlayRoutePlanning: carPlayRoutePlanning
+    )
     let generation = navigationGeneration
     lock.unlock()
-    if connected && shouldTrackWhenConnected {
+    if shouldTrack {
       ensureLocationUpdates()
-    } else if !connected && !hasActiveNavigation {
+    } else {
       stopLocationUpdates(expectedGeneration: generation)
     }
   }
@@ -331,7 +350,10 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     lock.lock()
     let update = navigationSession.currentUpdate()
     let hasActiveNavigation = update.trip != nil && update.snapshot.phase != .arrived
-    let shouldTrack = hasActiveNavigation || carPlayConnected
+    let shouldTrack = navOSSShouldTrackLocation(
+      hasActiveNavigation: hasActiveNavigation,
+      isCarPlayRoutePlanning: carPlayRoutePlanning
+    )
     lock.unlock()
     guard shouldTrack else {
       return
@@ -834,9 +856,13 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       let update = self.navigationSession.currentUpdate()
       let hasActiveNavigation = update.trip != nil && update.snapshot.phase != .arrived
       let generationMatches = expectedGeneration.map { $0 == self.navigationGeneration } ?? true
+      let shouldTrack = navOSSShouldTrackLocation(
+        hasActiveNavigation: hasActiveNavigation,
+        isCarPlayRoutePlanning: self.carPlayRoutePlanning
+      )
       let shouldStop =
         force
-        || (generationMatches && !hasActiveNavigation)
+        || (generationMatches && !shouldTrack)
       self.lock.unlock()
       guard shouldStop else {
         return

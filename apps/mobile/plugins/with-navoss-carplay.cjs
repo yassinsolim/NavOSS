@@ -13,6 +13,7 @@ const vehicleArrowSource = path.join(__dirname, '..', 'assets', 'images', 'vehic
 const vehicleCarSource = path.join(__dirname, '..', 'assets', 'images', 'vehicle-car.png');
 const sourceFiles = [
   'NavOSSCarPlayMapViewController.swift',
+  'NavOSSCarPlayDashboardSceneDelegate.swift',
   'NavOSSCarPlaySceneDelegate.swift',
   'NavOSSCarPlayVisualHarnessViewController.swift',
   'NavOSSPhoneSceneDelegate.swift',
@@ -60,6 +61,7 @@ function withNavOSSCarPlay(config) {
     const configurations = manifest.UISceneConfigurations ?? {};
     if (!carPlayEnabled) {
       delete configurations.CPTemplateApplicationSceneSessionRoleApplication;
+      delete configurations.CPTemplateApplicationDashboardSceneSessionRoleApplication;
       if (manifest.UISceneConfigurations !== undefined) {
         manifest.UISceneConfigurations = configurations;
         modConfig.modResults.UIApplicationSceneManifest = manifest;
@@ -79,6 +81,13 @@ function withNavOSSCarPlay(config) {
         UISceneClassName: 'CPTemplateApplicationScene',
         UISceneConfigurationName: 'NavOSS CarPlay',
         UISceneDelegateClassName: 'NavOSSCarPlaySceneDelegate',
+      },
+    ];
+    configurations.CPTemplateApplicationDashboardSceneSessionRoleApplication = [
+      {
+        UISceneClassName: 'CPTemplateApplicationDashboardScene',
+        UISceneConfigurationName: 'NavOSS CarPlay Dashboard',
+        UISceneDelegateClassName: 'NavOSSCarPlayDashboardSceneDelegate',
       },
     ];
     manifest.UIApplicationSupportsMultipleScenes = true;

@@ -26,7 +26,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     ] == "dark"
     mapViewController.applyAppearance(darkAppearance ? .dark : .light)
 
-    mapViewController.requestsUserLocation = false
+    mapViewController.setIdleLocationTrackingEnabled(false)
     addChild(mapViewController)
     mapViewController.view.frame = view.bounds
     mapViewController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -60,6 +60,25 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         activeGuidance: false,
         alternateRoute: alternateRoute
       )
+    case "preview-resize":
+      mapViewController.view.autoresizingMask = []
+      mapViewController.view.frame = CGRect(
+        x: 0,
+        y: 0,
+        width: view.bounds.width * 0.55,
+        height: view.bounds.height
+      )
+      mapViewController.display(
+        route: Self.wideRoute,
+        routeId: "visual-preview-resize",
+        activeGuidance: false
+      )
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+        guard let self else { return }
+        self.mapViewController.view.frame = self.view.bounds
+        self.mapViewController.view.setNeedsLayout()
+        self.mapViewController.view.layoutIfNeeded()
+      }
     case "progress-05":
       mapViewController.display(
         route: route,
@@ -136,6 +155,15 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     NavOSSCarPlayCoordinate(latitude: 51.09730, longitude: -114.02210),
     NavOSSCarPlayCoordinate(latitude: 51.10610, longitude: -114.01220),
     NavOSSCarPlayCoordinate(latitude: 51.11390, longitude: -114.00220),
+  ]
+
+  private static let wideRoute = [
+    NavOSSCarPlayCoordinate(latitude: 51.04390, longitude: -114.15400),
+    NavOSSCarPlayCoordinate(latitude: 51.04640, longitude: -114.13200),
+    NavOSSCarPlayCoordinate(latitude: 51.04480, longitude: -114.10700),
+    NavOSSCarPlayCoordinate(latitude: 51.04720, longitude: -114.08100),
+    NavOSSCarPlayCoordinate(latitude: 51.04510, longitude: -114.05400),
+    NavOSSCarPlayCoordinate(latitude: 51.04800, longitude: -114.02700),
   ]
 }
 #endif

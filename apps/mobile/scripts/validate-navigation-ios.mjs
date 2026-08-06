@@ -597,6 +597,7 @@ try {
       for (const [name, scenario, appearance] of [
         ['carplay-preview-light', 'preview', 'light'],
         ['carplay-preview-dark', 'preview', 'dark'],
+        ['carplay-preview-resize', 'preview-resize', 'light'],
         ['carplay-progress-05', 'progress-05', 'light'],
         ['carplay-progress-60', 'progress-60', 'light'],
         ['carplay-overview', 'overview', 'light'],
@@ -644,6 +645,12 @@ try {
       if (recognizedText.includes('allow') && recognizedText.includes('location')) {
         throw new Error(`Permission dialog obscures screenshot: ${basename(metric.path)}`);
       }
+      if (
+        recognizedText.includes('would like to send') &&
+        recognizedText.includes('notifications')
+      ) {
+        throw new Error(`Notification dialog obscures screenshot: ${basename(metric.path)}`);
+      }
     }
     const hashes = await Promise.all(
       paths.map(async (path) => [basename(path), await sha256(path)]),
@@ -654,6 +661,7 @@ try {
     const metricsByName = new Map(metrics.map((metric) => [basename(metric.path), metric]));
     const routeVisibleMetrics = [
       metricsByName.get('carplay-preview-light.png'),
+      metricsByName.get('carplay-preview-resize.png'),
       metricsByName.get('carplay-progress-05.png'),
       metricsByName.get('carplay-overview.png'),
     ].filter((metric) => metric !== undefined);

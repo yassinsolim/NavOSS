@@ -9,4 +9,8 @@ public final class NavOSSNavigationAppDelegateSubscriber: ExpoAppDelegateSubscri
     NavOSSNavigationService.shared.resumePersistedNavigation()
     return true
   }
+
+  public func applicationWillTerminate(_ application: UIApplication) {
+    NavOSSNavigationService.shared.clearNavigation()
+  }
 }

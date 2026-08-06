@@ -195,6 +195,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   func sceneDidBecomeActive(_ scene: UIScene) {
     guard let interfaceController, let mapTemplate else { return }
+    mapViewController?.setIdleLocationTrackingEnabled(true)
     searchRequestGeneration &+= 1
     searchTask?.cancel()
     searchTask = nil
@@ -222,6 +223,26 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     } else {
       mapViewController?.clearRoute()
       mapViewController?.recenter()
+    }
+  }
+
+  func sceneWillResignActive(_ scene: UIScene) {
+    if NavOSSCarPlayTripStore.shared.snapshot().trip == nil {
+      mapViewController?.setIdleLocationTrackingEnabled(false)
+      NavOSSNavigationService.shared.finishCarPlayRoutePlanning()
+    }
+  }
+
+  func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+    guard userActivity.activityType == NavOSSCarPlayDashboardAction.activityType,
+      let rawAction = userActivity.userInfo?["action"] as? String,
+      let action = NavOSSCarPlayDashboardAction(rawValue: rawAction)
+    else { return }
+    switch action {
+    case .go:
+      showPlaces()
+    case .voice:
+      showSearch()
     }
   }
 
@@ -305,6 +326,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     searchTask?.cancel()
     searchTask = nil
     mapViewController?.clearRoute()
+    mapViewController?.deactivate()
     navigationSession?.finishTrip()
     navigationSession = nil
     activeManeuver = nil
@@ -751,7 +773,6 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       return
     }
     destinationSelectionMode = selectionMode
-    NavOSSNavigationService.shared.prepareForCarPlayRoutePlanning()
     let searchTemplate = CPSearchTemplate()
     searchTemplate.delegate = self
     interfaceController.pushTemplate(searchTemplate, animated: true, completion: nil)
@@ -992,7 +1013,6 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     let hasActiveTrip = NavOSSCarPlayTripStore.shared.snapshot().trip != nil
     destinationSelectionMode = .newTrip
     if !hasActiveTrip {
-      NavOSSNavigationService.shared.prepareForCarPlayRoutePlanning()
       showSearchHub()
       return
     }
@@ -1564,7 +1584,6 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     isPreviewingRoutes = false
     mapTemplate?.hideTripPreviews()
     mapViewController?.clearRoute()
-    NavOSSNavigationService.shared.prepareForCarPlayRoutePlanning()
     showNavigationAlert(title: destination.name, subtitle: "Finding routes…")
     let routePreferences = preferencesStore.load().routePreferences
     routeTask = Task { [weak self] in

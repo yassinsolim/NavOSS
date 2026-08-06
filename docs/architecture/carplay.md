@@ -14,7 +14,7 @@ The implementation will use:
 - The same normalized route model and NavOSS API used by the phone experience.
 - React Native as a consumer of native navigation state, not as the owner of a CarPlay session.
 
-This preserves one route and one navigation session across the phone and main CarPlay display. Dashboard, instrument-cluster, and HUD surfaces remain future work.
+This preserves one route and one navigation session across the phone, main CarPlay display, and CarPlay Dashboard. Instrument-cluster and HUD surfaces remain future work.
 
 ## External Gate
 
@@ -29,7 +29,7 @@ Apple approved the CarPlay Navigation App capability for the explicit App ID `or
 
 This removes the external approval blocker, but it does not make the current implementation release-ready. A dedicated build can now continue an active phone route onto the main CarPlay display with a native route line, `CPNavigationSession`, maneuvers, travel estimates, arrival, reconnect state, and vehicle-side cancellation. While that scene is connected, the phone replaces its interactive map with a low-distraction companion showing only the next maneuver, arrival summary, destination, and End or Done action.
 
-The native navigation service now owns active Core Location updates, map matching, maneuver progression, spoken guidance, background continuation, rerouting, arrival, and transient active-route recovery. CarPlay search uses the private NavOSS API, previews route alternatives with approved templates, and starts navigation without phone interaction. Dashboard, cluster metadata, and real-vehicle validation remain incomplete. Normal production builds remain unchanged; the dedicated `production-carplay` profile enables the scene, entitlement, native API URL, and location background mode for controlled testing.
+The native navigation service now owns active Core Location updates, map matching, maneuver progression, spoken guidance, background continuation, rerouting, arrival, and transient active-route recovery. CarPlay search uses the private NavOSS API, previews route alternatives with approved templates, and starts navigation without phone interaction. A Dashboard scene renders the shared route and guidance state without creating a second navigation session, with Go and Voice shortcuts that activate the main CarPlay scene. Apple decides which navigation app occupies the Dashboard tile; Voice opens NavOSS search and is not a custom Siri speech recognizer. Cluster metadata and real-vehicle Dashboard validation remain incomplete. Normal production builds remain unchanged; the dedicated `production-carplay` profile enables the scenes, entitlement, native API URL, and location background mode for controlled testing.
 
 ### Maps capability decision
 
@@ -60,6 +60,10 @@ The shared native trip store now accepts a validated route, destination, steps, 
 The main-display renderer now consumes the same monotonic native route progress as the phone. During active guidance it removes travelled geometry, anchors the remaining route at the matched road position, renders the shared NavOSS vehicle arrow instead of a generic dot, follows matched course with a forward-biased tilted camera, and clears stale route or vehicle layers on arrival, cancellation, preview, and reconnect transitions. Route previews show the selected green route, a muted alternate, and the destination marker. The basemap follows CarPlay light and dark appearance using the same Liberty and Dark OpenFreeMap styles as the phone.
 
 Normal builds omit the CarPlay scene and entitlement but retain active-navigation background location for phone guidance. Native location starts only during active navigation or, in the dedicated CarPlay build, while CarPlay needs a current origin. When in Use authorization and iOS's visible background indicator are used; Always authorization is not requested. The current active route is stored only for operating-system recovery and erased on End or confirmed arrival.
+
+### CarPlay Dashboard scene
+
+`NavOSSCarPlayDashboardSceneDelegate` conforms to `CPTemplateApplicationDashboardSceneDelegate` and installs a separate MapLibre view in the Dashboard-owned window. It observes the shared trip and preference stores, renders route progress without starting another `CPNavigationSession`, and never requests idle MapLibre location tracking. Its Go and Voice buttons use `NSUserActivity` to activate the main CarPlay scene, where Go opens Places and Voice opens Search. Disconnect removes observers and deactivates the map view. Dashboard availability and tile selection remain controlled by CarPlay, not NavOSS.
 
 ### Navigation service
 

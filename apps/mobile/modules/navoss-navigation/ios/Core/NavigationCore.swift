@@ -15,6 +15,13 @@ private let offRouteDistanceThresholdMeters = 35.0
 private let onRouteRecoveryDistanceThresholdMeters = 20.0
 private let onRouteRecoverySampleCount = 2
 
+func navOSSShouldTrackLocation(
+  hasActiveNavigation: Bool,
+  isCarPlayRoutePlanning: Bool
+) -> Bool {
+  hasActiveNavigation || isCarPlayRoutePlanning
+}
+
 enum NavOSSPersistedNavigationDecision: Equatable {
   case discard
   case publish

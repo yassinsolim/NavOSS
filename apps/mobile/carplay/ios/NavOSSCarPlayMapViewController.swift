@@ -32,6 +32,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var navigationViewingDistance = 850.0
   private var presentsRouteOverview = false
   private var guidanceHiddenLayerIdentifiers: Set<String> = []
+  private var lastLaidOutMapSize = CGSize.zero
+  private var routeFitGeneration: UInt64 = 0
   private var alternateRouteCoordinates: [CLLocationCoordinate2D] = []
   private var routeCoordinates: [CLLocationCoordinate2D] = []
   private var routeId: String?
@@ -44,7 +46,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private let speedLabel = UILabel()
   private let speedLimitLabel = UILabel()
   var onStyleLoaded: (() -> Void)?
-  var requestsUserLocation = true
+  var reservesRouteChoiceSheet = true
+  private(set) var requestsUserLocation = true
 
   override func loadView() {
     styleSlug = resolvedStyleSlug()
@@ -145,6 +148,15 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     mapView.frame = view.bounds
+    let mapSize = mapView.bounds.size
+    guard mapSize.width > 0, mapSize.height > 0, mapSize != lastLaidOutMapSize else { return }
+    lastLaidOutMapSize = mapSize
+    guard routeCoordinates.count >= 2 else { return }
+    if activeGuidance, !presentsRouteOverview, latestPosition != nil {
+      recenter()
+    } else {
+      fitRoute(animated: false)
+    }
   }
 
   func applyAppearance(_ appearance: NavOSSCarPlayAppearance) {
@@ -164,6 +176,19 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
     styleSlug = nextStyleSlug
     loadStyle(resetRetryCount: true)
+  }
+
+  func setIdleLocationTrackingEnabled(_ enabled: Bool) {
+    requestsUserLocation = enabled
+    guard isViewLoaded, !activeGuidance else { return }
+    mapView.showsUserLocation = enabled
+    if enabled {
+      needsIdleLocationRecenter = true
+      recenter()
+    } else {
+      needsIdleLocationRecenter = false
+      mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
+    }
   }
 
   func applyMapPreferences(
@@ -199,6 +224,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard let latestPosition else {
       if activeGuidance {
         fitRoute(animated: true)
+      } else if !requestsUserLocation {
+        mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
       } else if let location = mapView.userLocation?.location,
         location.horizontalAccuracy >= 0
       {
@@ -349,6 +376,16 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     recenter()
   }
 
+  func deactivate() {
+    displayLink?.invalidate()
+    displayLink = nil
+    latestPosition = nil
+    renderedPosition = nil
+    mapView.showsUserLocation = false
+    mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
+    mapView.delegate = nil
+  }
+
   func zoom(by delta: Double) {
     if activeGuidance {
       navigationViewingDistance = max(
@@ -448,7 +485,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     let edgePadding =
       activeGuidance
       ? UIEdgeInsets(top: 56, left: 48, bottom: 96, right: 48)
-      : UIEdgeInsets(top: 56, left: previewSheetInset, bottom: 56, right: 48)
+      : reservesRouteChoiceSheet
+        ? UIEdgeInsets(top: 56, left: previewSheetInset, bottom: 56, right: 48)
+        : UIEdgeInsets(top: 32, left: 32, bottom: 32, right: 32)
+    routeFitGeneration &+= 1
+    let fitGeneration = routeFitGeneration
     fittedCoordinates.withUnsafeBufferPointer { coordinates in
       guard let baseAddress = coordinates.baseAddress else {
         return
@@ -457,8 +498,18 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         baseAddress,
         count: UInt(coordinates.count),
         edgePadding: edgePadding,
-        animated: animated
-      )
+        direction: -1,
+        duration: animated ? 0.35 : 0,
+        animationTimingFunction: nil
+      ) { [weak self] in
+        guard let self, self.routeFitGeneration == fitGeneration, !self.activeGuidance else {
+          return
+        }
+        let maximumZoomLevel = self.reservesRouteChoiceSheet ? 11.5 : 12.5
+        if self.mapView.zoomLevel > maximumZoomLevel {
+          self.mapView.setZoomLevel(maximumZoomLevel, animated: false)
+        }
+      }
     }
   }
 

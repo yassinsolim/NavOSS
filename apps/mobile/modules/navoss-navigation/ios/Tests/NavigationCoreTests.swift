@@ -3,6 +3,27 @@ import XCTest
 @testable import NavOSSNavigationCore
 
 final class NavigationCoreTests: XCTestCase {
+  func testLocationTrackingRequiresPlanningOrActiveNavigation() {
+    XCTAssertFalse(
+      navOSSShouldTrackLocation(
+        hasActiveNavigation: false,
+        isCarPlayRoutePlanning: false
+      )
+    )
+    XCTAssertTrue(
+      navOSSShouldTrackLocation(
+        hasActiveNavigation: false,
+        isCarPlayRoutePlanning: true
+      )
+    )
+    XCTAssertTrue(
+      navOSSShouldTrackLocation(
+        hasActiveNavigation: true,
+        isCarPlayRoutePlanning: false
+      )
+    )
+  }
+
   func testPersistedNavigationWaitsForValidatedLocation() {
     XCTAssertEqual(
       navOSSPersistedNavigationDecision(

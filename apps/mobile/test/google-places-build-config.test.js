@@ -64,13 +64,22 @@ describe('Google Places build configuration', () => {
 
   it('packages the visual host behind simulator compiler guards', () => {
     expect(sourceFiles).toContain('NavOSSCarPlayVisualHarnessViewController.swift');
+    expect(sourceFiles).toContain('NavOSSCarPlayDashboardSceneDelegate.swift');
 
     const carPlayScene = readFileSync(
       resolve(import.meta.dirname, '..', 'carplay/ios/NavOSSCarPlaySceneDelegate.swift'),
       'utf8',
     );
+    const carPlayPlugin = readFileSync(
+      resolve(import.meta.dirname, '..', 'plugins/with-navoss-carplay.cjs'),
+      'utf8',
+    );
     const carPlayMap = readFileSync(
       resolve(import.meta.dirname, '..', 'carplay/ios/NavOSSCarPlayMapViewController.swift'),
+      'utf8',
+    );
+    const carPlayDashboard = readFileSync(
+      resolve(import.meta.dirname, '..', 'carplay/ios/NavOSSCarPlayDashboardSceneDelegate.swift'),
       'utf8',
     );
     const visualHarness = readFileSync(
@@ -101,6 +110,14 @@ describe('Google Places build configuration', () => {
       ),
       'utf8',
     );
+    const navigationAppDelegateSubscriber = readFileSync(
+      resolve(
+        import.meta.dirname,
+        '..',
+        'modules/navoss-navigation/ios/NavOSSNavigationAppDelegateSubscriber.swift',
+      ),
+      'utf8',
+    );
     const navigationTypes = readFileSync(
       resolve(import.meta.dirname, '..', 'modules/navoss-navigation/index.ts'),
       'utf8',
@@ -111,6 +128,24 @@ describe('Google Places build configuration', () => {
     );
 
     expect(visualHarness).toContain('#if targetEnvironment(simulator)');
+    expect(carPlayDashboard).toContain('CPTemplateApplicationDashboardSceneDelegate');
+    expect(carPlayDashboard).toContain('dashboardController.shortcutButtons = [');
+    expect(carPlayDashboard).toContain('title: "Go"');
+    expect(carPlayDashboard).toContain('title: "Voice"');
+    expect(carPlayDashboard).toContain('mapViewController.display(');
+    expect(carPlayDashboard).toContain('mapViewController.reservesRouteChoiceSheet = false');
+    expect(carPlayDashboard).toContain('mapViewController.setIdleLocationTrackingEnabled(false)');
+    expect(carPlayScene).toContain('NavOSSCarPlayDashboardAction.activityType');
+    expect(carPlayPlugin).toContain(
+      'configurations.CPTemplateApplicationDashboardSceneSessionRoleApplication = [',
+    );
+    expect(carPlayPlugin).toContain("UISceneClassName: 'CPTemplateApplicationDashboardScene'");
+    expect(carPlayPlugin).toContain(
+      "UISceneDelegateClassName: 'NavOSSCarPlayDashboardSceneDelegate'",
+    );
+    expect(carPlayPlugin).toContain(
+      'delete configurations.CPTemplateApplicationDashboardSceneSessionRoleApplication',
+    );
     expect(carPlayScene).toMatch(
       /SearchCategory\(\s*category: "fuel",\s*label: "Gas",\s*query: "fuel",\s*systemImageName: "fuelpump\.fill"\s*\)/,
     );
@@ -154,6 +189,16 @@ describe('Google Places build configuration', () => {
     expect(carPlayScene).toContain('Check Location access on your iPhone, then try again.');
     expect(navigationService).toContain('public func awaitCurrentRouteOrigin(');
     expect(navigationService).toContain('try await Task.sleep(nanoseconds: 100_000_000)');
+    expect(navigationService).toContain('defer { finishCarPlayRoutePlanning() }');
+    expect(navigationService).toContain('isCarPlayRoutePlanning: carPlayRoutePlanning');
+    expect(navigationService.match(/navOSSShouldTrackLocation\(/g)).toHaveLength(3);
+    expect(navigationService).toContain('if !connected {\n      carPlayRoutePlanning = false');
+    expect(carPlayScene).not.toContain(
+      'NavOSSNavigationService.shared.prepareForCarPlayRoutePlanning()',
+    );
+    expect(navigationAppDelegateSubscriber).toContain(
+      'public func applicationWillTerminate(_ application: UIApplication)',
+    );
     expect(carPlayScene).toContain('let systemTrip = makeSystemTrip(routes)');
     expect(carPlayScene).toContain(
       'showRouteChoicesPreview(for: systemTrip, textConfiguration: nil)',
@@ -178,6 +223,8 @@ describe('Google Places build configuration', () => {
     expect(carPlayScene).toContain('routeChoicesByIdentifier = [:]');
     expect(carPlayScene).toContain('mapTemplate?.hideTripPreviews()');
     expect(carPlayScene).toContain('func sceneDidBecomeActive(_ scene: UIScene)');
+    expect(carPlayScene).toContain('func sceneWillResignActive(_ scene: UIScene)');
+    expect(carPlayScene).toContain('mapViewController?.setIdleLocationTrackingEnabled(false)');
     expect(carPlayScene).toContain(
       'interfaceController.popToRootTemplate(animated: false, completion: nil)',
     );
@@ -187,6 +234,12 @@ describe('Google Places build configuration', () => {
       /else if routeCoordinates\.count >= 2 \{\s*fitRoute\(animated: false\)\s*\} else \{\s*recenter\(\)/,
     );
     expect(carPlayMap).toContain('mapView.bounds.width * 0.60');
+    expect(carPlayMap).toContain('override func viewDidLayoutSubviews()');
+    expect(carPlayMap).toContain('mapSize != lastLaidOutMapSize');
+    expect(carPlayMap).toContain('reservesRouteChoiceSheet ? 11.5 : 12.5');
+    expect(carPlayMap).toContain('duration: animated ? 0.35 : 0');
+    expect(carPlayMap).toContain('self.routeFitGeneration == fitGeneration');
+    expect(carPlayMap).toContain('UIEdgeInsets(top: 32, left: 32, bottom: 32, right: 32)');
     expect(carPlayMap).toContain('previewCoordinatesWithBreathingRoom(routeCoordinates)');
     expect(carPlayMap).toContain('(maximumLatitude - minimumLatitude) * 0.25');
     expect(carPlayMap).toContain('(maximumLongitude - minimumLongitude) * 0.25');
@@ -203,6 +256,8 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('didUpdate userLocation: MLNUserLocation?');
     expect(carPlayMap).toContain('zoomLevel: 15.5');
     expect(visualHarness).toContain('case "idle-location"');
+    expect(visualHarness).toContain('case "preview-resize"');
+    expect(phoneScene).toContain('"preview-resize"');
     expect(carPlayMap).toContain('navOSSCarPlayIsSpeeding(');
     expect(carPlayMap).toContain('bringPositionLayerToFront(position, in: style)');
     expect(carPlayMap).toContain('style.removeLayer(positionLayer)');
@@ -212,6 +267,12 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('circleStrokeWidth = NSExpression(forConstantValue: 2)');
     expect(carPlayMap).toContain('UIColor.systemRed.withAlphaComponent(0.88)');
     expect(carPlayMap).toContain('style.setImage(carMarkerImage(), forName: carImageIdentifier)');
+    expect(carPlayMap).toContain('func deactivate()');
+    expect(carPlayMap).toContain('func setIdleLocationTrackingEnabled(_ enabled: Bool)');
+    expect(carPlayMap).toContain('else if !requestsUserLocation');
+    expect(carPlayMap).toContain('mapView.showsUserLocation = false');
+    expect(carPlayScene).toContain('mapViewController?.deactivate()');
+    expect(carPlayDashboard).toContain('mapViewController?.deactivate()');
     expect(carPlayMap).toContain('private func carMarkerImage() -> UIImage');
     expect(carPlayMap).toContain('mapView.attributionButton.isHidden = true');
     expect(carPlayMap).toContain('© OpenStreetMap contributors');
