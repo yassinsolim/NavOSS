@@ -60,6 +60,12 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         activeGuidance: false,
         alternateRoute: alternateRoute
       )
+    case "preview-short":
+      mapViewController.display(
+        route: Self.shortRoute,
+        routeId: "visual-preview-short",
+        activeGuidance: false
+      )
     case "preview-resize":
       mapViewController.view.autoresizingMask = []
       mapViewController.view.frame = CGRect(
@@ -164,6 +170,12 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     NavOSSCarPlayCoordinate(latitude: 51.04720, longitude: -114.08100),
     NavOSSCarPlayCoordinate(latitude: 51.04510, longitude: -114.05400),
     NavOSSCarPlayCoordinate(latitude: 51.04800, longitude: -114.02700),
+  ]
+
+  private static let shortRoute = [
+    NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07190),
+    NavOSSCarPlayCoordinate(latitude: 51.04620, longitude: -114.06880),
+    NavOSSCarPlayCoordinate(latitude: 51.04800, longitude: -114.06520),
   ]
 }
 #endif

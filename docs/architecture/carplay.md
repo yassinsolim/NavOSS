@@ -99,7 +99,17 @@ Apple does not permit arbitrary controls or React Native overlays in the base ma
 
 `NavOSSCarPlayDashboardSceneDelegate` conforms to `CPTemplateApplicationDashboardSceneDelegate` and renders a second native MapLibre view into the dashboard window.
 
-The scene manifest will include `CPSupportsDashboardNavigationScene` and the dashboard scene role. While navigating, Dashboard receives the same matched location, route, and camera state as the main display. When idle, it can expose at most two useful shortcut buttons, such as Home and Work or Recents.
+The scene manifest includes `CPTemplateApplicationDashboardSceneSessionRoleApplication` and the
+Dashboard scene delegate. While navigating, Dashboard receives the same matched location, route,
+and camera state as the main display. When idle, it exposes the Go and Voice shortcuts allowed by
+`CPDashboardController`.
+
+CarPlay owns Dashboard navigation-widget selection. NavOSS cannot declare itself the default or
+force its Dashboard scene to connect. A route-choice preview is not active navigation: Apple calls
+`selectedPreviewFor` while the sheet is visible, and NavOSS starts `CPNavigationSession` only after
+the user taps Go and CarPlay calls `startedTrip`. Returning Home before Go can therefore leave the
+previous navigation app in the widget. During an active NavOSS trip, CarPlay may promote NavOSS to
+the navigation widget. iOS does not expose the region-limited default Navigation setting in Canada.
 
 ### Instrument cluster and HUD
 
@@ -175,6 +185,8 @@ traffic, lane, speed, or incident knowledge.
 - Convert normalized alternatives into `CPTrip` and `CPRouteChoice` objects.
 - Use `CPMapTemplate.showTripPreviews` for route selection.
 - Draw selected and alternate route geometry in the native MapLibre view.
+- Fit the full selected route with the route-choice sheet reserved and cap preview zoom at 10.5 so
+  the physical 800×480 display retains regional context.
 - Include real duration, distance, and major-road summaries.
 - Continue to state that live traffic is unavailable until a real traffic source exists.
 

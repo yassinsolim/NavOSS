@@ -160,6 +160,26 @@ tile selection and shortcut behavior remain pending. Local build 40 was supersed
 after independent review found lifecycle races, and local build 41 was interrupted before producing
 an IPA; neither was submitted.
 
+Wider CarPlay preview candidate `0.1.0 (43)` was built locally from commit `310d6e7` with the
+Google-disabled `production-carplay` profile. It lowers the route-choice preview zoom ceiling from
+11.5 to 10.5, doubling the visible geographic span on the physical 800×480 layout while retaining
+the left-side route-choice-sheet reservation. Clean native validation passed nine CarPlay states,
+including a short-route regression with route-green ratio `0.000284` and a resized wide route with
+regional context. The signed IPA has SHA-256
+`49f9edc34897ec36f3730604483047c40e4e9fa6a4b4d76ef8dca47cdd81756b` and passed strict signature,
+arm64, App Store profile, CarPlay entitlement, Dashboard scene, production origin, privacy
+manifest, and Google-disabled packaging audits. EAS submission
+`13b91d30-8a30-425f-80b2-697499fd15f6` completed successfully, and App Store Connect reports build
+43 `VALID` and `IN_BETA_TESTING`. Physical installation and route-preview confirmation remain
+pending.
+
+CarPlay does not expose an API that lets NavOSS force itself into the Dashboard navigation widget,
+and Canada's iOS Default Apps settings do not offer the region-limited Navigation default. The
+route-choice sheet is preview state: NavOSS starts `CPNavigationSession` only after the user taps
+the green Go button and CarPlay calls `startedTrip`. Returning Home before Go can therefore leave
+Google Maps in the navigation widget. The physical Dashboard check must start a NavOSS trip before
+returning Home.
+
 Before creating a build, verify:
 
 ```sh

@@ -266,7 +266,9 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('func currentLocationCoordinate()');
     expect(carPlayMap).toContain('zoomLevel: 15.5');
     expect(visualHarness).toContain('case "idle-location"');
+    expect(visualHarness).toContain('case "preview-short"');
     expect(visualHarness).toContain('case "preview-resize"');
+    expect(phoneScene).toContain('"preview-short"');
     expect(phoneScene).toContain('"preview-resize"');
     expect(carPlayMap).toContain('navOSSCarPlayIsSpeeding(');
     expect(carPlayMap).toContain('bringPositionLayerToFront(position, in: style)');

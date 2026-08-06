@@ -597,6 +597,7 @@ try {
       for (const [name, scenario, appearance] of [
         ['carplay-preview-light', 'preview', 'light'],
         ['carplay-preview-dark', 'preview', 'dark'],
+        ['carplay-preview-short', 'preview-short', 'light'],
         ['carplay-preview-resize', 'preview-resize', 'light'],
         ['carplay-progress-05', 'progress-05', 'light'],
         ['carplay-progress-60', 'progress-60', 'light'],
@@ -669,7 +670,15 @@ try {
       throw new Error('A CarPlay route scenario does not contain enough route-green pixels.');
     }
     const previewMetric = metricsByName.get('carplay-preview-light.png');
+    const shortPreviewMetric = metricsByName.get('carplay-preview-short.png');
     const clearMetric = metricsByName.get('carplay-clear.png');
+    if (
+      shortPreviewMetric === undefined ||
+      shortPreviewMetric.routeGreenRatio < 0.0002 ||
+      shortPreviewMetric.routeGreenRatio > 0.0025
+    ) {
+      throw new Error('Short CarPlay preview is missing or framed too tightly.');
+    }
     if (
       previewMetric !== undefined &&
       clearMetric !== undefined &&
