@@ -191,6 +191,18 @@ cached route-origin sample could expire before Go and guidance could still wait 
 callback. The replacement holds an independent location lease for the lifetime of the preview and
 cancels pending route work when the CarPlay scene resigns.
 
+Route-preview lease replacement `0.1.0 (45)` was built locally from commit `3f80b88` with the
+Google-disabled `production-carplay` profile. It retains a dedicated Core Location lease while the
+route-choice sheet is visible, releases it on every preview exit path, starts active navigation
+before releasing it after Go, and cancels in-flight route work when the CarPlay scene resigns. The
+clean nine-state CarPlay suite, 53 native tests, six source-contract tests, and full root gates
+passed. The signed IPA has SHA-256
+`9df1a5ea52412eba9def5783b1e9028ed088fbc7cde88c63108d1766c5946851` and passed strict signature,
+arm64, App Store profile, CarPlay entitlement, main and Dashboard scenes, production origin,
+location-only background mode, privacy manifest, Google-disabled packaging, and simulator-hook
+audits. EAS submission `196e2349-0721-4fe7-871c-d2f93fbe0fcd` uploaded successfully; Apple
+processing, TestFlight attachment, and physical installation remain pending.
+
 CarPlay does not expose an API that lets NavOSS force itself into the Dashboard navigation widget,
 and Canada's iOS Default Apps settings do not offer the region-limited Navigation default. The
 route-choice sheet is preview state: NavOSS starts `CPNavigationSession` only after the user taps
