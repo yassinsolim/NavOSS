@@ -208,6 +208,23 @@ rejected build 45: the destination endpoint was not reliably visible, the previe
 too thick, and Go entered follow mode only intermittently. Build 45 remains internal and is
 superseded by the explicit-endpoint and persistent-follow replacement.
 
+Explicit-endpoint and persistent-follow replacement `0.1.0 (47)` was built locally from commit
+`c66f4f4` with the Google-disabled `production-carplay` profile. Build number 46 was consumed by a
+pre-install rejection after the shell inherited the simulator HTTP API origin; the release guard
+stopped it before native compilation and no build 46 IPA was produced. Build 47 explicitly used
+`https://navoss-api.yassin.app`. Route previews now cap zoom at 9.5, draw a 4-point selected trail
+with a 7-point casing, and mark the route origin green and destination blue. Go enters follow mode
+at the selected route origin when no publishable GPS position exists, preserves that position
+across repeated nil-position snapshots, and yields to the first real GPS update. The clean ten-state
+CarPlay suite includes the exact preview-to-Go repeated-nil regression; its route-green ratio was
+`0.01129`, while the short preview remained visible at `0.000173`. The 53 native tests, six
+source-contract tests, full root gates, and independent review passed. The signed IPA has SHA-256
+`e3d811d9a50276f1824b660e601dbada0dc4a873cf60c4c950d396d99361b1db` and passed strict signature,
+arm64, App Store profile, CarPlay entitlement, main and Dashboard scenes, production-only origin,
+location-only background mode, privacy manifest, Google-disabled packaging, and simulator-hook
+audits. EAS submission `c0bd1f8b-011d-4dd1-abfb-13a03582fd6f` uploaded successfully; Apple
+processing and physical installation remain pending.
+
 CarPlay does not expose an API that lets NavOSS force itself into the Dashboard navigation widget,
 and Canada's iOS Default Apps settings do not offer the region-limited Navigation default. The
 route-choice sheet is preview state: NavOSS starts `CPNavigationSession` only after the user taps
