@@ -230,6 +230,21 @@ Go follow behavior were retained. Build 47 remains internal and is superseded by
 framing that reserves 68% for Apple's sheet, expands route bounds by 50%, and caps preview zoom at
 8.5.
 
+Wider-preview replacement `0.1.0 (48)` was built locally from commit `9706760` with the
+Google-disabled `production-carplay` profile. It preserves build 47's 4/7-point route styling,
+explicit endpoint markers, and persistent Go follow, while reserving 68% of map width for Apple's
+route-choice sheet, expanding route bounds by 50%, and capping preview zoom at 8.5. The clean
+ten-state CarPlay suite now checks late-progress guidance and independently measures green-origin
+and blue-destination marker pixels in every preview. Normal preview route ratios were
+`0.000761`-`0.000810`; both marker ratios exceeded `0.000256`. The short preview retained a route
+ratio of `0.0000623`, origin marker ratio `0.0000623`, and destination marker ratio `0.000270`.
+The 53 native tests, six source-contract tests, full root gates, and independent review passed. The
+signed IPA has SHA-256 `d9fca8a5fdc2828eadbe2d2cabd0a4558c2c71ba234c04e663e8cf3100723492`
+and passed strict signature, arm64, App Store profile, CarPlay entitlement, main and Dashboard
+scenes, production-only origin, location-only background mode, privacy manifest, Google-disabled
+packaging, and simulator-hook audits. EAS submission `0e58a3a0-6619-4b7d-863a-bbe3e537672c`
+uploaded successfully; Apple processing and physical installation remain pending.
+
 CarPlay does not expose an API that lets NavOSS force itself into the Dashboard navigation widget,
 and Canada's iOS Default Apps settings do not offer the region-limited Navigation default. The
 route-choice sheet is preview state: NavOSS starts `CPNavigationSession` only after the user taps
