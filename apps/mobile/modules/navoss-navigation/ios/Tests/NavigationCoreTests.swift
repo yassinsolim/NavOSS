@@ -678,6 +678,87 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertNil(store.load())
   }
 
+  func testCarPlayRouteNamesDescribeDistinctMajorRoads() {
+    let sharedStart = NavOSSCarPlayRouteStep(
+      distanceMeters: 300,
+      durationSeconds: 30,
+      geometry: [
+        NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+        NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.07),
+      ],
+      instruction: "Head east",
+      maneuverType: "depart",
+      roadName: "17 Avenue SW"
+    )
+    let glenmoreRoute = makeNavigationSessionTrip(
+      id: "glenmore",
+      steps: [
+        sharedStart,
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 1_650,
+          durationSeconds: 120,
+          geometry: [
+            NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.07),
+            NavOSSCarPlayCoordinate(latitude: 51.13, longitude: -114.01),
+          ],
+          instruction: "Continue east",
+          maneuverType: "straight",
+          roadName: "Glenmore Trail"
+        ),
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 50,
+          durationSeconds: 10,
+          geometry: [
+            NavOSSCarPlayCoordinate(latitude: 51.12, longitude: -114.02),
+            NavOSSCarPlayCoordinate(latitude: 51.13, longitude: -114.01),
+          ],
+          instruction: "Take the ramp",
+          maneuverType: "right",
+          roadName: "Airport Ramp"
+        ),
+      ]
+    )
+    let stoneyRoute = makeNavigationSessionTrip(
+      id: "stoney",
+      steps: [
+        sharedStart,
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 1_700,
+          durationSeconds: 125,
+          geometry: [
+            NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.07),
+            NavOSSCarPlayCoordinate(latitude: 51.13, longitude: -114.01),
+          ],
+          instruction: "Continue north",
+          maneuverType: "straight",
+          roadName: "Stoney Trail"
+        ),
+      ]
+    )
+
+    XCTAssertEqual(
+      navOSSCarPlayRouteChoiceDetails([glenmoreRoute, stoneyRoute]),
+      ["via Glenmore Trail", "via Stoney Trail"]
+    )
+  }
+
+  func testCarPlayRouteNamesMeasureDifferenceWhenRoadsMatch() {
+    let fastestRoute = makeNavigationSessionTrip(id: "fastest")
+    let longerRoute = NavOSSCarPlayTrip(
+      destination: fastestRoute.destination,
+      distanceMeters: fastestRoute.distanceMeters + 320,
+      durationSeconds: fastestRoute.durationSeconds + 45,
+      geometry: fastestRoute.geometry,
+      id: "longer",
+      steps: fastestRoute.steps
+    )
+
+    XCTAssertEqual(
+      navOSSCarPlayRouteChoiceDetails([fastestRoute, longerRoute]),
+      [nil, "300 m longer"]
+    )
+  }
+
   func testCarPlayTripStorePublishesValidatedLifecycle() {
     let notifications = NotificationCenter()
     let store = NavOSSCarPlayTripStore(notificationCenter: notifications)
@@ -1315,6 +1396,7 @@ final class NavigationCoreTests: XCTestCase {
     currentSpokenInstruction: String? = nil,
     nextSpokenInstruction: String? = nil,
     geometry: [NavOSSCarPlayCoordinate]? = nil,
+    steps: [NavOSSCarPlayRouteStep]? = nil,
     waypoints: [NavOSSCarPlayDestination]? = nil
   ) -> NavOSSCarPlayTrip {
     NavOSSCarPlayTrip(
@@ -1333,7 +1415,7 @@ final class NavigationCoreTests: XCTestCase {
         NavOSSCarPlayCoordinate(latitude: 51.13, longitude: -114.01),
       ],
       id: id,
-      steps: [
+      steps: steps ?? [
         NavOSSCarPlayRouteStep(
           distanceMeters: 500,
           durationSeconds: 60,

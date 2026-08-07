@@ -243,14 +243,17 @@ signed IPA has SHA-256 `d9fca8a5fdc2828eadbe2d2cabd0a4558c2c71ba234c04e663e8cf31
 and passed strict signature, arm64, App Store profile, CarPlay entitlement, main and Dashboard
 scenes, production-only origin, location-only background mode, privacy manifest, Google-disabled
 packaging, and simulator-hook audits. EAS submission `0e58a3a0-6619-4b7d-863a-bbe3e537672c`
-uploaded successfully; Apple processing and physical installation remain pending.
+uploaded successfully. Apple reports internal `IN_BETA_TESTING` and external
+`READY_FOR_BETA_SUBMISSION`; CoreDevice confirms build 48 installed on the paired iPhone 15 Pro
+Max. Physical 800×480 preview and Go-follow validation remain pending.
 
-CarPlay does not expose an API that lets NavOSS force itself into the Dashboard navigation widget,
-and Canada's iOS Default Apps settings do not offer the region-limited Navigation default. The
-route-choice sheet is preview state: NavOSS starts `CPNavigationSession` only after the user taps
-the green Go button and CarPlay calls `startedTrip`. Returning Home before Go can therefore leave
-Google Maps in the navigation widget. The physical Dashboard check must start a NavOSS trip before
-returning Home.
+Build 48 registers a Dashboard scene but omits the required
+`UIApplicationSceneManifest.CPSupportsDashboardNavigationScene` declaration. Physical testing
+confirmed that Google Maps therefore retained the Dashboard navigation slot even after NavOSS
+started a `CPNavigationSession`. The next candidate adds the declaration and a compiled-bundle
+validation guard. CarPlay still owns final Dashboard selection, and Canada's iOS Default Apps
+settings do not offer the region-limited Navigation default. Physical acceptance must verify that
+an active NavOSS trip replaces the prior Google Maps Dashboard content after returning Home.
 
 Before creating a build, verify:
 

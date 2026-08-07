@@ -475,6 +475,18 @@ try {
       );
       appPath = join(derivedData, 'Build/Products/Debug-iphonesimulator/NavOSS.app');
       if (!existsSync(appPath)) throw new Error(`Built app not found: ${appPath}`);
+      const dashboardSupport = spawnSync(
+        '/usr/libexec/PlistBuddy',
+        [
+          '-c',
+          'Print :UIApplicationSceneManifest:CPSupportsDashboardNavigationScene',
+          join(appPath, 'Info.plist'),
+        ],
+        { encoding: 'utf8', env: environment },
+      );
+      if (dashboardSupport.status !== 0 || dashboardSupport.stdout.trim() !== 'true') {
+        throw new Error('Built app is missing CarPlay Dashboard navigation eligibility.');
+      }
       await run('codesign', ['--force', '--sign', '-', appPath], {
         logPath: join(logsDirectory, 'codesign.log'),
         timeoutMs: 60_000,

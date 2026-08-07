@@ -60,6 +60,7 @@ function withNavOSSCarPlay(config) {
     const manifest = modConfig.modResults.UIApplicationSceneManifest ?? {};
     const configurations = manifest.UISceneConfigurations ?? {};
     if (!carPlayEnabled) {
+      delete manifest.CPSupportsDashboardNavigationScene;
       delete configurations.CPTemplateApplicationSceneSessionRoleApplication;
       delete configurations.CPTemplateApplicationDashboardSceneSessionRoleApplication;
       if (manifest.UISceneConfigurations !== undefined) {
@@ -90,6 +91,7 @@ function withNavOSSCarPlay(config) {
         UISceneDelegateClassName: 'NavOSSCarPlayDashboardSceneDelegate',
       },
     ];
+    manifest.CPSupportsDashboardNavigationScene = true;
     manifest.UIApplicationSupportsMultipleScenes = true;
     manifest.UISceneConfigurations = configurations;
     modConfig.modResults.UIApplicationSceneManifest = manifest;

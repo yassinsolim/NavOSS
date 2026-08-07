@@ -110,6 +110,10 @@ describe('Google Places build configuration', () => {
       ),
       'utf8',
     );
+    const navigationValidator = readFileSync(
+      resolve(import.meta.dirname, '..', 'scripts/validate-navigation-ios.mjs'),
+      'utf8',
+    );
     const navigationAppDelegateSubscriber = readFileSync(
       resolve(
         import.meta.dirname,
@@ -142,6 +146,14 @@ describe('Google Places build configuration', () => {
     expect(carPlayPlugin).toContain("UISceneClassName: 'CPTemplateApplicationDashboardScene'");
     expect(carPlayPlugin).toContain(
       "UISceneDelegateClassName: 'NavOSSCarPlayDashboardSceneDelegate'",
+    );
+    expect(carPlayPlugin).toContain('manifest.CPSupportsDashboardNavigationScene = true');
+    expect(carPlayPlugin).toContain('delete manifest.CPSupportsDashboardNavigationScene');
+    expect(navigationValidator).toContain(
+      'Print :UIApplicationSceneManifest:CPSupportsDashboardNavigationScene',
+    );
+    expect(navigationValidator).toContain(
+      'Built app is missing CarPlay Dashboard navigation eligibility.',
     );
     expect(carPlayPlugin).toContain(
       'delete configurations.CPTemplateApplicationDashboardSceneSessionRoleApplication',
@@ -218,6 +230,10 @@ describe('Google Places build configuration', () => {
       'showRouteChoicesPreview(for: systemTrip, textConfiguration: nil)',
     );
     expect(carPlayScene).toContain('let routeChoices = routes.enumerated().map');
+    expect(carPlayScene).toContain(
+      'let routeChoiceDetails = navOSSCarPlayRouteChoiceDetails(routes)',
+    );
+    expect(carPlayScene).toContain('let routeDetail = routeChoiceDetails[index]');
     expect(carPlayScene).toContain('additionalInformationVariants: [estimates]');
     expect(carPlayScene).toContain('selectionSummaryVariants: ["\\(summary) · \\(estimates)"');
     expect(carPlayScene).toContain('waypoints: waypoints');
@@ -250,10 +266,16 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toMatch(
       /else if routeCoordinates\.count >= 2 \{\s*fitRoute\(animated: false\)\s*\} else \{\s*recenter\(\)/,
     );
-    expect(carPlayMap).toContain('mapView.bounds.width * 0.68');
+    expect(carPlayMap).toContain('mapView.bounds.width * 0.66');
     expect(carPlayMap).toContain('override func viewDidLayoutSubviews()');
     expect(carPlayMap).toContain('mapSize != lastLaidOutMapSize');
-    expect(carPlayMap).toContain('reservesRouteChoiceSheet ? 8.5 : 12.5');
+    expect(carPlayMap).toContain('reservesRouteChoiceSheet ? 9.25 : 12.5');
+    expect(carPlayMap).toMatch(
+      /latitudeMargin = max\(\s*\(maximumLatitude - minimumLatitude\) \* 0\.25, 0\.002\s*\)/,
+    );
+    expect(carPlayMap).toMatch(
+      /longitudeMargin = max\(\s*\(maximumLongitude - minimumLongitude\) \* 0\.25, 0\.002\s*\)/,
+    );
     expect(carPlayMap).toContain(
       'position ?? latestPosition ?? (activeGuidance ? routeOriginPosition : nil)',
     );
@@ -262,8 +284,8 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('self.routeFitGeneration == fitGeneration');
     expect(carPlayMap).toContain('UIEdgeInsets(top: 32, left: 32, bottom: 32, right: 32)');
     expect(carPlayMap).toContain('previewCoordinatesWithBreathingRoom(routeCoordinates)');
-    expect(carPlayMap).toContain('(maximumLatitude - minimumLatitude) * 0.50');
-    expect(carPlayMap).toContain('(maximumLongitude - minimumLongitude) * 0.50');
+    expect(carPlayMap).toContain('(maximumLatitude - minimumLatitude) * 0.25');
+    expect(carPlayMap).toContain('(maximumLongitude - minimumLongitude) * 0.25');
     expect(carPlayMap).toContain(
       'matchedCoordinate: (renderedPosition ?? effectivePosition)?.coordinate',
     );

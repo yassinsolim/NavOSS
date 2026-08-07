@@ -220,6 +220,76 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
   }
 }
 
+public func navOSSCarPlayRouteChoiceDetails(
+  _ routes: [NavOSSCarPlayTrip]
+) -> [String?] {
+  struct RoadCandidate {
+    let displayName: String
+    let firstStepIndex: Int
+    let key: String
+    var distanceMeters: Double
+  }
+
+  let candidatesByRoute = routes.map { route in
+    var candidates: [String: RoadCandidate] = [:]
+    for (stepIndex, step) in route.steps.enumerated() {
+      let displayName = step.roadName.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !displayName.isEmpty else { continue }
+      let key = displayName.lowercased()
+      if var candidate = candidates[key] {
+        candidate.distanceMeters += max(0, step.distanceMeters)
+        candidates[key] = candidate
+      } else {
+        candidates[key] = RoadCandidate(
+          displayName: displayName,
+          firstStepIndex: stepIndex,
+          key: key,
+          distanceMeters: max(0, step.distanceMeters)
+        )
+      }
+    }
+    return Array(candidates.values)
+  }
+  var routePresenceByRoad: [String: Int] = [:]
+  for candidates in candidatesByRoute {
+    for key in Set(candidates.map(\.key)) {
+      routePresenceByRoad[key, default: 0] += 1
+    }
+  }
+
+  return candidatesByRoute.enumerated().map { routeIndex, candidates in
+    let minimumMajorRoadDistance = max(200, routes[routeIndex].distanceMeters * 0.05)
+    let majorCandidates = candidates.filter {
+      $0.distanceMeters >= minimumMajorRoadDistance
+        && routePresenceByRoad[$0.key, default: routes.count] < routes.count
+    }
+    let selected = majorCandidates.sorted { left, right in
+      let leftPresence = routePresenceByRoad[left.key, default: routes.count]
+      let rightPresence = routePresenceByRoad[right.key, default: routes.count]
+      if leftPresence != rightPresence { return leftPresence < rightPresence }
+      if left.distanceMeters != right.distanceMeters {
+        return left.distanceMeters > right.distanceMeters
+      }
+      return left.firstStepIndex < right.firstStepIndex
+    }.first
+    if let selected { return "via \(selected.displayName)" }
+    guard routeIndex > 0, let fastestRoute = routes.first else { return nil }
+    let extraDistanceMeters = routes[routeIndex].distanceMeters - fastestRoute.distanceMeters
+    if extraDistanceMeters >= 50 {
+      if extraDistanceMeters < 1_000 {
+        let roundedMeters = max(50, Int((extraDistanceMeters / 50).rounded()) * 50)
+        return "\(roundedMeters) m longer"
+      }
+      return String(format: "%.1f km longer", extraDistanceMeters / 1_000)
+    }
+    let extraDurationMinutes = Int(
+      ((routes[routeIndex].durationSeconds - fastestRoute.durationSeconds) / 60).rounded()
+    )
+    if extraDurationMinutes > 0 { return "\(extraDurationMinutes) min slower" }
+    return "Similar route"
+  }
+}
+
 public final class NavOSSActiveTripStore: @unchecked Sendable {
   private struct StoredTrip: Codable {
     let expiresAt: Date

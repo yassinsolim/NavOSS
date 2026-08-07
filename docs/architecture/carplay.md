@@ -99,13 +99,14 @@ Apple does not permit arbitrary controls or React Native overlays in the base ma
 
 `NavOSSCarPlayDashboardSceneDelegate` conforms to `CPTemplateApplicationDashboardSceneDelegate` and renders a second native MapLibre view into the dashboard window.
 
-The scene manifest includes `CPTemplateApplicationDashboardSceneSessionRoleApplication` and the
-Dashboard scene delegate. While navigating, Dashboard receives the same matched location, route,
-and camera state as the main display. When idle, it exposes the Go and Voice shortcuts allowed by
-`CPDashboardController`.
+The scene manifest includes `CPSupportsDashboardNavigationScene`,
+`CPTemplateApplicationDashboardSceneSessionRoleApplication`, and the Dashboard scene delegate.
+While navigating, Dashboard receives the same matched location, route, and camera state as the
+main display. When idle, it exposes the Go and Voice shortcuts allowed by `CPDashboardController`.
 
 CarPlay owns Dashboard navigation-widget selection. NavOSS cannot declare itself the default or
-force its Dashboard scene to connect. A route-choice preview is not active navigation: Apple calls
+force its Dashboard scene to connect, but it must advertise Dashboard navigation eligibility. A
+route-choice preview is not active navigation: Apple calls
 `selectedPreviewFor` while the sheet is visible, and NavOSS starts `CPNavigationSession` only after
 the user taps Go and CarPlay calls `startedTrip`. Returning Home before Go can therefore leave the
 previous navigation app in the widget. During an active NavOSS trip, CarPlay may promote NavOSS to
