@@ -6,6 +6,7 @@ import ImageIO
 import Vision
 
 struct Metrics: Codable {
+  let destinationBlueRatio: Double
   let dominantRatio: Double
   let height: Int
   let luminanceVariance: Double
@@ -14,6 +15,7 @@ struct Metrics: Codable {
   let perceptualSignature: [Int]
   let quantizedColorCount: Int
   let recognizedText: [String]
+  let originGreenRatio: Double
   let routeGreenRatio: Double
   let width: Int
 }
@@ -48,6 +50,8 @@ func analyze(path: String) throws -> Metrics {
   var luminanceSquaredSum = 0.0
   var sampleCount = 0
   var nearBackgroundCount = 0
+  var destinationBlueCount = 0
+  var originGreenCount = 0
   var routeGreenCount = 0
 
   for y in Swift.stride(from: 0, to: height, by: stride) {
@@ -68,6 +72,16 @@ func analyze(path: String) throws -> Metrics {
         && Int(blue) > Int(red) + 30
       {
         routeGreenCount += 1
+      }
+      if Int(red) < 90 && Int(green) > 160 && Int(blue) >= 50 && Int(blue) < 130
+        && Int(green) > Int(blue) + 70
+      {
+        originGreenCount += 1
+      }
+      if Int(red) < 80 && Int(green) >= 70 && Int(green) < 180 && Int(blue) > 180
+        && Int(blue) > Int(green) + 70
+      {
+        destinationBlueCount += 1
       }
       sampleCount += 1
     }
@@ -97,6 +111,7 @@ func analyze(path: String) throws -> Metrics {
     $0.topCandidates(1).first?.string
   }
   return Metrics(
+    destinationBlueRatio: Double(destinationBlueCount) / Double(sampleCount),
     dominantRatio: Double(dominant) / Double(sampleCount),
     height: height,
     luminanceVariance: variance,
@@ -105,6 +120,7 @@ func analyze(path: String) throws -> Metrics {
     perceptualSignature: perceptualSignature,
     quantizedColorCount: colors.count,
     recognizedText: recognizedText,
+    originGreenRatio: Double(originGreenCount) / Double(sampleCount),
     routeGreenRatio: Double(routeGreenCount) / Double(sampleCount),
     width: width
   )

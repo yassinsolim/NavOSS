@@ -523,7 +523,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       activeGuidance
       ? routeCoordinates
       : previewCoordinatesWithBreathingRoom(routeCoordinates)
-    let previewSheetInset = max(64, mapView.bounds.width * 0.60)
+    let previewSheetInset = max(64, mapView.bounds.width * 0.68)
     let edgePadding =
       activeGuidance
       ? UIEdgeInsets(top: 56, left: 48, bottom: 96, right: 48)
@@ -547,7 +547,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         guard let self, self.routeFitGeneration == fitGeneration, !self.activeGuidance else {
           return
         }
-        let maximumZoomLevel = self.reservesRouteChoiceSheet ? 9.5 : 12.5
+        let maximumZoomLevel = self.reservesRouteChoiceSheet ? 8.5 : 12.5
         if self.mapView.zoomLevel > maximumZoomLevel {
           self.mapView.setZoomLevel(maximumZoomLevel, animated: false)
         }
@@ -563,8 +563,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard let minimumLatitude = latitudes.min(), let maximumLatitude = latitudes.max(),
       let minimumLongitude = longitudes.min(), let maximumLongitude = longitudes.max()
     else { return coordinates }
-    let latitudeMargin = max((maximumLatitude - minimumLatitude) * 0.25, 0.002)
-    let longitudeMargin = max((maximumLongitude - minimumLongitude) * 0.25, 0.002)
+    let latitudeMargin = max((maximumLatitude - minimumLatitude) * 0.50, 0.004)
+    let longitudeMargin = max((maximumLongitude - minimumLongitude) * 0.50, 0.004)
     return coordinates + [
       CLLocationCoordinate2D(
         latitude: minimumLatitude - latitudeMargin,

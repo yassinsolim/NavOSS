@@ -250,10 +250,10 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toMatch(
       /else if routeCoordinates\.count >= 2 \{\s*fitRoute\(animated: false\)\s*\} else \{\s*recenter\(\)/,
     );
-    expect(carPlayMap).toContain('mapView.bounds.width * 0.60');
+    expect(carPlayMap).toContain('mapView.bounds.width * 0.68');
     expect(carPlayMap).toContain('override func viewDidLayoutSubviews()');
     expect(carPlayMap).toContain('mapSize != lastLaidOutMapSize');
-    expect(carPlayMap).toContain('reservesRouteChoiceSheet ? 9.5 : 12.5');
+    expect(carPlayMap).toContain('reservesRouteChoiceSheet ? 8.5 : 12.5');
     expect(carPlayMap).toContain(
       'position ?? latestPosition ?? (activeGuidance ? routeOriginPosition : nil)',
     );
@@ -262,8 +262,8 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('self.routeFitGeneration == fitGeneration');
     expect(carPlayMap).toContain('UIEdgeInsets(top: 32, left: 32, bottom: 32, right: 32)');
     expect(carPlayMap).toContain('previewCoordinatesWithBreathingRoom(routeCoordinates)');
-    expect(carPlayMap).toContain('(maximumLatitude - minimumLatitude) * 0.25');
-    expect(carPlayMap).toContain('(maximumLongitude - minimumLongitude) * 0.25');
+    expect(carPlayMap).toContain('(maximumLatitude - minimumLatitude) * 0.50');
+    expect(carPlayMap).toContain('(maximumLongitude - minimumLongitude) * 0.50');
     expect(carPlayMap).toContain(
       'matchedCoordinate: (renderedPosition ?? effectivePosition)?.coordinate',
     );

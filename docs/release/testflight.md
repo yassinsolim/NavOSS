@@ -223,7 +223,12 @@ source-contract tests, full root gates, and independent review passed. The signe
 arm64, App Store profile, CarPlay entitlement, main and Dashboard scenes, production-only origin,
 location-only background mode, privacy manifest, Google-disabled packaging, and simulator-hook
 audits. EAS submission `c0bd1f8b-011d-4dd1-abfb-13a03582fd6f` uploaded successfully; Apple
-processing and physical installation remain pending.
+reports internal `IN_BETA_TESTING` and external `READY_FOR_BETA_SUBMISSION`. Physical installation
+completed on the paired iPhone, but 800×480 CarPlay testing rejected build 47 because the blue
+destination remained hidden and the preview was still too close. Its thinner route and persistent
+Go follow behavior were retained. Build 47 remains internal and is superseded by wider preview
+framing that reserves 68% for Apple's sheet, expands route bounds by 50%, and caps preview zoom at
+8.5.
 
 CarPlay does not expose an API that lets NavOSS force itself into the Dashboard navigation widget,
 and Canada's iOS Default Apps settings do not offer the region-limited Navigation default. The

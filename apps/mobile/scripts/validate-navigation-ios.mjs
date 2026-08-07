@@ -661,15 +661,29 @@ try {
       throw new Error('Two screenshot checkpoints are byte-identical.');
     }
     const metricsByName = new Map(metrics.map((metric) => [basename(metric.path), metric]));
-    const routeVisibleMetrics = [
-      metricsByName.get('carplay-preview-light.png'),
-      metricsByName.get('carplay-preview-resize.png'),
+    const guidanceRouteMetrics = [
       metricsByName.get('carplay-progress-05.png'),
       metricsByName.get('carplay-guidance-position-fallback.png'),
+      metricsByName.get('carplay-progress-60.png'),
       metricsByName.get('carplay-overview.png'),
     ].filter((metric) => metric !== undefined);
-    if (routeVisibleMetrics.some((metric) => metric.routeGreenRatio < 0.0014)) {
-      throw new Error('A CarPlay route scenario does not contain enough route-green pixels.');
+    if (guidanceRouteMetrics.some((metric) => metric.routeGreenRatio < 0.0014)) {
+      throw new Error('A CarPlay guidance scenario does not contain enough route-green pixels.');
+    }
+    const previewRouteMetrics = [
+      metricsByName.get('carplay-preview-light.png'),
+      metricsByName.get('carplay-preview-dark.png'),
+      metricsByName.get('carplay-preview-resize.png'),
+    ].filter((metric) => metric !== undefined);
+    if (previewRouteMetrics.some((metric) => metric.routeGreenRatio < 0.0007)) {
+      throw new Error('A widened CarPlay preview does not contain enough route-green pixels.');
+    }
+    if (
+      previewRouteMetrics.some(
+        (metric) => metric.originGreenRatio < 0.00002 || metric.destinationBlueRatio < 0.00002,
+      )
+    ) {
+      throw new Error('A widened CarPlay preview is missing an endpoint marker.');
     }
     const previewMetric = metricsByName.get('carplay-preview-light.png');
     const shortPreviewMetric = metricsByName.get('carplay-preview-short.png');
@@ -677,7 +691,9 @@ try {
     if (
       shortPreviewMetric === undefined ||
       shortPreviewMetric.routeGreenRatio < 0.00006 ||
-      shortPreviewMetric.routeGreenRatio > 0.0015
+      shortPreviewMetric.routeGreenRatio > 0.0015 ||
+      shortPreviewMetric.originGreenRatio < 0.00002 ||
+      shortPreviewMetric.destinationBlueRatio < 0.00002
     ) {
       throw new Error('Short CarPlay preview is missing or framed too tightly.');
     }

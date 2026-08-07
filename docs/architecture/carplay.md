@@ -185,7 +185,8 @@ traffic, lane, speed, or incident knowledge.
 - Convert normalized alternatives into `CPTrip` and `CPRouteChoice` objects.
 - Use `CPMapTemplate.showTripPreviews` for route selection.
 - Draw selected and alternate route geometry in the native MapLibre view.
-- Fit the full selected route with the route-choice sheet reserved, cap preview zoom at 9.5, and
+- Fit the full selected route with 68% of the map width reserved for the route-choice sheet, expand
+  route bounds by 50%, cap preview zoom at 8.5, and
   use a 4-point route with a 7-point casing so the physical 800×480 display retains regional
   context without obscuring road choices.
 - Mark both preview endpoints independently: green for the route origin and blue for the
