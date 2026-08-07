@@ -98,6 +98,30 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         routeProgress: 0.05,
         speedLimitKph: 50
       )
+    case "guidance-position-fallback":
+      mapViewController.display(
+        route: route,
+        routeId: "visual-guidance-fallback",
+        activeGuidance: false
+      )
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+        self?.mapViewController.display(
+          route: route,
+          routeId: "visual-guidance-fallback",
+          activeGuidance: true
+        )
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) { [weak self] in
+        self?.mapViewController.display(
+          route: route,
+          routeId: "visual-guidance-fallback",
+          activeGuidance: true
+        )
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { [weak self] in
+        self?.markReady()
+      }
+      return
     case "progress-60":
       mapViewController.applyMapPreferences(showsPointsOfInterest: true, vehicleMarker: .car)
       mapViewController.display(

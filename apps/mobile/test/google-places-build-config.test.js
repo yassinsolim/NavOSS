@@ -253,17 +253,23 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('mapView.bounds.width * 0.60');
     expect(carPlayMap).toContain('override func viewDidLayoutSubviews()');
     expect(carPlayMap).toContain('mapSize != lastLaidOutMapSize');
-    expect(carPlayMap).toContain('reservesRouteChoiceSheet ? 10.0 : 12.5');
+    expect(carPlayMap).toContain('reservesRouteChoiceSheet ? 9.5 : 12.5');
+    expect(carPlayMap).toContain(
+      'position ?? latestPosition ?? (activeGuidance ? routeOriginPosition : nil)',
+    );
+    expect(carPlayMap).toContain('private func installOriginOverlayIfReady()');
     expect(carPlayMap).toContain('duration: animated ? 0.35 : 0');
     expect(carPlayMap).toContain('self.routeFitGeneration == fitGeneration');
     expect(carPlayMap).toContain('UIEdgeInsets(top: 32, left: 32, bottom: 32, right: 32)');
     expect(carPlayMap).toContain('previewCoordinatesWithBreathingRoom(routeCoordinates)');
     expect(carPlayMap).toContain('(maximumLatitude - minimumLatitude) * 0.25');
     expect(carPlayMap).toContain('(maximumLongitude - minimumLongitude) * 0.25');
-    expect(carPlayMap).toContain('matchedCoordinate: (renderedPosition ?? position)?.coordinate');
+    expect(carPlayMap).toContain(
+      'matchedCoordinate: (renderedPosition ?? effectivePosition)?.coordinate',
+    );
     expect(carPlayMap).toContain('routeCoordinates[0] = CLLocationCoordinate2D(');
-    expect(carPlayMap).toContain('NSExpression(forConstantValue: activeGuidance ? 11 : 9)');
-    expect(carPlayMap).toContain('NSExpression(forConstantValue: activeGuidance ? 7 : 6)');
+    expect(carPlayMap).toContain('NSExpression(forConstantValue: activeGuidance ? 11 : 7)');
+    expect(carPlayMap).toContain('NSExpression(forConstantValue: activeGuidance ? 7 : 4)');
     expect(navigationService).toContain('let latestCarPlayPosition = latestLocation.flatMap');
     expect(navigationService).toContain('let carPlayPosition = navOSSCarPlayPublishedPosition(');
     expect(navigationService).toContain('fallback: latestCarPlayPosition');
@@ -279,6 +285,7 @@ describe('Google Places build configuration', () => {
     expect(visualHarness).toContain('case "idle-location"');
     expect(visualHarness).toContain('case "preview-short"');
     expect(visualHarness).toContain('case "preview-resize"');
+    expect(visualHarness).toContain('case "guidance-position-fallback"');
     expect(phoneScene).toContain('"preview-short"');
     expect(phoneScene).toContain('"preview-resize"');
     expect(carPlayMap).toContain('navOSSCarPlayIsSpeeding(');
@@ -305,6 +312,7 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('deadline: .now() + 8');
     expect(phoneScene).toContain('#if targetEnvironment(simulator)');
     expect(phoneScene).toContain('NAVOSS_CARPLAY_VISUAL_SCENARIO');
+    expect(phoneScene).toContain('"guidance-position-fallback"');
     expect(phoneScene).toContain('"idle-location"');
   });
 });

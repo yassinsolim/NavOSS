@@ -185,9 +185,12 @@ traffic, lane, speed, or incident knowledge.
 - Convert normalized alternatives into `CPTrip` and `CPRouteChoice` objects.
 - Use `CPMapTemplate.showTripPreviews` for route selection.
 - Draw selected and alternate route geometry in the native MapLibre view.
-- Fit the full selected route with the route-choice sheet reserved, cap preview zoom at 10.0, and
-  use a 6-point route with a 9-point casing so the physical 800×480 display retains regional
+- Fit the full selected route with the route-choice sheet reserved, cap preview zoom at 9.5, and
+  use a 4-point route with a 7-point casing so the physical 800×480 display retains regional
   context without obscuring road choices.
+- Mark both preview endpoints independently: green for the route origin and blue for the
+  destination. Do not rely on the route stroke or MapLibre user-location layer to make either
+  endpoint discoverable beneath CarPlay chrome.
 - Include real duration, distance, and major-road summaries.
 - Continue to state that live traffic is unavailable until a real traffic source exists.
 
@@ -202,6 +205,9 @@ traffic, lane, speed, or incident knowledge.
   control already provide orientation without colliding with template controls.
 - Vehicle position and course interpolate only between received matched GPS updates. NavOSS does not
   extrapolate or predict movement beyond the latest real position.
+- When Go arrives before a publishable GPS position, enter follow mode at the selected route origin
+  and preserve that position across later nil-position snapshots. Replace it as soon as a real
+  matched or raw location is published.
 - Settings persist Automatic/Light/Dark appearance, All guidance/Alerts only/Muted audio, visible or
   hidden basemap points of interest, and Arrow/Car vehicle marker choices.
 

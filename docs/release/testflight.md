@@ -203,8 +203,10 @@ location-only background mode, privacy manifest, Google-disabled packaging, and 
 audits. EAS submission `196e2349-0721-4fe7-871c-d2f93fbe0fcd` uploaded successfully; Apple
 reports internal `IN_BETA_TESTING` and external `READY_FOR_BETA_SUBMISSION`. The paired iPhone
 reported build 44 at the first post-processing check, then updated through TestFlight; CoreDevice
-confirmed bundle version 45 installed on the iPhone 15 Pro Max. Physical CarPlay preview and
-active-guidance validation remain pending.
+confirmed bundle version 45 installed on the iPhone 15 Pro Max. Physical 800×480 CarPlay testing
+rejected build 45: the destination endpoint was not reliably visible, the preview trail remained
+too thick, and Go entered follow mode only intermittently. Build 45 remains internal and is
+superseded by the explicit-endpoint and persistent-follow replacement.
 
 CarPlay does not expose an API that lets NavOSS force itself into the Dashboard navigation widget,
 and Canada's iOS Default Apps settings do not offer the region-limited Navigation default. The

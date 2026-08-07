@@ -600,6 +600,7 @@ try {
         ['carplay-preview-short', 'preview-short', 'light'],
         ['carplay-preview-resize', 'preview-resize', 'light'],
         ['carplay-progress-05', 'progress-05', 'light'],
+        ['carplay-guidance-position-fallback', 'guidance-position-fallback', 'light'],
         ['carplay-progress-60', 'progress-60', 'light'],
         ['carplay-overview', 'overview', 'light'],
         ['carplay-clear', 'clear', 'light'],
@@ -664,6 +665,7 @@ try {
       metricsByName.get('carplay-preview-light.png'),
       metricsByName.get('carplay-preview-resize.png'),
       metricsByName.get('carplay-progress-05.png'),
+      metricsByName.get('carplay-guidance-position-fallback.png'),
       metricsByName.get('carplay-overview.png'),
     ].filter((metric) => metric !== undefined);
     if (routeVisibleMetrics.some((metric) => metric.routeGreenRatio < 0.0014)) {

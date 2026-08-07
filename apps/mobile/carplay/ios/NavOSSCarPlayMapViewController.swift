@@ -9,6 +9,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private let calgaryCenter = CLLocationCoordinate2D(latitude: 51.0447, longitude: -114.0719)
   private let destinationLayerIdentifier = "navoss-carplay-destination"
   private let destinationSourceIdentifier = "navoss-carplay-destination-source"
+  private let originLayerIdentifier = "navoss-carplay-origin"
+  private let originSourceIdentifier = "navoss-carplay-origin-source"
   private let alternateRouteLayerIdentifier = "navoss-carplay-alternate-route"
   private let alternateRouteSourceIdentifier = "navoss-carplay-alternate-route-source"
   private let carImageIdentifier = "navoss-carplay-vehicle-car"
@@ -25,6 +27,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var interpolationStartedAt: CFTimeInterval = 0
   private let interpolationDuration: CFTimeInterval = 0.9
   private var latestDestination: NavOSSCarPlayCoordinate?
+  private var latestOrigin: NavOSSCarPlayCoordinate?
   private var latestPosition: NavOSSCarPlayPosition?
   private var mapOrientation = NavOSSCarPlayMapOrientation.headingUp
   private var needsIdleLocationRecenter = true
@@ -304,12 +307,22 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     distanceToManeuverMeters: Double? = nil,
     speedLimitKph: Int? = nil
   ) {
+    let routeOriginPosition = route.first.map {
+      NavOSSCarPlayPosition(
+        coordinate: $0,
+        courseDegrees: nil,
+        speedMetersPerSecond: nil
+      )
+    }
+    let effectivePosition =
+      position ?? latestPosition ?? (activeGuidance ? routeOriginPosition : nil)
     let shouldEnterFollowMode = activeGuidance && (!self.activeGuidance || renderedPosition == nil)
     self.activeGuidance = activeGuidance
+    latestOrigin = activeGuidance ? nil : route.first
     latestDestination = route.last
-    if let position {
-      updateTargetPosition(position)
-    } else {
+    if let effectivePosition {
+      updateTargetPosition(effectivePosition)
+    } else if !activeGuidance {
       latestPosition = nil
       renderedPosition = nil
     }
@@ -323,7 +336,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       ? navOSSRemainingRouteGeometry(
         route,
         routeProgress: routeProgress,
-        matchedCoordinate: (renderedPosition ?? position)?.coordinate
+        matchedCoordinate: (renderedPosition ?? effectivePosition)?.coordinate
       )
       : route
     routeCoordinates = displayedRoute.map {
@@ -337,17 +350,18 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       }
     installAlternateRouteOverlayIfReady()
     installRouteOverlayIfReady()
+    installOriginOverlayIfReady()
     installDestinationOverlayIfReady()
     installPositionOverlayIfReady()
-    updateSpeedDisplay(position?.speedMetersPerSecond, speedLimitKph: speedLimitKph)
+    updateSpeedDisplay(effectivePosition?.speedMetersPerSecond, speedLimitKph: speedLimitKph)
     updateSpeedLimitDisplay(speedLimitKph)
     updateGuidanceDeclutter()
     updatePointOfInterestVisibility()
-    if activeGuidance, let position {
+    if activeGuidance, let effectivePosition {
       if presentsRouteOverview {
         fitRoute(animated: false)
       } else if shouldEnterFollowMode {
-        follow(position, duration: 0)
+        follow(effectivePosition, duration: 0)
       }
     } else if activeGuidance {
       fitRoute(animated: true)
@@ -359,6 +373,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   func clearRoute() {
     routeFitGeneration &+= 1
     activeGuidance = false
+    latestOrigin = nil
     latestDestination = nil
     latestPosition = nil
     renderedPosition = nil
@@ -388,6 +403,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       source.shape = nil
     }
     if let source = mapView.style?.source(withIdentifier: destinationSourceIdentifier)
+      as? MLNShapeSource
+    {
+      source.shape = nil
+    }
+    if let source = mapView.style?.source(withIdentifier: originSourceIdentifier)
       as? MLNShapeSource
     {
       source.shape = nil
@@ -425,6 +445,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     styleLoadRetryCount = 0
     installAlternateRouteOverlayIfReady()
     installRouteOverlayIfReady()
+    installOriginOverlayIfReady()
     installDestinationOverlayIfReady()
     installPositionOverlayIfReady()
     updateGuidanceDeclutter()
@@ -526,7 +547,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         guard let self, self.routeFitGeneration == fitGeneration, !self.activeGuidance else {
           return
         }
-        let maximumZoomLevel = self.reservesRouteChoiceSheet ? 10.0 : 12.5
+        let maximumZoomLevel = self.reservesRouteChoiceSheet ? 9.5 : 12.5
         if self.mapView.zoomLevel > maximumZoomLevel {
           self.mapView.setZoomLevel(maximumZoomLevel, animated: false)
         }
@@ -759,9 +780,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       style.addLayer(route)
     }
     (style.layer(withIdentifier: routeCasingLayerIdentifier) as? MLNLineStyleLayer)?.lineWidth =
-      NSExpression(forConstantValue: activeGuidance ? 11 : 9)
+      NSExpression(forConstantValue: activeGuidance ? 11 : 7)
     (style.layer(withIdentifier: routeLayerIdentifier) as? MLNLineStyleLayer)?.lineWidth =
-      NSExpression(forConstantValue: activeGuidance ? 7 : 6)
+      NSExpression(forConstantValue: activeGuidance ? 7 : 4)
   }
 
   private func installAlternateRouteOverlayIfReady() {
@@ -838,6 +859,37 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       destinationLayer.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
       destinationLayer.circleStrokeWidth = NSExpression(forConstantValue: 2)
       style.addLayer(destinationLayer)
+    }
+  }
+
+  private func installOriginOverlayIfReady() {
+    guard let latestOrigin, let style = mapView.style else {
+      (mapView.style?.source(withIdentifier: originSourceIdentifier) as? MLNShapeSource)?.shape = nil
+      return
+    }
+    let point = MLNPointFeature()
+    point.coordinate = CLLocationCoordinate2D(
+      latitude: latestOrigin.latitude,
+      longitude: latestOrigin.longitude
+    )
+    let source: MLNShapeSource
+    if let existingSource = style.source(withIdentifier: originSourceIdentifier)
+      as? MLNShapeSource
+    {
+      source = existingSource
+      source.shape = point
+    } else {
+      source = MLNShapeSource(identifier: originSourceIdentifier, shape: point, options: nil)
+      style.addSource(source)
+    }
+
+    if style.layer(withIdentifier: originLayerIdentifier) == nil {
+      let originLayer = MLNCircleStyleLayer(identifier: originLayerIdentifier, source: source)
+      originLayer.circleColor = NSExpression(forConstantValue: UIColor.systemGreen)
+      originLayer.circleRadius = NSExpression(forConstantValue: 6)
+      originLayer.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
+      originLayer.circleStrokeWidth = NSExpression(forConstantValue: 2)
+      style.addLayer(originLayer)
     }
   }
 
