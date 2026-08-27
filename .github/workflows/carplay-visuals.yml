@@ -71,33 +71,46 @@ jobs:
           echo "Creating '$name' on $runtime using $devicetype"
           xcrun simctl create "$name" "$devicetype" "$runtime"
 
-      # `nohup` plus a detached log keeps the server alive once this step's shell exits; a plain
-      # `&` can take SIGHUP and die before the capture step runs.
-      - name: Start the API
-        run: |
-          nohup env HOST=127.0.0.1 PORT=3001 \
-            corepack pnpm --filter @navoss/api dev >/tmp/navoss-api.log 2>&1 &
-          disown || true
-          for _ in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:3001/health >/dev/null 2>&1; then
-              echo "API ready"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "API did not become ready" >&2
-          tail -50 /tmp/navoss-api.log >&2 || true
-          exit 1
-
-      # Renders the real CarPlay map controller through the in-app visual harness, which does not
-      # depend on Apple's CarPlay template host. That host crashes on some runtimes inside its own
-      # code, so driving it directly would make this job fail for reasons unrelated to NavOSS.
-      - name: Capture CarPlay scenarios
+      # The server and the capture run in ONE step, sharing a shell, with a trap that stops the
+      # server on exit. Separate steps are not a process supervisor: a server backgrounded in one
+      # step is not guaranteed to survive into the next, and if it dies the capture fails for a
+      # reason that has nothing to do with rendering.
+      #
+      # The capture renders the real CarPlay map controller through the in-app visual harness,
+      # which does not use Apple's CarPlay template host. That host crashes on some runtimes
+      # inside its own code, so driving it here would fail for reasons unrelated to NavOSS.
+      - name: Run the API and capture CarPlay scenarios
         env:
           EXPO_PUBLIC_API_URL: http://127.0.0.1:3001
           NAVOSS_CARPLAY_ENABLED: '1'
           NAVOSS_CARPLAY_ENTITLEMENT_ENABLED: '1'
-        run: corepack pnpm validate:navigation:ios -- --carplay-only
+        run: |
+          set -euo pipefail
+          env HOST=127.0.0.1 PORT=3001 corepack pnpm --filter @navoss/api dev \
+            >/tmp/navoss-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+
+          ready=0
+          for _ in $(seq 1 60); do
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              echo "API process exited before becoming ready" >&2
+              tail -50 /tmp/navoss-api.log >&2 || true
+              exit 1
+            fi
+            if curl -fsS http://127.0.0.1:3001/health >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "API did not become ready" >&2
+            tail -50 /tmp/navoss-api.log >&2 || true
+            exit 1
+          fi
+
+          corepack pnpm validate:navigation:ios -- --carplay-only
 
       - name: Upload screenshots
         if: always()
