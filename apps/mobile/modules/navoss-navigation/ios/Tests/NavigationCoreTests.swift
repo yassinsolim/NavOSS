@@ -135,6 +135,27 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertNil(navOSSRouteBearingDegrees(near: duplicate, in: [duplicate, duplicate]))
   }
 
+  /// Regression guard for a real defect: the CarPlay controller originally passed
+  /// `navOSSRemainingRouteGeometry` output here, which prepends the puck as element 0. The query
+  /// point was then 0 m from its own synthetic vertex, so the distance gate could never reject
+  /// and an off-route vehicle still inherited the road's bearing. Callers must pass true road
+  /// geometry.
+  func testRouteBearingGateIsDefeatedByGeometryStartingAtTheQueryPoint() {
+    let farOffRoute = NavOSSCarPlayCoordinate(latitude: 51.041, longitude: -114.075)
+    let trueRoad = [
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.07),
+    ]
+
+    // Correct input: the vehicle is ~111 m away, so no bearing is supplied.
+    XCTAssertNil(navOSSRouteBearingDegrees(near: farOffRoute, in: trueRoad))
+
+    // Wrong input, with the query point prepended as a synthetic head. The gate is bypassed and
+    // a bearing comes back even though the vehicle is nowhere near the road.
+    let withSyntheticHead = [farOffRoute] + trueRoad
+    XCTAssertNotNil(navOSSRouteBearingDegrees(near: farOffRoute, in: withSyntheticHead))
+  }
+
   func testInterpolationSpanTracksObservedSampleInterval() {
     // The measured cadence with no distance filter is about 1 s; the span should follow it
     // rather than staying pinned at the old fixed 0.9 s, which left a dead gap every cycle.
@@ -1278,6 +1299,48 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertTrue(backwardRecovery.isOffRoute)
     XCTAssertNil(backwardRecovery.matchedCoordinate)
     XCTAssertEqual(backwardRecovery.routeProgress, forward.routeProgress, accuracy: 0.000_001)
+  }
+
+  /// Each backward step below `backwardProgressToleranceMeters` is accepted, which lowers the
+  /// baseline for the next comparison. Without a non-regressing high-water mark, a vehicle
+  /// reversing in small increments unwinds progress without ever becoming off-route: measured
+  /// against a real Calgary route, 12 m steps rewound 480 m to zero and never rerouted.
+  func testSlowContinuousReverseEventuallyTriggersOffRoute() throws {
+    let core = NavigationCore()
+    // ~5.6 km due east, long enough to drive out and reverse well inside it.
+    try core.setRoute([
+      NavigationCoordinate(latitude: 51.04, longitude: -114.12),
+      NavigationCoordinate(latitude: 51.04, longitude: -114.04),
+    ])
+    func fix(_ longitude: Double) throws -> NavigationSnapshot {
+      try core.updateLocation(
+        NavigationLocationSample(
+          coordinate: NavigationCoordinate(latitude: 51.04, longitude: longitude),
+          courseDegrees: nil,
+          horizontalAccuracyMeters: 5
+        )
+      )
+    }
+
+    // Drive forward.
+    var longitude = -114.12
+    for _ in 0..<20 {
+      longitude += 0.0002
+      _ = try fix(longitude)
+    }
+    XCTAssertFalse(try fix(longitude).isOffRoute)
+
+    // Reverse in ~7 m steps, each individually inside the 15 m + accuracy tolerance.
+    var reversed = try fix(longitude)
+    for _ in 0..<40 where !reversed.isOffRoute {
+      longitude -= 0.0001
+      reversed = try fix(longitude)
+    }
+
+    XCTAssertTrue(
+      reversed.isOffRoute,
+      "Sustained small-step reverse must accumulate against the high-water mark and reroute."
+    )
   }
 
   func testSelectsNearestSegmentOnBentRoute() throws {

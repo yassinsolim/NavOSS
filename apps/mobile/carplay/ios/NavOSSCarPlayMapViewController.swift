@@ -347,7 +347,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         matchedCoordinate: (renderedPosition ?? effectivePosition)?.coordinate
       )
       : route
-    routeGeometry = displayedRoute
+    // The true road geometry, not `displayedRoute`. `navOSSRemainingRouteGeometry` prepends the
+    // puck as element 0, so measuring against it would put the vehicle 0 m from the "route" and
+    // make the distance gate in `navOSSRouteBearingDegrees` unreachable.
+    routeGeometry = route
     routeCoordinates = displayedRoute.map {
       CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
     }
