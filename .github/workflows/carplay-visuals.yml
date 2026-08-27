@@ -11,11 +11,13 @@ name: CarPlay visuals
 #
 # Output is screenshots uploaded as artifacts for a human to look at.
 
+# Manual dispatch only for now. This job cannot be verified without running it on a GitHub
+# runner, and a scheduled job that fails every night is worse than no job: it trains people to
+# ignore red. Enable the cron below once a manual run has succeeded once.
 on:
   workflow_dispatch:
-  schedule:
-    # 09:00 UTC daily, comfortably after typical evening pushes.
-    - cron: '0 9 * * *'
+  # schedule:
+  #   - cron: '0 9 * * *'
 
 concurrency:
   group: carplay-visuals-${{ github.ref }}
@@ -50,9 +52,32 @@ jobs:
       - name: Build shared contracts
         run: corepack pnpm --filter @navoss/contracts build
 
+      # The harness looks the device up by name and throws if it is absent
+      # (apps/mobile/scripts/validate-navigation-ios.mjs, "Simulator not found"). It never
+      # creates one, and a hosted runner has no device with this name, so create it here against
+      # whatever iOS runtime the image ships.
+      - name: Create the simulator the harness expects
+        run: |
+          set -euo pipefail
+          name='NavOSS iPhone 15 Pro Max'
+          if xcrun simctl list devices available | grep -qF "$name ("; then
+            echo "Simulator already present"
+            exit 0
+          fi
+          runtime=$(xcrun simctl list runtimes --json \
+            | python3 -c 'import json,sys; rs=[r for r in json.load(sys.stdin)["runtimes"] if r["isAvailable"] and r["identifier"].startswith("com.apple.CoreSimulator.SimRuntime.iOS")]; print(sorted(rs, key=lambda r: r["version"])[-1]["identifier"])')
+          devicetype=$(xcrun simctl list devicetypes --json \
+            | python3 -c 'import json,sys; ds=[d for d in json.load(sys.stdin)["devicetypes"] if "iPhone" in d["name"]]; print(ds[-1]["identifier"])')
+          echo "Creating '$name' on $runtime using $devicetype"
+          xcrun simctl create "$name" "$devicetype" "$runtime"
+
+      # `nohup` plus a detached log keeps the server alive once this step's shell exits; a plain
+      # `&` can take SIGHUP and die before the capture step runs.
       - name: Start the API
         run: |
-          HOST=127.0.0.1 PORT=3001 corepack pnpm --filter @navoss/api dev &
+          nohup env HOST=127.0.0.1 PORT=3001 \
+            corepack pnpm --filter @navoss/api dev >/tmp/navoss-api.log 2>&1 &
+          disown || true
           for _ in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:3001/health >/dev/null 2>&1; then
               echo "API ready"
@@ -61,6 +86,7 @@ jobs:
             sleep 2
           done
           echo "API did not become ready" >&2
+          tail -50 /tmp/navoss-api.log >&2 || true
           exit 1
 
       # Renders the real CarPlay map controller through the in-app visual harness, which does not
@@ -78,8 +104,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: carplay-visuals-${{ github.run_id }}
+          # The harness writes to a `.tmp` sibling and only renames it on success, so a failed
+          # run leaves everything under the `.tmp` path. Upload both or the job is useless
+          # exactly when it matters.
           path: |
             artifacts/navigation-validation/screenshots
             artifacts/navigation-validation/logs
+            artifacts/navigation-validation.tmp/screenshots
+            artifacts/navigation-validation.tmp/logs
           if-no-files-found: warn
           retention-days: 14
