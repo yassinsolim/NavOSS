@@ -23,6 +23,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private let routeCasingLayerIdentifier = "navoss-carplay-route-casing"
   private let routeLayerIdentifier = "navoss-carplay-route"
   private let routeSourceIdentifier = "navoss-carplay-route-source"
+  private let routeHeadSourceIdentifier = "navoss-carplay-route-head-source"
+  private let routeHeadCasingLayerIdentifier = "navoss-carplay-route-head-casing"
+  private let routeHeadLayerIdentifier = "navoss-carplay-route-head"
   private var activeGuidance = false
   private var appearance = NavOSSCarPlayAppearance.automatic
   private var displayLink: CADisplayLink?
@@ -675,7 +678,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         latitude: renderedPosition.coordinate.latitude,
         longitude: renderedPosition.coordinate.longitude
       )
-      installRouteOverlayIfReady()
+      // Only the head moves between frames. Rebuilding the static tail here would re-tessellate
+      // the entire polyline at display-link rate, which is what this split exists to stop.
+      installRouteHeadIfReady()
     }
     installPositionOverlayIfReady()
     if !presentsRouteOverview, let renderedPosition {
@@ -753,6 +758,74 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
   }
 
+  /// Colours and widths shared by the route line and its moving head, so the two sources render
+  /// as one continuous line.
+  private func styleRouteLinePair(
+    casingIdentifier: String,
+    lineIdentifier: String,
+    in style: MLNStyle
+  ) {
+    (style.layer(withIdentifier: casingIdentifier) as? MLNLineStyleLayer)?.lineWidth =
+      NSExpression(forConstantValue: activeGuidance ? 11 : 7)
+    (style.layer(withIdentifier: lineIdentifier) as? MLNLineStyleLayer)?.lineWidth =
+      NSExpression(forConstantValue: activeGuidance ? 7 : 4)
+  }
+
+  private func addRouteLinePairIfNeeded(
+    casingIdentifier: String,
+    lineIdentifier: String,
+    source: MLNShapeSource,
+    in style: MLNStyle
+  ) {
+    if style.layer(withIdentifier: casingIdentifier) == nil {
+      let casing = MLNLineStyleLayer(identifier: casingIdentifier, source: source)
+      casing.lineCap = NSExpression(forConstantValue: "round")
+      casing.lineJoin = NSExpression(forConstantValue: "round")
+      casing.lineColor = NSExpression(
+        forConstantValue: styleSlug == "dark"
+          ? UIColor(red: 0.04, green: 0.08, blue: 0.08, alpha: 1)
+          : UIColor.white
+      )
+      casing.lineOpacity = NSExpression(forConstantValue: 0.96)
+      style.addLayer(casing)
+    }
+    if style.layer(withIdentifier: lineIdentifier) == nil {
+      let route = MLNLineStyleLayer(identifier: lineIdentifier, source: source)
+      route.lineCap = NSExpression(forConstantValue: "round")
+      route.lineJoin = NSExpression(forConstantValue: "round")
+      route.lineColor = NSExpression(
+        forConstantValue: styleSlug == "dark"
+          ? UIColor(red: 0.20, green: 0.78, blue: 0.55, alpha: 1)
+          : UIColor(red: 0.11, green: 0.49, blue: 0.31, alpha: 1)
+      )
+      style.addLayer(route)
+    }
+  }
+
+  private func shapeSource(
+    _ identifier: String,
+    coordinates: [CLLocationCoordinate2D],
+    in style: MLNStyle
+  ) -> MLNShapeSource {
+    var mutable = coordinates
+    let polyline = mutable.withUnsafeMutableBufferPointer { buffer in
+      MLNPolylineFeature(coordinates: buffer.baseAddress!, count: UInt(buffer.count))
+    }
+    if let existing = style.source(withIdentifier: identifier) as? MLNShapeSource {
+      existing.shape = polyline
+      return existing
+    }
+    let created = MLNShapeSource(identifier: identifier, shape: polyline, options: nil)
+    style.addSource(created)
+    return created
+  }
+
+  /// Installs the static part of the route: everything from the first fixed vertex onward.
+  ///
+  /// `routeCoordinates[0]` is the moving head and is deliberately excluded, because rebuilding
+  /// this source re-tessellates the whole polyline. Splitting the head into its own two-point
+  /// source turns the per-frame cost from O(route vertices) into O(1); this source is then only
+  /// rebuilt when the route itself changes.
   private func installRouteOverlayIfReady() {
     guard let style = mapView.style else {
       return
@@ -764,49 +837,54 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       })
     else {
       (style.source(withIdentifier: routeSourceIdentifier) as? MLNShapeSource)?.shape = nil
+      (style.source(withIdentifier: routeHeadSourceIdentifier) as? MLNShapeSource)?.shape = nil
       return
     }
-    let polyline = routeCoordinates.withUnsafeMutableBufferPointer { coordinates in
-      MLNPolylineFeature(coordinates: coordinates.baseAddress!, count: UInt(coordinates.count))
-    }
-    let source: MLNShapeSource
-    if let existingSource = style.source(withIdentifier: routeSourceIdentifier)
-      as? MLNShapeSource
-    {
-      source = existingSource
-      source.shape = polyline
+    // With exactly two coordinates the head already spans the whole remaining route, so the
+    // static source would duplicate it and reintroduce the moving vertex it exists to avoid.
+    let tail = Array(routeCoordinates.dropFirst())
+    if tail.count >= 2 {
+      let source = shapeSource(routeSourceIdentifier, coordinates: tail, in: style)
+      addRouteLinePairIfNeeded(
+        casingIdentifier: routeCasingLayerIdentifier,
+        lineIdentifier: routeLayerIdentifier,
+        source: source,
+        in: style
+      )
+      styleRouteLinePair(
+        casingIdentifier: routeCasingLayerIdentifier,
+        lineIdentifier: routeLayerIdentifier,
+        in: style
+      )
     } else {
-      source = MLNShapeSource(identifier: routeSourceIdentifier, shape: polyline, options: nil)
-      style.addSource(source)
+      (style.source(withIdentifier: routeSourceIdentifier) as? MLNShapeSource)?.shape = nil
     }
+    installRouteHeadIfReady()
+  }
 
-    if style.layer(withIdentifier: routeCasingLayerIdentifier) == nil {
-      let casing = MLNLineStyleLayer(identifier: routeCasingLayerIdentifier, source: source)
-      casing.lineCap = NSExpression(forConstantValue: "round")
-      casing.lineJoin = NSExpression(forConstantValue: "round")
-      casing.lineColor = NSExpression(
-        forConstantValue: styleSlug == "dark"
-          ? UIColor(red: 0.04, green: 0.08, blue: 0.08, alpha: 1)
-          : UIColor.white
-      )
-      casing.lineOpacity = NSExpression(forConstantValue: 0.96)
-      style.addLayer(casing)
+  /// The moving head: a two-point line from the interpolated puck to the first fixed vertex.
+  /// This is the only geometry that changes between animation frames.
+  private func installRouteHeadIfReady() {
+    guard let style = mapView.style else {
+      return
     }
-    if style.layer(withIdentifier: routeLayerIdentifier) == nil {
-      let route = MLNLineStyleLayer(identifier: routeLayerIdentifier, source: source)
-      route.lineCap = NSExpression(forConstantValue: "round")
-      route.lineJoin = NSExpression(forConstantValue: "round")
-      route.lineColor = NSExpression(
-        forConstantValue: styleSlug == "dark"
-          ? UIColor(red: 0.20, green: 0.78, blue: 0.55, alpha: 1)
-          : UIColor(red: 0.11, green: 0.49, blue: 0.31, alpha: 1)
-      )
-      style.addLayer(route)
+    guard routeCoordinates.count >= 2 else {
+      (style.source(withIdentifier: routeHeadSourceIdentifier) as? MLNShapeSource)?.shape = nil
+      return
     }
-    (style.layer(withIdentifier: routeCasingLayerIdentifier) as? MLNLineStyleLayer)?.lineWidth =
-      NSExpression(forConstantValue: activeGuidance ? 11 : 7)
-    (style.layer(withIdentifier: routeLayerIdentifier) as? MLNLineStyleLayer)?.lineWidth =
-      NSExpression(forConstantValue: activeGuidance ? 7 : 4)
+    let head = [routeCoordinates[0], routeCoordinates[1]]
+    let source = shapeSource(routeHeadSourceIdentifier, coordinates: head, in: style)
+    addRouteLinePairIfNeeded(
+      casingIdentifier: routeHeadCasingLayerIdentifier,
+      lineIdentifier: routeHeadLayerIdentifier,
+      source: source,
+      in: style
+    )
+    styleRouteLinePair(
+      casingIdentifier: routeHeadCasingLayerIdentifier,
+      lineIdentifier: routeHeadLayerIdentifier,
+      in: style
+    )
   }
 
   private func installAlternateRouteOverlayIfReady() {
