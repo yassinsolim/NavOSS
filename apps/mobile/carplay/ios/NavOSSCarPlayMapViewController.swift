@@ -410,6 +410,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     {
       source.shape = nil
     }
+    if let source = mapView.style?.source(withIdentifier: routeHeadSourceIdentifier)
+      as? MLNShapeSource
+    {
+      source.shape = nil
+    }
     if let source = mapView.style?.source(withIdentifier: alternateRouteSourceIdentifier)
       as? MLNShapeSource
     {
@@ -771,35 +776,66 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       NSExpression(forConstantValue: activeGuidance ? 7 : 4)
   }
 
-  private func addRouteLinePairIfNeeded(
-    casingIdentifier: String,
-    lineIdentifier: String,
-    source: MLNShapeSource,
+  /// Creates the tail and head layers together, once, in a fixed order: both casings first, then
+  /// both lines. Creating each pair lazily made z-order depend on install history, and appending
+  /// casing-then-line per pair left a casing above a line, which painted a white nick across the
+  /// route at the shared join. Visibility is driven purely by the source shapes, which are nil
+  /// when a part has nothing to draw.
+  private func installRouteLayersIfNeeded(
+    tailSource: MLNShapeSource,
+    headSource: MLNShapeSource,
     in style: MLNStyle
   ) {
-    if style.layer(withIdentifier: casingIdentifier) == nil {
-      let casing = MLNLineStyleLayer(identifier: casingIdentifier, source: source)
-      casing.lineCap = NSExpression(forConstantValue: "round")
-      casing.lineJoin = NSExpression(forConstantValue: "round")
-      casing.lineColor = NSExpression(
+    func casing(_ identifier: String, _ source: MLNShapeSource) -> MLNLineStyleLayer {
+      let layer = MLNLineStyleLayer(identifier: identifier, source: source)
+      layer.lineCap = NSExpression(forConstantValue: "round")
+      layer.lineJoin = NSExpression(forConstantValue: "round")
+      layer.lineColor = NSExpression(
         forConstantValue: styleSlug == "dark"
           ? UIColor(red: 0.04, green: 0.08, blue: 0.08, alpha: 1)
           : UIColor.white
       )
-      casing.lineOpacity = NSExpression(forConstantValue: 0.96)
-      style.addLayer(casing)
+      layer.lineOpacity = NSExpression(forConstantValue: 0.96)
+      return layer
     }
-    if style.layer(withIdentifier: lineIdentifier) == nil {
-      let route = MLNLineStyleLayer(identifier: lineIdentifier, source: source)
-      route.lineCap = NSExpression(forConstantValue: "round")
-      route.lineJoin = NSExpression(forConstantValue: "round")
-      route.lineColor = NSExpression(
+    func line(_ identifier: String, _ source: MLNShapeSource) -> MLNLineStyleLayer {
+      let layer = MLNLineStyleLayer(identifier: identifier, source: source)
+      layer.lineCap = NSExpression(forConstantValue: "round")
+      layer.lineJoin = NSExpression(forConstantValue: "round")
+      layer.lineColor = NSExpression(
         forConstantValue: styleSlug == "dark"
           ? UIColor(red: 0.20, green: 0.78, blue: 0.55, alpha: 1)
           : UIColor(red: 0.11, green: 0.49, blue: 0.31, alpha: 1)
       )
-      style.addLayer(route)
+      return layer
     }
+    // Any missing layer means the set is being built for the first time on this style, or the
+    // style was reloaded. Rebuild the whole set so the order is always the same.
+    let identifiers = [
+      routeCasingLayerIdentifier, routeHeadCasingLayerIdentifier,
+      routeLayerIdentifier, routeHeadLayerIdentifier,
+    ]
+    guard identifiers.contains(where: { style.layer(withIdentifier: $0) == nil }) else { return }
+    for identifier in identifiers {
+      if let existing = style.layer(withIdentifier: identifier) {
+        style.removeLayer(existing)
+      }
+    }
+    style.addLayer(casing(routeCasingLayerIdentifier, tailSource))
+    style.addLayer(casing(routeHeadCasingLayerIdentifier, headSource))
+    style.addLayer(line(routeLayerIdentifier, tailSource))
+    style.addLayer(line(routeHeadLayerIdentifier, headSource))
+  }
+
+  /// Returns the source, creating it with no shape if it does not exist yet. Lets the layer set
+  /// be built before either part has geometry, without drawing anything.
+  private func ensureShapeSource(_ identifier: String, in style: MLNStyle) -> MLNShapeSource {
+    if let existing = style.source(withIdentifier: identifier) as? MLNShapeSource {
+      return existing
+    }
+    let created = MLNShapeSource(identifier: identifier, shape: nil, options: nil)
+    style.addSource(created)
+    return created
   }
 
   private func shapeSource(
@@ -844,21 +880,15 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     // static source would duplicate it and reintroduce the moving vertex it exists to avoid.
     let tail = Array(routeCoordinates.dropFirst())
     if tail.count >= 2 {
-      let source = shapeSource(routeSourceIdentifier, coordinates: tail, in: style)
-      addRouteLinePairIfNeeded(
-        casingIdentifier: routeCasingLayerIdentifier,
-        lineIdentifier: routeLayerIdentifier,
-        source: source,
-        in: style
-      )
-      styleRouteLinePair(
-        casingIdentifier: routeCasingLayerIdentifier,
-        lineIdentifier: routeLayerIdentifier,
-        in: style
-      )
+      _ = shapeSource(routeSourceIdentifier, coordinates: tail, in: style)
     } else {
       (style.source(withIdentifier: routeSourceIdentifier) as? MLNShapeSource)?.shape = nil
     }
+    styleRouteLinePair(
+      casingIdentifier: routeCasingLayerIdentifier,
+      lineIdentifier: routeLayerIdentifier,
+      in: style
+    )
     installRouteHeadIfReady()
   }
 
@@ -873,13 +903,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       return
     }
     let head = [routeCoordinates[0], routeCoordinates[1]]
-    let source = shapeSource(routeHeadSourceIdentifier, coordinates: head, in: style)
-    addRouteLinePairIfNeeded(
-      casingIdentifier: routeHeadCasingLayerIdentifier,
-      lineIdentifier: routeHeadLayerIdentifier,
-      source: source,
-      in: style
-    )
+    let headSource = shapeSource(routeHeadSourceIdentifier, coordinates: head, in: style)
+    // Both sources must exist before the layer set is built, so the order is fixed regardless of
+    // which part happens to have geometry first.
+    let tailSource = ensureShapeSource(routeSourceIdentifier, in: style)
+    installRouteLayersIfNeeded(tailSource: tailSource, headSource: headSource, in: style)
     styleRouteLinePair(
       casingIdentifier: routeHeadCasingLayerIdentifier,
       lineIdentifier: routeHeadLayerIdentifier,
