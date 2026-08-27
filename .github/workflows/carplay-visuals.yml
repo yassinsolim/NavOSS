@@ -56,6 +56,22 @@ jobs:
       # (apps/mobile/scripts/validate-navigation-ios.mjs, "Simulator not found"). It never
       # creates one, and a hosted runner has no device with this name, so create it here against
       # whatever iOS runtime the image ships.
+      # The image default was Xcode 16.4, under which the ExpoModulesJSI pod's xcframework
+      # build script fails. Everything else in this project is built with a much newer Xcode, so
+      # use the newest the image actually ships rather than whatever is currently selected.
+      - name: Select the newest available Xcode
+        run: |
+          set -euo pipefail
+          latest=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$latest" ]; then
+            echo "No versioned Xcode found; keeping the current selection"
+            xcodebuild -version
+            exit 0
+          fi
+          echo "Selecting $latest"
+          sudo xcode-select -s "$latest/Contents/Developer"
+          xcodebuild -version
+
       - name: Create the simulator the harness expects
         run: |
           set -euo pipefail
@@ -85,6 +101,9 @@ jobs:
           NAVOSS_CARPLAY_ENTITLEMENT_ENABLED: '1'
         run: |
           set -euo pipefail
+          # AGENTS.md: unset CC and CXX so ExpoModulesJSI uses Apple Clang rather than any
+          # toolchain the image happens to export.
+          unset CC CXX || true
           env HOST=127.0.0.1 PORT=3001 corepack pnpm --filter @navoss/api dev \
             >/tmp/navoss-api.log 2>&1 &
           api_pid=$!
