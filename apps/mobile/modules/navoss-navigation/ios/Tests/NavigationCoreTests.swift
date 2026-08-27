@@ -1027,7 +1027,11 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(snapshot.routeProgress, 0.5, accuracy: 0.001)
   }
 
-  func testMatchedProgressDoesNotMoveBackwardWithGPSJitter() throws {
+  // Route below spans 0.02 degrees of longitude at latitude 51.04 (Calgary), which is
+  // 1398.6 m. A 0.00005 degree jitter is therefore ~3.5 m of along-route regression.
+  private static let jitterRouteLengthMeters = 1398.6
+
+  func testMatchedProgressTracksBackwardJitterInsideAccuracyBand() throws {
     let core = NavigationCore()
     try core.setRoute([
       NavigationCoordinate(latitude: 51.04, longitude: -114.08),
@@ -1048,8 +1052,47 @@ final class NavigationCoreTests: XCTestCase {
       )
     )
 
-    XCTAssertEqual(jitteredBackward.routeProgress, forward.routeProgress, accuracy: 0.000_001)
-    XCTAssertEqual(jitteredBackward.matchedCoordinate, forward.matchedCoordinate)
+    // Contract: a regression inside `backwardProgressToleranceMeters` + accuracy (15 + 5 m)
+    // is tracked rather than held, so the puck keeps following the vehicle. Holding the
+    // previous match here is what stalled the puck at low speed.
+    XCTAssertFalse(jitteredBackward.isOffRoute)
+    XCTAssertNotEqual(jitteredBackward.matchedCoordinate, forward.matchedCoordinate)
+
+    let regressionMeters =
+      (forward.routeProgress - jitteredBackward.routeProgress) * Self.jitterRouteLengthMeters
+    XCTAssertEqual(regressionMeters, 3.5, accuracy: 0.5)
+    XCTAssertLessThanOrEqual(regressionMeters, 20)
+  }
+
+  func testStationaryGPSNoiseDoesNotStallMatchedPosition() throws {
+    let core = NavigationCore()
+    try core.setRoute([
+      NavigationCoordinate(latitude: 51.04, longitude: -114.08),
+      NavigationCoordinate(latitude: 51.04, longitude: -114.06),
+    ])
+    func fix(_ longitude: Double) -> NavigationLocationSample {
+      NavigationLocationSample(
+        coordinate: NavigationCoordinate(latitude: 51.04, longitude: longitude),
+        courseDegrees: nil,
+        horizontalAccuracyMeters: 5
+      )
+    }
+
+    _ = try core.updateLocation(fix(-114.07))
+    // One noisy fix lands ~7 m ahead of where the stopped vehicle actually is.
+    let ahead = try core.updateLocation(fix(-114.0699))
+
+    // The vehicle is stationary at a light; every later fix reports the true position.
+    var settled = ahead
+    for _ in 0..<6 {
+      settled = try core.updateLocation(fix(-114.07))
+    }
+
+    // Regression contract: progress must settle back onto the true position instead of
+    // latching to the forward extreme of the noise until the vehicle drives past it.
+    XCTAssertFalse(settled.isOffRoute)
+    XCTAssertLessThan(settled.routeProgress, ahead.routeProgress)
+    XCTAssertNotEqual(settled.matchedCoordinate, ahead.matchedCoordinate)
   }
 
   func testSustainedBackwardTravelTriggersRerouteWithoutRewindingProgress() throws {

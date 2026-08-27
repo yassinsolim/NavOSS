@@ -495,9 +495,13 @@ final class NavigationCore {
       return snapshot
     }
 
-    let isBackwardProjection = snapshot.rawCoordinate != nil
-      && projection.progress < snapshot.routeProgress
-    let shouldAcceptProjection = !isOffRoute && !isDepartureSample && !isBackwardProjection
+    // Backward regression is accepted inside the accuracy-aware noise band so that a stationary
+    // or slow-moving vehicle keeps tracking its true position. `isDepartureSample` already
+    // rejects regressions beyond `backwardProgressToleranceMeters + accuracy` and feeds them
+    // into off-route hysteresis, so it is the single authority on backward motion. A stricter
+    // zero-tolerance gate here would latch `routeProgress` to the forward extreme of GPS noise
+    // and hold the matched coordinate until the vehicle physically drove past it.
+    let shouldAcceptProjection = !isOffRoute && !isDepartureSample
     let previousMatchedCoordinate = snapshot.matchedCoordinate
     let previousMatchedCourseDegrees = snapshot.matchedCourseDegrees
     let provisionalMatchedCoordinate = previousMatchedCoordinate ?? projection.coordinate
