@@ -803,6 +803,11 @@ public let navOSSRouteBearingMaxDistanceMeters = 35.0
 /// Bearing of the route segment nearest `coordinate`, or `nil` when the coordinate is farther
 /// than `maxDistanceMeters` from the route. Used only as a fallback when the vehicle reports no
 /// usable course; an off-route vehicle must not be shown pointing along a road it is not on.
+///
+/// - Important: Pass true road geometry. Passing `navOSSRemainingRouteGeometry` output defeats
+///   the distance gate, because that helper prepends the vehicle's own matched coordinate as
+///   element 0, putting the query point 0 m from the "route". An early revision of the CarPlay
+///   controller made exactly this mistake and the gate was inert until review caught it.
 public func navOSSRouteBearingDegrees(
   near coordinate: NavOSSCarPlayCoordinate,
   in geometry: [NavOSSCarPlayCoordinate],

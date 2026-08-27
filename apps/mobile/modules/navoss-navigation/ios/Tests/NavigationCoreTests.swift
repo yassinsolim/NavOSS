@@ -135,27 +135,6 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertNil(navOSSRouteBearingDegrees(near: duplicate, in: [duplicate, duplicate]))
   }
 
-  /// Regression guard for a real defect: the CarPlay controller originally passed
-  /// `navOSSRemainingRouteGeometry` output here, which prepends the puck as element 0. The query
-  /// point was then 0 m from its own synthetic vertex, so the distance gate could never reject
-  /// and an off-route vehicle still inherited the road's bearing. Callers must pass true road
-  /// geometry.
-  func testRouteBearingGateIsDefeatedByGeometryStartingAtTheQueryPoint() {
-    let farOffRoute = NavOSSCarPlayCoordinate(latitude: 51.041, longitude: -114.075)
-    let trueRoad = [
-      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
-      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.07),
-    ]
-
-    // Correct input: the vehicle is ~111 m away, so no bearing is supplied.
-    XCTAssertNil(navOSSRouteBearingDegrees(near: farOffRoute, in: trueRoad))
-
-    // Wrong input, with the query point prepended as a synthetic head. The gate is bypassed and
-    // a bearing comes back even though the vehicle is nowhere near the road.
-    let withSyntheticHead = [farOffRoute] + trueRoad
-    XCTAssertNotNil(navOSSRouteBearingDegrees(near: farOffRoute, in: withSyntheticHead))
-  }
-
   func testInterpolationSpanTracksObservedSampleInterval() {
     // The measured cadence with no distance filter is about 1 s; the span should follow it
     // rather than staying pinned at the old fixed 0.9 s, which left a dead gap every cycle.
