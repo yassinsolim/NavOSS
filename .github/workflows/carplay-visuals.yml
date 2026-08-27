@@ -64,30 +64,9 @@ jobs:
             echo "Simulator already present"
             exit 0
           fi
-          # Pick the newest available iOS runtime, then a device type from THAT runtime's own
-          # supportedDeviceTypes. Choosing from the global devicetypes list picks whatever happens
-          # to be last, which was an iPhone 6s Plus and is rejected as "Incompatible device".
-          read -r runtime devicetype < <(xcrun simctl list runtimes --json | python3 -c '
-import json, sys
-
-data = json.load(sys.stdin)
-runtimes = [
-    r for r in data["runtimes"]
-    if r.get("isAvailable") and "SimRuntime.iOS" in r["identifier"]
-]
-if not runtimes:
-    sys.exit("no available iOS runtime")
-
-def version(runtime):
-    return [int(part) for part in runtime["version"].split(".") if part.isdigit()]
-
-newest = sorted(runtimes, key=version)[-1]
-iphones = [t for t in newest.get("supportedDeviceTypes", []) if "iPhone" in t["name"]]
-if not iphones:
-    sys.exit(f"no iPhone device type supported by {newest[\"identifier\"]}")
-preferred = [t for t in iphones if "Pro" in t["name"]] or iphones
-print(newest["identifier"], preferred[-1]["identifier"])
-')
+          read -r runtime devicetype < <(
+            xcrun simctl list runtimes --json | python3 scripts/pick-ios-simulator.py
+          )
           echo "Creating '$name' on $runtime using $devicetype"
           xcrun simctl create "$name" "$devicetype" "$runtime"
 
