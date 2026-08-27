@@ -776,6 +776,45 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
+  /// A parked driver rotating the car produces heading callbacks with no new location. The cone
+  /// must turn anyway, so the resolved cone bearing has to change while the apex does not.
+  func testCarPlayConeRotatesOnHeadingOnlyUpdateWithUnchangedApex() {
+    let coordinate = NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719)
+    let parked = NavOSSCarPlayPosition(
+      coordinate: coordinate,
+      courseDegrees: nil,
+      compassHeadingDegrees: 90,
+      speedMetersPerSecond: 0
+    )
+    let afterRotating = NavOSSCarPlayPosition(
+      coordinate: coordinate,
+      courseDegrees: nil,
+      compassHeadingDegrees: 200,
+      speedMetersPerSecond: 0
+    )
+
+    let before = navOSSCarPlayConeHeadingDegrees(
+      compassHeadingDegrees: parked.compassHeadingDegrees,
+      fallbackCourseDegrees: nil
+    )
+    let after = navOSSCarPlayConeHeadingDegrees(
+      compassHeadingDegrees: afterRotating.compassHeadingDegrees,
+      fallbackCourseDegrees: nil
+    )
+
+    XCTAssertEqual(parked.coordinate, afterRotating.coordinate)
+    XCTAssertEqual(before, 90)
+    XCTAssertEqual(after, 200)
+  }
+
+  /// Driving with a course but no compass must still draw a cone rather than nothing.
+  func testCarPlayConeFallsBackToCourseWhenCompassIsAbsent() {
+    XCTAssertEqual(
+      navOSSCarPlayConeHeadingDegrees(compassHeadingDegrees: nil, fallbackCourseDegrees: 275),
+      275
+    )
+  }
+
   func testCarPlayRemainingRouteGeometryKeepsVisibleFinalSegmentAtCompletion() {
     let geometry = [
       NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.10),

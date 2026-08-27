@@ -1221,9 +1221,14 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     if let resolvedCourseDegrees {
       lastRenderedCourseDegrees = resolvedCourseDegrees
     }
+    // The marker keeps its course-based rotation above; only the cone prefers the compass, which
+    // is the one bearing that still answers "which way is the car pointing" while stopped.
     installHeadingConeOverlayIfReady(
       apex: latestPosition.coordinate,
-      headingDegrees: resolvedCourseDegrees
+      headingDegrees: navOSSCarPlayConeHeadingDegrees(
+        compassHeadingDegrees: latestPosition.compassHeadingDegrees,
+        fallbackCourseDegrees: resolvedCourseDegrees
+      )
     )
     let markerImageIdentifier: String
     if resolvedCourseDegrees == nil {
