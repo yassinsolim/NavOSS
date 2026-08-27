@@ -36,7 +36,11 @@ describe('map screen configuration', () => {
     expect(mapScreen).toContain('const searchEnabled = true;');
     expect(mapScreen).toContain('const nearbySearchEnabled = searchOrigin !== undefined;');
     expect(mapScreen).toContain('Location.watchPositionAsync(');
-    expect(mapScreen).toContain('distanceInterval: 25');
+    // The idle map must not throttle by distance. A 25 m filter meant a parked or slow-moving
+    // vehicle kept a stale dot, since Core Location only delivers once that much ground is
+    // covered; a standalone harness measured 5 m yielding a 5030 ms median between fixes.
+    expect(mapScreen).toContain('distanceInterval: 0');
+    expect(mapScreen).not.toContain('distanceInterval: 25');
     expect(mapScreen).toMatch(
       /useEffect\(\(\) => \{\s+if \(isCarPlayVisualHarness\(\)\) return;\s+let active = true;/,
     );
