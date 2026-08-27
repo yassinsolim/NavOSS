@@ -376,7 +376,12 @@ try {
       if (Number(process.versions.node.split('.')[0]) !== 24) {
         throw new Error(`Node 24 is required; found ${process.versions.node}`);
       }
-      for (const command of ['xcodebuild', 'xcrun', 'corepack', 'maestro', 'swift']) {
+      // Maestro drives the phone flows only. `--carplay-only` captures CarPlay scenarios by
+      // launching the app directly with scenario environment variables, so requiring Maestro
+      // there fails preflight on any machine that has no reason to have it installed.
+      const requiredCommands = ['xcodebuild', 'xcrun', 'corepack', 'swift'];
+      if (!carPlayOnly) requiredCommands.push('maestro');
+      for (const command of requiredCommands) {
         const result = spawnSync('sh', ['-c', `command -v ${command}`], {
           encoding: 'utf8',
           env: environment,

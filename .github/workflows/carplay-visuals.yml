@@ -117,13 +117,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: carplay-visuals-${{ github.run_id }}
-          # The harness writes to a `.tmp` sibling and only renames it on success, so a failed
-          # run leaves everything under the `.tmp` path. Upload both or the job is useless
-          # exactly when it matters.
+          # Whole directories, not just screenshots and logs. The validator renames its `.tmp`
+          # tree into place in a `finally`, so an early preflight failure leaves both selected
+          # subdirectories empty and the only useful file is `summary.json` at the root.
           path: |
-            artifacts/navigation-validation/screenshots
-            artifacts/navigation-validation/logs
-            artifacts/navigation-validation.tmp/screenshots
-            artifacts/navigation-validation.tmp/logs
+            artifacts/navigation-validation
+            artifacts/navigation-validation.tmp
           if-no-files-found: warn
           retention-days: 14
