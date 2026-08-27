@@ -64,10 +64,9 @@ jobs:
             echo "Simulator already present"
             exit 0
           fi
-          runtime=$(xcrun simctl list runtimes --json \
-            | python3 -c 'import json,sys; rs=[r for r in json.load(sys.stdin)["runtimes"] if r["isAvailable"] and r["identifier"].startswith("com.apple.CoreSimulator.SimRuntime.iOS")]; print(sorted(rs, key=lambda r: r["version"])[-1]["identifier"])')
-          devicetype=$(xcrun simctl list devicetypes --json \
-            | python3 -c 'import json,sys; ds=[d for d in json.load(sys.stdin)["devicetypes"] if "iPhone" in d["name"]]; print(ds[-1]["identifier"])')
+          read -r runtime devicetype < <(
+            xcrun simctl list runtimes --json | python3 scripts/pick-ios-simulator.py
+          )
           echo "Creating '$name' on $runtime using $devicetype"
           xcrun simctl create "$name" "$devicetype" "$runtime"
 
