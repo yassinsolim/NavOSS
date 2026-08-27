@@ -520,7 +520,9 @@ public func navOSSRemainingRouteGeometry(
     // vertices between them survive; otherwise the polyline cuts straight across any bend the
     // interpolation has not reached yet.
     let spliceIndex =
-      matchedCoordinate.map { min(index, navOSSNearestSegmentIndex($0, in: geometry)) } ?? index
+      matchedCoordinate.map {
+        min(index, navOSSNearestSegmentIndex($0, in: geometry, progressIndex: index))
+      } ?? index
     return navOSSVisibleRouteTail(
       [matchedCoordinate ?? routePosition] + geometry.dropFirst(spliceIndex + 1),
       fullGeometry: geometry
@@ -548,22 +550,45 @@ private func navOSSVisibleRouteTail(
   return [anchor, destination]
 }
 
+/// Segment the matched coordinate sits on, searched backward from `progressIndex` and stopped at
+/// the first local minimum.
+///
+/// The splice only looks backward because the rendered puck interpolates toward the snapshot and
+/// therefore lags it; the segment it lags onto is adjacent to the progress segment. A search over
+/// the whole geometry has no such guarantee: it keeps the first equal-distance match, so on an
+/// out-and-back or a loop a puck on the return leg can project just as well onto the parallel
+/// outbound leg and drag the splice backwards, restoring road already covered.
+///
+/// Walking backward and stopping once the distance starts increasing confines the result to the
+/// run of segments the puck is actually near, and needs no distance threshold, so there is no
+/// tuned constant to get wrong on dense or sparse geometry. Stopping early on a curve is
+/// harmless: the caller takes `min(progressIndex, result)`, so a conservative result simply
+/// splices closer to progress, which is where the geometry is already correct.
 private func navOSSNearestSegmentIndex(
   _ coordinate: NavOSSCarPlayCoordinate,
-  in geometry: [NavOSSCarPlayCoordinate]
+  in geometry: [NavOSSCarPlayCoordinate],
+  progressIndex: Int
 ) -> Int {
-  var bestIndex = 0
-  var bestDistanceMeters = Double.infinity
-  for index in geometry.indices.dropLast() {
-    let projection = navOSSCarPlaySegmentProjection(
+  let lastSegment = geometry.count - 2
+  guard lastSegment >= 0 else { return 0 }
+
+  func distanceMeters(at index: Int) -> Double {
+    navOSSCarPlaySegmentProjection(
       coordinate,
       start: geometry[index],
       end: geometry[index + 1]
-    )
-    if projection.distanceMeters < bestDistanceMeters {
-      bestDistanceMeters = projection.distanceMeters
-      bestIndex = index
-    }
+    ).distanceMeters
+  }
+
+  var bestIndex = min(max(progressIndex, 0), lastSegment)
+  var bestDistanceMeters = distanceMeters(at: bestIndex)
+  var index = bestIndex - 1
+  while index >= 0 {
+    let candidate = distanceMeters(at: index)
+    if candidate > bestDistanceMeters { break }
+    bestDistanceMeters = candidate
+    bestIndex = index
+    index -= 1
   }
   return bestIndex
 }

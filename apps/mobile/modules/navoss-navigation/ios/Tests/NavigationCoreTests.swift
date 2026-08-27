@@ -663,6 +663,53 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
+  /// Issue #13. `navOSSNearestSegmentIndex` searched the whole geometry and kept the first
+  /// equal-distance match, so on an out-and-back a puck on the return leg could project onto the
+  /// parallel outbound leg and drag the splice backwards, resurrecting road already driven.
+  func testCarPlayRemainingRouteGeometryDoesNotRestoreTravelledOutboundLeg() {
+    let outboundEnd = NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.06)
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.08),
+      outboundEnd,
+      NavOSSCarPlayCoordinate(latitude: 51.04003, longitude: -114.06),
+      NavOSSCarPlayCoordinate(latitude: 51.04003, longitude: -114.08),
+    ]
+    // On the return leg but biased south, i.e. marginally nearer the travelled outbound leg,
+    // which is the adversarial case for an unbounded nearest-segment search.
+    let onReturnLeg = NavOSSCarPlayCoordinate(latitude: 51.040005, longitude: -114.07)
+
+    let remaining = navOSSRemainingRouteGeometry(
+      geometry,
+      routeProgress: 0.80,
+      matchedCoordinate: onReturnLeg
+    )
+
+    XCTAssertFalse(
+      remaining.contains(outboundEnd),
+      "Remaining geometry must not resurrect the travelled outbound leg. Got \(remaining)."
+    )
+  }
+
+  /// The corner fix this bound must not undo: a puck legitimately lagging behind progress on the
+  /// SAME leg still has to pull the splice back so intervening vertices survive.
+  func testCarPlayRemainingRouteGeometryStillRecoversLaggingPuckOnTheSameLeg() {
+    let corner = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.07)
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      corner,
+      NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.07),
+    ]
+    let laggingMatchedCoordinate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.071)
+
+    let remaining = navOSSRemainingRouteGeometry(
+      geometry,
+      routeProgress: 0.45,
+      matchedCoordinate: laggingMatchedCoordinate
+    )
+
+    XCTAssertTrue(remaining.contains(corner), "Got \(remaining).")
+  }
+
   func testCarPlayRemainingRouteGeometryKeepsVisibleFinalSegmentAtCompletion() {
     let geometry = [
       NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.10),
