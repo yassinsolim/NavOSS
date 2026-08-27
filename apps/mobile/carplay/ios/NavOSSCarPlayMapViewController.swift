@@ -28,7 +28,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var displayLink: CADisplayLink?
   private var interpolationFromPosition: NavOSSCarPlayPosition?
   private var interpolationStartedAt: CFTimeInterval = 0
-  private let interpolationDuration: CFTimeInterval = 0.9
+  private var interpolationDuration: CFTimeInterval = navOSSCarPlayDefaultInterpolationSeconds
+  private var lastTargetAt: CFTimeInterval?
   private var latestDestination: NavOSSCarPlayCoordinate?
   private var latestOrigin: NavOSSCarPlayCoordinate?
   private var latestPosition: NavOSSCarPlayPosition?
@@ -331,6 +332,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       latestPosition = nil
       renderedPosition = nil
       lastRenderedCourseDegrees = nil
+      lastTargetAt = nil
     }
     if activeGuidance && !presentsRouteOverview {
       navigationViewingDistance = navOSSCarPlayViewingDistance(distanceToManeuverMeters)
@@ -385,6 +387,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     latestPosition = nil
     renderedPosition = nil
     lastRenderedCourseDegrees = nil
+    lastTargetAt = nil
     displayLink?.invalidate()
     displayLink = nil
     speedLabel.isHidden = true
@@ -432,6 +435,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     latestPosition = nil
     renderedPosition = nil
     lastRenderedCourseDegrees = nil
+    lastTargetAt = nil
     mapView.showsUserLocation = false
     mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
     mapView.delegate = nil
@@ -615,7 +619,14 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private func updateTargetPosition(_ position: NavOSSCarPlayPosition) {
     interpolationFromPosition = renderedPosition ?? latestPosition ?? position
     latestPosition = position
-    interpolationStartedAt = CACurrentMediaTime()
+    let now = CACurrentMediaTime()
+    // Match the animation span to how often targets actually arrive, so the vehicle neither
+    // stalls at its target nor is still catching up when the next fix lands.
+    interpolationDuration = navOSSCarPlayInterpolationSeconds(
+      sinceLastTargetSeconds: lastTargetAt.map { now - $0 }
+    )
+    lastTargetAt = now
+    interpolationStartedAt = now
     if renderedPosition == nil {
       renderedPosition = position
       installPositionOverlayIfReady()

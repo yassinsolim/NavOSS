@@ -135,6 +135,38 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertNil(navOSSRouteBearingDegrees(near: duplicate, in: [duplicate, duplicate]))
   }
 
+  func testInterpolationSpanTracksObservedSampleInterval() {
+    // The measured cadence with no distance filter is about 1 s; the span should follow it
+    // rather than staying pinned at the old fixed 0.9 s, which left a dead gap every cycle.
+    XCTAssertEqual(
+      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: 1.008), 1.008, accuracy: 0.0001)
+    XCTAssertEqual(
+      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: 0.5), 0.5, accuracy: 0.0001)
+  }
+
+  func testInterpolationSpanFallsBackBeforeASecondTargetExists() {
+    XCTAssertEqual(
+      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: nil),
+      navOSSCarPlayDefaultInterpolationSeconds, accuracy: 0.0001)
+    XCTAssertEqual(
+      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: 0),
+      navOSSCarPlayDefaultInterpolationSeconds, accuracy: 0.0001)
+    XCTAssertEqual(
+      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: .nan),
+      navOSSCarPlayDefaultInterpolationSeconds, accuracy: 0.0001)
+  }
+
+  func testInterpolationSpanIsClampedBothWays() {
+    // A burst of fixes must not produce a span so short it churns frames.
+    XCTAssertEqual(
+      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: 0.01),
+      navOSSCarPlayMinimumInterpolationSeconds, accuracy: 0.0001)
+    // A very late fix must not stretch one span into a visible crawl.
+    XCTAssertEqual(
+      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: 30),
+      navOSSCarPlayMaximumInterpolationSeconds, accuracy: 0.0001)
+  }
+
   func testPersistedNavigationWaitsForValidatedLocation() {
     XCTAssertEqual(
       navOSSPersistedNavigationDecision(

@@ -829,3 +829,30 @@ public func navOSSRouteBearingDegrees(
   guard bestDistanceMeters <= maxDistanceMeters else { return nil }
   return bestBearingDegrees
 }
+
+/// Fallback animation span used before two targets have been seen.
+public let navOSSCarPlayDefaultInterpolationSeconds = 0.9
+/// Clamp bounds. Below the floor the animation is imperceptible and churns frames; above the
+/// ceiling a late fix would stretch one span so far that the vehicle visibly crawls.
+public let navOSSCarPlayMinimumInterpolationSeconds = 0.25
+public let navOSSCarPlayMaximumInterpolationSeconds = 2.0
+
+/// Animation span for one position update.
+///
+/// A fixed span cannot match a variable sample interval: when it is shorter than the gap the
+/// vehicle reaches its target and sits still until the next fix, and when it is longer the
+/// vehicle is still catching up when a new target arrives. Feeding the observed interval back in
+/// keeps the animation continuous, so the span tracks however often fixes actually arrive.
+public func navOSSCarPlayInterpolationSeconds(
+  sinceLastTargetSeconds: Double?,
+  defaultSeconds: Double = navOSSCarPlayDefaultInterpolationSeconds
+) -> Double {
+  guard let sinceLastTargetSeconds, sinceLastTargetSeconds.isFinite, sinceLastTargetSeconds > 0
+  else {
+    return defaultSeconds
+  }
+  return min(
+    navOSSCarPlayMaximumInterpolationSeconds,
+    max(navOSSCarPlayMinimumInterpolationSeconds, sinceLastTargetSeconds)
+  )
+}
