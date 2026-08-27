@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 
 @testable import NavOSSNavigationCore
@@ -133,6 +134,47 @@ final class NavigationCoreTests: XCTestCase {
     let duplicate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08)
     XCTAssertNil(navOSSRouteBearingDegrees(near: duplicate, in: [duplicate]))
     XCTAssertNil(navOSSRouteBearingDegrees(near: duplicate, in: [duplicate, duplicate]))
+  }
+
+  func testHeadingConePolygonClosesAndSamplesRequestedSpread() throws {
+    let apex = NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719)
+    let polygon = navOSSHeadingConePolygon(
+      apex: apex,
+      headingDegrees: 90,
+      radiusMeters: 30,
+      spreadDegrees: 60
+    )
+    let arc = Array(polygon.dropFirst().dropLast())
+    let bearings = arc.map { localBearingDegrees(from: apex, to: $0) }
+    let firstBearing = try XCTUnwrap(bearings.first)
+    let lastBearing = try XCTUnwrap(bearings.last)
+
+    XCTAssertEqual(polygon.first, apex)
+    XCTAssertEqual(polygon.last, apex)
+    XCTAssertEqual(clockwiseDifference(from: firstBearing, to: lastBearing), 60, accuracy: 0.01)
+    for (start, end) in zip(bearings, bearings.dropFirst()) {
+      XCTAssertLessThanOrEqual(clockwiseDifference(from: start, to: end), 5.0001)
+    }
+  }
+
+  func testHeadingConePolygonUsesRequestedRadiusAndHeading() throws {
+    let apex = NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719)
+    let polygon = navOSSHeadingConePolygon(
+      apex: apex,
+      headingDegrees: 135,
+      radiusMeters: 30,
+      spreadDegrees: 60
+    )
+    let arc = Array(polygon.dropFirst().dropLast())
+    let bearings = arc.map { localBearingDegrees(from: apex, to: $0) }
+    let centerBearing = try XCTUnwrap(
+      bearings.min { angularDifference(from: $0, to: 135) < angularDifference(from: $1, to: 135) }
+    )
+
+    for coordinate in arc {
+      XCTAssertEqual(localDistanceMeters(from: apex, to: coordinate), 30, accuracy: 0.01)
+    }
+    XCTAssertEqual(centerBearing, 135, accuracy: 0.01)
   }
 
   func testInterpolationSpanTracksObservedSampleInterval() {
@@ -1601,6 +1643,39 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(snapshot.phase, .idle)
     XCTAssertNil(snapshot.matchedCoordinate)
     XCTAssertGreaterThan(snapshot.routeVersion, initialVersion)
+  }
+
+  private func localDistanceMeters(
+    from apex: NavOSSCarPlayCoordinate,
+    to coordinate: NavOSSCarPlayCoordinate
+  ) -> Double {
+    let latitudeScale = 111_320.0
+    let longitudeScale = latitudeScale * cos(apex.latitude * .pi / 180)
+    return hypot(
+      (coordinate.longitude - apex.longitude) * longitudeScale,
+      (coordinate.latitude - apex.latitude) * latitudeScale
+    )
+  }
+
+  private func localBearingDegrees(
+    from apex: NavOSSCarPlayCoordinate,
+    to coordinate: NavOSSCarPlayCoordinate
+  ) -> Double {
+    let latitudeScale = 111_320.0
+    let longitudeScale = latitudeScale * cos(apex.latitude * .pi / 180)
+    let degrees = atan2(
+      (coordinate.longitude - apex.longitude) * longitudeScale,
+      (coordinate.latitude - apex.latitude) * latitudeScale
+    ) * 180 / .pi
+    return degrees >= 0 ? degrees : degrees + 360
+  }
+
+  private func clockwiseDifference(from start: Double, to end: Double) -> Double {
+    (end - start + 360).truncatingRemainder(dividingBy: 360)
+  }
+
+  private func angularDifference(from first: Double, to second: Double) -> Double {
+    abs((first - second + 540).truncatingRemainder(dividingBy: 360) - 180)
   }
 
   private func makeGuidance(distance: Double, duration: Double) -> NavOSSCarPlayGuidance {

@@ -13,6 +13,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private let originSourceIdentifier = "navoss-carplay-origin-source"
   private let alternateRouteLayerIdentifier = "navoss-carplay-alternate-route"
   private let alternateRouteSourceIdentifier = "navoss-carplay-alternate-route-source"
+  private let headingConeLayerIdentifier = "navoss-carplay-heading-cone"
+  private let headingConeSourceIdentifier = "navoss-carplay-heading-cone-source"
+  private let headingConeRadiusMeters = 30.0
+  private let headingConeSpreadDegrees = 60.0
   private let carImageIdentifier = "navoss-carplay-vehicle-car"
   private let positionImageIdentifier = "navoss-carplay-vehicle-arrow"
   private let neutralImageIdentifier = "navoss-carplay-vehicle-neutral"
@@ -40,6 +44,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var needsIdleLocationRecenter = true
   private var renderedPosition: NavOSSCarPlayPosition?
   private var lastRenderedCourseDegrees: Double?
+  private var lastHeadingConeApex: NavOSSCarPlayCoordinate?
+  private var lastHeadingConeHeadingDegrees: Double?
   private var navigationViewingDistance = 850.0
   private var presentsRouteOverview = false
   private var guidanceHiddenLayerIdentifiers: Set<String> = []
@@ -393,6 +399,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     latestPosition = nil
     renderedPosition = nil
     lastRenderedCourseDegrees = nil
+    lastHeadingConeApex = nil
+    lastHeadingConeHeadingDegrees = nil
     lastTargetAt = nil
     displayLink?.invalidate()
     displayLink = nil
@@ -411,6 +419,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       source.shape = nil
     }
     if let source = mapView.style?.source(withIdentifier: routeHeadSourceIdentifier)
+      as? MLNShapeSource
+    {
+      source.shape = nil
+    }
+    if let source = mapView.style?.source(withIdentifier: headingConeSourceIdentifier)
       as? MLNShapeSource
     {
       source.shape = nil
@@ -446,6 +459,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     latestPosition = nil
     renderedPosition = nil
     lastRenderedCourseDegrees = nil
+    lastHeadingConeApex = nil
+    lastHeadingConeHeadingDegrees = nil
     lastTargetAt = nil
     mapView.showsUserLocation = false
     mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
@@ -468,6 +483,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     styleLoadWatchdog?.cancel()
     styleLoadWatchdog = nil
     styleLoadRetryCount = 0
+    lastHeadingConeApex = nil
+    lastHeadingConeHeadingDegrees = nil
     installAlternateRouteOverlayIfReady()
     installRouteOverlayIfReady()
     installOriginOverlayIfReady()
@@ -785,16 +802,30 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
   }
 
-  /// Creates the tail and head layers together, once, in a fixed order: both casings first, then
-  /// both lines. Creating each pair lazily made z-order depend on install history, and appending
-  /// casing-then-line per pair left a casing above a line, which painted a white nick across the
-  /// route at the shared join. Visibility is driven purely by the source shapes, which are nil
-  /// when a part has nothing to draw.
+  /// Creates the heading cone, tail, and head layers together, once, in a fixed order: the cone,
+  /// both casings, then both lines. Creating each pair lazily made z-order depend on install
+  /// history, and appending casing-then-line per pair left a casing above a line, which painted a
+  /// white nick across the route at the shared join. Visibility is driven purely by the source
+  /// shapes, which are nil when a part has nothing to draw.
   private func installRouteLayersIfNeeded(
+    headingConeSource: MLNShapeSource,
     tailSource: MLNShapeSource,
     headSource: MLNShapeSource,
     in style: MLNStyle
   ) {
+    func headingCone(_ source: MLNShapeSource) -> MLNFillStyleLayer {
+      let layer = MLNFillStyleLayer(identifier: headingConeLayerIdentifier, source: source)
+      layer.fillColor = NSExpression(
+        forConstantValue: UIColor(
+          red: 0.0941176471,
+          green: 0.4745098039,
+          blue: 0.4352941176,
+          alpha: 1
+        )
+      )
+      layer.fillOpacity = NSExpression(forConstantValue: 0.25)
+      return layer
+    }
     func casing(_ identifier: String, _ source: MLNShapeSource) -> MLNLineStyleLayer {
       let layer = MLNLineStyleLayer(identifier: identifier, source: source)
       layer.lineCap = NSExpression(forConstantValue: "round")
@@ -821,6 +852,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     // Any missing layer means the set is being built for the first time on this style, or the
     // style was reloaded. Rebuild the whole set so the order is always the same.
     let identifiers = [
+      headingConeLayerIdentifier,
       routeCasingLayerIdentifier, routeHeadCasingLayerIdentifier,
       routeLayerIdentifier, routeHeadLayerIdentifier,
     ]
@@ -830,10 +862,22 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         style.removeLayer(existing)
       }
     }
-    style.addLayer(casing(routeCasingLayerIdentifier, tailSource))
-    style.addLayer(casing(routeHeadCasingLayerIdentifier, headSource))
-    style.addLayer(line(routeLayerIdentifier, tailSource))
-    style.addLayer(line(routeHeadLayerIdentifier, headSource))
+    // When a puck is already present, retain its priority even if this set is rebuilt after a
+    // partial style change. Otherwise the later position layers append above this fixed group.
+    let insertionLayer = style.layer(withIdentifier: shadowLayerIdentifier)
+      ?? style.layer(withIdentifier: positionLayerIdentifier)
+    func add(_ layer: MLNStyleLayer) {
+      if let insertionLayer {
+        style.insertLayer(layer, below: insertionLayer)
+      } else {
+        style.addLayer(layer)
+      }
+    }
+    add(headingCone(headingConeSource))
+    add(casing(routeCasingLayerIdentifier, tailSource))
+    add(casing(routeHeadCasingLayerIdentifier, headSource))
+    add(line(routeLayerIdentifier, tailSource))
+    add(line(routeHeadLayerIdentifier, headSource))
   }
 
   /// Returns the source, creating it with no shape if it does not exist yet. Lets the layer set
@@ -890,9 +934,15 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     // Sources and layers first, then styling. Styling before the layers exist left the tail at
     // MapLibre's default 1 pt width on the first install after any style load, which is permanent
     // in route preview because `display` runs once there.
+    let headingConeSource = ensureShapeSource(headingConeSourceIdentifier, in: style)
     let tailSource = ensureShapeSource(routeSourceIdentifier, in: style)
     let headSource = ensureShapeSource(routeHeadSourceIdentifier, in: style)
-    installRouteLayersIfNeeded(tailSource: tailSource, headSource: headSource, in: style)
+    installRouteLayersIfNeeded(
+      headingConeSource: headingConeSource,
+      tailSource: tailSource,
+      headSource: headSource,
+      in: style
+    )
     applyRouteLineWidths(in: style)
 
     let tail = Array(routeCoordinates.dropFirst())
@@ -928,6 +978,48 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       return
     }
     source.shape = polylineFeature([routeCoordinates[0], routeCoordinates[1]])
+  }
+
+  private func installHeadingConeOverlayIfReady(
+    apex: NavOSSCarPlayCoordinate,
+    headingDegrees: Double?
+  ) {
+    guard let source = mapView.style?.source(withIdentifier: headingConeSourceIdentifier)
+      as? MLNShapeSource
+    else {
+      return
+    }
+    guard activeGuidance, let headingDegrees else {
+      source.shape = nil
+      lastHeadingConeApex = nil
+      lastHeadingConeHeadingDegrees = nil
+      return
+    }
+    // The source follows the interpolated puck; skip the allocation only when neither input
+    // changed since the last render.
+    guard lastHeadingConeApex != apex || lastHeadingConeHeadingDegrees != headingDegrees else {
+      return
+    }
+    let polygon = navOSSHeadingConePolygon(
+      apex: apex,
+      headingDegrees: headingDegrees,
+      radiusMeters: headingConeRadiusMeters,
+      spreadDegrees: headingConeSpreadDegrees
+    )
+    guard polygon.count >= 4 else {
+      source.shape = nil
+      lastHeadingConeApex = nil
+      lastHeadingConeHeadingDegrees = nil
+      return
+    }
+    var coordinates = polygon.map {
+      CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
+    }
+    source.shape = coordinates.withUnsafeMutableBufferPointer { buffer in
+      MLNPolygonFeature(coordinates: buffer.baseAddress!, count: UInt(buffer.count))
+    }
+    lastHeadingConeApex = apex
+    lastHeadingConeHeadingDegrees = headingDegrees
   }
 
   private func installAlternateRouteOverlayIfReady() {
@@ -1044,6 +1136,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
     guard activeGuidance, let latestPosition = renderedPosition ?? latestPosition else {
       (style.source(withIdentifier: positionSourceIdentifier) as? MLNShapeSource)?.shape = nil
+      (style.source(withIdentifier: headingConeSourceIdentifier) as? MLNShapeSource)?.shape = nil
+      lastHeadingConeApex = nil
+      lastHeadingConeHeadingDegrees = nil
       return
     }
     let point = MLNPointFeature()
@@ -1125,6 +1220,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     if let resolvedCourseDegrees {
       lastRenderedCourseDegrees = resolvedCourseDegrees
     }
+    installHeadingConeOverlayIfReady(
+      apex: latestPosition.coordinate,
+      headingDegrees: resolvedCourseDegrees
+    )
     let markerImageIdentifier: String
     if resolvedCourseDegrees == nil {
       markerImageIdentifier = neutralImageIdentifier
