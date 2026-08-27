@@ -42,6 +42,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private let lock = NSRecursiveLock()
   private var locationManager: CLLocationManager?
   private var latestLocation: CLLocation?
+  private var latestCompassHeadingDegrees: Double?
   private var navigationGeneration: UInt64 = 0
   private let navigationSession: NavigationSession
   private let notificationCenter: NotificationCenter
@@ -351,6 +352,56 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     }
   }
 
+  public func locationManager(
+    _ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading
+  ) {
+    guard newHeading.headingAccuracy >= 0 else {
+      return
+    }
+    let compassHeadingDegrees =
+      newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
+    guard compassHeadingDegrees.isFinite, (0..<360).contains(compassHeadingDegrees) else {
+      return
+    }
+
+    let versionedUpdate: VersionedNavigationUpdate
+    lock.lock()
+    latestCompassHeadingDegrees = compassHeadingDegrees
+    guard latestLocation != nil else {
+      lock.unlock()
+      return
+    }
+    versionedUpdate = VersionedNavigationUpdate(
+      generation: navigationGeneration,
+      update: navigationSession.currentUpdate()
+    )
+    lock.unlock()
+
+    guard let trip = versionedUpdate.update.trip,
+      versionedUpdate.update.snapshot.phase != .arrived
+    else {
+      return
+    }
+    let previousState = NavOSSCarPlayTripStore.shared.snapshot()
+    guard previousState.trip?.id == trip.id,
+      let position = navOSSCarPlayPositionApplyingCompassHeading(
+        compassHeadingDegrees,
+        to: previousState.position
+      ),
+      position.isValid
+    else {
+      return
+    }
+    NavOSSCarPlayTripStore.shared.publishNavigationState(
+      trip: trip,
+      guidance: previousState.guidance,
+      position: position,
+      routeProgress: previousState.routeProgress,
+      generation: versionedUpdate.generation,
+      sequence: versionedUpdate.update.snapshot.sequence
+    )
+  }
+
   public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
     guard let locationError = error as? CLError, locationError.code == .denied else {
       return
@@ -404,6 +455,9 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     manager.activityType = .automotiveNavigation
     manager.allowsBackgroundLocationUpdates = backgroundLocationEnabled
     manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+    // Three degrees avoids sub-degree magnetometer jitter and needless wakeups while still
+    // moving the facing cone smoothly as a parked vehicle turns.
+    manager.headingFilter = 3
     // A 5 m threshold behaves as an effective update interval at low speed: measured against an
     // identical simulated track at 1 m/s, `distanceFilter = 5` delivered 11 callbacks with a
     // median gap of 5030 ms, while `kCLDistanceFilterNone` delivered 71 with a median of
@@ -500,6 +554,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       return
     }
     let update = versionedUpdate.update
+    let compassHeadingDegrees = latestCompassHeadingDegrees
     let latestCarPlayPosition = latestLocation.flatMap { location -> NavOSSCarPlayPosition? in
       guard
         let origin = navOSSNavigationRouteOrigin(
@@ -516,6 +571,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       return NavOSSCarPlayPosition(
         coordinate: origin.coordinate,
         courseDegrees: origin.headingDegrees,
+        compassHeadingDegrees: compassHeadingDegrees,
         speedMetersPerSecond: location.speed >= 0 ? location.speed : nil
       )
     }
@@ -536,13 +592,16 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       let speed = self.lock.withLock {
         self.latestLocation.flatMap { $0.speed >= 0 ? $0.speed : nil }
       }
-      let carPlayPosition = navOSSCarPlayPublishedPosition(
-        matchedCoordinate: update.snapshot.matchedCoordinate,
-        rawCoordinate: update.snapshot.rawCoordinate,
-        matchedCourseDegrees: update.snapshot.matchedCourseDegrees,
-        rawCourseDegrees: latestCarPlayPosition?.courseDegrees,
-        speedMetersPerSecond: speed,
-        fallback: latestCarPlayPosition
+      let carPlayPosition = navOSSCarPlayPositionApplyingCompassHeading(
+        compassHeadingDegrees,
+        to: navOSSCarPlayPublishedPosition(
+          matchedCoordinate: update.snapshot.matchedCoordinate,
+          rawCoordinate: update.snapshot.rawCoordinate,
+          matchedCourseDegrees: update.snapshot.matchedCourseDegrees,
+          rawCourseDegrees: latestCarPlayPosition?.courseDegrees,
+          speedMetersPerSecond: speed,
+          fallback: latestCarPlayPosition
+        )
       )
       NavOSSCarPlayTripStore.shared.publishNavigationState(
         trip: trip,
@@ -837,6 +896,9 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       backgroundActivitySession = CLBackgroundActivitySession()
     }
     manager.startUpdatingLocation()
+    if CLLocationManager.headingAvailable() {
+      manager.startUpdatingHeading()
+    }
   }
 
   private func startNavigation(
@@ -902,6 +964,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
         return
       }
       self.locationManager?.stopUpdatingLocation()
+      self.locationManager?.stopUpdatingHeading()
       if #available(iOS 17.0, *),
         let session = self.backgroundActivitySession as? CLBackgroundActivitySession
       {

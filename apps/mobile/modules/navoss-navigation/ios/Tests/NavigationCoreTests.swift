@@ -84,6 +84,48 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(published?.courseDegrees, 90)
   }
 
+  func testCarPlayConeHeadingPrefersCompassThenCourse() {
+    XCTAssertEqual(
+      navOSSCarPlayConeHeadingDegrees(
+        compassHeadingDegrees: 42,
+        fallbackCourseDegrees: 128
+      ),
+      42
+    )
+    XCTAssertEqual(
+      navOSSCarPlayConeHeadingDegrees(
+        compassHeadingDegrees: nil,
+        fallbackCourseDegrees: 128
+      ),
+      128
+    )
+    XCTAssertEqual(
+      navOSSCarPlayConeHeadingDegrees(
+        compassHeadingDegrees: 360,
+        fallbackCourseDegrees: 128
+      ),
+      128
+    )
+  }
+
+  func testHeadingOnlyUpdateKeepsLastLocationPosition() {
+    // A parked turn can deliver this heading without a new CLLocation sample.
+    let previous = NavOSSCarPlayPosition(
+      coordinate: NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719),
+      courseDegrees: 128,
+      compassHeadingDegrees: 42,
+      speedMetersPerSecond: 0
+    )
+
+    let published = navOSSCarPlayPositionApplyingCompassHeading(217, to: previous)
+
+    XCTAssertEqual(published?.coordinate, previous.coordinate)
+    XCTAssertEqual(published?.courseDegrees, previous.courseDegrees)
+    XCTAssertEqual(published?.speedMetersPerSecond, previous.speedMetersPerSecond)
+    XCTAssertEqual(published?.compassHeadingDegrees, 217)
+    XCTAssertNil(navOSSCarPlayPositionApplyingCompassHeading(217, to: nil))
+  }
+
   func testRouteBearingSuppliesHeadingForOnRouteVehicleWithNoCourse() {
     // Due-east leg then a due-north leg.
     let geometry = [
@@ -471,6 +513,35 @@ final class NavigationCoreTests: XCTestCase {
         coordinate: coordinate,
         courseDegrees: 90,
         speedMetersPerSecond: -1
+      ).isValid
+    )
+  }
+
+  func testCarPlayPositionValidatesCompassHeading() {
+    let coordinate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08)
+
+    XCTAssertTrue(
+      NavOSSCarPlayPosition(
+        coordinate: coordinate,
+        courseDegrees: 90,
+        compassHeadingDegrees: 180,
+        speedMetersPerSecond: 13.5
+      ).isValid
+    )
+    XCTAssertFalse(
+      NavOSSCarPlayPosition(
+        coordinate: coordinate,
+        courseDegrees: 90,
+        compassHeadingDegrees: 360,
+        speedMetersPerSecond: 13.5
+      ).isValid
+    )
+    XCTAssertFalse(
+      NavOSSCarPlayPosition(
+        coordinate: coordinate,
+        courseDegrees: 90,
+        compassHeadingDegrees: .infinity,
+        speedMetersPerSecond: 13.5
       ).isValid
     )
   }
