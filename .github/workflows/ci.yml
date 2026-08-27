@@ -70,3 +70,52 @@ jobs:
 
       - name: Test Swift navigation core
         run: swift test --package-path apps/mobile/modules/navoss-navigation
+
+  carplay-generated-sources:
+    name: CarPlay generated sources
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      # `apps/mobile/ios` is generated and gitignored, so this cannot be a `git diff`. Regenerate
+      # it and compare the copies the config plugin made against the sources they came from.
+      - name: Regenerate the iOS project
+        working-directory: apps/mobile
+        env:
+          EXPO_PUBLIC_API_URL: https://ci.invalid
+          NAVOSS_CARPLAY_ENABLED: '1'
+          NAVOSS_CARPLAY_ENTITLEMENT_ENABLED: '1'
+        run: corepack pnpm exec expo prebuild --platform ios --no-install
+
+      # The plugin copies `apps/mobile/carplay/ios/*.swift` into the generated project. Editing a
+      # source without regenerating silently builds the previous copy, which has shipped stale
+      # CarPlay code more than once. Fail loudly instead.
+      - name: Verify copied CarPlay sources match their originals
+        working-directory: apps/mobile
+        run: |
+          status=0
+          for source in carplay/ios/*.swift; do
+            generated="ios/NavOSS/$(basename "$source")"
+            if [ ! -f "$generated" ]; then
+              echo "::error file=$source::not copied into the generated project"
+              status=1
+            elif ! diff -q "$source" "$generated" >/dev/null; then
+              echo "::error file=$source::generated copy differs from source"
+              diff -u "$source" "$generated" || true
+              status=1
+            fi
+          done
+          exit $status

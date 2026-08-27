@@ -1,0 +1,85 @@
+name: CarPlay visuals
+
+# Deliberately NOT a required check on pull requests.
+#
+# It needs a booted simulator and an attached CarPlay external display, neither of which is
+# reliable enough to gate merges on. It exists because the CarPlay layer has no test target:
+# `apps/mobile/carplay/ios` is copied into the generated project and cannot be unit tested, so
+# rendering defects there are invisible to every other job. Recent examples that no unit test
+# could have caught: the route drawn as a 1 pt hairline after a style load, a zero-length dot
+# painted on the vehicle at arrival, and a stale route stub left on screen after a trip ended.
+#
+# Output is screenshots uploaded as artifacts for a human to look at.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 09:00 UTC daily, comfortably after typical evening pushes.
+    - cron: '0 9 * * *'
+
+concurrency:
+  group: carplay-visuals-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+
+jobs:
+  visuals:
+    name: CarPlay visual scenarios
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Build shared contracts
+        run: corepack pnpm --filter @navoss/contracts build
+
+      - name: Start the API
+        run: |
+          HOST=127.0.0.1 PORT=3001 corepack pnpm --filter @navoss/api dev &
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3001/health >/dev/null 2>&1; then
+              echo "API ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API did not become ready" >&2
+          exit 1
+
+      # Renders the real CarPlay map controller through the in-app visual harness, which does not
+      # depend on Apple's CarPlay template host. That host crashes on some runtimes inside its own
+      # code, so driving it directly would make this job fail for reasons unrelated to NavOSS.
+      - name: Capture CarPlay scenarios
+        env:
+          EXPO_PUBLIC_API_URL: http://127.0.0.1:3001
+          NAVOSS_CARPLAY_ENABLED: '1'
+          NAVOSS_CARPLAY_ENTITLEMENT_ENABLED: '1'
+        run: corepack pnpm validate:navigation:ios -- --carplay-only
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carplay-visuals-${{ github.run_id }}
+          path: |
+            artifacts/navigation-validation/screenshots
+            artifacts/navigation-validation/logs
+          if-no-files-found: warn
+          retention-days: 14
