@@ -673,6 +673,45 @@ private func navOSSCarPlaySegmentProjection(
   return (hypot(startX + fraction * deltaX, startY + fraction * deltaY), fraction)
 }
 
+/// Closed polygon ring for the vehicle's forward-looking heading cone.
+///
+/// Bearings use the navigation convention: 0° is true north and values increase clockwise.
+/// The local metre conversion intentionally matches `navOSSCarPlaySegmentProjection`.
+public func navOSSHeadingConePolygon(
+  apex: NavOSSCarPlayCoordinate,
+  headingDegrees: Double,
+  radiusMeters: Double,
+  spreadDegrees: Double
+) -> [NavOSSCarPlayCoordinate] {
+  guard apex.isValid, headingDegrees.isFinite, radiusMeters.isFinite, radiusMeters >= 0,
+    spreadDegrees.isFinite, (0...360).contains(spreadDegrees)
+  else {
+    return []
+  }
+
+  let latitudeScale = 111_320.0
+  let longitudeScale = latitudeScale * cos(apex.latitude * .pi / 180)
+  let segmentCount = max(1, Int(ceil(spreadDegrees / 5)))
+  let startBearingDegrees = headingDegrees - spreadDegrees / 2
+  var polygon = [apex]
+  polygon.reserveCapacity(segmentCount + 3)
+
+  for segment in 0...segmentCount {
+    let bearingDegrees = startBearingDegrees
+      + spreadDegrees * Double(segment) / Double(segmentCount)
+    let bearingRadians = bearingDegrees * .pi / 180
+    polygon.append(
+      NavOSSCarPlayCoordinate(
+        latitude: apex.latitude + radiusMeters * cos(bearingRadians) / latitudeScale,
+        longitude: apex.longitude + radiusMeters * sin(bearingRadians) / longitudeScale
+      )
+    )
+  }
+
+  polygon.append(apex)
+  return polygon
+}
+
 private func navOSSCarPlayCoordinateDistance(
   from start: NavOSSCarPlayCoordinate,
   to end: NavOSSCarPlayCoordinate
