@@ -1,0 +1,127 @@
+name: CarPlay visuals
+
+# Deliberately NOT a required check on pull requests.
+#
+# It needs a booted simulator and an attached CarPlay external display, neither of which is
+# reliable enough to gate merges on. It exists because the CarPlay layer has no test target:
+# `apps/mobile/carplay/ios` is copied into the generated project and cannot be unit tested, so
+# rendering defects there are invisible to every other job. Recent examples that no unit test
+# could have caught: the route drawn as a 1 pt hairline after a style load, a zero-length dot
+# painted on the vehicle at arrival, and a stale route stub left on screen after a trip ended.
+#
+# Output is screenshots uploaded as artifacts for a human to look at.
+
+# Manual dispatch only for now. This job cannot be verified without running it on a GitHub
+# runner, and a scheduled job that fails every night is worse than no job: it trains people to
+# ignore red. Enable the cron below once a manual run has succeeded once.
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '0 9 * * *'
+
+concurrency:
+  group: carplay-visuals-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+
+jobs:
+  visuals:
+    name: CarPlay visual scenarios
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Build shared contracts
+        run: corepack pnpm --filter @navoss/contracts build
+
+      # The harness looks the device up by name and throws if it is absent
+      # (apps/mobile/scripts/validate-navigation-ios.mjs, "Simulator not found"). It never
+      # creates one, and a hosted runner has no device with this name, so create it here against
+      # whatever iOS runtime the image ships.
+      - name: Create the simulator the harness expects
+        run: |
+          set -euo pipefail
+          name='NavOSS iPhone 15 Pro Max'
+          if xcrun simctl list devices available | grep -qF "$name ("; then
+            echo "Simulator already present"
+            exit 0
+          fi
+          runtime=$(xcrun simctl list runtimes --json \
+            | python3 -c 'import json,sys; rs=[r for r in json.load(sys.stdin)["runtimes"] if r["isAvailable"] and r["identifier"].startswith("com.apple.CoreSimulator.SimRuntime.iOS")]; print(sorted(rs, key=lambda r: r["version"])[-1]["identifier"])')
+          devicetype=$(xcrun simctl list devicetypes --json \
+            | python3 -c 'import json,sys; ds=[d for d in json.load(sys.stdin)["devicetypes"] if "iPhone" in d["name"]]; print(ds[-1]["identifier"])')
+          echo "Creating '$name' on $runtime using $devicetype"
+          xcrun simctl create "$name" "$devicetype" "$runtime"
+
+      # The server and the capture run in ONE step, sharing a shell, with a trap that stops the
+      # server on exit. Separate steps are not a process supervisor: a server backgrounded in one
+      # step is not guaranteed to survive into the next, and if it dies the capture fails for a
+      # reason that has nothing to do with rendering.
+      #
+      # The capture renders the real CarPlay map controller through the in-app visual harness,
+      # which does not use Apple's CarPlay template host. That host crashes on some runtimes
+      # inside its own code, so driving it here would fail for reasons unrelated to NavOSS.
+      - name: Run the API and capture CarPlay scenarios
+        env:
+          EXPO_PUBLIC_API_URL: http://127.0.0.1:3001
+          NAVOSS_CARPLAY_ENABLED: '1'
+          NAVOSS_CARPLAY_ENTITLEMENT_ENABLED: '1'
+        run: |
+          set -euo pipefail
+          env HOST=127.0.0.1 PORT=3001 corepack pnpm --filter @navoss/api dev \
+            >/tmp/navoss-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+
+          ready=0
+          for _ in $(seq 1 60); do
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              echo "API process exited before becoming ready" >&2
+              tail -50 /tmp/navoss-api.log >&2 || true
+              exit 1
+            fi
+            if curl -fsS http://127.0.0.1:3001/health >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "API did not become ready" >&2
+            tail -50 /tmp/navoss-api.log >&2 || true
+            exit 1
+          fi
+
+          corepack pnpm validate:navigation:ios -- --carplay-only
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carplay-visuals-${{ github.run_id }}
+          # Whole directories, not just screenshots and logs. The validator renames its `.tmp`
+          # tree into place in a `finally`, so an early preflight failure leaves both selected
+          # subdirectories empty and the only useful file is `summary.json` at the root.
+          path: |
+            artifacts/navigation-validation
+            artifacts/navigation-validation.tmp
+          if-no-files-found: warn
+          retention-days: 14
