@@ -515,8 +515,14 @@ public func navOSSRemainingRouteGeometry(
       latitude: start.latitude + (end.latitude - start.latitude) * segmentProgress,
       longitude: start.longitude + (end.longitude - start.longitude) * segmentProgress
     )
+    // `matchedCoordinate` is the rendered puck, which interpolates toward the snapshot and can
+    // therefore sit behind `routeProgress`. Splice from whichever of the two is earlier so the
+    // vertices between them survive; otherwise the polyline cuts straight across any bend the
+    // interpolation has not reached yet.
+    let spliceIndex =
+      matchedCoordinate.map { min(index, navOSSNearestSegmentIndex($0, in: geometry)) } ?? index
     return navOSSVisibleRouteTail(
-      [matchedCoordinate ?? routePosition] + geometry.dropFirst(index + 1),
+      [matchedCoordinate ?? routePosition] + geometry.dropFirst(spliceIndex + 1),
       fullGeometry: geometry
     )
   }
@@ -540,6 +546,26 @@ private func navOSSVisibleRouteTail(
     return remaining
   }
   return [anchor, destination]
+}
+
+private func navOSSNearestSegmentIndex(
+  _ coordinate: NavOSSCarPlayCoordinate,
+  in geometry: [NavOSSCarPlayCoordinate]
+) -> Int {
+  var bestIndex = 0
+  var bestDistanceMeters = Double.infinity
+  for index in geometry.indices.dropLast() {
+    let projection = navOSSCarPlaySegmentProjection(
+      coordinate,
+      start: geometry[index],
+      end: geometry[index + 1]
+    )
+    if projection.distanceMeters < bestDistanceMeters {
+      bestDistanceMeters = projection.distanceMeters
+      bestIndex = index
+    }
+  }
+  return bestIndex
 }
 
 public func navOSSRemainingWaypoints(
@@ -767,4 +793,66 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
     }
     notificationCenter.post(name: .navOSSCarPlayStateDidChange, object: self)
   }
+}
+
+/// Maximum distance from the route at which the route's own heading may stand in for a missing
+/// vehicle course. Matches the off-route departure threshold in `NavigationCore`, so a vehicle
+/// the matcher would call off-route never inherits the route's bearing.
+public let navOSSRouteBearingMaxDistanceMeters = 35.0
+
+/// Bearing of the route segment nearest `coordinate`, or `nil` when the coordinate is farther
+/// than `maxDistanceMeters` from the route. Used only as a fallback when the vehicle reports no
+/// usable course; an off-route vehicle must not be shown pointing along a road it is not on.
+public func navOSSRouteBearingDegrees(
+  near coordinate: NavOSSCarPlayCoordinate,
+  in geometry: [NavOSSCarPlayCoordinate],
+  maxDistanceMeters: Double = navOSSRouteBearingMaxDistanceMeters
+) -> Double? {
+  guard geometry.count >= 2 else { return nil }
+  var bestDistanceMeters = Double.infinity
+  var bestBearingDegrees: Double?
+  for index in geometry.indices.dropLast() {
+    let start = geometry[index]
+    let end = geometry[index + 1]
+    guard start != end else { continue }
+    let projection = navOSSCarPlaySegmentProjection(coordinate, start: start, end: end)
+    guard projection.distanceMeters < bestDistanceMeters else { continue }
+    bestDistanceMeters = projection.distanceMeters
+    let meanLatitude = (start.latitude + end.latitude) / 2 * .pi / 180
+    let degrees =
+      atan2(
+        (end.longitude - start.longitude) * cos(meanLatitude),
+        end.latitude - start.latitude
+      ) * 180 / .pi
+    bestBearingDegrees = degrees >= 0 ? degrees : degrees + 360
+  }
+  guard bestDistanceMeters <= maxDistanceMeters else { return nil }
+  return bestBearingDegrees
+}
+
+/// Fallback animation span used before two targets have been seen.
+public let navOSSCarPlayDefaultInterpolationSeconds = 0.9
+/// Clamp bounds. Below the floor the animation is imperceptible and churns frames; above the
+/// ceiling a late fix would stretch one span so far that the vehicle visibly crawls.
+public let navOSSCarPlayMinimumInterpolationSeconds = 0.25
+public let navOSSCarPlayMaximumInterpolationSeconds = 2.0
+
+/// Animation span for one position update.
+///
+/// A fixed span cannot match a variable sample interval: when it is shorter than the gap the
+/// vehicle reaches its target and sits still until the next fix, and when it is longer the
+/// vehicle is still catching up when a new target arrives. Feeding the observed interval back in
+/// keeps the animation continuous, so the span tracks however often fixes actually arrive.
+public func navOSSCarPlayInterpolationSeconds(
+  sinceLastTargetSeconds: Double?,
+  defaultSeconds: Double = navOSSCarPlayDefaultInterpolationSeconds
+) -> Double {
+  guard let sinceLastTargetSeconds, sinceLastTargetSeconds.isFinite, sinceLastTargetSeconds > 0
+  else {
+    return defaultSeconds
+  }
+  return min(
+    navOSSCarPlayMaximumInterpolationSeconds,
+    max(navOSSCarPlayMinimumInterpolationSeconds, sinceLastTargetSeconds)
+  )
 }

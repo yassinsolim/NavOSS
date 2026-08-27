@@ -15,6 +15,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private let alternateRouteSourceIdentifier = "navoss-carplay-alternate-route-source"
   private let carImageIdentifier = "navoss-carplay-vehicle-car"
   private let positionImageIdentifier = "navoss-carplay-vehicle-arrow"
+  private let neutralImageIdentifier = "navoss-carplay-vehicle-neutral"
+  private let shadowImageIdentifier = "navoss-carplay-vehicle-shadow"
+  private let shadowLayerIdentifier = "navoss-carplay-position-shadow"
   private let positionLayerIdentifier = "navoss-carplay-position"
   private let positionSourceIdentifier = "navoss-carplay-position-source"
   private let routeCasingLayerIdentifier = "navoss-carplay-route-casing"
@@ -25,13 +28,15 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var displayLink: CADisplayLink?
   private var interpolationFromPosition: NavOSSCarPlayPosition?
   private var interpolationStartedAt: CFTimeInterval = 0
-  private let interpolationDuration: CFTimeInterval = 0.9
+  private var interpolationDuration: CFTimeInterval = navOSSCarPlayDefaultInterpolationSeconds
+  private var lastTargetAt: CFTimeInterval?
   private var latestDestination: NavOSSCarPlayCoordinate?
   private var latestOrigin: NavOSSCarPlayCoordinate?
   private var latestPosition: NavOSSCarPlayPosition?
   private var mapOrientation = NavOSSCarPlayMapOrientation.headingUp
   private var needsIdleLocationRecenter = true
   private var renderedPosition: NavOSSCarPlayPosition?
+  private var lastRenderedCourseDegrees: Double?
   private var navigationViewingDistance = 850.0
   private var presentsRouteOverview = false
   private var guidanceHiddenLayerIdentifiers: Set<String> = []
@@ -39,6 +44,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var routeFitGeneration: UInt64 = 0
   private var alternateRouteCoordinates: [CLLocationCoordinate2D] = []
   private var routeCoordinates: [CLLocationCoordinate2D] = []
+  private var routeGeometry: [NavOSSCarPlayCoordinate] = []
   private var routeId: String?
   private var showsPointsOfInterest = true
   private var styleLoadRetryCount = 0
@@ -325,6 +331,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     } else if !activeGuidance {
       latestPosition = nil
       renderedPosition = nil
+      lastRenderedCourseDegrees = nil
+      lastTargetAt = nil
     }
     if activeGuidance && !presentsRouteOverview {
       navigationViewingDistance = navOSSCarPlayViewingDistance(distanceToManeuverMeters)
@@ -339,6 +347,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         matchedCoordinate: (renderedPosition ?? effectivePosition)?.coordinate
       )
       : route
+    // The true road geometry, not `displayedRoute`. `navOSSRemainingRouteGeometry` prepends the
+    // puck as element 0, so measuring against it would put the vehicle 0 m from the "route" and
+    // make the distance gate in `navOSSRouteBearingDegrees` unreachable.
+    routeGeometry = route
     routeCoordinates = displayedRoute.map {
       CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
     }
@@ -377,6 +389,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     latestDestination = nil
     latestPosition = nil
     renderedPosition = nil
+    lastRenderedCourseDegrees = nil
+    lastTargetAt = nil
     displayLink?.invalidate()
     displayLink = nil
     speedLabel.isHidden = true
@@ -386,6 +400,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     routeId = nil
     alternateRouteCoordinates = []
     routeCoordinates = []
+    routeGeometry = []
     mapView.showsUserLocation = requestsUserLocation
     if let source = mapView.style?.source(withIdentifier: routeSourceIdentifier)
       as? MLNShapeSource
@@ -422,6 +437,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     displayLink = nil
     latestPosition = nil
     renderedPosition = nil
+    lastRenderedCourseDegrees = nil
+    lastTargetAt = nil
     mapView.showsUserLocation = false
     mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
     mapView.delegate = nil
@@ -605,7 +622,14 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private func updateTargetPosition(_ position: NavOSSCarPlayPosition) {
     interpolationFromPosition = renderedPosition ?? latestPosition ?? position
     latestPosition = position
-    interpolationStartedAt = CACurrentMediaTime()
+    let now = CACurrentMediaTime()
+    // Match the animation span to how often targets actually arrive, so the vehicle neither
+    // stalls at its target nor is still catching up when the next fix lands.
+    interpolationDuration = navOSSCarPlayInterpolationSeconds(
+      sinceLastTargetSeconds: lastTargetAt.map { now - $0 }
+    )
+    lastTargetAt = now
+    interpolationStartedAt = now
     if renderedPosition == nil {
       renderedPosition = position
       installPositionOverlayIfReady()
@@ -925,6 +949,31 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     if style.image(forName: carImageIdentifier) == nil {
       style.setImage(carMarkerImage(), forName: carImageIdentifier)
     }
+    if style.image(forName: neutralImageIdentifier) == nil {
+      style.setImage(neutralMarkerImage(), forName: neutralImageIdentifier)
+    }
+    if style.image(forName: shadowImageIdentifier) == nil {
+      style.setImage(vehicleShadowImage(), forName: shadowImageIdentifier)
+    }
+
+    // Ground shadow is its own layer pinned to rotation 0, so the light stays fixed while the
+    // vehicle turns. It shares the position source, so it follows the puck for free and is
+    // cleared with it.
+    let shadow: MLNSymbolStyleLayer
+    if let existingShadow = style.layer(withIdentifier: shadowLayerIdentifier)
+      as? MLNSymbolStyleLayer
+    {
+      shadow = existingShadow
+    } else {
+      shadow = MLNSymbolStyleLayer(identifier: shadowLayerIdentifier, source: source)
+      shadow.iconAllowsOverlap = NSExpression(forConstantValue: true)
+      shadow.iconIgnoresPlacement = NSExpression(forConstantValue: true)
+      shadow.iconRotationAlignment = NSExpression(forConstantValue: "map")
+      shadow.iconPitchAlignment = NSExpression(forConstantValue: "map")
+      shadow.iconImageName = NSExpression(forConstantValue: shadowImageIdentifier)
+      shadow.iconRotation = NSExpression(forConstantValue: 0)
+      style.addLayer(shadow)
+    }
 
     let position: MLNSymbolStyleLayer
     if let existingLayer = style.layer(withIdentifier: positionLayerIdentifier)
@@ -936,14 +985,66 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       position.iconAllowsOverlap = NSExpression(forConstantValue: true)
       position.iconIgnoresPlacement = NSExpression(forConstantValue: true)
       position.iconRotationAlignment = NSExpression(forConstantValue: "map")
+      // Keep the marker on the ground plane; without this an implementation default change
+      // would billboard it and break the perspective compensation baked into the artwork.
+      position.iconPitchAlignment = NSExpression(forConstantValue: "map")
       style.addLayer(position)
     }
-    position.iconImageName = NSExpression(
-      forConstantValue: vehicleMarker == .car ? carImageIdentifier : positionImageIdentifier
+    // Heading fallback chain. Pointing a directional marker due north when the heading is
+    // unknown is worse than showing no direction at all, so the terminal case swaps in a
+    // non-directional marker instead of inventing a bearing.
+    //   1. validated course from the published position (matched route bearing, else GPS course)
+    //   2. bearing of the route segment nearest the puck
+    //   3. last heading actually rendered this trip
+    //   4. none -> neutral, non-directional marker
+    let resolvedCourseDegrees =
+      validCourseDegrees(latestPosition.courseDegrees)
+      ?? navOSSRouteBearingDegrees(near: latestPosition.coordinate, in: routeGeometry)
+      ?? lastRenderedCourseDegrees
+    if let resolvedCourseDegrees {
+      lastRenderedCourseDegrees = resolvedCourseDegrees
+    }
+    let markerImageIdentifier: String
+    if resolvedCourseDegrees == nil {
+      markerImageIdentifier = neutralImageIdentifier
+    } else {
+      markerImageIdentifier = vehicleMarker == .car ? carImageIdentifier : positionImageIdentifier
+    }
+    position.iconImageName = NSExpression(forConstantValue: markerImageIdentifier)
+    position.iconScale = NSExpression(
+      forConstantValue: markerImageIdentifier == carImageIdentifier ? 0.55 : 0.72
     )
-    position.iconScale = NSExpression(forConstantValue: vehicleMarker == .car ? 0.82 : 0.72)
-    position.iconRotation = NSExpression(forConstantValue: latestPosition.courseDegrees ?? 0)
+    shadow.iconScale = NSExpression(
+      forConstantValue: markerImageIdentifier == carImageIdentifier ? 0.72 : 0.62
+    )
+    position.iconRotation = NSExpression(forConstantValue: resolvedCourseDegrees ?? 0)
     bringPositionLayerToFront(position, in: style)
+  }
+
+  private func validCourseDegrees(_ courseDegrees: Double?) -> Double? {
+    guard let courseDegrees, courseDegrees.isFinite, (0..<360).contains(courseDegrees) else {
+      return nil
+    }
+    return courseDegrees
+  }
+
+  // Route bearing lives in NavOSSNavigationCore (`navOSSRouteBearingDegrees`) so its
+  // distance-to-route gate is unit tested; an off-route vehicle must not inherit the road's
+  // heading.
+
+  /// Non-directional marker used only when no heading can be resolved.
+  private func neutralMarkerImage() -> UIImage {
+    let renderer = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64))
+    return renderer.image { context in
+      let graphics = context.cgContext
+      graphics.saveGState()
+      graphics.setShadow(offset: CGSize(width: 0, height: 3), blur: 5, color: UIColor.black.cgColor)
+      UIColor.white.setFill()
+      UIBezierPath(ovalIn: CGRect(x: 16, y: 16, width: 32, height: 32)).fill()
+      graphics.restoreGState()
+      UIColor(red: 0.03, green: 0.48, blue: 0.65, alpha: 1).setFill()
+      UIBezierPath(ovalIn: CGRect(x: 20, y: 20, width: 24, height: 24)).fill()
+    }
   }
 
   private func bringPositionLayerToFront(
@@ -955,71 +1056,141 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     style.addLayer(positionLayer)
   }
 
-  private func carMarkerImage() -> UIImage {
-    let renderer = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64))
-    return renderer.image { context in
+  /// Ground shadow, drawn by its own layer so it never rotates with the vehicle. A shadow baked
+  /// into the vehicle sprite spins with the heading, which reads as a lighting error.
+  private func vehicleShadowImage() -> UIImage {
+    let size = CGSize(width: 96, height: 96)
+    return UIGraphicsImageRenderer(size: size).image { context in
       let graphics = context.cgContext
-      graphics.saveGState()
-      graphics.setShadow(offset: CGSize(width: 0, height: 4), blur: 5, color: UIColor.black.cgColor)
-      UIColor.black.withAlphaComponent(0.28).setFill()
-      UIBezierPath(ovalIn: CGRect(x: 16, y: 47, width: 32, height: 10)).fill()
-      graphics.restoreGState()
-
-      UIColor(red: 0.04, green: 0.11, blue: 0.16, alpha: 0.9).setFill()
-      UIBezierPath(roundedRect: CGRect(x: 12, y: 17, width: 8, height: 29), cornerRadius: 4).fill()
-      UIBezierPath(roundedRect: CGRect(x: 44, y: 17, width: 8, height: 29), cornerRadius: 4).fill()
-
-      let body = UIBezierPath(
-        roundedRect: CGRect(x: 17, y: 5, width: 30, height: 51),
-        cornerRadius: 12
-      )
-      graphics.saveGState()
-      body.addClip()
+      let center = CGPoint(x: size.width / 2, y: size.height / 2)
       let colors =
         [
-          UIColor(red: 0.45, green: 0.93, blue: 0.98, alpha: 1).cgColor,
-          UIColor(red: 0.03, green: 0.48, blue: 0.65, alpha: 1).cgColor,
-          UIColor(red: 0.01, green: 0.19, blue: 0.31, alpha: 1).cgColor,
+          UIColor.black.withAlphaComponent(0.30).cgColor,
+          UIColor.black.withAlphaComponent(0.16).cgColor,
+          UIColor.black.withAlphaComponent(0).cgColor,
         ] as CFArray
-      let locations: [CGFloat] = [0, 0.48, 1]
+      guard
+        let gradient = CGGradient(
+          colorsSpace: CGColorSpaceCreateDeviceRGB(),
+          colors: colors,
+          locations: [0, 0.55, 1]
+        )
+      else { return }
+      graphics.saveGState()
+      // Squash into an ellipse so the pool sits on the ground plane rather than reading as a ball.
+      graphics.translateBy(x: center.x, y: center.y)
+      graphics.scaleBy(x: 1, y: 0.62)
+      graphics.translateBy(x: -center.x, y: -center.y)
+      graphics.drawRadialGradient(
+        gradient,
+        startCenter: center,
+        startRadius: 0,
+        endCenter: center,
+        endRadius: size.width / 2,
+        options: []
+      )
+      graphics.restoreGState()
+    }
+  }
+
+  /// Three-quarter shaded vehicle, pre-stretched along its axis so that the map's guidance pitch
+  /// (38 degrees) foreshortens it back to the intended proportions instead of squashing it.
+  private func carMarkerImage() -> UIImage {
+    let width = 96.0
+    let height = 128.0
+    return UIGraphicsImageRenderer(size: CGSize(width: width, height: height)).image { context in
+      let graphics = context.cgContext
+
+      // Wheels first so the body overlaps them.
+      UIColor(red: 0.05, green: 0.07, blue: 0.10, alpha: 1).setFill()
+      for rect in [
+        CGRect(x: 20, y: 30, width: 12, height: 26),
+        CGRect(x: 64, y: 30, width: 12, height: 26),
+        CGRect(x: 20, y: 76, width: 12, height: 26),
+        CGRect(x: 64, y: 76, width: 12, height: 26),
+      ] {
+        UIBezierPath(roundedRect: rect, cornerRadius: 5).fill()
+      }
+
+      let body = UIBezierPath(
+        roundedRect: CGRect(x: 24, y: 8, width: 48, height: 112),
+        cornerRadius: 20
+      )
+
+      // Body paint: light from the upper left, shadow to the lower right.
+      graphics.saveGState()
+      body.addClip()
+      let paint =
+        [
+          UIColor(red: 0.42, green: 0.78, blue: 0.95, alpha: 1).cgColor,
+          UIColor(red: 0.11, green: 0.52, blue: 0.78, alpha: 1).cgColor,
+          UIColor(red: 0.03, green: 0.24, blue: 0.42, alpha: 1).cgColor,
+        ] as CFArray
       if let gradient = CGGradient(
         colorsSpace: CGColorSpaceCreateDeviceRGB(),
-        colors: colors,
-        locations: locations
+        colors: paint,
+        locations: [0, 0.55, 1]
       ) {
         graphics.drawLinearGradient(
           gradient,
-          start: CGPoint(x: 18, y: 5),
-          end: CGPoint(x: 46, y: 56),
+          start: CGPoint(x: 26, y: 10),
+          end: CGPoint(x: 74, y: 118),
           options: []
         )
       }
+      // Specular sweep along the upper-left flank sells the curved metal.
+      UIColor.white.withAlphaComponent(0.30).setFill()
+      let highlight = UIBezierPath()
+      highlight.move(to: CGPoint(x: 30, y: 22))
+      highlight.addQuadCurve(
+        to: CGPoint(x: 34, y: 106),
+        controlPoint: CGPoint(x: 25, y: 64)
+      )
+      highlight.addLine(to: CGPoint(x: 41, y: 104))
+      highlight.addQuadCurve(
+        to: CGPoint(x: 37, y: 26),
+        controlPoint: CGPoint(x: 32, y: 64)
+      )
+      highlight.close()
+      highlight.fill()
       graphics.restoreGState()
 
-      UIColor.white.withAlphaComponent(0.24).setStroke()
-      body.lineWidth = 1.5
+      // Cabin glass, darker than the paint, with a windscreen and rear screen.
+      UIColor(red: 0.05, green: 0.13, blue: 0.22, alpha: 0.95).setFill()
+      let windscreen = UIBezierPath()
+      windscreen.move(to: CGPoint(x: 33, y: 40))
+      windscreen.addLine(to: CGPoint(x: 63, y: 40))
+      windscreen.addLine(to: CGPoint(x: 58, y: 56))
+      windscreen.addLine(to: CGPoint(x: 38, y: 56))
+      windscreen.close()
+      windscreen.fill()
+      let rearScreen = UIBezierPath()
+      rearScreen.move(to: CGPoint(x: 38, y: 82))
+      rearScreen.addLine(to: CGPoint(x: 58, y: 82))
+      rearScreen.addLine(to: CGPoint(x: 62, y: 96))
+      rearScreen.addLine(to: CGPoint(x: 34, y: 96))
+      rearScreen.close()
+      rearScreen.fill()
+
+      // Roof panel between the screens.
+      UIColor(red: 0.16, green: 0.60, blue: 0.84, alpha: 1).setFill()
+      UIBezierPath(
+        roundedRect: CGRect(x: 36, y: 58, width: 24, height: 22),
+        cornerRadius: 6
+      ).fill()
+
+      // Lamps: warm at the nose, red at the tail.
+      UIColor(red: 1, green: 0.96, blue: 0.82, alpha: 0.95).setFill()
+      UIBezierPath(roundedRect: CGRect(x: 31, y: 13, width: 12, height: 6), cornerRadius: 3).fill()
+      UIBezierPath(roundedRect: CGRect(x: 53, y: 13, width: 12, height: 6), cornerRadius: 3).fill()
+      UIColor(red: 0.90, green: 0.16, blue: 0.16, alpha: 0.95).setFill()
+      UIBezierPath(roundedRect: CGRect(x: 31, y: 109, width: 12, height: 6), cornerRadius: 3).fill()
+      UIBezierPath(roundedRect: CGRect(x: 53, y: 109, width: 12, height: 6), cornerRadius: 3).fill()
+
+      // Crisp rim so the vehicle separates from busy map tiles.
+      UIColor.white.withAlphaComponent(0.55).setStroke()
+      body.lineWidth = 2
       body.stroke()
-
-      let windshield = UIBezierPath()
-      windshield.move(to: CGPoint(x: 23, y: 18))
-      windshield.addLine(to: CGPoint(x: 41, y: 18))
-      windshield.addLine(to: CGPoint(x: 38, y: 31))
-      windshield.addLine(to: CGPoint(x: 26, y: 31))
-      windshield.close()
-      UIColor(red: 0.03, green: 0.12, blue: 0.2, alpha: 0.92).setFill()
-      windshield.fill()
-      UIColor.white.withAlphaComponent(0.28).setStroke()
-      windshield.lineWidth = 1
-      windshield.stroke()
-
-      UIColor(red: 0.04, green: 0.14, blue: 0.22, alpha: 0.9).setFill()
-      UIBezierPath(roundedRect: CGRect(x: 24, y: 36, width: 16, height: 10), cornerRadius: 4).fill()
-      UIColor.white.withAlphaComponent(0.7).setFill()
-      UIBezierPath(roundedRect: CGRect(x: 21, y: 8, width: 6, height: 3), cornerRadius: 1.5).fill()
-      UIBezierPath(roundedRect: CGRect(x: 37, y: 8, width: 6, height: 3), cornerRadius: 1.5).fill()
-      UIColor.red.withAlphaComponent(0.88).setFill()
-      UIBezierPath(roundedRect: CGRect(x: 21, y: 50, width: 6, height: 3), cornerRadius: 1.5).fill()
-      UIBezierPath(roundedRect: CGRect(x: 37, y: 50, width: 6, height: 3), cornerRadius: 1.5).fill()
     }
   }
 

@@ -404,7 +404,13 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     manager.activityType = .automotiveNavigation
     manager.allowsBackgroundLocationUpdates = backgroundLocationEnabled
     manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-    manager.distanceFilter = 5
+    // A 5 m threshold behaves as an effective update interval at low speed: measured against an
+    // identical simulated track at 1 m/s, `distanceFilter = 5` delivered 11 callbacks with a
+    // median gap of 5030 ms, while `kCLDistanceFilterNone` delivered 71 with a median of
+    // 1008 ms. Crawling traffic is exactly when the puck must keep moving, so this manager,
+    // which only runs during active guidance or CarPlay route planning, takes every fix the OS
+    // will give it. `kCLLocationAccuracyBestForNavigation` already dominates power here.
+    manager.distanceFilter = kCLDistanceFilterNone
     manager.pausesLocationUpdatesAutomatically = false
     manager.showsBackgroundLocationIndicator = backgroundLocationEnabled
     manager.delegate = self
@@ -534,6 +540,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
         matchedCoordinate: update.snapshot.matchedCoordinate,
         rawCoordinate: update.snapshot.rawCoordinate,
         matchedCourseDegrees: update.snapshot.matchedCourseDegrees,
+        rawCourseDegrees: latestCarPlayPosition?.courseDegrees,
         speedMetersPerSecond: speed,
         fallback: latestCarPlayPosition
       )

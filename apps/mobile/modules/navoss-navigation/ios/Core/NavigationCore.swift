@@ -9,6 +9,10 @@ private let backwardProgressPenaltyFactor = 0.5
 private let backwardProgressToleranceMeters = 15.0
 private let continuityPenaltyFactor = 0.25
 private let continuityToleranceMeters = 75.0
+/// Total regression from the high-water progress mark that counts as real reverse travel. Sits
+/// above measured stationary-noise regression (23 m at sigma 4, 47 m at sigma 8, 48 m at
+/// sigma 12) so a parked vehicle cannot trip it.
+private let cumulativeBackwardToleranceMeters = 50.0
 private let maximumCoursePenaltyMeters = 50.0
 private let offRouteConfirmationSampleCount = 3
 private let offRouteDistanceThresholdMeters = 35.0
@@ -48,6 +52,7 @@ func navOSSCarPlayPublishedPosition(
   matchedCoordinate: NavigationCoordinate?,
   rawCoordinate: NavigationCoordinate?,
   matchedCourseDegrees: Double?,
+  rawCourseDegrees: Double? = nil,
   speedMetersPerSecond: Double?,
   fallback: NavOSSCarPlayPosition?
 ) -> NavOSSCarPlayPosition? {
@@ -57,7 +62,10 @@ func navOSSCarPlayPublishedPosition(
       latitude: coordinate.latitude,
       longitude: coordinate.longitude
     ),
-    courseDegrees: matchedCourseDegrees,
+    // Going off route clears the matched course, but the vehicle still has a heading. Fall back
+    // to the validated raw GPS course so the arrow keeps pointing where the car is travelling
+    // instead of snapping to due north.
+    courseDegrees: matchedCourseDegrees ?? rawCourseDegrees ?? fallback?.courseDegrees,
     speedMetersPerSecond: speedMetersPerSecond
   )
 }
@@ -312,6 +320,7 @@ final class NavigationCore {
   private var departureSampleCount = 0
   private var hasArrived = false
   private var isOffRoute = false
+  private var progressHighWaterMark = 0.0
   private var recoverySampleCount = 0
   private var route: RoutePolyline?
   private var routeVersion = 0
@@ -344,6 +353,7 @@ final class NavigationCore {
     departureSampleCount = 0
     hasArrived = false
     isOffRoute = false
+    progressHighWaterMark = 0
     recoverySampleCount = 0
     routeVersion += 1
     sequence += 1
@@ -368,6 +378,7 @@ final class NavigationCore {
     departureSampleCount = 0
     hasArrived = false
     isOffRoute = false
+    progressHighWaterMark = 0
     recoverySampleCount = 0
     route = nil
     routeVersion += 1
@@ -444,8 +455,23 @@ final class NavigationCore {
       0,
       (snapshot.routeProgress - projection.progress) * route.totalDistanceMeters
     )
-    let isBackwardTravelSample = backwardProgressMeters >
-      backwardProgressToleranceMeters + accuracyAllowanceMeters
+    // Per-sample regression catches an abrupt reversal, but not a slow one: each accepted step
+    // below the tolerance lowers the baseline for the next comparison, so reversing in small
+    // increments rewinds progress without limit. Measured against a real Calgary route, 12 m
+    // steps unwound 480 m of progress to zero and never once tripped off-route. Cumulative
+    // regression is therefore tracked against a high-water mark as well.
+    //
+    // The cumulative threshold has to clear GPS noise, which regresses from its own high-water
+    // mark even while parked: measured 23 m at sigma 4, 47 m at sigma 8, 48 m at sigma 12. The
+    // base sits above that, and the accuracy term scales it for poorer fixes.
+    let cumulativeBackwardMeters = max(
+      0,
+      (progressHighWaterMark - projection.progress) * route.totalDistanceMeters
+    )
+    let isBackwardTravelSample =
+      backwardProgressMeters > backwardProgressToleranceMeters + accuracyAllowanceMeters
+      || cumulativeBackwardMeters
+        > cumulativeBackwardToleranceMeters + 2 * accuracyAllowanceMeters
     let isDepartureSample = projection.distanceMeters >
       offRouteDistanceThresholdMeters + accuracyAllowanceMeters || isBackwardTravelSample
     let isRecoverySample = projection.distanceMeters + accuracyAllowanceMeters <=
@@ -495,9 +521,19 @@ final class NavigationCore {
       return snapshot
     }
 
-    let isBackwardProjection = snapshot.rawCoordinate != nil
-      && projection.progress < snapshot.routeProgress
-    let shouldAcceptProjection = !isOffRoute && !isDepartureSample && !isBackwardProjection
+    // Backward regression is accepted inside the accuracy-aware noise band so that a stationary
+    // or slow-moving vehicle keeps tracking its true position. `isDepartureSample` already
+    // rejects regressions beyond `backwardProgressToleranceMeters + accuracy` and feeds them
+    // into off-route hysteresis, so it is the single authority on backward motion. A stricter
+    // zero-tolerance gate here would latch `routeProgress` to the forward extreme of GPS noise
+    // and hold the matched coordinate until the vehicle physically drove past it.
+    let shouldAcceptProjection = !isOffRoute && !isDepartureSample
+    // Raised only by accepted on-route progress, and read before this line when computing
+    // cumulative regression, so the mark is the furthest point genuinely reached this route
+    // rather than a value that drifts down with each tolerated backward step.
+    if shouldAcceptProjection {
+      progressHighWaterMark = max(progressHighWaterMark, projection.progress)
+    }
     let previousMatchedCoordinate = snapshot.matchedCoordinate
     let previousMatchedCourseDegrees = snapshot.matchedCourseDegrees
     let provisionalMatchedCoordinate = previousMatchedCoordinate ?? projection.coordinate

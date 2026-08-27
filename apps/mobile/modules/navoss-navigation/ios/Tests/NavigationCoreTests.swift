@@ -55,6 +55,139 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
+  // Off-route clears the matched course, but the vehicle still has a real heading from GPS.
+  // The CarPlay overlay renders `courseDegrees ?? 0`, so publishing nil here points the arrow
+  // due north while the driver is travelling in some other direction.
+  func testCarPlayPublishKeepsHeadingWhenOffRouteClearsMatchedCourse() {
+    let published = navOSSCarPlayPublishedPosition(
+      matchedCoordinate: nil,
+      rawCoordinate: NavigationCoordinate(latitude: 51.0447, longitude: -114.0719),
+      matchedCourseDegrees: nil,
+      rawCourseDegrees: 118,
+      speedMetersPerSecond: 14,
+      fallback: nil
+    )
+
+    XCTAssertEqual(published?.courseDegrees, 118)
+  }
+
+  func testCarPlayPublishPrefersMatchedCourseOverRawCourse() {
+    let published = navOSSCarPlayPublishedPosition(
+      matchedCoordinate: NavigationCoordinate(latitude: 51.0447, longitude: -114.0719),
+      rawCoordinate: NavigationCoordinate(latitude: 51.0447, longitude: -114.0719),
+      matchedCourseDegrees: 90,
+      rawCourseDegrees: 118,
+      speedMetersPerSecond: 14,
+      fallback: nil
+    )
+
+    XCTAssertEqual(published?.courseDegrees, 90)
+  }
+
+  func testRouteBearingSuppliesHeadingForOnRouteVehicleWithNoCourse() {
+    // Due-east leg then a due-north leg.
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.07),
+      NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.07),
+    ]
+
+    let onEastLeg = navOSSRouteBearingDegrees(
+      near: NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.075),
+      in: geometry
+    )
+    XCTAssertNotNil(onEastLeg)
+    XCTAssertEqual(onEastLeg ?? 0, 90, accuracy: 1)
+
+    let onNorthLeg = navOSSRouteBearingDegrees(
+      near: NavOSSCarPlayCoordinate(latitude: 51.045, longitude: -114.07),
+      in: geometry
+    )
+    XCTAssertNotNil(onNorthLeg)
+    XCTAssertEqual(onNorthLeg ?? 0, 0, accuracy: 1)
+  }
+
+  func testRouteBearingIsWithheldWhenVehicleIsFarOffRoute() {
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.07),
+    ]
+
+    // ~111 m north of the route: beyond the 35 m gate, so no heading may be inferred.
+    XCTAssertNil(
+      navOSSRouteBearingDegrees(
+        near: NavOSSCarPlayCoordinate(latitude: 51.041, longitude: -114.075),
+        in: geometry
+      )
+    )
+    // Just inside the gate still resolves.
+    XCTAssertNotNil(
+      navOSSRouteBearingDegrees(
+        near: NavOSSCarPlayCoordinate(latitude: 51.0402, longitude: -114.075),
+        in: geometry
+      )
+    )
+  }
+
+  func testRouteBearingRejectsDegenerateGeometry() {
+    let duplicate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08)
+    XCTAssertNil(navOSSRouteBearingDegrees(near: duplicate, in: [duplicate]))
+    XCTAssertNil(navOSSRouteBearingDegrees(near: duplicate, in: [duplicate, duplicate]))
+  }
+
+  /// Regression guard for a real defect: the CarPlay controller originally passed
+  /// `navOSSRemainingRouteGeometry` output here, which prepends the puck as element 0. The query
+  /// point was then 0 m from its own synthetic vertex, so the distance gate could never reject
+  /// and an off-route vehicle still inherited the road's bearing. Callers must pass true road
+  /// geometry.
+  func testRouteBearingGateIsDefeatedByGeometryStartingAtTheQueryPoint() {
+    let farOffRoute = NavOSSCarPlayCoordinate(latitude: 51.041, longitude: -114.075)
+    let trueRoad = [
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.07),
+    ]
+
+    // Correct input: the vehicle is ~111 m away, so no bearing is supplied.
+    XCTAssertNil(navOSSRouteBearingDegrees(near: farOffRoute, in: trueRoad))
+
+    // Wrong input, with the query point prepended as a synthetic head. The gate is bypassed and
+    // a bearing comes back even though the vehicle is nowhere near the road.
+    let withSyntheticHead = [farOffRoute] + trueRoad
+    XCTAssertNotNil(navOSSRouteBearingDegrees(near: farOffRoute, in: withSyntheticHead))
+  }
+
+  func testInterpolationSpanTracksObservedSampleInterval() {
+    // The measured cadence with no distance filter is about 1 s; the span should follow it
+    // rather than staying pinned at the old fixed 0.9 s, which left a dead gap every cycle.
+    XCTAssertEqual(
+      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: 1.008), 1.008, accuracy: 0.0001)
+    XCTAssertEqual(
+      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: 0.5), 0.5, accuracy: 0.0001)
+  }
+
+  func testInterpolationSpanFallsBackBeforeASecondTargetExists() {
+    XCTAssertEqual(
+      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: nil),
+      navOSSCarPlayDefaultInterpolationSeconds, accuracy: 0.0001)
+    XCTAssertEqual(
+      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: 0),
+      navOSSCarPlayDefaultInterpolationSeconds, accuracy: 0.0001)
+    XCTAssertEqual(
+      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: .nan),
+      navOSSCarPlayDefaultInterpolationSeconds, accuracy: 0.0001)
+  }
+
+  func testInterpolationSpanIsClampedBothWays() {
+    // A burst of fixes must not produce a span so short it churns frames.
+    XCTAssertEqual(
+      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: 0.01),
+      navOSSCarPlayMinimumInterpolationSeconds, accuracy: 0.0001)
+    // A very late fix must not stretch one span into a visible crawl.
+    XCTAssertEqual(
+      navOSSCarPlayInterpolationSeconds(sinceLastTargetSeconds: 30),
+      navOSSCarPlayMaximumInterpolationSeconds, accuracy: 0.0001)
+  }
+
   func testPersistedNavigationWaitsForValidatedLocation() {
     XCTAssertEqual(
       navOSSPersistedNavigationDecision(
@@ -520,6 +653,35 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(remaining.last, geometry.last)
     XCTAssertEqual(remaining.count, 2)
     XCTAssertFalse(remaining.contains(geometry[0]))
+  }
+
+  // The CarPlay map controller passes `routeProgress` from the current snapshot but
+  // `matchedCoordinate` from `renderedPosition`, which is a straight-line interpolation that
+  // lags the snapshot. When the two straddle a corner, every vertex between them is dropped
+  // and the polyline draws a straight connector across the turn.
+  func testCarPlayRemainingRouteGeometryKeepsCornerWhenMatchedCoordinateLagsProgress() {
+    // 700 m east, then a 90 degree left turn and 1112 m north.
+    let start = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08)
+    let corner = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.07)
+    let end = NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.07)
+    let geometry = [start, corner, end]
+
+    // Interpolated puck still 70 m short of the corner (~35% of the route).
+    let laggingMatchedCoordinate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.071)
+    // Snapshot progress has already rounded the corner (~45% of the route).
+    let remaining = navOSSRemainingRouteGeometry(
+      geometry,
+      routeProgress: 0.45,
+      matchedCoordinate: laggingMatchedCoordinate
+    )
+
+    XCTAssertEqual(remaining.first, laggingMatchedCoordinate)
+    XCTAssertEqual(remaining.last, end)
+    XCTAssertTrue(
+      remaining.contains(corner),
+      "The corner vertex must survive so the route line follows the road instead of "
+        + "cutting straight across the turn. Got \(remaining)."
+    )
   }
 
   func testCarPlayRemainingRouteGeometryKeepsVisibleFinalSegmentAtCompletion() {
@@ -1027,7 +1189,11 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(snapshot.routeProgress, 0.5, accuracy: 0.001)
   }
 
-  func testMatchedProgressDoesNotMoveBackwardWithGPSJitter() throws {
+  // Route below spans 0.02 degrees of longitude at latitude 51.04 (Calgary), which is
+  // 1398.6 m. A 0.00005 degree jitter is therefore ~3.5 m of along-route regression.
+  private static let jitterRouteLengthMeters = 1398.6
+
+  func testMatchedProgressTracksBackwardJitterInsideAccuracyBand() throws {
     let core = NavigationCore()
     try core.setRoute([
       NavigationCoordinate(latitude: 51.04, longitude: -114.08),
@@ -1048,8 +1214,47 @@ final class NavigationCoreTests: XCTestCase {
       )
     )
 
-    XCTAssertEqual(jitteredBackward.routeProgress, forward.routeProgress, accuracy: 0.000_001)
-    XCTAssertEqual(jitteredBackward.matchedCoordinate, forward.matchedCoordinate)
+    // Contract: a regression inside `backwardProgressToleranceMeters` + accuracy (15 + 5 m)
+    // is tracked rather than held, so the puck keeps following the vehicle. Holding the
+    // previous match here is what stalled the puck at low speed.
+    XCTAssertFalse(jitteredBackward.isOffRoute)
+    XCTAssertNotEqual(jitteredBackward.matchedCoordinate, forward.matchedCoordinate)
+
+    let regressionMeters =
+      (forward.routeProgress - jitteredBackward.routeProgress) * Self.jitterRouteLengthMeters
+    XCTAssertEqual(regressionMeters, 3.5, accuracy: 0.5)
+    XCTAssertLessThanOrEqual(regressionMeters, 20)
+  }
+
+  func testStationaryGPSNoiseDoesNotStallMatchedPosition() throws {
+    let core = NavigationCore()
+    try core.setRoute([
+      NavigationCoordinate(latitude: 51.04, longitude: -114.08),
+      NavigationCoordinate(latitude: 51.04, longitude: -114.06),
+    ])
+    func fix(_ longitude: Double) -> NavigationLocationSample {
+      NavigationLocationSample(
+        coordinate: NavigationCoordinate(latitude: 51.04, longitude: longitude),
+        courseDegrees: nil,
+        horizontalAccuracyMeters: 5
+      )
+    }
+
+    _ = try core.updateLocation(fix(-114.07))
+    // One noisy fix lands ~7 m ahead of where the stopped vehicle actually is.
+    let ahead = try core.updateLocation(fix(-114.0699))
+
+    // The vehicle is stationary at a light; every later fix reports the true position.
+    var settled = ahead
+    for _ in 0..<6 {
+      settled = try core.updateLocation(fix(-114.07))
+    }
+
+    // Regression contract: progress must settle back onto the true position instead of
+    // latching to the forward extreme of the noise until the vehicle drives past it.
+    XCTAssertFalse(settled.isOffRoute)
+    XCTAssertLessThan(settled.routeProgress, ahead.routeProgress)
+    XCTAssertNotEqual(settled.matchedCoordinate, ahead.matchedCoordinate)
   }
 
   func testSustainedBackwardTravelTriggersRerouteWithoutRewindingProgress() throws {
@@ -1094,6 +1299,48 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertTrue(backwardRecovery.isOffRoute)
     XCTAssertNil(backwardRecovery.matchedCoordinate)
     XCTAssertEqual(backwardRecovery.routeProgress, forward.routeProgress, accuracy: 0.000_001)
+  }
+
+  /// Each backward step below `backwardProgressToleranceMeters` is accepted, which lowers the
+  /// baseline for the next comparison. Without a non-regressing high-water mark, a vehicle
+  /// reversing in small increments unwinds progress without ever becoming off-route: measured
+  /// against a real Calgary route, 12 m steps rewound 480 m to zero and never rerouted.
+  func testSlowContinuousReverseEventuallyTriggersOffRoute() throws {
+    let core = NavigationCore()
+    // ~5.6 km due east, long enough to drive out and reverse well inside it.
+    try core.setRoute([
+      NavigationCoordinate(latitude: 51.04, longitude: -114.12),
+      NavigationCoordinate(latitude: 51.04, longitude: -114.04),
+    ])
+    func fix(_ longitude: Double) throws -> NavigationSnapshot {
+      try core.updateLocation(
+        NavigationLocationSample(
+          coordinate: NavigationCoordinate(latitude: 51.04, longitude: longitude),
+          courseDegrees: nil,
+          horizontalAccuracyMeters: 5
+        )
+      )
+    }
+
+    // Drive forward.
+    var longitude = -114.12
+    for _ in 0..<20 {
+      longitude += 0.0002
+      _ = try fix(longitude)
+    }
+    XCTAssertFalse(try fix(longitude).isOffRoute)
+
+    // Reverse in ~7 m steps, each individually inside the 15 m + accuracy tolerance.
+    var reversed = try fix(longitude)
+    for _ in 0..<40 where !reversed.isOffRoute {
+      longitude -= 0.0001
+      reversed = try fix(longitude)
+    }
+
+    XCTAssertTrue(
+      reversed.isOffRoute,
+      "Sustained small-step reverse must accumulate against the high-water mark and reroute."
+    )
   }
 
   func testSelectsNearestSegmentOnBentRoute() throws {
