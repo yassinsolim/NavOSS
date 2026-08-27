@@ -55,6 +55,86 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
+  // Off-route clears the matched course, but the vehicle still has a real heading from GPS.
+  // The CarPlay overlay renders `courseDegrees ?? 0`, so publishing nil here points the arrow
+  // due north while the driver is travelling in some other direction.
+  func testCarPlayPublishKeepsHeadingWhenOffRouteClearsMatchedCourse() {
+    let published = navOSSCarPlayPublishedPosition(
+      matchedCoordinate: nil,
+      rawCoordinate: NavigationCoordinate(latitude: 51.0447, longitude: -114.0719),
+      matchedCourseDegrees: nil,
+      rawCourseDegrees: 118,
+      speedMetersPerSecond: 14,
+      fallback: nil
+    )
+
+    XCTAssertEqual(published?.courseDegrees, 118)
+  }
+
+  func testCarPlayPublishPrefersMatchedCourseOverRawCourse() {
+    let published = navOSSCarPlayPublishedPosition(
+      matchedCoordinate: NavigationCoordinate(latitude: 51.0447, longitude: -114.0719),
+      rawCoordinate: NavigationCoordinate(latitude: 51.0447, longitude: -114.0719),
+      matchedCourseDegrees: 90,
+      rawCourseDegrees: 118,
+      speedMetersPerSecond: 14,
+      fallback: nil
+    )
+
+    XCTAssertEqual(published?.courseDegrees, 90)
+  }
+
+  func testRouteBearingSuppliesHeadingForOnRouteVehicleWithNoCourse() {
+    // Due-east leg then a due-north leg.
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.07),
+      NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.07),
+    ]
+
+    let onEastLeg = navOSSRouteBearingDegrees(
+      near: NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.075),
+      in: geometry
+    )
+    XCTAssertNotNil(onEastLeg)
+    XCTAssertEqual(onEastLeg ?? 0, 90, accuracy: 1)
+
+    let onNorthLeg = navOSSRouteBearingDegrees(
+      near: NavOSSCarPlayCoordinate(latitude: 51.045, longitude: -114.07),
+      in: geometry
+    )
+    XCTAssertNotNil(onNorthLeg)
+    XCTAssertEqual(onNorthLeg ?? 0, 0, accuracy: 1)
+  }
+
+  func testRouteBearingIsWithheldWhenVehicleIsFarOffRoute() {
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.07),
+    ]
+
+    // ~111 m north of the route: beyond the 35 m gate, so no heading may be inferred.
+    XCTAssertNil(
+      navOSSRouteBearingDegrees(
+        near: NavOSSCarPlayCoordinate(latitude: 51.041, longitude: -114.075),
+        in: geometry
+      )
+    )
+    // Just inside the gate still resolves.
+    XCTAssertNotNil(
+      navOSSRouteBearingDegrees(
+        near: NavOSSCarPlayCoordinate(latitude: 51.0402, longitude: -114.075),
+        in: geometry
+      )
+    )
+  }
+
+  func testRouteBearingRejectsDegenerateGeometry() {
+    let duplicate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08)
+    XCTAssertNil(navOSSRouteBearingDegrees(near: duplicate, in: [duplicate]))
+    XCTAssertNil(navOSSRouteBearingDegrees(near: duplicate, in: [duplicate, duplicate]))
+  }
+
   func testPersistedNavigationWaitsForValidatedLocation() {
     XCTAssertEqual(
       navOSSPersistedNavigationDecision(

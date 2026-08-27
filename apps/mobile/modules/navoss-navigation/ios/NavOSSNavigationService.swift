@@ -534,6 +534,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
         matchedCoordinate: update.snapshot.matchedCoordinate,
         rawCoordinate: update.snapshot.rawCoordinate,
         matchedCourseDegrees: update.snapshot.matchedCourseDegrees,
+        rawCourseDegrees: latestCarPlayPosition?.courseDegrees,
         speedMetersPerSecond: speed,
         fallback: latestCarPlayPosition
       )

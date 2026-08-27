@@ -15,6 +15,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private let alternateRouteSourceIdentifier = "navoss-carplay-alternate-route-source"
   private let carImageIdentifier = "navoss-carplay-vehicle-car"
   private let positionImageIdentifier = "navoss-carplay-vehicle-arrow"
+  private let neutralImageIdentifier = "navoss-carplay-vehicle-neutral"
   private let positionLayerIdentifier = "navoss-carplay-position"
   private let positionSourceIdentifier = "navoss-carplay-position-source"
   private let routeCasingLayerIdentifier = "navoss-carplay-route-casing"
@@ -32,6 +33,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var mapOrientation = NavOSSCarPlayMapOrientation.headingUp
   private var needsIdleLocationRecenter = true
   private var renderedPosition: NavOSSCarPlayPosition?
+  private var lastRenderedCourseDegrees: Double?
   private var navigationViewingDistance = 850.0
   private var presentsRouteOverview = false
   private var guidanceHiddenLayerIdentifiers: Set<String> = []
@@ -39,6 +41,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var routeFitGeneration: UInt64 = 0
   private var alternateRouteCoordinates: [CLLocationCoordinate2D] = []
   private var routeCoordinates: [CLLocationCoordinate2D] = []
+  private var routeGeometry: [NavOSSCarPlayCoordinate] = []
   private var routeId: String?
   private var showsPointsOfInterest = true
   private var styleLoadRetryCount = 0
@@ -325,6 +328,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     } else if !activeGuidance {
       latestPosition = nil
       renderedPosition = nil
+      lastRenderedCourseDegrees = nil
     }
     if activeGuidance && !presentsRouteOverview {
       navigationViewingDistance = navOSSCarPlayViewingDistance(distanceToManeuverMeters)
@@ -339,6 +343,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         matchedCoordinate: (renderedPosition ?? effectivePosition)?.coordinate
       )
       : route
+    routeGeometry = displayedRoute
     routeCoordinates = displayedRoute.map {
       CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
     }
@@ -377,6 +382,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     latestDestination = nil
     latestPosition = nil
     renderedPosition = nil
+    lastRenderedCourseDegrees = nil
     displayLink?.invalidate()
     displayLink = nil
     speedLabel.isHidden = true
@@ -386,6 +392,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     routeId = nil
     alternateRouteCoordinates = []
     routeCoordinates = []
+    routeGeometry = []
     mapView.showsUserLocation = requestsUserLocation
     if let source = mapView.style?.source(withIdentifier: routeSourceIdentifier)
       as? MLNShapeSource
@@ -422,6 +429,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     displayLink = nil
     latestPosition = nil
     renderedPosition = nil
+    lastRenderedCourseDegrees = nil
     mapView.showsUserLocation = false
     mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
     mapView.delegate = nil
@@ -925,6 +933,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     if style.image(forName: carImageIdentifier) == nil {
       style.setImage(carMarkerImage(), forName: carImageIdentifier)
     }
+    if style.image(forName: neutralImageIdentifier) == nil {
+      style.setImage(neutralMarkerImage(), forName: neutralImageIdentifier)
+    }
 
     let position: MLNSymbolStyleLayer
     if let existingLayer = style.layer(withIdentifier: positionLayerIdentifier)
@@ -938,12 +949,58 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       position.iconRotationAlignment = NSExpression(forConstantValue: "map")
       style.addLayer(position)
     }
-    position.iconImageName = NSExpression(
-      forConstantValue: vehicleMarker == .car ? carImageIdentifier : positionImageIdentifier
+    // Heading fallback chain. Pointing a directional marker due north when the heading is
+    // unknown is worse than showing no direction at all, so the terminal case swaps in a
+    // non-directional marker instead of inventing a bearing.
+    //   1. validated course from the published position (matched route bearing, else GPS course)
+    //   2. bearing of the route segment nearest the puck
+    //   3. last heading actually rendered this trip
+    //   4. none -> neutral, non-directional marker
+    let resolvedCourseDegrees =
+      validCourseDegrees(latestPosition.courseDegrees)
+      ?? navOSSRouteBearingDegrees(near: latestPosition.coordinate, in: routeGeometry)
+      ?? lastRenderedCourseDegrees
+    if let resolvedCourseDegrees {
+      lastRenderedCourseDegrees = resolvedCourseDegrees
+    }
+    let markerImageIdentifier: String
+    if resolvedCourseDegrees == nil {
+      markerImageIdentifier = neutralImageIdentifier
+    } else {
+      markerImageIdentifier = vehicleMarker == .car ? carImageIdentifier : positionImageIdentifier
+    }
+    position.iconImageName = NSExpression(forConstantValue: markerImageIdentifier)
+    position.iconScale = NSExpression(
+      forConstantValue: markerImageIdentifier == carImageIdentifier ? 0.82 : 0.72
     )
-    position.iconScale = NSExpression(forConstantValue: vehicleMarker == .car ? 0.82 : 0.72)
-    position.iconRotation = NSExpression(forConstantValue: latestPosition.courseDegrees ?? 0)
+    position.iconRotation = NSExpression(forConstantValue: resolvedCourseDegrees ?? 0)
     bringPositionLayerToFront(position, in: style)
+  }
+
+  private func validCourseDegrees(_ courseDegrees: Double?) -> Double? {
+    guard let courseDegrees, courseDegrees.isFinite, (0..<360).contains(courseDegrees) else {
+      return nil
+    }
+    return courseDegrees
+  }
+
+  // Route bearing lives in NavOSSNavigationCore (`navOSSRouteBearingDegrees`) so its
+  // distance-to-route gate is unit tested; an off-route vehicle must not inherit the road's
+  // heading.
+
+  /// Non-directional marker used only when no heading can be resolved.
+  private func neutralMarkerImage() -> UIImage {
+    let renderer = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64))
+    return renderer.image { context in
+      let graphics = context.cgContext
+      graphics.saveGState()
+      graphics.setShadow(offset: CGSize(width: 0, height: 3), blur: 5, color: UIColor.black.cgColor)
+      UIColor.white.setFill()
+      UIBezierPath(ovalIn: CGRect(x: 16, y: 16, width: 32, height: 32)).fill()
+      graphics.restoreGState()
+      UIColor(red: 0.03, green: 0.48, blue: 0.65, alpha: 1).setFill()
+      UIBezierPath(ovalIn: CGRect(x: 20, y: 20, width: 24, height: 24)).fill()
+    }
   }
 
   private func bringPositionLayerToFront(

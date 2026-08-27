@@ -48,6 +48,7 @@ func navOSSCarPlayPublishedPosition(
   matchedCoordinate: NavigationCoordinate?,
   rawCoordinate: NavigationCoordinate?,
   matchedCourseDegrees: Double?,
+  rawCourseDegrees: Double? = nil,
   speedMetersPerSecond: Double?,
   fallback: NavOSSCarPlayPosition?
 ) -> NavOSSCarPlayPosition? {
@@ -57,7 +58,10 @@ func navOSSCarPlayPublishedPosition(
       latitude: coordinate.latitude,
       longitude: coordinate.longitude
     ),
-    courseDegrees: matchedCourseDegrees,
+    // Going off route clears the matched course, but the vehicle still has a heading. Fall back
+    // to the validated raw GPS course so the arrow keeps pointing where the car is travelling
+    // instead of snapping to due north.
+    courseDegrees: matchedCourseDegrees ?? rawCourseDegrees ?? fallback?.courseDegrees,
     speedMetersPerSecond: speedMetersPerSecond
   )
 }

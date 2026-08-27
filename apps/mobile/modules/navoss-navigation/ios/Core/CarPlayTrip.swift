@@ -794,3 +794,38 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
     notificationCenter.post(name: .navOSSCarPlayStateDidChange, object: self)
   }
 }
+
+/// Maximum distance from the route at which the route's own heading may stand in for a missing
+/// vehicle course. Matches the off-route departure threshold in `NavigationCore`, so a vehicle
+/// the matcher would call off-route never inherits the route's bearing.
+public let navOSSRouteBearingMaxDistanceMeters = 35.0
+
+/// Bearing of the route segment nearest `coordinate`, or `nil` when the coordinate is farther
+/// than `maxDistanceMeters` from the route. Used only as a fallback when the vehicle reports no
+/// usable course; an off-route vehicle must not be shown pointing along a road it is not on.
+public func navOSSRouteBearingDegrees(
+  near coordinate: NavOSSCarPlayCoordinate,
+  in geometry: [NavOSSCarPlayCoordinate],
+  maxDistanceMeters: Double = navOSSRouteBearingMaxDistanceMeters
+) -> Double? {
+  guard geometry.count >= 2 else { return nil }
+  var bestDistanceMeters = Double.infinity
+  var bestBearingDegrees: Double?
+  for index in geometry.indices.dropLast() {
+    let start = geometry[index]
+    let end = geometry[index + 1]
+    guard start != end else { continue }
+    let projection = navOSSCarPlaySegmentProjection(coordinate, start: start, end: end)
+    guard projection.distanceMeters < bestDistanceMeters else { continue }
+    bestDistanceMeters = projection.distanceMeters
+    let meanLatitude = (start.latitude + end.latitude) / 2 * .pi / 180
+    let degrees =
+      atan2(
+        (end.longitude - start.longitude) * cos(meanLatitude),
+        end.latitude - start.latitude
+      ) * 180 / .pi
+    bestBearingDegrees = degrees >= 0 ? degrees : degrees + 360
+  }
+  guard bestDistanceMeters <= maxDistanceMeters else { return nil }
+  return bestBearingDegrees
+}
