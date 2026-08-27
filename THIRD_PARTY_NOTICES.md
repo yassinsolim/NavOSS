@@ -5,7 +5,7 @@ It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
 
-Lockfile SHA-256: `f98ee53a8903afa047485519911287c7cf8ae079fd0482143f18abce9f716fe3`
+Lockfile SHA-256: `7853dcb056489f46e69bc5e7469cd7914586e4fc7a9eb587cdc7f3863294d043`
 
 Regenerate with:
 
@@ -352,6 +352,7 @@ corepack pnpm licenses:generate
 - `css-in-js-utils` - `3.1.0` - <https://github.com/robinweser/css-in-js-utils#readme>
 - `css.escape` - `1.5.1` - <https://mths.be/cssescape>
 - `csstype` - `3.2.3` - <https://github.com/frenic/csstype#readme>
+- `csv-parse` - `6.1.0` - <https://csv.js.org/parse>
 - `debug` - `2.6.9, 3.2.7, 4.4.3` - <https://github.com/debug-js/debug#readme>
 - `decode-uri-component` - `0.2.2` - <https://github.com/SamVerschueren/decode-uri-component#readme>
 - `deepmerge` - `4.3.1` - <https://github.com/TehShrike/deepmerge>
