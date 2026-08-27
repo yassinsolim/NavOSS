@@ -473,6 +473,8 @@ export function MapScreen() {
   // the car points.
   const [deviceFacingHeading, setDeviceFacingHeading] = useState<number | undefined>(undefined);
   const [mapBearing, setMapBearing] = useState(0);
+  // Quantised: onRegionIsChanging fires per frame, and the cone only needs to resize perceptibly.
+  const [mapZoomStep, setMapZoomStep] = useState<number | undefined>(undefined);
   const [vehicleStyle, setVehicleStyle] = useState<VehicleStyle>('arrow');
   const [userCoordinate, setUserCoordinate] = useState<{
     latitude: number;
@@ -485,8 +487,8 @@ export function MapScreen() {
     deviceFacingHeading ?? (routeState.type === 'navigating' ? userHeading : undefined);
   // The magnetometer ticks far faster than the map needs, and each tick rebuilds a 14-point ring.
   const facingConeFeature = useMemo(
-    () => headingConeFeature(facingConeCoordinate, facingConeHeading),
-    [facingConeCoordinate, facingConeHeading],
+    () => headingConeFeature(facingConeCoordinate, facingConeHeading, mapZoomStep),
+    [facingConeCoordinate, facingConeHeading, mapZoomStep],
   );
   const mapRegion = mapRegionForCoordinate(userCoordinate);
   const roadEventRegion: RoadEventRegion | undefined =
@@ -2052,6 +2054,7 @@ export function MapScreen() {
         }}
         onRegionIsChanging={({ nativeEvent }) => {
           setMapBearing(nativeEvent.bearing);
+          setMapZoomStep(Math.round(nativeEvent.zoom * 4) / 4);
           if (routeState.type === 'navigating' && nativeEvent.userInteraction) {
             setIsNavigationCameraFollowing(false);
           }

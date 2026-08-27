@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   HEADING_CONE_RADIUS_METERS,
   HEADING_CONE_SPREAD_DEGREES,
+  HEADING_CONE_TARGET_POINTS,
   headingConeFeature,
   headingConePolygon,
+  headingConeRadiusMeters,
 } from '../src/features/map/heading-cone.js';
 
 const CALGARY = { latitude: 51.0447, longitude: -114.0719 };
@@ -103,5 +105,45 @@ describe('headingConeFeature', () => {
     const feature = headingConeFeature(CALGARY, 90);
 
     expect(feature?.geometry.coordinates[0]?.at(0)).toEqual([CALGARY.longitude, CALGARY.latitude]);
+  });
+});
+
+describe('headingConeRadiusMeters', () => {
+  it('holds a constant on-screen size as the map zooms', () => {
+    const metersPerPointAt = (zoom: number) =>
+      headingConeRadiusMeters(CALGARY.latitude, zoom) / HEADING_CONE_TARGET_POINTS;
+
+    // One zoom level in is exactly half the ground resolution, so the cone must halve in metres
+    // to occupy the same number of points.
+    expect(metersPerPointAt(15) / metersPerPointAt(16)).toBeCloseTo(2, 5);
+    // Zoom 12 would want a 1.1 km cone, which the guard clamps, so stay in the unclamped range.
+    expect(metersPerPointAt(14) / metersPerPointAt(16)).toBeCloseTo(4, 5);
+  });
+
+  it('shrinks with latitude, matching Web Mercator ground resolution', () => {
+    expect(headingConeRadiusMeters(60, 15)).toBeLessThan(headingConeRadiusMeters(0, 15));
+  });
+
+  it('is far larger than the fixed radius at browsing zoom, where 30 m was invisible', () => {
+    // The first cut used a fixed 30 m, which measured about 18 points at browsing zoom.
+    expect(headingConeRadiusMeters(CALGARY.latitude, 14)).toBeGreaterThan(4 * 30);
+  });
+
+  it('occupies the same screen size at browsing and navigation zoom', () => {
+    const browsing = headingConeRadiusMeters(CALGARY.latitude, 14) / 2 ** -14;
+    const navigating = headingConeRadiusMeters(CALGARY.latitude, 16) / 2 ** -16;
+
+    expect(browsing).toBeCloseTo(navigating, 5);
+  });
+
+  it('falls back to the fixed radius before the map reports a zoom', () => {
+    expect(headingConeRadiusMeters(CALGARY.latitude, undefined)).toBe(HEADING_CONE_RADIUS_METERS);
+    expect(headingConeRadiusMeters(CALGARY.latitude, Number.NaN)).toBe(HEADING_CONE_RADIUS_METERS);
+  });
+
+  it('clamps absurd zooms rather than emitting a degenerate or planetary cone', () => {
+    expect(headingConeRadiusMeters(CALGARY.latitude, 30)).toBeGreaterThan(0);
+    expect(headingConeRadiusMeters(CALGARY.latitude, -5)).toBe(600);
+    expect(headingConeRadiusMeters(CALGARY.latitude, 30)).toBe(8);
   });
 });
