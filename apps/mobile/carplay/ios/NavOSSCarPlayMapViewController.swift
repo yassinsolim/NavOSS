@@ -676,6 +676,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         to: target.courseDegrees,
         progress: progress
       ),
+      compassHeadingDegrees: target.compassHeadingDegrees,
       speedMetersPerSecond: target.speedMetersPerSecond
     )
     if let renderedPosition, routeCoordinates.count >= 2 {
