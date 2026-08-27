@@ -522,6 +522,35 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertFalse(remaining.contains(geometry[0]))
   }
 
+  // The CarPlay map controller passes `routeProgress` from the current snapshot but
+  // `matchedCoordinate` from `renderedPosition`, which is a straight-line interpolation that
+  // lags the snapshot. When the two straddle a corner, every vertex between them is dropped
+  // and the polyline draws a straight connector across the turn.
+  func testCarPlayRemainingRouteGeometryKeepsCornerWhenMatchedCoordinateLagsProgress() {
+    // 700 m east, then a 90 degree left turn and 1112 m north.
+    let start = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08)
+    let corner = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.07)
+    let end = NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.07)
+    let geometry = [start, corner, end]
+
+    // Interpolated puck still 70 m short of the corner (~35% of the route).
+    let laggingMatchedCoordinate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.071)
+    // Snapshot progress has already rounded the corner (~45% of the route).
+    let remaining = navOSSRemainingRouteGeometry(
+      geometry,
+      routeProgress: 0.45,
+      matchedCoordinate: laggingMatchedCoordinate
+    )
+
+    XCTAssertEqual(remaining.first, laggingMatchedCoordinate)
+    XCTAssertEqual(remaining.last, end)
+    XCTAssertTrue(
+      remaining.contains(corner),
+      "The corner vertex must survive so the route line follows the road instead of "
+        + "cutting straight across the turn. Got \(remaining)."
+    )
+  }
+
   func testCarPlayRemainingRouteGeometryKeepsVisibleFinalSegmentAtCompletion() {
     let geometry = [
       NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.10),

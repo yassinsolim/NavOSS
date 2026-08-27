@@ -515,8 +515,14 @@ public func navOSSRemainingRouteGeometry(
       latitude: start.latitude + (end.latitude - start.latitude) * segmentProgress,
       longitude: start.longitude + (end.longitude - start.longitude) * segmentProgress
     )
+    // `matchedCoordinate` is the rendered puck, which interpolates toward the snapshot and can
+    // therefore sit behind `routeProgress`. Splice from whichever of the two is earlier so the
+    // vertices between them survive; otherwise the polyline cuts straight across any bend the
+    // interpolation has not reached yet.
+    let spliceIndex =
+      matchedCoordinate.map { min(index, navOSSNearestSegmentIndex($0, in: geometry)) } ?? index
     return navOSSVisibleRouteTail(
-      [matchedCoordinate ?? routePosition] + geometry.dropFirst(index + 1),
+      [matchedCoordinate ?? routePosition] + geometry.dropFirst(spliceIndex + 1),
       fullGeometry: geometry
     )
   }
@@ -540,6 +546,26 @@ private func navOSSVisibleRouteTail(
     return remaining
   }
   return [anchor, destination]
+}
+
+private func navOSSNearestSegmentIndex(
+  _ coordinate: NavOSSCarPlayCoordinate,
+  in geometry: [NavOSSCarPlayCoordinate]
+) -> Int {
+  var bestIndex = 0
+  var bestDistanceMeters = Double.infinity
+  for index in geometry.indices.dropLast() {
+    let projection = navOSSCarPlaySegmentProjection(
+      coordinate,
+      start: geometry[index],
+      end: geometry[index + 1]
+    )
+    if projection.distanceMeters < bestDistanceMeters {
+      bestDistanceMeters = projection.distanceMeters
+      bestIndex = index
+    }
+  }
+  return bestIndex
 }
 
 public func navOSSRemainingWaypoints(
