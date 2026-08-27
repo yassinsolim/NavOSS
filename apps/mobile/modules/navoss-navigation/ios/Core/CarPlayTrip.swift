@@ -800,6 +800,10 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
 /// the matcher would call off-route never inherits the route's bearing.
 public let navOSSRouteBearingMaxDistanceMeters = 35.0
 
+/// Callers must pass true road geometry. Passing `navOSSRemainingRouteGeometry` output defeats
+/// the gate below, because that helper prepends the vehicle's own matched coordinate as element
+/// 0, putting the query point 0 m from the "route". The CarPlay controller shipped that bug once.
+///
 /// Bearing of the route segment nearest `coordinate`, or `nil` when the coordinate is farther
 /// than `maxDistanceMeters` from the route. Used only as a fallback when the vehicle reports no
 /// usable course; an off-route vehicle must not be shown pointing along a road it is not on.
