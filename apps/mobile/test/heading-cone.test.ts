@@ -19,7 +19,7 @@ function bearingFromApexDegrees(point: { latitude: number; longitude: number }):
     (point.longitude - CALGARY.longitude) *
     METERS_PER_DEGREE_LONGITUDE_AT_EQUATOR *
     Math.cos((CALGARY.latitude * Math.PI) / 180);
-  return (((Math.atan2(east, north) * 180) / Math.PI) + 360) % 360;
+  return ((Math.atan2(east, north) * 180) / Math.PI + 360) % 360;
 }
 
 function distanceFromApexMeters(point: { latitude: number; longitude: number }): number {
@@ -65,7 +65,9 @@ describe('headingConePolygon', () => {
 
   it('samples the arc finely enough not to look faceted', () => {
     const bearings = headingConePolygon(CALGARY, 0).slice(1, -1).map(bearingFromApexDegrees);
-    const unwrapped = bearings.map((bearing) => (bearing > 180 ? bearing - 360 : bearing)).sort((a, b) => a - b);
+    const unwrapped = bearings
+      .map((bearing) => (bearing > 180 ? bearing - 360 : bearing))
+      .sort((a, b) => a - b);
 
     for (let index = 1; index < unwrapped.length; index += 1) {
       expect(unwrapped[index]! - unwrapped[index - 1]!).toBeLessThanOrEqual(5.001);
