@@ -356,23 +356,62 @@ public enum NavOSSCarPlayGuidancePhase: String, Codable, Equatable, Sendable {
 public struct NavOSSCarPlayPosition: Equatable, Sendable {
   public let coordinate: NavOSSCarPlayCoordinate
   public let courseDegrees: Double?
+  public let compassHeadingDegrees: Double?
   public let speedMetersPerSecond: Double?
 
   public init(
     coordinate: NavOSSCarPlayCoordinate,
     courseDegrees: Double?,
+    compassHeadingDegrees: Double? = nil,
     speedMetersPerSecond: Double? = nil
   ) {
     self.coordinate = coordinate
     self.courseDegrees = courseDegrees
+    self.compassHeadingDegrees = compassHeadingDegrees
     self.speedMetersPerSecond = speedMetersPerSecond
   }
 
   var isValid: Bool {
     coordinate.isValid
       && courseDegrees.map { $0.isFinite && (0..<360).contains($0) } != false
+      && compassHeadingDegrees.map { $0.isFinite && (0..<360).contains($0) } != false
       && speedMetersPerSecond.map { $0.isFinite && $0 >= 0 && $0 <= 100 } != false
   }
+}
+
+/// Replaces only a published position's compass heading so a heading callback does not perturb
+/// the matching output from its latest location sample.
+public func navOSSCarPlayPositionApplyingCompassHeading(
+  _ compassHeadingDegrees: Double?,
+  to position: NavOSSCarPlayPosition?
+) -> NavOSSCarPlayPosition? {
+  guard let position else { return nil }
+  return NavOSSCarPlayPosition(
+    coordinate: position.coordinate,
+    courseDegrees: position.courseDegrees,
+    compassHeadingDegrees: compassHeadingDegrees,
+    speedMetersPerSecond: position.speedMetersPerSecond
+  )
+}
+
+/// Resolves the facing cone independently from the vehicle marker's course-based rotation.
+public func navOSSCarPlayConeHeadingDegrees(
+  compassHeadingDegrees: Double?,
+  fallbackCourseDegrees: Double?
+) -> Double? {
+  if let compassHeadingDegrees,
+    compassHeadingDegrees.isFinite,
+    (0..<360).contains(compassHeadingDegrees)
+  {
+    return compassHeadingDegrees
+  }
+  guard let fallbackCourseDegrees,
+    fallbackCourseDegrees.isFinite,
+    (0..<360).contains(fallbackCourseDegrees)
+  else {
+    return nil
+  }
+  return fallbackCourseDegrees
 }
 
 public func navOSSCarPlayIsSpeeding(speedKph: Int, speedLimitKph: Int?) -> Bool {
@@ -632,6 +671,45 @@ private func navOSSCarPlaySegmentProjection(
     ? 0
     : min(1, max(0, -(startX * deltaX + startY * deltaY) / squaredLength))
   return (hypot(startX + fraction * deltaX, startY + fraction * deltaY), fraction)
+}
+
+/// Closed polygon ring for the vehicle's forward-looking heading cone.
+///
+/// Bearings use the navigation convention: 0° is true north and values increase clockwise.
+/// The local metre conversion intentionally matches `navOSSCarPlaySegmentProjection`.
+public func navOSSHeadingConePolygon(
+  apex: NavOSSCarPlayCoordinate,
+  headingDegrees: Double,
+  radiusMeters: Double,
+  spreadDegrees: Double
+) -> [NavOSSCarPlayCoordinate] {
+  guard apex.isValid, headingDegrees.isFinite, radiusMeters.isFinite, radiusMeters >= 0,
+    spreadDegrees.isFinite, (0...360).contains(spreadDegrees)
+  else {
+    return []
+  }
+
+  let latitudeScale = 111_320.0
+  let longitudeScale = latitudeScale * cos(apex.latitude * .pi / 180)
+  let segmentCount = max(1, Int(ceil(spreadDegrees / 5)))
+  let startBearingDegrees = headingDegrees - spreadDegrees / 2
+  var polygon = [apex]
+  polygon.reserveCapacity(segmentCount + 3)
+
+  for segment in 0...segmentCount {
+    let bearingDegrees = startBearingDegrees
+      + spreadDegrees * Double(segment) / Double(segmentCount)
+    let bearingRadians = bearingDegrees * .pi / 180
+    polygon.append(
+      NavOSSCarPlayCoordinate(
+        latitude: apex.latitude + radiusMeters * cos(bearingRadians) / latitudeScale,
+        longitude: apex.longitude + radiusMeters * sin(bearingRadians) / longitudeScale
+      )
+    )
+  }
+
+  polygon.append(apex)
+  return polygon
 }
 
 private func navOSSCarPlayCoordinateDistance(

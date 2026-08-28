@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 
 @testable import NavOSSNavigationCore
@@ -84,6 +85,48 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(published?.courseDegrees, 90)
   }
 
+  func testCarPlayConeHeadingPrefersCompassThenCourse() {
+    XCTAssertEqual(
+      navOSSCarPlayConeHeadingDegrees(
+        compassHeadingDegrees: 42,
+        fallbackCourseDegrees: 128
+      ),
+      42
+    )
+    XCTAssertEqual(
+      navOSSCarPlayConeHeadingDegrees(
+        compassHeadingDegrees: nil,
+        fallbackCourseDegrees: 128
+      ),
+      128
+    )
+    XCTAssertEqual(
+      navOSSCarPlayConeHeadingDegrees(
+        compassHeadingDegrees: 360,
+        fallbackCourseDegrees: 128
+      ),
+      128
+    )
+  }
+
+  func testHeadingOnlyUpdateKeepsLastLocationPosition() {
+    // A parked turn can deliver this heading without a new CLLocation sample.
+    let previous = NavOSSCarPlayPosition(
+      coordinate: NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719),
+      courseDegrees: 128,
+      compassHeadingDegrees: 42,
+      speedMetersPerSecond: 0
+    )
+
+    let published = navOSSCarPlayPositionApplyingCompassHeading(217, to: previous)
+
+    XCTAssertEqual(published?.coordinate, previous.coordinate)
+    XCTAssertEqual(published?.courseDegrees, previous.courseDegrees)
+    XCTAssertEqual(published?.speedMetersPerSecond, previous.speedMetersPerSecond)
+    XCTAssertEqual(published?.compassHeadingDegrees, 217)
+    XCTAssertNil(navOSSCarPlayPositionApplyingCompassHeading(217, to: nil))
+  }
+
   func testRouteBearingSuppliesHeadingForOnRouteVehicleWithNoCourse() {
     // Due-east leg then a due-north leg.
     let geometry = [
@@ -133,6 +176,47 @@ final class NavigationCoreTests: XCTestCase {
     let duplicate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08)
     XCTAssertNil(navOSSRouteBearingDegrees(near: duplicate, in: [duplicate]))
     XCTAssertNil(navOSSRouteBearingDegrees(near: duplicate, in: [duplicate, duplicate]))
+  }
+
+  func testHeadingConePolygonClosesAndSamplesRequestedSpread() throws {
+    let apex = NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719)
+    let polygon = navOSSHeadingConePolygon(
+      apex: apex,
+      headingDegrees: 90,
+      radiusMeters: 30,
+      spreadDegrees: 60
+    )
+    let arc = Array(polygon.dropFirst().dropLast())
+    let bearings = arc.map { localBearingDegrees(from: apex, to: $0) }
+    let firstBearing = try XCTUnwrap(bearings.first)
+    let lastBearing = try XCTUnwrap(bearings.last)
+
+    XCTAssertEqual(polygon.first, apex)
+    XCTAssertEqual(polygon.last, apex)
+    XCTAssertEqual(clockwiseDifference(from: firstBearing, to: lastBearing), 60, accuracy: 0.01)
+    for (start, end) in zip(bearings, bearings.dropFirst()) {
+      XCTAssertLessThanOrEqual(clockwiseDifference(from: start, to: end), 5.0001)
+    }
+  }
+
+  func testHeadingConePolygonUsesRequestedRadiusAndHeading() throws {
+    let apex = NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719)
+    let polygon = navOSSHeadingConePolygon(
+      apex: apex,
+      headingDegrees: 135,
+      radiusMeters: 30,
+      spreadDegrees: 60
+    )
+    let arc = Array(polygon.dropFirst().dropLast())
+    let bearings = arc.map { localBearingDegrees(from: apex, to: $0) }
+    let centerBearing = try XCTUnwrap(
+      bearings.min { angularDifference(from: $0, to: 135) < angularDifference(from: $1, to: 135) }
+    )
+
+    for coordinate in arc {
+      XCTAssertEqual(localDistanceMeters(from: apex, to: coordinate), 30, accuracy: 0.01)
+    }
+    XCTAssertEqual(centerBearing, 135, accuracy: 0.01)
   }
 
   func testInterpolationSpanTracksObservedSampleInterval() {
@@ -475,6 +559,35 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
+  func testCarPlayPositionValidatesCompassHeading() {
+    let coordinate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08)
+
+    XCTAssertTrue(
+      NavOSSCarPlayPosition(
+        coordinate: coordinate,
+        courseDegrees: 90,
+        compassHeadingDegrees: 180,
+        speedMetersPerSecond: 13.5
+      ).isValid
+    )
+    XCTAssertFalse(
+      NavOSSCarPlayPosition(
+        coordinate: coordinate,
+        courseDegrees: 90,
+        compassHeadingDegrees: 360,
+        speedMetersPerSecond: 13.5
+      ).isValid
+    )
+    XCTAssertFalse(
+      NavOSSCarPlayPosition(
+        coordinate: coordinate,
+        courseDegrees: 90,
+        compassHeadingDegrees: .infinity,
+        speedMetersPerSecond: 13.5
+      ).isValid
+    )
+  }
+
   func testCarPlaySpeedingStartsAtFiveOverKnownLimit() {
     XCTAssertFalse(navOSSCarPlayIsSpeeding(speedKph: 54, speedLimitKph: 50))
     XCTAssertTrue(navOSSCarPlayIsSpeeding(speedKph: 55, speedLimitKph: 50))
@@ -660,6 +773,45 @@ final class NavigationCoreTests: XCTestCase {
       remaining.contains(corner),
       "The corner vertex must survive so the route line follows the road instead of "
         + "cutting straight across the turn. Got \(remaining)."
+    )
+  }
+
+  /// A parked driver rotating the car produces heading callbacks with no new location. The cone
+  /// must turn anyway, so the resolved cone bearing has to change while the apex does not.
+  func testCarPlayConeRotatesOnHeadingOnlyUpdateWithUnchangedApex() {
+    let coordinate = NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719)
+    let parked = NavOSSCarPlayPosition(
+      coordinate: coordinate,
+      courseDegrees: nil,
+      compassHeadingDegrees: 90,
+      speedMetersPerSecond: 0
+    )
+    let afterRotating = NavOSSCarPlayPosition(
+      coordinate: coordinate,
+      courseDegrees: nil,
+      compassHeadingDegrees: 200,
+      speedMetersPerSecond: 0
+    )
+
+    let before = navOSSCarPlayConeHeadingDegrees(
+      compassHeadingDegrees: parked.compassHeadingDegrees,
+      fallbackCourseDegrees: nil
+    )
+    let after = navOSSCarPlayConeHeadingDegrees(
+      compassHeadingDegrees: afterRotating.compassHeadingDegrees,
+      fallbackCourseDegrees: nil
+    )
+
+    XCTAssertEqual(parked.coordinate, afterRotating.coordinate)
+    XCTAssertEqual(before, 90)
+    XCTAssertEqual(after, 200)
+  }
+
+  /// Driving with a course but no compass must still draw a cone rather than nothing.
+  func testCarPlayConeFallsBackToCourseWhenCompassIsAbsent() {
+    XCTAssertEqual(
+      navOSSCarPlayConeHeadingDegrees(compassHeadingDegrees: nil, fallbackCourseDegrees: 275),
+      275
     )
   }
 
@@ -1601,6 +1753,39 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(snapshot.phase, .idle)
     XCTAssertNil(snapshot.matchedCoordinate)
     XCTAssertGreaterThan(snapshot.routeVersion, initialVersion)
+  }
+
+  private func localDistanceMeters(
+    from apex: NavOSSCarPlayCoordinate,
+    to coordinate: NavOSSCarPlayCoordinate
+  ) -> Double {
+    let latitudeScale = 111_320.0
+    let longitudeScale = latitudeScale * cos(apex.latitude * .pi / 180)
+    return hypot(
+      (coordinate.longitude - apex.longitude) * longitudeScale,
+      (coordinate.latitude - apex.latitude) * latitudeScale
+    )
+  }
+
+  private func localBearingDegrees(
+    from apex: NavOSSCarPlayCoordinate,
+    to coordinate: NavOSSCarPlayCoordinate
+  ) -> Double {
+    let latitudeScale = 111_320.0
+    let longitudeScale = latitudeScale * cos(apex.latitude * .pi / 180)
+    let degrees = atan2(
+      (coordinate.longitude - apex.longitude) * longitudeScale,
+      (coordinate.latitude - apex.latitude) * latitudeScale
+    ) * 180 / .pi
+    return degrees >= 0 ? degrees : degrees + 360
+  }
+
+  private func clockwiseDifference(from start: Double, to end: Double) -> Double {
+    (end - start + 360).truncatingRemainder(dividingBy: 360)
+  }
+
+  private func angularDifference(from first: Double, to second: Double) -> Double {
+    abs((first - second + 540).truncatingRemainder(dividingBy: 360) - 180)
   }
 
   private func makeGuidance(distance: Double, duration: Double) -> NavOSSCarPlayGuidance {

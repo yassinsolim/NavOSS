@@ -293,7 +293,10 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('NSExpression(forConstantValue: activeGuidance ? 11 : 7)');
     expect(carPlayMap).toContain('NSExpression(forConstantValue: activeGuidance ? 7 : 4)');
     expect(navigationService).toContain('let latestCarPlayPosition = latestLocation.flatMap');
-    expect(navigationService).toContain('let carPlayPosition = navOSSCarPlayPublishedPosition(');
+    // The published position is now wrapped so the compass bearing can be applied to it, so assert
+    // both steps rather than one literal concatenation that incidental nesting can break.
+    expect(navigationService).toContain('navOSSCarPlayPublishedPosition(');
+    expect(navigationService).toContain('navOSSCarPlayPositionApplyingCompassHeading(');
     expect(navigationService).toContain('fallback: latestCarPlayPosition');
     expect(carPlayMap).toContain(
       'UIEdgeInsets(top: 56, left: previewSheetInset, bottom: 56, right: 48)',
