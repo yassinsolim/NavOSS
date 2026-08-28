@@ -10,6 +10,7 @@ import {
   type MapRef,
   type StyleSpecification,
 } from '@maplibre/maplibre-react-native';
+import { headingConeFeature } from '@/features/map/heading-cone';
 import {
   newestValidRouteOriginSample,
   routeOriginSampleFromLocation,
@@ -56,6 +57,7 @@ import {
   useDeferredValue,
   useEffect,
   useEffectEvent,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -466,12 +468,28 @@ export function MapScreen() {
   const [navigationStepIndex, setNavigationStepIndex] = useState(0);
   const [isNavigationCameraFollowing, setIsNavigationCameraFollowing] = useState(true);
   const [userHeading, setUserHeading] = useState(0);
+  // Compass facing, distinct from userHeading: course over ground is direction of travel and is
+  // gated on movement, so it is unavailable exactly when a parked driver wants to see which way
+  // the car points.
+  const [deviceFacingHeading, setDeviceFacingHeading] = useState<number | undefined>(undefined);
   const [mapBearing, setMapBearing] = useState(0);
+  // Quantised: onRegionIsChanging fires per frame, and the cone only needs to resize perceptibly.
+  const [mapZoomStep, setMapZoomStep] = useState<number | undefined>(undefined);
   const [vehicleStyle, setVehicleStyle] = useState<VehicleStyle>('arrow');
   const [userCoordinate, setUserCoordinate] = useState<{
     latitude: number;
     longitude: number;
   }>();
+  const facingConeCoordinate = navigationSnapshot?.matchedCoordinate ?? userCoordinate;
+  // Compass first: it answers "which way am I pointing" even stopped. Course over ground is the
+  // fallback for devices without a usable magnetometer, where it is the only bearing available.
+  const facingConeHeading =
+    deviceFacingHeading ?? (routeState.type === 'navigating' ? userHeading : undefined);
+  // The magnetometer ticks far faster than the map needs, and each tick rebuilds a 14-point ring.
+  const facingConeFeature = useMemo(
+    () => headingConeFeature(facingConeCoordinate, facingConeHeading, mapZoomStep),
+    [facingConeCoordinate, facingConeHeading, mapZoomStep],
+  );
   const mapRegion = mapRegionForCoordinate(userCoordinate);
   const roadEventRegion: RoadEventRegion | undefined =
     mapRegion === 'calgary-ab'
@@ -802,11 +820,33 @@ export function MapScreen() {
   }, []);
 
   useEffect(() => {
+    if (locationState !== 'visible') return;
+    let active = true;
+    let subscription: Location.LocationSubscription | undefined;
+    void Location.watchHeadingAsync((heading) => {
+      if (!active) return;
+      // trueHeading is -1 until the magnetometer has a bearing to true north; magHeading still
+      // points the right way, so prefer true and fall back rather than showing nothing.
+      const facing = heading.trueHeading >= 0 ? heading.trueHeading : heading.magHeading;
+      setDeviceFacingHeading(Number.isFinite(facing) && facing >= 0 ? facing : undefined);
+    })
+      .then((nextSubscription) => {
+        if (active) subscription = nextSubscription;
+        else nextSubscription.remove();
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      subscription?.remove();
+    };
+  }, [locationState]);
+
+  useEffect(() => {
     if (locationState !== 'visible' || routeState.type !== 'idle') return;
     let active = true;
     let subscription: Location.LocationSubscription | undefined;
     void Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.Balanced, distanceInterval: 25 },
+      { accuracy: Location.Accuracy.High, distanceInterval: 0 },
       (position) => {
         if (!active) return;
         const sample = routeOriginSampleFromLocation(position);
@@ -2014,6 +2054,7 @@ export function MapScreen() {
         }}
         onRegionIsChanging={({ nativeEvent }) => {
           setMapBearing(nativeEvent.bearing);
+          setMapZoomStep(Math.round(nativeEvent.zoom * 4) / 4);
           if (routeState.type === 'navigating' && nativeEvent.userInteraction) {
             setIsNavigationCameraFollowing(false);
           }
@@ -2054,6 +2095,15 @@ export function MapScreen() {
           ref={cameraRef}
           zoom={routeState.type === 'navigating' && isNavigationCameraFollowing ? 16 : undefined}
         />
+        {facingConeFeature !== undefined && (
+          <GeoJSONSource data={facingConeFeature} id="navoss-facing-cone">
+            <Layer
+              id="navoss-facing-cone-fill"
+              paint={{ 'fill-color': NavOssColors.green, 'fill-opacity': 0.25 }}
+              type="fill"
+            />
+          </GeoJSONSource>
+        )}
         {locationState === 'visible' && routeState.type !== 'navigating' && (
           <UserLocation accuracy heading />
         )}
