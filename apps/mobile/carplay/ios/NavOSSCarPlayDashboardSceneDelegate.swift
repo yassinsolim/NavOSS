@@ -9,6 +9,50 @@ enum NavOSSCarPlayDashboardAction: String {
   case voice
 }
 
+@MainActor
+final class NavOSSCarPlayDashboardActionStore {
+  static let shared = NavOSSCarPlayDashboardActionStore()
+
+  private struct PendingAction {
+    let action: NavOSSCarPlayDashboardAction
+    let identifier: UUID
+  }
+
+  private var handledIdentifiers: Set<UUID> = []
+  private var handledOrder: [UUID] = []
+  private var pendingAction: PendingAction?
+
+  private init() {}
+
+  @discardableResult
+  func stage(
+    _ action: NavOSSCarPlayDashboardAction,
+    identifier: UUID = UUID()
+  ) -> UUID {
+    guard !handledIdentifiers.contains(identifier) else { return identifier }
+    if pendingAction?.identifier != identifier {
+      pendingAction = PendingAction(action: action, identifier: identifier)
+    }
+    return identifier
+  }
+
+  func take() -> NavOSSCarPlayDashboardAction? {
+    guard let pendingAction else { return nil }
+    self.pendingAction = nil
+    handledIdentifiers.insert(pendingAction.identifier)
+    handledOrder.append(pendingAction.identifier)
+    if handledOrder.count > 8 {
+      handledIdentifiers.remove(handledOrder.removeFirst())
+    }
+    return pendingAction.action
+  }
+
+  func clear(_ identifier: UUID) {
+    guard pendingAction?.identifier == identifier else { return }
+    pendingAction = nil
+  }
+}
+
 @objc(NavOSSCarPlayDashboardSceneDelegate)
 @MainActor
 final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
@@ -27,7 +71,7 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
     dashboardWindow = window
     let mapViewController = NavOSSCarPlayMapViewController()
     mapViewController.reservesRouteChoiceSheet = false
-    mapViewController.setIdleLocationTrackingEnabled(false)
+    mapViewController.setIdleLocationTrackingEnabled(true)
     applyPreferences(to: mapViewController)
     self.mapViewController = mapViewController
     window.rootViewController = mapViewController
@@ -128,17 +172,36 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
       subtitleVariants: [],
       image: UIImage(systemName: systemImageName) ?? UIImage(),
       handler: { _ in
+        let actionStore = NavOSSCarPlayDashboardActionStore.shared
+        let actionIdentifier = actionStore.stage(action)
         let activity = NSUserActivity(activityType: NavOSSCarPlayDashboardAction.activityType)
-        activity.userInfo = ["action": action.rawValue]
-        let mainSession = UIApplication.shared.openSessions.first {
-          $0.role == .carTemplateApplication
+        activity.userInfo = [
+          "action": action.rawValue,
+          "identifier": actionIdentifier.uuidString,
+        ]
+        let clearPendingAction: (Error) -> Void = { _ in
+          Task { @MainActor in
+            actionStore.clear(actionIdentifier)
+          }
         }
-        UIApplication.shared.requestSceneSessionActivation(
-          mainSession,
-          userActivity: activity,
-          options: nil,
-          errorHandler: nil
-        )
+        if #available(iOS 17.0, *) {
+          var request = UISceneSessionActivationRequest(role: .carTemplateApplication)
+          request.userActivity = activity
+          UIApplication.shared.activateSceneSession(
+            for: request,
+            errorHandler: clearPendingAction
+          )
+        } else {
+          let mainSession = UIApplication.shared.openSessions.first {
+            $0.role == .carTemplateApplication
+          }
+          UIApplication.shared.requestSceneSessionActivation(
+            mainSession,
+            userActivity: activity,
+            options: nil,
+            errorHandler: clearPendingAction
+          )
+        }
       }
     )
   }

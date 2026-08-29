@@ -63,7 +63,7 @@ Normal builds omit the CarPlay scene and entitlement but retain active-navigatio
 
 ### CarPlay Dashboard scene
 
-`NavOSSCarPlayDashboardSceneDelegate` conforms to `CPTemplateApplicationDashboardSceneDelegate` and installs a separate MapLibre view in the Dashboard-owned window. It observes the shared trip and preference stores, renders route progress without starting another `CPNavigationSession`, and never requests idle MapLibre location tracking. Its Go and Voice buttons use `NSUserActivity` to activate the main CarPlay scene, where Go opens Places and Voice opens Search. Disconnect removes observers and deactivates the map view. Dashboard availability and tile selection remain controlled by CarPlay, not NavOSS.
+`NavOSSCarPlayDashboardSceneDelegate` conforms to `CPTemplateApplicationDashboardSceneDelegate` and installs a separate MapLibre view in the Dashboard-owned window. It observes the shared trip and preference stores and renders route progress without starting another `CPNavigationSession`. While idle, its own map requests user location immediately so the Dashboard does not depend on opening the main CarPlay scene first. Go and Voice stage a one-shot action, activate the `.carTemplateApplication` scene role explicitly on iOS 17 and later, and drain the action only after that scene has an interface controller; Go opens Places and Voice opens Search. This prevents cold-start scene ordering from silently dropping either shortcut. Disconnect removes observers and deactivates the map view. Dashboard availability and tile selection remain controlled by CarPlay, not NavOSS.
 
 ### Navigation service
 

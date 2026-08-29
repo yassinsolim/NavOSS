@@ -138,8 +138,12 @@ describe('Google Places build configuration', () => {
     expect(carPlayDashboard).toContain('title: "Voice"');
     expect(carPlayDashboard).toContain('mapViewController.display(');
     expect(carPlayDashboard).toContain('mapViewController.reservesRouteChoiceSheet = false');
-    expect(carPlayDashboard).toContain('mapViewController.setIdleLocationTrackingEnabled(false)');
+    expect(carPlayDashboard).toContain('mapViewController.setIdleLocationTrackingEnabled(true)');
+    expect(carPlayDashboard).toContain(
+      'UISceneSessionActivationRequest(role: .carTemplateApplication)',
+    );
     expect(carPlayScene).toContain('NavOSSCarPlayDashboardAction.activityType');
+    expect(carPlayScene).toContain('performPendingDashboardAction()');
     expect(carPlayPlugin).toContain(
       'configurations.CPTemplateApplicationDashboardSceneSessionRoleApplication = [',
     );
