@@ -2,54 +2,29 @@ import CarPlay
 internal import NavOSSNavigation
 import UIKit
 
-enum NavOSSCarPlayDashboardAction: String {
-  static let activityType = "org.navoss.mobile.carplay-dashboard-action"
-
-  case go
-  case voice
-}
-
+/// Main-actor holder for the Dashboard shortcut queue.
+///
+/// The queueing rules live in `NavOSSCarPlayDashboardActionQueue` inside the navigation core, where
+/// they are covered by tests; this only owns the shared instance the scenes talk to.
 @MainActor
-final class NavOSSCarPlayDashboardActionStore {
-  static let shared = NavOSSCarPlayDashboardActionStore()
-
-  private struct PendingAction {
-    let action: NavOSSCarPlayDashboardAction
-    let identifier: UUID
-  }
-
-  private var handledIdentifiers: Set<UUID> = []
-  private var handledOrder: [UUID] = []
-  private var pendingAction: PendingAction?
-
-  private init() {}
+enum NavOSSCarPlayDashboardActionStore {
+  private static var queue = NavOSSCarPlayDashboardActionQueue()
 
   @discardableResult
-  func stage(
+  static func stage(
     _ action: NavOSSCarPlayDashboardAction,
     identifier: UUID = UUID()
   ) -> UUID {
-    guard !handledIdentifiers.contains(identifier) else { return identifier }
-    if pendingAction?.identifier != identifier {
-      pendingAction = PendingAction(action: action, identifier: identifier)
-    }
+    queue.stage(action, identifier: identifier)
     return identifier
   }
 
-  func take() -> NavOSSCarPlayDashboardAction? {
-    guard let pendingAction else { return nil }
-    self.pendingAction = nil
-    handledIdentifiers.insert(pendingAction.identifier)
-    handledOrder.append(pendingAction.identifier)
-    if handledOrder.count > 8 {
-      handledIdentifiers.remove(handledOrder.removeFirst())
-    }
-    return pendingAction.action
+  static func take() -> NavOSSCarPlayDashboardAction? {
+    queue.take()
   }
 
-  func clear(_ identifier: UUID) {
-    guard pendingAction?.identifier == identifier else { return }
-    pendingAction = nil
+  static func clear(_ identifier: UUID) {
+    queue.clear(identifier)
   }
 }
 
@@ -172,8 +147,7 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
       subtitleVariants: [],
       image: UIImage(systemName: systemImageName) ?? UIImage(),
       handler: { _ in
-        let actionStore = NavOSSCarPlayDashboardActionStore.shared
-        let actionIdentifier = actionStore.stage(action)
+        let actionIdentifier = NavOSSCarPlayDashboardActionStore.stage(action)
         let activity = NSUserActivity(activityType: NavOSSCarPlayDashboardAction.activityType)
         activity.userInfo = [
           "action": action.rawValue,
@@ -181,7 +155,7 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
         ]
         let clearPendingAction: (Error) -> Void = { _ in
           Task { @MainActor in
-            actionStore.clear(actionIdentifier)
+            NavOSSCarPlayDashboardActionStore.clear(actionIdentifier)
           }
         }
         if #available(iOS 17.0, *) {

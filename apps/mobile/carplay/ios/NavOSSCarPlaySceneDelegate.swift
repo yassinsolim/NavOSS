@@ -248,13 +248,13 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     let identifier =
       (userActivity.userInfo?["identifier"] as? String).flatMap(UUID.init(uuidString:))
       ?? UUID()
-    NavOSSCarPlayDashboardActionStore.shared.stage(action, identifier: identifier)
+    NavOSSCarPlayDashboardActionStore.stage(action, identifier: identifier)
     performPendingDashboardAction()
   }
 
   private func performPendingDashboardAction() {
     guard interfaceController != nil,
-      let action = NavOSSCarPlayDashboardActionStore.shared.take()
+      let action = NavOSSCarPlayDashboardActionStore.take()
     else { return }
     switch action {
     case .go:
