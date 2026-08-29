@@ -220,6 +220,14 @@ async function screenshot(name) {
 }
 
 async function setLocationPrivacy(action) {
+  // A stale TCC entry silently defeats `grant`: the permission prompt still appears and obscures
+  // the captured screenshots, which fails pixel validation on a run whose app is otherwise fine.
+  // Clearing the entry first makes the grant deterministic on a freshly installed app.
+  if (action === 'grant') {
+    await run('xcrun', ['simctl', 'privacy', simulatorId, 'reset', 'all', 'org.navoss.mobile'], {
+      timeoutMs: 30_000,
+    }).catch(() => undefined);
+  }
   const command = ['simctl', 'privacy', simulatorId, action, 'location', 'org.navoss.mobile'];
   try {
     await run('xcrun', command, { timeoutMs: 30_000 });

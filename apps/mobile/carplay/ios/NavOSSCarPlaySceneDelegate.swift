@@ -226,6 +226,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       mapViewController?.clearRoute()
       mapViewController?.recenter()
     }
+    performPendingDashboardAction()
   }
 
   func sceneWillResignActive(_ scene: UIScene) {
@@ -243,6 +244,18 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     guard userActivity.activityType == NavOSSCarPlayDashboardAction.activityType,
       let rawAction = userActivity.userInfo?["action"] as? String,
       let action = NavOSSCarPlayDashboardAction(rawValue: rawAction)
+    else { return }
+    let identifier =
+      (userActivity.userInfo?["identifier"] as? String).flatMap(UUID.init(uuidString:))
+      ?? UUID()
+    NavOSSCarPlayDashboardActionStore.stage(action, identifier: identifier)
+    performPendingDashboardAction()
+  }
+
+  private func performPendingDashboardAction() {
+    // Readiness is passed in so the queue enforces the ordering; see the queue's `take(isReady:)`.
+    guard
+      let action = NavOSSCarPlayDashboardActionStore.take(isReady: interfaceController != nil)
     else { return }
     switch action {
     case .go:
@@ -306,6 +319,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     NavOSSCarPlayTripStore.shared.setConnected(true)
     NavOSSNavigationService.shared.setCarPlayConnected(true)
     apply(NavOSSCarPlayTripStore.shared.snapshot())
+    performPendingDashboardAction()
   }
 
   func templateApplicationScene(

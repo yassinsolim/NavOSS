@@ -3,8 +3,11 @@ appId: org.navoss.mobile
 - openLink: 'exp+navoss://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081'
 - waitForAnimationToEnd
 - extendedWaitUntil:
-    visible: 'Open|Bundling.*|Search places|Close|Continue'
+    visible: 'Open|Bundling.*|Search places|Close|Continue|Allow While Using App'
     timeout: 10000
+- tapOn:
+    text: 'Allow While Using App'
+    optional: true
 - runFlow:
     when:
       visible: 'Open'
@@ -60,6 +63,6 @@ appId: org.navoss.mobile
 - eraseText
 - inputText: 'Airport'
 - extendedWaitUntil:
-  visible: 'Select Calgary International Airport.*'
-  timeout: 20000
+    visible: 'Select Calgary International Airport.*'
+    timeout: 20000
 - assertNotVisible: 'Current location unavailable'

@@ -2,11 +2,30 @@ import CarPlay
 internal import NavOSSNavigation
 import UIKit
 
-enum NavOSSCarPlayDashboardAction: String {
-  static let activityType = "org.navoss.mobile.carplay-dashboard-action"
+/// Main-actor holder for the Dashboard shortcut queue.
+///
+/// The queueing rules live in `NavOSSCarPlayDashboardActionQueue` inside the navigation core, where
+/// they are covered by tests; this only owns the shared instance the scenes talk to.
+@MainActor
+enum NavOSSCarPlayDashboardActionStore {
+  private static var queue = NavOSSCarPlayDashboardActionQueue()
 
-  case go
-  case voice
+  @discardableResult
+  static func stage(
+    _ action: NavOSSCarPlayDashboardAction,
+    identifier: UUID = UUID()
+  ) -> UUID {
+    queue.stage(action, identifier: identifier)
+    return identifier
+  }
+
+  static func take(isReady: Bool) -> NavOSSCarPlayDashboardAction? {
+    queue.take(isReady: isReady)
+  }
+
+  static func clear(_ identifier: UUID) {
+    queue.clear(identifier)
+  }
 }
 
 @objc(NavOSSCarPlayDashboardSceneDelegate)
@@ -27,7 +46,7 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
     dashboardWindow = window
     let mapViewController = NavOSSCarPlayMapViewController()
     mapViewController.reservesRouteChoiceSheet = false
-    mapViewController.setIdleLocationTrackingEnabled(false)
+    mapViewController.setIdleLocationTrackingEnabled(true)
     applyPreferences(to: mapViewController)
     self.mapViewController = mapViewController
     window.rootViewController = mapViewController
@@ -128,17 +147,35 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
       subtitleVariants: [],
       image: UIImage(systemName: systemImageName) ?? UIImage(),
       handler: { _ in
+        let actionIdentifier = NavOSSCarPlayDashboardActionStore.stage(action)
         let activity = NSUserActivity(activityType: NavOSSCarPlayDashboardAction.activityType)
-        activity.userInfo = ["action": action.rawValue]
-        let mainSession = UIApplication.shared.openSessions.first {
-          $0.role == .carTemplateApplication
+        activity.userInfo = [
+          "action": action.rawValue,
+          "identifier": actionIdentifier.uuidString,
+        ]
+        let clearPendingAction: (Error) -> Void = { _ in
+          Task { @MainActor in
+            NavOSSCarPlayDashboardActionStore.clear(actionIdentifier)
+          }
         }
-        UIApplication.shared.requestSceneSessionActivation(
-          mainSession,
-          userActivity: activity,
-          options: nil,
-          errorHandler: nil
-        )
+        if #available(iOS 17.0, *) {
+          var request = UISceneSessionActivationRequest(role: .carTemplateApplication)
+          request.userActivity = activity
+          UIApplication.shared.activateSceneSession(
+            for: request,
+            errorHandler: clearPendingAction
+          )
+        } else {
+          let mainSession = UIApplication.shared.openSessions.first {
+            $0.role == .carTemplateApplication
+          }
+          UIApplication.shared.requestSceneSessionActivation(
+            mainSession,
+            userActivity: activity,
+            options: nil,
+            errorHandler: clearPendingAction
+          )
+        }
       }
     )
   }
