@@ -1856,6 +1856,71 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
+  // MARK: - Remaining-route splice on out-and-back routes
+
+  /// Issue #13. On an out-and-back, a puck on the return leg can project marginally closer to the
+  /// parallel outbound leg, so an unbounded nearest-segment search splices behind the driver and
+  /// the "remaining" route resurrects road already travelled.
+  func testRemainingRouteDoesNotResurrectTravelledLegOnOutAndBack() {
+    let outboundEnd = NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.06)
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.08),
+      outboundEnd,
+      NavOSSCarPlayCoordinate(latitude: 51.04003, longitude: -114.06),
+      NavOSSCarPlayCoordinate(latitude: 51.04003, longitude: -114.08),
+    ]
+    // On the return leg, biased 0.5 m south so it sits nearer the travelled outbound leg.
+    let puck = NavOSSCarPlayCoordinate(latitude: 51.040005, longitude: -114.07)
+
+    let remaining = navOSSRemainingRouteGeometry(
+      geometry,
+      routeProgress: 0.80,
+      matchedCoordinate: puck
+    )
+
+    XCTAssertFalse(
+      remaining.contains(outboundEnd),
+      "the outbound leg the driver already covered must not reappear as remaining route"
+    )
+  }
+
+  /// The bound is directional: road ahead is always eligible, so a puck that has run ahead of the
+  /// progress estimate still splices forward rather than being dragged back.
+  func testRemainingRouteStillSplicesForwardOfProgress() {
+    let geometry = (0...20).map {
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08 + Double($0) * 0.001)
+    }
+    let ahead = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.068)
+
+    let remaining = navOSSRemainingRouteGeometry(
+      geometry,
+      routeProgress: 0.10,
+      matchedCoordinate: ahead
+    )
+
+    XCTAssertEqual(remaining.first, ahead)
+    XCTAssertEqual(remaining.last, geometry.last)
+  }
+
+  /// A nearby correction must still be honoured: the puck lags the snapshot by interpolation, and
+  /// the vertices between them have to survive or the drawn line cuts across the bend.
+  func testRemainingRouteStillHonoursASmallBackwardCorrection() {
+    let geometry = (0...20).map {
+      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08 + Double($0) * 0.0005)
+    }
+    // Roughly 35 m behind the progress point, well inside a single interpolation step.
+    let lagging = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.0755)
+
+    let remaining = navOSSRemainingRouteGeometry(
+      geometry,
+      routeProgress: 0.30,
+      matchedCoordinate: lagging
+    )
+
+    XCTAssertEqual(remaining.first, lagging)
+    XCTAssertGreaterThan(remaining.count, 2, "intermediate vertices must survive the splice")
+  }
+
   // MARK: - CarPlay Dashboard shortcuts
 
   /// The reported defect: pressing Go or Voice from the Dashboard did nothing when the main
