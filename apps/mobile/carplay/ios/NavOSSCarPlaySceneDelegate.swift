@@ -253,8 +253,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   }
 
   private func performPendingDashboardAction() {
-    guard interfaceController != nil,
-      let action = NavOSSCarPlayDashboardActionStore.take()
+    // Readiness is passed in so the queue enforces the ordering; see the queue's `take(isReady:)`.
+    guard
+      let action = NavOSSCarPlayDashboardActionStore.take(isReady: interfaceController != nil)
     else { return }
     switch action {
     case .go:

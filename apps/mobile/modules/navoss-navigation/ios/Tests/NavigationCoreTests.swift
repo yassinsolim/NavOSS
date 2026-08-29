@@ -1862,18 +1862,18 @@ final class NavigationCoreTests: XCTestCase {
   /// CarPlay scene did not exist yet. The press must survive until a scene can run it.
   func testDashboardActionSurvivesUntilSceneIsReady() {
     var queue = NavOSSCarPlayDashboardActionQueue()
-    XCTAssertNil(queue.take(), "nothing staged yet")
+    XCTAssertNil(queue.take(isReady: true), "nothing staged yet")
 
     queue.stage(.go, identifier: UUID())
 
     XCTAssertEqual(queue.pending, .go, "the press is held while no scene can run it")
-    XCTAssertEqual(queue.take(), .go, "the scene runs it once it is ready")
+    XCTAssertEqual(queue.take(isReady: true), .go, "the scene runs it once it is ready")
   }
 
   func testDashboardVoiceActionIsDeliveredIndependently() {
     var queue = NavOSSCarPlayDashboardActionQueue()
     queue.stage(.voice, identifier: UUID())
-    XCTAssertEqual(queue.take(), .voice)
+    XCTAssertEqual(queue.take(isReady: true), .voice)
   }
 
   /// A drained action must not run again. UIKit can deliver the same activity to `didConnect`,
@@ -1883,20 +1883,20 @@ final class NavigationCoreTests: XCTestCase {
     let identifier = UUID()
 
     queue.stage(.go, identifier: identifier)
-    XCTAssertEqual(queue.take(), .go)
+    XCTAssertEqual(queue.take(isReady: true), .go)
 
     queue.stage(.go, identifier: identifier)
 
     XCTAssertNil(queue.pending, "redelivery of a handled press stages nothing")
-    XCTAssertNil(queue.take(), "one press performs one action")
+    XCTAssertNil(queue.take(isReady: true), "one press performs one action")
   }
 
   func testDistinctPressesEachRun() {
     var queue = NavOSSCarPlayDashboardActionQueue()
     queue.stage(.go, identifier: UUID())
-    XCTAssertEqual(queue.take(), .go)
+    XCTAssertEqual(queue.take(isReady: true), .go)
     queue.stage(.voice, identifier: UUID())
-    XCTAssertEqual(queue.take(), .voice, "a genuine second press still runs")
+    XCTAssertEqual(queue.take(isReady: true), .voice, "a genuine second press still runs")
   }
 
   /// Scene activation can fail. A dropped press must not surface later against an unrelated
@@ -1909,7 +1909,7 @@ final class NavigationCoreTests: XCTestCase {
     queue.clear(identifier)
 
     XCTAssertNil(queue.pending)
-    XCTAssertNil(queue.take())
+    XCTAssertNil(queue.take(isReady: true))
   }
 
   func testClearingAnUnrelatedIdentifierKeepsThePress() {
@@ -1918,26 +1918,62 @@ final class NavigationCoreTests: XCTestCase {
 
     queue.clear(UUID())
 
-    XCTAssertEqual(queue.take(), .voice, "an unrelated failure must not cancel a live press")
+    XCTAssertEqual(queue.take(isReady: true), .voice, "an unrelated failure must not cancel a live press")
   }
 
   func testLatestPressWins() {
     var queue = NavOSSCarPlayDashboardActionQueue()
     queue.stage(.go, identifier: UUID())
     queue.stage(.voice, identifier: UUID())
-    XCTAssertEqual(queue.take(), .voice)
-    XCTAssertNil(queue.take(), "the superseded press does not run afterwards")
+    XCTAssertEqual(queue.take(isReady: true), .voice)
+    XCTAssertNil(queue.take(isReady: true), "the superseded press does not run afterwards")
   }
 
   func testReplaySuppressionDoesNotGrowWithoutBound() {
     var queue = NavOSSCarPlayDashboardActionQueue()
     for _ in 0..<200 {
       queue.stage(.go, identifier: UUID())
-      XCTAssertEqual(queue.take(), .go)
+      XCTAssertEqual(queue.take(isReady: true), .go)
     }
     let identifier = UUID()
     queue.stage(.voice, identifier: identifier)
-    XCTAssertEqual(queue.take(), .voice, "history stays bounded and still admits new presses")
+    XCTAssertEqual(queue.take(isReady: true), .voice, "history stays bounded and still admits new presses")
+  }
+
+  /// The ordering that makes the fix work: a press must not be consumed while nothing can run it.
+  /// Consuming early is exactly the reported defect, because the press is then gone by the time a
+  /// CarPlay scene connects.
+  func testPressIsNotConsumedWhileNoSceneCanRunIt() {
+    var queue = NavOSSCarPlayDashboardActionQueue()
+    queue.stage(.go, identifier: UUID())
+
+    XCTAssertNil(queue.take(isReady: false), "nothing runs before a scene is ready")
+    XCTAssertEqual(queue.pending, .go, "and the press is still waiting, not discarded")
+
+    XCTAssertEqual(queue.take(isReady: true), .go, "it runs on the first ready callback")
+  }
+
+  func testRepeatedNotReadyDrainsPreserveThePress() {
+    var queue = NavOSSCarPlayDashboardActionQueue()
+    queue.stage(.voice, identifier: UUID())
+
+    for _ in 0..<5 {
+      XCTAssertNil(queue.take(isReady: false))
+    }
+
+    XCTAssertEqual(queue.take(isReady: true), .voice, "repeated early callbacks do not erode it")
+  }
+
+  func testNotReadyDrainDoesNotMarkThePressHandled() {
+    var queue = NavOSSCarPlayDashboardActionQueue()
+    let identifier = UUID()
+    queue.stage(.go, identifier: identifier)
+    _ = queue.take(isReady: false)
+
+    // Re-staging the same identifier must still work: the press was never handled.
+    queue.stage(.go, identifier: identifier)
+
+    XCTAssertEqual(queue.take(isReady: true), .go)
   }
 
   func testActivityTypeIsStable() {

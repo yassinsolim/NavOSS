@@ -19,8 +19,8 @@ enum NavOSSCarPlayDashboardActionStore {
     return identifier
   }
 
-  static func take() -> NavOSSCarPlayDashboardAction? {
-    queue.take()
+  static func take(isReady: Bool) -> NavOSSCarPlayDashboardAction? {
+    queue.take(isReady: isReady)
   }
 
   static func clear(_ identifier: UUID) {

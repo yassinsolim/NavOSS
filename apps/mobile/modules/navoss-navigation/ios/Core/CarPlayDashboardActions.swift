@@ -39,8 +39,15 @@ public struct NavOSSCarPlayDashboardActionQueue: Equatable, Sendable {
     pendingIdentifier = identifier
   }
 
-  /// Returns the staged action and marks it handled. Returns `nil` when nothing is pending.
-  public mutating func take() -> NavOSSCarPlayDashboardAction? {
+  /// Returns the staged action and marks it handled, but only once the caller can actually run it.
+  ///
+  /// Readiness is a parameter rather than the caller's own precondition because the two must be
+  /// evaluated in this order. A press that is consumed while no CarPlay scene can run it is
+  /// silently lost, which is the original defect: the driver taps Go, nothing happens, and nothing
+  /// remains staged for the scene that connects a moment later. Keeping the check here means the
+  /// ordering is covered by tests instead of resting on how one call site is written.
+  public mutating func take(isReady: Bool) -> NavOSSCarPlayDashboardAction? {
+    guard isReady else { return nil }
     guard let pendingAction, let pendingIdentifier else { return nil }
     handledIdentifiers.append(pendingIdentifier)
     if handledIdentifiers.count > Self.handledLimit {
