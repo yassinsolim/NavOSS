@@ -14,6 +14,27 @@ The delivery path is:
 
 EAS Submit sends iOS builds to TestFlight. It does not submit them for public App Store review.
 
+## Required secrets
+
+Verified on 2026-08-29: the repository has **no secrets at any scope**. Neither repository-level
+secrets, nor the `app-store-production`, `Preview`, or `Production` environments, nor Dependabot
+secrets contain anything. Two workflows depend on that state and behave accordingly.
+
+| Secret | Scope | Used by | Without it |
+| --- | --- | --- | --- |
+| `EXPO_TOKEN` | `app-store-production` environment | `iOS TestFlight` | Fails at its guard; no build is queued. Tracked in #24. |
+| `ANTHROPIC_API_KEY` | Repository secrets | `Automated PR review` | Warns and skips; the job stays green and no review is posted. |
+
+Neither can be created from the command line. `EXPO_TOKEN` comes from
+<https://expo.dev/settings/access-tokens> and `ANTHROPIC_API_KEY` from the Anthropic console, both
+web-only.
+
+The difference in failure mode is deliberate. The release workflow is dispatched on purpose, so
+failing loudly is correct. The review workflow runs on every pull request, where a permanently red
+check would train people to ignore it, so it emits a warning annotation and skips instead. That
+makes it quiet by design, which is exactly how the TestFlight path went unnoticed, so its inert
+state is recorded here rather than left to be rediscovered.
+
 ## One-Time Setup
 
 Complete these steps after Apple Developer Program enrollment is active:
