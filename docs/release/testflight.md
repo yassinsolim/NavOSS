@@ -255,6 +255,41 @@ validation guard. CarPlay still owns final Dashboard selection, and Canada's iOS
 settings do not offer the region-limited Navigation default. Physical acceptance must verify that
 an active NavOSS trip replaces the prior Google Maps Dashboard content after returning Home.
 
+Location-freshness and facing-direction candidate `0.1.0 (50)` was built by EAS from merge commit
+`7bea926865abbbfbcd490fc6f9fd5a735cfc4101` with the Google-disabled `production-carplay` profile.
+It fixes two reported defects. Idle map location used `distanceInterval: 25`, so Core Location
+delivered a position only after roughly 25 m of travel; a stationary or slow-moving user saw a
+frozen dot until the screen was refreshed. Instrumented callback measurement over an identical
+20 m simulated walk recorded 22 fixes at a steady ~1004 ms gap with the filter removed, against
+2 fixes with gaps of 20 108 ms and 14 583 ms at the old value. The map now watches at
+`distanceInterval: 0` with high accuracy. Separately, no facing indicator existed on either
+surface: heading was derived from course over ground, which iOS invalidates while stopped, and
+`startUpdatingHeading` was never called anywhere in the CarPlay path. Both surfaces now read the
+magnetometer, and a heading-only callback republishes the last position so the indicator rotates
+while the vehicle is stationary.
+
+Build 50 also adds the `CPSupportsDashboardNavigationScene` declaration that build 48 omitted; the
+shipped `Info.plist` asserts it directly.
+
+The signed IPA has SHA-256
+`e965743937e34259608002181e889d71fe66a9f4d93cc6648d47bdb3a1e8e5ff`. Audit of the downloaded
+artifact confirmed bundle `org.navoss.mobile`, version `0.1.0 (50)`, arm64, `get-task-allow: false`,
+team `FJH4UWVC4K`, the `com.apple.developer.carplay-maps` entitlement, main and Dashboard CarPlay
+scenes, `location` as the only background mode, the embedded production origin
+`https://navoss-api.yassin.app`, and zero development origins. Repository gates passed on the
+merge commit with 150 mobile tests and 73 native tests.
+
+EAS build `318ea9de-5070-4a78-85dd-6189ac9228bc` and submission
+`5b320093-5011-474c-804a-dc89adb15ccb` both completed; the binary reached App Store Connect on
+August 29, 2026.
+
+Two limits apply to this record. The shipped bundle is Hermes bytecode, so a text search can
+confirm that the `distanceInterval` key and the facing-cone layer exist but cannot read the
+committed value; that the shipped value is `0` rests on build provenance, since EAS reports the
+build's commit as `7bea926` and that tree contains the fix. CarPlay wedge rendering also remains
+unverified on real hardware: the simulator has no magnetometer, and the visual workflow is blocked
+by issue #19.
+
 Before creating a build, verify:
 
 ```sh

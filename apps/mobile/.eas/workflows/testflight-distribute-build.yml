@@ -1,0 +1,35 @@
+name: TestFlight distribution from EAS build
+
+# Distributes an EAS iOS build to TestFlight groups, including external groups.
+#
+# `eas submit --groups` only reaches internal groups, so external distribution has to go through
+# this job. Use this variant when the EAS build id is known; use `testflight-distribute.yml` when
+# only the App Store Connect build id is known.
+#
+#   eas workflow:run .eas/workflows/testflight-distribute-build.yml \
+#     -F build_id=<eas build id> -F changelog="..."
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        type: string
+        required: true
+        description: EAS build id to distribute.
+      changelog:
+        type: string
+        required: true
+        description: What to Test notes shown to TestFlight testers.
+
+jobs:
+  distribute:
+    name: Distribute to internal and external TestFlight
+    type: testflight
+    params:
+      build_id: ${{ inputs.build_id }}
+      internal_groups:
+        - testers
+      external_groups:
+        - NavOSS Friends
+      changelog: ${{ inputs.changelog }}
+      submit_beta_review: true

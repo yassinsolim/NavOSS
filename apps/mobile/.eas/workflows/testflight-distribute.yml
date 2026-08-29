@@ -1,0 +1,35 @@
+name: TestFlight distribution
+
+# Distributes an already-uploaded App Store Connect build to TestFlight groups.
+#
+# `eas submit --groups` only reaches internal groups, so external distribution has to go through
+# this job. Run it with the App Store Connect build id, which is visible in App Store Connect under
+# TestFlight for the build:
+#
+#   eas workflow:run .eas/workflows/testflight-distribute.yml \
+#     -F asc_build_id=<id> -F changelog="..."
+
+on:
+  workflow_dispatch:
+    inputs:
+      asc_build_id:
+        type: string
+        required: true
+        description: App Store Connect build id to distribute.
+      changelog:
+        type: string
+        required: true
+        description: What to Test notes shown to TestFlight testers.
+
+jobs:
+  distribute:
+    name: Distribute to internal and external TestFlight
+    type: testflight
+    params:
+      asc_build_id: ${{ inputs.asc_build_id }}
+      internal_groups:
+        - testers
+      external_groups:
+        - NavOSS Friends
+      changelog: ${{ inputs.changelog }}
+      submit_beta_review: true
