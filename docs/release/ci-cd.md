@@ -38,6 +38,22 @@ Apple credentials belong in EAS credential storage or App Store Connect, not in 
 
 ## Release Procedure
 
+> The GitHub path below does not work yet. Step 8 of the one-time setup is incomplete: the
+> `app-store-production` environment exists but holds no `EXPO_TOKEN`, so the workflow stops at its
+> token guard and no build is queued. Every build so far, including build 50, was started from a
+> local EAS session instead. Issue #24 tracks the fix.
+
+Until then, release from a machine with an EAS session:
+
+```sh
+cd apps/mobile
+eas build --platform ios --profile production-carplay --auto-submit --non-interactive
+```
+
+`eas submit --groups` adds a build to internal groups only. External distribution goes through the
+TestFlight workflow job in `apps/mobile/.eas/workflows/`; on the free plan use the
+`asc_build_id` variant, because the `build_id` variant requires a paid plan.
+
 1. Update `expo.version` in `apps/mobile/app.json`. EAS remotely increments the iOS build number.
 2. Merge only after CI passes.
 3. Create a GitHub release with the exact tag `ios-v<expo.version>`, such as `ios-v0.1.0`.
