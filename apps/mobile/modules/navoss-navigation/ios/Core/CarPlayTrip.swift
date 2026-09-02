@@ -609,11 +609,11 @@ private func navOSSVisibleRouteTail(
 /// parallel outbound carriageway is far back along the route even though it is metres away in
 /// space. That separation is what makes the bound work.
 ///
-/// Measured on a real 8.9 km Calgary out-and-back, 1416 samples per run of a lagging puck with
-/// lateral GPS noise. Unbounded search resurrected a travelled leg 12 times, worst case 8747 m
-/// behind. Sweeping the bound across four seeds and two noise levels, 200 m through 350 m
-/// eliminated every resurrection while degrading no legitimate match; resurrections return at
-/// 400 m, and the corner guarantee below needs at least 186 m. 250 m sits between those limits.
+/// Reproducible via `pnpm --filter @navoss/mobile test:carplay-splice` on a checked-in real 8.9 km
+/// Calgary out-and-back. Across four deterministic seeds and 4 m/8 m lateral noise (11,328 total
+/// samples), the unbounded control resurrects a travelled leg 186 times, worst case 8,902 m back.
+/// 250 m through 350 m eliminates every resurrection while degrading no legitimate match;
+/// resurrections return at 400 m, and the corner guard needs at least 186 m.
 private let navOSSMaximumSegmentLookbackMeters = 250.0
 
 private func navOSSNearestSegmentIndex(

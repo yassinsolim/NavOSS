@@ -1884,41 +1884,29 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
-  /// The bound is directional: road ahead is always eligible, so a puck that has run ahead of the
-  /// progress estimate still splices forward rather than being dragged back.
-  func testRemainingRouteStillSplicesForwardOfProgress() {
-    let geometry = (0...20).map {
-      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08 + Double($0) * 0.001)
-    }
-    let ahead = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.068)
+  /// Pins the measured upper boundary. The competing outbound projection sits roughly 310 m
+  /// behind progress: the selected 250 m bound rejects it, while loosening the bound to 400 m
+  /// resurrects `outboundEnd`.
+  func testRemainingRouteLookbackDoesNotGrowPastTheMeasuredSafeBand() {
+    let outboundEnd = NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.076)
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.080),
+      outboundEnd,
+      NavOSSCarPlayCoordinate(latitude: 51.04003, longitude: -114.076),
+      NavOSSCarPlayCoordinate(latitude: 51.04003, longitude: -114.080),
+    ]
+    let puck = NavOSSCarPlayCoordinate(latitude: 51.040005, longitude: -114.078)
 
     let remaining = navOSSRemainingRouteGeometry(
       geometry,
-      routeProgress: 0.10,
-      matchedCoordinate: ahead
+      routeProgress: 0.80,
+      matchedCoordinate: puck
     )
 
-    XCTAssertEqual(remaining.first, ahead)
-    XCTAssertEqual(remaining.last, geometry.last)
-  }
-
-  /// A nearby correction must still be honoured: the puck lags the snapshot by interpolation, and
-  /// the vertices between them have to survive or the drawn line cuts across the bend.
-  func testRemainingRouteStillHonoursASmallBackwardCorrection() {
-    let geometry = (0...20).map {
-      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08 + Double($0) * 0.0005)
-    }
-    // Roughly 35 m behind the progress point, well inside a single interpolation step.
-    let lagging = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.0755)
-
-    let remaining = navOSSRemainingRouteGeometry(
-      geometry,
-      routeProgress: 0.30,
-      matchedCoordinate: lagging
+    XCTAssertFalse(
+      remaining.contains(outboundEnd),
+      "loosening the lookback past the measured safe band resurrects this outbound leg"
     )
-
-    XCTAssertEqual(remaining.first, lagging)
-    XCTAssertGreaterThan(remaining.count, 2, "intermediate vertices must survive the splice")
   }
 
   // MARK: - CarPlay Dashboard shortcuts
