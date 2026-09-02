@@ -76,12 +76,13 @@ Apple credentials belong in EAS credential storage or App Store Connect, not in 
 
 ## Release Procedure
 
-> The GitHub path below does not work yet. Step 8 of the one-time setup is incomplete: the
-> `app-store-production` environment exists but holds no `EXPO_TOKEN`, so the workflow stops at its
-> token guard and no build is queued. Every build so far, including build 50, was started from a
-> local EAS session instead. Issue #24 tracks the fix.
+`EXPO_TOKEN` is now configured in the `app-store-production` environment, so the GitHub path works.
+Verified on 2026-09-02: run 33616401716 passed every step including the token guard and queued
+build 52, the first build in this project's history initiated by CI rather than from a local EAS
+session. Issue #24 is closed.
 
-Until then, release from a machine with an EAS session:
+Releasing from a machine with an EAS session also still works, and is the fallback when the
+workflow is unavailable:
 
 ```sh
 cd apps/mobile
