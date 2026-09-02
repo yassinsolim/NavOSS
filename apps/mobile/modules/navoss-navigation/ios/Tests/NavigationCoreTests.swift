@@ -1856,6 +1856,59 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
+  // MARK: - Remaining-route splice on out-and-back routes
+
+  /// Issue #13. On an out-and-back, a puck on the return leg can project marginally closer to the
+  /// parallel outbound leg, so an unbounded nearest-segment search splices behind the driver and
+  /// the "remaining" route resurrects road already travelled.
+  func testRemainingRouteDoesNotResurrectTravelledLegOnOutAndBack() {
+    let outboundEnd = NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.06)
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.08),
+      outboundEnd,
+      NavOSSCarPlayCoordinate(latitude: 51.04003, longitude: -114.06),
+      NavOSSCarPlayCoordinate(latitude: 51.04003, longitude: -114.08),
+    ]
+    // On the return leg, biased 0.5 m south so it sits nearer the travelled outbound leg.
+    let puck = NavOSSCarPlayCoordinate(latitude: 51.040005, longitude: -114.07)
+
+    let remaining = navOSSRemainingRouteGeometry(
+      geometry,
+      routeProgress: 0.80,
+      matchedCoordinate: puck
+    )
+
+    XCTAssertFalse(
+      remaining.contains(outboundEnd),
+      "the outbound leg the driver already covered must not reappear as remaining route"
+    )
+  }
+
+  /// Bounds the constant from above. This geometry is analytic, not measured: the competing
+  /// outbound projection sits roughly 310 m behind progress, so the shipped 250 m bound rejects it
+  /// while loosening to 400 m resurrects `outboundEnd`.
+  func testRemainingRouteLookbackStaysBelowTheOppositeCarriagewayProjection() {
+    let outboundEnd = NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.076)
+    let geometry = [
+      NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.080),
+      outboundEnd,
+      NavOSSCarPlayCoordinate(latitude: 51.04003, longitude: -114.076),
+      NavOSSCarPlayCoordinate(latitude: 51.04003, longitude: -114.080),
+    ]
+    let puck = NavOSSCarPlayCoordinate(latitude: 51.040005, longitude: -114.078)
+
+    let remaining = navOSSRemainingRouteGeometry(
+      geometry,
+      routeProgress: 0.80,
+      matchedCoordinate: puck
+    )
+
+    XCTAssertFalse(
+      remaining.contains(outboundEnd),
+      "loosening the lookback past the measured safe band resurrects this outbound leg"
+    )
+  }
+
   // MARK: - CarPlay Dashboard shortcuts
 
   /// The reported defect: pressing Go or Voice from the Dashboard did nothing when the main
