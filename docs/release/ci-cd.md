@@ -14,6 +14,28 @@ The delivery path is:
 
 EAS Submit sends iOS builds to TestFlight. It does not submit them for public App Store review.
 
+## Local automated PR review
+
+`scripts/review-ready-prs.sh` runs a second, isolated OMP agent against every ready pull request.
+It waits until the pull request is not a draft and all checks have finished successfully, then
+reviews each head commit once. A synchronize event changes the head SHA and triggers a new review.
+Dependabot is excluded because its mechanical updates are covered by lockfile validation and CI.
+
+The agent receives the pull-request metadata and diff as untrusted files and is restricted to
+`read`, `grep`, and `glob`; it cannot edit the checkout, run commands, or post to GitHub. The wrapper
+posts the resulting `VERDICT:` comment and an invisible marker containing the reviewed SHA.
+
+Install or refresh the per-user launchd job:
+
+```sh
+scripts/install-local-pr-reviewer.sh
+```
+
+It polls every two minutes while this Mac is awake and connected. Logs live under
+`~/Library/Logs/NavOSS/`. This uses the locally authenticated OMP provider and GitHub CLI, so it
+needs no repository model secret. It is intentionally local: when this Mac is asleep or offline,
+reviews wait until it returns.
+
 ## One-Time Setup
 
 Complete these steps after Apple Developer Program enrollment is active:
