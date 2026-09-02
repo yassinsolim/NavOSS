@@ -609,11 +609,18 @@ private func navOSSVisibleRouteTail(
 /// parallel outbound carriageway is far back along the route even though it is metres away in
 /// space. That separation is what makes the bound work.
 ///
-/// Reproducible via `pnpm --filter @navoss/mobile test:carplay-splice` on a checked-in real 8.9 km
-/// Calgary out-and-back. Across four deterministic seeds and 4 m/8 m lateral noise (11,328 total
-/// samples), the unbounded control resurrects a travelled leg 186 times, worst case 8,902 m back.
-/// 250 m through 350 m eliminates every resurrection while degrading no legitimate match;
-/// resurrections return at 400 m, and the corner guard needs at least 186 m.
+/// The value is derived from the interpolation contract, not from a sweep. The puck trails the
+/// snapshot by at most `navOSSCarPlayMaximumInterpolationSeconds`, so at roughly 50 m/s the
+/// legitimate lag is about 100 m; 250 m keeps a wide margin over that while staying far below the
+/// separation between carriageways. A sweep cannot choose this number: any bound rejects
+/// candidates beyond itself by construction, so measuring "splices past W" against bound W is
+/// circular.
+///
+/// What is measured, via `pnpm --filter @navoss/mobile test:carplay-splice` over a checked-in real
+/// 8.9 km Calgary out-and-back: the unbounded search picks a segment on the opposite carriageway
+/// 179 times in 11,328 samples, worst case 8,902 m behind, so the defect is real on real geometry;
+/// and bounding costs almost nothing, rejecting the correct segment in 5 of those samples at 250 m
+/// against 7 at 50 m. The corner guarantee in the tests independently requires at least 186 m.
 private let navOSSMaximumSegmentLookbackMeters = 250.0
 
 private func navOSSNearestSegmentIndex(

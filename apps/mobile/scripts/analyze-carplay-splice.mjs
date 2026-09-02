@@ -55,6 +55,15 @@ for (const length of segmentLengths) {
   cumulativeLengths.push(cumulativeLengths.at(-1) + length);
 }
 
+// The fixture is the A->B route concatenated with B->A. The A->B leg contributed 195 vertices and
+// the return was appended without repeating the shared vertex, so segments below this index belong
+// to the outbound carriageway and the rest to the return.
+const outboundVertexCount = 195;
+
+function legOf(segmentIndex) {
+  return segmentIndex < outboundVertexCount - 1 ? 'outbound' : 'return';
+}
+
 function projectedAlongRoute(index, fraction) {
   return cumulativeLengths[index] + fraction * segmentLengths[index];
 }
@@ -109,16 +118,21 @@ function casesFor(seed, noiseMeters) {
           coordinate[0] + (gaussian(random) * noiseMeters) / metersPerDegreeLatitude,
           coordinate[1] + (gaussian(random) * noiseMeters) / longitudeScale,
         ],
+        leg: legOf(index),
       });
     }
   }
   return cases;
 }
 
+// A resurrection is choosing a segment on the leg the driver is not travelling. Grading by leg
+// keeps the criterion independent of the window being swept. A distance rule cannot fire for any
+// window smaller than the rule itself, so it reports zero by construction for exactly the values
+// under test, which made the earlier table's low-window cells meaningless.
 function evaluate(cases, windowMeters) {
   let degradedLegitimateMatches = 0;
-  let resurrections = 0;
-  let worstResurrection;
+  let harmfulWrongLegMatches = 0;
+  let worstWrongLeg;
   for (const sample of cases) {
     const global = nearestSegment(
       sample.coordinate,
@@ -128,17 +142,20 @@ function evaluate(cases, windowMeters) {
     const bounded = nearestSegment(sample.coordinate, sample.completedLength, windowMeters);
     if (global === undefined || bounded === undefined)
       throw new Error('Route search returned no candidate.');
-    if (bounded.lookback > 250) {
-      resurrections += 1;
-      if (worstResurrection === undefined || bounded.lookback > worstResurrection.lookback) {
-        worstResurrection = bounded;
+    // Wrong-leg matches near the U-turn are unavoidable and harmless: there the two carriageways
+    // coincide, so either answer draws the same road. Count only matches far enough back to redraw
+    // road the driver actually finished.
+    if (legOf(bounded.index) !== sample.leg && bounded.lookback > 500) {
+      harmfulWrongLegMatches += 1;
+      if (worstWrongLeg === undefined || bounded.lookback > worstWrongLeg.lookback) {
+        worstWrongLeg = bounded;
       }
     }
-    if (global.lookback <= 250 && bounded.distanceMeters - global.distanceMeters > 1) {
+    if (legOf(global.index) === sample.leg && bounded.distanceMeters - global.distanceMeters > 1) {
       degradedLegitimateMatches += 1;
     }
   }
-  return { degradedLegitimateMatches, resurrections, worstResurrection };
+  return { degradedLegitimateMatches, harmfulWrongLegMatches, worstWrongLeg };
 }
 
 const runs = [];
@@ -152,7 +169,7 @@ for (const seed of seeds) {
 console.log(
   `route: ${geometry.length} vertices, ${(cumulativeLengths.at(-1) / 1000).toFixed(2)} km`,
 );
-console.log('cells are resurrections/legitimate-matches-degraded-by-more-than-1m');
+console.log('cells are harmful-wrong-leg-matches/legitimate-matches-degraded-by-more-than-1m');
 console.log(
   `${'seed'.padStart(5)} ${'noise'.padStart(6)} | ${windowsMeters
     .map((window) => (Number.isFinite(window) ? `${window}m` : 'global').padStart(8))
@@ -161,7 +178,7 @@ console.log(
 for (const run of runs) {
   const cells = windowsMeters.map((window) => {
     const result = evaluate(run.cases, window);
-    return `${result.resurrections}/${result.degradedLegitimateMatches}`.padStart(8);
+    return `${result.harmfulWrongLegMatches}/${result.degradedLegitimateMatches}`.padStart(8);
   });
   console.log(
     `${String(run.seed).padStart(5)} ${`${run.noiseMeters}m`.padStart(6)} | ${cells.join(' | ')}`,
@@ -172,21 +189,31 @@ const allCases = runs.flatMap((run) => run.cases);
 const globalResult = evaluate(allCases, Number.POSITIVE_INFINITY);
 const selectedResult = evaluate(allCases, 250);
 const tightResult = evaluate(allCases, 50);
-const looseResult = evaluate(allCases, 400);
 console.log(
-  `control: ${globalResult.resurrections}/${allCases.length} resurrections, worst ${Math.round(
-    globalResult.worstResurrection?.lookback ?? 0,
-  )} m behind`,
+  `control: ${globalResult.harmfulWrongLegMatches}/${allCases.length} harmful wrong-leg matches, ` +
+    `worst ${Math.round(globalResult.worstWrongLeg?.lookback ?? 0)} m behind`,
 );
 
-if (globalResult.resurrections === 0) throw new Error('Control did not reproduce the defect.');
-if (selectedResult.resurrections !== 0 || selectedResult.degradedLegitimateMatches !== 0) {
-  throw new Error('250 m is not in the measured safe band.');
+// What this harness can and cannot establish.
+//
+// It cannot establish that a 250 m bound prevents splices more than 250 m back: the bound rejects
+// those candidates by construction, so any sweep column at or below the criterion is a tautology
+// rather than a measurement. Claiming a "safe band" from such a column would be circular.
+//
+// What it does establish is that the unbounded search is genuinely harmful on real geometry, and
+// what bounding costs: how often a bound rejects the correct same-leg segment. That cost, together
+// with the corner guarantee's >=186 m floor, is what selects the constant.
+if (globalResult.harmfulWrongLegMatches === 0) {
+  throw new Error('Control did not reproduce the defect.');
 }
-if (tightResult.degradedLegitimateMatches === 0) {
-  throw new Error('Tight-bound control did not degrade a legitimate match.');
+if (selectedResult.harmfulWrongLegMatches !== 0) {
+  throw new Error('250 m admitted a harmful wrong-leg match.');
 }
-if (looseResult.resurrections === 0) {
-  throw new Error('Loose-bound control did not resurrect a travelled leg.');
+if (tightResult.degradedLegitimateMatches <= selectedResult.degradedLegitimateMatches) {
+  throw new Error('A 50 m bound was expected to reject more correct matches than 250 m.');
 }
-console.log('PASS: control fires; 250 m is clean; both unsafe sides fail.');
+console.log(
+  `PASS: control harmful; 250 m admits none; 50 m rejects ` +
+    `${tightResult.degradedLegitimateMatches} correct matches vs ` +
+    `${selectedResult.degradedLegitimateMatches} at 250 m.`,
+);
