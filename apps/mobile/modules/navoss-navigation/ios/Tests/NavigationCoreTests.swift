@@ -1884,10 +1884,10 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
-  /// Pins the measured upper boundary. The competing outbound projection sits roughly 310 m
-  /// behind progress: the selected 250 m bound rejects it, while loosening the bound to 400 m
-  /// resurrects `outboundEnd`.
-  func testRemainingRouteLookbackDoesNotGrowPastTheMeasuredSafeBand() {
+  /// Bounds the constant from above. This geometry is analytic, not measured: the competing
+  /// outbound projection sits roughly 310 m behind progress, so the shipped 250 m bound rejects it
+  /// while loosening to 400 m resurrects `outboundEnd`.
+  func testRemainingRouteLookbackStaysBelowTheOppositeCarriagewayProjection() {
     let outboundEnd = NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.076)
     let geometry = [
       NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.080),

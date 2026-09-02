@@ -611,16 +611,16 @@ private func navOSSVisibleRouteTail(
 ///
 /// The value is derived from the interpolation contract, not from a sweep. The puck trails the
 /// snapshot by at most `navOSSCarPlayMaximumInterpolationSeconds`, so at roughly 50 m/s the
-/// legitimate lag is about 100 m; 250 m keeps a wide margin over that while staying far below the
-/// separation between carriageways. A sweep cannot choose this number: any bound rejects
-/// candidates beyond itself by construction, so measuring "splices past W" against bound W is
-/// circular.
+/// legitimate lag is about 100 m; 250 m keeps a wide margin over that. A sweep cannot choose this
+/// number: a bound of W rejects candidates past W by construction, so measuring "splices past W"
+/// against bound W is circular.
 ///
-/// What is measured, via `pnpm --filter @navoss/mobile test:carplay-splice` over a checked-in real
-/// 8.9 km Calgary out-and-back: the unbounded search picks a segment on the opposite carriageway
-/// 179 times in 11,328 samples, worst case 8,902 m behind, so the defect is real on real geometry;
-/// and bounding costs almost nothing, rejecting the correct segment in 5 of those samples at 250 m
-/// against 7 at 50 m. The corner guarantee in the tests independently requires at least 186 m.
+/// `pnpm --filter @navoss/mobile test:carplay-splice` shows what the bound does on a checked-in
+/// real 8.9 km Calgary out-and-back with a lagging puck: the unbounded search picks the opposite
+/// carriageway 78 times in 5,664 samples, worst case 8,902 m behind, and the bound cuts that to 2.
+/// It does not reach zero, and is not claimed to. Where the carriageways run within the lookback
+/// of each other, position alone is genuinely ambiguous and only heading could resolve it; what
+/// the bound removes is the catastrophic case of splicing kilometres of travelled road back in.
 private let navOSSMaximumSegmentLookbackMeters = 250.0
 
 private func navOSSNearestSegmentIndex(

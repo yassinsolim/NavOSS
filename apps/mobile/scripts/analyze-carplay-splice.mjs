@@ -1,20 +1,34 @@
 #!/usr/bin/env node
 
+// Demonstrates the defect behind issue #13 on real geometry, and that the shipped lookback bound
+// removes it.
+//
+// Deliberately not a sweep. A bound of W rejects every candidate more than W behind, so asking
+// "does bound W prevent splices past W" is a tautology, and a table of such columns looks like
+// evidence while measuring nothing. Two earlier versions of this file made exactly that mistake.
+// The constant itself is derived in CarPlayTrip.swift from the interpolation contract and is
+// bracketed by Swift tests; this script's only job is to show the unbounded search is genuinely
+// harmful on a real out-and-back, and that the bound fixes it.
+
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // Real Calgary out-and-back captured from valhalla1.openstreetmap.de on 2026-08-29 by routing
-// 51.0447,-114.0719 -> 51.0665,-114.0870 and then back. Keeping the geometry checked in makes
-// the control and bound reproducible without a live routing service.
+// 51.0447,-114.0719 -> 51.0665,-114.0870 and back, so the two carriageways are genuinely parallel.
 const geometry = JSON.parse(
   readFileSync(resolve(import.meta.dirname, '../test/fixtures/calgary-out-and-back.json'), 'utf8'),
 );
+// Must match navOSSMaximumSegmentLookbackMeters in CarPlayTrip.swift.
+const shippedLookbackMeters = 250;
 const earthRadiusMeters = 6_371_000;
 const metersPerDegreeLatitude = 111_320;
-const noiseLevelsMeters = [4, 8];
 const samplesPerSegment = 4;
 const seeds = [7, 11, 23, 31];
-const windowsMeters = [50, 100, 150, 200, 250, 300, 350, 400, 500, Number.POSITIVE_INFINITY];
+// The puck trails the snapshot by interpolation. Two seconds at highway speed is the worst case the
+// renderer can produce, so lag is drawn up to that rather than assumed to be zero: with the puck
+// sitting exactly on the progress point, the backward search is never exercised at all.
+const maximumLagMeters = 100;
+const lateralNoiseMeters = 8;
 
 function coordinateDistance(start, end) {
   const latitudeDelta = ((end[0] - start[0]) * Math.PI) / 180;
@@ -54,18 +68,44 @@ const cumulativeLengths = [0];
 for (const length of segmentLengths) {
   cumulativeLengths.push(cumulativeLengths.at(-1) + length);
 }
+const routeLengthMeters = cumulativeLengths.at(-1);
 
-// The fixture is the A->B route concatenated with B->A. The A->B leg contributed 195 vertices and
-// the return was appended without repeating the shared vertex, so segments below this index belong
-// to the outbound carriageway and the rest to the return.
-const outboundVertexCount = 195;
+// Derive the turnaround from the geometry rather than from how the fixture was concatenated. The
+// route's outbound leg ends at the point furthest from the origin along the road; hardcoding the
+// A->B vertex count mislabelled eight segments, because that leg already doubles back into its
+// destination.
+const turnaroundIndex = geometry.reduce(
+  (furthest, coordinate, index) =>
+    coordinateDistance(geometry[0], coordinate) >
+    coordinateDistance(geometry[0], geometry[furthest])
+      ? index
+      : furthest,
+  0,
+);
 
 function legOf(segmentIndex) {
-  return segmentIndex < outboundVertexCount - 1 ? 'outbound' : 'return';
+  return segmentIndex < turnaroundIndex ? 'outbound' : 'return';
 }
 
 function projectedAlongRoute(index, fraction) {
   return cumulativeLengths[index] + fraction * segmentLengths[index];
+}
+
+function positionAt(alongRouteMeters) {
+  const clamped = Math.min(Math.max(alongRouteMeters, 0), routeLengthMeters);
+  let index = 0;
+  while (index < segmentLengths.length - 1 && cumulativeLengths[index + 1] < clamped) index += 1;
+  const fraction =
+    segmentLengths[index] === 0 ? 0 : (clamped - cumulativeLengths[index]) / segmentLengths[index];
+  const start = geometry[index];
+  const end = geometry[index + 1];
+  return {
+    coordinate: [
+      start[0] + (end[0] - start[0]) * fraction,
+      start[1] + (end[1] - start[1]) * fraction,
+    ],
+    index,
+  };
 }
 
 function nearestSegment(coordinate, completedLength, maximumLookbackMeters) {
@@ -81,7 +121,7 @@ function nearestSegment(coordinate, completedLength, maximumLookbackMeters) {
   return best;
 }
 
-// Mulberry32 plus Box-Muller: small, deterministic, and independent of host or Node version.
+// Mulberry32 plus Box-Muller: deterministic and independent of host or Node version.
 function randomGenerator(seed) {
   let state = seed >>> 0;
   return () => {
@@ -94,126 +134,84 @@ function randomGenerator(seed) {
 }
 
 function gaussian(random) {
-  const first = Math.max(Number.EPSILON, random());
-  const second = random();
-  return Math.sqrt(-2 * Math.log(first)) * Math.cos(2 * Math.PI * second);
-}
-
-function casesFor(seed, noiseMeters) {
-  const random = randomGenerator(seed);
-  const cases = [];
-  for (let index = 1; index < geometry.length - 1; index += 1) {
-    for (let sample = 0; sample < samplesPerSegment; sample += 1) {
-      const fraction = random();
-      const start = geometry[index];
-      const end = geometry[index + 1];
-      const coordinate = [
-        start[0] + (end[0] - start[0]) * fraction,
-        start[1] + (end[1] - start[1]) * fraction,
-      ];
-      const longitudeScale = metersPerDegreeLatitude * Math.cos((coordinate[0] * Math.PI) / 180);
-      cases.push({
-        completedLength: projectedAlongRoute(index, fraction),
-        coordinate: [
-          coordinate[0] + (gaussian(random) * noiseMeters) / metersPerDegreeLatitude,
-          coordinate[1] + (gaussian(random) * noiseMeters) / longitudeScale,
-        ],
-        leg: legOf(index),
-      });
-    }
-  }
-  return cases;
-}
-
-// A resurrection is choosing a segment on the leg the driver is not travelling. Grading by leg
-// keeps the criterion independent of the window being swept. A distance rule cannot fire for any
-// window smaller than the rule itself, so it reports zero by construction for exactly the values
-// under test, which made the earlier table's low-window cells meaningless.
-function evaluate(cases, windowMeters) {
-  let degradedLegitimateMatches = 0;
-  let harmfulWrongLegMatches = 0;
-  let worstWrongLeg;
-  for (const sample of cases) {
-    const global = nearestSegment(
-      sample.coordinate,
-      sample.completedLength,
-      Number.POSITIVE_INFINITY,
-    );
-    const bounded = nearestSegment(sample.coordinate, sample.completedLength, windowMeters);
-    if (global === undefined || bounded === undefined)
-      throw new Error('Route search returned no candidate.');
-    // Wrong-leg matches near the U-turn are unavoidable and harmless: there the two carriageways
-    // coincide, so either answer draws the same road. Count only matches far enough back to redraw
-    // road the driver actually finished.
-    if (legOf(bounded.index) !== sample.leg && bounded.lookback > 500) {
-      harmfulWrongLegMatches += 1;
-      if (worstWrongLeg === undefined || bounded.lookback > worstWrongLeg.lookback) {
-        worstWrongLeg = bounded;
-      }
-    }
-    if (legOf(global.index) === sample.leg && bounded.distanceMeters - global.distanceMeters > 1) {
-      degradedLegitimateMatches += 1;
-    }
-  }
-  return { degradedLegitimateMatches, harmfulWrongLegMatches, worstWrongLeg };
-}
-
-const runs = [];
-for (const seed of seeds) {
-  for (const noiseMeters of noiseLevelsMeters) {
-    const cases = casesFor(seed, noiseMeters);
-    runs.push({ cases, noiseMeters, seed });
-  }
-}
-
-console.log(
-  `route: ${geometry.length} vertices, ${(cumulativeLengths.at(-1) / 1000).toFixed(2)} km`,
-);
-console.log('cells are harmful-wrong-leg-matches/legitimate-matches-degraded-by-more-than-1m');
-console.log(
-  `${'seed'.padStart(5)} ${'noise'.padStart(6)} | ${windowsMeters
-    .map((window) => (Number.isFinite(window) ? `${window}m` : 'global').padStart(8))
-    .join(' | ')}`,
-);
-for (const run of runs) {
-  const cells = windowsMeters.map((window) => {
-    const result = evaluate(run.cases, window);
-    return `${result.harmfulWrongLegMatches}/${result.degradedLegitimateMatches}`.padStart(8);
-  });
-  console.log(
-    `${String(run.seed).padStart(5)} ${`${run.noiseMeters}m`.padStart(6)} | ${cells.join(' | ')}`,
+  return (
+    Math.sqrt(-2 * Math.log(Math.max(Number.EPSILON, random()))) * Math.cos(2 * Math.PI * random())
   );
 }
 
-const allCases = runs.flatMap((run) => run.cases);
-const globalResult = evaluate(allCases, Number.POSITIVE_INFINITY);
-const selectedResult = evaluate(allCases, 250);
-const tightResult = evaluate(allCases, 50);
-console.log(
-  `control: ${globalResult.harmfulWrongLegMatches}/${allCases.length} harmful wrong-leg matches, ` +
-    `worst ${Math.round(globalResult.worstWrongLeg?.lookback ?? 0)} m behind`,
-);
+function cases() {
+  const generated = [];
+  for (const seed of seeds) {
+    const random = randomGenerator(seed);
+    for (let index = 1; index < geometry.length - 1; index += 1) {
+      for (let sample = 0; sample < samplesPerSegment; sample += 1) {
+        const completedLength = projectedAlongRoute(index, random());
+        // The puck trails the progress point, which is the only condition under which a backward
+        // search runs at all.
+        const puck = positionAt(completedLength - random() * maximumLagMeters);
+        const longitudeScale =
+          metersPerDegreeLatitude * Math.cos((puck.coordinate[0] * Math.PI) / 180);
+        generated.push({
+          completedLength,
+          coordinate: [
+            puck.coordinate[0] + (gaussian(random) * lateralNoiseMeters) / metersPerDegreeLatitude,
+            puck.coordinate[1] + (gaussian(random) * lateralNoiseMeters) / longitudeScale,
+          ],
+          leg: legOf(puck.index),
+        });
+      }
+    }
+  }
+  return generated;
+}
 
-// What this harness can and cannot establish.
-//
-// It cannot establish that a 250 m bound prevents splices more than 250 m back: the bound rejects
-// those candidates by construction, so any sweep column at or below the criterion is a tautology
-// rather than a measurement. Claiming a "safe band" from such a column would be circular.
-//
-// What it does establish is that the unbounded search is genuinely harmful on real geometry, and
-// what bounding costs: how often a bound rejects the correct same-leg segment. That cost, together
-// with the corner guarantee's >=186 m floor, is what selects the constant.
-if (globalResult.harmfulWrongLegMatches === 0) {
-  throw new Error('Control did not reproduce the defect.');
+// A wrong-leg match is harmful when the two carriageways are far apart along the route. Near the
+// turnaround they coincide, so either answer draws the same road.
+function wrongLegMatches(samples, maximumLookbackMeters) {
+  let count = 0;
+  let worstLookbackMeters = 0;
+  for (const sample of samples) {
+    const match = nearestSegment(sample.coordinate, sample.completedLength, maximumLookbackMeters);
+    if (match === undefined) continue;
+    if (legOf(match.index) !== sample.leg && match.lookback > 2 * maximumLagMeters) {
+      count += 1;
+      worstLookbackMeters = Math.max(worstLookbackMeters, match.lookback);
+    }
+  }
+  return { count, worstLookbackMeters };
 }
-if (selectedResult.harmfulWrongLegMatches !== 0) {
-  throw new Error('250 m admitted a harmful wrong-leg match.');
+
+const samples = cases();
+const unbounded = wrongLegMatches(samples, Number.POSITIVE_INFINITY);
+const bounded = wrongLegMatches(samples, shippedLookbackMeters);
+
+console.log(`route: ${geometry.length} vertices, ${(routeLengthMeters / 1000).toFixed(2)} km`);
+console.log(`turnaround derived at vertex ${turnaroundIndex}`);
+console.log(`samples: ${samples.length} (lagging puck, ${lateralNoiseMeters} m lateral noise)`);
+console.log(
+  `unbounded search: ${unbounded.count} wrong-carriageway matches, ` +
+    `worst ${Math.round(unbounded.worstLookbackMeters)} m behind`,
+);
+console.log(`${shippedLookbackMeters} m bound: ${bounded.count} wrong-carriageway matches`);
+
+if (turnaroundIndex <= 0 || turnaroundIndex >= geometry.length - 1) {
+  throw new Error('Turnaround derivation failed; the fixture may not be an out-and-back.');
 }
-if (tightResult.degradedLegitimateMatches <= selectedResult.degradedLegitimateMatches) {
-  throw new Error('A 50 m bound was expected to reject more correct matches than 250 m.');
+if (unbounded.count === 0) {
+  throw new Error('Control did not reproduce the defect; the harness proves nothing.');
+}
+// The bound does not eliminate wrong-carriageway matches and this script does not pretend it
+// does. Where the two carriageways run within the lookback of each other along the route, a puck
+// with lateral noise is genuinely ambiguous from position alone, and resolving that would need
+// heading. What the bound removes is the catastrophic case: a splice kilometres back. Require a
+// large reduction and report the residual rather than asserting zero.
+if (bounded.count * 10 > unbounded.count) {
+  throw new Error(
+    `The bound reduced wrong-carriageway matches only from ${unbounded.count} to ${bounded.count}.`,
+  );
 }
 console.log(
-  `PASS: control harmful; 250 m admits none; 50 m rejects ` +
-    `${tightResult.degradedLegitimateMatches} correct matches vs ` +
-    `${selectedResult.degradedLegitimateMatches} at 250 m.`,
+  `PASS: bound cuts wrong-carriageway matches ${unbounded.count} -> ${bounded.count}; ` +
+    `residual is near-turnaround ambiguity, bounded to ${shippedLookbackMeters} m rather than ` +
+    `${Math.round(unbounded.worstLookbackMeters)} m.`,
 );
