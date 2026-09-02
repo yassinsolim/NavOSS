@@ -76,10 +76,16 @@ Apple credentials belong in EAS credential storage or App Store Connect, not in 
 
 ## Release Procedure
 
-`EXPO_TOKEN` is now configured in the `app-store-production` environment, so the GitHub path works.
-Verified on 2026-09-02: run 33616401716 passed every step including the token guard and queued
-build 52, the first build in this project's history initiated by CI rather than from a local EAS
-session. Issue #24 is closed.
+`EXPO_TOKEN` is configured in the `app-store-production` environment, and the GitHub path was
+verified end to end on 2026-09-02. Run 33616401716 passed every step including the token guard,
+queued build 52, and that build reached TestFlight: EAS build `FINISHED`, submission `FINISHED`,
+and App Store Connect reporting `0.1.0 (52)` in beta testing. It is the first build in this
+project's history produced by CI rather than from a local EAS session, which is what issue #24
+reported.
+
+That is a dated observation, not a guarantee. An Expo token can be revoked or expire, and the
+workflow fails closed at its guard when that happens, so treat a red `Require Expo token` step as
+the token needing renewal rather than as a workflow regression.
 
 Releasing from a machine with an EAS session also still works, and is the fallback when the
 workflow is unavailable:
