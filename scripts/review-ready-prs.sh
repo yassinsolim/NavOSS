@@ -103,10 +103,16 @@ EOF
     "@$review_directory/prompt.txt" \
     "@$review_directory/pr.json" \
     "@$review_directory/diff.patch" \
-    > "$review_directory/review.md"; then
+    > "$review_directory/raw.md"; then
     echo "$LOG_PREFIX OMP review failed for PR #$number; it will retry next poll" >&2
     continue
   fi
+
+  # Print mode interleaves progress chrome and ANSI escapes with the model's answer, so take the
+  # review to be the first VERDICT line through the end rather than assuming a pristine stdout.
+  sed 's/\x1B\[[0-9;]*[A-Za-z]//g' "$review_directory/raw.md" \
+    | awk '/^VERDICT: (approve|comment|request-changes)$/ { found = 1 } found { print }' \
+    > "$review_directory/review.md"
 
   if ! grep -Eq '^VERDICT: (approve|comment|request-changes)$' "$review_directory/review.md"; then
     echo "$LOG_PREFIX invalid verdict for PR #$number; it will retry next poll" >&2
