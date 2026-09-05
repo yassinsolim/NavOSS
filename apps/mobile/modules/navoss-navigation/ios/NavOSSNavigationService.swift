@@ -226,7 +226,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     let hasActiveNavigation = update.trip != nil && update.snapshot.phase != .arrived
     let shouldTrack = navOSSShouldTrackLocation(
       hasActiveNavigation: hasActiveNavigation,
-      isCarPlayRoutePlanning: carPlayRoutePlanningLeases.isActive
+      isCarPlayRoutePlanning: carPlayRoutePlanningLeases.isActive,
+      isCarPlayConnected: carPlayConnected
     )
     let generation = navigationGeneration
     lock.unlock()
@@ -415,7 +416,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     let hasActiveNavigation = update.trip != nil && update.snapshot.phase != .arrived
     let shouldTrack = navOSSShouldTrackLocation(
       hasActiveNavigation: hasActiveNavigation,
-      isCarPlayRoutePlanning: carPlayRoutePlanningLeases.isActive
+      isCarPlayRoutePlanning: carPlayRoutePlanningLeases.isActive,
+      isCarPlayConnected: carPlayConnected
     )
     lock.unlock()
     guard shouldTrack else {
@@ -887,8 +889,12 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     lock.lock()
     let update = navigationSession.currentUpdate()
     let hasActiveTrip = update.trip != nil && update.snapshot.phase != .arrived
+    let isCarPlayConnected = carPlayConnected
     lock.unlock()
-    if hasActiveTrip,
+    if navOSSShouldHoldBackgroundLocationSession(
+      hasActiveNavigation: hasActiveTrip,
+      isCarPlayConnected: isCarPlayConnected
+    ),
       backgroundLocationEnabled,
       #available(iOS 17.0, *),
       backgroundActivitySession == nil
@@ -954,7 +960,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       let generationMatches = expectedGeneration.map { $0 == self.navigationGeneration } ?? true
       let shouldTrack = navOSSShouldTrackLocation(
         hasActiveNavigation: hasActiveNavigation,
-        isCarPlayRoutePlanning: self.carPlayRoutePlanningLeases.isActive
+        isCarPlayRoutePlanning: self.carPlayRoutePlanningLeases.isActive,
+        isCarPlayConnected: self.carPlayConnected
       )
       let shouldStop =
         force

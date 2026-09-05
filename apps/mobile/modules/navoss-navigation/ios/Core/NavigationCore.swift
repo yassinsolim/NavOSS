@@ -41,11 +41,30 @@ struct NavOSSLocationTrackingLeases {
   }
 }
 
+/// Whether Core Location should be running.
+///
+/// A connected CarPlay display counts. The driver is looking at a map in a vehicle and the phone is
+/// usually locked in a pocket or cradle, so tracking only during an active trip leaves the idle
+/// CarPlay map frozen until the phone is woken by hand.
 func navOSSShouldTrackLocation(
   hasActiveNavigation: Bool,
-  isCarPlayRoutePlanning: Bool
+  isCarPlayRoutePlanning: Bool,
+  isCarPlayConnected: Bool = false
 ) -> Bool {
-  hasActiveNavigation || isCarPlayRoutePlanning
+  hasActiveNavigation || isCarPlayRoutePlanning || isCarPlayConnected
+}
+
+/// Whether to hold a `CLBackgroundActivitySession`.
+///
+/// Under When In Use authorization this is what keeps location alive once the screen sleeps. Both
+/// conditions are cases where the driver still depends on position with the phone untouched: an
+/// active trip, or a connected CarPlay display. Idle phone use is excluded, because the map is not
+/// visible then and the session would cost battery and show the indicator for nothing.
+func navOSSShouldHoldBackgroundLocationSession(
+  hasActiveNavigation: Bool,
+  isCarPlayConnected: Bool
+) -> Bool {
+  hasActiveNavigation || isCarPlayConnected
 }
 
 func navOSSCarPlayPublishedPosition(

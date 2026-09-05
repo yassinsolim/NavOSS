@@ -4,6 +4,61 @@ import XCTest
 @testable import NavOSSNavigationCore
 
 final class NavigationCoreTests: XCTestCase {
+  /// The reported freeze: with CarPlay connected but no trip started, tracking used to stop, so the
+  /// map sat still until the phone was woken by hand. A connected display must keep location alive
+  /// on its own.
+  func testLocationTracksWhileCarPlayIsConnectedWithoutATrip() {
+    XCTAssertTrue(
+      navOSSShouldTrackLocation(
+        hasActiveNavigation: false,
+        isCarPlayRoutePlanning: false,
+        isCarPlayConnected: true
+      )
+    )
+  }
+
+  func testLocationStopsOnceCarPlayDisconnectsWithNoOtherReason() {
+    XCTAssertFalse(
+      navOSSShouldTrackLocation(
+        hasActiveNavigation: false,
+        isCarPlayRoutePlanning: false,
+        isCarPlayConnected: false
+      ),
+      "an idle phone with no display attached must not keep the location manager running"
+    )
+  }
+
+  /// Under When In Use authorization this session is what survives the screen sleeping. Without it
+  /// the CarPlay map freezes exactly as reported.
+  func testBackgroundSessionHeldWhileCarPlayIsConnected() {
+    XCTAssertTrue(
+      navOSSShouldHoldBackgroundLocationSession(
+        hasActiveNavigation: false,
+        isCarPlayConnected: true
+      )
+    )
+  }
+
+  func testBackgroundSessionHeldDuringActiveNavigation() {
+    XCTAssertTrue(
+      navOSSShouldHoldBackgroundLocationSession(
+        hasActiveNavigation: true,
+        isCarPlayConnected: false
+      )
+    )
+  }
+
+  /// Idle phone use is deliberately excluded: the map is not visible, so a session would only cost
+  /// battery and show the background indicator for nothing.
+  func testNoBackgroundSessionForIdlePhoneUse() {
+    XCTAssertFalse(
+      navOSSShouldHoldBackgroundLocationSession(
+        hasActiveNavigation: false,
+        isCarPlayConnected: false
+      )
+    )
+  }
+
   func testLocationTrackingRequiresPlanningOrActiveNavigation() {
     XCTAssertFalse(
       navOSSShouldTrackLocation(
