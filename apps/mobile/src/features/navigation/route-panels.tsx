@@ -573,6 +573,51 @@ export function CarPlayCompanionPanel({
   );
 }
 
+interface CarPlayIdlePanelProps {
+  bottomInset: number;
+  safeAreaTop: number;
+}
+
+/// Shown whenever CarPlay is connected without active guidance. The phone deliberately renders no
+/// map here: the car screen owns the driving surface, and a second MapLibre view on the handset
+/// costs battery and GPU for a display the driver should not be looking at.
+export function CarPlayIdlePanel({ bottomInset, safeAreaTop }: CarPlayIdlePanelProps) {
+  return (
+    <Animated.View
+      entering={FadeIn.duration(220).reduceMotion(ReduceMotion.System)}
+      exiting={FadeOut.duration(150).reduceMotion(ReduceMotion.System)}
+      style={[
+        styles.carPlayCompanion,
+        {
+          paddingBottom: Math.max(bottomInset, 20),
+          paddingTop: Math.max(safeAreaTop, 20),
+        },
+      ]}
+    >
+      <View style={styles.carPlayConnectionRow}>
+        <View style={styles.carPlayConnectionDot} />
+        <Text style={styles.carPlayConnectionText}>CarPlay</Text>
+      </View>
+
+      <View
+        accessibilityLabel="NavOSS is running on your car's display. Search and start a route from the car screen."
+        accessible
+        style={styles.carPlayIdleBody}
+      >
+        <SymbolView
+          name={{ android: 'directions_car', ios: 'car.fill' }}
+          size={72}
+          tintColor={NavOssColors.sky}
+        />
+        <Text style={styles.carPlayIdleTitle}>Navigating on your car's display</Text>
+        <Text style={styles.carPlayIdleSubtitle}>
+          Search and start a route from the car screen.
+        </Text>
+      </View>
+    </Animated.View>
+  );
+}
+
 interface SafetyCameraAlertBannerProps {
   camera: SafetyCamera;
   distanceAheadMeters: number;
@@ -1086,6 +1131,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingBottom: 20,
     paddingTop: 12,
+  },
+  carPlayIdleBody: {
+    alignItems: 'center',
+    flex: 1,
+    gap: 14,
+    justifyContent: 'center',
+    paddingBottom: 40,
+  },
+  carPlayIdleSubtitle: {
+    color: NavOssColors.sky,
+    fontFamily: NavOssFonts.medium,
+    fontSize: 16,
+    letterSpacing: 0,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  carPlayIdleTitle: {
+    color: NavOssColors.white,
+    fontFamily: NavOssFonts.bold,
+    fontSize: 26,
+    letterSpacing: 0,
+    lineHeight: 32,
+    textAlign: 'center',
   },
   carPlayInstruction: {
     color: NavOssColors.white,
