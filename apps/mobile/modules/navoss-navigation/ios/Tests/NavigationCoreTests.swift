@@ -4,23 +4,141 @@ import XCTest
 @testable import NavOSSNavigationCore
 
 final class NavigationCoreTests: XCTestCase {
+  /// Accepting a location while no trip runs must not touch the CarPlay store.
+  ///
+  /// The main scene rebuilds itself from `navOSSCarPlayStateDidChange`, and its no-trip branch is a
+  /// full teardown: it cancels the in-flight route task, empties the route choices, releases the
+  /// planning lease, and hides trip previews. Publishing a per-fix idle position through that state
+  /// posted the notification about once a second, which cancelled route planning before the driver
+  /// could pick a route. Idle position belongs to the map layer, not to shared trip state.
+  func testIdlePositionDoesNotDisturbSharedCarPlayState() {
+    let center = NotificationCenter()
+    let store = NavOSSCarPlayTripStore(notificationCenter: center)
+    store.setConnected(true)
+
+    var posts = 0
+    let observer = center.addObserver(
+      forName: .navOSSCarPlayStateDidChange,
+      object: store,
+      queue: nil
+    ) { _ in posts += 1 }
+    defer { center.removeObserver(observer) }
+
+    // Re-publishing the same idle-state connection must stay silent; only real transitions post.
+    store.setConnected(true)
+
+    XCTAssertEqual(posts, 0)
+  }
+
+  /// A Dashboard-only connection must count. Plugging in and never opening NavOSS on the head-unit
+  /// screen connects the Dashboard scene alone; when only the template scene reported connection,
+  /// nothing tracked and the idle map froze on exactly that path.
+  func testDashboardAloneCountsAsConnected() {
+    var scenes = NavOSSCarPlayConnectedScenes()
+    XCTAssertFalse(scenes.isConnected)
+
+    scenes.set(true, scene: "dashboard")
+
+    XCTAssertTrue(scenes.isConnected)
+  }
+
+  /// Either scene disconnecting must not drop location while the other is still on screen.
+  func testConnectionSurvivesUntilEverySceneDisconnects() {
+    var scenes = NavOSSCarPlayConnectedScenes()
+    scenes.set(true, scene: "template")
+    scenes.set(true, scene: "dashboard")
+
+    scenes.set(false, scene: "template")
+    XCTAssertTrue(scenes.isConnected)
+
+    scenes.set(false, scene: "dashboard")
+    XCTAssertFalse(scenes.isConnected)
+  }
+
+  /// Disconnect arriving for a scene that never connected must not flip the state on.
+  func testRepeatedDisconnectStaysDisconnected() {
+    var scenes = NavOSSCarPlayConnectedScenes()
+    scenes.set(false, scene: "dashboard")
+    scenes.set(false, scene: "template")
+
+    XCTAssertFalse(scenes.isConnected)
+  }
+
+  /// The reported freeze: with CarPlay connected but no trip started, tracking used to stop, so the
+  /// map sat still until the phone was woken by hand. A connected display must keep location alive
+  /// on its own.
+  func testLocationTracksWhileCarPlayIsConnectedWithoutATrip() {
+    XCTAssertTrue(
+      navOSSShouldTrackLocation(
+        hasActiveNavigation: false,
+        isCarPlayRoutePlanning: false,
+        isCarPlayConnected: true
+      )
+    )
+  }
+
+  func testLocationStopsOnceCarPlayDisconnectsWithNoOtherReason() {
+    XCTAssertFalse(
+      navOSSShouldTrackLocation(
+        hasActiveNavigation: false,
+        isCarPlayRoutePlanning: false,
+        isCarPlayConnected: false
+      ),
+      "an idle phone with no display attached must not keep the location manager running"
+    )
+  }
+
+  /// Under When In Use authorization this session is what survives the screen sleeping. Without it
+  /// the CarPlay map freezes exactly as reported.
+  func testBackgroundSessionHeldWhileCarPlayIsConnected() {
+    XCTAssertTrue(
+      navOSSShouldHoldBackgroundLocationSession(
+        hasActiveNavigation: false,
+        isCarPlayConnected: true
+      )
+    )
+  }
+
+  func testBackgroundSessionHeldDuringActiveNavigation() {
+    XCTAssertTrue(
+      navOSSShouldHoldBackgroundLocationSession(
+        hasActiveNavigation: true,
+        isCarPlayConnected: false
+      )
+    )
+  }
+
+  /// Idle phone use is deliberately excluded: the map is not visible, so a session would only cost
+  /// battery and show the background indicator for nothing.
+  func testNoBackgroundSessionForIdlePhoneUse() {
+    XCTAssertFalse(
+      navOSSShouldHoldBackgroundLocationSession(
+        hasActiveNavigation: false,
+        isCarPlayConnected: false
+      )
+    )
+  }
+
   func testLocationTrackingRequiresPlanningOrActiveNavigation() {
     XCTAssertFalse(
       navOSSShouldTrackLocation(
         hasActiveNavigation: false,
-        isCarPlayRoutePlanning: false
+        isCarPlayRoutePlanning: false,
+        isCarPlayConnected: false
       )
     )
     XCTAssertTrue(
       navOSSShouldTrackLocation(
         hasActiveNavigation: false,
-        isCarPlayRoutePlanning: true
+        isCarPlayRoutePlanning: true,
+        isCarPlayConnected: false
       )
     )
     XCTAssertTrue(
       navOSSShouldTrackLocation(
         hasActiveNavigation: true,
-        isCarPlayRoutePlanning: false
+        isCarPlayRoutePlanning: false,
+        isCarPlayConnected: false
       )
     )
   }

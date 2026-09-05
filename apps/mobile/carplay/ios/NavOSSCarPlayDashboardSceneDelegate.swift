@@ -43,6 +43,10 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
     didConnect dashboardController: CPDashboardController,
     to window: UIWindow
   ) {
+    // A Dashboard-only connection is the common case of plugging in and never opening NavOSS on
+    // the head-unit screen. It is just as much a live map in a vehicle as the template scene, so
+    // it must hold location too.
+    NavOSSNavigationService.shared.setCarPlayConnected(true, scene: "dashboard")
     dashboardWindow = window
     let mapViewController = NavOSSCarPlayMapViewController()
     mapViewController.reservesRouteChoiceSheet = false
@@ -88,6 +92,7 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
     didDisconnect dashboardController: CPDashboardController,
     from window: UIWindow
   ) {
+    NavOSSNavigationService.shared.setCarPlayConnected(false, scene: "dashboard")
     if let stateObserver {
       NotificationCenter.default.removeObserver(stateObserver)
       self.stateObserver = nil

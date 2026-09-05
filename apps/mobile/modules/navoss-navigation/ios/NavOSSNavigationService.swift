@@ -37,7 +37,13 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private var announcementState = NavOSSCarPlayAudioState()
   private var audioSessionNeedsDeactivation = false
   private var backgroundActivitySession: AnyObject?
-  private var carPlayConnected = false
+  /// Scenes currently reporting a connected CarPlay display.
+  ///
+  /// The template scene and the Dashboard scene connect and disconnect independently, and either
+  /// alone is a reason to keep tracking. A single flag let whichever disconnected first clear the
+  /// state while the other was still on screen.
+  private var carPlayConnectedScenes = NavOSSCarPlayConnectedScenes()
+  private var carPlayConnected: Bool { carPlayConnectedScenes.isConnected }
   private var carPlayRoutePlanningLeases = NavOSSLocationTrackingLeases()
   private let lock = NSRecursiveLock()
   private var locationManager: CLLocationManager?
@@ -216,17 +222,20 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     stopLocationUpdates(expectedGeneration: generation)
   }
 
-  public func setCarPlayConnected(_ connected: Bool) {
+  /// `scene` names the CarPlay scene reporting the change, so the template and Dashboard scenes
+  /// can connect and disconnect in any order without one clearing the other's state.
+  public func setCarPlayConnected(_ connected: Bool, scene: String) {
     lock.lock()
-    carPlayConnected = connected
-    if !connected {
+    carPlayConnectedScenes.set(connected, scene: scene)
+    if !carPlayConnected {
       carPlayRoutePlanningLeases.removeAll()
     }
     let update = navigationSession.currentUpdate()
     let hasActiveNavigation = update.trip != nil && update.snapshot.phase != .arrived
     let shouldTrack = navOSSShouldTrackLocation(
       hasActiveNavigation: hasActiveNavigation,
-      isCarPlayRoutePlanning: carPlayRoutePlanningLeases.isActive
+      isCarPlayRoutePlanning: carPlayRoutePlanningLeases.isActive,
+      isCarPlayConnected: carPlayConnected
     )
     let generation = navigationGeneration
     lock.unlock()
@@ -323,6 +332,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     }
     latestLocation = location
     lock.unlock()
+
     let course =
       location.speed >= 2 && (0..<360).contains(location.course)
       ? location.course
@@ -415,7 +425,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     let hasActiveNavigation = update.trip != nil && update.snapshot.phase != .arrived
     let shouldTrack = navOSSShouldTrackLocation(
       hasActiveNavigation: hasActiveNavigation,
-      isCarPlayRoutePlanning: carPlayRoutePlanningLeases.isActive
+      isCarPlayRoutePlanning: carPlayRoutePlanningLeases.isActive,
+      isCarPlayConnected: carPlayConnected
     )
     lock.unlock()
     guard shouldTrack else {
@@ -462,7 +473,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     // identical simulated track at 1 m/s, `distanceFilter = 5` delivered 11 callbacks with a
     // median gap of 5030 ms, while `kCLDistanceFilterNone` delivered 71 with a median of
     // 1008 ms. Crawling traffic is exactly when the puck must keep moving, so this manager,
-    // which only runs during active guidance or CarPlay route planning, takes every fix the OS
+    // which runs during active guidance, CarPlay route planning, or while a CarPlay display is
+    // connected, takes every fix the OS
     // will give it. `kCLLocationAccuracyBestForNavigation` already dominates power here.
     manager.distanceFilter = kCLDistanceFilterNone
     manager.pausesLocationUpdatesAutomatically = false
@@ -887,8 +899,12 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     lock.lock()
     let update = navigationSession.currentUpdate()
     let hasActiveTrip = update.trip != nil && update.snapshot.phase != .arrived
+    let isCarPlayConnected = carPlayConnected
     lock.unlock()
-    if hasActiveTrip,
+    if navOSSShouldHoldBackgroundLocationSession(
+      hasActiveNavigation: hasActiveTrip,
+      isCarPlayConnected: isCarPlayConnected
+    ),
       backgroundLocationEnabled,
       #available(iOS 17.0, *),
       backgroundActivitySession == nil
@@ -954,7 +970,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       let generationMatches = expectedGeneration.map { $0 == self.navigationGeneration } ?? true
       let shouldTrack = navOSSShouldTrackLocation(
         hasActiveNavigation: hasActiveNavigation,
-        isCarPlayRoutePlanning: self.carPlayRoutePlanningLeases.isActive
+        isCarPlayRoutePlanning: self.carPlayRoutePlanningLeases.isActive,
+        isCarPlayConnected: self.carPlayConnected
       )
       let shouldStop =
         force

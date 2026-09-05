@@ -216,8 +216,10 @@ describe('Google Places build configuration', () => {
       'isCarPlayRoutePlanning: carPlayRoutePlanningLeases.isActive',
     );
     expect(navigationService.match(/navOSSShouldTrackLocation\(/g)).toHaveLength(3);
+    // Planning leases must be released once no CarPlay scene remains connected, rather than when
+    // whichever scene reported the change happens to be disconnecting.
     expect(navigationService).toContain(
-      'if !connected {\n      carPlayRoutePlanningLeases.removeAll()',
+      'if !carPlayConnected {\n      carPlayRoutePlanningLeases.removeAll()',
     );
     expect(carPlayScene).not.toContain(
       'NavOSSNavigationService.shared.prepareForCarPlayRoutePlanning()',

@@ -317,7 +317,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       }
     }
     NavOSSCarPlayTripStore.shared.setConnected(true)
-    NavOSSNavigationService.shared.setCarPlayConnected(true)
+    NavOSSNavigationService.shared.setCarPlayConnected(true, scene: "template")
     apply(NavOSSCarPlayTripStore.shared.snapshot())
     performPendingDashboardAction()
   }
@@ -371,7 +371,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     settingsCategory = nil
     settingsTemplate = nil
     NavOSSCarPlayTripStore.shared.setConnected(false)
-    NavOSSNavigationService.shared.setCarPlayConnected(false)
+    NavOSSNavigationService.shared.setCarPlayConnected(false, scene: "template")
     self.interfaceController = nil
     carWindow = nil
     mapTemplate = nil
