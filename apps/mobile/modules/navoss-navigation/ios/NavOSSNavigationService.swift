@@ -323,7 +323,22 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       return
     }
     latestLocation = location
+    let update = navigationSession.currentUpdate()
+    let hasActiveTrip = update.trip != nil && update.snapshot.phase != .arrived
     lock.unlock()
+
+    // With no trip running nothing else publishes a position, so an idle CarPlay map would fall
+    // back to MapLibre's own location manager, which this app never configures for background
+    // delivery. Publishing here keeps the manager that holds the background session as the single
+    // source of position, which is what keeps the map moving once the screen sleeps.
+    if !hasActiveTrip {
+      NavOSSCarPlayTripStore.shared.publishIdleCoordinate(
+        NavOSSCarPlayCoordinate(
+          latitude: location.coordinate.latitude,
+          longitude: location.coordinate.longitude
+        )
+      )
+    }
     let course =
       location.speed >= 2 && (0..<360).contains(location.course)
       ? location.course

@@ -107,7 +107,13 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
     guard let mapViewController else { return }
     guard let trip = state.trip else {
       mapViewController.clearRoute()
-      mapViewController.recenter()
+      // Render the service's fix rather than leaving the dot to MapLibre's own manager, which is
+      // what froze the idle map once the phone's screen slept.
+      if let idleCoordinate = state.idleCoordinate {
+        mapViewController.displayIdleLocation(idleCoordinate, animated: true)
+      } else {
+        mapViewController.recenter()
+      }
       return
     }
     let activeGuidance = state.guidance?.phase == .navigating || state.guidance?.phase == .arrived

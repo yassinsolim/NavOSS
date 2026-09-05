@@ -4,6 +4,33 @@ import XCTest
 @testable import NavOSSNavigationCore
 
 final class NavigationCoreTests: XCTestCase {
+  /// An idle map must be able to render from the service's own fix. Before this the dot came from
+  /// MapLibre's separate location manager, which nothing configures for background delivery, so it
+  /// stopped once the screen slept.
+  func testIdleCoordinateIsPublishedForMapsToRender() {
+    let store = NavOSSCarPlayTripStore(notificationCenter: NotificationCenter())
+    XCTAssertNil(store.snapshot().idleCoordinate)
+
+    let fix = NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719)
+    store.publishIdleCoordinate(fix)
+
+    XCTAssertEqual(store.snapshot().idleCoordinate, fix)
+  }
+
+  /// Connecting or disconnecting a display must not discard the last known idle fix, or the map
+  /// blanks on every state change until another location arrives.
+  func testIdleCoordinateSurvivesConnectionChanges() {
+    let store = NavOSSCarPlayTripStore(notificationCenter: NotificationCenter())
+    let fix = NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719)
+    store.publishIdleCoordinate(fix)
+
+    store.setConnected(true)
+    XCTAssertEqual(store.snapshot().idleCoordinate, fix)
+
+    store.setConnected(false)
+    XCTAssertEqual(store.snapshot().idleCoordinate, fix)
+  }
+
   /// The reported freeze: with CarPlay connected but no trip started, tracking used to stop, so the
   /// map sat still until the phone was woken by hand. A connected display must keep location alive
   /// on its own.

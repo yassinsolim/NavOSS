@@ -470,6 +470,11 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       mapTemplate?.automaticallyHidesNavigationBar = false
       mapTemplate?.trailingNavigationBarButtons = []
       mapViewController?.clearRoute()
+      // Render the service's fix rather than leaving the idle dot to MapLibre's own manager, which
+      // is what froze the map once the phone's screen slept.
+      if let idleCoordinate = state.idleCoordinate {
+        mapViewController?.displayIdleLocation(idleCoordinate, animated: true)
+      }
       return
     }
 
