@@ -4,6 +4,7 @@ import {
   type PhoneRouteStatus,
   type PhoneSurfaceInput,
   phoneSurface,
+  releasesPhoneRouteOnCarPlayConnect,
 } from '../src/features/navigation/phone-surface';
 
 const ALL_STATUSES: PhoneRouteStatus[] = [
@@ -56,5 +57,29 @@ describe('phone surface while CarPlay is disconnected', () => {
     for (const routeStatus of ALL_STATUSES) {
       expect(surface({ carPlayConnected: false, routeStatus })).toBe('map');
     }
+  });
+});
+
+describe('releasing a phone-side route when the car connects', () => {
+  it('releases plans the companion offers no way to act on', () => {
+    // Loading, failed, and preview plans render Retry, Cancel, and Start on the phone map. The
+    // companion has none of those, and the plan never crossed the native bridge, so leaving it
+    // live strands the driver on both surfaces.
+    for (const routeStatus of ['error', 'loading', 'preview'] as PhoneRouteStatus[]) {
+      expect(releasesPhoneRouteOnCarPlayConnect(routeStatus)).toBe(true);
+    }
+  });
+
+  it('leaves a running or completed trip alone for the car scene to restore', () => {
+    for (const routeStatus of ['arrived', 'idle', 'navigating'] as PhoneRouteStatus[]) {
+      expect(releasesPhoneRouteOnCarPlayConnect(routeStatus)).toBe(false);
+    }
+  });
+
+  it('covers every route status, so a new state must make an explicit choice', () => {
+    const decided = ALL_STATUSES.filter(
+      (routeStatus) => typeof releasesPhoneRouteOnCarPlayConnect(routeStatus) === 'boolean',
+    );
+    expect(decided).toHaveLength(ALL_STATUSES.length);
   });
 });

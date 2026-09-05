@@ -25,3 +25,13 @@ export function phoneSurface({
   if (routeStatus === 'navigating' && guidanceResolved) return 'guidance';
   return 'carplay-idle';
 }
+
+/// Whether a phone-side route must be released when the car connects.
+///
+/// The companion offers no retry, cancel, or Start affordance, and a plan that never reached the
+/// native bridge has no car-side counterpart to recover it. Releasing beats stranding the driver
+/// behind a surface that cannot act on it. A trip already running or arrived is left alone: the
+/// car scene restores those, and the companion drives them.
+export function releasesPhoneRouteOnCarPlayConnect(routeStatus: PhoneRouteStatus): boolean {
+  return routeStatus === 'error' || routeStatus === 'loading' || routeStatus === 'preview';
+}

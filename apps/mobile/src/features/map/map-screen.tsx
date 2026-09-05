@@ -128,7 +128,11 @@ import {
   RoutePreviewPanel,
   SafetyCameraAlertBanner,
 } from '@/features/navigation/route-panels';
-import { phoneSurface } from '@/features/navigation/phone-surface';
+import {
+  type PhoneRouteStatus,
+  phoneSurface,
+  releasesPhoneRouteOnCarPlayConnect,
+} from '@/features/navigation/phone-surface';
 import { RouteStopsEditor } from '@/features/navigation/route-stops-editor';
 import {
   buildEtaShareMessage,
@@ -1911,6 +1915,26 @@ export function MapScreen() {
     handleEndNavigation();
   });
 
+  // Both directions, so adding or removing a route state on either side fails the build rather
+  // than leaving `phoneSurface` silently deciding for a state it no longer knows about.
+  const _routeStatusParity: PhoneRouteStatus extends RouteUiState['type']
+    ? RouteUiState['type'] extends PhoneRouteStatus
+      ? true
+      : never
+    : never = true;
+  void _routeStatusParity;
+
+  const handleCarPlayStateChanged = useEffectEvent((connected: boolean) => {
+    const justConnected = connected && !carPlayConnected;
+    setCarPlayConnected(connected);
+    if (!justConnected) return;
+    // The car owns route planning from here, and a plan the companion cannot act on is released
+    // rather than stranded behind it.
+    if (releasesPhoneRouteOnCarPlayConnect(routeState.type)) {
+      handleCancelRoute();
+    }
+  });
+
   useEffect(() => {
     const initialCarPlayState = getCarPlayState();
     const initialPreferences = getNavigationPreferences();
@@ -1918,7 +1942,7 @@ export function MapScreen() {
     setNavigationAudioModeState(initialPreferences.audioMode);
     setRoutePreferences(initialPreferences.routePreferences);
     const stateSubscription = observeCarPlayState((state) => {
-      setCarPlayConnected(state.connected);
+      handleCarPlayStateChanged(state.connected);
     });
     const preferencesSubscription = observeNavigationPreferences((preferences) => {
       setNavigationAudioModeState(preferences.audioMode);
@@ -1977,36 +2001,39 @@ export function MapScreen() {
   const selectedPlaceWebsiteUrl = placeWebsiteUrl(selectedResult?.details?.website);
   const selectedPlaceWebsiteLabel = placeWebsiteLabel(selectedResult?.details?.website);
 
-  // CarPlay owns the driving surface, so every connected state resolves to a companion and the
-  // phone never runs a second map view against the car's.
-  const surface = phoneSurface({
-    carPlayConnected,
-    guidanceResolved:
-      guidanceStep !== undefined && remainingRoute !== undefined && remainingStep !== undefined,
-    routeStatus: routeState.type,
-  });
-
-  if (
-    surface === 'guidance' &&
+  // The single resolved maneuver snapshot. Deriving both the surface decision and the render from
+  // this one value keeps them from drifting apart and silently restoring the map fall-through.
+  const carPlayGuidance =
     routeState.type === 'navigating' &&
     guidanceStep !== undefined &&
     remainingRoute !== undefined &&
     remainingStep !== undefined
-  ) {
+      ? { destination: routeState.destination, guidanceStep, remainingRoute, remainingStep }
+      : undefined;
+
+  // CarPlay owns the driving surface, so every connected state resolves to a companion and the
+  // phone never runs a second map view against the car's.
+  const surface = phoneSurface({
+    carPlayConnected,
+    guidanceResolved: carPlayGuidance !== undefined,
+    routeStatus: routeState.type,
+  });
+
+  if (surface === 'guidance' && carPlayGuidance !== undefined) {
     return (
       <View style={styles.container}>
         <StatusBar style="light" />
         <CarPlayCompanionPanel
           actionLabel="End"
           bottomInset={insets.bottom}
-          destinationName={routeState.destination.name}
-          distanceMeters={remainingStep.distanceMeters}
-          durationSeconds={remainingRoute.durationSeconds}
-          instruction={guidanceStep.instruction}
-          maneuverType={guidanceStep.maneuverType}
+          destinationName={carPlayGuidance.destination.name}
+          distanceMeters={carPlayGuidance.remainingStep.distanceMeters}
+          durationSeconds={carPlayGuidance.remainingRoute.durationSeconds}
+          instruction={carPlayGuidance.guidanceStep.instruction}
+          maneuverType={carPlayGuidance.guidanceStep.maneuverType}
           onAction={handleEndNavigation}
-          remainingDistanceMeters={remainingRoute.distanceMeters}
-          roadName={guidanceStep.roadName}
+          remainingDistanceMeters={carPlayGuidance.remainingRoute.distanceMeters}
+          roadName={carPlayGuidance.guidanceStep.roadName}
           safeAreaTop={insets.top}
         />
       </View>
