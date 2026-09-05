@@ -49,7 +49,7 @@ struct NavOSSLocationTrackingLeases {
 func navOSSShouldTrackLocation(
   hasActiveNavigation: Bool,
   isCarPlayRoutePlanning: Bool,
-  isCarPlayConnected: Bool = false
+  isCarPlayConnected: Bool
 ) -> Bool {
   hasActiveNavigation || isCarPlayRoutePlanning || isCarPlayConnected
 }

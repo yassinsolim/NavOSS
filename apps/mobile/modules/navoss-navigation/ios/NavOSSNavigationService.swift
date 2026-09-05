@@ -479,7 +479,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     // identical simulated track at 1 m/s, `distanceFilter = 5` delivered 11 callbacks with a
     // median gap of 5030 ms, while `kCLDistanceFilterNone` delivered 71 with a median of
     // 1008 ms. Crawling traffic is exactly when the puck must keep moving, so this manager,
-    // which only runs during active guidance or CarPlay route planning, takes every fix the OS
+    // which runs during active guidance, CarPlay route planning, or while a CarPlay display is
+    // connected, takes every fix the OS
     // will give it. `kCLLocationAccuracyBestForNavigation` already dominates power here.
     manager.distanceFilter = kCLDistanceFilterNone
     manager.pausesLocationUpdatesAutomatically = false

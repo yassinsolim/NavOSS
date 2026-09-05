@@ -90,19 +90,22 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertFalse(
       navOSSShouldTrackLocation(
         hasActiveNavigation: false,
-        isCarPlayRoutePlanning: false
+        isCarPlayRoutePlanning: false,
+        isCarPlayConnected: false
       )
     )
     XCTAssertTrue(
       navOSSShouldTrackLocation(
         hasActiveNavigation: false,
-        isCarPlayRoutePlanning: true
+        isCarPlayRoutePlanning: true,
+        isCarPlayConnected: false
       )
     )
     XCTAssertTrue(
       navOSSShouldTrackLocation(
         hasActiveNavigation: true,
-        isCarPlayRoutePlanning: false
+        isCarPlayRoutePlanning: false,
+        isCarPlayConnected: false
       )
     )
   }
