@@ -586,6 +586,25 @@ Before submitting the CarPlay candidate, inspect the signed IPA and confirm the 
 
 Apple permits up to 100 internal testers associated with App Store Connect. Builds expire after 90 days.
 
+### Build 53 — CarPlay location and phone companion
+
+`0.1.0 (53)` from commit `3ea24de`, EAS build `FINISHED`, auto-submitted, App Store Connect submission `FINISHED` on 2026-09-05.
+
+Carries two CarPlay fixes merged that day:
+
+- **#32** — location now stays alive while a CarPlay display is connected, from either the template or the Dashboard scene. Fixes the map freezing until the phone was woken by hand. Connection is keyed by scene so either disconnecting alone does not drop location.
+- **#33** — the phone shows a companion for every connected state instead of falling through to a second map. Addresses the build 52 tester report "Blank screen on CarPlay", whose screenshot was the phone, not the car display.
+
+What to Test, in a parked or passenger-operated vehicle:
+
+1. Connect CarPlay with no route running, lock the phone, and confirm the car map keeps following the vehicle rather than freezing until the phone is woken.
+2. Connect with only the Dashboard visible — do not open NavOSS on the head-unit screen — and confirm the same.
+3. Confirm the phone shows the CarPlay companion, never a map, in every state: idle, while a route loads, during guidance, and on arrival.
+4. Start a route from the car and confirm previews stay on screen long enough to choose one; route selection must not cancel itself after about a second.
+5. Tap Go on the phone, then connect the car, and confirm the half-finished plan is released rather than stranded behind the companion.
+
+Unverified: none of the above has been exercised on a real head unit. That remains the only place the reported symptoms appear.
+
 ## External TestFlight
 
 After the internal gate passes:
