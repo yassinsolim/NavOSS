@@ -120,6 +120,7 @@ import {
 import {
   ArrivalPanel,
   CarPlayCompanionPanel,
+  CarPlayIdlePanel,
   NavigationBanner,
   type NavigationRouteStatus,
   NavigationStatusBar,
@@ -127,6 +128,7 @@ import {
   RoutePreviewPanel,
   SafetyCameraAlertBanner,
 } from '@/features/navigation/route-panels';
+import { phoneSurface } from '@/features/navigation/phone-surface';
 import { RouteStopsEditor } from '@/features/navigation/route-stops-editor';
 import {
   buildEtaShareMessage,
@@ -1975,8 +1977,17 @@ export function MapScreen() {
   const selectedPlaceWebsiteUrl = placeWebsiteUrl(selectedResult?.details?.website);
   const selectedPlaceWebsiteLabel = placeWebsiteLabel(selectedResult?.details?.website);
 
+  // CarPlay owns the driving surface, so every connected state resolves to a companion and the
+  // phone never runs a second map view against the car's.
+  const surface = phoneSurface({
+    carPlayConnected,
+    guidanceResolved:
+      guidanceStep !== undefined && remainingRoute !== undefined && remainingStep !== undefined,
+    routeStatus: routeState.type,
+  });
+
   if (
-    carPlayConnected &&
+    surface === 'guidance' &&
     routeState.type === 'navigating' &&
     guidanceStep !== undefined &&
     remainingRoute !== undefined &&
@@ -2002,7 +2013,7 @@ export function MapScreen() {
     );
   }
 
-  if (carPlayConnected && routeState.type === 'arrived') {
+  if (surface === 'arrival' && routeState.type === 'arrived') {
     return (
       <View style={styles.container}>
         <StatusBar style="light" />
@@ -2019,6 +2030,15 @@ export function MapScreen() {
           roadName={routeState.destination.name}
           safeAreaTop={insets.top}
         />
+      </View>
+    );
+  }
+
+  if (surface === 'carplay-idle') {
+    return (
+      <View style={styles.container}>
+        <StatusBar style="light" />
+        <CarPlayIdlePanel bottomInset={insets.bottom} safeAreaTop={insets.top} />
       </View>
     );
   }
