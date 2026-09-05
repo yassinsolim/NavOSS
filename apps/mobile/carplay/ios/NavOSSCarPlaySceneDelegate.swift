@@ -317,7 +317,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       }
     }
     NavOSSCarPlayTripStore.shared.setConnected(true)
-    NavOSSNavigationService.shared.setCarPlayConnected(true)
+    NavOSSNavigationService.shared.setCarPlayConnected(true, scene: "template")
     apply(NavOSSCarPlayTripStore.shared.snapshot())
     performPendingDashboardAction()
   }
@@ -371,7 +371,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     settingsCategory = nil
     settingsTemplate = nil
     NavOSSCarPlayTripStore.shared.setConnected(false)
-    NavOSSNavigationService.shared.setCarPlayConnected(false)
+    NavOSSNavigationService.shared.setCarPlayConnected(false, scene: "template")
     self.interfaceController = nil
     carWindow = nil
     mapTemplate = nil
@@ -470,11 +470,6 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       mapTemplate?.automaticallyHidesNavigationBar = false
       mapTemplate?.trailingNavigationBarButtons = []
       mapViewController?.clearRoute()
-      // Render the service's fix rather than leaving the idle dot to MapLibre's own manager, which
-      // is what froze the map once the phone's screen slept.
-      if let idleCoordinate = state.idleCoordinate {
-        mapViewController?.displayIdleLocation(idleCoordinate, animated: true)
-      }
       return
     }
 

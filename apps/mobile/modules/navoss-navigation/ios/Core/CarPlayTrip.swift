@@ -464,13 +464,6 @@ public struct NavOSSCarPlayGuidance: Codable, Equatable, Sendable {
 public struct NavOSSCarPlayState: Equatable, Sendable {
   public let connected: Bool
   public let guidance: NavOSSCarPlayGuidance?
-  /// Where the vehicle is while no trip is running.
-  ///
-  /// Idle maps used to take their dot straight from MapLibre's own location manager, a second
-  /// manager this app never configures for background delivery. Publishing the fix the navigation
-  /// service already receives makes its manager, the one holding the background session, the
-  /// single source of position.
-  public let idleCoordinate: NavOSSCarPlayCoordinate?
   public let position: NavOSSCarPlayPosition?
   public let routeProgress: Double
   public let trip: NavOSSCarPlayTrip?
@@ -478,14 +471,12 @@ public struct NavOSSCarPlayState: Equatable, Sendable {
   public init(
     connected: Bool,
     guidance: NavOSSCarPlayGuidance?,
-    idleCoordinate: NavOSSCarPlayCoordinate? = nil,
     position: NavOSSCarPlayPosition? = nil,
     routeProgress: Double = 0,
     trip: NavOSSCarPlayTrip?
   ) {
     self.connected = connected
     self.guidance = guidance
-    self.idleCoordinate = idleCoordinate
     self.position = position
     self.routeProgress = min(1, max(0, routeProgress.isFinite ? routeProgress : 0))
     self.trip = trip
@@ -754,7 +745,6 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
       NavOSSCarPlayState(
         connected: current.connected,
         guidance: nil,
-        idleCoordinate: current.idleCoordinate,
         position: nil,
         routeProgress: 0,
         trip: nil
@@ -767,7 +757,6 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
       NavOSSCarPlayState(
         connected: current.connected,
         guidance: nil,
-        idleCoordinate: current.idleCoordinate,
         position: nil,
         routeProgress: 0,
         trip: nil
@@ -791,7 +780,6 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
       return NavOSSCarPlayState(
         connected: current.connected,
         guidance: guidance,
-        idleCoordinate: current.idleCoordinate,
         position: current.position,
         routeProgress: current.routeProgress,
         trip: current.trip
@@ -807,7 +795,6 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
       NavOSSCarPlayState(
         connected: current.connected,
         guidance: nil,
-        idleCoordinate: current.idleCoordinate,
         position: current.position,
         routeProgress: 0,
         trip: trip
@@ -832,25 +819,9 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
       NavOSSCarPlayState(
         connected: current.connected,
         guidance: guidance,
-        idleCoordinate: current.idleCoordinate,
         position: position,
         routeProgress: routeProgress,
         trip: trip
-      )
-    }
-  }
-
-  /// Publishes the vehicle's position while no trip is running, so an idle map can render a dot
-  /// from the navigation service's location manager instead of MapLibre's unconfigured one.
-  public func publishIdleCoordinate(_ coordinate: NavOSSCarPlayCoordinate?) {
-    update { current in
-      NavOSSCarPlayState(
-        connected: current.connected,
-        guidance: current.guidance,
-        idleCoordinate: coordinate,
-        position: current.position,
-        routeProgress: current.routeProgress,
-        trip: current.trip
       )
     }
   }
@@ -860,7 +831,6 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
       NavOSSCarPlayState(
         connected: connected,
         guidance: current.guidance,
-        idleCoordinate: current.idleCoordinate,
         position: current.position,
         routeProgress: current.routeProgress,
         trip: current.trip

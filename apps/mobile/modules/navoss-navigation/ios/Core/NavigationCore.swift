@@ -41,6 +41,27 @@ struct NavOSSLocationTrackingLeases {
   }
 }
 
+/// Which CarPlay scenes currently report a connected display.
+///
+/// The template scene and the Dashboard scene connect and disconnect independently, and either
+/// alone is a live map in a vehicle. A single flag let whichever disconnected first clear the
+/// state while the other was still on screen, dropping location under it.
+struct NavOSSCarPlayConnectedScenes {
+  private var scenes: Set<String> = []
+
+  var isConnected: Bool {
+    !scenes.isEmpty
+  }
+
+  mutating func set(_ connected: Bool, scene: String) {
+    if connected {
+      scenes.insert(scene)
+    } else {
+      scenes.remove(scene)
+    }
+  }
+}
+
 /// Whether Core Location should be running.
 ///
 /// A connected CarPlay display counts. The driver is looking at a map in a vehicle and the phone is

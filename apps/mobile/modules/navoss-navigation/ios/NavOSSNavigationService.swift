@@ -37,7 +37,13 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private var announcementState = NavOSSCarPlayAudioState()
   private var audioSessionNeedsDeactivation = false
   private var backgroundActivitySession: AnyObject?
-  private var carPlayConnected = false
+  /// Scenes currently reporting a connected CarPlay display.
+  ///
+  /// The template scene and the Dashboard scene connect and disconnect independently, and either
+  /// alone is a reason to keep tracking. A single flag let whichever disconnected first clear the
+  /// state while the other was still on screen.
+  private var carPlayConnectedScenes = NavOSSCarPlayConnectedScenes()
+  private var carPlayConnected: Bool { carPlayConnectedScenes.isConnected }
   private var carPlayRoutePlanningLeases = NavOSSLocationTrackingLeases()
   private let lock = NSRecursiveLock()
   private var locationManager: CLLocationManager?
@@ -216,10 +222,12 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     stopLocationUpdates(expectedGeneration: generation)
   }
 
-  public func setCarPlayConnected(_ connected: Bool) {
+  /// `scene` names the CarPlay scene reporting the change, so the template and Dashboard scenes
+  /// can connect and disconnect in any order without one clearing the other's state.
+  public func setCarPlayConnected(_ connected: Bool, scene: String) {
     lock.lock()
-    carPlayConnected = connected
-    if !connected {
+    carPlayConnectedScenes.set(connected, scene: scene)
+    if !carPlayConnected {
       carPlayRoutePlanningLeases.removeAll()
     }
     let update = navigationSession.currentUpdate()
@@ -323,22 +331,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       return
     }
     latestLocation = location
-    let update = navigationSession.currentUpdate()
-    let hasActiveTrip = update.trip != nil && update.snapshot.phase != .arrived
     lock.unlock()
 
-    // With no trip running nothing else publishes a position, so an idle CarPlay map would fall
-    // back to MapLibre's own location manager, which this app never configures for background
-    // delivery. Publishing here keeps the manager that holds the background session as the single
-    // source of position, which is what keeps the map moving once the screen sleeps.
-    if !hasActiveTrip {
-      NavOSSCarPlayTripStore.shared.publishIdleCoordinate(
-        NavOSSCarPlayCoordinate(
-          latitude: location.coordinate.latitude,
-          longitude: location.coordinate.longitude
-        )
-      )
-    }
     let course =
       location.speed >= 2 && (0..<360).contains(location.course)
       ? location.course
