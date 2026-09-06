@@ -607,6 +607,25 @@ Outcome, reported by the tester on build 53: the blank phone screen is fixed, th
 with the handset screen off, and turning was called out as not smooth. The freeze was not a location
 fault at all — the vehicle's render loop was bound to the handset's display. See the next entry.
 
+### Build 54 — vehicle render loop on the car's screen
+
+`0.1.0 (54)` from commit `78e3aaa`, EAS build `FINISHED`, auto-submitted, App Store Connect
+submission `FINISHED` on 2026-09-06.
+
+Carries PR #34, which fixes the freeze build 53 still had and the turning the tester called out:
+
+- The vehicle's render loop was created with `CADisplayLink(target:selector:)`, documented in
+  Apple's header as a link for the _main display_. It therefore ran on the handset's screen and
+  stopped the moment that screen slept, freezing the car's map even though Core Location kept
+  delivering and MapLibre kept rendering. It now comes from the CarPlay window's own screen.
+- The vehicle now travels the road between two fixes rather than the straight chord between them,
+  and takes its heading from 16 m of that road, so it rounds a bend instead of cutting it and the
+  arrow turns while the turn is happening.
+
+Verified before release: 103 native tests, mutation-checked; repository gates; and
+`NAVIGATION_VALIDATION_PASSED` on a real simulator build. The freeze itself is still unverified on
+hardware — run the checklist below.
+
 ### Vehicle motion with the handset locked
 
 Run on an entitled physical head unit, parked or passenger-operated, and record the build number,
