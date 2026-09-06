@@ -766,6 +766,13 @@ func navOSSCarPlayBearingDegrees(
 /// How far off the route a fix may sit and still be animated along the road.
 public let navOSSCarPlayPathInterpolationMaxOffsetMeters = 30.0
 
+/// Road either side of the vehicle used to measure which way it is pointing.
+///
+/// A single segment's bearing is constant along it and steps at the vertex, so a right-angle turn
+/// would snap the arrow round in one frame. Sixteen metres of road, eight either side, spreads that
+/// rotation across the approach and exit at any speed while still turning promptly.
+public let navOSSCarPlayBearingWindowMeters = 8.0
+
 /// Where the vehicle sits between two fixes, and which way it points, following the road.
 ///
 /// Consecutive fixes are already matched to the route, but a straight line between two of them
@@ -812,10 +819,35 @@ public func navOSSCarPlayPathInterpolation(
   }
   let clampedProgress = min(1, max(0, progress))
   let travelled = originAlong + (destinationAlong - originAlong) * clampedProgress
-  return navOSSCarPlayPointAlong(
+  guard let point = navOSSCarPlayPointAlong(
     geometry,
     cumulativeLengths: cumulativeLengths,
     distanceMeters: travelled
+  )
+  else {
+    return nil
+  }
+  // The bearing of the single segment under the vehicle is constant along that segment and then
+  // changes in one step at the vertex, so a right-angle intersection would still snap the arrow
+  // round in a single frame. Measuring across a short window of road either side turns it over the
+  // approach and exit instead, which is what the corner actually looks like from the driver's seat.
+  let total = cumulativeLengths[cumulativeLengths.count - 1]
+  let behind = navOSSCarPlayPointAlong(
+    geometry,
+    cumulativeLengths: cumulativeLengths,
+    distanceMeters: max(0, travelled - navOSSCarPlayBearingWindowMeters)
+  )
+  let ahead = navOSSCarPlayPointAlong(
+    geometry,
+    cumulativeLengths: cumulativeLengths,
+    distanceMeters: min(total, travelled + navOSSCarPlayBearingWindowMeters)
+  )
+  guard let behind, let ahead, behind.coordinate != ahead.coordinate else {
+    return (point.coordinate, point.bearingDegrees)
+  }
+  return (
+    point.coordinate,
+    navOSSCarPlayBearingDegrees(from: behind.coordinate, to: ahead.coordinate)
   )
 }
 

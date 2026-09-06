@@ -297,24 +297,44 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertGreaterThan(abs(chordLatitude - 51.0400), 1e-4)
   }
 
-  /// The arrow turns while the vehicle travels the bend. Course reported between two fixes only
-  /// changes once the turn is already finished, which is what made the rotation snap.
-  func testPathInterpolationRotatesThroughTheTurn() {
-    let entering = navOSSCarPlayPathInterpolation(
-      from: cornerRouteOrigin,
-      to: cornerRouteDestination,
-      along: cornerRoute,
-      progress: 0.25
-    )
-    let leaving = navOSSCarPlayPathInterpolation(
-      from: cornerRouteOrigin,
-      to: cornerRouteDestination,
-      along: cornerRoute,
-      progress: 0.75
-    )
+  /// The arrow must turn *while* the vehicle travels the bend.
+  ///
+  /// Sampling one point on each leg cannot show this: it reads the same whether the arrow rotates
+  /// across the corner or snaps 90° in a single frame at the vertex, which is what a bare segment
+  /// bearing does. Walk a realistic span instead — one 1 s fix interval at 50 km/h is 14 m of road,
+  /// drawn at the render link's 30 frames — and bound the step between consecutive frames.
+  func testPathInterpolationRotatesThroughTheTurnWithoutSnapping() {
+    // Seven metres either side of the corner, so the span is one fix interval at 50 km/h.
+    let approach = NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.07009998)
+    let exit = NavOSSCarPlayCoordinate(latitude: 51.04006288, longitude: -114.0700)
+    let frames = 30
 
-    XCTAssertEqual(entering?.bearingDegrees ?? -1, 90, accuracy: 0.5)
-    XCTAssertEqual(leaving?.bearingDegrees ?? -1, 0, accuracy: 0.5)
+    var bearings: [Double] = []
+    for step in 0...frames {
+      guard
+        let bearing = navOSSCarPlayPathInterpolation(
+          from: approach,
+          to: exit,
+          along: cornerRoute,
+          progress: Double(step) / Double(frames)
+        )?.bearingDegrees
+      else {
+        return XCTFail("no interpolation at frame \(step)")
+      }
+      bearings.append(bearing)
+    }
+
+    // Enters heading east, leaves heading north.
+    XCTAssertGreaterThan(bearings.first ?? 0, 80)
+    XCTAssertLessThan(bearings.last ?? 90, 10)
+
+    // No single frame may carry an appreciable share of the turn.
+    let steps = zip(bearings, bearings.dropFirst())
+      .map { abs((($1 - $0 + 540).truncatingRemainder(dividingBy: 360)) - 180) }
+    XCTAssertLessThan(steps.max() ?? 0, 8, "the arrow jumped \(steps.max() ?? 0)° in one frame")
+
+    // And the rotation is spread across the corner rather than concentrated at the vertex.
+    XCTAssertGreaterThan(steps.filter { $0 > 0.5 }.count, 20)
   }
 
   /// Every intermediate frame stays on the carriageway, not just the sampled ones.
