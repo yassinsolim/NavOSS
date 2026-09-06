@@ -842,7 +842,9 @@ public func navOSSCarPlayPathInterpolation(
     cumulativeLengths: cumulativeLengths,
     distanceMeters: min(total, travelled + navOSSCarPlayBearingWindowMeters)
   )
-  guard let behind, let ahead, behind.coordinate != ahead.coordinate else {
+  // Both offsets are clamped into the route, and forward travel over a route of non-zero length
+  // keeps them 16 m apart, so they cannot collapse onto one another.
+  guard let behind, let ahead else {
     return (point.coordinate, point.bearingDegrees)
   }
   return (

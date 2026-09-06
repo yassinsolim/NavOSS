@@ -297,44 +297,94 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertGreaterThan(abs(chordLatitude - 51.0400), 1e-4)
   }
 
+  /// Planar separation, using the same local metre conversion as the geometry helpers.
+  private func metresBetween(
+    _ start: NavOSSCarPlayCoordinate,
+    _ end: NavOSSCarPlayCoordinate
+  ) -> Double {
+    let latitudeScale = 111_320.0
+    let longitudeScale = latitudeScale * cos(start.latitude * .pi / 180)
+    return hypot(
+      (end.longitude - start.longitude) * longitudeScale,
+      (end.latitude - start.latitude) * latitudeScale
+    )
+  }
+
   /// The arrow must turn *while* the vehicle travels the bend.
   ///
   /// Sampling one point on each leg cannot show this: it reads the same whether the arrow rotates
   /// across the corner or snaps 90° in a single frame at the vertex, which is what a bare segment
-  /// bearing does. Walk a realistic span instead — one 1 s fix interval at 50 km/h is 14 m of road,
-  /// drawn at the render link's 30 frames — and bound the step between consecutive frames.
+  /// bearing does.
+  ///
+  /// The bound is degrees per metre travelled, not degrees per frame, so it measures the geometry
+  /// rather than how finely this test happens to sample it. A quarter turn spread across the
+  /// bearing window is `90 / (2 * window)` on average; the ceiling here leaves room for the peak
+  /// without admitting a snap, which concentrates the same 90° into centimetres.
   func testPathInterpolationRotatesThroughTheTurnWithoutSnapping() {
     // Seven metres either side of the corner, so the span is one fix interval at 50 km/h.
     let approach = NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.07009998)
     let exit = NavOSSCarPlayCoordinate(latitude: 51.04006288, longitude: -114.0700)
     let frames = 30
 
-    var bearings: [Double] = []
+    var samples: [(coordinate: NavOSSCarPlayCoordinate, bearingDegrees: Double)] = []
     for step in 0...frames {
       guard
-        let bearing = navOSSCarPlayPathInterpolation(
+        let sample = navOSSCarPlayPathInterpolation(
           from: approach,
           to: exit,
           along: cornerRoute,
           progress: Double(step) / Double(frames)
-        )?.bearingDegrees
+        )
       else {
         return XCTFail("no interpolation at frame \(step)")
       }
-      bearings.append(bearing)
+      samples.append(sample)
     }
 
     // Enters heading east, leaves heading north.
-    XCTAssertGreaterThan(bearings.first ?? 0, 80)
-    XCTAssertLessThan(bearings.last ?? 90, 10)
+    XCTAssertGreaterThan(samples.first?.bearingDegrees ?? 0, 80)
+    XCTAssertLessThan(samples.last?.bearingDegrees ?? 90, 10)
 
-    // No single frame may carry an appreciable share of the turn.
-    let steps = zip(bearings, bearings.dropFirst())
-      .map { abs((($1 - $0 + 540).truncatingRemainder(dividingBy: 360)) - 180) }
-    XCTAssertLessThan(steps.max() ?? 0, 8, "the arrow jumped \(steps.max() ?? 0)° in one frame")
+    let averageDegreesPerMetre = 90 / (2 * navOSSCarPlayBearingWindowMeters)
+    let ceilingDegreesPerMetre = averageDegreesPerMetre * 1.6
+    var worstDegreesPerMetre = 0.0
+    var turningMetres = 0.0
+    for (start, end) in zip(samples, samples.dropFirst()) {
+      let travelled = metresBetween(start.coordinate, end.coordinate)
+      guard travelled > 0 else { continue }
+      let turned = abs(
+        ((end.bearingDegrees - start.bearingDegrees + 540).truncatingRemainder(dividingBy: 360))
+          - 180
+      )
+      worstDegreesPerMetre = max(worstDegreesPerMetre, turned / travelled)
+      if turned > 0.5 { turningMetres += travelled }
+    }
 
-    // And the rotation is spread across the corner rather than concentrated at the vertex.
-    XCTAssertGreaterThan(steps.filter { $0 > 0.5 }.count, 20)
+    XCTAssertLessThan(
+      worstDegreesPerMetre,
+      ceilingDegreesPerMetre,
+      "the arrow turned \(worstDegreesPerMetre)°/m, so it is snapping rather than rounding"
+    )
+    // The turn is delivered over road, not at a point.
+    XCTAssertGreaterThan(turningMetres, navOSSCarPlayBearingWindowMeters)
+  }
+
+  /// A route shorter than the bearing window still reports the road's own direction: the offsets
+  /// clamp to the ends and the window simply spans everything there is.
+  func testPathInterpolationHandlesARouteShorterThanTheBearingWindow() {
+    let shortRoute = [
+      NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.0700),
+      NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.06997),
+    ]
+
+    let sample = navOSSCarPlayPathInterpolation(
+      from: shortRoute[0],
+      to: shortRoute[1],
+      along: shortRoute,
+      progress: 0.5
+    )
+
+    XCTAssertEqual(sample?.bearingDegrees ?? -1, 90, accuracy: 1)
   }
 
   /// Every intermediate frame stays on the carriageway, not just the sampled ones.
