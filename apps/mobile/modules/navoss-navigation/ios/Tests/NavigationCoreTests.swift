@@ -369,22 +369,32 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertGreaterThan(turningMetres, navOSSCarPlayBearingWindowMeters)
   }
 
-  /// A route shorter than the bearing window still reports the road's own direction: the offsets
-  /// clamp to the ends and the window simply spans everything there is.
-  func testPathInterpolationHandlesARouteShorterThanTheBearingWindow() {
+  /// A route shorter than the bearing window is spanned whole, and the window still governs the
+  /// heading there.
+  ///
+  /// The route bends 90° at its midpoint, roughly two metres along each leg. Measuring across the
+  /// clamped window reads the through-direction, 45°; the bare segment bearing under the vehicle
+  /// would read 90°. Asserting the windowed value is what makes this test discriminating — a
+  /// straight short route reads the same either way and would prove nothing.
+  func testPathInterpolationSpansAShortRouteWhole() {
+    let corner = NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.06997)
     let shortRoute = [
       NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.0700),
-      NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.06997),
+      corner,
+      NavOSSCarPlayCoordinate(latitude: 51.04001886, longitude: -114.06997),
     ]
 
     let sample = navOSSCarPlayPathInterpolation(
       from: shortRoute[0],
-      to: shortRoute[1],
+      to: shortRoute[2],
       along: shortRoute,
       progress: 0.5
     )
 
-    XCTAssertEqual(sample?.bearingDegrees ?? -1, 90, accuracy: 1)
+    // Halfway along the route is the corner itself.
+    XCTAssertEqual(sample?.coordinate.latitude ?? 0, corner.latitude, accuracy: 1e-6)
+    XCTAssertEqual(sample?.coordinate.longitude ?? 0, corner.longitude, accuracy: 1e-6)
+    XCTAssertEqual(sample?.bearingDegrees ?? -1, 45, accuracy: 2)
   }
 
   /// Every intermediate frame stays on the carriageway, not just the sampled ones.

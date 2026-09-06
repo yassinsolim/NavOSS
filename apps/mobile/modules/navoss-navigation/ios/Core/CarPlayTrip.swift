@@ -842,8 +842,9 @@ public func navOSSCarPlayPathInterpolation(
     cumulativeLengths: cumulativeLengths,
     distanceMeters: min(total, travelled + navOSSCarPlayBearingWindowMeters)
   )
-  // Both offsets are clamped into the route, and forward travel over a route of non-zero length
-  // keeps them 16 m apart, so they cannot collapse onto one another.
+  // Clamping narrows the window at the ends of the route — and a route shorter than the window is
+  // spanned whole — but over a route of non-zero length the two offsets cannot collapse onto one
+  // another, so there is always a direction to measure.
   guard let behind, let ahead else {
     return (point.coordinate, point.bearingDegrees)
   }
