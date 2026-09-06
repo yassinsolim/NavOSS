@@ -727,6 +727,129 @@ private func navOSSCarPlayCoordinateDistance(
   return 2 * 6_371_000 * asin(sqrt(haversine))
 }
 
+/// Bearing from `start` to `end` in the navigation convention: 0° is true north, increasing
+/// clockwise. The local metre conversion intentionally matches `navOSSCarPlaySegmentProjection`.
+func navOSSCarPlayBearingDegrees(
+  from start: NavOSSCarPlayCoordinate,
+  to end: NavOSSCarPlayCoordinate
+) -> Double {
+  let meanLatitude = (start.latitude + end.latitude) / 2 * .pi / 180
+  let degrees =
+    atan2(
+      (end.longitude - start.longitude) * cos(meanLatitude),
+      end.latitude - start.latitude
+    ) * 180 / .pi
+  return degrees >= 0 ? degrees : degrees + 360
+}
+
+/// How far off the route a fix may sit and still be animated along the road.
+public let navOSSCarPlayPathInterpolationMaxOffsetMeters = 30.0
+
+/// Where the vehicle sits between two fixes, and which way it points, following the road.
+///
+/// Consecutive fixes are already matched to the route, but a straight line between two of them
+/// that straddle a corner cuts across it: the vehicle leaves the road mid-turn and the arrow then
+/// swings in one late jump when the next fix lands. Walking the road between the two projections
+/// keeps the vehicle on the carriageway and rotates it progressively through the corner.
+///
+/// Returns `nil` when the road cannot honestly describe the movement — either endpoint too far off
+/// route, or travel that is not forward along it — so the caller falls back to a straight line
+/// rather than inventing a path the vehicle did not take.
+public func navOSSCarPlayPathInterpolation(
+  from origin: NavOSSCarPlayCoordinate,
+  to destination: NavOSSCarPlayCoordinate,
+  along geometry: [NavOSSCarPlayCoordinate],
+  progress: Double,
+  maxOffsetMeters: Double = navOSSCarPlayPathInterpolationMaxOffsetMeters
+) -> (coordinate: NavOSSCarPlayCoordinate, bearingDegrees: Double)? {
+  guard geometry.count >= 2, origin.isValid, destination.isValid, progress.isFinite else {
+    return nil
+  }
+  var cumulativeLengths = [0.0]
+  cumulativeLengths.reserveCapacity(geometry.count)
+  for index in 1..<geometry.count {
+    cumulativeLengths.append(
+      cumulativeLengths[index - 1]
+        + navOSSCarPlayCoordinateDistance(from: geometry[index - 1], to: geometry[index])
+    )
+  }
+  guard let originAlong = navOSSCarPlayDistanceAlong(
+    origin,
+    in: geometry,
+    cumulativeLengths: cumulativeLengths,
+    maxOffsetMeters: maxOffsetMeters
+  ),
+    let destinationAlong = navOSSCarPlayDistanceAlong(
+      destination,
+      in: geometry,
+      cumulativeLengths: cumulativeLengths,
+      maxOffsetMeters: maxOffsetMeters
+    ),
+    destinationAlong > originAlong
+  else {
+    return nil
+  }
+  let clampedProgress = min(1, max(0, progress))
+  let travelled = originAlong + (destinationAlong - originAlong) * clampedProgress
+  return navOSSCarPlayPointAlong(
+    geometry,
+    cumulativeLengths: cumulativeLengths,
+    distanceMeters: travelled
+  )
+}
+
+/// Distance of `coordinate` measured along the route, or `nil` when it sits farther than
+/// `maxOffsetMeters` from every segment.
+private func navOSSCarPlayDistanceAlong(
+  _ coordinate: NavOSSCarPlayCoordinate,
+  in geometry: [NavOSSCarPlayCoordinate],
+  cumulativeLengths: [Double],
+  maxOffsetMeters: Double
+) -> Double? {
+  var bestDistanceMeters = Double.infinity
+  var bestAlongMeters: Double?
+  for index in geometry.indices.dropLast() {
+    let projection = navOSSCarPlaySegmentProjection(
+      coordinate,
+      start: geometry[index],
+      end: geometry[index + 1]
+    )
+    guard projection.distanceMeters < bestDistanceMeters else { continue }
+    bestDistanceMeters = projection.distanceMeters
+    let segmentLength = cumulativeLengths[index + 1] - cumulativeLengths[index]
+    bestAlongMeters = cumulativeLengths[index] + segmentLength * projection.fraction
+  }
+  guard bestDistanceMeters <= maxOffsetMeters else { return nil }
+  return bestAlongMeters
+}
+
+/// The point `distanceMeters` along the route, with the bearing of the segment carrying it.
+private func navOSSCarPlayPointAlong(
+  _ geometry: [NavOSSCarPlayCoordinate],
+  cumulativeLengths: [Double],
+  distanceMeters: Double
+) -> (coordinate: NavOSSCarPlayCoordinate, bearingDegrees: Double)? {
+  guard let totalLength = cumulativeLengths.last, totalLength > 0 else { return nil }
+  let clamped = min(max(distanceMeters, 0), totalLength)
+  var segmentIndex = geometry.count - 2
+  for index in geometry.indices.dropLast() where clamped <= cumulativeLengths[index + 1] {
+    segmentIndex = index
+    break
+  }
+  let start = geometry[segmentIndex]
+  let end = geometry[segmentIndex + 1]
+  let segmentLength = cumulativeLengths[segmentIndex + 1] - cumulativeLengths[segmentIndex]
+  let fraction =
+    segmentLength > 0 ? (clamped - cumulativeLengths[segmentIndex]) / segmentLength : 0
+  return (
+    NavOSSCarPlayCoordinate(
+      latitude: start.latitude + (end.latitude - start.latitude) * fraction,
+      longitude: start.longitude + (end.longitude - start.longitude) * fraction
+    ),
+    navOSSCarPlayBearingDegrees(from: start, to: end)
+  )
+}
+
 public final class NavOSSCarPlayTripStore: @unchecked Sendable {
   public static let shared = NavOSSCarPlayTripStore()
 
@@ -901,13 +1024,7 @@ public func navOSSRouteBearingDegrees(
     let projection = navOSSCarPlaySegmentProjection(coordinate, start: start, end: end)
     guard projection.distanceMeters < bestDistanceMeters else { continue }
     bestDistanceMeters = projection.distanceMeters
-    let meanLatitude = (start.latitude + end.latitude) / 2 * .pi / 180
-    let degrees =
-      atan2(
-        (end.longitude - start.longitude) * cos(meanLatitude),
-        end.latitude - start.latitude
-      ) * 180 / .pi
-    bestBearingDegrees = degrees >= 0 ? degrees : degrees + 360
+    bestBearingDegrees = navOSSCarPlayBearingDegrees(from: start, to: end)
   }
   guard bestDistanceMeters <= maxDistanceMeters else { return nil }
   return bestBearingDegrees

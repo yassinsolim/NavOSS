@@ -313,6 +313,15 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('didUpdate userLocation: MLNUserLocation?');
     expect(carPlayMap).toContain('func currentLocationCoordinate()');
     expect(carPlayMap).toContain('zoomLevel: 15.5');
+    // `CADisplayLink(target:selector:)` is documented in Apple's header as a link for the *main
+    // display*, so binding the vehicle loop to it froze the car's map whenever the driver's phone
+    // screen slept, while MapLibre — which builds its own link from `window.screen` — kept
+    // rendering. The link must come from the screen the CarPlay window is actually on. This cannot
+    // be a behavioural test: it needs a real CarPlay scene and a sleeping handset display.
+    expect(carPlayMap).toContain('view.window?.windowScene?.screen ?? view.window?.screen');
+    expect(carPlayMap).toContain(
+      'screen?.displayLink(withTarget: self, selector: #selector(renderPositionFrame))',
+    );
     expect(visualHarness).toContain('case "idle-location"');
     expect(visualHarness).toContain('case "preview-short"');
     expect(visualHarness).toContain('case "preview-resize"');
