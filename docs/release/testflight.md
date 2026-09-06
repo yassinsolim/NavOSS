@@ -603,7 +603,23 @@ What to Test, in a parked or passenger-operated vehicle:
 4. Start a route from the car and confirm previews stay on screen long enough to choose one; route selection must not cancel itself after about a second.
 5. Tap Go on the phone, then connect the car, and confirm the half-finished plan is released rather than stranded behind the companion.
 
-Unverified: none of the above has been exercised on a real head unit. That remains the only place the reported symptoms appear.
+Outcome, reported by the tester on build 53: the blank phone screen is fixed, the car's map still froze
+with the handset screen off, and turning was called out as not smooth. The freeze was not a location
+fault at all — the vehicle's render loop was bound to the handset's display. See the next entry.
+
+### Vehicle motion with the handset locked
+
+Run on an entitled physical head unit, parked or passenger-operated, and record the build number,
+device, and connection type. Do not record route coordinates or trip history.
+
+1. Start a route, lock the phone, and confirm the vehicle keeps moving on the car's screen: the
+   arrow advances, the travelled route is consumed behind it, and the camera keeps following.
+2. Leave it locked through at least one turn and confirm the arrow rounds the bend on the road
+   rather than cutting the corner and snapping straight afterwards.
+3. Wake the phone and confirm nothing jumps: the vehicle should already be where the car showed it.
+4. Disconnect and reconnect CarPlay while locked, then repeat step 1, to confirm the render loop is
+   rebuilt against the car's screen rather than left on the handset's.
+5. Repeat step 1 with only the Dashboard scene visible, without opening NavOSS on the head unit.
 
 ## External TestFlight
 

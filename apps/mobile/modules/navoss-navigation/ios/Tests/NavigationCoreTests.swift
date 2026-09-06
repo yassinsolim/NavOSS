@@ -227,6 +227,182 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
+  // MARK: - Vehicle render link lifecycle
+
+  /// With no link yet there is nothing to reuse.
+  func testDisplayLinkIsCreatedWhenAbsent() {
+    XCTAssertEqual(
+      navOSSCarPlayDisplayLinkAction(hasLink: false, linkedScreenMatchesWindow: false),
+      .create
+    )
+    XCTAssertEqual(
+      navOSSCarPlayDisplayLinkAction(hasLink: false, linkedScreenMatchesWindow: true),
+      .create
+    )
+  }
+
+  /// A link already driven by the window's own display keeps running; rebuilding every fix would
+  /// drop frames for nothing.
+  func testDisplayLinkIsKeptWhileItMatchesTheWindowScreen() {
+    XCTAssertEqual(
+      navOSSCarPlayDisplayLinkAction(hasLink: true, linkedScreenMatchesWindow: true),
+      .keep
+    )
+  }
+
+  /// A link left behind on another display is the reported freeze: bound to the handset, it stops
+  /// firing the moment that screen sleeps, so it must be replaced rather than reused.
+  func testDisplayLinkIsRebuiltWhenItsScreenNoLongerMatches() {
+    XCTAssertEqual(
+      navOSSCarPlayDisplayLinkAction(hasLink: true, linkedScreenMatchesWindow: false),
+      .rebuild
+    )
+  }
+
+  // MARK: - Road-following interpolation between fixes
+
+  /// A right-angle corner: 700 m east, then north. `cornerRouteOrigin` sits 100 m before the
+  /// corner and `cornerRouteDestination` 100 m after it, so half the animation span is exactly the
+  /// corner vertex.
+  private var cornerRoute: [NavOSSCarPlayCoordinate] {
+    [
+      NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.0800),
+      NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.0700),
+      NavOSSCarPlayCoordinate(latitude: 51.0450, longitude: -114.0700),
+    ]
+  }
+  private var cornerRouteOrigin: NavOSSCarPlayCoordinate {
+    NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.071427)
+  }
+  private var cornerRouteDestination: NavOSSCarPlayCoordinate {
+    NavOSSCarPlayCoordinate(latitude: 51.040898, longitude: -114.0700)
+  }
+
+  /// The vehicle must round the corner on the road. A straight line between the same two fixes
+  /// cuts the bend, putting the vehicle roughly 70 m into the block it is driving around before it
+  /// snaps back onto the carriageway.
+  func testPathInterpolationRoundsCornerInsteadOfCuttingIt() {
+    let midpoint = navOSSCarPlayPathInterpolation(
+      from: cornerRouteOrigin,
+      to: cornerRouteDestination,
+      along: cornerRoute,
+      progress: 0.5
+    )
+
+    XCTAssertEqual(midpoint?.coordinate.latitude ?? 0, 51.0400, accuracy: 1e-5)
+    XCTAssertEqual(midpoint?.coordinate.longitude ?? 0, -114.0700, accuracy: 1e-5)
+
+    let chordLatitude =
+      (cornerRouteOrigin.latitude + cornerRouteDestination.latitude) / 2
+    XCTAssertGreaterThan(abs(chordLatitude - 51.0400), 1e-4)
+  }
+
+  /// The arrow must turn *while* the vehicle travels the bend.
+  ///
+  /// Sampling one point on each leg cannot show this: it reads the same whether the arrow rotates
+  /// across the corner or snaps 90° in a single frame at the vertex, which is what a bare segment
+  /// bearing does. Walk a realistic span instead — one 1 s fix interval at 50 km/h is 14 m of road,
+  /// drawn at the render link's 30 frames — and bound the step between consecutive frames.
+  func testPathInterpolationRotatesThroughTheTurnWithoutSnapping() {
+    // Seven metres either side of the corner, so the span is one fix interval at 50 km/h.
+    let approach = NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.07009998)
+    let exit = NavOSSCarPlayCoordinate(latitude: 51.04006288, longitude: -114.0700)
+    let frames = 30
+
+    var bearings: [Double] = []
+    for step in 0...frames {
+      guard
+        let bearing = navOSSCarPlayPathInterpolation(
+          from: approach,
+          to: exit,
+          along: cornerRoute,
+          progress: Double(step) / Double(frames)
+        )?.bearingDegrees
+      else {
+        return XCTFail("no interpolation at frame \(step)")
+      }
+      bearings.append(bearing)
+    }
+
+    // Enters heading east, leaves heading north.
+    XCTAssertGreaterThan(bearings.first ?? 0, 80)
+    XCTAssertLessThan(bearings.last ?? 90, 10)
+
+    // No single frame may carry an appreciable share of the turn.
+    let steps = zip(bearings, bearings.dropFirst())
+      .map { abs((($1 - $0 + 540).truncatingRemainder(dividingBy: 360)) - 180) }
+    XCTAssertLessThan(steps.max() ?? 0, 8, "the arrow jumped \(steps.max() ?? 0)° in one frame")
+
+    // And the rotation is spread across the corner rather than concentrated at the vertex.
+    XCTAssertGreaterThan(steps.filter { $0 > 0.5 }.count, 20)
+  }
+
+  /// Every intermediate frame stays on the carriageway, not just the sampled ones.
+  func testPathInterpolationStaysOnTheRoadForTheWholeSpan() {
+    for step in 0...20 {
+      let progress = Double(step) / 20
+      guard
+        let point = navOSSCarPlayPathInterpolation(
+          from: cornerRouteOrigin,
+          to: cornerRouteDestination,
+          along: cornerRoute,
+          progress: progress
+        )?.coordinate
+      else {
+        return XCTFail("no interpolation at progress \(progress)")
+      }
+      let onEastLeg = abs(point.latitude - 51.0400) < 1e-5
+      let onNorthLeg = abs(point.longitude - (-114.0700)) < 1e-5
+      XCTAssertTrue(onEastLeg || onNorthLeg, "left the road at progress \(progress)")
+    }
+  }
+
+  /// An off-route vehicle must not be dragged onto a road it is not on. The caller falls back to a
+  /// straight line rather than inventing a path.
+  func testPathInterpolationRefusesOffRouteEndpoints() {
+    XCTAssertNil(
+      navOSSCarPlayPathInterpolation(
+        from: NavOSSCarPlayCoordinate(latitude: 51.0500, longitude: -114.0800),
+        to: cornerRouteDestination,
+        along: cornerRoute,
+        progress: 0.5
+      )
+    )
+  }
+
+  /// Travel that is not forward along the route cannot be described by it.
+  func testPathInterpolationRefusesBackwardTravel() {
+    XCTAssertNil(
+      navOSSCarPlayPathInterpolation(
+        from: cornerRouteDestination,
+        to: cornerRouteOrigin,
+        along: cornerRoute,
+        progress: 0.5
+      )
+    )
+  }
+
+  /// On a straight road the result must match the straight line it replaces.
+  func testPathInterpolationMatchesStraightLineOnAStraightRoad() {
+    let straight = [
+      NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.0800),
+      NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.0700),
+    ]
+    let origin = NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.0790)
+    let destination = NavOSSCarPlayCoordinate(latitude: 51.0400, longitude: -114.0750)
+
+    let midpoint = navOSSCarPlayPathInterpolation(
+      from: origin,
+      to: destination,
+      along: straight,
+      progress: 0.5
+    )
+
+    XCTAssertEqual(midpoint?.coordinate.latitude ?? 0, 51.0400, accuracy: 1e-6)
+    XCTAssertEqual(midpoint?.coordinate.longitude ?? 0, -114.0770, accuracy: 1e-5)
+    XCTAssertEqual(midpoint?.bearingDegrees ?? -1, 90, accuracy: 0.5)
+  }
+
   func testHeadingOnlyUpdateKeepsLastLocationPosition() {
     // A parked turn can deliver this heading without a new CLLocation sample.
     let previous = NavOSSCarPlayPosition(

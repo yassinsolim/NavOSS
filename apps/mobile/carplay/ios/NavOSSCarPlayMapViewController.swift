@@ -33,6 +33,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var activeGuidance = false
   private var appearance = NavOSSCarPlayAppearance.automatic
   private var displayLink: CADisplayLink?
+  private var displayLinkScreen: UIScreen?
   private var interpolationFromPosition: NavOSSCarPlayPosition?
   private var interpolationStartedAt: CFTimeInterval = 0
   private var interpolationDuration: CFTimeInterval = navOSSCarPlayDefaultInterpolationSeconds
@@ -402,8 +403,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     lastHeadingConeApex = nil
     lastHeadingConeHeadingDegrees = nil
     lastTargetAt = nil
-    displayLink?.invalidate()
-    displayLink = nil
+    invalidateDisplayLink()
     speedLabel.isHidden = true
     speedLimitLabel.isHidden = true
     navigationViewingDistance = 850
@@ -454,8 +454,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   func deactivate() {
     routeFitGeneration &+= 1
-    displayLink?.invalidate()
-    displayLink = nil
+    invalidateDisplayLink()
     latestPosition = nil
     renderedPosition = nil
     lastRenderedCourseDegrees = nil
@@ -659,40 +658,85 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       renderedPosition = position
       installPositionOverlayIfReady()
     }
-    if displayLink == nil {
-      let link = CADisplayLink(target: self, selector: #selector(renderPositionFrame))
-      link.preferredFrameRateRange = CAFrameRateRange(
-        minimum: 20,
-        maximum: 30,
-        preferred: 30
-      )
-      link.add(to: .main, forMode: .common)
-      displayLink = link
+    let screen = renderScreen()
+    switch navOSSCarPlayDisplayLinkAction(
+      hasLink: displayLink != nil,
+      linkedScreenMatchesWindow: displayLinkScreen === screen
+    ) {
+    case .keep:
+      break
+    case .rebuild:
+      invalidateDisplayLink()
+      displayLink = makeRenderDisplayLink(on: screen)
+    case .create:
+      displayLink = makeRenderDisplayLink(on: screen)
     }
+  }
+
+  private func renderScreen() -> UIScreen? {
+    view.window?.windowScene?.screen ?? view.window?.screen
+  }
+
+  /// A display link driven by the screen the CarPlay window is actually on.
+  ///
+  /// `CADisplayLink(target:selector:)` is driven by the handset's own display, which stops once the
+  /// phone screen sleeps. This is the loop that advances the vehicle, the route head, and the
+  /// camera, so binding it to the handset froze the car's map mid-route whenever the driver locked
+  /// the phone, even though fixes kept arriving and MapLibre kept rendering. The car's screen stays
+  /// awake, so the link has to come from it.
+  private func makeRenderDisplayLink(on screen: UIScreen?) -> CADisplayLink {
+    displayLinkScreen = screen
+    let link =
+      screen?.displayLink(withTarget: self, selector: #selector(renderPositionFrame))
+      ?? CADisplayLink(target: self, selector: #selector(renderPositionFrame))
+    link.preferredFrameRateRange = CAFrameRateRange(
+      minimum: 20,
+      maximum: 30,
+      preferred: 30
+    )
+    link.add(to: .main, forMode: .common)
+    return link
+  }
+
+  private func invalidateDisplayLink() {
+    displayLink?.invalidate()
+    displayLink = nil
+    displayLinkScreen = nil
   }
 
   @objc private func renderPositionFrame() {
     guard activeGuidance, let target = latestPosition, let start = interpolationFromPosition else {
-      displayLink?.invalidate()
-      displayLink = nil
+      invalidateDisplayLink()
       return
     }
     let progress = min(
       1,
       max(0, (CACurrentMediaTime() - interpolationStartedAt) / interpolationDuration)
     )
+    // Follow the carriageway between the two fixes where the road can describe the movement, so
+    // the vehicle rounds a corner instead of cutting the chord across it and then snapping back.
+    let roadPath = navOSSCarPlayPathInterpolation(
+      from: start.coordinate,
+      to: target.coordinate,
+      along: routeGeometry,
+      progress: progress
+    )
     renderedPosition = NavOSSCarPlayPosition(
-      coordinate: NavOSSCarPlayCoordinate(
-        latitude: start.coordinate.latitude
-          + (target.coordinate.latitude - start.coordinate.latitude) * progress,
-        longitude: start.coordinate.longitude
-          + (target.coordinate.longitude - start.coordinate.longitude) * progress
-      ),
-      courseDegrees: interpolatedCourse(
-        from: start.courseDegrees,
-        to: target.courseDegrees,
-        progress: progress
-      ),
+      coordinate: roadPath?.coordinate
+        ?? NavOSSCarPlayCoordinate(
+          latitude: start.coordinate.latitude
+            + (target.coordinate.latitude - start.coordinate.latitude) * progress,
+          longitude: start.coordinate.longitude
+            + (target.coordinate.longitude - start.coordinate.longitude) * progress
+        ),
+      // The road's own bearing turns the arrow through the bend as the vehicle travels it. Course
+      // reported between two fixes only changes once the turn is already over.
+      courseDegrees: roadPath?.bearingDegrees
+        ?? interpolatedCourse(
+          from: start.courseDegrees,
+          to: target.courseDegrees,
+          progress: progress
+        ),
       compassHeadingDegrees: target.compassHeadingDegrees,
       speedMetersPerSecond: target.speedMetersPerSecond
     )
@@ -710,8 +754,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       follow(renderedPosition, duration: 0)
     }
     if progress >= 1 {
-      displayLink?.invalidate()
-      displayLink = nil
+      invalidateDisplayLink()
     }
   }
 
