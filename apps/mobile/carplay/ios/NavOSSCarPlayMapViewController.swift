@@ -659,11 +659,16 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       installPositionOverlayIfReady()
     }
     let screen = renderScreen()
-    if displayLink != nil, displayLinkScreen !== screen {
-      // The window moved to another screen, so the existing link is driven by the wrong display.
+    switch navOSSCarPlayDisplayLinkAction(
+      hasLink: displayLink != nil,
+      linkedScreenMatchesWindow: displayLinkScreen === screen
+    ) {
+    case .keep:
+      break
+    case .rebuild:
       invalidateDisplayLink()
-    }
-    if displayLink == nil {
+      displayLink = makeRenderDisplayLink(on: screen)
+    case .create:
       displayLink = makeRenderDisplayLink(on: screen)
     }
   }

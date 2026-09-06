@@ -227,6 +227,38 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
+  // MARK: - Vehicle render link lifecycle
+
+  /// With no link yet there is nothing to reuse.
+  func testDisplayLinkIsCreatedWhenAbsent() {
+    XCTAssertEqual(
+      navOSSCarPlayDisplayLinkAction(hasLink: false, linkedScreenMatchesWindow: false),
+      .create
+    )
+    XCTAssertEqual(
+      navOSSCarPlayDisplayLinkAction(hasLink: false, linkedScreenMatchesWindow: true),
+      .create
+    )
+  }
+
+  /// A link already driven by the window's own display keeps running; rebuilding every fix would
+  /// drop frames for nothing.
+  func testDisplayLinkIsKeptWhileItMatchesTheWindowScreen() {
+    XCTAssertEqual(
+      navOSSCarPlayDisplayLinkAction(hasLink: true, linkedScreenMatchesWindow: true),
+      .keep
+    )
+  }
+
+  /// A link left behind on another display is the reported freeze: bound to the handset, it stops
+  /// firing the moment that screen sleeps, so it must be replaced rather than reused.
+  func testDisplayLinkIsRebuiltWhenItsScreenNoLongerMatches() {
+    XCTAssertEqual(
+      navOSSCarPlayDisplayLinkAction(hasLink: true, linkedScreenMatchesWindow: false),
+      .rebuild
+    )
+  }
+
   // MARK: - Road-following interpolation between fixes
 
   /// A right-angle corner: 700 m east, then north. `cornerRouteOrigin` sits 100 m before the

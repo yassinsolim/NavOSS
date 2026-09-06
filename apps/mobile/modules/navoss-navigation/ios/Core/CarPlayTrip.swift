@@ -727,6 +727,27 @@ private func navOSSCarPlayCoordinateDistance(
   return 2 * 6_371_000 * asin(sqrt(haversine))
 }
 
+/// What to do with the vehicle's render link before the next frame.
+public enum NavOSSCarPlayDisplayLinkAction: String, Sendable {
+  case create
+  case keep
+  case rebuild
+}
+
+/// The render link must be driven by the display the CarPlay window is on.
+///
+/// A link built for the handset's own display stops firing the moment that display sleeps, which
+/// froze the car's map mid-route while fixes were still arriving. A link left behind after the
+/// window moves to another screen has the same problem, so a link whose screen no longer matches
+/// the window is replaced rather than reused.
+public func navOSSCarPlayDisplayLinkAction(
+  hasLink: Bool,
+  linkedScreenMatchesWindow: Bool
+) -> NavOSSCarPlayDisplayLinkAction {
+  guard hasLink else { return .create }
+  return linkedScreenMatchesWindow ? .keep : .rebuild
+}
+
 /// Bearing from `start` to `end` in the navigation convention: 0° is true north, increasing
 /// clockwise. The local metre conversion intentionally matches `navOSSCarPlaySegmentProjection`.
 func navOSSCarPlayBearingDegrees(
