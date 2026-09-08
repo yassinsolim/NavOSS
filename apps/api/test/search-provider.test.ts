@@ -120,6 +120,78 @@ describe('Photon search provider', () => {
     expect(eastHills.results[0]?.id).toBe('poi:east-hills-shopping-centre');
     expect(saddletowne.results[0]?.id).toBe('poi:saddletowne-lrt');
   });
+
+  it('surfaces a concise detail category from osm_value when details are requested', async () => {
+    const provider = createPhotonSearchProvider({
+      fetchImplementation: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              features: [
+                {
+                  geometry: { coordinates: [-114.0719, 51.0447], type: 'Point' },
+                  properties: {
+                    name: 'Shell',
+                    osm_id: 1,
+                    osm_key: 'amenity',
+                    osm_type: 'N',
+                    osm_value: 'fuel',
+                    type: 'house',
+                  },
+                  type: 'Feature',
+                },
+              ],
+              type: 'FeatureCollection',
+            }),
+            { status: 200 },
+          ),
+        ),
+      now: () => new Date('2026-07-15T12:00:00Z'),
+    });
+
+    const withDetails = await provider.search({ includeDetails: true, limit: 8, q: 'Shell' });
+    const withoutDetails = await provider.search({ limit: 8, q: 'Shell' });
+
+    expect(withDetails.results[0]?.details?.category).toBe('fuel');
+    expect(withDetails.results[0]?.category).toBe('address');
+    expect(withoutDetails.results[0]?.category).toBe('address');
+    expect(withoutDetails.results[0]).not.toHaveProperty('details');
+  });
+});
+
+describe('place description response boundary', () => {
+  it('omits empty details when the only metadata was a placeholder', async () => {
+    const source: SearchProvider = {
+      search: () =>
+        Promise.resolve({
+          degraded: true,
+          results: [
+            {
+              category: 'poi',
+              center: { latitude: 51.0447, longitude: -114.0719 },
+              confidence: 0.9,
+              details: { category: 'yes' },
+              id: 'photon:N:1',
+              label: 'Example Place, Calgary',
+              name: 'Example Place',
+            },
+          ],
+          source: {
+            id: 'photon-development',
+            datasetVersion: 'test',
+            freshness: 'fresh',
+            updatedAt: '2026-09-07T00:00:00Z',
+          },
+        }),
+    };
+    const response = await createDevelopmentSearchProvider([], source).search({
+      includeDetails: true,
+      limit: 8,
+      q: 'Example Place',
+    });
+    expect(response.results[0]).not.toHaveProperty('details');
+    expect(() => SearchResponseSchema.parse(response)).not.toThrow();
+  });
 });
 
 describe('Nominatim search provider', () => {
@@ -941,4 +1013,175 @@ describe('Nominatim search provider', () => {
     expect(response.results.some(({ name }) => name.includes('Liquor'))).toBe(false);
     expect(response.source.id).toBe('nominatim-self-hosted');
   });
+
+  it('turns a cuisine-tagged restaurant into a concise, factual detail category', async () => {
+    const provider = createNominatimSearchProvider({
+      endpoint: 'http://nominatim:8080/',
+      fetchImplementation: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                addresstype: 'amenity',
+                category: 'amenity',
+                display_name: 'Trullo Trattoria, Calgary, Alberta, Canada',
+                extratags: { cuisine: 'italian' },
+                importance: 0.5,
+                lat: '50.9717',
+                lon: '-114.1202',
+                name: 'Trullo Trattoria',
+                osm_id: 6_334_181_056,
+                osm_type: 'node',
+                type: 'restaurant',
+              },
+            ]),
+            { status: 200 },
+          ),
+        ),
+    });
+    const wrapped = createProductionSearchProvider([], provider);
+
+    const response = await wrapped.search({ includeDetails: true, limit: 8, q: 'Trullo' });
+
+    expect(response.results[0]?.details?.category).toBe('italian restaurant');
+    expect(() => SearchResponseSchema.parse(response)).not.toThrow();
+  });
+
+  it('does not fabricate a cuisine when the tag is unsafe', async () => {
+    const provider = createNominatimSearchProvider({
+      endpoint: 'http://nominatim:8080/',
+      fetchImplementation: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                addresstype: 'amenity',
+                category: 'amenity',
+                display_name: 'Odd Diner, Calgary, Alberta, Canada',
+                extratags: { cuisine: '123;<script>' },
+                importance: 0.5,
+                lat: '50.9717',
+                lon: '-114.1202',
+                name: 'Odd Diner',
+                osm_id: 1,
+                osm_type: 'node',
+                type: 'restaurant',
+              },
+            ]),
+            { status: 200 },
+          ),
+        ),
+    });
+    const wrapped = createProductionSearchProvider([], provider);
+
+    const response = await wrapped.search({ includeDetails: true, limit: 8, q: 'Odd Diner' });
+
+    expect(response.results[0]?.details?.category).toBe('restaurant');
+  });
+
+  it('formats a plain raw tag into its concise browse-category label', async () => {
+    const provider = createNominatimSearchProvider({
+      endpoint: 'http://nominatim:8080/',
+      fetchImplementation: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                addresstype: 'amenity',
+                category: 'amenity',
+                display_name: 'Shell, Calgary, Alberta, Canada',
+                extratags: null,
+                importance: 0.4,
+                lat: '51.041',
+                lon: '-114.211',
+                name: 'Shell',
+                osm_id: 123,
+                osm_type: 'node',
+                type: 'fuel',
+              },
+            ]),
+            { status: 200 },
+          ),
+        ),
+    });
+    const wrapped = createProductionSearchProvider([], provider);
+
+    const response = await wrapped.search({ includeDetails: true, limit: 8, q: 'Shell' });
+
+    expect(response.results[0]?.details?.category).toBe('gas station');
+  });
+
+  it('keeps a dual-mapped raw tag (fast_food) matching both restaurant and takeout browsing', async () => {
+    const fastFoodResult = (id: string, cuisine?: string) => ({
+      addresstype: 'amenity',
+      category: 'amenity',
+      display_name: `${id}, Calgary, Alberta, Canada`,
+      extratags: cuisine === undefined ? null : { cuisine },
+      importance: 0.5,
+      lat: '51.045',
+      lon: '-114.07',
+      name: id,
+      osm_id: id,
+      osm_type: 'node',
+      type: 'fast_food',
+    });
+    const provider = createNominatimSearchProvider({
+      endpoint: 'http://nominatim:8080/',
+      fetchImplementation: () =>
+        Promise.resolve(
+          new Response(JSON.stringify([fastFoodResult('mexican-taco-hut', 'mexican')]), {
+            status: 200,
+          }),
+        ),
+    });
+    const wrapped = createProductionSearchProvider([], provider);
+
+    const asRestaurant = await wrapped.search({
+      category: 'restaurant',
+      limit: 8,
+      q: 'taco hut',
+    });
+    const asTakeout = await wrapped.search({ category: 'takeout', limit: 8, q: 'taco hut' });
+
+    expect(asRestaurant.results).toHaveLength(1);
+    expect(asTakeout.results).toHaveLength(1);
+    expect(asRestaurant.results[0]?.details?.category).toBe('mexican fast food');
+    expect(asTakeout.results[0]?.details?.category).toBe('mexican fast food');
+    expect(() => SearchResponseSchema.parse(asRestaurant)).not.toThrow();
+  });
+
+  it.each(['yes', 'unknown', 'point_of_interest', 'building'])(
+    'omits the placeholder %s instead of showing a misleading place description',
+    async (rawTag) => {
+      const provider = createNominatimSearchProvider({
+        endpoint: 'http://nominatim:8080/',
+        fetchImplementation: () =>
+          Promise.resolve(
+            new Response(
+              JSON.stringify([
+                {
+                  category: 'shop',
+                  display_name: 'Example Place, Calgary',
+                  lat: '51.045',
+                  lon: '-114.07',
+                  name: 'Example Place',
+                  osm_id: 1,
+                  osm_type: 'node',
+                  type: rawTag,
+                },
+              ]),
+            ),
+          ),
+      });
+      const response = await createProductionSearchProvider([], provider).search({
+        includeDetails: true,
+        limit: 8,
+        q: 'Example Place',
+      });
+      expect(response.results).toHaveLength(1);
+      expect(response.results[0]?.details?.category).toBeUndefined();
+      expect(response.results[0]?.name).toBe('Example Place');
+      expect(() => SearchResponseSchema.parse(response)).not.toThrow();
+    },
+  );
 });
