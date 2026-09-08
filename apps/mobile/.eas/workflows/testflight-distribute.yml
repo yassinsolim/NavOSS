@@ -1,8 +1,8 @@
 name: TestFlight distribution
 
-# App Store Connect uploads trigger distribution to the existing beta groups. This also covers
-# builds uploaded outside GitHub Actions, without building a new binary for every source commit.
-# The project's App Store Connect connection must be enabled in EAS settings.
+# Once the Expo GitHub connection is activated, App Store Connect uploads trigger distribution
+# to the existing beta group, including uploads made outside GitHub Actions. This does not build
+# a new binary for every commit. See docs/release/ci-cd.md for the current activation status.
 #
 # Manual dispatch remains available to recover a missed upload event or change What to Test notes:
 #   eas workflow:run .eas/workflows/testflight-distribute.yml \
@@ -24,6 +24,10 @@ on:
         type: string
         required: true
         description: What to Test notes shown to TestFlight testers.
+      submit_beta_review:
+        type: boolean
+        default: true
+        description: Submit new builds for Beta App Review; disable for an already approved build.
 
 jobs:
   distribute:
@@ -35,4 +39,4 @@ jobs:
       external_groups:
         - NavOSS Friends
       changelog: ${{ inputs.changelog || 'Please test place search, route previews, and navigation. Test CarPlay only while parked or passenger-operated. Report issues through TestFlight.' }}
-      submit_beta_review: true
+      submit_beta_review: ${{ inputs.submit_beta_review != false && inputs.submit_beta_review != 'false' }}

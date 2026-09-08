@@ -7,8 +7,8 @@ NavOSS does not publish an App Store update from every commit. Navigation change
 The delivery path is:
 
 1. Pull request or push to `main`: run formatting, type checks, lint, tests, builds, license-notice freshness, and native Swift tests.
-2. Publish an `ios-v<app-version>` GitHub release: queue the EAS `production-carplay` build and automatic TestFlight submission.
-3. Test the processed build using the internal TestFlight group.
+2. Publish an `ios-v<app-version>` GitHub release, or dispatch `iOS TestFlight`: queue the EAS `production-carplay` build and automatic upload to App Store Connect.
+3. The internal `testers` group automatically receives builds. The upload-triggered workflow in `apps/mobile/.eas/workflows/testflight-distribute.yml` is configured to assign eligible builds to `NavOSS Friends` and submit Beta App Review. See the activation status below before relying on automatic external delivery.
 4. Manually select the validated build in App Store Connect, complete metadata, and submit it for App Review.
 5. Choose manual, automatic-after-approval, or phased release in App Store Connect.
 
@@ -60,21 +60,21 @@ Apple credentials belong in EAS credential storage or App Store Connect, not in 
 
 ## Release Procedure
 
-> The GitHub path below does not work yet. Step 8 of the one-time setup is incomplete: the
-> `app-store-production` environment exists but holds no `EXPO_TOKEN`, so the workflow stops at its
-> token guard and no build is queued. Every build so far, including build 50, was started from a
-> local EAS session instead. Issue #24 tracks the fix.
+The `app-store-production` GitHub environment has `EXPO_TOKEN` configured. The existing
+GitHub workflow queues builds and uploads; EAS submission success is not proof of external
+group assignment, Apple approval, or installation on a tester's device.
 
-Until then, release from a machine with an EAS session:
+The local EAS entry point remains available:
 
 ```sh
 cd apps/mobile
 eas build --platform ios --profile production-carplay --auto-submit --non-interactive
 ```
 
-`eas submit --groups` adds a build to internal groups only. External distribution goes through the
-TestFlight workflow job in `apps/mobile/.eas/workflows/`; on the free plan use the
-`asc_build_id` variant, because the `build_id` variant requires a paid plan.
+`eas submit --groups` targets internal groups. The internal `testers` group already has
+`hasAccessToAllBuilds=true`; do not pass it as an explicit group to an EAS TestFlight job.
+External delivery uses `testflight-distribute.yml` with the App Store Connect build ID.
+Its `asc_build_id` job was exercised successfully without purchasing a paid build-upload job.
 
 1. Update `expo.version` in `apps/mobile/app.json`. EAS remotely increments the iOS build number.
 2. Merge only after CI passes.
@@ -82,11 +82,54 @@ TestFlight workflow job in `apps/mobile/.eas/workflows/`; on the free plan use t
 4. Watch the GitHub workflow until EAS accepts the build request, then monitor the EAS build/submission dashboard.
 5. Wait for App Store Connect processing and complete export-compliance prompts.
 6. Install from TestFlight with Metro disconnected and run the release smoke suite.
-7. Promote the tested build manually for external TestFlight or App Review.
+7. Confirm the build is assigned to `NavOSS Friends` and Apple reports `IN_BETA_TESTING` before calling it distributed. Public App Store review and release remain separate manual decisions.
 
 Before promotion, audit the signed IPA for the approved `com.apple.developer.carplay-maps` entitlement, the CarPlay template scene, the `location` background mode, and the production API origin.
 
 The workflow rejects a tag that does not match `apps/mobile/app.json`.
+
+## TestFlight auto-distribution activation
+
+The workflow handles App Store Connect `build_upload` events with state `complete` for app
+`6792619727`, including uploads made outside GitHub Actions. It never starts a new binary build
+on each source commit. A completed upload is not the same as a processed, approved beta;
+processing or review failures must remain visible in EAS/App Store Connect.
+
+Verified on 2026-09-07:
+
+- EAS is connected to NavOSS's existing App Store Connect app and has its upload webhook.
+- Internal `testers` receives all builds automatically. External `NavOSS Friends` contains builds
+  16, 53, and 54. Recent builds have `autoNotifyEnabled=true`.
+- The real recovery run `01a07e1b-60f7-7fa5-9eaa-a2795797b7f8` completed successfully against
+  already-approved build 54, with Beta App Review resubmission disabled. Group scope stayed unchanged.
+- **Automatic triggering is not yet active:** Expo has no linked GitHub repository/app installation,
+  and reports `NO_APP_STORE_CONNECT_WORKFLOWS`. The account authorization step was left unfinished;
+  do not describe the workflow as automatically delivering builds until it is connected and an
+  upload-triggered run succeeds.
+
+To finish activation, open the project's [GitHub settings](https://expo.dev/accounts/yassinsolim/projects/navoss/github),
+connect the Expo GitHub app to **only `yassinsolim/NavOSS`**, and set the monorepo project directory to
+`apps/mobile`. Keep the workflow on the repository's default branch. Then upload a new approved
+candidate and verify an App Store Connect-triggered EAS run assigns that exact build to `NavOSS Friends`.
+
+Manual recovery for a missed event or an already-uploaded build:
+
+```sh
+cd apps/mobile
+eas workflow:run .eas/workflows/testflight-distribute.yml \
+  -F asc_build_id=<app-store-connect-build-id> \
+  -F changelog="What testers should check"
+```
+
+For an already-approved build, add `-F submit_beta_review=false` to avoid resubmitting it.
+Apple Beta App Review and export-compliance requirements are never bypassed.
+
+### Testers' automatic installation setting
+
+Each friend must enable **TestFlight → NavOSS → App Information → Automatic Updates**.
+The developer can make a build available and enable notifications, but cannot force this
+device setting or immediate installation. Existing testers do not need a new invitation for each build.
+See [Apple's TestFlight guide](https://testflight.apple.com/#installing-testing).
 
 ## Over-the-Air Updates
 
