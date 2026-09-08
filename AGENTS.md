@@ -58,7 +58,7 @@
 
 ## Immediate next work
 
-1. Replace generic search-result “Point of interest” labels with concise, factual place descriptions drawn from available provider data.
-2. Connect the existing build/submission workflow to TestFlight distribution for the established tester groups; distinguish Apple approval and group availability from testers' automatic-update settings.
+1. Upload a new App Store Connect candidate and confirm the `app_store_connect.build_upload` trigger runs `testflight-distribute.yml` and assigns that exact build to `NavOSS Friends`. Activation prerequisites are recorded in `docs/release/ci-cd.md`; the event-triggered path itself is still unproven.
+2. Distinguish Apple approval and group availability from testers' automatic-update device setting when reporting delivery.
 3. Preserve the locked-phone CarPlay verification checklist and record real head-unit outcomes when available.
 4. Run focused checks and the applicable release gates before publishing changes; record the exact build and distribution state rather than inferring it from a successful upload.

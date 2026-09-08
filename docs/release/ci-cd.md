@@ -102,15 +102,23 @@ Verified on 2026-09-07:
   16, 53, and 54. Recent builds have `autoNotifyEnabled=true`.
 - The real recovery run `01a07e1b-60f7-7fa5-9eaa-a2795797b7f8` completed successfully against
   already-approved build 54, with Beta App Review resubmission disabled. Group scope stayed unchanged.
-- **Automatic triggering is not yet active:** Expo has no linked GitHub repository/app installation,
-  and reports `NO_APP_STORE_CONNECT_WORKFLOWS`. The account authorization step was left unfinished;
-  do not describe the workflow as automatically delivering builds until it is connected and an
-  upload-triggered run succeeds.
 
-To finish activation, open the project's [GitHub settings](https://expo.dev/accounts/yassinsolim/projects/navoss/github),
-connect the Expo GitHub app to **only `yassinsolim/NavOSS`**, and set the monorepo project directory to
-`apps/mobile`. Keep the workflow on the repository's default branch. Then upload a new approved
-candidate and verify an App Store Connect-triggered EAS run assigns that exact build to `NavOSS Friends`.
+Activation prerequisites completed on 2026-09-08:
+
+- The production Expo GitHub app (`github.com/apps/expo`) is installed on the account and scoped to
+  **only `yassinsolim/NavOSS`**. The account previously had the unrelated
+  `github.com/apps/expo-development` app installed, which is why the connection stayed unlinked.
+- The repository is linked to the `navoss` project, and the base directory is saved as `/apps/mobile`.
+- `eas integrations:asc:status` reports `connected` for `ascAppIdentifier` `6792619727`, matching the
+  workflow's trigger guard.
+- `eas workflow:list` registers `testflight-distribute.yml`, and the `app_store_connect.build_upload`
+  trigger is on the default branch as of `54ce160`.
+- **The upload-triggered path is still unproven:** no App Store Connect upload has occurred since
+  activation, so no event-triggered run exists. Do not describe automatic external delivery as working
+  until an upload-triggered run assigns that exact build to `NavOSS Friends`.
+
+To confirm activation, upload a new candidate and verify an App Store Connect-triggered EAS run
+assigns that exact build to `NavOSS Friends`.
 
 Manual recovery for a missed event or an already-uploaded build:
 
