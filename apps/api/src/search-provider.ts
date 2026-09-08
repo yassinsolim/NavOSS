@@ -129,6 +129,120 @@ const NOMINATIM_CATEGORY_VIEWBOX_RADII = [
   { latitude: 0.06, longitude: 0.08 },
 ] as const;
 
+// Consumer-facing place kinds for provider metadata. Raw tags remain separate so category
+// filtering never has to interpret presentation text.
+const SEARCH_CATEGORY_LABELS = {
+  apparel: 'clothing store',
+  art: 'art gallery',
+  atm: 'ATM',
+  attraction: 'attraction',
+  bar: 'bar',
+  'beauty-salon': 'beauty salon',
+  'beauty-supply': 'beauty supply',
+  cafe: 'café',
+  'car-dealer': 'car dealer',
+  'car-repair': 'auto repair',
+  'car-wash': 'car wash',
+  'charging-station': 'EV charging',
+  cinema: 'cinema',
+  convenience: 'convenience store',
+  dessert: 'dessert shop',
+  'dry-cleaning': 'dry cleaning',
+  electronics: 'electronics store',
+  fuel: 'gas station',
+  grocery: 'grocery store',
+  gym: 'gym',
+  healthcare: 'healthcare',
+  'home-garden': 'home & garden',
+  hotel: 'hotel',
+  library: 'library',
+  'live-music': 'live music',
+  museum: 'museum',
+  nightlife: 'nightclub',
+  park: 'park',
+  parking: 'parking',
+  pharmacy: 'pharmacy',
+  'post-office': 'post office',
+  restaurant: 'restaurant',
+  'shopping-centre': 'shopping centre',
+  'sporting-goods': 'sporting goods',
+  takeout: 'takeout',
+} as const satisfies Record<SearchCategory, string>;
+
+const CUISINE_PLACE_TYPES: Record<string, true> = {
+  restaurant: true,
+  fast_food: true,
+  cafe: true,
+};
+// Descriptions accompany raw detail objects through filtering without adding transport fields.
+// Weak keys release the metadata when the request results are discarded.
+const descriptionsByDetails = new WeakMap<NonNullable<SearchResult['details']>, string>();
+
+const OMITTED_PLACE_CATEGORIES: Record<string, true> = {
+  yes: true,
+  no: true,
+  unknown: true,
+  other: true,
+  poi: true,
+  'point of interest': true,
+  point_of_interest: true,
+  amenity: true,
+  shop: true,
+  building: true,
+  commercial: true,
+};
+
+const RAW_CATEGORY_LABELS: Record<string, string> = {};
+for (const category of Object.keys(SEARCH_CATEGORY_TYPES) as SearchCategory[]) {
+  for (const tag of SEARCH_CATEGORY_TYPES[category]) {
+    RAW_CATEGORY_LABELS[tag] ??= SEARCH_CATEGORY_LABELS[category];
+  }
+}
+RAW_CATEGORY_LABELS.fast_food = 'fast food';
+RAW_CATEGORY_LABELS.food_court = 'food court';
+RAW_CATEGORY_LABELS.pub = 'pub';
+RAW_CATEGORY_LABELS.biergarten = 'beer garden';
+RAW_CATEGORY_LABELS.retail = 'retail area';
+
+// Use the first explicitly tagged cuisine, never a guess from a business name. Limit it to two
+// plain words so combining it with a place kind produces a useful short description.
+function normalizedCuisineWord(cuisine: string | undefined): string | undefined {
+  if (cuisine === undefined) return undefined;
+  const firstValue = (cuisine.split(';')[0] ?? '')
+    .trim()
+    .toLocaleLowerCase('en-CA')
+    .replaceAll('_', ' ');
+  return /^[a-z]+( [a-z]+)?$/.test(firstValue) ? firstValue : undefined;
+}
+
+function finalizeDetailCategory(rawCategory: string, cuisine?: string): string | undefined {
+  const rawTag = rawCategory.trim().toLocaleLowerCase('en-CA');
+  if (rawTag === '' || OMITTED_PLACE_CATEGORIES[rawTag] === true) return undefined;
+  const words = rawTag.replaceAll(/[_-]+/g, ' ').split(/\s+/).filter(Boolean);
+  if (words.length > 3 || !words.every((word) => /^[\p{L}]+$/u.test(word))) return undefined;
+  const baseLabel =
+    (Object.hasOwn(RAW_CATEGORY_LABELS, rawTag) ? RAW_CATEGORY_LABELS[rawTag] : undefined) ??
+    words.join(' ');
+  const cuisineWord =
+    CUISINE_PLACE_TYPES[rawTag] === true ? normalizedCuisineWord(cuisine) : undefined;
+  if (cuisineWord === undefined || cuisineWord === baseLabel) return baseLabel;
+  const description = `${cuisineWord} ${baseLabel}`;
+  return description.split(/\s+/).length <= 3 ? description : baseLabel;
+}
+
+function finalizeResultDetails(result: SearchResult): SearchResult {
+  if (result.details?.category === undefined) return result;
+  const category =
+    descriptionsByDetails.get(result.details) ?? finalizeDetailCategory(result.details.category);
+  const details = { ...result.details };
+  delete details.category;
+  if (category !== undefined) details.category = category;
+  const finalized: SearchResult = { ...result };
+  if (Object.keys(details).length === 0) delete finalized.details;
+  else finalized.details = details;
+  return finalized;
+}
+
 function nominatimViewbox(
   query: SearchQuery,
   radius = NOMINATIM_CATEGORY_VIEWBOX_RADII.at(-1),
@@ -161,6 +275,7 @@ const PhotonFeatureSchema = z.object({
     osm_id: z.union([z.number(), z.string()]),
     osm_key: z.string().optional(),
     osm_type: z.string().optional(),
+    osm_value: z.string().optional(),
     postcode: z.string().optional(),
     state: z.string().optional(),
     street: z.string().optional(),
@@ -260,18 +375,23 @@ function displayLabel(properties: z.infer<typeof PhotonFeatureSchema>['propertie
 function normalizePhotonResults(
   payload: z.infer<typeof PhotonResponseSchema>,
   limit: number,
+  includeDetails: boolean,
 ): SearchResult[] {
-  return payload.features.slice(0, limit).map((feature, index) => ({
-    category: categoryFor(feature.properties),
-    center: {
-      latitude: feature.geometry.coordinates[1],
-      longitude: feature.geometry.coordinates[0],
-    },
-    confidence: Math.max(0.55, 0.92 - index * 0.06),
-    id: `photon:${feature.properties.osm_type ?? 'unknown'}:${String(feature.properties.osm_id)}`,
-    label: displayLabel(feature.properties),
-    name: displayName(feature.properties),
-  }));
+  return payload.features.slice(0, limit).map((feature, index) => {
+    const detailCategory = includeDetails ? nonEmptyText(feature.properties.osm_value) : undefined;
+    return {
+      category: categoryFor(feature.properties),
+      center: {
+        latitude: feature.geometry.coordinates[1],
+        longitude: feature.geometry.coordinates[0],
+      },
+      confidence: Math.max(0.55, 0.92 - index * 0.06),
+      ...(detailCategory === undefined ? {} : { details: { category: detailCategory } }),
+      id: `photon:${feature.properties.osm_type ?? 'unknown'}:${String(feature.properties.osm_id)}`,
+      label: displayLabel(feature.properties),
+      name: displayName(feature.properties),
+    };
+  });
 }
 
 function nominatimCategory(
@@ -334,8 +454,12 @@ function normalizeNominatimResults(
       result.extratags?.website ?? result.extratags?.['contact:website'],
     );
     const wheelchair = nonEmptyText(result.extratags?.wheelchair);
+    const placeDescription =
+      query.includeDetails && result.type !== undefined
+        ? finalizeDetailCategory(result.type, result.extratags?.cuisine)
+        : undefined;
 
-    return {
+    const normalized: SearchResult = {
       category: nominatimCategory(result),
       center: { latitude: result.lat, longitude: result.lon },
       confidence,
@@ -355,6 +479,10 @@ function normalizeNominatimResults(
       label: result.display_name,
       name,
     };
+    if (placeDescription !== undefined && normalized.details !== undefined) {
+      descriptionsByDetails.set(normalized.details, placeDescription);
+    }
+    return normalized;
   });
 }
 
@@ -416,7 +544,7 @@ export function createPhotonSearchProvider(
       const parsed = PhotonResponseSchema.parse(await response.json());
       return {
         degraded: true,
-        results: normalizePhotonResults(parsed, query.limit),
+        results: normalizePhotonResults(parsed, query.limit, query.includeDetails === true),
         source: {
           datasetVersion: 'openstreetmap-continuous',
           freshness: 'fresh',
@@ -570,9 +698,16 @@ function mergeResults(
     } else if (result.details !== undefined) {
       const existing = deduplicated[duplicateIndex];
       if (existing !== undefined) {
+        const details = { ...result.details, ...existing.details };
+        const description =
+          (existing.details === undefined
+            ? undefined
+            : descriptionsByDetails.get(existing.details)) ??
+          descriptionsByDetails.get(result.details);
+        if (description !== undefined) descriptionsByDetails.set(details, description);
         deduplicated[duplicateIndex] = {
           ...existing,
-          details: { ...result.details, ...existing.details },
+          details,
         };
       }
     }
@@ -583,7 +718,8 @@ function mergeResults(
 function matchesSearchCategory(result: SearchResult, query: SearchQuery): boolean {
   if (query.category === undefined) return true;
   const category = result.details?.category?.toLocaleLowerCase('en-CA');
-  return category !== undefined && SEARCH_CATEGORY_TYPES[query.category].has(category);
+  if (category === undefined) return false;
+  return SEARCH_CATEGORY_TYPES[query.category].has(category);
 }
 
 function combinedSource(responses: SearchResponse[]): SearchResponse['source'] {
@@ -645,7 +781,7 @@ export function createDevelopmentSearchProvider(
             [fixtureResponse.results, photonResponse.results],
             query,
             query.limit,
-          ),
+          ).map(finalizeResultDetails),
           source: photonResponse.source,
         };
       } catch {
@@ -734,7 +870,7 @@ export function createProductionSearchProvider(
           ),
           query,
           query.limit,
-        ),
+        ).map(finalizeResultDetails),
         source:
           useCalgarySources || responses[0] === undefined
             ? combinedSource(responses)

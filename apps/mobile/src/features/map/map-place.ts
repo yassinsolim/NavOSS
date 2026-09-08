@@ -41,8 +41,7 @@ function propertyString(
   return undefined;
 }
 
-function placeCategory(properties: GeoJsonProperties): string {
-  const value = propertyString(properties, ['subclass', 'class']) ?? 'point of interest';
+export function formatPlaceCategory(value: string): string {
   if (value === 'fuel') return 'Gas station';
   return value
     .split('_')
@@ -69,7 +68,9 @@ export function mapPlaceFromRenderedFeatures(
     if (name === undefined) continue;
 
     const center = featureCoordinate(feature, fallback);
-    const category = placeCategory(feature.properties);
+    const category = formatPlaceCategory(
+      propertyString(feature.properties, ['subclass', 'class']) ?? 'point of interest',
+    );
     const osmId: unknown =
       feature.properties === null
         ? undefined

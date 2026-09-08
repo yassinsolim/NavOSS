@@ -555,9 +555,8 @@ export function MapScreen() {
       categoryQueries.map((query) =>
         searchPlaces(query, {
           ...proximityOptions,
-          ...(category?.searchCategory === undefined
-            ? {}
-            : { category: category.searchCategory, includeDetails: true }),
+          includeDetails: true,
+          ...(category?.searchCategory === undefined ? {} : { category: category.searchCategory }),
           signal: controller.signal,
         }),
       ),
@@ -2539,6 +2538,7 @@ export function MapScreen() {
             style={[styles.topOverlay, { paddingTop: insets.top + 10 }]}
           >
             <SearchPanel
+              activeCategoryLabel={selectedCategoryId === undefined ? undefined : query}
               apiConnection={apiConnection}
               coverageName={coverageName}
               darkMap={darkMap}

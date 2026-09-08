@@ -23,12 +23,11 @@ on:
 
 jobs:
   distribute:
-    name: Distribute to internal and external TestFlight
+    name: Distribute to NavOSS Friends
     type: testflight
     params:
       build_id: ${{ inputs.build_id }}
-      internal_groups:
-        - testers
+      # The internal `testers` group already has automatic distribution enabled in Apple.
       external_groups:
         - NavOSS Friends
       changelog: ${{ inputs.changelog }}

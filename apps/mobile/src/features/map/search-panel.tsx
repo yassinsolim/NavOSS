@@ -30,6 +30,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
+import { categoryLabel } from '@/features/map/search-result-category';
 import { formatSearchDistance, searchResultContext } from '@/features/map/search-proximity';
 import { getGooglePlacesOpenSourceLicenseInfo } from '@/features/navigation/native-navigation';
 
@@ -40,6 +41,7 @@ export type ApiConnectionState = 'connecting' | 'online' | 'offline';
 export type SearchState = 'idle' | 'loading' | 'success' | 'error';
 
 interface SearchPanelProps {
+  activeCategoryLabel?: string;
   apiConnection: ApiConnectionState;
   coverageName: string;
   darkMap: boolean;
@@ -70,10 +72,6 @@ function connectionLabel(state: ApiConnectionState, coverageName: string): strin
   return 'Service online';
 }
 
-function categoryLabel(category: SearchResult['category']): string {
-  return category === 'poi' ? 'Point of interest' : category;
-}
-
 function searchSourceLabel(source: SearchSource | undefined): string {
   if (source === undefined) {
     return 'Calgary place search';
@@ -91,6 +89,7 @@ function searchSourceLabel(source: SearchSource | undefined): string {
 }
 
 export function SearchPanel({
+  activeCategoryLabel,
   apiConnection,
   coverageName,
   darkMap,
@@ -270,6 +269,7 @@ export function SearchPanel({
               renderItem={({ index, item }) => {
                 const distance = formatSearchDistance(item.distanceMeters);
                 const context = searchResultContext(item);
+                const badge = categoryLabel(item, activeCategoryLabel);
                 return (
                   <Animated.View
                     entering={FadeInDown.duration(180)
@@ -278,7 +278,7 @@ export function SearchPanel({
                     layout={LinearTransition.duration(160).reduceMotion(ReduceMotion.System)}
                   >
                     <Pressable
-                      accessibilityLabel={`Select ${item.name}${distance === undefined ? '' : `, ${distance} away`}, ${context}`}
+                      accessibilityLabel={`Select ${item.name}${badge === '' ? '' : `, ${badge}`}${distance === undefined ? '' : `, ${distance} away`}, ${context}`}
                       onPress={() => {
                         onSelectResult(item);
                       }}
@@ -307,7 +307,7 @@ export function SearchPanel({
                           {context}
                         </Text>
                       </View>
-                      <Text style={styles.category}>{categoryLabel(item.category)}</Text>
+                      {badge !== '' && <Text style={styles.category}>{badge}</Text>}
                     </Pressable>
                   </Animated.View>
                 );

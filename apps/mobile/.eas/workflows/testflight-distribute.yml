@@ -1,15 +1,19 @@
 name: TestFlight distribution
 
-# Distributes an already-uploaded App Store Connect build to TestFlight groups.
+# Once the Expo GitHub connection is activated, App Store Connect uploads trigger distribution
+# to the existing beta group, including uploads made outside GitHub Actions. This does not build
+# a new binary for every commit. See docs/release/ci-cd.md for the current activation status.
 #
-# `eas submit --groups` only reaches internal groups, so external distribution has to go through
-# this job. Run it with the App Store Connect build id, which is visible in App Store Connect under
-# TestFlight for the build:
-#
+# Manual dispatch remains available to recover a missed upload event or change What to Test notes:
 #   eas workflow:run .eas/workflows/testflight-distribute.yml \
 #     -F asc_build_id=<id> -F changelog="..."
 
 on:
+  app_store_connect:
+    build_upload:
+      states:
+        - complete
+      if: ${{ app_store_connect.app.id == '6792619727' && app_store_connect.build_upload.build.id }}
   workflow_dispatch:
     inputs:
       asc_build_id:
@@ -20,16 +24,19 @@ on:
         type: string
         required: true
         description: What to Test notes shown to TestFlight testers.
+      submit_beta_review:
+        type: boolean
+        default: true
+        description: Submit new builds for Beta App Review; disable for an already approved build.
 
 jobs:
   distribute:
-    name: Distribute to internal and external TestFlight
+    name: Distribute to NavOSS Friends
     type: testflight
     params:
-      asc_build_id: ${{ inputs.asc_build_id }}
-      internal_groups:
-        - testers
+      asc_build_id: ${{ inputs.asc_build_id || app_store_connect.build_upload.build.id }}
+      # The internal `testers` group already has automatic distribution enabled in Apple.
       external_groups:
         - NavOSS Friends
-      changelog: ${{ inputs.changelog }}
-      submit_beta_review: true
+      changelog: ${{ inputs.changelog || 'Please test place search, route previews, and navigation. Test CarPlay only while parked or passenger-operated. Report issues through TestFlight.' }}
+      submit_beta_review: ${{ inputs.submit_beta_review != false && inputs.submit_beta_review != 'false' }}

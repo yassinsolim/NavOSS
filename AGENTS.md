@@ -41,12 +41,11 @@
 
 ## Current checkpoint
 
-- `main` contains complete CarPlay controls at `a5e1f5d` and its release record at `a3cbb5e`.
-- Build `0.1.0 (26)` was signed, audited, and uploaded. Apple processing, internal `testers` attachment, and physical head-unit validation are still pending.
-- Build 26 adds parked Search, Settings, Automatic/Light/Dark appearance, All guidance/Alerts only/Muted audio, active End/overview/report controls, and private bounded two-hour report drafts.
-- Build 26 IPA SHA-256: `c59f1e40669c9f93ec17a1e7debdcaceca47fa6fd3153afe7be6d26574074950`.
-- EAS submission: `a8d7e2de-a355-46d9-acc5-889cff6517f9`.
-- The detailed release source of truth is `docs/release/testflight.md`; CarPlay design and remaining gaps are in `docs/architecture/carplay.md`.
+- The latest recorded TestFlight candidate is `0.1.0 (54)` from `78e3aaa` (PR #34), with EAS build and submission both `FINISHED` on 2026-09-06. Submission completion alone does not establish Apple processing, tester-group distribution, or automatic installation.
+- Build 54 binds the CarPlay vehicle render loop to the car display and adds road-following position and corner-heading interpolation. Build 53 fixed the blank phone companion screen, but its tester feedback confirmed that the screen-off freeze remained.
+- Physical head-unit validation of build 54's locked-phone movement, turning, and reconnect behavior remains unconfirmed. Do not treat simulator map-host checks as that validation.
+- Build numbers and source commits must come from current EAS/App Store Connect evidence and `docs/release/testflight.md`, not from an old checkpoint. Later source or test commits do not imply a new distributed binary.
+- The release source of truth is `docs/release/testflight.md`; CarPlay design and remaining gaps are in `docs/architecture/carplay.md`.
 
 ## Git discipline
 
@@ -59,7 +58,7 @@
 
 ## Immediate next work
 
-1. Confirm build 26 is processed in App Store Connect and attach it to internal group `testers`.
-2. Save focused What to Test notes for parked Search, appearance, audio modes, reports, End, overview/follow, arrow direction, and reconnect behavior.
-3. Install build 26 and validate it on a real wired or wireless CarPlay head unit while parked or passenger-operated.
-4. Update `docs/release/testflight.md`, run focused checks, commit with signoff, and push the confirmed state.
+1. Replace generic search-result “Point of interest” labels with concise, factual place descriptions drawn from available provider data.
+2. Connect the existing build/submission workflow to TestFlight distribution for the established tester groups; distinguish Apple approval and group availability from testers' automatic-update settings.
+3. Preserve the locked-phone CarPlay verification checklist and record real head-unit outcomes when available.
+4. Run focused checks and the applicable release gates before publishing changes; record the exact build and distribution state rather than inferring it from a successful upload.
