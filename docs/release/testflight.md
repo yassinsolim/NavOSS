@@ -662,8 +662,13 @@ wait on an API release. Against the currently deployed API the visible strings a
   than a wrong one. `search-panel.tsx:310` guards the empty case and the accessibility label at
   `search-panel.tsx:281` matches.
 
-The API-side description enrichment in the same PR is not deployed; production `/v1/search` still
-returns the older `details.category` values.
+The API-side half of PR #35 is not deployed, and it is more than cosmetic. It maps raw tags to
+consumer wording (`cafe` to `café`, `fuel` to `gas station`, `fast_food` to `fast food`) and, on the
+Photon path, attaches `details.category` from `osm_value` where the response previously carried none.
+`finalizeResultDetails` never invents a category for a result that has none. Deploying it will also
+change some existing labels' casing, because the mobile formatter only title-cases the first word of
+a space-separated value: today's `fast_food` renders `Fast Food`, whereas the deployed `fast food`
+will render `Fast food`.
 
 **First upload-triggered distribution.** Workflow run `01a08433-074e-7ae0-91bb-cc1d371e51b6` started
 2026-09-09T03:25:31Z with `triggerEventType` `APP_STORE_CONNECT_BUILD_UPLOAD_STATE_CHANGED`, actor
