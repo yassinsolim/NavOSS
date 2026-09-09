@@ -650,9 +650,18 @@ device, and connection type. Do not record route coordinates or trip history.
 `0.1.0 (55)` from commit `e4474a3`, EAS build `ff65252a-1e0a-4bff-b177-096f94c03c2f` `FINISHED`,
 auto-submitted, EAS submission `928574be-399b-4cf6-817d-00b8fba62d07` `FINISHED` on 2026-09-09.
 
-Carries the merged PR #35 mobile change: search results show a factual place type such as `Café`,
-`Fast Food`, or `Gas Station` instead of the generic `Point of interest` badge. The label reads
-`details.category`, which the deployed API already returns, so it does not wait on an API release.
+Carries the merged PR #35 mobile change: search results no longer show the generic `Point of
+interest` badge. The label reads `details.category` from the existing API response, so it does not
+wait on an API release. Against the currently deployed API the visible strings are:
+
+- `cafe` renders `Cafe`, without an accent. `Café` only appears once the API emits the accented
+  `café`, which is part of the undeployed API change.
+- `fast_food` renders `Fast Food`; `fuel` and `gas station` both render `Gas station`.
+- Results with no `details.category` render no badge at all. A name search for `Shell` on the
+  deployed API returns results with no `details` object, so those rows show no category chip rather
+  than a wrong one. `search-panel.tsx:310` guards the empty case and the accessibility label at
+  `search-panel.tsx:281` matches.
+
 The API-side description enrichment in the same PR is not deployed; production `/v1/search` still
 returns the older `details.category` values.
 
@@ -661,11 +670,14 @@ returns the older `details.category` values.
 `GitHub App`, and `requestedGitRef` `refs/heads/main@67261efb`. Its `distribute` job
 (`Distribute to NavOSS Friends`, type `TESTFLIGHT`) reported `SUCCESS` with no errors and outputs
 `apple_app_id` `6792619727` and `asc_build_id` `39b7602d-44f9-435d-89da-db1f3b57f80c`. No manual
-dispatch was involved, so the App Store Connect event path is now proven end to end.
+dispatch was involved, so the App Store Connect event reaches EAS and starts the workflow.
 
-Not yet observed for this build: the App Store Connect side of the same fact — that
-`39b7602d-44f9-435d-89da-db1f3b57f80c` is build 55 and appears under `NavOSS Friends` — and Beta App
-Review's outcome. Confirm both in App Store Connect before telling testers the build is available.
+What that run does not establish: the job finished in about three seconds and returned
+`background_job_receipt_id` `01a08433-0d2a-7a05-8971-fd7d4f9ea853`, meaning it enqueued the
+TestFlight assignment rather than completing it. The outcome of that background job, the fact that
+`39b7602d-44f9-435d-89da-db1f3b57f80c` is build 55, its appearance under `NavOSS Friends`, and Beta
+App Review's result are all unconfirmed. Check App Store Connect before telling testers the build is
+available.
 
 ## External TestFlight
 
@@ -686,6 +698,12 @@ Friends` group. Beta App Review is `WAITING_FOR_REVIEW`. The external group has 
 hard public-link limit of 10. Its link is `https://testflight.apple.com/join/KyZPPD4m`; Apple shows
 that it is not accepting new testers until review approval. Do not publish the direct EAS IPA
 artifact URL as a TestFlight link; it is not a friend-install invitation.
+
+Superseded in part on 2026-09-07: `NavOSS Friends` had builds 16, 53, and 54 assigned, and recent
+builds carried `autoNotifyEnabled=true` on their build beta detail. The July 28 tester count and
+review state above were not rechecked then and should not be relied on. Whether build 55 reached the
+group, and whether the group has any testers, is unconfirmed — read it from App Store Connect rather
+than from this file.
 
 ## Public App Store gate
 

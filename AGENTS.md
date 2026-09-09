@@ -42,7 +42,7 @@
 ## Current checkpoint
 
 - The latest recorded TestFlight candidate is `0.1.0 (55)` from `e4474a3`, with EAS build and submission both `FINISHED` on 2026-09-09. Submission completion alone does not establish Apple processing, tester-group distribution, or automatic installation.
-- Build 55 carries PR #35's factual search-result place labels (`Café`, `Fast Food`, `Gas Station` in place of `Point of interest`). Its upload fired the first App Store Connect-triggered distribution run; Apple-side group membership and Beta App Review are still unconfirmed for it.
+- Build 55 carries PR #35's factual search-result place labels, replacing the generic `Point of interest` badge. Against the deployed API these render as `Cafe`, `Fast Food`, and `Gas station`; results with no `details.category` show no badge. The accented `Café` needs the undeployed API change. Build 55's upload fired the first App Store Connect-triggered distribution run, which enqueued the assignment; Apple-side group membership and Beta App Review are unconfirmed.
 - Build 54 bound the CarPlay vehicle render loop to the car display and added road-following position and corner-heading interpolation. The maintainer confirmed on 2026-09-09 that navigation with the phone's screen off now works, closing the screen-off freeze; cornering, wake-without-jump, reconnect, and Dashboard-only steps remain unreported.
 - Build numbers and source commits must come from current EAS/App Store Connect evidence and `docs/release/testflight.md`, not from an old checkpoint. Later source or test commits do not imply a new distributed binary.
 - The release source of truth is `docs/release/testflight.md`; CarPlay design and remaining gaps are in `docs/architecture/carplay.md`.

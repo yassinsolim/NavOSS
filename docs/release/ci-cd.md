@@ -113,11 +113,13 @@ Activation prerequisites completed on 2026-09-08:
   workflow's trigger guard.
 - `eas workflow:list` registers `testflight-distribute.yml`, and the `app_store_connect.build_upload`
   trigger is on the default branch as of `54ce160`.
-- **The upload-triggered path is proven as of 2026-09-08/09.** Build 55's auto-submitted upload fired
-  workflow run `01a08433-074e-7ae0-91bb-cc1d371e51b6` with `triggerEventType`
-  `APP_STORE_CONNECT_BUILD_UPLOAD_STATE_CHANGED`; its `Distribute to NavOSS Friends` job returned
-  `SUCCESS` with no errors. Apple-side group membership and Beta App Review still need confirming per
-  build in App Store Connect.
+- **The event-triggered invocation is proven as of 2026-09-08/09.** Build 55's auto-submitted upload
+  fired workflow run `01a08433-074e-7ae0-91bb-cc1d371e51b6` with `triggerEventType`
+  `APP_STORE_CONNECT_BUILD_UPLOAD_STATE_CHANGED`, and its `Distribute to NavOSS Friends` job returned
+  `SUCCESS` with no errors. That job enqueues the assignment and returns a
+  `background_job_receipt_id`, so a `SUCCESS` here means the request was accepted, not that a tester
+  can install the build. Apple-side processing, group membership, and Beta App Review still need
+  confirming per build in App Store Connect.
 
 Manual recovery for a missed event or an already-uploaded build:
 
