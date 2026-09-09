@@ -623,8 +623,13 @@ Carries PR #34, which fixes the freeze build 53 still had and the turning the te
   arrow turns while the turn is happening.
 
 Verified before release: 103 native tests, mutation-checked; repository gates; and
-`NAVIGATION_VALIDATION_PASSED` on a real simulator build. The freeze itself is still unverified on
-hardware — run the checklist below.
+`NAVIGATION_VALIDATION_PASSED` on a real simulator build.
+
+Confirmed on hardware 2026-09-09: the maintainer reported that navigation with the phone's screen
+off now works, which closes the freeze that builds 53 and 54 were chasing. That report covers step 1
+below — the vehicle keeps moving on the car's screen while the handset is locked. Steps 2 through 5
+(cornering, wake-without-jump, reconnect, Dashboard-only) have not been separately reported and stay
+open.
 
 ### Vehicle motion with the handset locked
 
