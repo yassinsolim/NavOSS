@@ -631,6 +631,13 @@ below — the vehicle keeps moving on the car's screen while the handset is lock
 (cornering, wake-without-jump, reconnect, Dashboard-only) have not been separately reported and stay
 open.
 
+Residual risk found during the 2026-09-09 audit, not observed in the field:
+`NavOSSCarPlayMapViewController.swift:691` falls back to `CADisplayLink(target:selector:)` when
+`renderScreen()` returns `nil`, which is the handset-bound link the fix exists to avoid. It
+self-heals, because the screen-identity comparison at `:661-673` rebuilds the link on the next
+position update once a screen exists, but a freeze at the very start of a trip would point here
+first.
+
 ### Vehicle motion with the handset locked
 
 Run on an entitled physical head unit, parked or passenger-operated, and record the build number,
@@ -645,7 +652,7 @@ device, and connection type. Do not record route coordinates or trip history.
    rebuilt against the car's screen rather than left on the handset's.
 5. Repeat step 1 with only the Dashboard scene visible, without opening NavOSS on the head unit.
 
-### Build 55 — factual place labels, first automatic distribution
+### Build 55 — factual place labels, first automatic distribution trigger
 
 `0.1.0 (55)` from commit `e4474a3`, EAS build `ff65252a-1e0a-4bff-b177-096f94c03c2f` `FINISHED`,
 auto-submitted, EAS submission `928574be-399b-4cf6-817d-00b8fba62d07` `FINISHED` on 2026-09-09.
@@ -663,14 +670,15 @@ wait on an API release. Against the currently deployed API the visible strings a
   `search-panel.tsx:281` matches.
 
 The API-side half of PR #35 is not deployed, and it is more than cosmetic. It maps raw tags to
-consumer wording (`cafe` to `café`, `fuel` to `gas station`, `fast_food` to `fast food`) and, on the
-Photon path, attaches `details.category` from `osm_value` where the response previously carried none.
-`finalizeResultDetails` never invents a category for a result that has none. Deploying it will also
-change some existing labels' casing, because the mobile formatter only title-cases the first word of
-a space-separated value: today's `fast_food` renders `Fast Food`, whereas the deployed `fast food`
-will render `Fast food`.
+consumer wording (`cafe` to `café`, `fuel` to `gas station`, `fast_food` to `fast food`). On the
+Photon provider path it also attaches `details.category` from `osm_value` where the response
+previously carried none; production is documented as self-hosted Alberta Nominatim, so whether that
+particular gain reaches production is unverified. `finalizeResultDetails` never invents a category
+for a result that has none. Deploying will also change some labels' casing, because the mobile
+formatter only title-cases the first word of a space-separated value: today's `fast_food` renders
+`Fast Food`, whereas the deployed `fast food` will render `Fast food`.
 
-**First upload-triggered distribution.** Workflow run `01a08433-074e-7ae0-91bb-cc1d371e51b6` started
+**First upload-triggered invocation.** Workflow run `01a08433-074e-7ae0-91bb-cc1d371e51b6` started
 2026-09-09T03:25:31Z with `triggerEventType` `APP_STORE_CONNECT_BUILD_UPLOAD_STATE_CHANGED`, actor
 `GitHub App`, and `requestedGitRef` `refs/heads/main@67261efb`. Its `distribute` job
 (`Distribute to NavOSS Friends`, type `TESTFLIGHT`) reported `SUCCESS` with no errors and outputs
