@@ -652,7 +652,7 @@ device, and connection type. Do not record route coordinates or trip history.
    rebuilt against the car's screen rather than left on the handset's.
 5. Repeat step 1 with only the Dashboard scene visible, without opening NavOSS on the head unit.
 
-### Build 55 — factual place labels, first automatic distribution trigger
+### Build 55 — factual place labels, first automatic trigger
 
 `0.1.0 (55)` from commit `e4474a3`, EAS build `ff65252a-1e0a-4bff-b177-096f94c03c2f` `FINISHED`,
 auto-submitted, EAS submission `928574be-399b-4cf6-817d-00b8fba62d07` `FINISHED` on 2026-09-09.
@@ -672,11 +672,12 @@ wait on an API release. Against the currently deployed API the visible strings a
 The API-side half of PR #35 is not deployed, and it is more than cosmetic. It maps raw tags to
 consumer wording (`cafe` to `café`, `fuel` to `gas station`, `fast_food` to `fast food`). On the
 Photon provider path it also attaches `details.category` from `osm_value` where the response
-previously carried none; production is documented as self-hosted Alberta Nominatim, so whether that
-particular gain reaches production is unverified. `finalizeResultDetails` never invents a category
-for a result that has none. Deploying will also change some labels' casing, because the mobile
-formatter only title-cases the first word of a space-separated value: today's `fast_food` renders
-`Fast Food`, whereas the deployed `fast food` will render `Fast food`.
+previously carried none. Production's configured provider is self-hosted Alberta Nominatim, so that
+Photon behaviour is not evidence of any live production gain; treat it as unverified for production
+until measured against a deployed response. `finalizeResultDetails` never invents a category for a
+result that has none. Deploying will also change some labels' casing, because the mobile formatter
+only title-cases the first word of a space-separated value: today's `fast_food` renders `Fast Food`,
+whereas the deployed `fast food` will render `Fast food`.
 
 **First upload-triggered invocation.** Workflow run `01a08433-074e-7ae0-91bb-cc1d371e51b6` started
 2026-09-09T03:25:31Z with `triggerEventType` `APP_STORE_CONNECT_BUILD_UPLOAD_STATE_CHANGED`, actor
