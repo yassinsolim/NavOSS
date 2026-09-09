@@ -645,6 +645,28 @@ device, and connection type. Do not record route coordinates or trip history.
    rebuilt against the car's screen rather than left on the handset's.
 5. Repeat step 1 with only the Dashboard scene visible, without opening NavOSS on the head unit.
 
+### Build 55 — factual place labels, first automatic distribution
+
+`0.1.0 (55)` from commit `e4474a3`, EAS build `ff65252a-1e0a-4bff-b177-096f94c03c2f` `FINISHED`,
+auto-submitted, EAS submission `928574be-399b-4cf6-817d-00b8fba62d07` `FINISHED` on 2026-09-09.
+
+Carries the merged PR #35 mobile change: search results show a factual place type such as `Café`,
+`Fast Food`, or `Gas Station` instead of the generic `Point of interest` badge. The label reads
+`details.category`, which the deployed API already returns, so it does not wait on an API release.
+The API-side description enrichment in the same PR is not deployed; production `/v1/search` still
+returns the older `details.category` values.
+
+**First upload-triggered distribution.** Workflow run `01a08433-074e-7ae0-91bb-cc1d371e51b6` started
+2026-09-09T03:25:31Z with `triggerEventType` `APP_STORE_CONNECT_BUILD_UPLOAD_STATE_CHANGED`, actor
+`GitHub App`, and `requestedGitRef` `refs/heads/main@67261efb`. Its `distribute` job
+(`Distribute to NavOSS Friends`, type `TESTFLIGHT`) reported `SUCCESS` with no errors and outputs
+`apple_app_id` `6792619727` and `asc_build_id` `39b7602d-44f9-435d-89da-db1f3b57f80c`. No manual
+dispatch was involved, so the App Store Connect event path is now proven end to end.
+
+Not yet observed for this build: the App Store Connect side of the same fact — that
+`39b7602d-44f9-435d-89da-db1f3b57f80c` is build 55 and appears under `NavOSS Friends` — and Beta App
+Review's outcome. Confirm both in App Store Connect before telling testers the build is available.
+
 ## External TestFlight
 
 After the internal gate passes:

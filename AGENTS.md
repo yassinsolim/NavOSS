@@ -41,9 +41,9 @@
 
 ## Current checkpoint
 
-- The latest recorded TestFlight candidate is `0.1.0 (54)` from `78e3aaa` (PR #34), with EAS build and submission both `FINISHED` on 2026-09-06. Submission completion alone does not establish Apple processing, tester-group distribution, or automatic installation.
-- Build 54 binds the CarPlay vehicle render loop to the car display and adds road-following position and corner-heading interpolation. Build 53 fixed the blank phone companion screen, but its tester feedback confirmed that the screen-off freeze remained.
-- Physical head-unit validation of build 54's locked-phone movement, turning, and reconnect behavior remains unconfirmed. Do not treat simulator map-host checks as that validation.
+- The latest recorded TestFlight candidate is `0.1.0 (55)` from `e4474a3`, with EAS build and submission both `FINISHED` on 2026-09-09. Submission completion alone does not establish Apple processing, tester-group distribution, or automatic installation.
+- Build 55 carries PR #35's factual search-result place labels (`Café`, `Fast Food`, `Gas Station` in place of `Point of interest`). Its upload fired the first App Store Connect-triggered distribution run; Apple-side group membership and Beta App Review are still unconfirmed for it.
+- Build 54 bound the CarPlay vehicle render loop to the car display and added road-following position and corner-heading interpolation. The maintainer confirmed on 2026-09-09 that navigation with the phone's screen off now works, closing the screen-off freeze; cornering, wake-without-jump, reconnect, and Dashboard-only steps remain unreported.
 - Build numbers and source commits must come from current EAS/App Store Connect evidence and `docs/release/testflight.md`, not from an old checkpoint. Later source or test commits do not imply a new distributed binary.
 - The release source of truth is `docs/release/testflight.md`; CarPlay design and remaining gaps are in `docs/architecture/carplay.md`.
 
@@ -58,7 +58,7 @@
 
 ## Immediate next work
 
-1. Upload a new App Store Connect candidate and confirm the `app_store_connect.build_upload` trigger runs `testflight-distribute.yml` and assigns that exact build to `NavOSS Friends`. Activation prerequisites are recorded in `docs/release/ci-cd.md`; the event-triggered path itself is still unproven.
+1. Confirm in App Store Connect that build 55 reached `NavOSS Friends` and clear Beta App Review. The upload-triggered path itself is proven; see `docs/release/ci-cd.md`.
 2. Distinguish Apple approval and group availability from testers' automatic-update device setting when reporting delivery.
 3. Preserve the locked-phone CarPlay verification checklist and record real head-unit outcomes when available.
 4. Run focused checks and the applicable release gates before publishing changes; record the exact build and distribution state rather than inferring it from a successful upload.
