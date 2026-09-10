@@ -54,6 +54,11 @@ jobs:
       - name: Test
         run: corepack pnpm test
 
+      # The Swift doc comment for the splice lookback quotes this script's numbers. Running it here
+      # keeps those numbers executable instead of a claim that drifts away from the code.
+      - name: Check the CarPlay splice control
+        run: corepack pnpm --filter @navoss/mobile test:carplay-splice
+
       - name: Build
         run: corepack pnpm build
 
