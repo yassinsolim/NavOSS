@@ -10,6 +10,7 @@ entry yields something like an iPhone 6s Plus, which modern runtimes reject with
 """
 
 import json
+import re
 import sys
 
 
@@ -37,8 +38,16 @@ def main() -> int:
         print("no iPhone device type supported by " + newest["identifier"], file=sys.stderr)
         return 1
 
-    preferred = [device for device in iphones if "Pro" in device["name"]] or iphones
-    print(newest["identifier"], preferred[-1]["identifier"])
+    pro_max = [device for device in iphones if "Pro Max" in device["name"]]
+    pro = [device for device in iphones if "Pro" in device["name"]]
+    preferred = pro_max or pro or iphones
+
+    def generation(device):
+        match = re.search(r"\biPhone (\d+)", device["name"])
+        return int(match.group(1)) if match else -1
+
+    newest_iphone = max(preferred, key=generation)
+    print(newest["identifier"], newest_iphone["identifier"])
     return 0
 
 
