@@ -315,14 +315,40 @@ async function runMaestroFlow(flowPath, logPath, timeoutMs) {
   }
 }
 
+async function waitForCarPlayScenarioReady(name, scenario, outputPath, timeoutMs = 120_000) {
+  const token = `NAVOSS_CARPLAY_VISUAL_READY ${scenario}`;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const output = await readFile(outputPath, 'utf8').catch(() => '');
+    if (output.includes(token)) return;
+    await delay(250);
+  }
+  throw new Error(
+    `CarPlay visual scenario never signalled ready: ${name} (expected "${token}" in ${outputPath})`,
+  );
+}
+
 async function captureCarPlayScenario(name, scenario, appearance) {
+  // The harness prints a ready token once its scenario has rendered. Screenshotting after a fixed
+  // delay instead captured the splash screen on hosted runners, which are slower to launch than a
+  // developer Mac, and two such checkpoints came out byte-identical.
+  const outputPath = join(logsDirectory, `carplay-${name}.out`);
+  await rm(outputPath, { force: true });
   await run('xcrun', ['simctl', 'terminate', simulatorId, 'org.navoss.mobile'], {
     logPath: join(logsDirectory, 'carplay.log'),
     timeoutMs: 15_000,
   }).catch(() => undefined);
   await run(
     'xcrun',
-    ['simctl', 'launch', '--terminate-running-process', simulatorId, 'org.navoss.mobile'],
+    [
+      'simctl',
+      'launch',
+      `--stdout=${outputPath}`,
+      `--stderr=${outputPath}`,
+      '--terminate-running-process',
+      simulatorId,
+      'org.navoss.mobile',
+    ],
     {
       env: {
         SIMCTL_CHILD_NAVOSS_CARPLAY_VISUAL_APPEARANCE: appearance,
@@ -332,7 +358,7 @@ async function captureCarPlayScenario(name, scenario, appearance) {
       timeoutMs: 30_000,
     },
   );
-  await delay(5_000);
+  await waitForCarPlayScenarioReady(name, scenario, outputPath);
   await screenshot(name);
 }
 
