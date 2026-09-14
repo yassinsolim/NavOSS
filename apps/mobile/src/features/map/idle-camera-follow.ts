@@ -58,6 +58,12 @@ export interface PhoneIdleLocationWatchInput {
   mapTabIsVisible: boolean;
   routeIsIdle: boolean;
 }
+export function phoneIdleLocationWatchOptions<Accuracy>(accuracy: Accuracy): {
+  accuracy: Accuracy;
+  distanceInterval: 0;
+} {
+  return { accuracy, distanceInterval: 0 };
+}
 
 /** The Expo watch is a foreground, phone-map concern; CarPlay owns its own location path. */
 export function shouldWatchPhoneIdleLocation({

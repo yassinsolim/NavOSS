@@ -14,6 +14,7 @@ import { headingConeFeature } from '@/features/map/heading-cone';
 import {
   idleCameraCenterForFollow,
   idleCameraFollowIntentAfterRegionChange,
+  phoneIdleLocationWatchOptions,
   shouldFollowIdleCamera,
   shouldWatchPhoneIdleLocation,
 } from '@/features/map/idle-camera-follow';
@@ -892,7 +893,7 @@ export function MapScreen() {
     let active = true;
     let subscription: Location.LocationSubscription | undefined;
     void Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.High, distanceInterval: 0 },
+      phoneIdleLocationWatchOptions(Location.Accuracy.High),
       (position) => {
         if (!active) return;
         const sample = routeOriginSampleFromLocation(position);
