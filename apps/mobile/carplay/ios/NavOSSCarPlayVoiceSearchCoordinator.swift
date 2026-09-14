@@ -45,6 +45,7 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
   private var lastPartialTranscript: String?
   private var maximumCaptureTimer: Timer?
   private var permissionPromptInFlight = false
+  private var permissionPromptTimer: Timer?
   private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
   private var recognitionTask: SFSpeechRecognitionTask?
   private var silenceTimer: Timer?
@@ -211,21 +212,22 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
     permissionPromptInFlight = true
     captureState = .requestingPermissions
     activateVoiceControlState(VoiceControlState.permission)
+    schedulePermissionPromptTimeout(generation: generation)
     if microphonePermission == .undetermined {
       requestMicrophonePermission { [weak self] in
-        guard let self, self.isCurrent(generation) else {
+        guard let self, self.isAwaitingPermission(generation: generation) else {
           return
         }
-        self.permissionPromptInFlight = false
+        self.finishPermissionPrompt()
         self.preflightPermissions(generation: generation)
       }
     } else {
       SFSpeechRecognizer.requestAuthorization { [weak self] _ in
         DispatchQueue.main.async {
-          guard let self, self.isCurrent(generation) else {
+          guard let self, self.isAwaitingPermission(generation: generation) else {
             return
           }
-          self.permissionPromptInFlight = false
+          self.finishPermissionPrompt()
           self.preflightPermissions(generation: generation)
         }
       }
@@ -443,18 +445,28 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
       text: "Try voice search again",
       detailText: "Use the microphone"
     )
-    retryItem.handler = { [weak self] _, completion in
-      completion()
-      self?.start()
-    }
-    interfaceController.pushTemplate(
-      CPListTemplate(
-        title: title,
-        sections: [CPListSection(items: [message, retryItem])]
-      ),
-      animated: true,
-      completion: nil
+    let retryTemplate = CPListTemplate(
+      title: title,
+      sections: [CPListSection(items: [message, retryItem])]
     )
+    retryItem.handler = { [weak self, weak retryTemplate] _, completion in
+      completion()
+      guard
+        let self,
+        let retryTemplate,
+        let interfaceController = self.interfaceController,
+        interfaceController.topTemplate === retryTemplate
+      else {
+        return
+      }
+      interfaceController.popTemplate(animated: true) { [weak self] success, _ in
+        guard success else {
+          return
+        }
+        self?.start()
+      }
+    }
+    interfaceController.pushTemplate(retryTemplate, animated: true, completion: nil)
   }
 
   private func endSession(dismissingVoiceTemplate: Bool) {
@@ -506,6 +518,8 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
 
   private func tearDownCapture(cancelRecognition: Bool) {
     permissionPromptInFlight = false
+    permissionPromptTimer?.invalidate()
+    permissionPromptTimer = nil
     silenceTimer?.invalidate()
     silenceTimer = nil
     maximumCaptureTimer?.invalidate()
@@ -569,8 +583,16 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
         forName: AVAudioSession.routeChangeNotification,
         object: audioSession,
         queue: .main
-      ) { [weak self] _ in
+      ) { [weak self] notification in
         MainActor.assumeIsolated {
+          guard
+            let rawReason = (notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? NSNumber)?
+              .uintValue,
+            let reason = AVAudioSession.RouteChangeReason(rawValue: rawReason),
+            reason == .oldDeviceUnavailable || reason == .noSuitableRouteForCategory
+          else {
+            return
+          }
           self?.showFailure(
             state: VoiceControlState.error,
             title: "Vehicle audio changed",
@@ -586,6 +608,34 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
     let center = NotificationCenter.default
     audioSessionObservers.forEach(center.removeObserver)
     audioSessionObservers.removeAll()
+  }
+
+  private func isAwaitingPermission(generation: UInt64) -> Bool {
+    isCurrent(generation)
+      && captureState == .requestingPermissions
+      && permissionPromptInFlight
+  }
+
+  private func finishPermissionPrompt() {
+    permissionPromptInFlight = false
+    permissionPromptTimer?.invalidate()
+    permissionPromptTimer = nil
+  }
+
+  private func schedulePermissionPromptTimeout(generation: UInt64) {
+    permissionPromptTimer?.invalidate()
+    permissionPromptTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) {
+      [weak self] _ in
+      guard let self, self.isAwaitingPermission(generation: generation) else {
+        return
+      }
+      self.showFailure(
+        state: VoiceControlState.permission,
+        title: "Permission request timed out",
+        detail: "When safely parked, finish allowing Microphone and Speech Recognition on your iPhone, then try again.",
+        generation: generation
+      )
+    }
   }
 
   private func scheduleSilenceTimer(after interval: TimeInterval, generation: UInt64) {

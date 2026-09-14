@@ -1227,18 +1227,29 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     let message = CPListItem(text: detail, detailText: nil)
     message.isEnabled = false
     let retry = CPListItem(text: "Try voice search again", detailText: "Use the microphone")
-    retry.handler = { [weak self] _, completion in
-      completion()
-      self?.showVoiceSearch(selectionMode: self?.destinationSelectionMode ?? .newTrip)
-    }
-    interfaceController.pushTemplate(
-      CPListTemplate(
-        title: title,
-        sections: [CPListSection(items: [message, retry])]
-      ),
-      animated: true,
-      completion: nil
+    let retryTemplate = CPListTemplate(
+      title: title,
+      sections: [CPListSection(items: [message, retry])]
     )
+    retry.handler = { [weak self, weak retryTemplate] _, completion in
+      completion()
+      guard
+        let self,
+        let retryTemplate,
+        let interfaceController = self.interfaceController,
+        interfaceController.topTemplate === retryTemplate
+      else {
+        return
+      }
+      let selectionMode = self.destinationSelectionMode
+      interfaceController.popTemplate(animated: true) { [weak self] success, _ in
+        guard success else {
+          return
+        }
+        self?.showVoiceSearch(selectionMode: selectionMode)
+      }
+    }
+    interfaceController.pushTemplate(retryTemplate, animated: true, completion: nil)
   }
 
   private func startDestinationSearch(
