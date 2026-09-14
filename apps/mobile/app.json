@@ -32,6 +32,7 @@
       },
       "infoPlist": {
         "EXDevMenuShowFloatingActionButton": false,
+        "NSPhotoLibraryUsageDescription": "NavOSS does not open, read, or save your photos. Apple requires this notice because the Expo file and image components NavOSS links can reach the photo library, and NavOSS never asks them to.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
