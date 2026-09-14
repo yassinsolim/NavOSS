@@ -215,7 +215,11 @@ describe('Google Places build configuration', () => {
     expect(navigationService).toContain(
       'isCarPlayRoutePlanning: carPlayRoutePlanningLeases.isActive',
     );
-    expect(navigationService.match(/navOSSShouldTrackLocation\(/g)).toHaveLength(3);
+    // Four call sites: the connected-scene setter, the authorization callback, the post-trip
+    // reconcile, and the stop path itself. The stop path re-checks the policy so ending a trip or
+    // arriving no longer kills the idle map of a still-connected CarPlay display.
+    expect(navigationService.match(/navOSSShouldTrackLocation\(/g)).toHaveLength(4);
+    expect(navigationService).toContain('private func reconcileLocationUpdates(');
     // Planning leases must be released once no CarPlay scene remains connected, rather than when
     // whichever scene reported the change happens to be disconnecting.
     expect(navigationService).toContain(
@@ -341,7 +345,11 @@ describe('Google Places build configuration', () => {
     expect(carPlayMap).toContain('func deactivate()');
     expect(carPlayMap).toContain('func setIdleLocationTrackingEnabled(_ enabled: Bool)');
     expect(carPlayMap.match(/routeFitGeneration &\+= 1/g)).toHaveLength(3);
-    expect(carPlayMap).toContain('else if !requestsUserLocation');
+    // The puck is MapLibre's only while idle. During guidance the controller draws its own
+    // interpolated position layer, and the visual harness disables user location entirely.
+    expect(carPlayMap).toContain(
+      'mapView.showsUserLocation = requestsUserLocation && !activeGuidance',
+    );
     expect(carPlayMap).toContain('mapView.showsUserLocation = false');
     expect(carPlayScene).toContain('mapViewController?.deactivate()');
     expect(carPlayDashboard).toContain('mapViewController?.deactivate()');

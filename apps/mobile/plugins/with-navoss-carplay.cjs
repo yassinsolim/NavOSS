@@ -15,6 +15,7 @@ const sourceFiles = [
   'NavOSSCarPlayMapViewController.swift',
   'NavOSSCarPlayDashboardSceneDelegate.swift',
   'NavOSSCarPlaySceneDelegate.swift',
+  'NavOSSCarPlayVoiceSearchCoordinator.swift',
   'NavOSSCarPlayVisualHarnessViewController.swift',
   'NavOSSPhoneSceneDelegate.swift',
 ];
@@ -53,9 +54,22 @@ function withNavOSSCarPlay(config) {
       delete modConfig.modResults.NavOSSGooglePlacesEnabled;
       delete modConfig.modResults.NavOSSGooglePlacesAPIKey;
     }
-    modConfig.modResults.UIBackgroundModes = [
-      ...new Set([...(modConfig.modResults.UIBackgroundModes ?? []), 'location']),
-    ];
+    const backgroundModes = new Set([
+      ...(modConfig.modResults.UIBackgroundModes ?? []),
+      'location',
+    ]);
+    if (carPlayEnabled) {
+      modConfig.modResults.NSMicrophoneUsageDescription =
+        'NavOSS uses your microphone only when you press the CarPlay voice search button. Audio is recognized on this device and is not retained.';
+      modConfig.modResults.NSSpeechRecognitionUsageDescription =
+        'NavOSS recognizes a CarPlay destination on this device only after you press the voice search button. Audio and transcripts are not retained.';
+      backgroundModes.add('audio');
+    } else {
+      delete modConfig.modResults.NSMicrophoneUsageDescription;
+      delete modConfig.modResults.NSSpeechRecognitionUsageDescription;
+      backgroundModes.delete('audio');
+    }
+    modConfig.modResults.UIBackgroundModes = [...backgroundModes];
 
     const manifest = modConfig.modResults.UIApplicationSceneManifest ?? {};
     const configurations = manifest.UISceneConfigurations ?? {};
@@ -120,6 +134,17 @@ function withNavOSSCarPlay(config) {
   }
 
   config = withXcodeProject(config, (modConfig) => {
+    // `getProjectName` infers the name by probing for an AppDelegate, which does not exist yet
+    // during `expo prebuild --clean`. The mod request already carries the name, so use it and keep
+    // the probe only as a fallback for older mod shapes.
+    const projectName =
+      modConfig.modRequest.projectName ??
+      IOSConfig.XcodeUtils.getProjectName(modConfig.modRequest.platformProjectRoot);
+    IOSConfig.XcodeUtils.addFramework({
+      project: modConfig.modResults,
+      projectName,
+      framework: 'Speech.framework',
+    });
     const resourceDirectory = path.join(modConfig.modRequest.platformProjectRoot, 'Resources');
     const resourcePath = path.join(resourceDirectory, 'vehicle-arrow.png');
     const carResourcePath = path.join(resourceDirectory, 'vehicle-car.png');

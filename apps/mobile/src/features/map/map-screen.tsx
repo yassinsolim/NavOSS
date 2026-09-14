@@ -12,6 +12,12 @@ import {
 } from '@maplibre/maplibre-react-native';
 import { headingConeFeature } from '@/features/map/heading-cone';
 import {
+  idleCameraCenterForFollow,
+  idleCameraFollowIntentAfterRegionChange,
+  shouldFollowIdleCamera,
+  shouldWatchPhoneIdleLocation,
+} from '@/features/map/idle-camera-follow';
+import {
   newestValidRouteOriginSample,
   routeOriginSampleFromLocation,
   routeRequestOriginFromSample,
@@ -41,6 +47,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import {
   Alert,
+  AppState,
   Keyboard,
   Linking,
   Pressable,
@@ -408,7 +415,6 @@ export function MapScreen() {
   const routeAbortControllerRef = useRef<AbortController>(null);
   const routeOriginSampleRef = useRef<RouteOriginSample | undefined>(undefined);
   const nativeStateVersionRef = useRef(-1);
-  const hasCenteredOnUserRef = useRef(false);
   const placeAbortControllerRef = useRef<AbortController>(null);
   const placeInteractionRef = useRef(0);
   const searchAbortControllerRef = useRef<AbortController>(null);
@@ -416,11 +422,11 @@ export function MapScreen() {
   const categorySearchActiveRef = useRef(false);
   const safetyCamerasRef = useRef<readonly SafetyCamera[]>([]);
   const [apiConnection, setApiConnection] = useState<ApiConnectionState>('connecting');
+  const [isAppActive, setIsAppActive] = useState(() => AppState.currentState === 'active');
   const [activeTab, setActiveTab] = useState<AppTab>('explore');
   const [coverageName, setCoverageName] = useState('Loading route coverage');
   const [locationState, setLocationState] = useState<LocationState>('idle');
   const [mapError, setMapError] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
   const [mapPreferences, setMapPreferences] = useState(DEFAULT_MAP_PREFERENCES);
   const [mapStyle, setMapStyle] = useState<string | StyleSpecification>(
     mapStyleUrl(DEFAULT_MAP_PREFERENCES.stylePreset, colorScheme),
@@ -473,6 +479,7 @@ export function MapScreen() {
   const [rerouteCount, setRerouteCount] = useState(0);
   const [navigationStepIndex, setNavigationStepIndex] = useState(0);
   const [isNavigationCameraFollowing, setIsNavigationCameraFollowing] = useState(true);
+  const [isIdleCameraFollowing, setIsIdleCameraFollowing] = useState(true);
   const [userHeading, setUserHeading] = useState(0);
   // Compass facing, distinct from userHeading: course over ground is direction of travel and is
   // gated on movement, so it is unavailable exactly when a parked driver wants to see which way
@@ -519,6 +526,29 @@ export function MapScreen() {
       : undefined;
   const searchEnabled = true;
   const nearbySearchEnabled = searchOrigin !== undefined;
+  const phoneMapVisible =
+    isAppActive && !carPlayConnected && (routeState.type !== 'idle' || activeTab === 'explore');
+  const hasTransientDestination =
+    selectedResult !== undefined || query.trim().length > 0 || searchState !== 'idle';
+  const shouldRunPhoneIdleLocationWatch = shouldWatchPhoneIdleLocation({
+    appIsActive: isAppActive,
+    carPlayConnected,
+    locationIsVisible: locationState === 'visible',
+    mapTabIsVisible: activeTab === 'explore',
+    routeIsIdle: routeState.type === 'idle',
+  });
+  const idleCameraShouldFollow = shouldFollowIdleCamera({
+    appIsActive: isAppActive,
+    hasTransientDestination,
+    hasUserCoordinate: userCoordinate !== undefined,
+    intent: isIdleCameraFollowing,
+    phoneMapVisible,
+    routeIsIdle: routeState.type === 'idle',
+  });
+  const idleCameraCenter = useMemo(
+    () => idleCameraCenterForFollow(userCoordinate, idleCameraShouldFollow),
+    [idleCameraShouldFollow, userCoordinate],
+  );
 
   const invalidatePlaceInteraction = () => {
     placeInteractionRef.current += 1;
@@ -788,6 +818,16 @@ export function MapScreen() {
   }, [mapPreferences.showRoadEvents, roadEventRegion]);
 
   useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      setIsAppActive(nextAppState === 'active');
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!phoneMapVisible) return;
     let active = true;
     setLocationState('locating');
     void ensureForegroundLocationPermission(
@@ -804,6 +844,7 @@ export function MapScreen() {
           maxAge: 60_000,
           requiredAccuracy: 500,
         });
+        if (!active) return;
         const location =
           lastKnown ??
           (await Location.getCurrentPositionAsync({
@@ -822,10 +863,10 @@ export function MapScreen() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [phoneMapVisible]);
 
   useEffect(() => {
-    if (locationState !== 'visible') return;
+    if (locationState !== 'visible' || !phoneMapVisible) return;
     let active = true;
     let subscription: Location.LocationSubscription | undefined;
     void Location.watchHeadingAsync((heading) => {
@@ -844,10 +885,10 @@ export function MapScreen() {
       active = false;
       subscription?.remove();
     };
-  }, [locationState]);
+  }, [locationState, phoneMapVisible]);
 
   useEffect(() => {
-    if (locationState !== 'visible' || routeState.type !== 'idle') return;
+    if (!shouldRunPhoneIdleLocationWatch) return;
     let active = true;
     let subscription: Location.LocationSubscription | undefined;
     void Location.watchPositionAsync(
@@ -869,24 +910,7 @@ export function MapScreen() {
       active = false;
       subscription?.remove();
     };
-  }, [locationState, routeState.type]);
-
-  useEffect(() => {
-    if (
-      !mapReady ||
-      userCoordinate === undefined ||
-      hasCenteredOnUserRef.current ||
-      routeState.type !== 'idle'
-    ) {
-      return;
-    }
-    hasCenteredOnUserRef.current = true;
-    cameraRef.current?.flyTo({
-      center: [userCoordinate.longitude, userCoordinate.latitude],
-      duration: 750,
-      zoom: 15,
-    });
-  }, [mapReady, routeState.type, userCoordinate]);
+  }, [shouldRunPhoneIdleLocationWatch]);
 
   useEffect(() => {
     if (mapRegion !== 'calgary-ab') {
@@ -975,6 +999,7 @@ export function MapScreen() {
       }
       setNavigationStepIndex(snapshot.guidance?.stepIndex ?? 0);
       if (snapshot.trip === undefined) {
+        setIsIdleCameraFollowing(true);
         setRouteState((current) =>
           current.type === 'navigating' || current.type === 'arrived' ? { type: 'idle' } : current,
         );
@@ -1164,6 +1189,7 @@ export function MapScreen() {
     routeAbortControllerRef.current?.abort();
     const controller = new AbortController();
     routeAbortControllerRef.current = controller;
+    setIsIdleCameraFollowing(false);
     setRouteState({
       destination,
       ...(previewOrigin === undefined ? {} : { previewOrigin }),
@@ -1273,6 +1299,9 @@ export function MapScreen() {
     setSelectedCategoryId(undefined);
     setQuery(value);
     setSelectedResult(undefined);
+    if (value.trim().length > 0) {
+      setIsIdleCameraFollowing(false);
+    }
 
     if (value.trim().length < 2) {
       setResults([]);
@@ -1294,6 +1323,7 @@ export function MapScreen() {
     invalidatePlaceInteraction();
     routeAbortControllerRef.current?.abort();
     setIsNavigationCameraFollowing(true);
+    setIsIdleCameraFollowing(true);
     setQuery('');
     setResults([]);
     setSearchState('idle');
@@ -1309,6 +1339,7 @@ export function MapScreen() {
     invalidateSearchRequest();
     invalidatePlaceInteraction();
     routeAbortControllerRef.current?.abort();
+    setIsIdleCameraFollowing(false);
     setRouteState({ type: 'idle' });
     setQuery(result.name);
     setResults([]);
@@ -1376,6 +1407,7 @@ export function MapScreen() {
     categorySearchActiveRef.current = true;
     invalidatePlaceInteraction();
     routeAbortControllerRef.current?.abort();
+    setIsIdleCameraFollowing(false);
     setActiveTab('explore');
     setIsMoreCategoriesVisible(false);
     setShortcutBeingSet(undefined);
@@ -1394,6 +1426,7 @@ export function MapScreen() {
     setIsMoreCategoriesVisible(false);
     setSelectedCategoryId(undefined);
     setSelectedResult(undefined);
+    setIsIdleCameraFollowing(false);
     setQuery('');
     setResults([]);
     setSearchState('idle');
@@ -1416,6 +1449,7 @@ export function MapScreen() {
 
     invalidatePlaceInteraction();
     routeAbortControllerRef.current?.abort();
+    setIsIdleCameraFollowing(false);
     setSelectedResult(undefined);
     setRouteState({ type: 'idle' });
     if (results.length === 1) {
@@ -1518,6 +1552,7 @@ export function MapScreen() {
       setResults([]);
       setSearchState('idle');
       setSelectedResult(place);
+      setIsIdleCameraFollowing(false);
       setSelectedPlaceSaved(isFavoriteDestination(place.id));
       setPlaceDetailsLoading(true);
 
@@ -1584,6 +1619,7 @@ export function MapScreen() {
   };
 
   const handleLocate = async () => {
+    setIsIdleCameraFollowing(true);
     setLocationState('locating');
 
     try {
@@ -1591,6 +1627,7 @@ export function MapScreen() {
         Location.getForegroundPermissionsAsync,
         Location.requestForegroundPermissionsAsync,
       );
+      if (AppState.currentState !== 'active') return;
       if (!granted) {
         setLocationState('denied');
         return;
@@ -1599,19 +1636,20 @@ export function MapScreen() {
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
-      const coordinate = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      };
-
-      setUserCoordinate(coordinate);
+      if (AppState.currentState !== 'active') return;
+      const sample = routeOriginSampleFromLocation(location);
+      routeOriginSampleRef.current = sample;
+      setUserCoordinate(sample.coordinate);
+      if (sample.headingDegrees !== undefined) setUserHeading(sample.headingDegrees);
       setLocationState('visible');
-      cameraRef.current?.flyTo({
-        center: [coordinate.longitude, coordinate.latitude],
-        duration: 750,
-        zoom: 15,
-      });
-    } catch (error: unknown) {
+      if (hasTransientDestination) {
+        cameraRef.current?.flyTo({
+          center: [sample.coordinate.longitude, sample.coordinate.latitude],
+          duration: 750,
+          zoom: 15,
+        });
+      }
+    } catch {
       setLocationState('error');
     }
   };
@@ -1628,17 +1666,17 @@ export function MapScreen() {
     stopNavigationAnnouncements();
     routeAbortControllerRef.current?.abort();
     setIsNavigationCameraFollowing(true);
+    setIsIdleCameraFollowing(true);
     setRouteState({ type: 'idle' });
     setSelectedResult(undefined);
     setQuery('');
-    cameraRef.current?.flyTo({
-      center:
-        userCoordinate === undefined
-          ? CANADA_CENTER
-          : [userCoordinate.longitude, userCoordinate.latitude],
-      duration: 650,
-      zoom: userCoordinate === undefined ? 3.2 : 13,
-    });
+    if (userCoordinate === undefined) {
+      cameraRef.current?.flyTo({
+        center: CANADA_CENTER,
+        duration: 650,
+        zoom: 3.2,
+      });
+    }
   };
 
   const handleSelectRoute = (route: RouteAlternative) => {
@@ -1871,16 +1909,10 @@ export function MapScreen() {
     setNavigationRouteStatus('tracking');
     setRerouteCount(0);
     setIsNavigationCameraFollowing(true);
-    setRouteState({
-      destination: routeState.destination,
-      routes: routeState.routes,
-      selectedRouteId: routeState.route.id,
-      type: 'preview',
-      waypoints: routeState.waypoints,
-    });
-    requestAnimationFrame(() => {
-      fitRoute(routeState.route);
-    });
+    setIsIdleCameraFollowing(true);
+    setSelectedResult(undefined);
+    setQuery('');
+    setRouteState({ type: 'idle' });
   };
 
   const handleFinishArrival = () => {
@@ -1901,6 +1933,7 @@ export function MapScreen() {
     setNavigationRouteStatus('tracking');
     setRerouteCount(0);
     setIsNavigationCameraFollowing(true);
+    setIsIdleCameraFollowing(true);
     setQuery('');
     setSelectedResult(undefined);
     setRouteState({ type: 'idle' });
@@ -2088,7 +2121,6 @@ export function MapScreen() {
         }}
         onDidFinishLoadingMap={() => {
           setMapError(false);
-          setMapReady(true);
         }}
         onLongPress={({ nativeEvent }) => {
           const [longitude, latitude] = nativeEvent.lngLat;
@@ -2103,6 +2135,13 @@ export function MapScreen() {
           setMapZoomStep(Math.round(nativeEvent.zoom * 4) / 4);
           if (routeState.type === 'navigating' && nativeEvent.userInteraction) {
             setIsNavigationCameraFollowing(false);
+          } else if (routeState.type === 'idle') {
+            setIsIdleCameraFollowing((currentIntent) =>
+              idleCameraFollowIntentAfterRegionChange(
+                currentIntent,
+                nativeEvent.userInteraction === true,
+              ),
+            );
           }
         }}
         preferredFramesPerSecond={60}
@@ -2112,13 +2151,29 @@ export function MapScreen() {
       >
         <Images images={MAP_IMAGES} />
         <Camera
-          bearing={isNavigationCameraFollowing ? navigationBearing : undefined}
-          center={isNavigationCameraFollowing ? navigationCameraCenter : undefined}
+          bearing={
+            routeState.type === 'navigating' && isNavigationCameraFollowing
+              ? navigationBearing
+              : undefined
+          }
+          center={
+            routeState.type === 'navigating'
+              ? isNavigationCameraFollowing
+                ? navigationCameraCenter
+                : undefined
+              : idleCameraShouldFollow
+                ? idleCameraCenter
+                : undefined
+          }
           duration={
-            routeState.type === 'navigating' ? NAVIGATION_CAMERA_TRANSITION.duration : undefined
+            routeState.type === 'navigating' || idleCameraShouldFollow
+              ? NAVIGATION_CAMERA_TRANSITION.duration
+              : undefined
           }
           easing={
-            routeState.type === 'navigating' ? NAVIGATION_CAMERA_TRANSITION.easing : undefined
+            routeState.type === 'navigating' || idleCameraShouldFollow
+              ? NAVIGATION_CAMERA_TRANSITION.easing
+              : undefined
           }
           initialViewState={{
             center: CANADA_CENTER,
@@ -2139,7 +2194,13 @@ export function MapScreen() {
               : undefined
           }
           ref={cameraRef}
-          zoom={routeState.type === 'navigating' && isNavigationCameraFollowing ? 16 : undefined}
+          zoom={
+            routeState.type === 'navigating' && isNavigationCameraFollowing
+              ? 16
+              : idleCameraShouldFollow
+                ? 15
+                : undefined
+          }
         />
         {facingConeFeature !== undefined && (
           <GeoJSONSource data={facingConeFeature} id="navoss-facing-cone">
@@ -2150,7 +2211,7 @@ export function MapScreen() {
             />
           </GeoJSONSource>
         )}
-        {locationState === 'visible' && routeState.type !== 'navigating' && (
+        {locationState === 'visible' && routeState.type !== 'navigating' && phoneMapVisible && (
           <UserLocation accuracy heading />
         )}
         {routeState.type === 'navigating' && userCoordinate !== undefined && (

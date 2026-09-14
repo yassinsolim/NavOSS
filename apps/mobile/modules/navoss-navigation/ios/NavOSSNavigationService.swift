@@ -45,6 +45,11 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private var carPlayConnectedScenes = NavOSSCarPlayConnectedScenes()
   private var carPlayConnected: Bool { carPlayConnectedScenes.isConnected }
   private var carPlayRoutePlanningLeases = NavOSSLocationTrackingLeases()
+  /// Voice capture owns the shared audio session while any connected CarPlay scene records.
+  /// These methods run on the main actor alongside AVSpeechSynthesizer callbacks.
+  private var carPlayVoiceInputLeases: Set<UUID> = []
+  private var deferredSpeech: (text: String, expectedGeneration: UInt64?)?
+  private var isCarPlayVoiceInputActive: Bool { !carPlayVoiceInputLeases.isEmpty }
   private let lock = NSRecursiveLock()
   private var locationManager: CLLocationManager?
   private var latestLocation: CLLocation?
@@ -128,7 +133,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       sequence: update.snapshot.sequence
     )
     notificationCenter.post(name: .navOSSNavigationSnapshotDidChange, object: self)
-    stopLocationUpdates(expectedGeneration: generation)
+    reconcileLocationUpdates(expectedGeneration: generation)
     cancelNavigationSpeech(expectedGeneration: generation)
   }
 
@@ -289,6 +294,32 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     try startNavigation(trip, persist: true)
   }
 
+  /// Stops navigation speech before CarPlay begins recording. The coordinator calls the matching
+  /// finish method only after it has released its recording session.
+  @MainActor
+  public func beginCarPlayVoiceInput() -> UUID {
+    let identifier = UUID()
+    carPlayVoiceInputLeases.insert(identifier)
+    deferredSpeech = nil
+    pendingUtteranceIds.removeAll()
+    speechSynthesizer.stopSpeaking(at: .immediate)
+    return identifier
+  }
+
+  /// Returns audio-session ownership to normal navigation guidance after CarPlay capture ends.
+  @MainActor
+  public func finishCarPlayVoiceInput(_ identifier: UUID) {
+    guard carPlayVoiceInputLeases.remove(identifier) != nil, !isCarPlayVoiceInputActive else {
+      return
+    }
+    audioSessionNeedsDeactivation = false
+    guard let deferredSpeech else {
+      return
+    }
+    self.deferredSpeech = nil
+    speak(deferredSpeech.text, expectedGeneration: deferredSpeech.expectedGeneration)
+  }
+
   public func stopAnnouncements() {
     lock.lock()
     let generation = navigationGeneration
@@ -307,6 +338,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       guard isCurrent else {
         return
       }
+      self.deferredSpeech = nil
       self.pendingUtteranceIds.removeAll()
       self.speechSynthesizer.stopSpeaking(at: .immediate)
       self.deactivateAudioSession()
@@ -632,7 +664,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       speak(speechPrompt.text, expectedGeneration: versionedUpdate.generation)
     }
     if update.snapshot.phase == .arrived {
-      stopLocationUpdates(expectedGeneration: versionedUpdate.generation)
+      reconcileLocationUpdates(expectedGeneration: versionedUpdate.generation)
     }
   }
 
@@ -830,6 +862,10 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
           return
         }
       }
+      if self.isCarPlayVoiceInputActive {
+        self.deferredSpeech = (text: text, expectedGeneration: expectedGeneration)
+        return
+      }
       let utterance = AVSpeechUtterance(string: text)
       utterance.pitchMultiplier = 1.02
       utterance.preUtteranceDelay = 0.04
@@ -872,7 +908,11 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   }
 
   private func deactivateAudioSession(attempt: Int = 0) {
-    guard audioSessionNeedsDeactivation, pendingUtteranceIds.isEmpty else { return }
+    guard
+      !isCarPlayVoiceInputActive,
+      audioSessionNeedsDeactivation,
+      pendingUtteranceIds.isEmpty
+    else { return }
     guard !speechSynthesizer.isSpeaking else {
       scheduleAudioSessionDeactivationRetry(attempt: attempt)
       return
@@ -954,6 +994,28 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       publish(versionedUpdate)
     }
     ensureLocationUpdates()
+  }
+
+  /// Re-evaluates location ownership after a trip transition. A connected CarPlay scene remains a
+  /// valid reason to track its idle map, while an idle phone alone never starts background location.
+  private func reconcileLocationUpdates(expectedGeneration: UInt64) {
+    lock.lock()
+    guard navigationGeneration == expectedGeneration else {
+      lock.unlock()
+      return
+    }
+    let update = navigationSession.currentUpdate()
+    let shouldTrack = navOSSShouldTrackLocation(
+      hasActiveNavigation: update.trip != nil && update.snapshot.phase != .arrived,
+      isCarPlayRoutePlanning: carPlayRoutePlanningLeases.isActive,
+      isCarPlayConnected: carPlayConnected
+    )
+    lock.unlock()
+    if shouldTrack {
+      ensureLocationUpdates()
+    } else {
+      stopLocationUpdates(expectedGeneration: expectedGeneration)
+    }
   }
 
   private func stopLocationUpdates(

@@ -42,7 +42,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var latestOrigin: NavOSSCarPlayCoordinate?
   private var latestPosition: NavOSSCarPlayPosition?
   private var mapOrientation = NavOSSCarPlayMapOrientation.headingUp
-  private var needsIdleLocationRecenter = true
+  private var idleLocationFollowEnabled = true
   private var renderedPosition: NavOSSCarPlayPosition?
   private var lastRenderedCourseDegrees: Double?
   private var lastHeadingConeApex: NavOSSCarPlayCoordinate?
@@ -75,7 +75,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     mapView.isPitchEnabled = false
     mapView.isRotateEnabled = false
-    mapView.isScrollEnabled = false
+    // MapLibre reports real gesture reasons to the delegate, so an explicit idle pan can pause
+    // follow without treating our own camera animations as a driver gesture.
+    mapView.isScrollEnabled = true
     mapView.isZoomEnabled = false
     mapView.compassView.isHidden = true
     mapView.logoView.isHidden = true
@@ -202,10 +204,15 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard isViewLoaded, !activeGuidance else { return }
     mapView.showsUserLocation = enabled
     if enabled {
-      needsIdleLocationRecenter = true
-      recenter()
+      // A route preview owns its camera until the driver explicitly recenters.
+      if routeCoordinates.count >= 2 {
+        idleLocationFollowEnabled = false
+        mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
+      } else {
+        recenter()
+      }
     } else {
-      needsIdleLocationRecenter = false
+      idleLocationFollowEnabled = false
       mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
     }
   }
@@ -223,7 +230,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   func applyMapOrientation(_ mapOrientation: NavOSSCarPlayMapOrientation) {
     self.mapOrientation = mapOrientation
-    guard isViewLoaded else { return }
+    guard isViewLoaded, activeGuidance || idleLocationFollowEnabled else { return }
     recenter()
   }
 
@@ -238,34 +245,43 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
   }
 
+  private var idleLocationTrackingMode: MLNUserTrackingMode {
+    mapOrientation == .northUp ? .follow : .followWithCourse
+  }
+
   func recenter() {
     presentsRouteOverview = false
-    guard let latestPosition else {
-      if activeGuidance {
-        fitRoute(animated: true)
-      } else if !requestsUserLocation {
-        mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
-      } else if let location = mapView.userLocation?.location,
-        location.horizontalAccuracy >= 0
-      {
-        displayIdleLocation(
-          NavOSSCarPlayCoordinate(
-            latitude: location.coordinate.latitude,
-            longitude: location.coordinate.longitude
-          ),
-          animated: true
-        )
+    if activeGuidance {
+      if let latestPosition {
+        follow(latestPosition, duration: 0.35)
       } else {
-        needsIdleLocationRecenter = true
-        let trackingMode: MLNUserTrackingMode =
-          mapOrientation == .northUp
-          ? .follow
-          : .followWithCourse
-        mapView.setUserTrackingMode(trackingMode, animated: true, completionHandler: nil)
+        fitRoute(animated: true)
       }
       return
     }
-    follow(latestPosition, duration: 0.35)
+
+    guard requestsUserLocation else {
+      idleLocationFollowEnabled = false
+      mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
+      return
+    }
+
+    idleLocationFollowEnabled = true
+    // Do not let MapLibre center on an old cached `userLocation`. It takes over as soon as its
+    // delegate supplies a fresh fix; until then, a separately validated service coordinate can
+    // center the camera without becoming a fake live puck.
+    if currentLocationCoordinate() != nil {
+      mapView.setUserTrackingMode(
+        idleLocationTrackingMode,
+        animated: true,
+        completionHandler: nil
+      )
+    } else {
+      mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
+      if let fallbackCoordinate = NavOSSNavigationService.shared.currentCoordinate() {
+        displayIdleLocation(fallbackCoordinate, animated: true)
+      }
+    }
   }
 
   func displayIdleLocation(
@@ -275,8 +291,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard !activeGuidance, coordinate.latitude.isFinite, coordinate.longitude.isFinite,
       (-90...90).contains(coordinate.latitude), (-180...180).contains(coordinate.longitude)
     else { return }
-    needsIdleLocationRecenter = false
-    mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
+    // This is a camera fallback only. It deliberately does not synthesize a MapLibre user location
+    // or change tracking mode, so an old service cache can never masquerade as a live puck.
     mapView.setCenter(
       CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude),
       zoomLevel: 15.5,
@@ -334,6 +350,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       position ?? latestPosition ?? (activeGuidance ? routeOriginPosition : nil)
     let shouldEnterFollowMode = activeGuidance && (!self.activeGuidance || renderedPosition == nil)
     self.activeGuidance = activeGuidance
+    mapView.isScrollEnabled = !activeGuidance
+    if !activeGuidance {
+      idleLocationFollowEnabled = false
+      mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
+    }
     latestOrigin = activeGuidance ? nil : route.first
     latestDestination = route.last
     if let effectivePosition {
@@ -412,6 +433,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     alternateRouteCoordinates = []
     routeCoordinates = []
     routeGeometry = []
+    mapView.isScrollEnabled = true
     mapView.showsUserLocation = requestsUserLocation
     if let source = mapView.style?.source(withIdentifier: routeSourceIdentifier)
       as? MLNShapeSource
@@ -461,6 +483,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     lastHeadingConeApex = nil
     lastHeadingConeHeadingDegrees = nil
     lastTargetAt = nil
+    idleLocationFollowEnabled = false
+    mapView.isScrollEnabled = false
     mapView.showsUserLocation = false
     mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
     mapView.delegate = nil
@@ -474,6 +498,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       )
       recenter()
     } else {
+      idleLocationFollowEnabled = false
+      mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
       mapView.setZoomLevel(max(8, min(18, mapView.zoomLevel + delta)), animated: true)
     }
   }
@@ -508,16 +534,37 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   }
 
   func mapView(_ mapView: MLNMapView, didUpdate userLocation: MLNUserLocation?) {
-    guard needsIdleLocationRecenter, !activeGuidance, requestsUserLocation,
-      let location = userLocation?.location, location.horizontalAccuracy >= 0
-    else { return }
-    displayIdleLocation(
-      NavOSSCarPlayCoordinate(
-        latitude: location.coordinate.latitude,
-        longitude: location.coordinate.longitude
+    guard
+      navOSSShouldFollowIdleCarPlayLocation(
+        hasActiveGuidance: activeGuidance,
+        idleFollowEnabled: idleLocationFollowEnabled,
+        requestsUserLocation: requestsUserLocation
       ),
-      animated: true
-    )
+      let location = userLocation?.location,
+      navOSSNavigationRouteOrigin(
+        coordinate: NavOSSCarPlayCoordinate(
+          latitude: location.coordinate.latitude,
+          longitude: location.coordinate.longitude
+        ),
+        courseDegrees: location.course,
+        speedMetersPerSecond: location.speed,
+        horizontalAccuracyMeters: location.horizontalAccuracy,
+        ageSeconds: Date().timeIntervalSince(location.timestamp)
+      ) != nil
+    else { return }
+    if mapView.userTrackingMode != idleLocationTrackingMode {
+      mapView.setUserTrackingMode(
+        idleLocationTrackingMode,
+        animated: false,
+        completionHandler: nil
+      )
+    }
+  }
+
+  func mapView(_ mapView: MLNMapView, regionIsChangingWith reason: MLNCameraChangeReason) {
+    guard !activeGuidance, requestsUserLocation, reason.contains(.gesturePan) else { return }
+    idleLocationFollowEnabled = false
+    mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
   }
 
   func mapViewDidFailLoadingMap(_ mapView: MLNMapView, withError error: Error) {
