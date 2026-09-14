@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   idleCameraCenterForFollow,
   idleCameraFollowIntentAfterRegionChange,
+  phoneIdleLocationWatchOptions,
   shouldFollowIdleCamera,
   shouldWatchPhoneIdleLocation,
 } from '../src/features/map/idle-camera-follow.js';
@@ -48,6 +49,13 @@ describe('idle camera follow policy', () => {
       false,
     );
     expect(shouldFollowIdleCamera({ ...visibleIdleMap, routeIsIdle: false })).toBe(false);
+  });
+
+  it('requests every idle phone location update instead of throttling by distance', () => {
+    expect(phoneIdleLocationWatchOptions('high-accuracy')).toEqual({
+      accuracy: 'high-accuracy',
+      distanceInterval: 0,
+    });
   });
 
   it('stops the foreground phone watch when the map is hidden, backgrounded, or CarPlay owns it', () => {
