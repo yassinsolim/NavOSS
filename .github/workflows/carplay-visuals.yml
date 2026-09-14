@@ -11,13 +11,13 @@ name: CarPlay visuals
 #
 # Output is screenshots uploaded as artifacts for a human to look at.
 
-# Manual dispatch only for now. This job cannot be verified without running it on a GitHub
-# runner, and a scheduled job that fails every night is worse than no job: it trains people to
-# ignore red. Enable the cron below once a manual run has succeeded once.
+# A scheduled job that fails every night is worse than no job: it trains people to ignore red, so
+# the cron stayed off until a manual run had succeeded end to end. Run 34825183196 did, capturing
+# all ten scenarios and passing pixel validation, so the nightly is enabled.
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '0 9 * * *'
+  schedule:
+    - cron: '0 9 * * *'
 
 concurrency:
   group: carplay-visuals-${{ github.ref }}
