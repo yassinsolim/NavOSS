@@ -535,6 +535,13 @@ public func navOSSRemainingRouteGeometry(
     navOSSCarPlayCoordinateDistance(from: start, to: end)
   }
   let totalLength = segmentLengths.reduce(0, +)
+  // Distance from the route origin to each vertex, so a candidate segment's position can be
+  // compared against the progress point along the road rather than by vertex count.
+  var cumulativeLengths = [0.0]
+  cumulativeLengths.reserveCapacity(geometry.count)
+  for length in segmentLengths {
+    cumulativeLengths.append(cumulativeLengths[cumulativeLengths.count - 1] + length)
+  }
   let progress = min(1, max(0, routeProgress.isFinite ? routeProgress : 0))
   let completedLength = progress * totalLength
   var traversedLength = 0.0
@@ -559,7 +566,15 @@ public func navOSSRemainingRouteGeometry(
     // vertices between them survive; otherwise the polyline cuts straight across any bend the
     // interpolation has not reached yet.
     let spliceIndex =
-      matchedCoordinate.map { min(index, navOSSNearestSegmentIndex($0, in: geometry)) } ?? index
+      matchedCoordinate.flatMap {
+        navOSSNearestSegmentIndex(
+          $0,
+          in: geometry,
+          segmentLengths: segmentLengths,
+          cumulativeLengths: cumulativeLengths,
+          completedLength: completedLength
+        )
+      }.map { min(index, $0) } ?? index
     return navOSSVisibleRouteTail(
       [matchedCoordinate ?? routePosition] + geometry.dropFirst(spliceIndex + 1),
       fullGeometry: geometry
@@ -587,11 +602,35 @@ private func navOSSVisibleRouteTail(
   return [anchor, destination]
 }
 
+/// How far behind the progress point the puck may project and still be treated as sitting on that
+/// segment, measured along the route so sparse and dense geometry behave alike.
+///
+/// The puck lags the snapshot only by interpolation, so a legitimate match is a short way back; a
+/// parallel outbound carriageway is far back along the route even though it is metres away in
+/// space. That separation is what makes the bound work.
+///
+/// The value is derived from the interpolation contract, not from a sweep. The puck trails the
+/// snapshot by at most `navOSSCarPlayMaximumInterpolationSeconds`, so at roughly 50 m/s the
+/// legitimate lag is about 100 m; 250 m keeps a wide margin over that. A sweep cannot choose this
+/// number: a bound of W rejects candidates past W by construction, so measuring "splices past W"
+/// against bound W is circular.
+///
+/// `pnpm --filter @navoss/mobile test:carplay-splice` shows what the bound does on a checked-in
+/// real 8.9 km Calgary out-and-back with a lagging puck: the unbounded search picks the opposite
+/// carriageway 78 times in 5,664 samples, worst case 8,902 m behind, and the bound cuts that to 2.
+/// It does not reach zero, and is not claimed to. Where the carriageways run within the lookback
+/// of each other, position alone is genuinely ambiguous and only heading could resolve it; what
+/// the bound removes is the catastrophic case of splicing kilometres of travelled road back in.
+private let navOSSMaximumSegmentLookbackMeters = 250.0
+
 private func navOSSNearestSegmentIndex(
   _ coordinate: NavOSSCarPlayCoordinate,
-  in geometry: [NavOSSCarPlayCoordinate]
-) -> Int {
-  var bestIndex = 0
+  in geometry: [NavOSSCarPlayCoordinate],
+  segmentLengths: [Double],
+  cumulativeLengths: [Double],
+  completedLength: Double
+) -> Int? {
+  var bestIndex: Int?
   var bestDistanceMeters = Double.infinity
   for index in geometry.indices.dropLast() {
     let projection = navOSSCarPlaySegmentProjection(
@@ -599,6 +638,15 @@ private func navOSSNearestSegmentIndex(
       start: geometry[index],
       end: geometry[index + 1]
     )
+    // Measure from where the puck actually projects, not from the segment's start vertex: a long
+    // segment would otherwise be rejected wholesale even when the puck sits near its far end.
+    let projectedAlongRoute =
+      cumulativeLengths[index] + projection.fraction * segmentLengths[index]
+    // Only the backward direction is bounded. Road ahead stays eligible, because a duplicate leg
+    // can only masquerade as the current one from behind.
+    if completedLength - projectedAlongRoute > navOSSMaximumSegmentLookbackMeters {
+      continue
+    }
     if projection.distanceMeters < bestDistanceMeters {
       bestDistanceMeters = projection.distanceMeters
       bestIndex = index
