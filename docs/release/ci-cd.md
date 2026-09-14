@@ -14,27 +14,30 @@ The delivery path is:
 
 EAS Submit sends iOS builds to TestFlight. It does not submit them for public App Store review.
 
-## Local automated PR review
+## Local PR review
 
-`scripts/review-ready-prs.sh` runs a second, isolated OMP agent against every ready pull request.
-It waits until the pull request is not a draft and all checks have finished successfully, then
-reviews each head commit once. A synchronize event changes the head SHA and triggers a new review.
-Dependabot is excluded because its mechanical updates are covered by lockfile validation and CI.
-
-The agent receives the pull-request metadata and diff as untrusted files and is restricted to
-`read`, `grep`, and `glob`; it cannot edit the checkout, run commands, or post to GitHub. The wrapper
-posts the resulting `VERDICT:` comment and an invisible marker containing the reviewed SHA.
-
-Install or refresh the per-user launchd job:
+There is currently no automatic PR review. The GitHub Action was removed because the repository
+does not have a model credential, and the local launchd replacement is not installed. Run reviews
+manually:
 
 ```sh
-scripts/install-local-pr-reviewer.sh
+scripts/review-ready-prs.sh
 ```
 
-It polls every two minutes while this Mac is awake and connected. Logs live under
-`~/Library/Logs/NavOSS/`. This uses the locally authenticated OMP provider and GitHub CLI, so it
-needs no repository model secret. It is intentionally local: when this Mac is asleep or offline,
-reviews wait until it returns.
+The script selects ready, non-Dependabot pull requests whose named checks have passed and reviews
+each head SHA once. It gives the isolated reviewer read-only repository tools, validates the
+`VERDICT:` line, rechecks the head before posting, and records the reviewed SHA to avoid duplicate
+comments.
+
+`scripts/install-local-pr-reviewer.sh` can install a two-minute launchd poller, but do not describe
+or depend on that automation until OMP can authenticate in launchd's minimal environment. Verify
+the actual prerequisite first:
+
+```sh
+env -i HOME="$HOME" /bin/zsh -lc 'omp -p "reply OK"'
+```
+
+Install the job only after that command succeeds without an interactive session credential.
 
 ## One-Time Setup
 
