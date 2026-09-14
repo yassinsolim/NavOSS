@@ -5,7 +5,7 @@ It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
 
-Lockfile SHA-256: `7853dcb056489f46e69bc5e7469cd7914586e4fc7a9eb587cdc7f3863294d043`
+Lockfile SHA-256: `60bb96c359c61fad31617925e62bc0bdb57187bdcf4fe36e5bd517a575d977d2`
 
 Regenerate with:
 
@@ -49,10 +49,10 @@ corepack pnpm licenses:generate
 
 - `glob` - `13.0.6` - <https://github.com/isaacs/node-glob#readme>
 - `lru-cache` - `11.5.2` - <https://github.com/isaacs/node-lru-cache#readme>
-- `minimatch` - `10.2.5` - <https://github.com/isaacs/minimatch#readme>
+- `minimatch` - `10.2.5, 10.2.6` - <https://github.com/isaacs/minimatch#readme>
 - `minipass` - `7.1.3` - <https://github.com/isaacs/minipass#readme>
 - `path-scurry` - `2.0.2` - <https://github.com/isaacs/path-scurry#readme>
-- `sax` - `1.6.0` - <https://github.com/isaacs/sax-js#readme>
+- `sax` - `1.6.1` - <https://github.com/isaacs/sax-js#readme>
 
 ## BSD-2-Clause
 
@@ -190,8 +190,8 @@ corepack pnpm licenses:generate
 - `@expo/cli` - `57.0.6` - <https://github.com/expo/expo/tree/main/packages/@expo/cli>
 - `@expo/code-signing-certificates` - `0.0.6` - <https://github.com/expo/code-signing-certificates/tree/main#readme>
 - `@expo/config` - `57.0.3` - <https://github.com/expo/expo/tree/main/packages/@expo/config#readme>
-- `@expo/config-plugins` - `57.0.3` - <https://docs.expo.dev/guides/config-plugins/>
-- `@expo/config-types` - `57.0.1` - <https://github.com/expo/expo/tree/main/packages/@expo/config-types#readme>
+- `@expo/config-plugins` - `57.0.9` - <https://docs.expo.dev/guides/config-plugins/>
+- `@expo/config-types` - `57.0.2` - <https://github.com/expo/expo/tree/main/packages/@expo/config-types#readme>
 - `@expo/devcert` - `1.2.1` - <https://github.com/expo/devcert#readme>
 - `@expo/devtools` - `57.0.0` - <https://github.com/expo/expo/tree/main/packages/@expo/devtools#readme>
 - `@expo/dom-webview` - `57.0.0` - <https://github.com/expo/expo/tree/main/packages/@expo/dom-webview>
@@ -200,7 +200,7 @@ corepack pnpm licenses:generate
 - `@expo/fingerprint` - `0.20.3` - <https://github.com/expo/expo/tree/main/packages/@expo/fingerprint#readme>
 - `@expo/image-utils` - `0.11.1` - <https://github.com/expo/expo/tree/main/packages/%40expo/image-utils#readme>
 - `@expo/inline-modules` - `0.1.2` - <https://github.com/expo/expo#readme>
-- `@expo/json-file` - `11.0.0` - <https://github.com/expo/expo/tree/main/packages/@expo/json-file#readme>
+- `@expo/json-file` - `11.0.1` - <https://github.com/expo/expo/tree/main/packages/@expo/json-file#readme>
 - `@expo/local-build-cache-provider` - `57.0.2` - <https://github.com/expo/expo/tree/main/packages/@expo/local-build-cache-provider#readme>
 - `@expo/log-box` - `57.0.0` - <https://github.com/expo/expo/tree/main/packages/@expo/log-box>
 - `@expo/metro` - `56.0.0` - <https://github.com/expo/expo-metro#readme>
@@ -209,9 +209,9 @@ corepack pnpm licenses:generate
 - `@expo/metro-runtime` - `57.0.3` - <https://github.com/expo/expo/tree/main/packages/@expo/metro-runtime>
 - `@expo/osascript` - `2.7.0` - <https://github.com/expo/expo/tree/main/packages/@expo/osascript#readme>
 - `@expo/package-manager` - `1.13.0` - <https://github.com/expo/expo/tree/main/packages/@expo/package-manager#readme>
-- `@expo/plist` - `0.8.0` - <https://github.com/expo/expo/tree/main/packages/@expo/plist#readme>
+- `@expo/plist` - `0.8.1` - <https://github.com/expo/expo/tree/main/packages/@expo/plist#readme>
 - `@expo/prebuild-config` - `57.0.5` - <https://github.com/expo/expo/tree/main/packages/@expo/prebuild-config#readme>
-- `@expo/require-utils` - `57.0.1` - <https://github.com/expo/expo/tree/main/packages/@expo/require-utils#readme>
+- `@expo/require-utils` - `57.0.1, 57.0.5` - <https://github.com/expo/expo/tree/main/packages/@expo/require-utils#readme>
 - `@expo/router-server` - `57.0.2` - <https://docs.expo.dev/routing/introduction/>
 - `@expo/schema-utils` - `57.0.1` - <https://github.com/expo/expo/tree/main/packages/@expo/schema-utils#readme>
 - `@expo/sdk-runtime-versions` - `1.0.0`
@@ -294,11 +294,11 @@ corepack pnpm licenses:generate
 - `@types/react-test-renderer` - `19.1.0` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react-test-renderer>
 - `@types/yargs` - `17.0.35` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/yargs>
 - `@types/yargs-parser` - `21.0.3` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/yargs-parser>
-- `@xmldom/xmldom` - `0.8.13, 0.9.10` - <https://github.com/xmldom/xmldom>
+- `@xmldom/xmldom` - `0.8.15, 0.9.12` - <https://github.com/xmldom/xmldom>
 - `abort-controller` - `3.0.0` - <https://github.com/mysticatea/abort-controller#readme>
 - `abstract-logging` - `2.0.1` - <https://github.com/jsumners/abstract-logging#readme>
 - `accepts` - `1.3.8, 2.0.0` - <https://github.com/jshttp/accepts#readme>
-- `acorn` - `8.17.0` - <https://github.com/acornjs/acorn>
+- `acorn` - `8.18.0` - <https://github.com/acornjs/acorn>
 - `agent-base` - `7.1.4` - <https://github.com/TooTallNate/proxy-agents#readme>
 - `agent-cli-detector` - `0.1.2`
 - `ajv` - `8.20.0` - <https://ajv.js.org>
@@ -324,7 +324,7 @@ corepack pnpm licenses:generate
 - `base64-js` - `1.5.1` - <https://github.com/beatgammit/base64-js>
 - `bplist-creator` - `0.1.0` - <https://github.com/nearinfinity/node-bplist-creator#readme>
 - `bplist-parser` - `0.3.1, 0.3.2` - <https://github.com/nearinfinity/node-bplist-parser>
-- `brace-expansion` - `5.0.7` - <https://github.com/juliangruber/brace-expansion#readme>
+- `brace-expansion` - `5.0.7, 5.0.9` - <https://github.com/juliangruber/brace-expansion#readme>
 - `braces` - `3.0.3` - <https://github.com/micromatch/braces>
 - `browserslist` - `4.28.6` - <https://github.com/browserslist/browserslist#readme>
 - `buffer-from` - `1.1.2` - <https://github.com/LinusU/buffer-from#readme>
