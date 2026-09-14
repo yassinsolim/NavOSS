@@ -6,7 +6,7 @@ import UIKit
 @objc(NavOSSCarPlaySceneDelegate)
 @MainActor
 final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate,
-  CPMapTemplateDelegate, CPSearchTemplateDelegate
+  CPInterfaceControllerDelegate, CPMapTemplateDelegate, CPSearchTemplateDelegate
 {
   private struct SearchCategory {
     let category: String?
@@ -61,6 +61,11 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private enum DestinationSelectionMode {
     case addStop
     case newTrip
+  }
+
+  private enum DestinationSearchResult {
+    case cancelled
+    case results([NavOSSCarPlayDestination], remoteSearchFailed: Bool)
   }
 
   private enum SettingsCategory {
@@ -184,6 +189,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private var routeTask: Task<Void, Never>?
   private var searchRequestGeneration: UInt64 = 0
   private var searchTask: Task<Void, Never>?
+  private var voiceSearchCoordinator: NavOSSCarPlayVoiceSearchCoordinator?
   private var destinationObserver: NSObjectProtocol?
   private var placesTemplate: CPListTemplate?
   private var stateObserver: NSObjectProtocol?
@@ -230,6 +236,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   }
 
   func sceneWillResignActive(_ scene: UIScene) {
+    voiceSearchCoordinator?.cancel()
     if NavOSSCarPlayTripStore.shared.snapshot().trip == nil {
       routeRequestGeneration &+= 1
       routeTask?.cancel()
@@ -261,7 +268,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     case .go:
       showPlaces()
     case .voice:
-      showSearch()
+      showVoiceSearch()
     }
   }
 
@@ -271,6 +278,12 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     to window: CPWindow
   ) {
     self.interfaceController = interfaceController
+    interfaceController.delegate = self
+    voiceSearchCoordinator = NavOSSCarPlayVoiceSearchCoordinator(
+      interfaceController: interfaceController
+    ) { [weak self] query in
+      self?.showVoiceSearchResults(for: query)
+    }
     carWindow = window
 
     let mapViewController = NavOSSCarPlayMapViewController()
@@ -327,6 +340,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     didDisconnect interfaceController: CPInterfaceController,
     from window: CPWindow
   ) {
+    voiceSearchCoordinator?.invalidate()
+    voiceSearchCoordinator = nil
+    interfaceController.delegate = nil
     if let stateObserver {
       NotificationCenter.default.removeObserver(stateObserver)
       self.stateObserver = nil
@@ -784,21 +800,37 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private func showSearch(
     selectionMode: DestinationSelectionMode = .newTrip
   ) {
-    guard let interfaceController else {
+    guard let interfaceController, prepareDestinationSearch(selectionMode: selectionMode) else {
       return
     }
+    let searchTemplate = CPSearchTemplate()
+    searchTemplate.delegate = self
+    interfaceController.pushTemplate(searchTemplate, animated: true, completion: nil)
+  }
+
+  private func showVoiceSearch(
+    selectionMode: DestinationSelectionMode = .newTrip
+  ) {
+    guard interfaceController != nil, let voiceSearchCoordinator else {
+      return
+    }
+    guard prepareDestinationSearch(selectionMode: selectionMode) else {
+      return
+    }
+    voiceSearchCoordinator.start()
+  }
+
+  private func prepareDestinationSearch(selectionMode: DestinationSelectionMode) -> Bool {
     let state = NavOSSCarPlayTripStore.shared.snapshot()
     guard state.guidance?.phase != .navigating || selectionMode == .addStop else {
       showNavigationAlert(
         title: "Navigation in progress",
         subtitle: "End the current trip before searching for another destination."
       )
-      return
+      return false
     }
     destinationSelectionMode = selectionMode
-    let searchTemplate = CPSearchTemplate()
-    searchTemplate.delegate = self
-    interfaceController.pushTemplate(searchTemplate, animated: true, completion: nil)
+    return true
   }
 
   private func showSettings(audioOnly: Bool) {
@@ -1110,7 +1142,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         self?.showSearch()
       },
       CPBarButton(image: carPlayImage("mic.fill")) { [weak self] _ in
-        self?.showSearch()
+        self?.showVoiceSearch()
       },
     ]
     interfaceController.pushTemplate(template, animated: true, completion: nil)
@@ -1147,6 +1179,116 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         .first(where: { $0.label == label })
     else { return }
     showCategoryResults(category)
+  }
+
+  private func showVoiceSearchResults(for query: String) {
+    guard
+      interfaceController != nil,
+      prepareDestinationSearch(selectionMode: destinationSelectionMode)
+    else {
+      return
+    }
+    startDestinationSearch(query: query) { [weak self] result in
+      guard let self else {
+        return
+      }
+      switch result {
+      case .cancelled:
+        return
+      case let .results(matches, remoteSearchFailed):
+        guard !matches.isEmpty else {
+          self.showVoiceSearchRetry(
+            title: remoteSearchFailed ? "Search unavailable" : "No places found",
+            detail: remoteSearchFailed
+              ? "Check your connection, then try voice search again."
+              : "Try saying a more specific place or address."
+          )
+          return
+        }
+        guard let interfaceController = self.interfaceController else {
+          return
+        }
+        interfaceController.pushTemplate(
+          CPListTemplate(
+            title: "Search results",
+            sections: [CPListSection(items: matches.map { self.destinationItem($0) })]
+          ),
+          animated: true,
+          completion: nil
+        )
+      }
+    }
+  }
+
+  private func showVoiceSearchRetry(title: String, detail: String) {
+    guard let interfaceController else {
+      return
+    }
+    let message = CPListItem(text: detail, detailText: nil)
+    message.isEnabled = false
+    let retry = CPListItem(text: "Try voice search again", detailText: "Use the microphone")
+    retry.handler = { [weak self] _, completion in
+      completion()
+      self?.showVoiceSearch(selectionMode: self?.destinationSelectionMode ?? .newTrip)
+    }
+    interfaceController.pushTemplate(
+      CPListTemplate(
+        title: title,
+        sections: [CPListSection(items: [message, retry])]
+      ),
+      animated: true,
+      completion: nil
+    )
+  }
+
+  private func startDestinationSearch(
+    query: String,
+    completion: @escaping (DestinationSearchResult) -> Void
+  ) {
+    searchRequestGeneration &+= 1
+    let requestGeneration = searchRequestGeneration
+    searchTask?.cancel()
+    searchTask = Task { [weak self] in
+      guard let self else {
+        completion(.cancelled)
+        return
+      }
+      let localMatches = NavOSSCarPlayDestinationStore.shared.snapshot().searchableDestinations
+        .filter { destination in
+          destination.name.localizedCaseInsensitiveContains(query)
+            || destination.label.localizedCaseInsensitiveContains(query)
+        }
+      do {
+        let proximity = self.mapViewController?.currentLocationCoordinate()
+          ?? NavOSSNavigationService.shared.currentCoordinate()
+        let client = try NavOSSNavigationAPIClient()
+        let remoteMatches = try await client.search(
+          query: query,
+          proximity: proximity
+        )
+        guard !Task.isCancelled, requestGeneration == self.searchRequestGeneration else {
+          completion(.cancelled)
+          return
+        }
+        let matches = self.uniqueDestinations(localMatches + remoteMatches)
+        self.searchTask = nil
+        self.searchDestinationsByIdentifier = Dictionary(
+          uniqueKeysWithValues: matches.map { ($0.id, $0) }
+        )
+        completion(.results(matches, remoteSearchFailed: false))
+      } catch {
+        guard !Task.isCancelled, requestGeneration == self.searchRequestGeneration else {
+          completion(.cancelled)
+          return
+        }
+        let matches = self.uniqueDestinations(localMatches)
+        self.searchTask = nil
+        self.searchDestinationsByIdentifier = Dictionary(
+          uniqueKeysWithValues: matches.map { ($0.id, $0) }
+        )
+        completion(.results(matches, remoteSearchFailed: true))
+      }
+    }
   }
 
   private func placesTemplateSections() -> [CPListSection] {
@@ -1832,63 +1974,37 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     NavOSSNavigationService.shared.finishCarPlayRoutePlanning(routePreviewLocationLease)
   }
 
+  func templateWillDisappear(_ template: CPTemplate, animated: Bool) {
+    voiceSearchCoordinator?.templateWillDisappear(template)
+  }
+
+  func templateDidDisappear(_ template: CPTemplate, animated: Bool) {
+    voiceSearchCoordinator?.templateDidDisappear(template)
+  }
+
   func searchTemplate(
     _ searchTemplate: CPSearchTemplate,
     updatedSearchText searchText: String,
     completionHandler: @escaping ([CPListItem]) -> Void
   ) {
     let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-    searchRequestGeneration &+= 1
-    let requestGeneration = searchRequestGeneration
-    searchTask?.cancel()
     guard query.count >= 2 else {
+      searchRequestGeneration &+= 1
+      searchTask?.cancel()
       searchTask = nil
       searchDestinationsByIdentifier = [:]
       completionHandler([])
       return
     }
-    searchTask = Task { [weak self] in
+    startDestinationSearch(query: query) { [weak self] result in
       guard let self else {
         completionHandler([])
         return
       }
-      let localMatches = NavOSSCarPlayDestinationStore.shared.snapshot().searchableDestinations
-        .filter { destination in
-          destination.name.localizedCaseInsensitiveContains(query)
-            || destination.label.localizedCaseInsensitiveContains(query)
-        }
-      do {
-        let proximity = self.mapViewController?.currentLocationCoordinate()
-          ?? NavOSSNavigationService.shared.currentCoordinate()
-        let client = try NavOSSNavigationAPIClient()
-        let remoteMatches = try await client.search(
-          query: query,
-          proximity: proximity
-        )
-        let matches = self.uniqueDestinations(localMatches + remoteMatches)
-        guard !Task.isCancelled,
-          requestGeneration == self.searchRequestGeneration
-        else {
-          completionHandler([])
-          return
-        }
-        self.searchTask = nil
-        self.searchDestinationsByIdentifier = Dictionary(
-          uniqueKeysWithValues: matches.map { ($0.id, $0) }
-        )
-        completionHandler(matches.map { self.destinationItem($0) })
-      } catch {
-        let matches = Array(localMatches.prefix(8))
-        guard !Task.isCancelled,
-          requestGeneration == self.searchRequestGeneration
-        else {
-          completionHandler([])
-          return
-        }
-        self.searchTask = nil
-        self.searchDestinationsByIdentifier = Dictionary(
-          uniqueKeysWithValues: matches.map { ($0.id, $0) }
-        )
+      switch result {
+      case .cancelled:
+        completionHandler([])
+      case let .results(matches, _):
         completionHandler(matches.map { self.destinationItem($0) })
       }
     }

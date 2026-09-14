@@ -45,6 +45,10 @@ describe('map screen configuration', () => {
       /useEffect\(\(\) => \{\s+if \(isCarPlayVisualHarness\(\)\) return;\s+let active = true;/,
     );
     expect(mapScreen).toContain('if (isCarPlayVisualHarness()) return null;');
-    expect(mapScreen).toContain("locationState !== 'visible' || routeState.type !== 'idle'");
+    // Idle-follow policy moved into `shouldWatchPhoneIdleLocation`, covered behaviourally in
+    // `idle-camera-follow.test.ts`. The screen must still drive the watch from that policy rather
+    // than reintroducing an inline condition, and must stop watching once the map is not visible.
+    expect(mapScreen).toContain('shouldWatchPhoneIdleLocation({');
+    expect(mapScreen).toContain('if (!shouldRunPhoneIdleLocationWatch) return;');
   });
 });

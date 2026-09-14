@@ -119,6 +119,57 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
+  func testIdleCarPlayCameraFollowsEachFreshMapLibreFixWhileEnabled() {
+    XCTAssertTrue(
+      navOSSShouldFollowIdleCarPlayLocation(
+        hasActiveGuidance: false,
+        idleFollowEnabled: true,
+        requestsUserLocation: true
+      )
+    )
+    XCTAssertTrue(
+      navOSSShouldFollowIdleCarPlayLocation(
+        hasActiveGuidance: false,
+        idleFollowEnabled: true,
+        requestsUserLocation: true
+      )
+    )
+  }
+
+  func testIdleCarPlayCameraHoldsAfterPanOrRoutePreviewUntilRecenter() {
+    XCTAssertFalse(
+      navOSSShouldFollowIdleCarPlayLocation(
+        hasActiveGuidance: false,
+        idleFollowEnabled: false,
+        requestsUserLocation: true
+      )
+    )
+    XCTAssertTrue(
+      navOSSShouldFollowIdleCarPlayLocation(
+        hasActiveGuidance: false,
+        idleFollowEnabled: true,
+        requestsUserLocation: true
+      )
+    )
+  }
+
+  func testIdleCarPlayCameraDoesNotFollowDuringGuidanceOrWithoutLocation() {
+    XCTAssertFalse(
+      navOSSShouldFollowIdleCarPlayLocation(
+        hasActiveGuidance: true,
+        idleFollowEnabled: true,
+        requestsUserLocation: true
+      )
+    )
+    XCTAssertFalse(
+      navOSSShouldFollowIdleCarPlayLocation(
+        hasActiveGuidance: false,
+        idleFollowEnabled: true,
+        requestsUserLocation: false
+      )
+    )
+  }
+
   func testLocationTrackingRequiresPlanningOrActiveNavigation() {
     XCTAssertFalse(
       navOSSShouldTrackLocation(
