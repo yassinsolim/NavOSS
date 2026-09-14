@@ -170,7 +170,10 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
   private func markReady() {
     view.accessibilityLabel = "CarPlay visual \(scenario) ready"
     view.isAccessibilityElement = true
+    // The validator redirects this to a file, where stdout is block buffered, so a few bytes would
+    // otherwise sit unwritten until the process exits.
     print("NAVOSS_CARPLAY_VISUAL_READY \(scenario)")
+    fflush(stdout)
   }
 
   private static let route = [
