@@ -32,14 +32,14 @@ env:
 jobs:
   visuals:
     name: CarPlay visual scenarios
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
 
@@ -52,13 +52,9 @@ jobs:
       - name: Build shared contracts
         run: corepack pnpm --filter @navoss/contracts build
 
-      # The harness looks the device up by name and throws if it is absent
-      # (apps/mobile/scripts/validate-navigation-ios.mjs, "Simulator not found"). It never
-      # creates one, and a hosted runner has no device with this name, so create it here against
-      # whatever iOS runtime the image ships.
-      # The image default was Xcode 16.4, under which the ExpoModulesJSI pod's xcframework
-      # build script fails. Everything else in this project is built with a much newer Xcode, so
-      # use the newest the image actually ships rather than whatever is currently selected.
+      # Expo SDK 57's `apple` package requires Swift tools 6.2. The macOS 15 image tops out at
+      # Xcode 16.4 / Swift 6.1, so this job must remain on macOS 26 or newer. Select the newest
+      # installed Xcode patch so the simulator runtime and compiler stay aligned.
       - name: Select the newest available Xcode
         run: |
           set -euo pipefail
