@@ -25,61 +25,44 @@ function surface(overrides: Partial<PhoneSurfaceInput> = {}) {
   });
 }
 
+const CONNECTED_SURFACE_CASES = [
+  { expected: 'arrival', guidanceResolved: false, routeStatus: 'arrived' },
+  { expected: 'arrival', guidanceResolved: true, routeStatus: 'arrived' },
+  { expected: 'map', guidanceResolved: false, routeStatus: 'error' },
+  { expected: 'map', guidanceResolved: true, routeStatus: 'error' },
+  { expected: 'map', guidanceResolved: false, routeStatus: 'idle' },
+  { expected: 'map', guidanceResolved: true, routeStatus: 'idle' },
+  { expected: 'map', guidanceResolved: false, routeStatus: 'loading' },
+  { expected: 'map', guidanceResolved: true, routeStatus: 'loading' },
+  { expected: 'carplay-idle', guidanceResolved: false, routeStatus: 'navigating' },
+  { expected: 'guidance', guidanceResolved: true, routeStatus: 'navigating' },
+  { expected: 'map', guidanceResolved: false, routeStatus: 'preview' },
+  { expected: 'map', guidanceResolved: true, routeStatus: 'preview' },
+] as const;
+
 describe('phone surface while CarPlay is connected', () => {
-  it('never renders a map for any route status', () => {
-    // A tester on build 52 reported a blank phone screen with CarPlay working. The handset was
-    // falling through to a full map beside the car's, so no connected state may resolve to 'map'.
-    for (const routeStatus of ALL_STATUSES) {
-      expect(surface({ routeStatus })).not.toBe('map');
-      expect(surface({ guidanceResolved: false, routeStatus })).not.toBe('map');
-    }
-  });
-
-  it('shows guidance only when the maneuver snapshot is complete', () => {
-    expect(surface({ routeStatus: 'navigating' })).toBe('guidance');
-    expect(surface({ guidanceResolved: false, routeStatus: 'navigating' })).toBe('carplay-idle');
-  });
-
-  it('shows arrival regardless of guidance resolution', () => {
-    expect(surface({ routeStatus: 'arrived' })).toBe('arrival');
-    expect(surface({ guidanceResolved: false, routeStatus: 'arrived' })).toBe('arrival');
-  });
-
-  it('shows the idle companion for states with no active guidance', () => {
-    for (const routeStatus of ['error', 'idle', 'loading', 'preview'] as PhoneRouteStatus[]) {
-      expect(surface({ routeStatus })).toBe('carplay-idle');
-    }
-  });
+  it.each(CONNECTED_SURFACE_CASES)(
+    'renders $expected for $routeStatus when guidance is $guidanceResolved',
+    ({ expected, guidanceResolved, routeStatus }) => {
+      expect(surface({ guidanceResolved, routeStatus })).toBe(expected);
+    },
+  );
 });
 
 describe('phone surface while CarPlay is disconnected', () => {
-  it('always renders the map, including mid-trip', () => {
+  it('always renders the map, including mid-trip and incomplete guidance', () => {
     for (const routeStatus of ALL_STATUSES) {
-      expect(surface({ carPlayConnected: false, routeStatus })).toBe('map');
+      for (const guidanceResolved of [false, true]) {
+        expect(surface({ carPlayConnected: false, guidanceResolved, routeStatus })).toBe('map');
+      }
     }
   });
 });
 
 describe('releasing a phone-side route when the car connects', () => {
-  it('releases plans the companion offers no way to act on', () => {
-    // Loading, failed, and preview plans render Retry, Cancel, and Start on the phone map. The
-    // companion has none of those, and the plan never crossed the native bridge, so leaving it
-    // live strands the driver on both surfaces.
-    for (const routeStatus of ['error', 'loading', 'preview'] as PhoneRouteStatus[]) {
-      expect(releasesPhoneRouteOnCarPlayConnect(routeStatus)).toBe(true);
-    }
-  });
-
-  it('leaves a running or completed trip alone for the car scene to restore', () => {
-    for (const routeStatus of ['arrived', 'idle', 'navigating'] as PhoneRouteStatus[]) {
+  it('preserves every route state so connecting cannot discard phone planning work', () => {
+    for (const routeStatus of ALL_STATUSES) {
       expect(releasesPhoneRouteOnCarPlayConnect(routeStatus)).toBe(false);
     }
-  });
-
-  it('covers every route status, so a new state must make an explicit choice', () => {
-    const decided = ALL_STATUSES.filter(
-      (routeStatus) => typeof releasesPhoneRouteOnCarPlayConnect(routeStatus) === 'boolean',
-    );
-    expect(decided).toHaveLength(ALL_STATUSES.length);
   });
 });

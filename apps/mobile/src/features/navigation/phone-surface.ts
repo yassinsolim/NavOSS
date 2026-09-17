@@ -12,9 +12,9 @@ export interface PhoneSurfaceInput {
 
 /// Which surface the handset shows.
 ///
-/// While CarPlay is connected the phone never renders a map. The car display owns the driving
-/// surface, and a second MapLibre view on the handset renders a screen the driver should not be
-/// looking at. Every connected state therefore resolves to a companion.
+/// CarPlay takes over driving guidance after a route starts. Before then, the handset keeps its
+/// interactive map so a passenger or parked driver can search, recover a failed plan, and start a
+/// route preview without losing access to the controls that exist only on the phone.
 export function phoneSurface({
   carPlayConnected,
   guidanceResolved,
@@ -22,16 +22,23 @@ export function phoneSurface({
 }: PhoneSurfaceInput): PhoneSurface {
   if (!carPlayConnected) return 'map';
   if (routeStatus === 'arrived') return 'arrival';
-  if (routeStatus === 'navigating' && guidanceResolved) return 'guidance';
-  return 'carplay-idle';
+  if (routeStatus === 'navigating') return guidanceResolved ? 'guidance' : 'carplay-idle';
+  return 'map';
 }
 
 /// Whether a phone-side route must be released when the car connects.
 ///
-/// The companion offers no retry, cancel, or Start affordance, and a plan that never reached the
-/// native bridge has no car-side counterpart to recover it. Releasing beats stranding the driver
-/// behind a surface that cannot act on it. A trip already running or arrived is left alone: the
-/// car scene restores those, and the companion drives them.
+/// Planning states remain actionable on the connected handset, so connecting must not discard a
+/// preview or a plan that can retry or cancel. Keep the choice exhaustive so a new route state
+/// cannot silently lose user work.
 export function releasesPhoneRouteOnCarPlayConnect(routeStatus: PhoneRouteStatus): boolean {
-  return routeStatus === 'error' || routeStatus === 'loading' || routeStatus === 'preview';
+  switch (routeStatus) {
+    case 'arrived':
+    case 'error':
+    case 'idle':
+    case 'loading':
+    case 'navigating':
+    case 'preview':
+      return false;
+  }
 }

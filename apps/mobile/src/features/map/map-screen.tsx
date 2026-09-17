@@ -504,6 +504,40 @@ export function MapScreen() {
     () => headingConeFeature(facingConeCoordinate, facingConeHeading, mapZoomStep),
     [facingConeCoordinate, facingConeHeading, mapZoomStep],
   );
+  const guidanceStep =
+    routeState.type === 'navigating'
+      ? getUpcomingGuidanceStep(routeState.route, navigationStepIndex)
+      : undefined;
+  const remainingRoute =
+    routeState.type === 'navigating'
+      ? getRemainingRouteSummary(
+          routeState.route,
+          navigationStepIndex,
+          navigationSnapshot?.matchedCoordinate ?? userCoordinate,
+        )
+      : undefined;
+  const remainingStep =
+    routeState.type === 'navigating'
+      ? getRemainingStepSummary(
+          routeState.route,
+          navigationStepIndex,
+          navigationSnapshot?.matchedCoordinate ?? userCoordinate,
+        )
+      : undefined;
+  // The resolved maneuver decides both the companion and whether the phone keeps its map.
+  const carPlayGuidance =
+    routeState.type === 'navigating' &&
+    carPlayConnected &&
+    guidanceStep !== undefined &&
+    remainingRoute !== undefined &&
+    remainingStep !== undefined
+      ? { destination: routeState.destination, guidanceStep, remainingRoute, remainingStep }
+      : undefined;
+  const surface = phoneSurface({
+    carPlayConnected,
+    guidanceResolved: carPlayGuidance !== undefined,
+    routeStatus: routeState.type,
+  });
   const mapRegion = mapRegionForCoordinate(userCoordinate);
   const roadEventRegion: RoadEventRegion | undefined =
     mapRegion === 'calgary-ab'
@@ -528,12 +562,14 @@ export function MapScreen() {
   const searchEnabled = true;
   const nearbySearchEnabled = searchOrigin !== undefined;
   const phoneMapVisible =
-    isAppActive && !carPlayConnected && (routeState.type !== 'idle' || activeTab === 'explore');
+    isAppActive && surface === 'map' && (routeState.type !== 'idle' || activeTab === 'explore');
   const hasTransientDestination =
     selectedResult !== undefined || query.trim().length > 0 || searchState !== 'idle';
+  // CarPlay owns location only while it owns the handset surface; its connected planning map needs
+  // the foreground watch for a live puck and idle camera follow.
   const shouldRunPhoneIdleLocationWatch = shouldWatchPhoneIdleLocation({
     appIsActive: isAppActive,
-    carPlayConnected,
+    carPlayConnected: carPlayConnected && surface !== 'map',
     locationIsVisible: locationState === 'visible',
     mapTabIsVisible: activeTab === 'explore',
     routeIsIdle: routeState.type === 'idle',
@@ -1754,26 +1790,6 @@ export function MapScreen() {
     routeState.type === 'preview' && selectedRoute !== undefined
       ? routeState.routes.filter((route) => route.id !== selectedRoute.id)
       : [];
-  const guidanceStep =
-    routeState.type === 'navigating'
-      ? getUpcomingGuidanceStep(routeState.route, navigationStepIndex)
-      : undefined;
-  const remainingRoute =
-    routeState.type === 'navigating'
-      ? getRemainingRouteSummary(
-          routeState.route,
-          navigationStepIndex,
-          navigationSnapshot?.matchedCoordinate ?? userCoordinate,
-        )
-      : undefined;
-  const remainingStep =
-    routeState.type === 'navigating'
-      ? getRemainingStepSummary(
-          routeState.route,
-          navigationStepIndex,
-          navigationSnapshot?.matchedCoordinate ?? userCoordinate,
-        )
-      : undefined;
   const vehicleMatchStatus: VehicleMatchStatus =
     navigationSnapshot?.rawCoordinate === undefined
       ? 'acquiring'
@@ -1961,8 +1977,8 @@ export function MapScreen() {
     const justConnected = connected && !carPlayConnected;
     setCarPlayConnected(connected);
     if (!justConnected) return;
-    // The car owns route planning from here, and a plan the companion cannot act on is released
-    // rather than stranded behind it.
+    // The connected handset keeps planning controls, so this policy must retain its in-flight
+    // route rather than discarding work the driver can still finish on the phone.
     if (releasesPhoneRouteOnCarPlayConnect(routeState.type)) {
       handleCancelRoute();
     }
@@ -2033,24 +2049,6 @@ export function MapScreen() {
   const selectedPlacePhoneUrl = placePhoneUrl(selectedResult?.details?.phone);
   const selectedPlaceWebsiteUrl = placeWebsiteUrl(selectedResult?.details?.website);
   const selectedPlaceWebsiteLabel = placeWebsiteLabel(selectedResult?.details?.website);
-
-  // The single resolved maneuver snapshot. Deriving both the surface decision and the render from
-  // this one value keeps them from drifting apart and silently restoring the map fall-through.
-  const carPlayGuidance =
-    routeState.type === 'navigating' &&
-    guidanceStep !== undefined &&
-    remainingRoute !== undefined &&
-    remainingStep !== undefined
-      ? { destination: routeState.destination, guidanceStep, remainingRoute, remainingStep }
-      : undefined;
-
-  // CarPlay owns the driving surface, so every connected state resolves to a companion and the
-  // phone never runs a second map view against the car's.
-  const surface = phoneSurface({
-    carPlayConnected,
-    guidanceResolved: carPlayGuidance !== undefined,
-    routeStatus: routeState.type,
-  });
 
   if (surface === 'guidance' && carPlayGuidance !== undefined) {
     return (
