@@ -67,6 +67,7 @@
       ],
       "@maplibre/maplibre-react-native",
       "./plugins/with-navoss-carplay.cjs",
+      "./plugins/with-navoss-deployment-target.cjs",
       [
         "expo-location",
         {
