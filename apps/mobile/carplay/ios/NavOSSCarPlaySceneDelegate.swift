@@ -60,6 +60,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   private enum DestinationSelectionMode {
     case addStop
+    case changeDestination
     case newTrip
   }
 
@@ -181,7 +182,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private var overviewMapButton: CPMapButton?
   private let preferencesStore = NavOSSCarPlayPreferencesStore.shared
   private var preferencesObserver: NSObjectProtocol?
-  private var reportMapButton: CPMapButton?
+  private var tripActionsMapButton: CPMapButton?
   private var routePreviewReplacesActiveTrip = false
   private var rootActionShowsTrip = false
   private let reportStore = NavOSSCarPlayReportStore.shared
@@ -378,7 +379,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     idleMapButtons = []
     muteGuidanceMapButton = nil
     overviewMapButton = nil
-    reportMapButton = nil
+    tripActionsMapButton = nil
     rootActionShowsTrip = false
     routePreviewReplacesActiveTrip = false
     routeChoicesByIdentifier = [:]
@@ -448,14 +449,14 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       self?.showSettings(audioOnly: true)
     }
     muteGuidanceButton.image = audioModeImage(preferencesStore.load().audioMode)
-    let reportButton = CPMapButton { [weak self] _ in
-      self?.showReports()
+    let tripActionsButton = CPMapButton { [weak self] _ in
+      self?.showPlaces()
     }
-    reportButton.image = UIImage(systemName: "exclamationmark.bubble.fill")
+    tripActionsButton.image = UIImage(systemName: "plus.circle.fill")
     endNavigationMapButton = endNavigationButton
     overviewMapButton = overviewButton
     muteGuidanceMapButton = muteGuidanceButton
-    reportMapButton = reportButton
+    tripActionsMapButton = tripActionsButton
     idleMapButtons = [searchButton, recenterButton, settingsButton]
     template.mapButtons = idleMapButtons
     return template
@@ -822,7 +823,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   private func prepareDestinationSearch(selectionMode: DestinationSelectionMode) -> Bool {
     let state = NavOSSCarPlayTripStore.shared.snapshot()
-    guard state.guidance?.phase != .navigating || selectionMode == .addStop else {
+    guard state.guidance?.phase != .navigating || selectionMode != .newTrip else {
       showNavigationAlert(
         title: "Navigation in progress",
         subtitle: "End the current trip before searching for another destination."
@@ -1303,9 +1304,12 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   }
 
   private func placesTemplateSections() -> [CPListSection] {
-    destinationSelectionMode == .addStop
-      ? destinationSearchSections()
-      : destinationSections()
+    switch destinationSelectionMode {
+    case .addStop, .changeDestination:
+      return destinationSearchSections()
+    case .newTrip:
+      return destinationSections()
+    }
   }
 
   private func destinationSections() -> [CPListSection] {
@@ -1324,6 +1328,15 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         completion()
         self?.showAddStopPicker()
       }
+      let changeDestinationItem = CPListItem(
+        text: "Change destination",
+        detailText: "Choose a new destination from here",
+        image: UIImage(systemName: "arrow.triangle.2.circlepath")
+      )
+      changeDestinationItem.handler = { [weak self] _, completion in
+        completion()
+        self?.showChangeDestinationPicker()
+      }
       let routesItem = CPListItem(
         text: "View routes",
         detailText: "Compare alternatives from here",
@@ -1332,6 +1345,15 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       routesItem.handler = { [weak self] _, completion in
         completion()
         self?.returnToMapAndLoadActiveRouteAlternatives()
+      }
+      let reportItem = CPListItem(
+        text: "Report road condition",
+        detailText: "Save a private testing report",
+        image: UIImage(systemName: "exclamationmark.bubble.fill")
+      )
+      reportItem.handler = { [weak self] _, completion in
+        completion()
+        self?.showReports()
       }
       let endItem = CPListItem(
         text: "End navigation",
@@ -1343,7 +1365,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       }
       return [
         CPListSection(
-          items: [addStopItem, routesItem, endItem],
+          items: [addStopItem, changeDestinationItem, routesItem, reportItem, endItem],
           header: "Current trip",
           sectionIndexTitle: nil
         )
@@ -1430,6 +1452,25 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     interfaceController.pushTemplate(template, animated: true, completion: nil)
   }
 
+  private func showChangeDestinationPicker() {
+    guard let interfaceController else {
+      return
+    }
+    let state = NavOSSCarPlayTripStore.shared.snapshot()
+    guard state.trip != nil, state.guidance?.phase == .navigating else {
+      showNavigationAlert(title: "Trip unavailable", subtitle: "Start navigation and try again.")
+      return
+    }
+    destinationSelectionMode = .changeDestination
+    let template = CPListTemplate(
+      title: "Change destination",
+      sections: destinationSearchSections()
+    )
+    template.trailingNavigationBarButtons = [makeEndNavigationBarButton()]
+    placesTemplate = template
+    interfaceController.pushTemplate(template, animated: true, completion: nil)
+  }
+
   private func showCategoryResults(_ category: SearchCategory) {
     guard let interfaceController else { return }
     showNavigationAlert(title: category.label, subtitle: "Finding nearby places…")
@@ -1508,13 +1549,14 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       searchVisible: interfaceController?.topTemplate is CPSearchTemplate
     )
     if controlState.drivingControlsVisible, let endNavigationMapButton,
-      let overviewMapButton, let muteGuidanceMapButton, let reportMapButton
+      let overviewMapButton, let muteGuidanceMapButton, let tripActionsMapButton
     {
       overviewMapButton.image = UIImage(systemName: "map")
       muteGuidanceMapButton.image = audioModeImage(preferencesStore.load().audioMode)
+      // CarPlay limits the map to four controls, so reports remain in the Current trip list.
       mapTemplate?.mapButtons = [
         endNavigationMapButton, overviewMapButton, muteGuidanceMapButton,
-        reportMapButton,
+        tripActionsMapButton,
       ]
       if controlState.returnToRootFromSearch {
         interfaceController?.popToRootTemplate(animated: true, completion: nil)
@@ -1583,6 +1625,8 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     switch destinationSelectionMode {
     case .addStop:
       returnToMapAndLoadStopRoute(adding: destination)
+    case .changeDestination:
+      returnToMapAndLoadReplacementRoute(to: destination)
     case .newTrip:
       returnToMapAndLoadRoutes(to: destination)
     }
@@ -1613,6 +1657,14 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     interfaceController.popToRootTemplate(animated: true) { [weak self] _, error in
       guard error == nil else { return }
       self?.loadStopRoute(adding: stop)
+    }
+  }
+
+  private func returnToMapAndLoadReplacementRoute(to destination: NavOSSCarPlayDestination) {
+    guard let interfaceController else { return }
+    interfaceController.popToRootTemplate(animated: true) { [weak self] _, error in
+      guard error == nil else { return }
+      self?.loadReplacementRoute(to: destination)
     }
   }
 
@@ -1680,6 +1732,68 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         self.showNavigationAlert(
           title: "Stop unavailable",
           subtitle: "No route through this stop was found."
+        )
+      }
+    }
+  }
+
+  private func loadReplacementRoute(to destination: NavOSSCarPlayDestination) {
+    let state = NavOSSCarPlayTripStore.shared.snapshot()
+    guard let trip = state.trip, state.guidance?.phase == .navigating else {
+      showNavigationAlert(title: "Trip unavailable", subtitle: "Start navigation and try again.")
+      return
+    }
+    guard destination.id != trip.destination.id else {
+      showNavigationAlert(title: "Already your destination", subtitle: "Choose a different place.")
+      return
+    }
+    let waypoints = navOSSRemainingWaypoints(in: trip, after: state.routeProgress)
+      .filter { $0.id != destination.id }
+    routeRequestGeneration &+= 1
+    let requestGeneration = routeRequestGeneration
+    routeTask?.cancel()
+    showNavigationAlert(title: destination.name, subtitle: "Finding routes to this destination…")
+    routeTask = Task { [weak self] in
+      do {
+        guard let origin = await NavOSSNavigationService.shared.awaitCurrentRouteOrigin()
+        else {
+          guard !Task.isCancelled, let self,
+            requestGeneration == self.routeRequestGeneration
+          else { return }
+          self.routeTask = nil
+          self.showNavigationAlert(
+            title: "Current location unavailable",
+            subtitle: "Check Location access on your iPhone, then try again."
+          )
+          return
+        }
+        let client = try NavOSSNavigationAPIClient()
+        let routes = try await client.routes(
+          origin: origin.coordinate,
+          originHeadingDegrees: origin.headingDegrees,
+          originHorizontalAccuracyMeters: origin.horizontalAccuracyMeters,
+          destination: destination,
+          preferences: trip.preferences,
+          alternatives: 2,
+          waypoints: waypoints
+        )
+        guard !Task.isCancelled, let self,
+          requestGeneration == self.routeRequestGeneration
+        else { return }
+        self.routeTask = nil
+        _ = await self.mapTemplate?.dismissNavigationAlert(animated: true)
+        guard !Task.isCancelled,
+          requestGeneration == self.routeRequestGeneration
+        else { return }
+        self.showRoutePreviews(routes, replacingActiveTrip: true)
+      } catch {
+        guard !Task.isCancelled, let self,
+          requestGeneration == self.routeRequestGeneration
+        else { return }
+        self.routeTask = nil
+        self.showNavigationAlert(
+          title: "Destination unavailable",
+          subtitle: "No route to this destination was found."
         )
       }
     }

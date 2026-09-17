@@ -1,9 +1,8 @@
 import type { Coordinate, SearchResult } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -21,6 +20,7 @@ import {
   searchProximityOptions,
   searchResultContext,
 } from '@/features/map/search-proximity';
+import { createLatestRequestGate } from '@/features/map/latest-request-gate';
 import { searchPlaces } from '@/lib/api';
 
 interface RouteStopsEditorProps {
@@ -30,6 +30,8 @@ interface RouteStopsEditorProps {
   origin?: Coordinate;
   visible: boolean;
 }
+
+type StopSearchState = 'error' | 'idle' | 'loading' | 'success';
 
 export function RouteStopsEditor({
   destinations,
@@ -42,15 +44,77 @@ export function RouteStopsEditor({
   const [draft, setDraft] = useState<SearchResult[]>([]);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [searchState, setSearchState] = useState<StopSearchState>('idle');
+  const previousVisibleRef = useRef(false);
+  const originRef = useRef(origin);
+  const [searchRequestGate] = useState(createLatestRequestGate);
 
   useEffect(() => {
-    if (!visible) return;
-    setDraft([...destinations]);
+    originRef.current = origin;
+  }, [origin]);
+
+  const completeSearch = useCallback(
+    async (normalizedQuery: string, requestGeneration: number) => {
+      try {
+        const response = await searchPlaces(
+          normalizedQuery,
+          searchProximityOptions(originRef.current),
+        );
+        if (!searchRequestGate.isCurrent(requestGeneration)) return;
+        setResults(rankSearchResults(response.results, [], originRef.current));
+        setSearchState('success');
+      } catch {
+        if (!searchRequestGate.isCurrent(requestGeneration)) return;
+        setResults([]);
+        setSearchState('error');
+      }
+    },
+    [searchRequestGate],
+  );
+
+  useEffect(() => {
+    if (visible && !previousVisibleRef.current) {
+      searchRequestGate.advance();
+      setDraft([...destinations]);
+      setQuery('');
+      setResults([]);
+      setSearchState('idle');
+    }
+    previousVisibleRef.current = visible;
+  }, [destinations, searchRequestGate, visible]);
+
+  useEffect(() => {
+    const normalizedQuery = query.trim();
+    const requestGeneration = searchRequestGate.advance();
+    if (!visible || normalizedQuery.length < 2) {
+      if (visible) {
+        setResults([]);
+        setSearchState('idle');
+      }
+      return;
+    }
+
+    setResults([]);
+    setSearchState('loading');
+    const timeout = setTimeout(() => {
+      void completeSearch(normalizedQuery, requestGeneration);
+    }, 250);
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [completeSearch, query, searchRequestGate, visible]);
+
+  const updateQuery = (nextQuery: string) => {
+    searchRequestGate.advance();
+    setQuery(nextQuery);
+  };
+
+  const clearSearch = () => {
+    searchRequestGate.advance();
     setQuery('');
     setResults([]);
-    setSearching(false);
-  }, [destinations, visible]);
+    setSearchState('idle');
+  };
 
   const moveDestination = (index: number, offset: -1 | 1) => {
     const nextIndex = index + offset;
@@ -66,20 +130,17 @@ export function RouteStopsEditor({
     });
   };
 
-  const runSearch = async () => {
+  const runSearch = () => {
     const normalizedQuery = query.trim();
-    if (normalizedQuery.length < 2 || searching) return;
-    Keyboard.dismiss();
-    setSearching(true);
-    try {
-      const response = await searchPlaces(normalizedQuery, searchProximityOptions(origin));
-      setResults(rankSearchResults(response.results, [], origin));
-    } catch {
-      setResults([]);
-    } finally {
-      setSearching(false);
-    }
+    if (normalizedQuery.length < 2) return;
+    const requestGeneration = searchRequestGate.advance();
+    setResults([]);
+    setSearchState('loading');
+    void completeSearch(normalizedQuery, requestGeneration);
   };
+
+  const canSearch = query.trim().length >= 2;
+  const showSearchResults = canSearch && searchState !== 'idle';
 
   return (
     <Modal
@@ -210,24 +271,24 @@ export function RouteStopsEditor({
                 <TextInput
                   accessibilityLabel="Search for a stop"
                   autoCapitalize="words"
+                  autoCorrect={false}
+                  blurOnSubmit={false}
                   enterKeyHint="search"
-                  onChangeText={setQuery}
-                  onSubmitEditing={() => {
-                    void runSearch();
-                  }}
+                  onChangeText={updateQuery}
+                  onSubmitEditing={runSearch}
                   placeholder="Search places"
                   placeholderTextColor={NavOssColors.muted}
+                  returnKeyType="search"
                   style={styles.searchInput}
                   value={query}
                 />
                 <Pressable
                   accessibilityLabel="Search stops"
-                  onPress={() => {
-                    void runSearch();
-                  }}
-                  style={styles.searchButton}
+                  disabled={!canSearch}
+                  onPress={runSearch}
+                  style={[styles.searchButton, !canSearch && styles.buttonDisabled]}
                 >
-                  {searching ? (
+                  {searchState === 'loading' ? (
                     <ActivityIndicator color={NavOssColors.white} size="small" />
                   ) : (
                     <SymbolView
@@ -238,37 +299,60 @@ export function RouteStopsEditor({
                   )}
                 </Pressable>
               </View>
-              <View style={styles.results}>
-                {results.map((result) => (
-                  <Pressable
-                    accessibilityLabel={`Add ${result.name} as a stop`}
-                    key={result.id}
-                    onPress={() => {
-                      setDraft((current) => [...current, result]);
-                      setQuery('');
-                      setResults([]);
-                    }}
-                    style={styles.resultRow}
-                  >
-                    <SymbolView
-                      name={{ android: 'add_location', ios: 'plus.circle.fill' }}
-                      size={21}
-                      tintColor={NavOssColors.green}
-                    />
-                    <View style={styles.resultCopy}>
-                      <Text numberOfLines={1} style={styles.resultName}>
-                        {result.name}
-                      </Text>
-                      <Text numberOfLines={1} style={styles.resultContext}>
-                        {searchResultContext(result)}
-                      </Text>
+              {showSearchResults && (
+                <View style={styles.results}>
+                  {searchState === 'loading' && (
+                    <View style={styles.searchState}>
+                      <ActivityIndicator color={NavOssColors.green} size="small" />
+                      <Text style={styles.searchStateText}>Searching places</Text>
                     </View>
-                    <Text style={styles.distance}>
-                      {formatSearchDistance(result.distanceMeters)}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+                  )}
+                  {searchState === 'error' && (
+                    <View style={styles.searchState}>
+                      <Text style={styles.searchStateText}>Search service unavailable</Text>
+                    </View>
+                  )}
+                  {searchState === 'success' && results.length === 0 && (
+                    <View style={styles.searchState}>
+                      <Text style={styles.searchStateText}>No places found</Text>
+                    </View>
+                  )}
+                  {results.map((result) => {
+                    const distance = formatSearchDistance(result.distanceMeters);
+                    return (
+                      <Pressable
+                        accessibilityLabel={`Add ${result.name} as a stop`}
+                        key={result.id}
+                        onPress={() => {
+                          setDraft((current) => [...current, result]);
+                          clearSearch();
+                        }}
+                        style={styles.resultRow}
+                      >
+                        <SymbolView
+                          name={{ android: 'add_location', ios: 'plus.circle.fill' }}
+                          size={21}
+                          tintColor={NavOssColors.green}
+                        />
+                        <View style={styles.resultCopy}>
+                          <Text numberOfLines={1} style={styles.resultName}>
+                            {result.name}
+                          </Text>
+                          <Text numberOfLines={1} style={styles.resultContext}>
+                            {searchResultContext(result)}
+                          </Text>
+                        </View>
+                        <View style={styles.resultMeta}>
+                          {distance !== undefined && (
+                            <Text style={styles.distance}>{distance}</Text>
+                          )}
+                          <Text style={styles.addResultLabel}>Add stop</Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
             </View>
           )}
         </ScrollView>
@@ -279,6 +363,12 @@ export function RouteStopsEditor({
 
 const styles = StyleSheet.create({
   addSection: { gap: 12 },
+  addResultLabel: {
+    color: NavOssColors.green,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 12,
+    letterSpacing: 0,
+  },
   buttonDisabled: { opacity: 0.35 },
   content: { gap: 24, padding: 16, paddingBottom: 40 },
   destinationMarker: {
@@ -349,6 +439,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   resultCopy: { flex: 1, gap: 2, minWidth: 0 },
+  resultMeta: { alignItems: 'flex-end', gap: 2 },
   resultName: {
     color: NavOssColors.asphalt,
     fontFamily: NavOssFonts.semibold,
@@ -415,6 +506,20 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: 'center',
     width: 48,
+  },
+  searchState: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    minHeight: 62,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  searchStateText: {
+    color: NavOssColors.muted,
+    fontFamily: NavOssFonts.medium,
+    fontSize: 14,
+    letterSpacing: 0,
   },
   searchInput: {
     backgroundColor: NavOssColors.white,
