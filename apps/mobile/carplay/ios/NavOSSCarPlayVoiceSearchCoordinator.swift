@@ -30,10 +30,6 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
     static let error = "error"
   }
 
-  // NavOSS is currently focused on Calgary. Keep recognition on the same Canadian English locale
-  // rather than silently substituting the device's keyboard/dictation locale or a network service.
-  private static let recognitionLocale = Locale(identifier: "en-CA")
-
   private weak var interfaceController: CPInterfaceController?
   private let onRecognizedQuery: (String) -> Void
 
@@ -83,7 +79,7 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
           self.captureState = .idle
           self.showRetryScreen(
             title: "Voice search unavailable",
-            detail: "CarPlay could not start voice search. Try again when it is safe."
+            detail: "CarPlay could not start voice search. Try again."
           )
           return
         }
@@ -144,7 +140,7 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
         ),
         CPVoiceControlState(
           identifier: VoiceControlState.unavailable,
-          titleVariants: ["On-device voice unavailable", "On-device English (Canada) recognition is unavailable"],
+          titleVariants: ["On-device voice unavailable", "Download an English speech model or enable Dictation in iPhone Settings"],
           image: UIImage(systemName: "exclamationmark.triangle"),
           repeats: false
         ),
@@ -183,7 +179,7 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
       showFailure(
         state: VoiceControlState.permission,
         title: "Voice permission needed",
-        detail: "When safely parked, open Settings on your iPhone, allow Microphone and Speech Recognition for NavOSS, then try again.",
+        detail: "On your iPhone, open Settings and allow Microphone and Speech Recognition for NavOSS, then try again.",
         generation: generation
       )
       return
@@ -195,7 +191,7 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
       showFailure(
         state: VoiceControlState.permission,
         title: "Open NavOSS on your iPhone",
-        detail: "When safely parked, unlock and open NavOSS on your iPhone. Then tap the CarPlay microphone to allow voice search once.",
+        detail: "Unlock and open NavOSS on your iPhone. Answer the Microphone and Speech Recognition prompts there, then tap the CarPlay microphone again.",
         generation: generation
       )
       return
@@ -238,34 +234,29 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
     guard isCurrent(generation) else {
       return
     }
-    guard let recognizer = SFSpeechRecognizer(locale: Self.recognitionLocale) else {
-      showFailure(
-        state: VoiceControlState.unavailable,
-        title: "Voice search unavailable",
-        detail: "On-device English (Canada) recognition is not available on this iPhone.",
-        generation: generation
-      )
-      return
+    var recognizersByLocaleIdentifier: [String: SFSpeechRecognizer] = [:]
+    let localeSelection = navOSSOnDeviceVoiceRecognitionLocale(
+      deviceLocale: .current,
+      supportedLocales: Array(SFSpeechRecognizer.supportedLocales())
+    ) { locale in
+      guard #available(iOS 13.0, *) else {
+        return false
+      }
+      guard
+        let recognizer = SFSpeechRecognizer(locale: locale),
+        recognizer.isAvailable,
+        recognizer.supportsOnDeviceRecognition
+      else {
+        return false
+      }
+      recognizersByLocaleIdentifier[locale.identifier] = recognizer
+      return true
     }
-    guard recognizer.locale.languageCode?.lowercased() == "en",
-      recognizer.locale.regionCode?.uppercased() == "CA",
-      recognizer.isAvailable
+    guard
+      case let .available(locale) = localeSelection,
+      let recognizer = recognizersByLocaleIdentifier[locale.identifier]
     else {
-      showFailure(
-        state: VoiceControlState.unavailable,
-        title: "Voice search unavailable",
-        detail: "On-device English (Canada) recognition is not available right now.",
-        generation: generation
-      )
-      return
-    }
-    guard #available(iOS 13.0, *), recognizer.supportsOnDeviceRecognition else {
-      showFailure(
-        state: VoiceControlState.unavailable,
-        title: "On-device voice unavailable",
-        detail: "This iPhone cannot recognize English (Canada) destinations on device. NavOSS will not send voice audio to a service.",
-        generation: generation
-      )
+      showOnDeviceVoiceUnavailable(generation: generation)
       return
     }
 
@@ -323,6 +314,15 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
     }
   }
 
+  private func showOnDeviceVoiceUnavailable(generation: UInt64) {
+    showFailure(
+      state: VoiceControlState.unavailable,
+      title: "On-device voice unavailable",
+      detail: "Download an English speech model or enable Dictation in Settings on your iPhone, then try again.",
+      generation: generation
+    )
+  }
+
   private func receiveRecognition(
     result: SFSpeechRecognitionResult?,
     error: Error?,
@@ -348,12 +348,7 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
 
     if error != nil {
       if speechRecognizer?.isAvailable == false, lastPartialTranscript == nil {
-        showFailure(
-          state: VoiceControlState.unavailable,
-          title: "Voice search unavailable",
-          detail: "On-device English (Canada) recognition is unavailable right now.",
-          generation: generation
-        )
+        showOnDeviceVoiceUnavailable(generation: generation)
       } else {
         completeWithLatestTranscript(generation: generation)
       }
@@ -632,7 +627,7 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
       self.showFailure(
         state: VoiceControlState.permission,
         title: "Permission request timed out",
-        detail: "When safely parked, finish allowing Microphone and Speech Recognition on your iPhone, then try again.",
+        detail: "Answer the Microphone and Speech Recognition prompts on your iPhone, then try again.",
         generation: generation
       )
     }
