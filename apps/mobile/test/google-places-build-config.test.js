@@ -198,10 +198,18 @@ describe('Google Places build configuration', () => {
     expect(carPlayScene).toContain('preferences: routePreferences');
     expect(carPlayScene).not.toContain('preferences: NavOSSRoutePreferences(),');
     expect(carPlayScene).toContain('text: "Add stop"');
+    expect(carPlayScene).toContain('text: "Change destination"');
     expect(carPlayScene).toContain('text: "View routes"');
+    expect(carPlayScene).toContain('self?.showChangeDestinationPicker()');
+    expect(carPlayScene).toContain('private var tripActionsMapButton: CPMapButton?');
+    expect(carPlayScene).toContain('tripActionsMapButton = tripActionsButton');
+    expect(carPlayScene).toContain(
+      'endNavigationMapButton, overviewMapButton, muteGuidanceMapButton,\n        tripActionsMapButton,',
+    );
+    expect(carPlayScene).toContain('private func loadReplacementRoute(');
     expect(carPlayScene).toContain('self?.returnToMapAndLoadActiveRouteAlternatives()');
     expect(carPlayScene).toContain('self.showRoutePreviews(routes, replacingActiveTrip: true)');
-    expect(carPlayScene.match(/awaitCurrentRouteOrigin\(/g)).toHaveLength(4);
+    expect(carPlayScene.match(/awaitCurrentRouteOrigin\(/g)).toHaveLength(5);
     expect(carPlayScene.match(/timeoutSeconds: 2/g)).toHaveLength(1);
     expect(carPlayScene.match(/currentLocationCoordinate\(\)/g)).toHaveLength(2);
     expect(carPlayScene).toContain('guard let proximity else');
