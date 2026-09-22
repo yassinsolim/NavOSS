@@ -1,0 +1,126 @@
+name: iOS TestFlight (hosted runner)
+
+# Builds the IPA with `eas build --local` on a GitHub macOS runner instead of EAS Build servers.
+#
+# Why this exists: the EAS Free plan caps cloud iOS builds per month, and a maintainer Mac running
+# Xcode 27 cannot archive this project. ExpoModulesJSI's nested xcframework build exits 0 and
+# reports success, but emits compiler warnings on stderr that Xcode 27 records as
+# "PhaseScriptExecution emitted errors", failing the outer archive. The hosted image defaults to
+# Xcode 26.6, which is what produced builds 55-57.
+#
+# `--local` only contacts EAS to resolve the project and download managed credentials, so it does
+# not consume the cloud build quota. Signing material never leaves the runner and is never printed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag matching apps/mobile/app.json, for example ios-v0.1.0
+        required: true
+        type: string
+      submit:
+        description: Upload the signed IPA to App Store Connect.
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: ios-testflight-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-submit:
+    name: Build and submit to TestFlight
+    runs-on: macos-26
+    timeout-minutes: 90
+    environment: app-store-production
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      # Required by the CarPlay config plugin; the production origin is public, not a secret.
+      EXPO_PUBLIC_API_URL: https://navoss-api.yassin.app
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Verify release tag
+        run: |
+          node -e "const app=require('./apps/mobile/app.json').expo; const expected='ios-v'+app.version; if(process.env.RELEASE_TAG!==expected){console.error('Expected '+expected+', received '+process.env.RELEASE_TAG); process.exit(1)}"
+
+      - name: Require Expo token
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo 'Configure EXPO_TOKEN in the app-store-production GitHub environment.' >&2
+            exit 1
+          fi
+
+      # Pin the Xcode that built 55-57. Xcode 27 is present on this image as a preview and fails
+      # the ExpoModulesJSI archive phase described above.
+      - name: Select Xcode 26.6
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode_26.6.app
+          xcodebuild -version
+
+      - name: Build signed IPA locally
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          # AGENTS.md: ExpoModulesJSI must use Apple Clang, not a toolchain the image exports.
+          unset CC CXX || true
+          npx --yes eas-cli@24.3.0 build \
+            --platform ios \
+            --profile production-carplay \
+            --local \
+            --non-interactive \
+            --output "$RUNNER_TEMP/navoss.ipa"
+
+      # An IPA is only a deliverable if it is actually signed for distribution. Verify before
+      # uploading rather than trusting that the build step succeeded.
+      - name: Verify signature and entitlements
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/ipa-audit"
+          rm -rf "$work" && mkdir -p "$work"
+          unzip -q "$RUNNER_TEMP/navoss.ipa" -d "$work"
+          app="$(find "$work/Payload" -maxdepth 1 -name '*.app' | head -1)"
+          test -n "$app"
+          codesign --verify --strict --deep "$app"
+          codesign -dv "$app" 2>&1 | grep -q 'Signature=' || { echo 'Unsigned binary' >&2; exit 1; }
+          if ! codesign -d --entitlements - --xml "$app" 2>/dev/null \
+            | plutil -extract com.apple.developer.carplay-maps raw - -o - >/dev/null 2>&1; then
+            echo 'Missing com.apple.developer.carplay-maps entitlement' >&2
+            exit 1
+          fi
+          test -f "$app/embedded.mobileprovision" || { echo 'Missing provisioning profile' >&2; exit 1; }
+          echo "Verified $(basename "$app")"
+
+      - name: Submit to App Store Connect
+        if: inputs.submit
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --yes eas-cli@24.3.0 submit \
+            --platform ios \
+            --profile production-carplay \
+            --path "$RUNNER_TEMP/navoss.ipa" \
+            --non-interactive
