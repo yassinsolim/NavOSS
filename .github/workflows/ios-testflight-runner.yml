@@ -130,6 +130,10 @@ jobs:
           fi
           echo "Verified $(basename "$app")"
 
+      # EAS runs the upload on its own infrastructure, so the CLI only waits on a queue we do not
+      # control. Run 35779380209 built and audited the IPA, then burned the remaining 70 minutes
+      # waiting and was killed by `timeout-minutes`, marking a submission that was already queued
+      # as cancelled. `--no-wait` hands off and returns, leaving EAS to finish the upload.
       - name: Submit to App Store Connect
         if: inputs.submit
         working-directory: apps/mobile
@@ -141,4 +145,6 @@ jobs:
             --platform ios \
             --profile production-carplay \
             --path "$RUNNER_TEMP/navoss.ipa" \
-            --non-interactive
+            --non-interactive \
+            --no-wait
+          echo 'Submission handed to EAS. Track it with: eas submit:list --limit 1'
