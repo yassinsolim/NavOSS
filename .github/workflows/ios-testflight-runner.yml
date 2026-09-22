@@ -103,13 +103,31 @@ jobs:
           app="$(find "$work/Payload" -maxdepth 1 -name '*.app' | head -1)"
           test -n "$app"
           codesign --verify --strict --deep "$app"
-          codesign -dv "$app" 2>&1 | grep -q 'Signature=' || { echo 'Unsigned binary' >&2; exit 1; }
-          if ! codesign -d --entitlements - --xml "$app" 2>/dev/null \
-            | plutil -extract com.apple.developer.carplay-maps raw - -o - >/dev/null 2>&1; then
+          # `codesign -dv` prints "Signature size=NNNN" for a real signature and "Signature=adhoc"
+          # for an ad-hoc one, so grepping "Signature=" rejects exactly the binaries we want.
+          # Assert the distribution chain and team instead.
+          info="$(codesign -dvvv "$app" 2>&1)"
+          if echo "$info" | grep -q 'Signature=adhoc'; then
+            echo 'Ad-hoc signature; not a distribution build' >&2
+            exit 1
+          fi
+          if ! echo "$info" | grep -q 'Authority=Apple Worldwide Developer Relations'; then
+            echo 'Signature does not chain to Apple' >&2
+            exit 1
+          fi
+          if ! echo "$info" | grep -q 'TeamIdentifier=FJH4UWVC4K'; then
+            echo 'Unexpected team identifier' >&2
+            exit 1
+          fi
+          entitlements="$(codesign -d --entitlements :- "$app" 2>/dev/null || true)"
+          if ! echo "$entitlements" | grep -q 'com.apple.developer.carplay-maps'; then
             echo 'Missing com.apple.developer.carplay-maps entitlement' >&2
             exit 1
           fi
-          test -f "$app/embedded.mobileprovision" || { echo 'Missing provisioning profile' >&2; exit 1; }
+          if [ ! -f "$app/embedded.mobileprovision" ]; then
+            echo 'Missing provisioning profile' >&2
+            exit 1
+          fi
           echo "Verified $(basename "$app")"
 
       - name: Submit to App Store Connect
