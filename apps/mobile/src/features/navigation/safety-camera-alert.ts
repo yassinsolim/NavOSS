@@ -21,6 +21,12 @@ interface RouteSegment {
   start: RouteAlternative['geometry'][number];
 }
 
+interface CameraRouteProjection {
+  courseDegrees: number;
+  distanceAlongRouteMeters: number;
+  distanceFromRouteMeters: number;
+}
+
 export interface UpcomingSafetyCamera {
   camera: SafetyCamera;
   distanceAheadMeters: number;
@@ -86,7 +92,10 @@ function routeSegments(route: RouteAlternative): RouteSegment[] {
   return segments;
 }
 
-function projectCoordinate(coordinate: Coordinate, segment: RouteSegment) {
+function projectCoordinate(
+  coordinate: Coordinate,
+  segment: RouteSegment,
+): CameraRouteProjection | undefined {
   const longitudeScale = Math.cos(toRadians(coordinate.latitude));
   const startX =
     (segment.start[0] - coordinate.longitude) * METERS_PER_DEGREE_LATITUDE * longitudeScale;
@@ -95,12 +104,15 @@ function projectCoordinate(coordinate: Coordinate, segment: RouteSegment) {
     (segment.end[0] - segment.start[0]) * METERS_PER_DEGREE_LATITUDE * longitudeScale;
   const segmentY = (segment.end[1] - segment.start[1]) * METERS_PER_DEGREE_LATITUDE;
   const segmentLengthSquared = segmentX ** 2 + segmentY ** 2;
-  const segmentProgress =
-    segmentLengthSquared === 0
-      ? 0
-      : Math.max(0, Math.min(1, -(startX * segmentX + startY * segmentY) / segmentLengthSquared));
+  const segmentProgress = -(startX * segmentX + startY * segmentY) / segmentLengthSquared;
+  // A shared vertex belongs to the incoming segment, not the road we turn onto.
+  // Do not clamp cameras before/after a segment onto a route they do not cross.
+  if (segmentProgress <= 0 || segmentProgress > 1) {
+    return undefined;
+  }
 
   return {
+    courseDegrees: segment.courseDegrees,
     distanceAlongRouteMeters:
       segment.cumulativeDistanceMeters + segment.lengthMeters * segmentProgress,
     distanceFromRouteMeters: Math.hypot(
@@ -131,26 +143,46 @@ export function findUpcomingSafetyCamera(
       continue;
     }
 
+    let closestProjection: CameraRouteProjection | undefined;
     for (const segment of segments) {
       const projection = projectCoordinate(camera.coordinate, segment);
+      if (projection === undefined) {
+        continue;
+      }
       const distanceAheadMeters =
         projection.distanceAlongRouteMeters - currentDistanceAlongRouteMeters;
       if (
         projection.distanceFromRouteMeters > MAXIMUM_ROUTE_OFFSET_METERS ||
         distanceAheadMeters <= 0 ||
-        distanceAheadMeters > MAXIMUM_ALERT_DISTANCE_METERS ||
-        courseDifferenceDegrees(DIRECTION_BEARINGS[camera.direction], segment.courseDegrees) >
-          MAXIMUM_DIRECTION_DELTA_DEGREES
+        distanceAheadMeters > MAXIMUM_ALERT_DISTANCE_METERS
       ) {
         continue;
       }
 
+      // Associate the camera with its closest approach before testing direction.
+      // A farther, aligned road must not override a nearer cross-street approach.
       if (
-        upcomingCamera === undefined ||
-        distanceAheadMeters < upcomingCamera.distanceAheadMeters
+        closestProjection === undefined ||
+        projection.distanceFromRouteMeters < closestProjection.distanceFromRouteMeters
       ) {
-        upcomingCamera = { camera, distanceAheadMeters };
+        closestProjection = projection;
       }
+    }
+
+    if (
+      closestProjection === undefined ||
+      courseDifferenceDegrees(
+        DIRECTION_BEARINGS[camera.direction],
+        closestProjection.courseDegrees,
+      ) > MAXIMUM_DIRECTION_DELTA_DEGREES
+    ) {
+      continue;
+    }
+
+    const distanceAheadMeters =
+      closestProjection.distanceAlongRouteMeters - currentDistanceAlongRouteMeters;
+    if (upcomingCamera === undefined || distanceAheadMeters < upcomingCamera.distanceAheadMeters) {
+      upcomingCamera = { camera, distanceAheadMeters };
     }
   }
 
