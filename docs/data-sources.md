@@ -177,10 +177,17 @@ from the road name or icon orientation.
 
 During active guidance, an alert is eligible only when the camera:
 
-- is no more than 45 meters from the selected route geometry;
+- projects onto an upcoming segment of the selected route within 45 meters laterally, without
+  extending the segment before its start or beyond its end;
 - is ahead of current native route progress and no more than 450 meters away;
-- has an enforced direction within 60 degrees of route travel direction; and
+- has an enforced direction within 60 degrees of its closest upcoming route approach; and
 - has not already been announced during the current trip.
+
+At a shared turn vertex, the incoming segment determines the approach direction, not the outgoing
+road. Camera-to-route association happens before direction filtering: a farther, direction-aligned
+segment cannot override a nearer cross-street approach. Cameras genuinely farther along a road
+reached after a turn can still warn; the current device compass does not override the planned
+approach at the camera. These checks use published monitored traffic direction, not optical facing.
 
 Eligible cameras produce a visible alert and the native iOS phrase, “Red light and speed camera ahead.” These alerts are informational. Drivers remain responsible for obeying posted signs, signals, and speed limits, and the official dataset may change between monthly updates.
 
