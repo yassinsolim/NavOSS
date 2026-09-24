@@ -1457,6 +1457,109 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
+  func testCarPlayFastestRouteIndexTracksRawDurationNotArrayPosition() {
+    let trueFastest = makeNavigationSessionTrip(id: "fastest")
+    // Same displayed-minute bucket as `trueFastest` and legitimately recommended first for being
+    // shorter, but its raw duration is higher, so it must not be treated as the fastest route.
+    let bucketTiedShorter = NavOSSCarPlayTrip(
+      destination: trueFastest.destination,
+      distanceMeters: trueFastest.distanceMeters - 300,
+      durationSeconds: trueFastest.durationSeconds + 20,
+      geometry: trueFastest.geometry,
+      id: "bucket-tied",
+      steps: trueFastest.steps
+    )
+    let clearlySlower = NavOSSCarPlayTrip(
+      destination: trueFastest.destination,
+      distanceMeters: trueFastest.distanceMeters + 5_000,
+      durationSeconds: trueFastest.durationSeconds + 600,
+      geometry: trueFastest.geometry,
+      id: "slower",
+      steps: trueFastest.steps
+    )
+
+    XCTAssertEqual(
+      navOSSCarPlayFastestRouteIndex([bucketTiedShorter, trueFastest, clearlySlower]),
+      1
+    )
+    XCTAssertNil(navOSSCarPlayFastestRouteIndex([]))
+  }
+
+  func testCarPlayTripsOrderedForDisplayPutsShorterRouteFirstWithinSharedMinute() {
+    let quickerRaw = makeNavigationSessionTrip(id: "quicker-raw")
+    let quickerRawByDistance = NavOSSCarPlayTrip(
+      destination: quickerRaw.destination,
+      distanceMeters: 9_200,
+      durationSeconds: 595,
+      geometry: quickerRaw.geometry,
+      id: "quicker-raw",
+      steps: quickerRaw.steps
+    )
+    let shorterDistance = NavOSSCarPlayTrip(
+      destination: quickerRaw.destination,
+      distanceMeters: 8_100,
+      durationSeconds: 605,
+      geometry: quickerRaw.geometry,
+      id: "shorter-distance",
+      steps: quickerRaw.steps
+    )
+
+    // Both routes round to the same displayed minute (595s and 605s both round to 10 minutes);
+    // the shorter-distance route must present first even though it is listed second and has a
+    // higher raw duration.
+    XCTAssertEqual(
+      navOSSCarPlayTripsOrderedForDisplay([quickerRawByDistance, shorterDistance]).map(\.id),
+      ["shorter-distance", "quicker-raw"]
+    )
+  }
+
+  func testCarPlayTripsOrderedForDisplayKeepsFasterMinuteRouteFirstWhenListedSecond() {
+    let base = makeNavigationSessionTrip(id: "base")
+    let slowerMinute = NavOSSCarPlayTrip(
+      destination: base.destination,
+      distanceMeters: 5_000,
+      durationSeconds: 650,
+      geometry: base.geometry,
+      id: "slower-minute",
+      steps: base.steps
+    )
+    let fasterMinute = NavOSSCarPlayTrip(
+      destination: base.destination,
+      distanceMeters: 20_000,
+      durationSeconds: 550,
+      geometry: base.geometry,
+      id: "faster-minute",
+      steps: base.steps
+    )
+
+    // 550s rounds to 9 minutes and 650s rounds to 11 minutes, so the faster-minute route must
+    // present first even though it is listed second and covers a much longer distance.
+    XCTAssertEqual(
+      navOSSCarPlayTripsOrderedForDisplay([slowerMinute, fasterMinute]).map(\.id),
+      ["faster-minute", "slower-minute"]
+    )
+  }
+
+  func testCarPlayRouteChoiceDetailsUseTrueFastestBaselineRegardlessOfPosition() {
+    let trueFastest = makeNavigationSessionTrip(id: "fastest")
+    let bucketTiedShorter = NavOSSCarPlayTrip(
+      destination: trueFastest.destination,
+      distanceMeters: trueFastest.distanceMeters - 300,
+      durationSeconds: trueFastest.durationSeconds + 20,
+      geometry: trueFastest.geometry,
+      id: "bucket-tied",
+      steps: trueFastest.steps
+    )
+
+    // Before the fix, the delta was measured against `routes.first` (array position 0), which
+    // described the true fastest route (at index 1 here) as "longer" than the route it is
+    // actually faster than.
+    XCTAssertEqual(
+      navOSSCarPlayRouteChoiceDetails([bucketTiedShorter, trueFastest]),
+      ["Similar route", nil]
+    )
+  }
+
   func testCarPlayTripStorePublishesValidatedLifecycle() {
     let notifications = NotificationCenter()
     let store = NavOSSCarPlayTripStore(notificationCenter: notifications)

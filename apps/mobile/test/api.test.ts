@@ -366,6 +366,189 @@ describe('fetchRoutes', () => {
     expect(bodies[1]).not.toHaveProperty('originHeadingDegrees');
     expect(bodies[1]).not.toHaveProperty('originHorizontalAccuracyMeters');
   });
+
+  it('reorders a raw-time-sorted server payload to put the shorter route first within a shared displayed minute', async () => {
+    const quickerRawRoute = {
+      distanceMeters: 9_200,
+      durationSeconds: 595,
+      geometry: [
+        [-114.08, 51.04],
+        [-114.01, 51.13],
+      ],
+      id: 'route-quicker-raw',
+      label: 'fastest' as const,
+      steps: [
+        {
+          distanceMeters: 9_200,
+          durationSeconds: 595,
+          geometry: [
+            [-114.08, 51.04],
+            [-114.01, 51.13],
+          ],
+          instruction: 'Continue north.',
+          maneuverType: 'continue',
+          roadName: 'Test Road',
+        },
+      ],
+    };
+    const shorterDistanceRoute = {
+      distanceMeters: 8_100,
+      durationSeconds: 605,
+      geometry: [
+        [-114.08, 51.04],
+        [-114.02, 51.12],
+      ],
+      id: 'route-shorter-distance',
+      label: 'alternative' as const,
+      steps: [
+        {
+          distanceMeters: 8_100,
+          durationSeconds: 605,
+          geometry: [
+            [-114.08, 51.04],
+            [-114.02, 51.12],
+          ],
+          instruction: 'Continue northeast.',
+          maneuverType: 'continue',
+          roadName: 'Other Road',
+        },
+      ],
+    };
+
+    const response = await fetchRoutes(
+      {
+        alternatives: 2,
+        destination: { latitude: 51.13, longitude: -114.01 },
+        origin: { latitude: 51.04, longitude: -114.08 },
+        preferences: {
+          avoidFerries: false,
+          avoidHighways: false,
+          avoidTolls: false,
+          avoidUnpaved: false,
+        },
+      },
+      {
+        baseUrl: 'http://127.0.0.1:3001/',
+        fetchImplementation: () =>
+          Promise.resolve(
+            new Response(
+              JSON.stringify({
+                degraded: true,
+                generatedAt: '2026-07-15T12:00:00Z',
+                // Server orders by raw duration ascending: the quicker-raw route first even though
+                // both routes round to the same displayed minute.
+                routes: [quickerRawRoute, shorterDistanceRoute],
+                source: {
+                  attribution: 'Routing by Valhalla using OpenStreetMap data',
+                  id: 'valhalla-development',
+                  mode: 'development',
+                  traffic: 'unavailable',
+                },
+              }),
+              { headers: { 'content-type': 'application/json' }, status: 200 },
+            ),
+          ),
+      },
+    );
+
+    expect(response.routes.map((route) => route.id)).toEqual([
+      'route-shorter-distance',
+      'route-quicker-raw',
+    ]);
+    // Precise durations, geometry, ids, and server-assigned labels are untouched by reordering.
+    expect(response.routes[0]).toEqual(shorterDistanceRoute);
+    expect(response.routes[1]).toEqual(quickerRawRoute);
+  });
+
+  it('keeps the faster-displayed-minute route first even when the server lists it second', async () => {
+    const slowerMinuteRoute = {
+      distanceMeters: 5_000,
+      durationSeconds: 650,
+      geometry: [
+        [-114.08, 51.04],
+        [-114.01, 51.13],
+      ],
+      id: 'route-listed-first-slower-minute',
+      label: 'alternative' as const,
+      steps: [
+        {
+          distanceMeters: 5_000,
+          durationSeconds: 650,
+          geometry: [
+            [-114.08, 51.04],
+            [-114.01, 51.13],
+          ],
+          instruction: 'Continue north.',
+          maneuverType: 'continue',
+          roadName: 'Test Road',
+        },
+      ],
+    };
+    const fasterMinuteRoute = {
+      distanceMeters: 20_000,
+      durationSeconds: 550,
+      geometry: [
+        [-114.08, 51.04],
+        [-113.9, 51.2],
+      ],
+      id: 'route-listed-second-faster-minute',
+      label: 'fastest' as const,
+      steps: [
+        {
+          distanceMeters: 20_000,
+          durationSeconds: 550,
+          geometry: [
+            [-114.08, 51.04],
+            [-113.9, 51.2],
+          ],
+          instruction: 'Continue on highway.',
+          maneuverType: 'continue',
+          roadName: 'Highway',
+        },
+      ],
+    };
+
+    const response = await fetchRoutes(
+      {
+        alternatives: 2,
+        destination: { latitude: 51.13, longitude: -114.01 },
+        origin: { latitude: 51.04, longitude: -114.08 },
+        preferences: {
+          avoidFerries: false,
+          avoidHighways: false,
+          avoidTolls: false,
+          avoidUnpaved: false,
+        },
+      },
+      {
+        baseUrl: 'http://127.0.0.1:3001/',
+        fetchImplementation: () =>
+          Promise.resolve(
+            new Response(
+              JSON.stringify({
+                degraded: true,
+                generatedAt: '2026-07-15T12:00:00Z',
+                routes: [slowerMinuteRoute, fasterMinuteRoute],
+                source: {
+                  attribution: 'Routing by Valhalla using OpenStreetMap data',
+                  id: 'valhalla-development',
+                  mode: 'development',
+                  traffic: 'unavailable',
+                },
+              }),
+              { headers: { 'content-type': 'application/json' }, status: 200 },
+            ),
+          ),
+      },
+    );
+
+    expect(response.routes.map((route) => route.id)).toEqual([
+      'route-listed-second-faster-minute',
+      'route-listed-first-slower-minute',
+    ]);
+    expect(response.routes[0]).toEqual(fasterMinuteRoute);
+    expect(response.routes[1]).toEqual(slowerMinuteRoute);
+  });
 });
 
 describe('fetchSafetyCameras', () => {

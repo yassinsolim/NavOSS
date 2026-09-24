@@ -110,8 +110,15 @@ export function compareRouteAlternatives(
   left: Pick<RouteAlternative, 'distanceMeters' | 'durationSeconds'>,
   right: Pick<RouteAlternative, 'distanceMeters' | 'durationSeconds'>,
 ): number {
-  const durationDifference = left.durationSeconds - right.durationSeconds;
-  return durationDifference === 0 ? left.distanceMeters - right.distanceMeters : durationDifference;
+  // Both phone and CarPlay present whole minutes; avoid recommending a much longer trip for an
+  // invisible seconds-level saving. Preserve the precise durations for guidance and ETA.
+  const leftMinutes = Math.max(1, Math.round(left.durationSeconds / 60));
+  const rightMinutes = Math.max(1, Math.round(right.durationSeconds / 60));
+  return (
+    leftMinutes - rightMinutes ||
+    left.distanceMeters - right.distanceMeters ||
+    left.durationSeconds - right.durationSeconds
+  );
 }
 
 export const RouteResponseSchema = z

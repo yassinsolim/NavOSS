@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   approximateSearchCoordinate,
   formatSearchDistance,
+  groupRecentSearchResults,
   rankCategoryResults,
   rankSearchResults,
   searchProximityOptions,
@@ -168,5 +169,76 @@ describe('search proximity', () => {
 
     expect(ranked.map(({ id }) => id)).toEqual(['actually-nearest', 'server-nearest']);
     expect(ranked[0]?.distanceMeters).toBeLessThan(ranked[1]?.distanceMeters ?? 0);
+  });
+
+  describe('recent search matches', () => {
+    const result = (id: string, distanceMeters: number) => ({
+      category: 'poi' as const,
+      center: { latitude: 51.045, longitude: -114.072 },
+      confidence: 0.99,
+      distanceMeters,
+      id,
+      label: `Cafe, ${id}`,
+      name: 'Cafe',
+    });
+
+    it('shortlists only returned matches in history order, with at most three recents', () => {
+      const results = [
+        result('nearest', 100),
+        result('older', 200),
+        result('newest', 400),
+        result('previous', 600),
+        result('fourth-recent', 800),
+      ];
+      const grouped = groupRecentSearchResults(results, [
+        'unmatched-history',
+        'newest',
+        'previous',
+        'older',
+        'fourth-recent',
+      ]);
+
+      expect(grouped.recentMatches.map(({ id }) => id)).toEqual(['newest', 'previous', 'older']);
+      expect(grouped.recentMatches[0]).toBe(results[2]);
+      expect(grouped.remainingResults.map(({ id }) => id)).toEqual(['nearest', 'fourth-recent']);
+      expect(grouped.remainingResults.map(({ distanceMeters }) => distanceMeters)).toEqual([
+        100, 800,
+      ]);
+    });
+
+    it('never repeats a destination within or between the two groups', () => {
+      const results = [result('nearest', 100), result('middle', 200), result('far', 800)];
+      const grouped = groupRecentSearchResults(results, ['far', 'far', 'nearest', 'nearest']);
+
+      expect(grouped.recentMatches.map(({ id }) => id)).toEqual(['far', 'nearest']);
+      expect(grouped.remainingResults.map(({ id }) => id)).toEqual(['middle']);
+      const displayedIds = [...grouped.recentMatches, ...grouped.remainingResults].map(
+        ({ id }) => id,
+      );
+      expect(new Set(displayedIds).size).toBe(results.length);
+    });
+
+    it('leaves the ordinary result order and objects unchanged without matching history', () => {
+      const results = [result('nearest', 100), result('middle', 200), result('far', 800)];
+
+      for (const history of [[], ['unmatched-history']]) {
+        const grouped = groupRecentSearchResults(results, history);
+        expect(grouped.recentMatches).toEqual([]);
+        expect(grouped.remainingResults).toBe(results);
+      }
+    });
+
+    it('does not restore history IDs excluded from the current result pool', () => {
+      const pool = [
+        result('nearest', 100),
+        result('excluded-branch', 200),
+        result('matching-recent', 600),
+      ];
+      const results = pool.filter(({ id }) => id !== 'excluded-branch');
+      const grouped = groupRecentSearchResults(results, ['excluded-branch', 'matching-recent']);
+
+      expect(grouped.recentMatches.map(({ id }) => id)).toEqual(['matching-recent']);
+      expect(grouped.remainingResults.map(({ id }) => id)).toEqual(['nearest']);
+    });
   });
 });

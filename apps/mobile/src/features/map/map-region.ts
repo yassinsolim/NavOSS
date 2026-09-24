@@ -72,6 +72,12 @@ export function mapRegionForCoordinate(coordinate: Coordinate | undefined): MapR
   return 'other';
 }
 
+// Nearby search (place lookups, category browsing, parking) is only backed for these regions;
+// Ontario currently has road-event/safety-camera coverage but no search API coverage.
+export function isSearchCoverageRegion(region: MapRegion): boolean {
+  return region === 'calgary-ab' || region === 'kelowna-bc';
+}
+
 export function mapRegionLabel(region: MapRegion): string {
   if (region === 'calgary-ab') return 'Calgary';
   if (region === 'kelowna-bc') return 'Kelowna';

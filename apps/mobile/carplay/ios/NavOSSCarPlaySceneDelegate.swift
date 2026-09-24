@@ -573,9 +573,12 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     )
     destination.name = trip.destination.name
     let routeChoiceDetails = navOSSCarPlayRouteChoiceDetails(routes)
+    let fastestIndex = navOSSCarPlayFastestRouteIndex(routes) ?? 0
     let routeChoices = routes.enumerated().map { index, route in
       let routeDetail = routeChoiceDetails[index]
-      let routeName = index == 0 ? "Fastest route" : "Alternative \(index)"
+      let isFastest = index == fastestIndex
+      let alternativeNumber = index < fastestIndex ? index + 1 : index
+      let routeName = isFastest ? "Fastest route" : "Alternative \(alternativeNumber)"
       let summary = routeDetail.map { "\(routeName) · \($0)" } ?? routeName
       let duration = formatDuration(route.durationSeconds)
       let distance = formatDistance(route.distanceMeters)

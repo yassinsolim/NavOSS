@@ -204,6 +204,145 @@ final class NavigationAPIClientTests: XCTestCase {
     XCTAssertNil(payloads.last?["originHorizontalAccuracyMeters"])
   }
 
+  func testRoutesReorderShorterRouteFirstWithinSharedDisplayedMinute() async throws {
+    NavigationURLProtocol.handler = { request in
+      Self.response(
+        request: request,
+        json: """
+          {
+            "degraded": true,
+            "generatedAt": "2026-07-22T00:00:00.000Z",
+            "routes": [{
+              "distanceMeters": 9200,
+              "durationSeconds": 595,
+              "geometry": [[-114.08, 51.04], [-114.01, 51.13]],
+              "id": "route-quicker-raw",
+              "label": "fastest",
+              "steps": [{
+                "distanceMeters": 9200,
+                "durationSeconds": 595,
+                "geometry": [[-114.08, 51.04], [-114.01, 51.13]],
+                "instruction": "Continue north",
+                "maneuverType": "continue",
+                "roadName": "Test Road"
+              }]
+            }, {
+              "distanceMeters": 8100,
+              "durationSeconds": 605,
+              "geometry": [[-114.08, 51.04], [-114.02, 51.12]],
+              "id": "route-shorter-distance",
+              "label": "alternative",
+              "steps": [{
+                "distanceMeters": 8100,
+                "durationSeconds": 605,
+                "geometry": [[-114.08, 51.04], [-114.02, 51.12]],
+                "instruction": "Continue northeast",
+                "maneuverType": "continue",
+                "roadName": "Other Road"
+              }]
+            }],
+            "source": {
+              "attribution": "Routing by Valhalla using OpenStreetMap data",
+              "id": "valhalla-development",
+              "mode": "development",
+              "traffic": "unavailable"
+            }
+          }
+          """
+      )
+    }
+    let client = try makeClient()
+
+    let routes = try await client.routes(
+      origin: NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      destination: NavOSSCarPlayDestination(
+        id: "airport",
+        label: "Airport Road",
+        latitude: 51.13,
+        longitude: -114.01,
+        name: "Airport"
+      ),
+      preferences: NavOSSRoutePreferences()
+    )
+
+    // Both routes round to the same displayed minute; the API listed the quicker-raw route
+    // first, but the shorter-distance route must present first, and precise fields survive.
+    XCTAssertEqual(routes.map(\.id), ["route-shorter-distance", "route-quicker-raw"])
+    XCTAssertEqual(routes[0].distanceMeters, 8_100)
+    XCTAssertEqual(routes[0].durationSeconds, 605)
+    XCTAssertEqual(routes[1].distanceMeters, 9_200)
+    XCTAssertEqual(routes[1].durationSeconds, 595)
+  }
+
+  func testRoutesKeepFasterDisplayedMinuteRouteFirstWhenListedSecond() async throws {
+    NavigationURLProtocol.handler = { request in
+      Self.response(
+        request: request,
+        json: """
+          {
+            "degraded": true,
+            "generatedAt": "2026-07-22T00:00:00.000Z",
+            "routes": [{
+              "distanceMeters": 5000,
+              "durationSeconds": 650,
+              "geometry": [[-114.08, 51.04], [-114.01, 51.13]],
+              "id": "route-listed-first-slower-minute",
+              "label": "alternative",
+              "steps": [{
+                "distanceMeters": 5000,
+                "durationSeconds": 650,
+                "geometry": [[-114.08, 51.04], [-114.01, 51.13]],
+                "instruction": "Continue north",
+                "maneuverType": "continue",
+                "roadName": "Test Road"
+              }]
+            }, {
+              "distanceMeters": 20000,
+              "durationSeconds": 550,
+              "geometry": [[-114.08, 51.04], [-113.9, 51.2]],
+              "id": "route-listed-second-faster-minute",
+              "label": "fastest",
+              "steps": [{
+                "distanceMeters": 20000,
+                "durationSeconds": 550,
+                "geometry": [[-114.08, 51.04], [-113.9, 51.2]],
+                "instruction": "Continue on highway",
+                "maneuverType": "continue",
+                "roadName": "Highway"
+              }]
+            }],
+            "source": {
+              "attribution": "Routing by Valhalla using OpenStreetMap data",
+              "id": "valhalla-development",
+              "mode": "development",
+              "traffic": "unavailable"
+            }
+          }
+          """
+      )
+    }
+    let client = try makeClient()
+
+    let routes = try await client.routes(
+      origin: NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      destination: NavOSSCarPlayDestination(
+        id: "airport",
+        label: "Airport Road",
+        latitude: 51.13,
+        longitude: -114.01,
+        name: "Airport"
+      ),
+      preferences: NavOSSRoutePreferences()
+    )
+
+    XCTAssertEqual(
+      routes.map(\.id),
+      ["route-listed-second-faster-minute", "route-listed-first-slower-minute"]
+    )
+    XCTAssertEqual(routes[0].durationSeconds, 550)
+    XCTAssertEqual(routes[1].durationSeconds, 650)
+  }
+
   private func makeClient() throws -> NavOSSNavigationAPIClient {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [NavigationURLProtocol.self]

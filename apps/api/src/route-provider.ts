@@ -177,8 +177,37 @@ function buildValhallaRequest(request: RouteRequest): unknown {
   };
 }
 
+/**
+ * Labels the true fastest-by-raw-duration route as `fastest`, independent of the array's
+ * recommendation order. `compareRouteAlternatives` may rank a same-displayed-minute, shorter
+ * route ahead of a route with a lower raw duration, so the label can no longer be assigned by
+ * position; it must track which route is actually quickest to drive, with distance breaking an
+ * exact-duration tie.
+ */
+function applyFastestLabel<T extends { distanceMeters: number; durationSeconds: number }>(
+  routes: T[],
+): (T & { label: 'fastest' | 'alternative' })[] {
+  let fastestIndex = 0;
+  let fastest: T | undefined = routes[0];
+  routes.forEach((candidate, index) => {
+    if (
+      fastest !== undefined &&
+      (candidate.durationSeconds < fastest.durationSeconds ||
+        (candidate.durationSeconds === fastest.durationSeconds &&
+          candidate.distanceMeters < fastest.distanceMeters))
+    ) {
+      fastest = candidate;
+      fastestIndex = index;
+    }
+  });
+  return routes.map((route, index) => ({
+    ...route,
+    label: index === fastestIndex ? ('fastest' as const) : ('alternative' as const),
+  }));
+}
+
 function normalizeRoutes(payload: z.infer<typeof ValhallaResponseSchema>): RouteAlternative[] {
-  return payload.routes
+  const routes = payload.routes
     .map((route, index) => {
       const speedLimitsKph = route.legs.flatMap(
         (leg) =>
@@ -212,11 +241,8 @@ function normalizeRoutes(payload: z.infer<typeof ValhallaResponseSchema>): Route
         ),
       };
     })
-    .sort(compareRouteAlternatives)
-    .map((route, index) => ({
-      ...route,
-      label: index === 0 ? ('fastest' as const) : ('alternative' as const),
-    }));
+    .sort(compareRouteAlternatives);
+  return applyFastestLabel(routes);
 }
 
 function buildMapboxTrafficUrl(
@@ -255,7 +281,7 @@ function buildMapboxTrafficUrl(
 function normalizeMapboxTrafficRoutes(
   payload: z.infer<typeof MapboxTrafficResponseSchema>,
 ): RouteAlternative[] {
-  return payload.routes
+  const routes = payload.routes
     .map((route, index) => ({
       distanceMeters: route.distance,
       durationSeconds: route.duration,
@@ -284,11 +310,8 @@ function normalizeMapboxTrafficRoutes(
         typicalDurationSeconds: route.duration_typical,
       },
     }))
-    .sort(compareRouteAlternatives)
-    .map((route, index) => ({
-      ...route,
-      label: index === 0 ? ('fastest' as const) : ('alternative' as const),
-    }));
+    .sort(compareRouteAlternatives);
+  return applyFastestLabel(routes);
 }
 
 export function createMapboxTrafficRouteProvider(

@@ -1,0 +1,58 @@
+appId: org.navoss.mobile
+---
+# Approved-feedback-polish navigation validation.
+# Covers: search -> place select -> real Directions -> Edit stops (add/reorder/apply,
+# keyboard-visible result must stay tappable) -> Start navigation -> guidance controls -> End navigation.
+# Requires: app installed, location permission already granted on the simulator.
+# A development client must already be connected to Metro and a backend serving these public
+# Calgary test places; the flow does not configure accounts or submit feedback.
+# setLocation calls immediately precede Directions and Apply so the route-origin freshness
+# guard (<=15s fix age) always sees a fresh sample - do not remove or reorder them.
+- setLocation:
+    latitude: 51.0447
+    longitude: -114.0719
+- launchApp
+- tapOn: 'Center map on my location'
+- tapOn: 'Search places'
+- eraseText
+- inputText: 'Calgary Tower'
+- extendedWaitUntil:
+    visible: 'Select Calgary Tower.*'
+    timeout: 10000
+- tapOn: 'Select Calgary Tower.*'
+- setLocation:
+    latitude: 51.0447
+    longitude: -114.0719
+- tapOn: 'Directions'
+- extendedWaitUntil:
+    visible: 'Start navigation'
+    timeout: 15000
+- takeScreenshot: 01-route-preview
+- tapOn: 'Edit route stops'
+- tapOn: 'Place name or address'
+- inputText: 'Fairmont Palliser'
+- extendedWaitUntil:
+    visible: 'Add Fairmont Palliser Hotel as a stop.*'
+    timeout: 10000
+- takeScreenshot: 02-stop-result-above-keyboard
+- tapOn: 'Add Fairmont Palliser Hotel as a stop.*'
+- tapOn: 'Move Fairmont Palliser Hotel up'
+- takeScreenshot: 03-stops-reordered
+- setLocation:
+    latitude: 51.0447
+    longitude: -114.0719
+- tapOn: 'Apply route stops'
+- extendedWaitUntil:
+    visible: 'Start navigation'
+    timeout: 15000
+- takeScreenshot: 04-route-applied-with-stop
+- tapOn: 'Start navigation'
+- extendedWaitUntil:
+    visible: 'End navigation'
+    timeout: 15000
+- takeScreenshot: 05-guidance-active
+- tapOn: 'End navigation'
+- extendedWaitUntil:
+    visible: "Where to\\?"
+    timeout: 10000
+- takeScreenshot: 06-navigation-ended

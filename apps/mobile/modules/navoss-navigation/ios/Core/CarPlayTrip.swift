@@ -220,6 +220,46 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
   }
 }
 
+/// Returns the index of the fastest route by raw driving duration, breaking an exact-duration tie
+/// by the shorter distance. `routes` may already be sorted for recommendation display (a
+/// same-displayed-minute, shorter route can legitimately sort first), so the fastest route cannot
+/// be inferred from array position.
+public func navOSSCarPlayFastestRouteIndex(_ routes: [NavOSSCarPlayTrip]) -> Int? {
+  guard !routes.isEmpty else { return nil }
+  var fastestIndex = 0
+  for index in 1..<routes.count {
+    let candidate = routes[index]
+    let current = routes[fastestIndex]
+    if candidate.durationSeconds < current.durationSeconds
+      || (candidate.durationSeconds == current.durationSeconds
+        && candidate.distanceMeters < current.distanceMeters)
+    {
+      fastestIndex = index
+    }
+  }
+  return fastestIndex
+}
+
+/// Orders routes for phone/CarPlay display: routes that round to the same displayed minute are
+/// ordered by shorter distance, then by raw duration, so a same-displayed-minute, shorter route
+/// can legitimately sort ahead of a route with a lower raw duration. Mirrors
+/// `compareRouteAlternatives` in `packages/contracts/src/route.ts` so both API-derived clients
+/// present routes in the order they promise. Does not affect which route is fastest by raw
+/// duration; see `navOSSCarPlayFastestRouteIndex`.
+public func navOSSCarPlayTripsOrderedForDisplay(
+  _ trips: [NavOSSCarPlayTrip]
+) -> [NavOSSCarPlayTrip] {
+  trips.sorted { left, right in
+    let leftMinutes = max(1, (left.durationSeconds / 60).rounded())
+    let rightMinutes = max(1, (right.durationSeconds / 60).rounded())
+    if leftMinutes != rightMinutes { return leftMinutes < rightMinutes }
+    if left.distanceMeters != right.distanceMeters {
+      return left.distanceMeters < right.distanceMeters
+    }
+    return left.durationSeconds < right.durationSeconds
+  }
+}
+
 public func navOSSCarPlayRouteChoiceDetails(
   _ routes: [NavOSSCarPlayTrip]
 ) -> [String?] {
@@ -256,6 +296,7 @@ public func navOSSCarPlayRouteChoiceDetails(
       routePresenceByRoad[key, default: 0] += 1
     }
   }
+  let fastestIndex = navOSSCarPlayFastestRouteIndex(routes)
 
   return candidatesByRoute.enumerated().map { routeIndex, candidates in
     let minimumMajorRoadDistance = max(200, routes[routeIndex].distanceMeters * 0.05)
@@ -273,7 +314,8 @@ public func navOSSCarPlayRouteChoiceDetails(
       return left.firstStepIndex < right.firstStepIndex
     }.first
     if let selected { return "via \(selected.displayName)" }
-    guard routeIndex > 0, let fastestRoute = routes.first else { return nil }
+    guard let fastestIndex, routeIndex != fastestIndex else { return nil }
+    let fastestRoute = routes[fastestIndex]
     let extraDistanceMeters = routes[routeIndex].distanceMeters - fastestRoute.distanceMeters
     if extraDistanceMeters >= 50 {
       if extraDistanceMeters < 1_000 {

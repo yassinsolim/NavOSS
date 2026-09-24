@@ -61,6 +61,13 @@ The shared native trip store now accepts a validated route, destination, steps, 
 
 The main-display renderer now consumes the same monotonic native route progress as the phone. During active guidance it removes travelled geometry, anchors the remaining route at the matched road position, renders the shared NavOSS vehicle arrow instead of a generic dot, follows matched course with a forward-biased tilted camera, and clears stale route or vehicle layers on arrival, cancellation, preview, and reconnect transitions. Route previews show the selected green route, a muted alternate, and the destination marker. The basemap follows CarPlay light and dark appearance using the same Liberty and Dark OpenFreeMap styles as the phone.
 
+Phone and CarPlay order route alternatives by the whole-minute duration shown to the driver,
+then by shorter distance when those displayed durations tie, then by precise duration. The
+underlying duration, geometry, and route identifier are unchanged. The Fastest label and relative
+time descriptions still use the true lowest-duration route, independently of list position.
+Both clients apply the presentation ordering to validated responses so the behavior does not
+depend on a coordinated API deployment.
+
 Normal builds omit the CarPlay scene and entitlement but retain active-navigation background location for phone guidance. Native location runs during active navigation, while CarPlay needs a current origin, and for as long as a CarPlay display is connected. When in Use authorization and iOS's visible background indicator are used; Always authorization is not requested. The current active route is stored only for operating-system recovery and erased on End or confirmed arrival.
 
 A connected display, from either the template scene or the Dashboard scene alone, also holds a `CLBackgroundActivitySession`. Under When in Use authorization that session is what keeps location flowing after the phone's screen sleeps, and without it the CarPlay map froze until the phone was physically woken, since the driver's phone is normally locked in a pocket or cradle. The design assumes that session is process-wide, so it also keeps MapLibre's own location manager delivering and the idle map needs no separate position feed. That assumption is unverified on a head unit and is the thing to check first if the idle map still stalls. Publishing a position through the shared trip store instead would be actively harmful: every fix posts a state change whose no-trip branch cancels in-flight route planning and hides trip previews. Idle phone use deliberately holds no session: the map is not visible then, so it would cost battery and show the background indicator for nothing. The accepted cost is that a connected CarPlay session holds navigation-grade location for its whole duration, including while the driver is using another app on the head unit.
@@ -148,7 +155,7 @@ bar that CarPlay may hide. Settings persists Automatic, Light, or Dark map appea
 Heading up orientation, avoid-highways/tolls/ferries/unpaved route preferences, and one of three
 audio modes: All guidance speaks maneuvers and camera alerts; Alerts only suppresses maneuver speech
 but keeps camera alerts; Muted suppresses both. Active guidance exposes End, overview/follow, sound
-settings, and Report.
+settings, and Trip actions; reporting is available from the Current trip list.
 
 Phone and CarPlay controls read the same native preference store and receive local change events.
 Future-route defaults remain separate from the preferences captured by an already active trip.

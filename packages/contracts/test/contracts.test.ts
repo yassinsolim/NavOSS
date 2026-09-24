@@ -559,7 +559,7 @@ describe('RoadEventResponseSchema', () => {
 });
 
 describe('route contracts', () => {
-  it('ranks routes by duration first and distance second', () => {
+  it('ranks routes by displayed travel time first and distance second', () => {
     const routes = [
       { distanceMeters: 9_000, durationSeconds: 600 },
       { distanceMeters: 8_000, durationSeconds: 600 },
@@ -573,7 +573,7 @@ describe('route contracts', () => {
     ]);
   });
 
-  it('keeps the true fastest route first when ETAs display the same minute', () => {
+  it('prefers the shorter route when both ETAs display the same minute', () => {
     const routes = [
       { distanceMeters: 12_000, durationSeconds: 540 },
       { distanceMeters: 6_000, durationSeconds: 559 },
@@ -581,10 +581,37 @@ describe('route contracts', () => {
     ];
 
     expect([...routes].sort(compareRouteAlternatives)).toEqual([
-      { distanceMeters: 12_000, durationSeconds: 540 },
       { distanceMeters: 6_000, durationSeconds: 559 },
+      { distanceMeters: 12_000, durationSeconds: 540 },
       { distanceMeters: 5_000, durationSeconds: 600 },
     ]);
+  });
+
+  it('keeps a faster displayed ETA ahead even when its route is longer', () => {
+    expect(
+      [
+        { distanceMeters: 4_000, durationSeconds: 570 },
+        { distanceMeters: 8_000, durationSeconds: 569 },
+      ].sort(compareRouteAlternatives),
+    ).toEqual([
+      { distanceMeters: 8_000, durationSeconds: 569 },
+      { distanceMeters: 4_000, durationSeconds: 570 },
+    ]);
+  });
+
+  it('handles the one-minute display floor and breaks equal-distance ties by precise time', () => {
+    const routes = [
+      { distanceMeters: 300, durationSeconds: 20 },
+      { distanceMeters: 100, durationSeconds: 50 },
+      { distanceMeters: 100, durationSeconds: 40 },
+    ];
+
+    expect([...routes].sort(compareRouteAlternatives)).toEqual([
+      { distanceMeters: 100, durationSeconds: 40 },
+      { distanceMeters: 100, durationSeconds: 50 },
+      { distanceMeters: 300, durationSeconds: 20 },
+    ]);
+    expect(routes[0]?.durationSeconds).toBe(20);
   });
 
   it('applies safe driving defaults to a route request', () => {
