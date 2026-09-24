@@ -75,11 +75,12 @@ import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
 import { APP_TAB_BAR_HEIGHT, AppTabBar, type AppTab } from '@/features/map/app-tab-bar';
 import { ContributeScreen } from '@/features/map/contribute-screen';
 import { ExploreCategoryBar } from '@/features/map/explore-category-bar';
-import type { ExploreCategory } from '@/features/map/explore-categories';
+import { exploreCategoryById, type ExploreCategory } from '@/features/map/explore-categories';
 import { createLatestRequestGate } from '@/features/map/latest-request-gate';
 import { ensureForegroundLocationPermission } from '@/features/map/map-location';
 import {
   CALGARY_REGION_BOUNDS,
+  isSearchCoverageRegion,
   KELOWNA_REGION_BOUNDS,
   mapRegionForCoordinate,
   TORONTO_CAMERA_BOUNDS,
@@ -132,6 +133,7 @@ import {
   NavigationBanner,
   type NavigationRouteStatus,
   NavigationStatusBar,
+  NAVIGATION_STATUS_COMPACT_WIDTH,
   RoutePlanningPanel,
   RoutePreviewPanel,
   SafetyCameraAlertBanner,
@@ -227,6 +229,7 @@ const ROAD_EVENT_LAYER_IDS = [
   'road-closure-events',
   'road-incident-events',
 ] as const;
+const SAFETY_CAMERA_LAYER_IDS = ['safety-camera-symbols', 'toronto-safety-camera-symbols'] as const;
 const MAP_IMAGES = {
   'road-closure': require('@/assets/images/road-closure-marker.png'),
   'road-construction': require('@/assets/images/road-construction-marker.png'),
@@ -326,7 +329,9 @@ function droppedPinResult(coordinate: Coordinate): SearchResult {
 
 function safetyCameraFeatures(
   cameras: readonly (Pick<SafetyCamera, 'coordinate' | 'id' | 'location'> &
-    Partial<Pick<SafetyCamera, 'direction'>>)[],
+    Partial<Pick<SafetyCamera, 'direction'>> & {
+      enforcement: readonly SafetyCamera['enforcement'][number][];
+    })[],
 ): FeatureCollection<Point> {
   return {
     features: cameras.map((camera) => ({
@@ -336,6 +341,7 @@ function safetyCameraFeatures(
       },
       properties: {
         ...(camera.direction === undefined ? {} : { direction: camera.direction }),
+        enforcement: camera.enforcement.join(','),
         id: camera.id,
         location: camera.location,
       },
@@ -343,6 +349,25 @@ function safetyCameraFeatures(
     })),
     type: 'FeatureCollection',
   };
+}
+
+// Authoritative metadata only: enforced direction describes which traffic flow is monitored, not
+// which way the camera optically faces, and neither source publishes optical facing. Never infer
+// either from a road name.
+function cameraDetailAlertMessage(
+  enforcement: readonly string[],
+  direction: string | undefined,
+): string {
+  const enforcementLabel = enforcement
+    .map((type) =>
+      type === 'red-light' ? 'red light' : type === 'speed-on-green' ? 'speed on green' : type,
+    )
+    .join(' and ');
+  const directionLine =
+    direction === undefined
+      ? 'Enforced direction: unspecified by this source.'
+      : `Enforced direction: ${direction} traffic. This is the monitored traffic flow, not the camera's optical facing, which this source does not publish.`;
+  return `${enforcementLabel.length > 0 ? enforcementLabel : 'Unspecified'} enforcement camera.\n${directionLine}`;
 }
 
 function roadEventFeatures(
@@ -417,7 +442,7 @@ export function MapScreen() {
   const routeOriginSampleRef = useRef<RouteOriginSample | undefined>(undefined);
   const nativeStateVersionRef = useRef(-1);
   const placeAbortControllerRef = useRef<AbortController>(null);
-  const placeInteractionRef = useRef(0);
+  const placeInteractionRef = useRef(createLatestRequestGate());
   const searchAbortControllerRef = useRef<AbortController>(null);
   const searchRequestGateRef = useRef(createLatestRequestGate());
   const categorySearchActiveRef = useRef(false);
@@ -552,15 +577,18 @@ export function MapScreen() {
         ? officialRoadEventResponse
         : undefined;
   const roadEvents: readonly MapRoadEvent[] = roadEventSnapshot?.events ?? [];
-  const searchOrigin =
-    mapRegion === 'calgary-ab' || mapRegion === 'kelowna-bc'
-      ? searchOriginWithinBounds(
-          userCoordinate,
-          mapRegion === 'calgary-ab' ? CALGARY_REGION_BOUNDS : KELOWNA_REGION_BOUNDS,
-        )
-      : undefined;
+  const searchOrigin = isSearchCoverageRegion(mapRegion)
+    ? searchOriginWithinBounds(
+        userCoordinate,
+        mapRegion === 'calgary-ab' ? CALGARY_REGION_BOUNDS : KELOWNA_REGION_BOUNDS,
+      )
+    : undefined;
   const searchEnabled = true;
   const nearbySearchEnabled = searchOrigin !== undefined;
+  const recentDestinationIds = useMemo(
+    () => destinationCatalog.recents.map((destination) => destination.id),
+    [destinationCatalog.recents],
+  );
   const phoneMapVisible =
     isAppActive && surface === 'map' && (routeState.type !== 'idle' || activeTab === 'explore');
   const hasTransientDestination =
@@ -587,11 +615,12 @@ export function MapScreen() {
     [idleCameraShouldFollow, userCoordinate],
   );
 
-  const invalidatePlaceInteraction = () => {
-    placeInteractionRef.current += 1;
+  const invalidatePlaceInteraction = (): number => {
+    const interactionGeneration = placeInteractionRef.current.advance();
     placeAbortControllerRef.current?.abort();
     placeAbortControllerRef.current = null;
     setPlaceDetailsLoading(false);
+    return interactionGeneration;
   };
 
   const refreshDestinationCatalog = () => {
@@ -610,12 +639,13 @@ export function MapScreen() {
     fitResults: boolean,
     nearestFirst = false,
     category?: ExploreCategory,
+    proximityOrigin: Coordinate | undefined = searchOrigin,
   ): AbortController => {
     const requestGeneration = invalidateSearchRequest();
     const controller = new AbortController();
     searchAbortControllerRef.current = controller;
     setSearchState('loading');
-    const proximityOptions = searchProximityOptions(searchOrigin);
+    const proximityOptions = searchProximityOptions(proximityOrigin);
 
     const categoryQueries = [normalizedQuery];
     void Promise.all(
@@ -646,8 +676,8 @@ export function MapScreen() {
             return true;
           });
         const rankedResults = nearestFirst
-          ? rankCategoryResults(mergedResults, searchOrigin)
-          : rankSearchResults(mergedResults, getRecentDestinationIds(), searchOrigin);
+          ? rankCategoryResults(mergedResults, proximityOrigin)
+          : rankSearchResults(mergedResults, getRecentDestinationIds(), proximityOrigin);
         startTransition(() => {
           setApiConnection('online');
           setResults(rankedResults);
@@ -1014,7 +1044,7 @@ export function MapScreen() {
       stopNavigationAnnouncements();
       routeAbortControllerRef.current?.abort();
       invalidateSearchRequest();
-      placeInteractionRef.current += 1;
+      placeInteractionRef.current.advance();
       placeAbortControllerRef.current?.abort();
     };
   }, []);
@@ -1192,7 +1222,10 @@ export function MapScreen() {
     if (signal.aborted) return undefined;
     if (!granted) {
       setLocationState('denied');
-      return undefined;
+      throw new NavOssApiError(
+        'Allow NavOSS to use your location in iPhone Settings to calculate a route.',
+        0,
+      );
     }
 
     const lastKnown = await Location.getLastKnownPositionAsync({
@@ -1208,7 +1241,12 @@ export function MapScreen() {
     const sample = routeOriginSampleFromLocation(location);
     const selectedSample = newestValidRouteOriginSample(sample, routeOriginSampleRef.current);
     const routeOrigin = routeRequestOriginFromSample(selectedSample);
-    if (selectedSample === undefined || routeOrigin === undefined) return undefined;
+    if (selectedSample === undefined || routeOrigin === undefined) {
+      throw new NavOssApiError(
+        'A fresh, accurate location fix is needed. Wait for GPS to update, then try again.',
+        0,
+      );
+    }
     if (signal.aborted) return undefined;
     routeOriginSampleRef.current = selectedSample;
     setUserCoordinate(selectedSample.coordinate);
@@ -1239,25 +1277,14 @@ export function MapScreen() {
         previewOrigin === undefined
           ? await getCurrentRouteOrigin(controller.signal)
           : { origin: previewOrigin };
-      if (routeOrigin === undefined || controller.signal.aborted) {
-        if (!controller.signal.aborted) {
-          setRouteState({
-            destination,
-            message: 'Location access is needed to calculate a driving route.',
-            ...(previewOrigin === undefined ? {} : { previewOrigin }),
-            type: 'error',
-            waypoints,
-          });
-        }
-        return;
-      }
+      if (routeOrigin === undefined || controller.signal.aborted) return;
       const origin = routeOrigin.origin;
       if (
         previewOrigin === undefined &&
         [origin, ...waypoints.map((waypoint) => waypoint.center), destination.center].some(
           (coordinate) => {
             const region = mapRegionForCoordinate(coordinate);
-            return region !== 'calgary-ab' && region !== 'kelowna-bc';
+            return !isSearchCoverageRegion(region);
           },
         )
       ) {
@@ -1374,7 +1401,7 @@ export function MapScreen() {
     Keyboard.dismiss();
     categorySearchActiveRef.current = false;
     invalidateSearchRequest();
-    invalidatePlaceInteraction();
+    const interactionId = invalidatePlaceInteraction();
     routeAbortControllerRef.current?.abort();
     setIsIdleCameraFollowing(false);
     setRouteState({ type: 'idle' });
@@ -1400,7 +1427,6 @@ export function MapScreen() {
       zoom: 16,
     });
 
-    const interactionId = placeInteractionRef.current;
     const controller = new AbortController();
     placeAbortControllerRef.current = controller;
     void searchPlaces(result.name, {
@@ -1411,7 +1437,7 @@ export function MapScreen() {
       signal: controller.signal,
     })
       .then((response) => {
-        if (!controller.signal.aborted && placeInteractionRef.current === interactionId) {
+        if (!controller.signal.aborted && placeInteractionRef.current.isCurrent(interactionId)) {
           setSelectedResult((current) =>
             current?.id === result.id ? enrichMapPlace(result, response.results) : current,
           );
@@ -1423,7 +1449,7 @@ export function MapScreen() {
       .finally(() => {
         if (
           placeAbortControllerRef.current === controller &&
-          placeInteractionRef.current === interactionId
+          placeInteractionRef.current.isCurrent(interactionId)
         ) {
           placeAbortControllerRef.current = null;
           setPlaceDetailsLoading(false);
@@ -1524,10 +1550,52 @@ export function MapScreen() {
   const handleMapPress = async (point: [number, number], coordinate: Coordinate) => {
     if (
       routeState.type !== 'idle' ||
-      (!mapPreferences.showPlaces && !mapPreferences.showRoadEvents) ||
+      (!mapPreferences.showPlaces &&
+        !mapPreferences.showRoadEvents &&
+        !mapPreferences.showSafetyCameras) ||
       mapRef.current === null
     ) {
       return;
+    }
+
+    // Reserved once, before the first native hit-test await, so a newer interaction (another tap,
+    // a search selection, or clearing the sheet) can never be overtaken by this tap resolving late.
+    const interactionId = invalidatePlaceInteraction();
+    const isCurrentInteraction = () => placeInteractionRef.current.isCurrent(interactionId);
+
+    if (mapPreferences.showSafetyCameras) {
+      try {
+        const tapRadius = 18;
+        const features = await mapRef.current.queryRenderedFeatures(
+          [
+            [point[0] - tapRadius, point[1] - tapRadius],
+            [point[0] + tapRadius, point[1] + tapRadius],
+          ],
+          { layers: [...SAFETY_CAMERA_LAYER_IDS] },
+        );
+        if (!isCurrentInteraction()) {
+          return;
+        }
+        const cameraFeature = features[0];
+        const cameraProperties = cameraFeature?.properties;
+        if (cameraProperties !== undefined && cameraProperties !== null) {
+          const location =
+            typeof cameraProperties.location === 'string' ? cameraProperties.location : 'Camera';
+          const enforcement =
+            typeof cameraProperties.enforcement === 'string'
+              ? cameraProperties.enforcement.split(',')
+              : [];
+          const direction =
+            typeof cameraProperties.direction === 'string' ? cameraProperties.direction : undefined;
+          Keyboard.dismiss();
+          Alert.alert(location, cameraDetailAlertMessage(enforcement, direction), [
+            { text: 'Close' },
+          ]);
+          return;
+        }
+      } catch {
+        // Continue to road-event and place hit-testing while the camera layer reloads.
+      }
     }
 
     if (mapPreferences.showRoadEvents && roadEventSnapshot !== undefined) {
@@ -1540,6 +1608,9 @@ export function MapScreen() {
           ],
           { layers: [...ROAD_EVENT_LAYER_IDS] },
         );
+        if (!isCurrentInteraction()) {
+          return;
+        }
         const eventId = features
           .map((feature) => feature.properties?.id)
           .find((id): id is string => typeof id === 'string');
@@ -1558,12 +1629,6 @@ export function MapScreen() {
       return;
     }
 
-    const interactionId = placeInteractionRef.current + 1;
-    placeInteractionRef.current = interactionId;
-    placeAbortControllerRef.current?.abort();
-    placeAbortControllerRef.current = null;
-    setPlaceDetailsLoading(false);
-
     try {
       const tapRadius = 18;
       const features = await mapRef.current.queryRenderedFeatures(
@@ -1573,7 +1638,7 @@ export function MapScreen() {
         ],
         { layers: [...MAP_PLACE_LAYER_IDS] },
       );
-      if (placeInteractionRef.current !== interactionId) {
+      if (!isCurrentInteraction()) {
         return;
       }
       const place = mapPlaceFromRenderedFeatures(features, coordinate);
@@ -1603,7 +1668,7 @@ export function MapScreen() {
           longitude: place.center.longitude,
           signal: controller.signal,
         });
-        if (!controller.signal.aborted && placeInteractionRef.current === interactionId) {
+        if (!controller.signal.aborted && isCurrentInteraction()) {
           setSelectedResult((current) =>
             current?.id === place.id ? enrichMapPlace(place, response.results) : current,
           );
@@ -1611,16 +1676,13 @@ export function MapScreen() {
       } catch {
         // The rendered map feature remains usable when optional metadata is unavailable.
       } finally {
-        if (
-          placeAbortControllerRef.current === controller &&
-          placeInteractionRef.current === interactionId
-        ) {
+        if (placeAbortControllerRef.current === controller && isCurrentInteraction()) {
           placeAbortControllerRef.current = null;
           setPlaceDetailsLoading(false);
         }
       }
     } catch {
-      if (placeInteractionRef.current === interactionId) {
+      if (isCurrentInteraction()) {
         setPlaceDetailsLoading(false);
       }
     }
@@ -1646,7 +1708,34 @@ export function MapScreen() {
     const destination = selectedResult;
     invalidatePlaceInteraction();
     recordRecentDestination(destination);
+    refreshDestinationCatalog();
     void calculateRoute(destination);
+  };
+
+  const handleFindParking = () => {
+    if (selectedResult === undefined || routeState.type !== 'idle') {
+      return;
+    }
+
+    const parkingOrigin = selectedResult.center;
+    if (!isSearchCoverageRegion(mapRegionForCoordinate(parkingOrigin))) {
+      Alert.alert(
+        'Parking search is unavailable here',
+        'Nearby parking search is not available for this location yet.',
+        [{ text: 'Close' }],
+      );
+      return;
+    }
+    const parkingCategory = exploreCategoryById('parking');
+    Keyboard.dismiss();
+    categorySearchActiveRef.current = true;
+    invalidatePlaceInteraction();
+    setSelectedPlaceSaved(false);
+    setSelectedResult(undefined);
+    setSelectedCategoryId(parkingCategory?.id);
+    setQuery(parkingCategory?.label ?? 'Parking');
+    setResults([]);
+    runPlaceSearch(parkingCategory?.query ?? 'parking', true, true, parkingCategory, parkingOrigin);
   };
 
   const openExternalPlaceUrl = (url: string) => {
@@ -2037,7 +2126,7 @@ export function MapScreen() {
           : routeState.type === 'arrived'
             ? 170 + insets.bottom
             : routeState.type === 'navigating'
-              ? (width < 390 ? 154 : 102) + insets.bottom
+              ? (width < NAVIGATION_STATUS_COMPACT_WIDTH ? 154 : 102) + insets.bottom
               : placeSheetVisible
                 ? placeSheetHeight
                 : 0;
@@ -2519,6 +2608,29 @@ export function MapScreen() {
         </Pressable>
       )}
 
+      {(activeTab === 'explore' || !appShellVisible) && routeState.type !== 'navigating' && (
+        <Pressable
+          accessibilityHint="Opens the road report sheet for hazards, closures, and other road conditions"
+          accessibilityLabel="Report a road condition"
+          onPress={handleOpenRoadReport}
+          style={({ pressed }) => [
+            styles.reportButton,
+            {
+              bottom:
+                (routeState.type === 'arrived' ? selectedPanelHeight + 18 : controlBottom + 62) +
+                54,
+            },
+            pressed && styles.controlPressed,
+          ]}
+        >
+          <SymbolView
+            name={{ android: 'report_problem', ios: 'exclamationmark.bubble.fill' }}
+            size={21}
+            tintColor={NavOssColors.asphalt}
+          />
+        </Pressable>
+      )}
+
       {(activeTab === 'explore' || !appShellVisible) &&
         mapPreferences.showRoadEvents &&
         (roadEventSnapshot !== undefined || roadEventRefreshDelayed) && (
@@ -2556,6 +2668,7 @@ export function MapScreen() {
           loading={placeDetailsLoading}
           onClose={handleClosePlace}
           onDirections={handlePlaceDirections}
+          onFindParking={handleFindParking}
           onReadReviews={() => {
             openExternalPlaceUrl(placeReviewsUrl(selectedResult));
           }}
@@ -2627,6 +2740,7 @@ export function MapScreen() {
               onSelectResult={handleSelectResult}
               onSubmit={handleSubmit}
               query={query}
+              recentDestinationIds={recentDestinationIds}
               results={results}
               searchEnabled={searchEnabled}
               searchPlaceholder={
@@ -2988,6 +3102,23 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     width: 44,
     zIndex: 27,
+  },
+  reportButton: {
+    alignItems: 'center',
+    backgroundColor: NavOssColors.white,
+    borderColor: NavOssColors.border,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    height: 44,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 18,
+    shadowColor: '#000000',
+    shadowOffset: { height: 3, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    width: 44,
+    zIndex: 26,
   },
   recenterButton: {
     alignItems: 'center',

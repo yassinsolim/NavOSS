@@ -18,19 +18,16 @@ import {
 import Animated, {
   FadeIn,
   FadeInDown,
-  FadeInRight,
   FadeInUp,
   FadeOut,
   FadeOutDown,
   FadeOutUp,
   LinearTransition,
   ReduceMotion,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
 } from 'react-native-reanimated';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
+import { Spacing } from '@/constants/theme';
 import {
   formatArrivalTime,
   formatDistance,
@@ -44,6 +41,9 @@ import {
 } from '@/features/navigation/maneuver-direction';
 import type { VehicleMatchStatus, VehicleStyle } from '@/features/navigation/vehicle-puck';
 import type { NavigationAudioMode } from '@/features/navigation/native-navigation';
+
+// Keep the summary and four 44pt actions on separate rows at portrait-phone widths.
+export const NAVIGATION_STATUS_COMPACT_WIDTH = 480;
 
 interface RoutePlanningPanelProps {
   bottomInset: number;
@@ -74,11 +74,16 @@ export function RoutePlanningPanel({
           <Text numberOfLines={1} style={styles.eyebrow}>
             {errorMessage === undefined ? 'Finding the best route' : 'Route unavailable'}
           </Text>
-          <Text numberOfLines={1} style={styles.destinationName}>
+          <Text accessibilityRole="header" numberOfLines={2} style={styles.destinationName}>
             {destination.name}
           </Text>
         </View>
-        <Pressable accessibilityLabel="Cancel route" onPress={onCancel} style={styles.iconButton}>
+        <Pressable
+          accessibilityLabel="Cancel route"
+          accessibilityRole="button"
+          onPress={onCancel}
+          style={({ pressed }) => [styles.iconButton, pressed && styles.controlPressed]}
+        >
           <SymbolView
             name={{ android: 'close', ios: 'xmark' }}
             size={19}
@@ -89,15 +94,18 @@ export function RoutePlanningPanel({
 
       {errorMessage === undefined ? (
         <Animated.View
+          accessibilityLiveRegion="polite"
           entering={FadeIn.duration(160).reduceMotion(ReduceMotion.System)}
           exiting={FadeOut.duration(120).reduceMotion(ReduceMotion.System)}
           style={styles.planningRow}
         >
           <ActivityIndicator color={NavOssColors.green} size="small" />
-          <Text style={styles.planningText}>Using your current location</Text>
+          <Text style={styles.planningText}>Finding a route to your destination</Text>
         </Animated.View>
       ) : (
         <Animated.View
+          accessibilityLiveRegion="polite"
+          accessibilityRole="alert"
           entering={FadeIn.duration(180).reduceMotion(ReduceMotion.System)}
           exiting={FadeOut.duration(120).reduceMotion(ReduceMotion.System)}
           style={styles.errorContent}
@@ -106,8 +114,9 @@ export function RoutePlanningPanel({
           <View style={styles.errorActions}>
             <Pressable
               accessibilityLabel="Retry route"
+              accessibilityRole="button"
               onPress={onRetry}
-              style={styles.retryButton}
+              style={({ pressed }) => [styles.retryButton, pressed && styles.primaryPressed]}
             >
               <SymbolView
                 name={{ android: 'refresh', ios: 'arrow.clockwise' }}
@@ -119,8 +128,12 @@ export function RoutePlanningPanel({
             {onPreviewSupportedRoute !== undefined && (
               <Pressable
                 accessibilityLabel="Preview a supported route"
+                accessibilityRole="button"
                 onPress={onPreviewSupportedRoute}
-                style={styles.previewFallbackButton}
+                style={({ pressed }) => [
+                  styles.previewFallbackButton,
+                  pressed && styles.controlPressed,
+                ]}
               >
                 <SymbolView
                   name={{ android: 'map', ios: 'map.fill' }}
@@ -157,48 +170,26 @@ interface RoutePreviewPanelProps {
 }
 
 function RouteChoiceCard({
-  index,
   onSelect,
   route,
   selected,
 }: {
-  index: number;
   onSelect: () => void;
   route: RouteAlternative;
   selected: boolean;
 }) {
   const trafficDelay = formatTrafficDelay(route.traffic?.delaySeconds ?? 0);
   const viaLabel = routeViaLabel(route);
-  const animatedStyle = useAnimatedStyle(
-    () => ({
-      opacity: withTiming(selected ? 1 : 0.92, {
-        duration: 140,
-        reduceMotion: ReduceMotion.System,
-      }),
-      transform: [
-        {
-          scale: withSpring(selected ? 1 : 0.965, {
-            damping: 18,
-            mass: 0.65,
-            reduceMotion: ReduceMotion.System,
-            stiffness: 240,
-          }),
-        },
-      ],
-    }),
-    [selected],
-  );
 
   return (
     <Animated.View
-      entering={FadeInRight.duration(210)
-        .delay(Math.min(index, 4) * 35)
-        .reduceMotion(ReduceMotion.System)}
+      entering={FadeIn.duration(160).reduceMotion(ReduceMotion.System)}
       layout={LinearTransition.duration(170).reduceMotion(ReduceMotion.System)}
-      style={animatedStyle}
     >
       <Pressable
         accessibilityLabel={`Select ${route.label} ${formatDuration(route.durationSeconds)} route, ${formatDistance(route.distanceMeters)}, ${viaLabel}${trafficDelay === undefined ? '' : `, ${trafficDelay}`}`}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
         onPress={onSelect}
         style={({ pressed }) => [
           styles.routeChoice,
@@ -206,11 +197,20 @@ function RouteChoiceCard({
           pressed && styles.routeChoicePressed,
         ]}
       >
-        <Text style={[styles.routeChoiceEta, selected && styles.routeChoiceEtaSelected]}>
-          {formatDuration(route.durationSeconds)}
-        </Text>
+        <View style={styles.routeChoiceHeading}>
+          <Text style={[styles.routeChoiceEta, selected && styles.routeChoiceEtaSelected]}>
+            {formatDuration(route.durationSeconds)}
+          </Text>
+          {selected && (
+            <SymbolView
+              name={{ android: 'check_circle', ios: 'checkmark.circle.fill' }}
+              size={18}
+              tintColor={NavOssColors.green}
+            />
+          )}
+        </View>
         <Text style={[styles.routeChoiceMeta, selected && styles.routeChoiceMetaSelected]}>
-          {index === 0
+          {route.label === 'fastest'
             ? `Fastest · ${formatDistance(route.distanceMeters)}${trafficDelay === undefined ? '' : ` · ${trafficDelay}`}`
             : `${formatDistance(route.distanceMeters)}${trafficDelay === undefined ? '' : ` · ${trafficDelay}`}`}
         </Text>
@@ -246,7 +246,7 @@ export function RoutePreviewPanel({
   const selectedTrafficDelay = formatTrafficDelay(selectedRoute.traffic?.delaySeconds ?? 0);
   return (
     <Animated.View
-      entering={FadeInUp.duration(260).reduceMotion(ReduceMotion.System)}
+      entering={FadeInUp.duration(200).reduceMotion(ReduceMotion.System)}
       exiting={FadeOutDown.duration(180).reduceMotion(ReduceMotion.System)}
       layout={LinearTransition.duration(200).reduceMotion(ReduceMotion.System)}
       style={[
@@ -258,11 +258,16 @@ export function RoutePreviewPanel({
       <View style={styles.panelHeader}>
         <View style={styles.panelTitleCopy}>
           <Text style={styles.eyebrow}>Route preview</Text>
-          <Text numberOfLines={1} style={styles.destinationName}>
+          <Text accessibilityRole="header" numberOfLines={2} style={styles.destinationName}>
             {destination.name}
           </Text>
         </View>
-        <Pressable accessibilityLabel="Cancel route" onPress={onCancel} style={styles.iconButton}>
+        <Pressable
+          accessibilityLabel="Cancel route"
+          accessibilityRole="button"
+          onPress={onCancel}
+          style={({ pressed }) => [styles.iconButton, pressed && styles.controlPressed]}
+        >
           <SymbolView
             name={{ android: 'close', ios: 'xmark' }}
             size={19}
@@ -276,11 +281,10 @@ export function RoutePreviewPanel({
         horizontal
         showsHorizontalScrollIndicator={false}
       >
-        {routes.map((route, index) => {
+        {routes.map((route) => {
           const selected = route.id === selectedRoute.id;
           return (
             <RouteChoiceCard
-              index={index}
               key={route.id}
               onSelect={() => {
                 onSelectRoute(route);
@@ -294,8 +298,9 @@ export function RoutePreviewPanel({
 
       <Pressable
         accessibilityLabel="Edit route stops"
+        accessibilityRole="button"
         onPress={onEditStops}
-        style={styles.stopsButton}
+        style={({ pressed }) => [styles.stopsButton, pressed && styles.controlPressed]}
       >
         <SymbolView
           name={{
@@ -317,61 +322,77 @@ export function RoutePreviewPanel({
         />
       </Pressable>
 
-      <ScrollView
-        contentContainerStyle={styles.routePreferenceOptions}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-      >
-        {(
-          [
-            ['avoidHighways', 'Highways', { android: 'alt_route', ios: 'road.lanes' }],
-            ['avoidTolls', 'Tolls', { android: 'toll', ios: 'dollarsign.circle.fill' }],
-            ['avoidFerries', 'Ferries', { android: 'directions_boat', ios: 'ferry.fill' }],
-            ['avoidUnpaved', 'Unpaved', { android: 'landscape', ios: 'mountain.2.fill' }],
-          ] as const
-        ).map(([preference, label, icon]) => {
-          const selected = routePreferences[preference];
-          return (
-            <Pressable
-              accessibilityLabel={`Avoid ${label.toLowerCase()}`}
-              accessibilityRole="switch"
-              accessibilityState={{ checked: selected }}
-              key={preference}
-              onPress={() => {
-                onToggleRoutePreference(preference);
-              }}
-              style={[styles.optionButton, selected && styles.optionButtonSelected]}
-            >
-              <SymbolView
-                name={icon}
-                size={17}
-                tintColor={selected ? NavOssColors.white : NavOssColors.asphalt}
-              />
-              <Text
-                adjustsFontSizeToFit
-                minimumFontScale={0.8}
-                numberOfLines={1}
-                style={[styles.optionText, selected && styles.optionTextSelected]}
+      <View style={styles.preferenceRow}>
+        <Text style={styles.preferenceHeading}>Avoid</Text>
+
+        <ScrollView
+          contentContainerStyle={styles.routePreferenceOptions}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.preferenceList}
+        >
+          {(
+            [
+              ['avoidHighways', 'Highways', { android: 'alt_route', ios: 'road.lanes' }],
+              ['avoidTolls', 'Tolls', { android: 'toll', ios: 'dollarsign.circle.fill' }],
+              ['avoidFerries', 'Ferries', { android: 'directions_boat', ios: 'ferry.fill' }],
+              ['avoidUnpaved', 'Unpaved', { android: 'landscape', ios: 'mountain.2.fill' }],
+            ] as const
+          ).map(([preference, label, icon]) => {
+            const selected = routePreferences[preference];
+            return (
+              <Pressable
+                accessibilityLabel={`Avoid ${label.toLowerCase()}`}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: selected }}
+                key={preference}
+                onPress={() => {
+                  onToggleRoutePreference(preference);
+                }}
+                style={({ pressed }) => [
+                  styles.optionButton,
+                  selected && styles.optionButtonSelected,
+                  pressed && (selected ? styles.primaryPressed : styles.controlPressed),
+                ]}
               >
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+                <SymbolView
+                  name={icon}
+                  size={17}
+                  tintColor={selected ? NavOssColors.white : NavOssColors.asphalt}
+                />
+                <Text
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                  numberOfLines={1}
+                  style={[styles.optionText, selected && styles.optionTextSelected]}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       <View style={styles.routeOptions}>
+        <Text style={styles.markerLabel}>Navigation marker</Text>
         <View accessibilityLabel="Navigation marker" style={styles.vehiclePicker}>
           {(['arrow', 'car'] as const).map((style) => {
             const selected = style === vehicleStyle;
             return (
               <Pressable
                 accessibilityLabel={`Use ${style} navigation marker`}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
                 key={style}
                 onPress={() => {
                   onVehicleStyleChange(style);
                 }}
-                style={[styles.vehicleButton, selected && styles.vehicleButtonSelected]}
+                style={({ pressed }) => [
+                  styles.vehicleButton,
+                  selected && styles.vehicleButtonSelected,
+                  pressed && styles.navigationActionPressed,
+                ]}
               >
                 <SymbolView
                   name={
@@ -388,12 +409,7 @@ export function RoutePreviewPanel({
         </View>
       </View>
 
-      <Animated.View
-        key={selectedRoute.id}
-        entering={FadeIn.duration(180).reduceMotion(ReduceMotion.System)}
-        layout={LinearTransition.duration(160).reduceMotion(ReduceMotion.System)}
-        style={styles.previewSummary}
-      >
+      <View style={styles.previewSummary}>
         <View style={styles.etaBlock}>
           <Text style={styles.eta}>{formatDuration(selectedRoute.durationSeconds)}</Text>
           <Text style={styles.arrival}>
@@ -407,8 +423,9 @@ export function RoutePreviewPanel({
         {previewOriginLabel === undefined ? (
           <Pressable
             accessibilityLabel="Start navigation"
+            accessibilityRole="button"
             onPress={onStart}
-            style={styles.startButton}
+            style={({ pressed }) => [styles.startButton, pressed && styles.primaryPressed]}
           >
             <SymbolView
               name={{ android: 'navigation', ios: 'location.north.fill' }}
@@ -420,8 +437,9 @@ export function RoutePreviewPanel({
         ) : (
           <Pressable
             accessibilityLabel="Use my location for navigation"
+            accessibilityRole="button"
             onPress={onUseCurrentLocation}
-            style={styles.useLocationButton}
+            style={({ pressed }) => [styles.useLocationButton, pressed && styles.primaryPressed]}
           >
             <SymbolView
               name={{ android: 'my_location', ios: 'location.fill' }}
@@ -431,7 +449,7 @@ export function RoutePreviewPanel({
             <Text style={styles.useLocationText}>Use my location</Text>
           </Pressable>
         )}
-      </Animated.View>
+      </View>
 
       {previewOriginLabel !== undefined && (
         <View
@@ -450,7 +468,7 @@ export function RoutePreviewPanel({
       )}
 
       <View style={styles.sourceRow}>
-        <Text numberOfLines={1} style={styles.developmentSource}>
+        <Text style={styles.developmentSource}>
           {routeSource?.attribution ?? 'Routing source unavailable'}
         </Text>
         <Text style={styles.trafficStatus}>
@@ -555,6 +573,7 @@ export function CarPlayCompanionPanel({
         </View>
         <Pressable
           accessibilityLabel={actionLabel === 'End' ? 'End navigation' : 'Finish navigation'}
+          accessibilityRole="button"
           onPress={onAction}
           style={({ pressed }) => [
             styles.carPlayEndButton,
@@ -689,12 +708,17 @@ export function ArrivalPanel({ bottomInset, destination, onDone }: ArrivalPanelP
         </View>
         <View style={styles.panelTitleCopy}>
           <Text style={styles.arrivalTitle}>You've arrived</Text>
-          <Text numberOfLines={1} style={styles.destinationName}>
+          <Text accessibilityRole="header" numberOfLines={2} style={styles.destinationName}>
             {destination.name}
           </Text>
         </View>
       </View>
-      <Pressable accessibilityLabel="Finish navigation" onPress={onDone} style={styles.doneButton}>
+      <Pressable
+        accessibilityLabel="Finish navigation"
+        accessibilityRole="button"
+        onPress={onDone}
+        style={({ pressed }) => [styles.doneButton, pressed && styles.primaryPressed]}
+      >
         <Text style={styles.doneText}>Done</Text>
       </Pressable>
     </Animated.View>
@@ -813,7 +837,7 @@ export function NavigationStatusBar({
   rerouteCount,
 }: NavigationStatusBarProps) {
   const { width } = useWindowDimensions();
-  const compact = width < 390;
+  const compact = width < NAVIGATION_STATUS_COMPACT_WIDTH;
   const soundLabel =
     audioMode === 'all-guidance'
       ? 'All guidance'
@@ -900,6 +924,7 @@ export function NavigationStatusBar({
         <Pressable
           accessibilityHint="Choose maneuver and safety-alert speech"
           accessibilityLabel={`Guidance sound, ${soundLabel}`}
+          accessibilityRole="button"
           onPress={onSound}
           style={({ pressed }) => [
             styles.navigationAction,
@@ -911,6 +936,7 @@ export function NavigationStatusBar({
         <Pressable
           accessibilityHint="Choose a road condition to record at your current location"
           accessibilityLabel="Report road condition"
+          accessibilityRole="button"
           onPress={onReport}
           style={({ pressed }) => [
             styles.navigationAction,
@@ -927,6 +953,7 @@ export function NavigationStatusBar({
         <Pressable
           accessibilityHint="Opens the system share sheet without reading your contacts"
           accessibilityLabel="Share ETA"
+          accessibilityRole="button"
           onPress={onShare}
           style={({ pressed }) => [
             styles.navigationAction,
@@ -942,6 +969,7 @@ export function NavigationStatusBar({
         </Pressable>
         <Pressable
           accessibilityLabel="End navigation"
+          accessibilityRole="button"
           onPress={onEnd}
           style={({ pressed }) => [
             styles.navigationAction,
@@ -985,16 +1013,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   bottomPanel: {
-    backgroundColor: NavOssColors.white,
+    backgroundColor: NavOssColors.paper,
     borderTopColor: NavOssColors.border,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    borderTopLeftRadius: Spacing.three,
+    borderTopRightRadius: Spacing.three,
     borderTopWidth: StyleSheet.hairlineWidth,
     bottom: 0,
     left: 0,
     minHeight: 156,
-    paddingHorizontal: 16,
-    paddingTop: 14,
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.three,
     position: 'absolute',
     right: 0,
   },
@@ -1003,9 +1031,9 @@ const styles = StyleSheet.create({
     backgroundColor: NavOssColors.fog,
     borderRadius: 8,
     flexDirection: 'row',
-    gap: 9,
-    minHeight: 42,
-    paddingHorizontal: 12,
+    gap: Spacing.two,
+    minHeight: 48,
+    paddingHorizontal: Spacing.three,
   },
   stopsButtonText: {
     color: NavOssColors.asphalt,
@@ -1028,8 +1056,8 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     position: 'absolute',
     right: 12,
-    shadowColor: '#000000',
-    shadowOffset: { height: 3, width: 0 },
+    shadowColor: NavOssColors.asphalt,
+    shadowOffset: { height: Spacing.one, width: 0 },
     shadowOpacity: 0.18,
     shadowRadius: 8,
     zIndex: 29,
@@ -1054,7 +1082,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   cameraAlertTitle: {
-    color: NavOssColors.coral,
+    color: NavOssColors.asphalt,
     fontFamily: NavOssFonts.semibold,
     fontSize: 17,
     letterSpacing: 0,
@@ -1180,35 +1208,43 @@ const styles = StyleSheet.create({
   },
   destinationName: {
     color: NavOssColors.asphalt,
-    fontFamily: NavOssFonts.semibold,
-    fontSize: 20,
+    fontFamily: NavOssFonts.bold,
+    fontSize: 22,
     letterSpacing: 0,
+    lineHeight: 28,
   },
   developmentSource: {
     color: NavOssColors.muted,
     fontFamily: NavOssFonts.medium,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0,
+    lineHeight: 16,
     flex: 1,
   },
   doneButton: {
     alignItems: 'center',
     backgroundColor: NavOssColors.green,
-    borderRadius: 7,
+    borderRadius: Spacing.two,
     height: 48,
     justifyContent: 'center',
-    marginTop: 14,
+    marginTop: Spacing.three,
   },
   doneText: {
-    color: NavOssColors.white,
+    color: NavOssColors.paper,
     fontFamily: NavOssFonts.semibold,
     fontSize: 17,
     letterSpacing: 0,
   },
   endButton: {
     alignItems: 'center',
-    backgroundColor: '#FCE9E5',
+    backgroundColor: NavOssColors.fog,
     justifyContent: 'center',
+  },
+  controlPressed: {
+    backgroundColor: NavOssColors.sky,
+  },
+  primaryPressed: {
+    backgroundColor: NavOssColors.asphalt,
   },
   errorRow: {
     alignItems: 'center',
@@ -1220,19 +1256,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: Spacing.two,
   },
   errorContent: {
-    gap: 10,
-    marginTop: 12,
+    backgroundColor: NavOssColors.fog,
+    borderLeftColor: NavOssColors.coral,
+    borderLeftWidth: Spacing.one,
+    borderRadius: Spacing.two,
+    gap: Spacing.three,
+    marginTop: Spacing.three,
+    padding: Spacing.three,
   },
   errorText: {
-    color: NavOssColors.muted,
-    flex: 1,
+    color: NavOssColors.asphalt,
     fontFamily: NavOssFonts.regular,
     fontSize: 15,
     letterSpacing: 0,
-    lineHeight: 19,
+    lineHeight: 24,
   },
   eta: {
     color: NavOssColors.green,
@@ -1244,6 +1284,7 @@ const styles = StyleSheet.create({
   etaBlock: {
     flex: 1,
     gap: 2,
+    minWidth: Spacing.six * 2,
   },
   eyebrow: {
     color: NavOssColors.green,
@@ -1279,9 +1320,10 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     alignItems: 'center',
-    height: 42,
+    borderRadius: Spacing.four,
+    height: 44,
     justifyContent: 'center',
-    width: 42,
+    width: 44,
   },
   maneuverIcon: {
     alignItems: 'center',
@@ -1302,7 +1344,7 @@ const styles = StyleSheet.create({
     padding: 14,
     position: 'absolute',
     right: 10,
-    shadowColor: '#000000',
+    shadowColor: NavOssColors.asphalt,
     shadowOffset: { height: 4, width: 0 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
@@ -1322,12 +1364,11 @@ const styles = StyleSheet.create({
     width: 44,
   },
   navigationActionPressed: {
-    opacity: 0.68,
-    transform: [{ scale: 0.96 }],
+    opacity: 0.8,
   },
   navigationActions: {
     flexDirection: 'row',
-    gap: 7,
+    gap: Spacing.two,
   },
   navigationActionsCompact: {
     alignSelf: 'flex-end',
@@ -1341,7 +1382,7 @@ const styles = StyleSheet.create({
   navigationMeta: {
     color: NavOssColors.muted,
     fontFamily: NavOssFonts.regular,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0,
   },
   navigationMetric: {
@@ -1357,7 +1398,7 @@ const styles = StyleSheet.create({
   },
   navigationStatus: {
     alignItems: 'center',
-    backgroundColor: NavOssColors.white,
+    backgroundColor: NavOssColors.paper,
     borderTopColor: NavOssColors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
     bottom: 0,
@@ -1389,8 +1430,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: 'row',
-    gap: 6,
-    height: 44,
+    gap: Spacing.two,
+    minHeight: 44,
     paddingHorizontal: 12,
   },
   optionButtonSelected: {
@@ -1404,7 +1445,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   optionTextSelected: {
-    color: NavOssColors.white,
+    color: NavOssColors.paper,
+  },
+  preferenceHeading: {
+    color: NavOssColors.muted,
+    fontFamily: NavOssFonts.medium,
+    fontSize: 14,
+  },
+  preferenceList: {
+    flex: 1,
+  },
+  preferenceRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: Spacing.two,
+    paddingVertical: Spacing.two,
+  },
+  markerLabel: {
+    color: NavOssColors.muted,
+    fontFamily: NavOssFonts.medium,
+    fontSize: 14,
   },
   panelHeader: {
     alignItems: 'center',
@@ -1419,14 +1479,16 @@ const styles = StyleSheet.create({
   planningRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 18,
+    gap: Spacing.two,
+    marginTop: Spacing.three,
   },
   planningText: {
     color: NavOssColors.muted,
+    flex: 1,
     fontFamily: NavOssFonts.regular,
     fontSize: 15,
     letterSpacing: 0,
+    lineHeight: 24,
   },
   previewPanel: {
     minHeight: 370,
@@ -1434,10 +1496,10 @@ const styles = StyleSheet.create({
   previewFallbackButton: {
     alignItems: 'center',
     borderColor: NavOssColors.green,
-    borderRadius: 7,
+    borderRadius: Spacing.two,
     borderWidth: 1,
     flexDirection: 'row',
-    gap: 6,
+    gap: Spacing.two,
     minHeight: 44,
     paddingHorizontal: 12,
   },
@@ -1450,90 +1512,99 @@ const styles = StyleSheet.create({
   previewNotice: {
     alignItems: 'center',
     backgroundColor: NavOssColors.fog,
-    borderRadius: 6,
+    borderRadius: Spacing.two,
     flexDirection: 'row',
-    gap: 7,
-    marginTop: 9,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    gap: Spacing.two,
+    marginTop: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
   },
   previewNoticeText: {
     color: NavOssColors.muted,
     flex: 1,
     fontFamily: NavOssFonts.regular,
-    fontSize: 12,
+    fontSize: 14,
     letterSpacing: 0,
-    lineHeight: 16,
+    lineHeight: 20,
   },
   previewSummary: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 14,
-    marginTop: 12,
+    flexWrap: 'wrap',
+    gap: Spacing.three,
+    marginTop: Spacing.two,
   },
   retryButton: {
     alignItems: 'center',
     backgroundColor: NavOssColors.green,
-    borderRadius: 7,
+    borderRadius: Spacing.two,
     flexDirection: 'row',
-    gap: 6,
-    height: 44,
+    gap: Spacing.two,
+    minHeight: 44,
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: Spacing.three,
   },
   retryText: {
-    color: NavOssColors.white,
+    color: NavOssColors.paper,
     fontFamily: NavOssFonts.semibold,
     fontSize: 15,
     letterSpacing: 0,
   },
   routeChoice: {
     borderColor: NavOssColors.border,
-    borderRadius: 7,
+    borderRadius: Spacing.two,
     borderWidth: 1,
-    gap: 2,
-    minWidth: 142,
+    gap: Spacing.one,
+    minWidth: 160,
     minHeight: 88,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    maxWidth: 224,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
   },
   routeChoiceEta: {
     color: NavOssColors.asphalt,
-    fontFamily: NavOssFonts.semibold,
-    fontSize: 16,
+    fontFamily: NavOssFonts.bold,
+    fontSize: 20,
     letterSpacing: 0,
   },
   routeChoiceEtaSelected: {
-    color: NavOssColors.white,
+    color: NavOssColors.green,
+  },
+  routeChoiceHeading: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: Spacing.two,
+    justifyContent: 'space-between',
   },
   routeChoiceMeta: {
     color: NavOssColors.muted,
     fontFamily: NavOssFonts.regular,
-    fontSize: 12,
+    fontSize: 14,
     letterSpacing: 0,
+    lineHeight: 20,
   },
   routeChoiceMetaSelected: {
-    color: '#D7E8E5',
+    color: NavOssColors.asphalt,
   },
   routeChoicePressed: {
     opacity: 0.78,
   },
   routeChoiceSelected: {
-    backgroundColor: NavOssColors.green,
+    backgroundColor: NavOssColors.sky,
     borderColor: NavOssColors.green,
   },
   routeChoices: {
-    gap: 8,
-    paddingVertical: 11,
+    gap: Spacing.two,
+    paddingVertical: Spacing.two,
   },
   routeOptions: {
     alignItems: 'center',
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    gap: Spacing.two,
+    justifyContent: 'space-between',
   },
   routePreferenceOptions: {
-    gap: 8,
-    paddingBottom: 10,
+    gap: Spacing.two,
   },
   reportButton: {
     backgroundColor: NavOssColors.sun,
@@ -1541,11 +1612,12 @@ const styles = StyleSheet.create({
   routeVia: {
     color: NavOssColors.muted,
     fontFamily: NavOssFonts.regular,
-    fontSize: 11,
+    fontSize: 13,
     letterSpacing: 0,
-    marginTop: 2,
-    maxWidth: 170,
-    minHeight: 28,
+    lineHeight: 20,
+    marginTop: Spacing.one,
+    maxWidth: 192,
+    minHeight: 40,
   },
   shareEtaButton: {
     backgroundColor: NavOssColors.sky,
@@ -1553,53 +1625,54 @@ const styles = StyleSheet.create({
   sourceRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 8,
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+    marginTop: Spacing.two,
   },
   startButton: {
     alignItems: 'center',
     backgroundColor: NavOssColors.green,
-    borderRadius: 7,
+    borderRadius: Spacing.two,
     flexDirection: 'row',
-    gap: 7,
-    height: 50,
+    gap: Spacing.two,
+    minHeight: 52,
     justifyContent: 'center',
     minWidth: 112,
-    paddingHorizontal: 18,
+    paddingHorizontal: Spacing.four,
   },
   startText: {
-    color: NavOssColors.white,
+    color: NavOssColors.paper,
     fontFamily: NavOssFonts.bold,
     fontSize: 17,
     letterSpacing: 0,
   },
   trafficStatus: {
-    color: NavOssColors.coral,
+    color: NavOssColors.muted,
     fontFamily: NavOssFonts.medium,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0,
   },
   useLocationButton: {
     alignItems: 'center',
     backgroundColor: NavOssColors.green,
-    borderRadius: 7,
+    borderRadius: Spacing.two,
     flexDirection: 'row',
-    gap: 7,
-    minHeight: 50,
-    paddingHorizontal: 14,
+    gap: Spacing.two,
+    minHeight: 52,
+    paddingHorizontal: Spacing.three,
   },
   useLocationText: {
-    color: NavOssColors.white,
+    color: NavOssColors.paper,
     fontFamily: NavOssFonts.semibold,
     fontSize: 15,
     letterSpacing: 0,
   },
   vehicleButton: {
     alignItems: 'center',
-    borderRadius: 15,
-    height: 30,
+    borderRadius: Spacing.two,
+    height: 44,
     justifyContent: 'center',
-    width: 34,
+    width: 44,
   },
   vehicleButtonSelected: {
     backgroundColor: NavOssColors.asphalt,
@@ -1607,10 +1680,9 @@ const styles = StyleSheet.create({
   vehiclePicker: {
     alignItems: 'center',
     backgroundColor: NavOssColors.fog,
-    borderRadius: 17,
+    borderRadius: Spacing.two,
     flexDirection: 'row',
-    gap: 2,
-    height: 34,
-    paddingHorizontal: 2,
+    gap: Spacing.one,
+    padding: Spacing.one,
   },
 });

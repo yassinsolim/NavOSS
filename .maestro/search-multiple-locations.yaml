@@ -11,14 +11,17 @@ appId: org.navoss.mobile
     text: 'Reload'
     optional: true
 - extendedWaitUntil:
-    visible: 'Search Calgary'
+    visible: 'Search places'
     timeout: 20000
-- tapOn: 'Search Calgary'
+- tapOn: 'Search places'
 - eraseText
 - inputText: 'Starbucks'
 - extendedWaitUntil:
     visible: 'Select Starbucks.*away.*'
     timeout: 20000
 - pressKey: Enter
+- assertVisible: 'Show list'
+- takeScreenshot: 'navoss-search-multiple-locations-map'
+- tapOn: 'Show list'
 - assertVisible: 'Select Starbucks.*away.*'
-- takeScreenshot: '/tmp/navoss-search-multiple-locations'
+- takeScreenshot: 'navoss-search-multiple-locations'

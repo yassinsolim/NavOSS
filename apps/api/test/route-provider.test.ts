@@ -228,6 +228,92 @@ describe('Valhalla route provider', () => {
     expect(routeIds[1]).toBeDefined();
     expect(routeIds[0]).not.toBe(routeIds[1]);
   });
+
+  it('labels the true raw-duration-fastest route even when a same-minute, shorter route recommends first', async () => {
+    // Once routes are recommended by displayed-minute bucket, a shorter route in the same bucket
+    // as the true fastest can legitimately sort ahead of it. The "fastest" label must still track
+    // the lowest raw duration, not array position.
+    const provider = createValhallaRouteProvider({
+      endpoint: 'https://valhalla.test/route',
+      fetchImplementation: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              code: 'Ok',
+              routes: [
+                valhallaRoute(9_000, 590, 0), // 9.83 min -> 10 min bucket, true fastest raw duration
+                valhallaRoute(7_000, 610, 0.01), // 10.17 min -> 10 min bucket, shorter distance
+                valhallaRoute(20_000, 1_200, 0.02), // 20 min bucket, clearly slower
+              ],
+            }),
+            { status: 200 },
+          ),
+        ),
+    });
+
+    const routes = await provider.getRoutes({
+      alternatives: 2,
+      destination: { latitude: 51.13157, longitude: -114.01055 },
+      origin: { latitude: 51.0447, longitude: -114.0719 },
+      preferences: {
+        avoidFerries: false,
+        avoidHighways: false,
+        avoidTolls: false,
+        avoidUnpaved: false,
+      },
+    });
+
+    expect(
+      routes.map(({ distanceMeters, durationSeconds, label }) => ({
+        distanceMeters,
+        durationSeconds,
+        label,
+      })),
+    ).toEqual([
+      { distanceMeters: 7_000, durationSeconds: 610, label: 'alternative' },
+      { distanceMeters: 9_000, durationSeconds: 590, label: 'fastest' },
+      { distanceMeters: 20_000, durationSeconds: 1_200, label: 'alternative' },
+    ]);
+  });
+
+  it('breaks an exact raw-duration tie by distance when labeling the fastest route', async () => {
+    const provider = createValhallaRouteProvider({
+      endpoint: 'https://valhalla.test/route',
+      fetchImplementation: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              code: 'Ok',
+              routes: [valhallaRoute(9_000, 600, 0), valhallaRoute(8_000, 600, 0.01)],
+            }),
+            { status: 200 },
+          ),
+        ),
+    });
+
+    const routes = await provider.getRoutes({
+      alternatives: 1,
+      destination: { latitude: 51.13157, longitude: -114.01055 },
+      origin: { latitude: 51.0447, longitude: -114.0719 },
+      preferences: {
+        avoidFerries: false,
+        avoidHighways: false,
+        avoidTolls: false,
+        avoidUnpaved: false,
+      },
+    });
+
+    expect(
+      routes.map(({ distanceMeters, durationSeconds, label }) => ({
+        distanceMeters,
+        durationSeconds,
+        label,
+      })),
+    ).toEqual([
+      { distanceMeters: 8_000, durationSeconds: 600, label: 'fastest' },
+      { distanceMeters: 9_000, durationSeconds: 600, label: 'alternative' },
+    ]);
+  });
 });
 
 describe('Mapbox live-traffic route provider', () => {

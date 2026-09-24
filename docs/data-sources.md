@@ -61,6 +61,18 @@ Nominatim `extratags` may provide a public address, place category, opening hour
 official website, and wheelchair-access tag. These community-maintained fields may be absent,
 outdated, or expressed in raw OpenStreetMap syntax. NavOSS does not infer missing values.
 
+For Calgary and Kelowna places, the phone can derive Open, Closing soon (within one hour), or
+Closed from unambiguous weekly opening-hour rules using the region's local time zone. Holiday,
+seasonal, commented, and otherwise unsupported schedules retain their source text without a
+guessed status. Missing hours remain missing, and community-maintained hours are not a guarantee
+that a business is currently operating.
+
+The place sheet's Parking action searches around the selected place, not the device's position.
+It requires supported search coverage and does not start or replace a route. Text searches can
+highlight up to three matching recent destinations from the current results; the remaining list
+stays nearest-first. This history remains on the device. Submitting a search exposes the map
+markers through a compact results strip, with Show list available to return to the full list.
+
 OpenStreetMap does not provide a Google-style review corpus. NavOSS does not scrape reviews or add
 Google values to its open-data result or shared contracts. An optional, key-gated Google Places UI
 Kit component may receive a selected POI name and coordinate and render Google's photos, current
@@ -157,6 +169,11 @@ The official description states that each Intersection Safety Camera detects veh
 As of July 1, 2026, the source contains 57 camera records. Five records omit ward metadata; NavOSS retains those cameras without fabricating a ward. A record must still have valid coordinates, community, quadrant, and a recognizable enforced direction. Unknown direction data fails closed and the API returns a temporary-unavailable response rather than issuing potentially incorrect alerts.
 
 The NavOSS API fetches and validates the dataset server-side and caches successful responses for six hours. The mobile client does not send user location to Calgary Open Data. The app displays all validated official locations on the map and includes visible City of Calgary attribution.
+
+Tapping an enforcement-camera marker shows its published enforcement type and monitored traffic
+direction. This direction is not the camera's optical facing, which the source does not publish.
+Where a source does not provide a direction, the detail view says so rather than inferring it
+from the road name or icon orientation.
 
 During active guidance, an alert is eligible only when the camera:
 

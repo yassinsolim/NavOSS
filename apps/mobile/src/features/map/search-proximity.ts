@@ -4,6 +4,7 @@ import type { SearchResult } from '@navoss/contracts';
 const SEARCH_PROXIMITY_DECIMAL_PLACES = 3;
 const SEARCH_PROXIMITY_SCALE = 10 ** SEARCH_PROXIMITY_DECIMAL_PLACES;
 const EARTH_RADIUS_METERS = 6_371_000;
+const MAX_RECENT_SEARCH_MATCHES = 3;
 
 export function searchOriginWithinBounds(
   origin: Coordinate | undefined,
@@ -125,6 +126,29 @@ export function rankSearchResults(
       return leftRank - rightRank;
     })
     .slice(0, limit);
+}
+
+export function groupRecentSearchResults(
+  results: readonly SearchResult[],
+  recentDestinationIds: readonly string[],
+): { recentMatches: SearchResult[]; remainingResults: readonly SearchResult[] } {
+  const recentMatches: SearchResult[] = [];
+  // History only selects from this search's filtered, ranked results; it never adds places.
+  for (const id of recentDestinationIds) {
+    if (recentMatches.some((result) => result.id === id)) continue;
+    const match = results.find((result) => result.id === id);
+    if (match === undefined) continue;
+    recentMatches.push(match);
+    if (recentMatches.length === MAX_RECENT_SEARCH_MATCHES) break;
+  }
+
+  return {
+    recentMatches,
+    remainingResults:
+      recentMatches.length === 0
+        ? results
+        : results.filter((result) => !recentMatches.some((recent) => recent.id === result.id)),
+  };
 }
 
 export function rankCategoryResults(

@@ -1,13 +1,9 @@
 import { SymbolView } from 'expo-symbols';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  ReduceMotion,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { ReduceMotion, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
+import { Spacing } from '@/constants/theme';
 
 export type AppTab = 'contribute' | 'explore' | 'saved';
 
@@ -42,20 +38,10 @@ function TabButton({
 }) {
   const animatedIconStyle = useAnimatedStyle(
     () => ({
-      backgroundColor: withTiming(selected ? NavOssColors.sky : 'rgba(255,255,255,0)', {
+      backgroundColor: withTiming(selected ? NavOssColors.sky : NavOssColors.paper, {
         duration: 160,
         reduceMotion: ReduceMotion.System,
       }),
-      transform: [
-        {
-          scale: withSpring(selected ? 1 : 0.9, {
-            damping: 17,
-            mass: 0.65,
-            reduceMotion: ReduceMotion.System,
-            stiffness: 240,
-          }),
-        },
-      ],
     }),
     [selected],
   );
@@ -113,7 +99,7 @@ export function AppTabBar({
 const styles = StyleSheet.create({
   bar: {
     alignItems: 'center',
-    backgroundColor: NavOssColors.white,
+    backgroundColor: NavOssColors.paper,
     borderTopColor: NavOssColors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
     bottom: 0,
@@ -121,23 +107,23 @@ const styles = StyleSheet.create({
     left: 0,
     position: 'absolute',
     right: 0,
-    shadowColor: '#000000',
-    shadowOffset: { height: -2, width: 0 },
+    shadowColor: NavOssColors.asphalt,
+    shadowOffset: { height: -Spacing.half, width: 0 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
     zIndex: 50,
   },
   iconWell: {
     alignItems: 'center',
-    borderRadius: 18,
-    height: 30,
+    borderRadius: Spacing.three,
+    height: Spacing.five,
     justifyContent: 'center',
-    width: 50,
+    width: 56,
   },
   label: {
     color: NavOssColors.muted,
     fontFamily: NavOssFonts.medium,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0,
   },
   labelSelected: {
@@ -145,12 +131,12 @@ const styles = StyleSheet.create({
     fontFamily: NavOssFonts.bold,
   },
   pressed: {
-    opacity: 0.7,
+    backgroundColor: NavOssColors.fog,
   },
   tab: {
     alignItems: 'center',
     flex: 1,
-    gap: 2,
+    gap: Spacing.one,
     height: APP_TAB_BAR_HEIGHT,
     justifyContent: 'center',
   },

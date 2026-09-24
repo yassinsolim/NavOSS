@@ -1,5 +1,6 @@
 import {
   AppConfigResponseSchema,
+  compareRouteAlternatives,
   ContributionSubmissionResponseSchema,
   GooglePlaceQueryGrantResponseSchema,
   OfficialRoadEventResponseSchema,
@@ -246,7 +247,13 @@ export async function fetchRoutes(
     delete fallback.originHorizontalAccuracyMeters;
     response = await send(fallback);
   }
-  return RouteResponseSchema.parse(await parseResponse(response));
+  const validated = RouteResponseSchema.parse(await parseResponse(response));
+  // Present the same order the server intends for phone and CarPlay: an already-deployed API
+  // may still return routes ordered by raw duration, so re-apply the shared bucket-then-distance
+  // comparator here rather than depending on a coordinated server deploy. `fastest`/durations are
+  // untouched — only display order changes.
+  validated.routes.sort(compareRouteAlternatives);
+  return validated;
 }
 
 export async function fetchSafetyCameras(

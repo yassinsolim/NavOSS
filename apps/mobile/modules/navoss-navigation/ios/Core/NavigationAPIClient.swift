@@ -225,7 +225,7 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
       )
       response = try await post(path: "v1/routes", body: fallback)
     }
-    return try response.routes.map { route in
+    let trips = try response.routes.map { route in
       NavOSSCarPlayTrip(
         destination: destination,
         distanceMeters: route.distanceMeters,
@@ -255,6 +255,11 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
         waypoints: waypoints.isEmpty ? nil : waypoints
       )
     }
+    // Present the same order the API and phone client promise: mirrors the shared
+    // `compareRouteAlternatives` bucket-then-distance ordering so CarPlay does not depend on a
+    // coordinated server deploy. Fastest-name logic (`navOSSCarPlayFastestRouteIndex`) and route
+    // choice details already track raw duration independently of array position.
+    return navOSSCarPlayTripsOrderedForDisplay(trips)
   }
 
   private func coordinates(_ values: [[Double]]) throws -> [NavOSSCarPlayCoordinate] {

@@ -19,7 +19,6 @@ describe('route stops editor', () => {
     expect(editor).toContain('}, 250);');
     expect(editor).toContain('blurOnSubmit={false}');
     expect(editor).not.toContain('Keyboard.dismiss()');
-    expect(editor).toContain('No places found');
     expect(editor).toContain('Add stop</Text>');
   });
 

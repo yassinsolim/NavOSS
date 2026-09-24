@@ -2,8 +2,9 @@ import type { SearchResult, SearchSource } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
 import {
   ActivityIndicator,
-  FlatList,
+  SectionList,
   Image,
+  Keyboard,
   Linking,
   Modal,
   Pressable,
@@ -14,7 +15,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -30,12 +31,18 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
+import { Spacing } from '@/constants/theme';
 import { categoryLabel } from '@/features/map/search-result-category';
-import { formatSearchDistance, searchResultContext } from '@/features/map/search-proximity';
+import {
+  formatSearchDistance,
+  groupRecentSearchResults,
+  searchResultContext,
+} from '@/features/map/search-proximity';
 import { getGooglePlacesOpenSourceLicenseInfo } from '@/features/navigation/native-navigation';
 
 const PRIVACY_POLICY_URL = 'https://navoss.yassin.app/privacy';
 const SUPPORT_URL = 'https://navoss.yassin.app/support';
+const NO_RECENT_DESTINATIONS: readonly string[] = [];
 
 export type ApiConnectionState = 'connecting' | 'online' | 'offline';
 export type SearchState = 'idle' | 'loading' | 'success' | 'error';
@@ -53,6 +60,7 @@ interface SearchPanelProps {
   onSelectResult: (result: SearchResult) => void;
   onSubmit: () => void;
   query: string;
+  recentDestinationIds?: readonly string[];
   results: SearchResult[];
   searchEnabled?: boolean;
   searchPlaceholder?: string;
@@ -60,9 +68,16 @@ interface SearchPanelProps {
   searchState: SearchState;
 }
 
-function connectionLabel(state: ApiConnectionState, coverageName: string): string {
+interface SearchResultSection {
+  data: readonly SearchResult[];
+  key: string;
+  recent: boolean;
+  title: string | undefined;
+}
+
+function connectionLabel(state: ApiConnectionState): string {
   if (state === 'offline') {
-    return 'Local API offline';
+    return 'Service unavailable';
   }
 
   if (state === 'connecting') {
@@ -82,10 +97,10 @@ function searchSourceLabel(source: SearchSource | undefined): string {
   }
 
   return source.freshness === 'static'
-    ? 'Static Calgary fallback'
+    ? 'Calgary place data · Not live'
     : source.id === 'nominatim-self-hosted'
       ? 'OpenStreetMap search'
-      : 'OpenStreetMap search · Development';
+      : 'OpenStreetMap search · Preview data';
 }
 
 export function SearchPanel({
@@ -101,6 +116,7 @@ export function SearchPanel({
   onSelectResult,
   onSubmit,
   query,
+  recentDestinationIds = NO_RECENT_DESTINATIONS,
   results,
   searchEnabled = true,
   searchPlaceholder = 'Where to?',
@@ -110,6 +126,22 @@ export function SearchPanel({
   const [isAboutVisible, setIsAboutVisible] = useState(false);
   const [isGoogleLicensesVisible, setIsGoogleLicensesVisible] = useState(false);
   const [googlePlacesLicenseInfo] = useState(() => getGooglePlacesOpenSourceLicenseInfo());
+  const [resultsExpanded, setResultsExpanded] = useState(true);
+  const resultSections = useMemo<SearchResultSection[]>(() => {
+    const { recentMatches, remainingResults } = groupRecentSearchResults(
+      results,
+      activeCategoryLabel === undefined ? recentDestinationIds : NO_RECENT_DESTINATIONS,
+    );
+    if (recentMatches.length === 0) {
+      return [{ data: remainingResults, key: 'results', recent: false, title: undefined }];
+    }
+    return [
+      { data: recentMatches, key: 'recent', recent: true, title: 'Recent matches' },
+      ...(remainingResults.length === 0
+        ? []
+        : [{ data: remainingResults, key: 'results', recent: false, title: 'More matches' }]),
+    ];
+  }, [activeCategoryLabel, recentDestinationIds, results]);
   const searchFocus = useSharedValue(0);
   const animatedSearchBarStyle = useAnimatedStyle(() => ({
     borderColor: interpolateColor(
@@ -117,8 +149,7 @@ export function SearchPanel({
       [0, 1],
       [NavOssColors.border, NavOssColors.green],
     ),
-    shadowOpacity: interpolate(searchFocus.value, [0, 1], [0.16, 0.22]),
-    transform: [{ scale: interpolate(searchFocus.value, [0, 1], [1, 1.012]) }],
+    shadowOpacity: interpolate(searchFocus.value, [0, 1], [0.1, 0.16]),
   }));
   const showResults = query.trim().length >= 2 && (searchState !== 'idle' || results.length > 0);
   const connectionColor =
@@ -138,17 +169,15 @@ export function SearchPanel({
           style={styles.brandMark}
         />
         <Text style={[styles.brandName, darkMap && styles.brandNameDark]}>NavOSS</Text>
-        <View style={styles.connectionStatus}>
+        <View accessibilityLiveRegion="polite" style={styles.connectionStatus}>
           <View style={[styles.connectionDot, { backgroundColor: connectionColor }]} />
-          <Text
-            numberOfLines={1}
-            style={[styles.connectionText, darkMap && styles.connectionTextDark]}
-          >
-            {connectionLabel(apiConnection, coverageName)}
+          <Text numberOfLines={1} style={styles.connectionText}>
+            {connectionLabel(apiConnection)}
           </Text>
         </View>
         <Pressable
           accessibilityLabel="About and privacy"
+          accessibilityRole="button"
           hitSlop={8}
           onPress={() => {
             setIsAboutVisible(true);
@@ -158,7 +187,7 @@ export function SearchPanel({
           <SymbolView
             name={{ android: 'info', ios: 'info.circle' }}
             size={20}
-            tintColor={darkMap ? NavOssColors.white : NavOssColors.asphalt}
+            tintColor={NavOssColors.asphalt}
           />
         </Pressable>
       </View>
@@ -171,10 +200,14 @@ export function SearchPanel({
         />
         <TextInput
           accessibilityLabel={searchEnabled ? 'Search places' : 'Place search unavailable here'}
+          accessibilityState={{ disabled: !searchEnabled }}
           autoCapitalize="words"
           autoCorrect={false}
           enterKeyHint="search"
-          onChangeText={onChangeQuery}
+          onChangeText={(nextQuery) => {
+            setResultsExpanded(true);
+            onChangeQuery(nextQuery);
+          }}
           onBlur={() => {
             searchFocus.value = withTiming(0, {
               duration: 150,
@@ -182,12 +215,17 @@ export function SearchPanel({
             });
           }}
           onFocus={() => {
+            setResultsExpanded(true);
             searchFocus.value = withTiming(1, {
               duration: 170,
               reduceMotion: ReduceMotion.System,
             });
           }}
-          onSubmitEditing={onSubmit}
+          onSubmitEditing={() => {
+            setResultsExpanded(false);
+            Keyboard.dismiss();
+            onSubmit();
+          }}
           editable={searchEnabled}
           placeholder={searchEnabled ? searchPlaceholder : 'Place search unavailable here'}
           placeholderTextColor={NavOssColors.muted}
@@ -202,9 +240,10 @@ export function SearchPanel({
           >
             <Pressable
               accessibilityLabel="Clear search"
+              accessibilityRole="button"
               hitSlop={10}
               onPress={onClear}
-              style={styles.clearButton}
+              style={({ pressed }) => [styles.clearButton, pressed && styles.aboutButtonPressed]}
             >
               <SymbolView
                 name={{ android: 'close', ios: 'xmark' }}
@@ -225,19 +264,62 @@ export function SearchPanel({
           layout={LinearTransition.duration(180).reduceMotion(ReduceMotion.System)}
           style={[styles.resultsPanel, { maxHeight: maximumResultsHeight }]}
         >
+          {results.length > 0 && (
+            <View style={styles.resultsHeader}>
+              <Text accessibilityRole="header" style={styles.resultsCount}>
+                {results.length} {results.length === 1 ? 'place' : 'places'} found
+              </Text>
+              <Pressable
+                accessibilityHint={
+                  resultsExpanded
+                    ? 'Collapse the list to explore matching locations on the map'
+                    : 'Browse matching places and their distances'
+                }
+                accessibilityLabel={resultsExpanded ? 'Show map' : 'Show list'}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: resultsExpanded }}
+                onPress={() => {
+                  setResultsExpanded((expanded) => !expanded);
+                  if (resultsExpanded) Keyboard.dismiss();
+                }}
+                style={({ pressed }) => [
+                  styles.presentationButton,
+                  pressed && styles.resultRowPressed,
+                ]}
+              >
+                <SymbolView
+                  name={
+                    resultsExpanded
+                      ? { android: 'map', ios: 'map' }
+                      : { android: 'list', ios: 'list.bullet' }
+                  }
+                  size={16}
+                  tintColor={NavOssColors.green}
+                />
+                <Text style={styles.presentationText}>
+                  {resultsExpanded ? 'Show map' : 'Show list'}
+                </Text>
+              </Pressable>
+            </View>
+          )}
           {searchState === 'loading' && (
             <Animated.View
+              accessibilityLiveRegion="polite"
               entering={FadeIn.duration(150).reduceMotion(ReduceMotion.System)}
               exiting={FadeOut.duration(100).reduceMotion(ReduceMotion.System)}
               style={styles.stateRow}
             >
               <ActivityIndicator color={NavOssColors.green} size="small" />
-              <Text style={styles.stateText}>Searching places</Text>
+              <Text style={styles.stateText}>
+                {activeCategoryLabel === undefined ? 'Searching places' : 'Finding nearby places'}
+              </Text>
             </Animated.View>
           )}
 
           {searchState === 'error' && (
             <Animated.View
+              accessibilityLiveRegion="polite"
+              accessibilityRole="alert"
               entering={FadeIn.duration(150).reduceMotion(ReduceMotion.System)}
               exiting={FadeOut.duration(100).reduceMotion(ReduceMotion.System)}
               style={styles.stateRow}
@@ -247,38 +329,57 @@ export function SearchPanel({
                 size={20}
                 tintColor={NavOssColors.coral}
               />
-              <Text style={styles.stateText}>Search service unavailable</Text>
+              <View style={styles.stateCopy}>
+                <Text style={styles.stateTitle}>Search is unavailable right now</Text>
+                <Text style={styles.stateText}>Please try your search again in a moment.</Text>
+              </View>
             </Animated.View>
           )}
 
           {searchState === 'success' && results.length === 0 && (
             <Animated.View
+              accessibilityLiveRegion="polite"
               entering={FadeIn.duration(150).reduceMotion(ReduceMotion.System)}
               exiting={FadeOut.duration(100).reduceMotion(ReduceMotion.System)}
               style={styles.stateRow}
             >
-              <Text style={styles.stateText}>No places found</Text>
+              <View style={styles.stateCopy}>
+                <Text style={styles.stateTitle}>
+                  {activeCategoryLabel === undefined
+                    ? 'No matches found'
+                    : 'No places found nearby'}
+                </Text>
+                <Text style={styles.stateText}>
+                  {activeCategoryLabel === undefined
+                    ? 'Try another place name or add a street.'
+                    : 'Try another category or search by name.'}
+                </Text>
+              </View>
             </Animated.View>
           )}
 
-          {results.length > 0 && (
-            <FlatList
-              data={results}
+          {results.length > 0 && resultsExpanded && (
+            <SectionList
+              sections={resultSections}
               keyboardShouldPersistTaps="handled"
               keyExtractor={(result) => result.id}
-              renderItem={({ index, item }) => {
+              renderItem={({ item, section }) => {
                 const distance = formatSearchDistance(item.distanceMeters);
                 const context = searchResultContext(item);
                 const badge = categoryLabel(item, activeCategoryLabel);
                 return (
                   <Animated.View
-                    entering={FadeInDown.duration(180)
-                      .delay(Math.min(index, 5) * 28)
-                      .reduceMotion(ReduceMotion.System)}
+                    entering={FadeIn.duration(160).reduceMotion(ReduceMotion.System)}
                     layout={LinearTransition.duration(160).reduceMotion(ReduceMotion.System)}
                   >
                     <Pressable
                       accessibilityLabel={`Select ${item.name}${badge === '' ? '' : `, ${badge}`}${distance === undefined ? '' : `, ${distance} away`}, ${context}`}
+                      accessibilityHint={
+                        section.recent
+                          ? 'Recently used destination matching this search'
+                          : undefined
+                      }
+                      accessibilityRole="button"
                       onPress={() => {
                         onSelectResult(item);
                       }}
@@ -289,21 +390,23 @@ export function SearchPanel({
                     >
                       <View style={styles.resultLead}>
                         <SymbolView
-                          name={{ android: 'location_on', ios: 'mappin' }}
-                          size={17}
-                          tintColor={NavOssColors.coral}
+                          name={
+                            section.recent
+                              ? { android: 'history', ios: 'clock.arrow.circlepath' }
+                              : { android: 'location_on', ios: 'mappin' }
+                          }
+                          size={20}
+                          tintColor={section.recent ? NavOssColors.green : NavOssColors.coral}
                         />
                         {distance !== undefined && (
-                          <Text numberOfLines={1} style={styles.resultDistance}>
-                            {distance}
-                          </Text>
+                          <Text style={styles.resultDistance}>{distance}</Text>
                         )}
                       </View>
                       <View style={styles.resultCopy}>
                         <Text numberOfLines={1} style={styles.resultName}>
                           {item.name}
                         </Text>
-                        <Text numberOfLines={1} style={styles.resultLabel}>
+                        <Text numberOfLines={2} style={styles.resultLabel}>
                           {context}
                         </Text>
                       </View>
@@ -312,7 +415,16 @@ export function SearchPanel({
                   </Animated.View>
                 );
               }}
+              renderSectionHeader={({ section }) =>
+                section.title === undefined ? null : (
+                  <Text accessibilityRole="header" style={styles.resultSectionTitle}>
+                    {section.title}
+                  </Text>
+                )
+              }
               showsVerticalScrollIndicator={false}
+              stickySectionHeadersEnabled={false}
+              style={styles.resultsList}
             />
           )}
 
@@ -335,6 +447,7 @@ export function SearchPanel({
             <Text style={styles.aboutHeaderTitle}>NavOSS</Text>
             <Pressable
               accessibilityLabel="Close about and privacy"
+              accessibilityRole="button"
               hitSlop={8}
               onPress={() => {
                 setIsAboutVisible(false);
@@ -398,6 +511,7 @@ export function SearchPanel({
               )}
               <Pressable
                 accessibilityLabel="Clear saved and recent destinations"
+                accessibilityRole="button"
                 onPress={onClearDestinationHistory}
                 style={({ pressed }) => [styles.aboutLink, pressed && styles.aboutButtonPressed]}
               >
@@ -414,7 +528,7 @@ export function SearchPanel({
                 onPress={() => {
                   void Linking.openURL(PRIVACY_POLICY_URL);
                 }}
-                style={styles.aboutLink}
+                style={({ pressed }) => [styles.aboutLink, pressed && styles.aboutButtonPressed]}
               >
                 <Text style={styles.aboutLinkText}>Privacy policy</Text>
                 <SymbolView
@@ -438,7 +552,7 @@ export function SearchPanel({
                 onPress={() => {
                   void Linking.openURL(SUPPORT_URL);
                 }}
-                style={styles.aboutLink}
+                style={({ pressed }) => [styles.aboutLink, pressed && styles.aboutButtonPressed]}
               >
                 <Text style={styles.aboutLinkText}>Support</Text>
                 <SymbolView
@@ -462,10 +576,11 @@ export function SearchPanel({
               {googlePlacesLicenseInfo !== undefined && (
                 <Pressable
                   accessibilityLabel="Open Google Places open-source licences"
+                  accessibilityRole="button"
                   onPress={() => {
                     setIsGoogleLicensesVisible(true);
                   }}
-                  style={styles.aboutLink}
+                  style={({ pressed }) => [styles.aboutLink, pressed && styles.aboutButtonPressed]}
                 >
                   <Text style={styles.aboutLinkText}>Google Places licences</Text>
                   <SymbolView
@@ -493,6 +608,7 @@ export function SearchPanel({
             <Text style={styles.aboutHeaderTitle}>Google Places licences</Text>
             <Pressable
               accessibilityLabel="Close Google Places licences"
+              accessibilityRole="button"
               hitSlop={8}
               onPress={() => {
                 setIsGoogleLicensesVisible(false);
@@ -526,35 +642,36 @@ const styles = StyleSheet.create({
     fontFamily: NavOssFonts.regular,
     fontSize: 16,
     letterSpacing: 0,
-    lineHeight: 25,
+    lineHeight: 24,
   },
   aboutButton: {
     alignItems: 'center',
+    backgroundColor: NavOssColors.paper,
     borderColor: NavOssColors.border,
-    borderRadius: 17,
+    borderRadius: Spacing.four,
     borderWidth: StyleSheet.hairlineWidth,
-    height: 34,
+    height: 44,
     justifyContent: 'center',
-    width: 34,
+    width: 44,
   },
   aboutButtonPressed: {
     backgroundColor: NavOssColors.fog,
   },
   aboutCloseButton: {
     alignItems: 'center',
-    borderRadius: 20,
-    height: 40,
+    borderRadius: Spacing.four,
+    height: 44,
     justifyContent: 'center',
-    width: 40,
+    width: 44,
   },
   aboutContent: {
-    gap: 28,
-    paddingBottom: 44,
-    paddingHorizontal: 24,
-    paddingTop: 34,
+    gap: Spacing.five,
+    paddingBottom: Spacing.five,
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.five,
   },
   aboutDestructiveText: {
-    color: NavOssColors.coral,
+    color: NavOssColors.asphalt,
     fontFamily: NavOssFonts.semibold,
     fontSize: 16,
     letterSpacing: 0,
@@ -585,13 +702,13 @@ const styles = StyleSheet.create({
     fontFamily: NavOssFonts.regular,
     fontSize: 18,
     letterSpacing: 0,
-    lineHeight: 27,
+    lineHeight: 28,
   },
   aboutLink: {
     alignItems: 'center',
     alignSelf: 'flex-start',
     flexDirection: 'row',
-    gap: 7,
+    gap: Spacing.two,
     minHeight: 44,
   },
   aboutLinkText: {
@@ -607,8 +724,8 @@ const styles = StyleSheet.create({
   aboutSection: {
     borderTopColor: NavOssColors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 12,
-    paddingTop: 22,
+    gap: Spacing.three,
+    paddingTop: Spacing.four,
   },
   aboutSectionTitle: {
     color: NavOssColors.asphalt,
@@ -624,9 +741,9 @@ const styles = StyleSheet.create({
     lineHeight: 38,
   },
   brandMark: {
-    borderRadius: 6,
-    height: 30,
-    width: 30,
+    borderRadius: Spacing.two,
+    height: Spacing.five,
+    width: Spacing.five,
   },
   brandName: {
     color: NavOssColors.asphalt,
@@ -635,31 +752,32 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   brandNameDark: {
-    color: NavOssColors.white,
-    textShadowColor: '#000000',
+    color: NavOssColors.paper,
+    textShadowColor: NavOssColors.asphalt,
     textShadowOffset: { height: 1, width: 0 },
-    textShadowRadius: 3,
+    textShadowRadius: Spacing.one,
   },
   brandRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 9,
-    height: 34,
+    gap: Spacing.two,
+    minHeight: 44,
   },
   category: {
-    color: NavOssColors.green,
+    color: NavOssColors.muted,
     fontFamily: NavOssFonts.medium,
     fontSize: 12,
     letterSpacing: 0,
-    maxWidth: 92,
+    maxWidth: Spacing.six + Spacing.five,
     textAlign: 'right',
     textTransform: 'capitalize',
   },
   clearButton: {
     alignItems: 'center',
-    height: 36,
+    borderRadius: Spacing.four,
+    height: 44,
     justifyContent: 'center',
-    width: 36,
+    width: 44,
   },
   connectionDot: {
     borderRadius: 4,
@@ -668,40 +786,45 @@ const styles = StyleSheet.create({
   },
   connectionStatus: {
     alignItems: 'center',
+    backgroundColor: NavOssColors.paper,
+    borderColor: NavOssColors.border,
+    borderRadius: Spacing.three,
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
-    gap: 6,
+    flexShrink: 1,
+    gap: Spacing.one,
     marginLeft: 'auto',
     maxWidth: '52%',
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
   },
   connectionText: {
     color: NavOssColors.muted,
+    flexShrink: 1,
     fontFamily: NavOssFonts.medium,
     fontSize: 12,
     letterSpacing: 0,
   },
-  connectionTextDark: {
-    color: '#E3E8E5',
-    textShadowColor: '#000000',
-    textShadowOffset: { height: 1, width: 0 },
-    textShadowRadius: 3,
-  },
   container: {
-    gap: 10,
-    marginHorizontal: 14,
+    gap: Spacing.two,
+    marginHorizontal: Spacing.three,
     zIndex: 20,
   },
   fixtureFooter: {
     alignItems: 'center',
+    backgroundColor: NavOssColors.fog,
     borderTopColor: NavOssColors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
-    minHeight: 30,
+    flexShrink: 0,
+    minHeight: Spacing.five,
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
   },
   fixtureText: {
     color: NavOssColors.muted,
     fontFamily: NavOssFonts.medium,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0,
   },
   input: {
@@ -727,29 +850,30 @@ const styles = StyleSheet.create({
   },
   resultCopy: {
     flex: 1,
-    gap: 2,
+    gap: Spacing.one,
     minWidth: 0,
   },
   resultDistance: {
     color: NavOssColors.asphalt,
     fontFamily: NavOssFonts.semibold,
-    fontSize: 10,
+    fontSize: 14,
     letterSpacing: 0,
+    lineHeight: 20,
   },
   resultLead: {
     alignItems: 'center',
-    backgroundColor: '#FCE9E5',
-    borderRadius: 8,
-    gap: 1,
-    height: 42,
+    flexShrink: 0,
+    gap: Spacing.one,
+    minHeight: 44,
     justifyContent: 'center',
-    width: 50,
+    minWidth: Spacing.five + Spacing.four,
   },
   resultLabel: {
     color: NavOssColors.muted,
     fontFamily: NavOssFonts.regular,
-    fontSize: 13,
+    fontSize: 14,
     letterSpacing: 0,
+    lineHeight: 20,
   },
   resultName: {
     color: NavOssColors.asphalt,
@@ -762,52 +886,107 @@ const styles = StyleSheet.create({
     borderBottomColor: NavOssColors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
-    gap: 10,
-    minHeight: 62,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: Spacing.two,
+    minHeight: Spacing.six + Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
   },
   resultRowPressed: {
+    backgroundColor: NavOssColors.sky,
+  },
+  resultSectionTitle: {
     backgroundColor: NavOssColors.fog,
+    color: NavOssColors.asphalt,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 14,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  resultsCount: {
+    color: NavOssColors.asphalt,
+    flex: 1,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 14,
+    minWidth: 0,
+  },
+  resultsHeader: {
+    alignItems: 'center',
+    borderBottomColor: NavOssColors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    flexShrink: 0,
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+  },
+  resultsList: {
+    flexShrink: 1,
+  },
+  presentationButton: {
+    alignItems: 'center',
+    borderRadius: Spacing.two,
+    flexDirection: 'row',
+    gap: Spacing.two,
+    minHeight: 44,
+    paddingHorizontal: Spacing.two,
+  },
+  presentationText: {
+    color: NavOssColors.asphalt,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 14,
   },
   resultsPanel: {
-    backgroundColor: NavOssColors.white,
+    backgroundColor: NavOssColors.paper,
     borderColor: NavOssColors.border,
-    borderRadius: 8,
+    borderRadius: Spacing.three,
     borderWidth: StyleSheet.hairlineWidth,
+    flexShrink: 1,
     overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: { height: 5, width: 0 },
+    shadowColor: NavOssColors.asphalt,
+    shadowOffset: { height: Spacing.one, width: 0 },
     shadowOpacity: 0.14,
     shadowRadius: 16,
   },
   searchBar: {
     alignItems: 'center',
-    backgroundColor: NavOssColors.white,
+    backgroundColor: NavOssColors.paper,
     borderColor: NavOssColors.border,
-    borderRadius: 27,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Spacing.five,
+    borderWidth: 2,
     flexDirection: 'row',
-    gap: 10,
-    height: 54,
-    paddingLeft: 15,
-    paddingRight: 8,
-    shadowColor: '#000000',
-    shadowOffset: { height: 3, width: 0 },
-    shadowOpacity: 0.16,
+    gap: Spacing.two,
+    height: 56,
+    paddingLeft: Spacing.three,
+    paddingRight: Spacing.one,
+    shadowColor: NavOssColors.asphalt,
+    shadowOffset: { height: Spacing.one, width: 0 },
+    shadowOpacity: 0.1,
     shadowRadius: 12,
+  },
+  stateCopy: {
+    flex: 1,
+    gap: Spacing.one,
   },
   stateRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 10,
-    minHeight: 58,
-    paddingHorizontal: 16,
+    gap: Spacing.two,
+    minHeight: Spacing.six,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.three,
   },
   stateText: {
     color: NavOssColors.muted,
-    fontFamily: NavOssFonts.medium,
-    fontSize: 15,
+    flexShrink: 1,
+    fontFamily: NavOssFonts.regular,
+    fontSize: 14,
     letterSpacing: 0,
+    lineHeight: 20,
+  },
+  stateTitle: {
+    color: NavOssColors.asphalt,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 16,
+    lineHeight: 20,
   },
 });
