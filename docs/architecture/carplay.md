@@ -241,6 +241,8 @@ traffic, lane, speed, or incident knowledge.
 - The main-display speed and speed-limit readouts anchor to the map content's top-right bounds,
   independently of transient template safe-area insets. They follow a real content resize but do not
   move when chrome appears or disappears. Dashboard rendering keeps its own safe-area behavior.
+  When no posted limit is available, the current-speed badge occupies the rightmost slot instead of
+  reserving empty space for the hidden limit; a returning limit restores the original badge order.
 - Posted speed limits come from geometry-aligned Valhalla/OpenStreetMap `maxspeed` annotations.
   NavOSS selects the nearest matched route segment and hides the sign for unknown or unlimited
   values rather than inferring a limit from road class.

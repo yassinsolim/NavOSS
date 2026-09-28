@@ -162,13 +162,15 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       }
       return
     case "hud-wide-chrome":
-      // Pins the map to a landscape, full-width region (simulating a wide CarPlay display)
-      // and sets the same `anchorsSpeedHUDToViewBounds` option the main CarPlay scene uses in
-      // production, then grows `additionalSafeAreaInsets` to simulate CarPlay revealing the
-      // Trips/back affordance at the top-left when the driver touches the map. Asserts the
-      // speed readout both sits at the content's true top-right margin and is unaffected by
-      // the inset change — a correctly anchored readout never moves; a regression here
-      // crashes the harness instead of silently emitting a stale screenshot.
+      // Pins the map to a landscape, wide-display region and sets the same
+      // `anchorsSpeedHUDToViewBounds` option the main CarPlay scene uses in production, then
+      // exercises every way the speed/speed-limit readouts can move: transient chrome
+      // (`additionalSafeAreaInsets`) revealed and hidden, a real content resize, and the
+      // speed limit going from known -> unknown -> known again through the real display()
+      // path. Asserts the readouts sit at the true content-relative margins throughout —
+      // including that speed slides flush to the trailing margin (no blank badge-width slot)
+      // while the limit is unknown, and returns to its slot beside the limit once restored.
+      // A regression crashes the harness instead of silently emitting a stale screenshot.
       let hudFrame = CGRect(
         x: 0,
         y: 0,
@@ -197,17 +199,24 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
         guard let self else { return }
         self.view.layoutIfNeeded()
+        let margin = 8.0
+        let badgeWidth = 38.0
+        let gap = 4.0
+        let expectedTop = margin
         let beforeChrome = self.mapViewController.speedReadoutFrame
-        let expectedReadoutWidth = 38.0
-        let expectedMargin = 8.0
-        let expectedTop = expectedMargin
-        let expectedLeft = hudFrame.width - expectedMargin - expectedReadoutWidth
-        guard abs(beforeChrome.origin.y - expectedTop) < 0.5,
-          abs(beforeChrome.origin.x - expectedLeft) < 0.5
+        let limitBeforeChrome = self.mapViewController.speedLimitReadoutFrame
+        let expectedSpeedLeftWithLimit = hudFrame.width - margin - badgeWidth - gap - badgeWidth
+        let expectedLimitLeft = hudFrame.width - margin - badgeWidth
+        guard self.mapViewController.speedReadoutIsVisible,
+          abs(beforeChrome.origin.y - expectedTop) < 0.5,
+          abs(beforeChrome.origin.x - expectedSpeedLeftWithLimit) < 0.5,
+          let limitBeforeChrome,
+          abs(limitBeforeChrome.origin.y - expectedTop) < 0.5,
+          abs(limitBeforeChrome.origin.x - expectedLimitLeft) < 0.5
         else {
           assertionFailure(
-            "CarPlay speed readout is not at the content top-right margin: "
-              + "frame=\(beforeChrome) expectedOrigin=(\(expectedLeft), \(expectedTop)) "
+            "CarPlay speed/limit readouts are not at the content top-right margin: "
+              + "speed=\(beforeChrome) limit=\(String(describing: limitBeforeChrome)) "
               + "content=\(hudFrame)"
           )
           return
@@ -245,12 +254,66 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         )
         self.view.layoutIfNeeded()
         let resizedReadout = self.mapViewController.speedReadoutFrame
-        guard
-          abs(resizedReadout.minX - (resizedBounds.width - expectedMargin - expectedReadoutWidth))
-            < 0.5,
+        let resizedExpectedSpeedLeft = resizedBounds.width - margin - badgeWidth - gap - badgeWidth
+        guard abs(resizedReadout.minX - resizedExpectedSpeedLeft) < 0.5,
           abs(resizedReadout.minY - expectedTop) < 0.5
         else {
           assertionFailure("CarPlay speed readout did not follow a real content resize")
+          return
+        }
+        // Drop the speed limit through the real display() path (no synthesized frame): the
+        // speed badge must slide flush to the trailing margin instead of leaving the limit
+        // badge's old badgeWidth+gap slot empty.
+        self.mapViewController.display(
+          route: Self.wideRoute,
+          routeId: "visual-hud-wide-chrome",
+          activeGuidance: true,
+          position: NavOSSCarPlayPosition(
+            coordinate: Self.wideRoute[2], courseDegrees: 70, speedMetersPerSecond: 24
+          ),
+          routeProgress: 0.35,
+          speedLimitKph: nil
+        )
+        self.view.layoutIfNeeded()
+        let speedWithoutLimit = self.mapViewController.speedReadoutFrame
+        let expectedSpeedLeftAlone = resizedBounds.width - margin - badgeWidth
+        guard self.mapViewController.speedReadoutIsVisible,
+          self.mapViewController.speedLimitReadoutFrame == nil,
+          abs(speedWithoutLimit.origin.x - expectedSpeedLeftAlone) < 0.5,
+          abs(speedWithoutLimit.origin.y - expectedTop) < 0.5
+        else {
+          assertionFailure(
+            "CarPlay speed readout left a blank slot instead of taking the trailing margin "
+              + "once the speed limit was hidden: speed=\(speedWithoutLimit) "
+              + "limit=\(String(describing: self.mapViewController.speedLimitReadoutFrame))"
+          )
+          return
+        }
+        // Restore the limit through the real display() path and confirm the speed badge
+        // slides back to its original slot without changing the visible ordering (speed
+        // left, limit right, no overlap).
+        self.mapViewController.display(
+          route: Self.wideRoute,
+          routeId: "visual-hud-wide-chrome",
+          activeGuidance: true,
+          position: NavOSSCarPlayPosition(
+            coordinate: Self.wideRoute[2], courseDegrees: 70, speedMetersPerSecond: 24
+          ),
+          routeProgress: 0.35,
+          speedLimitKph: 80
+        )
+        self.view.layoutIfNeeded()
+        let speedRestored = self.mapViewController.speedReadoutFrame
+        let limitRestored = self.mapViewController.speedLimitReadoutFrame
+        guard self.mapViewController.speedReadoutIsVisible, let limitRestored,
+          abs(speedRestored.origin.x - resizedExpectedSpeedLeft) < 0.5,
+          abs(limitRestored.origin.x - (resizedBounds.width - margin - badgeWidth)) < 0.5,
+          speedRestored.maxX < limitRestored.minX
+        else {
+          assertionFailure(
+            "CarPlay speed/limit readouts did not restore correctly: "
+              + "speed=\(speedRestored) limit=\(String(describing: limitRestored))"
+          )
           return
         }
         self.markReady()
