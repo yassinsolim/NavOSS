@@ -33,7 +33,10 @@ build can continue an active phone route onto the main CarPlay display with a na
 cancellation. During active CarPlay guidance, the phone shows a compact next-maneuver card and a
 scrollable list of remaining maneuvers. The live first distance follows native progress; later
 distances describe the legs leading to those maneuvers. Instructions wrap without hiding the road
-name, and the ETA, destination, and End action remain outside the scrolling list. Arrival exposes Done.
+name. At standard text sizes, ETA, destination, and End remain outside the scrolling list. At
+accessibility text sizes, the header, full-width maneuver cards, and untruncated trip summary scroll
+together so they cannot squeeze the directions viewport away; a full-width End remains fixed below.
+Arrival exposes Done with the same layout rules.
 
 Connecting CarPlay while idle, loading, viewing a preview, or handling a route error preserves the
 phone's interactive map and its search, Retry, Cancel, and Start controls. Those planning states are

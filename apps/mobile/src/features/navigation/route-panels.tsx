@@ -507,16 +507,54 @@ type CarPlayCompanionPanelProps = CarPlayCompanionFrameProps &
 /// one scrollable column, so a passenger can read ahead without the car screen.
 export function CarPlayCompanionPanel(props: CarPlayCompanionPanelProps) {
   const { bottomInset, destinationName, onAction, safeAreaTop } = props;
+  const { fontScale } = useWindowDimensions();
+  const expandedText = fontScale >= 1.5;
   const arrived = props.phase === 'arrived';
   const [next, ...later] = arrived ? [] : props.maneuvers;
   const nextDirection =
     next === undefined ? 'arrive' : maneuverDirection(next.maneuverType, next.instruction);
   const nextDistance = next === undefined ? undefined : formatDistance(next.distanceMeters);
+  const arrivalTime = arrived ? '' : formatArrivalTime(props.durationSeconds);
+  // Intl may bind the day period with a no-break space. At large sizes, wrap before PM/AM,
+  // rather than forcing a character break inside it when the complete time cannot fit.
+  const displayedArrivalTime = expandedText
+    ? arrivalTime.replace(/[\u00a0\u202f]/g, ' ')
+    : arrivalTime;
   const nextSummary = arrived
     ? `You've arrived, ${destinationName}`
     : next === undefined
       ? destinationName
-      : `Next, in ${String(nextDistance)}, ${next.instruction}${next.roadName.length === 0 ? '' : `, ${next.roadName}`}, arrive ${formatArrivalTime(props.durationSeconds)}`;
+      : `Next, in ${String(nextDistance)}, ${next.instruction}${next.roadName.length === 0 ? '' : `, ${next.roadName}`}, arrive ${arrivalTime}`;
+  const connectionHeader = (
+    <View style={styles.carPlayConnectionRow}>
+      <View style={styles.carPlayConnectionDot} />
+      <Text style={styles.carPlayConnectionText}>Directions on CarPlay</Text>
+    </View>
+  );
+  const tripSummary = (
+    <View style={[styles.carPlayTripSummary, expandedText && styles.carPlayFlowContent]}>
+      {!arrived && (
+        <>
+          <Text
+            numberOfLines={expandedText ? undefined : 1}
+            style={[styles.carPlayEta, styles.tabularNumbers]}
+          >
+            {displayedArrivalTime}
+          </Text>
+          <Text
+            numberOfLines={expandedText ? undefined : 1}
+            style={[styles.carPlayRemaining, styles.tabularNumbers]}
+          >
+            {formatDuration(props.durationSeconds)} ·{' '}
+            {formatDistance(props.remainingDistanceMeters)}
+          </Text>
+          <Text numberOfLines={expandedText ? undefined : 2} style={styles.carPlayDestination}>
+            {destinationName}
+          </Text>
+        </>
+      )}
+    </View>
+  );
 
   return (
     <Animated.View
@@ -530,21 +568,19 @@ export function CarPlayCompanionPanel(props: CarPlayCompanionPanelProps) {
         },
       ]}
     >
-      <View style={styles.carPlayConnectionRow}>
-        <View style={styles.carPlayConnectionDot} />
-        <Text style={styles.carPlayConnectionText}>Directions on CarPlay</Text>
-      </View>
+      {!expandedText && connectionHeader}
 
       <ScrollView
         contentContainerStyle={styles.carPlayDirectionsContent}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={expandedText}
         style={styles.carPlayDirections}
       >
+        {expandedText && connectionHeader}
         <View
           accessibilityLabel={nextSummary}
           accessibilityLiveRegion="polite"
           accessible
-          style={styles.carPlayNext}
+          style={[styles.carPlayNext, expandedText && styles.carPlayStacked]}
         >
           <View style={styles.carPlayNextIcon}>
             <SymbolView
@@ -553,11 +589,9 @@ export function CarPlayCompanionPanel(props: CarPlayCompanionPanelProps) {
               tintColor={NavOssColors.white}
             />
           </View>
-          <View style={styles.guidanceCopy}>
+          <View style={[styles.guidanceCopy, expandedText && styles.carPlayFlowContent]}>
             {nextDistance !== undefined && (
-              <Text numberOfLines={1} style={[styles.guidanceDistance, styles.tabularNumbers]}>
-                {nextDistance}
-              </Text>
+              <Text style={[styles.guidanceDistance, styles.tabularNumbers]}>{nextDistance}</Text>
             )}
             <Text style={styles.guidanceInstruction}>
               {arrived ? "You've arrived" : (next?.instruction ?? destinationName)}
@@ -570,6 +604,7 @@ export function CarPlayCompanionPanel(props: CarPlayCompanionPanelProps) {
             )}
           </View>
         </View>
+        {expandedText && tripSummary}
 
         {later.length > 0 && (
           <View style={styles.carPlayStepList}>
@@ -583,7 +618,7 @@ export function CarPlayCompanionPanel(props: CarPlayCompanionPanelProps) {
                   accessibilityLabel={`Then after ${distance}, ${maneuver.instruction}${maneuver.roadName.length === 0 ? '' : `, ${maneuver.roadName}`}`}
                   accessible
                   key={maneuver.stepIndex}
-                  style={styles.carPlayStepRow}
+                  style={[styles.carPlayStepRow, expandedText && styles.carPlayStacked]}
                 >
                   <SymbolView
                     name={maneuverSymbol(
@@ -592,13 +627,19 @@ export function CarPlayCompanionPanel(props: CarPlayCompanionPanelProps) {
                     size={22}
                     tintColor={NavOssColors.sky}
                   />
-                  <View style={styles.carPlayStepCopy}>
+                  <View style={[styles.carPlayStepCopy, expandedText && styles.carPlayFlowContent]}>
                     <Text style={styles.carPlayStepInstruction}>{maneuver.instruction}</Text>
                     {maneuver.roadName.length > 0 && (
                       <Text style={styles.carPlayStepRoad}>{maneuver.roadName}</Text>
                     )}
                   </View>
-                  <Text style={[styles.carPlayStepDistance, styles.tabularNumbers]}>
+                  <Text
+                    style={[
+                      styles.carPlayStepDistance,
+                      styles.tabularNumbers,
+                      expandedText && styles.carPlayStepDistanceExpanded,
+                    ]}
+                  >
                     {distance}
                   </Text>
                 </View>
@@ -609,28 +650,14 @@ export function CarPlayCompanionPanel(props: CarPlayCompanionPanelProps) {
       </ScrollView>
 
       <View style={styles.carPlayFooter}>
-        <View style={styles.carPlayTripSummary}>
-          {!arrived && (
-            <>
-              <Text numberOfLines={1} style={[styles.carPlayEta, styles.tabularNumbers]}>
-                {formatArrivalTime(props.durationSeconds)}
-              </Text>
-              <Text numberOfLines={1} style={[styles.carPlayRemaining, styles.tabularNumbers]}>
-                {formatDuration(props.durationSeconds)} ·{' '}
-                {formatDistance(props.remainingDistanceMeters)}
-              </Text>
-              <Text numberOfLines={2} style={styles.carPlayDestination}>
-                {destinationName}
-              </Text>
-            </>
-          )}
-        </View>
+        {!expandedText && tripSummary}
         <Pressable
           accessibilityLabel={arrived ? 'Finish navigation' : 'End navigation'}
           accessibilityRole="button"
           onPress={onAction}
           style={({ pressed }) => [
             styles.carPlayEndButton,
+            expandedText && styles.carPlayEndButtonExpanded,
             pressed && styles.navigationActionPressed,
           ]}
         >
@@ -1183,6 +1210,7 @@ const styles = StyleSheet.create({
   carPlayConnectionText: {
     color: NavOssColors.sky,
     fontFamily: NavOssFonts.semibold,
+    flexShrink: 1,
     fontSize: 15,
     letterSpacing: 0,
   },
@@ -1195,6 +1223,7 @@ const styles = StyleSheet.create({
   },
   carPlayDirections: {
     flex: 1,
+    minHeight: 0,
   },
   carPlayDirectionsContent: {
     gap: Spacing.three,
@@ -1210,6 +1239,12 @@ const styles = StyleSheet.create({
     minHeight: 68,
     minWidth: 68,
     paddingHorizontal: Spacing.two,
+  },
+  carPlayEndButtonExpanded: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: Spacing.two,
+    paddingVertical: Spacing.two,
   },
   carPlayEndText: {
     color: NavOssColors.white,
@@ -1231,6 +1266,16 @@ const styles = StyleSheet.create({
     gap: 16,
     paddingTop: 18,
   },
+  carPlayFlowContent: {
+    flexBasis: 'auto',
+    flexGrow: 0,
+    flexShrink: 0,
+    width: '100%',
+  },
+  carPlayStacked: {
+    alignItems: 'stretch',
+    flexDirection: 'column',
+  },
   carPlayNext: {
     alignItems: 'center',
     backgroundColor: NavOssColors.green,
@@ -1238,6 +1283,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 14,
     padding: 14,
+    flexShrink: 0,
   },
   carPlayNextIcon: {
     alignItems: 'center',
@@ -1282,6 +1328,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     lineHeight: 22,
     textAlign: 'right',
+  },
+  carPlayStepDistanceExpanded: {
+    textAlign: 'left',
   },
   carPlayStepInstruction: {
     color: NavOssColors.white,
