@@ -656,6 +656,7 @@ try {
         ['carplay-overview', 'overview', 'light'],
         ['carplay-clear', 'clear', 'light'],
         ['carplay-idle-location', 'idle-location', 'light'],
+        ['carplay-hud-wide-chrome', 'hud-wide-chrome', 'light'],
       ]) {
         await captureCarPlayScenario(name, scenario, appearance);
       }

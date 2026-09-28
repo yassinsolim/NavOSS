@@ -298,6 +298,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     NavOSSNavigationService.shared.setAudioMode(preferences.audioMode)
     self.mapViewController = mapViewController
     window.rootViewController = mapViewController
+    mapViewController.anchorsSpeedHUDToViewBounds = true
     mapViewController.recenter()
 
     let mapTemplate = makeMapTemplate()

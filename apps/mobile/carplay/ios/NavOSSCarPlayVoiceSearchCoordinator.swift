@@ -271,6 +271,31 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
     speechRecognizer = recognizer
     recognitionRequest = request
 
+    activateAudioCapture(
+      recognizer: recognizer,
+      request: request,
+      generation: generation,
+      attempt: 0
+    )
+  }
+
+  /// Claims the microphone input for recognition. The shared `AVAudioSession` can transiently
+  /// report itself busy immediately after a prior guidance-speech or capture session releases it
+  /// (route renegotiation, teardown still settling); a short bounded retry rides that out for
+  /// exactly the failures that mean "not ready yet" rather than surfacing a spurious "No
+  /// microphone audio" failure for a session that recovers a moment later. Anything else fails
+  /// immediately with the real, accurate error instead of masking it behind a retry loop.
+  /// Permissions and on-device recognizer availability were already confirmed to start this
+  /// session, so a failure here is about the audio route, not about access.
+  private func activateAudioCapture(
+    recognizer: SFSpeechRecognizer,
+    request: SFSpeechAudioBufferRecognitionRequest,
+    generation: UInt64,
+    attempt: Int
+  ) {
+    guard isCurrent(generation) else {
+      return
+    }
     let engine = AVAudioEngine()
     audioEngine = engine
     do {
@@ -289,12 +314,33 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
       engine.prepare()
       try engine.start()
     } catch {
-      showFailure(
-        state: VoiceControlState.error,
-        title: "No microphone audio",
-        detail: "Check that your vehicle microphone is available, then try voice search again.",
-        generation: generation
-      )
+      // Undo whatever this attempt partially set up before trying again or giving up; letting a
+      // half-started AVAudioEngine (possibly with a tap still installed) just fall out of scope
+      // leaks its resources instead of releasing them.
+      engine.inputNode.removeTap(onBus: 0)
+      engine.stop()
+      audioEngine = nil
+      guard
+        isTransientCaptureFailure(error),
+        let delay = NavOSSVoiceAudioSessionRetryPolicy.carPlayRecordingClaim
+          .delay(afterFailedAttempt: attempt)
+      else {
+        showFailure(
+          state: VoiceControlState.error,
+          title: "No microphone audio",
+          detail: "Check that your vehicle microphone is available, then try voice search again.",
+          generation: generation
+        )
+        return
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+        self?.activateAudioCapture(
+          recognizer: recognizer,
+          request: request,
+          generation: generation,
+          attempt: attempt + 1
+        )
+      }
       return
     }
 
@@ -312,6 +358,21 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
     maximumCaptureTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: false) { [weak self] _ in
       self?.finishListeningForSilence(generation: generation)
     }
+  }
+
+  /// Whether `error` is one of the documented "not ready yet" conditions worth a short retry, as
+  /// opposed to a permanent configuration/hardware problem retrying would never fix:
+  /// `VoiceCaptureError.noAudio` (the input node reports zero sample rate — the classic symptom
+  /// of querying it before the OS finishes establishing a route) and
+  /// `AVAudioSession.ErrorCode.cannotStartRecording` ("an attempt to start audio recording, but
+  /// the operation failed" — https://developer.apple.com/documentation/coreaudiotypes/avaudiosession/errorcode/cannotstartrecording).
+  private func isTransientCaptureFailure(_ error: Error) -> Bool {
+    if error is VoiceCaptureError {
+      return true
+    }
+    let nsError = error as NSError
+    return nsError.domain == NSOSStatusErrorDomain
+      && nsError.code == AVAudioSession.ErrorCode.cannotStartRecording.rawValue
   }
 
   private func showOnDeviceVoiceUnavailable(generation: UInt64) {
@@ -534,7 +595,8 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
       return
     }
     self.voiceInputLease = nil
-    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    // The service is the sole owner of deactivating the shared AVAudioSession (retried, never
+    // assumed); handing the lease back here is enough.
     NavOSSNavigationService.shared.finishCarPlayVoiceInput(voiceInputLease)
   }
 

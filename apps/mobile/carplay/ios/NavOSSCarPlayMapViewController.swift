@@ -64,6 +64,23 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private(set) var mapView: MLNMapView!
   private let speedLabel = UILabel()
   private let speedLimitLabel = UILabel()
+  private weak var overlayContentView: UIView?
+  private var overlayTopConstraint: NSLayoutConstraint?
+  private var overlayTrailingConstraint: NSLayoutConstraint?
+  private var speedTrailingConstraint: NSLayoutConstraint?
+  /// When `true`, the speed / speed-limit readouts anchor to this view controller's own
+  /// content bounds (the map view controller's `topAnchor`/`trailingAnchor`) instead of the
+  /// live `safeAreaLayoutGuide`. The main CarPlay map template's window IS the app's full
+  /// content region, so its content bounds already sit at the persistent top-right corner
+  /// of the display; unlike the live safe area, they do not shift when CarPlay transiently
+  /// grows safe-area insets around chrome it draws over the map — for example the trip/back
+  /// affordance it surfaces at the top-left when the driver touches the map. Defaults to
+  /// `false`, which keeps the previous live-safe-area behavior used by the dashboard scene
+  /// (a plain `UIWindow` without that transient-chrome quirk) and the visual harness. May be
+  /// set before or after the view loads.
+  var anchorsSpeedHUDToViewBounds = false {
+    didSet { updateOverlayAnchors() }
+  }
   var onStyleLoaded: (() -> Void)?
   var reservesRouteChoiceSheet = true
   private(set) var requestsUserLocation = true
@@ -88,6 +105,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     self.mapView = mapView
     scheduleStyleLoadWatchdog()
     let container = UIView(frame: .zero)
+    overlayContentView = container
     container.addSubview(mapView)
     let attributionLabel = UILabel()
     attributionLabel.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.78)
@@ -122,6 +140,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     speedLimitLabel.translatesAutoresizingMaskIntoConstraints = false
     speedLimitLabel.isHidden = true
     container.addSubview(speedLimitLabel)
+    let speedTrailing = speedLabel.trailingAnchor.constraint(
+      equalTo: speedLimitLabel.trailingAnchor,
+      constant: -(38 + 4)
+    )
     NSLayoutConstraint.activate([
       attributionLabel.leadingAnchor.constraint(
         equalTo: container.safeAreaLayoutGuide.leadingAnchor,
@@ -132,22 +154,71 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         constant: -6
       ),
       attributionLabel.heightAnchor.constraint(equalToConstant: 18),
-      speedLimitLabel.trailingAnchor.constraint(
-        equalTo: container.safeAreaLayoutGuide.trailingAnchor,
-        constant: -8
-      ),
-      speedLimitLabel.topAnchor.constraint(
-        equalTo: container.safeAreaLayoutGuide.topAnchor,
-        constant: 8
-      ),
       speedLimitLabel.widthAnchor.constraint(equalToConstant: 38),
       speedLimitLabel.heightAnchor.constraint(equalToConstant: 36),
-      speedLabel.trailingAnchor.constraint(equalTo: speedLimitLabel.leadingAnchor, constant: -4),
+      speedTrailing,
       speedLabel.topAnchor.constraint(equalTo: speedLimitLabel.topAnchor),
       speedLabel.widthAnchor.constraint(equalToConstant: 38),
       speedLabel.heightAnchor.constraint(equalToConstant: 36),
     ])
+    speedTrailingConstraint = speedTrailing
+    updateOverlayAnchors()
     view = container
+  }
+
+  /// Re-anchors the speed / speed-limit readouts per `anchorsSpeedHUDToViewBounds`, replacing
+  /// any previously installed constraints. Safe to call before the view has loaded; it
+  /// becomes a no-op until `loadView` supplies `overlayContentView`, at which point the
+  /// initial call in `loadView` picks up whichever mode was selected first.
+  private func updateOverlayAnchors() {
+    guard let container = overlayContentView else { return }
+    overlayTopConstraint?.isActive = false
+    overlayTrailingConstraint?.isActive = false
+    let top: NSLayoutConstraint
+    let trailing: NSLayoutConstraint
+    if anchorsSpeedHUDToViewBounds {
+      top = speedLimitLabel.topAnchor.constraint(equalTo: container.topAnchor, constant: 8)
+      trailing = speedLimitLabel.trailingAnchor.constraint(
+        equalTo: container.trailingAnchor,
+        constant: -8
+      )
+    } else {
+      top = speedLimitLabel.topAnchor.constraint(
+        equalTo: container.safeAreaLayoutGuide.topAnchor,
+        constant: 8
+      )
+      trailing = speedLimitLabel.trailingAnchor.constraint(
+        equalTo: container.safeAreaLayoutGuide.trailingAnchor,
+        constant: -8
+      )
+    }
+    NSLayoutConstraint.activate([top, trailing])
+    overlayTopConstraint = top
+    overlayTrailingConstraint = trailing
+  }
+
+  /// Toggles whether the speed badge's trailing edge sits `badgeWidth + gap` inside the
+  /// speed-limit badge's trailing edge (limit visible, ordering preserved: speed left, limit
+  /// right) or flush with it (limit hidden/unknown) — so speed always occupies the true
+  /// trailing slot instead of leaving a blank badge-width gap where an unknown limit would
+  /// have been.
+  private func updateSpeedTrailingConstraint(limitVisible: Bool) {
+    speedTrailingConstraint?.constant = limitVisible ? -(38 + 4) : 0
+  }
+
+  /// The current-speed readout's frame in `view` coordinates. Exposed (not `private`) so the
+  /// visual harness and any future layout regression test can assert the overlay holds its
+  /// position at the content's persistent top-right anchor across simulated CarPlay chrome
+  /// changes, sliding flush to the trailing edge (no blank slot) whenever the speed limit is
+  /// unknown/hidden.
+  var speedReadoutFrame: CGRect { speedLabel.frame }
+
+  var speedReadoutIsVisible: Bool { !speedLabel.isHidden }
+
+  /// The speed-limit readout's frame in `view` coordinates, or `nil` while it is hidden — an
+  /// unknown limit is never synthesized into a visible-but-blank badge.
+  var speedLimitReadoutFrame: CGRect? {
+    speedLimitLabel.isHidden ? nil : speedLimitLabel.frame
   }
 
   override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -427,6 +498,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     invalidateDisplayLink()
     speedLabel.isHidden = true
     speedLimitLabel.isHidden = true
+    updateSpeedTrailingConstraint(limitVisible: false)
     navigationViewingDistance = 850
     presentsRouteOverview = false
     routeId = nil
@@ -841,10 +913,12 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private func updateSpeedLimitDisplay(_ speedLimitKph: Int?) {
     guard activeGuidance, let speedLimitKph else {
       speedLimitLabel.isHidden = true
+      updateSpeedTrailingConstraint(limitVisible: false)
       return
     }
     speedLimitLabel.text = "MAX\n\(speedLimitKph)"
     speedLimitLabel.isHidden = false
+    updateSpeedTrailingConstraint(limitVisible: true)
   }
 
   private func updatePointOfInterestVisibility() {

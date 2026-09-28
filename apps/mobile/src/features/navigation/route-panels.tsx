@@ -34,6 +34,7 @@ import {
   formatDuration,
   formatTrafficDelay,
   routeViaLabel,
+  type UpcomingManeuver,
 } from '@/features/navigation/route-progress';
 import {
   maneuverDirection,
@@ -483,35 +484,209 @@ export function RoutePreviewPanel({
 
 export type NavigationRouteStatus = 'reroute-failed' | 'rerouting' | 'tracking';
 
-interface CarPlayCompanionPanelProps {
-  actionLabel: 'Done' | 'End';
+interface CarPlayCompanionFrameProps {
   bottomInset: number;
   destinationName: string;
-  distanceMeters: number;
-  durationSeconds: number;
-  instruction: string;
-  maneuverType: string;
   onAction: () => void;
-  remainingDistanceMeters: number;
-  roadName: string;
   safeAreaTop: number;
 }
 
-export function CarPlayCompanionPanel({
-  actionLabel,
-  bottomInset,
-  destinationName,
-  distanceMeters,
-  durationSeconds,
-  instruction,
-  maneuverType,
-  onAction,
-  remainingDistanceMeters,
-  roadName,
-  safeAreaTop,
-}: CarPlayCompanionPanelProps) {
-  const direction = maneuverDirection(maneuverType, instruction);
+type CarPlayCompanionPanelProps = CarPlayCompanionFrameProps &
+  (
+    | { phase: 'arrived' }
+    | {
+        durationSeconds: number;
+        /// Next maneuver first, then every later one through arrival.
+        maneuvers: readonly UpcomingManeuver[];
+        phase: 'navigating';
+        remainingDistanceMeters: number;
+      }
+  );
 
+/// The handset while CarPlay drives: the next maneuver on top and every remaining step below it in
+/// one scrollable column, so a passenger can read ahead without the car screen.
+export function CarPlayCompanionPanel(props: CarPlayCompanionPanelProps) {
+  const { bottomInset, destinationName, onAction, safeAreaTop } = props;
+  const { fontScale } = useWindowDimensions();
+  const expandedText = fontScale >= 1.5;
+  const arrived = props.phase === 'arrived';
+  const [next, ...later] = arrived ? [] : props.maneuvers;
+  const nextDirection =
+    next === undefined ? 'arrive' : maneuverDirection(next.maneuverType, next.instruction);
+  const nextDistance = next === undefined ? undefined : formatDistance(next.distanceMeters);
+  const arrivalTime = arrived ? '' : formatArrivalTime(props.durationSeconds);
+  // Intl may bind the day period with a no-break space. At large sizes, wrap before PM/AM,
+  // rather than forcing a character break inside it when the complete time cannot fit.
+  const displayedArrivalTime = expandedText
+    ? arrivalTime.replace(/[\u00a0\u202f]/g, ' ')
+    : arrivalTime;
+  const nextSummary = arrived
+    ? `You've arrived, ${destinationName}`
+    : next === undefined
+      ? destinationName
+      : `Next, in ${String(nextDistance)}, ${next.instruction}${next.roadName.length === 0 ? '' : `, ${next.roadName}`}, arrive ${arrivalTime}`;
+  const connectionHeader = (
+    <View style={styles.carPlayConnectionRow}>
+      <View style={styles.carPlayConnectionDot} />
+      <Text style={styles.carPlayConnectionText}>Directions on CarPlay</Text>
+    </View>
+  );
+  const tripSummary = (
+    <View style={[styles.carPlayTripSummary, expandedText && styles.carPlayFlowContent]}>
+      {!arrived && (
+        <>
+          <Text
+            numberOfLines={expandedText ? undefined : 1}
+            style={[styles.carPlayEta, styles.tabularNumbers]}
+          >
+            {displayedArrivalTime}
+          </Text>
+          <Text
+            numberOfLines={expandedText ? undefined : 1}
+            style={[styles.carPlayRemaining, styles.tabularNumbers]}
+          >
+            {formatDuration(props.durationSeconds)} ·{' '}
+            {formatDistance(props.remainingDistanceMeters)}
+          </Text>
+          <Text numberOfLines={expandedText ? undefined : 2} style={styles.carPlayDestination}>
+            {destinationName}
+          </Text>
+        </>
+      )}
+    </View>
+  );
+
+  return (
+    <Animated.View
+      entering={FadeIn.duration(220).reduceMotion(ReduceMotion.System)}
+      exiting={FadeOut.duration(150).reduceMotion(ReduceMotion.System)}
+      style={[
+        styles.carPlayCompanion,
+        {
+          paddingBottom: Math.max(bottomInset, 20),
+          paddingTop: Math.max(safeAreaTop, 20),
+        },
+      ]}
+    >
+      {!expandedText && connectionHeader}
+
+      <ScrollView
+        contentContainerStyle={styles.carPlayDirectionsContent}
+        showsVerticalScrollIndicator={expandedText}
+        style={styles.carPlayDirections}
+      >
+        {expandedText && connectionHeader}
+        <View
+          accessibilityLabel={nextSummary}
+          accessibilityLiveRegion="polite"
+          accessible
+          style={[styles.carPlayNext, expandedText && styles.carPlayStacked]}
+        >
+          <View style={styles.carPlayNextIcon}>
+            <SymbolView
+              name={maneuverSymbol(nextDirection)}
+              size={34}
+              tintColor={NavOssColors.white}
+            />
+          </View>
+          <View style={[styles.guidanceCopy, expandedText && styles.carPlayFlowContent]}>
+            {nextDistance !== undefined && (
+              <Text style={[styles.guidanceDistance, styles.tabularNumbers]}>{nextDistance}</Text>
+            )}
+            <Text style={styles.guidanceInstruction}>
+              {arrived ? "You've arrived" : (next?.instruction ?? destinationName)}
+            </Text>
+            {arrived ? (
+              <Text style={styles.guidanceRoad}>{destinationName}</Text>
+            ) : (
+              next !== undefined &&
+              next.roadName.length > 0 && <Text style={styles.guidanceRoad}>{next.roadName}</Text>
+            )}
+          </View>
+        </View>
+        {expandedText && tripSummary}
+
+        {later.length > 0 && (
+          <View style={styles.carPlayStepList}>
+            <Text accessibilityRole="header" style={styles.carPlayStepListTitle}>
+              Then
+            </Text>
+            {later.map((maneuver) => {
+              const distance = formatDistance(maneuver.distanceMeters);
+              return (
+                <View
+                  accessibilityLabel={`Then after ${distance}, ${maneuver.instruction}${maneuver.roadName.length === 0 ? '' : `, ${maneuver.roadName}`}`}
+                  accessible
+                  key={maneuver.stepIndex}
+                  style={[styles.carPlayStepRow, expandedText && styles.carPlayStacked]}
+                >
+                  <SymbolView
+                    name={maneuverSymbol(
+                      maneuverDirection(maneuver.maneuverType, maneuver.instruction),
+                    )}
+                    size={22}
+                    tintColor={NavOssColors.sky}
+                  />
+                  <View style={[styles.carPlayStepCopy, expandedText && styles.carPlayFlowContent]}>
+                    <Text style={styles.carPlayStepInstruction}>{maneuver.instruction}</Text>
+                    {maneuver.roadName.length > 0 && (
+                      <Text style={styles.carPlayStepRoad}>{maneuver.roadName}</Text>
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      styles.carPlayStepDistance,
+                      styles.tabularNumbers,
+                      expandedText && styles.carPlayStepDistanceExpanded,
+                    ]}
+                  >
+                    {distance}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
+
+      <View style={styles.carPlayFooter}>
+        {!expandedText && tripSummary}
+        <Pressable
+          accessibilityLabel={arrived ? 'Finish navigation' : 'End navigation'}
+          accessibilityRole="button"
+          onPress={onAction}
+          style={({ pressed }) => [
+            styles.carPlayEndButton,
+            expandedText && styles.carPlayEndButtonExpanded,
+            pressed && styles.navigationActionPressed,
+          ]}
+        >
+          <SymbolView
+            name={
+              arrived ? { android: 'check', ios: 'checkmark' } : { android: 'close', ios: 'xmark' }
+            }
+            size={26}
+            tintColor={NavOssColors.white}
+          />
+          {/* A static native Text can retain its old measured bounds across Dynamic Type changes. */}
+          <Text key={fontScale} style={styles.carPlayEndText}>
+            {arrived ? 'Done' : 'End'}
+          </Text>
+        </Pressable>
+      </View>
+    </Animated.View>
+  );
+}
+
+interface CarPlayIdlePanelProps {
+  bottomInset: number;
+  onEnd: () => void;
+  safeAreaTop: number;
+}
+
+/// Shown only while an active CarPlay route has no resolvable maneuver yet. Without CarPlay
+/// guidance the connected handset keeps its interactive map instead (see `phoneSurface`).
+export function CarPlayIdlePanel({ bottomInset, onEnd, safeAreaTop }: CarPlayIdlePanelProps) {
   return (
     <Animated.View
       entering={FadeIn.duration(220).reduceMotion(ReduceMotion.System)}
@@ -526,55 +701,31 @@ export function CarPlayCompanionPanel({
     >
       <View style={styles.carPlayConnectionRow}>
         <View style={styles.carPlayConnectionDot} />
-        <Text style={styles.carPlayConnectionText}>CarPlay</Text>
+        <Text style={styles.carPlayConnectionText}>Directions on CarPlay</Text>
       </View>
 
       <View
-        accessibilityLabel={`CarPlay navigation, ${formatDistance(distanceMeters)}, ${instruction}${roadName.length === 0 ? '' : `, ${roadName}`}, arrive ${formatArrivalTime(durationSeconds)}`}
-        accessibilityLiveRegion="polite"
+        accessibilityLabel="Your route is on your car's display. Directions will appear here once the next turn is ready."
         accessible
-        style={styles.carPlayGuidance}
+        style={styles.carPlayIdleBody}
       >
-        <SymbolView name={maneuverSymbol(direction)} size={88} tintColor={NavOssColors.white} />
-        <Text
-          adjustsFontSizeToFit
-          minimumFontScale={0.7}
-          numberOfLines={1}
-          style={styles.carPlayDistance}
-        >
-          {formatDistance(distanceMeters)}
+        <SymbolView
+          name={{ android: 'directions_car', ios: 'car.fill' }}
+          size={72}
+          tintColor={NavOssColors.sky}
+        />
+        <Text style={styles.carPlayIdleTitle}>Your route is on your car's display</Text>
+        <Text style={styles.carPlayIdleSubtitle}>
+          Directions will appear here once the next turn is ready.
         </Text>
-        <Text numberOfLines={3} style={styles.carPlayInstruction}>
-          {instruction}
-        </Text>
-        {roadName.length > 0 && (
-          <Text numberOfLines={1} style={styles.carPlayRoad}>
-            {roadName}
-          </Text>
-        )}
       </View>
 
       <View style={styles.carPlayFooter}>
-        <View style={styles.carPlayTripSummary}>
-          <Text
-            adjustsFontSizeToFit
-            minimumFontScale={0.75}
-            numberOfLines={1}
-            style={styles.carPlayEta}
-          >
-            {formatArrivalTime(durationSeconds)}
-          </Text>
-          <Text numberOfLines={1} style={styles.carPlayRemaining}>
-            {formatDuration(durationSeconds)} · {formatDistance(remainingDistanceMeters)}
-          </Text>
-          <Text numberOfLines={1} style={styles.carPlayDestination}>
-            {destinationName}
-          </Text>
-        </View>
+        <View style={styles.carPlayTripSummary} />
         <Pressable
-          accessibilityLabel={actionLabel === 'End' ? 'End navigation' : 'Finish navigation'}
+          accessibilityLabel="End navigation"
           accessibilityRole="button"
-          onPress={onAction}
+          onPress={onEnd}
           style={({ pressed }) => [
             styles.carPlayEndButton,
             pressed && styles.navigationActionPressed,
@@ -585,53 +736,8 @@ export function CarPlayCompanionPanel({
             size={26}
             tintColor={NavOssColors.white}
           />
-          <Text style={styles.carPlayEndText}>{actionLabel}</Text>
+          <Text style={styles.carPlayEndText}>End</Text>
         </Pressable>
-      </View>
-    </Animated.View>
-  );
-}
-
-interface CarPlayIdlePanelProps {
-  bottomInset: number;
-  safeAreaTop: number;
-}
-
-/// Shown whenever CarPlay is connected without active guidance. The phone deliberately renders no
-/// map here: the car screen owns the driving surface, and a second MapLibre view on the handset
-/// costs battery and GPU for a display the driver should not be looking at.
-export function CarPlayIdlePanel({ bottomInset, safeAreaTop }: CarPlayIdlePanelProps) {
-  return (
-    <Animated.View
-      entering={FadeIn.duration(220).reduceMotion(ReduceMotion.System)}
-      exiting={FadeOut.duration(150).reduceMotion(ReduceMotion.System)}
-      style={[
-        styles.carPlayCompanion,
-        {
-          paddingBottom: Math.max(bottomInset, 20),
-          paddingTop: Math.max(safeAreaTop, 20),
-        },
-      ]}
-    >
-      <View style={styles.carPlayConnectionRow}>
-        <View style={styles.carPlayConnectionDot} />
-        <Text style={styles.carPlayConnectionText}>CarPlay</Text>
-      </View>
-
-      <View
-        accessibilityLabel="NavOSS is running on your car's display. Search and start a route from the car screen."
-        accessible
-        style={styles.carPlayIdleBody}
-      >
-        <SymbolView
-          name={{ android: 'directions_car', ios: 'car.fill' }}
-          size={72}
-          tintColor={NavOssColors.sky}
-        />
-        <Text style={styles.carPlayIdleTitle}>Navigating on your car's display</Text>
-        <Text style={styles.carPlayIdleSubtitle}>
-          Search and start a route from the car screen.
-        </Text>
       </View>
     </Animated.View>
   );
@@ -1107,6 +1213,7 @@ const styles = StyleSheet.create({
   carPlayConnectionText: {
     color: NavOssColors.sky,
     fontFamily: NavOssFonts.semibold,
+    flexShrink: 1,
     fontSize: 15,
     letterSpacing: 0,
   },
@@ -1117,21 +1224,32 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     marginTop: 4,
   },
-  carPlayDistance: {
-    color: NavOssColors.white,
-    fontFamily: NavOssFonts.bold,
-    fontSize: 54,
-    letterSpacing: 0,
-    lineHeight: 60,
+  carPlayDirections: {
+    flex: 1,
+    minHeight: 0,
+  },
+  carPlayDirectionsContent: {
+    gap: Spacing.three,
+    paddingBottom: Spacing.three,
+    paddingTop: Spacing.two,
   },
   carPlayEndButton: {
     alignItems: 'center',
     backgroundColor: NavOssColors.coral,
     borderRadius: 8,
     gap: 2,
-    height: 68,
     justifyContent: 'center',
-    width: 68,
+    minHeight: 68,
+    minWidth: 68,
+    paddingHorizontal: Spacing.two,
+  },
+  carPlayEndButtonExpanded: {
+    flexBasis: 'auto',
+    flexGrow: 0,
+    flexShrink: 0,
+    width: '100%',
+    gap: Spacing.two,
+    paddingVertical: Spacing.two,
   },
   carPlayEndText: {
     color: NavOssColors.white,
@@ -1153,12 +1271,32 @@ const styles = StyleSheet.create({
     gap: 16,
     paddingTop: 18,
   },
-  carPlayGuidance: {
-    flex: 1,
-    gap: 8,
+  carPlayFlowContent: {
+    flexBasis: 'auto',
+    flexGrow: 0,
+    flexShrink: 0,
+    width: '100%',
+  },
+  carPlayStacked: {
+    alignItems: 'stretch',
+    flexDirection: 'column',
+  },
+  carPlayNext: {
+    alignItems: 'center',
+    backgroundColor: NavOssColors.green,
+    borderRadius: 8,
+    flexDirection: 'row',
+    gap: 14,
+    padding: 14,
+    flexShrink: 0,
+  },
+  carPlayNextIcon: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 8,
+    height: 56,
     justifyContent: 'center',
-    paddingBottom: 20,
-    paddingTop: 12,
+    width: 56,
   },
   carPlayIdleBody: {
     alignItems: 'center',
@@ -1183,23 +1321,60 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     textAlign: 'center',
   },
-  carPlayInstruction: {
-    color: NavOssColors.white,
-    fontFamily: NavOssFonts.bold,
-    fontSize: 31,
+  carPlayStepCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  carPlayStepDistance: {
+    color: NavOssColors.sky,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 15,
     letterSpacing: 0,
-    lineHeight: 37,
+    lineHeight: 22,
+    textAlign: 'right',
+  },
+  carPlayStepDistanceExpanded: {
+    textAlign: 'left',
+  },
+  carPlayStepInstruction: {
+    color: NavOssColors.white,
+    fontFamily: NavOssFonts.medium,
+    fontSize: 17,
+    letterSpacing: 0,
+    lineHeight: 22,
+  },
+  carPlayStepList: {
+    gap: Spacing.half,
+  },
+  carPlayStepListTitle: {
+    color: NavOssColors.sky,
+    fontFamily: NavOssFonts.semibold,
+    fontSize: 13,
+    letterSpacing: 0,
+    paddingBottom: Spacing.one,
+    textTransform: 'uppercase',
+  },
+  carPlayStepRoad: {
+    color: NavOssColors.sky,
+    fontFamily: NavOssFonts.regular,
+    fontSize: 14,
+    letterSpacing: 0,
+    lineHeight: 19,
+  },
+  carPlayStepRow: {
+    alignItems: 'flex-start',
+    borderBottomColor: 'rgba(255,255,255,0.18)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    gap: 14,
+    minHeight: 52,
+    paddingVertical: 12,
   },
   carPlayRemaining: {
     color: NavOssColors.white,
     fontFamily: NavOssFonts.medium,
     fontSize: 16,
-    letterSpacing: 0,
-  },
-  carPlayRoad: {
-    color: NavOssColors.sky,
-    fontFamily: NavOssFonts.medium,
-    fontSize: 20,
     letterSpacing: 0,
   },
   carPlayTripSummary: {
@@ -1645,6 +1820,9 @@ const styles = StyleSheet.create({
     fontFamily: NavOssFonts.bold,
     fontSize: 17,
     letterSpacing: 0,
+  },
+  tabularNumbers: {
+    fontVariant: ['tabular-nums'],
   },
   trafficStatus: {
     color: NavOssColors.muted,

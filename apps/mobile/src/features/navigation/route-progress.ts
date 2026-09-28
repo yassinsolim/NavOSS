@@ -177,6 +177,53 @@ export function getUpcomingGuidanceStep(
   return route.steps[Math.min(currentStepIndex + 1, route.steps.length - 1)];
 }
 
+/// The road a maneuver joins, or an empty string when its instruction already names it. Routing
+/// instructions usually read "Turn left onto <road>", and repeating the road below is noise.
+export function distinctRoadName(instruction: string, roadName: string): string {
+  const road = roadName.trim();
+  if (road.length === 0) return '';
+  return instruction.toLocaleLowerCase('en-CA').includes(road.toLocaleLowerCase('en-CA'))
+    ? ''
+    : road;
+}
+
+export interface UpcomingManeuver {
+  /// Live distance to the next maneuver; for later rows, the length of the leg leading into it.
+  distanceMeters: number;
+  instruction: string;
+  maneuverType: string;
+  /// Empty when the instruction already names the road.
+  roadName: string;
+  stepIndex: number;
+}
+
+/// Every maneuver still ahead, starting with the one `getUpcomingGuidanceStep` announces.
+export function getUpcomingManeuvers(
+  route: RouteAlternative,
+  traversedStepIndex: number,
+  distanceToNextManeuverMeters: number,
+): UpcomingManeuver[] {
+  const lastStepIndex = route.steps.length - 1;
+  if (lastStepIndex < 0) return [];
+  const currentStepIndex = Math.max(0, Math.min(traversedStepIndex, lastStepIndex));
+  const nextStepIndex = Math.min(currentStepIndex + 1, lastStepIndex);
+  const maneuvers: UpcomingManeuver[] = [];
+  for (let stepIndex = nextStepIndex; stepIndex <= lastStepIndex; stepIndex += 1) {
+    const step = route.steps[stepIndex];
+    maneuvers.push({
+      distanceMeters:
+        stepIndex === nextStepIndex
+          ? Math.max(0, distanceToNextManeuverMeters)
+          : route.steps[stepIndex - 1].distanceMeters,
+      instruction: step.instruction,
+      maneuverType: step.maneuverType,
+      roadName: distinctRoadName(step.instruction, step.roadName),
+      stepIndex,
+    });
+  }
+  return maneuvers;
+}
+
 export function formatDuration(durationSeconds: number): string {
   const minutes = Math.max(1, Math.round(durationSeconds / 60));
   if (minutes < 60) {

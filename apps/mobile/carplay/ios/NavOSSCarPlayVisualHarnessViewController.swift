@@ -48,6 +48,9 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     }
 
     switch scenario {
+    case "audio-release":
+      runAudioReleaseScenario()
+      return
     case "idle-location":
       mapViewController.displayIdleLocation(
         NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07190),
@@ -158,12 +161,240 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         self?.markReady()
       }
       return
+    case "hud-wide-chrome":
+      // Pins the map to a landscape, wide-display region and sets the same
+      // `anchorsSpeedHUDToViewBounds` option the main CarPlay scene uses in production, then
+      // exercises every way the speed/speed-limit readouts can move: transient chrome
+      // (`additionalSafeAreaInsets`) revealed and hidden, a real content resize, and the
+      // speed limit going from known -> unknown -> known again through the real display()
+      // path. Asserts the readouts sit at the true content-relative margins throughout —
+      // including that speed slides flush to the trailing margin (no blank badge-width slot)
+      // while the limit is unknown, and returns to its slot beside the limit once restored.
+      // A regression crashes the harness instead of silently emitting a stale screenshot.
+      let hudFrame = CGRect(
+        x: 0,
+        y: 0,
+        width: 1024,
+        height: 360
+      )
+      mapViewController.view.autoresizingMask = []
+      mapViewController.view.bounds = hudFrame
+      let scale = min(view.bounds.width / hudFrame.width, view.bounds.height / hudFrame.height)
+      mapViewController.view.transform = CGAffineTransform(scaleX: scale, y: scale)
+      mapViewController.view.center = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
+      mapViewController.anchorsSpeedHUDToViewBounds = true
+      mapViewController.applyMapPreferences(showsPointsOfInterest: true, vehicleMarker: .car)
+      mapViewController.display(
+        route: Self.wideRoute,
+        routeId: "visual-hud-wide-chrome",
+        activeGuidance: true,
+        position: NavOSSCarPlayPosition(
+          coordinate: Self.wideRoute[2],
+          courseDegrees: 70,
+          speedMetersPerSecond: 24
+        ),
+        routeProgress: 0.35,
+        speedLimitKph: 80
+      )
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+        guard let self else { return }
+        self.view.layoutIfNeeded()
+        let margin = 8.0
+        let badgeWidth = 38.0
+        let gap = 4.0
+        let expectedTop = margin
+        let beforeChrome = self.mapViewController.speedReadoutFrame
+        let limitBeforeChrome = self.mapViewController.speedLimitReadoutFrame
+        let expectedSpeedLeftWithLimit = hudFrame.width - margin - badgeWidth - gap - badgeWidth
+        let expectedLimitLeft = hudFrame.width - margin - badgeWidth
+        guard self.mapViewController.speedReadoutIsVisible,
+          abs(beforeChrome.origin.y - expectedTop) < 0.5,
+          abs(beforeChrome.origin.x - expectedSpeedLeftWithLimit) < 0.5,
+          let limitBeforeChrome,
+          abs(limitBeforeChrome.origin.y - expectedTop) < 0.5,
+          abs(limitBeforeChrome.origin.x - expectedLimitLeft) < 0.5
+        else {
+          assertionFailure(
+            "CarPlay speed/limit readouts are not at the content top-right margin: "
+              + "speed=\(beforeChrome) limit=\(String(describing: limitBeforeChrome)) "
+              + "content=\(hudFrame)"
+          )
+          return
+        }
+        self.mapViewController.additionalSafeAreaInsets = UIEdgeInsets(
+          top: 44,
+          left: 180,
+          bottom: 0,
+          right: 96
+        )
+        self.view.setNeedsLayout()
+        self.view.layoutIfNeeded()
+        let afterChrome = self.mapViewController.speedReadoutFrame
+        guard beforeChrome == afterChrome else {
+          assertionFailure(
+            "CarPlay speed readout drifted when transient chrome insets changed: "
+              + "before=\(beforeChrome) after=\(afterChrome)"
+          )
+          return
+        }
+        self.mapViewController.additionalSafeAreaInsets = .zero
+        self.view.layoutIfNeeded()
+        guard self.mapViewController.speedReadoutFrame == beforeChrome else {
+          assertionFailure("CarPlay speed readout drifted when transient chrome was hidden")
+          return
+        }
+        let resizedBounds = CGRect(x: 0, y: 0, width: 1280, height: 360)
+        self.mapViewController.view.bounds = resizedBounds
+        let resizedScale = min(
+          self.view.bounds.width / resizedBounds.width,
+          self.view.bounds.height / resizedBounds.height
+        )
+        self.mapViewController.view.transform = CGAffineTransform(
+          scaleX: resizedScale, y: resizedScale
+        )
+        self.view.layoutIfNeeded()
+        let resizedReadout = self.mapViewController.speedReadoutFrame
+        let resizedExpectedSpeedLeft = resizedBounds.width - margin - badgeWidth - gap - badgeWidth
+        guard abs(resizedReadout.minX - resizedExpectedSpeedLeft) < 0.5,
+          abs(resizedReadout.minY - expectedTop) < 0.5
+        else {
+          assertionFailure("CarPlay speed readout did not follow a real content resize")
+          return
+        }
+        // Drop the speed limit through the real display() path (no synthesized frame): the
+        // speed badge must slide flush to the trailing margin instead of leaving the limit
+        // badge's old badgeWidth+gap slot empty.
+        self.mapViewController.display(
+          route: Self.wideRoute,
+          routeId: "visual-hud-wide-chrome",
+          activeGuidance: true,
+          position: NavOSSCarPlayPosition(
+            coordinate: Self.wideRoute[2], courseDegrees: 70, speedMetersPerSecond: 24
+          ),
+          routeProgress: 0.35,
+          speedLimitKph: nil
+        )
+        self.view.layoutIfNeeded()
+        let speedWithoutLimit = self.mapViewController.speedReadoutFrame
+        let expectedSpeedLeftAlone = resizedBounds.width - margin - badgeWidth
+        guard self.mapViewController.speedReadoutIsVisible,
+          self.mapViewController.speedLimitReadoutFrame == nil,
+          abs(speedWithoutLimit.origin.x - expectedSpeedLeftAlone) < 0.5,
+          abs(speedWithoutLimit.origin.y - expectedTop) < 0.5
+        else {
+          assertionFailure(
+            "CarPlay speed readout left a blank slot instead of taking the trailing margin "
+              + "once the speed limit was hidden: speed=\(speedWithoutLimit) "
+              + "limit=\(String(describing: self.mapViewController.speedLimitReadoutFrame))"
+          )
+          return
+        }
+        // Restore the limit through the real display() path and confirm the speed badge
+        // slides back to its original slot without changing the visible ordering (speed
+        // left, limit right, no overlap).
+        self.mapViewController.display(
+          route: Self.wideRoute,
+          routeId: "visual-hud-wide-chrome",
+          activeGuidance: true,
+          position: NavOSSCarPlayPosition(
+            coordinate: Self.wideRoute[2], courseDegrees: 70, speedMetersPerSecond: 24
+          ),
+          routeProgress: 0.35,
+          speedLimitKph: 80
+        )
+        self.view.layoutIfNeeded()
+        let speedRestored = self.mapViewController.speedReadoutFrame
+        let limitRestored = self.mapViewController.speedLimitReadoutFrame
+        guard self.mapViewController.speedReadoutIsVisible, let limitRestored,
+          abs(speedRestored.origin.x - resizedExpectedSpeedLeft) < 0.5,
+          abs(limitRestored.origin.x - (resizedBounds.width - margin - badgeWidth)) < 0.5,
+          speedRestored.maxX < limitRestored.minX
+        else {
+          assertionFailure(
+            "CarPlay speed/limit readouts did not restore correctly: "
+              + "speed=\(speedRestored) limit=\(String(describing: limitRestored))"
+          )
+          return
+        }
+        self.markReady()
+      }
+      return
     default:
       assertionFailure("Unknown CarPlay visual scenario: \(scenario)")
     }
 
     DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
       self?.markReady()
+    }
+  }
+
+  private func runAudioReleaseScenario() {
+    let service = NavOSSNavigationService.shared
+    let previousMode = service.audioMode()
+    service.setAudioMode(.allGuidance)
+    service.announceSafetyCamera()
+    waitForAudioCondition(
+      "guidance activation", until: Date().addingTimeInterval(10),
+      condition: {
+        service.audioSessionTestState.needsRelease && service.audioSessionTestState.isSpeaking
+      }
+    ) { [weak self] in
+      guard let self else { return }
+      let lease = service.beginCarPlayVoiceInput()
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+        guard let self else { return }
+        let held = service.audioSessionTestState
+        guard held.hasVoiceInput && held.needsRelease else {
+          assertionFailure("Speech cancellation released an active voice-input lease")
+          return
+        }
+        service.finishCarPlayVoiceInput(lease)
+        self.waitForAudioCondition(
+          "voice-input release", until: Date().addingTimeInterval(10),
+          condition: {
+            let state = service.audioSessionTestState
+            return !state.needsRelease && !state.hasVoiceInput && !state.isSpeaking
+          }
+        ) { [weak self] in
+          guard let self else { return }
+          service.announceSafetyCamera()
+          self.waitForAudioCondition(
+            "second guidance activation", until: Date().addingTimeInterval(10),
+            condition: {
+              service.audioSessionTestState.needsRelease && service.audioSessionTestState.isSpeaking
+            }
+          ) { [weak self] in
+            self?.waitForAudioCondition(
+              "natural speech completion release", until: Date().addingTimeInterval(15),
+              condition: {
+                let state = service.audioSessionTestState
+                return !state.needsRelease && !state.isSpeaking && !state.hasVoiceInput
+              }
+            ) { [weak self] in
+              service.setAudioMode(previousMode)
+              self?.markReady()
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private func waitForAudioCondition(
+    _ stage: String,
+    until deadline: Date,
+    condition: @escaping () -> Bool,
+    completion: @escaping () -> Void
+  ) {
+    if condition() {
+      completion()
+    } else if Date() >= deadline {
+      assertionFailure("Audio lifecycle scenario timed out: \(stage)")
+    } else {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+        self?.waitForAudioCondition(
+          stage, until: deadline, condition: condition, completion: completion)
+      }
     }
   }
 
