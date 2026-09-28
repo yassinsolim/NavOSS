@@ -668,7 +668,10 @@ export function CarPlayCompanionPanel(props: CarPlayCompanionPanelProps) {
             size={26}
             tintColor={NavOssColors.white}
           />
-          <Text style={styles.carPlayEndText}>{arrived ? 'Done' : 'End'}</Text>
+          {/* A static native Text can retain its old measured bounds across Dynamic Type changes. */}
+          <Text key={fontScale} style={styles.carPlayEndText}>
+            {arrived ? 'Done' : 'End'}
+          </Text>
         </Pressable>
       </View>
     </Animated.View>
@@ -1241,8 +1244,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
   },
   carPlayEndButtonExpanded: {
-    flex: 1,
-    flexDirection: 'row',
+    flexBasis: 'auto',
+    flexGrow: 0,
+    flexShrink: 0,
+    width: '100%',
     gap: Spacing.two,
     paddingVertical: Spacing.two,
   },
