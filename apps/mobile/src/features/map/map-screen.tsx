@@ -115,11 +115,14 @@ import {
 import { RoadReportSheet } from '@/features/map/road-report-sheet';
 import { SavedPlacesScreen } from '@/features/map/saved-places-screen';
 import {
+  planPlaceSearch,
   rankCategoryResults,
   rankSearchResults,
   searchOriginWithinBounds,
+  searchProximityKey,
   searchProximityOptions,
   searchResultBounds,
+  type SettledPlaceSearch,
 } from '@/features/map/search-proximity';
 import {
   type ApiConnectionState,
@@ -151,6 +154,7 @@ import {
   getRemainingRouteSummary,
   getRemainingStepSummary,
   getUpcomingGuidanceStep,
+  getUpcomingManeuvers,
 } from '@/features/navigation/route-progress';
 import { isCoordinateInCoverage } from '@/features/navigation/route-coverage';
 import {
@@ -445,6 +449,7 @@ export function MapScreen() {
   const placeInteractionRef = useRef(createLatestRequestGate());
   const searchAbortControllerRef = useRef<AbortController>(null);
   const searchRequestGateRef = useRef(createLatestRequestGate());
+  const displayedSearchRef = useRef<SettledPlaceSearch | undefined>(undefined);
   const categorySearchActiveRef = useRef(false);
   const safetyCamerasRef = useRef<readonly SafetyCamera[]>([]);
   const [apiConnection, setApiConnection] = useState<ApiConnectionState>('connecting');
@@ -470,6 +475,8 @@ export function MapScreen() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searchSource, setSearchSource] = useState<SearchSource>();
   const [searchState, setSearchState] = useState<SearchState>('idle');
+  // The typed search the visible results answer; loading is announced only for a different query.
+  const [settledSearch, setSettledSearch] = useState<SettledPlaceSearch>();
   const [selectedResult, setSelectedResult] = useState<SearchResult>();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>();
   const [shortcutBeingSet, setShortcutBeingSet] = useState<'home' | 'work'>();
@@ -549,14 +556,31 @@ export function MapScreen() {
           navigationSnapshot?.matchedCoordinate ?? userCoordinate,
         )
       : undefined;
-  // The resolved maneuver decides both the companion and whether the phone keeps its map.
+  // The resolved maneuver decides both the companion and whether the phone keeps its map. The
+  // companion mirrors the car screen, so it prefers the native guidance CarPlay itself renders.
+  const nativeGuidance =
+    navigationSnapshot?.guidance?.phase === 'navigating' &&
+    navigationSnapshot.guidance.stepIndex === navigationStepIndex
+      ? navigationSnapshot.guidance
+      : undefined;
   const carPlayGuidance =
     routeState.type === 'navigating' &&
     carPlayConnected &&
     guidanceStep !== undefined &&
     remainingRoute !== undefined &&
     remainingStep !== undefined
-      ? { destination: routeState.destination, guidanceStep, remainingRoute, remainingStep }
+      ? {
+          destination: routeState.destination,
+          maneuvers: getUpcomingManeuvers(
+            routeState.route,
+            navigationStepIndex,
+            nativeGuidance?.distanceToManeuverMeters ?? remainingStep.distanceMeters,
+          ),
+          remainingDistanceMeters:
+            nativeGuidance?.remainingDistanceMeters ?? remainingRoute.distanceMeters,
+          remainingDurationSeconds:
+            nativeGuidance?.remainingDurationSeconds ?? remainingRoute.durationSeconds,
+        }
       : undefined;
   const surface = phoneSurface({
     carPlayConnected,
@@ -585,6 +609,8 @@ export function MapScreen() {
     : undefined;
   const searchEnabled = true;
   const nearbySearchEnabled = searchOrigin !== undefined;
+  const searchOriginKey = searchProximityKey(searchOrigin);
+  const displayedSearch = searchState === 'success' ? settledSearch : undefined;
   const recentDestinationIds = useMemo(
     () => destinationCatalog.recents.map((destination) => destination.id),
     [destinationCatalog.recents],
@@ -640,11 +666,12 @@ export function MapScreen() {
     nearestFirst = false,
     category?: ExploreCategory,
     proximityOrigin: Coordinate | undefined = searchOrigin,
+    announceLoading = true,
   ): AbortController => {
     const requestGeneration = invalidateSearchRequest();
     const controller = new AbortController();
     searchAbortControllerRef.current = controller;
-    setSearchState('loading');
+    if (announceLoading) setSearchState('loading');
     const proximityOptions = searchProximityOptions(proximityOrigin);
 
     const categoryQueries = [normalizedQuery];
@@ -682,6 +709,11 @@ export function MapScreen() {
           setApiConnection('online');
           setResults(rankedResults);
           setSearchSource(firstResponse.source);
+          setSettledSearch(
+            category === undefined
+              ? { proximityKey: searchProximityKey(proximityOrigin), query: normalizedQuery }
+              : undefined,
+          );
           setSearchState('success');
         });
         if (fitResults) {
@@ -1008,6 +1040,10 @@ export function MapScreen() {
   }, [mapRegion]);
 
   useEffect(() => {
+    displayedSearchRef.current = displayedSearch;
+  }, [displayedSearch]);
+
+  useEffect(() => {
     const normalizedQuery = deferredQuery.trim();
 
     if (
@@ -1019,9 +1055,24 @@ export function MapScreen() {
       return;
     }
 
+    // Location fixes keep arriving while results are open. Only a new proximity cell may requery,
+    // and a requery of the query already on screen must not re-announce loading over its results.
+    // The loading flag is read through a ref so announcing loading cannot re-run and abort this
+    // search. The committed settled identity is a dependency instead: a refresh that lands after
+    // the location moved back must be replanned against the current cell, not stranded.
+    const plan = planPlaceSearch(normalizedQuery, searchOriginKey, displayedSearchRef.current);
+    if (plan === 'skip') return;
+
     let searchController: AbortController | undefined;
     const timeout = setTimeout(() => {
-      searchController = runPlaceSearch(normalizedQuery, false);
+      searchController = runPlaceSearch(
+        normalizedQuery,
+        false,
+        false,
+        undefined,
+        searchOrigin,
+        plan === 'search',
+      );
     }, 250);
 
     return () => {
@@ -1031,9 +1082,10 @@ export function MapScreen() {
   }, [
     deferredQuery,
     searchEnabled,
-    searchOrigin?.latitude,
-    searchOrigin?.longitude,
+    searchOriginKey,
     selectedResult?.name,
+    settledSearch?.proximityKey,
+    settledSearch?.query,
   ]);
 
   useEffect(() => {
@@ -2144,16 +2196,13 @@ export function MapScreen() {
       <View style={styles.container}>
         <StatusBar style="light" />
         <CarPlayCompanionPanel
-          actionLabel="End"
           bottomInset={insets.bottom}
           destinationName={carPlayGuidance.destination.name}
-          distanceMeters={carPlayGuidance.remainingStep.distanceMeters}
-          durationSeconds={carPlayGuidance.remainingRoute.durationSeconds}
-          instruction={carPlayGuidance.guidanceStep.instruction}
-          maneuverType={carPlayGuidance.guidanceStep.maneuverType}
+          durationSeconds={carPlayGuidance.remainingDurationSeconds}
+          maneuvers={carPlayGuidance.maneuvers}
           onAction={handleEndNavigation}
-          remainingDistanceMeters={carPlayGuidance.remainingRoute.distanceMeters}
-          roadName={carPlayGuidance.guidanceStep.roadName}
+          phase="navigating"
+          remainingDistanceMeters={carPlayGuidance.remainingDistanceMeters}
           safeAreaTop={insets.top}
         />
       </View>
@@ -2165,16 +2214,10 @@ export function MapScreen() {
       <View style={styles.container}>
         <StatusBar style="light" />
         <CarPlayCompanionPanel
-          actionLabel="Done"
           bottomInset={insets.bottom}
           destinationName={routeState.destination.name}
-          distanceMeters={0}
-          durationSeconds={0}
-          instruction="You've arrived"
-          maneuverType="arrive"
           onAction={handleFinishArrival}
-          remainingDistanceMeters={0}
-          roadName={routeState.destination.name}
+          phase="arrived"
           safeAreaTop={insets.top}
         />
       </View>
@@ -2185,7 +2228,11 @@ export function MapScreen() {
     return (
       <View style={styles.container}>
         <StatusBar style="light" />
-        <CarPlayIdlePanel bottomInset={insets.bottom} safeAreaTop={insets.top} />
+        <CarPlayIdlePanel
+          bottomInset={insets.bottom}
+          onEnd={handleEndNavigation}
+          safeAreaTop={insets.top}
+        />
       </View>
     );
   }

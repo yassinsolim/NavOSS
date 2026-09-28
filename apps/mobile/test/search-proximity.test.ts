@@ -4,8 +4,10 @@ import {
   approximateSearchCoordinate,
   formatSearchDistance,
   groupRecentSearchResults,
+  planPlaceSearch,
   rankCategoryResults,
   rankSearchResults,
+  searchProximityKey,
   searchProximityOptions,
   searchOriginWithinBounds,
   searchResultBounds,
@@ -239,6 +241,50 @@ describe('search proximity', () => {
 
       expect(grouped.recentMatches.map(({ id }) => id)).toEqual(['matching-recent']);
       expect(grouped.remainingResults.map(({ id }) => id)).toEqual(['nearest']);
+    });
+  });
+
+  describe('typed search settling while location updates arrive', () => {
+    const here = { latitude: 51.0447312, longitude: -114.0719234 };
+    const sameCell = { latitude: 51.0451, longitude: -114.0716 };
+    const nextCell = { latitude: 51.0512, longitude: -114.0719 };
+
+    it('keys requests by the rounded cell actually sent, not the raw fix', () => {
+      expect(searchProximityKey(sameCell)).toBe(searchProximityKey(here));
+      expect(searchProximityKey(nextCell)).not.toBe(searchProximityKey(here));
+      expect(searchProximityKey(undefined)).toBe(searchProximityKey(undefined));
+    });
+
+    it('announces loading for the first search and for any different query', () => {
+      const key = searchProximityKey(here);
+      expect(planPlaceSearch('coffee', key, undefined)).toBe('search');
+      expect(planPlaceSearch('coffee shop', key, { proximityKey: key, query: 'coffee' })).toBe(
+        'search',
+      );
+    });
+
+    it('settles on displayed results when a fix stays within the same cell', () => {
+      const displayed = { proximityKey: searchProximityKey(here), query: 'Coffee' };
+      expect(planPlaceSearch('coffee', searchProximityKey(sameCell), displayed)).toBe('skip');
+    });
+
+    it('refreshes the displayed query quietly when the driver enters a new cell', () => {
+      const displayed = { proximityKey: searchProximityKey(here), query: 'coffee' };
+      expect(planPlaceSearch('coffee', searchProximityKey(nextCell), displayed)).toBe('refresh');
+    });
+
+    it('converges back to the current cell when a late refresh settles results for another', () => {
+      const hereKey = searchProximityKey(here);
+      const nextKey = searchProximityKey(nextCell);
+      // Settled here, refreshed toward the next cell, then the fix returned before that landed.
+      expect(planPlaceSearch('coffee', hereKey, { proximityKey: hereKey, query: 'coffee' })).toBe(
+        'skip',
+      );
+      const lateRefresh = { proximityKey: nextKey, query: 'coffee' };
+      expect(planPlaceSearch('coffee', hereKey, lateRefresh)).toBe('refresh');
+      expect(planPlaceSearch('coffee', hereKey, { proximityKey: hereKey, query: 'coffee' })).toBe(
+        'skip',
+      );
     });
   });
 });

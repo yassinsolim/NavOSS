@@ -55,6 +55,38 @@ export function searchProximityOptions(origin: Coordinate | undefined) {
   };
 }
 
+/// The rounded proximity cell a place search is sent with. Location fixes inside one cell produce
+/// an identical request, so this, not the raw coordinate, is what may trigger a new search.
+export function searchProximityKey(origin: Coordinate | undefined): string {
+  const approximateOrigin = approximateSearchCoordinate(origin);
+  return approximateOrigin === undefined
+    ? 'anywhere'
+    : `${String(approximateOrigin.latitude)},${String(approximateOrigin.longitude)}`;
+}
+
+export interface SettledPlaceSearch {
+  proximityKey: string;
+  query: string;
+}
+
+export type PlaceSearchPlan = 'refresh' | 'search' | 'skip';
+
+/// How a typed query should reach the API given the search the panel already shows.
+///
+/// - `skip`: the displayed results already answer this exact request.
+/// - `refresh`: same query, new proximity cell; re-rank quietly while the settled results stay up.
+/// - `search`: a query the panel has not answered yet, so loading is announced.
+export function planPlaceSearch(
+  query: string,
+  proximityKey: string,
+  displayed: SettledPlaceSearch | undefined,
+): PlaceSearchPlan {
+  if (displayed?.query.toLocaleLowerCase('en-CA') !== query.toLocaleLowerCase('en-CA')) {
+    return 'search';
+  }
+  return displayed.proximityKey === proximityKey ? 'skip' : 'refresh';
+}
+
 export function formatSearchDistance(distanceMeters: number | undefined): string | undefined {
   if (distanceMeters === undefined) return undefined;
   if (distanceMeters < 1_000) {

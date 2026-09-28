@@ -27,9 +27,19 @@ CarPlay navigation is a managed Apple capability. The app needs the Boolean enti
 
 Apple approved the CarPlay Navigation App capability for the explicit App ID `org.navoss.mobile` on 2026-07-21. The Developer portal now exposes `com.apple.developer.carplay-maps` for Development, Ad Hoc, and App Store Connect provisioning.
 
-This removes the external approval blocker, but it does not make the current implementation release-ready. A dedicated build can now continue an active phone route onto the main CarPlay display with a native route line, `CPNavigationSession`, maneuvers, travel estimates, arrival, reconnect state, and vehicle-side cancellation. While that scene is connected, the phone replaces its interactive map with a low-distraction companion. During guidance and arrival the companion shows the next maneuver, arrival summary, destination, and End or Done action; in every other connected state it shows only that navigation is running on the car's display.
+The approved capability removes the entitlement blocker, not the field-validation gate. A dedicated
+build can continue an active phone route onto the main CarPlay display with a native route line,
+`CPNavigationSession`, maneuvers, travel estimates, arrival, reconnect state, and vehicle-side
+cancellation. During active CarPlay guidance, the phone shows a compact next-maneuver card and a
+scrollable list of remaining maneuvers. The live first distance follows native progress; later
+distances describe the legs leading to those maneuvers. Instructions wrap without hiding the road
+name, and the ETA, destination, and End action remain outside the scrolling list. Arrival exposes Done.
 
-The companion covers _every_ connected state, so the handset never runs a second MapLibre view against the car's. This deliberately withdraws search, the Saved and Contribute tabs, the tab bar, and map appearance for as long as the car is connected, including while parked, matching how first-party navigation apps hand the whole surface to the head unit. Phone-side route state that the companion cannot act on — loading, failed, or awaiting Start — is released on connect rather than stranded behind a surface with no Retry, Cancel, or Start control. Reaching those phone surfaces again means disconnecting from the car.
+Connecting CarPlay while idle, loading, viewing a preview, or handling a route error preserves the
+phone's interactive map and its search, Retry, Cancel, and Start controls. Those planning states are
+not discarded on connect. A connected active trip whose maneuver is not yet resolved instead shows
+an explicit waiting state with End; it does not claim the app is idle or trap the user without an
+exit. End and confirmed arrival return to the appropriate actionable phone surface.
 
 The native navigation service now owns active Core Location updates, map matching, maneuver progression, spoken guidance, background continuation, rerouting, arrival, and transient active-route recovery. CarPlay search uses the private NavOSS API, previews route alternatives with approved templates, and starts navigation without phone interaction. A Dashboard scene renders the shared route and guidance state without creating a second navigation session, with Go and Voice shortcuts that activate the main CarPlay scene. Apple decides which navigation app occupies the Dashboard tile; Voice opens NavOSS search and is not a custom Siri speech recognizer. Cluster metadata and real-vehicle Dashboard validation remain incomplete. Normal production builds remain unchanged; the dedicated `production-carplay` profile enables the scenes, entitlement, native API URL, and location background mode for controlled testing.
 
@@ -160,6 +170,20 @@ settings, and Trip actions; reporting is available from the Current trip list.
 Phone and CarPlay controls read the same native preference store and receive local change events.
 Future-route defaults remain separate from the preferences captured by an already active trip.
 
+CarPlay voice search starts only from its microphone control. Microphone and Speech Recognition
+permission prompts appear on the iPhone; approval is not a guarantee that an on-device recognizer
+or vehicle input route is available. Recording requires an available on-device recognizer and never
+falls back to cloud recognition. Transient recording-start failures have a short bounded retry;
+permanent failures retain an actionable error.
+
+The navigation service is the sole owner of shared audio-session deactivation. Recording leases
+block speech cleanup from releasing an active microphone session. Completing or failing capture
+returns ownership to the service, including when queued speech is stale. A failed deactivation keeps
+its release obligation and retries with a capped delay until success or a new owner supersedes it;
+there is no terminal retry cutoff. Epoch checks precede any operating-system call so stale work
+cannot deactivate a newer owner. This prevents an assumed or abandoned release from leaving other
+audio ducked.
+
 CarPlay reports use the same eight safety-oriented labels as the phone. They are bounded native
 drafts with precise coordinate, creation time, and two-hour expiry. They remain private on the
 device and are not shown to other drivers; no police/checkpoint option or free text exists. This is
@@ -211,6 +235,9 @@ traffic, lane, speed, or incident knowledge.
 
 - Current speed comes directly from valid Core Location speed and is shown in km/h during active
   guidance.
+- The main-display speed and speed-limit readouts anchor to the map content's top-right bounds,
+  independently of transient template safe-area insets. They follow a real content resize but do not
+  move when chrome appears or disappears. Dashboard rendering keeps its own safe-area behavior.
 - Posted speed limits come from geometry-aligned Valhalla/OpenStreetMap `maxspeed` annotations.
   NavOSS selects the nearest matched route segment and hides the sign for unknown or unlimited
   values rather than inferring a limit from road class.
@@ -267,6 +294,16 @@ Each display owns its own map view and camera, but all displays consume the same
 The checked-in Expo plugin packages the same `vehicle-arrow.png` used by the phone into the native app target. Simulator builds compile and link the CarPlay scene, but Xcode 26.6 strips the restricted CarPlay entitlement from ordinary ad hoc simulator signatures on this machine. The automated navigation harness therefore mounts the exact production `NavOSSCarPlayMapViewController` in a simulator-only phone window and captures deterministic preview, progress, appearance, and cleanup states. Vision OCR, pixel metrics, hashes, and perceptual comparisons reject blank, duplicated, stale, or permission-obscured frames. The visual entrypoint is compiler-gated to Simulator and absent from device binaries.
 
 This renderer simulation complements rather than replaces CarPlay framework testing. Native tests validate shared trip state, route trimming, controls, and lifecycle; a signed TestFlight build and a real wired or wireless CarPlay system remain required to validate `CPMapTemplate` chrome, vehicle input, connection/reconnection, and head-unit-specific behavior.
+
+The `hud-wide-chrome` renderer scenario exercises the production anchoring option with real UIKit
+layout at 1024- and 1280-point widths, including inset reveal/hide, and is part of the maintained
+visual scenario list. The opt-in `audio-release` scenario exercises the real navigation service and
+`AVSpeechSynthesizer`: speech activation, interruption by a recording lease, lease release, and
+natural speech-completion release. It requires working simulator speech output, records no
+microphone input, and is selected with `SIMCTL_CHILD_NAVOSS_CARPLAY_VISUAL_SCENARIO=audio-release`
+when launching the simulator app. Unit tests cover repeated release failures and stale owners;
+neither those tests nor the simulator scenario verify vehicle-microphone capture or music mixing
+on a physical head unit.
 
 ## Expo Integration
 

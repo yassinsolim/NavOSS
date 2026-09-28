@@ -35,7 +35,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
 
   private let activeTripStore: NavOSSActiveTripStore
   private var announcementState = NavOSSCarPlayAudioState()
-  private var audioSessionNeedsDeactivation = false
+  private var audioSessionOwnership = NavOSSAudioSessionOwnership()
   private var backgroundActivitySession: AnyObject?
   /// Scenes currently reporting a connected CarPlay display.
   ///
@@ -57,6 +57,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private var navigationGeneration: UInt64 = 0
   private let navigationSession: NavigationSession
   private let notificationCenter: NotificationCenter
+  private var pendingAudioSessionRelease: DispatchWorkItem?
   private var pendingUtteranceIds: Set<ObjectIdentifier> = []
   private var rerouteCount = 0
   private var rerouteRequestId: UUID?
@@ -98,6 +99,14 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     defer { lock.unlock() }
     return announcementState.mode
   }
+
+  #if targetEnvironment(simulator)
+  /// Read-only state for the simulator harness; no audio or transcript leaves the service.
+  @MainActor
+  public var audioSessionTestState: (needsRelease: Bool, isSpeaking: Bool, hasVoiceInput: Bool) {
+    (audioSessionOwnership.needsRelease, speechSynthesizer.isSpeaking, isCarPlayVoiceInputActive)
+  }
+  #endif
 
   public func setAudioMode(_ mode: NavOSSCarPlayAudioMode) {
     lock.lock()
@@ -303,6 +312,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     deferredSpeech = nil
     pendingUtteranceIds.removeAll()
     speechSynthesizer.stopSpeaking(at: .immediate)
+    audioSessionOwnership.claim()
+    cancelPendingAudioSessionRelease()
     return identifier
   }
 
@@ -312,7 +323,11 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     guard carPlayVoiceInputLeases.remove(identifier) != nil, !isCarPlayVoiceInputActive else {
       return
     }
-    audioSessionNeedsDeactivation = false
+    // Always attempt release, even when deferred speech exists: speak() may reject it (stale
+    // navigationGeneration, empty text) without claiming anything, and that must not strand the
+    // session claimed with nothing left to release it. If speak() does accept, its own claim()
+    // supersedes this attempt (or cancels it if still only scheduled as a retry).
+    attemptAudioSessionRelease(epoch: audioSessionOwnership.epoch)
     guard let deferredSpeech else {
       return
     }
@@ -341,7 +356,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       self.deferredSpeech = nil
       self.pendingUtteranceIds.removeAll()
       self.speechSynthesizer.stopSpeaking(at: .immediate)
-      self.deactivateAudioSession()
+      self.attemptAudioSessionRelease(epoch: self.audioSessionOwnership.epoch)
     }
   }
 
@@ -885,9 +900,11 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
         )
         do {
           try audioSession.setActive(true)
-          self.audioSessionNeedsDeactivation = true
+          self.audioSessionOwnership.claim()
+          self.cancelPendingAudioSessionRelease()
         } catch {
-          self.audioSessionNeedsDeactivation = false
+          // Nothing new was actually claimed; leave any prior release obligation untouched
+          // rather than pretending it is satisfied.
         }
       }
       self.pendingUtteranceIds.insert(ObjectIdentifier(utterance))
@@ -903,18 +920,24 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
         self.pendingUtteranceIds.removeAll()
       }
       guard self.pendingUtteranceIds.isEmpty else { return }
-      self.deactivateAudioSession()
+      self.attemptAudioSessionRelease(epoch: self.audioSessionOwnership.epoch)
     }
   }
 
-  private func deactivateAudioSession(attempt: Int = 0) {
-    guard
-      !isCarPlayVoiceInputActive,
-      audioSessionNeedsDeactivation,
-      pendingUtteranceIds.isEmpty
-    else { return }
+  /// Sole real caller of `AVAudioSession.setActive(false)` — the sole *deactivation* owner.
+  /// Guidance speech finishing and CarPlay capture finishing both route through this one
+  /// entrypoint. `epoch` is checked first, before any state or the real session is touched, so a
+  /// stale call (a retry scheduled against a superseded claim) is a complete no-op.
+  private func attemptAudioSessionRelease(epoch: NavOSSAudioSessionOwnership.Epoch) {
+    guard audioSessionOwnership.isCurrentClaim(epoch) else {
+      return
+    }
+    cancelPendingAudioSessionRelease()
+    guard !isCarPlayVoiceInputActive, pendingUtteranceIds.isEmpty else {
+      return
+    }
     guard !speechSynthesizer.isSpeaking else {
-      scheduleAudioSessionDeactivationRetry(attempt: attempt)
+      scheduleAudioSessionReleaseRetry(epoch: epoch)
       return
     }
     do {
@@ -922,17 +945,30 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
         false,
         options: .notifyOthersOnDeactivation
       )
-      audioSessionNeedsDeactivation = false
+      audioSessionOwnership.releaseSucceeded(epoch: epoch)
     } catch {
-      scheduleAudioSessionDeactivationRetry(attempt: attempt)
+      scheduleAudioSessionReleaseRetry(epoch: epoch)
     }
   }
 
-  private func scheduleAudioSessionDeactivationRetry(attempt: Int) {
-    guard attempt < 4 else { return }
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-      self?.deactivateAudioSession(attempt: attempt + 1)
+  private func scheduleAudioSessionReleaseRetry(epoch: NavOSSAudioSessionOwnership.Epoch) {
+    switch audioSessionOwnership.releaseFailed(epoch: epoch) {
+    case .stale:
+      return
+    case .retryAfter(let delay):
+      let workItem = DispatchWorkItem { [weak self] in
+        self?.attemptAudioSessionRelease(epoch: epoch)
+      }
+      pendingAudioSessionRelease = workItem
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
+  }
+
+  /// Invalidates any scheduled release retry so it can never fire against a session a new owner
+  /// (fresh guidance speech, or a new CarPlay recording lease) has since claimed.
+  private func cancelPendingAudioSessionRelease() {
+    pendingAudioSessionRelease?.cancel()
+    pendingAudioSessionRelease = nil
   }
 
   private func startAuthorizedLocationUpdates(_ manager: CLLocationManager) {
