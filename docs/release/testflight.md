@@ -693,6 +693,30 @@ TestFlight assignment rather than completing it. The outcome of that background 
 App Review's result are all unconfirmed. Check App Store Connect before telling testers the build is
 available.
 
+### Build 70 — camera direction, audio lifecycle, and phone companion
+
+`0.1.0 (70)` from `main` commit `afa4067`, built with the Google-disabled `production-carplay`
+profile by GitHub Actions run `36604772860` (`iOS TestFlight (hosted runner)`, Xcode 26.6,
+`eas build --local`). EAS incremented the remote build number from 69 to 70. The workflow's
+strict signature, Apple distribution chain, team, CarPlay entitlement, and provisioning-profile
+audit passed. EAS submission `cf68625e-5ce1-4765-9dc8-e9eb24f06370` was created 2026-09-29T17:43Z,
+stayed `IN_QUEUE` for more than two hours, then reached `FINISHED`; the maintainer confirmed build
+70 in App Store Connect.
+
+Carries PR #57 (approved older-feedback discovery and route polish), PR #58 (camera alerts use the
+incoming route approach), and PR #59 (build 69 feedback). PR #59 gives the native service sole
+ownership of audio-session release, with a capped, never-abandoned retry, and bounds transient
+CarPlay recording-start retries. The main-display speed HUD anchors to content bounds and leaves no
+empty slot for an unknown limit. The CarPlay phone companion shows the next maneuver and remaining
+steps and reflows at accessibility text sizes. Repeated GPS fixes no longer restart the same search.
+
+Verified before release: 254 mobile and 128 native tests, workspace gates, iOS 27 simulator
+compilation, independent simulator UI checks, native HUD layout scenarios, and a real
+`AVSpeechSynthesizer`/`AVAudioSession` release scenario. Not yet verified: vehicle-microphone voice
+search after permission approval, head-unit music restoration, and the route-preview panel's Start
+control at the largest accessibility text size. `NavOSS Friends` assignment and Beta App Review
+state are unconfirmed; check App Store Connect before telling testers the build is available.
+
 ## External TestFlight
 
 After the internal gate passes:
