@@ -14,9 +14,20 @@ updates:
       development-dependencies:
         dependency-type: development
     ignore:
-      # Node type majors must follow the pinned runtime (.node-version / engines); upgrade both together.
-      - dependency-name: '@types/node'
+      # Major versions need a deliberate upgrade with native builds and device testing.
+      # This also keeps @types/node on the pinned Node major (.node-version / engines).
+      - dependency-name: '*'
         update-types: ['version-update:semver-major']
+      # The Expo SDK pins these to tested versions. Move them with `npx expo install --fix` or an
+      # SDK upgrade, never independently: e.g. React Native 0.87 is not supported by Expo SDK 57.
+      - dependency-name: 'expo'
+      - dependency-name: 'expo-*'
+      - dependency-name: '@expo/*'
+      - dependency-name: 'react'
+      - dependency-name: 'react-dom'
+      - dependency-name: 'react-native'
+      - dependency-name: 'react-native-*'
+      - dependency-name: '@react-native-async-storage/*'
 
   - package-ecosystem: github-actions
     directory: /
