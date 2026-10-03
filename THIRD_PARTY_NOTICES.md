@@ -5,7 +5,7 @@ It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
 
-Lockfile SHA-256: `60bb96c359c61fad31617925e62bc0bdb57187bdcf4fe36e5bd517a575d977d2`
+Lockfile SHA-256: `5bd3a1eb028283301abbfbbfe718e807df05d38d187282b3de24c073d6312c16`
 
 Regenerate with:
 
@@ -324,7 +324,7 @@ corepack pnpm licenses:generate
 - `base64-js` - `1.5.1` - <https://github.com/beatgammit/base64-js>
 - `bplist-creator` - `0.1.0` - <https://github.com/nearinfinity/node-bplist-creator#readme>
 - `bplist-parser` - `0.3.1, 0.3.2` - <https://github.com/nearinfinity/node-bplist-parser>
-- `brace-expansion` - `5.0.7, 5.0.9` - <https://github.com/juliangruber/brace-expansion#readme>
+- `brace-expansion` - `5.0.9` - <https://github.com/juliangruber/brace-expansion#readme>
 - `braces` - `3.0.3` - <https://github.com/micromatch/braces>
 - `browserslist` - `4.28.6` - <https://github.com/browserslist/browserslist#readme>
 - `buffer-from` - `1.1.2` - <https://github.com/LinusU/buffer-from#readme>
