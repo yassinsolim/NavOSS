@@ -509,7 +509,9 @@ try {
         {
           cwd: join(mobileDirectory, 'ios'),
           logPath: join(logsDirectory, 'xcodebuild.log'),
-          timeoutMs: 900_000,
+          // A cold Debug build on a hosted macOS runner takes over 15 minutes; every nightly
+          // CarPlay visuals run from 2026-09-22 was interrupted near the final Swift compile.
+          timeoutMs: 2_100_000,
         },
       );
       appPath = join(derivedData, 'Build/Products/Debug-iphonesimulator/NavOSS.app');

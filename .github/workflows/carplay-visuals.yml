@@ -33,7 +33,8 @@ jobs:
   visuals:
     name: CarPlay visual scenarios
     runs-on: macos-26
-    timeout-minutes: 60
+    # Holds the validator's 35-minute cold xcodebuild plus install, prebuild, pods, and capture.
+    timeout-minutes: 90
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
