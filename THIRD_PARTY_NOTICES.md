@@ -5,7 +5,7 @@ It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
 
-Lockfile SHA-256: `5bd3a1eb028283301abbfbbfe718e807df05d38d187282b3de24c073d6312c16`
+Lockfile SHA-256: `61d6245706e3eaeface222c7b1b70bcf1d6fe368c5d8c11dfca56638e035703c`
 
 Regenerate with:
 
@@ -289,7 +289,7 @@ corepack pnpm licenses:generate
 - `@types/istanbul-lib-coverage` - `2.0.6` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-lib-coverage>
 - `@types/istanbul-lib-report` - `3.0.3` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-lib-report>
 - `@types/istanbul-reports` - `3.0.4` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-reports>
-- `@types/node` - `24.13.3` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node>
+- `@types/node` - `24.19.0` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node>
 - `@types/react` - `19.2.17` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react>
 - `@types/react-test-renderer` - `19.1.0` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react-test-renderer>
 - `@types/yargs` - `17.0.35` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/yargs>
@@ -616,7 +616,7 @@ corepack pnpm licenses:generate
 - `toqr` - `0.1.1` - <https://github.com/kitten/toqr#readme>
 - `tr46` - `0.0.3` - <https://github.com/Sebmaster/tr46.js#readme>
 - `ua-parser-js` - `0.7.41, 1.0.41` - <https://uaparser.dev>
-- `undici-types` - `7.18.2` - <https://undici.nodejs.org>
+- `undici-types` - `7.24.6` - <https://undici.nodejs.org>
 - `unicode-canonical-property-names-ecmascript` - `2.0.1` - <https://github.com/mathiasbynens/unicode-canonical-property-names-ecmascript>
 - `unicode-match-property-ecmascript` - `2.0.0` - <https://github.com/mathiasbynens/unicode-match-property-ecmascript>
 - `unicode-match-property-value-ecmascript` - `2.2.1` - <https://github.com/mathiasbynens/unicode-match-property-value-ecmascript>
