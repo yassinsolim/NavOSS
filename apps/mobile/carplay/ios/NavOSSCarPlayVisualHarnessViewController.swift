@@ -1,3 +1,4 @@
+import CoreLocation
 import MapLibre
 internal import NavOSSNavigation
 import UIKit
@@ -50,6 +51,27 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     switch scenario {
     case "audio-release":
       runAudioReleaseScenario()
+      return
+    case "idle-live-location":
+      // Exercises the real NavOSSCarPlayLocationManager -> MLNMapView path: with the simulator
+      // location set far from the Calgary startup center, the puck and camera must move there.
+      mapViewController.setIdleLocationTrackingEnabled(true)
+      waitForAudioCondition(
+        "idle map follows live location", until: Date().addingTimeInterval(30),
+        condition: { [weak self] in
+          guard let mapView = self?.mapViewController.mapView,
+            let fix = mapView.userLocation?.location,
+            CLLocationCoordinate2DIsValid(fix.coordinate)
+          else { return false }
+          let center = mapView.centerCoordinate
+          let centerLocation = CLLocation(latitude: center.latitude, longitude: center.longitude)
+          return fix.distance(from: centerLocation) < 500
+            && centerLocation.distance(
+              from: CLLocation(latitude: 51.0447, longitude: -114.0719)) > 100_000
+        }
+      ) { [weak self] in
+        self?.markReady()
+      }
       return
     case "idle-location":
       mapViewController.displayIdleLocation(

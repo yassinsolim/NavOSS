@@ -296,6 +296,11 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     )
     mapViewController.applyMapOrientation(preferences.mapOrientation)
     NavOSSNavigationService.shared.setAudioMode(preferences.audioMode)
+    // Location tracking for this scene must be live before the first `recenter()`, or its
+    // one-shot `NavOSSNavigationService.shared.currentCoordinate()` fallback — the only source of
+    // a usable position before any live fix arrives — finds nothing and leaves the camera on its
+    // hard-coded startup default.
+    NavOSSNavigationService.shared.setCarPlayConnected(true, scene: "template")
     self.mapViewController = mapViewController
     window.rootViewController = mapViewController
     mapViewController.anchorsSpeedHUDToViewBounds = true
@@ -332,7 +337,6 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       }
     }
     NavOSSCarPlayTripStore.shared.setConnected(true)
-    NavOSSNavigationService.shared.setCarPlayConnected(true, scene: "template")
     apply(NavOSSCarPlayTripStore.shared.snapshot())
     performPendingDashboardAction()
   }

@@ -300,7 +300,14 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
     audioEngine = engine
     do {
       let audioSession = AVAudioSession.sharedInstance()
-      try audioSession.setCategory(.record, mode: .measurement, options: [])
+      // `.allowBluetoothHFP` (`AVAudioSessionCategoryOptionAllowBluetoothHFP` in
+      // AVAudioSessionTypes.h) defaults to false for `.record`. Without it, a paired car's
+      // Hands-Free Profile microphone is never a candidate input route, so recording silently
+      // falls back to the iPhone's own built-in mic — audible to the system (non-zero format,
+      // no thrown error) but picking up cabin road noise instead of the driver's voice from the
+      // car's microphone. That reproduces as recognition quietly mishearing or hearing nothing,
+      // which the simulator (no Bluetooth/CarPlay microphone route at all) cannot reproduce.
+      try audioSession.setCategory(.record, mode: .measurement, options: [.allowBluetoothHFP])
       try audioSession.setActive(true)
 
       let inputNode = engine.inputNode
