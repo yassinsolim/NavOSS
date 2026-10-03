@@ -355,7 +355,8 @@ async function captureCarPlayScenario(name, scenario, appearance) {
         SIMCTL_CHILD_NAVOSS_CARPLAY_VISUAL_SCENARIO: scenario,
       },
       logPath: join(logsDirectory, 'carplay.log'),
-      timeoutMs: 30_000,
+      // The first launch on a newly created hosted-runner simulator can exceed 30 s.
+      timeoutMs: 120_000,
     },
   );
   await waitForCarPlayScenarioReady(name, scenario, outputPath);
