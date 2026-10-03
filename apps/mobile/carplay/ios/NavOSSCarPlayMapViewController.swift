@@ -1,6 +1,103 @@
+import CoreLocation
 import MapLibre
 internal import NavOSSNavigation
 import UIKit
+
+/// Feeds `MLNMapView.showsUserLocation` from a `CLLocationManager` explicitly configured for
+/// background delivery, instead of `MLNMapView`'s private default location manager.
+///
+/// `MLNMapView.locationManager` exists precisely so a host app can supply its own: the SDK's own
+/// documentation on the protocol notes a conforming type "does not need to be based on
+/// `CLLocationManager`" at all. Nothing in this app ever configured the *default* manager for
+/// background delivery (see `docs/architecture/carplay.md`), so once the phone's screen slept the
+/// idle CarPlay map's own puck stopped updating and the camera never left its startup default.
+/// This manager mirrors `NavOSSNavigationService`'s own location manager configuration —
+/// `allowsBackgroundLocationUpdates`, driven by the `location` `UIBackgroundModes` entry every iOS
+/// navigation build already declares — so the idle map's live-location source does not depend on
+/// another manager's background session keeping the whole process from being suspended.
+@MainActor
+final class NavOSSCarPlayLocationManager: NSObject, @preconcurrency MLNLocationManager,
+  @preconcurrency CLLocationManagerDelegate
+{
+  private let manager = CLLocationManager()
+  weak var delegate: MLNLocationManagerDelegate?
+
+  override init() {
+    super.init()
+    manager.activityType = .automotiveNavigation
+    // Matches `MLNMapView`'s own default manager's accuracy/filter so swapping it in changes
+    // nothing about fix cadence, only whether fixes keep arriving once the screen sleeps.
+    manager.desiredAccuracy = kCLLocationAccuracyBest
+    manager.distanceFilter = kCLDistanceFilterNone
+    manager.pausesLocationUpdatesAutomatically = false
+    let backgroundLocationEnabled =
+      (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?
+      .contains("location") == true
+    manager.allowsBackgroundLocationUpdates = backgroundLocationEnabled
+    manager.showsBackgroundLocationIndicator = backgroundLocationEnabled
+    // `MLNMapView` installs itself as `delegate` right after `locationManager` is assigned; do not
+    // set it here.
+    manager.delegate = self
+  }
+
+  var distanceFilter: CLLocationDistance {
+    get { manager.distanceFilter }
+    set { manager.distanceFilter = newValue }
+  }
+
+  var desiredAccuracy: CLLocationAccuracy {
+    get { manager.desiredAccuracy }
+    set { manager.desiredAccuracy = newValue }
+  }
+
+  var accuracyAuthorization: CLAccuracyAuthorization { manager.accuracyAuthorization }
+
+  var activityType: CLActivityType {
+    get { manager.activityType }
+    set { manager.activityType = newValue }
+  }
+
+  var headingOrientation: CLDeviceOrientation {
+    get { manager.headingOrientation }
+    set { manager.headingOrientation = newValue }
+  }
+
+  var authorizationStatus: CLAuthorizationStatus { manager.authorizationStatus }
+
+  func requestAlwaysAuthorization() { manager.requestAlwaysAuthorization() }
+  func requestWhenInUseAuthorization() { manager.requestWhenInUseAuthorization() }
+  func startUpdatingLocation() { manager.startUpdatingLocation() }
+  func stopUpdatingLocation() { manager.stopUpdatingLocation() }
+  func startUpdatingHeading() { manager.startUpdatingHeading() }
+  func stopUpdatingHeading() { manager.stopUpdatingHeading() }
+  func dismissHeadingCalibrationDisplay() { manager.dismissHeadingCalibrationDisplay() }
+
+  func requestTemporaryFullAccuracyAuthorization(withPurposeKey purposeKey: String) {
+    manager.requestTemporaryFullAccuracyAuthorization(withPurposeKey: purposeKey)
+  }
+
+  func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    delegate?.locationManager(self, didUpdate: locations)
+  }
+
+  func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+    delegate?.locationManager(self, didUpdate: newHeading)
+  }
+
+  func locationManagerShouldDisplayHeadingCalibration(_ manager: CLLocationManager) -> Bool {
+    delegate?.locationManagerShouldDisplayHeadingCalibration(self) ?? false
+  }
+
+  func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    delegate?.locationManager(self, didFailWithError: error)
+  }
+
+  // Only forward: MLNMapView starts and stops updates from `showsUserLocation`. Starting here would
+  // keep a background location session alive while the map has not asked for one.
+  func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    delegate?.locationManagerDidChangeAuthorization(self)
+  }
+}
 
 @MainActor
 final class NavOSSCarPlayMapViewController: UIViewController,
@@ -100,6 +197,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     mapView.logoView.isHidden = true
     mapView.attributionButton.isHidden = true
     mapView.delegate = self
+    // `MLNMapView`'s own default location manager is a private `CLLocationManager` this app never
+    // configures for background delivery; set the custom one before `showsUserLocation` per
+    // `MLNMapView.locationManager`'s documented requirement.
+    mapView.locationManager = NavOSSCarPlayLocationManager()
     mapView.showsUserLocation = requestsUserLocation
     mapView.setCenter(calgaryCenter, zoomLevel: 10.5, animated: false)
     self.mapView = mapView

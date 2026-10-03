@@ -936,10 +936,10 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     guard !isCarPlayVoiceInputActive, pendingUtteranceIds.isEmpty else {
       return
     }
-    guard !speechSynthesizer.isSpeaking else {
-      scheduleAudioSessionReleaseRetry(epoch: epoch)
-      return
-    }
+    // Not gated on `speechSynthesizer.isSpeaking`: every queued utterance has already reported
+    // didFinish/didCancel, and on device `isSpeaking` can stay true afterwards, which previously
+    // deferred release indefinitely and left other audio ducked. Per AVAudioSession.h, deactivating
+    // with I/O still running deactivates anyway (iOS 26 no longer even reports isBusy).
     do {
       try AVAudioSession.sharedInstance().setActive(
         false,
