@@ -355,7 +355,8 @@ async function captureCarPlayScenario(name, scenario, appearance) {
         SIMCTL_CHILD_NAVOSS_CARPLAY_VISUAL_SCENARIO: scenario,
       },
       logPath: join(logsDirectory, 'carplay.log'),
-      timeoutMs: 30_000,
+      // The first launch on a newly created hosted-runner simulator can exceed 30 s.
+      timeoutMs: 120_000,
     },
   );
   await waitForCarPlayScenarioReady(name, scenario, outputPath);
@@ -509,7 +510,9 @@ try {
         {
           cwd: join(mobileDirectory, 'ios'),
           logPath: join(logsDirectory, 'xcodebuild.log'),
-          timeoutMs: 900_000,
+          // A cold Debug build on a hosted macOS runner takes over 15 minutes; every nightly
+          // CarPlay visuals run from 2026-09-22 was interrupted near the final Swift compile.
+          timeoutMs: 2_100_000,
         },
       );
       appPath = join(derivedData, 'Build/Products/Debug-iphonesimulator/NavOSS.app');
