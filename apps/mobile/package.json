@@ -6,7 +6,7 @@
   "dependencies": {
     "@expo-google-fonts/atkinson-hyperlegible-next": "0.4.1",
     "@expo/ui": "~57.0.4",
-    "@maplibre/maplibre-react-native": "11.3.6",
+    "@maplibre/maplibre-react-native": "11.4.1",
     "@navoss/contracts": "workspace:*",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.4",
