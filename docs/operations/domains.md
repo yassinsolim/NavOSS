@@ -2,19 +2,19 @@
 
 NavOSS uses an app-scoped namespace under `yassin.app` so future projects can use the same pattern without collisions.
 
-| Host                       | Purpose                                                  | Target                                             |
-| -------------------------- | -------------------------------------------------------- | -------------------------------------------------- |
-| `navoss.yassin.app`        | Product, privacy, support, attribution, and source links | Dedicated Vercel project                           |
-| `navoss-api.yassin.app`    | Versioned mobile API                                     | Stable backend ingress; not Vercel-hosted Valhalla |
-| `navoss-status.yassin.app` | Public service status                                    | Reserved for a later independent status provider   |
+| Host                       | Purpose                                                  | Target                                                |
+| -------------------------- | -------------------------------------------------------- | ----------------------------------------------------- |
+| `navoss.yassin.app`        | Product, privacy, support, attribution, and source links | Self-hosted static web server                         |
+| `navoss-api.yassin.app`    | Versioned mobile API                                     | Stable backend ingress, separate from the static site |
+| `navoss-status.yassin.app` | Public service status                                    | Reserved for a later independent status provider      |
 
 Future apps should use `<app>.yassin.app`, `<app>-api.yassin.app`, and `<app>-status.yassin.app`. Cloudflare Universal SSL for `*.yassin.app` covers one label below the zone; nested hosts such as `api.<app>.yassin.app` require a separate certificate product and must not be published accidentally.
 
 ## Website
 
-The dedicated Vercel project `navoss` deploys `apps/site` from the GitHub `main` branch. The canonical site is <https://navoss.yassin.app>; <https://navoss.vercel.app> remains the operational fallback.
+The canonical site is <https://navoss.yassin.app>, built from `apps/site`. Cloudflare remains authoritative DNS.
 
-Cloudflare remains authoritative DNS. The `navoss` CNAME points directly to the Vercel target with proxying disabled so Vercel can verify the domain and issue TLS.
+Deployment: every push to `main` is built and published automatically to the self-hosted web server. Response headers (including the CSP), rewrites and URL rules live in `apps/site/site.json`.
 
 The site must publish these stable routes before TestFlight:
 
@@ -25,7 +25,7 @@ The site must publish these stable routes before TestFlight:
 
 ## API
 
-`navoss-api.yassin.app` must point to the backend ingress, not the static Vercel project. Vercel can host the public documentation site, but the regional Valhalla/search stack requires an always-on container or VM with persistent artifacts and measured capacity.
+`navoss-api.yassin.app` must point to the backend ingress, not the static site. The static site only serves the public documentation pages; the regional Valhalla/search stack requires an always-on container or VM with persistent artifacts and measured capacity.
 
 For a temporary private device test, a Cloudflare Tunnel can terminate HTTPS and forward the hostname to the API on the development Mac. That still depends on the Mac remaining online and does not qualify as a production TestFlight backend.
 
