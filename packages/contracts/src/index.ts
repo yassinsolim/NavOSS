@@ -140,3 +140,36 @@ export type {
   SearchResult,
   SearchSource,
 } from './search.js';
+
+export {
+  COMMUNITY_TRAFFIC_ATTRIBUTION,
+  COMMUNITY_TRAFFIC_SOURCE_ID,
+  CommunityTrafficSourceSchema,
+  parseTrafficFlowBounds,
+  RouteCongestionLevelSchema,
+  RouteTrafficAnnotationSchema,
+  snapTrafficFlowBounds,
+  TRAFFIC_FLOW_GRID_DEGREES,
+  TRAFFIC_FLOW_MAX_SPAN_DEGREES,
+  TRAFFIC_PROBE_LIMITS,
+  TrafficCongestionLevelSchema,
+  TrafficFlowFeatureSchema,
+  TrafficFlowQuerySchema,
+  TrafficFlowResponseSchema,
+  TrafficProbeBatchRequestSchema,
+  TrafficProbeBatchResponseSchema,
+  TrafficProbePointSchema,
+  TrafficStatusResponseSchema,
+} from './traffic.js';
+export type {
+  RouteCongestionLevel,
+  RouteTrafficAnnotation,
+  TrafficCongestionLevel,
+  TrafficFlowBounds,
+  TrafficFlowFeature,
+  TrafficFlowQuery,
+  TrafficFlowResponse,
+  TrafficProbeBatchRequest,
+  TrafficProbeBatchResponse,
+  TrafficStatusResponse,
+} from './traffic.js';
