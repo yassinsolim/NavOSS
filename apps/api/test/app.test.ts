@@ -1109,6 +1109,41 @@ describe('OpenAPI', () => {
     expect(document.paths).toHaveProperty('/v2/events');
     expect(document.paths).toHaveProperty('/v2/safety-facilities');
     expect(document.paths).toHaveProperty('/v2/traffic-cameras');
+    expect(document.paths).toHaveProperty('/v2/community/challenges');
+    expect(document.paths).toHaveProperty('/v2/community/installations');
+    expect(document.paths).toHaveProperty('/v2/community/reports');
+    expect(document.paths).toHaveProperty('/v2/community/reports/{reportId}');
+    expect(document.paths).toHaveProperty('/v2/community/reports/{reportId}/votes');
     expect(document.paths).not.toHaveProperty('/openapi.json');
+  });
+});
+
+describe('community reports without a database', () => {
+  it('keeps reading off and refuses writes with a problem response', async () => {
+    const app = await createTestApp({ communityReports: null });
+    const config = await app.inject({ method: 'GET', url: '/v2/config' });
+    expect(config.json()).toMatchObject({ features: { communityReports: false } });
+
+    const challenge = await app.inject({ method: 'POST', url: '/v2/community/challenges' });
+    expect(challenge.statusCode).toBe(503);
+    expect(challenge.json()).toMatchObject({ code: 'service_unavailable' });
+
+    const read = await app.inject({
+      method: 'GET',
+      query: { east: '-114', north: '51.1', south: '51', west: '-114.1' },
+      url: '/v2/community/reports',
+    });
+    expect(read.statusCode).toBe(503);
+  });
+
+  it('rejects oversized or inverted bounding boxes before touching storage', async () => {
+    const app = await createTestApp({ communityReports: null });
+    for (const query of [
+      { east: '-113', north: '51.1', south: '51', west: '-114.1' },
+      { east: '-114', north: '51', south: '51.1', west: '-114.1' },
+    ]) {
+      const response = await app.inject({ method: 'GET', query, url: '/v2/community/reports' });
+      expect(response.statusCode).toBe(400);
+    }
   });
 });
