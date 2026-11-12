@@ -221,16 +221,19 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
         guard let self else { return }
         self.view.layoutIfNeeded()
-        let margin = 8.0
-        let badgeWidth = 38.0
-        let gap = 4.0
+        let margin = NavOSSCarPlayMapViewController.hudMargin
+        let speedWidth = NavOSSCarPlayMapViewController.speedBadgeSize.width
+        let limitSize = NavOSSCarPlayMapViewController.speedLimitBadgeSize
+        let gap = NavOSSCarPlayMapViewController.hudGap
         let expectedTop = margin
+        // The round speed badge is centred on the taller limit sign.
+        let expectedSpeedTop = margin + (limitSize.height - NavOSSCarPlayMapViewController.speedBadgeSize.height) / 2
         let beforeChrome = self.mapViewController.speedReadoutFrame
         let limitBeforeChrome = self.mapViewController.speedLimitReadoutFrame
-        let expectedSpeedLeftWithLimit = hudFrame.width - margin - badgeWidth - gap - badgeWidth
-        let expectedLimitLeft = hudFrame.width - margin - badgeWidth
+        let expectedSpeedLeftWithLimit = hudFrame.width - margin - limitSize.width - gap - speedWidth
+        let expectedLimitLeft = hudFrame.width - margin - limitSize.width
         guard self.mapViewController.speedReadoutIsVisible,
-          abs(beforeChrome.origin.y - expectedTop) < 0.5,
+          abs(beforeChrome.origin.y - expectedSpeedTop) < 0.5,
           abs(beforeChrome.origin.x - expectedSpeedLeftWithLimit) < 0.5,
           let limitBeforeChrome,
           abs(limitBeforeChrome.origin.y - expectedTop) < 0.5,
@@ -276,9 +279,10 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         )
         self.view.layoutIfNeeded()
         let resizedReadout = self.mapViewController.speedReadoutFrame
-        let resizedExpectedSpeedLeft = resizedBounds.width - margin - badgeWidth - gap - badgeWidth
+        let resizedExpectedSpeedLeft =
+          resizedBounds.width - margin - limitSize.width - gap - speedWidth
         guard abs(resizedReadout.minX - resizedExpectedSpeedLeft) < 0.5,
-          abs(resizedReadout.minY - expectedTop) < 0.5
+          abs(resizedReadout.minY - expectedSpeedTop) < 0.5
         else {
           assertionFailure("CarPlay speed readout did not follow a real content resize")
           return
@@ -298,11 +302,11 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         )
         self.view.layoutIfNeeded()
         let speedWithoutLimit = self.mapViewController.speedReadoutFrame
-        let expectedSpeedLeftAlone = resizedBounds.width - margin - badgeWidth
+        let expectedSpeedLeftAlone = resizedBounds.width - margin - speedWidth
         guard self.mapViewController.speedReadoutIsVisible,
           self.mapViewController.speedLimitReadoutFrame == nil,
           abs(speedWithoutLimit.origin.x - expectedSpeedLeftAlone) < 0.5,
-          abs(speedWithoutLimit.origin.y - expectedTop) < 0.5
+          abs(speedWithoutLimit.origin.y - expectedSpeedTop) < 0.5
         else {
           assertionFailure(
             "CarPlay speed readout left a blank slot instead of taking the trailing margin "
@@ -329,7 +333,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         let limitRestored = self.mapViewController.speedLimitReadoutFrame
         guard self.mapViewController.speedReadoutIsVisible, let limitRestored,
           abs(speedRestored.origin.x - resizedExpectedSpeedLeft) < 0.5,
-          abs(limitRestored.origin.x - (resizedBounds.width - margin - badgeWidth)) < 0.5,
+          abs(limitRestored.origin.x - (resizedBounds.width - margin - limitSize.width)) < 0.5,
           speedRestored.maxX < limitRestored.minX
         else {
           assertionFailure(
@@ -341,6 +345,72 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         self.markReady()
       }
       return
+    case "guidance-maneuver", "guidance-night":
+      // A CarPlay-sized 800 × 480 frame with the guidance card's safe-area inset, approaching a
+      // left turn: maneuver arrow, current-road pill, speed and limit badges. The night variant
+      // runs the dark style and is over the limit, so the speed badge turns red.
+      let night = scenario == "guidance-night"
+      useCarPlayFrame(CGSize(width: 800, height: 480), guidanceCardInset: 300)
+      mapViewController.applyMapPreferences(showsPointsOfInterest: true, vehicleMarker: .arrow)
+      let trip = Self.turnTrip
+      let position = NavOSSCarPlayPosition(
+        coordinate: NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.06750),
+        courseDegrees: 90,
+        speedMetersPerSecond: night ? 19 : 12
+      )
+      let guidance = NavOSSCarPlayGuidance(
+        distanceToManeuverMeters: 180, durationToManeuverSeconds: 15, instruction: "",
+        maneuverType: "turn", phase: .navigating, remainingDistanceMeters: 980,
+        remainingDurationSeconds: 110, roadName: "", stepIndex: 0)
+      // 450 m along the 1,560 m fixture, 200 m before the turn.
+      renderGuidance(trip: trip, guidance: guidance, position: position, progress: 0.29, speedLimitKph: 50)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+        guard let self else { return }
+        guard self.mapViewController.currentRoadNameReadout == "9 Avenue SW" else {
+          assertionFailure(
+            "Current road pill missing: \(String(describing: self.mapViewController.currentRoadNameReadout))"
+          )
+          return
+        }
+        guard self.mapViewController.enlargedRoadLabelLayerCount > 0 else {
+          assertionFailure("Road labels were not enlarged for guidance")
+          return
+        }
+        self.markReady()
+      }
+      return
+    case "guidance-annotations":
+      // Exercises the optional inputs with harness-only fixture data: per-segment congestion on
+      // the route and camera/report markers. Production publishes neither until real sources exist.
+      useCarPlayFrame(CGSize(width: 800, height: 480), guidanceCardInset: 300)
+      let trip = Self.turnTrip(congestion: [.slow, .heavy, .stopped, .free])
+      NavOSSCarPlayMapAlertStore.shared.publish([
+        NavOSSCarPlayMapAlert(
+          id: "fixture-camera", kind: .redLightAndSpeedCamera,
+          coordinate: NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.06560)),
+        NavOSSCarPlayMapAlert(
+          id: "fixture-report", kind: .report(.construction),
+          coordinate: NavOSSCarPlayCoordinate(latitude: 51.04560, longitude: -114.06400)),
+      ])
+      let guidance = NavOSSCarPlayGuidance(
+        distanceToManeuverMeters: 1_400, durationToManeuverSeconds: 120, instruction: "",
+        maneuverType: "turn", phase: .navigating, remainingDistanceMeters: 2_000,
+        remainingDurationSeconds: 200, roadName: "", stepIndex: 0)
+      renderGuidance(
+        trip: trip, guidance: guidance,
+        position: NavOSSCarPlayPosition(
+          coordinate: NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07150),
+          courseDegrees: 90, speedMetersPerSecond: 14),
+        progress: 0.1, speedLimitKph: nil)
+      _ = mapViewController.toggleRouteOverview()
+      // The fixture alerts stay published: the app process ends after this scenario's capture.
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+        self?.markReady()
+      }
+      return
+    case "maneuver-symbols":
+      showManeuverSymbols()
+      return
     default:
       assertionFailure("Unknown CarPlay visual scenario: \(scenario)")
     }
@@ -348,6 +418,85 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
       self?.markReady()
     }
+  }
+
+  /// Lays the map out at a CarPlay display size, scaled to fit the phone, with the left inset the
+  /// guidance card takes on a real head unit.
+  private func useCarPlayFrame(_ size: CGSize, guidanceCardInset: CGFloat) {
+    mapViewController.view.autoresizingMask = []
+    mapViewController.view.bounds = CGRect(origin: .zero, size: size)
+    let scale = min(view.bounds.width / size.width, view.bounds.height / size.height)
+    mapViewController.view.transform = CGAffineTransform(scaleX: scale, y: scale)
+    mapViewController.view.center = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
+    mapViewController.additionalSafeAreaInsets = UIEdgeInsets(
+      top: 0, left: guidanceCardInset, bottom: 0, right: 0)
+    mapViewController.anchorsSpeedHUDToViewBounds = true
+  }
+
+  /// Renders guidance through the same presentation path the CarPlay scenes use.
+  private func renderGuidance(
+    trip: NavOSSCarPlayTrip,
+    guidance: NavOSSCarPlayGuidance,
+    position: NavOSSCarPlayPosition,
+    progress: Double,
+    speedLimitKph: Int?
+  ) {
+    let presentation = navOSSCarPlayGuidancePresentation(trip: trip, guidance: guidance)
+    mapViewController.display(
+      route: trip.geometry,
+      routeId: trip.id,
+      activeGuidance: true,
+      position: position,
+      routeProgress: progress,
+      distanceToManeuverMeters: guidance.distanceToManeuverMeters,
+      speedLimitKph: speedLimitKph,
+      overlay: NavOSSCarPlayGuidanceOverlay(
+        maneuverArrow: presentation.map {
+          navOSSCarPlayManeuverArrow(trip: trip, maneuverStepIndex: $0.primary.stepIndex)
+        } ?? [],
+        currentRoadName: presentation?.currentRoadName,
+        congestion: trip.congestion
+      )
+    )
+  }
+
+  /// Every turn-card symbol the renderer draws, on the guidance-card green, for visual review.
+  private func showManeuverSymbols() {
+    let samples: [(NavOSSCarPlayManeuverKind, Double, String)] = [
+      (.straight, 0, "Straight"), (.slightRight, 35, "Slight right"), (.right, 90, "Right"),
+      (.sharpRight, 140, "Sharp right"), (.slightLeft, -35, "Slight left"), (.left, -90, "Left"),
+      (.sharpLeft, -140, "Sharp left"), (.uTurn, -180, "U-turn"), (.keepRight, 25, "Keep right"),
+      (.offRampRight, 40, "Exit right"), (.roundabout(exit: 1), 90, "Exit 1"),
+      (.roundabout(exit: 2), 0, "Exit 2"), (.roundabout(exit: 3), -90, "Exit 3"),
+      (.roundabout(exit: nil), -150, "Exit 4"), (.depart, 0, "Start"), (.arrive, 0, "Arrive"),
+    ]
+    // The board covers the lower part only, so the frame keeps real map pixels above it.
+    let board = UIView(
+      frame: CGRect(x: 0, y: view.bounds.height - 660, width: view.bounds.width, height: 660))
+    board.backgroundColor = UIColor(red: 0.06, green: 0.35, blue: 0.30, alpha: 1)
+    let columns = 4
+    let cell = CGSize(width: view.bounds.width / CGFloat(columns), height: 150)
+    for (index, sample) in samples.enumerated() {
+      let origin = CGPoint(
+        x: CGFloat(index % columns) * cell.width,
+        y: 30 + CGFloat(index / columns) * cell.height
+      )
+      let imageView = UIImageView(
+        image: NavOSSCarPlayManeuverSymbols.image(kind: sample.0, angleDegrees: sample.1))
+      imageView.tintColor = .white
+      imageView.contentMode = .scaleAspectFit
+      imageView.frame = CGRect(x: origin.x + (cell.width - 80) / 2, y: origin.y, width: 80, height: 80)
+      board.addSubview(imageView)
+      let label = UILabel(
+        frame: CGRect(x: origin.x, y: origin.y + 88, width: cell.width, height: 24))
+      label.text = sample.2
+      label.textAlignment = .center
+      label.textColor = .white
+      label.font = .systemFont(ofSize: 15, weight: .semibold)
+      board.addSubview(label)
+    }
+    view.addSubview(board)
+    DispatchQueue.main.async { [weak self] in self?.markReady() }
   }
 
   private func runAudioReleaseScenario() {
@@ -451,6 +600,40 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     NavOSSCarPlayCoordinate(latitude: 51.04510, longitude: -114.05400),
     NavOSSCarPlayCoordinate(latitude: 51.04800, longitude: -114.02700),
   ]
+
+  /// Harness fixture: east along one avenue, a left turn, then north to the destination.
+  private static func turnTrip(congestion: [NavOSSCarPlayCongestionLevel]? = nil) -> NavOSSCarPlayTrip {
+    let start = NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07400)
+    let middle = NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.06900)
+    let corner = NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.06500)
+    let north = NavOSSCarPlayCoordinate(latitude: 51.04920, longitude: -114.06500)
+    let end = NavOSSCarPlayCoordinate(latitude: 51.05300, longitude: -114.06500)
+    return NavOSSCarPlayTrip(
+      destination: NavOSSCarPlayDestination(
+        id: "fixture-destination", label: "Harness fixture", latitude: end.latitude,
+        longitude: end.longitude, name: "Fixture destination"),
+      distanceMeters: 1_560,
+      durationSeconds: 180,
+      geometry: [start, middle, corner, north, end],
+      id: "visual-turn-trip",
+      steps: [
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 650, durationSeconds: 60, geometry: [start, middle, corner],
+          instruction: "Drive east on 9 Avenue SW.", maneuverType: "depart",
+          roadName: "9 Avenue SW"),
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 920, durationSeconds: 120, geometry: [corner, north, end],
+          instruction: "Turn left onto Centre Street.", maneuverType: "turn",
+          roadName: "Centre Street"),
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 0, durationSeconds: 0, geometry: [end, end],
+          instruction: "You have arrived.", maneuverType: "arrive", roadName: "Centre Street"),
+      ],
+      congestion: congestion
+    )
+  }
+
+  private static var turnTrip: NavOSSCarPlayTrip { turnTrip() }
 
   private static let shortRoute = [
     NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07190),

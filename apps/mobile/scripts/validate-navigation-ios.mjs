@@ -660,6 +660,10 @@ try {
         ['carplay-clear', 'clear', 'light'],
         ['carplay-idle-location', 'idle-location', 'light'],
         ['carplay-hud-wide-chrome', 'hud-wide-chrome', 'light'],
+        ['carplay-guidance-maneuver', 'guidance-maneuver', 'light'],
+        ['carplay-guidance-night', 'guidance-night', 'dark'],
+        ['carplay-guidance-annotations', 'guidance-annotations', 'light'],
+        ['carplay-maneuver-symbols', 'maneuver-symbols', 'light'],
       ]) {
         await captureCarPlayScenario(name, scenario, appearance);
       }
@@ -721,6 +725,8 @@ try {
       metricsByName.get('carplay-guidance-position-fallback.png'),
       metricsByName.get('carplay-progress-60.png'),
       metricsByName.get('carplay-overview.png'),
+      metricsByName.get('carplay-guidance-maneuver.png'),
+      metricsByName.get('carplay-guidance-night.png'),
     ].filter((metric) => metric !== undefined);
     if (guidanceRouteMetrics.some((metric) => metric.routeGreenRatio < 0.0014)) {
       throw new Error('A CarPlay guidance scenario does not contain enough route-green pixels.');
@@ -763,6 +769,7 @@ try {
       ['carplay-preview-light.png', 'carplay-preview-dark.png'],
       ['carplay-progress-05.png', 'carplay-progress-60.png'],
       ['carplay-progress-05.png', 'carplay-overview.png'],
+      ['carplay-guidance-maneuver.png', 'carplay-guidance-night.png'],
     ]) {
       const firstMetric = metricsByName.get(first);
       const secondMetric = metricsByName.get(second);
