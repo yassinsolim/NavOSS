@@ -28,5 +28,12 @@ curl --fail --silent --show-error \
   --data '{"alternatives":0,"origin":{"latitude":51.04427,"longitude":-114.06309},"destination":{"latitude":51.1308592,"longitude":-114.010689},"preferences":{"avoidFerries":false,"avoidHighways":false,"avoidTolls":false,"avoidUnpaved":false}}' \
   "$base_url/v1/routes" |
   jq -e '.degraded == false and .source.id == "valhalla-self-hosted" and .source.mode == "production" and (.routes | length) > 0 and .routes[0].distanceMeters > 18000 and .routes[0].distanceMeters < 20500 and .routes[0].durationSeconds > 1150 and .routes[0].durationSeconds < 1300' >/dev/null
+curl --fail --silent --show-error "$base_url/v1/traffic/status" |
+  jq -e --arg mode "${COMMUNITY_TRAFFIC_MODE:-off}" '(.mode == (if $mode == "collect" then "collecting" else $mode end)) and (.probes.accepting == (.mode != "off")) and (.publication.minimumContributors >= 2)' >/dev/null
+if [ "${COMMUNITY_TRAFFIC_MODE:-off}" = live ]; then
+  curl --fail --silent --show-error "$base_url/v1/traffic/flow?bbox=-114.20,50.95,-113.90,51.15" |
+    jq -e '.type == "FeatureCollection" and .source.id == "navoss-community"' >/dev/null
+  curl --fail --silent --show-error "$base_url/v2/config" | jq -e '.features.liveTraffic == true' >/dev/null
+fi
 
 printf 'NavOSS stack checks passed against %s\n' "$base_url"

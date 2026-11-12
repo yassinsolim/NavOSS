@@ -19,7 +19,7 @@ previous `valhalla-alberta-british-columbia-260730` artifact remains available f
 
 ## Storage
 
-- `/srv/navoss/state/postgres`: PostGIS state for the reproducible Calgary search index and future community reports. Logical backups exclude `calgary_search_*` tables.
+- `/srv/navoss/state/postgres`: PostGIS state for the reproducible Calgary search index, short-lived community-traffic aggregates, and future community reports. Logical backups exclude `calgary_search_*` tables and the rows of `traffic_segments` and `traffic_flow_buckets`.
 - `/srv/navoss/artifacts/imports`: official Alberta and British Columbia extracts plus the merged regional Nominatim input.
 - `/srv/navoss/artifacts/valhalla`: reproducible Alberta and British Columbia routing graph.
 - `/srv/navoss/artifacts/nominatim/postgres`: reproducible Alberta and British Columbia search index.
@@ -44,7 +44,7 @@ chmod 600 .env
 Generate independent random passwords rather than copying the example values.
 Never commit `.env`.
 
-Live traffic remains disabled when `MAPBOX_ACCESS_TOKEN` is blank and
+Licensed Mapbox traffic remains disabled when `MAPBOX_ACCESS_TOKEN` is blank and
 `MAPBOX_VEHICLE_LICENSE_CONFIRMED=0`. Do not set the confirmation flag based on
 a standard self-service account: Mapbox's current pricing terms require a
 commercial application license for vehicle and in-vehicle use. After that
@@ -53,6 +53,59 @@ confirmation flag to `1`, update the production privacy/App Store disclosures,
 and rerun the route-quality and physical CarPlay gates. A token without license
 confirmation, or confirmation without a token, intentionally prevents API
 startup.
+
+## Community traffic
+
+Community traffic is built from short driving batches that opted-in NavOSS drivers upload. The
+design, parameters and threat model are in
+[`docs/architecture/community-traffic.md`](../../docs/architecture/community-traffic.md). It is
+controlled by one value in `.env` and is `off` unless set:
+
+| `COMMUNITY_TRAFFIC_MODE` | `POST /v1/traffic/probes` | Flow, route traffic, `features.liveTraffic` |
+| ------------------------ | ------------------------- | ------------------------------------------- |
+| `off` (default)          | 503                       | unavailable, `false`                        |
+| `collect`                | accepted and aggregated   | unavailable, `false`                        |
+| `live`                   | accepted and aggregated   | published above the threshold, `true`       |
+
+Roll out in that order:
+
+```sh
+# 1. Deploy the image with the mode still off; nothing changes for clients.
+sudo docker compose build api
+sudo docker compose up -d --no-build --wait --wait-timeout 300 api caddy
+./check-stack.sh
+
+# 2. Collect. The API creates the traffic tables on start; to apply them ahead of time instead:
+sudo docker compose run --rm --no-deps api node dist/traffic/migrate.js
+sed -i 's/^COMMUNITY_TRAFFIC_MODE=.*/COMMUNITY_TRAFFIC_MODE=collect/' .env
+sudo docker compose up -d --no-build --wait --wait-timeout 300 api
+COMMUNITY_TRAFFIC_MODE=collect ./check-stack.sh
+
+# 3. Publish, once the privacy policy and app release that describe sharing are out.
+sed -i 's/^COMMUNITY_TRAFFIC_MODE=.*/COMMUNITY_TRAFFIC_MODE=live/' .env
+sudo docker compose up -d --no-build --wait --wait-timeout 300 api
+COMMUNITY_TRAFFIC_MODE=live ./check-stack.sh
+```
+
+While collecting or live, the API logs a `Community traffic summary` line every 15 minutes with
+batch counters and the number of observed and publishable segments. It contains no position, road,
+address or time. Use it to decide when there is enough data to go live.
+
+Operational facts:
+
+- The mode requires the self-hosted Valhalla (`VALHALLA_TRACE_URL`); the API refuses to start in
+  `collect` or `live` without it, and never sends a trace to a public routing server.
+- Probe matching may hold one of Valhalla's two worker threads; extra batches get 503 and are
+  dropped by the app, so routing keeps the other thread.
+- Every API start empties `traffic_segments` and `traffic_flow_buckets`. Up to
+  `COMMUNITY_TRAFFIC_WINDOW_SECONDS` (30 minutes) of live traffic disappears on a restart and
+  rebuilds as drivers upload. This is deliberate: see the architecture document.
+- Run a single API container. Two would each empty the tables on start and could not compare
+  contributor tokens.
+- `backup-reports-db.sh` dumps the two traffic tables' structure only, never their rows.
+- Rollback: set `COMMUNITY_TRAFFIC_MODE=off` and restart `api`. To remove the schema as well:
+  `DROP TABLE traffic_flow_buckets, traffic_segments, traffic_schema_migrations;`.
+- Valhalla's `traffic_name` stays blank. Observed speeds are not fed into route selection yet.
 
 ## Regional extract preparation
 
@@ -279,5 +332,8 @@ Do not start both initial imports simultaneously. During either import, monitor
   text and parameter values from error logs.
 - Cloudflare Tunnel forwards only the public API hostname to local Caddy.
 - Report-database dumps are mode 0640, compressed, and retained for 14 days.
-  They exclude the reproducible public search index and do not contain user search,
-  route, or trip data.
+  They exclude the reproducible public search index and the rows of the community-traffic
+  tables, and do not contain user search, route, or trip data.
+- Community-traffic uploads are map-matched in memory and discarded. The database holds only
+  per-road-segment speed histograms in five-minute buckets, deleted within 36 minutes; no position,
+  trace, device, or trip identifier is stored or logged.
