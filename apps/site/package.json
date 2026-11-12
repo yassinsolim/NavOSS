@@ -8,6 +8,10 @@
     "build": "node scripts/build.mjs",
     "check": "node scripts/check.mjs",
     "lint": "node scripts/check.mjs",
-    "test": "node --test test/site.test.mjs"
+    "test": "node --test test/site.test.mjs test/brand.test.mjs",
+    "brand:render": "node scripts/render-brand-assets.mjs"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "2.6.2"
   }
 }

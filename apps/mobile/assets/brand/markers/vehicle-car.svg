@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Top-down car pointing north; MapLibre rotates it to the vehicle heading. -->
+  <path d="M24 5h16c5 0 8 3.5 8 8.5v38c0 5-3.5 8.5-8.5 8.5h-15C19.5 60 16 56.5 16 51.5v-38C16 8.5 19 5 24 5Z" fill="#0E1516" opacity="0.28" transform="translate(0 1)"/>
+  <path d="M24.5 4h15c4.4 0 7.5 3.1 7.5 7.5v39c0 4.4-3.1 7.5-7.5 7.5h-15c-4.4 0-7.5-3.1-7.5-7.5v-39C17 7.1 20.1 4 24.5 4Z" fill="#FFFFFF"/>
+  <path d="M25 6.5h14c3.3 0 5.5 2.2 5.5 5.5v38c0 3.3-2.2 5.5-5.5 5.5H25c-3.3 0-5.5-2.2-5.5-5.5V12c0-3.3 2.2-5.5 5.5-5.5Z" fill="#0F8F7F"/>
+  <path d="M23 20.5c5.6-2.4 12.4-2.4 18 0l-1.6 7.5c-4.9-1.5-9.9-1.5-14.8 0Z" fill="#0E1516"/>
+  <path d="M24.6 42c4.9 1.2 9.9 1.2 14.8 0l1.6 6c-5.6 1.9-12.4 1.9-18 0Z" fill="#0E1516"/>
+  <path d="M23.5 29.5h17v11h-17Z" fill="#13A893"/>
+  <path d="M23 8.5h5.5l-1 2.8h-5.2Zm18 0h-5.5l1 2.8h5.2Z" fill="#F7C948"/>
+</svg>
