@@ -50,6 +50,9 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
     dashboardWindow = window
     let mapViewController = NavOSSCarPlayMapViewController()
     mapViewController.reservesRouteChoiceSheet = false
+    // Dashboard is a small tile beside other apps: keep the route, arrow, and speed, but leave the
+    // road name to the guidance card CarPlay draws beside it.
+    mapViewController.showsRoadName = false
     mapViewController.setIdleLocationTrackingEnabled(true)
     applyPreferences(to: mapViewController)
     self.mapViewController = mapViewController
@@ -112,10 +115,12 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
     guard let mapViewController else { return }
     guard let trip = state.trip else {
       mapViewController.clearRoute()
-      mapViewController.recenter()
       return
     }
     let activeGuidance = state.guidance?.phase == .navigating || state.guidance?.phase == .arrived
+    let presentation = state.guidance.flatMap {
+      navOSSCarPlayGuidancePresentation(trip: trip, guidance: $0)
+    }
     mapViewController.display(
       route: trip.geometry,
       routeId: trip.id,
@@ -128,6 +133,12 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
         geometry: trip.geometry,
         matchedCoordinate: state.position?.coordinate,
         routeProgress: state.routeProgress
+      ),
+      overlay: NavOSSCarPlayGuidanceOverlay(
+        maneuverArrow: presentation.map {
+          navOSSCarPlayManeuverArrow(trip: trip, maneuverStepIndex: $0.primary.stepIndex)
+        } ?? [],
+        congestion: trip.congestion
       )
     )
   }
