@@ -125,6 +125,29 @@ public struct NavOSSCarPlayRouteStep: Codable, Equatable, Sendable {
   public let maneuverType: String
   public let roadName: String
   public let spokenInstruction: String?
+  /// Optional OSRM maneuver modifier ("left", "slight right", …). Absent today; the instruction
+  /// text is used instead.
+  public let maneuverModifier: String?
+  /// Optional 1-based roundabout exit count from the provider.
+  public let roundaboutExit: Int?
+  /// Optional posted exit number ("12A"), shown as a highway exit label.
+  public let exitNumber: String?
+  /// Optional signpost destination text ("Downtown / Banff").
+  public let signpost: String?
+  /// Optional signpost branch (route numbers or road names) and toward (place names) elements,
+  /// kept as the provider wrote them.
+  public let signpostBranch: [String]?
+  public let signpostToward: [String]?
+  /// Optional name of the junction or interchange.
+  public let junctionName: String?
+  /// Optional lanes at the approach to this step's maneuver, left to right.
+  public let lanes: [NavOSSCarPlayLane]?
+  /// Optional name of the road driven along this step's geometry, when it differs from the
+  /// maneuver's road name.
+  public let currentRoadName: String?
+  /// Optional provider bearings either side of this step's maneuver, in degrees from north.
+  public let bearingBeforeDegrees: Double?
+  public let bearingAfterDegrees: Double?
 
   public init(
     distanceMeters: Double,
@@ -133,7 +156,18 @@ public struct NavOSSCarPlayRouteStep: Codable, Equatable, Sendable {
     instruction: String,
     maneuverType: String,
     roadName: String,
-    spokenInstruction: String? = nil
+    spokenInstruction: String? = nil,
+    maneuverModifier: String? = nil,
+    roundaboutExit: Int? = nil,
+    exitNumber: String? = nil,
+    signpost: String? = nil,
+    lanes: [NavOSSCarPlayLane]? = nil,
+    currentRoadName: String? = nil,
+    bearingBeforeDegrees: Double? = nil,
+    bearingAfterDegrees: Double? = nil,
+    signpostBranch: [String]? = nil,
+    signpostToward: [String]? = nil,
+    junctionName: String? = nil
   ) {
     self.distanceMeters = distanceMeters
     self.durationSeconds = durationSeconds
@@ -142,6 +176,17 @@ public struct NavOSSCarPlayRouteStep: Codable, Equatable, Sendable {
     self.maneuverType = maneuverType
     self.roadName = roadName
     self.spokenInstruction = spokenInstruction
+    self.maneuverModifier = maneuverModifier
+    self.roundaboutExit = roundaboutExit
+    self.exitNumber = exitNumber
+    self.signpost = signpost
+    self.lanes = lanes
+    self.currentRoadName = currentRoadName
+    self.bearingBeforeDegrees = bearingBeforeDegrees
+    self.bearingAfterDegrees = bearingAfterDegrees
+    self.signpostBranch = signpostBranch
+    self.signpostToward = signpostToward
+    self.junctionName = junctionName
   }
 
   var isValid: Bool {
@@ -181,6 +226,9 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
   public let steps: [NavOSSCarPlayRouteStep]
   public let traffic: NavOSSCarPlayTraffic?
   public let waypoints: [NavOSSCarPlayDestination]?
+  /// Optional observed congestion, one level per geometry segment like `speedLimitsKph`. Absent
+  /// until a real traffic source exists; a misaligned array is ignored by the renderer.
+  public let congestion: [NavOSSCarPlayCongestionLevel]?
 
   public init(
     destination: NavOSSCarPlayDestination,
@@ -193,7 +241,8 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
     speedLimitsKph: [Int]? = nil,
     steps: [NavOSSCarPlayRouteStep],
     traffic: NavOSSCarPlayTraffic? = nil,
-    waypoints: [NavOSSCarPlayDestination]? = nil
+    waypoints: [NavOSSCarPlayDestination]? = nil,
+    congestion: [NavOSSCarPlayCongestionLevel]? = nil
   ) {
     self.destination = destination
     self.distanceMeters = distanceMeters
@@ -206,6 +255,7 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
     self.steps = steps
     self.traffic = traffic
     self.waypoints = waypoints
+    self.congestion = congestion
   }
 
   var isValid: Bool {
@@ -454,10 +504,6 @@ public func navOSSCarPlayConeHeadingDegrees(
     return nil
   }
   return fallbackCourseDegrees
-}
-
-public func navOSSCarPlayIsSpeeding(speedKph: Int, speedLimitKph: Int?) -> Bool {
-  speedLimitKph.map { speedKph >= $0 + 5 } ?? false
 }
 
 public struct NavOSSCarPlayGuidance: Codable, Equatable, Sendable {
