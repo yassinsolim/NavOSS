@@ -92,9 +92,10 @@ The North America coverage, infrastructure, and provider decision is recorded in
 current production claim while defining the staged Canada, United States, Mexico, and licensed
 traffic gates.
 
-NavOSS keeps live traffic disabled until a provider contract permits use in an
-open-source MapLibre app with CarPlay. The provider review reached these
-conclusions on July 23, 2026:
+NavOSS's own live traffic is built from opted-in driver speeds and is described under
+[Community Traffic](#community-traffic). Commercial live traffic stays disabled until a provider
+contract permits use in an open-source MapLibre app with CarPlay. The provider review reached
+these conclusions on July 23, 2026:
 
 - [Google Routes API terms](https://cloud.google.com/maps-platform/terms/maps-service-terms)
   prohibit Routes content in conjunction with a non-Google map, so Google traffic
@@ -120,6 +121,41 @@ send the provider token to the app or cache route responses. Production must not
 enable this adapter until the license, privacy disclosure, attribution, cost
 controls, same-time route-quality gate, and physical phone/CarPlay validation are
 complete.
+
+## Community Traffic
+
+- Source id: `navoss-community`
+- Supplier: NavOSS drivers who switched traffic sharing on
+- Attribution shown with the layer: "Traffic from opted-in NavOSS drivers"
+- Licence: NavOSS's own aggregate. Road geometry and segment identifiers come from OpenStreetMap
+  ([ODbL](https://www.openstreetmap.org/copyright)) through the self-hosted Valhalla graph.
+- Endpoints: `POST /v1/traffic/probes`, `GET /v1/traffic/flow`, `GET /v1/traffic/status`
+- Design, parameters and threat model: [`architecture/community-traffic.md`](architecture/community-traffic.md)
+
+The server is implemented and disabled by default (`COMMUNITY_TRAFFIC_MODE=off`); production has
+not enabled it and no released app uploads driving observations. When enabled, a road segment is
+published only after at least three independent contributors drove it within the last 30 minutes,
+so with few users little or nothing is shown. `GET /v1/traffic/status` reports how many segments
+are published and how many samples back them. NavOSS does not interpolate, predict, or fill gaps:
+a road without enough recent contributors has no traffic colour, and a route without enough
+observed length has no traffic-adjusted ETA.
+
+### Official feeds reviewed for Alberta and British Columbia
+
+Reviewed on November 12, 2026 for a free, redistributable, real-time speed or flow feed that an
+open-source navigation app with CarPlay may use. None was added.
+
+| Source                                                                                                                                           | What it offers                                                                                                                                                                                  | Terms read                                                                                                                                                                                                                                                                                                                    | Decision                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [511 Alberta API](https://511.alberta.ca/developers/doc)                                                                                         | Events, road conditions, cameras, alerts, ferries, rest areas. No road-speed or flow resource. Needs a registered account and developer key; 10 calls per 60 seconds.                           | [About 511 Alberta](https://511.alberta.ca/about/about), "Terms of Use": reproduction is allowed for personal and public non-commercial (educational) use; reproduction for commercial distribution needs written permission from the Government of Alberta. It is not published under the Open Government Licence – Alberta. | Not used. It has no flow data, and its terms do not clearly permit redistribution through an app whose AGPL licence lets anyone reuse it commercially. Alberta events would need written permission first. |
+| [City of Calgary Travel Times](https://data.calgary.ca/Transportation-Transit/Travel-Times/aeb8-fh2w) (`aeb8-fh2w`)                              | Current car travel time in minutes for 68 named corridors, 20-minute resolution. No geometry, no segment references, no free-flow baseline. Metadata says it is collected with INRIX Analytics. | [Open Government Licence – City of Calgary](https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa): copy, adapt and distribute for any lawful purpose with attribution; clause 6(c) excludes third-party rights the City is not authorised to license.                                                                          | Not used. Drawing it would mean inventing corridor geometry from text labels, and it cannot give per-segment congestion. Whether the INRIX-derived values fall under clause 6(c) is not stated.            |
+| [City of Calgary Current Traffic Incidents](https://data.calgary.ca/d/4jah-h97u) and [Construction Detours](https://data.calgary.ca/d/w8zq-79bq) | Incident and construction points. No speeds.                                                                                                                                                    | Open Government Licence – City of Calgary (as above).                                                                                                                                                                                                                                                                         | Already used as event overlays ([Calgary Road Events](#calgary-road-events)); not a flow source.                                                                                                           |
+| [DriveBC Open511 API](https://api.open511.gov.bc.ca/help)                                                                                        | Road events for provincial highways. No speed or flow resource.                                                                                                                                 | The API guidelines state use is governed by the [Open Government Licence – British Columbia](https://www2.gov.bc.ca/gov/content/data/open-data/open-government-license-bc).                                                                                                                                                   | Already used for Kelowna-area events; not a flow source.                                                                                                                                                   |
+
+British Columbia's [Traffic Data Program](https://twm.th.gov.bc.ca/?c=tdp) publishes historical
+counts, not live speeds. No other official live speed feed for either province was found. If one
+appears, it must be added here with its licence before any code uses it, be labelled as its own
+source in responses, and never be blended into `navoss-community` values.
 
 ## Calgary Road Events
 
@@ -148,8 +184,8 @@ transient request failure, and visibly identifies a stale or delayed snapshot. P
 user location to Calgary Open Data.
 
 Road-event markers are awareness information only. They do not change route selection, trigger
-rerouting or speech, alter ETA, or represent road speeds or congestion. NavOSS still has no live
-traffic or traffic-aware ETA. Construction uses an amber work-zone symbol, closures use a red
+rerouting or speech, alter ETA, or represent road speeds or congestion. They are not an input to
+[Community Traffic](#community-traffic). Construction uses an amber work-zone symbol, closures use a red
 no-entry symbol, and incidents use a coral warning symbol. NavOSS does not ingest or display police
 patrol, checkpoint, or speed-trap locations; there is therefore no police-location marker.
 

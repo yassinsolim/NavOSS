@@ -2,7 +2,7 @@
 
 Status: **ready for internal TestFlight**. A direct privacy/support email must be activated before external beta testing.
 
-Effective date: July 31, 2026
+Effective date: November 12, 2026
 
 NavOSS is an account-free navigation application beginning with a Calgary technical beta. This policy explains how NavOSS uses data when you view the map, inspect or search for a place, request a route, navigate, share a place or ETA, open an external link, or ask for support.
 
@@ -18,9 +18,69 @@ The direct address `navoss@yassin.app` is not yet verified and is not presented 
 
 ### Location during active navigation
 
-When you grant When in Use location permission, NavOSS uses precise location to display your position, choose a route origin, match your position to an active route, detect rerouting and arrival, and determine whether an official safety camera is ahead in the direction of travel. If you start turn-by-turn navigation, location updates continue while the phone is locked, another app is visible, or CarPlay is connected. iOS displays its blue background-location indicator while this active session continues. NavOSS does not request Always location access.
+When you grant When in Use location permission, NavOSS uses precise location to display your position, choose a route origin, match your position to an active route, detect rerouting and arrival, and determine whether an official safety camera is ahead in the direction of travel. If you start turn-by-turn navigation, location updates continue while the phone is locked, another app is visible, or CarPlay is connected. iOS displays its blue background-location indicator while this active session continues. NavOSS does not request Always location access. If you switch on traffic sharing, positions along through roads are also sent during navigation as described under [Traffic sharing](#traffic-sharing-optional-off-by-default); it is off unless you turn it on.
 
 Route requests send origin and destination coordinates to the NavOSS API. A reroute sends the latest route origin and destination. Current production uses Valhalla on the same operator-controlled server as the API. A future licensed live-traffic deployment may forward those route endpoints and preferences to Mapbox Directions; that mode remains disabled until its commercial vehicle-use license and release gates are complete. Active route matching and camera eligibility run on the phone. The current active route is stored transiently on the phone so navigation can recover after an operating-system restart, then erased when navigation ends or arrival is confirmed. Separately, the app stores up to 12 recent destinations and 20 places you save, including their names, labels, and coordinates, only on the device for phone and CarPlay shortcuts. It does not store route geometry or trip progress as destination history or send either list to NavOSS.
+
+### Traffic sharing (optional, off by default)
+
+NavOSS can build live traffic from the driving speeds of people who choose to share them. Traffic
+sharing is **off by default**. The NavOSS server supports it, but it is not switched on in
+production and no released version of the app sends driving observations yet. When a version
+with the **Share traffic speeds** switch is released, this section describes exactly what turning
+it on does.
+
+**What is sent.** While sharing is on and turn-by-turn navigation is active, the app sends short
+batches of your driving positions to the NavOSS API. A batch is a list of positions, each with the
+number of seconds since the batch's first position, plus the time the batch started rounded down
+to the minute. A batch covers about one minute of driving and never more than five. It contains no
+account, no name, no device, installation, or advertising identifier, no trip identifier, no
+destination, no route, and nothing that connects one batch to another. NavOSS has no accounts, so
+there is nothing to connect it to.
+
+**When it is sent.** Only during active turn-by-turn navigation, including while the phone is
+locked or CarPlay is connected, about once a minute. Nothing is sent while you browse the map,
+search, preview a route, or drive without navigation, and nothing is sent when sharing is off.
+
+**What is left out.** The app does not record the first 400 metres or the last 400 metres of a
+trip, or anything within 400 metres of your destination or a stop on the way, and it holds back
+the most recent 400 metres so that a trip you end early never sends its final stretch. The server
+additionally discards the first and last 100 metres of every batch it receives. Positions on
+residential streets, service roads, driveways, and parking areas are ignored; only through roads
+are used.
+
+**What the server does.** The server matches a batch to roads in memory, works out one average
+speed for each stretch of road, adds that speed to a five-minute tally for that stretch, and
+discards the batch. Your positions, the batch, and its timing are never written to a database, a
+file, a backup, or a log. To match a batch to roads the server uses its own routing software on
+the same NavOSS-controlled machine in Alberta; batches are not sent to any other company.
+
+**What is kept, and for how long.** For each stretch of road and each five-minute period, NavOSS
+keeps how many shared speeds it received, a tally of those speeds in 2 km/h steps, the public
+OpenStreetMap shape of the road, and one scrambled marker per contributor. The marker lets the
+server tell that speeds came from different drivers. It is derived from your network address and
+that one stretch of road with a secret that exists only in the running server's memory, so the
+markers for two roads cannot be matched to each other or turned back into an address from the
+stored data. All of this is deleted within 36 minutes and erased whenever the server restarts. It
+is excluded from database backups. To limit abuse, the server also keeps a salted fingerprint of
+the source network address in memory for up to ten minutes; it is not logged or stored.
+
+**What other drivers see.** A stretch of road is coloured, and can affect an estimated arrival
+time, only after at least three different contributors have driven it within the last 30 minutes.
+A road driven by one or two contributors is never shown. Other drivers see a colour and a typical
+speed for the road; they never see a vehicle, a trip, or who contributed. With few contributors,
+most roads will show no traffic at all.
+
+**What NavOSS cannot rule out.** On a quiet road, three contributors may be a small group of
+people, and the fact that the road was recently driven becomes visible. Cloudflare and the NavOSS
+server necessarily see each upload and its network address while it is being delivered, as they do
+for every request.
+
+**How to turn it off.** Turn off **Share traffic speeds** in the app's About and Privacy screen.
+Uploads stop immediately and anything not yet sent is discarded. Ending navigation or removing the
+app has the same effect. Because nothing that was shared is stored with an identity, there is no
+per-person record to delete; what was contributed disappears on its own within 36 minutes. You can
+see traffic from other drivers without sharing your own.
 
 ### Search text and place details
 
@@ -72,7 +132,7 @@ Cloudflare provides public DNS, TLS termination, denial-of-service protection, a
 
 ## Purposes
 
-NavOSS uses data only to provide map rendering, road-event awareness, place details, search, routing, navigation, rerouting, arrival detection, safety-camera notices, user-requested sharing and external actions, service reliability, abuse prevention, security, and user-requested support.
+NavOSS uses data only to provide map rendering, road-event awareness, place details, search, routing, navigation, rerouting, arrival detection, safety-camera notices, community traffic for and from drivers who opt in, user-requested sharing and external actions, service reliability, abuse prevention, security, and user-requested support.
 
 NavOSS does not sell personal information or use it for advertising, marketing profiles, or cross-app tracking.
 
@@ -80,7 +140,7 @@ NavOSS does not sell personal information or use it for advertising, marketing p
 
 | Provider                                                                                           | Purpose and data                                                                                                                                                                                                                             | Location or policy                                                                  |
 | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| NavOSS operator-controlled server                                                                  | API, Nominatim and indexed Calgary search, Valhalla routing, camera normalization, and operational security                                                                                                                                  | Alberta, Canada                                                                     |
+| NavOSS operator-controlled server                                                                  | API, Nominatim and indexed Calgary search, Valhalla routing and road matching of opted-in traffic batches, camera normalization, and operational security                                                                                    | Alberta, Canada                                                                     |
 | [Cloudflare](https://www.cloudflare.com/privacypolicy/)                                            | DNS, TLS, traffic delivery, tunnel, and network security; processes IP and request traffic                                                                                                                                                   | Global network; Cloudflare describes international transfers in its policy          |
 | [OpenFreeMap](https://openfreemap.org/privacy/)                                                    | Direct map style, tile, font, and sprite delivery                                                                                                                                                                                            | Hyperknot Software Kft. in Hungary, with infrastructure that may include Cloudflare |
 | [Ontario 511](https://511on.ca/developers/doc)                                                     | Official construction, closure, and incident data polled by the NavOSS server; receives no phone location or user data                                                                                                                       | Government of Ontario                                                               |
@@ -99,6 +159,8 @@ Map and route data is derived from OpenStreetMap contributors. Search combines O
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Search text, tapped-place name, and search origin  | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup                                                                                                                        |
 | Route and reroute coordinates                      | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup                                                                                                                        |
+| Traffic-sharing batches (only when switched on)    | Positions and timing processed in memory and discarded; never written to a NavOSS database, log, or backup                                                                                                                           |
+| Traffic tallies from shared batches                | Per road stretch and five-minute period: count, speed tally, public road shape, and per-road scrambled contributor markers; deleted within 36 minutes, erased on server restart, excluded from backups                               |
 | Active route, trip progress and camera eligibility | Processed on the phone; the active route is erased when navigation ends or arrival is confirmed; no trip-history database                                                                                                            |
 | Recent and saved destinations                      | Up to 12 recent and 20 saved destination names, labels, and coordinates stored only on the device until cleared in About and Privacy or the app is removed                                                                           |
 | Map appearance preferences                         | Stored locally in app storage until the app is removed or the settings are changed; not transmitted to NavOSS                                                                                                                        |
@@ -111,10 +173,10 @@ Map and route data is derived from OpenStreetMap contributors. Search combines O
 | Public Calgary business and parcel search index    | Current local mirror refreshed every 24 hours; reproducible index tables are excluded from logical backups                                                                                                                           |
 | API and service operational logs                   | Maximum seven days; routine HTTP access logging is disabled                                                                                                                                                                          |
 | Host authentication and firewall security logs     | Maximum seven days; may contain timestamp, source IP and port, local account, action, and outcome                                                                                                                                    |
-| Report database backups                            | Maximum 14 days; may contain accepted beta contributions but do not contain route or search requests                                                                                                                                 |
+| Report database backups                            | Maximum 14 days; may contain accepted beta contributions but do not contain route or search requests or traffic tallies                                                                                                              |
 | Support messages                                   | Controlled by Apple or GitHub according to the channel selected by the user and that provider's policy                                                                                                                               |
 
-NavOSS operational logs are limited to timestamps, service/container identity, severity, lifecycle events, health failures, error names, and random request IDs where needed. They exclude HTTP request and response bodies, search text, route coordinates, and normal HTTP access events. All six production containers write to the host journal, which enforces a seven-day and 512 MiB limit. Caddy access logs and automatic Fastify request logs are disabled.
+NavOSS operational logs are limited to timestamps, service/container identity, severity, lifecycle events, health failures, error names, and random request IDs where needed. They exclude HTTP request and response bodies, search text, route coordinates, shared traffic positions, and normal HTTP access events. When traffic sharing is enabled on the server, a periodic summary records only counts of batches and road stretches. All six production containers write to the host journal, which enforces a seven-day and 512 MiB limit. Caddy access logs and automatic Fastify request logs are disabled.
 
 Cloudflare and OpenFreeMap apply their own retention policies to data they process. Cloudflare's policy does not promise one fixed period for all end-user network/security data. OpenFreeMap states that anonymized logs may be retained indefinitely and incident IP logs for at most 30 days. These provider-controlled periods are not part of NavOSS's seven-day host limit.
 
@@ -126,7 +188,9 @@ You can erase all locally stored recent and saved destinations at any time using
 
 You can use NavOSS without granting Contacts access because the app never asks for it. Sharing and the external reviews link are optional, user-initiated actions. Dismissing the system share sheet sends nothing to a recipient. In a Google-enabled build, opening a POI sheet can send its public coordinate for Google-rendered photos, ratings, and reviews; choosing no external reviews link sends no Google Maps search.
 
-Because NavOSS has no account and does not retain server-side search, route, or trip records, it normally has no server history that can be exported or deleted. The local recent- and saved-destination lists can be deleted in the app as described above. A rights request may identify a support message or a recent security event. Include only enough information to locate that record. NavOSS may be unable to associate an IP-only, transient request with a person. Requests about Cloudflare, OpenFreeMap, Apple, or GitHub data may also need to be directed to that provider.
+Traffic sharing is optional and off by default; turn **Share traffic speeds** off in About and Privacy to stop it, as described under Traffic sharing above.
+
+Because NavOSS has no account and does not retain server-side search, route, or trip records, it normally has no server history that can be exported or deleted. Shared traffic speeds are stored only as short-lived road tallies that cannot be linked to a person. The local recent- and saved-destination lists can be deleted in the app as described above. A rights request may identify a support message or a recent security event. Include only enough information to locate that record. NavOSS may be unable to associate an IP-only, transient request with a person. Requests about Cloudflare, OpenFreeMap, Apple, or GitHub data may also need to be directed to that provider.
 
 ## Children
 
