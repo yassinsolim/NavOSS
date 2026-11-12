@@ -6,25 +6,27 @@ enum NavigationSessionError: Error, Equatable {
 
 struct NavigationSessionUpdate: Equatable, Sendable {
   let guidance: NavOSSCarPlayGuidance?
+  let roadContext: NavigationRoadContext
   let snapshot: NavigationSnapshot
   let trip: NavOSSCarPlayTrip?
 }
 
 final class NavigationSession {
   private let core: NavigationCore
+  private var stepGeometry: NavigationStepGeometry?
   private(set) var trip: NavOSSCarPlayTrip?
 
   init(core: NavigationCore = NavigationCore()) {
     self.core = core
   }
 
+  /// Length of the active route geometry in metres.
+  var routeLengthMeters: Double? {
+    core.routeLengthMeters
+  }
+
   func currentUpdate() -> NavigationSessionUpdate {
-    let snapshot = core.currentSnapshot()
-    return NavigationSessionUpdate(
-      guidance: guidance(for: snapshot),
-      snapshot: snapshot,
-      trip: trip
-    )
+    update(for: core.currentSnapshot())
   }
 
   @discardableResult
@@ -38,18 +40,17 @@ final class NavigationSession {
       }
     )
     self.trip = trip
-    return NavigationSessionUpdate(
-      guidance: guidance(for: snapshot),
-      snapshot: snapshot,
-      trip: trip
-    )
+    stepGeometry = NavigationStepGeometry(trip: trip)
+    return update(for: snapshot)
   }
 
   @discardableResult
   func clear() -> NavigationSessionUpdate {
     trip = nil
+    stepGeometry = nil
     return NavigationSessionUpdate(
       guidance: nil,
+      roadContext: .unknown,
       snapshot: core.clearRoute(),
       trip: nil
     )
@@ -60,79 +61,38 @@ final class NavigationSession {
     guard trip != nil else {
       throw NavigationSessionError.noActiveTrip
     }
-    let snapshot = try core.updateLocation(sample)
-    return NavigationSessionUpdate(
-      guidance: guidance(for: snapshot),
-      snapshot: snapshot,
-      trip: trip
-    )
+    return update(for: try core.updateLocation(sample))
   }
 
-  private func guidance(for snapshot: NavigationSnapshot) -> NavOSSCarPlayGuidance? {
-    guard let trip, snapshot.phase != .idle else {
+  /// Extrapolates through a gap in fixes; `nil` when the core declines (see
+  /// `NavigationCore.deadReckon`).
+  func deadReckon(at timestamp: TimeInterval) -> NavigationSessionUpdate? {
+    guard trip != nil, let snapshot = core.deadReckon(at: timestamp) else {
       return nil
     }
-    if snapshot.phase == .arrived {
-      let arrivalStep = trip.steps[trip.steps.count - 1]
-      return NavOSSCarPlayGuidance(
-        distanceToManeuverMeters: 0,
-        durationToManeuverSeconds: 0,
-        instruction: arrivalStep.instruction,
-        maneuverType: arrivalStep.maneuverType,
-        phase: .arrived,
-        remainingDistanceMeters: 0,
-        remainingDurationSeconds: 0,
-        roadName: arrivalStep.roadName,
-        stepIndex: trip.steps.count - 1
+    return update(for: snapshot)
+  }
+
+  /// The on-route point `alongMeters` from the active route's origin.
+  func routePoint(alongMeters: Double) -> NavigationCoordinate? {
+    core.routePoint(alongMeters: alongMeters)
+  }
+
+  private func update(for snapshot: NavigationSnapshot) -> NavigationSessionUpdate {
+    guard let trip, let stepGeometry else {
+      return NavigationSessionUpdate(
+        guidance: nil,
+        roadContext: .unknown,
+        snapshot: snapshot,
+        trip: nil
       )
     }
-
-    let totalStepDistance = trip.steps.reduce(0) { $0 + $1.distanceMeters }
-    let completedDistance = max(0, min(1, snapshot.routeProgress)) * totalStepDistance
-    var traversedDistance = 0.0
-    var currentStepIndex = trip.steps.count - 1
-    var currentStepProgress = 1.0
-
-    for (index, step) in trip.steps.enumerated() {
-      let stepEnd = traversedDistance + step.distanceMeters
-      if completedDistance <= stepEnd || index == trip.steps.count - 1 {
-        currentStepIndex = index
-        currentStepProgress =
-          step.distanceMeters == 0
-          ? 1
-          : max(0, min(1, (completedDistance - traversedDistance) / step.distanceMeters))
-        break
-      }
-      traversedDistance = stepEnd
-    }
-
-    let currentStep = trip.steps[currentStepIndex]
-    let remainingStepFraction = 1 - currentStepProgress
-    let distanceToManeuver = currentStep.distanceMeters * remainingStepFraction
-    let durationToManeuver = currentStep.durationSeconds * remainingStepFraction
-    let laterSteps = trip.steps.dropFirst(currentStepIndex + 1)
-    let remainingDistance =
-      distanceToManeuver
-      + laterSteps.reduce(0) {
-        $0 + $1.distanceMeters
-      }
-    let remainingDuration =
-      durationToManeuver
-      + laterSteps.reduce(0) {
-        $0 + $1.durationSeconds
-      }
-    let guidanceStep = trip.steps[min(currentStepIndex + 1, trip.steps.count - 1)]
-
-    return NavOSSCarPlayGuidance(
-      distanceToManeuverMeters: distanceToManeuver,
-      durationToManeuverSeconds: durationToManeuver,
-      instruction: guidanceStep.instruction,
-      maneuverType: guidanceStep.maneuverType,
-      phase: .navigating,
-      remainingDistanceMeters: remainingDistance,
-      remainingDurationSeconds: remainingDuration,
-      roadName: guidanceStep.roadName,
-      stepIndex: currentStepIndex
+    let guidance = navigationGuidance(trip: trip, stepGeometry: stepGeometry, snapshot: snapshot)
+    return NavigationSessionUpdate(
+      guidance: guidance,
+      roadContext: navigationRoadContext(trip: trip, guidance: guidance, snapshot: snapshot),
+      snapshot: snapshot,
+      trip: trip
     )
   }
 }
