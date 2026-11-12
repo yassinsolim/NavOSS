@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Themed-icon silhouette. Android tints the alpha channel, so the fold is a gap rather than a shade. -->
+  <defs>
+    <clipPath id="left-face"><rect width="500" height="1024"/></clipPath>
+    <clipPath id="right-face"><rect x="524" width="500" height="1024"/></clipPath>
+  </defs>
+  <g transform="translate(512 512) scale(0.62) translate(-512 -502)" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="40" stroke-linejoin="round">
+    <path d="M512 204 L774 800 L512 664 L250 800 Z" clip-path="url(#left-face)"/>
+    <path d="M512 204 L774 800 L512 664 L250 800 Z" clip-path="url(#right-face)"/>
+  </g>
+</svg>

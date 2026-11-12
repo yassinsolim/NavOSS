@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Car seen from the front with hazard lights. -->
+  <path fill="currentColor" d="M22 17h20a3 3 0 0 1 2.8 2L47.5 27H49a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-3v3.5a2 2 0 0 1-4 0V42H22v3.5a2 2 0 0 1-4 0V42h-3a2 2 0 0 1-2-2V29a2 2 0 0 1 2-2h1.5l2.7-8a3 3 0 0 1 2.8-2Z"/>
+  <path fill="var(--tile)" d="M23 21h18l2 6H21Z"/>
+  <circle cx="20" cy="33.5" r="3.2" fill="#F59E0B" stroke="var(--tile)" stroke-width="1.5"/>
+  <circle cx="44" cy="33.5" r="3.2" fill="#F59E0B" stroke="var(--tile)" stroke-width="1.5"/>
+</svg>
