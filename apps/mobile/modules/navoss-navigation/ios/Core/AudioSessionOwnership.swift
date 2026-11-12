@@ -75,3 +75,57 @@ public struct NavOSSAudioSessionOwnership: Equatable {
     return .retryAfter(delay)
   }
 }
+
+/// Guidance utterances that still owe the synthesizer's didFinish/didCancel callback.
+///
+/// The audio session (and the ducking of the driver's music) is released only once this is
+/// empty. If AVSpeechSynthesizer never reports a queued utterance (seen when synthesis fails to
+/// start, or for utterances queued behind an interrupted one), waiting on the callback alone
+/// leaves music ducked indefinitely. Every utterance therefore also gets a deadline derived from
+/// its length; an utterance past its deadline is treated as finished, so the release still
+/// happens, late rather than never.
+public struct NavOSSSpeechUtteranceLedger: Equatable {
+  /// Generous speaking rate: real guidance at 0.92× the default rate is faster than this.
+  public static let secondsPerCharacter = 0.1
+  /// Slack for audio route setup (Bluetooth/CarPlay) before speech starts.
+  public static let startupGraceSeconds = 6.0
+
+  private var deadlines: [ObjectIdentifier: TimeInterval] = [:]
+
+  public init() {}
+
+  public var isEmpty: Bool { deadlines.isEmpty }
+  public var count: Int { deadlines.count }
+
+  /// The earliest moment an outstanding utterance becomes overdue.
+  public var nextDeadline: TimeInterval? { deadlines.values.min() }
+
+  public static func deadline(forCharacterCount count: Int, startedAt now: TimeInterval)
+    -> TimeInterval
+  {
+    now + startupGraceSeconds + Double(max(0, count)) * secondsPerCharacter
+  }
+
+  public mutating func begin(_ utterance: ObjectIdentifier, characterCount: Int, now: TimeInterval) {
+    deadlines[utterance] = Self.deadline(forCharacterCount: characterCount, startedAt: now)
+  }
+
+  /// Returns `true` when this completion emptied the ledger.
+  @discardableResult
+  public mutating func complete(_ utterance: ObjectIdentifier) -> Bool {
+    let removed = deadlines.removeValue(forKey: utterance) != nil
+    return removed && deadlines.isEmpty
+  }
+
+  public mutating func removeAll() {
+    deadlines.removeAll()
+  }
+
+  /// Drops every utterance whose deadline has passed. Returns `true` when that emptied the
+  /// ledger, i.e. the caller should now attempt the session release it was waiting for.
+  public mutating func expireOverdue(now: TimeInterval) -> Bool {
+    let before = deadlines.count
+    deadlines = deadlines.filter { $0.value > now }
+    return before > 0 && deadlines.count < before && deadlines.isEmpty
+  }
+}

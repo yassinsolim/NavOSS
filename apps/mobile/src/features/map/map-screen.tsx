@@ -158,11 +158,6 @@ import {
 } from '@/features/navigation/route-progress';
 import { isCoordinateInCoverage } from '@/features/navigation/route-coverage';
 import {
-  findUpcomingSafetyCamera,
-  type UpcomingSafetyCamera,
-} from '@/features/navigation/safety-camera-alert';
-import {
-  announceSafetyCamera,
   clearCarPlayTrip,
   clearDestinationHistory,
   clearNavigationRoute,
@@ -493,7 +488,10 @@ export function MapScreen() {
   const [routeSource, setRouteSource] = useState<RouteResponse['source']>();
   const [cameraAnnouncementCount, setCameraAnnouncementCount] = useState(0);
   const [carPlayConnected, setCarPlayConnected] = useState(false);
-  const [safetyCameraAlert, setSafetyCameraAlert] = useState<UpcomingSafetyCamera>();
+  const [safetyCameraAlert, setSafetyCameraAlert] = useState<{
+    camera: SafetyCamera;
+    distanceAheadMeters: number;
+  }>();
   const [safetyCameras, setSafetyCameras] = useState<readonly SafetyCamera[]>([]);
   const [roadEventResponse, setRoadEventResponse] = useState<RoadEventResponse>();
   const [officialRoadEventResponse, setOfficialRoadEventResponse] =
@@ -1225,18 +1223,20 @@ export function MapScreen() {
         return;
       }
 
-      if (!snapshot.isOffRoute && snapshot.rawCoordinate !== undefined) {
-        const upcomingCamera = findUpcomingSafetyCamera(
-          safetyCamerasRef.current,
-          route,
-          snapshot.routeProgress,
-          announcedCameraIdsRef.current,
+      // Native navigation decides camera eligibility and speaks the alert (so it also works with
+      // the phone locked or only CarPlay on screen); the phone only presents it. Each alert has a
+      // unique `sequence`, recorded here so a repeated snapshot does not re-show the banner.
+      const nativeAlert = snapshot.safetyCameraAlert;
+      const alertKey =
+        nativeAlert === undefined ? undefined : `alert:${String(nativeAlert.sequence)}`;
+      if (nativeAlert !== undefined && alertKey !== undefined) {
+        const camera = safetyCamerasRef.current.find(
+          (candidate) => candidate.id === nativeAlert.cameraId,
         );
-        if (upcomingCamera !== undefined) {
-          announcedCameraIdsRef.current.add(upcomingCamera.camera.id);
+        if (!announcedCameraIdsRef.current.has(alertKey) && camera !== undefined) {
+          announcedCameraIdsRef.current.add(alertKey);
           setCameraAnnouncementCount((currentCount) => currentCount + 1);
-          setSafetyCameraAlert(upcomingCamera);
-          announceSafetyCamera();
+          setSafetyCameraAlert({ camera, distanceAheadMeters: nativeAlert.distanceAheadMeters });
           if (cameraAlertTimeoutRef.current !== undefined) {
             clearTimeout(cameraAlertTimeoutRef.current);
           }

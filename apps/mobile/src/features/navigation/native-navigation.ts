@@ -12,6 +12,7 @@ import NavOSSNavigation, {
   type NativeNavigationAudioMode,
   type NativeNavigationPreferences,
   type NativeNavigationSnapshot,
+  type NativeRerouteMode,
 } from '../../../modules/navoss-navigation';
 
 interface NativeTrafficInput {
@@ -56,10 +57,26 @@ export type {
   NativeCarPlayState,
   NativeDestinationCatalog,
   NativeNavigationSnapshot,
+  NativeRerouteMode,
+  NativeRerouteProposal,
+  NativeSafetyCameraAlert,
+  NativeSpeedingState,
 } from '../../../modules/navoss-navigation';
 
-export function announceSafetyCamera(): void {
-  NavOSSNavigation.announceSafetyCamera();
+export function setNavigationRerouteMode(mode: NativeRerouteMode): void {
+  NavOSSNavigation.setRerouteMode(mode);
+}
+
+export function setNavigationSpeedingWarning(toleranceKph: number, audible: boolean): void {
+  NavOSSNavigation.setSpeedingWarning(toleranceKph, audible);
+}
+
+export function acceptRerouteProposal(id: string): boolean {
+  return NavOSSNavigation.acceptRerouteProposal(id);
+}
+
+export function declineRerouteProposal(id: string): boolean {
+  return NavOSSNavigation.declineRerouteProposal(id);
 }
 
 export function observeNavigationSnapshots(listener: (snapshot: NativeNavigationSnapshot) => void) {
