@@ -95,6 +95,8 @@ import {
   createCalgarySafetyCameraProvider,
   type SafetyCameraProvider,
 } from './safety-camera-provider.js';
+import { registerTrafficRoutes } from './traffic/routes.js';
+import { createConfiguredTrafficService, type TrafficService } from './traffic/service.js';
 import {
   createTorontoSafetyCameraProvider,
   TorontoCameraProviderError,
@@ -124,6 +126,8 @@ export interface BuildAppOptions {
   searchProvider?: SearchProvider;
   searchFixtures?: readonly SearchFixture[];
   torontoCameraProvider?: TorontoSafetyCameraProvider;
+  trafficRateLimiter?: ContributionRateLimiter;
+  trafficService?: TrafficService;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -146,7 +150,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.kelownaSafetyFacilityProvider ?? createKelownaSafetyFacilityProvider();
   const productionSearch = options.productionSearch ?? process.env.NOMINATIM_URL !== undefined;
   const routeProvider = options.routeProvider ?? createConfiguredRouteProvider();
-  const liveTraffic = routeProvider.source?.traffic === 'live';
+  const trafficService = options.trafficService ?? createConfiguredTrafficService({ clock });
+  const trafficRateLimiter =
+    options.trafficRateLimiter ??
+    createContributionRateLimiter({
+      clock: () => clock().getTime(),
+      globalLimit: trafficService.settings.rateLimitGlobal,
+      sourceLimit: trafficService.settings.rateLimitPerSource,
+      windowMs: trafficService.settings.rateLimitWindowSeconds * 1_000,
+    });
+  // `/v1/config` is frozen for shipped clients and reports the licensed provider only.
+  const providerLiveTraffic = routeProvider.source?.traffic === 'live';
+  const liveTraffic = providerLiveTraffic || trafficService.mode === 'live';
   const searchProvider =
     options.searchProvider ??
     (productionSearch
@@ -165,11 +180,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     driveBcTrafficCameraProvider.stop?.();
     eventProvider.stop?.();
     ontarioEventProvider.stop?.();
-    await Promise.all([contributionProvider.close?.(), googlePlaceQueryBudget.close?.()]);
+    await Promise.all([
+      contributionProvider.close?.(),
+      googlePlaceQueryBudget.close?.(),
+      trafficService.close(),
+    ]);
   });
 
-  app.addHook('onReady', () => {
+  app.addHook('onReady', async () => {
     contributionProvider.start?.();
+    // Fails startup when traffic is enabled but its schema cannot be prepared.
+    await trafficService.start();
   });
 
   app.setValidatorCompiler(validatorCompiler);
@@ -193,6 +214,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         { description: 'Driving route calculation and guidance', name: 'routes' },
         { description: 'Regional OpenStreetMap search with Calgary civic data', name: 'search' },
         { description: 'Service health and readiness', name: 'system' },
+        { description: 'Opt-in community traffic sharing and flow', name: 'traffic' },
       ],
     },
     transform: jsonSchemaTransform,
@@ -471,7 +493,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         tags: ['config'],
       },
     },
-    () => createLegacyAppConfig(clock().toISOString(), productionSearch, liveTraffic),
+    () => createLegacyAppConfig(clock().toISOString(), productionSearch, providerLiveTraffic),
   );
 
   typedApp.get(
@@ -774,6 +796,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       }
     },
   );
+
+  registerTrafficRoutes(app, trafficService, trafficRateLimiter);
 
   typedApp.get(
     '/openapi.json',
