@@ -82,8 +82,8 @@ remaining NavOSS priorities are:
    and synchronized phone/CarPlay sound controls in a new signed build.
 2. Repeat the completed `CPMapTemplate` interaction audit on wired and wireless head units,
    including reconnect, locked-phone continuation, speech/radio mixing, rotary input, and arrival.
-3. Add Dashboard or cluster metadata only after a separately gated implementation and supported
-   vehicle test. Do not infer support from the main-map simulator harness.
+3. Validate the implemented Dashboard map, instrument-cluster scene, and maneuver/lane metadata on
+   a supported vehicle. Do not infer support from the main-map simulator harness.
 4. Keep public incident display and voting plus traffic-aware ETA blocked until the existing trust,
    moderation, licensed-data, and route-quality gates are met.
 
@@ -169,8 +169,8 @@ the session.
 
 - Licensed traffic evaluation and traffic-aware route-quality gates.
 - Official closure ingestion before community closure routing effects.
-- Offline routing and parked CarPlay stop removal/reordering; phone multi-stop and CarPlay stop
-  addition are already implemented.
+- Offline routing. Phone multi-stop and CarPlay stop addition, removal, and reordering are
+  implemented; CarPlay removal and reordering still need a signed build and head-unit check.
 - Ontario search and routing only after dedicated data imports and quality
   validation; Toronto camera markers alone are not Ontario coverage.
 

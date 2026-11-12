@@ -14,7 +14,7 @@ The implementation will use:
 - The same normalized route model and NavOSS API used by the phone experience.
 - React Native as a consumer of native navigation state, not as the owner of a CarPlay session.
 
-This preserves one route and one navigation session across the phone, main CarPlay display, and CarPlay Dashboard. Instrument-cluster and HUD surfaces remain future work.
+This preserves one route and one navigation session across the phone, the main CarPlay display, CarPlay Dashboard, and, where the vehicle offers one, the instrument cluster or head-up display.
 
 ## External Gate
 
@@ -44,7 +44,7 @@ not discarded on connect. A connected active trip whose maneuver is not yet reso
 an explicit waiting state with End; it does not claim the app is idle or trap the user without an
 exit. End and confirmed arrival return to the appropriate actionable phone surface.
 
-The native navigation service now owns active Core Location updates, map matching, maneuver progression, spoken guidance, background continuation, rerouting, arrival, and transient active-route recovery. CarPlay search uses the private NavOSS API, previews route alternatives with approved templates, and starts navigation without phone interaction. A Dashboard scene renders the shared route and guidance state without creating a second navigation session, with Go and Voice shortcuts that activate the main CarPlay scene. Apple decides which navigation app occupies the Dashboard tile; Voice opens NavOSS search and is not a custom Siri speech recognizer. Cluster metadata and real-vehicle Dashboard validation remain incomplete. Normal production builds remain unchanged; the dedicated `production-carplay` profile enables the scenes, entitlement, native API URL, and location background mode for controlled testing.
+The native navigation service now owns active Core Location updates, map matching, maneuver progression, spoken guidance, background continuation, rerouting, arrival, and transient active-route recovery. CarPlay search uses the private NavOSS API, previews route alternatives with approved templates, and starts navigation without phone interaction. A Dashboard scene renders the shared route and guidance state without creating a second navigation session, with Go and Voice shortcuts that activate the main CarPlay scene. Apple decides which navigation app occupies the Dashboard tile; Voice opens NavOSS search and is not a custom Siri speech recognizer. Instrument-cluster rendering and maneuver metadata are implemented; real-vehicle Dashboard and cluster validation remain incomplete. Normal production builds remain unchanged; the dedicated `production-carplay` profile enables the scenes, entitlement, native API URL, and location background mode for controlled testing.
 
 ### Maps capability decision
 
@@ -138,9 +138,29 @@ the navigation widget. iOS does not expose the region-limited default Navigation
 
 ### Instrument cluster and HUD
 
-NavOSS will provide CarPlay with structured turn-by-turn metadata rather than trying to draw arbitrary cluster UI. On supported OS and vehicle combinations this includes route segments, current segment, maneuver state, road-name variants, lane guidance, and travel estimates. Availability checks are required because display support is vehicle-dependent and some current APIs remain beta.
+Two separate mechanisms reach a vehicle's cluster or head-up display, and NavOSS uses both through
+public API under the existing `com.apple.developer.carplay-maps` entitlement:
 
-CarPlay Ultra is a vehicle and system integration. NavOSS can participate through supported CarPlay framework surfaces, but cannot reproduce Apple's system UI or promise instrument-cluster maps on every vehicle.
+- **Navigation metadata.** The main scene adds every route maneuver to its `CPNavigationSession`
+  when guidance starts (`addManeuvers`, iOS 17.4+), with `maneuverType`, `junctionType`,
+  geometry-measured `junctionExitAngle`, `trafficSide`, road-following names, highway exit labels
+  when the route supplies them, `currentRoadNameVariants`, speed-aware `maneuverState`, and
+  per-maneuver and trip `CPTravelEstimates`. Lane guidance is added with `addLaneGuidances` and
+  linked to its maneuver on iOS 18+, only when the route carries lanes. The vehicle renders this
+  metadata itself; NavOSS draws nothing for it.
+- **Cluster map.** `NavOSSCarPlayInstrumentClusterSceneDelegate` implements
+  `CPTemplateApplicationInstrumentClusterSceneDelegate` (iOS 15.4+). The plugin registers the
+  `CPTemplateApplicationInstrumentClusterSceneSessionRoleApplication` configuration and sets
+  `CPSupportsInstrumentClusterNavigationScene`. When the car connects a cluster window, NavOSS
+  installs its own map view controller showing the shared route, vehicle, and maneuver arrow. It
+  handles the car's zoom controls, follows `contentStyle`, hides its own speed badge because the
+  cluster already has a speedometer, and draws the speed-limit sign only while the vehicle's cluster
+  speed-limit setting is not Disabled.
+
+Whether a cluster or HUD connects is the vehicle's decision; most CarPlay systems have neither, and
+Xcode's Simulator cannot show one. Apple's separate CarPlay Simulator app can. CarPlay Ultra is a
+vehicle and system integration that NavOSS cannot reproduce. It participates only through these
+framework surfaces.
 
 ## User Flows
 
@@ -177,7 +197,31 @@ CarPlay voice search starts only from its microphone control. Microphone and Spe
 permission prompts appear on the iPhone; approval is not a guarantee that an on-device recognizer
 or vehicle input route is available. Recording requires an available on-device recognizer and never
 falls back to cloud recognition. Transient recording-start failures have a short bounded retry;
-permanent failures retain an actionable error.
+permanent failures retain an actionable error. Recording uses the `.record` category in the
+`.default` mode. `.measurement` was dropped because it turns off the system's gain control and noise
+suppression, which a car microphone needs over road noise. After activation, NavOSS explicitly
+prefers the car's `CarAudio` input, then a Bluetooth hands-free microphone, then a headset, then the
+iPhone. Every voice failure opens a list with **Try voice search again**, **Type a destination**,
+and **Home, Work, and recents**, so a phone without an on-device English recognizer still reaches a
+destination. A recognized query opens its results list immediately in a searching state and fills
+it in place.
+
+### Siri
+
+`NavigateWithNavOSSIntent` (App Intents, iOS 16+) and the `NavOSSAppShortcuts` provider support
+"Navigate to _place_ with NavOSS", "Take me to _place_ with NavOSS", and "Navigate with NavOSS",
+which asks "Where to?". Places resolve from Home, Work, saved places, and recents first. Other
+names go to the NavOSS search API near the current position. When CarPlay is connected, the intent
+shows routes to the place on the car screen. It brings the main CarPlay scene forward if needed and
+replaces nothing until the driver taps Go. During a trip it offers the place as a new destination.
+Without CarPlay, Siri replies that CarPlay is needed and does not open the phone UI. Limits:
+
+- Siri itself, not NavOSS, processes the spoken phrase.
+- App Shortcut phrases can match free-form place names only through the entity query.
+- Apple Maps-style "Navigate to X" without "with NavOSS" goes to the user's default navigation app.
+  Third-party apps cannot claim that phrase.
+- The intent ships only in CarPlay-enabled builds, because the plugin copies it with the CarPlay
+  sources.
 
 The navigation service is the sole owner of shared audio-session deactivation. Recording leases
 block speech cleanup from releasing an active microphone session. Completing or failing capture
@@ -187,21 +231,35 @@ there is no terminal retry cutoff. Epoch checks precede any operating-system cal
 cannot deactivate a newer owner. This prevents an assumed or abandoned release from leaving other
 audio ducked.
 
-CarPlay reports use the same eight safety-oriented labels as the phone. They are bounded native
-drafts with precise coordinate, creation time, and two-hour expiry. They remain private on the
-device and are not shown to other drivers; no police/checkpoint option or free text exists. This is
-an explicit testing state until the trust, moderation, rate-limit, confirmation, and expiry backend
-is implemented.
+CarPlay reports use the same eight safety-oriented labels as the phone. During guidance the Report
+map button opens an eight-tile grid, and one more tap saves the report and returns to the map with
+a three-second confirmation. Reports are bounded native drafts with precise coordinate, creation
+time, and two-hour expiry. They remain private on the device and are not shown to other drivers; no
+police/checkpoint option or free text exists. This is an explicit testing state until the trust,
+moderation, rate-limit, confirmation, and expiry backend is implemented.
+
+The map is ready for data it does not have yet. Each of these inputs is optional and renders
+nothing while absent:
+
+- `NavOSSCarPlayTrip.congestion: [NavOSSCarPlayCongestionLevel]?` (one level per geometry segment)
+  colours slow, heavy, and stopped stretches of the remaining route;
+- `NavOSSCarPlayMapAlertStore.shared.publish([NavOSSCarPlayMapAlert])` draws camera and report
+  markers;
+- `NavOSSCarPlayRouteStep.lanes`, `maneuverModifier`, `roundaboutExit`, `exitNumber`, `signpost`,
+  `signpostBranch`, `signpostToward`, `junctionName`, `currentRoadName`, `bearingBeforeDegrees`,
+  and `bearingAfterDegrees` mirror the route contract's `/v2/routes` step enrichment and feed lane guidance, maneuver symbols, exit labels, and the current-road pill.
 
 The remaining gaps are primarily data and platform capabilities:
 
-- live traffic, incident-aware ETA, closures, and traffic-coloured routes require a licensed feed;
-- lane guidance, junction views, and signpost text require normalized provider data that is not
-  present in the current route contract; posted speed limits already use geometry-aligned
-  Valhalla/OpenStreetMap annotations and hide unknown values;
+- nothing publishes congestion or map alerts yet. Live traffic, incident-aware ETA, closures, and
+  shared reports need real sources first;
+- the native route client does not yet request or decode the enriched route contract, so lanes,
+  modifiers, exits, and signposts are absent at runtime. Maneuver types and roundabout exits are
+  read from the provider's instruction text, and turn angles are measured from route geometry;
 - public crowd reports require the planned trust, moderation, expiry, and anti-abuse backend;
 - richer place imagery, ratings, entrances, and parking context require separately licensed data;
-- Dashboard, cluster, HUD, and CarPlay Ultra surfaces remain vehicle- and entitlement-dependent.
+- Dashboard, cluster, HUD, and CarPlay Ultra surfaces remain vehicle-dependent and unvalidated on
+  a real car.
 
 NavOSS must not invent any of these signals. Until their source and quality gates exist, the
 CarPlay experience should stay quieter than Google Maps or Waze rather than imply unavailable
@@ -209,20 +267,24 @@ traffic, lane, speed, or incident knowledge.
 
 ### Destination search
 
-- Use `CPSearchTemplate` for bounded destination search.
-- Label the root destination action **Search**, not Places.
-- The Search list mirrors the phone's useful discovery groups with nearby Restaurants, Coffee,
-  Bars, Gas, Groceries, Parking, Pharmacies, Parks, Shopping, Hotels, Attractions, Hospitals and
-  clinics, Charging stations, Car repair, and Car wash. Typed category intent is preserved for
-  restaurants, groceries, and parks so strict server filtering still applies.
-- Show recents and locally stored favorites without requiring phone interaction.
-- Keep result rows concise and provide clear no-network and degraded-provider states in CarPlay.
-- Do not direct a moving driver to finish setup on the phone.
+- The Search grid puts Home, Work, Recents, and Saved first, then Gas, Coffee, Food, and Parking.
+  Its navigation bar holds Categories, Keyboard, and Microphone, and Categories lists every nearby
+  category.
+- Typed search waits about 280 ms after the last keystroke before asking the API. A superseded
+  keystroke receives the previous results instead of an empty list, and the keyboard's Search key
+  opens the full result list.
+- Category results open immediately in a searching state. They are ordered nearest first, and each
+  row shows its straight-line distance and label. Empty, offline, and location-unavailable results
+  each show a message and a way forward.
+- Home or Work that is not set, and empty Recents or Saved lists, explain how to fill them and
+  offer search instead of ending there.
+- Keep result rows concise and do not direct a moving driver to finish setup on the phone.
 
 ### Route preview
 
 - Convert normalized alternatives into `CPTrip` and `CPRouteChoice` objects.
-- Use `CPMapTemplate.showTripPreviews` for route selection.
+- Use `CPMapTemplate.showRouteChoicesPreview` for route selection, with Go (new trip) or Use
+  route (a change to the active trip), Routes, and Overview buttons.
 - Draw selected and alternate route geometry in the native MapLibre view.
 - Fit the full selected route with 68% of the map width reserved for the route-choice sheet, expand
   route bounds by 50%, cap preview zoom at 8.5, and
@@ -236,8 +298,27 @@ traffic, lane, speed, or incident knowledge.
 
 ### Driving map
 
-- Current speed comes directly from valid Core Location speed and is shown in km/h during active
-  guidance.
+- The follow camera is course-up, or north-up from Settings, with the vehicle in the lower part of
+  the view. Speed sets the viewing distance, from 550 m when stopped to about 1.1 km at 100 km/h,
+  capped at 1.35 km. An approaching maneuver pulls it closer. Pitch eases between 50° close in and
+  36° far out. Distance, pitch, and heading ease toward their targets with frame-rate-independent
+  time constants, so speed changes, the next maneuver, and corners never snap the view.
+- The render loop is bound to the car's screen and requests 60 fps (30 fps minimum). It keeps
+  running until both the vehicle and the camera have settled, then stops until the next fix.
+- During guidance the camera centres in the area beside CarPlay's guidance card, using the window's
+  horizontal safe-area insets. It ignores the top inset, which changes whenever the navigation bar
+  appears.
+- The route is drawn as the NavOSS teal-green line with a casing. The full route is drawn grey
+  underneath, so road already driven reads as travelled. Alternates are grey with their own casing.
+- Within 1 km of the next maneuver, a white arrow with a dark outline is drawn on the road through
+  the turn. It follows a roundabout's circulation to the exit.
+- Road-name labels are enlarged by about 22% with a stronger halo during guidance and restored
+  afterwards. POIs and 3D buildings hide during guidance.
+- The current-road pill sits at the bottom centre of the live safe area. It shows only while
+  following and only when the route names the road.
+- Current speed comes directly from valid Core Location speed and is shown in km/h in a round badge
+  during active guidance. It turns red at 5 km/h or more over a known posted limit; the tolerance is
+  an input for a future setting. The posted limit is a black-on-white MAX sign beside it.
 - The main-display speed and speed-limit readouts anchor to the map content's top-right bounds,
   independently of transient template safe-area insets. They follow a real content resize but do not
   move when chrome appears or disappears. Dashboard rendering keeps its own safe-area behavior.
@@ -246,6 +327,8 @@ traffic, lane, speed, or incident knowledge.
 - Posted speed limits come from geometry-aligned Valhalla/OpenStreetMap `maxspeed` annotations.
   NavOSS selects the nearest matched route segment and hides the sign for unknown or unlimited
   values rather than inferring a limit from road class.
+- In Automatic appearance the map follows the vehicle's suggested `contentStyle` (iOS 15.4+), which
+  the car changes for night or headlights, before the window's own trait collection.
 - The CarPlay compass ornament is hidden because heading-up guidance and the explicit overview/follow
   control already provide orientation without colliding with template controls.
 - Vehicle position and course interpolate only between received matched GPS updates. NavOSS does not
@@ -254,28 +337,61 @@ traffic, lane, speed, or incident knowledge.
   and preserve that position across later nil-position snapshots. Replace it as soon as a real
   matched or raw location is published.
 - Settings persist Automatic/Light/Dark appearance, All guidance/Alerts only/Muted audio, visible or
-  hidden basemap points of interest, and Arrow/Car vehicle marker choices.
+  hidden basemap points of interest, and Arrow/Car vehicle marker choices. Choosing a sound mode
+  from the driving map's sound button returns straight to the map.
 
 ### Active guidance
 
 - Seed the first active CarPlay position from the same fresh Core Location sample used to request
   routes, so tapping Go enters follow mode immediately instead of waiting for another GPS callback.
-
-- Start a `CPNavigationSession` from the selected `CPTrip`.
-- Keep at least one `CPManeuver` in `upcomingManeuvers`.
-- Update `CPTravelEstimates` for the trip and current maneuver as native progress changes.
-- Publish lane and route-segment metadata where available.
-- Pause, resume, cancel, finish, and reroute through the matching CarPlay session APIs.
+- Start a `CPNavigationSession` from the selected `CPTrip` and add every maneuver to it up front.
+- Turn-card symbols are drawn from the maneuver kind and the exit angle measured from route geometry.
+  Slight, normal, and sharp turns, keep and fork, ramps, U-turns, and roundabouts each look like the
+  junction; roundabouts show the circulation to the numbered exit. Instruction variants add the
+  signpost and the road name when the route has them.
+- `upcomingManeuvers` holds the next maneuver. It also holds the one after it ("then") when the
+  second follows within 250 m.
+- `maneuverState` is speed-aware: execute within max(60 m, 6 s of travel), prepare within
+  max(400 m, 25 s), and continue beyond 2 km.
+- `currentRoadNameVariants` is the road being driven, taken from the step in progress. It used to be
+  the upcoming road.
+- `CPLaneGuidance` is set as `currentLaneGuidance` only during prepare and execute, and only when
+  the route supplies lanes.
+- Per-maneuver estimates count down to the next maneuver. Each maneuver's `initialTravelEstimates`
+  is its full leg, and trip estimates use the remaining distance and time.
+- Arrival pauses the trip with the destination name and a persistent "You've arrived" alert with
+  Done (ends the trip) or Keep map. A new route for the same destination while guiding is announced
+  with a short "New route" alert. Only one navigation alert shows at a time; a newer message
+  replaces the older one instead of being dropped.
 - Coordinate spoken guidance with the vehicle audio session without taking over overall volume.
 
-An active native trip always exposes an explicit End action. The root map places an
-`xmark.circle.fill` control first in its four-button map control list, so it remains available when
-CarPlay hides the navigation bar or reduces the visible controls. The Places screen becomes a
-Current trip screen with both an **End** bar button and an **End navigation** row. If a trip starts
-from the phone while CarPlay search is open, CarPlay returns to the root map so the End control is
-immediately reachable. These controls and Apple's built-in cancel callback share one idempotent
-teardown path that cancels route/search work, clears previews, maneuvers, map overlays, and native
-navigation state, stops background guidance, and notifies the phone.
+Not yet used: `CPRouteSegment` and `resumeTrip(updatedRouteSegments:currentSegment:rerouteReason:)`
+(iOS 26.4) for reroutes. A reroute currently adds the new route's maneuvers to the running session.
+
+An active native trip always exposes an explicit End action. During guidance the four map buttons
+are End, Overview/Follow, Sound, and Report. The navigation bar's **Trip** button, which CarPlay
+reveals on any touch, opens the Current trip list: Add stop, Stops, Change destination, View routes,
+Report, and End navigation, plus an **End** bar button. **Stops** lists the remaining stops in
+order. Choosing one offers Remove stop or Move earlier, then shows recalculated alternatives; the
+current trip keeps guiding until the driver chooses a route. If a trip starts from the phone while
+CarPlay search is open, CarPlay returns to the root map so the End control is immediately reachable.
+These controls and Apple's built-in cancel callback share one idempotent teardown path. It cancels
+route and search work, clears previews, maneuvers, map overlays, and native navigation state, stops
+background guidance, and notifies the phone.
+
+### Resume, reconnect, and stale templates
+
+- Returning to NavOSS from another CarPlay app or a call keeps the template stack and an open route
+  preview with its choices. Earlier builds popped to the root map on every activation and discarded
+  the preview. A preview is dropped only when a trip started on the phone while NavOSS was away, or
+  when the trip it was replacing ended. The preview's location lease is released while away and
+  taken again on return.
+- Searches and route requests started before switching away keep running, and their results are
+  waiting on return.
+- The Current trip list refreshes on return and on every trip change, so it never offers actions
+  for a trip that ended elsewhere.
+- Reconnecting rebuilds the map, the navigation session, and every maneuver from the shared trip
+  store, then drains pending Dashboard and Siri requests.
 
 ### Share ETA and Contacts decision
 
@@ -302,7 +418,11 @@ This renderer simulation complements rather than replaces CarPlay framework test
 
 The `hud-wide-chrome` renderer scenario exercises the production anchoring option with real UIKit
 layout at 1024- and 1280-point widths, including inset reveal/hide, and is part of the maintained
-visual scenario list. The opt-in `audio-release` scenario exercises the real navigation service and
+visual scenario list. `guidance-maneuver` and `guidance-night` render an 800 × 480 CarPlay frame
+with a guidance-card inset while approaching a turn: the maneuver arrow, the current-road pill
+(asserted), and the speed and limit badges. The night run uses the dark style and is over the limit.
+`guidance-annotations` feeds harness-only fixture congestion and camera/report markers through the
+optional inputs in overview. `maneuver-symbols` lays out every turn-card symbol for review. The opt-in `audio-release` scenario exercises the real navigation service and
 `AVSpeechSynthesizer`: speech activation, interruption by a recording lease, lease release, and
 natural speech-completion release. It requires working simulator speech output, records no
 microphone input, and is selected with `SIMCTL_CHILD_NAVOSS_CARPLAY_VISUAL_SCENARIO=audio-release`
@@ -321,10 +441,17 @@ apps/mobile/modules/navoss-navigation/
   ios/
     NavOSSNavigationModule.swift
     Core/CarPlayTrip.swift
+    Core/CarPlayGuidancePresentation.swift
 
 apps/mobile/carplay/ios/
     NavOSSCarPlayMapViewController.swift
+    NavOSSCarPlayManeuverSymbols.swift
     NavOSSCarPlaySceneDelegate.swift
+    NavOSSCarPlayDashboardSceneDelegate.swift
+    NavOSSCarPlayInstrumentClusterSceneDelegate.swift
+    NavOSSCarPlayVoiceSearchCoordinator.swift
+    NavOSSCarPlayVisualHarnessViewController.swift
+    NavOSSNavigationIntents.swift
     NavOSSPhoneSceneDelegate.swift
 
 apps/mobile/plugins/with-navoss-carplay.cjs
@@ -332,10 +459,13 @@ apps/mobile/plugins/with-navoss-carplay.cjs
 
 The config plugin configures the native API URL and `location` background mode for every iOS navigation build. When `NAVOSS_CARPLAY_ENABLED=1`, it also:
 
-- Adds the main CarPlay scene and the Expo-compatible phone window scene to `Info.plist`.
-- Adds the required Swift templates to the application target.
+- Adds the main CarPlay, Dashboard, and instrument-cluster scenes and the Expo-compatible phone
+  window scene to `Info.plist`, with `CPSupportsDashboardNavigationScene` and
+  `CPSupportsInstrumentClusterNavigationScene`.
+- Adds every Swift file in `apps/mobile/carplay/ios` (the plugin's `sourceFiles`) to the
+  application target. A unit test fails when that list and the directory disagree. CI's CarPlay
+  generated sources job regenerates the project and fails when any copy differs from its source.
 - Adds the navigation entitlement only when `NAVOSS_CARPLAY_ENTITLEMENT_ENABLED=1`.
-- Leaves Dashboard and instrument-cluster integration disabled until those implementations are complete.
 
 When CarPlay is disabled, the plugin removes the CarPlay scene and entitlement. Background location is not a CarPlay entitlement: it supports an active trip on the phone and stops on End or confirmed arrival.
 
