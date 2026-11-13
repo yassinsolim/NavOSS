@@ -761,7 +761,11 @@ export function ArrivalSheet({
         style={[styles.arrival, { paddingBottom: Math.max(bottomInset, space.lg) }]}
       >
         <View style={styles.arrivalSummary}>
-          <View style={styles.arrivalIcon}>
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={styles.arrivalIcon}
+          >
             <SymbolView
               name={{ android: 'flag', ios: 'flag.checkered' }}
               size={28}
