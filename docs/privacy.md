@@ -26,61 +26,107 @@ Route requests send origin and destination coordinates to the NavOSS API. A rero
 
 NavOSS can build live traffic from the driving speeds of people who choose to share them. Traffic
 sharing is **off by default**. The NavOSS server supports it, but it is not switched on in
-production and no released version of the app sends driving observations yet. When a version
-with the **Share traffic speeds** switch is released, this section describes exactly what turning
-it on does.
+production and no released version of the app sends driving observations yet. The paragraphs
+below describe what the server does. Statements about what the app does are requirements for the
+app version that adds the **Share traffic speeds** switch; no released app has been checked
+against them yet.
 
 **What is sent.** While sharing is on and turn-by-turn navigation is active, the app sends short
 batches of your driving positions to the NavOSS API. A batch is a list of positions, each with the
 number of seconds since the batch's first position, plus the time the batch started rounded down
-to the minute. A batch covers about one minute of driving and never more than five. It contains no
-account, no name, no device, installation, or advertising identifier, no trip identifier, no
-destination, no route, and nothing that connects one batch to another. NavOSS has no accounts, so
-there is nothing to connect it to.
+to the minute, plus an upload credential (described below). A batch covers about one minute of
+driving and never more than five. It contains no account, no name, no advertising identifier, no
+trip identifier, no destination and no planned route. It does contain a short stretch of the path
+you actually drove. There is no field that links one batch to another, but batches from one trip
+carry the same credential, come from the same network address, and continue where the previous
+one stopped, so the server and Cloudflare could link them while they are being delivered. NavOSS
+does not record that link.
+
+**Proof that the upload comes from a real copy of the app.** To stop made-up traffic, the server
+accepts batches only from an iPhone that has registered an Apple App Attest key for NavOSS. For
+that key the server stores a keyed hash of the key's identifier, the public key in encrypted
+form, a counter, whether Apple attested it, and the times it was registered and last used; it is
+deleted after 90 days without use. Using that key, the app obtains an upload credential that is
+valid for two hours. The server keeps no record of which installation a credential was issued
+to, and nothing it stores about traffic refers to an installation or a credential. Asking for a
+credential does update the key's "last used" time.
 
 **When it is sent.** Only during active turn-by-turn navigation, including while the phone is
 locked or CarPlay is connected, about once a minute. Nothing is sent while you browse the map,
 search, preview a route, or drive without navigation, and nothing is sent when sharing is off.
 
-**What is left out.** The app does not record the first 400 metres or the last 400 metres of a
-trip, or anything within 400 metres of your destination or a stop on the way, and it holds back
-the most recent 400 metres so that a trip you end early never sends its final stretch. The server
-additionally discards the first and last 100 metres of every batch it receives. Positions on
-residential streets, service roads, driveways, and parking areas are ignored; only through roads
-are used.
+**What is left out.** The app is required not to record the first 400 metres or the last 400
+metres of a trip, or anything within 400 metres of your destination or a stop on the way, and to
+hold back the most recent 400 metres so that a trip you end early never sends its final stretch.
+The server cannot check this, because it is never told where a trip starts or ends. What the
+server itself does is discard the first and last 100 metres of every batch it receives and use
+only motorways, trunk roads, primary roads and secondary roads. Positions on smaller roads
+(tertiary and residential streets, service roads, driveways, tracks, and parking areas) may still
+be uploaded and matched to the map in memory, but nothing is kept from them. Roads marked private
+are left out only when they are mapped as one of those smaller road types, which is the usual
+case; the server does not check access restrictions separately.
 
 **What the server does.** The server matches a batch to roads in memory, works out one average
-speed for each stretch of road, adds that speed to a five-minute tally for that stretch, and
-discards the batch. Your positions, the batch, and its timing are never written to a database, a
-file, a backup, or a log. To match a batch to roads the server uses its own routing software on
-the same NavOSS-controlled machine in Alberta; batches are not sent to any other company.
+speed for each stretch of road between two junctions that the batch drove completely, holds that
+speed in memory, and discards the batch. The NavOSS API does not write your positions, the batch,
+or its timing to its database, a backup, or its log. To match a batch to roads the API uses
+routing software (Valhalla) on the same NavOSS-controlled machine in Alberta and will only start
+if that software is at a local address; batches are not forwarded to another routing provider.
+Like every request to NavOSS, a batch is delivered through Cloudflare, which sees it in transit.
+NavOSS has not yet verified that the routing software, the reverse proxy's error handling, system
+swap, or crash dumps on the production machine never write any part of a batch, and will not
+switch publication on until it has.
 
-**What is kept, and for how long.** For each stretch of road and each five-minute period, NavOSS
-keeps how many shared speeds it received, a tally of those speeds in 2 km/h steps, the public
-OpenStreetMap shape of the road, and one scrambled marker per contributor. The marker lets the
-server tell that speeds came from different drivers. It is derived from your network address and
-that one stretch of road with a secret that exists only in the running server's memory, so the
-markers for two roads cannot be matched to each other or turned back into an address from the
-stored data. All of this is deleted within 36 minutes and erased whenever the server restarts. It
-is excluded from database backups. To limit abuse, the server also keeps a salted fingerprint of
-the source network address in memory for up to ten minutes; it is not logged or stored.
+**What is kept, and for how long.**
+
+- _Before publication, in memory only._ For each stretch of road, the server's memory holds one
+  speed per contributor, the five-minute period in which it arrived, and a scrambled marker that
+  tells contributors apart. The marker is derived from your App Attest installation and that one
+  stretch of road using a secret that exists only in the running server's memory, so markers for
+  two roads cannot be matched to each other. This is dropped after at most 20 minutes and is lost
+  whenever the server restarts. It is never written to the database.
+- _After publication, in the database._ Once at least three installations have driven the same
+  stretch, the server stores one typical speed for it, rounded to 5 km/h, the public
+  OpenStreetMap shape of that stretch, and the five-minute boundary at which it was published. It
+  is deleted 15 minutes later, erased whenever the server starts (including when the feature is
+  switched off), and excluded from database backups.
+- _Abuse limits, in memory only._ The server keeps salted fingerprints of the source network and
+  of the contributor, with request times, for up to 11 minutes after the last request.
+
+Everything derived from a batch is gone within 35 minutes of its arrival. These periods, the
+minimum of three contributors, and the road types are fixed in the server's code and cannot be
+weakened by configuration.
 
 **What other drivers see.** A stretch of road is coloured, and can affect an estimated arrival
-time, only after at least three different contributors have driven it within the last 30 minutes.
-A road driven by one or two contributors is never shown. Other drivers see a colour and a typical
-speed for the road; they never see a vehicle, a trip, or who contributed. With few contributors,
-most roads will show no traffic at all.
+time, only after at least three different App Attest installations have driven that same stretch
+within about 20 minutes, and only from the next five-minute boundary. A stretch driven by one or
+two contributors is never shown and never stored. Other drivers see, for each published stretch,
+its shape, a congestion colour, a typical speed rounded to 5 km/h, the road's normal speed, and
+the five-minute boundary at which it was published. They never see a vehicle, a trip, a count of
+contributors, or who contributed. With few contributors, most roads will show no traffic at all.
 
-**What NavOSS cannot rule out.** On a quiet road, three contributors may be a small group of
-people, and the fact that the road was recently driven becomes visible. Cloudflare and the NavOSS
-server necessarily see each upload and its network address while it is being delivered, as they do
-for every request.
+**What NavOSS cannot rule out.** This is data minimisation with a threshold, not anonymity.
+
+- Three installations are not necessarily three unrelated people. They can be one household, or
+  one person who has registered several keys.
+- On a quiet road, the fact that a stretch was driven by at least three contributors shortly
+  before a given five-minute boundary becomes visible to anyone watching the map, and the small
+  group who drive there may be guessable.
+- If two of the three contributors on a stretch cooperate, they can infer that a third person
+  drove it in that window and roughly how fast.
+- Someone with access to the running server's memory, together with its database, could work out
+  which installation contributed to a stretch that is still waiting for publication.
+- Cloudflare and the NavOSS server necessarily see each upload and its network address while it
+  is being delivered, as they do for every request.
+- A home on a secondary or larger road is on a road the server uses. Only the trimming the app
+  performs and the three-contributor rule protect it.
 
 **How to turn it off.** Turn off **Share traffic speeds** in the app's About and Privacy screen.
-Uploads stop immediately and anything not yet sent is discarded. Ending navigation or removing the
-app has the same effect. Because nothing that was shared is stored with an identity, there is no
-per-person record to delete; what was contributed disappears on its own within 36 minutes. You can
-see traffic from other drivers without sharing your own.
+Uploads are required to stop immediately and anything not yet sent to be discarded. Ending
+navigation or removing the app has the same effect. What was contributed disappears on its own
+within 35 minutes. Nothing about traffic is stored with an account, an installation, or a trip
+identifier, so there is no per-person traffic record to look up or delete. You can see traffic
+from other drivers without sharing your own.
 
 ### Search text and place details
 
@@ -159,8 +205,10 @@ Map and route data is derived from OpenStreetMap contributors. Search combines O
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Search text, tapped-place name, and search origin  | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup                                                                                                                        |
 | Route and reroute coordinates                      | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup                                                                                                                        |
-| Traffic-sharing batches (only when switched on)    | Positions and timing processed in memory and discarded; never written to a NavOSS database, log, or backup                                                                                                                           |
-| Traffic tallies from shared batches                | Per road stretch and five-minute period: count, speed tally, public road shape, and per-road scrambled contributor markers; deleted within 36 minutes, erased on server restart, excluded from backups                               |
+| Traffic-sharing batches (only when switched on)    | Positions and timing processed in memory and discarded; not written by the NavOSS API to its database, log, or a backup                                                                                                              |
+| Unpublished traffic speeds                         | API memory only: one speed per contributor and road stretch with a per-road scrambled marker; dropped within 20 minutes; never in the database                                                                                       |
+| Published traffic speeds                           | Per road stretch: speed rounded to 5 km/h, public road shape, five-minute publication time; deleted after 15 minutes, erased on every server start, excluded from backups                                                            |
+| App Attest key for traffic sharing                 | Keyed hash of the key identifier, encrypted public key, counter, registration and last-use times; deleted after 90 days without use                                                                                                  |
 | Active route, trip progress and camera eligibility | Processed on the phone; the active route is erased when navigation ends or arrival is confirmed; no trip-history database                                                                                                            |
 | Recent and saved destinations                      | Up to 12 recent and 20 saved destination names, labels, and coordinates stored only on the device until cleared in About and Privacy or the app is removed                                                                           |
 | Map appearance preferences                         | Stored locally in app storage until the app is removed or the settings are changed; not transmitted to NavOSS                                                                                                                        |
@@ -173,10 +221,10 @@ Map and route data is derived from OpenStreetMap contributors. Search combines O
 | Public Calgary business and parcel search index    | Current local mirror refreshed every 24 hours; reproducible index tables are excluded from logical backups                                                                                                                           |
 | API and service operational logs                   | Maximum seven days; routine HTTP access logging is disabled                                                                                                                                                                          |
 | Host authentication and firewall security logs     | Maximum seven days; may contain timestamp, source IP and port, local account, action, and outcome                                                                                                                                    |
-| Report database backups                            | Maximum 14 days; may contain accepted beta contributions but do not contain route or search requests or traffic tallies                                                                                                              |
+| Report database backups                            | Maximum 14 days; may contain accepted beta contributions but do not contain route or search requests or traffic speeds                                                                                                               |
 | Support messages                                   | Controlled by Apple or GitHub according to the channel selected by the user and that provider's policy                                                                                                                               |
 
-NavOSS operational logs are limited to timestamps, service/container identity, severity, lifecycle events, health failures, error names, and random request IDs where needed. They exclude HTTP request and response bodies, search text, route coordinates, shared traffic positions, and normal HTTP access events. When traffic sharing is enabled on the server, a periodic summary records only counts of batches and road stretches. All six production containers write to the host journal, which enforces a seven-day and 512 MiB limit. Caddy access logs and automatic Fastify request logs are disabled.
+NavOSS operational logs are limited to timestamps, service/container identity, severity, lifecycle events, health failures, error names, and random request IDs where needed. They exclude HTTP request and response bodies, search text, route coordinates, shared traffic positions, and normal HTTP access events. When traffic sharing is enabled on the server, a periodic summary records only counts of batches, credentials, and road stretches, with no road, position, address, or installation. All six production containers write to the host journal, which enforces a seven-day and 512 MiB limit. Caddy access logs and automatic Fastify request logs are disabled.
 
 Cloudflare and OpenFreeMap apply their own retention policies to data they process. Cloudflare's policy does not promise one fixed period for all end-user network/security data. OpenFreeMap states that anonymized logs may be retained indefinitely and incident IP logs for at most 30 days. These provider-controlled periods are not part of NavOSS's seven-day host limit.
 
@@ -190,7 +238,7 @@ You can use NavOSS without granting Contacts access because the app never asks f
 
 Traffic sharing is optional and off by default; turn **Share traffic speeds** off in About and Privacy to stop it, as described under Traffic sharing above.
 
-Because NavOSS has no account and does not retain server-side search, route, or trip records, it normally has no server history that can be exported or deleted. Shared traffic speeds are stored only as short-lived road tallies that cannot be linked to a person. The local recent- and saved-destination lists can be deleted in the app as described above. A rights request may identify a support message or a recent security event. Include only enough information to locate that record. NavOSS may be unable to associate an IP-only, transient request with a person. Requests about Cloudflare, OpenFreeMap, Apple, or GitHub data may also need to be directed to that provider.
+Because NavOSS has no account and does not retain server-side search, route, or trip records, it normally has no server history that can be exported or deleted. Shared traffic speeds are stored without an account, installation, or trip identifier and only as short-lived per-road values once three contributors agree; the residual ways a contribution could still be inferred are listed under Traffic sharing above. The local recent- and saved-destination lists can be deleted in the app as described above. A rights request may identify a support message or a recent security event. Include only enough information to locate that record. NavOSS may be unable to associate an IP-only, transient request with a person. Requests about Cloudflare, OpenFreeMap, Apple, or GitHub data may also need to be directed to that provider.
 
 ## Children
 

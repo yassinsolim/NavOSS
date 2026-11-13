@@ -129,14 +129,16 @@ complete.
 - Attribution shown with the layer: "Traffic from opted-in NavOSS drivers"
 - Licence: NavOSS's own aggregate. Road geometry and segment identifiers come from OpenStreetMap
   ([ODbL](https://www.openstreetmap.org/copyright)) through the self-hosted Valhalla graph.
-- Endpoints: `POST /v1/traffic/probes`, `GET /v1/traffic/flow`, `GET /v1/traffic/status`
+- Endpoints: `POST /v2/traffic/credentials`, `POST /v2/traffic/probes`, `GET /v2/traffic/flow`,
+  `GET /v2/traffic/status`
 - Design, parameters and threat model: [`architecture/community-traffic.md`](architecture/community-traffic.md)
 
 The server is implemented and disabled by default (`COMMUNITY_TRAFFIC_MODE=off`); production has
-not enabled it and no released app uploads driving observations. When enabled, a road segment is
-published only after at least three independent contributors drove it within the last 30 minutes,
-so with few users little or nothing is shown. `GET /v1/traffic/status` reports how many segments
-are published and how many samples back them. NavOSS does not interpolate, predict, or fill gaps:
+not enabled it and no released app uploads driving observations. When enabled, a road edge on a
+motorway, trunk, primary or secondary road is published only at a five-minute boundary, after at
+least three App Attest installations drove it in the preceding 15 to 20 minutes, and stays up for
+15 minutes. With few users little or nothing is shown, and the service publishes no count of how
+much data it holds. NavOSS does not interpolate, predict, or fill gaps:
 a road without enough recent contributors has no traffic colour, and a route without enough
 observed length has no traffic-adjusted ETA.
 
