@@ -13,7 +13,12 @@
       "dependsOn": ["^lint"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "env": [
+        "NAVOSS_REQUIRE_TEST_DATABASE",
+        "NAVOSS_TEST_DATABASE_URL",
+        "NAVOSS_TRAFFIC_TEST_DATABASE_URL"
+      ]
     }
   }
 }

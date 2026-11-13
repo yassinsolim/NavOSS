@@ -30,8 +30,10 @@ import borderPoints from '../../../packages/contracts/test/fixtures/coverage-bor
 /**
  * Runs against a real PostGIS. Locally: `docker run --platform linux/amd64 -d --name
  * api-reports-postgis -e POSTGRES_USER=navoss -e POSTGRES_PASSWORD=navoss -e POSTGRES_DB=navoss
- * -p 127.0.0.1:5441:5432 postgis/postgis:16-3.5-alpine`. Skips when no database is reachable unless
- * NAVOSS_REQUIRE_TEST_DATABASE=1.
+ * -p 127.0.0.1:5441:5432 postgis/postgis:16-3.5-alpine`, or point NAVOSS_TEST_DATABASE_URL at any
+ * PostGIS database. The suite migrates and drops a schema of its own, so it also runs against a
+ * database whose `public` schema is already migrated. Skips when no database is reachable unless
+ * NAVOSS_REQUIRE_TEST_DATABASE=1 (set in CI, which provides a PostGIS service).
  */
 const DATABASE_URL =
   process.env.NAVOSS_TEST_DATABASE_URL ?? 'postgres://navoss:navoss@127.0.0.1:5441/navoss';
@@ -77,6 +79,8 @@ describe.skipIf(!available)('community reports on PostGIS', () => {
   const schemaPool = (): Pool =>
     new Pool({
       connectionString: DATABASE_URL,
+      // Tagged so lock-wait checks see only this suite's connections.
+      application_name: SCHEMA,
       max: 4,
       options: `-c search_path=${SCHEMA},public`,
     });
@@ -544,7 +548,9 @@ describe.skipIf(!available)('community reports on PostGIS', () => {
   async function waitForLockWaiters(count: number): Promise<void> {
     for (let attempt = 0; attempt < 300; attempt += 1) {
       const waiting = await admin.query<{ count: number }>(
-        "SELECT count(*)::int AS count FROM pg_stat_activity WHERE wait_event_type = 'Lock'",
+        `SELECT count(*)::int AS count FROM pg_stat_activity
+         WHERE wait_event_type = 'Lock' AND application_name = $1`,
+        [SCHEMA],
       );
       if ((waiting.rows[0]?.count ?? 0) >= count) return;
       await delay(10);
@@ -700,10 +706,22 @@ describe.skipIf(!available)('community reports on PostGIS', () => {
       submitRequest(app, await register(app), DOWNTOWN),
       submitRequest(app, await register(app), sameCell),
     ]);
-    const statuses = (await Promise.all(requests.map((request) => request()))).map(
-      (response) => response.statusCode,
-    );
-    expect(statuses.sort()).toEqual([201, 429]);
+
+    // Deterministic interleaving: a SHARE lock lets both submissions read the cell count but holds
+    // every insert. Without the cell advisory locks both would count 11 and then both insert; with
+    // them the second waits on the advisory lock until the first commits, then counts 12.
+    const gate = await admin.connect();
+    try {
+      await gate.query('BEGIN');
+      await gate.query(`LOCK TABLE ${SCHEMA}.community_reports IN SHARE MODE`);
+      const pending = requests.map((request) => request());
+      await waitForLockWaiters(2);
+      await gate.query('COMMIT');
+      const statuses = (await Promise.all(pending)).map((response) => response.statusCode);
+      expect(statuses.sort()).toEqual([201, 429]);
+    } finally {
+      gate.release();
+    }
   });
 
   // Review finding 6.
