@@ -80,6 +80,12 @@ export const PHOTON_RESPONSE_RECORDING = z
     ),
   );
 
+export function recordedPhotonSearchCase(q: string) {
+  const recorded = PHOTON_RESPONSE_RECORDING.cases.find((entry) => entry.query.q === q);
+  if (recorded === undefined) throw new Error('Missing public-place Photon recording.');
+  return recorded;
+}
+
 // An adapter *test vector*: these names, tags and coordinates come from the unmodified Photon
 // recording above. It exercises Nominatim's documented class/type/address shape, without claiming
 // that the deployed Nominatim returned these particular HTTP payloads.

@@ -24,7 +24,8 @@ const OMITTED_LOCALITY: Record<string, true> = {
 };
 
 function text(value: string | undefined): string | undefined {
-  return value?.trim() || undefined;
+  const trimmed = value?.trim();
+  return trimmed === '' ? undefined : trimmed;
 }
 
 /** Prefer structured provider addresses; the breadcrumb fallback also supports older providers. */

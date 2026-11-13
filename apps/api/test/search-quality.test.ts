@@ -15,6 +15,7 @@ import {
   createRecordedSearchProvider,
   nominatimShapeFromPhoton,
   PHOTON_RESPONSE_RECORDING,
+  recordedPhotonSearchCase,
   recordedSearchCase,
   SEARCH_RESPONSE_RECORDING,
 } from './support/search-response-fixture.js';
@@ -63,13 +64,13 @@ describe('recorded production search quality', () => {
       details: { category: 'university' },
       name: 'University of Calgary',
     });
-    expect(response.results.filter(({ name }) => name === 'University')).toEqual([
-      expect.objectContaining({
-        details: expect.objectContaining({ category: 'train station' }),
-        id: 'nominatim:way:197609299',
-        label: 'University, Crowchild Trail NW, Calgary',
-      }),
-    ]);
+    const stations = response.results.filter(({ name }) => name === 'University');
+    expect(stations).toHaveLength(1);
+    expect(stations[0]).toMatchObject({
+      details: { category: 'train station' },
+      id: 'nominatim:way:197609299',
+      label: 'University, Crowchild Trail NW, Calgary',
+    });
     expect(SearchResponseSchema.parse(response)).toEqual(response);
   });
 
@@ -80,17 +81,15 @@ describe('recorded production search quality', () => {
     ).toHaveLength(4);
     const response = await createRecordedSearchProvider(recorded).search(recorded.query);
 
-    expect(response.results.filter(({ name }) => name === 'University of Calgary')).toEqual([
-      expect.objectContaining({
-        center: { latitude: 51.07795, longitude: -114.13073 },
-        details: expect.objectContaining({
-          category: 'university',
-          address: expect.stringContaining('2500'),
-        }),
-        id: 'poi:university-of-calgary',
-        label: 'University of Calgary, 2500 University Drive NW, Calgary',
-      }),
-    ]);
+    const campuses = response.results.filter(({ name }) => name === 'University of Calgary');
+    expect(campuses).toHaveLength(1);
+    expect(campuses[0]).toMatchObject({
+      center: { latitude: 51.07795, longitude: -114.13073 },
+      details: { category: 'university' },
+      id: 'poi:university-of-calgary',
+      label: 'University of Calgary, 2500 University Drive NW, Calgary',
+    });
+    expect(campuses[0]?.details?.address).toContain('2500');
     expect(response.results.some(({ name }) => name === 'Bookstore U Of C')).toBe(true);
   });
 
@@ -420,9 +419,8 @@ describe('development aliases and province-wide proximity retrieval', () => {
   );
 
   it('starts local and provincial lookups concurrently with one shared timeout, merging both pools', async () => {
-    const recorded = PHOTON_RESPONSE_RECORDING.cases.find(({ query }) => query.q === 'Costco');
-    expect(recorded).toBeDefined();
-    const query: SearchQuery = { ...recorded!.query, includeDetails: true, limit: 20 };
+    const recorded = recordedPhotonSearchCase('Costco');
+    const query: SearchQuery = { ...recorded.query, includeDetails: true, limit: 20 };
     const provinceViewbox = new URL(
       buildNominatimSearchUrl(query, 'http://recorded-nominatim.test/'),
     ).searchParams.get('viewbox');
@@ -435,7 +433,8 @@ describe('development aliases and province-wide proximity retrieval', () => {
       endpoint: 'http://recorded-nominatim.test/',
       fetchImplementation: (input, init) => {
         const { promise, resolve } = Promise.withResolvers<Response>();
-        const url = new URL(String(input));
+        const url =
+          input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
         calls.push({
           viewbox: url.searchParams.get('viewbox'),
           signal: init?.signal,
@@ -449,9 +448,8 @@ describe('development aliases and province-wide proximity retrieval', () => {
     expect(calls[0]?.signal).toBe(calls[1]?.signal);
     expect(calls[0]?.viewbox).not.toBe(provinceViewbox);
     expect(calls[1]?.viewbox).toBe(provinceViewbox);
-    const local = recorded!.response.features.slice(0, 3).map(nominatimShapeFromPhoton);
-    const distant = PHOTON_RESPONSE_RECORDING.cases
-      .find(({ query }) => query.q === 'University')!
+    const local = recorded.response.features.slice(0, 3).map(nominatimShapeFromPhoton);
+    const distant = recordedPhotonSearchCase('University')
       .response.features.filter(({ properties }) => properties.name === 'University of Calgary')
       .map(nominatimShapeFromPhoton);
     calls[0]?.finish(new Response(JSON.stringify(local)));
