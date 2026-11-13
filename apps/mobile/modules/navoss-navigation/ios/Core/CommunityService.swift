@@ -134,6 +134,11 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     }
   }
 
+  /// The traffic-sharing state as last reported, for synchronous presenters (CarPlay lists).
+  public func trafficSharingState() -> NavOSSTrafficSharingState {
+    lock.withLock { trafficState }
+  }
+
   public func preferences() -> NavOSSCommunityPreferences {
     preferencesStore.load()
   }
@@ -143,10 +148,13 @@ public final class NavOSSCommunityService: @unchecked Sendable {
   public func refreshFeatures(force: Bool = false) async -> Bool {
     guard let client else { return false }
     let task: Task<Bool?, Never> = lock.withLock {
-      if !force, let featuresFetchedAt, let reportsLive,
+      // A failed or negative answer is remembered as long as a positive one, so a server
+      // without community features (404, offline) is asked at most once per interval.
+      if !force, let featuresFetchedAt,
         Date().timeIntervalSince(featuresFetchedAt) < Self.featuresRefreshSeconds
       {
-        return Task { reportsLive }
+        let known = reportsLive ?? false
+        return Task { known }
       }
       if let featuresTask { return featuresTask }
       let task = Task<Bool?, Never> { try? await client.features().communityReports }
@@ -157,10 +165,10 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     var changed = false
     lock.withLock {
       featuresTask = nil
+      featuresFetchedAt = Date()
       if let live {
         changed = reportsLive != live
         reportsLive = live
-        featuresFetchedAt = Date()
         if !live {
           cache.clear()
           monitor.setReports([])

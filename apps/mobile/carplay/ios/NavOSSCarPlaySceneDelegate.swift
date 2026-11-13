@@ -803,7 +803,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     let trafficItem = CPListItem(
       text: selectedTitle("Share traffic speeds", selected: preferences.sharesTrafficSpeeds),
       detailText: preferences.sharesTrafficSpeeds
-        ? "Anonymous speeds during guidance, never trip ends"
+        ? navOSSCarPlayTrafficSharingDetail(community.trafficSharingState())
         : "Off",
       image: UIImage(systemName: "car.2.fill")
     )

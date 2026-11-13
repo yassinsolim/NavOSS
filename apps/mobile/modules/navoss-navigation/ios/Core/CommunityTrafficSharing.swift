@@ -97,6 +97,10 @@ public actor NavOSSTrafficSharingSession {
     let status: NavOSSTrafficStatus
     do {
       status = try await transport.trafficStatus()
+    } catch NavOSSCommunityFailure.notFound {
+      // A server without community traffic (an older API) answers 404: not available, quietly.
+      if trip == current { set(.unavailable(reason: .notAccepting)) }
+      return
     } catch {
       if trip == current { set(.unavailable(reason: .offline)) }
       return

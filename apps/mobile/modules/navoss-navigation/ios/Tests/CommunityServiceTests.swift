@@ -127,4 +127,57 @@ final class CommunityServiceTests: XCTestCase {
     XCTAssertFalse(availability.canWrite)
     XCTAssertEqual(availability.trafficSharing, .off)
   }
+
+  /// Production today: an older API without `/v2/community/*` or `/v2/traffic/*` (404) and, where
+  /// `/v2/config` exists, `communityReports: false`. The client must stay silent.
+  func testAnOlderServerGetsNoRegistrationNoChallengesAndNoRetryLoop() async {
+    for configAnswer in [404, 200] {
+      CommunityStubProtocol.sent = []
+      CommunityStubProtocol.handler = { sent in
+        if sent.path == "/v2/config", configAnswer == 200 {
+          return (200, ["features": ["communityReports": false]], [:])
+        }
+        return (404, ["code": "not_found", "detail": "x", "requestId": "r", "status": 404, "title": "Not Found"], [:])
+      }
+      let configuration = URLSessionConfiguration.ephemeral
+      configuration.protocolClasses = [CommunityStubProtocol.self]
+      let client = NavOSSCommunityClient(
+        baseURL: URL(string: "http://127.0.0.1:3001")!,
+        provider: NavOSSDevelopmentAttestationProvider(
+          teamId: "ABCDE12345", bundleId: "org.navoss.mobile",
+          store: NavOSSCommunityMemorySecretStore()),
+        store: NavOSSCommunityMemorySecretStore(),
+        session: URLSession(configuration: configuration)
+      )
+      let defaults = UserDefaults(suiteName: "community-old-\(UUID().uuidString)")!
+      let preferences = NavOSSCommunityPreferencesStore(defaults: defaults, notificationCenter: NotificationCenter())
+      preferences.setSharesTrafficSpeeds(true)
+      let alertStore = NavOSSCarPlayMapAlertStore(notificationCenter: NotificationCenter())
+      let service = NavOSSCommunityService(
+        client: client, preferencesStore: preferences, alertStore: alertStore,
+        notificationCenter: NotificationCenter())
+      service.navigationDidStart(trip())
+      for _ in 0..<30 {
+        service.navigationClockTick()
+        _ = await service.refreshFeatures()
+        _ = try? await service.fetchReports(
+          in: NavOSSCommunityBounds(east: -114.0, north: 51.1, south: 51.0, west: -114.1))
+        try? await Task.sleep(nanoseconds: 10_000_000)
+      }
+      do {
+        _ = try await service.submitReport(type: .pothole, coordinate: point(10), heading: nil)
+        XCTFail("submit must not proceed")
+      } catch {}
+      await waitFor { service.trafficSharingState() != .ready && service.trafficSharingState() != .starting }
+      let paths = CommunityStubProtocol.sent.map(\.path)
+      XCTAssertEqual(paths.filter { $0 == "/v2/config" }.count, 1, "config \(configAnswer): \(paths)")
+      XCTAssertEqual(paths.filter { $0 == "/v2/traffic/status" }.count, 1, "\(paths)")
+      XCTAssertFalse(paths.contains { $0.hasPrefix("/v2/community") }, "\(paths)")
+      XCTAssertFalse(paths.contains("/v2/traffic/credentials"))
+      XCTAssertEqual(alertStore.snapshot(), [])
+      XCTAssertEqual(service.trafficSharingState(), .unavailable(reason: .notAccepting))
+      XCTAssertEqual(navOSSCarPlayTrafficSharingDetail(service.trafficSharingState()), "Not available yet")
+      service.navigationDidEnd()
+    }
+  }
 }

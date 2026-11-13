@@ -415,15 +415,21 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
           courseDegrees: 90, speedMetersPerSecond: 12),
         progress: 0.1, speedLimitKph: nil)
       _ = mapViewController.toggleRouteOverview()
-      DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
-        guard let self else { return }
-        guard self.mapViewController.mapAlertMarkerCount == 4 else {
-          assertionFailure(
-            "Community report markers missing: \(self.mapViewController.mapAlertMarkerCount)")
-          return
+      // The markers install once the map style has loaded; wait for them, then capture.
+      func awaitMarkers(_ attempt: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+          guard let self else { return }
+          let count = self.mapViewController.mapAlertMarkerCount
+          if count == 4 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in self?.markReady() }
+          } else if attempt < 50 {
+            awaitMarkers(attempt + 1)
+          } else {
+            assertionFailure("Community report markers missing: \(count)")
+          }
         }
-        self.markReady()
       }
+      awaitMarkers(0)
       return
     case "guidance-annotations":
       // Exercises the optional inputs with harness-only fixture data: per-segment congestion on
