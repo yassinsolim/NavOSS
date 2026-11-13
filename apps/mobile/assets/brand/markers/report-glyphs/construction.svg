@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Traffic cone. -->
+  <path fill="currentColor" d="M29 13h6l9 30H20Z"/>
+  <path fill="var(--tile)" d="M26.5 22h11l1.5 5H25Zm-3 10h17l1.5 5h-20Z"/>
+  <rect x="15" y="43" width="34" height="5" rx="2" fill="currentColor"/>
+</svg>

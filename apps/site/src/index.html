@@ -3,205 +3,384 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NavOSS · Private, account-free navigation</title>
     <meta
       name="description"
-      content="NavOSS is private, account-free navigation built in Canada with transparent regional coverage and data sources."
+      content="NavOSS is private, account-free, open-source navigation for iPhone and CarPlay. Alberta and British Columbia coverage is rolling out in a technical beta."
     />
-    <meta name="theme-color" content="#1b2526" />
-    <meta property="og:title" content="NavOSS" />
+    <link rel="canonical" href="https://navoss.yassin.app/" />
+    <meta property="og:title" content="NavOSS · Private, account-free navigation" />
     <meta
       property="og:description"
-      content="Private navigation without an account, with coverage claims you can inspect."
+      content="Open-source turn-by-turn navigation for iPhone and CarPlay. No account, no ads, no tracking."
     />
-    <meta
-      property="og:image"
-      content="https://navoss.yassin.app/assets/navoss-social-preview.jpg"
-    />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <link rel="canonical" href="https://navoss.yassin.app/" />
-    <link rel="icon" href="/assets/navoss-chevron.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css" />
-    <title>NavOSS | Private navigation, built in Canada</title>
+    <meta property="og:url" content="https://navoss.yassin.app/" />
+    <!-- @head -->
   </head>
   <body>
-    <header class="site-header">
-      <a class="brand" href="/" aria-label="NavOSS home">
-        <img src="/assets/navoss-chevron.svg" alt="" />
-        <span>NavOSS</span>
-      </a>
-      <nav class="site-nav" aria-label="Primary navigation">
-        <a href="#why-navoss">Why NavOSS</a>
-        <a href="#coverage">Coverage</a>
-        <a href="/privacy">Privacy</a>
-        <a href="/support">Support</a>
-        <a class="source-link" href="https://github.com/yassinsolim/NavOSS">View source</a>
-      </nav>
-    </header>
+    <!-- @header -->
 
-    <main>
-      <section class="hero" aria-label="NavOSS map centred on downtown Calgary">
-        <div class="hero__content">
-          <p class="eyebrow reveal">Private navigation, built in Canada</p>
-          <h1 class="reveal reveal--2">NavOSS</h1>
-          <p class="hero__lead reveal reveal--3">
-            Know where you're going without giving an ad network a map of everywhere you've been.
-          </p>
-          <p class="hero__sublead reveal reveal--3">
-            Account-free map context, search where supported, spoken guidance, rerouting, and
-            CarPlay.
-          </p>
-          <div class="hero__actions reveal reveal--3">
-            <a class="button button--primary" href="#current-build">See the current build</a>
-            <a class="button button--secondary" href="https://github.com/yassinsolim/NavOSS"
-              >Inspect the source</a
-            >
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero__inner">
+          <div class="hero__copy">
+            <p class="pill">
+              <span class="pill__dot" aria-hidden="true"></span>iOS + CarPlay technical beta
+            </p>
+            <h1 id="hero-title">Navigation that keeps your trips to&nbsp;yourself.</h1>
+            <p class="hero__lead">
+              <span translate="no">NavOSS</span> is private, account-free, open-source navigation
+              for iPhone and CarPlay. Search, spoken turn-by-turn guidance and rerouting work
+              without an account, ads or tracking.
+            </p>
+            <div class="hero__actions">
+              <a class="button button--primary" href="#beta">Join the beta</a>
+              <a class="button button--secondary" href="#privacy">How privacy works</a>
+            </div>
+            <p class="hero__coverage">
+              <strong>Coverage:</strong> Alberta and British Columbia are rolling out, starting with
+              Calgary and Kelowna.
+            </p>
           </div>
-          <div class="hero__proof reveal reveal--3">
-            <strong>Internal beta</strong>
-            <span>Calgary and Kelowna routes · Official regional context</span>
-          </div>
+
+          <figure class="hero__visual" aria-labelledby="hero-visual-caption">
+            <div class="carplay" aria-hidden="true">
+              <div class="carplay__bar">
+                <span class="carplay__time">5:30</span>
+                <span class="carplay__app"></span>
+                <span class="carplay__app carplay__app--active"></span>
+                <span class="carplay__app"></span>
+              </div>
+              <div class="carplay__screen">
+                <svg
+                  class="map"
+                  viewBox="0 0 480 270"
+                  preserveAspectRatio="xMidYMid slice"
+                  focusable="false"
+                >
+                  <rect class="map__land" width="480" height="270" />
+                  <path class="map__park" d="M300 150h120v90H300z" />
+                  <path
+                    class="map__water"
+                    d="M-10 40 C 80 70 140 20 230 50 S 380 10 490 30 V -10 H -10Z"
+                  />
+                  <g class="map__roads">
+                    <path d="M-10 120 H490" />
+                    <path d="M-10 210 H490" />
+                    <path d="M90 -10 V280" />
+                    <path d="M250 -10 V280" />
+                    <path d="M400 -10 V280" />
+                  </g>
+                  <g class="map__minor">
+                    <path d="M-10 165 H490" />
+                    <path d="M170 -10 V280" />
+                    <path d="M330 -10 V280" />
+                  </g>
+                  <path class="map__route-casing" d="M250 290 V120 H420" />
+                  <path class="map__route" d="M250 290 V120 H420" />
+                  <g transform="translate(250 200)">
+                    <circle class="map__puck-ring" r="13" />
+                    <circle class="map__puck" r="10.5" />
+                    <path class="map__puck-arrow" d="M0 -6.5 5 5 0 2.5 -5 5Z" />
+                  </g>
+                </svg>
+                <div class="carplay__card">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M6 20V11a3 3 0 0 1 3-3h8m-3-4 4 4-4 4" />
+                  </svg>
+                  <strong>400 m</strong>
+                  <span>River Road</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="phone" aria-hidden="true">
+              <div class="phone__screen">
+                <svg
+                  class="map"
+                  viewBox="0 0 300 620"
+                  preserveAspectRatio="xMidYMid slice"
+                  focusable="false"
+                >
+                  <rect class="map__land" width="300" height="620" />
+                  <path class="map__park" d="M180 380h130v140H180z" />
+                  <path
+                    class="map__water"
+                    d="M-10 470 C 60 440 110 520 170 500 S 230 560 310 540 V630 H-10Z"
+                  />
+                  <g class="map__roads">
+                    <path d="M-10 250 H310" />
+                    <path d="M-10 360 H310" />
+                    <path d="M70 -10 V630" />
+                    <path d="M150 -10 V630" />
+                    <path d="M240 -10 V630" />
+                  </g>
+                  <g class="map__minor">
+                    <path d="M-10 160 H310" />
+                    <path d="M-10 300 H310" />
+                    <path d="M110 -10 V630" />
+                    <path d="M195 -10 V630" />
+                  </g>
+                  <path class="map__route-casing" d="M150 640 V250 H240 V-10" />
+                  <path class="map__route" d="M150 640 V250 H240 V-10" />
+                  <g transform="translate(150 430)">
+                    <circle class="map__puck-ring" r="17" />
+                    <circle class="map__puck" r="14" />
+                    <path class="map__puck-arrow" d="M0 -8.5 6.5 6.5 0 3.2 -6.5 6.5Z" />
+                  </g>
+                </svg>
+                <div class="ui-maneuver">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M6 20V11a3 3 0 0 1 3-3h8m-3-4 4 4-4 4" />
+                  </svg>
+                  <div>
+                    <strong>300 m</strong>
+                    <span>Turn right onto River Road</span>
+                  </div>
+                </div>
+                <div class="ui-trip">
+                  <div>
+                    <strong>12 min</strong>
+                    <span>6.4 km · 5:42 pm</span>
+                  </div>
+                  <span class="ui-trip__end">End</span>
+                </div>
+              </div>
+            </div>
+            <figcaption id="hero-visual-caption">
+              Illustration of NavOSS guidance. Streets and places are invented.
+            </figcaption>
+          </figure>
         </div>
-        <p class="hero__caption">Current NavOSS app · coverage shown honestly</p>
       </section>
 
-      <section class="section evidence-band" aria-label="Verified NavOSS evidence">
+      <section class="section" id="features" aria-labelledby="features-title">
         <div class="section__inner">
-          <p class="evidence-band__label">Tested, not hand-waved</p>
-          <div class="metrics" aria-label="Current automated evidence">
-            <div class="metric"><strong>3</strong><span>official regional contexts</span></div>
-            <div class="metric"><strong>25/25</strong><span>regional route variants</span></div>
-            <div class="metric"><strong>0</strong><span>accounts required</span></div>
-            <div class="metric"><strong>100%</strong><span>source available to inspect</span></div>
-          </div>
-        </div>
-      </section>
-
-      <section class="section" id="why-navoss">
-        <div class="section__inner">
-          <p class="eyebrow">Why NavOSS</p>
-          <h2>A navigator you can question.</h2>
+          <p class="eyebrow">In the app today</p>
+          <h2 id="features-title">Everything you need to get there.</h2>
           <p class="section__intro">
-            Trust comes from restrained data collection, visible sources, and release claims that
-            match the evidence.
+            The features below ship in the current technical beta. Where coverage is limited, the
+            app says so instead of guessing.
           </p>
-          <div class="principles">
-            <article class="principle">
-              <span class="principle__number">01</span>
-              <h3>No account</h3>
+          <ul class="feature-grid">
+            <li class="feature">
+              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 3 19 20 12 16 5 20Z" />
+              </svg>
+              <h3>Spoken turn-by-turn</h3>
               <p>
-                Browse, search, preview routes, and navigate without a profile, advertising ID, or
-                social graph.
+                Voice guidance, clear maneuver banners and automatic rerouting that keep running
+                with the phone locked.
               </p>
-            </article>
-            <article class="principle">
-              <span class="principle__number">02</span>
-              <h3>Honest limits</h3>
+            </li>
+            <li class="feature">
+              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="3" y="5" width="18" height="12" rx="2.5" />
+                <path d="M8 21h8M12 17v4" />
+              </svg>
+              <h3>CarPlay</h3>
               <p>
-                Provider, coverage, traffic availability, and degraded states stay visible instead
-                of being hidden behind optimistic copy.
+                Route preview, guidance and the map on your car's display, sharing one navigation
+                session with the phone.
               </p>
-            </article>
-            <article class="principle">
-              <span class="principle__number">03</span>
-              <h3>Open evidence</h3>
+            </li>
+            <li class="feature">
+              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="11" cy="11" r="6.5" />
+                <path d="m16 16 4.5 4.5" />
+              </svg>
+              <h3>Search places &amp; addresses</h3>
               <p>
-                The contracts, clients, native navigation core, tests, and operating runbooks are
-                available for inspection.
+                Self-hosted OpenStreetMap search, plus City of Calgary business and address records
+                for Calgary.
               </p>
-            </article>
-          </div>
+            </li>
+            <li class="feature">
+              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 18c3-8 6-12 8-12s5 4 8 12" />
+                <path d="M7 13h10" />
+              </svg>
+              <h3>Route choices</h3>
+              <p>
+                Compare alternative routes before you go and avoid highways when you'd rather take
+                the long way.
+              </p>
+            </li>
+            <li class="feature">
+              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="3" y="7" width="13" height="10" rx="2" />
+                <path d="m16 11 5-3v8l-5-3" />
+              </svg>
+              <h3>Official cameras &amp; road events</h3>
+              <p>
+                Spoken warnings for City of Calgary intersection safety cameras, and official
+                DriveBC closures and incidents on the map around Kelowna.
+              </p>
+            </li>
+            <li class="feature">
+              <svg class="feature__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21Z" />
+                <circle cx="12" cy="9.5" r="2.5" />
+              </svg>
+              <h3>Places stay on your phone</h3>
+              <p>
+                Saved places and recent destinations live only on the device, ready on the phone and
+                in CarPlay.
+              </p>
+            </li>
+          </ul>
         </div>
       </section>
 
-      <section class="section coverage-band" id="coverage">
-        <div class="section__inner coverage-layout">
+      <section class="section section--tinted" id="roadmap" aria-labelledby="roadmap-title">
+        <div class="section__inner">
+          <p class="eyebrow">In development</p>
+          <h2 id="roadmap-title">What's being built next.</h2>
+          <p class="section__intro">
+            These are not in the beta yet. Each ships only after it works on real roads and the
+            privacy policy describes it.
+          </p>
+          <ul class="roadmap">
+            <li class="roadmap__item">
+              <p class="tag">In development</p>
+              <h3>Community road reports</h3>
+              <p>
+                Mark crashes, closures, hazards and stopped vehicles for other drivers, without an
+                account. Today the report button only keeps expiring test drafts on your phone.
+              </p>
+            </li>
+            <li class="roadmap__item">
+              <p class="tag">In development</p>
+              <h3>Community traffic</h3>
+              <p>
+                Free live traffic built from anonymised speeds shared by drivers who opt in. NavOSS
+                shows no live traffic today.
+              </p>
+            </li>
+            <li class="roadmap__item">
+              <p class="tag">In development</p>
+              <h3>Offline maps</h3>
+              <p>
+                Download a region and keep the map and routing working without a signal. The beta
+                needs a connection today.
+              </p>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section" id="privacy" aria-labelledby="privacy-title">
+        <div class="section__inner split">
           <div>
-            <p class="eyebrow">Coverage</p>
-            <h2>Calgary and Kelowna.<br />Regional context.</h2>
+            <p class="eyebrow">How privacy works</p>
+            <h2 id="privacy-title">No account. No profile. No trip history.</h2>
             <p class="section__intro">
-              Search and routing are live in Calgary and Kelowna, with intercity routing tested
-              between them. Ontario overlays do not imply Ontario navigation coverage.
+              A navigator has to know where you are. In today's beta,
+              <span translate="no">NavOSS</span> uses that only to get you there. Anything new, like
+              opt-in community traffic, is described in the privacy policy before it ships.
             </p>
+            <a class="text-link" href="/privacy">Read the privacy policy</a>
           </div>
-          <dl class="roadmap-list">
-            <div>
-              <dt>Backend live</dt>
-              <dd>Calgary and Kelowna search, local routes, and intercity routes are certified.</dd>
-            </div>
-            <div>
-              <dt>Expansion plan</dt>
-              <dd>Canada, the United States, and Mexico after regional quality gates pass.</dd>
-            </div>
-            <div>
-              <dt>Live traffic</dt>
-              <dd>
-                No live traffic yet. A licensed provider is under review; Google and Apple traffic
-                are not mixed into the open map, and no traffic claim ships before the contract and
-                road tests.
-              </dd>
-            </div>
-          </dl>
+          <ol class="steps">
+            <li>
+              <h3>Open the app and go</h3>
+              <p>
+                There is no sign-up, advertising ID, analytics SDK or cross-app tracking in the
+                default build.
+              </p>
+            </li>
+            <li>
+              <h3>Requests are answered, then dropped</h3>
+              <p>
+                Search and route requests are processed in memory on a server in Alberta. They are
+                not written to a database, access log or backup.
+              </p>
+            </li>
+            <li>
+              <h3>Guidance runs on the phone</h3>
+              <p>
+                Route matching and camera checks happen on the device. Location updates stop when
+                you end the trip or arrive.
+              </p>
+            </li>
+            <li>
+              <h3>Your places are yours</h3>
+              <p>
+                Saved and recent destinations stay on the phone. Clear them in one tap, or remove
+                the app.
+              </p>
+            </li>
+          </ol>
         </div>
       </section>
 
-      <section class="section" id="current-build">
-        <div class="section__inner">
-          <p class="eyebrow">Current internal beta</p>
-          <h2>Real navigation, still earning its range.</h2>
-          <dl class="status-list">
-            <div class="status-row">
-              <dt>Ready now</dt>
-              <dd>
-                The regional API, route alternatives, road context, webcams, and fixed public
-                facilities are live. Existing signed builds remain Calgary-compatible.
-              </dd>
-            </div>
-            <div class="status-row">
-              <dt>Next field gate</dt>
-              <dd>
-                Sign and install the regional client, then repeat locked-phone, on-road, voice,
-                wired-CarPlay, and wireless-CarPlay validation before tester attachment.
-              </dd>
-            </div>
-            <div class="status-row">
-              <dt>Not shipped</dt>
-              <dd>
-                Ontario search and routing, broader British Columbia coverage, licensed live
-                traffic, lane guidance, Android, offline routing, and public community incident
-                reports.
-              </dd>
-            </div>
-          </dl>
-        </div>
-      </section>
-
-      <section class="section notice-band">
-        <div class="section__inner">
+      <section class="section section--tinted" id="open-source" aria-labelledby="open-title">
+        <div class="section__inner split">
           <div>
-            <h2>Trust the road signs first.</h2>
-            <p>
-              NavOSS is pre-release software, not a substitute for posted signs, road laws, closure
-              notices, or good judgement. Have a passenger operate test builds while moving.
+            <p class="eyebrow">Open source</p>
+            <h2 id="open-title">Every claim is checkable.</h2>
+            <p class="section__intro">
+              The app, the navigation engine, the API and the operating runbooks are public. So is
+              where the map comes from.
             </p>
+            <div class="inline-actions">
+              <a class="text-link" href="https://github.com/yassinsolim/NavOSS"
+                >Browse the source</a
+              >
+              <a class="text-link" href="/data-sources">See data sources</a>
+            </div>
           </div>
-          <a class="button button--secondary" href="/support">Read support guidance</a>
+          <dl class="sources">
+            <div>
+              <dt>Map &amp; places</dt>
+              <dd>OpenStreetMap contributors, City of Calgary Open Data</dd>
+            </div>
+            <div>
+              <dt>Routing &amp; search</dt>
+              <dd>Self-hosted Valhalla and Nominatim in Alberta</dd>
+            </div>
+            <div>
+              <dt>Map display</dt>
+              <dd>MapLibre with OpenFreeMap vector tiles</dd>
+            </div>
+            <div>
+              <dt>Road context</dt>
+              <dd>City of Calgary safety cameras, DriveBC Open511</dd>
+            </div>
+            <div>
+              <dt>Licences</dt>
+              <dd>App MPL-2.0 · API AGPL-3.0-only</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="section" id="beta" aria-labelledby="beta-title">
+        <div class="section__inner">
+          <div class="cta">
+            <div>
+              <p class="eyebrow">Technical beta</p>
+              <h2 id="beta-title">Help test NavOSS.</h2>
+              <p>
+                The iOS + CarPlay beta goes out through TestFlight to a small group of testers.
+                Follow the work, file a route report or ask about joining on GitHub.
+              </p>
+              <p class="cta__note">
+                Testing while driving? Have a passenger operate the app, and always follow posted
+                signs and road laws.
+              </p>
+            </div>
+            <div class="cta__actions">
+              <a class="button button--primary" href="https://github.com/yassinsolim/NavOSS"
+                >Follow on GitHub</a
+              >
+              <a class="button button--secondary" href="/support">Get support</a>
+            </div>
+          </div>
         </div>
       </section>
     </main>
 
-    <footer class="site-footer">
-      <div class="footer__inner">
-        <span>NavOSS · Built in Calgary, Alberta</span>
-        <nav aria-label="Footer navigation">
-          <a href="/privacy">Privacy</a>
-          <a href="/support">Support</a>
-          <a href="/data-sources">Data sources</a>
-          <a href="/licenses">Licenses</a>
-        </nav>
-      </div>
-    </footer>
+    <!-- @footer -->
   </body>
 </html>

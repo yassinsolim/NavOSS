@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Hole in the road surface with cracks. -->
+  <ellipse cx="32" cy="36" rx="16" ry="8" fill="currentColor"/>
+  <path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M32 28l-3-6 4-4-2-5M21 30l-5-5M43 30l4-6 5-1"/>
+</svg>

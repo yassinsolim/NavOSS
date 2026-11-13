@@ -19,7 +19,7 @@ previous `valhalla-alberta-british-columbia-260730` artifact remains available f
 
 ## Storage
 
-- `/srv/navoss/state/postgres`: PostGIS state for the reproducible Calgary search index and future community reports. Logical backups exclude `calgary_search_*` tables.
+- `/srv/navoss/state/postgres`: PostGIS state for the reproducible Calgary search index and community reports. Logical backups exclude `calgary_search_*` tables and the rows (not the schema) of the short-lived `community_*` tables.
 - `/srv/navoss/artifacts/imports`: official Alberta and British Columbia extracts plus the merged regional Nominatim input.
 - `/srv/navoss/artifacts/valhalla`: reproducible Alberta and British Columbia routing graph.
 - `/srv/navoss/artifacts/nominatim/postgres`: reproducible Alberta and British Columbia search index.
@@ -185,6 +185,46 @@ sudo docker compose up -d --no-build --wait --wait-timeout 300 valhalla nominati
 Rollback restores the previous four `.env` values and reruns the same four-service command.
 Versioned artifacts are never deleted during deployment.
 
+## Database migrations and community reports
+
+Community-report tables are created by explicit, ordered SQL migrations
+(`apps/api/src/migrations.ts`), not at API startup. The API refuses community-report
+requests with `503` until every migration is applied. Apply them before starting a new API image:
+
+```sh
+sudo docker compose build api
+sudo docker compose run --rm --no-deps api node dist/migrate.js
+sudo docker compose up -d --no-build --wait --wait-timeout 300 api caddy
+./check-stack.sh
+```
+
+`migrate.js` takes an advisory lock, applies each pending migration in its own transaction,
+records it in `navoss_schema_migrations`, and refuses to continue if an applied migration's SQL
+changed. It is safe to repeat. Migrations are additive; rolling the API image back leaves the new
+tables unused. The older runtime-created tables (contributions, search index, Google budget) are
+unchanged.
+
+Writes need `APP_ATTEST_TEAM_ID` and `COMMUNITY_INSTALLATION_SECRET` in `.env`; without them
+`/v2/community/*` writes return `503` and reads follow `COMMUNITY_REPORTS_PUBLICATION`. Keep the
+secret out of Git and do not rotate it casually: it keys the stored key-id hashes and seals the
+stored public keys, so rotation forces every phone to register a new App Attest key.
+
+Publication (`COMMUNITY_REPORTS_PUBLICATION`):
+
+- `shadow` (code and example default): store and score reports, show none. `features.communityReports`
+  in `/v1/config` and `/v2/config` is `false`.
+- `attested`: the beta setting for a small group of TestFlight drivers. A report from an App
+  Attest-verified installation is returned immediately as `unconfirmed` with `confirmations: 0`
+  and becomes `confirmed` after independent corroboration. Config reports `communityReports: true`.
+- `corroborated`: only reports with a sufficient lower confidence bound and at least two
+  independent installations are returned.
+
+To run the beta: set `COMMUNITY_REPORTS_PUBLICATION=attested`, the team id, and the secret; apply
+migrations; recreate `api`; then confirm `curl -s http://127.0.0.1:8080/v2/config` shows
+`"communityReports":true`. Set it back to `shadow` and recreate `api` to stop showing reports
+immediately (the kill switch). `COMMUNITY_ATTESTATION_MODE=allow-development` admits simulator
+installations as untrusted with much lower limits; never use it on the production API.
+
 ## First import
 
 For a new host with no live service to preserve, the two geospatial imports are intentionally
@@ -279,5 +319,11 @@ Do not start both initial imports simultaneously. During either import, monitor
   text and parameter values from error logs.
 - Cloudflare Tunnel forwards only the public API hostname to local Caddy.
 - Report-database dumps are mode 0640, compressed, and retained for 14 days.
-  They exclude the reproducible public search index and do not contain user search,
-  route, or trip data.
+  They exclude the reproducible public search index and the rows of the short-lived
+  community-report tables, and do not contain user search, route, or trip data.
+- Community reports: no accounts. Only a keyed hash of each App Attest key id and a sealed
+  public key are stored. Report positions are kept until 24 hours after expiry; each
+  installation's last write position is kept rounded to about 1 km for the impossible-travel
+  check and cleared after 24 hours; installations are deleted after 90 days without writes or on
+  request. Vote coordinates are checked for proximity and never stored. Coordinates are never
+  logged.

@@ -144,6 +144,7 @@ export function createAppConfig(
   generatedAt: string,
   productionSearch = false,
   liveTraffic = false,
+  communityReports = false,
 ): AppConfigResponse {
   return {
     apiVersion: 'v2',
@@ -187,7 +188,7 @@ export function createAppConfig(
       search: '/v1/search',
     },
     features: {
-      communityReports: false,
+      communityReports,
       liveTraffic,
       officialSafetyCameras: true,
       productionSearch,
@@ -202,8 +203,9 @@ export function createLegacyAppConfig(
   generatedAt: string,
   productionSearch = false,
   liveTraffic = false,
+  communityReports = false,
 ): LegacyAppConfigResponse {
-  const regional = createAppConfig(generatedAt, productionSearch, liveTraffic);
+  const regional = createAppConfig(generatedAt, productionSearch, liveTraffic, communityReports);
   return {
     ...regional,
     apiVersion: 'v1',
