@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import {
   communityAssertionClientData,
@@ -17,6 +18,7 @@ import {
   type CommunityReportService,
 } from '../src/community-reports.js';
 import { MIGRATIONS, MigrationError, pendingMigrations, runMigrations } from '../src/migrations.js';
+import { rateLimitCell } from '../src/community-trust.js';
 import { isSupportedSearchCoordinate } from '../src/search-provider.js';
 import {
   createTestAppAttestAuthority,
@@ -174,10 +176,10 @@ describe.skipIf(!available)('community reports on PostGIS', () => {
     });
   }
 
-  async function nearby(app: FastifyInstance) {
+  async function nearby(app: FastifyInstance, box: Record<keyof typeof BBOX, number> = BBOX) {
     const response = await app.inject({
       method: 'GET',
-      query: Object.fromEntries(Object.entries(BBOX).map(([key, value]) => [key, String(value)])),
+      query: Object.fromEntries(Object.entries(box).map(([key, value]) => [key, String(value)])),
       url: '/v2/community/reports',
     });
     expect(response.statusCode).toBe(200);
@@ -186,7 +188,9 @@ describe.skipIf(!available)('community reports on PostGIS', () => {
       reports: {
         confirmations: number;
         coordinate: { latitude: number };
+        expiresAt: string;
         id: string;
+        reportedAt: string;
         state: string;
       }[];
     }>();
@@ -248,7 +252,7 @@ describe.skipIf(!available)('community reports on PostGIS', () => {
     expect(read.reports).toEqual([
       expect.objectContaining({ confirmations: 0, id: reportId, state: 'unconfirmed' }),
     ]);
-    expect(read.reports[0]?.coordinate).toEqual({ latitude: 51.0447, longitude: -114.0719 });
+    expect(read.reports[0]?.coordinate).toEqual({ latitude: 51.0445, longitude: -114.072 });
 
     now = new Date(now.getTime() + 30 * 60_000);
     const passer = await register(app);
@@ -470,5 +474,285 @@ describe.skipIf(!available)('community reports on PostGIS', () => {
     const afterwards = await submit(app, reporter, offset(400));
     expect(afterwards.statusCode).toBe(401);
     expect(afterwards.json()).toMatchObject({ title: 'Unknown installation' });
+  });
+
+  async function registerDevelopment(app: FastifyInstance): Promise<TestDevice> {
+    const device = authority.createDevelopmentDevice();
+    const response = await app.inject({
+      method: 'POST',
+      payload: {
+        challenge: await challenge(app),
+        keyId: device.keyId,
+        kind: 'development',
+        publicKey: device.publicKey,
+      },
+      url: '/v2/community/installations',
+    });
+    expect(response.statusCode).toBe(201);
+    return device;
+  }
+
+  async function submitRequest(
+    app: FastifyInstance,
+    device: TestDevice,
+    coordinate: { latitude: number; longitude: number },
+    type: 'collision' | 'pothole' = 'collision',
+  ) {
+    const payload = {
+      assertion: await asserted(app, device, { coordinate, kind: 'submit-report', type }),
+      coordinate,
+      type,
+    };
+    return () => app.inject({ method: 'POST', payload, url: '/v2/community/reports' });
+  }
+
+  async function voteRequest(
+    app: FastifyInstance,
+    device: TestDevice,
+    reportId: string,
+    value: 'present' | 'not-present',
+    observedAt = NEARBY,
+  ) {
+    const payload = {
+      assertion: await asserted(app, device, { kind: 'vote', observedAt, reportId, vote: value }),
+      observedAt,
+      vote: value,
+    };
+    return () =>
+      app.inject({ method: 'POST', payload, url: `/v2/community/reports/${reportId}/votes` });
+  }
+
+  /**
+   * PostgreSQL exposes lock waits only through pg_stat_activity, with no notification, so this
+   * polls it; the real delay is the database's, not a guessed sleep.
+   */
+  async function waitForLockWaiters(count: number): Promise<void> {
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      const waiting = await admin.query<{ count: number }>(
+        "SELECT count(*)::int AS count FROM pg_stat_activity WHERE wait_event_type = 'Lock'",
+      );
+      if ((waiting.rows[0]?.count ?? 0) >= count) return;
+      await delay(10);
+    }
+    throw new Error('Expected transactions to wait on a lock.');
+  }
+
+  // Review finding 1.
+  it('refuses development installations once the server is back in enforce mode', async () => {
+    const development = await makeApp('attested', 'allow-development');
+    const device = await registerDevelopment(development.app);
+    expect((await submit(development.app, device)).statusCode).toBe(201);
+
+    const enforced = await makeApp('attested', 'enforce');
+    const refused = await submit(enforced.app, device, offset(400), 'pothole');
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json()).toMatchObject({ title: 'Development attestation disabled' });
+  });
+
+  // Review finding 2.
+  it('keeps untrusted evidence out of every public outcome', async () => {
+    const { app } = await makeApp('attested', 'allow-development');
+    const reporter = await register(app);
+    const { expiresAt, reportId } = (await submit(app, reporter)).json<{
+      expiresAt: string;
+      reportId: string;
+    }>();
+    for (let index = 0; index < 3; index += 1) {
+      const denied = await vote(app, await registerDevelopment(app), reportId, 'not-present');
+      expect(denied.json()).toMatchObject({ active: true });
+    }
+    expect((await nearby(app)).reports).toEqual([
+      expect.objectContaining({ id: reportId, state: 'unconfirmed' }),
+    ]);
+    const stored = await admin.query<{ expires_at: Date }>(
+      `SELECT expires_at FROM ${SCHEMA}.community_reports WHERE id = $1`,
+      [reportId],
+    );
+    expect(stored.rows[0]?.expires_at.toISOString()).toBe(new Date(expiresAt).toISOString());
+
+    // A development report stays shadow-only even when an attested driver confirms it.
+    const developer = await registerDevelopment(app);
+    const developmentReport = (await submit(app, developer, offset(1_000), 'pothole')).json<{
+      reportId: string;
+    }>().reportId;
+    const confirmed = await vote(
+      app,
+      await register(app),
+      developmentReport,
+      'present',
+      offset(1_000),
+    );
+    expect(confirmed.statusCode).toBe(200);
+    expect((await nearby(app)).reports.map((report) => report.id)).toEqual([reportId]);
+  });
+
+  // Review finding 3.
+  it('filters public reads on the published grid point, not the private position', async () => {
+    const { app } = await makeApp('attested');
+    const { reportId } = (await submit(app, await register(app))).json<{ reportId: string }>();
+    // A tiny box around the private position that excludes the published grid point.
+    const aroundPrivate = {
+      east: DOWNTOWN.longitude + 0.00001,
+      north: DOWNTOWN.latitude + 0.00001,
+      south: DOWNTOWN.latitude - 0.00001,
+      west: DOWNTOWN.longitude - 0.00001,
+    };
+    expect((await nearby(app, aroundPrivate)).reports).toEqual([]);
+    const aroundPublished = { east: -114.0719, north: 51.0446, south: 51.0444, west: -114.0721 };
+    expect((await nearby(app, aroundPublished)).reports.map((report) => report.id)).toEqual([
+      reportId,
+    ]);
+  });
+
+  // Review finding 4.
+  it('assesses a vote against votes committed while it waited for the report lock', async () => {
+    const { app } = await makeApp('attested');
+    const { reportId } = (await submit(app, await register(app))).json<{ reportId: string }>();
+    // The reporter's own evidence has decayed to about 0.25 by now.
+    now = new Date(now.getTime() + 90 * 60_000);
+    const present = await voteRequest(app, await register(app), reportId, 'present');
+    const absent = await voteRequest(app, await register(app), reportId, 'not-present');
+
+    const holder = await admin.connect();
+    try {
+      await holder.query('BEGIN');
+      await holder.query(`SELECT id FROM ${SCHEMA}.community_reports WHERE id = $1 FOR UPDATE`, [
+        reportId,
+      ]);
+      const first = present();
+      await waitForLockWaiters(1);
+      const second = absent();
+      await waitForLockWaiters(2);
+      await holder.query('COMMIT');
+      const [presentResponse, absentResponse] = await Promise.all([first, second]);
+      expect(presentResponse.statusCode).toBe(200);
+      // Support 0.25 + 0.5 against 0.5 contradiction: not enough to end the report.
+      expect(absentResponse.json()).toMatchObject({ active: true, status: 'recorded' });
+    } finally {
+      holder.release();
+    }
+  });
+
+  // Review finding 5.
+  it('serializes concurrent nearby submissions so they merge instead of duplicating', async () => {
+    const { app } = await makeApp('corroborated');
+    for (const meters of [0, 2_000, 4_000]) {
+      const coordinate = offset(meters);
+      const requests = await Promise.all([
+        submitRequest(app, await register(app), coordinate),
+        submitRequest(app, await register(app), coordinate),
+      ]);
+      const responses = await Promise.all(requests.map((request) => request()));
+      const bodies = responses.map((response) =>
+        response.json<{ reportId: string; status: string }>(),
+      );
+      expect(bodies.map((body) => body.status).sort()).toEqual(['accepted', 'merged']);
+      expect(bodies[0]?.reportId).toBe(bodies[1]?.reportId);
+    }
+  });
+
+  it('serializes the per-cell limit across installations', async () => {
+    const { app } = await makeApp('attested');
+    const seeded = await admin.query<{ id: string }>(
+      `INSERT INTO ${SCHEMA}.community_installations
+         (id, key_id_hash, sealed_public_key, trust, sign_count, evidence_updated_at,
+          registered_at, last_active_at)
+       VALUES (gen_random_uuid(), $1, $2, 'attested', 0, $3, $3, $3) RETURNING id`,
+      [randomBytes(32), Buffer.from([0]), now],
+    );
+    for (let index = 0; index < 11; index += 1) {
+      await admin.query(
+        `INSERT INTO ${SCHEMA}.community_reports
+           (id, installation_id, type, position, public_position, cell, reporter_trust,
+            reporter_weight, created_at, expires_at)
+         VALUES (gen_random_uuid(), $1, 'road-hazard',
+                 ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography,
+                 ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography,
+                 $4, 'attested', 0.5, $5, $6)`,
+        [
+          seeded.rows[0]?.id,
+          DOWNTOWN.longitude,
+          DOWNTOWN.latitude,
+          rateLimitCell(DOWNTOWN),
+          now,
+          new Date(now.getTime() + 7_200_000),
+        ],
+      );
+    }
+    const sameCell = { latitude: 51.0447, longitude: -114.0745 };
+    expect(rateLimitCell(sameCell)).toBe(rateLimitCell(DOWNTOWN));
+    const requests = await Promise.all([
+      submitRequest(app, await register(app), DOWNTOWN),
+      submitRequest(app, await register(app), sameCell),
+    ]);
+    const statuses = (await Promise.all(requests.map((request) => request()))).map(
+      (response) => response.statusCode,
+    );
+    expect(statuses.sort()).toEqual([201, 429]);
+  });
+
+  // Review finding 6.
+  it('publishes only five-minute report and expiry times', async () => {
+    now = new Date('2026-11-12T18:03:27.123Z');
+    const { app } = await makeApp('attested');
+    await submit(app, await register(app));
+    const [published] = (await nearby(app)).reports;
+    expect(published?.reportedAt).toBe('2026-11-12T18:00:00.000Z');
+    expect(published?.expiresAt).toBe('2026-11-12T20:05:00.000Z');
+  });
+
+  // Review finding 7.
+  it('does not deadlock when two drivers vote on each other’s reports at once', async () => {
+    const { app } = await makeApp('attested');
+    for (const meters of [0, 3_000, 6_000]) {
+      const first = await register(app);
+      const second = await register(app);
+      const firstReport = (await submit(app, first, offset(meters))).json<{ reportId: string }>()
+        .reportId;
+      const secondReport = (await submit(app, second, offset(meters + 50), 'pothole')).json<{
+        reportId: string;
+      }>().reportId;
+      const observedAt = offset(meters + 20);
+      const requests = await Promise.all([
+        voteRequest(app, first, secondReport, 'present', observedAt),
+        voteRequest(app, second, firstReport, 'present', observedAt),
+      ]);
+      const statuses = (await Promise.all(requests.map((request) => request()))).map(
+        (response) => response.statusCode,
+      );
+      expect(statuses).toEqual([200, 200]);
+    }
+  });
+
+  it('does not deadlock a withdrawal racing a vote on the same report', async () => {
+    const { app } = await makeApp('attested');
+    const reporter = await register(app);
+    const { reportId } = (await submit(app, reporter)).json<{ reportId: string }>();
+    const withdrawPayload = {
+      assertion: await asserted(app, reporter, { kind: 'delete-report', reportId }),
+    };
+    const castVote = await voteRequest(app, await register(app), reportId, 'present');
+    const [withdrawn, voted] = await Promise.all([
+      app.inject({
+        method: 'DELETE',
+        payload: withdrawPayload,
+        url: `/v2/community/reports/${reportId}`,
+      }),
+      castVote(),
+    ]);
+    expect(withdrawn.statusCode).toBe(200);
+    expect([200, 404]).toContain(voted.statusCode);
+  });
+
+  // Review finding 8.
+  it('never merges across installations or reveals another report id in shadow mode', async () => {
+    const { app } = await makeApp('shadow');
+    const first = (await submit(app, await register(app))).json<{ reportId: string }>();
+    const second = (await submit(app, await register(app), offset(30))).json<{
+      reportId: string;
+      status: string;
+    }>();
+    expect(second.status).toBe('accepted');
+    expect(second.reportId).not.toBe(first.reportId);
   });
 });

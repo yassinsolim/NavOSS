@@ -54,6 +54,7 @@ export const MIGRATIONS: readonly Migration[] = [
           'pothole', 'object-on-road', 'road-hazard', 'stalled-vehicle'
         )),
         position geography(Point, 4326) NOT NULL,
+        public_position geography(Point, 4326) NOT NULL,
         heading smallint CHECK (heading BETWEEN 0 AND 359),
         cell text NOT NULL,
         reporter_trust text NOT NULL CHECK (reporter_trust IN ('attested', 'untrusted')),
@@ -62,6 +63,8 @@ export const MIGRATIONS: readonly Migration[] = [
         expires_at timestamptz NOT NULL CHECK (expires_at >= created_at)
       );
       CREATE INDEX community_reports_position_idx ON community_reports USING gist (position);
+      CREATE INDEX community_reports_public_position_idx
+        ON community_reports USING gist (public_position);
       CREATE INDEX community_reports_expires_at_idx ON community_reports (expires_at);
       CREATE INDEX community_reports_installation_idx
         ON community_reports (installation_id, created_at);
@@ -72,6 +75,7 @@ export const MIGRATIONS: readonly Migration[] = [
         installation_id uuid NOT NULL
           REFERENCES community_installations (id) ON DELETE CASCADE,
         vote text NOT NULL CHECK (vote IN ('present', 'not-present')),
+        voter_trust text NOT NULL CHECK (voter_trust IN ('attested', 'untrusted')),
         weight double precision NOT NULL CHECK (weight > 0 AND weight <= 1),
         created_at timestamptz NOT NULL,
         PRIMARY KEY (report_id, installation_id)

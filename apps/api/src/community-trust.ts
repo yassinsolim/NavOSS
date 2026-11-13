@@ -124,7 +124,12 @@ export interface ReportEvidenceInput {
   now: Date;
   reporterTrust: CommunityInstallationTrust;
   reporterWeight: number;
-  votes: readonly { createdAt: Date; vote: CommunityReportVoteValue; weight: number }[];
+  votes: readonly {
+    createdAt: Date;
+    trust: CommunityInstallationTrust;
+    vote: CommunityReportVoteValue;
+    weight: number;
+  }[];
 }
 
 export interface ReportAssessment {
@@ -145,10 +150,14 @@ export function assessReport(input: ReportEvidenceInput): ReportAssessment {
   const decayed = (weight: number, at: Date): number =>
     decayEvidence({ contradict: 0, support: weight }, input.now.getTime() - at.getTime(), halfLife)
       .support;
-  let support = decayed(input.reporterWeight, input.createdAt);
+  // Only attested evidence counts. Untrusted (development) reports and votes are kept for shadow
+  // analysis but never corroborate, contradict, extend, or shorten anything public.
+  let support =
+    input.reporterTrust === 'attested' ? decayed(input.reporterWeight, input.createdAt) : 0;
   let contradict = 0;
   let presentVotes = 0;
   for (const vote of input.votes) {
+    if (vote.trust !== 'attested') continue;
     if (vote.vote === 'present') {
       support += decayed(vote.weight, vote.createdAt);
       presentVotes += 1;
@@ -186,14 +195,13 @@ export function reportVisibility(
   publication: CommunityReportPublication,
   input: ReportEvidenceInput,
 ): ReportVisibility {
-  if (publication === 'shadow') return { visible: false };
+  if (publication === 'shadow' || input.reporterTrust !== 'attested') return { visible: false };
   const assessment = assessReport(input);
   if (isCorroborated(assessment)) {
     return { confirmations: assessment.presentVotes, state: 'confirmed', visible: true };
   }
   if (
     publication === 'attested' &&
-    input.reporterTrust === 'attested' &&
     input.reporterWeight >= COMMUNITY_TRUST_RULES.minimumSingleReporterWeight &&
     assessment.mean > 0.5
   ) {
@@ -248,17 +256,53 @@ export function coarsenForTravelCheck(point: LatLng): LatLng {
   };
 }
 
-/** Position shown to other drivers: four decimals (about 11 m), enough to place it on a road. */
+/**
+ * Published report positions snap to a 0.0005-degree grid (about 55 m north-south and 30-35 m
+ * east-west in Alberta and British Columbia). Coarse enough that a report made from a driveway
+ * cannot single out one residential parcel; fine enough to show the stretch of road. The snapped
+ * position is stored and is the only position public reads filter on.
+ */
+export const PUBLICATION_GRID_DEGREES = 0.0005;
+
 export function coarsenForPublication(point: LatLng): LatLng {
+  const steps = 1 / PUBLICATION_GRID_DEGREES;
   return {
-    latitude: Math.round(point.latitude * 10_000) / 10_000,
-    longitude: Math.round(point.longitude * 10_000) / 10_000,
+    latitude: Math.round(point.latitude * steps) / steps,
+    longitude: Math.round(point.longitude * steps) / steps,
   };
+}
+
+/** Public report times use five-minute steps so they cannot order or time individual reports. */
+export const PUBLIC_TIME_STEP_MS = 5 * MINUTE_MS;
+
+export function publicReportedAt(createdAt: Date): Date {
+  return new Date(Math.floor(createdAt.getTime() / PUBLIC_TIME_STEP_MS) * PUBLIC_TIME_STEP_MS);
+}
+
+export function publicExpiresAt(expiresAt: Date): Date {
+  return new Date(Math.ceil(expiresAt.getTime() / PUBLIC_TIME_STEP_MS) * PUBLIC_TIME_STEP_MS);
 }
 
 /** Rate-limit cell (0.01 x 0.01 degree, roughly 1.1 km x 0.7 km in Alberta and BC). */
 export function rateLimitCell(point: LatLng): string {
   return `${String(Math.floor(point.latitude * 100))}:${String(Math.floor(point.longitude * 100))}`;
+}
+
+/**
+ * Advisory-lock keys that serialize report creation near `point`: its rate-limit cell and the eight
+ * around it, in one fixed order. Cells are wider than the merge radius everywhere in coverage, so
+ * any two submissions that could merge, or that share a cell, contend for a common key.
+ */
+export function cellLockKeys(point: LatLng): [number, number][] {
+  const latitude = Math.floor(point.latitude * 100);
+  const longitude = Math.floor(point.longitude * 100);
+  const keys: [number, number][] = [];
+  for (const deltaLatitude of [-1, 0, 1]) {
+    for (const deltaLongitude of [-1, 0, 1]) {
+      keys.push([latitude + deltaLatitude, longitude + deltaLongitude]);
+    }
+  }
+  return keys;
 }
 
 export function isImpossibleTravel(input: {

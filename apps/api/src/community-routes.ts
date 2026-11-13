@@ -53,6 +53,12 @@ const FAILURES: Record<
     status: 409,
     title: 'Installation already registered',
   },
+  busy: {
+    code: 'service_unavailable',
+    detail: 'The request conflicted with concurrent reports. Request a new challenge and retry.',
+    status: 503,
+    title: 'Community reports busy',
+  },
   attestation: {
     code: 'forbidden',
     detail: 'The device attestation or assertion could not be verified.',
@@ -143,6 +149,8 @@ const PROBLEM_RESPONSES = {
   503: ProblemDetailsSchema,
 } as const;
 
+export const COMMUNITY_READS_PER_NETWORK_PER_HOUR = 1_200;
+
 export interface CommunityRouteOptions {
   clock: () => Date;
   service: CommunityReportService | undefined;
@@ -161,6 +169,12 @@ export function registerCommunityRoutes(app: TypedApp, options: CommunityRouteOp
     globalLimit: 40_000,
     sourceLimit: 240,
   });
+  // A phone polling once a minute makes 60 reads an hour; carrier NAT can share one bucket.
+  const readLimiter = createContributionRateLimiter({
+    clock: clockMs,
+    globalLimit: 200_000,
+    sourceLimit: COMMUNITY_READS_PER_NETWORK_PER_HOUR,
+  });
 
   const fail = (
     request: FastifyRequest,
@@ -170,19 +184,18 @@ export function registerCommunityRoutes(app: TypedApp, options: CommunityRouteOp
     const failure = FAILURES[reason];
     reply.status(failure.status).type('application/problem+json');
     if (failure.status === 429) reply.header('retry-after', '900');
+    if (reason === 'busy') reply.header('retry-after', '1');
     return createProblem(request, failure.status, failure.code, failure.title, failure.detail);
   };
 
   const run = async <T>(
     request: FastifyRequest,
     reply: FastifyReply,
-    limiter: { consume(source: string): boolean } | undefined,
+    limiter: { consume(source: string): boolean },
     work: (service: CommunityReportService) => Promise<T>,
   ): Promise<ProblemDetails | T> => {
+    if (!limiter.consume(networkBucket(request.ip))) return fail(request, reply, 'rate-limited');
     if (options.service === undefined) return fail(request, reply, 'unavailable');
-    if (limiter !== undefined && !limiter.consume(networkBucket(request.ip))) {
-      return fail(request, reply, 'rate-limited');
-    }
     try {
       return await work(options.service);
     } catch (error: unknown) {
@@ -263,7 +276,8 @@ export function registerCommunityRoutes(app: TypedApp, options: CommunityRouteOp
         tags: ['community'],
       },
     },
-    (request, reply) => run(request, reply, undefined, (service) => service.nearby(request.query)),
+    (request, reply) =>
+      run(request, reply, readLimiter, (service) => service.nearby(request.query)),
   );
 
   app.post(

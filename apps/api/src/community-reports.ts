@@ -31,6 +31,7 @@ import {
 import {
   applyReporterOutcome,
   assessReport,
+  cellLockKeys,
   coarsenForPublication,
   coarsenForTravelCheck,
   COMMUNITY_TRUST_RULES,
@@ -39,6 +40,8 @@ import {
   expiryAfterVote,
   installationWeight,
   isImpossibleTravel,
+  publicExpiresAt,
+  publicReportedAt,
   rateLimitCell,
   reportLimitViolation,
   reportVisibility,
@@ -61,6 +64,7 @@ export type AttestationMode = 'enforce' | 'allow-development';
 export type CommunityReportFailure =
   | 'already-registered'
   | 'attestation'
+  | 'busy'
   | 'development-not-allowed'
   | 'duplicate-vote'
   | 'impossible-travel'
@@ -147,23 +151,29 @@ interface ReportRow {
     created_at: string;
     installation_id: string;
     vote: CommunityReportVoteValue;
+    voter_trust: CommunityInstallationTrust;
     weight: number;
   }[];
 }
 
-const REPORT_COLUMNS = `
+/** Report columns with either the private or the published position. */
+const reportColumns = (position: 'position' | 'public_position'): string => `
   r.id, r.installation_id, r.type, r.reporter_trust, r.reporter_weight, r.created_at, r.expires_at,
-  ST_Y(r.position::geometry) AS latitude, ST_X(r.position::geometry) AS longitude,
+  ST_Y(r.${position}::geometry) AS latitude, ST_X(r.${position}::geometry) AS longitude,
   COALESCE(
     (SELECT json_agg(json_build_object(
-       'installation_id', v.installation_id, 'vote', v.vote, 'weight', v.weight,
-       'created_at', v.created_at))
+       'installation_id', v.installation_id, 'vote', v.vote, 'voter_trust', v.voter_trust,
+       'weight', v.weight, 'created_at', v.created_at))
      FROM community_report_votes v WHERE v.report_id = r.id),
     '[]'::json
   ) AS votes`;
 
 const POINT_SQL = (longitude: string, latitude: string): string =>
   `ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)::geography`;
+
+/** PostgreSQL deadlock and serialization failures: safe to retry the whole transaction. */
+const RETRYABLE_SQLSTATES = new Set(['40001', '40P01']);
+const MAXIMUM_TRANSACTION_ATTEMPTS = 3;
 
 function base64ToBytes(value: string): Buffer {
   return Buffer.from(value, 'base64');
@@ -177,12 +187,20 @@ function toReportEvidence(row: ReportRow, now: Date): ReportEvidenceInput {
     reporterWeight: row.reporter_weight,
     votes: row.votes.map((vote) => ({
       createdAt: new Date(vote.created_at),
+      trust: vote.voter_trust,
       vote: vote.vote,
       weight: vote.weight,
     })),
   };
 }
 
+/**
+ * Lock order, used by every write so concurrent writes cannot deadlock:
+ *   1. cell advisory locks (submissions only), in `cellLockKeys` order;
+ *   2. installation rows, ascending id, in one statement;
+ *   3. report rows.
+ * Vote evidence is always read in a fresh statement after the report row lock is held.
+ */
 export function createCommunityReportService(
   options: CommunityReportServiceOptions,
 ): CommunityReportService {
@@ -234,6 +252,12 @@ export function createCommunityReportService(
     if (result.rowCount !== 1) throw new CommunityReportError('invalid-challenge');
   };
 
+  /**
+   * Runs `work` in a transaction. Deadlocks and serialization failures are retried with the same,
+   * already verified request (its counter update rolled back with the failed attempt), so a
+   * conflict never silently burns the caller's challenge; if retries run out the caller gets a
+   * retryable `busy` response.
+   */
   const withTransaction = async <T>(work: (client: PoolClient) => Promise<T>): Promise<T> => {
     let client: PoolClient;
     try {
@@ -242,38 +266,64 @@ export function createCommunityReportService(
       throw new CommunityReportError('unavailable', { cause: error });
     }
     try {
-      await client.query('BEGIN');
-      const result = await work(client);
-      await client.query('COMMIT');
-      return result;
-    } catch (error: unknown) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      if (error instanceof CommunityReportError) throw error;
-      throw new CommunityReportError('unavailable', { cause: error });
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          await client.query('BEGIN');
+          const result = await work(client);
+          await client.query('COMMIT');
+          return result;
+        } catch (error: unknown) {
+          await client.query('ROLLBACK').catch(() => undefined);
+          if (error instanceof CommunityReportError) throw error;
+          const code = (error as { code?: unknown }).code;
+          if (typeof code === 'string' && RETRYABLE_SQLSTATES.has(code)) {
+            if (attempt < MAXIMUM_TRANSACTION_ATTEMPTS) continue;
+            throw new CommunityReportError('busy', { cause: error });
+          }
+          throw new CommunityReportError('unavailable', { cause: error });
+        }
+      }
     } finally {
       client.release();
     }
   };
 
-  /** Verifies a write assertion and advances the installation's counter inside `client`'s transaction. */
+  /**
+   * Locks the asserting installation together with `relatedInstallationIds` (ascending id), then
+   * verifies the assertion and advances the counter. Untrusted installations are refused outright
+   * when development attestation is not allowed, even if they were registered while it was.
+   */
   const assertInstallation = async (
     client: PoolClient,
     assertion: CommunityAssertion,
     operation: CommunityAssertedOperation,
     now: Date,
+    relatedInstallationIds: readonly string[] = [],
   ): Promise<AssertedInstallation> => {
     const verifier = requireVerifier();
     const keyId = base64ToBytes(assertion.keyId);
-    const result = await client.query<InstallationRow>(
+    const keyIdHash = keyed('id:', keyId);
+    const found = await client.query<{ id: string }>(
+      'SELECT id FROM community_installations WHERE key_id_hash = $1',
+      [keyIdHash],
+    );
+    const installationId = found.rows[0]?.id;
+    if (installationId === undefined) throw new CommunityReportError('unknown-installation');
+
+    const locked = await client.query<InstallationRow>(
       `SELECT id, trust, sealed_public_key, sign_count::text AS sign_count,
               evidence_support, evidence_contradict, evidence_updated_at, last_write_at,
               ST_Y(last_write_position::geometry) AS last_write_latitude,
               ST_X(last_write_position::geometry) AS last_write_longitude
-       FROM community_installations WHERE key_id_hash = $1 FOR UPDATE`,
-      [keyed('id:', keyId)],
+       FROM community_installations WHERE id = ANY($1::uuid[])
+       ORDER BY id FOR UPDATE`,
+      [[...new Set([installationId, ...relatedInstallationIds])]],
     );
-    const row = result.rows[0];
+    const row = locked.rows.find((candidate) => candidate.id === installationId);
     if (row === undefined) throw new CommunityReportError('unknown-installation');
+    if (row.trust !== 'attested' && options.attestationMode !== 'allow-development') {
+      throw new CommunityReportError('development-not-allowed');
+    }
 
     let signCount: number;
     try {
@@ -345,6 +395,28 @@ export function createCommunityReportService(
     );
   };
 
+  /** Locks an active report row, then reads it and its votes in a fresh statement. */
+  const lockActiveReport = async (
+    client: PoolClient,
+    reportId: string,
+    now: Date,
+  ): Promise<ReportRow | undefined> => {
+    const locked = await client.query(
+      'SELECT id FROM community_reports WHERE id = $1 AND expires_at > $2 FOR UPDATE',
+      [reportId, now],
+    );
+    if (locked.rowCount !== 1) return undefined;
+    const fresh = await client.query<ReportRow>(
+      `SELECT ${reportColumns('position')} FROM community_reports r WHERE r.id = $1`,
+      [reportId],
+    );
+    return fresh.rows[0];
+  };
+
+  /**
+   * Records a vote on a report whose row (and both installations) the caller has locked. Untrusted
+   * votes are stored for shadow analysis only: they never change expiry or anyone's credibility.
+   */
   const applyVote = async (
     client: PoolClient,
     voter: AssertedInstallation,
@@ -363,11 +435,13 @@ export function createCommunityReportService(
     }
     const weight = installationWeight(voter.trust, voter.evidence);
     const inserted = await client.query(
-      `INSERT INTO community_report_votes (report_id, installation_id, vote, weight, created_at)
-       VALUES ($1, $2, $3, $4, $5) ON CONFLICT (report_id, installation_id) DO NOTHING`,
-      [report.id, voter.id, vote, weight, now],
+      `INSERT INTO community_report_votes
+         (report_id, installation_id, vote, voter_trust, weight, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (report_id, installation_id) DO NOTHING`,
+      [report.id, voter.id, vote, voter.trust, weight, now],
     );
     if (inserted.rowCount !== 1) throw new CommunityReportError('duplicate-vote');
+    if (voter.trust !== 'attested') return report.expires_at;
 
     const assessment = assessReport(
       toReportEvidence(
@@ -375,7 +449,13 @@ export function createCommunityReportService(
           ...report,
           votes: [
             ...report.votes,
-            { created_at: now.toISOString(), installation_id: voter.id, vote, weight },
+            {
+              created_at: now.toISOString(),
+              installation_id: voter.id,
+              vote,
+              voter_trust: voter.trust,
+              weight,
+            },
           ],
         },
         now,
@@ -393,14 +473,14 @@ export function createCommunityReportService(
       expiresAt,
     ]);
 
-    // Independent outcome for the reporter's credibility.
+    // Independent outcome for the reporter's credibility; that row is already locked.
     const reporter = await client.query<{
       evidence_contradict: number;
       evidence_support: number;
       evidence_updated_at: Date;
     }>(
       `SELECT evidence_support, evidence_contradict, evidence_updated_at
-       FROM community_installations WHERE id = $1 FOR UPDATE`,
+       FROM community_installations WHERE id = $1`,
       [report.installation_id],
     );
     const reporterRow = reporter.rows[0];
@@ -535,7 +615,39 @@ export function createCommunityReportService(
       await ensureSchema();
       const now = clock();
       await consumeChallenge(request.assertion.challenge, now);
+      const point = [request.coordinate.longitude, request.coordinate.latitude];
       return withTransaction(async (client) => {
+        // 1. Serialize the cell count, merge search, and insert against nearby submissions.
+        for (const [latitudeKey, longitudeKey] of cellLockKeys(request.coordinate)) {
+          await client.query('SELECT pg_advisory_xact_lock($1::int, $2::int)', [
+            latitudeKey,
+            longitudeKey,
+          ]);
+        }
+
+        // Cross-installation merging only where reports are published, and only between attested
+        // installations: shadow mode must not reveal that someone else reported here.
+        const self = await client.query<{ id: string; trust: CommunityInstallationTrust }>(
+          'SELECT id, trust FROM community_installations WHERE key_id_hash = $1',
+          [keyed('id:', base64ToBytes(request.assertion.keyId))],
+        );
+        const selfRow = self.rows[0];
+        const mayMerge = options.publication !== 'shadow' && selfRow?.trust === 'attested';
+        const candidate = mayMerge
+          ? (
+              await client.query<{ id: string; installation_id: string }>(
+                `SELECT r.id, r.installation_id FROM community_reports r
+                 WHERE r.type = $1 AND r.expires_at > $2 AND r.reporter_trust = 'attested'
+                   AND r.installation_id <> $6
+                   AND ST_DWithin(r.position, ${POINT_SQL('$3', '$4')}, $5)
+                 ORDER BY ST_Distance(r.position, ${POINT_SQL('$3', '$4')}), r.id
+                 LIMIT 1`,
+                [request.type, now, ...point, COMMUNITY_TRUST_RULES.mergeRadiusMeters, selfRow.id],
+              )
+            ).rows[0]
+          : undefined;
+
+        // 2. Installation rows (self and the candidate's reporter), ascending id.
         const installation = await assertInstallation(
           client,
           request.assertion,
@@ -546,45 +658,42 @@ export function createCommunityReportService(
             type: request.type,
           },
           now,
+          candidate === undefined ? [] : [candidate.installation_id],
         );
         await recordTravel(client, installation, request.coordinate, now);
 
-        const nearbySameType = await client.query<ReportRow>(
-          `SELECT ${REPORT_COLUMNS} FROM community_reports r
-           WHERE r.type = $1 AND r.expires_at > $2
-             AND ST_DWithin(r.position, ${POINT_SQL('$3', '$4')}, $5)
-           ORDER BY (r.installation_id = $6) DESC,
-                    ST_Distance(r.position, ${POINT_SQL('$3', '$4')})
-           LIMIT 1 FOR UPDATE OF r`,
-          [
-            request.type,
-            now,
-            request.coordinate.longitude,
-            request.coordinate.latitude,
-            COMMUNITY_TRUST_RULES.mergeRadiusMeters,
-            installation.id,
-          ],
+        const own = await client.query<{ expires_at: Date; id: string }>(
+          `SELECT id, expires_at FROM community_reports
+           WHERE installation_id = $1 AND type = $2 AND expires_at > $3
+             AND ST_DWithin(position, ${POINT_SQL('$4', '$5')}, $6)
+           LIMIT 1`,
+          [installation.id, request.type, now, ...point, COMMUNITY_TRUST_RULES.mergeRadiusMeters],
         );
-        const existing = nearbySameType.rows[0];
-        if (existing !== undefined) {
-          if (existing.installation_id === installation.id) {
+        const ownRow = own.rows[0];
+        if (ownRow !== undefined) {
+          return {
+            expiresAt: ownRow.expires_at.toISOString(),
+            reportId: ownRow.id,
+            status: 'accepted' as const,
+          };
+        }
+
+        // 3. The candidate report row, then its evidence in a fresh statement.
+        if (candidate !== undefined) {
+          const report = await lockActiveReport(client, candidate.id, now);
+          if (report !== undefined) {
+            const alreadyVoted = report.votes.some(
+              (vote) => vote.installation_id === installation.id,
+            );
+            const expiresAt = alreadyVoted
+              ? report.expires_at
+              : await applyVote(client, installation, report, 'present', now);
             return {
-              expiresAt: existing.expires_at.toISOString(),
-              reportId: existing.id,
-              status: 'accepted' as const,
+              expiresAt: publicExpiresAt(expiresAt).toISOString(),
+              reportId: report.id,
+              status: 'merged' as const,
             };
           }
-          const alreadyVoted = existing.votes.some(
-            (vote) => vote.installation_id === installation.id,
-          );
-          const expiresAt = alreadyVoted
-            ? existing.expires_at
-            : await applyVote(client, installation, existing, 'present', now);
-          return {
-            expiresAt: expiresAt.toISOString(),
-            reportId: existing.id,
-            status: 'merged' as const,
-          };
         }
 
         const cell = rateLimitCell(request.coordinate);
@@ -621,17 +730,20 @@ export function createCommunityReportService(
 
         const reportId = randomUUID();
         const expiresAt = new Date(now.getTime() + COMMUNITY_TRUST_RULES.reportLifetimeMs);
+        const published = coarsenForPublication(request.coordinate);
         await client.query(
           `INSERT INTO community_reports
-             (id, installation_id, type, position, heading, cell, reporter_trust, reporter_weight,
-              created_at, expires_at)
-           VALUES ($1, $2, $3, ${POINT_SQL('$4', '$5')}, $6, $7, $8, $9, $10, $11)`,
+             (id, installation_id, type, position, public_position, heading, cell, reporter_trust,
+              reporter_weight, created_at, expires_at)
+           VALUES ($1, $2, $3, ${POINT_SQL('$4', '$5')}, ${POINT_SQL('$6', '$7')}, $8, $9, $10,
+                   $11, $12, $13)`,
           [
             reportId,
             installation.id,
             request.type,
-            request.coordinate.longitude,
-            request.coordinate.latitude,
+            ...point,
+            published.longitude,
+            published.latitude,
             request.heading ?? null,
             cell,
             installation.trust,
@@ -650,18 +762,20 @@ export function createCommunityReportService(
       const now = clock();
       await consumeChallenge(request.assertion.challenge, now);
       return withTransaction(async (client) => {
+        const owner = await client.query<{ installation_id: string }>(
+          'SELECT installation_id FROM community_reports WHERE id = $1',
+          [reportId],
+        );
+        const reporterId = owner.rows[0]?.installation_id;
         const voter = await assertInstallation(
           client,
           request.assertion,
           { kind: 'vote', observedAt: request.observedAt, reportId, vote: request.vote },
           now,
+          reporterId === undefined ? [] : [reporterId],
         );
-        const found = await client.query<ReportRow>(
-          `SELECT ${REPORT_COLUMNS} FROM community_reports r
-           WHERE r.id = $1 AND r.expires_at > $2 FOR UPDATE OF r`,
-          [reportId, now],
-        );
-        const report = found.rows[0];
+        const report =
+          reporterId === undefined ? undefined : await lockActiveReport(client, reportId, now);
         if (report === undefined) throw new CommunityReportError('not-found');
         // The observation coordinate is used for these two checks only and never stored.
         if (
@@ -722,10 +836,12 @@ export function createCommunityReportService(
       await ensureSchema();
       let rows: ReportRow[];
       try {
+        // Filters on the published (grid-snapped) position only, so narrowing the box cannot
+        // locate a report more precisely than the coordinate it returns.
         const result = await pool.query<ReportRow>(
-          `SELECT ${REPORT_COLUMNS} FROM community_reports r
+          `SELECT ${reportColumns('public_position')} FROM community_reports r
            WHERE r.expires_at > $1
-             AND r.position && ST_MakeEnvelope($2, $3, $4, $5, 4326)::geography
+             AND r.public_position && ST_MakeEnvelope($2, $3, $4, $5, 4326)::geography
            ORDER BY r.created_at DESC
            LIMIT ${String(MAXIMUM_NEARBY_CANDIDATES)}`,
           [now, query.west, query.south, query.east, query.north],
@@ -738,12 +854,11 @@ export function createCommunityReportService(
       for (const row of rows) {
         const visibility = reportVisibility(options.publication, toReportEvidence(row, now));
         if (!visibility.visible) continue;
-        const reportedAt = new Date(Math.floor(row.created_at.getTime() / 60_000) * 60_000);
         const base = {
-          coordinate: coarsenForPublication(row),
-          expiresAt: row.expires_at.toISOString(),
+          coordinate: { latitude: row.latitude, longitude: row.longitude },
+          expiresAt: publicExpiresAt(row.expires_at).toISOString(),
           id: row.id,
-          reportedAt: reportedAt.toISOString(),
+          reportedAt: publicReportedAt(row.created_at).toISOString(),
           source: 'navoss-community' as const,
           type: row.type,
         };
@@ -754,6 +869,8 @@ export function createCommunityReportService(
         );
         if (reports.length >= MAXIMUM_NEARBY_REPORTS) break;
       }
+      // Random ids, not creation time, order the response.
+      reports.sort((left, right) => left.id.localeCompare(right.id));
       return { generatedAt: now.toISOString(), publication: options.publication, reports };
     },
   };

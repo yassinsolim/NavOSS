@@ -158,10 +158,12 @@ export const CommunityReportQuerySchema = z
   });
 
 const CommunityReportBaseShape = {
-  coordinate: CoordinateSchema.describe('Report position rounded to four decimal places'),
-  expiresAt: IsoDateTimeSchema,
+  coordinate: CoordinateSchema.describe(
+    'Report position snapped to a 0.0005-degree grid (about 55 m by 35 m)',
+  ),
+  expiresAt: IsoDateTimeSchema.describe('Expiry rounded up to five minutes'),
   id: z.uuid(),
-  reportedAt: IsoDateTimeSchema.describe('Report time rounded down to the minute'),
+  reportedAt: IsoDateTimeSchema.describe('Report time rounded down to five minutes'),
   source: z.literal('navoss-community'),
   type: CommunityReportTypeSchema,
 } as const;

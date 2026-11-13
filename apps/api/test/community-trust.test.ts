@@ -4,12 +4,16 @@ import {
   applyReporterOutcome,
   assessReport,
   betaLowerBound,
+  cellLockKeys,
+  coarsenForPublication,
   COMMUNITY_TRUST_RULES,
   decayEvidence,
   expiryAfterVote,
   installationWeight,
   isImpossibleTravel,
   networkBucket,
+  publicExpiresAt,
+  publicReportedAt,
   rateLimitCell,
   reportLimitViolation,
   reportVisibility,
@@ -65,7 +69,9 @@ describe('credibility', () => {
 });
 
 describe('publication policy', () => {
-  const confirmedVotes = [{ createdAt: minutes(2), vote: 'present' as const, weight: 0.5 }];
+  const confirmedVotes = [
+    { createdAt: minutes(2), trust: 'attested' as const, vote: 'present' as const, weight: 0.5 },
+  ];
 
   it('never publishes in shadow mode, however corroborated', () => {
     expect(reportVisibility('shadow', report({ votes: confirmedVotes }))).toEqual({
@@ -109,9 +115,36 @@ describe('publication policy', () => {
     expect(
       reportVisibility(
         'attested',
-        report({ votes: [{ createdAt: minutes(3), vote: 'not-present', weight: 0.5 }] }),
+        report({
+          votes: [{ createdAt: minutes(3), trust: 'attested', vote: 'not-present', weight: 0.5 }],
+        }),
       ),
     ).toEqual({ visible: false });
+  });
+
+  it('ignores untrusted evidence however much of it there is', () => {
+    const untrusted = (vote: 'present' | 'not-present') =>
+      Array.from({ length: 20 }, (_, index) => ({
+        createdAt: minutes(1 + index / 10),
+        trust: 'untrusted' as const,
+        vote,
+        weight: 1,
+      }));
+    // Twenty software-key confirmations of an untrusted report publish nothing.
+    expect(
+      reportVisibility(
+        'corroborated',
+        report({ reporterTrust: 'untrusted', votes: untrusted('present') }),
+      ),
+    ).toEqual({ visible: false });
+    // Twenty software-key denials cannot hide or weaken an attested report.
+    const attacked = report({ votes: untrusted('not-present') });
+    expect(reportVisibility('attested', attacked)).toEqual({
+      confirmations: 0,
+      state: 'unconfirmed',
+      visible: true,
+    });
+    expect(assessReport(attacked).contradict).toBe(0);
   });
 
   it('does not let one untrusted confirmation corroborate a report', () => {
@@ -119,7 +152,7 @@ describe('publication policy', () => {
       reportVisibility(
         'corroborated',
         report({
-          votes: [{ createdAt: minutes(2), vote: 'present', weight: NEW_UNTRUSTED_WEIGHT }],
+          votes: [{ createdAt: minutes(2), trust: 'untrusted', vote: 'present', weight: 0.5 }],
         }),
       ),
     ).toEqual({ visible: false });
@@ -169,8 +202,8 @@ describe('expiry', () => {
     const assessment = assessReport(
       report({
         votes: [
-          { createdAt: minutes(1), vote: 'not-present', weight: 1 },
-          { createdAt: minutes(2), vote: 'not-present', weight: 1 },
+          { createdAt: minutes(1), trust: 'attested', vote: 'not-present', weight: 1 },
+          { createdAt: minutes(2), trust: 'attested', vote: 'not-present', weight: 1 },
         ],
       }),
     );
@@ -232,5 +265,41 @@ describe('abuse limits', () => {
     );
     expect(networkBucket('203.0.113.7')).toBe(networkBucket('::ffff:203.0.113.200'));
     expect(networkBucket('2001:db8:1:2::1')).toBe(networkBucket('2001:db8:1:ffff::2'));
+  });
+});
+
+describe('publication coarsening', () => {
+  it('snaps published positions to a grid coarser than a residential parcel', () => {
+    expect(coarsenForPublication({ latitude: 51.044712, longitude: -114.071883 })).toEqual({
+      latitude: 51.0445,
+      longitude: -114.072,
+    });
+    // Nearby but distinct driveways collapse onto the same published point.
+    expect(coarsenForPublication({ latitude: 51.04462, longitude: -114.07185 })).toEqual(
+      coarsenForPublication({ latitude: 51.04441, longitude: -114.07209 }),
+    );
+  });
+
+  it('rounds public times to five minutes so expiry cannot reveal the creation instant', () => {
+    const created = new Date('2026-11-12T18:03:27.123Z');
+    const expires = new Date(created.getTime() + COMMUNITY_TRUST_RULES.reportLifetimeMs);
+    expect(publicReportedAt(created).toISOString()).toBe('2026-11-12T18:00:00.000Z');
+    expect(publicExpiresAt(expires).toISOString()).toBe('2026-11-12T20:05:00.000Z');
+    expect(
+      publicExpiresAt(
+        new Date(
+          new Date('2026-11-12T18:01:00Z').getTime() + COMMUNITY_TRUST_RULES.reportLifetimeMs,
+        ),
+      ),
+    ).toEqual(publicExpiresAt(expires));
+  });
+
+  it('gives any two mergeable submissions a shared cell lock', () => {
+    const west = { latitude: 51.04999, longitude: -114.07001 };
+    const east = { latitude: 51.05001, longitude: -114.06999 };
+    const westKeys = new Set(cellLockKeys(west).map((key) => key.join(':')));
+    expect(cellLockKeys(east).some((key) => westKeys.has(key.join(':')))).toBe(true);
+    const sorted = [...cellLockKeys(west)].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    expect(cellLockKeys(west)).toEqual(sorted);
   });
 });

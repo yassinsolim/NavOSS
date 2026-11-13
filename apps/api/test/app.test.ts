@@ -21,6 +21,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../src/app.js';
+import { COMMUNITY_READS_PER_NETWORK_PER_HOUR } from '../src/community-routes.js';
 import { CalgaryRoadEventProviderError } from '../src/calgary-road-event-provider.js';
 import { DriveBcRoadEventProviderError } from '../src/drivebc-road-event-provider.js';
 import { DriveBcTrafficCameraProviderError } from '../src/drivebc-traffic-camera-provider.js';
@@ -1134,6 +1135,22 @@ describe('community reports without a database', () => {
       url: '/v2/community/reports',
     });
     expect(read.statusCode).toBe(503);
+  });
+
+  it('rate limits public report reads per network', async () => {
+    const app = await createTestApp({ communityReports: null });
+    const read = () =>
+      app.inject({
+        method: 'GET',
+        query: { east: '-114', north: '51.1', south: '51', west: '-114.1' },
+        url: '/v2/community/reports',
+      });
+    for (let index = 0; index < COMMUNITY_READS_PER_NETWORK_PER_HOUR; index += 1) {
+      expect((await read()).statusCode).toBe(503);
+    }
+    const limited = await read();
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toMatchObject({ code: 'rate_limited' });
   });
 
   it('rejects oversized or inverted bounding boxes before touching storage', async () => {
