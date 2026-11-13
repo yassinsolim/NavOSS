@@ -126,6 +126,7 @@ import {
 import { laneStrip } from '@/features/navigation/lane-guidance';
 import {
   navigationCameraBearing,
+  navigationCameraCenter,
   toggleNavigationMapOrientation,
 } from '@/features/navigation/navigation-camera';
 import {
@@ -140,7 +141,7 @@ import {
   getUpcomingGuidanceStep,
   getUpcomingManeuvers,
 } from '@/features/navigation/route-progress';
-import { selectedRouteOf } from '@/features/navigation/route-ui-state';
+import { selectedRouteOf, tripEndNotice } from '@/features/navigation/route-ui-state';
 import { useSafetyCameraAlert } from '@/features/navigation/use-safety-camera-alert';
 import type { VehicleMatchStatus } from '@/features/navigation/vehicle-puck';
 import { fetchAppConfig, searchPlaces } from '@/lib/api';
@@ -296,8 +297,10 @@ export function useMapController() {
 
   const session = useNavigationSession({
     onFix: location.setNavigationFix,
-    onTripEnded: () => {
+    onTripEnded: (reason) => {
       setIsIdleCameraFollowing(true);
+      const ended = tripEndNotice(reason);
+      if (ended !== undefined) showNotice(ended);
     },
     routeState,
     setRouteSource: planner.setRouteSource,
@@ -1304,6 +1307,10 @@ export function useMapController() {
         ? 'off-route'
         : 'matched';
   const vehicleCoordinate = matchedCoordinate ?? userCoordinate;
+  const followCenter = navigationCameraCenter(
+    vehicleCoordinate,
+    routeState.type === 'navigating' ? selectedRoute?.geometry : undefined,
+  );
   const navigationBearing =
     routeState.type === 'navigating'
       ? navigationCameraBearing(
@@ -1512,6 +1519,7 @@ export function useMapController() {
       isNavigationFollowing: isNavigationCameraFollowing,
       navigationBearing,
       onChange: handleCameraChange,
+      followCenter,
       recenter: stable.recenter,
       vehicleCoordinate,
     },

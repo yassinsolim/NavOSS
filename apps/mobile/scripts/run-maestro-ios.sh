@@ -29,13 +29,16 @@ curl --fail --silent --output /dev/null http://127.0.0.1:3001/health
 curl --fail --silent --output /dev/null http://localhost:8081/status
 
 xcrun simctl boot "$device_id" >/dev/null 2>&1 || true
-open -a Simulator --args -CurrentDeviceUDID "$device_id"
+# Showing the device is a convenience: Maestro drives a headless simulator. Xcode 27 ships no
+# Simulator.app (Device Hub replaced it), and a missing window must not fail the run.
+open -a Simulator --args -CurrentDeviceUDID "$device_id" 2>/dev/null || true
 xcrun simctl bootstatus "$device_id" -b
 installed_app="$(xcrun simctl get_app_container "$device_id" org.navoss.mobile app)"
 staged_directory="$(mktemp -d "${TMPDIR:-/tmp}/navoss-maestro-app.XXXXXX")"
 staged_app="$staged_directory/NavOSS.app"
 maestro_log="$(mktemp "${TMPDIR:-/tmp}/navoss-maestro.XXXXXX.log")"
 maestro_debug="$staged_directory/maestro-debug"
+maestro_output="$staged_directory/maestro-output"
 ditto "$installed_app" "$staged_app"
 trap 'rm -rf "$staged_directory"; rm -f "$maestro_log"' EXIT HUP INT TERM
 xcrun simctl terminate "$device_id" org.navoss.mobile >/dev/null 2>&1 || true
@@ -52,8 +55,10 @@ xcrun simctl openurl \
 
 run_maestro() {
   rm -rf "$maestro_debug"
-  if maestro --device "$device_id" test --debug-output "$maestro_debug" "$flow_file" >"$maestro_log" 2>&1; then
+  rm -rf "$maestro_output"
+  if maestro --device "$device_id" test --debug-output "$maestro_debug" --test-output-dir "$maestro_output" "$flow_file" >"$maestro_log" 2>&1; then
     cat "$maestro_log"
+    sh "$(dirname "$0")/maestro-screenshots.sh" "$maestro_output"
     return 0
   else
     exit_code=$?

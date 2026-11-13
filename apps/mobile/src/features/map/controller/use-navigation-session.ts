@@ -50,7 +50,8 @@ export function useNavigationSession({
   setRouteState,
 }: {
   onFix: (coordinate: Coordinate | undefined, courseDegrees: number | undefined) => void;
-  onTripEnded: () => void;
+  /** Called on every snapshot without a trip; `reason` once when the core ended a trip itself. */
+  onTripEnded: (reason?: NativeNavigationSnapshot['tripEndReason']) => void;
   routeState: RouteUiState;
   setRouteSource: (source: RouteSource | undefined) => void;
   setRouteState: Dispatch<SetStateAction<RouteUiState>>;
@@ -63,6 +64,7 @@ export function useNavigationSession({
   const [routeStatus, setRouteStatus] = useState<NavigationRouteStatus>('tracking');
   const [rerouteCount, setRerouteCount] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
+  const reportedEndReasonRef = useRef<NativeNavigationSnapshot['tripEndReason']>(undefined);
 
   const applySnapshot = useEffectEvent((next: NativeNavigationSnapshot) => {
     if (next.stateVersion < stateVersionRef.current) return;
@@ -74,12 +76,18 @@ export function useNavigationSession({
     setStepIndex(next.guidance?.stepIndex ?? 0);
     if (next.trip === undefined) {
       adoptedTripRef.current = undefined;
-      onTripEnded();
+      const reason =
+        next.tripEndReason !== undefined && reportedEndReasonRef.current === undefined
+          ? next.tripEndReason
+          : undefined;
+      reportedEndReasonRef.current = next.tripEndReason;
+      onTripEnded(reason);
       setRouteState((current) =>
         current.type === 'navigating' || current.type === 'arrived' ? { type: 'idle' } : current,
       );
       return;
     }
+    reportedEndReasonRef.current = undefined;
     // Snapshots arrive about once a second. Rebuilding the route copies every polyline, so it
     // happens only when the core reports a different route or a different phase of it.
     const trip = next.trip;

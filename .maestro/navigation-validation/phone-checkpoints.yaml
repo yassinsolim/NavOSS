@@ -73,9 +73,9 @@ appId: org.navoss.mobile
 - inputText: 'Central Library'
 - tapOn: 'Search stops'
 - extendedWaitUntil:
-    visible: 'Add Central Library as a stop'
+    visible: 'Add Central Library as a stop.*'
     timeout: 20000
-- tapOn: 'Add Central Library as a stop'
+- tapOn: 'Add Central Library as a stop.*'
 - assertVisible: 'Move Central Library up'
 - tapOn: 'Move Central Library up'
 - tapOn: 'Apply route stops'
@@ -83,13 +83,13 @@ appId: org.navoss.mobile
     visible: 'Start navigation'
     timeout: 20000
 - assertVisible: 'Edit route stops'
-- takeScreenshot: '/tmp/navoss-validation-phone-preview'
+- takeScreenshot: 'navoss-validation-phone-preview'
 - tapOn: 'Start navigation'
 - extendedWaitUntil:
     visible: 'End navigation'
     timeout: 20000
 - assertVisible: 'Share ETA'
-- takeScreenshot: '/tmp/navoss-validation-phone-guidance'
+- takeScreenshot: 'navoss-validation-phone-guidance'
 - tapOn: 'Report road condition'
 - assertVisible: 'Report Crash'
 - assertVisible: 'Report Road closed'
@@ -100,7 +100,11 @@ appId: org.navoss.mobile
 - assertVisible: 'Report Other hazard'
 - assertVisible: 'Report Stopped vehicle'
 - assertVisible: '(?i).*saved privately on this iPhone for two hours and not shown to other drivers.*'
-- takeScreenshot: '/tmp/navoss-validation-phone-report'
+- takeScreenshot: 'navoss-validation-phone-report'
 - tapOn: 'Cancel report'
 - tapOn: 'End navigation'
-- assertVisible: 'Route preview'
+# Ending a trip returns to Explore (the trip's route is not kept as a preview).
+- extendedWaitUntil:
+    visible: 'Search places'
+    timeout: 10000
+- assertNotVisible: 'End navigation'

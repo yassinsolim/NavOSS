@@ -352,18 +352,30 @@ export function SafetyCameraAlertBanner({
  * coral only when the core reports it over the limit plus the driver's tolerance.
  */
 export function DrivingStatus({
+  creditsHeight,
   roadName,
   sheetPosition,
   speed,
 }: {
+  /** Height of the map-credit labels below; the readouts sit above them, never over them. */
+  creditsHeight: number;
   roadName: string | undefined;
   sheetPosition: SharedValue<number>;
   speed: SpeedReadout | undefined;
 }) {
-  const style = useAnimatedStyle(() => ({ bottom: sheetPosition.value + CONTROL_MARGIN + 44 }));
+  const clearance = Math.max(creditsHeight, 36) + space.sm;
+  const style = useAnimatedStyle(() => ({
+    bottom: sheetPosition.value + CONTROL_MARGIN + clearance,
+  }));
+  // Re-measure the road name when Dynamic Type changes mid-trip (see `ManeuverBanner`).
+  const { fontScale } = useWindowDimensions();
   if (speed === undefined && roadName === undefined) return null;
   return (
-    <Animated.View pointerEvents="none" style={[guidanceStyles.drivingStatus, style]}>
+    <Animated.View
+      key={String(fontScale)}
+      pointerEvents="none"
+      style={[guidanceStyles.drivingStatus, style]}
+    >
       {speed !== undefined && (
         <View
           accessibilityLabel={speed.accessibilityLabel}
@@ -578,6 +590,10 @@ export function TripSheet({
   const styles = useStyles();
   const detents = tripSheetDetents(metrics);
   const sound = audioModeOption(audioMode);
+  // As in the maneuver banner: iOS keeps text measured at the old size when Dynamic Type changes
+  // mid-trip ("End" drawn as "E…", the arrival time and action labels dropped). Keying the rows
+  // on the font scale makes them measure again.
+  const { fontScale } = useWindowDimensions();
   const matchStatusLabel = positionEstimated
     ? 'position estimated, waiting for GPS'
     : matchStatus === 'matched'
@@ -625,7 +641,7 @@ export function TripSheet({
       initialDetent={detents.initial}
       position={position}
     >
-      <View style={styles.tripSummary}>
+      <View key={`summary-${String(fontScale)}`} style={styles.tripSummary}>
         <View
           accessibilityLabel={`Navigation status, ${matchStatusLabel}, ${rerouteDetail}, ${cameraDetail}, arrive ${arrival}, ${formatDuration(durationSeconds)}, ${formatDistance(distanceMeters)}`}
           accessible
@@ -654,10 +670,12 @@ export function TripSheet({
           label="End"
           onPress={onEnd}
           size="driving"
+          // The trip metrics give way at large text sizes; the End control never truncates.
+          style={styles.tripEnd}
           variant="danger"
         />
       </View>
-      <View style={styles.tripActions}>
+      <View key={`actions-${String(fontScale)}`} style={styles.tripActions}>
         <TripAction
           accessibilityHint="Opens guidance settings: sound, rerouting and speed warning"
           accessibilityLabel={`Guidance sound, ${sound.label}`}
@@ -761,7 +779,11 @@ export function ArrivalSheet({
         style={[styles.arrival, { paddingBottom: Math.max(bottomInset, space.lg) }]}
       >
         <View style={styles.arrivalSummary}>
-          <View style={styles.arrivalIcon}>
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={styles.arrivalIcon}
+          >
             <SymbolView
               name={{ android: 'flag', ios: 'flag.checkered' }}
               size={28}
@@ -1012,6 +1034,7 @@ const useStyles = createThemedStyles(({ colors }) =>
     },
     tripArrival: { ...typography.largeTitle, color: colors.text },
     tripDetails: { gap: space.lg, paddingHorizontal: space.md },
+    tripEnd: { flexShrink: 0 },
     tripMetrics: { flex: 1 },
     tripReveal: { flex: 1 },
     tripRemaining: { ...typography.headline, color: colors.textSecondary },

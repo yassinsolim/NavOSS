@@ -1,5 +1,5 @@
 import { SymbolView } from 'expo-symbols';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { ReduceMotion, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 
 import { TAB_BAR_HEIGHT } from '@/features/map/overlay-layout';
@@ -73,8 +73,11 @@ export function AppTabBar({
   onSelect: (tab: AppTab) => void;
 }) {
   const styles = useStyles();
+  // Re-measure the tab labels when Dynamic Type changes while the app is open (see ExploreSheet).
+  const { fontScale } = useWindowDimensions();
   return (
     <View
+      key={String(fontScale)}
       accessibilityRole="tablist"
       style={[styles.bar, { height: TAB_BAR_HEIGHT + bottomInset, paddingBottom: bottomInset }]}
     >

@@ -872,6 +872,9 @@ public final class NavOSSNavigationModule: Module {
       "rerouteMode": state.rerouteMode.rawValue,
       "speedingState": state.speedingState.rawValue,
     ]
+    if let tripEndReason = state.tripEndReason {
+      payload["tripEndReason"] = tripEndReason.rawValue
+    }
     payload.merge(NavOSSCommunityBridge.navigationAlertsPayload()) { current, _ in current }
 
     if let speedMetersPerSecond = snapshot.speedMetersPerSecond {

@@ -1,5 +1,5 @@
 import { SymbolView } from 'expo-symbols';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -38,6 +38,8 @@ export interface MapControlsProps {
   showRecenter: boolean;
   /** Credit and coverage of the community traffic layer while it is on. */
   trafficStatus: { accessibilityLabel: string; text: string } | undefined;
+  /** Reports the height of the map-credit labels, so guidance readouts can sit above them. */
+  onCreditsHeightChange?: (height: number) => void;
 }
 
 /**
@@ -53,6 +55,7 @@ export function MapControls({
   metrics,
   mode,
   onLocate,
+  onCreditsHeightChange,
   onOpenAbout,
   onOpenMapPreferences,
   onOpenReport,
@@ -69,6 +72,7 @@ export function MapControls({
   useRenderCounter('MapControls');
   const { colors } = useTheme();
   const styles = useStyles();
+  const { fontScale } = useWindowDimensions();
   const guidance = mode === 'guidance';
   const followLimit = Math.round(metrics.windowHeight * 0.56);
   const minimumBottom = metrics.bottomInset + CONTROL_MARGIN;
@@ -127,7 +131,15 @@ export function MapControls({
       </View>
 
       <Animated.View pointerEvents="box-none" style={[styles.bottomGroup, bottomGroupStyle]}>
-        <View pointerEvents="box-none" style={styles.credits}>
+        <View
+          // Re-measure the credit labels when Dynamic Type changes while the app is open.
+          key={String(fontScale)}
+          onLayout={(event) => {
+            onCreditsHeightChange?.(Math.ceil(event.nativeEvent.layout.height));
+          }}
+          pointerEvents="box-none"
+          style={styles.credits}
+        >
           {problems.length > 0 && (
             <View accessibilityLiveRegion="polite" style={[styles.creditPill, styles.problemPill]}>
               <SymbolView

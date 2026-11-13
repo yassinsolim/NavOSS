@@ -247,6 +247,12 @@ export interface NativeNavigationSnapshot {
   speedingState?: NativeSpeedingState;
   stateVersion: number;
   trip?: NativeCarPlayTrip;
+  /**
+   * Why the last trip ended without the driver ending it; present only while no trip is active.
+   * `restored-trip-off-route`: a trip restored after relaunch was dropped because the first fix
+   * was off its route.
+   */
+  tripEndReason?: 'restored-trip-off-route';
 }
 
 export type NativeCarPlayGuidancePhase = 'arrived' | 'navigating' | 'preview';

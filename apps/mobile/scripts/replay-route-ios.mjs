@@ -6,7 +6,13 @@ import { RouteResponseSchema, SearchResponseSchema } from '@navoss/contracts';
 
 const apiUrl = process.env.NAVOSS_API_URL ?? 'http://127.0.0.1:3001';
 const simulatorName = process.env.NAVOSS_SIMULATOR_NAME ?? 'NavOSS iPhone 15 Pro Max';
-const destinationQuery =
+// The replay must drive to the place the app is navigating to. The Maestro flow that starts the
+// trip (`.maestro/start-airport-simulation.yaml`) types `Airport` and taps the first row named
+// `Calgary International Airport…`, so the same search text and the same rule pick it here.
+// Searching for the full name instead returns other places of that name first (the airport
+// grounds, a kilometre from the terminal), and the replay then drives away from the trip.
+const searchText = process.env.NAVOSS_SIMULATION_SEARCH_TEXT ?? 'Airport';
+const destinationName =
   process.env.NAVOSS_SIMULATION_DESTINATION ?? 'Calgary International Airport';
 const speedMetersPerSecond = Number(process.env.NAVOSS_SIMULATION_SPEED_MPS ?? '25');
 const intervalSeconds = Number(process.env.NAVOSS_SIMULATION_INTERVAL_SECONDS ?? '1');
@@ -108,17 +114,17 @@ if (headDistanceMeters > 0 && tailDistanceMeters > 0) {
 const searchUrl = new URL('/v1/search', apiUrl);
 const searchResponse = SearchResponseSchema.parse(
   await fetch(searchUrl, {
-    body: JSON.stringify({ limit: 8, q: destinationQuery }),
+    body: JSON.stringify({ limit: 8, q: searchText }),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
   }).then((response) => response.json()),
 );
-const destination =
-  searchResponse.results.find((result) => result.name === destinationQuery) ??
-  searchResponse.results[0];
+const destination = searchResponse.results.find((result) =>
+  result.name.startsWith(destinationName),
+);
 
 if (destination === undefined) {
-  throw new Error(`No destination matched: ${destinationQuery}`);
+  throw new Error(`Searching "${searchText}" returned no place named ${destinationName}.`);
 }
 
 const routeResponse = RouteResponseSchema.parse(

@@ -33,6 +33,14 @@ struct NavOSSNavigationServiceState: Sendable {
   let speedingState: NavOSSSpeedingState
   let stateVersion: UInt64
   let trip: NavOSSCarPlayTrip?
+  /// Why the last trip ended without the driver ending it; `nil` while a trip is active.
+  let tripEndReason: NavOSSTripEndReason?
+}
+
+/// A trip the core ended on its own, which the phone tells the driver about.
+public enum NavOSSTripEndReason: String, Sendable {
+  /// A trip restored after relaunch was dropped because the first fix was off its route.
+  case restoredTripOffRoute = "restored-trip-off-route"
 }
 
 /// Interval of the navigation clock while guidance is active.
@@ -90,6 +98,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private let speechSynthesizer = AVSpeechSynthesizer()
   private var stateVersion: UInt64 = 0
   private var validatesPersistedNavigation = false
+  private var tripEndReason: NavOSSTripEndReason?
 
   init(
     activeTripStore: NavOSSActiveTripStore = NavOSSActiveTripStore(),
@@ -231,7 +240,12 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   }
 
   public func clearNavigation() {
+    clearNavigation(endReason: nil)
+  }
+
+  private func clearNavigation(endReason: NavOSSTripEndReason?) {
     lock.lock()
+    tripEndReason = endReason
     let update = navigationSession.clear()
     navigationGeneration &+= 1
     let generation = navigationGeneration
@@ -417,7 +431,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     lock.unlock()
     switch persistedNavigationDecision(versionedUpdate) {
     case .discard:
-      clearNavigation()
+      clearNavigation(endReason: .restoredTripOffRoute)
     case .publish:
       publish(versionedUpdate)
       evaluateReroute(for: versionedUpdate)
@@ -548,7 +562,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     }
     switch persistedNavigationDecision(versionedUpdate) {
     case .discard:
-      clearNavigation()
+      clearNavigation(endReason: .restoredTripOffRoute)
     case .publish:
       publish(versionedUpdate)
       evaluateReroute(for: versionedUpdate)
@@ -1189,7 +1203,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       safetyCameraAlert: safetyCameraMonitor.activeAlert,
       speedingState: speedingMonitor.state,
       stateVersion: stateVersion,
-      trip: update.trip
+      trip: update.trip,
+      tripEndReason: update.trip == nil ? tripEndReason : nil
     )
   }
 
@@ -1498,6 +1513,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       speechPlanner.reset()
       speedingMonitor.reset()
       self.validatesPersistedNavigation = validatesPersistedNavigation
+      tripEndReason = nil
       stateVersion &+= 1
       if persist {
         activeTripStore.save(trip)

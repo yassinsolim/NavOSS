@@ -14,4 +14,4 @@ appId: org.navoss.mobile
     visible: 'Map with .* official safety camera symbols.*'
     timeout: 20000
 - assertVisible: 'Search places'
-- takeScreenshot: '/tmp/navoss-camera-marker-icons'
+- takeScreenshot: 'navoss-camera-marker-icons'

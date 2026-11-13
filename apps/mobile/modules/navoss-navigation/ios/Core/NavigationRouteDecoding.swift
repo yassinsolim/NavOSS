@@ -255,7 +255,7 @@ func navigationTrips(
         distanceMeters: step.distanceMeters,
         durationSeconds: step.durationSeconds,
         geometry: try navigationCoordinates(step.geometry),
-        instruction: step.instruction,
+        instruction: navOSSPresentedInstruction(step.instruction, maneuverType: step.maneuverType),
         maneuverType: step.maneuverType,
         roadName: step.roadName,
         spokenInstruction: spoken[index],

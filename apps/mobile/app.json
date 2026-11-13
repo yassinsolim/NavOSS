@@ -92,7 +92,8 @@
           "locationAlwaysPermission": false,
           "locationWhenInUsePermission": "NavOSS uses your precise location to show your position and provide active turn-by-turn navigation, including while your phone is locked or connected to CarPlay. Location is not retained after navigation ends, except the place of a road report you choose to share.",
           "isIosBackgroundLocationEnabled": true,
-          "isAndroidBackgroundLocationEnabled": false
+          "isAndroidBackgroundLocationEnabled": false,
+          "motionUsagePermission": "NavOSS does not use motion and fitness activity. Apple requires this notice because the Expo location component NavOSS links can read it, and NavOSS never asks it to."
         }
       ]
     ],
