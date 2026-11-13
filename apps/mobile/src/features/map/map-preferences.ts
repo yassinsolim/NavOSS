@@ -13,9 +13,11 @@ const OPEN_FREE_MAP_STYLE_ROOT = 'https://tiles.openfreemap.org/styles';
  * builds always use OpenFreeMap.
  */
 function hostedStyleRoot(): string {
-  const override = process.env.EXPO_PUBLIC_DEBUG_MAP_STYLE_ROOT;
+  // `unknown`, as in `getApiBaseUrl`: `process.env` is only typed where Expo's generated
+  // `expo-env.d.ts` exists, which a clean checkout (and CI) does not have.
+  const override: unknown = process.env.EXPO_PUBLIC_DEBUG_MAP_STYLE_ROOT;
   const development = typeof __DEV__ !== 'undefined' && __DEV__;
-  return development && override !== undefined && override !== ''
+  return development && typeof override === 'string' && override !== ''
     ? override
     : OPEN_FREE_MAP_STYLE_ROOT;
 }
