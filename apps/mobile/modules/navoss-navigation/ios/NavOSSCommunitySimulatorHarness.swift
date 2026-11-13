@@ -110,8 +110,9 @@ import Foundation
             let availability = await community.availability()
             let counts = await community.trafficOutcomeCounts()
             let alerts = community.navigationAlerts()
+            let phase = NavOSSNavigationService.shared.currentState().navigation.phase
             log(
-              "watch traffic=\(availability.trafficSharing) uploads=\(counts.sorted { $0.key < $1.key }) reportAlert=\(alerts.reportAlert?.reportId ?? "-") stillThere=\(alerts.stillTherePrompt?.reportId ?? "-")"
+              "watch phase=\(phase) traffic=\(availability.trafficSharing) uploads=\(counts.sorted { $0.key < $1.key }) reportAlert=\(alerts.reportAlert?.reportId ?? "-") stillThere=\(alerts.stillTherePrompt?.reportId ?? "-")"
             )
           }
         default:
