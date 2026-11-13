@@ -53,6 +53,9 @@ const cases = expandCases(casesPayload);
 const benchmarkId = Array.isArray(casesPayload)
   ? 'regional-route-quality'
   : casesPayload.benchmarkId;
+const routePath = Array.isArray(casesPayload)
+  ? '/v1/routes'
+  : (casesPayload.routePath ?? '/v1/routes');
 if (
   !Array.isArray(casesPayload) &&
   casesPayload.expectedCaseCount !== undefined &&
@@ -128,6 +131,18 @@ function analyze(routeCase, route, response, latencyMs, avoidHighways) {
     durationMinutes: route.durationSeconds / 60,
     geometryPoints: route.geometry.length,
     geometryRatio: geometryDistanceMeters / route.distanceMeters,
+    laneManeuvers: route.steps.filter((step) => (step.lanes?.length ?? 0) > 0).length,
+    signpostManeuvers: route.steps.filter(
+      (step) => step.signpost !== undefined || step.exitNumber !== undefined,
+    ).length,
+    currentRoadNameCoverage:
+      route.steps.filter((step) => step.currentRoadName !== undefined).length / route.steps.length,
+    knownSpeedLimitSegments:
+      route.speedLimits?.filter((limit) => limit.status === 'known').length ?? 0,
+    unknownSpeedLimitSegments:
+      route.speedLimits?.filter((limit) => limit.status === 'unknown').length ?? 0,
+    unlimitedSpeedLimitSegments:
+      route.speedLimits?.filter((limit) => limit.status === 'unlimited').length ?? 0,
     latencyMs,
     maximumSegmentMeters,
     originOffsetMeters: distanceMeters(positionCoordinate(route.geometry[0]), routeCase.origin),
@@ -174,6 +189,8 @@ function analyze(routeCase, route, response, latencyMs, avoidHighways) {
     failures.push('destination access');
   }
   if (metrics.spokenCoverage < 0.75) failures.push('spoken instruction coverage');
+  if (metrics.laneManeuvers < (routeCase.minimumLaneManeuvers ?? 0))
+    failures.push('missing interchange lane guidance');
   if (Math.abs(metrics.stepRatio - 1) > 0.03) failures.push('step distance');
   if (response.source.traffic !== 'unavailable') failures.push('traffic posture');
   if (response.degraded !== false) failures.push('degraded route source');
@@ -201,7 +218,7 @@ function analyze(routeCase, route, response, latencyMs, avoidHighways) {
 
 async function runCase(routeCase, avoidHighways) {
   const startedAt = performance.now();
-  const response = await fetch(new URL('/v1/routes', apiUrl), {
+  const response = await fetch(new URL(routePath, apiUrl), {
     body: JSON.stringify({
       alternatives: 1,
       destination: routeCase.destination,
@@ -307,6 +324,7 @@ const summary = {
   apiUrl,
   benchmarkDefinitionHash,
   benchmarkId,
+  routePath,
   failed: failures.length,
   generatedAt: new Date().toISOString(),
   passed: results.length - failures.length,

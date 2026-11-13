@@ -17,6 +17,7 @@ apps/mobile/android
 apps/mobile/ios
 data/downloads
 data/generated
+artifacts
 docs/release/carplay-request
 *.mbtiles
 *.pmtiles

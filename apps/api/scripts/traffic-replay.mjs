@@ -27,7 +27,7 @@
 //   TRAFFIC_REPLAY_ORIGIN             "lat,lon" (default downtown Calgary)
 //   TRAFFIC_REPLAY_DESTINATION        "lat,lon" (default Calgary International Airport)
 //   TRAFFIC_REPLAY_VALHALLA_ROUTE_URL take the drive from this Valhalla /route endpoint instead
-//                                     of the API, for a local graph outside NavOSS coverage
+//                                     of the API; replay positions must remain inside AB+BC.
 //
 // Each installation is a software development key, which a production server
 // (COMMUNITY_ATTESTATION_MODE=enforce) refuses. The positions are synthetic; never point this at

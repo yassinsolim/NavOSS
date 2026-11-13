@@ -10,8 +10,9 @@ server pipeline as built, the contract the app must follow, what the design does
 protect against, and what is deliberately left for later.
 
 Status: the server is implemented and off by default (`COMMUNITY_TRAFFIC_MODE=off`). No released
-app uploads anything yet. The phone switch, the upload client, the map layer and the `/v2/routes`
-wiring are later work. With few contributors very little will be published.
+app uploads anything yet. The v2 route hook now applies published community speeds and preserves the
+service's returned route order; phone upload/switch and map-layer integration remain client work.
+With few contributors very little will be published.
 
 **This is not an anonymity system and makes no formal anonymity claim.** It is data minimisation
 plus a contributor threshold. The section [What this does not protect against](#what-this-does-not-protect-against)
@@ -49,6 +50,18 @@ phone (sharing on, navigating, App Attest installation registered)
 Code lives in `apps/api/src/traffic/`; contracts in `packages/contracts/src/traffic.ts`. All four
 routes are under `/v2`: nothing under `/v1` was added or changed, and no shipped client calls
 them.
+
+Traffic batches use the shared sourced Alberta/BC province polygons before trimming and matching,
+the same eligibility predicate as search/routing and attested community reports. The optional
+`COMMUNITY_TRAFFIC_BOUNDS` envelope may restrict that area but cannot authorize Saskatchewan, the
+US, Yukon or the Northwest Territories. Recorded Liechtenstein replay tests inject an explicit
+fixture-only area; there is no environment bypass of production province eligibility.
+
+`/v2/routes` is connected to `TrafficService.enrichRoutes`: `route.congestion` aligns one-to-one
+with route geometry segments, `route.traffic.observedFraction` states the released-data share,
+and `source.trafficSource` identifies NavOSS community data. That source sets `source.traffic`
+to `live`; a route without `traffic` in the same response is unavailable for that route.
+Off/collecting modes return the original route fields and order without a community source.
 
 ## Contributors: attested installations, unlinkable in storage
 
@@ -654,17 +667,17 @@ updates the installation's counter and `last_active_at`, as every attested reque
 
 ## Configuration
 
-| Variable                                                                      | Default               | Notes                                                                            |
-| ----------------------------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------- |
-| `COMMUNITY_TRAFFIC_MODE`                                                      | `off`                 | `off`, `collect` (form cohorts, publish and store nothing), `live`               |
-| `VALHALLA_TRACE_URL`                                                          | from `VALHALLA_URL`   | `trace_attributes` endpoint; must be a local endpoint when the mode is not `off` |
-| `COMMUNITY_TRAFFIC_MIN_CONTRIBUTORS`                                          | `3`                   | 3 to 50                                                                          |
-| `COMMUNITY_TRAFFIC_TRIP_TRIM_METERS`                                          | `400`                 | 400 to 2,000; advertised to the app                                              |
-| `COMMUNITY_TRAFFIC_ROUTE_MIN_COVERAGE`                                        | `0.5`                 | 0.1 to 1                                                                         |
-| `COMMUNITY_TRAFFIC_RATE_LIMIT_GLOBAL`                                         | `6000`                | Authenticated batches per 10 minutes                                             |
-| `COMMUNITY_TRAFFIC_BOUNDS`                                                    | Alberta + BC          | `west,south,east,north`; for local testing against another graph                 |
-| `APP_ATTEST_*`, `COMMUNITY_ATTESTATION_MODE`, `COMMUNITY_INSTALLATION_SECRET` | see community reports | Required for uploads: without them no credential is issued                       |
-| `PGHOST` and the other `PG*` variables                                        | unset                 | Unset uses an in-memory release store, and no attestation, for development only  |
+| Variable                                                                      | Default               | Notes                                                                             |
+| ----------------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------- |
+| `COMMUNITY_TRAFFIC_MODE`                                                      | `off`                 | `off`, `collect` (form cohorts, publish and store nothing), `live`                |
+| `VALHALLA_TRACE_URL`                                                          | from `VALHALLA_URL`   | `trace_attributes` endpoint; must be a local endpoint when the mode is not `off`  |
+| `COMMUNITY_TRAFFIC_MIN_CONTRIBUTORS`                                          | `3`                   | 3 to 50                                                                           |
+| `COMMUNITY_TRAFFIC_TRIP_TRIM_METERS`                                          | `400`                 | 400 to 2,000; advertised to the app                                               |
+| `COMMUNITY_TRAFFIC_ROUTE_MIN_COVERAGE`                                        | `0.5`                 | 0.1 to 1                                                                          |
+| `COMMUNITY_TRAFFIC_RATE_LIMIT_GLOBAL`                                         | `6000`                | Authenticated batches per 10 minutes                                              |
+| `COMMUNITY_TRAFFIC_BOUNDS`                                                    | Alberta + BC          | `west,south,east,north`; can only narrow the provincial coverage, never extend it |
+| `APP_ATTEST_*`, `COMMUNITY_ATTESTATION_MODE`, `COMMUNITY_INSTALLATION_SECRET` | see community reports | Required for uploads: without them no credential is issued                        |
+| `PGHOST` and the other `PG*` variables                                        | unset                 | Unset uses an in-memory release store, and no attestation, for development only   |
 
 The privacy limits are enforced when the service is built (`assertTrafficPrivacyLimits`), not
 only when the environment is read: k below 3, a trip trim below 400 m, a batch trim below 100 m,

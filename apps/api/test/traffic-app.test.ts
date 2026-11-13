@@ -36,6 +36,7 @@ import {
   driveBatch,
   fakeAttestation,
   FIXTURE_SETTINGS,
+  isFixtureTrafficCoordinate,
   JAMMED_GAPS,
   NOW,
   stubbedMatcher,
@@ -70,6 +71,7 @@ async function createTrafficApp(
   const clock = (): Date => new Date(nowMs);
   const stub = stubbedMatcher();
   const service = createTrafficService({
+    isInCoverage: isFixtureTrafficCoordinate,
     attestation: attestation ?? undefined,
     clock,
     mapMatcher: stub.matcher,
@@ -414,6 +416,7 @@ describe('community traffic over HTTP', () => {
 
     // Issued by another process (or before a restart): not accepted here.
     const other = createTrafficService({
+      isInCoverage: isFixtureTrafficCoordinate,
       attestation: fakeAttestation(),
       clock: () => NOW,
       mapMatcher: stubbedMatcher().matcher,
@@ -618,6 +621,7 @@ describe('community traffic over HTTP', () => {
       finishMatch = resolve;
     });
     const service = createTrafficService({
+      isInCoverage: isFixtureTrafficCoordinate,
       attestation: fakeAttestation(),
       clock: () => NOW,
       mapMatcher: {
@@ -724,6 +728,7 @@ describe('community traffic over HTTP', () => {
     const build = (mode: TrafficSettings['mode']) => {
       const failures: string[] = [];
       const service = createTrafficService({
+        isInCoverage: isFixtureTrafficCoordinate,
         attestation: fakeAttestation(),
         mapMatcher: stubbedMatcher().matcher,
         onMaintenanceFailure: (failure) => failures.push(failure),
@@ -795,6 +800,7 @@ describe('community traffic over HTTP', () => {
         const failures: string[] = [];
         let failPurge: (error: Error) => void = () => undefined;
         const service = createTrafficService({
+          isInCoverage: isFixtureTrafficCoordinate,
           attestation: fakeAttestation(),
           mapMatcher: stubbedMatcher().matcher,
           onMaintenanceFailure: (failure) => failures.push(failure),
@@ -982,6 +988,8 @@ describe('route traffic enrichment', () => {
     const service = createTrafficService({
       attestation: fakeAttestation(),
       clock: () => new Date(nowMs),
+      // The recorded drive is in Liechtenstein, outside the provincial service coverage.
+      isInCoverage: isFixtureTrafficCoordinate,
       mapMatcher: {
         matchTrace: (points) => stub.matcher.matchTrace(points),
         // Walking the route takes until after the next boundary.
@@ -995,7 +1003,10 @@ describe('route traffic enrichment', () => {
     });
     const upload = async (device: string, gaps?: readonly number[]) => {
       const capturedAt = new Date(Math.floor(nowMs / 60_000) * 60_000 - 300_000).toISOString();
-      await service.ingest(driveBatch(await credentialFor(service, device), gaps, capturedAt));
+      // A batch refused here (for example as outside coverage) would leave nothing to read.
+      expect(
+        await service.ingest(driveBatch(await credentialFor(service, device), gaps, capturedAt)),
+      ).toEqual({ status: 'accepted' });
     };
     // 18:05 publishes a jam; a new cohort that drove freely replaces it at 18:10.
     for (const device of ['phone-1', 'phone-2', 'phone-3']) await upload(device, JAMMED_GAPS);

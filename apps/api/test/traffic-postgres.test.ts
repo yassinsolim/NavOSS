@@ -35,6 +35,7 @@ import {
   driveBatch,
   fakeAttestation,
   FIXTURE_SETTINGS,
+  isFixtureTrafficCoordinate,
   JAMMED_GAPS,
   NOW,
   stubbedMatcher,
@@ -134,6 +135,7 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
         : null;
     const attestation: TrafficAttestation = communityReports ?? fakeAttestation();
     const service = createTrafficService({
+      isInCoverage: isFixtureTrafficCoordinate,
       attestation,
       clock,
       mapMatcher: stub.matcher,
@@ -284,6 +286,7 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
   it('refuses to start collecting on a database that was not migrated, but starts when off', async () => {
     const build = (mode: TrafficSettings['mode']) =>
       createTrafficService({
+        isInCoverage: isFixtureTrafficCoordinate,
         attestation: fakeAttestation(),
         mapMatcher: stubbedMatcher().matcher,
         settings: { ...FIXTURE_SETTINGS, mode },

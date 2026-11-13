@@ -387,6 +387,16 @@ describe('place opening-hours status', () => {
     ).toBe('open');
   });
 
+  it('uses Alberta time outside Calgary but does not guess a province-wide BC zone', () => {
+    const now = new Date('2026-01-15T20:05:00Z');
+    expect(
+      placeOpenStatus(place('Mo-Su 10:00-21:00', { latitude: 53.5461, longitude: -113.4938 }), now),
+    ).toBe('open');
+    expect(
+      placeOpenStatus(place('Mo-Su 10:00-21:00', { latitude: 55.7596, longitude: -120.2377 }), now),
+    ).toBeUndefined();
+  });
+
   it('omits the closing-soon claim across a real daylight-saving transition', () => {
     // Sunday 01:30 America/Edmonton on 2025-11-02, the actual fall-back date in this runtime's
     // time zone data: the next 60 real minutes cross the transition, so the wall-clock distance

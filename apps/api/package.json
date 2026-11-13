@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "check": "tsc -p tsconfig.json --noEmit",
@@ -15,6 +18,7 @@
     "traffic:replay": "node ./scripts/traffic-replay.mjs",
     "test:search:live": "node ./scripts/search-quality.mjs",
     "test:routes:live": "node ./scripts/route-quality.mjs",
+    "test:routes:alberta-bc": "ROUTE_QUALITY_CASES=./scripts/route-quality-alberta-bc.json node ./scripts/route-quality.mjs",
     "test:routes:calgary-50": "ROUTE_QUALITY_CASES=./scripts/route-quality-calgary-50.json node ./scripts/route-quality.mjs"
   },
   "dependencies": {
@@ -25,6 +29,7 @@
     "fastify-type-provider-zod": "catalog:",
     "openapi-types": "catalog:",
     "pg": "8.16.3",
+    "protobufjs": "7.5.4",
     "zod": "catalog:"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import type { CommunityAssertion, TrafficProbeBatchRequest } from '@navoss/contracts';
+import type { CommunityAssertion, Coordinate, TrafficProbeBatchRequest } from '@navoss/contracts';
 
 import { CommunityReportError } from '../src/community-reports.js';
 import type { Position } from '../src/traffic/geo.js';
@@ -59,6 +59,12 @@ export const FIXTURE_SETTINGS: TrafficSettings = {
   bounds: { east: 9.7, north: 47.3, south: 47, west: 9.4 },
   mode: 'live',
 };
+
+/** Explicit fixture-only replay coverage; no environment option can replace production polygons. */
+export function isFixtureTrafficCoordinate({ latitude, longitude }: Coordinate): boolean {
+  const { east, north, south, west } = FIXTURE_SETTINGS.bounds;
+  return longitude >= west && longitude <= east && latitude >= south && latitude <= north;
+}
 
 export const NOW = new Date('2026-11-12T18:00:30Z');
 export const CAPTURED_AT = '2026-11-12T17:55:00Z';

@@ -28,6 +28,7 @@ import {
   DRIVE,
   driveBatch,
   FIXTURE_SETTINGS,
+  isFixtureTrafficCoordinate,
   JAMMED_GAPS,
   NOW,
   requestUrl,
@@ -532,6 +533,7 @@ describe('privacy limits', () => {
   ])('refuses to build a service with %o', (weaker) => {
     expect(() =>
       createTrafficService({
+        isInCoverage: isFixtureTrafficCoordinate,
         mapMatcher: stubbedMatcher().matcher,
         settings: { ...FIXTURE_SETTINGS, ...weaker },
       }),

@@ -6,3 +6,4 @@ dist
 node_modules
 pnpm-lock.yaml
 apps/api/test/fixtures
+apps/api/src/valhalla-proto-3.8.2.json
