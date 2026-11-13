@@ -1,5 +1,7 @@
 # macOS development handoff
 
+> **Historical runbook.** Written at the build 26 checkpoint and kept for the bootstrap steps. Current project state is in [AGENTS.md](../../AGENTS.md) and [docs/release/testflight.md](../release/testflight.md); the latest shipped build is 0.1.0 (70). The maintainer's Mac now has Xcode 27.2 (no CarPlay Simulator window); hosted release runners use Xcode 26.6. Statements below about build 26, its checksum and next steps are obsolete.
+
 This runbook moves NavOSS development to another Mac without treating chat history, caches, or generated files as project state.
 
 ## Canonical state

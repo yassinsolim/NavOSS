@@ -1,6 +1,6 @@
 # Contributing to NavOSS
 
-Thanks for helping build privacy-first navigation in the open. NavOSS is an early Calgary technical alpha, not a production navigation or safety service.
+Thanks for helping build privacy-first navigation in the open. NavOSS is a technical beta (iPhone and CarPlay, service currently covering Calgary and Kelowna), not a production navigation or safety service. Read the status section of the [README](README.md#status) before assuming a capability exists: several server features are merged but not deployed.
 
 ## Before You Start
 
@@ -25,7 +25,7 @@ Run the API locally:
 HOST=0.0.0.0 PORT=3001 corepack pnpm --filter @navoss/api dev
 ```
 
-Native iOS and simulator instructions are in the [README](README.md#ios-simulator).
+Native iOS and simulator instructions are in the [README](README.md#run-it-locally). Changes to what a driver sees, hears or is told follow the product-design skill in [`.agents/skills/product-design`](.agents/skills/product-design/SKILL.md); user-facing claims must match the deployed service and [docs/privacy.md](docs/privacy.md).
 
 ## Pull Requests
 
@@ -42,6 +42,8 @@ corepack pnpm test
 corepack pnpm build
 git diff --check
 ```
+
+CI also runs the PostGIS suites (community reports and traffic). Locally they skip without `NAVOSS_TEST_DATABASE_URL` and `NAVOSS_TRAFFIC_TEST_DATABASE_URL`; run them against a PostGIS database when you change those areas. For a regression test that guards a security or privacy fix, remove the fix once and confirm the test fails.
 
 Run the Swift and Maestro suites when changing native navigation or user journeys. Explain any gate that could not run.
 

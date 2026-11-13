@@ -489,13 +489,13 @@ public func navOSSCarPlayCommunityFailureText(_ failure: NavOSSCommunityFailure)
 /// CarPlay detail line for "Share traffic speeds" while it is switched on.
 public func navOSSCarPlayTrafficSharingDetail(_ state: NavOSSTrafficSharingState) -> String {
   switch state {
-  case .sharing: "Sharing anonymous speeds, never trip ends"
+  case .sharing: "Sharing speeds without your identity; trip starts and ends are left out"
   case .startsLater: "Starts tomorrow for this iPhone"
   case .paused: "Paused for a few minutes"
   case .unavailable(.notAccepting), .unavailable(.unsupported):
     "Not available yet"
   case .unavailable: "Not sharing on this trip"
-  case .off, .ready, .starting: "Shares anonymous speeds during guidance, never trip ends"
+  case .off, .ready, .starting: "Shares speeds without your identity during guidance; trip starts and ends are left out"
   }
 }
 

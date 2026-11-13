@@ -54,7 +54,7 @@
     "ios": "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer EXPO_PUBLIC_API_URL=http://127.0.0.1:3001 expo run:ios",
     "ios:device": "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer expo run:ios --device",
     "web": "expo start --web",
-    "lint": "expo lint",
+    "lint": "node ./scripts/lint.mjs",
     "test": "vitest run",
     "test:native:ios": "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test --package-path modules/navoss-navigation",
     "test:carplay-splice": "node ./scripts/analyze-carplay-splice.mjs",

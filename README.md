@@ -1,11 +1,11 @@
 <p align="center">
-	<img src="apps/mobile/assets/images/icon.png" alt="NavOSS upward chevron icon" width="128" height="128">
+	<img src="apps/mobile/assets/images/icon.png" alt="NavOSS icon: a folded yellow navigation arrow on a teal background" width="128" height="128">
 </p>
 
 <h1 align="center">NavOSS</h1>
 
 <p align="center">
-	Account-free, privacy-first navigation built in the open, beginning with Calgary.
+	Account-free, privacy-first navigation for iPhone and CarPlay, built in the open, starting in Calgary.
 </p>
 
 <p align="center">
@@ -19,207 +19,162 @@
 	<img src="https://img.shields.io/badge/API-AGPL--3.0-E65342" alt="API license: AGPL-3.0-only">
 </p>
 
-NavOSS is an independently designed navigation project using OpenStreetMap-derived data, MapLibre, and Valhalla. The current milestone is a Calgary iPhone technical beta; Android and broader coverage come after the iOS navigation and operational gates are earned.
+NavOSS is an independently designed navigation app built on OpenStreetMap-derived data, MapLibre and Valhalla. There is no account, no advertising and no analytics SDK. Search, routing, spoken guidance, rerouting and fixed safety-camera alerts run against a self-hosted service in Alberta; route matching, guidance and speech run on the phone. The current milestone is an iPhone and CarPlay technical beta distributed through TestFlight. Android and broader coverage come after the iOS navigation and operations gates are earned.
 
 > [!WARNING]
-> NavOSS is pre-release software. It has no live traffic or production service guarantee and must not be your only source for navigation, closures, road rules, or safety-camera information. Have a passenger operate controls while a vehicle is moving.
+> NavOSS is pre-release software. The service it talks to today has no live traffic and no production guarantee. Do not rely on it as your only source for navigation, closures, road rules or safety-camera information. Have a passenger operate the controls while a vehicle is moving.
 
-## Project Status
+## Status
 
-| Area               | Current state                                                                                                                   |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| iOS candidate      | Places, saved destinations, search, route choices, spoken background guidance, ETA sharing, arrival, CarPlay, and camera alerts |
-| Native core        | Swift route ownership, course/continuity matching, rerouting, speech, recovery, and arrival hysteresis                          |
-| API                | Public Fastify ingress with self-hosted Alberta Nominatim/Valhalla and Calgary camera data                                      |
-| Automated evidence | Contract/API/mobile/site/Swift suites, simulator journeys, two iPhone layouts, and a 17-variant Calgary route matrix            |
-| Current TestFlight | Discovery and CarPlay build 15 is uploaded; Apple processing, installation, and physical validation remain                      |
-| Android            | Planned after the iOS navigation core is stable                                                                                 |
+This table separates three things that are easy to confuse. Read it before assuming a capability exists.
+
+### In the app on TestFlight now: build 0.1.0 (70)
+
+Built from `afa4067` (native navigation contract v8, the phone UI before the refresh). It talks to the deployed production service, which covers Calgary and Kelowna.
+
+| Area                 | What the build does                                                                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Map and search       | MapLibre map, place and address search, tappable places with OpenStreetMap details, Explore categories, saved and recent destinations (stored only on the device) |
+| Routing and guidance | Route choices, avoid highways, native spoken turn-by-turn that continues with the phone locked, rerouting, arrival, ETA sharing through the system share sheet    |
+| CarPlay              | Native CarPlay scene with search, route preview, Start/End, Dashboard, maneuvers, estimates and reconnect recovery                                                |
+| Safety cameras       | Official City of Calgary intersection safety cameras with direction-aware alerts                                                                                  |
+| Road reports         | The report button stores up to 25 two-hour private drafts on the device. Nothing is sent or shown to other drivers                                                |
+| Not in this build    | Live traffic, lane guidance, signposts, shared road reports, offline maps, the refreshed phone UI, instrument-cluster and Siri route-preview support              |
+
+### Merged on `main`, not yet shipped in a build
+
+Everything below is in the repository and covered by tests, but no TestFlight build contains it.
+
+| Area                           | State on `main`                                                                                                                                                                                                                                                                                                |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phone UI refresh (#78)         | Design system (`src/theme`, `src/ui`), gesture bottom sheets, a decomposed map screen with controller hooks, light and dark, loading/empty/error/offline/location-denied states                                                                                                                                |
+| Native contract v10 (#75, #84) | Indexed route matching, geometry-derived guidance, reroute consent modes, native camera alerts and speeding state, and `/v2/routes` step metadata. The client falls back to `/v1/routes` against a server that lacks `/v2/routes`                                                                              |
+| CarPlay quality pass (#77)     | Course-up camera, drawn maneuver symbols, "then" guidance, optional lane guidance, faster search and voice recovery, reroute and camera alerts, instrument-cluster scene, Siri route preview. Not exercised on a head unit                                                                                     |
+| Lanes and signposts (#84)      | Phone and CarPlay can show lanes and exit signs, but only when the server returns them, which the deployed server does not                                                                                                                                                                                     |
+| Offline maps app side (#83)    | On-device offline maps, routing (Valhalla 3.9.1 via Rallista valhalla-mobile) and search, with an Offline maps sheet and a CarPlay/native fallback. No bundles are hosted and the deployed server has no manifest, so the app shows "Offline maps are not available yet". Privacy manifest declares Disk Space |
+| Community client (#85)         | Native Swift client for community road reports and traffic, shared by phone and CarPlay, with App Attest and a JS bridge. Reports and traffic sharing are off by default. The phone-side report UI is not merged yet. CarPlay has report and Community settings screens                                        |
+
+### Server-side code merged but NOT deployed
+
+The production service (`https://navoss-api.yassin.app`) still runs the older API image: Calgary and Kelowna, no `/v2/routes`, no community or traffic endpoints, no offline manifest. It cannot be redeployed yet. The clients degrade quietly against it.
+
+| Area                                        | State                                                                                                                                                                                                                                             |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Alberta and British Columbia coverage (#79) | Polygon-enforced province coverage from Statistics Canada boundaries; validated locally on a real Alberta and BC graph (#86). Not live                                                                                                            |
+| `/v2/routes` lanes, signposts (#79, #86)    | Lane, signpost, speed-limit and current-road data. Not live                                                                                                                                                                                       |
+| Community road reports (#73)                | Account-free, App Attest-backed reports, publication modes `shadow` (default), `attested`, `corroborated`. Not live                                                                                                                               |
+| Community traffic (#76, #82, #86)           | Live traffic built from opted-in driver speeds, published only where at least three installations drove a road. Off by default (`COMMUNITY_TRAFFIC_MODE=off`). Not live                                                                           |
+| Offline bundles (#80)                       | A reproducible pipeline for dated Alberta and BC map, routing and search bundles and a manifest endpoint. There is no hosting for the bundles. The on-device side is merged on `main` (#83) but unshipped, so offline maps do not exist for users |
+
+Before any of these can reach users, the server must be deployed, migrated and enabled in a deliberate order, and a new build must ship. See [the next-build checklist](docs/release/next-build-checklist.md).
 
 ## Architecture
 
 ```text
-apps/mobile                  Expo + React Native iOS/Android client
-	modules/navoss-navigation Native Swift navigation core and Expo bridge
-apps/api                     Fastify search, routing, config, and camera API
-packages/contracts           Shared Zod request/response contracts
-docs                         Architecture, data provenance, tests, and release evidence
+apps/mobile                        Expo + React Native iOS client
+	src/theme, src/ui                Design tokens and primitives (colour roles, type, space, sheets)
+	src/features/map                 One map screen; behaviour in controller/* hooks
+	src/features/navigation          Guidance presentation; JS bridge to the native core
+	modules/navoss-navigation        Native Swift core: matching, guidance, rerouting, speech,
+	                                 routes client, community and traffic client (App Attest)
+	carplay/ios                      CarPlay main, Dashboard and cluster scenes, App Intent
+apps/api                           Fastify API: search, routing (v1 and v2), config, cameras,
+                                   community reports, community traffic, offline manifest
+apps/site                          Static website (CSP script-src 'none', no third-party requests)
+packages/contracts                 Shared strict Zod contracts (coverage, routes, reports, traffic, offline)
+infra                              Compose stack, Valhalla/Nominatim ops, offline bundle pipeline
+docs                               Architecture, data provenance, privacy, tests, release evidence
+.agents/skills/product-design      Product-design skill for agents (surfaces, copy rules, states)
 ```
 
-The mobile client remains independent of provider-specific route models. Public Photon and FOSSGIS services are development dependencies only; release builds require a stable HTTPS API and production-capable search, routing, and tile services.
+- **Design system.** The phone UI uses role-based colour tokens for light and dark, a type scale, spacing, radii and motion in `apps/mobile/src/theme`, and shared primitives in `src/ui` (`Button`, `Banner`, `StateView`, `BottomSheet`, ...). Sheets are driven by one Reanimated value on the UI thread. Contrast is tested.
+- **Controller hooks.** `map-screen.tsx` is a composition root; behaviour lives in `features/map/controller/*`. Camera frames never re-render the screen.
+- **Native contract v10.** The Swift module owns location, matching, guidance, rerouting with consent modes, speech, camera eligibility and phone/CarPlay state. The phone and CarPlay are consumers. The routes client discovers `/v2/routes` through `/v2/config` and falls back to `/v1/routes`.
+- **Community and traffic services.** Reports are structured, expiring and account-free, authenticated with Apple App Attest (`/v2/community/*`). Traffic is built from opted-in driver speeds and published only past a three-installation threshold (`/v2/traffic/*`). Both are off by default on the server and off by default in the app. Design: [community reports](docs/architecture/community-reports.md), [community traffic](docs/architecture/community-traffic.md).
+- **Offline pipeline.** `infra/offline` builds checksummed regional PMTiles, Valhalla 3.9.1 graphs and SQLite search, described by a manifest. The app side (#83) is merged on `main`, unshipped, and has no bundles to download yet.
+- **Coverage follows the server.** The app names the coverage the server declares and never invents it.
 
-## Implemented
+The mobile client does not depend on provider-specific route models. Public Photon and FOSSGIS services are development dependencies only; release builds require a stable HTTPS API.
 
-- Strict TypeScript pnpm/Turbo monorepo
-- Shared Zod contracts for coordinates, coverage, health, readiness, problems, and search
-- Fastify 5 API with Calgary-bounded OpenStreetMap search and deterministic fixture fallback
-- Self-hosted Alberta Nominatim search and Valhalla routing behind provider-aware readiness checks
-- Expo SDK 57 iOS development client with a full-screen MapLibre Calgary map
-- Tappable rendered places with proximity-safe self-hosted OpenStreetMap details, Directions, Share, call/site actions, optional Google-rendered rating/count attribution, and an explicit external reviews link
-- Explore quick categories plus grouped More categories, native local Home/Work/favourites/recents, private correction drafts, and structured two-hour road-report interaction tests stored only on the device
-- Details-first destination flow with explicit Directions, ETA/distance, alternatives, route preview, Start, live maneuver banner, and End
-- Privacy-minimal system-sheet place and ETA sharing without Contacts access, current coordinates, route geometry, or live tracking
-- Persistent map presets and content controls, including green Day/Auto-light highway emphasis and restored Night/Minimal landmarks
-- Native iOS background location, route projection, rerouting, spoken guidance, recovery, arrival, a map-matched puck, and a course-following MapLibre camera
-- Dedicated CarPlay tester build with native search, route preview, Start/End, `CPNavigationSession`, maneuvers, travel estimates, and reconnect recovery
-- All current official Calgary intersection-safety cameras on the map, with direction-safe route-ahead visual and spoken alerts
-- Runtime request and response validation plus generated OpenAPI 3.1
-- Search text/proximity sent in JSON POST bodies; routine access logging disabled and host logs bounded to seven days
+## Run it locally
 
-## Local API
-
-Use Node.js 24.18.0 and pnpm 11.13.1 through Corepack.
+Toolchain: Node.js 24.18.0 and pnpm 11.13.1 through Corepack (`mise.toml` pins both). The maintainer's Mac currently has Xcode 27.2; CI and release runners use Xcode 26.6. MapLibre needs the custom NavOSS development client; Expo Go cannot run this app.
 
 ```sh
 corepack pnpm install --frozen-lockfile
-corepack pnpm --filter @navoss/api dev
 ```
 
-The API binds to `127.0.0.1:3000` by default. Set `HOST` or `PORT` to override it.
-
-- `GET /health`
-- `GET /ready`
-- `GET /v1/config`
-- `GET /v1/cameras`
-- `GET /v2/cameras?region=toronto-on`
-- `POST /v1/search` with a JSON body
-- `POST /v1/routes`
-- `GET /openapi.json`
-
-Local development routes through Valhalla using OpenStreetMap data. The default is the public FOSSGIS development service and is visibly labeled as degraded in the app. Override it with a self-hosted endpoint:
-
-```sh
-VALHALLA_URL=http://127.0.0.1:8002/route HOST=0.0.0.0 PORT=3001 \
-	corepack pnpm --filter @navoss/api dev
-```
-
-The public service is for development validation, not production. Selecting a destination sends the chosen origin and destination coordinates to the configured routing endpoint only when the user requests a route.
-
-Place and address search uses the public Photon development endpoint by default and is restricted to the Calgary coverage bounds. Each search sends the entered text, English language preference, result limit, and, when location is available, approximate latitude/longitude to Photon. Photon continuously derives its results from OpenStreetMap. If Photon is unavailable, NavOSS falls back to deterministic Calgary fixtures and labels that fallback in the app.
-
-Override Photon with a self-hosted endpoint by setting `PHOTON_URL`. The public endpoint is a fair-use development dependency with throttling and no availability guarantee; it is not suitable for production traffic or a claim of exhaustive address coverage.
-
-Production uses `https://navoss-api.yassin.app` through an outbound Cloudflare Tunnel. Nominatim and Valhalla run on the operator-controlled Alberta VM and have no public ports. Search and route payloads are processed for each response and discarded; Caddy/Fastify access logging is disabled. The deployed route-quality gate passes all 17 Calgary variants with 73 ms p95 API latency.
-
-Fixed red-light and speed-on-green camera locations come from The City of Calgary's monthly Intersection Safety Cameras dataset. The API validates and caches all current official records; the phone receives normalized public locations without sending user location to Calgary Open Data. Source details, terms, and alert safeguards are documented in [docs/data-sources.md](docs/data-sources.md).
-
-## Navigation Status
-
-The replacement candidate supports route geometry, ETA, distance, alternatives, avoid-highway routing, major-road summaries, selectable arrow/car markers, live maneuver distance, static ETA sharing, native rerouting, confirmed arrival, and explicit Start/End navigation. On iOS, `NavOSSNavigation` owns active Core Location, route geometry, map matching, progress, maneuver speech, rerouting, arrival, and transient recovery. React installs a route only after explicit Start and consumes versioned native snapshots. The module scores route candidates by distance, course alignment, and continuity with previously accepted progress; course is used only at 2 m/s or faster so stationary heading noise does not steer matching.
-
-Accuracy-aware hysteresis confirms a departure after three credible off-route fixes and recovery after two precise on-route fixes. Native reroutes preserve destination and preferences, cancel stale work, and keep the existing route active when an update fails. Arrival requires two consecutive accurate endpoint fixes, at least 98% route progress, and an accuracy-adjusted destination distance within 30 meters. Camera alerts require route proximity, forward progress, and direction alignment, and each camera is announced at most once per trip.
-
-This is still a technical beta, not full turn-by-turn parity. The geometric matcher does not yet use road-network topology or speed/time-based transition probabilities. Lane presentation, live traffic, traffic-aware ETA, offline routing, and driver-visible community incident reports remain unavailable. The report control currently records only expiring local interaction-test drafts; it does not submit or publish them. Background guidance and spoken instructions are implemented but still require sustained on-road evidence.
-
-## CarPlay
-
-Apple approved the managed CarPlay Navigation App capability for `org.navoss.mobile` on 2026-07-21. CarPlay is a native scene in the same iPhone app rather than a second React Native screen. The dedicated `production-carplay` profile enables native search, route preview, Start/End, background progress, maneuvers, estimates, and reconnect continuity; normal builds omit the restricted scene and entitlement. Real wired/wireless CarPlay validation is still required. The similarly named deprecated macOS `com.apple.developer.maps` capability is unrelated and is not enabled.
-
-Phone-side Share ETA uses the system share sheet and does not read Contacts. A custom recent-contacts browser is not an approved CarPlay navigation-template surface and will not be added; any future CarPlay sharing control remains gated on explicit template-compliance review.
-
-The implementation boundary, entitlement gate, standard CarPlay flow, Dashboard support, cluster/HUD metadata, Expo prebuild strategy, and validation matrix are documented in [docs/architecture/carplay.md](docs/architecture/carplay.md).
-
-## iOS Simulator
-
-The local setup uses Xcode 26.6, iOS Simulator 26.5, CocoaPods 1.17.0, and Maestro 2.6.1. MapLibre requires the custom NavOSS development client; Expo Go cannot run this app.
-
-Start the API on the dedicated mobile-development port:
+Start the API on the mobile-development port (3000 may be taken):
 
 ```sh
 HOST=0.0.0.0 PORT=3001 corepack pnpm --filter @navoss/api dev
 ```
 
-In another terminal, build or reopen NavOSS in the iOS Simulator:
+Without a configuration the API uses the public FOSSGIS Valhalla and Photon development services and labels the result as degraded; point `VALHALLA_URL` and `PHOTON_URL` at self-hosted services to avoid that. Community reports and traffic need PostGIS, migrations (`node dist/migrate.js`), App Attest settings and, for the Simulator, `COMMUNITY_ATTESTATION_MODE=allow-development`; see [infra/compose/README.md](infra/compose/README.md).
+
+Build and open the iOS development client, then use Metro for JavaScript-only changes:
 
 ```sh
 corepack pnpm --filter @navoss/mobile ios
-```
-
-After the first native build, JavaScript-only changes need only Metro:
-
-```sh
 corepack pnpm --filter @navoss/mobile start:simulator
 ```
 
-Run the Calgary Tower simulator flow while the API and Metro are running:
+Notes that cost time:
 
-```sh
-corepack pnpm --filter @navoss/mobile test:e2e:ios
-```
+- Xcode 27.2 has no CarPlay Simulator window, and Device Hub disables it for simulators. Interactive CarPlay cannot be run here. `corepack pnpm validate:navigation:ios --carplay-only` renders the production CarPlay map with a labelled mock of the template chrome.
+- If the dev client cannot reach Metro, start Metro with `REACT_NATIVE_PACKAGER_HOSTNAME=127.0.0.1` and without `--localhost` (otherwise it can bind only to `::1`), and launch the app on its own instead of through the dev-client deep link.
+- An active trip is restored on relaunch: end navigation first. Set the simulator location immediately before requesting a route.
+- `apps/mobile/ios` is generated and ignored; change config, plugins, `carplay` or `modules`, then regenerate.
 
-Start an Airport guidance session with the car marker and replay its route as interpolated simulator GPS updates:
+Device testing with a personal team, EAS profiles and the TestFlight pipeline are documented in [docs/development/macos-handoff.md](docs/development/macos-handoff.md), [docs/release/ci-cd.md](docs/release/ci-cd.md) and [docs/release/testflight.md](docs/release/testflight.md).
 
-```sh
-corepack pnpm --filter @navoss/mobile test:simulate:ios
-```
+Useful API endpoints on a local server: `GET /health`, `GET /ready`, `GET /v1/config`, `GET /v2/config`, `POST /v1/search`, `POST /v1/routes`, `POST /v2/routes`, `GET /v1/cameras`, `GET /openapi.json`. Search and route requests are sent as JSON bodies, processed in memory and discarded; routine access logging is disabled.
 
-The replay streams every distinct Valhalla route vertex to Simulator so interpolation follows curves and ramps instead of cutting between a small sample of points. It defaults to 25 m/s. Set `NAVOSS_SIMULATION_SPEED_MPS` or `NAVOSS_SIMULATION_INTERVAL_SECONDS` to change playback. This validates foreground location progress and presentation only; it does not synthesize or validate live traffic.
-
-## Physical iPhone
-
-Local device testing does not require a paid Apple Developer membership. It does require Xcode signing with an Apple ID or Personal Team.
-
-1. Connect the unlocked iPhone by USB-C and tap **Trust** on both devices if prompted.
-2. On the iPhone, enable **Settings > Privacy & Security > Developer Mode**, restart, then confirm **Turn On**.
-3. In Xcode, open **Settings > Accounts** and add the Apple ID used for local signing if it is not already present.
-4. Open `apps/mobile/ios/NavOSS.xcworkspace`, select the NavOSS target, and choose your **Personal Team** under **Signing & Capabilities**. Keep **Automatically manage signing** enabled. This choice stays in the ignored local Xcode project and is not committed.
-5. Keep the Mac and iPhone on the same Wi-Fi network. Start the API on `0.0.0.0:3001` as above.
-6. Start Metro with the Mac's current LAN address:
-
-```sh
-EXPO_PUBLIC_API_URL="http://$(ipconfig getifaddr "$(route -n get default | awk '/interface:/ {print $2}')"):3001" \
-	corepack pnpm --filter @navoss/mobile start -- --host lan
-```
-
-7. In another terminal, install NavOSS and select the connected iPhone when prompted:
-
-```sh
-corepack pnpm --filter @navoss/mobile ios:device
-```
-
-The development client loads its JavaScript bundle from Metro, so it stops working after the Mac is disconnected. A TestFlight build embeds that bundle and will not need Metro, but search and routing will still require a stable HTTPS API. A standalone beta therefore needs the regional API/Valhalla stack hosted or another explicitly approved temporary backend; embedding offline routing is a separate later milestone.
-
-The API is intentionally exposed only for local development during this workflow. Stop both development servers when testing is finished.
-
-## Beta release readiness
-
-Build 12 remains the installed internal diagnostic build that supplied the latest feedback. Discovery and CarPlay build 15 is signed, audited, and uploaded to App Store Connect for the internal `testers` group; it still needs Apple processing, TestFlight installation, clean-device/background/real-CarPlay validation, and Beta App Review before external invites.
-
-- [TestFlight beta runbook and GO/NO-GO gates](docs/release/testflight.md)
-- [App Store Connect metadata draft](docs/release/app-store-metadata.md)
-- [Calgary route-quality evidence and Apple/Google worksheet](docs/testing/route-quality.md)
-- [Privacy policy draft](docs/privacy.md)
-- [Support page draft](docs/support.md)
-- [CI/CD and App Store delivery](docs/release/ci-cd.md)
-- [Domain and service naming](docs/operations/domains.md)
-
-## Quality Gates
+## Quality gates
 
 ```sh
 corepack pnpm check
 corepack pnpm lint
 corepack pnpm test
-corepack pnpm --filter @navoss/mobile test:native:ios
-corepack pnpm --filter @navoss/mobile test:e2e:reroute:ios
-corepack pnpm --filter @navoss/mobile test:e2e:arrival:ios
-corepack pnpm --filter @navoss/mobile test:e2e:safety-cameras:ios
-corepack pnpm --filter @navoss/api test:routes:live
-EXPO_PUBLIC_API_URL=https://api.example.org corepack pnpm --filter @navoss/mobile validate:release
 corepack pnpm build
 corepack pnpm format:check
 ```
+
+CI runs those five, plus a check that `THIRD_PARTY_NOTICES.md` is current, native Swift tests, CarPlay generated-source parity and scene declarations, and the **PostGIS suites** (community reports and traffic) against a `postgis/postgis:16-3.5-alpine` service with `NAVOSS_REQUIRE_TEST_DATABASE=1`, so they fail instead of silently skipping. Locally those suites skip when no database variable is set.
+
+For native navigation changes also run `corepack pnpm --filter @navoss/mobile test:native:ios` and a full Xcode compile. Maestro journeys and the iOS validation harness are listed in [apps/mobile/README.md](apps/mobile/README.md) and [docs/testing/navigation-validation.md](docs/testing/navigation-validation.md).
+
+## Limitations
+
+- **Coverage.** The deployed service covers Calgary and Kelowna. Alberta and British Columbia are not live.
+- **No live traffic, lane guidance or signposts** in the deployed service or in build 70. No traffic-aware ETA.
+- **No offline maps for users.** The code is on `main` but unshipped, and no bundle hosting exists. The app needs a connection to the NavOSS service for search and routing.
+- **CarPlay is not validated on a head unit.** Apple's CarPlay Navigation entitlement is approved; real wired and wireless checks are still outstanding.
+- **iOS only.** Android is planned after the iOS navigation core is stable.
+- **Map matching** is geometric; it does not use road-network topology. Background guidance and spoken instructions still need sustained on-road evidence.
+- **Data is incomplete.** OpenStreetMap, City of Calgary and DriveBC data can be missing, wrong or late; camera alerts are informational and do not replace signs and signals.
+- **Single operator.** There is no staffed support, no service-level agreement and no direct support email yet.
+- **External TestFlight is manual** and has not been opened for the new code.
 
 ## Contributing
 
 Issues and focused pull requests are welcome while the technical-beta boundaries remain explicit.
 
-- Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests, DCO sign-off, safety, and data rules.
-- Use the structured [issue forms](https://github.com/yassinsolim/NavOSS/issues/new/choose) for bugs, route-quality reports, and proposals.
+- Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests, DCO sign-off, safety and data rules, and [AGENTS.md](AGENTS.md) for agent and maintainer conventions.
+- Use the structured [issue forms](https://github.com/yassinsolim/NavOSS/issues/new/choose) for bugs, route-quality reports and proposals.
 - Report vulnerabilities privately according to [SECURITY.md](SECURITY.md).
 - Follow the [Code of Conduct](CODE_OF_CONDUCT.md) and [governance model](GOVERNANCE.md).
 
 Never submit private addresses, personal trip traces, credentials, or map data copied from proprietary navigation products.
 
-## Licensing and Attribution
+## More documentation
+
+- [Privacy policy](docs/privacy.md), [data sources](docs/data-sources.md), [support page](docs/support.md)
+- [TestFlight runbook](docs/release/testflight.md), [next-build checklist](docs/release/next-build-checklist.md), [App Store metadata](docs/release/app-store-metadata.md), [App Review readiness](docs/release/app-review.md)
+- [CarPlay architecture](docs/architecture/carplay.md) and [feature parity](docs/testing/carplay-feature-parity.md)
+- [Route-quality evidence](docs/testing/route-quality.md)
+
+## Licensing and attribution
 
 NavOSS uses a directory-based license split:
 
@@ -227,4 +182,4 @@ NavOSS uses a directory-based license split:
 - `apps/api` and future hosted backend/operations/data-pipeline code: AGPL-3.0-only; and
 - documentation and brand assets: all rights reserved unless stated otherwise.
 
-See [LICENSE](LICENSE), [LICENSES/README.md](LICENSES/README.md), and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). OpenStreetMap and City of Calgary data retain their own licenses and attribution requirements; details are in [docs/data-sources.md](docs/data-sources.md).
+See [LICENSE](LICENSE), [LICENSES/README.md](LICENSES/README.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). OpenStreetMap, City of Calgary, DriveBC and other data keep their own licenses and attribution requirements; details are in [docs/data-sources.md](docs/data-sources.md).
