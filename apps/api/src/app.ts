@@ -79,6 +79,7 @@ import {
   type KelownaSafetyFacilityProvider,
 } from './kelowna-safety-facility-provider.js';
 import { createProblem } from './problem.js';
+import { registerOfflineBundleManifest } from './offline-bundle-manifest.js';
 import {
   createConfiguredRouteProvider,
   RouteProviderError,
@@ -267,6 +268,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   );
 
   const typedApp = app.withTypeProvider<ZodTypeProvider>();
+  await app.register(registerOfflineBundleManifest);
 
   typedApp.get(
     '/health',

@@ -275,3 +275,44 @@ public addresses and coordinates. NavOSS includes the Kelowna Main Detachment an
 Police Office at `GET /v2/safety-facilities?region=kelowna-bc`. These markers identify public
 service facilities only. NavOSS does not collect or display patrol, officer, checkpoint, dispatch,
 or live police locations.
+
+## Self-built regional offline data
+
+The build pipeline in [`infra/offline`](../infra/offline/README.md) produces downloadable artifacts,
+not an already-enabled phone/CarPlay offline feature. It uses public, dated Geofabrik Alberta and
+British Columbia PBFs with matching OSM timestamps, provider MD5 verification and recorded SHA-256.
+No tiles are bulk-scraped from OpenFreeMap's public endpoint.
+
+| Component                                        | Source and licence                                                                                                                                                       | Required notices / limitations                                                                                                                                                                                       |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Roads, places, POIs, addresses and routing graph | [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), distributed by [Geofabrik](https://download.geofabrik.de/north-america/canada.html), **ODbL 1.0** | Visible OSM attribution; distribute derived search/routing databases under ODbL and retain the source/alteration information needed by that licence. OSM coverage is incomplete and not a live closure/traffic feed. |
+| Download footprint boundaries                    | [Geofabrik clipping polygons](https://github.com/geofabrik/polygons_download.geofabrik.de), an **OSM produced work under ODbL 1.0**                                      | Attribute OpenStreetMap. These are buffered extract extents, **not official province boundaries**; NavOSS clips its download selections to them and adds a 20 km overlap.                                            |
+| Vector tile schema                               | [OpenMapTiles](https://github.com/openmaptiles/openmaptiles/blob/master/LICENSE.md), **CC BY 4.0** design, **BSD-3-Clause** code                                         | Visible **OpenMapTiles** attribution with its link. The currently built schema is 3.16.0.                                                                                                                            |
+| Low-zoom vector background                       | [Natural Earth](https://www.naturalearthdata.com/about/terms-of-use/), **public domain**                                                                                 | Source acknowledged in the bundle. Offline styles omit the optional online shaded-raster texture; no raster endpoint is needed.                                                                                      |
+| Water/coastline polygons                         | [OSM Data](https://osmdata.openstreetmap.de/data/water-polygons.html), **OSM-derived ODbL 1.0**                                                                          | OSM attribution; retain the locked source snapshot.                                                                                                                                                                  |
+| Lake centreline geometry                         | [OSM Lakelines](https://github.com/acalcutt/osm-lakelines), **ODbL 1.0** data / **MIT** processing                                                                       | OSM attribution; source v12 is checksum-pinned.                                                                                                                                                                      |
+| Time-zone boundaries                             | [Timezone Boundary Builder](https://github.com/evansiroky/timezone-boundary-builder), **ODbL 1.0** OSM-derived data / **MIT** processing                                 | The locked 2026b snapshot is used for graph construction.                                                                                                                                                            |
+| Liberty / Bright offline styles                  | [OpenFreeMap styles](https://github.com/hyperknot/openfreemap-styles), forks of OSM Liberty / OSM Bright                                                                 | **BSD-3-Clause** code, **CC BY 4.0** design; OpenFreeMap integration **MIT**. Original notices are included.                                                                                                         |
+| Positron / Dark offline styles                   | [OpenFreeMap styles](https://github.com/hyperknot/openfreemap-styles), derived from Carto basemaps                                                                       | Carry **BSD-3-Clause / CC BY 4.0** notices and the underlying **CC BY 3.0** credit to Carto, Stamen and Paul Norman. Original style notices are included.                                                            |
+| Noto Sans Regular, Bold and Italic glyphs        | [MapLibre demo glyphs](https://github.com/maplibre/demotiles/tree/gh-pages/font), **SIL Open Font License 1.1**                                                          | The original font licences remain inside the glyph directories. All 256 BMP ranges for each stack are packaged; these are the fonts used by the pinned OpenFreeMap styles.                                           |
+| Sprites                                          | OpenFreeMap's bundled [Maki icons](https://github.com/mapbox/maki), **CC0 1.0**; right arrow **public domain**                                                           | Both 1× and 2× PNG/JSON sprite atlases are packaged with the original integration/style notices.                                                                                                                     |
+
+`sources.lock.json` records the exact source URLs and hashes. `resources.tar.gz` includes the original
+style/font licence texts, `ATTRIBUTION.txt`, and the source inventory. The manifest carries attribution
+records; both phone and CarPlay must keep OSM and OpenMapTiles credits visible when displaying maps.
+
+The builder uses [Planetiler](https://github.com/onthegomap/planetiler) (Apache-2.0) and
+[Valhalla](https://github.com/valhalla/valhalla) (MIT). The pinned mobile wrapper,
+[Rallista valhalla-mobile 0.6.4](https://github.com/Rallista/valhalla-mobile/tree/0.6.4) (MIT), embeds
+Valhalla 3.9.1; offline graphs use that engine while the online Compose service remains on 3.8.2.
+The numerical route comparison and compatibility results are documented in
+[`architecture/offline.md`](architecture/offline.md), without claiming identical online/offline ETAs.
+
+Offline resources are generated locally or obtained from licensed source archives, not under
+OpenFreeMap's public-endpoint bulk-download allowance. Its
+[terms](https://openfreemap.org/tos/) cap user offline downloads at 3,000 tiles or 50 MB and restrict
+automated collection; these self-built province/region bundles do not rely on that allowance.
+
+No user search text, device location, trip history or community speed samples are inputs to the
+offline builder. Search coverage reflects OSM records only: no inferred missing address numbers,
+private feedback, Google reviews, or proprietary traffic geometry are incorporated.

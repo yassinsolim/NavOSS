@@ -140,3 +140,5 @@ export type {
   SearchResult,
   SearchSource,
 } from './search.js';
+
+export { OfflineBundleManifestSchema, type OfflineBundleManifest } from './offline-bundle.js';
