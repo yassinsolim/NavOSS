@@ -1,7 +1,7 @@
 appId: org.navoss.mobile
 ---
 - launchApp
-- tapOn: 'Search Calgary'
+- tapOn: 'Search places'
 - eraseText
 - inputText: 'Airport'
 - assertVisible: 'Select Calgary International Airport.*'

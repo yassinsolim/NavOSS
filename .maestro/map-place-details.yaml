@@ -6,9 +6,9 @@ appId: org.navoss.mobile
     text: 'Close'
     optional: true
 - extendedWaitUntil:
-    visible: 'Search Calgary'
+    visible: 'Search places'
     timeout: 20000
-- tapOn: 'Search Calgary'
+- tapOn: 'Search places'
 - inputText: 'Calgary Tower'
 - assertVisible: 'Select Calgary Tower.*'
 - tapOn: 'Select Calgary Tower.*'
@@ -16,7 +16,7 @@ appId: org.navoss.mobile
     visible: 'Directions'
     timeout: 10000
 - assertVisible: 'Share'
-- assertVisible: 'Reviews'
+- assertVisible: 'Save'
 - tapOn: 'Share'
 - extendedWaitUntil:
     visible: 'Copy'

@@ -11,9 +11,9 @@ appId: org.navoss.mobile
     text: 'Reload'
     optional: true
 - extendedWaitUntil:
-    visible: 'Search Calgary'
+    visible: 'Search places'
     timeout: 20000
-- tapOn: 'Search Calgary'
+- tapOn: 'Search places'
 - eraseText
 - inputText: 'Calgary Tower'
 - assertVisible: 'Select Calgary Tower.*'
@@ -33,9 +33,9 @@ appId: org.navoss.mobile
     text: 'Reload'
     optional: true
 - extendedWaitUntil:
-    visible: 'Search Calgary'
+    visible: 'Search places'
     timeout: 20000
-- tapOn: 'Search Calgary'
+- tapOn: 'Search places'
 - eraseText
 - inputText: 'Calgary Tower'
 - assertVisible: 'Select Calgary Tower.*'

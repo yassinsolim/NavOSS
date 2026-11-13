@@ -9,6 +9,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 }));
 
 import {
+  contributionSubmission,
   createContributionDraft,
   loadContributionDrafts,
   normalizeContributionDrafts,
@@ -117,5 +118,36 @@ describe('local contribution drafts', () => {
       'navoss.contribution-drafts.v1',
       JSON.stringify([secondDraft]),
     );
+  });
+});
+
+describe('contribution submission', () => {
+  it('sends only what the privacy notice lists', () => {
+    const draft = createContributionDraft(
+      'route-issue',
+      '  Turn restriction missing  ',
+      ' Macleod Trail ',
+      new Date('2026-11-12T18:00:00Z'),
+    );
+    const submission = contributionSubmission(draft);
+    expect(Object.keys(submission).sort()).toEqual([
+      'createdAt',
+      'description',
+      'draftId',
+      'locationLabel',
+      'type',
+    ]);
+    expect(submission).toMatchObject({
+      createdAt: '2026-11-12T18:00:00.000Z',
+      description: 'Turn restriction missing',
+      draftId: draft.id,
+      locationLabel: 'Macleod Trail',
+      type: 'route-issue',
+    });
+  });
+
+  it('omits the location label when the tester gave none', () => {
+    const submission = contributionSubmission(createContributionDraft('missing-place', 'New cafe'));
+    expect(submission).not.toHaveProperty('locationLabel');
   });
 });

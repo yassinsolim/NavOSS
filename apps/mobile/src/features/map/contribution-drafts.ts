@@ -110,3 +110,26 @@ export function createContributionDraft(
     type,
   };
 }
+
+export interface ContributionSubmission {
+  createdAt: string;
+  description: string;
+  draftId: string;
+  locationLabel?: string;
+  type: ContributionType;
+}
+
+/**
+ * What leaves the device when feedback is submitted: the type, the description, the optional
+ * place or road label the tester typed, and the time. Nothing else is added here, so the
+ * privacy notice on the Contribute screen stays true by construction.
+ */
+export function contributionSubmission(draft: ContributionDraft): ContributionSubmission {
+  return {
+    createdAt: draft.createdAt,
+    description: draft.description,
+    draftId: draft.id,
+    ...(draft.location === undefined ? {} : { locationLabel: draft.location }),
+    type: draft.type,
+  };
+}

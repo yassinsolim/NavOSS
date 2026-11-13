@@ -38,4 +38,4 @@ appId: org.navoss.mobile
 - assertVisible: 'Open NavOSS support'
 - takeScreenshot: '/tmp/navoss-about-privacy'
 - tapOn: 'Close about and privacy'
-- assertVisible: 'Search Calgary'
+- assertVisible: 'Search places'

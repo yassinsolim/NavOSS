@@ -43,6 +43,29 @@ export const ROUTE_COLORS: Readonly<Record<RouteColor, string>> = {
   violet: '#7152A1',
 };
 
+/**
+ * The preferences that change the basemap style document. Everything else in `MapPreferences`
+ * (route colour, navigation camera, overlay toggles) is drawn by NavOSS's own layers, so changing
+ * it must not rebuild or reload the style.
+ */
+export type MapStyleInputs = Pick<
+  MapPreferences,
+  'showBuildings' | 'showPlaces' | 'showTransit' | 'stylePreset'
+>;
+
+export function mapStyleInputs(preferences: MapStyleInputs): MapStyleInputs {
+  return {
+    showBuildings: preferences.showBuildings,
+    showPlaces: preferences.showPlaces,
+    showTransit: preferences.showTransit,
+    stylePreset: preferences.stylePreset,
+  };
+}
+
+export function isDarkMapStyle(preset: MapStylePreset, colorScheme: ColorSchemeName): boolean {
+  return preset === 'night' || (preset === 'automatic' && colorScheme === 'dark');
+}
+
 const STYLE_SLUGS: Readonly<Record<Exclude<MapStylePreset, 'automatic'>, string>> = {
   contrast: 'bright',
   day: 'liberty',
@@ -278,7 +301,7 @@ function hideLayer(layer: StyleSpecification['layers'][number]): void {
 
 export function customizeMapStyle(
   style: StyleSpecification,
-  preferences: MapPreferences,
+  preferences: MapStyleInputs,
   colorScheme: ColorSchemeName = 'light',
   landmarkStyle: StyleSpecification = style,
 ): StyleSpecification {
@@ -367,7 +390,7 @@ function loadHostedMapStyle(
 }
 
 export async function loadCustomizedMapStyle(
-  preferences: MapPreferences,
+  preferences: MapStyleInputs,
   colorScheme: ColorSchemeName,
   fetchImplementation: typeof fetch = fetch,
 ): Promise<StyleSpecification> {

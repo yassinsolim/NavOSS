@@ -5,6 +5,7 @@ import {
   formatSearchDistance,
   groupRecentSearchResults,
   planPlaceSearch,
+  promoteExactNameMatches,
   rankCategoryResults,
   rankSearchResults,
   searchProximityKey,
@@ -286,5 +287,42 @@ describe('search proximity', () => {
         'skip',
       );
     });
+  });
+});
+
+describe('exact name matches', () => {
+  const place = (id: string, name: string) =>
+    ({
+      category: 'poi',
+      center: { latitude: 51.04, longitude: -114.06 },
+      confidence: 1,
+      id,
+      label: name,
+      name,
+    }) as const;
+  const ranked = [
+    place('a', 'Watermark Tower'),
+    place('b', 'TD Canada Trust Tower'),
+    place('c', 'Calgary Tower'),
+    place('d', 'Dome Tower'),
+  ];
+
+  it('puts the place whose name was typed in full first and keeps the rest in ranked order', () => {
+    expect(promoteExactNameMatches(ranked, ' calgary tower ').map((result) => result.id)).toEqual([
+      'c',
+      'a',
+      'b',
+      'd',
+    ]);
+  });
+
+  it('leaves the ranking alone for a partial name', () => {
+    expect(promoteExactNameMatches(ranked, 'Tower').map((result) => result.id)).toEqual([
+      'a',
+      'b',
+      'c',
+      'd',
+    ]);
+    expect(promoteExactNameMatches(ranked, '')).toEqual(ranked);
   });
 });

@@ -2,7 +2,7 @@ import { requireNativeView } from 'expo';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
+import { createThemedStyles, typography } from '@/theme';
 import { reserveGooglePlaceQuery } from '@/lib/api';
 
 interface NativeGooglePlaceRatingProps {
@@ -28,6 +28,7 @@ export function GooglePlaceRating({
     key: string;
     request: ReturnType<typeof reserveGooglePlaceQuery>;
   } | null>(null);
+  const styles = useStyles();
   const [granted, setGranted] = useState<boolean>();
 
   useEffect(() => {
@@ -74,11 +75,8 @@ export function GooglePlaceRating({
   );
 }
 
-const styles = StyleSheet.create({
-  availability: {
-    color: NavOssColors.muted,
-    fontFamily: NavOssFonts.regular,
-    fontSize: 14,
-    letterSpacing: 0,
-  },
-});
+const useStyles = createThemedStyles(({ colors }) =>
+  StyleSheet.create({
+    availability: { ...typography.footnote, color: colors.textSecondary },
+  }),
+);

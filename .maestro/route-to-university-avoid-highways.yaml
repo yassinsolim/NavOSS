@@ -1,7 +1,7 @@
 appId: org.navoss.mobile
 ---
 - launchApp
-- tapOn: 'Search Calgary'
+- tapOn: 'Search places'
 - eraseText
 - inputText: 'University'
 - assertVisible: 'Select University of Calgary.*'
@@ -13,6 +13,12 @@ appId: org.navoss.mobile
 - extendedWaitUntil:
     visible: 'Start navigation'
     timeout: 20000
+# Avoidances sit above the preview sheet's resting detent.
+- swipe:
+    start: 50%, 60%
+    end: 50%, 25%
+    duration: 400
+- waitForAnimationToEnd
 - tapOn: 'Avoid highways'
 - extendedWaitUntil:
     visible: 'Start navigation'
