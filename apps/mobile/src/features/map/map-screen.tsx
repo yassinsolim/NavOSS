@@ -114,6 +114,7 @@ export function MapScreen() {
   const { overlays, mapPreferences, selectedResult } = c;
   const safetyCameraCount = mapPreferences.showSafetyCameras ? overlays.safetyCameras.length : 0;
   const roadEventCount = mapPreferences.showRoadEvents ? overlays.roadEvents.length : 0;
+  const mapSummary = `Map with ${String(safetyCameraCount)} official safety camera symbols and ${String(roadEventCount)} road events`;
   const selectedPlacePhoneUrl = placePhoneUrl(selectedResult?.details?.phone);
   const selectedPlaceWebsiteUrl = placeWebsiteUrl(selectedResult?.details?.website);
   const guidanceReady =
@@ -128,7 +129,7 @@ export function MapScreen() {
     <View style={styles.container}>
       <StatusBar style={navigating || (exploring && c.darkMap) ? 'light' : 'auto'} />
       <MapCanvas
-        accessibilityLabel={`Map with ${String(safetyCameraCount)} official safety camera symbols and ${String(roadEventCount)} road events`}
+        accessibilityLabel={mapSummary}
         cameraRef={c.cameraRef}
         hidden={!exploring}
         idleCenter={c.camera.idleCenter}
@@ -174,6 +175,16 @@ export function MapScreen() {
         />
       </MapCanvas>
 
+      {/* The map's summary for assistive tech. The native map view exposes only its own label,
+          so the counts live on this thin element at the top edge of the map. */}
+      {exploring && (
+        <View
+          accessibilityLabel={mapSummary}
+          accessible
+          pointerEvents="none"
+          style={[styles.mapSummary, { top: insets.top }]}
+        />
+      )}
       {mapChromeVisible && (
         <MapControls
           attribution={mapAttributionLabel({
@@ -474,5 +485,6 @@ export function MapScreen() {
 const useStyles = createThemedStyles(({ colors }) =>
   StyleSheet.create({
     container: { backgroundColor: colors.background, flex: 1 },
+    mapSummary: { height: 2, left: 0, position: 'absolute', right: 0 },
   }),
 );

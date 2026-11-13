@@ -210,3 +210,19 @@ export function rankCategoryResults(
     })
     .slice(0, limit);
 }
+
+/**
+ * Moves results whose name is exactly what was typed to the front, keeping every other result
+ * in its ranked order. Typing a place's full name should not leave it below nearer places that
+ * merely share a word with it.
+ */
+export function promoteExactNameMatches(
+  results: readonly SearchResult[],
+  query: string,
+): SearchResult[] {
+  const wanted = query.trim().toLocaleLowerCase('en-CA');
+  if (wanted.length === 0) return [...results];
+  const isExact = (result: SearchResult) =>
+    result.name.trim().toLocaleLowerCase('en-CA') === wanted;
+  return [...results.filter(isExact), ...results.filter((result) => !isExact(result))];
+}

@@ -28,7 +28,8 @@ export function MapNoticeToast({
       key={notice.id}
       style={[styles.host, { top }]}
     >
-      <Pressable accessibilityHint="Dismisses this message" onPress={onDismiss}>
+      {/* Not one accessible element: the title and message are read, and matched, separately. */}
+      <Pressable accessible={false} onPress={onDismiss}>
         <Banner
           announce
           message={notice.message}
