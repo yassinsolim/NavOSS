@@ -37,9 +37,7 @@
     "coverage": {
       "displayName": "Calgary and Kelowna service areas",
       "id": "calgary-kelowna-service-areas",
-      "modes": [
-        "driving"
-      ],
+      "modes": ["driving"],
       "serviceAreas": [
         {
           "bounds": {

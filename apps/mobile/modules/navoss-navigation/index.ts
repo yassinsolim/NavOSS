@@ -179,6 +179,16 @@ export interface NativeCommunityBounds {
   west: number;
 }
 
+/**
+ * The phone's own fix backing a vote outside guidance. Native refuses it unless it is at most
+ * 15 s old (5 s of clock skew) with horizontal accuracy within 100 m, as for a route origin.
+ */
+export interface NativeVoteObservation extends NativeNavigationCoordinate {
+  horizontalAccuracyMeters: number;
+  /** Fix time in milliseconds since the Unix epoch. */
+  timestampMs: number;
+}
+
 export interface NativeCommunityReportSubmission extends NativeNavigationCoordinate {
   /**
    * Within 400 m of saved Home/Work or the trip's start, destination or stops a report is
@@ -490,6 +500,7 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   voteCommunityReport(
     reportId: string,
     vote: 'not-present' | 'present',
+    observedAt?: NativeVoteObservation,
   ): Promise<NativeCommunityResult<{ active: boolean }>>;
   withdrawCommunityReport(reportId: string): Promise<NativeCommunityResult>;
 }

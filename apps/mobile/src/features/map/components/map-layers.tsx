@@ -8,8 +8,11 @@ import type {
   SearchResult,
   TrafficCamera,
 } from '@navoss/contracts';
+import type { TrafficCongestionLevel } from '@navoss/contracts';
 import type { FeatureCollection, LineString } from 'geojson';
 import { useMemo } from 'react';
+
+import { communityReportFeatures } from '@/features/community/community';
 
 import { headingConeFeature } from '@/features/map/heading-cone';
 import {
@@ -23,6 +26,7 @@ import {
   trafficCameraFeatures,
 } from '@/features/map/map-features';
 import { ROUTE_COLORS, type RouteColor } from '@/features/map/map-preferences';
+import type { NativeCommunityReport } from '@/features/navigation/native-navigation';
 import { mapAlignedHeadingDegrees } from '@/features/navigation/vehicle-heading';
 import { VehiclePuck, type VehicleStyle } from '@/features/navigation/vehicle-puck';
 import { useRenderCounter } from '@/lib/render-counter';
@@ -72,6 +76,10 @@ function FacingConeLayer({
 
 export interface MapLayersProps {
   alternateRoutes: readonly RouteAlternativeV2[];
+  /** First label layer of the basemap: traffic flow is drawn beneath it when no route is shown. */
+  basemapLabelLayerId: string | undefined;
+  /** Shared reports from other drivers; empty unless the server provides them and they are on. */
+  communityReports: readonly NativeCommunityReport[];
   darkMap: boolean;
   deviceHeadingStore: ValueStore<number | undefined>;
   displayedSelectedRoute: RouteAlternativeV2 | undefined;
@@ -91,6 +99,8 @@ export interface MapLayersProps {
   showUserLocation: boolean;
   torontoSafetyCameras: readonly OfficialSafetyCamera[];
   trafficCameras: readonly TrafficCamera[];
+  /** Community traffic flow; empty unless the driver turned the layer on and the server is live. */
+  trafficFlow: FeatureCollection<LineString, { congestion: TrafficCongestionLevel }>;
   userCoordinate: Coordinate | undefined;
   userHeading: number;
   vehicleCoordinate: Coordinate | undefined;
@@ -105,6 +115,8 @@ export interface MapLayersProps {
  */
 export function MapLayers({
   alternateRoutes,
+  basemapLabelLayerId,
+  communityReports,
   darkMap,
   deviceHeadingStore,
   displayedSelectedRoute,
@@ -122,6 +134,7 @@ export function MapLayers({
   showUserLocation,
   torontoSafetyCameras,
   trafficCameras,
+  trafficFlow,
   userCoordinate,
   userHeading,
   vehicleCoordinate,
@@ -155,6 +168,18 @@ export function MapLayers({
     }),
     [roadEvents],
   );
+  const communityReportData = useMemo(
+    () => communityReportFeatures(communityReports),
+    [communityReports],
+  );
+  // Above the route casing and beneath the route line while a route is drawn, so the route's own
+  // congestion reads first; otherwise beneath the basemap's labels.
+  const trafficPosition =
+    displayedSelectedRoute !== undefined
+      ? { afterId: 'selected-route-casing', key: 'route' }
+      : basemapLabelLayerId !== undefined
+        ? { beforeId: basemapLabelLayerId, key: `label-${basemapLabelLayerId}` }
+        : { key: 'top' };
   const labelColor = darkMap ? '#F2F5F2' : palette.ink;
   const labelHalo = darkMap ? palette.ink : palette.white;
 
@@ -217,10 +242,34 @@ export function MapLayers({
           />
         </GeoJSONSource>
       )}
-      {/* Wave 2 seam: the traffic-flow line layer mounts here, above the route and below every
-          point symbol, coloured from `trafficColors` by speed ratio and gated on its opt-in
-          preference. Draw it under `selected-route-line` with `beforeId` if it should sit
-          beneath the active route. */}
+      {trafficFlow.features.length > 0 && (
+        <GeoJSONSource data={trafficFlow} id="community-traffic-flow">
+          <Layer
+            afterId={trafficPosition.afterId}
+            beforeId={trafficPosition.beforeId}
+            id="community-traffic-flow-line"
+            // A layer's position is fixed when it is added: remount it when the anchor changes.
+            key={trafficPosition.key}
+            layout={ROUND_LINE}
+            paint={{
+              'line-color': [
+                'match',
+                ['get', 'congestion'],
+                'stopped',
+                trafficColors.stopped,
+                'heavy',
+                trafficColors.heavy,
+                'slow',
+                trafficColors.slow,
+                trafficColors.free,
+              ],
+              'line-opacity': 0.92,
+              'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2, 14, 4, 17, 6],
+            }}
+            type="line"
+          />
+        </GeoJSONSource>
+      )}
 
       {isNavigating && userCoordinate !== undefined && vehicleCoordinate !== undefined && (
         <VehiclePuck
@@ -398,10 +447,24 @@ export function MapLayers({
               type="symbol"
             />
           </GeoJSONSource>
-          {/* Wave 2 seam: the community-reports symbol source mounts here, beside the official
-              road-event layers and above them, with its own layer id for hit-testing in
-              `handleMapPress`. */}
         </>
+      )}
+      {/* Driver reports sit above official road events: they are the most recent information,
+          and an unconfirmed report uses its own faded marker. */}
+      {communityReports.length > 0 && (
+        <GeoJSONSource data={communityReportData} id="community-reports-source">
+          <Layer
+            id="community-reports"
+            layout={{
+              'icon-allow-overlap': true,
+              'icon-image': ['get', 'icon'],
+              'icon-offset': ['get', 'offset'],
+              'icon-size': 0.62,
+              'symbol-sort-key': ['case', ['get', 'confirmed'], 1, 0],
+            }}
+            type="symbol"
+          />
+        </GeoJSONSource>
       )}
     </>
   );

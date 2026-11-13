@@ -19,6 +19,27 @@ import {
 import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import {
+  COMMUNITY_REPORT_LAYER_IDS,
+  type CommunityNotice,
+  communityReportDetail,
+  communityReportSymbol,
+  type CommunityReportAction,
+  type GeographicBox,
+  privateDraftNotice,
+  reportFetchBounds,
+  runCommunityReportAction,
+  snapViewBox,
+} from '@/features/community/community';
+import type { CommunitySettingsProps } from '@/features/community/community-sheets';
+import { useCommunityGuidance } from '@/features/community/community-guidance';
+import {
+  trafficFlowAnchorLayerId,
+  trafficFlowFeatures,
+  trafficFlowQuery,
+  trafficFlowStatus,
+} from '@/features/community/traffic-flow';
+import { useCommunity } from '@/features/community/use-community';
 import type { AppTab } from '@/features/map/app-tab-bar';
 import { useMapPreferences, useMapStyle } from '@/features/map/controller/use-map-preferences';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
@@ -80,6 +101,7 @@ import {
   getNavigationPreferences,
   isFavoriteDestination,
   isGooglePlaceRatingAvailable,
+  type NativeCommunityReport,
   type NativeDestinationCatalog,
   nativeDestinationToSearchResult,
   observeCarPlayNavigationEnded,
@@ -136,6 +158,10 @@ const NOTICE_VISIBLE_MS = 5_000;
 
 /** Details of a tapped overlay feature, shown in the map-feature sheet. */
 export interface MapFeatureDetail {
+  /** Why the actions are what they are (driver reports only). */
+  actionHint?: string | undefined;
+  /** Driver reports: answer or withdraw. */
+  actions?: readonly CommunityReportAction[];
   body: string;
   eyebrow: string;
   icon: SymbolName;
@@ -208,6 +234,17 @@ export function useMapController() {
   const [isRouteStopsVisible, setIsRouteStopsVisible] = useState(false);
   const [isGuidanceSettingsVisible, setIsGuidanceSettingsVisible] = useState(false);
   const [featureDetail, setFeatureDetail] = useState<MapFeatureDetail>();
+  // A tapped driver report; its detail is rebuilt from live state so counts stay current.
+  const [selectedCommunityReport, setSelectedCommunityReport] = useState<NativeCommunityReport>();
+  const [communityActionBusy, setCommunityActionBusy] = useState<CommunityReportAction>();
+  const [stillThereBusy, setStillThereBusy] = useState(false);
+  // A report near Home/Work or a trip end, waiting for "Keep it private" or "Share anyway".
+  const [nearPrivateReport, setNearPrivateReport] = useState<{
+    coordinate: Coordinate;
+    type: RoadReportType;
+  }>();
+  // The visible area on the 0.05° grid; changes only when the view crosses a grid line.
+  const [viewBox, setViewBox] = useState<GeographicBox>();
   const [notice, setNotice] = useState<MapNotice>();
   const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
   const [googlePlaceRatingAvailable] = useState(() => isGooglePlaceRatingAvailable());
@@ -338,11 +375,24 @@ export function useMapController() {
     }),
   });
 
+  const serverLiveTraffic = serverConfig?.capabilities.liveTraffic;
+  const trafficLayerWanted =
+    serverLiveTraffic === true && mapPreferences.showTraffic && phoneMapVisible;
+  const flowQuery = trafficLayerWanted ? trafficFlowQuery(viewBox) : undefined;
   const overlays = useOverlayData({
     inTorontoCameraBounds: location.inTorontoCameraBounds,
     mapRegion,
     showRoadEvents: mapPreferences.showRoadEvents,
+    trafficFlowQuery: flowQuery,
   });
+
+  const community = useCommunity({
+    appActive: isAppActive,
+    fetchBounds: phoneMapVisible ? reportFetchBounds(viewBox) : undefined,
+    serverLiveTraffic,
+    showReports: mapPreferences.showCommunityReports,
+  });
+  const sharesRoadReports = community.state?.preferences.sharesRoadReports === true;
 
   const search = usePlaceSearch({
     onConnectionChange: setApiConnection,
@@ -376,6 +426,21 @@ export function useMapController() {
   const idleCameraCenter = useMemo(
     () => idleCameraCenterForFollow(userCoordinate, idleCameraShouldFollow),
     [idleCameraShouldFollow, userCoordinate],
+  );
+
+  /** Runs when the camera settles. State changes only when the view crosses a grid line. */
+  const handleRegionDidChange = useStableCallback(
+    (bounds: [west: number, south: number, east: number, north: number]) => {
+      const next = snapViewBox(bounds);
+      setViewBox((current) =>
+        current?.west === next?.west &&
+        current?.south === next?.south &&
+        current?.east === next?.east &&
+        current?.north === next?.north
+          ? current
+          : next,
+      );
+    },
   );
 
   /** Runs for every camera frame. It must never set React state unless a value changes. */
@@ -676,6 +741,17 @@ export function useMapController() {
       }
     }
 
+    if (community.reports.length > 0) {
+      const reportId = renderedFeatureId(await hitTest(COMMUNITY_REPORT_LAYER_IDS));
+      if (!isCurrentInteraction()) return;
+      const report = community.reports.find((candidate) => candidate.id === reportId);
+      if (report !== undefined) {
+        Keyboard.dismiss();
+        setSelectedCommunityReport(report);
+        return;
+      }
+    }
+
     if (mapPreferences.showSafetyCameras) {
       const cameraFeatures = await hitTest(SAFETY_CAMERA_LAYER_IDS);
       if (!isCurrentInteraction()) return;
@@ -718,8 +794,6 @@ export function useMapController() {
       const event = overlays.roadEvents.find((candidate) => candidate.id === eventId);
       if (event !== undefined) {
         Keyboard.dismiss();
-        // Wave 2 seam: community reports are hit-tested here, beside official road events, and
-        // open the same detail sheet with their own confirm/dismiss actions.
         setFeatureDetail({
           body: roadEventMessage(event),
           eyebrow: 'Road event',
@@ -989,30 +1063,28 @@ export function useMapController() {
       });
       return;
     }
+    setNearPrivateReport(undefined);
     setIsRoadReportVisible(true);
   };
 
-  /**
-   * Wave 2 seam: this is the one place a road report is committed. Sharing reports replaces the
-   * local draft write with the attested submit call and keeps the draft as the offline fallback;
-   * the notice copy must change in the same commit, because it states what happens to a report.
-   */
-  const handleSaveRoadReport = async (type: RoadReportType) => {
-    if (reportCoordinate === undefined || isRoadReportSaving) return;
-    setIsRoadReportSaving(true);
+  // The near-home question is cleared when the sheet next opens, not here: changing the sheet's
+  // content while it animates away re-measures it and cancels the dismissal.
+  const closeRoadReport = () => {
+    setIsRoadReportVisible(false);
+  };
+
+  /** The private draft: the only path before sharing existed, and the fallback after it. */
+  const storeRoadReportDraft = async (
+    type: RoadReportType,
+    coordinate: Coordinate,
+    notice: CommunityNotice,
+  ) => {
     try {
       const currentReports = await loadRoadReportDrafts();
-      await saveRoadReportDrafts([
-        createRoadReportDraft(type, reportCoordinate),
-        ...currentReports,
-      ]);
-      setIsRoadReportVisible(false);
+      await saveRoadReportDrafts([createRoadReportDraft(type, coordinate), ...currentReports]);
+      closeRoadReport();
       haptics.success();
-      showNotice({
-        message: 'This report stays on this phone and is not shown to other drivers yet.',
-        title: 'Saved for testing',
-        tone: 'info',
-      });
+      showNotice(notice);
     } catch {
       haptics.error();
       showNotice({
@@ -1020,9 +1092,72 @@ export function useMapController() {
         title: 'Report not saved',
         tone: 'danger',
       });
+    }
+  };
+
+  /**
+   * The one place a road report is committed. With "Share road reports" on (and the server and
+   * device able to share), it goes to the native community service; near a private place it
+   * waits for an explicit choice; every other outcome keeps it as a private draft.
+   */
+  const commitRoadReport = async (
+    type: RoadReportType,
+    coordinate: Coordinate,
+    confirmNearPrivatePlace: boolean,
+  ) => {
+    if (isRoadReportSaving) return;
+    setIsRoadReportSaving(true);
+    try {
+      if (community.availability.reportSharing !== 'live' || !sharesRoadReports) {
+        await storeRoadReportDraft(
+          type,
+          coordinate,
+          privateDraftNotice(community.availability.reportSharing),
+        );
+        return;
+      }
+      const outcome = await community.submit(type, coordinate, {
+        confirmNearPrivatePlace,
+        heading:
+          routeState.type === 'navigating' ? navigationSnapshot?.matchedCourseDegrees : undefined,
+      });
+      if (outcome.kind === 'confirm-near-private-place') {
+        haptics.warning();
+        setNearPrivateReport({ coordinate, type });
+        return;
+      }
+      if (outcome.kind === 'shared') {
+        closeRoadReport();
+        haptics.success();
+        showNotice(outcome.notice);
+        return;
+      }
+      await storeRoadReportDraft(type, coordinate, outcome.notice);
     } finally {
       setIsRoadReportSaving(false);
     }
+  };
+
+  const handleSaveRoadReport = (type: RoadReportType) => {
+    if (reportCoordinate === undefined) return;
+    void commitRoadReport(type, reportCoordinate, false);
+  };
+
+  const handleKeepReportPrivate = () => {
+    if (nearPrivateReport === undefined || isRoadReportSaving) return;
+    setIsRoadReportSaving(true);
+    void storeRoadReportDraft(
+      nearPrivateReport.type,
+      nearPrivateReport.coordinate,
+      privateDraftNotice(community.availability.reportSharing),
+    ).finally(() => {
+      setIsRoadReportSaving(false);
+    });
+  };
+
+  const handleShareReportAnyway = () => {
+    if (nearPrivateReport === undefined) return;
+    void commitRoadReport(nearPrivateReport.type, nearPrivateReport.coordinate, true);
   };
 
   const endTrip = () => {
@@ -1194,6 +1329,125 @@ export function useMapController() {
   const placeSheetVisible = routeIsIdle && selectedResult !== undefined;
   const appShellVisible = routeIsIdle && selectedResult === undefined;
 
+  // --- Community reports and traffic --------------------------------------------------------
+
+  // The tapped report as the bridge knows it now; it closes if the report ends.
+  const liveSelectedReport =
+    selectedCommunityReport === undefined
+      ? undefined
+      : community.state?.reports.find((report) => report.id === selectedCommunityReport.id);
+  const communityFeatureDetail: MapFeatureDetail | undefined = (() => {
+    const report = liveSelectedReport ?? selectedCommunityReport;
+    if (report === undefined) return undefined;
+    const detail = communityReportDetail(report, {
+      answered: community.answeredIds.has(report.id),
+      nowMs: Date.now(),
+      reportSharing: community.availability.reportSharing,
+      sharesRoadReports,
+    });
+    return {
+      actionHint: detail.hint,
+      actions: detail.actions,
+      body: detail.body,
+      eyebrow: detail.eyebrow,
+      icon: communityReportSymbol(report.type),
+      title: detail.title,
+    };
+  })();
+
+  const handleCommunityReportAction = async (action: CommunityReportAction) => {
+    const report = selectedCommunityReport;
+    if (report === undefined || communityActionBusy !== undefined) return;
+    setCommunityActionBusy(action);
+    try {
+      const notice = await runCommunityReportAction({
+        action,
+        getFreshSample: () => location.getFreshLocationSample(new AbortController().signal),
+        nowMs: Date.now,
+        reportId: report.id,
+        vote: community.vote,
+        withdraw: community.withdraw,
+      });
+      if (notice.tone === 'info') haptics.success();
+      else haptics.warning();
+      setSelectedCommunityReport(undefined);
+      showNotice(notice);
+    } finally {
+      setCommunityActionBusy(undefined);
+    }
+  };
+
+  const distanceToManeuverMeters =
+    routeState.type === 'navigating'
+      ? (nativeGuidance?.distanceToManeuverMeters ?? remainingStep?.distanceMeters)
+      : undefined;
+  const communityGuidance = useCommunityGuidance({
+    competingPrompt: rerouteProposal !== undefined || cameraAlerts.alert !== undefined,
+    distanceToManeuverMeters,
+    onDismissStillThere: community.dismissStillThere,
+    reportSharing: community.availability.reportSharing,
+    sharesRoadReports,
+    snapshot: routeState.type === 'navigating' ? navigationSnapshot : undefined,
+  });
+  const handleStillThereAnswer = async (vote: 'not-present' | 'present') => {
+    const prompt = communityGuidance.stillThere;
+    if (prompt === undefined || stillThereBusy) return;
+    setStillThereBusy(true);
+    try {
+      const notice = await community.vote(prompt.reportId, vote);
+      communityGuidance.resolveStillThere();
+      if (notice.tone === 'info') haptics.success();
+      else haptics.warning();
+      showNotice(notice);
+    } finally {
+      setStillThereBusy(false);
+    }
+  };
+
+  const trafficFlowData = useMemo(
+    () => trafficFlowFeatures(overlays.trafficFlow),
+    [overlays.trafficFlow],
+  );
+  const trafficStatus = trafficLayerWanted
+    ? trafficFlowStatus({
+        failed: overlays.trafficFlowFailed,
+        response: overlays.trafficFlow,
+        tooWide: viewBox !== undefined && flowQuery === undefined,
+      })
+    : undefined;
+  // Traffic is drawn beneath the basemap's labels when no route is on the map.
+  const basemapLabelLayerId =
+    typeof mapStyle === 'string'
+      ? undefined
+      : trafficFlowAnchorLayerId(
+          mapStyle.layers.map((layer) => ({
+            id: layer.id,
+            type: layer.type,
+            ...('source-layer' in layer && typeof layer['source-layer'] === 'string'
+              ? { 'source-layer': layer['source-layer'] }
+              : {}),
+          })),
+        );
+
+  const communitySettings: Omit<
+    CommunitySettingsProps,
+    'onSetShowReports' | 'onSetShowTraffic' | 'showReports' | 'showTraffic'
+  > = {
+    availability: community.availability,
+    hasIdentity: community.state?.hasIdentity === true,
+    onResetIdentity: async () => {
+      const notice = await community.resetIdentity();
+      if (notice.tone === 'info') haptics.success();
+      else haptics.warning();
+      showNotice(notice);
+    },
+    onSetShareRoadReports: community.setShareRoadReports,
+    onSetShareTrafficSpeeds: community.setShareTrafficSpeeds,
+    sharesRoadReports,
+    sharesTrafficSpeeds: community.state?.preferences.sharesTrafficSpeeds === true,
+    trafficSharing: community.state?.trafficSharing,
+  };
+
   // Handlers that reach memoised map chrome keep one identity, so the canvas and the floating
   // controls re-render for new data only, never because a closure was rebuilt.
   const stable = {
@@ -1208,6 +1462,7 @@ export function useMapController() {
     onMapPress: useStableCallback((point: [number, number], coordinate: Coordinate) => {
       void handleMapPress(point, coordinate);
     }),
+    onRegionDidChange: handleRegionDidChange,
     openAbout: useStableCallback(() => {
       setIsAboutVisible(true);
     }),
@@ -1260,6 +1515,7 @@ export function useMapController() {
       recenter: stable.recenter,
       vehicleCoordinate,
     },
+    basemapLabelLayerId,
     cameraAlert: cameraAlerts.alert,
     cameraAnnouncementCount: cameraAlerts.announcementCount,
     cameraRef,
@@ -1274,11 +1530,30 @@ export function useMapController() {
       },
       visible: isMoreCategoriesVisible,
     },
+    community: {
+      reports: community.reports,
+      settings: communitySettings,
+      stillThere: communityGuidance.stillThere,
+      stillThereBusy,
+      reportAhead: communityGuidance.reportAhead,
+      onAnswerStillThere: (vote: 'not-present' | 'present') => {
+        void handleStillThereAnswer(vote);
+      },
+      onDismissStillThere: () => {
+        const prompt = communityGuidance.stillThere;
+        if (prompt === undefined) return;
+        communityGuidance.resolveStillThere();
+        community.dismissStillThere(prompt.reportId);
+      },
+      trafficFlow: trafficFlowData,
+      trafficStatus,
+    },
+    communityActionBusy,
     coverageName,
     darkMap,
     destinationCatalog,
     exploreSheetRef,
-    featureDetail,
+    featureDetail: communityFeatureDetail ?? featureDetail,
     googlePlaceRatingAvailable,
     guidanceSettings: {
       change: handleChangeGuidanceSettings,
@@ -1364,6 +1639,10 @@ export function useMapController() {
     onClearSearch: handleClear,
     onCloseFeatureDetail: () => {
       setFeatureDetail(undefined);
+      setSelectedCommunityReport(undefined);
+    },
+    onCommunityReportAction: (action: CommunityReportAction) => {
+      void handleCommunityReportAction(action);
     },
     onClosePlace: handleClosePlace,
     onDismissNotice: () => {
@@ -1376,6 +1655,7 @@ export function useMapController() {
     onMapError: stable.onMapError,
     onMapLongPress: stable.onMapLongPress,
     onMapPress: stable.onMapPress,
+    onRegionDidChange: stable.onRegionDidChange,
     onShowAttribution: stable.showAttribution,
     onOpenExternalUrl: openExternalUrl,
     onPlaceDirections: handlePlaceDirections,
@@ -1405,13 +1685,19 @@ export function useMapController() {
     placeSheetVisible,
     roadReport: {
       close: () => {
-        if (!isRoadReportSaving) setIsRoadReportVisible(false);
+        if (!isRoadReportSaving) closeRoadReport();
       },
+      keepPrivate: handleKeepReportPrivate,
+      nearPrivatePlace: nearPrivateReport?.type,
       open: stable.openRoadReport,
-      save: (type: RoadReportType) => {
-        void handleSaveRoadReport(type);
-      },
+      save: handleSaveRoadReport,
       saving: isRoadReportSaving,
+      setShareRoadReports: community.setShareRoadReports,
+      shareAnyway: handleShareReportAnyway,
+      sharing: {
+        availability: community.availability.reportSharing,
+        enabled: sharesRoadReports,
+      },
       visible: isRoadReportVisible,
     },
     route: {
