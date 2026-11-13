@@ -145,6 +145,32 @@ The conservative unresolved option is to disclose provider-retained map/network 
 
 The app-level privacy manifest conservatively declares linked Other User Content for App Functionality and no tracking because accepted free-form contribution text is retained server-side and may itself contain identifying details. A Google-enabled artifact embeds additional Google Places declarations and requires the additive Google data types, linkage, purposes, hosted policy, review notes, and archive inspection to match App Store Connect.
 
+### Shared road reports and traffic sharing
+
+The native client for shared road reports and **Share traffic speeds** is in the app. It sends
+nothing until the server enables it (`features.communityReports` in `/v2/config`; traffic
+`probes.accepting` in `/v2/traffic/status`) and, for traffic, until the driver turns the switch
+on. Before a build that can reach a server with either enabled is submitted, update App Store
+Connect, the app privacy manifest, and the permission string together:
+
+- **Precise Location.** A report sends the reporter's precise coordinate (and heading), which the
+  server stores until 24 hours after the report expires; a "Still there?" answer sends a fresh
+  coordinate that is used for a proximity check and discarded; traffic batches send short
+  stretches of driven path. This is no longer covered by the real-time exception. Disclose
+  Precise Location for App Functionality, not used for tracking. Conservatively mark it linked:
+  reports are stored against a per-installation pseudonymous App Attest key that the server can
+  relate to that installation's other reports and votes (traffic batches are not).
+- **Device ID / other identifiers.** The App Attest key identifier is a per-installation
+  identifier created by the app (stored hashed on the server, deletable with **Reset community
+  identity**, replaced by reinstalling). Decide with the account holder whether Apple's Device ID
+  category applies; the conservative answer is to disclose it as linked, for App Functionality
+  (fraud prevention), not tracking.
+- **Permission string.** "Location is not retained after navigation ends" stops being true for a
+  driver who submits a report. Reword it (for example: "…Location is not retained after
+  navigation ends, except the place of a road report you choose to share.") in the same build.
+- **Review notes.** Replace "no live traffic" only when traffic is actually live for reviewers,
+  and describe reports as structured, expiring, unofficial, and never changing a route.
+
 ## Location and permissions
 
 Current iOS purpose string:
