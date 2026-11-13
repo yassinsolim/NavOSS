@@ -32,6 +32,10 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
 
   private weak var interfaceController: CPInterfaceController?
   private let onRecognizedQuery: (String) -> Void
+  /// Reports a failure the driver needs to act on. The scene shows it with a retry and the
+  /// non-voice ways to pick a destination, so a missing recognizer or microphone is never a dead
+  /// end.
+  private let onFailure: (_ title: String, _ detail: String) -> Void
 
   private var audioEngine: AVAudioEngine?
   private var audioSessionObservers: [NSObjectProtocol] = []
@@ -52,10 +56,12 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
 
   init(
     interfaceController: CPInterfaceController,
-    onRecognizedQuery: @escaping (String) -> Void
+    onRecognizedQuery: @escaping (String) -> Void,
+    onFailure: @escaping (_ title: String, _ detail: String) -> Void
   ) {
     self.interfaceController = interfaceController
     self.onRecognizedQuery = onRecognizedQuery
+    self.onFailure = onFailure
   }
 
   /// Starts only after a deliberate CarPlay microphone tap.
@@ -77,9 +83,9 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
         guard success else {
           self.voiceTemplate = nil
           self.captureState = .idle
-          self.showRetryScreen(
-            title: "Voice search unavailable",
-            detail: "CarPlay could not start voice search. Try again."
+          self.onFailure(
+            "Voice search unavailable",
+            "CarPlay could not start voice search. Try again, or type a destination."
           )
           return
         }
@@ -140,7 +146,7 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
         ),
         CPVoiceControlState(
           identifier: VoiceControlState.unavailable,
-          titleVariants: ["On-device voice unavailable", "Download an English speech model or enable Dictation in iPhone Settings"],
+          titleVariants: ["Voice search unavailable", "Turn on Dictation on your iPhone, or type a destination"],
           image: UIImage(systemName: "exclamationmark.triangle"),
           repeats: false
         ),
@@ -307,8 +313,13 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
       // no thrown error) but picking up cabin road noise instead of the driver's voice from the
       // car's microphone. That reproduces as recognition quietly mishearing or hearing nothing,
       // which the simulator (no Bluetooth/CarPlay microphone route at all) cannot reproduce.
-      try audioSession.setCategory(.record, mode: .measurement, options: [.allowBluetoothHFP])
+      //
+      // Mode `.default` keeps the system's input processing (gain control, noise suppression).
+      // `.measurement` turns that off, which suits a quiet room but leaves a car microphone's
+      // signal too quiet and noisy for the recognizer over road noise.
+      try audioSession.setCategory(.record, mode: .default, options: [.allowBluetoothHFP])
       try audioSession.setActive(true)
+      preferVehicleMicrophone(in: audioSession)
 
       let inputNode = engine.inputNode
       let recordingFormat = inputNode.outputFormat(forBus: 0)
@@ -385,10 +396,25 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
   private func showOnDeviceVoiceUnavailable(generation: UInt64) {
     showFailure(
       state: VoiceControlState.unavailable,
-      title: "On-device voice unavailable",
-      detail: "Download an English speech model or enable Dictation in Settings on your iPhone, then try again.",
+      title: "Voice search unavailable",
+      detail: "This iPhone has no on-device English speech recognizer ready. NavOSS never sends your voice to a server. Turn on Dictation in iPhone Settings, or type a destination.",
       generation: generation
     )
+  }
+
+  /// Selects the car's microphone explicitly when one is offered. With CarPlay connected the
+  /// system normally routes input there, but a phone that also has a headset or Bluetooth
+  /// hands-free device can otherwise record from the wrong microphone.
+  private func preferVehicleMicrophone(in audioSession: AVAudioSession) {
+    let inputs = audioSession.availableInputs ?? []
+    guard
+      let preferred = navOSSCarPlayPreferredVoiceInputPort(inputs.map(\.portType.rawValue)),
+      let input = inputs.first(where: { $0.portType.rawValue == preferred }),
+      audioSession.preferredInput?.uid != input.uid
+    else {
+      return
+    }
+    try? audioSession.setPreferredInput(input)
   }
 
   private func receiveRecognition(
@@ -494,42 +520,8 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
       guard let self, self.isCurrent(generation) else {
         return
       }
-      self.showRetryScreen(title: title, detail: detail)
+      self.onFailure(title, detail)
     }
-  }
-
-  private func showRetryScreen(title: String, detail: String) {
-    guard let interfaceController else {
-      return
-    }
-    let message = CPListItem(text: detail, detailText: nil)
-    message.isEnabled = false
-    let retryItem = CPListItem(
-      text: "Try voice search again",
-      detailText: "Use the microphone"
-    )
-    let retryTemplate = CPListTemplate(
-      title: title,
-      sections: [CPListSection(items: [message, retryItem])]
-    )
-    retryItem.handler = { [weak self, weak retryTemplate] _, completion in
-      completion()
-      guard
-        let self,
-        let retryTemplate,
-        let interfaceController = self.interfaceController,
-        interfaceController.topTemplate === retryTemplate
-      else {
-        return
-      }
-      interfaceController.popTemplate(animated: true) { [weak self] success, _ in
-        guard success else {
-          return
-        }
-        self?.start()
-      }
-    }
-    interfaceController.pushTemplate(retryTemplate, animated: true, completion: nil)
   }
 
   private func endSession(dismissingVoiceTemplate: Bool) {
@@ -571,7 +563,10 @@ final class NavOSSCarPlayVoiceSearchCoordinator: NSObject {
         if self.voiceTemplate === voiceTemplate {
           self.voiceTemplate = nil
         }
-        guard success, self.isCurrent(generation) else {
+        // Continue even when CarPlay reports the dismissal failed: the sheet is gone in every case
+        // seen (already dismissed by the system), and dropping the result here left the driver
+        // with a recognized destination and no screen.
+        guard self.isCurrent(generation) else {
           return
         }
         completion()
