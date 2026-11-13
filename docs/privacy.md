@@ -155,7 +155,7 @@ most roads will show no traffic at all.
 - A home on a secondary or larger through road is on a road the server uses. Only the trimming
   the app performs and the three-contributor rule protect it.
 
-**How to turn it off.** Turn off **Share traffic speeds** in the app's About and Privacy screen.
+**How to turn it off.** Turn off **Share traffic speeds** in the app's Map appearance screen, under Community.
 Uploads are required to stop immediately and anything not yet sent to be discarded. Ending
 navigation or removing the app has the same effect. What was contributed stops being shown
 within 35 minutes and is deleted as described above. Nothing about traffic is stored with an
@@ -188,7 +188,13 @@ public RCMP facilities using only the `kelowna-bc` region identifier. It does no
 location, search text, routes, or user identifiers to those public-data services. DriveBC webcams
 are not enforcement cameras, and RCMP facilities are not live police locations.
 
-Map appearance choices, including style, navigation orientation, tilt, visible map content, safety-camera marker visibility, and route color, are stored only in the app on the device. These settings are not sent to NavOSS or used for analytics. Selecting a hosted map style changes which OpenFreeMap style resources the phone requests but does not add a new provider. Hiding camera markers does not disable active-navigation safety warnings.
+When **Show traffic** is on (off by default) and the NavOSS server declares live community
+traffic, the phone requests the published traffic for the area on screen from NavOSS. The request
+names that area only as a box expanded to a 0.05-degree grid (roughly 5 km), never the exact view
+or the phone's position, and is repeated no sooner than the published snapshot changes. It
+carries no identifier. Seeing traffic does not share your own speeds.
+
+Map appearance choices, including style, navigation orientation, tilt, visible map content, safety-camera marker visibility, the community report and traffic overlays, and route color, are stored only in the app on the device. These settings are not sent to NavOSS or used for analytics. Selecting a hosted map style changes which OpenFreeMap style resources the phone requests but does not add a new provider. Hiding camera markers does not disable active-navigation safety warnings.
 
 ### Sharing and external actions
 
@@ -228,7 +234,7 @@ allows alerts, speak a short alert for a report ahead.
 **Still there?** After you pass a report, and never near a turn, the app may ask whether it is
 still there. **Still there** or **Not there** sends that answer with your current coordinate,
 which the server uses only to check that you are within 1.5 km of the report and then discards.
-Letting the question disappear sends nothing. The app does not ask about reports you made during the same app session.
+Letting the question disappear sends nothing. With **Share road reports** on, you can also answer from a report's details on the map; the answer and your current coordinate are sent and used the same way. The app does not ask about reports you made during the same app session.
 
 **Identity and deletion.** The first report registers an App Attest key for this installation.
 The phone stores only the key's identifier, in the iOS Keychain on this device; the key itself
@@ -317,7 +323,7 @@ You can erase all locally stored recent and saved destinations at any time using
 
 You can use NavOSS without granting Contacts access because the app never asks for it. Sharing and the external reviews link are optional, user-initiated actions. Dismissing the system share sheet sends nothing to a recipient. In a Google-enabled build, opening a POI sheet can send its public coordinate for Google-rendered photos, ratings, and reviews; choosing no external reviews link sends no Google Maps search.
 
-Traffic sharing is optional and off by default; turn **Share traffic speeds** off in About and Privacy to stop it, as described under Traffic sharing above.
+Traffic sharing is optional and off by default; turn **Share traffic speeds** off in Map appearance, under Community, to stop it, as described under Traffic sharing above.
 
 Because NavOSS has no account and does not retain server-side search, route, or trip records, it normally has no server history that can be exported or deleted. Published traffic speeds are stored without an account, installation, or trip identifier and only as short-lived per-road values once at least three installations have driven a stretch (their speeds are combined into a median; they are not checked for agreement). Speeds waiting for publication are held only in memory, under markers the running server could recompute from an installation. The residual ways a contribution could still be inferred are listed under Traffic sharing above. The local recent- and saved-destination lists can be deleted in the app as described above. A rights request may identify a support message or a recent security event. Include only enough information to locate that record. NavOSS may be unable to associate an IP-only, transient request with a person. Requests about Cloudflare, OpenFreeMap, Apple, or GitHub data may also need to be directed to that provider.
 

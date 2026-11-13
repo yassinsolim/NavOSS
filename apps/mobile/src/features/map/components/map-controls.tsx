@@ -36,6 +36,8 @@ export interface MapControlsProps {
   roadEventStatus: string | undefined;
   sheetPosition: SharedValue<number>;
   showRecenter: boolean;
+  /** Credit and coverage of the community traffic layer while it is on. */
+  trafficStatus: { accessibilityLabel: string; text: string } | undefined;
 }
 
 /**
@@ -62,6 +64,7 @@ export function MapControls({
   roadEventStatus,
   sheetPosition,
   showRecenter,
+  trafficStatus,
 }: MapControlsProps) {
   useRenderCounter('MapControls');
   const { colors } = useTheme();
@@ -141,6 +144,17 @@ export function MapControls({
             <View style={styles.creditPill}>
               <Text maxFontSizeMultiplier={1.2} style={styles.statusText}>
                 {roadEventStatus}
+              </Text>
+            </View>
+          )}
+          {trafficStatus !== undefined && (
+            <View
+              accessibilityLabel={trafficStatus.accessibilityLabel}
+              accessible
+              style={styles.creditPill}
+            >
+              <Text maxFontSizeMultiplier={1.2} style={styles.statusText}>
+                {trafficStatus.text}
               </Text>
             </View>
           )}

@@ -7,7 +7,7 @@ import type {
 } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
 import type { ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   FadeInDown,
   FadeInUp,
@@ -193,6 +193,10 @@ export function ManeuverBanner({
   signage,
   status,
 }: ManeuverBannerProps) {
+  // iOS keeps text measured at the old size when Dynamic Type changes mid-trip, which clipped
+  // the instruction and the exit sign ("Exit 248B" drawn as "Exit 248") until relaunch. Keying
+  // the content on the font scale makes every line measure again at the new size.
+  const { fontScale } = useWindowDimensions();
   const rerouting = status === 'rerouting';
   const failed = status === 'reroute-failed';
   const displayedInstruction = rerouting
@@ -241,54 +245,60 @@ export function ManeuverBanner({
       }}
       style={[guidanceStyles.banner, { top: safeAreaTop + space.sm }]}
     >
-      <View style={guidanceStyles.bannerRow}>
-        <View style={[guidanceStyles.maneuverTile, failed && guidanceStyles.maneuverTileFailed]}>
-          <SymbolView
-            name={
-              rerouting
-                ? { android: 'sync', ios: 'arrow.triangle.2.circlepath' }
-                : failed
-                  ? { android: 'wifi_off', ios: 'wifi.slash' }
-                  : maneuverSymbol(maneuverDirection(maneuverType, instruction, maneuverModifier))
-            }
-            size={42}
-            tintColor={palette.white}
-          />
-        </View>
-        <View style={guidanceStyles.bannerCopy}>
-          <View style={guidanceStyles.distanceRow}>
-            <Text
-              maxFontSizeMultiplier={1.3}
-              adjustsFontSizeToFit
-              numberOfLines={1}
-              style={[guidanceStyles.distance, guidanceStyles.tabular, guidanceStyles.distanceText]}
-            >
-              {displayedDistance}
+      <View key={`font-scale-${String(fontScale)}`} style={guidanceStyles.bannerContent}>
+        <View style={guidanceStyles.bannerRow}>
+          <View style={[guidanceStyles.maneuverTile, failed && guidanceStyles.maneuverTileFailed]}>
+            <SymbolView
+              name={
+                rerouting
+                  ? { android: 'sync', ios: 'arrow.triangle.2.circlepath' }
+                  : failed
+                    ? { android: 'wifi_off', ios: 'wifi.slash' }
+                    : maneuverSymbol(maneuverDirection(maneuverType, instruction, maneuverModifier))
+              }
+              size={42}
+              tintColor={palette.white}
+            />
+          </View>
+          <View style={guidanceStyles.bannerCopy}>
+            <View style={guidanceStyles.distanceRow}>
+              <Text
+                maxFontSizeMultiplier={1.3}
+                adjustsFontSizeToFit
+                numberOfLines={1}
+                style={[
+                  guidanceStyles.distance,
+                  guidanceStyles.tabular,
+                  guidanceStyles.distanceText,
+                ]}
+              >
+                {displayedDistance}
+              </Text>
+              {exitLabel !== undefined && (
+                <View style={guidanceStyles.exitSign}>
+                  <Text
+                    maxFontSizeMultiplier={1.2}
+                    style={[guidanceStyles.exitSignText, guidanceStyles.tabular]}
+                  >
+                    {exitLabel}
+                  </Text>
+                </View>
+              )}
+            </View>
+            {/* The action is never shrunk: it wraps (iOS shrank it to an unreadable size once the
+              lane strip shared the banner). Where it leads is the smaller line beneath. */}
+            <Text maxFontSizeMultiplier={1.3} numberOfLines={3} style={guidanceStyles.instruction}>
+              {text.primary}
             </Text>
-            {exitLabel !== undefined && (
-              <View style={guidanceStyles.exitSign}>
-                <Text
-                  maxFontSizeMultiplier={1.2}
-                  style={[guidanceStyles.exitSignText, guidanceStyles.tabular]}
-                >
-                  {exitLabel}
-                </Text>
-              </View>
+            {secondary.length > 0 && (
+              <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={guidanceStyles.road}>
+                {secondary}
+              </Text>
             )}
           </View>
-          {/* The action is never shrunk: it wraps (iOS shrank it to an unreadable size once the
-              lane strip shared the banner). Where it leads is the smaller line beneath. */}
-          <Text maxFontSizeMultiplier={1.3} numberOfLines={3} style={guidanceStyles.instruction}>
-            {text.primary}
-          </Text>
-          {secondary.length > 0 && (
-            <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={guidanceStyles.road}>
-              {secondary}
-            </Text>
-          )}
         </View>
+        {routeDetails && children}
       </View>
-      {routeDetails && children}
     </Animated.View>
   );
 }
@@ -794,6 +804,7 @@ const guidanceStyles = StyleSheet.create({
     right: space.sm,
     ...elevation.high,
   },
+  bannerContent: { flexGrow: 1, gap: space.sm },
   bannerCopy: { flex: 1, justifyContent: 'center' },
   // Grows into the banner's minimum height but never shrinks: a lane strip below must add
   // height, not squeeze the instruction into a smaller font.

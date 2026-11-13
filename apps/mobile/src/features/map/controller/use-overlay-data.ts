@@ -5,8 +5,14 @@ import type {
   SafetyCamera,
   SafetyFacility,
   TrafficCamera,
+  TrafficFlowResponse,
 } from '@navoss/contracts';
 import { startTransition, useEffect, useState } from 'react';
+
+import {
+  TRAFFIC_FLOW_RETRY_MS,
+  trafficFlowRefreshDelayMs,
+} from '@/features/community/traffic-flow';
 
 import {
   type MapRoadEvent,
@@ -22,6 +28,7 @@ import {
   fetchSafetyCameras,
   fetchSafetyFacilities,
   fetchTrafficCameras,
+  fetchTrafficFlow,
 } from '@/lib/api';
 
 const NO_EVENTS: readonly MapRoadEvent[] = [];
@@ -36,6 +43,10 @@ export interface OverlayData {
   roadEvents: readonly MapRoadEvent[];
   safetyCameras: readonly SafetyCamera[];
   torontoSafetyCameras: readonly OfficialSafetyCamera[];
+  /** The last community traffic-flow snapshot, while the layer is wanted. */
+  trafficFlow: TrafficFlowResponse | undefined;
+  /** The latest flow request failed (the last snapshot, if any, stays drawn until it expires). */
+  trafficFlowFailed: boolean;
 }
 
 /**
@@ -43,18 +54,22 @@ export interface OverlayData {
  * safety facilities. Each is fetched only for the exact region that publishes it and is dropped
  * when the driver leaves that region, so the map never shows another city's data.
  *
- * Wave 2 seam: community reports and the traffic-flow snapshot are regional overlays too. Add
- * their fetch-and-refresh effects here and return them alongside `roadEvents`; `MapOverlayLayers`
- * draws whatever this hook returns.
+ * Community traffic flow is fetched here too, for the visible grid-aligned box, only while the
+ * driver has the traffic layer on and the server declares live traffic, and never sooner than the
+ * snapshot's own `validUntil`. Community reports come through the native bridge (`useCommunity`),
+ * which shares its cache with CarPlay.
  */
 export function useOverlayData({
   inTorontoCameraBounds,
   mapRegion,
   showRoadEvents,
+  trafficFlowQuery,
 }: {
   inTorontoCameraBounds: boolean;
   mapRegion: MapRegion;
   showRoadEvents: boolean;
+  /** `bbox` for `/v2/traffic/flow`; undefined when the layer is off, unavailable or too wide. */
+  trafficFlowQuery: string | undefined;
 }): OverlayData {
   const [safetyCameras, setSafetyCameras] = useState<readonly SafetyCamera[]>([]);
   const [roadEventResponse, setRoadEventResponse] = useState<RoadEventResponse>();
@@ -68,7 +83,47 @@ export function useOverlayData({
   const [kelownaSafetyFacilities, setKelownaSafetyFacilities] = useState<readonly SafetyFacility[]>(
     [],
   );
+  const [trafficFlow, setTrafficFlow] = useState<TrafficFlowResponse>();
+  const [trafficFlowFailed, setTrafficFlowFailed] = useState(false);
   const roadEventRegion = roadEventRegionForMapRegion(mapRegion);
+
+  useEffect(() => {
+    if (trafficFlowQuery === undefined) {
+      setTrafficFlow(undefined);
+      setTrafficFlowFailed(false);
+      return;
+    }
+    let controller: AbortController | undefined;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const load = () => {
+      controller = new AbortController();
+      const { signal } = controller;
+      void fetchTrafficFlow({ bbox: trafficFlowQuery, signal })
+        .then((response) => {
+          startTransition(() => {
+            setTrafficFlow(response);
+            setTrafficFlowFailed(false);
+          });
+          timeout = setTimeout(load, trafficFlowRefreshDelayMs(response, Date.now()));
+        })
+        .catch(() => {
+          if (signal.aborted) return;
+          setTrafficFlowFailed(true);
+          // A published value is never shown after its epoch: drop what has expired.
+          setTrafficFlow((current) =>
+            current !== undefined && Date.parse(current.validUntil) > Date.now()
+              ? current
+              : undefined,
+          );
+          timeout = setTimeout(load, TRAFFIC_FLOW_RETRY_MS);
+        });
+    };
+    load();
+    return () => {
+      controller?.abort();
+      clearTimeout(timeout);
+    };
+  }, [trafficFlowQuery]);
 
   useEffect(() => {
     if (!inTorontoCameraBounds) {
@@ -175,5 +230,7 @@ export function useOverlayData({
     roadEvents: roadEventSnapshot?.events ?? NO_EVENTS,
     safetyCameras,
     torontoSafetyCameras,
+    trafficFlow,
+    trafficFlowFailed,
   };
 }

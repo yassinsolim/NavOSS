@@ -31,10 +31,12 @@ appId: org.navoss.mobile
 - assertVisible: 'Report Object on road'
 - assertVisible: 'Report Other hazard'
 - assertVisible: 'Report Stopped vehicle'
-- assertVisible: '.*not shown to other drivers yet.*'
+# A fresh install never shares: "Share road reports" is off, so the report is a private draft
+# whether or not the server offers community reports.
+- assertVisible: '(?i).*saved privately on this iPhone for two hours and not shown to other drivers.*'
 - tapOn: 'Report Construction'
-- assertVisible: 'Saved for testing'
-- assertVisible: '.*not shown to other drivers yet.*'
+- assertVisible: 'Saved privately'
+- assertVisible: 'Saved privately on this iPhone for two hours and not shown to other drivers.*'
 - assertVisible: 'End navigation'
 - tapOn: 'End navigation'
 - extendedWaitUntil:

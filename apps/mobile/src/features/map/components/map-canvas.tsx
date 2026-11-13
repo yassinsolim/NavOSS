@@ -23,7 +23,24 @@ const INITIAL_VIEW_STATE = { center: CANADA_CENTER, zoom: 3.2 };
 // padding would otherwise survive the trip and push the next route preview under its sheet.
 const NO_PADDING = { bottom: 0, left: 0, right: 0, top: 0 };
 
+// Community report markers: `report-<type>` when confirmed, `-unconfirmed` (faded) otherwise.
 const MAP_IMAGES = {
+  'report-collision': require('@/assets/images/report-collision.png'),
+  'report-collision-unconfirmed': require('@/assets/images/report-collision-unconfirmed.png'),
+  'report-construction': require('@/assets/images/report-construction.png'),
+  'report-construction-unconfirmed': require('@/assets/images/report-construction-unconfirmed.png'),
+  'report-object-on-road': require('@/assets/images/report-object-on-road.png'),
+  'report-object-on-road-unconfirmed': require('@/assets/images/report-object-on-road-unconfirmed.png'),
+  'report-pothole': require('@/assets/images/report-pothole.png'),
+  'report-pothole-unconfirmed': require('@/assets/images/report-pothole-unconfirmed.png'),
+  'report-road-closure': require('@/assets/images/report-road-closure.png'),
+  'report-road-closure-unconfirmed': require('@/assets/images/report-road-closure-unconfirmed.png'),
+  'report-road-hazard': require('@/assets/images/report-road-hazard.png'),
+  'report-road-hazard-unconfirmed': require('@/assets/images/report-road-hazard-unconfirmed.png'),
+  'report-slow-traffic': require('@/assets/images/report-slow-traffic.png'),
+  'report-slow-traffic-unconfirmed': require('@/assets/images/report-slow-traffic-unconfirmed.png'),
+  'report-stalled-vehicle': require('@/assets/images/report-stalled-vehicle.png'),
+  'report-stalled-vehicle-unconfirmed': require('@/assets/images/report-stalled-vehicle-unconfirmed.png'),
   'road-closure': require('@/assets/images/road-closure-marker.png'),
   'road-construction': require('@/assets/images/road-construction-marker.png'),
   'road-incident': require('@/assets/images/road-incident-marker.png'),
@@ -52,6 +69,8 @@ export interface MapCanvasProps {
   onLoadError: (failed: boolean) => void;
   onLongPress: (coordinate: Coordinate) => void;
   onPress: (point: [number, number], coordinate: Coordinate) => void;
+  /** The settled visible area, after each pan, zoom or camera move. */
+  onRegionDidChange: (bounds: [west: number, south: number, east: number, north: number]) => void;
   vehicleCoordinate: Coordinate | undefined;
 }
 
@@ -80,6 +99,7 @@ export function MapCanvas({
   onLoadError,
   onLongPress,
   onPress,
+  onRegionDidChange,
   vehicleCoordinate,
 }: MapCanvasProps) {
   useRenderCounter('MapCanvas');
@@ -109,6 +129,9 @@ export function MapCanvas({
       onPress={({ nativeEvent }) => {
         const [longitude, latitude] = nativeEvent.lngLat;
         onPress(nativeEvent.point, { latitude, longitude });
+      }}
+      onRegionDidChange={({ nativeEvent }) => {
+        onRegionDidChange(nativeEvent.bounds);
       }}
       onRegionIsChanging={({ nativeEvent }) => {
         onCameraChange({

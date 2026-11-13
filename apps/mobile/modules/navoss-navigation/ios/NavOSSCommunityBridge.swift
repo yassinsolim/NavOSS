@@ -12,6 +12,19 @@ struct CommunityBoundsRecord: Record {
   }
 }
 
+/// A fresh device position from the phone's own location watch, for a vote made outside guidance.
+struct CommunityCoordinateRecord: Record {
+  @Field var latitude: Double = .nan
+  @Field var longitude: Double = .nan
+
+  var coordinate: NavOSSCarPlayCoordinate? {
+    guard latitude.isFinite, longitude.isFinite, (-90...90).contains(latitude),
+      (-180...180).contains(longitude)
+    else { return nil }
+    return NavOSSCarPlayCoordinate(latitude: latitude, longitude: longitude)
+  }
+}
+
 struct CommunityReportSubmissionRecord: Record {
   /// The driver confirmed sharing a report near home or the trip's start/end.
   @Field var confirmNearPrivatePlace: Bool = false
@@ -162,12 +175,17 @@ enum NavOSSCommunityBridge {
   }
 
   /// Votes with the device's current position, which the server uses only for its proximity
-  /// check and then discards.
-  static func vote(reportId: String, rawVote: String) async -> [String: Any] {
+  /// check and then discards. The navigation core's fix wins; outside guidance, where the core
+  /// may have none, the phone passes the fix from its own foreground location watch.
+  static func vote(
+    reportId: String, rawVote: String, phoneCoordinate: NavOSSCarPlayCoordinate? = nil
+  ) async -> [String: Any] {
     guard let vote = NavOSSCommunityVote(rawValue: rawVote) else {
       return ["ok": false, "error": "invalid-request"]
     }
-    guard let coordinate = NavOSSNavigationService.shared.currentCoordinate() else {
+    guard
+      let coordinate = NavOSSNavigationService.shared.currentCoordinate() ?? phoneCoordinate
+    else {
       return ["ok": false, "error": "location-unavailable"]
     }
     do {

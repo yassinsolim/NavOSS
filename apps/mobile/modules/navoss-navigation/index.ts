@@ -384,6 +384,7 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   voteCommunityReport(
     reportId: string,
     vote: 'not-present' | 'present',
+    observedAt?: NativeNavigationCoordinate,
   ): Promise<NativeCommunityResult<{ active: boolean }>>;
   withdrawCommunityReport(reportId: string): Promise<NativeCommunityResult>;
 }

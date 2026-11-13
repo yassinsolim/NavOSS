@@ -99,7 +99,7 @@ appId: org.navoss.mobile
 - assertVisible: 'Report Object on road'
 - assertVisible: 'Report Other hazard'
 - assertVisible: 'Report Stopped vehicle'
-- assertVisible: '.*not shown to other drivers yet.*'
+- assertVisible: '(?i).*saved privately on this iPhone for two hours and not shown to other drivers.*'
 - takeScreenshot: '/tmp/navoss-validation-phone-report'
 - tapOn: 'Cancel report'
 - tapOn: 'End navigation'

@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -8,15 +8,20 @@ import {
   type RouteColor,
   ROUTE_COLORS,
 } from '@/features/map/map-preferences';
+import {
+  CommunitySettings,
+  type CommunitySettingsProps,
+} from '@/features/community/community-sheets';
 import { fullSheetHeight, type ScreenMetrics } from '@/features/map/overlay-layout';
 import type { NavigationMapOrientation } from '@/features/navigation/navigation-camera';
-import { createThemedStyles, radius, space, touchTarget, typography, useTheme } from '@/theme';
+import { createThemedStyles, radius, space, touchTarget, typography } from '@/theme';
 import { haptics } from '@/theme/haptics';
 import { ListRow } from '@/ui/list-row';
 import { type SegmentOption, SegmentedControl } from '@/ui/segmented-control';
 import { BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
 import { ModalSheet } from '@/ui/sheet/modal-sheet';
 import { SectionTitle, SheetHeader } from '@/ui/sheet/sheet-header';
+import { SwitchRow } from '@/ui/switch-row';
 
 const STYLE_OPTIONS: readonly SegmentOption<MapStylePreset>[] = [
   { label: 'Auto', value: 'automatic' },
@@ -43,59 +48,19 @@ const ROUTE_COLOR_OPTIONS: readonly { label: string; value: RouteColor }[] = [
   { label: 'Violet route', value: 'violet' },
 ];
 
-function PreferenceSwitch({
-  detail,
-  label,
-  onValueChange,
-  value,
-}: {
-  detail?: string;
-  label: string;
-  onValueChange: (value: boolean) => void;
-  value: boolean;
-}) {
-  const { colors } = useTheme();
-  const styles = useStyles();
-  const toggle = () => {
-    haptics.selection();
-    onValueChange(!value);
-  };
-  // The whole row is the switch: one accessible element, and a target as wide as the sheet.
-  return (
-    <Pressable
-      accessibilityHint={detail}
-      accessibilityLabel={label}
-      accessibilityRole="switch"
-      accessibilityState={{ checked: value }}
-      onPress={toggle}
-      style={styles.switchRow}
-    >
-      <View style={styles.switchCopy}>
-        <Text style={styles.switchLabel}>{label}</Text>
-        {detail !== undefined && <Text style={styles.switchDetail}>{detail}</Text>}
-      </View>
-      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Switch
-          onValueChange={toggle}
-          trackColor={{ false: colors.borderStrong, true: colors.primary }}
-          value={value}
-        />
-      </View>
-    </Pressable>
-  );
-}
-
 /**
  * Map appearance. Every control applies immediately. Only the map style and the three basemap
  * layer switches rebuild the style; route colour, orientation, view and the overlay switches
  * repaint NavOSS's own layers and leave the basemap alone.
  *
- * Wave 2 seam: the opt-in "Traffic" overlay switch belongs in "Map content" (it needs a
- * `showTraffic` flag in `MapPreferences` and `normalizeMapPreferences`), and the offline-maps
- * entry is a `ListRow` in a new "Offline" section at the end of this sheet that opens the
- * offline-maps screen.
+ * The Community section holds the sharing switches (native preferences shared with CarPlay) and
+ * the two community overlays (`showCommunityReports`, `showTraffic`).
+ *
+ * Wave 2 seam: the offline-maps entry is a `ListRow` in a new "Offline" section at the end of
+ * this sheet that opens the offline-maps screen.
  */
 export function MapPreferencesSheet({
+  community,
   metrics,
   onChange,
   onClose,
@@ -104,6 +69,11 @@ export function MapPreferencesSheet({
   preferences,
   visible,
 }: {
+  /** Everything but the two overlay switches, which are map preferences. */
+  community: Omit<
+    CommunitySettingsProps,
+    'onSetShowReports' | 'onSetShowTraffic' | 'showReports' | 'showTraffic'
+  >;
   metrics: ScreenMetrics;
   onChange: (preferences: MapPreferences) => void;
   onClose: () => void;
@@ -164,28 +134,28 @@ export function MapPreferencesSheet({
         <View style={styles.section}>
           <SectionTitle>Map content</SectionTitle>
           <View style={styles.card}>
-            <PreferenceSwitch
+            <SwitchRow
               label="Places"
               onValueChange={(showPlaces) => {
                 onChange({ ...preferences, showPlaces });
               }}
               value={preferences.showPlaces}
             />
-            <PreferenceSwitch
+            <SwitchRow
               label="Buildings"
               onValueChange={(showBuildings) => {
                 onChange({ ...preferences, showBuildings });
               }}
               value={preferences.showBuildings}
             />
-            <PreferenceSwitch
+            <SwitchRow
               label="Transit"
               onValueChange={(showTransit) => {
                 onChange({ ...preferences, showTransit });
               }}
               value={preferences.showTransit}
             />
-            <PreferenceSwitch
+            <SwitchRow
               detail="Closures, construction and incidents published by regional road authorities"
               label="Road events"
               onValueChange={(showRoadEvents) => {
@@ -193,7 +163,7 @@ export function MapPreferencesSheet({
               }}
               value={preferences.showRoadEvents}
             />
-            <PreferenceSwitch
+            <SwitchRow
               detail="Official enforcement cameras and traffic webcams"
               label="Camera markers"
               onValueChange={(showSafetyCameras) => {
@@ -203,6 +173,18 @@ export function MapPreferencesSheet({
             />
           </View>
         </View>
+
+        <CommunitySettings
+          {...community}
+          onSetShowReports={(showCommunityReports) => {
+            onChange({ ...preferences, showCommunityReports });
+          }}
+          onSetShowTraffic={(showTraffic) => {
+            onChange({ ...preferences, showTraffic });
+          }}
+          showReports={preferences.showCommunityReports}
+          showTraffic={preferences.showTraffic}
+        />
 
         <View style={styles.section}>
           <SectionTitle>Route colour</SectionTitle>
@@ -283,15 +265,5 @@ const useStyles = createThemedStyles(({ colors }) =>
     },
     swatchButtonSelected: { borderColor: colors.text },
     swatchRow: { flexDirection: 'row', gap: space.md },
-    switchCopy: { flex: 1, gap: 2, paddingRight: space.md },
-    switchDetail: { ...typography.footnote, color: colors.textSecondary },
-    switchLabel: { ...typography.bodyStrong, color: colors.text },
-    switchRow: {
-      alignItems: 'center',
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      minHeight: 52,
-      paddingVertical: space.sm,
-    },
   }),
 );
