@@ -54,6 +54,7 @@ import {
   createContributionRateLimiter,
   type ContributionRateLimiter,
 } from './contribution-rate-limiter.js';
+import { createConfiguredDatabaseReadiness, type DatabaseReadiness } from './database-readiness.js';
 import {
   createConfiguredGooglePlaceQueryBudget,
   type GooglePlaceQueryBudget,
@@ -126,6 +127,8 @@ export interface BuildAppOptions {
   communityReports?: CommunityReportService | null;
   contributionProvider?: ContributionProvider;
   contributionRateLimiter?: Pick<ContributionRateLimiter, 'consume'>;
+  /** `null` reports no database check; omitted builds it from the environment. */
+  databaseReadiness?: DatabaseReadiness | null;
   driveBcEventProvider?: DriveBcRoadEventProvider;
   driveBcTrafficCameraProvider?: DriveBcTrafficCameraProvider;
   eventProvider?: CalgaryRoadEventProvider;
@@ -159,6 +162,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       : (options.communityReports ?? undefined);
   const communityReportsLive =
     communityReports !== undefined && communityReports.publication !== 'shadow';
+  const databaseReadiness =
+    options.databaseReadiness === undefined
+      ? createConfiguredDatabaseReadiness()
+      : (options.databaseReadiness ?? undefined);
   const driveBcEventProvider = options.driveBcEventProvider ?? createDriveBcRoadEventProvider();
   const driveBcTrafficCameraProvider =
     options.driveBcTrafficCameraProvider ?? createDriveBcTrafficCameraProvider();
@@ -210,6 +217,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     await Promise.all([
       communityReports?.close(),
       contributionProvider.close?.(),
+      databaseReadiness?.close(),
       googlePlaceQueryBudget.close?.(),
       trafficService.close(),
     ]);
@@ -365,8 +373,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           : productionSearch
             ? false
             : undefined;
+      const databaseReady = await databaseReadiness?.isReady();
       const isReady =
-        searchFixturesReady && routingProviderReady !== false && searchProviderReady !== false;
+        searchFixturesReady &&
+        routingProviderReady !== false &&
+        searchProviderReady !== false &&
+        databaseReady !== false;
 
       if (!isReady) {
         reply.status(503);
@@ -376,6 +388,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
       const response: ReadinessResponse = {
         checks: {
+          ...(databaseReady === undefined
+            ? {}
+            : {
+                database: {
+                  detail: databaseReady
+                    ? 'The database is reachable.'
+                    : 'The database is unavailable; database-backed features answer 503.',
+                  status: databaseReady ? ('ready' as const) : ('not_ready' as const),
+                },
+              }),
           ...(routingProviderReady === undefined
             ? {}
             : {
