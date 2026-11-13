@@ -52,6 +52,21 @@ describe('fetchRoutes against recorded /v2/routes responses', () => {
     expect(response.routes[0]?.speedLimits?.some((limit) => limit.status === 'unknown')).toBe(true);
   });
 
+  it('presents Valhalla multi-name roads and the arrival step readably', async () => {
+    const response = await fetchRoutes(ROUTE_REQUEST, {
+      baseUrl: 'http://127.0.0.1:3004',
+      fetchImplementation: async () =>
+        new Response(JSON.stringify(recordedRoutes('calgary-deerfoot-glenmore.v2'))),
+    });
+    const instructions = response.routes.flatMap((route) =>
+      route.steps.map((step) => step.instruction),
+    );
+    expect(instructions).toContain('Drive southwest on Highway 2 / Deerfoot Trail SE.');
+    expect(instructions).not.toContain('You have arrived at your destination.');
+    expect(instructions.some((text) => /\w\/\w/.test(text))).toBe(false);
+    expect(response.routes[0]?.steps.at(-1)?.instruction).toBe('Your destination is ahead.');
+  });
+
   it('accepts the real Metro Vancouver interchange response', async () => {
     const response = await fetchRoutes(ROUTE_REQUEST, {
       baseUrl: 'http://127.0.0.1:3004',

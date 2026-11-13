@@ -36,6 +36,8 @@ import {
   type TrafficFlowResponse,
 } from '@navoss/contracts';
 
+import { presentedInstruction } from '../features/navigation/instruction-text';
+
 export class NavOssApiError extends Error {
   public readonly status: number;
 
@@ -321,6 +323,11 @@ export async function fetchRoutes(
   // comparator here rather than depending on a coordinated server deploy. `fastest`/durations are
   // untouched — only display order changes.
   validated.routes.sort(compareRouteAlternatives);
+  for (const route of validated.routes) {
+    for (const step of route.steps) {
+      step.instruction = presentedInstruction(step.instruction, step.maneuverType);
+    }
+  }
   return validated;
 }
 

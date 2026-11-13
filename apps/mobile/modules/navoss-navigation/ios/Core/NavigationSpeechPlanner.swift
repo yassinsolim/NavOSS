@@ -255,7 +255,8 @@ final class NavigationSpeechPlanner {
   /// composed from the exit number, branch and "toward" destinations instead, so the driver hears
   /// what the signs say: "Take exit 248 toward Banff". Absent data is never spoken.
   static func maneuverPrompt(_ step: NavOSSCarPlayRouteStep) -> String {
-    let base = step.spokenInstruction ?? step.instruction
+    let base = navOSSSpokenStepText(
+      step.spokenInstruction ?? step.instruction, maneuverType: step.maneuverType)
     let exit = step.exitNumber
     let toward = step.signpostToward.map { Array($0.prefix(2)).joined(separator: " and ") }
     let branch = step.signpostBranch?.first
