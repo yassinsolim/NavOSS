@@ -530,7 +530,13 @@ public func navOSSCarPlayManeuverInfo(
     kind: kind,
     instructionVariants: variants,
     roadName: roadName.isEmpty ? nil : roadName,
-    turnAngleDegrees: measuredAngle ?? kind.nominalAngleDegrees,
+    // Valhalla's bearings at a ramp or fork barely differ (205° → 206° at Deerfoot exit 248), so a
+    // measured angle that is near zero or points the other way would draw a straight arrow for a
+    // right exit; the kind's own direction wins then.
+    turnAngleDegrees: measuredAngle.map { angle in
+      let nominal = kind.nominalAngleDegrees
+      return nominal != 0 && (abs(angle) < 15 || angle.sign != nominal.sign) ? nominal : angle
+    } ?? kind.nominalAngleDegrees,
     highwayExitLabel: exitNumber.flatMap { $0.isEmpty ? nil : "Exit \($0)" },
     lanes: navOSSCarPlayLaneSpecs(step.lanes),
     legDistanceMeters: stepIndex > 0 ? leg.distanceMeters : 0,

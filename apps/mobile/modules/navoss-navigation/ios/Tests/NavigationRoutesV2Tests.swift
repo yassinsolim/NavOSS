@@ -81,6 +81,7 @@ final class NavigationRoutesV2Tests: XCTestCase {
     XCTAssertEqual(info.lanes?.map(\.status), [.notGood, .notGood, .preferred])
     XCTAssertEqual(info.lanes?.last?.highlightedAngle, 90)
     XCTAssertEqual(info.kind, .offRampRight)
+    XCTAssertEqual(info.turnAngleDegrees, 40, "recorded 205° → 206° bearings must not draw a straight arrow")
     let later = try XCTUnwrap(navOSSCarPlayManeuverInfo(trip: trip, stepIndex: 3))
     XCTAssertEqual(
       later.instructionVariants.first,
