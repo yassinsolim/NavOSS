@@ -487,7 +487,10 @@ try {
         logPath: join(logsDirectory, 'pods.log'),
         timeoutMs: 300_000,
       });
-      const derivedData = resolve('/tmp/navoss-navigation-validation-derived');
+      // Concurrent worktrees on one Mac must not share (and delete) each other's build.
+      const derivedData = resolve(
+        process.env.NAVOSS_DERIVED_DATA_DIR ?? '/tmp/navoss-navigation-validation-derived',
+      );
       await rm(derivedData, { force: true, recursive: true });
       await run(
         'xcodebuild',
@@ -663,6 +666,7 @@ try {
         ['carplay-guidance-maneuver', 'guidance-maneuver', 'light'],
         ['carplay-guidance-night', 'guidance-night', 'dark'],
         ['carplay-guidance-annotations', 'guidance-annotations', 'light'],
+        ['carplay-community-reports', 'community-reports', 'light'],
         ['carplay-maneuver-symbols', 'maneuver-symbols', 'light'],
         // Flow scenarios: production map plus a labelled mock of CarPlay's own template, whose
         // content comes from production presentation code. See docs/architecture/carplay.md.

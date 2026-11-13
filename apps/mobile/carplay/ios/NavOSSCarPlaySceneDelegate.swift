@@ -71,6 +71,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   private enum SettingsCategory {
     case alertOptions
+    case community
     case drivingAvatar
     case mapColors
     case mapDisplay
@@ -83,6 +84,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     var sectionHeader: String {
       switch self {
       case .alertOptions, .volume: "Sound"
+      case .community: "Community"
       case .drivingAvatar: "Vehicle marker"
       case .mapColors: "Map appearance"
       case .mapDisplay: "Map content"
@@ -96,6 +98,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     var title: String {
       switch self {
       case .alertOptions: "Alert options"
+      case .community: "Community"
       case .drivingAvatar: "Driving avatar"
       case .mapColors: "Map colors"
       case .mapDisplay: "Map display"
@@ -403,7 +406,19 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
           self?.applySharedPreferences()
         }
       },
+      // Traffic-sharing state and community preferences shown in Settings ▸ Community.
+      NotificationCenter.default.addObserver(
+        forName: .navOSSCommunityStateDidChange,
+        object: NavOSSCommunityService.shared,
+        queue: .main
+      ) { [weak self] _ in
+        MainActor.assumeIsolated {
+          guard let self, self.settingsCategory == .community else { return }
+          self.settingsTemplate?.updateSections(self.settingsSections(category: .community))
+        }
+      },
     ]
+    Task { await NavOSSCommunityService.shared.refreshFeatures() }
     intentObserver = NotificationCenter.default.addObserver(
       forName: .navOSSCarPlayIntentDestinationRequested,
       object: nil,
@@ -713,7 +728,8 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       NavOSSCarPlayMapAlertStore.shared.publish(
         camera.coordinate.map {
           [NavOSSCarPlayMapAlert(id: "camera-\(camera.cameraId)", kind: .redLightAndSpeedCamera, coordinate: $0)]
-        } ?? []
+        } ?? [],
+        source: .cameras
       )
       if presentedCameraAlertSequence != camera.sequence, live.rerouteProposal == nil {
         presentedCameraAlertSequence = camera.sequence
@@ -726,8 +742,90 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       }
     } else if presentedCameraAlertSequence != nil {
       presentedCameraAlertSequence = nil
-      NavOSSCarPlayMapAlertStore.shared.publish([])
+      NavOSSCarPlayMapAlertStore.shared.publish([], source: .cameras)
     }
+    presentCommunityAlerts(on: mapTemplate)
+  }
+
+  // MARK: Community reports
+
+  private var presentedReportAlertSequence: Int?
+  private var presentedStillThereSequence: Int?
+
+  /// A short banner for a report ahead, and "Still there?" once one is passed. The core decides
+  /// when (after passing, never near a maneuver); this only presents. A prompt waits while
+  /// another alert (reroute proposal, camera) is on screen and is never stacked over one.
+  private func presentCommunityAlerts(on mapTemplate: CPMapTemplate) {
+    let alerts = NavOSSCommunityService.shared.navigationAlerts()
+    if let alert = alerts.reportAlert, presentedReportAlertSequence != alert.sequence,
+      mapTemplate.currentNavigationAlert == nil
+    {
+      presentedReportAlertSequence = alert.sequence
+      showNavigationAlert(
+        title: navOSSCarPlayCommunityAlertTitle(alert.type),
+        subtitle: "\(navOSSCarPlayDistanceLabel(alert.distanceAheadMeters)) · Reported by NavOSS drivers",
+        imageSystemName: reportSymbolName(alert.type),
+        duration: 6
+      )
+    }
+    guard let prompt = alerts.stillTherePrompt, presentedStillThereSequence != prompt.sequence,
+      mapTemplate.currentNavigationAlert == nil
+    else {
+      return
+    }
+    presentedStillThereSequence = prompt.sequence
+    // Shown once: Present and Not present send a vote; letting it time out is Dismiss and sends
+    // nothing. Either way the core will not ask about this report again.
+    NavOSSCommunityService.shared.dismissStillThere(reportId: prompt.reportId)
+    let vote: (NavOSSCommunityVote) -> Void = { vote in
+      guard let coordinate = NavOSSNavigationService.shared.currentCoordinate() else { return }
+      Task {
+        _ = try? await NavOSSCommunityService.shared.vote(
+          reportId: prompt.reportId, vote: vote, observedAt: coordinate)
+      }
+    }
+    let alert = CPNavigationAlert(
+      titleVariants: ["\(prompt.type.label) still there?"],
+      subtitleVariants: ["Reported by NavOSS drivers"],
+      image: UIImage(systemName: reportSymbolName(prompt.type)),
+      primaryAction: CPAlertAction(title: "Still there", style: .default) { _ in vote(.present) },
+      secondaryAction: CPAlertAction(title: "Not there", style: .cancel) { _ in
+        vote(.notPresent)
+      },
+      duration: 10
+    )
+    presentNavigationAlert(alert, on: mapTemplate)
+  }
+
+  private func communitySection() -> CPListSection {
+    let community = NavOSSCommunityService.shared
+    let preferences = community.preferences()
+    let trafficItem = CPListItem(
+      text: selectedTitle("Share traffic speeds", selected: preferences.sharesTrafficSpeeds),
+      detailText: preferences.sharesTrafficSpeeds
+        ? "Anonymous speeds during guidance, never trip ends"
+        : "Off",
+      image: UIImage(systemName: "car.2.fill")
+    )
+    trafficItem.handler = { _, completion in
+      completion()
+      let store = NavOSSCommunityPreferencesStore.shared
+      store.setSharesTrafficSpeeds(!store.load().sharesTrafficSpeeds)
+    }
+    let announceItem = CPListItem(
+      text: selectedTitle("Spoken road reports", selected: preferences.announcesRoadReports),
+      detailText: preferences.announcesRoadReports
+        ? "Says a short alert for a report ahead"
+        : "Visual only",
+      image: UIImage(systemName: "speaker.wave.2.fill")
+    )
+    announceItem.handler = { _, completion in
+      completion()
+      let store = NavOSSCommunityPreferencesStore.shared
+      store.setAnnouncesRoadReports(!store.load().announcesRoadReports)
+    }
+    return CPListSection(
+      items: [trafficItem, announceItem], header: "Community", sectionIndexTitle: nil)
   }
 
   private func makeSystemTrip(_ trip: NavOSSCarPlayTrip) -> CPTrip {
@@ -1117,6 +1215,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         (.drivingAvatar, "car.fill"),
         (.rerouting, "arrow.triangle.branch"),
         (.speedingWarning, "gauge.with.dots.needle.67percent"),
+        (.community, "person.2.fill"),
       ]
       let template = CPGridTemplate(
         title: "Settings",
@@ -1288,6 +1387,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         CPListSection(items: [poiItem], header: "Map content", sectionIndexTitle: nil)
       )
       sections.append(contentsOf: navigationPreferenceSections())
+      sections.append(communitySection())
     }
     return sections
   }
@@ -1383,6 +1483,8 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     case .stalledVehicle: "car.fill"
     }
   }
+  /// Submits to NavOSS community reports when the server has them live and this device can
+  /// attest; otherwise keeps the private local draft as before.
   private func saveReport(_ type: NavOSSCarPlayReportType) {
     guard let coordinate = NavOSSNavigationService.shared.currentCoordinate() else {
       interfaceController?.popToRootTemplate(animated: true) { [weak self] _, _ in
@@ -1393,21 +1495,49 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       }
       return
     }
-    guard reportStore.record(type, coordinate: coordinate) != nil else {
-      interfaceController?.popToRootTemplate(animated: true) { [weak self] _, _ in
-        self?.showNavigationAlert(title: "Report not saved", subtitle: "Try again in a moment.")
+    let heading = NavOSSCarPlayTripStore.shared.snapshot().position?.courseDegrees
+      .map { Int($0.rounded()) % 360 }
+    interfaceController?.popToRootTemplate(animated: true, completion: nil)
+    Task { @MainActor [weak self] in
+      let community = NavOSSCommunityService.shared
+      let live = await community.refreshFeatures()
+      let canWrite = await community.availability().canWrite
+      guard live, canWrite else {
+        self?.saveLocalDraft(type, coordinate: coordinate)
+        return
       }
-      return
-    }
-    interfaceController?.popToRootTemplate(animated: true) { [weak self] _, _ in
-      self?.showNavigationAlert(
-        title: "\(type.label) saved",
-        subtitle: "Kept privately on this iPhone. Not shared with other drivers.",
-        imageSystemName: "checkmark.circle.fill",
-        duration: 3
-      )
+      do {
+        _ = try await community.submitReport(type: type, coordinate: coordinate, heading: heading)
+        self?.showNavigationAlert(
+          title: "\(type.label) reported",
+          subtitle: "Sent to NavOSS. Nearby drivers may see it once it is checked.",
+          imageSystemName: "checkmark.circle.fill",
+          duration: 3
+        )
+      } catch let failure as NavOSSCommunityFailure {
+        self?.showNavigationAlert(
+          title: "Report not sent",
+          subtitle: navOSSCarPlayCommunityFailureText(failure)
+        )
+      } catch {
+        self?.showNavigationAlert(title: "Report not sent", subtitle: "Try again in a moment.")
+      }
     }
   }
+
+  private func saveLocalDraft(_ type: NavOSSCarPlayReportType, coordinate: NavOSSCarPlayCoordinate) {
+    guard reportStore.record(type, coordinate: coordinate) != nil else {
+      showNavigationAlert(title: "Report not saved", subtitle: "Try again in a moment.")
+      return
+    }
+    showNavigationAlert(
+      title: "\(type.label) saved",
+      subtitle: "Kept privately on this iPhone. Not shared with other drivers.",
+      imageSystemName: "checkmark.circle.fill",
+      duration: 3
+    )
+  }
+
   private func showPlaces() {
     guard let interfaceController else {
       return

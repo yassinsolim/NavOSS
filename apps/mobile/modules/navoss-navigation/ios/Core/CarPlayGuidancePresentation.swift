@@ -747,35 +747,43 @@ public struct NavOSSCarPlayMapAlert: Codable, Equatable, Sendable {
   }
 }
 
-/// Shared input for map alerts. Nothing publishes into it yet; the CarPlay map renders whatever it
-/// holds and draws nothing while it is empty.
+/// Shared input for map alerts. Each source (the camera monitor, community reports) replaces
+/// only its own alerts; the CarPlay map renders the union and draws nothing while it is empty.
 public final class NavOSSCarPlayMapAlertStore: @unchecked Sendable {
+  public enum Source: Sendable {
+    case cameras
+    case communityReports
+  }
+
   public static let shared = NavOSSCarPlayMapAlertStore()
 
   private let lock = NSLock()
   private let notificationCenter: NotificationCenter
-  private var alerts: [NavOSSCarPlayMapAlert] = []
+  private var alertsBySource: [Source: [NavOSSCarPlayMapAlert]] = [:]
 
   public init(notificationCenter: NotificationCenter = .default) {
     self.notificationCenter = notificationCenter
   }
 
-  public func publish(_ alerts: [NavOSSCarPlayMapAlert]) {
+  public func publish(_ alerts: [NavOSSCarPlayMapAlert], source: Source) {
     var seen = Set<String>()
     let valid = alerts.filter { $0.coordinate.isValid && seen.insert($0.id).inserted }
     lock.lock()
-    let changed = valid != self.alerts
-    self.alerts = valid
+    let changed = valid != alertsBySource[source, default: []]
+    alertsBySource[source] = valid
     lock.unlock()
     if changed {
       notificationCenter.post(name: .navOSSCarPlayMapAlertsDidChange, object: self)
     }
   }
 
+  /// Cameras first, then reports; an id published by both appears once.
   public func snapshot() -> [NavOSSCarPlayMapAlert] {
     lock.lock()
     defer { lock.unlock() }
-    return alerts
+    var seen = Set<String>()
+    return [Source.cameras, .communityReports].flatMap { alertsBySource[$0, default: []] }
+      .filter { seen.insert($0.id).inserted }
   }
 }
 

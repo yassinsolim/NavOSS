@@ -467,6 +467,14 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   /// Road-label layers currently enlarged for guidance, for the visual harness.
   var enlargedRoadLabelLayerCount: Int { activeGuidance ? roadLabelFontSizes.count : 0 }
+  /// Camera and community-report markers currently in the map's alert source.
+  var mapAlertMarkerCount: Int {
+    guard let source = mapView.style?.source(withIdentifier: mapAlertSourceIdentifier)
+      as? MLNShapeSource,
+      let collection = source.shape as? MLNShapeCollectionFeature
+    else { return 0 }
+    return collection.shapes.count
+  }
 
   /// The current-road pill's text while it is shown, for the visual harness.
   var currentRoadNameReadout: String? {
@@ -1844,8 +1852,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   // MARK: Cameras and reports
 
-  /// Camera and road-report markers from `NavOSSCarPlayMapAlertStore`. The store is empty until a
-  /// real data source publishes into it, so this normally draws nothing.
+  /// Camera and road-report markers from `NavOSSCarPlayMapAlertStore`: the active safety camera
+  /// and community reports the server returned (`NavOSSCommunityService`).
   private func installMapAlertsIfReady() {
     guard let style = mapView.style else { return }
     let source = ensureShapeSource(mapAlertSourceIdentifier, in: style)

@@ -382,6 +382,49 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         self.markReady()
       }
       return
+    case "community-reports":
+      // Community reports go through the production path: the community service's cache and
+      // its publication to the shared map-alert store, which the CarPlay map renders. The
+      // reports are harness fixtures (no network); production publishes only server answers.
+      useCarPlayFrame(CGSize(width: 800, height: 480), guidanceCardInset: 300)
+      NavOSSCarPlayMapAlertStore.shared.publish([], source: .cameras)
+      let now = Date()
+      func report(_ id: String, _ type: NavOSSCarPlayReportType, _ latitude: Double, _ longitude: Double)
+        -> NavOSSCommunityReport
+      {
+        NavOSSCommunityReport(
+          confirmations: id.hasSuffix("1") ? 2 : 0,
+          coordinate: NavOSSCarPlayCoordinate(latitude: latitude, longitude: longitude),
+          expiresAt: now.addingTimeInterval(3_600), id: id, reportedAt: now,
+          state: id.hasSuffix("1") ? .confirmed : .unconfirmed, type: type)
+      }
+      NavOSSCommunityService.shared.publishHarnessReports([
+        report("00000000-0000-4000-a000-000000000001", .collision, 51.04480, -114.07050),
+        report("00000000-0000-4000-a000-000000000002", .roadClosure, 51.04700, -114.06490),
+        report("00000000-0000-4000-a000-000000000003", .construction, 51.04460, -114.06700),
+        report("00000000-0000-4000-a000-000000000004", .slowTraffic, 51.05050, -114.06510),
+      ])
+      let guidance = NavOSSCarPlayGuidance(
+        distanceToManeuverMeters: 450, durationToManeuverSeconds: 40, instruction: "",
+        maneuverType: "turn", phase: .navigating, remainingDistanceMeters: 1_300,
+        remainingDurationSeconds: 150, roadName: "", stepIndex: 0)
+      renderGuidance(
+        trip: Self.turnTrip, guidance: guidance,
+        position: NavOSSCarPlayPosition(
+          coordinate: NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07250),
+          courseDegrees: 90, speedMetersPerSecond: 12),
+        progress: 0.1, speedLimitKph: nil)
+      _ = mapViewController.toggleRouteOverview()
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+        guard let self else { return }
+        guard self.mapViewController.mapAlertMarkerCount == 4 else {
+          assertionFailure(
+            "Community report markers missing: \(self.mapViewController.mapAlertMarkerCount)")
+          return
+        }
+        self.markReady()
+      }
+      return
     case "guidance-annotations":
       // Exercises the optional inputs with harness-only fixture data: per-segment congestion on
       // the route and camera/report markers. Production publishes neither until real sources exist.
@@ -394,7 +437,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         NavOSSCarPlayMapAlert(
           id: "fixture-report", kind: .report(.construction),
           coordinate: NavOSSCarPlayCoordinate(latitude: 51.04560, longitude: -114.06400)),
-      ])
+      ], source: .cameras)
       let guidance = NavOSSCarPlayGuidance(
         distanceToManeuverMeters: 1_400, durationToManeuverSeconds: 120, instruction: "",
         maneuverType: "turn", phase: .navigating, remainingDistanceMeters: 2_000,
