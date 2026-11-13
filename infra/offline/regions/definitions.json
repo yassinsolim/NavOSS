@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "overlapMeters": 20000,
+  "boundarySource": "https://download.geofabrik.de/north-america/canada.html",
+  "boundaryLicense": "ODbL-1.0",
+  "sourceDate": "2026-11-12",
+  "sourceChecksums": {
+    "alberta.poly": "73107224d9615f29b0c80b7b932c17a17fe18f523bba2014729f46a648024308",
+    "british-columbia.poly": "fce9475100adfe7030b6cad9a58759ff8c09473a78b339fe3452e240e976b408"
+  },
+  "regions": [
+    {
+      "id": "calgary",
+      "name": "Calgary, Airdrie, Cochrane & Okotoks",
+      "province": "alberta",
+      "bounds": [-114.65, 50.65, -113.4, 51.5]
+    },
+    {
+      "id": "edmonton",
+      "name": "Edmonton & surrounding communities",
+      "province": "alberta",
+      "bounds": [-114.1, 53.05, -112.75, 53.95]
+    },
+    {
+      "id": "southern-alberta",
+      "name": "Southern Alberta",
+      "province": "alberta",
+      "bounds": [-121, 48.5, -109.5, 52.35]
+    },
+    {
+      "id": "central-alberta",
+      "name": "Central Alberta & Red Deer",
+      "province": "alberta",
+      "bounds": [-121, 52, -109.5, 54.5]
+    },
+    {
+      "id": "rockies",
+      "name": "Rockies: Banff, Jasper & Golden corridor",
+      "province": "both",
+      "polygon": [
+        [-119.25, 53.3],
+        [-117.6, 53.45],
+        [-114.8, 51.5],
+        [-114.9, 50.7],
+        [-117.05, 50.4],
+        [-119.55, 52.45],
+        [-119.25, 53.3]
+      ]
+    },
+    {
+      "id": "northern-alberta",
+      "name": "Northern Alberta",
+      "province": "alberta",
+      "bounds": [-121, 54.1, -109.5, 60.5]
+    },
+    {
+      "id": "metro-vancouver",
+      "name": "Metro Vancouver & Fraser Valley",
+      "province": "british-columbia",
+      "bounds": [-123.45, 48.9, -121.05, 49.85]
+    },
+    {
+      "id": "vancouver-island",
+      "name": "Vancouver Island & Gulf Islands",
+      "province": "british-columbia",
+      "polygon": [
+        [-129.2, 50.95],
+        [-127.7, 51.25],
+        [-123.2, 49.6],
+        [-122.7, 48.0],
+        [-124.9, 47.7],
+        [-129.2, 50.95]
+      ]
+    },
+    {
+      "id": "bc-interior",
+      "name": "BC Interior, Okanagan & Kootenays",
+      "province": "british-columbia",
+      "bounds": [-126.3, 48.5, -113.5, 54.35]
+    },
+    {
+      "id": "bc-coast",
+      "name": "Central & North BC Coast",
+      "province": "british-columbia",
+      "bounds": [-143, 46, -124.8, 54.5]
+    },
+    {
+      "id": "northern-bc",
+      "name": "Northern British Columbia",
+      "province": "british-columbia",
+      "bounds": [-143, 53.95, -113.5, 60.5]
+    },
+    {
+      "id": "alberta",
+      "name": "All Alberta",
+      "province": "alberta",
+      "bounds": [-121, 48.5, -109.5, 60.5],
+      "bulk": true
+    },
+    {
+      "id": "british-columbia",
+      "name": "All British Columbia",
+      "province": "british-columbia",
+      "bounds": [-143, 46, -113.5, 60.5],
+      "bulk": true
+    }
+  ]
+}

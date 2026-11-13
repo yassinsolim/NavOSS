@@ -43,7 +43,8 @@ type TypedApp = FastifyInstance<
   ZodTypeProvider
 >;
 
-const FAILURES: Record<
+/** How each community failure is reported; shared with the community-traffic credential route. */
+export const COMMUNITY_REPORT_FAILURES: Record<
   CommunityReportFailure,
   { code: ProblemCode; detail: string; status: number; title: string }
 > = {
@@ -176,12 +177,18 @@ export function registerCommunityRoutes(app: TypedApp, options: CommunityRouteOp
     sourceLimit: COMMUNITY_READS_PER_NETWORK_PER_HOUR,
   });
 
+  app.addHook('onClose', () => {
+    writeLimiter.close();
+    challengeLimiter.close();
+    readLimiter.close();
+  });
+
   const fail = (
     request: FastifyRequest,
     reply: FastifyReply,
     reason: CommunityReportFailure,
   ): ProblemDetails => {
-    const failure = FAILURES[reason];
+    const failure = COMMUNITY_REPORT_FAILURES[reason];
     reply.status(failure.status).type('application/problem+json');
     if (failure.status === 429) reply.header('retry-after', '900');
     if (reason === 'busy') reply.header('retry-after', '1');

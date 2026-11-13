@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "routingEngineVersion": "3.9.1",
+  "image": "ghcr.io/valhalla/valhalla-scripted:3.9.1@sha256:6238809f9dc3057743d70a20efd3911ec38e458bfa13a0601909b58f68dfd956",
+  "configurationEngineVersion": "3.8.2",
+  "configurationImage": "ghcr.io/valhalla/valhalla-scripted:3.8.2@sha256:3d7a08f7e78b356ee873b61711b743ad81bcc114b0ca5731217da8bba6ba39d1",
+  "tileFormat": "valhalla-gph",
+  "tileFormatVersion": "3.9.1",
+  "mobileWrapper": {
+    "name": "rallista-valhalla-mobile",
+    "version": "0.6.4",
+    "routingEngineVersion": "3.9.1",
+    "valhallaCommit": "bafb69902220615a48307d5c790fb6c943802ba4",
+    "source": "https://github.com/Rallista/valhalla-mobile/tree/0.6.4"
+  }
+}

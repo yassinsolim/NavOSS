@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "bundleVersion": "2026-11-11-v1-012345abcdef",
+  "dataDate": "2026-11-11",
+  "osmTimestamp": "2026-11-11T21:22:47Z",
+  "generatedAt": "2026-11-12T12:00:00Z",
+  "minimumAppContractVersion": 1,
+  "graph": {
+    "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "routingEngineVersion": "3.9.1",
+    "tileFormat": "valhalla-gph",
+    "tileFormatVersion": "3.9.1",
+    "speedProfileSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "regions": [
+    {
+      "id": "calgary",
+      "name": "Calgary region test fixture",
+      "polygon": {
+        "type": "MultiPolygon",
+        "coordinates": [
+          [
+            [
+              [-114.6, 50.6],
+              [-113.3, 50.6],
+              [-113.3, 51.5],
+              [-114.6, 51.5],
+              [-114.6, 50.6]
+            ]
+          ]
+        ]
+      },
+      "bounds": [-114.6, 50.6, -113.3, 51.5],
+      "overlapMeters": 20000,
+      "dataDate": "2026-11-11",
+      "artifacts": {
+        "maps": {
+          "url": "https://offline.example.test/2026-11-11-v1-012345abcdef/regions/calgary/maps.pmtiles",
+          "byteSize": 1000,
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "format": "pmtiles",
+          "formatVersion": 3,
+          "schema": "openmaptiles",
+          "schemaVersion": "3.16.0",
+          "minZoom": 0,
+          "maxZoom": 14
+        },
+        "routing": {
+          "url": "https://offline.example.test/2026-11-11-v1-012345abcdef/regions/calgary/routing.tar",
+          "byteSize": 2000,
+          "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "format": "valhalla-tar",
+          "formatVersion": 1,
+          "routingEngineVersion": "3.9.1",
+          "tileFormat": "valhalla-gph",
+          "tileFormatVersion": "3.9.1",
+          "graphId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "search": {
+          "url": "https://offline.example.test/2026-11-11-v1-012345abcdef/regions/calgary/search.sqlite",
+          "byteSize": 3000,
+          "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "format": "sqlite-fts5",
+          "formatVersion": 1,
+          "schemaVersion": 1
+        },
+        "resources": {
+          "url": "https://offline.example.test/2026-11-11-v1-012345abcdef/resources.tar.gz",
+          "byteSize": 1000,
+          "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "format": "tar-gzip",
+          "formatVersion": 1,
+          "schemaVersion": 1,
+          "unpackedByteSize": 5000,
+          "styles": ["liberty", "bright", "positron", "dark"]
+        }
+      },
+      "attribution": [
+        {
+          "text": "© OpenStreetMap contributors",
+          "url": "https://www.openstreetmap.org/copyright",
+          "license": "ODbL-1.0"
+        }
+      ]
+    }
+  ]
+}

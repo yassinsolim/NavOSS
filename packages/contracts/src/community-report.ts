@@ -232,7 +232,9 @@ export type CommunityAssertedOperation =
       vote: CommunityReportVoteValue;
     }
   | { kind: 'delete-report'; reportId: string }
-  | { kind: 'delete-installation' };
+  | { kind: 'delete-installation' }
+  /** Exchanges the assertion for a short-lived community-traffic upload credential. */
+  | { kind: 'traffic-credential' };
 
 function formatDegrees(value: number): string {
   return value.toFixed(6);
@@ -269,6 +271,7 @@ export function communityAssertionClientData(
       fields.push(operation.reportId);
       break;
     case 'delete-installation':
+    case 'traffic-credential':
       break;
   }
   return fields.join('\n');

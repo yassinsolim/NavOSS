@@ -92,9 +92,10 @@ The North America coverage, infrastructure, and provider decision is recorded in
 current production claim while defining the staged Canada, United States, Mexico, and licensed
 traffic gates.
 
-NavOSS keeps live traffic disabled until a provider contract permits use in an
-open-source MapLibre app with CarPlay. The provider review reached these
-conclusions on July 23, 2026:
+NavOSS's own live traffic is built from opted-in driver speeds and is described under
+[Community Traffic](#community-traffic). Commercial live traffic stays disabled until a provider
+contract permits use in an open-source MapLibre app with CarPlay. The provider review reached
+these conclusions on July 23, 2026:
 
 - [Google Routes API terms](https://cloud.google.com/maps-platform/terms/maps-service-terms)
   prohibit Routes content in conjunction with a non-Google map, so Google traffic
@@ -120,6 +121,43 @@ send the provider token to the app or cache route responses. Production must not
 enable this adapter until the license, privacy disclosure, attribution, cost
 controls, same-time route-quality gate, and physical phone/CarPlay validation are
 complete.
+
+## Community Traffic
+
+- Source id: `navoss-community`
+- Supplier: NavOSS drivers who switched traffic sharing on
+- Attribution shown with the layer: "Traffic from opted-in NavOSS drivers"
+- Licence: NavOSS's own aggregate. Road geometry and segment identifiers come from OpenStreetMap
+  ([ODbL](https://www.openstreetmap.org/copyright)) through the self-hosted Valhalla graph.
+- Endpoints: `POST /v2/traffic/credentials`, `POST /v2/traffic/probes`, `GET /v2/traffic/flow`,
+  `GET /v2/traffic/status`
+- Design, parameters and threat model: [`architecture/community-traffic.md`](architecture/community-traffic.md)
+
+The server is implemented and disabled by default (`COMMUNITY_TRAFFIC_MODE=off`); production has
+not enabled it and no released app uploads driving observations. When enabled, a road edge on a
+motorway, trunk, primary or secondary road is published only at a five-minute boundary, after at
+least three App Attest installations drove it in the preceding 15 to 20 minutes, and stays up for
+15 minutes. With few users little or nothing is shown, and the service publishes no count of how
+much data it holds. NavOSS does not interpolate, predict, or fill gaps:
+a road without enough recent contributors has no traffic colour, and a route without enough
+observed length has no traffic-adjusted ETA.
+
+### Official feeds reviewed for Alberta and British Columbia
+
+Reviewed on November 12, 2026 for a free, redistributable, real-time speed or flow feed that an
+open-source navigation app with CarPlay may use. None was added.
+
+| Source                                                                                                                                           | What it offers                                                                                                                                                                                  | Terms read                                                                                                                                                                                                                                                                                                                    | Decision                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [511 Alberta API](https://511.alberta.ca/developers/doc)                                                                                         | Events, road conditions, cameras, alerts, ferries, rest areas. No road-speed or flow resource. Needs a registered account and developer key; 10 calls per 60 seconds.                           | [About 511 Alberta](https://511.alberta.ca/about/about), "Terms of Use": reproduction is allowed for personal and public non-commercial (educational) use; reproduction for commercial distribution needs written permission from the Government of Alberta. It is not published under the Open Government Licence – Alberta. | Not used. It has no flow data, and its terms do not clearly permit redistribution through an app whose AGPL licence lets anyone reuse it commercially. Alberta events would need written permission first. |
+| [City of Calgary Travel Times](https://data.calgary.ca/Transportation-Transit/Travel-Times/aeb8-fh2w) (`aeb8-fh2w`)                              | Current car travel time in minutes for 68 named corridors, 20-minute resolution. No geometry, no segment references, no free-flow baseline. Metadata says it is collected with INRIX Analytics. | [Open Government Licence – City of Calgary](https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa): copy, adapt and distribute for any lawful purpose with attribution; clause 6(c) excludes third-party rights the City is not authorised to license.                                                                          | Not used. Drawing it would mean inventing corridor geometry from text labels, and it cannot give per-segment congestion. Whether the INRIX-derived values fall under clause 6(c) is not stated.            |
+| [City of Calgary Current Traffic Incidents](https://data.calgary.ca/d/4jah-h97u) and [Construction Detours](https://data.calgary.ca/d/w8zq-79bq) | Incident and construction points. No speeds.                                                                                                                                                    | Open Government Licence – City of Calgary (as above).                                                                                                                                                                                                                                                                         | Already used as event overlays ([Calgary Road Events](#calgary-road-events)); not a flow source.                                                                                                           |
+| [DriveBC Open511 API](https://api.open511.gov.bc.ca/help)                                                                                        | Road events for provincial highways. No speed or flow resource.                                                                                                                                 | The API guidelines state use is governed by the [Open Government Licence – British Columbia](https://www2.gov.bc.ca/gov/content/data/open-data/open-government-license-bc).                                                                                                                                                   | Already used for Kelowna-area events; not a flow source.                                                                                                                                                   |
+
+British Columbia's [Traffic Data Program](https://twm.th.gov.bc.ca/?c=tdp) publishes historical
+counts, not live speeds. No other official live speed feed for either province was found. If one
+appears, it must be added here with its licence before any code uses it, be labelled as its own
+source in responses, and never be blended into `navoss-community` values.
 
 ## Calgary Road Events
 
@@ -148,8 +186,8 @@ transient request failure, and visibly identifies a stale or delayed snapshot. P
 user location to Calgary Open Data.
 
 Road-event markers are awareness information only. They do not change route selection, trigger
-rerouting or speech, alter ETA, or represent road speeds or congestion. NavOSS still has no live
-traffic or traffic-aware ETA. Construction uses an amber work-zone symbol, closures use a red
+rerouting or speech, alter ETA, or represent road speeds or congestion. They are not an input to
+[Community Traffic](#community-traffic). Construction uses an amber work-zone symbol, closures use a red
 no-entry symbol, and incidents use a coral warning symbol. NavOSS does not ingest or display police
 patrol, checkpoint, or speed-trap locations; there is therefore no police-location marker.
 
@@ -275,3 +313,44 @@ public addresses and coordinates. NavOSS includes the Kelowna Main Detachment an
 Police Office at `GET /v2/safety-facilities?region=kelowna-bc`. These markers identify public
 service facilities only. NavOSS does not collect or display patrol, officer, checkpoint, dispatch,
 or live police locations.
+
+## Self-built regional offline data
+
+The build pipeline in [`infra/offline`](../infra/offline/README.md) produces downloadable artifacts,
+not an already-enabled phone/CarPlay offline feature. It uses public, dated Geofabrik Alberta and
+British Columbia PBFs with matching OSM timestamps, provider MD5 verification and recorded SHA-256.
+No tiles are bulk-scraped from OpenFreeMap's public endpoint.
+
+| Component                                        | Source and licence                                                                                                                                                       | Required notices / limitations                                                                                                                                                                                       |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Roads, places, POIs, addresses and routing graph | [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), distributed by [Geofabrik](https://download.geofabrik.de/north-america/canada.html), **ODbL 1.0** | Visible OSM attribution; distribute derived search/routing databases under ODbL and retain the source/alteration information needed by that licence. OSM coverage is incomplete and not a live closure/traffic feed. |
+| Download footprint boundaries                    | [Geofabrik clipping polygons](https://github.com/geofabrik/polygons_download.geofabrik.de), an **OSM produced work under ODbL 1.0**                                      | Attribute OpenStreetMap. These are buffered extract extents, **not official province boundaries**; NavOSS clips its download selections to them and adds a 20 km overlap.                                            |
+| Vector tile schema                               | [OpenMapTiles](https://github.com/openmaptiles/openmaptiles/blob/master/LICENSE.md), **CC BY 4.0** design, **BSD-3-Clause** code                                         | Visible **OpenMapTiles** attribution with its link. The currently built schema is 3.16.0.                                                                                                                            |
+| Low-zoom vector background                       | [Natural Earth](https://www.naturalearthdata.com/about/terms-of-use/), **public domain**                                                                                 | Source acknowledged in the bundle. Offline styles omit the optional online shaded-raster texture; no raster endpoint is needed.                                                                                      |
+| Water/coastline polygons                         | [OSM Data](https://osmdata.openstreetmap.de/data/water-polygons.html), **OSM-derived ODbL 1.0**                                                                          | OSM attribution; retain the locked source snapshot.                                                                                                                                                                  |
+| Lake centreline geometry                         | [OSM Lakelines](https://github.com/acalcutt/osm-lakelines), **ODbL 1.0** data / **MIT** processing                                                                       | OSM attribution; source v12 is checksum-pinned.                                                                                                                                                                      |
+| Time-zone boundaries                             | [Timezone Boundary Builder](https://github.com/evansiroky/timezone-boundary-builder), **ODbL 1.0** OSM-derived data / **MIT** processing                                 | The locked 2026b snapshot is used for graph construction.                                                                                                                                                            |
+| Liberty / Bright offline styles                  | [OpenFreeMap styles](https://github.com/hyperknot/openfreemap-styles), forks of OSM Liberty / OSM Bright                                                                 | **BSD-3-Clause** code, **CC BY 4.0** design; OpenFreeMap integration **MIT**. Original notices are included.                                                                                                         |
+| Positron / Dark offline styles                   | [OpenFreeMap styles](https://github.com/hyperknot/openfreemap-styles), derived from Carto basemaps                                                                       | Carry **BSD-3-Clause / CC BY 4.0** notices and the underlying **CC BY 3.0** credit to Carto, Stamen and Paul Norman. Original style notices are included.                                                            |
+| Noto Sans Regular, Bold and Italic glyphs        | [MapLibre demo glyphs](https://github.com/maplibre/demotiles/tree/gh-pages/font), **SIL Open Font License 1.1**                                                          | The original font licences remain inside the glyph directories. All 256 BMP ranges for each stack are packaged; these are the fonts used by the pinned OpenFreeMap styles.                                           |
+| Sprites                                          | OpenFreeMap's bundled [Maki icons](https://github.com/mapbox/maki), **CC0 1.0**; right arrow **public domain**                                                           | Both 1× and 2× PNG/JSON sprite atlases are packaged with the original integration/style notices.                                                                                                                     |
+
+`sources.lock.json` records the exact source URLs and hashes. `resources.tar.gz` includes the original
+style/font licence texts, `ATTRIBUTION.txt`, and the source inventory. The manifest carries attribution
+records; both phone and CarPlay must keep OSM and OpenMapTiles credits visible when displaying maps.
+
+The builder uses [Planetiler](https://github.com/onthegomap/planetiler) (Apache-2.0) and
+[Valhalla](https://github.com/valhalla/valhalla) (MIT). The pinned mobile wrapper,
+[Rallista valhalla-mobile 0.6.4](https://github.com/Rallista/valhalla-mobile/tree/0.6.4) (MIT), embeds
+Valhalla 3.9.1; offline graphs use that engine while the online Compose service remains on 3.8.2.
+The numerical route comparison and compatibility results are documented in
+[`architecture/offline.md`](architecture/offline.md), without claiming identical online/offline ETAs.
+
+Offline resources are generated locally or obtained from licensed source archives, not under
+OpenFreeMap's public-endpoint bulk-download allowance. Its
+[terms](https://openfreemap.org/tos/) cap user offline downloads at 3,000 tiles or 50 MB and restrict
+automated collection; these self-built province/region bundles do not rely on that allowance.
+
+No user search text, device location, trip history or community speed samples are inputs to the
+offline builder. Search coverage reflects OSM records only: no inferred missing address numbers,
+private feedback, Google reviews, or proprietary traffic geometry are incorporated.
