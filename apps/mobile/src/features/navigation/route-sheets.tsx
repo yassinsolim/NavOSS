@@ -239,7 +239,8 @@ export function RoutePreviewSheet({
           >
             {formatDuration(selectedRoute.durationSeconds)}
           </Text>
-          <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.arrival}>
+          {/* Two lines rather than "arrive 1:4…" when a wide button shares the row. */}
+          <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={styles.arrival}>
             {formatDistance(selectedRoute.distanceMeters)} · arrive{' '}
             {formatArrivalTime(selectedRoute.durationSeconds)}
           </Text>
@@ -272,12 +273,12 @@ export function RoutePreviewSheet({
       >
         {demoOrigin && (
           <View
-            accessibilityLabel={`Preview only from ${previewOriginLabel}`}
+            accessibilityLabel={`Preview starts at ${previewOriginLabel}`}
             accessible
             style={styles.inset}
           >
             <Banner
-              message={`Preview only from ${previewOriginLabel}. Live guidance always uses your real location.`}
+              message={`Preview starts at ${previewOriginLabel}. Live guidance always uses your real location.`}
             />
           </View>
         )}

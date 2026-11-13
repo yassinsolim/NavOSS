@@ -352,15 +352,21 @@ export function SafetyCameraAlertBanner({
  * coral only when the core reports it over the limit plus the driver's tolerance.
  */
 export function DrivingStatus({
+  creditsHeight,
   roadName,
   sheetPosition,
   speed,
 }: {
+  /** Height of the map-credit labels below; the readouts sit above them, never over them. */
+  creditsHeight: number;
   roadName: string | undefined;
   sheetPosition: SharedValue<number>;
   speed: SpeedReadout | undefined;
 }) {
-  const style = useAnimatedStyle(() => ({ bottom: sheetPosition.value + CONTROL_MARGIN + 44 }));
+  const clearance = Math.max(creditsHeight, 36) + space.sm;
+  const style = useAnimatedStyle(() => ({
+    bottom: sheetPosition.value + CONTROL_MARGIN + clearance,
+  }));
   // Re-measure the road name when Dynamic Type changes mid-trip (see `ManeuverBanner`).
   const { fontScale } = useWindowDimensions();
   if (speed === undefined && roadName === undefined) return null;

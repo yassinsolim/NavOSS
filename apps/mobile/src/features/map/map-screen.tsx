@@ -1,4 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import {
@@ -64,6 +65,7 @@ export function MapScreen() {
   useRenderCounter('MapScreen');
   const styles = useStyles();
   const c = useMapController();
+  const [creditsHeight, setCreditsHeight] = useState(0);
   const { metrics, route, guidance } = c;
   const routeState = route.state;
   const insets = { bottom: metrics.bottomInset, top: metrics.topInset };
@@ -124,7 +126,7 @@ export function MapScreen() {
   const safetyCameraCount = mapPreferences.showSafetyCameras ? overlays.safetyCameras.length : 0;
   const roadEventCount = mapPreferences.showRoadEvents ? overlays.roadEvents.length : 0;
   const communityReportCount = c.community.reports.length;
-  const mapSummary = `Map with ${String(safetyCameraCount)} official safety camera symbols, ${String(roadEventCount)} road events and ${String(communityReportCount)} driver reports`;
+  const mapSummary = `Map with ${countLabel(safetyCameraCount, 'official safety camera symbol')}, ${countLabel(roadEventCount, 'road event')} and ${countLabel(communityReportCount, 'driver report')}`;
   const selectedPlacePhoneUrl = placePhoneUrl(selectedResult?.details?.phone);
   const selectedPlaceWebsiteUrl = placeWebsiteUrl(selectedResult?.details?.website);
   const guidanceReady =
@@ -251,12 +253,14 @@ export function MapScreen() {
           }
           sheetPosition={c.sheetPosition}
           showRecenter={!c.camera.isNavigationFollowing}
+          onCreditsHeightChange={setCreditsHeight}
           trafficStatus={c.community.trafficStatus}
         />
       )}
 
       {navigating && (
         <DrivingStatus
+          creditsHeight={creditsHeight}
           roadName={guidance.currentRoadName}
           sheetPosition={c.sheetPosition}
           speed={guidance.speed}
@@ -351,9 +355,7 @@ export function MapScreen() {
           onUseCurrentLocation={c.onUseCurrentLocation}
           onVehicleStyleChange={route.setVehicleStyle}
           position={c.sheetPosition}
-          previewOriginLabel={
-            routeState.previewOrigin === undefined ? undefined : 'Supported route demo'
-          }
+          previewOriginLabel={routeState.previewOrigin === undefined ? undefined : 'Calgary Tower'}
           routePreferences={route.preferences}
           routeSource={route.source}
           routes={routeState.routes}
@@ -546,3 +548,8 @@ const useStyles = createThemedStyles(({ colors }) =>
     container: { backgroundColor: colors.background, flex: 1 },
   }),
 );
+
+/** "1 road event", "2 road events": the map's VoiceOver summary reads naturally. */
+function countLabel(count: number, noun: string): string {
+  return `${String(count)} ${noun}${count === 1 ? '' : 's'}`;
+}

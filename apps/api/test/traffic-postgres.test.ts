@@ -8,7 +8,7 @@ import {
   type CommunityAssertedOperation,
 } from '@navoss/contracts';
 import type { FastifyInstance } from 'fastify';
-import { Pool } from 'pg';
+import { Client, Pool } from 'pg';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { createAppAttestVerifier } from '../src/app-attest.js';
@@ -27,7 +27,11 @@ import {
   type TrafficMaintenanceFailure,
 } from '../src/traffic/service.js';
 import type { TrafficSettings } from '../src/traffic/settings.js';
-import { createPostgresTrafficReleaseStore, TRAFFIC_POOL_CONFIG } from '../src/traffic/store.js';
+import {
+  createPostgresTrafficReleaseStore,
+  TRAFFIC_POOL_CONFIG,
+  type TrafficReleaseStore,
+} from '../src/traffic/store.js';
 import type { MapMatcher } from '../src/traffic/map-matcher.js';
 import { edgeSegmentKey } from '../src/traffic/segments.js';
 import { createTestAppAttestAuthority, type TestDevice } from './support/app-attest-fixture.js';
@@ -85,21 +89,54 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
   let nowMs = NOW.getTime();
   const clock = (): Date => new Date(nowMs);
 
+  /** An idle connection the cleanup ends is reported on its pool; production pools do the same. */
+  const quiet = (pool: Pool): Pool => {
+    pool.on('error', () => undefined);
+    return pool;
+  };
+
+  // Every connection this file opens is named after its schema, so assertions about server
+  // activity and the cleanup between tests see only this file's sessions. In CI the community
+  // reports suite runs against the same database at the same time, and deliberately makes its
+  // own sessions wait on locks.
+  const APPLICATION = SCHEMA;
+  const TRAFFIC_APPLICATION = `${SCHEMA}_traffic`;
+
   // `public` stays on the path for the PostGIS types; the test schema is searched first.
   const schemaPool = (): Pool =>
-    new Pool({
-      connectionString: DATABASE_URL,
-      max: 4,
-      options: `-c search_path=${SCHEMA},public`,
-    });
+    quiet(
+      new Pool({
+        application_name: APPLICATION,
+        connectionString: DATABASE_URL,
+        max: 4,
+        options: `-c search_path=${SCHEMA},public`,
+      }),
+    );
 
   /** The production traffic pool settings, including the server-side timeouts. */
   const trafficPool = (): Pool =>
-    new Pool({
-      ...TRAFFIC_POOL_CONFIG,
-      connectionString: DATABASE_URL,
-      options: `-c search_path=${SCHEMA},public`,
-    });
+    quiet(
+      new Pool({
+        ...TRAFFIC_POOL_CONFIG,
+        application_name: TRAFFIC_APPLICATION,
+        connectionString: DATABASE_URL,
+        options: `-c search_path=${SCHEMA},public`,
+      }),
+    );
+
+  /**
+   * This file's sessions other than the admin pool's that are still running a statement or
+   * waiting, holding a transaction open, or waiting on a lock.
+   */
+  const busySessions = async (): Promise<number> => {
+    const busy = await admin.query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM pg_stat_activity
+       WHERE application_name = ANY($1::text[]) AND pid <> pg_backend_pid()
+         AND (state <> 'idle' OR wait_event_type = 'Lock')`,
+      [[APPLICATION, TRAFFIC_APPLICATION]],
+    );
+    return busy.rows[0]?.count ?? 0;
+  };
 
   const emptyDatabasePool = (): Pool => {
     const url = new URL(DATABASE_URL);
@@ -117,6 +154,8 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
       mapMatcher: MapMatcher;
     };
     settings?: Partial<TrafficSettings>;
+    /** Wraps the PostGIS release store, for example to observe its errors. */
+    wrapStore?: (store: TrafficReleaseStore) => TrafficReleaseStore;
   }
 
   async function createApp(options: TrafficAppOptions = {}) {
@@ -148,7 +187,9 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
       mapMatcher: options.matcher?.mapMatcher ?? stub.matcher,
       onMaintenanceFailure: (failure) => failures.push(failure),
       settings: { ...FIXTURE_SETTINGS, ...options.settings },
-      store: createPostgresTrafficReleaseStore(trafficPool()),
+      store: (options.wrapStore ?? ((store) => store))(
+        createPostgresTrafficReleaseStore(trafficPool()),
+      ),
     });
     const app = await buildApp({
       clock,
@@ -228,7 +269,15 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
     );
 
   beforeAll(async () => {
-    admin = new Pool({ connectionString: DATABASE_URL, max: 2 });
+    // The admin pool never holds a transaction or a lock across statements, and gives up on a
+    // lock quickly, so a session left behind by a failed test fails the next one with a clear
+    // error instead of hanging it.
+    admin = new Pool({
+      application_name: `${SCHEMA}_admin`,
+      connectionString: DATABASE_URL,
+      lock_timeout: 2_000,
+      max: 2,
+    });
     await admin.query(`CREATE SCHEMA ${SCHEMA}`);
     await admin.query(`CREATE DATABASE ${EMPTY_DATABASE}`);
     const pool = schemaPool();
@@ -250,6 +299,14 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
 
   afterEach(async () => {
     await Promise.all(apps.splice(0).map((app) => app.close()));
+    // Whatever a failed test left behind holding a transaction, a lock or a running statement
+    // ends here, so one failure cannot hold up the tests after it. Idle pooled connections hold
+    // nothing and are left alone.
+    await admin.query(
+      `SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+       WHERE application_name = ANY($1::text[]) AND pid <> pg_backend_pid() AND state <> 'idle'`,
+      [[APPLICATION, TRAFFIC_APPLICATION, `${SCHEMA}_blocker`]],
+    );
   });
 
   afterAll(async () => {
@@ -569,7 +626,17 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
   });
 
   it('has PostgreSQL cancel a blocked epoch, and serves no snapshot it could not complete', async () => {
-    const { app, failures, service } = await createApp();
+    const storeErrors: unknown[] = [];
+    const { app, failures, service } = await createApp({
+      wrapStore: (store) => ({
+        ...store,
+        publishEpoch: (epochStartMs, releases) =>
+          store.publishEpoch(epochStartMs, releases).catch((error: unknown) => {
+            storeErrors.push(error);
+            throw error;
+          }),
+      }),
+    });
     for (const device of ['phone-1', 'phone-2', 'phone-3']) {
       await post(app, await credentialFor(service, device));
     }
@@ -577,29 +644,32 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
     const published = (await releaseRows()).rowCount ?? 0;
     expect(published).toBeGreaterThan(10);
 
-    // Something else holds the table at the expiry boundary.
-    const blocker = await admin.connect();
+    // Something else holds the table at the expiry boundary: a session of its own, not a pooled
+    // one, so ending it always ends its transaction and its lock, whatever happens below.
+    const blocker = new Client({
+      application_name: `${SCHEMA}_blocker`,
+      connectionString: DATABASE_URL,
+    });
+    await blocker.connect();
     try {
       await blocker.query('BEGIN');
       await blocker.query(`LOCK TABLE ${SCHEMA}.traffic_releases IN ACCESS EXCLUSIVE MODE`);
       nowMs = Date.parse('2026-11-12T18:20:00Z');
-      const startedMs = Date.now();
       const blocked = await app.inject(FLOW_URL);
 
-      // The server's lock timeout ended the wait: the epoch failed within its bound, and the
-      // stale rows are not relabelled as this epoch's snapshot.
+      // PostgreSQL itself ended the wait (lock_not_available, raised by `lock_timeout`), not the
+      // client's own timeout; the epoch failed and the stale rows are not relabelled as this
+      // epoch's snapshot.
       expect(blocked.statusCode).toBe(503);
-      expect(Date.now() - startedMs).toBeLessThan(TRAFFIC_POOL_CONFIG.statement_timeout);
       expect(failures).toContain('epoch');
-      // Nothing from the traffic pool is still running or waiting on the database.
-      const waiting = await admin.query<{ count: number }>(
-        `SELECT count(*)::int AS count FROM pg_stat_activity
-         WHERE datname = current_database() AND wait_event_type = 'Lock'`,
-      );
-      expect(waiting.rows[0]?.count).toBe(0);
-      await blocker.query('ROLLBACK');
+      expect(storeErrors).toHaveLength(1);
+      expect(storeErrors[0]).toMatchObject({ code: '55P03' });
+      // Nothing of this test's own is still running, waiting or holding a transaction: the
+      // cancelled statement's transaction was rolled back before the epoch failed.
+      expect(await busySessions()).toBe(0);
     } finally {
-      blocker.release();
+      await blocker.query('ROLLBACK').catch(() => undefined);
+      await blocker.end().catch(() => undefined);
     }
     // Past their expiry the rows are still present until a publication succeeds.
     expect((await releaseRows()).rowCount).toBe(published);
@@ -608,7 +678,7 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
     nowMs = Date.parse('2026-11-12T18:25:05Z');
     expect(await flowFeatures(app)).toEqual([]);
     expect((await releaseRows()).rowCount).toBe(0);
-  }, 20_000);
+  }, 30_000);
 
   it('stores nothing at all while only collecting, even for a cohort of three', async () => {
     const { app, service } = await createApp({ settings: { mode: 'collect' } });

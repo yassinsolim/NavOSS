@@ -6,6 +6,29 @@ const { withEntitlementsPlist, withInfoPlist, withXcodeProject } = require('@exp
 // development builds `development`. EAS also enables the App Attest capability on the App ID
 // from this entitlement when it syncs capabilities.
 const ENTITLEMENT = 'com.apple.developer.devicecheck.appattest-environment';
+const ENABLED_INFO_KEY = 'NavOSSAppAttestEnabled';
+
+/**
+ * The entitlement is written only with `NAVOSS_APP_ATTEST_ENTITLEMENT_ENABLED=1`, like CarPlay's.
+ * A provisioning profile must include the App Attest capability before a signed build may carry
+ * it, which is an Apple Developer account change; until then builds ship without it and the app
+ * keeps community writes in the "not supported" state.
+ */
+function appAttestEntitlementEnabled(environment = process.env) {
+  return environment.NAVOSS_APP_ATTEST_ENTITLEMENT_ENABLED === '1';
+}
+
+/** What the plugin writes for an environment: the entitlement, the Info.plist switch, the guard. */
+function appAttestBuildSettings(environment = process.env) {
+  const attestEnvironment = appAttestEnvironment(environment);
+  const enabled = appAttestEntitlementEnabled(environment);
+  return {
+    developmentTeamId:
+      attestEnvironment === 'development' ? developmentTeamId(environment) : undefined,
+    entitlement: enabled ? attestEnvironment : undefined,
+    releaseGuard: enabled,
+  };
+}
 const DEVELOPMENT_TEAM_ID_KEY = 'NavOSSDevelopmentAppAttestTeamID';
 
 /**
@@ -60,13 +83,22 @@ const RELEASE_GUARD_SCRIPT = [
 ].join('\n');
 
 function withNavOSSAppAttest(config) {
-  const environment = appAttestEnvironment();
-  const teamId = environment === 'development' ? developmentTeamId() : undefined;
+  const settings = appAttestBuildSettings();
+  const teamId = settings.developmentTeamId;
   config = withEntitlementsPlist(config, (modConfig) => {
-    modConfig.modResults[ENTITLEMENT] = environment;
+    if (settings.entitlement === undefined) {
+      delete modConfig.modResults[ENTITLEMENT];
+    } else {
+      modConfig.modResults[ENTITLEMENT] = settings.entitlement;
+    }
     return modConfig;
   });
   config = withInfoPlist(config, (modConfig) => {
+    if (settings.entitlement === undefined) {
+      delete modConfig.modResults[ENABLED_INFO_KEY];
+    } else {
+      modConfig.modResults[ENABLED_INFO_KEY] = true;
+    }
     if (teamId === undefined) {
       delete modConfig.modResults[DEVELOPMENT_TEAM_ID_KEY];
     } else {
@@ -74,6 +106,7 @@ function withNavOSSAppAttest(config) {
     }
     return modConfig;
   });
+  if (!settings.releaseGuard) return config;
   config = withXcodeProject(config, (modConfig) => {
     const project = modConfig.modResults;
     const phases = project.hash.project.objects.PBXShellScriptBuildPhase ?? {};
@@ -100,5 +133,7 @@ function withNavOSSAppAttest(config) {
 module.exports = withNavOSSAppAttest;
 module.exports.RELEASE_GUARD_SCRIPT = RELEASE_GUARD_SCRIPT;
 module.exports.appAttestEnvironment = appAttestEnvironment;
+module.exports.appAttestBuildSettings = appAttestBuildSettings;
+module.exports.appAttestEntitlementEnabled = appAttestEntitlementEnabled;
 module.exports.developmentTeamId = developmentTeamId;
 module.exports.ENTITLEMENT = ENTITLEMENT;

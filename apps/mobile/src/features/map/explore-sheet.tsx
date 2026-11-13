@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
@@ -113,6 +114,9 @@ export function ExploreSheet({
   useRenderCounter('ExploreSheet');
   const { colors } = useTheme();
   const styles = useStyles();
+  // iOS keeps text measured at the old size when Dynamic Type changes while the app is open
+  // ("Home" drawn as "Ho…"). Keying the chip row on the font scale makes it measure again.
+  const { fontScale } = useWindowDimensions();
   const detents = exploreSheetDetents(metrics);
   const [detentIndex, setDetentIndex] = useState(detents.initial);
   const [focused, setFocused] = useState(false);
@@ -338,6 +342,7 @@ export function ExploreSheet({
       ) : (
         <>
           <ScrollView
+            key={String(fontScale)}
             accessibilityLabel="Explore nearby"
             contentContainerStyle={styles.chips}
             horizontal

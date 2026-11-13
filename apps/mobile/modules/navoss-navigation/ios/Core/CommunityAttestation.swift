@@ -113,13 +113,57 @@ public final class NavOSSCommunityMemorySecretStore: NavOSSCommunitySecretStore,
 
 // MARK: - App Attest
 
+/// The step of the App Attest flow an error came from.
+public enum NavOSSAppAttestStep: Sendable {
+  case generateKey
+  case attestKey
+  case generateAssertion
+}
+
+/// Maps a DeviceCheck error (domain `com.apple.devicecheck.error`) to the client's states.
+///
+/// A build without the App Attest entitlement (or without the capability on its provisioning
+/// profile) can still see `isSupported == true`, and then fails key generation or attestation.
+/// Anything there other than an invalid key or Apple being unavailable means App Attest cannot be
+/// used by this build: `.unsupported`, which the app shows as "not available" and never retries.
+public func navOSSAppAttestFailure(
+  domain: String,
+  code: Int,
+  step: NavOSSAppAttestStep
+) -> NavOSSCommunityAttestationError {
+  let deviceCheckDomain = "com.apple.devicecheck.error"
+  let invalidKey = 3
+  let serverUnavailable = 4
+  let featureUnsupported = 1
+  if domain == deviceCheckDomain {
+    switch code {
+    case invalidKey: return .invalidKey
+    case serverUnavailable: return .serviceUnavailable
+    case featureUnsupported: return .unsupported
+    default: break
+    }
+  }
+  switch step {
+  case .generateKey, .attestKey: return .unsupported
+  case .generateAssertion: return .failed
+  }
+}
+
 #if canImport(DeviceCheck) && os(iOS)
   /// DCAppAttestService. Real keys live in the Secure Enclave; only the key id is stored.
-  public struct NavOSSAppAttestProvider: NavOSSCommunityAttestationProvider {
+  /// Used only when the build carries the App Attest entitlement (`NavOSSAppAttestEnabled`).
+  public final class NavOSSAppAttestProvider: NavOSSCommunityAttestationProvider,
+    @unchecked Sendable
+  {
+    private let lock = NSLock()
+    /// Set once key generation or attestation shows this build cannot use App Attest; from then
+    /// on the provider reports unsupported and nothing is attempted again this launch.
+    private var unusable = false
+
     public init() {}
 
     public var isSupported: Bool {
-      DCAppAttestService.shared.isSupported
+      DCAppAttestService.shared.isSupported && !lock.withLock { unusable }
     }
 
     public func generateKey() async throws -> String {
@@ -127,7 +171,7 @@ public final class NavOSSCommunityMemorySecretStore: NavOSSCommunitySecretStore,
       do {
         return try await DCAppAttestService.shared.generateKey()
       } catch {
-        throw Self.mapped(error)
+        throw mapped(error, step: .generateKey)
       }
     }
 
@@ -143,7 +187,7 @@ public final class NavOSSCommunityMemorySecretStore: NavOSSCommunitySecretStore,
           )
         )
       } catch {
-        throw Self.mapped(error)
+        throw mapped(error, step: .attestKey)
       }
     }
 
@@ -154,20 +198,19 @@ public final class NavOSSCommunityMemorySecretStore: NavOSSCommunitySecretStore,
           clientDataHash: clientDataHash
         )
       } catch {
-        throw Self.mapped(error)
+        throw mapped(error, step: .generateAssertion)
       }
     }
 
     public func discardKey(keyId: String) {}
 
-    private static func mapped(_ error: Error) -> NavOSSCommunityAttestationError {
-      guard let error = error as? DCError else { return .failed }
-      switch error.code {
-      case .featureUnsupported: return .unsupported
-      case .invalidKey: return .invalidKey
-      case .serverUnavailable: return .serviceUnavailable
-      default: return .failed
+    private func mapped(_ error: Error, step: NavOSSAppAttestStep) -> NavOSSCommunityAttestationError {
+      let nsError = error as NSError
+      let failure = navOSSAppAttestFailure(domain: nsError.domain, code: nsError.code, step: step)
+      if failure == .unsupported {
+        lock.withLock { unusable = true }
       }
+      return failure
     }
   }
 #endif
