@@ -8,10 +8,15 @@ import {
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+import { useTheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const { colors } = useTheme();
   const [fontsLoaded, fontError] = useFonts({
     AtkinsonHyperlegibleNext_400Regular,
     AtkinsonHyperlegibleNext_500Medium,
@@ -29,5 +34,15 @@ export default function RootLayout() {
     return null;
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <GestureHandlerRootView style={styles.root}>
+      <Stack
+        screenOptions={{ contentStyle: { backgroundColor: colors.background }, headerShown: false }}
+      />
+    </GestureHandlerRootView>
+  );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+});

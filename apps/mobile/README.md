@@ -25,6 +25,17 @@ After the native client exists, JavaScript-only work can use:
 corepack pnpm --filter @navoss/mobile start:simulator
 ```
 
+## UI structure
+
+The phone UI is one screen: a map with the sheet the current task needs on top of it.
+
+- `src/theme` holds the design tokens (colour roles for light and dark, type scale, spacing, radii, elevation, motion) and `useTheme`/`createThemedStyles`. Components use roles, never raw colours. The UI follows the system appearance; the `Auto` map style follows it too.
+- `src/ui` holds the shared primitives: `Button`, `IconButton`, `Chip`, `ListRow`, `Banner`, `StateView`, `SegmentedControl`, `GlassSurface`, and the sheets (`BottomSheet`, `ModalSheet`, `SheetHeader`). Sheets are driven by one Reanimated shared value: drags, flings and everything that follows the sheet run on the UI thread.
+- `src/features/map/controller` holds the behaviour as hooks; `useMapController` composes them and `map-screen.tsx` only decides what is on screen.
+- `src/features/map/components` holds the map canvas, its layers and the floating controls. Camera frames are written to a shared value and a quantised store, so panning, zooming and guidance camera animation re-render no React component except the heading-cone layer.
+
+To measure renders instead of guessing, start Metro with `EXPO_PUBLIC_NAVOSS_RENDER_COUNTS=1`; cumulative commit counts per instrumented component are logged as `[navoss:renders] …`. The counter is a no-op in release builds.
+
 ## Validation
 
 ```sh

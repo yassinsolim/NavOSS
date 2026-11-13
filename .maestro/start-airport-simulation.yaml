@@ -62,6 +62,12 @@ appId: org.navoss.mobile
 - extendedWaitUntil:
     visible: 'Start navigation'
     timeout: 20000
+# Avoidances and the navigation marker sit above the preview sheet's resting detent.
+- swipe:
+    start: 50%, 60%
+    end: 50%, 25%
+    duration: 400
+- waitForAnimationToEnd
 - tapOn: 'Use car navigation marker'
 - tapOn: 'Start navigation'
 - assertVisible: 'End navigation'

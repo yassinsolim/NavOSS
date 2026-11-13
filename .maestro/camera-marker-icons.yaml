@@ -13,5 +13,5 @@ appId: org.navoss.mobile
 - extendedWaitUntil:
     visible: 'Map with .* official safety camera symbols'
     timeout: 20000
-- assertVisible: 'Search Calgary'
+- assertVisible: 'Search places'
 - takeScreenshot: '/tmp/navoss-camera-marker-icons'

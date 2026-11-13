@@ -11,7 +11,7 @@ appId: org.navoss.mobile
     text: 'Reload'
     optional: true
 - extendedWaitUntil:
-    visible: 'Search Calgary'
+    visible: 'Search places'
     timeout: 20000
 - tapOn: 'Map appearance'
 - assertVisible: 'Map appearance'
@@ -32,7 +32,7 @@ appId: org.navoss.mobile
     direction: DOWN
 - tapOn: 'Blue route'
 - tapOn: 'Close map appearance'
-- assertVisible: 'Search Calgary'
+- assertVisible: 'Search places'
 - tapOn: 'Map appearance'
 - assertVisible:
     text: 'Night'
@@ -74,7 +74,7 @@ appId: org.navoss.mobile
     text: 'Reload'
     optional: true
 - extendedWaitUntil:
-    visible: 'Search Calgary'
+    visible: 'Search places'
     timeout: 20000
 - tapOn: 'Map appearance'
 - assertVisible:

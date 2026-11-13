@@ -12,8 +12,11 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 import {
   customizeMapStyle,
   DEFAULT_MAP_PREFERENCES,
+  isDarkMapStyle,
   loadMapPreferences,
+  type MapPreferences,
   loadCustomizedMapStyle,
+  mapStyleInputs,
   mapStyleUrl,
   normalizeMapPreferences,
   saveMapPreferences,
@@ -306,5 +309,50 @@ describe('map preferences', () => {
       'navoss.map-preferences.v1',
       JSON.stringify(preferences),
     );
+  });
+});
+
+describe('map style inputs', () => {
+  it('ignores every preference NavOSS draws itself, so changing one cannot reload the basemap', () => {
+    const baseline = mapStyleInputs(DEFAULT_MAP_PREFERENCES);
+    const repainted: MapPreferences = {
+      ...DEFAULT_MAP_PREFERENCES,
+      navigationOrientation: 'north-up',
+      navigationView: 'flat',
+      routeColor: 'violet',
+      showRoadEvents: false,
+      showSafetyCameras: false,
+    };
+    expect(mapStyleInputs(repainted)).toEqual(baseline);
+  });
+
+  it('changes when the preset or a basemap layer toggle changes', () => {
+    const baseline = mapStyleInputs(DEFAULT_MAP_PREFERENCES);
+    for (const change of [
+      { stylePreset: 'night' },
+      { showBuildings: false },
+      { showPlaces: false },
+      { showTransit: false },
+    ] as const) {
+      expect(mapStyleInputs({ ...DEFAULT_MAP_PREFERENCES, ...change })).not.toEqual(baseline);
+    }
+  });
+
+  it('builds the same style from style inputs alone as from the full preferences', () => {
+    const preferences = {
+      ...DEFAULT_MAP_PREFERENCES,
+      routeColor: 'coral',
+      showTransit: false,
+    } as const;
+    expect(customizeMapStyle(style, mapStyleInputs(preferences))).toEqual(
+      customizeMapStyle(style, preferences),
+    );
+  });
+
+  it('follows the system appearance only for the automatic preset', () => {
+    expect(isDarkMapStyle('automatic', 'dark')).toBe(true);
+    expect(isDarkMapStyle('automatic', 'light')).toBe(false);
+    expect(isDarkMapStyle('night', 'light')).toBe(true);
+    expect(isDarkMapStyle('day', 'dark')).toBe(false);
   });
 });
