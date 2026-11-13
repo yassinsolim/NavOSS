@@ -89,6 +89,11 @@ export class CommunityReportError extends Error {
 }
 
 export interface CommunityReportService {
+  /**
+   * Verifies a fresh `traffic-credential` assertion and names the asserting installation. Used
+   * only to issue a community-traffic upload credential; nothing about traffic is stored here.
+   */
+  assertTrafficContributor(assertion: CommunityAssertion): Promise<{ installationId: string }>;
   close(): Promise<void>;
   deleteInstallation(assertion: CommunityAssertion): Promise<void>;
   deleteReport(reportId: string, assertion: CommunityAssertion): Promise<void>;
@@ -825,6 +830,22 @@ export function createCommunityReportService(
           now,
         );
         await client.query('DELETE FROM community_installations WHERE id = $1', [installation.id]);
+      });
+    },
+
+    async assertTrafficContributor(assertion) {
+      requireVerifier();
+      await ensureSchema();
+      const now = clock();
+      await consumeChallenge(assertion.challenge, now);
+      return withTransaction(async (client) => {
+        const installation = await assertInstallation(
+          client,
+          assertion,
+          { kind: 'traffic-credential' },
+          now,
+        );
+        return { installationId: installation.id };
       });
     },
 

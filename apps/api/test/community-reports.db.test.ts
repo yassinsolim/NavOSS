@@ -202,7 +202,7 @@ describe.skipIf(!available)('community reports on PostGIS', () => {
     const pool = schemaPool();
     try {
       expect(await pendingMigrations(pool)).toEqual(MIGRATIONS.map((migration) => migration.id));
-      expect(await runMigrations(pool)).toEqual(['0001_community_reports']);
+      expect(await runMigrations(pool)).toEqual(MIGRATIONS.map((migration) => migration.id));
       expect(await runMigrations(pool)).toEqual([]);
       expect(await pendingMigrations(pool)).toEqual([]);
     } finally {

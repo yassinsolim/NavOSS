@@ -12,6 +12,7 @@
     "migrate": "node dist/migrate.js",
     "start": "node dist/server.js",
     "test": "vitest run",
+    "traffic:replay": "node ./scripts/traffic-replay.mjs",
     "test:search:live": "node ./scripts/search-quality.mjs",
     "test:routes:live": "node ./scripts/route-quality.mjs",
     "test:routes:calgary-50": "ROUTE_QUALITY_CASES=./scripts/route-quality-calgary-50.json node ./scripts/route-quality.mjs"
