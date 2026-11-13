@@ -53,7 +53,13 @@ export function Banner({
       accessibilityRole={tone === 'danger' && announce ? 'alert' : undefined}
       style={[styles.banner, styles[tone], style]}
     >
-      <SymbolView name={icon ?? DEFAULT_ICONS[tone]} size={18} tintColor={tint} />
+      <SymbolView
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        name={icon ?? DEFAULT_ICONS[tone]}
+        size={18}
+        tintColor={tint}
+      />
       <View style={styles.copy}>
         {title !== undefined && (
           <Text maxFontSizeMultiplier={1.5} style={styles.title}>

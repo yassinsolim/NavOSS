@@ -44,7 +44,13 @@ export function CategoriesSheet({
         {EXPLORE_CATEGORY_GROUPS.map((group) => (
           <View key={group.id} style={styles.group}>
             <View style={styles.groupHeading}>
-              <SymbolView name={group.icon} size={18} tintColor={colors.textSecondary} />
+              <SymbolView
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                name={group.icon}
+                size={18}
+                tintColor={colors.textSecondary}
+              />
               <Text accessibilityRole="header" style={styles.groupTitle}>
                 {group.label}
               </Text>
