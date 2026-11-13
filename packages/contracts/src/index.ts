@@ -181,6 +181,7 @@ export type {
   SearchSource,
 } from './search.js';
 
+export { OfflineBundleManifestSchema, type OfflineBundleManifest } from './offline-bundle.js';
 export {
   COMMUNITY_TRAFFIC_ATTRIBUTION,
   COMMUNITY_TRAFFIC_SOURCE_ID,
