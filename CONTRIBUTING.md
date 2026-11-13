@@ -11,7 +11,7 @@ Thanks for helping build privacy-first navigation in the open. NavOSS is an earl
 
 ## Local Setup
 
-NavOSS requires Node.js 24.18.0 and pnpm 11.13.0 through Corepack.
+NavOSS requires Node.js 24.18.0 and pnpm 11.13.1 through Corepack.
 
 ```sh
 corepack pnpm install --frozen-lockfile
