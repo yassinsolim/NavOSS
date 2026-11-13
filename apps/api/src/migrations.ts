@@ -84,6 +84,30 @@ export const MIGRATIONS: readonly Migration[] = [
         ON community_report_votes (installation_id, created_at);
     `,
   },
+  {
+    id: '0002_community_traffic',
+    sql: `
+      -- Published community-traffic releases only: one row per road edge that at least the
+      -- threshold of attested installations drove in one cohort. Observations below the threshold
+      -- never reach the database. geom is the edge's OpenStreetMap geometry from the routing
+      -- graph, never an uploaded position; both timestamps are publication-epoch boundaries.
+      -- UNLOGGED: the rows are erased on every API start, so they are kept out of the WAL too.
+      CREATE UNLOGGED TABLE traffic_releases (
+        segment_key text PRIMARY KEY CHECK (segment_key ~ '^w[0-9]+[fb]-[0-9a-f]{12}$'),
+        road_class text NOT NULL
+          CHECK (road_class IN ('motorway', 'trunk', 'primary', 'secondary')),
+        speed_kph smallint NOT NULL CHECK (speed_kph BETWEEN 0 AND 200 AND speed_kph % 5 = 0),
+        free_flow_kph smallint NOT NULL CHECK (free_flow_kph BETWEEN 1 AND 200),
+        released_at timestamptz NOT NULL
+          CHECK (extract(epoch FROM released_at)::bigint % 300 = 0),
+        expires_at timestamptz NOT NULL
+          CHECK (expires_at > released_at AND expires_at <= released_at + interval '15 minutes'),
+        geom geometry(LineString, 4326) NOT NULL
+      );
+      CREATE INDEX traffic_releases_geom_idx ON traffic_releases USING gist (geom);
+      CREATE INDEX traffic_releases_expires_at_idx ON traffic_releases (expires_at);
+    `,
+  },
 ];
 
 const MIGRATIONS_TABLE = 'navoss_schema_migrations';

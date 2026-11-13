@@ -1,13 +1,26 @@
-import type { RouteCongestionLevel, RouteTrafficAnnotation } from '@navoss/contracts';
+import {
+  compareRouteAlternatives,
+  type RouteCongestionLevel,
+  type RouteTrafficAnnotation,
+} from '@navoss/contracts';
 
-import { classifyCongestion } from './aggregation.js';
 import { cumulativeMeters, type Position } from './geo.js';
 import type { MatchedEdge } from './map-matcher.js';
-import { segmentKeyForEdge } from './observations.js';
+import { classifyCongestion } from './segments.js';
 import type { TrafficSettings } from './settings.js';
 
 // A stationary estimate must not turn a short blocked segment into an unbounded delay.
 const MIN_DELAY_SPEED_KPH = 3;
+// Roads a detour through a neighbourhood is made of. Published traffic never covers them.
+const THROUGH_ROAD_CLASSES: ReadonlySet<string> = new Set([
+  'motorway',
+  'trunk',
+  'primary',
+  'secondary',
+  'tertiary',
+]);
+// Two routes between the same places differ by a few metres of minor road at each end.
+const MINOR_ROAD_SLACK_METERS = 100;
 
 export interface TrafficRouteInput {
   durationSeconds: number;
@@ -27,7 +40,10 @@ export function annotateRouteTraffic(
   route: TrafficRouteInput,
   edges: readonly MatchedEdge[],
   publishedSpeedsKph: ReadonlyMap<string, number>,
-  settings: Pick<TrafficSettings, 'freeRatio' | 'heavyRatio' | 'routeMinCoverage' | 'slowRatio'>,
+  settings: Pick<
+    TrafficSettings,
+    'freeRatio' | 'heavyRatio' | 'routeMaxDelayRatio' | 'routeMinCoverage' | 'slowRatio'
+  >,
 ): RouteTrafficAnnotation | undefined {
   const segmentCount = route.geometry.length - 1;
   const congestion = new Array<RouteCongestionLevel>(segmentCount).fill('unknown');
@@ -40,8 +56,8 @@ export function annotateRouteTraffic(
       return undefined;
     }
     totalMeters += edge.lengthMeters;
-    const key = segmentKeyForEdge(edge);
-    const speedKph = key === undefined ? undefined : publishedSpeedsKph.get(key);
+    const speedKph =
+      edge.segmentKey === undefined ? undefined : publishedSpeedsKph.get(edge.segmentKey);
     if (speedKph === undefined) continue;
     observedMeters += edge.lengthMeters;
     congestion.fill(
@@ -68,6 +84,18 @@ export function annotateRouteTraffic(
   }
   if (totalMeters <= 0 || observedMeters / totalMeters < settings.routeMinCoverage) {
     return undefined;
+  }
+
+  // However slow the published speeds, traffic may only add a bounded share of the route's
+  // typical duration. Published speeds come from a handful of contributors; a wrong or planted
+  // jam must not be able to make a route look arbitrarily bad.
+  const uncappedDelay = segmentDelays.reduce((sum, delay) => sum + delay, 0);
+  const delayCap = route.durationSeconds * settings.routeMaxDelayRatio;
+  if (uncappedDelay > delayCap) {
+    const scale = delayCap / uncappedDelay;
+    segmentDelays.forEach((delay, index) => {
+      segmentDelays[index] = delay * scale;
+    });
   }
 
   // Guidance sums step durations for the remaining time, so each step carries its own delay.
@@ -112,4 +140,51 @@ export function annotateRouteTraffic(
     stepDurationsSeconds,
     typicalDurationSeconds: route.durationSeconds,
   };
+}
+
+/** Metres of a walked route on roads below tertiary class: residential, service and the like. */
+export function minorRoadMeters(edges: readonly MatchedEdge[]): number {
+  return edges.reduce(
+    (sum, edge) => sum + (THROUGH_ROAD_CLASSES.has(edge.roadClass) ? 0 : edge.lengthMeters),
+    0,
+  );
+}
+
+export interface RankableRoute {
+  distanceMeters: number;
+  durationSeconds: number;
+  /** `minorRoadMeters` of the route, or undefined when the route could not be walked. */
+  minorMeters: number | undefined;
+}
+
+/**
+ * Re-ranks routes on traffic-adjusted durations, starting from the routing engine's own order.
+ * A route moves ahead of one the engine ranked above it only when it is faster with traffic and
+ * does not use more minor-road distance than the route it overtakes. Traffic can therefore swap
+ * one through-road route for another, but it can never be the reason a driver is sent down
+ * residential or service streets, however slow a published speed claims the main road is.
+ */
+export function rankWithTraffic<Route extends RankableRoute>(routes: readonly Route[]): Route[] {
+  const ranked = [...routes];
+  let swapped = true;
+  while (swapped) {
+    swapped = false;
+    for (let index = 0; index + 1 < ranked.length; index += 1) {
+      const ahead = ranked[index];
+      const behind = ranked[index + 1];
+      if (
+        ahead !== undefined &&
+        behind !== undefined &&
+        compareRouteAlternatives(behind, ahead) < 0 &&
+        behind.minorMeters !== undefined &&
+        ahead.minorMeters !== undefined &&
+        behind.minorMeters <= ahead.minorMeters + MINOR_ROAD_SLACK_METERS
+      ) {
+        ranked[index] = behind;
+        ranked[index + 1] = ahead;
+        swapped = true;
+      }
+    }
+  }
+  return ranked;
 }

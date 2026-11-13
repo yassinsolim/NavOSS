@@ -1,370 +1,193 @@
 import type { TrafficFlowBounds } from '@navoss/contracts';
 import { Pool } from 'pg';
 
-import { HISTOGRAM_BINS, type FlowBucket } from './aggregation.js';
+import { pendingMigrations } from '../migrations.js';
+import type { TrafficRelease } from './cohorts.js';
 import type { Position } from './geo.js';
-import { applyTrafficMigrations } from './migrations.js';
-import type { SegmentObservation } from './observations.js';
-
-export interface PublishedSegment {
-  buckets: FlowBucket[];
-  freeFlowKph: number;
-  lines: Position[][];
-  segmentKey: string;
-}
-
-export interface PublicationRule {
-  /** k: distinct contributors required across the window. */
-  minimumContributors: number;
-  /** Buckets starting before this instant are ignored. */
-  windowStartMs: number;
-}
-
-export interface TrafficCounts {
-  observedSegments: number;
-  publishedSegments: number;
-  samples: number;
-}
 
 /**
- * Persistence for traffic aggregates. Every read applies the publication rule inside the store, so
- * a segment below the contributor threshold, or without map geometry yet, never leaves it.
+ * Storage for published releases only. Nothing below the contributor threshold is ever passed to
+ * a store, and every read is as of an epoch boundary: a release is visible from the boundary that
+ * produced it until the boundary at which it expires, whether or not cleanup has run.
  */
-export interface TrafficStore {
+export interface TrafficReleaseStore {
+  byKeys(keys: readonly string[], epochStartMs: number): Promise<TrafficRelease[]>;
   close(): Promise<void>;
-  counts(rule: PublicationRule): Promise<TrafficCounts>;
-  /** Removes buckets that started before the cutoff and segments left without any bucket. */
-  expire(cutoffMs: number): Promise<void>;
-  /** Prepares the schema and erases aggregates recorded under a previous contributor key. */
-  initialize(): Promise<void>;
-  publishedByKeys(keys: readonly string[], rule: PublicationRule): Promise<PublishedSegment[]>;
-  publishedInBounds(
+  inBounds(
     bounds: TrafficFlowBounds,
-    rule: PublicationRule,
+    epochStartMs: number,
     limit: number,
-  ): Promise<{ segments: PublishedSegment[]; truncated: boolean }>;
+  ): Promise<{ releases: TrafficRelease[]; truncated: boolean }>;
   /**
-   * Adds one sample per observation. A contributor token already present in a segment's bucket
-   * makes that observation a no-op, so one driver cannot stack samples.
+   * Applies one epoch boundary atomically: removes everything that expired at or before it, then
+   * writes that epoch's releases, replacing an older value for the same segment.
    */
-  record(
-    observations: readonly SegmentObservation[],
-    tokenFor: (segmentKey: string) => string,
-  ): Promise<void>;
+  publishEpoch(epochStartMs: number, releases: readonly TrafficRelease[]): Promise<void>;
+  /** Erases every stored release. Succeeds when the schema was never created. */
+  purge(): Promise<void>;
+  /** Rejects unless the storage schema is current. */
+  ready(): Promise<void>;
 }
 
 const ROAD_CLASS_RANK: Readonly<Record<string, number>> = {
   motorway: 0,
   primary: 2,
   secondary: 3,
-  tertiary: 4,
   trunk: 1,
 };
 
-interface MemorySegment {
-  buckets: Map<number, { histogram: number[]; tokens: Set<string> }>;
-  freeFlowKph: number;
-  lines: Map<string, Position[]>;
-  roadClass: string;
-}
-
-export function createInMemoryTrafficStore(): TrafficStore {
-  const segments = new Map<string, MemorySegment>();
-
-  const published = (
-    segmentKey: string,
-    segment: MemorySegment,
-    rule: PublicationRule,
-  ): PublishedSegment | undefined => {
-    const live = [...segment.buckets].filter(([start]) => start >= rule.windowStartMs);
-    const contributors = new Set(live.flatMap(([, bucket]) => [...bucket.tokens]));
-    if (contributors.size < rule.minimumContributors || segment.lines.size === 0) return undefined;
-    return {
-      buckets: live.map(([bucketStartMs, bucket]) => ({
-        bucketStartMs,
-        histogram: bucket.histogram,
-        sampleCount: bucket.tokens.size,
-      })),
-      freeFlowKph: segment.freeFlowKph,
-      lines: [...segment.lines.values()],
-      segmentKey,
-    };
-  };
+export function createInMemoryTrafficReleaseStore(): TrafficReleaseStore {
+  const releases = new Map<string, TrafficRelease>();
+  const visible = (release: TrafficRelease, epochStartMs: number): boolean =>
+    release.releasedAtMs <= epochStartMs && release.expiresAtMs > epochStartMs;
 
   return {
-    close: () => Promise.resolve(),
-    counts(rule) {
-      const live = [...segments].filter(([, segment]) =>
-        [...segment.buckets.keys()].some((start) => start >= rule.windowStartMs),
-      );
-      return Promise.resolve({
-        observedSegments: live.length,
-        publishedSegments: live.filter(([key, segment]) => published(key, segment, rule)).length,
-        samples: live.reduce(
-          (sum, [, segment]) =>
-            sum +
-            [...segment.buckets]
-              .filter(([start]) => start >= rule.windowStartMs)
-              .reduce((count, [, bucket]) => count + bucket.tokens.size, 0),
-          0,
-        ),
-      });
-    },
-    expire(cutoffMs) {
-      for (const [key, segment] of segments) {
-        for (const start of segment.buckets.keys()) {
-          if (start < cutoffMs) segment.buckets.delete(start);
-        }
-        if (segment.buckets.size === 0) segments.delete(key);
-      }
-      return Promise.resolve();
-    },
-    initialize() {
-      segments.clear();
-      return Promise.resolve();
-    },
-    publishedByKeys(keys, rule) {
+    byKeys(keys, epochStartMs) {
       return Promise.resolve(
         keys.flatMap((key) => {
-          const segment = segments.get(key);
-          return (segment === undefined ? undefined : published(key, segment, rule)) ?? [];
+          const release = releases.get(key);
+          return release !== undefined && visible(release, epochStartMs) ? [release] : [];
         }),
       );
     },
-    publishedInBounds(bounds, rule, limit) {
-      const matches = [...segments]
-        .filter(([, segment]) =>
-          [...segment.lines.values()].some((line) =>
-            line.some(
+    close: () => Promise.resolve(),
+    inBounds(bounds, epochStartMs, limit) {
+      const matches = [...releases.values()]
+        .filter(
+          (release) =>
+            visible(release, epochStartMs) &&
+            release.line.some(
               ([longitude, latitude]) =>
                 longitude >= bounds.west &&
                 longitude <= bounds.east &&
                 latitude >= bounds.south &&
                 latitude <= bounds.north,
             ),
-          ),
         )
         .sort(
-          ([leftKey, left], [rightKey, right]) =>
+          (left, right) =>
             (ROAD_CLASS_RANK[left.roadClass] ?? 9) - (ROAD_CLASS_RANK[right.roadClass] ?? 9) ||
-            leftKey.localeCompare(rightKey),
-        )
-        .flatMap(([key, segment]) => published(key, segment, rule) ?? []);
+            left.segmentKey.localeCompare(right.segmentKey),
+        );
       return Promise.resolve({
-        segments: matches.slice(0, limit),
+        releases: matches.slice(0, limit),
         truncated: matches.length > limit,
       });
     },
-    record(observations, tokenFor) {
-      for (const observation of observations) {
-        const segment = segments.get(observation.segmentKey) ?? {
-          buckets: new Map<number, { histogram: number[]; tokens: Set<string> }>(),
-          freeFlowKph: observation.freeFlowKph,
-          lines: new Map<string, Position[]>(),
-          roadClass: observation.roadClass,
-        };
-        segments.set(observation.segmentKey, segment);
-        segment.freeFlowKph = observation.freeFlowKph;
-        segment.roadClass = observation.roadClass;
-        for (const line of observation.lines) segment.lines.set(JSON.stringify(line), line);
-        const bucket = segment.buckets.get(observation.bucketStartMs) ?? {
-          histogram: new Array<number>(HISTOGRAM_BINS).fill(0),
-          tokens: new Set<string>(),
-        };
-        segment.buckets.set(observation.bucketStartMs, bucket);
-        const token = tokenFor(observation.segmentKey);
-        if (bucket.tokens.has(token)) continue;
-        bucket.tokens.add(token);
-        bucket.histogram[observation.speedBin] = (bucket.histogram[observation.speedBin] ?? 0) + 1;
+    publishEpoch(epochStartMs, epochReleases) {
+      for (const [key, release] of releases) {
+        if (release.expiresAtMs <= epochStartMs) releases.delete(key);
       }
+      for (const release of epochReleases) releases.set(release.segmentKey, release);
       return Promise.resolve();
     },
+    purge() {
+      releases.clear();
+      return Promise.resolve();
+    },
+    ready: () => Promise.resolve(),
   };
 }
 
-interface PublishedRow {
-  buckets: FlowBucket[];
+interface ReleaseRow {
+  expires_at_ms: string;
   free_flow_kph: number;
-  lines: Position[][];
+  line: Position[];
+  released_at_ms: string;
+  road_class: string;
   segment_key: string;
+  speed_kph: number;
 }
 
-// The contributor threshold and the geometry requirement are part of the query itself: rows that
-// fail them are never returned to application code.
-const PUBLISHED_SELECT = `
-  SELECT s.segment_key, s.free_flow_kph, (ST_AsGeoJSON(s.geom, 6)::json -> 'coordinates') AS lines, live.buckets
-  FROM traffic_segments s
-  CROSS JOIN LATERAL (
-    SELECT
-      json_agg(
-        json_build_object(
-          'bucketStartMs', (extract(epoch FROM b.bucket_start) * 1000)::bigint,
-          'histogram', b.speed_histogram,
-          'sampleCount', b.sample_count
-        )
-      ) AS buckets,
-      (
-        SELECT count(DISTINCT token)
-        FROM traffic_flow_buckets c
-        CROSS JOIN LATERAL unnest(c.contributor_tokens) AS token
-        WHERE c.segment_key = s.segment_key AND c.bucket_start >= $1
-      ) AS contributors
-    FROM traffic_flow_buckets b
-    WHERE b.segment_key = s.segment_key AND b.bucket_start >= $1
-  ) live
-  WHERE s.geom IS NOT NULL AND live.contributors >= $2`;
+const RELEASE_SELECT = `
+  SELECT segment_key, road_class, speed_kph, free_flow_kph,
+         (extract(epoch FROM released_at) * 1000)::bigint::text AS released_at_ms,
+         (extract(epoch FROM expires_at) * 1000)::bigint::text AS expires_at_ms,
+         (ST_AsGeoJSON(geom, 6)::json -> 'coordinates') AS line
+  FROM traffic_releases
+  WHERE released_at <= $1 AND expires_at > $1`;
 
-function toPublished(row: PublishedRow): PublishedSegment {
+function toRelease(row: ReleaseRow): TrafficRelease {
   return {
-    buckets: row.buckets,
+    expiresAtMs: Number(row.expires_at_ms),
     freeFlowKph: row.free_flow_kph,
-    lines: row.lines,
+    line: row.line,
+    releasedAtMs: Number(row.released_at_ms),
+    roadClass: row.road_class,
     segmentKey: row.segment_key,
+    speedKph: row.speed_kph,
   };
 }
 
-export function createPostgresTrafficStore(pool: Pool = new Pool({ max: 4 })): TrafficStore {
+export function createPostgresTrafficReleaseStore(
+  pool: Pool = new Pool({ max: 4 }),
+): TrafficReleaseStore {
   return {
-    close: () => pool.end(),
-    async counts(rule) {
-      const result = await pool.query<{ observed: string; published: string; samples: string }>(
-        `SELECT
-           count(*)::text AS observed,
-           count(*) FILTER (WHERE q.has_geometry AND q.contributors >= $2)::text AS published,
-           coalesce(sum(q.samples), 0)::text AS samples
-         FROM (
-           SELECT
-             s.geom IS NOT NULL AS has_geometry,
-             sum(b.sample_count) AS samples,
-             (
-               SELECT count(DISTINCT token)
-               FROM traffic_flow_buckets c
-               CROSS JOIN LATERAL unnest(c.contributor_tokens) AS token
-               WHERE c.segment_key = s.segment_key AND c.bucket_start >= $1
-             ) AS contributors
-           FROM traffic_segments s
-           JOIN traffic_flow_buckets b ON b.segment_key = s.segment_key AND b.bucket_start >= $1
-           GROUP BY s.segment_key
-         ) q`,
-        [new Date(rule.windowStartMs), rule.minimumContributors],
-      );
-      const row = result.rows[0];
-      return {
-        observedSegments: Number(row?.observed ?? 0),
-        publishedSegments: Number(row?.published ?? 0),
-        samples: Number(row?.samples ?? 0),
-      };
-    },
-    async expire(cutoffMs) {
-      await pool.query('DELETE FROM traffic_flow_buckets WHERE bucket_start < $1', [
-        new Date(cutoffMs),
-      ]);
-      await pool.query(
-        `DELETE FROM traffic_segments s
-         WHERE NOT EXISTS (SELECT 1 FROM traffic_flow_buckets b WHERE b.segment_key = s.segment_key)`,
-      );
-    },
-    async initialize() {
-      const client = await pool.connect();
-      try {
-        await applyTrafficMigrations(client);
-        // Contributor tokens are only comparable under the key of the process that wrote them.
-        // A new process has a new key, so it starts from nothing rather than risk counting one
-        // driver twice toward the publication threshold.
-        await client.query('TRUNCATE traffic_flow_buckets, traffic_segments');
-      } finally {
-        client.release();
-      }
-    },
-    async publishedByKeys(keys, rule) {
+    async byKeys(keys, epochStartMs) {
       if (keys.length === 0) return [];
-      const result = await pool.query<PublishedRow>(
-        `${PUBLISHED_SELECT} AND s.segment_key = ANY($3::text[])`,
-        [new Date(rule.windowStartMs), rule.minimumContributors, keys],
+      const result = await pool.query<ReleaseRow>(
+        `${RELEASE_SELECT} AND segment_key = ANY($2::text[])`,
+        [new Date(epochStartMs), keys],
       );
-      return result.rows.map(toPublished);
+      return result.rows.map(toRelease);
     },
-    async publishedInBounds(bounds, rule, limit) {
-      const result = await pool.query<PublishedRow>(
-        `${PUBLISHED_SELECT} AND s.geom && ST_MakeEnvelope($3, $4, $5, $6, 4326)
+    close: () => pool.end(),
+    async inBounds(bounds, epochStartMs, limit) {
+      const result = await pool.query<ReleaseRow>(
+        `${RELEASE_SELECT} AND geom && ST_MakeEnvelope($2, $3, $4, $5, 4326)
          ORDER BY
-           CASE s.road_class
-             WHEN 'motorway' THEN 0 WHEN 'trunk' THEN 1 WHEN 'primary' THEN 2
-             WHEN 'secondary' THEN 3 WHEN 'tertiary' THEN 4 ELSE 9
+           CASE road_class
+             WHEN 'motorway' THEN 0 WHEN 'trunk' THEN 1 WHEN 'primary' THEN 2 ELSE 3
            END,
-           s.segment_key
-         LIMIT $7`,
-        [
-          new Date(rule.windowStartMs),
-          rule.minimumContributors,
-          bounds.west,
-          bounds.south,
-          bounds.east,
-          bounds.north,
-          limit + 1,
-        ],
+           segment_key
+         LIMIT $6`,
+        [new Date(epochStartMs), bounds.west, bounds.south, bounds.east, bounds.north, limit + 1],
       );
       return {
-        segments: result.rows.slice(0, limit).map(toPublished),
+        releases: result.rows.slice(0, limit).map(toRelease),
         truncated: result.rows.length > limit,
       };
     },
-    async record(observations, tokenFor) {
-      if (observations.length === 0) return;
+    async publishEpoch(epochStartMs, releases) {
       const client = await pool.connect();
       try {
+        // One transaction and one insert per epoch for every segment released in it, in key
+        // order: row versions and physical order say which epoch, never which upload.
         await client.query('BEGIN');
-        for (const observation of observations) {
+        await client.query('DELETE FROM traffic_releases WHERE expires_at <= $1', [
+          new Date(epochStartMs),
+        ]);
+        if (releases.length > 0) {
           await client.query(
-            `INSERT INTO traffic_segments
-               (segment_key, way_id, forward, road_class, free_flow_kph, speed_limit_kph, geom)
-             VALUES ($1, $2, $3, $4, $5, $6, ST_SetSRID(ST_GeomFromGeoJSON($7), 4326))
+            `INSERT INTO traffic_releases
+               (segment_key, road_class, speed_kph, free_flow_kph, released_at, expires_at, geom)
+             SELECT r.segment_key, r.road_class, r.speed_kph, r.free_flow_kph,
+                    to_timestamp(r.released_at_ms / 1000.0), to_timestamp(r.expires_at_ms / 1000.0),
+                    ST_SetSRID(ST_GeomFromGeoJSON(r.geometry), 4326)
+             FROM jsonb_to_recordset($1::jsonb) AS r (
+               segment_key text, road_class text, speed_kph smallint, free_flow_kph smallint,
+               released_at_ms bigint, expires_at_ms bigint, geometry text
+             )
+             ORDER BY r.segment_key COLLATE "C"
              ON CONFLICT (segment_key) DO UPDATE SET
                road_class = EXCLUDED.road_class,
+               speed_kph = EXCLUDED.speed_kph,
                free_flow_kph = EXCLUDED.free_flow_kph,
-               speed_limit_kph = coalesce(EXCLUDED.speed_limit_kph, traffic_segments.speed_limit_kph),
-               geom = CASE
-                 WHEN EXCLUDED.geom IS NULL THEN traffic_segments.geom
-                 WHEN traffic_segments.geom IS NULL THEN EXCLUDED.geom
-                 WHEN ST_Covers(traffic_segments.geom, EXCLUDED.geom) THEN traffic_segments.geom
-                 ELSE ST_Multi(ST_LineMerge(ST_Union(traffic_segments.geom, EXCLUDED.geom)))
-               END`,
+               released_at = EXCLUDED.released_at,
+               expires_at = EXCLUDED.expires_at,
+               geom = EXCLUDED.geom`,
             [
-              observation.segmentKey,
-              observation.wayId,
-              observation.forward,
-              observation.roadClass,
-              observation.freeFlowKph,
-              observation.speedLimitKph ?? null,
-              observation.lines.length === 0
-                ? null
-                : JSON.stringify({ coordinates: observation.lines, type: 'MultiLineString' }),
-            ],
-          );
-          const histogram = new Array<number>(HISTOGRAM_BINS).fill(0);
-          histogram[observation.speedBin] = 1;
-          await client.query(
-            `INSERT INTO traffic_flow_buckets AS bucket
-               (segment_key, bucket_start, sample_count, speed_histogram, contributor_tokens)
-             VALUES ($1, $2, 1, $3::integer[], ARRAY[$4::bigint])
-             ON CONFLICT (segment_key, bucket_start) DO UPDATE SET
-               sample_count = bucket.sample_count + 1,
-               speed_histogram = (
-                 SELECT array_agg(pair.existing + pair.added ORDER BY pair.bin)
-                 FROM unnest(bucket.speed_histogram, EXCLUDED.speed_histogram)
-                   WITH ORDINALITY AS pair (existing, added, bin)
-               ),
-               -- Kept sorted so the array order says nothing about arrival order.
-               contributor_tokens = (
-                 SELECT array_agg(token ORDER BY token)
-                 FROM unnest(bucket.contributor_tokens || $4::bigint) AS token
-               )
-             WHERE NOT bucket.contributor_tokens @> ARRAY[$4::bigint]`,
-            [
-              observation.segmentKey,
-              new Date(observation.bucketStartMs),
-              histogram,
-              tokenFor(observation.segmentKey),
+              JSON.stringify(
+                releases.map((release) => ({
+                  expires_at_ms: release.expiresAtMs,
+                  free_flow_kph: release.freeFlowKph,
+                  geometry: JSON.stringify({ coordinates: release.line, type: 'LineString' }),
+                  released_at_ms: release.releasedAtMs,
+                  road_class: release.roadClass,
+                  segment_key: release.segmentKey,
+                  speed_kph: release.speedKph,
+                })),
+              ),
             ],
           );
         }
@@ -374,6 +197,17 @@ export function createPostgresTrafficStore(pool: Pool = new Pool({ max: 4 })): T
         throw error;
       } finally {
         client.release();
+      }
+    },
+    async purge() {
+      const table = await pool.query<{ present: boolean }>(
+        "SELECT to_regclass('traffic_releases') IS NOT NULL AS present",
+      );
+      if (table.rows[0]?.present === true) await pool.query('TRUNCATE traffic_releases');
+    },
+    async ready() {
+      if ((await pendingMigrations(pool)).length > 0) {
+        throw new Error('Database migrations are pending. Run `node dist/migrate.js`.');
       }
     },
   };

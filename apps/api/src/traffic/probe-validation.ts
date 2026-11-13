@@ -22,12 +22,11 @@ export function findProbeRejection(
     'bounds' | 'maxBatchAgeSeconds' | 'maxFutureSeconds' | 'maxPointSpeedMetersPerSecond'
   >,
 ): ProbeRejection | undefined {
-  const capturedAtMs = Date.parse(batch.capturedAt);
-  const lastOffsetSeconds = batch.points.at(-1)?.[2] ?? 0;
-  if (capturedAtMs > nowMs + settings.maxFutureSeconds * 1_000) return 'future';
-  if (capturedAtMs + lastOffsetSeconds * 1_000 < nowMs - settings.maxBatchAgeSeconds * 1_000) {
-    return 'stale';
-  }
+  // Both checks use the batch's last point, the latest moment the batch claims to describe: a
+  // start time inside the allowed skew must not carry later offsets into the future.
+  const lastPointMs = Date.parse(batch.capturedAt) + (batch.points.at(-1)?.[2] ?? 0) * 1_000;
+  if (lastPointMs > nowMs + settings.maxFutureSeconds * 1_000) return 'future';
+  if (lastPointMs < nowMs - settings.maxBatchAgeSeconds * 1_000) return 'stale';
   const { east, north, south, west } = settings.bounds;
   let previous: TrafficProbeBatchRequest['points'][number] | undefined;
   for (const point of batch.points) {
