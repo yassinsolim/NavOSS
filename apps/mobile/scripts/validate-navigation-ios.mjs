@@ -661,11 +661,19 @@ try {
         },
       );
       await delay(5_000);
-      await runMaestroFlow(
-        resolve(rootDirectory, '.maestro/navigation-validation/accept-location-prompt.yaml'),
-        join(logsDirectory, 'accept-location-prompt.log'),
-        120_000,
-      );
+      // Some simulator runtimes ignore `simctl privacy grant location`, so the prompt is answered
+      // through Maestro where it is installed. `--carplay-only` does not require Maestro (see
+      // preflight), and on runners without it the grant above is what earlier runs relied on.
+      const maestroAvailable =
+        spawnSync('sh', ['-c', 'command -v maestro'], { encoding: 'utf8', env: environment })
+          .status === 0;
+      if (maestroAvailable) {
+        await runMaestroFlow(
+          resolve(rootDirectory, '.maestro/navigation-validation/accept-location-prompt.yaml'),
+          join(logsDirectory, 'accept-location-prompt.log'),
+          120_000,
+        );
+      }
       for (const [name, scenario, appearance] of [
         ['carplay-preview-light', 'preview', 'light'],
         ['carplay-preview-dark', 'preview', 'dark'],
