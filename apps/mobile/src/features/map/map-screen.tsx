@@ -175,16 +175,6 @@ export function MapScreen() {
         />
       </MapCanvas>
 
-      {/* The map's summary for assistive tech. The native map view exposes only its own label,
-          so the counts live on this thin element at the top edge of the map. */}
-      {exploring && (
-        <View
-          accessibilityLabel={mapSummary}
-          accessible
-          pointerEvents="none"
-          style={[styles.mapSummary, { top: insets.top }]}
-        />
-      )}
       {mapChromeVisible && (
         <MapControls
           attribution={mapAttributionLabel({
@@ -485,6 +475,5 @@ export function MapScreen() {
 const useStyles = createThemedStyles(({ colors }) =>
   StyleSheet.create({
     container: { backgroundColor: colors.background, flex: 1 },
-    mapSummary: { height: 2, left: 0, position: 'absolute', right: 0 },
   }),
 );
