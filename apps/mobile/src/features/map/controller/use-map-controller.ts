@@ -386,7 +386,10 @@ export function useMapController() {
 
   function fitRoute(route: RouteAlternative, demoOrigin: boolean) {
     cameraRef.current?.fitBounds(routeBounds(route), {
+      // A preview is read north-up and flat, whatever the last trip left the camera at.
+      bearing: 0,
       duration: 750,
+      pitch: 0,
       padding: routePreviewCameraPadding(metrics, { demoOrigin }),
     });
   }

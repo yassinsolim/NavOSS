@@ -19,6 +19,9 @@ import { palette } from '@/theme/tokens';
 
 const CANADA_CENTER: [longitude: number, latitude: number] = [-106.3468, 56.1304];
 const INITIAL_VIEW_STATE = { center: CANADA_CENTER, zoom: 3.2 };
+// Explicit, not undefined: the native camera keeps the last padding it was given, so guidance
+// padding would otherwise survive the trip and push the next route preview under its sheet.
+const NO_PADDING = { bottom: 0, left: 0, right: 0, top: 0 };
 
 const MAP_IMAGES = {
   'road-closure': require('@/assets/images/road-closure-marker.png'),
@@ -134,7 +137,7 @@ export function MapCanvas({
         initialViewState={INITIAL_VIEW_STATE}
         maxZoom={19}
         minZoom={0}
-        padding={isNavigating ? guidanceCameraPadding(metrics) : undefined}
+        padding={isNavigating ? guidanceCameraPadding(metrics) : NO_PADDING}
         pitch={followsVehicle ? (navigationView === 'tilted' ? 42 : 0) : undefined}
         ref={cameraRef}
         zoom={followsVehicle ? 16 : idleShouldFollow ? 15 : undefined}
