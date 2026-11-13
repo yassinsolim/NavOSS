@@ -56,15 +56,24 @@ export function searchLocation(
         : undefined;
   const road = text(address.road ?? address.pedestrian ?? address.footway ?? address.path);
   let houseNumber = text(address.house_number);
+  const normalizedNumber = houseNumber === undefined ? undefined : normalizeSearchText(houseNumber);
+  const roadIncludesNumber =
+    road !== undefined &&
+    normalizedNumber !== undefined &&
+    normalizeSearchText(road).startsWith(`${normalizedNumber} `);
   let streetAddress =
-    road === undefined ? breadcrumbAddress : [houseNumber, road].filter(Boolean).join(' ');
+    road === undefined
+      ? breadcrumbAddress
+      : roadIncludesNumber
+        ? road
+        : [houseNumber, road].filter(Boolean).join(' ');
   // Address results often repeat the entire civic address as their name.
   const namedAddress =
     /^\s*(?:#[\p{L}\d/-]+\s+)?\d/u.test(name) && STREET_WORD.test(name) ? name : undefined;
   streetAddress ??= namedAddress;
   const civic = streetAddress?.match(/^(?:#([\p{L}\d/-]+)\s+)?(\d+[\p{L}\d/-]*)\s+(.+)$/u);
   houseNumber ??= civic?.[2];
-  const street = road ?? civic?.[3] ?? streetAddress;
+  const street = civic?.[3] ?? road ?? streetAddress;
   const last = localParts.at(-1);
   const city =
     text(

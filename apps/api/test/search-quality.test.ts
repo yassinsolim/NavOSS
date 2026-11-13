@@ -619,3 +619,44 @@ describe('record identity across dated snapshots', () => {
     });
   });
 });
+
+describe('provider civic address composition', () => {
+  it('does not repeat the house number when Photon supplies a complete street value', async () => {
+    const provider = createDevelopmentSearchProvider(
+      [],
+      createPhotonSearchProvider({
+        fetchImplementation: () =>
+          Promise.resolve(
+            new Response(
+              JSON.stringify({
+                type: 'FeatureCollection',
+                features: [
+                  {
+                    type: 'Feature',
+                    geometry: { type: 'Point', coordinates: [-114.0463494, 50.9897629] },
+                    properties: {
+                      osm_type: 'W',
+                      osm_id: 123813629,
+                      osm_key: 'shop',
+                      osm_value: 'wholesale',
+                      name: 'Costco',
+                      housenumber: '99',
+                      street: '99 Heritage Gate SE',
+                      city: 'Calgary',
+                    },
+                  },
+                ],
+              }),
+            ),
+          ),
+      }),
+    );
+    const response = await provider.search({
+      ...CALGARY,
+      q: 'Costco',
+      includeDetails: true,
+      limit: 8,
+    });
+    expect(response.results[0]?.label).toBe('Costco, 99 Heritage Gate SE, Calgary');
+  });
+});
