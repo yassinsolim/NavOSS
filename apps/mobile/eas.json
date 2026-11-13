@@ -13,6 +13,7 @@
       "environment": "development",
       "extends": "base",
       "env": {
+        "NAVOSS_APP_ATTEST_ENTITLEMENT_ENABLED": "0",
         "NAVOSS_APP_ATTEST_ENVIRONMENT": "development"
       }
     },
@@ -21,6 +22,7 @@
       "environment": "preview",
       "extends": "base",
       "env": {
+        "NAVOSS_APP_ATTEST_ENTITLEMENT_ENABLED": "0",
         "NAVOSS_APP_ATTEST_ENVIRONMENT": "production"
       }
     },
@@ -28,6 +30,7 @@
       "distribution": "internal",
       "environment": "production",
       "env": {
+        "NAVOSS_APP_ATTEST_ENTITLEMENT_ENABLED": "0",
         "NAVOSS_APP_ATTEST_ENVIRONMENT": "production",
         "NAVOSS_CARPLAY_ENABLED": "1",
         "NAVOSS_CARPLAY_ENTITLEMENT_ENABLED": "1",
@@ -39,6 +42,7 @@
       "autoIncrement": true,
       "environment": "production",
       "env": {
+        "NAVOSS_APP_ATTEST_ENTITLEMENT_ENABLED": "0",
         "NAVOSS_APP_ATTEST_ENVIRONMENT": "production",
         "NAVOSS_CARPLAY_ENABLED": "0",
         "NAVOSS_CARPLAY_ENTITLEMENT_ENABLED": "0",
@@ -50,6 +54,7 @@
       "autoIncrement": true,
       "environment": "production",
       "env": {
+        "NAVOSS_APP_ATTEST_ENTITLEMENT_ENABLED": "0",
         "NAVOSS_APP_ATTEST_ENVIRONMENT": "production",
         "NAVOSS_CARPLAY_ENABLED": "1",
         "NAVOSS_CARPLAY_ENTITLEMENT_ENABLED": "1",
@@ -61,6 +66,7 @@
       "autoIncrement": true,
       "environment": "production",
       "env": {
+        "NAVOSS_APP_ATTEST_ENTITLEMENT_ENABLED": "0",
         "NAVOSS_APP_ATTEST_ENVIRONMENT": "production",
         "NAVOSS_CARPLAY_ENABLED": "1",
         "NAVOSS_CARPLAY_ENTITLEMENT_ENABLED": "1",

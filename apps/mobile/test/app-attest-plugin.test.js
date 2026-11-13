@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  appAttestBuildSettings,
   appAttestEnvironment,
   developmentTeamId,
   RELEASE_GUARD_SCRIPT,
@@ -77,4 +78,25 @@ describe('App Attest entitlement environment', () => {
       expect(runGuard('Debug', 'development').status).toBe(0);
     },
   );
+
+  it('writes no entitlement and no Release guard unless the entitlement flag is on', () => {
+    for (const profile of ['production-carplay', 'production', 'development']) {
+      const settings = appAttestBuildSettings({
+        EAS_BUILD_PROFILE: profile,
+        NAVOSS_APP_ATTEST_ENVIRONMENT: profile === 'development' ? 'development' : 'production',
+      });
+      expect(settings.entitlement).toBeUndefined();
+      expect(settings.releaseGuard).toBe(false);
+    }
+  });
+
+  it('writes the production entitlement and the guard when the flag is on', () => {
+    expect(
+      appAttestBuildSettings({
+        EAS_BUILD_PROFILE: 'production-carplay',
+        NAVOSS_APP_ATTEST_ENTITLEMENT_ENABLED: '1',
+        NAVOSS_APP_ATTEST_ENVIRONMENT: 'production',
+      }),
+    ).toMatchObject({ entitlement: 'production', releaseGuard: true });
+  });
 });
