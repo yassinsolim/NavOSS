@@ -19,7 +19,7 @@
 - `packages/contracts`: shared strict Zod contracts.
 - Production API: `https://navoss-api.yassin.app`.
 - Bundle ID: `org.navoss.mobile`.
-- Native navigation contract v9 owns location, matching (windowed, grid-indexed, speed-plausible, with short dead reckoning), geometry-derived step progress, rerouting with consent modes (`adaptive`, `ask-first`, `keep-route`), speech, fixed-camera alert eligibility, speeding state, arrival, and phone/CarPlay state. The phone only presents camera alerts and reroute proposals.
+- Native navigation contract v10 (v9 plus `/v2/routes` step metadata carried through native) owns location, matching (windowed, grid-indexed, speed-plausible, with short dead reckoning), geometry-derived step progress, rerouting with consent modes (`adaptive`, `ask-first`, `keep-route`, whose rejoin is a `through` waypoint), speech, fixed-camera alert eligibility, speeding state, arrival, and phone/CarPlay state. The phone only presents camera alerts and reroute proposals.
 
 ## Toolchain and checks
 
