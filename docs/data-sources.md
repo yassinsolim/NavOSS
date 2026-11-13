@@ -27,6 +27,11 @@ origin, waypoint and destination must lie in a supported province.
 
 ## Calgary Place and Address Search
 
+The result-quality behaviour below describes this implementation, not the shipped build. The
+deployed service still uses the older Calgary/Kelowna image; province-wide retrieval and expanded
+station/campus/variant deduplication are not live there until deployment. The new phone
+presentation accepts the older response shape, but is not in TestFlight build 70.
+
 NavOSS combines a local copy of two City of Calgary datasets with its self-hosted
 OpenStreetMap/Nominatim index. The local copy is refreshed every 24 hours and swapped
 atomically after a complete import, so user searches never query Calgary Open Data directly.
