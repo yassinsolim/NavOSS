@@ -1,9 +1,10 @@
-import type {
-  Coordinate,
-  RouteAlternative,
-  RoutePreferences,
-  RouteResponse,
-  SearchResult,
+import {
+  SERVICE_COVERAGE_NAME,
+  type Coordinate,
+  type RouteAlternativeV2,
+  type RoutePreferences,
+  type RouteResponseV2,
+  type SearchResult,
 } from '@navoss/contracts';
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from 'react';
 
@@ -31,11 +32,11 @@ export interface RoutePlanner {
     waypoints?: SearchResult[],
   ) => Promise<void>;
   routePreferences: RoutePreferences;
-  routeSource: RouteResponse['source'] | undefined;
+  routeSource: RouteResponseV2['source'] | undefined;
   routeState: RouteUiState;
   /** Adopts preferences changed elsewhere (CarPlay) without writing them back to native. */
   setRoutePreferences: (preferences: RoutePreferences) => void;
-  setRouteSource: (source: RouteResponse['source'] | undefined) => void;
+  setRouteSource: (source: RouteResponseV2['source'] | undefined) => void;
   setRouteState: Dispatch<SetStateAction<RouteUiState>>;
   setVehicleStyle: (style: VehicleStyle) => void;
   /** Persists changed avoidances to the navigation core, which shares them with CarPlay. */
@@ -56,7 +57,7 @@ export function useRoutePlanner({
 }: {
   getCurrentRouteOrigin: (signal: AbortSignal) => Promise<RouteRequestOrigin | undefined>;
   onPlanningStarted: () => void;
-  onRoutePlanned: (route: RouteAlternative, demoOrigin: boolean) => void;
+  onRoutePlanned: (route: RouteAlternativeV2, demoOrigin: boolean) => void;
   onServiceReachable: () => void;
 }): RoutePlanner {
   const abortControllerRef = useRef<AbortController>(null);
@@ -64,7 +65,7 @@ export function useRoutePlanner({
   const [routePreferences, setRoutePreferences] = useState<RoutePreferences>(() =>
     getNavigationRoutePreferences(),
   );
-  const [routeSource, setRouteSource] = useState<RouteResponse['source']>();
+  const [routeSource, setRouteSource] = useState<RouteResponseV2['source']>();
   const [vehicleStyle, setVehicleStyle] = useState<VehicleStyle>('arrow');
 
   useEffect(
@@ -109,7 +110,7 @@ export function useRoutePlanner({
       ) {
         setRouteState({
           ...plan,
-          message: 'This route includes a location outside current driving coverage.',
+          message: `Directions cover ${SERVICE_COVERAGE_NAME}. This route includes a place outside that area.`,
           type: 'error',
         });
         return;

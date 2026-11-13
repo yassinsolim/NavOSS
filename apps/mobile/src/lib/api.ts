@@ -8,6 +8,7 @@ import {
   ProblemDetailsSchema,
   RoadEventResponseSchema,
   RouteResponseSchema,
+  RouteResponseV2Schema,
   SafetyCameraResponseSchema,
   SafetyFacilityResponseSchema,
   SearchResponseSchema,
@@ -22,6 +23,7 @@ import {
   type OfficialSafetyCameraResponse,
   type RouteRequest,
   type RouteResponse,
+  type RouteResponseV2,
   type RoadEventResponse,
   type SafetyCameraResponse,
   type SafetyFacilityRegion,
@@ -223,31 +225,66 @@ export async function searchPlaces(
   return SearchResponseSchema.parse(await parseResponse(response));
 }
 
+/**
+ * Normalises a `/v1/routes` response to the `/v2/routes` shape. The fields line up except what a
+ * step's `spokenInstruction` describes: v1 announces the *next* maneuver while driving a step, v2
+ * describes the step's own maneuver. Native navigation speaks the v2 meaning.
+ */
+export function routeResponseFromV1(response: RouteResponse): RouteResponseV2 {
+  return {
+    ...response,
+    routes: response.routes.map((route) => ({
+      ...route,
+      steps: route.steps.map((step, index) => {
+        const shifted = { ...step };
+        delete shifted.spokenInstruction;
+        const spokenInstruction =
+          index === 0 ? undefined : route.steps[index - 1]?.spokenInstruction;
+        return spokenInstruction === undefined ? shifted : { ...shifted, spokenInstruction };
+      }),
+    })),
+  };
+}
+
+/**
+ * Plans routes with `/v2/routes` (lanes, signposts, current road names, speed-limit states and
+ * optional community traffic). A server that predates it answers 404, and the request is sent to
+ * `/v1/routes` instead, so an older deployment keeps routing without the extra detail.
+ */
 export async function fetchRoutes(
   request: RouteRequest,
   options: FetchRoutesOptions = {},
-): Promise<RouteResponse> {
+): Promise<RouteResponseV2> {
   const fetchImplementation = options.fetchImplementation ?? fetch;
-  const url = `${normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl())}/v1/routes`;
-  const send = (body: RouteRequest) =>
-    fetchImplementation(url, {
-      body: JSON.stringify(body),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
-  let response = await send(request);
-  if (
-    response.status === 400 &&
-    (request.originHeadingDegrees !== undefined ||
-      request.originHorizontalAccuracyMeters !== undefined)
-  ) {
+  const baseUrl = normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl());
+  const send = async (path: string) => {
+    const post = (body: RouteRequest) =>
+      fetchImplementation(`${baseUrl}${path}`, {
+        body: JSON.stringify(body),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      });
+    const response = await post(request);
+    if (
+      response.status !== 400 ||
+      (request.originHeadingDegrees === undefined &&
+        request.originHorizontalAccuracyMeters === undefined)
+    ) {
+      return response;
+    }
     const fallback = { ...request };
     delete fallback.originHeadingDegrees;
     delete fallback.originHorizontalAccuracyMeters;
-    response = await send(fallback);
-  }
-  const validated = RouteResponseSchema.parse(await parseResponse(response));
+    return post(fallback);
+  };
+  const v2Response = await send('/v2/routes');
+  const validated =
+    v2Response.status === 404
+      ? routeResponseFromV1(
+          RouteResponseSchema.parse(await parseResponse(await send('/v1/routes'))),
+        )
+      : RouteResponseV2Schema.parse(await parseResponse(v2Response));
   // Present the same order the server intends for phone and CarPlay: an already-deployed API
   // may still return routes ordered by raw duration, so re-apply the shared bucket-then-distance
   // comparator here rather than depending on a coordinated server deploy. `fastest`/durations are

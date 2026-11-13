@@ -78,7 +78,7 @@ describe('search source label', () => {
   const source = { datasetVersion: '1', updatedAt: '2026-01-01T00:00:00Z' };
 
   it('never presents static or preview data as live', () => {
-    expect(searchSourceLabel(undefined)).toBe('Calgary place search');
+    expect(searchSourceLabel(undefined)).toBe('Place search');
     expect(searchSourceLabel({ ...source, freshness: 'static', id: 'calgary-fixtures' })).toBe(
       'Calgary place data · Not live',
     );

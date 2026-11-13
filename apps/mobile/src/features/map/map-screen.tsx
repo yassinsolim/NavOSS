@@ -29,12 +29,14 @@ import { CarPlayCompanionPanel, CarPlayIdlePanel } from '@/features/navigation/c
 import {
   ArrivalSheet,
   DrivingStatus,
+  LaneGuidanceStrip,
   ManeuverBanner,
   RerouteProposalCard,
   SafetyCameraAlertBanner,
   TripSheet,
 } from '@/features/navigation/guidance';
 import { GuidanceSettingsSheet } from '@/features/navigation/guidance-settings-sheet';
+import { maneuverSignage } from '@/features/navigation/lane-guidance';
 import { isCarPlayVisualHarness } from '@/features/navigation/native-navigation';
 import { RoutePlanningSheet, RoutePreviewSheet } from '@/features/navigation/route-sheets';
 import { RouteStopsEditor } from '@/features/navigation/route-stops-editor';
@@ -159,6 +161,7 @@ export function MapScreen() {
           safetyFacilities={overlays.kelownaSafetyFacilities}
           searchResults={routeIsIdle ? c.search.results : NO_SEARCH_RESULTS}
           selectedResult={selectedResult}
+          selectedRouteCongestion={route.selectedRouteCongestion}
           showRoadEvents={mapPreferences.showRoadEvents && overlays.roadEventSnapshot !== undefined}
           showSafetyCameras={mapPreferences.showSafetyCameras}
           showSafetyFacilities={mapPreferences.showPlaces}
@@ -347,6 +350,7 @@ export function MapScreen() {
           position={c.sheetPosition}
           positionEstimated={guidance.positionEstimated}
           rerouteCount={guidance.rerouteCount}
+          route={route.selectedRoute}
           routeSource={route.source}
           upcomingManeuvers={guidance.upcomingManeuvers ?? []}
         />
@@ -383,12 +387,16 @@ export function MapScreen() {
         <ManeuverBanner
           distanceMeters={guidance.remainingStep.distanceMeters}
           instruction={guidance.step.instruction}
+          maneuverModifier={guidance.step.maneuverModifier}
           maneuverType={guidance.step.maneuverType}
           onHeightChange={guidance.onBannerHeightChange}
           roadName={guidance.step.roadName}
           safeAreaTop={insets.top}
+          signage={maneuverSignage(guidance.step)}
           status={guidance.routeStatus}
-        />
+        >
+          {guidance.laneStrip !== undefined && <LaneGuidanceStrip strip={guidance.laneStrip} />}
+        </ManeuverBanner>
       )}
       {navigating && c.cameraAlert !== undefined && (
         <SafetyCameraAlertBanner

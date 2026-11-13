@@ -1,4 +1,13 @@
-import type { Coordinate, RouteAlternative, RouteResponse, SearchResult } from '@navoss/contracts';
+import {
+  COMMUNITY_TRAFFIC_ATTRIBUTION,
+  COMMUNITY_TRAFFIC_SOURCE_ID,
+  RouteAlternativeV2Schema,
+  RouteStepV2Schema,
+  type Coordinate,
+  type RouteAlternativeV2,
+  type RouteResponseV2,
+  type SearchResult,
+} from '@navoss/contracts';
 
 import {
   nativeDestinationToSearchResult,
@@ -27,22 +36,22 @@ export type RouteUiState =
   | {
       destination: SearchResult;
       previewOrigin?: Coordinate;
-      routes: RouteAlternative[];
+      routes: RouteAlternativeV2[];
       selectedRouteId: string;
       type: 'preview';
       waypoints: SearchResult[];
     }
   | {
       destination: SearchResult;
-      route: RouteAlternative;
-      routes: RouteAlternative[];
+      route: RouteAlternativeV2;
+      routes: RouteAlternativeV2[];
       type: 'navigating';
       waypoints: SearchResult[];
     }
   | {
       destination: SearchResult;
-      route: RouteAlternative;
-      routes: RouteAlternative[];
+      route: RouteAlternativeV2;
+      routes: RouteAlternativeV2[];
       type: 'arrived';
       waypoints: SearchResult[];
     };
@@ -65,7 +74,7 @@ export type RouteStatusParity = AssertTrue<
 export const IDLE_ROUTE: RouteUiState = { type: 'idle' };
 
 /** The route the map highlights and the panels describe, for any state that has one. */
-export function selectedRouteOf(state: RouteUiState): RouteAlternative | undefined {
+export function selectedRouteOf(state: RouteUiState): RouteAlternativeV2 | undefined {
   if (state.type === 'preview') {
     return state.routes.find((route) => route.id === state.selectedRouteId);
   }
@@ -74,8 +83,8 @@ export function selectedRouteOf(state: RouteUiState): RouteAlternative | undefin
 
 export interface NativeTripRoute {
   destination: SearchResult;
-  route: RouteAlternative;
-  routeSource: RouteResponse['source'] | undefined;
+  route: RouteAlternativeV2;
+  routeSource: RouteResponseV2['source'] | undefined;
   waypoints: SearchResult[];
 }
 
@@ -86,24 +95,32 @@ export interface NativeTripRoute {
  * has live traffic.
  */
 export function routeFromNativeTrip(trip: NativeTrip): NativeTripRoute {
-  const route: RouteAlternative = {
+  const congestion = RouteAlternativeV2Schema.shape.congestion.safeParse(trip.congestion);
+  const route: RouteAlternativeV2 = {
+    ...(congestion.success && congestion.data !== undefined ? { congestion: congestion.data } : {}),
     distanceMeters: trip.distanceMeters,
     durationSeconds: trip.durationSeconds,
     geometry: trip.geometry.map(({ latitude, longitude }) => [longitude, latitude]),
     id: trip.id,
     label: 'fastest',
     ...(trip.speedLimitsKph === undefined ? {} : { speedLimitsKph: trip.speedLimitsKph }),
-    steps: trip.steps.map((step) => ({
-      distanceMeters: step.distanceMeters,
-      durationSeconds: step.durationSeconds,
-      geometry: step.geometry.map(({ latitude, longitude }) => [longitude, latitude]),
-      instruction: step.instruction,
-      maneuverType: step.maneuverType,
-      roadName: step.roadName,
-      ...(step.spokenInstruction === undefined
-        ? {}
-        : { spokenInstruction: step.spokenInstruction }),
-    })),
+    steps: trip.steps.map((step) => {
+      const base = {
+        distanceMeters: step.distanceMeters,
+        durationSeconds: step.durationSeconds,
+        geometry: step.geometry.map(({ latitude, longitude }): [number, number] => [
+          longitude,
+          latitude,
+        ]),
+        instruction: step.instruction,
+        maneuverType: step.maneuverType,
+        roadName: step.roadName,
+      };
+      // Native echoes back what it was given; anything outside the contract is dropped rather
+      // than drawn.
+      const enriched = RouteStepV2Schema.safeParse({ ...step, ...base });
+      return enriched.success ? enriched.data : base;
+    }),
     ...(trip.traffic === undefined ? {} : { traffic: trip.traffic }),
   };
   const destination: SearchResult = {
@@ -117,14 +134,31 @@ export function routeFromNativeTrip(trip: NativeTrip): NativeTripRoute {
   return {
     destination,
     route,
-    routeSource: routeSourceForNativeTrip(trip.source),
+    routeSource: routeSourceForNativeTrip(trip.source, trip.trafficSource),
     waypoints: (trip.waypoints ?? []).map(nativeDestinationToSearchResult),
   };
 }
 
 export function routeSourceForNativeTrip(
   source: string | undefined,
-): RouteResponse['source'] | undefined {
+  trafficSource?: string,
+): RouteResponseV2['source'] | undefined {
+  if (
+    trafficSource === COMMUNITY_TRAFFIC_SOURCE_ID &&
+    (source === 'valhalla-self-hosted' || source === 'valhalla-development')
+  ) {
+    const routing = routeSourceForNativeTrip(source);
+    return routing === undefined
+      ? undefined
+      : {
+          ...routing,
+          traffic: 'live',
+          trafficSource: {
+            attribution: COMMUNITY_TRAFFIC_ATTRIBUTION,
+            id: COMMUNITY_TRAFFIC_SOURCE_ID,
+          },
+        };
+  }
   if (source === 'mapbox-traffic') {
     return {
       attribution: 'Routing and traffic by Mapbox',
