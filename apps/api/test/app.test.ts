@@ -21,6 +21,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../src/app.js';
+import { COMMUNITY_READS_PER_NETWORK_PER_HOUR } from '../src/community-routes.js';
 import { CalgaryRoadEventProviderError } from '../src/calgary-road-event-provider.js';
 import { DriveBcRoadEventProviderError } from '../src/drivebc-road-event-provider.js';
 import { DriveBcTrafficCameraProviderError } from '../src/drivebc-traffic-camera-provider.js';
@@ -1132,6 +1133,57 @@ describe('OpenAPI', () => {
     expect(document.paths).toHaveProperty('/v2/events');
     expect(document.paths).toHaveProperty('/v2/safety-facilities');
     expect(document.paths).toHaveProperty('/v2/traffic-cameras');
+    expect(document.paths).toHaveProperty('/v2/community/challenges');
+    expect(document.paths).toHaveProperty('/v2/community/installations');
+    expect(document.paths).toHaveProperty('/v2/community/reports');
+    expect(document.paths).toHaveProperty('/v2/community/reports/{reportId}');
+    expect(document.paths).toHaveProperty('/v2/community/reports/{reportId}/votes');
     expect(document.paths).not.toHaveProperty('/openapi.json');
+  });
+});
+
+describe('community reports without a database', () => {
+  it('keeps reading off and refuses writes with a problem response', async () => {
+    const app = await createTestApp({ communityReports: null });
+    const config = await app.inject({ method: 'GET', url: '/v2/config' });
+    expect(config.json()).toMatchObject({ features: { communityReports: false } });
+
+    const challenge = await app.inject({ method: 'POST', url: '/v2/community/challenges' });
+    expect(challenge.statusCode).toBe(503);
+    expect(challenge.json()).toMatchObject({ code: 'service_unavailable' });
+
+    const read = await app.inject({
+      method: 'GET',
+      query: { east: '-114', north: '51.1', south: '51', west: '-114.1' },
+      url: '/v2/community/reports',
+    });
+    expect(read.statusCode).toBe(503);
+  });
+
+  it('rate limits public report reads per network', async () => {
+    const app = await createTestApp({ communityReports: null });
+    const read = () =>
+      app.inject({
+        method: 'GET',
+        query: { east: '-114', north: '51.1', south: '51', west: '-114.1' },
+        url: '/v2/community/reports',
+      });
+    for (let index = 0; index < COMMUNITY_READS_PER_NETWORK_PER_HOUR; index += 1) {
+      expect((await read()).statusCode).toBe(503);
+    }
+    const limited = await read();
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toMatchObject({ code: 'rate_limited' });
+  });
+
+  it('rejects oversized or inverted bounding boxes before touching storage', async () => {
+    const app = await createTestApp({ communityReports: null });
+    for (const query of [
+      { east: '-113', north: '51.1', south: '51', west: '-114.1' },
+      { east: '-114', north: '51', south: '51.1', west: '-114.1' },
+    ]) {
+      const response = await app.inject({ method: 'GET', query, url: '/v2/community/reports' });
+      expect(response.statusCode).toBe(400);
+    }
   });
 });

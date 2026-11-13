@@ -7,23 +7,13 @@
       name="description"
       content="NavOSS map, search, routing, regional road-event, camera, and public-facility data provenance and limitations."
     />
-    <meta name="theme-color" content="#1b2526" />
     <link rel="canonical" href="https://navoss.yassin.app/data-sources" />
-    <link rel="icon" href="/assets/navoss-chevron.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css" />
     <title>Data sources | NavOSS</title>
+    <!-- @head -->
   </head>
   <body>
-    <header class="site-header">
-      <a class="brand" href="/" aria-label="NavOSS home"
-        ><img src="/assets/navoss-chevron.svg" alt="" /><span>NavOSS</span></a
-      >
-      <nav class="site-nav" aria-label="Primary navigation">
-        <a href="/privacy">Privacy</a><a href="/support">Support</a><a href="/data-sources">Data</a
-        ><a class="source-link" href="https://github.com/yassinsolim/NavOSS">View source</a>
-      </nav>
-    </header>
-    <main class="document-shell">
+    <!-- @header -->
+    <main id="main" class="document-shell">
       <article class="document">
         <p class="document__meta">Provenance and limitations</p>
         <h1>Know where the map comes from</h1>
@@ -40,6 +30,14 @@
           go to Calgary Open Data. Home-occupation business records and malformed parcel rows are
           excluded. No source can guarantee every informal, new, relocated, or unlicensed place, and
           parcel coordinates may not identify the best vehicle entrance.
+        </p>
+
+        <h2>Map display</h2>
+        <p>
+          The app draws the map with MapLibre from OpenFreeMap vector tiles, which are built from
+          OpenStreetMap data, and shows the required OpenStreetMap attribution on the map. The
+          illustrations on this website are original artwork with invented streets; they are not map
+          data or screenshots of a real place.
         </p>
 
         <h2>Routing</h2>
@@ -104,14 +102,6 @@
         </p>
       </article>
     </main>
-    <footer class="site-footer">
-      <div class="footer__inner">
-        <span>NavOSS · Calgary, Alberta</span>
-        <nav aria-label="Footer navigation">
-          <a href="/privacy">Privacy</a><a href="/support">Support</a
-          ><a href="/data-sources">Data sources</a><a href="/licenses">Licenses</a>
-        </nav>
-      </div>
-    </footer>
+    <!-- @footer -->
   </body>
 </html>

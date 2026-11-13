@@ -12,6 +12,7 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx watch src/server.ts",
     "lint": "eslint .",
+    "migrate": "node dist/migrate.js",
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:search:live": "node ./scripts/search-quality.mjs",

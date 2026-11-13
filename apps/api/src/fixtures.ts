@@ -154,6 +154,7 @@ function createConfigBase(
   generatedAt: string,
   productionSearch: boolean,
   liveTraffic: boolean,
+  communityReports = false,
 ): Omit<LegacyAppConfigResponse, 'apiVersion' | 'coverage'> {
   return {
     attribution: [
@@ -173,7 +174,7 @@ function createConfigBase(
       search: '/v1/search',
     },
     features: {
-      communityReports: false,
+      communityReports,
       liveTraffic,
       officialSafetyCameras: true,
       productionSearch,
@@ -188,8 +189,9 @@ export function createAppConfig(
   generatedAt: string,
   productionSearch = false,
   liveTraffic = false,
+  communityReports = false,
 ): AppConfigResponse {
-  const base = createConfigBase(generatedAt, productionSearch, liveTraffic);
+  const base = createConfigBase(generatedAt, productionSearch, liveTraffic, communityReports);
   return {
     ...base,
     apiVersion: 'v2',
@@ -216,9 +218,10 @@ export function createLegacyAppConfig(
   generatedAt: string,
   productionSearch = false,
   liveTraffic = false,
+  communityReports = false,
 ): LegacyAppConfigResponse {
   return {
-    ...createConfigBase(generatedAt, productionSearch, liveTraffic),
+    ...createConfigBase(generatedAt, productionSearch, liveTraffic, communityReports),
     apiVersion: 'v1',
     coverage: {
       bounds: CALGARY_REGION_BOUNDS,

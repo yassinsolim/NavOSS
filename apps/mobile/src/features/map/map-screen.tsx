@@ -157,11 +157,6 @@ import {
 } from '@/features/navigation/route-progress';
 import { isCoordinateInCoverage } from '@/features/navigation/route-coverage';
 import {
-  findUpcomingSafetyCamera,
-  type UpcomingSafetyCamera,
-} from '@/features/navigation/safety-camera-alert';
-import {
-  announceSafetyCamera,
   clearCarPlayTrip,
   clearDestinationHistory,
   clearNavigationRoute,
@@ -492,7 +487,10 @@ export function MapScreen() {
   const [routeSource, setRouteSource] = useState<RouteResponse['source']>();
   const [cameraAnnouncementCount, setCameraAnnouncementCount] = useState(0);
   const [carPlayConnected, setCarPlayConnected] = useState(false);
-  const [safetyCameraAlert, setSafetyCameraAlert] = useState<UpcomingSafetyCamera>();
+  const [safetyCameraAlert, setSafetyCameraAlert] = useState<{
+    camera: Pick<SafetyCamera, 'location'>;
+    distanceAheadMeters: number;
+  }>();
   const [safetyCameras, setSafetyCameras] = useState<readonly SafetyCamera[]>([]);
   const [roadEventResponse, setRoadEventResponse] = useState<RoadEventResponse>();
   const [officialRoadEventResponse, setOfficialRoadEventResponse] =
@@ -1223,26 +1221,32 @@ export function MapScreen() {
         return;
       }
 
-      if (!snapshot.isOffRoute && snapshot.rawCoordinate !== undefined) {
-        const upcomingCamera = findUpcomingSafetyCamera(
-          safetyCamerasRef.current,
-          route,
-          snapshot.routeProgress,
-          announcedCameraIdsRef.current,
-        );
-        if (upcomingCamera !== undefined) {
-          announcedCameraIdsRef.current.add(upcomingCamera.camera.id);
-          setCameraAnnouncementCount((currentCount) => currentCount + 1);
-          setSafetyCameraAlert(upcomingCamera);
-          announceSafetyCamera();
-          if (cameraAlertTimeoutRef.current !== undefined) {
-            clearTimeout(cameraAlertTimeoutRef.current);
-          }
-          cameraAlertTimeoutRef.current = setTimeout(() => {
-            setSafetyCameraAlert(undefined);
-            cameraAlertTimeoutRef.current = undefined;
-          }, 6_000);
+      // Native navigation decides camera eligibility and speaks the alert (so it also works with
+      // the phone locked or only CarPlay on screen); the phone only presents it. Each alert has a
+      // unique `sequence`, recorded here so a repeated snapshot does not re-show the banner.
+      const nativeAlert = snapshot.safetyCameraAlert;
+      const alertKey =
+        nativeAlert === undefined ? undefined : `alert:${String(nativeAlert.sequence)}`;
+      // The payload carries everything the banner shows, so it renders even when the phone's
+      // own camera fetch failed (e.g. the screen was unlocked offline).
+      if (
+        nativeAlert !== undefined &&
+        alertKey !== undefined &&
+        !announcedCameraIdsRef.current.has(alertKey)
+      ) {
+        announcedCameraIdsRef.current.add(alertKey);
+        setCameraAnnouncementCount((currentCount) => currentCount + 1);
+        setSafetyCameraAlert({
+          camera: { location: nativeAlert.location },
+          distanceAheadMeters: nativeAlert.distanceAheadMeters,
+        });
+        if (cameraAlertTimeoutRef.current !== undefined) {
+          clearTimeout(cameraAlertTimeoutRef.current);
         }
+        cameraAlertTimeoutRef.current = setTimeout(() => {
+          setSafetyCameraAlert(undefined);
+          cameraAlertTimeoutRef.current = undefined;
+        }, 6_000);
       }
     };
     if (navigationSnapshot !== undefined) {

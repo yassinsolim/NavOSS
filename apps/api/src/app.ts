@@ -45,6 +45,11 @@ import {
   type SearchFixture,
 } from './fixtures.js';
 import {
+  createConfiguredCommunityReportService,
+  type CommunityReportService,
+} from './community-reports.js';
+import { registerCommunityRoutes } from './community-routes.js';
+import {
   ContributionProviderError,
   createConfiguredContributionProvider,
   type ContributionProvider,
@@ -114,6 +119,8 @@ function errorName(error: unknown): string {
 export interface BuildAppOptions {
   cameraProvider?: SafetyCameraProvider;
   clock?: () => Date;
+  /** `null` disables community reports; omitted builds them from the environment. */
+  communityReports?: CommunityReportService | null;
   contributionProvider?: ContributionProvider;
   contributionRateLimiter?: ContributionRateLimiter;
   driveBcEventProvider?: DriveBcRoadEventProvider;
@@ -141,6 +148,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const contributionRateLimiter =
     options.contributionRateLimiter ??
     createContributionRateLimiter({ clock: () => clock().getTime() });
+  const communityReports =
+    options.communityReports === undefined
+      ? createConfiguredCommunityReportService({
+          clock,
+          isInCoverage: isSupportedSearchCoordinate,
+        })
+      : (options.communityReports ?? undefined);
+  const communityReportsLive =
+    communityReports !== undefined && communityReports.publication !== 'shadow';
   const driveBcEventProvider = options.driveBcEventProvider ?? createDriveBcRoadEventProvider();
   const driveBcTrafficCameraProvider =
     options.driveBcTrafficCameraProvider ?? createDriveBcTrafficCameraProvider();
@@ -177,10 +193,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     driveBcTrafficCameraProvider.stop?.();
     eventProvider.stop?.();
     ontarioEventProvider.stop?.();
-    await Promise.all([contributionProvider.close?.(), googlePlaceQueryBudget.close?.()]);
+    await Promise.all([
+      communityReports?.close(),
+      contributionProvider.close?.(),
+      googlePlaceQueryBudget.close?.(),
+    ]);
   });
 
   app.addHook('onReady', () => {
+    communityReports?.start();
     contributionProvider.start?.();
   });
 
@@ -197,6 +218,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       openapi: '3.1.0',
       tags: [
         { description: 'Official municipal safety-camera locations', name: 'cameras' },
+        {
+          description: 'Attested, account-free community road reports (unofficial)',
+          name: 'community',
+        },
         { description: 'Application configuration', name: 'config' },
         { description: 'Anonymous bounded beta feedback submissions', name: 'contributions' },
         { description: 'Official and source-qualified road events', name: 'events' },
@@ -490,7 +515,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         tags: ['config'],
       },
     },
-    () => createLegacyAppConfig(clock().toISOString(), productionSearch, liveTraffic),
+    () =>
+      createLegacyAppConfig(
+        clock().toISOString(),
+        productionSearch,
+        liveTraffic,
+        communityReportsLive,
+      ),
   );
 
   typedApp.get(
@@ -502,7 +533,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         tags: ['config'],
       },
     },
-    () => createAppConfig(clock().toISOString(), productionSearch, liveTraffic),
+    () =>
+      createAppConfig(clock().toISOString(), productionSearch, liveTraffic, communityReportsLive),
   );
 
   typedApp.post(
@@ -806,6 +838,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
     );
   }
+
+  registerCommunityRoutes(typedApp, { clock, service: communityReports });
 
   typedApp.get(
     '/openapi.json',

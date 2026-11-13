@@ -123,4 +123,27 @@ jobs:
               status=1
             fi
           done
+          for generated in ios/NavOSS/*.swift; do
+            name="$(basename "$generated")"
+            if [ ! -f "carplay/ios/$name" ] && grep -q "NavOSSCarPlay\|NavOSSPhoneSceneDelegate\|NavOSSNavigationIntents" <<<"$name"; then
+              echo "::error file=$generated::generated CarPlay source has no original in carplay/ios"
+              status=1
+            fi
+          done
           exit $status
+
+      # The scenes the copied sources implement must be declared, or the delegates never run.
+      - name: Verify CarPlay scene declarations
+        working-directory: apps/mobile
+        run: |
+          plist=ios/NavOSS/Info.plist
+          for key in CPSupportsDashboardNavigationScene CPSupportsInstrumentClusterNavigationScene; do
+            value="$(/usr/libexec/PlistBuddy -c "Print :UIApplicationSceneManifest:$key" "$plist")"
+            if [ "$value" != "true" ]; then
+              echo "::error::$key is not true in the generated Info.plist"
+              exit 1
+            fi
+          done
+          for role in CPTemplateApplicationSceneSessionRoleApplication CPTemplateApplicationDashboardSceneSessionRoleApplication CPTemplateApplicationInstrumentClusterSceneSessionRoleApplication; do
+            /usr/libexec/PlistBuddy -c "Print :UIApplicationSceneManifest:UISceneConfigurations:$role:0:UISceneDelegateClassName" "$plist"
+          done

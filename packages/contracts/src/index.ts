@@ -41,6 +41,46 @@ export type {
   ContributionType,
 } from './contribution.js';
 
+export {
+  communityAssertionClientData,
+  CommunityAssertedRequestSchema,
+  CommunityAssertionSchema,
+  CommunityChallengeResponseSchema,
+  CommunityDeletionResponseSchema,
+  CommunityInstallationRegistrationRequestSchema,
+  CommunityInstallationRegistrationResponseSchema,
+  CommunityInstallationTrustSchema,
+  CommunityReportParamsSchema,
+  CommunityReportPublicationSchema,
+  CommunityReportQuerySchema,
+  CommunityReportResponseSchema,
+  CommunityReportSchema,
+  CommunityReportSubmissionRequestSchema,
+  CommunityReportSubmissionResponseSchema,
+  CommunityReportTypeSchema,
+  CommunityReportVoteRequestSchema,
+  CommunityReportVoteResponseSchema,
+  CommunityReportVoteValueSchema,
+} from './community-report.js';
+export type {
+  CommunityAssertedOperation,
+  CommunityAssertion,
+  CommunityChallengeResponse,
+  CommunityInstallationRegistrationRequest,
+  CommunityInstallationRegistrationResponse,
+  CommunityInstallationTrust,
+  CommunityReport,
+  CommunityReportPublication,
+  CommunityReportQuery,
+  CommunityReportResponse,
+  CommunityReportSubmissionRequest,
+  CommunityReportSubmissionResponse,
+  CommunityReportType,
+  CommunityReportVoteRequest,
+  CommunityReportVoteResponse,
+  CommunityReportVoteValue,
+} from './community-report.js';
+
 export { HealthResponseSchema, ReadinessCheckSchema, ReadinessResponseSchema } from './health.js';
 export type { HealthResponse, ReadinessResponse } from './health.js';
 

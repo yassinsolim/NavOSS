@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Warning triangle. -->
+  <path fill="currentColor" stroke="currentColor" stroke-width="4" stroke-linejoin="round" d="M32 14 48 44H16Z"/>
+  <path fill="var(--tile)" d="M30 23h4l-.6 11h-2.8Zm2 13.3a2.4 2.4 0 1 1 0 4.8 2.4 2.4 0 0 1 0-4.8Z"/>
+</svg>

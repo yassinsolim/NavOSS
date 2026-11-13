@@ -75,3 +75,94 @@ public struct NavOSSAudioSessionOwnership: Equatable {
     return .retryAfter(delay)
   }
 }
+
+/// Guidance utterances that still owe the synthesizer's didFinish/didCancel callback.
+///
+/// The audio session (and the ducking of the driver's music) is released only once this is
+/// empty. If AVSpeechSynthesizer never reports an utterance (seen when synthesis fails to start,
+/// or for utterances queued behind an interrupted one), waiting on the callback alone leaves
+/// music ducked indefinitely, so outstanding utterances also have deadlines.
+///
+/// The synthesizer speaks its queue in order, so only the utterance at the head of the queue
+/// can be overdue. Its deadline is measured from when it began speaking (`didStart`), bounded
+/// by its length; before it starts it gets `startTimeoutSeconds` from the moment it reached
+/// the head. A prompt queued behind a long one therefore never expires before its turn.
+public struct NavOSSSpeechUtteranceLedger: Equatable {
+  /// Generous speaking rate: real guidance at 0.92× the default rate is faster than this.
+  public static let secondsPerCharacter = 0.1
+  /// Slack after the estimated speaking time.
+  public static let speakingGraceSeconds = 3.0
+  /// How long the head of the queue may take to start speaking (audio route setup over
+  /// Bluetooth/CarPlay) before it is treated as lost.
+  public static let startTimeoutSeconds = 6.0
+
+  private struct Entry: Equatable {
+    let id: ObjectIdentifier
+    let characterCount: Int
+    var startedAt: TimeInterval?
+  }
+
+  private var queue: [Entry] = []
+  /// When the current head reached the head of the queue.
+  private var headSince: TimeInterval?
+
+  public init() {}
+
+  public var isEmpty: Bool { queue.isEmpty }
+  public var count: Int { queue.count }
+
+  /// The moment the head of the queue becomes overdue, if anything is outstanding.
+  public var nextDeadline: TimeInterval? {
+    guard let head = queue.first else { return nil }
+    if let startedAt = head.startedAt {
+      return startedAt + Double(max(0, head.characterCount)) * Self.secondsPerCharacter
+        + Self.speakingGraceSeconds
+    }
+    return (headSince ?? 0) + Self.startTimeoutSeconds
+  }
+
+  public mutating func begin(_ utterance: ObjectIdentifier, characterCount: Int, now: TimeInterval) {
+    if queue.isEmpty {
+      headSince = now
+    }
+    queue.append(Entry(id: utterance, characterCount: characterCount, startedAt: nil))
+  }
+
+  /// The synthesizer reported `didStart` for `utterance`.
+  public mutating func start(_ utterance: ObjectIdentifier, now: TimeInterval) {
+    guard let index = queue.firstIndex(where: { $0.id == utterance }) else { return }
+    // Anything queued ahead of an utterance that is now speaking was dropped by the synthesizer.
+    queue.removeFirst(index)
+    queue[0].startedAt = now
+    headSince = now
+  }
+
+  /// Returns `true` when this completion emptied the ledger.
+  @discardableResult
+  public mutating func complete(_ utterance: ObjectIdentifier, now: TimeInterval) -> Bool {
+    guard let index = queue.firstIndex(where: { $0.id == utterance }) else { return false }
+    queue.remove(at: index)
+    if index == 0 {
+      headSince = now
+    }
+    return queue.isEmpty
+  }
+
+  public mutating func removeAll() {
+    queue.removeAll()
+    headSince = nil
+  }
+
+  /// Drops overdue utterances from the head of the queue. Returns `true` when that emptied the
+  /// ledger, i.e. the caller should now attempt the session release it was waiting for.
+  public mutating func expireOverdue(now: TimeInterval) -> Bool {
+    var expired = false
+    while let deadline = nextDeadline, deadline <= now {
+      queue.removeFirst()
+      // The next utterance's turn starts now, not when the lost one was queued.
+      headSince = now
+      expired = true
+    }
+    return expired && queue.isEmpty
+  }
+}

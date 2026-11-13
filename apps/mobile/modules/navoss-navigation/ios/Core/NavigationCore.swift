@@ -1,7 +1,5 @@
 import Foundation
 
-private let earthRadiusMeters = 6_371_000.0
-private let metersPerDegreeLatitude = Double.pi * earthRadiusMeters / 180
 private let arrivalConfirmationSampleCount = 2
 private let arrivalDistanceThresholdMeters = 30.0
 private let arrivalProgressThreshold = 0.98
@@ -18,6 +16,39 @@ private let offRouteConfirmationSampleCount = 3
 private let offRouteDistanceThresholdMeters = 35.0
 private let onRouteRecoveryDistanceThresholdMeters = 20.0
 private let onRouteRecoverySampleCount = 2
+
+// Matching window. Each fix is matched against the road near the previous match instead of the
+// whole route; the grid is consulted only when that window has nothing close to the fix.
+/// Road behind the previous match that stays eligible, so stationary noise and the bounded
+/// backward checks below still see the true position.
+private let matchWindowBackwardMeters = 150.0
+/// Road ahead of the previous match that is always eligible, whatever the reported speed.
+private let matchWindowMinimumForwardMeters = 400.0
+/// Upper bound on the forward window, so a long gap or a wild speed reading stays bounded.
+private let matchWindowMaximumForwardMeters = 3_000.0
+/// Believable speed ceiling (about 160 km/h) used when fixes are timestamped but carry no speed.
+private let maximumPlausibleSpeedMetersPerSecond = 45.0
+private let globalSearchInitialRadiusMeters = 250.0
+private let globalSearchMaximumRadiusMeters = 1_000.0
+
+// Transition plausibility. Only applies when fixes carry timestamps and a speed, which every
+// Core Location fix does; untimed replay input keeps the original continuity scoring.
+private let plausibilityBaseToleranceMeters = 25.0
+private let plausibilityForwardPenaltyFactor = 0.5
+private let plausibilityLagPenaltyFactor = 0.15
+/// A single accurate fix landing this far beyond the plausible travel is held as a multipath
+/// jump until a second fix agrees.
+private let implausibleJumpMarginMeters = 150.0
+private let implausibleJumpConfirmationCount = 2
+/// Course and speed at which travel against the matched road counts as leaving the route.
+private let wrongWayMinimumCourseDifferenceDegrees = 150.0
+private let wrongWayMinimumSpeedMetersPerSecond = 4.0
+
+// Dead reckoning through short signal loss (tunnels, underpasses, urban canyons).
+private let deadReckoningMinimumGapSeconds = 2.5
+private let deadReckoningMaximumGapSeconds = 20.0
+private let deadReckoningMaximumDistanceMeters = 400.0
+private let deadReckoningMinimumSpeedMetersPerSecond = 3.0
 
 struct NavOSSLocationTrackingLeases {
   private var identifiers: Set<UUID> = []
@@ -163,15 +194,23 @@ struct NavigationLocationSample: Equatable, Sendable {
   let coordinate: NavigationCoordinate
   let courseDegrees: Double?
   let horizontalAccuracyMeters: Double?
+  /// Ground speed reported with the fix. Feeds transition plausibility and dead reckoning.
+  let speedMetersPerSecond: Double?
+  /// Fix time in seconds since the reference date (`Date.timeIntervalSinceReferenceDate`).
+  let timestamp: TimeInterval?
 
   init(
     coordinate: NavigationCoordinate,
     courseDegrees: Double? = nil,
-    horizontalAccuracyMeters: Double?
+    horizontalAccuracyMeters: Double?,
+    speedMetersPerSecond: Double? = nil,
+    timestamp: TimeInterval? = nil
   ) {
     self.coordinate = coordinate
     self.courseDegrees = courseDegrees
     self.horizontalAccuracyMeters = horizontalAccuracyMeters
+    self.speedMetersPerSecond = speedMetersPerSecond
+    self.timestamp = timestamp
   }
 
   var isValid: Bool {
@@ -180,6 +219,13 @@ struct NavigationLocationSample: Equatable, Sendable {
     }
     if let courseDegrees,
        (!courseDegrees.isFinite || !(0..<360).contains(courseDegrees)) {
+      return false
+    }
+    if let speedMetersPerSecond,
+       (!speedMetersPerSecond.isFinite || speedMetersPerSecond < 0) {
+      return false
+    }
+    if let timestamp, !timestamp.isFinite {
       return false
     }
     guard let horizontalAccuracyMeters else {
@@ -206,176 +252,38 @@ struct NavigationSnapshot: Equatable, Sendable {
   let routeProgress: Double
   let routeVersion: Int
   let sequence: Int
-}
-
-private struct RouteProjection {
-  let coordinate: NavigationCoordinate
-  let courseDegrees: Double
-  let distanceMeters: Double
-  let progress: Double
-}
-
-private struct RouteSegment {
-  let cumulativeDistanceMeters: Double
-  let courseDegrees: Double
-  let end: NavigationCoordinate
-  let lengthMeters: Double
-  let start: NavigationCoordinate
-}
-
-private struct RoutePolyline {
-  let destination: NavigationCoordinate
-  let segments: [RouteSegment]
-  let totalDistanceMeters: Double
-
-  init(coordinates: [NavigationCoordinate]) throws {
-    guard coordinates.count >= 2, coordinates.allSatisfy(\.isValid) else {
-      throw NavigationCoreError.invalidRoute
-    }
-
-    var cumulativeDistanceMeters = 0.0
-    var segments: [RouteSegment] = []
-
-    for index in 0..<(coordinates.count - 1) {
-      let start = coordinates[index]
-      let end = coordinates[index + 1]
-      let lengthMeters = Self.distanceMeters(from: start, to: end)
-
-      if lengthMeters > 0 {
-        segments.append(
-          RouteSegment(
-            cumulativeDistanceMeters: cumulativeDistanceMeters,
-            courseDegrees: Self.courseDegrees(from: start, to: end),
-            end: end,
-            lengthMeters: lengthMeters,
-            start: start
-          )
-        )
-        cumulativeDistanceMeters += lengthMeters
-      }
-    }
-
-    guard !segments.isEmpty, cumulativeDistanceMeters.isFinite else {
-      throw NavigationCoreError.invalidRoute
-    }
-
-    self.destination = coordinates[coordinates.count - 1]
-    self.segments = segments
-    self.totalDistanceMeters = cumulativeDistanceMeters
-  }
-
-  func distanceToDestination(from coordinate: NavigationCoordinate) -> Double {
-    Self.distanceMeters(from: coordinate, to: destination)
-  }
-
-  func project(
-    _ coordinate: NavigationCoordinate,
-    courseDegrees: Double?,
-    previousProgress: Double?
-  ) -> RouteProjection {
-    let longitudeScale = cos(coordinate.latitude * .pi / 180)
-    var nearestProjection: RouteProjection?
-    var nearestScore = Double.infinity
-
-    for segment in segments {
-      let startX = (segment.start.longitude - coordinate.longitude) *
-        metersPerDegreeLatitude * longitudeScale
-      let startY = (segment.start.latitude - coordinate.latitude) * metersPerDegreeLatitude
-      let segmentX = (segment.end.longitude - segment.start.longitude) *
-        metersPerDegreeLatitude * longitudeScale
-      let segmentY = (segment.end.latitude - segment.start.latitude) * metersPerDegreeLatitude
-      let segmentLengthSquared = segmentX * segmentX + segmentY * segmentY
-      let segmentProgress = segmentLengthSquared == 0
-        ? 0
-        : max(0, min(1, -(startX * segmentX + startY * segmentY) / segmentLengthSquared))
-      let projectedX = startX + segmentX * segmentProgress
-      let projectedY = startY + segmentY * segmentProgress
-      let distanceMeters = hypot(projectedX, projectedY)
-      let matchedCoordinate = NavigationCoordinate(
-        latitude: segment.start.latitude +
-          (segment.end.latitude - segment.start.latitude) * segmentProgress,
-        longitude: segment.start.longitude +
-          (segment.end.longitude - segment.start.longitude) * segmentProgress
-      )
-      let progress = (
-        segment.cumulativeDistanceMeters + segment.lengthMeters * segmentProgress
-      ) / totalDistanceMeters
-      let projection = RouteProjection(
-        coordinate: matchedCoordinate,
-        courseDegrees: segment.courseDegrees,
-        distanceMeters: distanceMeters,
-        progress: max(0, min(1, progress))
-      )
-      let coursePenalty = courseDegrees.map { courseDegrees in
-        Self.courseDifferenceDegrees(courseDegrees, segment.courseDegrees) / 180 *
-          maximumCoursePenaltyMeters
-      } ?? 0
-      let continuityPenalty = previousProgress.map { previousProgress in
-        let progressDeltaMeters = abs(projection.progress - previousProgress) *
-          totalDistanceMeters
-        let backwardProgressMeters = max(
-          0,
-          (previousProgress - projection.progress) * totalDistanceMeters
-        )
-        return max(0, progressDeltaMeters - continuityToleranceMeters) *
-          continuityPenaltyFactor +
-          max(0, backwardProgressMeters - continuityToleranceMeters) *
-          backwardProgressPenaltyFactor
-      } ?? 0
-      let score = distanceMeters + coursePenalty + continuityPenalty
-
-      if score < nearestScore {
-        nearestProjection = projection
-        nearestScore = score
-      }
-    }
-
-    return nearestProjection!
-  }
-
-  private static func courseDegrees(
-    from origin: NavigationCoordinate,
-    to destination: NavigationCoordinate
-  ) -> Double {
-    let latitudeDelta = destination.latitude - origin.latitude
-    let meanLatitude = (origin.latitude + destination.latitude) / 2 * .pi / 180
-    let longitudeDelta = (destination.longitude - origin.longitude) * cos(meanLatitude)
-    let degrees = atan2(longitudeDelta, latitudeDelta) * 180 / .pi
-    return degrees >= 0 ? degrees : degrees + 360
-  }
-
-  private static func courseDifferenceDegrees(_ first: Double, _ second: Double) -> Double {
-    let difference = abs(first - second).truncatingRemainder(dividingBy: 360)
-    return min(difference, 360 - difference)
-  }
-
-  private static func distanceMeters(
-    from origin: NavigationCoordinate,
-    to destination: NavigationCoordinate
-  ) -> Double {
-    let latitudeDelta = (destination.latitude - origin.latitude) * .pi / 180
-    let longitudeDelta = (destination.longitude - origin.longitude) * .pi / 180
-    let originLatitude = origin.latitude * .pi / 180
-    let destinationLatitude = destination.latitude * .pi / 180
-    let haversine = sin(latitudeDelta / 2) * sin(latitudeDelta / 2) +
-      cos(originLatitude) * cos(destinationLatitude) *
-      sin(longitudeDelta / 2) * sin(longitudeDelta / 2)
-
-    return 2 * earthRadiusMeters * asin(sqrt(haversine))
-  }
+  /// Original route-geometry segment under the matched position, aligned with
+  /// `speedLimitsKph`. `nil` while unmatched or off route.
+  var geometrySegmentIndex: Int? = nil
+  /// The matched position was extrapolated along the route through a gap in fixes.
+  var isDeadReckoning = false
+  var speedMetersPerSecond: Double? = nil
 }
 
 final class NavigationCore {
+  private var anchorTimestamp: TimeInterval?
   private var arrivalSampleCount = 0
   private var departureSampleCount = 0
+  /// Progress established by the latest real fix. Dead reckoning moves the published snapshot
+  /// without touching this, so the next fix is judged against where the vehicle was last seen.
+  private var fixProgress = 0.0
   private var hasArrived = false
+  private var implausibleJumpCount = 0
   private var isOffRoute = false
+  private var lastFixSpeed: Double?
+  private var lastFixTimestamp: TimeInterval?
+  /// Snapshot produced by the latest real fix. A held fix falls back to this, never to a
+  /// dead-reckoned guess or to the rejected projection.
+  private var lastRealSnapshot: NavigationSnapshot?
   private var progressHighWaterMark = 0.0
   private var recoverySampleCount = 0
   private var route: RoutePolyline?
   private var routeVersion = 0
   private var sequence = 0
   private var snapshot: NavigationSnapshot
+  /// Segments scored for the most recent fix. Exposed so tests can prove per-fix cost does not
+  /// scale with route length.
+  private(set) var lastEvaluatedSegmentCount = 0
 
   init() {
     snapshot = NavigationSnapshot(
@@ -392,19 +300,28 @@ final class NavigationCore {
     )
   }
 
+  var routeLengthMeters: Double? {
+    route?.totalDistanceMeters
+  }
+
+  /// Along-route position established by the latest real fix.
+  var fixAlongMeters: Double? {
+    route.map { fixProgress * $0.totalDistanceMeters }
+  }
+
   func currentSnapshot() -> NavigationSnapshot {
     snapshot
+  }
+
+  /// The on-route point `alongMeters` from the route origin, or `nil` with no route.
+  func routePoint(alongMeters: Double) -> NavigationCoordinate? {
+    route?.point(alongMeters: alongMeters).coordinate
   }
 
   @discardableResult
   func setRoute(_ coordinates: [NavigationCoordinate]) throws -> NavigationSnapshot {
     route = try RoutePolyline(coordinates: coordinates)
-    arrivalSampleCount = 0
-    departureSampleCount = 0
-    hasArrived = false
-    isOffRoute = false
-    progressHighWaterMark = 0
-    recoverySampleCount = 0
+    resetTrackingState()
     routeVersion += 1
     sequence += 1
     snapshot = NavigationSnapshot(
@@ -424,12 +341,7 @@ final class NavigationCore {
 
   @discardableResult
   func clearRoute() -> NavigationSnapshot {
-    arrivalSampleCount = 0
-    departureSampleCount = 0
-    hasArrived = false
-    isOffRoute = false
-    progressHighWaterMark = 0
-    recoverySampleCount = 0
+    resetTrackingState()
     route = nil
     routeVersion += 1
     sequence += 1
@@ -462,6 +374,10 @@ final class NavigationCore {
     }
 
     sequence += 1
+    defer {
+      lastFixTimestamp = sample.timestamp
+      lastFixSpeed = sample.speedMetersPerSecond
+    }
     guard let route else {
       snapshot = NavigationSnapshot(
         distanceFromRouteMeters: nil,
@@ -473,15 +389,31 @@ final class NavigationCore {
         rawCoordinate: sample.coordinate,
         routeProgress: 0,
         routeVersion: routeVersion,
-        sequence: sequence
+        sequence: sequence,
+        speedMetersPerSecond: sample.speedMetersPerSecond
       )
       return snapshot
     }
 
-    let projection = route.project(
-      sample.coordinate,
-      courseDegrees: sample.courseDegrees,
-      previousProgress: snapshot.rawCoordinate == nil ? nil : snapshot.routeProgress
+    let accuracyAllowanceMeters = sample.horizontalAccuracyMeters ?? 0
+    let anchorAlongMeters = snapshot.rawCoordinate == nil
+      ? nil
+      : fixProgress * route.totalDistanceMeters
+    let elapsedSeconds = sample.timestamp.flatMap { timestamp in
+      anchorTimestamp.map { timestamp - $0 }
+    }.flatMap { $0 > 0 && $0 <= 600 ? $0 : nil }
+    let knownSpeeds = [sample.speedMetersPerSecond, lastFixSpeed].compactMap { $0 }
+    let expectedTravelMeters = elapsedSeconds.flatMap { elapsed in
+      knownSpeeds.isEmpty
+        ? nil
+        : knownSpeeds.reduce(0, +) / Double(knownSpeeds.count) * elapsed
+    }
+    let projection = bestProjection(
+      on: route,
+      sample: sample,
+      anchorAlongMeters: anchorAlongMeters,
+      elapsedSeconds: elapsedSeconds,
+      expectedTravelMeters: expectedTravelMeters
     )
 
     if hasArrived {
@@ -495,15 +427,32 @@ final class NavigationCore {
         rawCoordinate: sample.coordinate,
         routeProgress: 1,
         routeVersion: routeVersion,
-        sequence: sequence
+        sequence: sequence,
+        speedMetersPerSecond: sample.speedMetersPerSecond
       )
       return snapshot
     }
 
-    let accuracyAllowanceMeters = sample.horizontalAccuracyMeters ?? 0
+    // A single accurate fix far beyond any believable travel since the last accepted one is
+    // almost always multipath. Hold the match for it; a second agreeing fix is accepted, so a
+    // genuinely stale speed reading delays the match by one sample at most.
+    let isImplausibleJump: Bool = {
+      guard let anchorAlongMeters, let expectedTravelMeters,
+        (sample.horizontalAccuracyMeters ?? .infinity) <= 50
+      else {
+        return false
+      }
+      let tolerance = plausibilityBaseToleranceMeters + accuracyAllowanceMeters
+        + 0.5 * expectedTravelMeters
+      return projection.alongMeters - anchorAlongMeters
+        > expectedTravelMeters + tolerance + implausibleJumpMarginMeters
+    }()
+    implausibleJumpCount = isImplausibleJump ? implausibleJumpCount + 1 : 0
+    let isHeldJump = isImplausibleJump && implausibleJumpCount < implausibleJumpConfirmationCount
+
     let backwardProgressMeters = max(
       0,
-      (snapshot.routeProgress - projection.progress) * route.totalDistanceMeters
+      (fixProgress - projection.progress) * route.totalDistanceMeters
     )
     // Per-sample regression catches an abrupt reversal, but not a slow one: each accepted step
     // below the tolerance lowers the baseline for the next comparison, so reversing in small
@@ -522,10 +471,18 @@ final class NavigationCore {
       backwardProgressMeters > backwardProgressToleranceMeters + accuracyAllowanceMeters
       || cumulativeBackwardMeters
         > cumulativeBackwardToleranceMeters + 2 * accuracyAllowanceMeters
+    // A moving vehicle whose GPS course opposes the road it is matched to is driving the route
+    // backwards (a U-turn). That is visible at once, before any distance regression builds up.
+    let isWrongWaySample = (sample.speedMetersPerSecond ?? 0) >= wrongWayMinimumSpeedMetersPerSecond
+      && sample.courseDegrees.map {
+        navigationCourseDifferenceDegrees($0, projection.courseDegrees)
+          >= wrongWayMinimumCourseDifferenceDegrees
+      } == true
     let isDepartureSample = projection.distanceMeters >
       offRouteDistanceThresholdMeters + accuracyAllowanceMeters || isBackwardTravelSample
+      || isWrongWaySample
     let isRecoverySample = projection.distanceMeters + accuracyAllowanceMeters <=
-      onRouteRecoveryDistanceThresholdMeters && projection.progress >= snapshot.routeProgress
+      onRouteRecoveryDistanceThresholdMeters && projection.progress >= fixProgress
 
     if isOffRoute {
       departureSampleCount = 0
@@ -543,7 +500,7 @@ final class NavigationCore {
       }
     }
 
-    let isArrivalSample = !isOffRoute &&
+    let isArrivalSample = !isOffRoute && !isHeldJump &&
       projection.progress >= arrivalProgressThreshold &&
       sample.horizontalAccuracyMeters != nil &&
       route.distanceToDestination(from: sample.coordinate) + accuracyAllowanceMeters <=
@@ -556,6 +513,7 @@ final class NavigationCore {
       hasArrived = true
       isOffRoute = false
       recoverySampleCount = 0
+      fixProgress = 1
       snapshot = NavigationSnapshot(
         distanceFromRouteMeters: projection.distanceMeters,
         horizontalAccuracyMeters: sample.horizontalAccuracyMeters,
@@ -566,7 +524,8 @@ final class NavigationCore {
         rawCoordinate: sample.coordinate,
         routeProgress: 1,
         routeVersion: routeVersion,
-        sequence: sequence
+        sequence: sequence,
+        speedMetersPerSecond: sample.speedMetersPerSecond
       )
       return snapshot
     }
@@ -577,20 +536,29 @@ final class NavigationCore {
     // into off-route hysteresis, so it is the single authority on backward motion. A stricter
     // zero-tolerance gate here would latch `routeProgress` to the forward extreme of GPS noise
     // and hold the matched coordinate until the vehicle physically drove past it.
-    let shouldAcceptProjection = !isOffRoute && !isDepartureSample
+    let shouldAcceptProjection = !isOffRoute && !isDepartureSample && !isHeldJump
     // Raised only by accepted on-route progress, and read before this line when computing
     // cumulative regression, so the mark is the furthest point genuinely reached this route
     // rather than a value that drifts down with each tolerated backward step.
     if shouldAcceptProjection {
       progressHighWaterMark = max(progressHighWaterMark, projection.progress)
+      anchorTimestamp = sample.timestamp
     }
-    let previousMatchedCoordinate = snapshot.matchedCoordinate
-    let previousMatchedCourseDegrees = snapshot.matchedCourseDegrees
+    // A dead-reckoned snapshot is a guess; the held position falls back to the last real match.
+    let previous = lastRealSnapshot
+    let previousMatchedCoordinate = previous?.matchedCoordinate
     let provisionalMatchedCoordinate = previousMatchedCoordinate ?? projection.coordinate
-    let provisionalMatchedCourseDegrees = previousMatchedCourseDegrees ?? projection.courseDegrees
+    let provisionalMatchedCourseDegrees = previous?.matchedCourseDegrees
+      ?? projection.courseDegrees
+    let provisionalGeometrySegmentIndex = previousMatchedCoordinate == nil
+      ? projection.geometrySegmentIndex
+      : previous?.geometrySegmentIndex
     let provisionalRouteProgress = previousMatchedCoordinate == nil
       ? projection.progress
-      : snapshot.routeProgress
+      : fixProgress
+    let routeProgress = shouldAcceptProjection
+      ? projection.progress
+      : isOffRoute ? fixProgress : provisionalRouteProgress
     snapshot = NavigationSnapshot(
       distanceFromRouteMeters: projection.distanceMeters,
       horizontalAccuracyMeters: sample.horizontalAccuracyMeters,
@@ -603,12 +571,220 @@ final class NavigationCore {
         : isOffRoute ? nil : provisionalMatchedCourseDegrees,
       phase: .tracking,
       rawCoordinate: sample.coordinate,
-      routeProgress: shouldAcceptProjection
-        ? projection.progress
-        : isOffRoute ? snapshot.routeProgress : provisionalRouteProgress,
+      routeProgress: routeProgress,
       routeVersion: routeVersion,
-      sequence: sequence
+      sequence: sequence,
+      geometrySegmentIndex: shouldAcceptProjection
+        ? projection.geometrySegmentIndex
+        : isOffRoute ? nil : provisionalGeometrySegmentIndex,
+      speedMetersPerSecond: sample.speedMetersPerSecond
+    )
+    fixProgress = routeProgress
+    lastRealSnapshot = snapshot
+    return snapshot
+  }
+
+  /// Extrapolates the matched position along the route through a short gap in fixes.
+  ///
+  /// Without this the puck, the maneuver distance and the voice prompts all freeze in a tunnel
+  /// or under a long overpass. Extrapolation needs a recent accepted on-route fix with a usable
+  /// speed, never reaches arrival, never moves backward, and stops after
+  /// `deadReckoningMaximumGapSeconds` or `deadReckoningMaximumDistanceMeters`, whichever is
+  /// first. It never changes off-route, arrival or progress-mark state: the next real fix is
+  /// judged against the last real match.
+  ///
+  /// `maximumAlongMeters` caps extrapolation, so it stops before the next maneuver the vehicle has
+  /// not been seen to take; only a real fix can confirm a turn.
+  @discardableResult
+  func deadReckon(
+    at timestamp: TimeInterval,
+    maximumAlongMeters: Double? = nil
+  ) -> NavigationSnapshot? {
+    guard let route, !hasArrived, !isOffRoute, snapshot.phase == .tracking,
+      snapshot.matchedCoordinate != nil, let lastFixTimestamp, let lastFixSpeed,
+      lastFixTimestamp == anchorTimestamp,
+      lastFixSpeed >= deadReckoningMinimumSpeedMetersPerSecond
+    else {
+      return nil
+    }
+    let gapSeconds = timestamp - lastFixTimestamp
+    guard gapSeconds >= deadReckoningMinimumGapSeconds,
+      gapSeconds <= deadReckoningMaximumGapSeconds
+    else {
+      return nil
+    }
+    let fixAlongMeters = fixProgress * route.totalDistanceMeters
+    // Stop short of the destination: arrival must come from real, accurate fixes.
+    let alongMeters = min(
+      fixAlongMeters + min(deadReckoningMaximumDistanceMeters, lastFixSpeed * gapSeconds),
+      route.totalDistanceMeters * arrivalProgressThreshold,
+      maximumAlongMeters ?? .infinity
+    )
+    guard alongMeters > snapshot.routeProgress * route.totalDistanceMeters else {
+      return nil
+    }
+    let point = route.point(alongMeters: alongMeters)
+    sequence += 1
+    snapshot = NavigationSnapshot(
+      distanceFromRouteMeters: snapshot.distanceFromRouteMeters,
+      horizontalAccuracyMeters: snapshot.horizontalAccuracyMeters,
+      isOffRoute: false,
+      matchedCoordinate: point.coordinate,
+      matchedCourseDegrees: point.courseDegrees,
+      phase: .tracking,
+      rawCoordinate: snapshot.rawCoordinate,
+      routeProgress: point.progress,
+      routeVersion: routeVersion,
+      sequence: sequence,
+      geometrySegmentIndex: point.geometrySegmentIndex,
+      isDeadReckoning: true,
+      speedMetersPerSecond: lastFixSpeed
     )
     return snapshot
+  }
+
+  private func resetTrackingState() {
+    anchorTimestamp = nil
+    lastRealSnapshot = nil
+    arrivalSampleCount = 0
+    departureSampleCount = 0
+    fixProgress = 0
+    hasArrived = false
+    implausibleJumpCount = 0
+    isOffRoute = false
+    lastFixSpeed = nil
+    lastFixTimestamp = nil
+    progressHighWaterMark = 0
+    recoverySampleCount = 0
+  }
+
+  private func bestProjection(
+    on route: RoutePolyline,
+    sample: NavigationLocationSample,
+    anchorAlongMeters: Double?,
+    elapsedSeconds: Double?,
+    expectedTravelMeters: Double?
+  ) -> RouteProjection {
+    let accuracyAllowanceMeters = sample.horizontalAccuracyMeters ?? 0
+    var best: RouteProjection?
+    var bestScore = Double.infinity
+    var evaluated = 0
+
+    func consider(_ index: Int) {
+      evaluated += 1
+      let projection = route.project(sample.coordinate, ontoSegment: index)
+      let score = projection.distanceMeters
+        + coursePenalty(projection, courseDegrees: sample.courseDegrees)
+        + transitionPenalty(
+          projection,
+          anchorAlongMeters: anchorAlongMeters,
+          expectedTravelMeters: expectedTravelMeters,
+          accuracyAllowanceMeters: accuracyAllowanceMeters
+        )
+      if score < bestScore {
+        best = projection
+        bestScore = score
+      }
+    }
+
+    if let anchorAlongMeters {
+      let reachMeters = expectedTravelMeters
+        ?? elapsedSeconds.map { $0 * maximumPlausibleSpeedMetersPerSecond }
+        ?? 0
+      let forwardMeters = min(
+        matchWindowMaximumForwardMeters,
+        max(matchWindowMinimumForwardMeters, reachMeters * 1.5 + 2 * accuracyAllowanceMeters + 100)
+      )
+      let backwardMeters = max(matchWindowBackwardMeters, 50 + 2 * accuracyAllowanceMeters)
+      let window = route.segmentRange(
+        fromMeters: anchorAlongMeters - backwardMeters,
+        toMeters: anchorAlongMeters + forwardMeters
+      )
+      for index in window {
+        consider(index)
+      }
+      // No convincing match inside the window: the vehicle left the route, rejoined it
+      // somewhere else, or the window's best candidate only fits by position while heading or
+      // travel time say otherwise (a self-crossing after an outage, a hairpin's other leg).
+      // Look around the fix itself, still bounded by the grid radius. The combined score, not
+      // lateral distance alone, decides.
+      if let local = best,
+        bestScore > offRouteDistanceThresholdMeters + accuracyAllowanceMeters
+      {
+        let radius = min(
+          globalSearchMaximumRadiusMeters,
+          max(globalSearchInitialRadiusMeters, local.distanceMeters + 50)
+        )
+        for index in route.segmentIndices(near: sample.coordinate, radiusMeters: radius)
+        where !window.contains(index) {
+          consider(index)
+        }
+      }
+    } else {
+      var radius = globalSearchInitialRadiusMeters
+      while true {
+        for index in route.segmentIndices(near: sample.coordinate, radiusMeters: radius) {
+          consider(index)
+        }
+        if let found = best, found.distanceMeters + maximumCoursePenaltyMeters <= radius {
+          break
+        }
+        guard radius < globalSearchMaximumRadiusMeters else {
+          break
+        }
+        best = nil
+        bestScore = .infinity
+        radius = min(globalSearchMaximumRadiusMeters, radius * 4)
+      }
+      // Only the first fix of a route far from all of it reaches a full scan; every later fix
+      // has an anchor.
+      if best == nil {
+        for index in route.segments.indices {
+          consider(index)
+        }
+      }
+    }
+
+    lastEvaluatedSegmentCount = evaluated
+    return best!
+  }
+
+  private func coursePenalty(_ projection: RouteProjection, courseDegrees: Double?) -> Double {
+    courseDegrees.map { courseDegrees in
+      navigationCourseDifferenceDegrees(courseDegrees, projection.courseDegrees) / 180 *
+        maximumCoursePenaltyMeters
+    } ?? 0
+  }
+
+  /// How implausible it is to have moved from the previous match to `projection`.
+  ///
+  /// With timed fixes and a speed, the along-route travel is compared with what the speed
+  /// allows: overtaking it is penalised hard (that is how a later, parallel or crossing part of
+  /// the route steals the match), falling short is penalised lightly (speed lags at junctions),
+  /// and going backward keeps the original penalty. Untimed input keeps the original
+  /// distance-only continuity penalty.
+  private func transitionPenalty(
+    _ projection: RouteProjection,
+    anchorAlongMeters: Double?,
+    expectedTravelMeters: Double?,
+    accuracyAllowanceMeters: Double
+  ) -> Double {
+    guard let anchorAlongMeters else {
+      return 0
+    }
+    let deltaMeters = projection.alongMeters - anchorAlongMeters
+    let backwardPenalty = max(0, -deltaMeters - continuityToleranceMeters) *
+      backwardProgressPenaltyFactor
+    guard let expectedTravelMeters else {
+      return max(0, abs(deltaMeters) - continuityToleranceMeters) * continuityPenaltyFactor
+        + backwardPenalty
+    }
+    let tolerance = plausibilityBaseToleranceMeters + accuracyAllowanceMeters
+      + 0.5 * expectedTravelMeters
+    let overshoot = max(0, deltaMeters - expectedTravelMeters - tolerance)
+    let shortfall = max(0, expectedTravelMeters - tolerance - max(0, deltaMeters))
+    return overshoot * plausibilityForwardPenaltyFactor
+      + shortfall * plausibilityLagPenaltyFactor
+      + backwardPenalty
   }
 }
