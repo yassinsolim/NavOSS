@@ -363,6 +363,93 @@ final class CommunityTrafficTests: XCTestCase {
     XCTAssertGreaterThan(emittedCount, 0)
   }
 
+  /// ±5 m jitter around `center`, one fix every 2 s.
+  private func parked(
+    at center: NavOSSCarPlayCoordinate, seconds: Double, from time: Date, seed: UInt64
+  ) -> [NavOSSTrafficFix] {
+    var generator = SeededGenerator(seed: seed)
+    return stride(from: 2.0, through: seconds, by: 2).map {
+      NavOSSTrafficFix(
+        coordinate: offset(
+          center, north: Double.random(in: -5...5, using: &generator),
+          east: Double.random(in: -5...5, using: &generator)),
+        horizontalAccuracyMeters: 5, timestamp: time.addingTimeInterval($0))
+    }
+  }
+
+  func testParkedJitterNeverReleasesTheProtectedEndOfACancelledTrip() {
+    let destination = offset(origin, north: 0, east: 20_000)
+    let stop = offset(origin, north: 0, east: 5_000)
+    let drove = drive([origin, stop])
+    let fixes = drove + parked(at: stop, seconds: 600, from: drove.last!.timestamp, seed: 7)
+    var collector = NavOSSTrafficProbeCollector(rules: rules, protectedPoints: [origin, destination])
+    var batches: [NavOSSTrafficProbeBatch] = []
+    for fix in fixes {
+      batches += collector.ingest(fix)
+      batches += collector.tick(now: fix.timestamp)
+    }
+    collector.finish()  // navigation cancelled while parked
+    assertValid(batches)
+    XCTAssertFalse(batches.isEmpty)
+    assertNothingWithin(400, of: [stop], in: batches)
+  }
+
+  func testJitterAtTheOriginNeverSatisfiesTheStartTrim() {
+    let destination = offset(origin, north: 0, east: 6_000)
+    // Ten minutes of jitter in the driveway, then departure (the route origin is elsewhere, so
+    // only the start trim measured on credible movement protects the driveway).
+    let driveway = offset(origin, north: 1_000, east: 0)
+    let waiting = parked(at: driveway, seconds: 600, from: Date(timeIntervalSince1970: 1_794_500_000), seed: 9)
+    let leaving = drive([driveway, destination], startingAt: waiting.last!.timestamp.addingTimeInterval(2))
+    var collector = NavOSSTrafficProbeCollector(rules: rules, protectedPoints: [destination])
+    var batches: [NavOSSTrafficProbeBatch] = []
+    for fix in waiting + leaving { batches += collector.ingest(fix) }
+    assertValid(batches)
+    XCTAssertFalse(batches.isEmpty)
+    assertNothingWithin(400, of: [driveway], in: batches)
+  }
+
+  func testAStopAndGoQueueStillSendsItsStationarySamples() {
+    let a = offset(origin, north: 0, east: 2_000)
+    let destination = offset(a, north: 0, east: 4_000)
+    let first = drive([origin, a])
+    var clock = first.last!.timestamp
+    var stopped: [NavOSSTrafficFix] = []
+    for _ in 0..<20 {  // 40 s standing still in a queue
+      clock = clock.addingTimeInterval(2)
+      stopped.append(NavOSSTrafficFix(coordinate: a, horizontalAccuracyMeters: 5, timestamp: clock))
+    }
+    let second = drive([a, destination], startingAt: clock.addingTimeInterval(2))
+    let batches = run(first + stopped + second, protectedPoints: [origin, destination])
+    assertValid(batches)
+    let rounded = coordinate(navOSSRoundedToFiveDecimals(a.latitude), navOSSRoundedToFiveDecimals(a.longitude))
+    let standing = emitted(batches).filter { distance($0, rounded) < 1 }.count
+    XCTAssertGreaterThanOrEqual(standing, 15, "stationary time is signal for the server")
+  }
+
+  func testAGPSJumpAndBackReleasesNothing() {
+    let destination = offset(origin, north: 0, east: 20_000)
+    let stop = offset(origin, north: 0, east: 3_000)
+    let drove = drive([origin, stop])
+    var clock = drove.last!.timestamp
+    var parkedWithJumps: [NavOSSTrafficFix] = []
+    var jumps: [NavOSSCarPlayCoordinate] = []
+    for index in 0..<200 {
+      clock = clock.addingTimeInterval(2)
+      let jump = index % 10 == 5
+      let position = jump ? offset(stop, north: 300, east: 0) : stop
+      if jump { jumps.append(position) }
+      parkedWithJumps.append(NavOSSTrafficFix(coordinate: position, horizontalAccuracyMeters: 8, timestamp: clock))
+    }
+    var collector = NavOSSTrafficProbeCollector(rules: rules, protectedPoints: [origin, destination])
+    var batches: [NavOSSTrafficProbeBatch] = []
+    for fix in drove + parkedWithJumps { batches += collector.ingest(fix) }
+    collector.finish()
+    assertValid(batches)
+    assertNothingWithin(400, of: [stop], in: batches)
+    assertNothingWithin(1, of: jumps, in: batches)
+  }
+
   func testFinishingTheTripDiscardsEverythingHeldBack() {
     let destination = offset(origin, north: 0, east: 3_000)
     var collector = NavOSSTrafficProbeCollector(rules: rules, protectedPoints: [origin])

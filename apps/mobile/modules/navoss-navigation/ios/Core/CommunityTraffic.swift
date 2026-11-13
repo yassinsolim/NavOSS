@@ -131,6 +131,10 @@ public struct NavOSSTrafficProbeCollector: Sendable {
   public let rules: NavOSSTrafficProbeRules
   private var protectedPoints: [NavOSSCarPlayCoordinate]
   private var lastAccepted: PathFix?
+  private var movementAnchor: NavOSSCarPlayCoordinate?
+  /// Displacement from the movement anchor below which a fix counts as standing still.
+  static let minimumCredibleMovementMeters = 20.0
+  static let maximumPlausibleSpeedMetersPerSecond = 70.0
   private var pending: [PathFix] = []
   private var open: Open?
 
@@ -160,14 +164,25 @@ public struct NavOSSTrafficProbeCollector: Sendable {
     if let lastAccepted {
       let elapsed = fix.timestamp.timeIntervalSince(lastAccepted.timestamp)
       guard elapsed >= rules.sampleIntervalSeconds - 0.25 else { return ready }
-      pathMeters = lastAccepted.pathMeters
-        + navigationDistanceMeters(
-          from: Self.navigationCoordinate(lastAccepted.coordinate),
-          to: Self.navigationCoordinate(fix.coordinate)
-        )
+      // A jump no road vehicle could make is discarded: it neither moves the trims nor is sent.
+      let step = Self.distance(lastAccepted.coordinate, fix.coordinate)
+      guard step <= Self.maximumPlausibleSpeedMetersPerSecond * elapsed else { return ready }
+      // The trims are measured on credible movement only: path advances when the fix leaves the
+      // anchor by more than its accuracy allows, so GPS jitter while parked never adds up to
+      // the 400 m that would release a trip's protected end. Stationary fixes still queue, so
+      // a stopped car reports low speed once it has really moved on.
+      let anchor = movementAnchor ?? lastAccepted.coordinate
+      let fromAnchor = Self.distance(anchor, fix.coordinate)
+      if fromAnchor > max(Self.minimumCredibleMovementMeters, 2 * fix.horizontalAccuracyMeters) {
+        pathMeters = lastAccepted.pathMeters + fromAnchor
+        movementAnchor = fix.coordinate
+      } else {
+        pathMeters = lastAccepted.pathMeters
+      }
     } else {
       // The first fix of the trip is protected wherever the route said the trip began.
       protect([fix.coordinate])
+      movementAnchor = fix.coordinate
       pathMeters = 0
     }
     let accepted = PathFix(coordinate: fix.coordinate, pathMeters: pathMeters, timestamp: fix.timestamp)
@@ -193,6 +208,7 @@ public struct NavOSSTrafficProbeCollector: Sendable {
     pending.removeAll()
     open = nil
     lastAccepted = nil
+    movementAnchor = nil
   }
 
   private mutating func expire(now: Date) -> [NavOSSTrafficProbeBatch] {
@@ -281,6 +297,10 @@ public struct NavOSSTrafficProbeCollector: Sendable {
         schemaVersion: rules.schemaVersion
       )
     ]
+  }
+
+  private static func distance(_ a: NavOSSCarPlayCoordinate, _ b: NavOSSCarPlayCoordinate) -> Double {
+    navigationDistanceMeters(from: navigationCoordinate(a), to: navigationCoordinate(b))
   }
 
   private static func navigationCoordinate(_ coordinate: NavOSSCarPlayCoordinate)
