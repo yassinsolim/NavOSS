@@ -38,6 +38,7 @@ staged_directory="$(mktemp -d "${TMPDIR:-/tmp}/navoss-maestro-app.XXXXXX")"
 staged_app="$staged_directory/NavOSS.app"
 maestro_log="$(mktemp "${TMPDIR:-/tmp}/navoss-maestro.XXXXXX.log")"
 maestro_debug="$staged_directory/maestro-debug"
+maestro_output="$staged_directory/maestro-output"
 ditto "$installed_app" "$staged_app"
 trap 'rm -rf "$staged_directory"; rm -f "$maestro_log"' EXIT HUP INT TERM
 xcrun simctl terminate "$device_id" org.navoss.mobile >/dev/null 2>&1 || true
@@ -54,8 +55,10 @@ xcrun simctl openurl \
 
 run_maestro() {
   rm -rf "$maestro_debug"
-  if maestro --device "$device_id" test --debug-output "$maestro_debug" "$flow_file" >"$maestro_log" 2>&1; then
+  rm -rf "$maestro_output"
+  if maestro --device "$device_id" test --debug-output "$maestro_debug" --test-output-dir "$maestro_output" "$flow_file" >"$maestro_log" 2>&1; then
     cat "$maestro_log"
+    sh "$(dirname "$0")/maestro-screenshots.sh" "$maestro_output"
     return 0
   else
     exit_code=$?

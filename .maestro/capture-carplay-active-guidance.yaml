@@ -23,4 +23,4 @@ appId: org.navoss.mobile
     visible: 'End navigation'
     timeout: 20000
 - assertVisible: 'Share ETA'
-- takeScreenshot: '/tmp/navoss-carplay-active-guidance'
+- takeScreenshot: 'navoss-carplay-active-guidance'

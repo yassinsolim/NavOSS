@@ -36,6 +36,6 @@ appId: org.navoss.mobile
       text: 'Open NavOSS support'
     direction: DOWN
 - assertVisible: 'Open NavOSS support'
-- takeScreenshot: '/tmp/navoss-about-privacy'
+- takeScreenshot: 'navoss-about-privacy'
 - tapOn: 'Close about and privacy'
 - assertVisible: 'Search places'

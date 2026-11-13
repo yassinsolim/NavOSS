@@ -43,4 +43,6 @@ xcrun simctl spawn "$device_id" log stream \
   --predicate 'process == "NavOSS"' \
   >"$log_directory/navigation.log"
 
-maestro --device "$device_id" test ../../.maestro/assert-automatic-reroute-complete.yaml
+maestro_output="$(mktemp -d "${TMPDIR:-/tmp}/navoss-maestro-output.XXXXXX")"
+maestro --device "$device_id" test --test-output-dir "$maestro_output" ../../.maestro/assert-automatic-reroute-complete.yaml
+sh ./scripts/maestro-screenshots.sh "$maestro_output"

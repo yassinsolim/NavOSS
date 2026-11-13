@@ -21,4 +21,4 @@ appId: org.navoss.mobile
 - assertNotVisible: 'Start navigation'
 - assertVisible: 'Route preview'
 - assertVisible: '.*min'
-- takeScreenshot: '/tmp/navoss-reviewer-route-preview'
+- takeScreenshot: 'navoss-reviewer-route-preview'

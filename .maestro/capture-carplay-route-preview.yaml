@@ -20,4 +20,4 @@ appId: org.navoss.mobile
     timeout: 20000
 - assertVisible: 'Route preview'
 - assertVisible: 'No live traffic'
-- takeScreenshot: '/tmp/navoss-carplay-route-preview'
+- takeScreenshot: 'navoss-carplay-route-preview'
