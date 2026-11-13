@@ -414,6 +414,28 @@ describe('community traffic over HTTP', () => {
     expect((await perNetwork.upload('e', undefined, '2001:db8:13::5')).statusCode).toBe(202);
   });
 
+  it('limits how many credentials one network can request', async () => {
+    const traffic = await createTrafficApp();
+    const request = (device: string, address: string) =>
+      traffic.app.inject({
+        headers: { 'x-forwarded-for': address },
+        method: 'POST',
+        payload: { assertion: assertionFor(device) },
+        url: '/v2/traffic/credentials',
+      });
+
+    for (let index = 0; index < 120; index += 1) {
+      // Addresses spread over one IPv4 /24.
+      const response = await request(`phone-${String(index)}`, `198.51.100.${String(index)}`);
+      expect(response.statusCode).toBe(200);
+    }
+    const limited = await request('phone-120', '198.51.100.200');
+    expect(limited.statusCode).toBe(429);
+    expect(limited.headers['retry-after']).toBe('600');
+    expect((await request('phone-121', '198.51.101.1')).statusCode).toBe(200);
+    expect(traffic.service.metrics().credentialsIssued).toBe(121);
+  });
+
   it('does not let uploads without a credential use up the shared quota', async () => {
     const traffic = await createTrafficApp({ rateLimitGlobal: 2 });
     const junk = driveBatch('A'.repeat(64));

@@ -281,9 +281,11 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
         settings: { ...FIXTURE_SETTINGS, mode },
         store: createPostgresTrafficReleaseStore(emptyDatabasePool()),
       });
-    const live = build('live');
-    await expect(live.start()).rejects.toThrow(/migrations are pending/);
-    await live.close();
+    for (const mode of ['collect', 'live'] as const) {
+      const enabled = build(mode);
+      await expect(enabled.start()).rejects.toThrow(/migrations are pending/);
+      await enabled.close();
+    }
 
     const off = build('off');
     await expect(off.start()).resolves.toBeUndefined();
@@ -408,6 +410,8 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
     }
     expect(failures).toEqual(['epoch']);
     expect(service.metrics().epochFailures).toBe(1);
+    // What the operator summary logs: finite numbers, nothing that could name a road or a time.
+    for (const value of Object.values(service.metrics())) expect(Number.isFinite(value)).toBe(true);
 
     const database = await dumpDatabase();
     const logs = logLines.join('');
@@ -464,6 +468,59 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
     expect(await flowFeatures(app)).toEqual([]);
     expect((await releaseRows()).rowCount).toBeGreaterThan(10);
     await service.runEpoch();
+    expect((await releaseRows()).rowCount).toBe(0);
+  });
+
+  it('stores nothing at all while only collecting, even for a cohort of three', async () => {
+    const { app, service } = await createApp({ settings: { mode: 'collect' } });
+    const before = await dumpDatabase();
+    for (const device of ['phone-1', 'phone-2', 'phone-3']) {
+      expect((await post(app, await credentialFor(service, device))).statusCode).toBe(202);
+    }
+    await advanceEpoch(service);
+
+    // The cohorts were formed and counted for the operator, then thrown away.
+    expect(service.metrics().segmentsReleased).toBeGreaterThan(10);
+    expect(service.metrics().pendingSamples).toBe(0);
+    expect((await releaseRows()).rowCount).toBe(0);
+    expect(await dumpDatabase()).toBe(before);
+  });
+
+  it('has the publication rules as database constraints', async () => {
+    const insert = (overrides: Record<string, string>) => {
+      const row = {
+        expires_at: `'2026-11-12T18:20:00Z'`,
+        free_flow_kph: '50',
+        geom: `ST_SetSRID(ST_MakeLine(ST_MakePoint(9.5, 47.1), ST_MakePoint(9.51, 47.1)), 4326)`,
+        released_at: `'2026-11-12T18:05:00Z'`,
+        road_class: `'primary'`,
+        segment_key: `'w1f-0123456789ab'`,
+        speed_kph: '40',
+        ...overrides,
+      };
+      const pool = schemaPool();
+      return pool
+        .query(
+          `INSERT INTO traffic_releases (${Object.keys(row).join(', ')})
+           VALUES (${Object.values(row).join(', ')})`,
+        )
+        .finally(() => pool.end());
+    };
+
+    await expect(insert({})).resolves.toMatchObject({ rowCount: 1 });
+    await admin.query(`TRUNCATE ${SCHEMA}.traffic_releases`);
+    // An exact speed, a minor road, a time off the five-minute grid, a lifetime over 15 minutes,
+    // and a key that is not one whole edge.
+    await expect(insert({ speed_kph: '43' })).rejects.toThrow(/check constraint/);
+    await expect(insert({ road_class: `'tertiary'` })).rejects.toThrow(/check constraint/);
+    await expect(insert({ road_class: `'residential'` })).rejects.toThrow(/check constraint/);
+    await expect(insert({ released_at: `'2026-11-12T18:05:07Z'` })).rejects.toThrow(
+      /check constraint/,
+    );
+    await expect(insert({ expires_at: `'2026-11-12T18:25:00Z'` })).rejects.toThrow(
+      /check constraint/,
+    );
+    await expect(insert({ segment_key: `'w1f'` })).rejects.toThrow(/check constraint/);
     expect((await releaseRows()).rowCount).toBe(0);
   });
 

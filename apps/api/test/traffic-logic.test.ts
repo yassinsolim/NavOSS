@@ -403,19 +403,31 @@ describe('publication cohorts', () => {
     expect(cohorts.pending()).toEqual({ samples: 3, segments: 3 });
   });
 
-  it('cannot have its geometry changed by a later batch, counted or not', () => {
-    const cohorts = createTrafficCohorts(SETTINGS);
+  describe('geometry of a pending segment', () => {
     const planted: Position[] = [
       [-114.2, 51.3],
       [-114.1, 51.3],
     ];
-    add(cohorts, 'a', 60);
-    // A repeat from a contributor already in the cohort, and a new one, both with another line.
-    cohorts.add([{ ...sample(60), line: planted }], () => 'a', NOW_MS);
-    cohorts.add([{ ...sample(60), line: planted }], () => 'b', NOW_MS);
-    add(cohorts, 'c', 60);
 
-    expect(cohorts.closeEpoch(NEXT_TICK)[0]?.line).toEqual(sample(0).line);
+    it('is not changed by later contributors that are counted', () => {
+      const cohorts = createTrafficCohorts(SETTINGS);
+      add(cohorts, 'a', 60);
+      // Both later contributors count toward the threshold, and both carry another line. Nothing
+      // after them restores the first one.
+      expect(cohorts.add([{ ...sample(60), line: planted }], () => 'b', NOW_MS)).toBe(1);
+      expect(cohorts.add([{ ...sample(60), line: planted }], () => 'c', NOW_MS)).toBe(1);
+
+      expect(cohorts.closeEpoch(NEXT_TICK)[0]?.line).toEqual(sample(0).line);
+    });
+
+    it('is not changed by a repeat that is not counted', () => {
+      const cohorts = createTrafficCohorts(SETTINGS);
+      for (const contributor of ['a', 'b', 'c']) add(cohorts, contributor, 60);
+      // The last thing to arrive is a de-duplicated repeat carrying another line.
+      expect(cohorts.add([{ ...sample(60), line: planted }], () => 'a', NOW_MS)).toBe(0);
+
+      expect(cohorts.closeEpoch(NEXT_TICK)[0]?.line).toEqual(sample(0).line);
+    });
   });
 });
 
