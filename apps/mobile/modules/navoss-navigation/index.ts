@@ -173,11 +173,97 @@ export interface NativeNavigationPreferences {
   speedingToleranceKph?: number;
 }
 
+export type NativeOfflineCatalog =
+  'available' | 'loading' | 'not-published' | 'unreachable' | 'unsupported';
+
+export type NativeOfflineRegionState =
+  | 'downloading'
+  | 'failed'
+  | 'installed'
+  | 'installing'
+  | 'not-downloaded'
+  | 'paused'
+  | 'queued'
+  | 'verifying';
+
+export interface NativeOfflineFailure {
+  availableBytes?: number;
+  reason: 'installation' | 'integrity' | 'network' | 'server' | 'storage' | 'unsupported';
+  requiredBytes?: number;
+  statusCode?: number;
+}
+
+export interface NativeOfflineRegion {
+  attribution: { license: string; text: string; url: string }[];
+  /** `[west, south, east, north]`. */
+  bounds: [number, number, number, number];
+  /** Bytes still to download for this region, including shared resources not yet installed. */
+  downloadBytes: number;
+  failure?: NativeOfflineFailure;
+  id: string;
+  installedBytes?: number;
+  installedDataDate?: string;
+  installedVersion?: string;
+  name: string;
+  receivedBytes?: number;
+  state: NativeOfflineRegionState;
+  totalBytes?: number;
+  updateAvailable: boolean;
+}
+
+export interface NativeOfflineState {
+  availableBytes?: number;
+  bundleVersion?: string;
+  catalog: NativeOfflineCatalog;
+  dataDate?: string;
+  networkAvailable: boolean;
+  preferOffline: boolean;
+  regions: NativeOfflineRegion[];
+  /** The manifest came from the device cache after a failed refresh. */
+  stale: boolean;
+  storageBytes: number;
+}
+
+export interface NativeOfflineRouteRequest {
+  alternatives: number;
+  destination: NativeNavigationDestination;
+  origin: NativeNavigationCoordinate;
+  originHeadingDegrees?: number;
+  originHorizontalAccuracyMeters?: number;
+  preferences: NativeRoutePreferences;
+  waypoints: NativeNavigationDestination[];
+}
+
+export type NativeOfflineErrorCode =
+  'engine-unavailable' | 'no-route' | 'not-installed' | 'outside-coverage';
+
+export type NativeOfflineRouteResult =
+  { ok: true; trips: NativeCarPlayTrip[] } | { code: NativeOfflineErrorCode; ok: false };
+
+export interface NativeOfflinePlace {
+  address?: string;
+  category: 'address' | 'landmark' | 'neighborhood' | 'poi';
+  detailCategory?: string;
+  /** Straight-line ranking distance, not a driving distance. */
+  distanceMeters: number;
+  id: string;
+  label: string;
+  latitude: number;
+  longitude: number;
+  name: string;
+  nameSource: 'address' | 'category' | 'osm';
+}
+
+export type NativeOfflineSearchResult =
+  | { bundleVersion: string; ok: true; osmTimestamp: string; results: NativeOfflinePlace[] }
+  | { code: NativeOfflineErrorCode; ok: false };
+
 type NavOSSNavigationEvents = {
   onCarPlayNavigationEnded(event: { reason: 'carplay' }): void;
   onCarPlayStateChanged(state: NativeCarPlayState): void;
   onNavigationPreferencesChanged(preferences: NativeNavigationPreferences): void;
   onNavigationSnapshot(snapshot: NativeNavigationSnapshot): void;
+  onOfflineStateChanged(state: NativeOfflineState): void;
 };
 
 declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents> {
@@ -186,6 +272,8 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   clearDestinationHistory(): void;
   clearRecentDestinations(): void;
   clearRoute(): NativeNavigationSnapshot;
+  deleteOfflineRegion(regionId: string): void;
+  downloadOfflineRegion(regionId: string): void;
   declineRerouteProposal(id: string): boolean;
   getCarPlayState(): NativeCarPlayState;
   getAudioMode(): NativeNavigationAudioMode;
@@ -193,16 +281,33 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   getDestinationCatalog(): NativeDestinationCatalog;
   getGooglePlacesOpenSourceLicenseInfo(): string | null;
   getNavigationPreferences(): NativeNavigationPreferences;
+  getOfflineMapStyle(
+    slug: string,
+    latitude: number | null,
+    longitude: number | null,
+  ): { style: string; use: boolean } | null;
+  getOfflineState(): NativeOfflineState;
   getRecentDestinationIds(): string[];
   getRoutePreferences(): NativeRoutePreferences;
   getSnapshot(): NativeNavigationSnapshot;
   isFavoriteDestination(id: string): boolean;
   isCarPlayVisualHarness(): boolean;
   isGooglePlaceRatingAvailable(): boolean;
+  pauseOfflineRegion(regionId: string): void;
+  planOfflineRoutes(request: NativeOfflineRouteRequest): Promise<NativeOfflineRouteResult>;
   recordRecentDestination(destination: NativeNavigationDestination): void;
+  refreshOfflineManifest(): Promise<NativeOfflineState>;
   replaceFavoriteDestinations(destinations: NativeNavigationDestination[]): void;
+  searchOffline(
+    query: string,
+    latitude: number | null,
+    longitude: number | null,
+    limit: number,
+    category: string | null,
+  ): Promise<NativeOfflineSearchResult>;
   setHomeDestination(destination: NativeNavigationDestination | null): void;
   setAudioMode(mode: NativeNavigationAudioMode): void;
+  setPreferOfflineMaps(prefer: boolean): void;
   setRerouteMode(mode: NativeRerouteMode): void;
   setRoute(trip: NativeCarPlayTrip): NativeNavigationSnapshot;
   setRoutePreferences(preferences: NativeRoutePreferences): void;

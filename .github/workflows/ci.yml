@@ -105,6 +105,11 @@ jobs:
           NAVOSS_CARPLAY_ENTITLEMENT_ENABLED: '1'
         run: corepack pnpm exec expo prebuild --platform ios --no-install
 
+      # The offline routing engine is fetched by the NavOSSNavigation podspec during `pod install`
+      # (not run above). Check the pinned, SHA-256-verified download still resolves.
+      - name: Verify the pinned offline routing engine
+        run: ruby apps/mobile/modules/navoss-navigation/ios/valhalla_mobile.rb
+
       # The plugin copies `apps/mobile/carplay/ios/*.swift` into the generated project. Editing a
       # source without regenerating silently builds the previous copy, which has shipped stale
       # CarPlay code more than once. Fail loudly instead.

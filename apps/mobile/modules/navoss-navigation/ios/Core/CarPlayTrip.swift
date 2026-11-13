@@ -279,6 +279,16 @@ public func navOSSCarPlayTripsOrderedForDisplay(
 public func navOSSCarPlayRouteChoiceDetails(
   _ routes: [NavOSSCarPlayTrip]
 ) -> [String?] {
+  // An on-device route has no live traffic or closure data; say so on every choice.
+  zip(routes, navOSSCarPlayRoadChoiceDetails(routes)).map { route, detail in
+    guard route.source == navOSSOfflineRouteSource else { return detail }
+    return ["Offline, no traffic or closures", detail].compactMap { $0 }.joined(separator: " · ")
+  }
+}
+
+private func navOSSCarPlayRoadChoiceDetails(
+  _ routes: [NavOSSCarPlayTrip]
+) -> [String?] {
   struct RoadCandidate {
     let displayName: String
     let firstStepIndex: Int

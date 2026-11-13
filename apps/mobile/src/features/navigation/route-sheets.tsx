@@ -1,9 +1,4 @@
-import type {
-  RouteAlternative,
-  RoutePreferences,
-  RouteResponse,
-  SearchResult,
-} from '@navoss/contracts';
+import type { RouteAlternative, RoutePreferences, SearchResult } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
@@ -16,6 +11,7 @@ import {
   formatTrafficDelay,
   routeViaLabel,
 } from '@/features/navigation/route-progress';
+import type { RouteSource } from '@/features/navigation/route-ui-state';
 import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
 import { createThemedStyles, radius, space, typography, useTheme } from '@/theme';
 import { Banner } from '@/ui/banner';
@@ -169,7 +165,7 @@ interface RoutePreviewSheetProps {
   /** Set when the route was planned from a fixed demo origin rather than the driver's location. */
   previewOriginLabel?: string;
   routePreferences: RoutePreferences;
-  routeSource?: RouteResponse['source'];
+  routeSource?: RouteSource;
   routes: RouteAlternative[];
   selectedRoute: RouteAlternative;
   vehicleStyle: VehicleStyle;

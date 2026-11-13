@@ -5,6 +5,10 @@ import {
   type NativeNavigationSnapshot,
 } from './native-navigation';
 import type { PhoneRouteStatus } from './phone-surface';
+import { OFFLINE_ROUTE_SOURCE, type OfflineRouteSource } from '../offline/offline-copy';
+
+/** Who routed a trip: the NavOSS service's provider, or the on-device offline engine. */
+export type RouteSource = RouteResponse['source'] | OfflineRouteSource;
 
 type NativeTrip = NonNullable<NativeNavigationSnapshot['trip']>;
 
@@ -75,7 +79,7 @@ export function selectedRouteOf(state: RouteUiState): RouteAlternative | undefin
 export interface NativeTripRoute {
   destination: SearchResult;
   route: RouteAlternative;
-  routeSource: RouteResponse['source'] | undefined;
+  routeSource: RouteSource | undefined;
   waypoints: SearchResult[];
 }
 
@@ -122,9 +126,8 @@ export function routeFromNativeTrip(trip: NativeTrip): NativeTripRoute {
   };
 }
 
-export function routeSourceForNativeTrip(
-  source: string | undefined,
-): RouteResponse['source'] | undefined {
+export function routeSourceForNativeTrip(source: string | undefined): RouteSource | undefined {
+  if (source === OFFLINE_ROUTE_SOURCE.id) return OFFLINE_ROUTE_SOURCE;
   if (source === 'mapbox-traffic') {
     return {
       attribution: 'Routing and traffic by Mapbox',

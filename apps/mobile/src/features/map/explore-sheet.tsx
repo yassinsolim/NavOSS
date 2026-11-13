@@ -35,6 +35,7 @@ import {
   type NativeDestinationCatalog,
   nativeDestinationToSearchResult,
 } from '@/features/navigation/native-navigation';
+import { useOfflineMapsInstalled } from '@/features/offline/offline-maps';
 import { useRenderCounter } from '@/lib/render-counter';
 import { createThemedStyles, radius, space, typography, useTheme } from '@/theme';
 import { haptics } from '@/theme/haptics';
@@ -146,7 +147,13 @@ export function ExploreSheet({
   );
   const showResults = query.trim().length >= 2 && (searchState !== 'idle' || results.length > 0);
   const listExpanded = detentIndex > 0;
-  const notice = exploreServiceNotice({ apiConnection, locationState, nearbySearchEnabled });
+  const offlineMapsInstalled = useOfflineMapsInstalled();
+  const notice = exploreServiceNotice({
+    apiConnection,
+    locationState,
+    nearbySearchEnabled,
+    offlineMapsInstalled,
+  });
 
   return (
     <BottomSheet

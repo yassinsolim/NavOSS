@@ -2,7 +2,6 @@ import type {
   Coordinate,
   RouteAlternative,
   RoutePreferences,
-  RouteResponse,
   SearchResult,
 } from '@navoss/contracts';
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from 'react';
@@ -13,9 +12,15 @@ import {
   setNavigationRoutePreferences,
 } from '@/features/navigation/native-navigation';
 import type { RouteRequestOrigin } from '@/features/navigation/route-origin';
-import { IDLE_ROUTE, type RouteUiState } from '@/features/navigation/route-ui-state';
+import {
+  IDLE_ROUTE,
+  type RouteSource,
+  type RouteUiState,
+} from '@/features/navigation/route-ui-state';
+import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
+import { fetchRoutesWithOfflineFallback } from '@/features/offline/offline-maps';
 import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
-import { fetchRoutes, NavOssApiError } from '@/lib/api';
+import { NavOssApiError } from '@/lib/api';
 
 export interface RoutePlanner {
   /** Aborts an in-flight route request without changing the route state. */
@@ -31,11 +36,11 @@ export interface RoutePlanner {
     waypoints?: SearchResult[],
   ) => Promise<void>;
   routePreferences: RoutePreferences;
-  routeSource: RouteResponse['source'] | undefined;
+  routeSource: RouteSource | undefined;
   routeState: RouteUiState;
   /** Adopts preferences changed elsewhere (CarPlay) without writing them back to native. */
   setRoutePreferences: (preferences: RoutePreferences) => void;
-  setRouteSource: (source: RouteResponse['source'] | undefined) => void;
+  setRouteSource: (source: RouteSource | undefined) => void;
   setRouteState: Dispatch<SetStateAction<RouteUiState>>;
   setVehicleStyle: (style: VehicleStyle) => void;
   /** Persists changed avoidances to the navigation core, which shares them with CarPlay. */
@@ -64,7 +69,7 @@ export function useRoutePlanner({
   const [routePreferences, setRoutePreferences] = useState<RoutePreferences>(() =>
     getNavigationRoutePreferences(),
   );
-  const [routeSource, setRouteSource] = useState<RouteResponse['source']>();
+  const [routeSource, setRouteSource] = useState<RouteSource>();
   const [vehicleStyle, setVehicleStyle] = useState<VehicleStyle>('arrow');
 
   useEffect(
@@ -115,7 +120,8 @@ export function useRoutePlanner({
         return;
       }
 
-      const response = await fetchRoutes(
+      // The service first; an installed offline region answers when it cannot be reached.
+      const response = await fetchRoutesWithOfflineFallback(
         {
           alternatives: 2,
           destination: destination.center,
@@ -125,6 +131,8 @@ export function useRoutePlanner({
             ? {}
             : { waypoints: waypoints.map((waypoint) => waypoint.center) }),
         },
+        destination,
+        waypoints,
         { signal: controller.signal },
       );
       if (superseded()) return;
@@ -134,7 +142,7 @@ export function useRoutePlanner({
         return;
       }
 
-      onServiceReachable();
+      if (response.source.id !== OFFLINE_ROUTE_SOURCE.id) onServiceReachable();
       setRouteSource(response.source);
       setRouteState({
         ...plan,

@@ -91,9 +91,7 @@ function PreferenceSwitch({
  * repaint NavOSS's own layers and leave the basemap alone.
  *
  * Wave 2 seam: the opt-in "Traffic" overlay switch belongs in "Map content" (it needs a
- * `showTraffic` flag in `MapPreferences` and `normalizeMapPreferences`), and the offline-maps
- * entry is a `ListRow` in a new "Offline" section at the end of this sheet that opens the
- * offline-maps screen.
+ * `showTraffic` flag in `MapPreferences` and `normalizeMapPreferences`).
  */
 export function MapPreferencesSheet({
   metrics,
@@ -101,6 +99,7 @@ export function MapPreferencesSheet({
   onClose,
   onClosed,
   onOpenGuidanceSettings,
+  onOpenOfflineMaps,
   preferences,
   visible,
 }: {
@@ -110,6 +109,7 @@ export function MapPreferencesSheet({
   /** Called after the sheet has left the screen, when another sheet may be presented. */
   onClosed: () => void;
   onOpenGuidanceSettings: () => void;
+  onOpenOfflineMaps: () => void;
   preferences: MapPreferences;
   visible: boolean;
 }) {
@@ -244,6 +244,19 @@ export function MapPreferencesSheet({
               onPress={onOpenGuidanceSettings}
               subtitle="Sound, rerouting and speed warning"
               title="Guidance settings"
+              trailing="chevron"
+            />
+          </View>
+        </View>
+        <View style={styles.section}>
+          <SectionTitle>Offline</SectionTitle>
+          <View style={styles.linkCard}>
+            <ListRow
+              accessibilityLabel="Offline maps"
+              icon={{ android: 'download_for_offline', ios: 'arrow.down.circle' }}
+              onPress={onOpenOfflineMaps}
+              subtitle="Download regions for use without a connection"
+              title="Offline maps"
               trailing="chevron"
             />
           </View>

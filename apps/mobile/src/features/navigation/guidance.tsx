@@ -1,4 +1,4 @@
-import type { RouteResponse, SafetyCamera, SearchResult } from '@navoss/contracts';
+import type { SafetyCamera, SearchResult } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -32,6 +32,7 @@ import {
   formatDuration,
   type UpcomingManeuver,
 } from '@/features/navigation/route-progress';
+import type { RouteSource } from '@/features/navigation/route-ui-state';
 import type { VehicleMatchStatus } from '@/features/navigation/vehicle-puck';
 import {
   createThemedStyles,
@@ -421,7 +422,7 @@ interface TripSheetProps {
   /** The matched position is being extrapolated through a short gap in GPS fixes. */
   positionEstimated: boolean;
   rerouteCount: number;
-  routeSource: RouteResponse['source'] | undefined;
+  routeSource: RouteSource | undefined;
   upcomingManeuvers: readonly UpcomingManeuver[];
 }
 

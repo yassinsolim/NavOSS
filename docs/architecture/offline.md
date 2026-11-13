@@ -1,9 +1,9 @@
 # Regional offline bundles
 
-This is the **server/build contract** for the later phone/CarPlay offline wave. The pipeline and
-manifest endpoint are implemented; the current app does not download/install these bundles or
-perform native offline search/routing. Nothing in this work provisions storage or touches the
-production VM.
+This is the **server/build contract** for offline maps. The pipeline and manifest endpoint are
+implemented, and the app consumes them (see [App integration](#app-integration)). No production
+artifact hosting is provisioned: until a manifest is published the app says “Offline maps are not
+available yet”. Nothing in this work provisions storage or touches the production VM.
 
 Reproduce with [`infra/offline/README.md`](../../infra/offline/README.md). Build outputs, raw inputs,
 logs and verification screenshots are ignored under `artifacts/offline/`.
@@ -448,3 +448,32 @@ verification passed for all seven final published files (three per region plus s
 All repository check/lint/test/build gates passed, alongside shellcheck and Python behavioural
 tests. The screenshot/evidence files remain under ignored `artifacts/offline/evidence/`; they are
 not app screenshots or a physical offline-driving claim.
+
+## App integration
+
+- **Engine.** `modules/navoss-navigation/ios/valhalla_mobile.rb` fetches Rallista valhalla-mobile
+  0.6.4's prebuilt `valhalla-wrapper.xcframework` (SHA-256 pinned to upstream's Package.swift
+  checksum) and its `tzdata.tar` while CocoaPods evaluates `NavOSSNavigation.podspec`, so
+  `expo prebuild --clean`, EAS and CI get it without a committed binary. A small Objective-C++
+  bridge (`Offline/NavOSSValhallaActor.mm`) calls the wrapper's `route` entry point directly; the
+  wrapper's Swift packages are not linked. Requests always ask for native Valhalla **JSON**
+  (`"format": "json"`); `navOSSOfflineTrips` adapts it, keeping lanes, exit numbers and sign
+  branch/toward elements separate. Offline trips carry no speed limits (native JSON route output
+  has no per-edge limits) and no traffic.
+- **Install.** `NavOSSOfflineStore` implements the layout above: one region pipeline at a time,
+  resumable byte-range downloads into `staging/`, exact size + SHA-256 checks, safe resource
+  extraction, PMTiles/tar/SQLite sanity checks, rename into `regions/<id>/<bundleVersion>/`,
+  atomic `active.json`. Superseded versions are deleted on the next launch. The tree is excluded
+  from iCloud backup. Downloads pause (and resume later) when iOS ends background time.
+- **Use.** Offline routes and search read exactly one installed region: the widest covering every
+  stop (or the search origin). Routes leaving that region's polygon are rejected. Online is
+  always tried first while the device has a network; native reroutes and CarPlay fall back
+  through `NavOSSNavigationAPIClient.offlineFallback`, the phone through
+  `src/features/offline/offline-maps.ts`. Offline routes are labelled “Offline route · No traffic
+  or closures”, offline search “Offline results · OpenStreetMap data from <date>”. Maps switch to
+  the bound local style (same four slugs, same customisation) with no network, with “Prefer
+  offline maps” inside a region, or when the hosted style fails; phone and CarPlay attribution
+  say “Offline map · © OpenMapTiles · © OpenStreetMap”.
+- **CarPlay harness.** Scenario `offline-preview` (`NAVOSS_CARPLAY_VISUAL_SCENARIO`) draws the
+  installed region's offline style; it needs a region installed on the simulator, so it is not in
+  the default `validate:navigation:ios` list.

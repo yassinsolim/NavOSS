@@ -144,21 +144,62 @@ private struct RouteStep: Decodable {
   let spokenInstruction: String?
 }
 
+/// Answers routes and search from installed offline regions when the NavOSS service cannot be
+/// reached. The app installs one at launch; without it the client is online-only.
+public protocol NavOSSOfflineNavigationFallback: AnyObject, Sendable {
+  var isNetworkAvailable: Bool { get }
+  var hasInstalledRegions: Bool { get }
+  func covers(_ points: [NavOSSCarPlayCoordinate]) -> Bool
+  func offlineRoutes(
+    origin: NavOSSCarPlayCoordinate,
+    originHeadingDegrees: Double?,
+    originHorizontalAccuracyMeters: Double?,
+    destination: NavOSSCarPlayDestination,
+    preferences: NavOSSRoutePreferences,
+    alternatives: Int,
+    waypoints: [NavOSSCarPlayDestination]
+  ) async throws -> [NavOSSCarPlayTrip]
+  func offlineSearch(
+    query: String,
+    proximity: NavOSSCarPlayCoordinate?,
+    limit: Int,
+    category: String?
+  ) async throws -> [NavOSSCarPlayDestination]
+}
+
 public final class NavOSSNavigationAPIClient: @unchecked Sendable {
+  /// Installed by the app at launch; every client created afterwards falls back to it.
+  nonisolated(unsafe) public static var offlineFallback: NavOSSOfflineNavigationFallback?
+
+  /// Online requests that offline data could answer give up sooner, so a dead connection
+  /// does not hold a reroute for the full timeout.
+  static let timeoutWithOfflineFallback: TimeInterval = 8
+
   private let baseURL: URL
   private let decoder = JSONDecoder()
   private let encoder = JSONEncoder()
+  private let offlineFallback: NavOSSOfflineNavigationFallback?
   private let session: URLSession
 
   public init(
     baseURL: URL? = nil,
-    session: URLSession = .shared
+    session: URLSession = .shared,
+    offlineFallback: NavOSSOfflineNavigationFallback? = NavOSSNavigationAPIClient.offlineFallback
   ) throws {
     guard let resolvedBaseURL = baseURL ?? Self.configuredBaseURL() else {
       throw NavOSSNavigationAPIError.invalidConfiguration
     }
     self.baseURL = resolvedBaseURL
+    self.offlineFallback = offlineFallback
     self.session = session
+  }
+
+  /// Whether an online failure should be answered from offline data: the service or the
+  /// network was unreachable. A rejected request (400) is not retried offline.
+  static func isUnreachable(_ error: Error) -> Bool {
+    if error is URLError { return true }
+    if case NavOSSNavigationAPIError.serviceUnavailable = error { return true }
+    return false
   }
 
   public func search(
@@ -166,6 +207,37 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     proximity: NavOSSCarPlayCoordinate?,
     limit: Int = 8,
     category: String? = nil
+  ) async throws -> [NavOSSCarPlayDestination] {
+    guard let offlineFallback, offlineFallback.hasInstalledRegions else {
+      return try await onlineSearch(
+        query: query, proximity: proximity, limit: limit, category: category, timeout: 20)
+    }
+    func offline() async throws -> [NavOSSCarPlayDestination] {
+      // Labelled so a driver never mistakes downloaded OpenStreetMap data for live search.
+      try await offlineFallback.offlineSearch(
+        query: query, proximity: proximity, limit: limit, category: category
+      ).map {
+        NavOSSCarPlayDestination(
+          category: $0.category, id: $0.id, label: "Offline result · \($0.label)",
+          latitude: $0.latitude, longitude: $0.longitude, name: $0.name)
+      }
+    }
+    if !offlineFallback.isNetworkAvailable { return try await offline() }
+    do {
+      return try await onlineSearch(
+        query: query, proximity: proximity, limit: limit, category: category,
+        timeout: Self.timeoutWithOfflineFallback)
+    } catch where Self.isUnreachable(error) {
+      return try await offline()
+    }
+  }
+
+  private func onlineSearch(
+    query: String,
+    proximity: NavOSSCarPlayCoordinate?,
+    limit: Int,
+    category: String?,
+    timeout: TimeInterval
   ) async throws -> [NavOSSCarPlayDestination] {
     let roundedProximity = proximity.map {
       NavOSSCarPlayCoordinate(
@@ -181,7 +253,8 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
       q: query,
       sort: roundedProximity == nil ? nil : "distance"
     )
-    let response: SearchResponse = try await post(path: "v1/search", body: request)
+    let response: SearchResponse = try await post(
+      path: "v1/search", body: request, timeout: timeout)
     return response.results.map {
       NavOSSCarPlayDestination(
         category: $0.category,
@@ -203,6 +276,47 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     alternatives: Int = 2,
     waypoints: [NavOSSCarPlayDestination] = []
   ) async throws -> [NavOSSCarPlayTrip] {
+    let points =
+      [origin]
+      + (waypoints + [destination]).map {
+        NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+      }
+    guard let offlineFallback, offlineFallback.covers(points) else {
+      return try await onlineRoutes(
+        origin: origin, originHeadingDegrees: originHeadingDegrees,
+        originHorizontalAccuracyMeters: originHorizontalAccuracyMeters, destination: destination,
+        preferences: preferences, alternatives: alternatives, waypoints: waypoints, timeout: 20)
+    }
+    func offline() async throws -> [NavOSSCarPlayTrip] {
+      try await offlineFallback.offlineRoutes(
+        origin: origin, originHeadingDegrees: originHeadingDegrees,
+        originHorizontalAccuracyMeters: originHorizontalAccuracyMeters, destination: destination,
+        preferences: preferences, alternatives: alternatives, waypoints: waypoints)
+    }
+    // Online stays first whenever the network is up, so routing returns to the service (and its
+    // traffic and closures) as soon as it is reachable again.
+    if !offlineFallback.isNetworkAvailable { return try await offline() }
+    do {
+      return try await onlineRoutes(
+        origin: origin, originHeadingDegrees: originHeadingDegrees,
+        originHorizontalAccuracyMeters: originHorizontalAccuracyMeters, destination: destination,
+        preferences: preferences, alternatives: alternatives, waypoints: waypoints,
+        timeout: Self.timeoutWithOfflineFallback)
+    } catch where Self.isUnreachable(error) {
+      return try await offline()
+    }
+  }
+
+  private func onlineRoutes(
+    origin: NavOSSCarPlayCoordinate,
+    originHeadingDegrees: Double?,
+    originHorizontalAccuracyMeters: Double?,
+    destination: NavOSSCarPlayDestination,
+    preferences: NavOSSRoutePreferences,
+    alternatives: Int,
+    waypoints: [NavOSSCarPlayDestination],
+    timeout: TimeInterval
+  ) async throws -> [NavOSSCarPlayTrip] {
     let request = RouteRequest(
       alternatives: alternatives,
       destination: NavOSSCarPlayCoordinate(
@@ -221,7 +335,7 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     )
     let response: RouteResponse
     do {
-      response = try await post(path: "v1/routes", body: request)
+      response = try await post(path: "v1/routes", body: request, timeout: timeout)
     } catch NavOSSNavigationAPIError.invalidRequest
       where originHeadingDegrees != nil || originHorizontalAccuracyMeters != nil
     {
@@ -234,7 +348,7 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
         preferences: preferences,
         waypoints: request.waypoints
       )
-      response = try await post(path: "v1/routes", body: fallback)
+      response = try await post(path: "v1/routes", body: fallback, timeout: timeout)
     }
     let trips = try response.routes.map { route in
       NavOSSCarPlayTrip(
@@ -307,13 +421,14 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
 
   private func post<Request: Encodable, Response: Decodable>(
     path: String,
-    body: Request
+    body: Request,
+    timeout: TimeInterval
   ) async throws -> Response {
     var request = URLRequest(url: baseURL.appending(path: path))
     request.httpBody = try encoder.encode(body)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "content-type")
-    request.timeoutInterval = 20
+    request.timeoutInterval = timeout
     return try await send(request)
   }
 

@@ -177,6 +177,8 @@ export function useMapController() {
   const noticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const noticeIdRef = useRef(0);
   const guidanceSettingsQueuedRef = useRef(false);
+  const offlineMapsQueuedRef = useRef(false);
+  const [isOfflineMapsVisible, setIsOfflineMapsVisible] = useState(false);
   // Measured height of the maneuver banner; it grows when an instruction wraps.
   const [guidanceBannerHeight, setGuidanceBannerHeight] = useState(GUIDANCE_BANNER_HEIGHT);
   // Where the driver left the route preview sheet, kept across the re-plan that remounts it.
@@ -218,7 +220,7 @@ export function useMapController() {
   const [isIdleCameraFollowing, setIsIdleCameraFollowing] = useState(true);
 
   const { preferences: mapPreferences, updatePreferences } = useMapPreferences();
-  const { darkMap, mapStyle } = useMapStyle(mapPreferences, colorScheme);
+  const { darkMap, mapStyle, offline: mapStyleOffline } = useMapStyle(mapPreferences, colorScheme);
 
   const showNotice = (next: Omit<MapNotice, 'id'>) => {
     clearTimeout(noticeTimeoutRef.current);
@@ -1197,6 +1199,15 @@ export function useMapController() {
         setIsGuidanceSettingsVisible(true);
       }
     }),
+    openOfflineMaps: useStableCallback(() => {
+      // From map appearance, offline maps opens once that sheet has finished closing.
+      if (isMapPreferencesVisible) {
+        offlineMapsQueuedRef.current = true;
+        setIsMapPreferencesVisible(false);
+      } else {
+        setIsOfflineMapsVisible(true);
+      }
+    }),
     openMapPreferences: useStableCallback(() => {
       setIsMapPreferencesVisible(true);
     }),
@@ -1294,6 +1305,11 @@ export function useMapController() {
         setIsMapPreferencesVisible(false);
       },
       onClosed: () => {
+        if (offlineMapsQueuedRef.current) {
+          offlineMapsQueuedRef.current = false;
+          setIsOfflineMapsVisible(true);
+          return;
+        }
         if (!guidanceSettingsQueuedRef.current) return;
         guidanceSettingsQueuedRef.current = false;
         setIsGuidanceSettingsVisible(true);
@@ -1303,6 +1319,14 @@ export function useMapController() {
     },
     mapRef,
     mapStyle,
+    mapStyleOffline,
+    offlineMaps: {
+      close: () => {
+        setIsOfflineMapsVisible(false);
+      },
+      open: stable.openOfflineMaps,
+      visible: isOfflineMapsVisible,
+    },
     metrics,
     notice,
     onApplyRouteStops: handleApplyRouteStops,
