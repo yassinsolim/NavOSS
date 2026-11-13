@@ -269,7 +269,6 @@ export function ManeuverBanner({
               <View style={guidanceStyles.exitSign}>
                 <Text
                   maxFontSizeMultiplier={1.2}
-                  numberOfLines={1}
                   style={[guidanceStyles.exitSignText, guidanceStyles.tabular]}
                 >
                   {exitLabel}
@@ -832,7 +831,7 @@ const guidanceStyles = StyleSheet.create({
     flexWrap: 'wrap',
     rowGap: space.xxs,
   },
-  distanceText: { flexShrink: 1 },
+  distanceText: { flexShrink: 0 },
   exitSign: {
     backgroundColor: palette.white,
     flexShrink: 0,
