@@ -294,7 +294,10 @@ grid and the lifetime to 15 minutes.
   versions and physical order identify the epoch, not an upload.
 - The table is `UNLOGGED`, so releases are not in the write-ahead log, are not replicated, and
   are lost on a database crash. They are excluded from `backup-reports-db.sh`.
-- Every API start erases the table, in every mode including `off`.
+- Every API start erases the table, in every mode including `off`. With the mode `off` the API
+  waits at most three seconds for that and then starts anyway, so a stuck database cannot keep
+  the production API down; a failed purge is logged. Database connections and statements for
+  this table are bounded at 5 s and 10 s.
 
 Run a **single API container**. Cohorts, keys and rate limits are per process: a second replica
 would not double-count anyone (each needs its own three contributors), but it would reject the

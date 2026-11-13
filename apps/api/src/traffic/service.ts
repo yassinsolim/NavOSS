@@ -44,6 +44,7 @@ import {
 const MIN_MATCHED_POINTS = 5;
 // Releases are written just after the boundary so a clock that runs slightly early still sees it.
 const EPOCH_TIMER_SLACK_MS = 1_000;
+const OFF_MODE_PURGE_WAIT_MS = 3_000;
 
 export const COMMUNITY_TRAFFIC_SOURCE = {
   attribution: COMMUNITY_TRAFFIC_ATTRIBUTION,
@@ -430,14 +431,24 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
       if (epochTimer !== undefined) return;
       // Releases are erased on every start, in every mode. Switching the feature off therefore
       // removes its data, and segment keys from a replaced routing graph never outlive a restart.
-      try {
-        await store.purge();
-      } catch (error: unknown) {
+      const purged = store.purge().catch((error: unknown) => {
         counters.purgeFailures += 1;
         options.onMaintenanceFailure?.('purge');
-        if (settings.mode !== 'off') throw error;
+        throw error;
+      });
+      if (settings.mode === 'off') {
+        // The API runs with traffic off in production. A slow or unreachable database must not
+        // keep it from starting: wait briefly, then let the purge finish, or fail and be
+        // reported, on its own.
+        await Promise.race([
+          purged.catch(() => undefined),
+          new Promise<void>((resolve) => {
+            setTimeout(resolve, OFF_MODE_PURGE_WAIT_MS).unref();
+          }),
+        ]);
+        return;
       }
-      if (settings.mode === 'off') return;
+      await purged;
       await store.ready();
       lastClosedEpochMs = epochStart();
       scheduleEpoch();

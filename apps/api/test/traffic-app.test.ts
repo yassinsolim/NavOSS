@@ -10,7 +10,7 @@ import {
   TrafficStatusResponseSchema,
 } from '@navoss/contracts';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../src/app.js';
 import { CALGARY_SEARCH_FIXTURES } from '../src/fixtures.js';
@@ -569,6 +569,73 @@ describe('community traffic over HTTP', () => {
     await expect(live.service.start()).rejects.toThrow('storage is down');
     expect(live.failures).toEqual(['purge']);
     await Promise.all([off.service.close(), live.service.close()]);
+  });
+
+  it('does not let a database that never answers hold up startup while off', async () => {
+    vi.useFakeTimers({ now: NOW });
+    try {
+      const build = (mode: TrafficSettings['mode']) => {
+        const failures: string[] = [];
+        let failPurge: (error: Error) => void = () => undefined;
+        const service = createTrafficService({
+          attestation: fakeAttestation(),
+          mapMatcher: stubbedMatcher().matcher,
+          onMaintenanceFailure: (failure) => failures.push(failure),
+          settings: { ...FIXTURE_SETTINGS, mode },
+          store: {
+            byKeys: () => Promise.resolve([]),
+            close: () => Promise.resolve(),
+            inBounds: () => Promise.resolve({ releases: [], truncated: false }),
+            publishEpoch: () => Promise.resolve(),
+            // Neither succeeds nor fails until the test says so.
+            purge: () =>
+              new Promise<void>((_resolve, reject) => {
+                failPurge = reject;
+              }),
+            ready: () => Promise.resolve(),
+          },
+        });
+        let state: 'failed' | 'pending' | 'started' = 'pending';
+        const started = service.start().then(
+          () => {
+            state = 'started';
+          },
+          () => {
+            state = 'failed';
+          },
+        );
+        return {
+          failPurge: (error: Error) => {
+            failPurge(error);
+          },
+          failures,
+          service,
+          started,
+          state: () => state,
+        };
+      };
+
+      const off = build('off');
+      const live = build('live');
+      await vi.advanceTimersByTimeAsync(2_999);
+      expect(off.state()).toBe('pending');
+      await vi.advanceTimersByTimeAsync(1);
+      // Off: the API starts without the purge. Enabled: it keeps waiting for its storage.
+      expect(off.state()).toBe('started');
+      expect(live.state()).toBe('pending');
+      expect(off.failures).toEqual([]);
+
+      // When the purge does fail later, it is still reported.
+      off.failPurge(new Error('connection timed out'));
+      live.failPurge(new Error('connection timed out'));
+      await Promise.all([off.started, live.started]);
+      expect(off.failures).toEqual(['purge']);
+      expect(live.state()).toBe('failed');
+      expect(live.failures).toEqual(['purge']);
+      await Promise.all([off.service.close(), live.service.close()]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reports a failed purge to the operator log and still starts when off', async () => {

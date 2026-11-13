@@ -115,6 +115,9 @@ Operational facts:
   Up to 15 minutes of published traffic, and up to 20 minutes of pending observations, disappear
   on a restart and rebuild as drivers upload. Upload credentials issued before the restart stop
   working; the app requests a new one.
+- With the mode `off` the purge never blocks startup: the API waits at most three seconds for it
+  and then starts regardless; a purge that fails or times out is logged as
+  `Community traffic maintenance failed`. In `collect` or `live` a failed purge stops startup.
 - Restart the API whenever the Valhalla graph is replaced. Segment keys belong to one graph.
 - Run a single API container. Pending observations, credential keys and rate limits are per
   process; this is not enforced.
@@ -276,6 +279,10 @@ records it in `navoss_schema_migrations`, and refuses to continue if an applied 
 changed. It is safe to repeat. Migrations are additive; rolling the API image back leaves the new
 tables unused. The older runtime-created tables (contributions, search index, Google budget) are
 unchanged.
+
+Because there is one ledger, an image that carries a new migration reports it as pending for
+every feature: start this image without running `migrate.js` and community-report requests answer
+`503` until it is run, even with community traffic `off`.
 
 Writes need `APP_ATTEST_TEAM_ID` and `COMMUNITY_INSTALLATION_SECRET` in `.env`; without them
 `/v2/community/*` writes return `503` and reads follow `COMMUNITY_REPORTS_PUBLICATION`. Keep the

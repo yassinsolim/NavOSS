@@ -120,7 +120,9 @@ function toRelease(row: ReleaseRow): TrafficRelease {
 }
 
 export function createPostgresTrafficReleaseStore(
-  pool: Pool = new Pool({ max: 4 }),
+  // Bounded waits: an unreachable or stuck database becomes an error the caller reports, never a
+  // request or a startup that hangs.
+  pool: Pool = new Pool({ connectionTimeoutMillis: 5_000, max: 4, query_timeout: 10_000 }),
 ): TrafficReleaseStore {
   return {
     async byKeys(keys, epochStartMs) {
