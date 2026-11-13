@@ -13,6 +13,11 @@ import {
   saveMapPreferences,
 } from '@/features/map/map-preferences';
 import { isCarPlayVisualHarness } from '@/features/navigation/native-navigation';
+import {
+  hasInstalledOfflineRegion,
+  offlineStyleSource,
+  useOfflineState,
+} from '@/features/offline/offline-maps';
 
 export interface MapPreferencesState {
   preferences: MapPreferences;
@@ -48,6 +53,8 @@ export interface MapStyleState {
   /** Whether the basemap is dark, for the status bar and anything drawn directly on the map. */
   darkMap: boolean;
   mapStyle: string | StyleSpecification;
+  /** The basemap is drawn from a downloaded offline region. */
+  offline: boolean;
 }
 
 /**
@@ -63,23 +70,49 @@ export function useMapStyle(
   const [mapStyle, setMapStyle] = useState<string | StyleSpecification>(() =>
     mapStyleUrl(DEFAULT_MAP_PREFERENCES.stylePreset, colorScheme),
   );
+  const [offline, setOffline] = useState(false);
+  // Only the facts that change which style to draw: an installed region, connectivity and the
+  // prefer-offline setting. Download progress must not rebuild the style.
+  const offlineState = useOfflineState();
+  const offlineKey = [
+    offlineState.regions
+      .filter((region) => region.installedVersion !== undefined)
+      .map((region) => `${region.id}@${region.installedVersion ?? ''}`)
+      .join(','),
+    String(offlineState.networkAvailable),
+    String(offlineState.preferOffline),
+  ].join('|');
+  const offlineInstalled = hasInstalledOfflineRegion(offlineState);
 
   useEffect(() => {
     let active = true;
     const inputs = { showBuildings, showPlaces, showTransit, stylePreset };
+    const localStyles = offlineInstalled ? offlineStyleSource() : undefined;
     // The previous style stays on screen until the next one is ready, so a change never flashes
     // through an uncustomised basemap.
-    void loadCustomizedMapStyle(inputs, colorScheme)
-      .then((style) => {
-        if (active) setMapStyle(style);
+    void loadCustomizedMapStyle(inputs, colorScheme, fetch, localStyles)
+      .then((loaded) => {
+        if (!active) return;
+        setMapStyle(loaded.style);
+        setOffline(loaded.offline);
       })
       .catch(() => {
-        if (active) setMapStyle(mapStyleUrl(stylePreset, colorScheme));
+        if (!active) return;
+        setMapStyle(mapStyleUrl(stylePreset, colorScheme));
+        setOffline(false);
       });
     return () => {
       active = false;
     };
-  }, [colorScheme, showBuildings, showPlaces, showTransit, stylePreset]);
+  }, [
+    colorScheme,
+    offlineInstalled,
+    offlineKey,
+    showBuildings,
+    showPlaces,
+    showTransit,
+    stylePreset,
+  ]);
 
-  return { darkMap: isDarkMapStyle(stylePreset, colorScheme), mapStyle };
+  return { darkMap: isDarkMapStyle(stylePreset, colorScheme), mapStyle, offline };
 }

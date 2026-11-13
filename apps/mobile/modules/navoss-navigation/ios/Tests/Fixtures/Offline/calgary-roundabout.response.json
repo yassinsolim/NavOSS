@@ -1,0 +1,128 @@
+{
+  "trip": {
+    "locations": [
+      { "type": "break", "lat": 51.003731, "lon": -114.126945, "original_index": 0 },
+      { "type": "break", "lat": 51.005856, "lon": -114.129337, "original_index": 1 }
+    ],
+    "legs": [
+      {
+        "maneuvers": [
+          {
+            "type": 1,
+            "instruction": "Drive north on Peacekeepers Way SW.",
+            "verbal_succinct_transition_instruction": "Drive north. Then Enter the roundabout and take the 1st exit onto Peacekeepers Way SW.",
+            "verbal_pre_transition_instruction": "Drive north on Peacekeepers Way SW. Then Enter the roundabout and take the 1st exit onto Peacekeepers Way SW.",
+            "verbal_post_transition_instruction": "Continue for 100 meters.",
+            "street_names": ["Peacekeepers Way SW"],
+            "bearing_after": 360,
+            "time": 24.26,
+            "length": 0.101,
+            "cost": 27.329,
+            "begin_shape_index": 0,
+            "end_shape_index": 4,
+            "verbal_multi_cue": true,
+            "travel_mode": "drive",
+            "travel_type": "car"
+          },
+          {
+            "type": 26,
+            "instruction": "Enter the roundabout and take the 1st exit onto Peacekeepers Way SW.",
+            "verbal_transition_alert_instruction": "Enter the roundabout and take the 1st exit onto Peacekeepers Way SW.",
+            "verbal_succinct_transition_instruction": "Enter the roundabout and take the 1st exit.",
+            "verbal_pre_transition_instruction": "Enter the roundabout and take the 1st exit onto Peacekeepers Way SW.",
+            "bearing_before": 18,
+            "bearing_after": 47,
+            "time": 6.747,
+            "length": 0.028,
+            "cost": 17.87,
+            "begin_shape_index": 4,
+            "end_shape_index": 10,
+            "roundabout_exit_count": 1,
+            "travel_mode": "drive",
+            "travel_type": "car"
+          },
+          {
+            "type": 27,
+            "instruction": "Exit the roundabout onto Peacekeepers Way SW.",
+            "verbal_succinct_transition_instruction": "Exit the roundabout.",
+            "verbal_pre_transition_instruction": "Exit the roundabout onto Peacekeepers Way SW.",
+            "verbal_post_transition_instruction": "Continue for 100 meters.",
+            "street_names": ["Peacekeepers Way SW"],
+            "bearing_before": 329,
+            "bearing_after": 340,
+            "time": 27.177,
+            "length": 0.113,
+            "cost": 46.121,
+            "begin_shape_index": 10,
+            "end_shape_index": 17,
+            "travel_mode": "drive",
+            "travel_type": "car"
+          },
+          {
+            "type": 15,
+            "instruction": "Turn left to stay on Peacekeepers Way SW.",
+            "verbal_transition_alert_instruction": "Turn left to stay on Peacekeepers Way SW.",
+            "verbal_succinct_transition_instruction": "Turn left.",
+            "verbal_pre_transition_instruction": "Turn left to stay on Peacekeepers Way SW.",
+            "verbal_post_transition_instruction": "Continue for 200 meters.",
+            "street_names": ["Peacekeepers Way SW"],
+            "bearing_before": 358,
+            "bearing_after": 271,
+            "time": 44.926,
+            "length": 0.166,
+            "cost": 87.467,
+            "begin_shape_index": 17,
+            "end_shape_index": 24,
+            "travel_mode": "drive",
+            "travel_type": "car"
+          },
+          {
+            "type": 4,
+            "instruction": "You have arrived at your destination.",
+            "verbal_transition_alert_instruction": "You will arrive at your destination.",
+            "verbal_pre_transition_instruction": "You have arrived at your destination.",
+            "bearing_before": 270,
+            "time": 0.0,
+            "length": 0.0,
+            "cost": 0.0,
+            "begin_shape_index": 24,
+            "end_shape_index": 24,
+            "travel_mode": "drive",
+            "travel_type": "car"
+          }
+        ],
+        "summary": {
+          "has_time_restrictions": false,
+          "has_toll": false,
+          "has_highway": false,
+          "has_ferry": false,
+          "min_lat": 51.003731,
+          "min_lon": -114.129337,
+          "max_lat": 51.005862,
+          "max_lon": -114.126787,
+          "time": 103.111,
+          "length": 0.408,
+          "cost": 178.789
+        },
+        "shape": "et_h`B`ewtxEaq@Hg@G{Ae@uAs@g@uAs@eAsAy@yAMwA^mAhAmEvBgDn@gCPu`@XgB@uBF_EFA`GAjFC`_@Dbq@@dQ@~X?`F"
+      }
+    ],
+    "summary": {
+      "has_time_restrictions": false,
+      "has_toll": false,
+      "has_highway": false,
+      "has_ferry": false,
+      "min_lat": 51.003731,
+      "min_lon": -114.129337,
+      "max_lat": 51.005862,
+      "max_lon": -114.126787,
+      "time": 103.111,
+      "length": 0.408,
+      "cost": 178.789
+    },
+    "status_message": "Found route between points",
+    "status": 0,
+    "units": "kilometers",
+    "language": "en-US"
+  }
+}

@@ -6,6 +6,21 @@ import type { NavigationMapOrientation } from '@/features/navigation/navigation-
 
 const STORAGE_KEY = 'navoss.map-preferences.v1';
 const OPEN_FREE_MAP_STYLE_ROOT = 'https://tiles.openfreemap.org/styles';
+
+/**
+ * The hosted style root. Development builds may point it elsewhere (for example a closed
+ * loopback port) to exercise the offline fallback when the hosted style cannot load; release
+ * builds always use OpenFreeMap.
+ */
+function hostedStyleRoot(): string {
+  // `unknown`, as in `getApiBaseUrl`: `process.env` is only typed where Expo's generated
+  // `expo-env.d.ts` exists, which a clean checkout (and CI) does not have.
+  const override: unknown = process.env.EXPO_PUBLIC_DEBUG_MAP_STYLE_ROOT;
+  const development = typeof __DEV__ !== 'undefined' && __DEV__;
+  return development && typeof override === 'string' && override !== ''
+    ? override
+    : OPEN_FREE_MAP_STYLE_ROOT;
+}
 const styleCache = new Map<string, Promise<StyleSpecification>>();
 
 export type MapStylePreset = 'automatic' | 'contrast' | 'day' | 'minimal' | 'night';
@@ -124,10 +139,32 @@ export function normalizeMapPreferences(value: unknown): MapPreferences {
   };
 }
 
+/** The OpenFreeMap / offline-bundle style slug (`liberty`, `bright`, `positron`, `dark`). */
+export function mapStyleSlug(preset: MapStylePreset, colorScheme: ColorSchemeName): string {
+  return preset === 'automatic'
+    ? colorScheme === 'dark'
+      ? 'dark'
+      : 'liberty'
+    : STYLE_SLUGS[preset];
+}
+
 export function mapStyleUrl(preset: MapStylePreset, colorScheme: ColorSchemeName): string {
-  const slug =
-    preset === 'automatic' ? (colorScheme === 'dark' ? 'dark' : 'liberty') : STYLE_SLUGS[preset];
-  return `${OPEN_FREE_MAP_STYLE_ROOT}/${slug}`;
+  return `${hostedStyleRoot()}/${mapStyleSlug(preset, colorScheme)}`;
+}
+
+/**
+ * Installed offline styles, already bound to local files. The offline bundles carry the same
+ * four OpenMapTiles styles as the hosted map, so every preset and toggle applies unchanged.
+ */
+export interface OfflineMapStyles {
+  style: (slug: string) => StyleSpecification | undefined;
+  /** Draw the offline map now (no connection, or the driver prefers offline maps). */
+  use: boolean;
+}
+
+export interface LoadedMapStyle {
+  offline: boolean;
+  style: StyleSpecification;
 }
 
 function resolvedMapStylePreset(
@@ -393,11 +430,36 @@ export async function loadCustomizedMapStyle(
   preferences: MapStyleInputs,
   colorScheme: ColorSchemeName,
   fetchImplementation: typeof fetch = fetch,
-): Promise<StyleSpecification> {
-  const url = mapStyleUrl(preferences.stylePreset, colorScheme);
-  const style = await loadHostedMapStyle(url, fetchImplementation);
-  const landmarkStyle = hasLandmarkLayers(style)
-    ? style
-    : await loadHostedMapStyle(mapStyleUrl('day', colorScheme), fetchImplementation);
-  return customizeMapStyle(style, preferences, colorScheme, landmarkStyle);
+  offline?: OfflineMapStyles,
+): Promise<LoadedMapStyle> {
+  const slug = mapStyleSlug(preferences.stylePreset, colorScheme);
+  const offlineStyle = (): LoadedMapStyle | undefined => {
+    const style = offline?.style(slug);
+    if (style === undefined) return undefined;
+    const landmarkStyle = hasLandmarkLayers(style) ? style : (offline?.style('liberty') ?? style);
+    return {
+      offline: true,
+      style: customizeMapStyle(style, preferences, colorScheme, landmarkStyle),
+    };
+  };
+  if (offline?.use === true) {
+    const local = offlineStyle();
+    if (local !== undefined) return local;
+  }
+  try {
+    const url = mapStyleUrl(preferences.stylePreset, colorScheme);
+    const style = await loadHostedMapStyle(url, fetchImplementation);
+    const landmarkStyle = hasLandmarkLayers(style)
+      ? style
+      : await loadHostedMapStyle(mapStyleUrl('day', colorScheme), fetchImplementation);
+    return {
+      offline: false,
+      style: customizeMapStyle(style, preferences, colorScheme, landmarkStyle),
+    };
+  } catch (error: unknown) {
+    // The hosted style is unreachable: a downloaded region keeps the map usable.
+    const local = offlineStyle();
+    if (local !== undefined) return local;
+    throw error;
+  }
 }

@@ -40,6 +40,8 @@ import {
   routeTrafficLabel,
   type UpcomingManeuver,
 } from '@/features/navigation/route-progress';
+import type { RouteSource } from '@/features/navigation/route-ui-state';
+import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import type { VehicleMatchStatus } from '@/features/navigation/vehicle-puck';
 import {
   createThemedStyles,
@@ -535,7 +537,7 @@ interface TripSheetProps {
   rerouteCount: number;
   /** The route being driven, for its traffic status. */
   route: Pick<RouteAlternativeV2, 'congestion' | 'traffic'> | undefined;
-  routeSource: RouteResponseV2['source'] | undefined;
+  routeSource: RouteSource | undefined;
   upcomingManeuvers: readonly UpcomingManeuver[];
 }
 
@@ -717,7 +719,10 @@ export function TripSheet({
           )}
           <Text maxFontSizeMultiplier={1.4} style={styles.tripSource}>
             {routeSource?.attribution ?? 'Routing source unavailable'} ·{' '}
-            {routeTrafficLabel(routeSource, route)}
+            {routeTrafficLabel(
+              routeSource?.id === OFFLINE_ROUTE_SOURCE.id ? undefined : routeSource,
+              route,
+            )}
           </Text>
         </BottomSheetScrollView>
       </BottomSheetReveal>

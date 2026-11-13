@@ -1,4 +1,5 @@
 require 'json'
+require_relative 'valhalla_mobile'
 
 package = JSON.parse(File.read(File.join(__dir__, '..', 'package.json')))
 
@@ -20,7 +21,15 @@ Pod::Spec.new do |s|
     s.dependency 'GooglePlacesSwift', '10.15.0'
   end
 
-  s.source_files = '*.swift', 'Core/**/*.swift'
+  # Offline routing engine: a pinned, checksum-verified prebuilt XCFramework (see valhalla_mobile.rb).
+  valhalla = NavOSSValhallaMobile::RELATIVE_DIRECTORY
+  NavOSSValhallaMobile.ensure!(__dir__)
+  s.vendored_frameworks = "#{valhalla}/valhalla-wrapper.xcframework"
+  s.resource_bundles = { 'NavOSSValhalla' => ["#{valhalla}/tzdata.tar"] }
+  s.libraries = 'c++', 'sqlite3', 'z'
+
+  s.source_files = '*.swift', 'Core/**/*.swift', 'Offline/**/*.{swift,h,mm}'
+  s.public_header_files = 'Offline/NavOSSValhallaActor.h'
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'SWIFT_COMPILATION_MODE' => 'wholemodule',

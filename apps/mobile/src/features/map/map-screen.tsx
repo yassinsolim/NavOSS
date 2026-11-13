@@ -24,6 +24,7 @@ import { CAMERA_ALERT_HEIGHT, REROUTE_CARD_HEIGHT } from '@/features/map/overlay
 import { PlaceSheet } from '@/features/map/place-sheet';
 import { RoadReportSheet } from '@/features/map/road-report-sheet';
 import { SavedPlacesScreen } from '@/features/map/saved-places-screen';
+import { OfflineMapsSheet } from '@/features/offline/offline-maps-sheet';
 import { mapProblemLabels } from '@/features/map/search-status';
 import { CarPlayCompanionPanel, CarPlayIdlePanel } from '@/features/navigation/carplay-panels';
 import {
@@ -180,11 +181,14 @@ export function MapScreen() {
 
       {mapChromeVisible && (
         <MapControls
-          attribution={mapAttributionLabel({
-            hasTorontoCameras: overlays.torontoSafetyCameras.length > 0,
-            mapRegion: c.location.mapRegion,
-            roadEventRegion: overlays.roadEventRegion,
-          })}
+          attribution={
+            (c.mapStyleOffline ? 'Offline map · ' : '') +
+            mapAttributionLabel({
+              hasTorontoCameras: overlays.torontoSafetyCameras.length > 0,
+              mapRegion: c.location.mapRegion,
+              roadEventRegion: overlays.roadEventRegion,
+            })
+          }
           bannerStackHeight={guidance.bannerHeight + cameraAlertHeight + rerouteCardHeight}
           locating={c.location.locationState === 'locating'}
           mapBearing={c.mapBearing}
@@ -433,8 +437,14 @@ export function MapScreen() {
         onClose={c.mapPreferencesSheet.close}
         onClosed={c.mapPreferencesSheet.onClosed}
         onOpenGuidanceSettings={c.guidanceSettings.open}
+        onOpenOfflineMaps={c.offlineMaps.open}
         preferences={mapPreferences}
         visible={c.mapPreferencesSheet.visible}
+      />
+      <OfflineMapsSheet
+        metrics={metrics}
+        onClose={c.offlineMaps.close}
+        visible={c.offlineMaps.visible}
       />
       <AboutSheet
         coverageName={c.coverageName}

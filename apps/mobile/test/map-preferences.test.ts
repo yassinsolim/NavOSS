@@ -256,7 +256,71 @@ describe('map preferences', () => {
       'https://tiles.openfreemap.org/styles/bright',
       { headers: { accept: 'application/json' } },
     );
-    expect(visibility('building', customized)).toBe('none');
+    expect(customized.offline).toBe(false);
+    expect(visibility('building', customized.style)).toBe('none');
+  });
+
+  describe('with an installed offline region', () => {
+    const offlineStyle: StyleSpecification = {
+      ...style,
+      sources: {
+        openmaptiles: { type: 'vector', url: 'pmtiles://file:///offline/maps.pmtiles' },
+      },
+    };
+    const offline = (use: boolean) => ({
+      style: vi.fn((_slug: string) => offlineStyle),
+      use,
+    });
+
+    it('draws the local style without fetching when the map should be offline', async () => {
+      const fetchImplementation = vi.fn(() => Promise.reject(new Error('no network')));
+      const source = offline(true);
+      const loaded = await loadCustomizedMapStyle(
+        { ...DEFAULT_MAP_PREFERENCES, showBuildings: false, stylePreset: 'contrast' },
+        'light',
+        fetchImplementation,
+        source,
+      );
+      expect(fetchImplementation).not.toHaveBeenCalled();
+      expect(source.style).toHaveBeenCalledWith('bright');
+      expect(loaded.offline).toBe(true);
+      expect(loaded.style.sources.openmaptiles).toEqual(offlineStyle.sources.openmaptiles);
+      // Presets and toggles apply to the offline style exactly as to the hosted one.
+      expect(visibility('building', loaded.style)).toBe('none');
+    });
+
+    it('stays on the hosted style while online, and falls back when it cannot load', async () => {
+      const ok = vi.fn(() => Promise.resolve(new Response(JSON.stringify(style), { status: 200 })));
+      const online = await loadCustomizedMapStyle(
+        { ...DEFAULT_MAP_PREFERENCES, stylePreset: 'contrast' },
+        'light',
+        ok,
+        offline(false),
+      );
+      expect(online.offline).toBe(false);
+
+      // A preset whose hosted style has not been cached by an earlier load.
+      const failing = vi.fn(() => Promise.reject(new TypeError('Network request failed')));
+      const fallback = await loadCustomizedMapStyle(
+        { ...DEFAULT_MAP_PREFERENCES, stylePreset: 'minimal' },
+        'light',
+        failing,
+        offline(false),
+      );
+      expect(fallback.offline).toBe(true);
+    });
+
+    it('still reports the failure when no offline style exists for the preset', async () => {
+      const failing = vi.fn(() => Promise.reject(new TypeError('Network request failed')));
+      await expect(
+        loadCustomizedMapStyle(
+          { ...DEFAULT_MAP_PREFERENCES, stylePreset: 'minimal' },
+          'light',
+          failing,
+          { style: () => undefined, use: true },
+        ),
+      ).rejects.toThrow('Network request failed');
+    });
   });
 
   it('loads day landmarks when a hosted preset omits POI layers', async () => {
@@ -290,7 +354,7 @@ describe('map preferences', () => {
       'https://tiles.openfreemap.org/styles/liberty',
       { headers: { accept: 'application/json' } },
     );
-    expect(paint('poi_general', 'text-color', customized)).toBe('#ECE8DF');
+    expect(paint('poi_general', 'text-color', customized.style)).toBe('#ECE8DF');
   });
 
   it('loads and saves preferences only in local app storage', async () => {
