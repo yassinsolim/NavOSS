@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Official road closure: no-entry disc. -->
+  <circle cx="32" cy="32" r="30" fill="#0E1516" opacity="0.28"/>
+  <circle cx="32" cy="32" r="28" fill="#FFFFFF"/>
+  <circle cx="32" cy="32" r="24" fill="#E5484D"/>
+  <rect x="17" y="27.5" width="30" height="9" rx="3" fill="#FFFFFF"/>
+</svg>

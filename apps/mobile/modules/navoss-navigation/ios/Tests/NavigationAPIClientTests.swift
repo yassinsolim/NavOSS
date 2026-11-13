@@ -343,6 +343,123 @@ final class NavigationAPIClientTests: XCTestCase {
     XCTAssertEqual(routes[1].durationSeconds, 650)
   }
 
+  func testRoutesDecodeSafelyWhenTheAPIAddsEnrichmentFields() async throws {
+    // The routing API is adding optional lanes, signposts, current road names, per-segment
+    // congestion and a traffic source. A build that predates them must still navigate.
+    NavigationURLProtocol.handler = { request in
+      Self.response(
+        request: request,
+        json: """
+          {
+            "degraded": false,
+            "generatedAt": "2026-11-12T00:00:00.000Z",
+            "routes": [{
+              "congestion": ["free", "heavy"],
+              "distanceMeters": 1000,
+              "durationSeconds": 120,
+              "geometry": [[-114.08, 51.04], [-114.07, 51.05], [-114.06, 51.06]],
+              "id": "route-enriched",
+              "label": "fastest",
+              "steps": [{
+                "currentRoadName": "Crowchild Trail NW",
+                "distanceMeters": 1000,
+                "durationSeconds": 120,
+                "exitNumber": "12",
+                "geometry": [[-114.08, 51.04], [-114.06, 51.06]],
+                "instruction": "Continue north",
+                "lanes": [{"indications": ["straight"], "valid": true, "active": true}],
+                "maneuverModifier": "slight right",
+                "maneuverType": "continue",
+                "roadName": "Crowchild Trail NW",
+                "signpost": "Banff"
+              }],
+              "trafficSource": "navoss-probes"
+            }],
+            "source": {
+              "attribution": "Routing by Valhalla using OpenStreetMap data",
+              "id": "valhalla-self-hosted",
+              "mode": "production",
+              "traffic": "unavailable"
+            }
+          }
+          """
+      )
+    }
+
+    let routes = try await makeClient().routes(
+      origin: NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+      destination: NavOSSCarPlayDestination(
+        id: "destination",
+        label: "Destination",
+        latitude: 51.06,
+        longitude: -114.06,
+        name: "Destination"
+      ),
+      preferences: NavOSSRoutePreferences()
+    )
+
+    XCTAssertEqual(routes.map(\.id), ["route-enriched"])
+    XCTAssertEqual(routes.first?.steps.first?.roadName, "Crowchild Trail NW")
+    XCTAssertTrue(routes.first?.isValid == true)
+  }
+
+  func testSafetyCamerasDecodeWithoutSendingLocationAndDropUnknownDirections() async throws {
+    NavigationURLProtocol.handler = { request in
+      XCTAssertEqual(request.httpMethod, "GET")
+      XCTAssertEqual(request.url?.path, "/v1/cameras")
+      XCTAssertNil(request.url?.query)
+      return Self.response(
+        request: request,
+        json: """
+          {
+            "cameras": [
+              {
+                "community": "HILLHURST",
+                "coordinate": {"latitude": 51.045, "longitude": -114.08},
+                "direction": "northbound",
+                "enforcement": ["red-light", "speed-on-green"],
+                "id": "calgary-isc:1",
+                "location": "14 Street and Kensington Road N.W.",
+                "quadrant": "NW"
+              },
+              {
+                "community": "HILLHURST",
+                "coordinate": {"latitude": 51.046, "longitude": -114.08},
+                "direction": "northeastbound",
+                "enforcement": ["red-light", "speed-on-green"],
+                "id": "calgary-isc:2",
+                "location": "Unknown approach",
+                "quadrant": "NW"
+              }
+            ],
+            "source": {
+              "attribution": "The City of Calgary",
+              "datasetId": "dv2f-necx",
+              "datasetUrl": "https://data.calgary.ca/Health-and-Safety/Intersection-Safety-Cameras/dv2f-necx",
+              "updateFrequency": "monthly",
+              "updatedAt": "2026-11-01T00:00:00.000Z"
+            }
+          }
+          """
+      )
+    }
+
+    let cameras = try await makeClient().safetyCameras()
+
+    XCTAssertEqual(
+      cameras,
+      [
+        NavOSSSafetyCamera(
+          id: "calgary-isc:1",
+          latitude: 51.045,
+          longitude: -114.08,
+          direction: .northbound,
+          location: "14 Street and Kensington Road N.W."
+        )
+      ]
+    )
+  }
+
   private func makeClient() throws -> NavOSSNavigationAPIClient {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [NavigationURLProtocol.self]

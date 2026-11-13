@@ -1,55 +1,36 @@
 #!/usr/bin/env node
 
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-const siteRoot = resolve(import.meta.dirname, '..');
-const sourceRoot = resolve(siteRoot, 'src');
-const pages = ['index.html', 'privacy.html', 'support.html', 'data-sources.html', 'licenses.html'];
-const routeTargets = new Map([
-  ['/', 'index.html'],
-  ['/privacy', 'privacy.html'],
-  ['/support', 'support.html'],
-  ['/data-sources', 'data-sources.html'],
-  ['/licenses', 'licenses.html'],
-]);
+import { buildSite, contentSecurityPolicy, pages, validateSite } from './site.mjs';
+
+const outputRoot = mkdtempSync(join(tmpdir(), 'navoss-site-check-'));
 const failures = [];
 
-for (const page of pages) {
-  const path = resolve(sourceRoot, page);
-  const contents = readFileSync(path, 'utf8');
+try {
+  buildSite(outputRoot);
+  failures.push(...validateSite(outputRoot));
+} finally {
+  rmSync(outputRoot, { force: true, recursive: true });
+}
 
-  for (const [label, pattern] of [
-    ['Canadian English language', /<html\s+lang="en-CA">/],
-    ['description', /<meta\s+name="description"\s+content="[^"]+"\s*\/?>/s],
-    ['viewport', /<meta\s+name="viewport"\s+content="[^"]+"\s*\/?>/s],
-    ['canonical URL', /<link\s+rel="canonical"\s+href="[^"]+"\s*\/?>/s],
-    ['main content', /<main(?:\s|>)/],
-    ['footer', /<footer(?:\s|>)/],
-  ]) {
-    if (!pattern.test(contents)) failures.push(`${page}: missing ${label}`);
+const csp = contentSecurityPolicy();
+for (const [directive, expected] of [
+  ['default-src', ["'self'"]],
+  ['script-src', ["'none'"]],
+  ['style-src', ["'self'"]],
+  ['font-src', ["'self'"]],
+  ['object-src', ["'none'"]],
+  ['frame-ancestors', ["'none'"]],
+]) {
+  if (JSON.stringify(csp[directive]) !== JSON.stringify(expected)) {
+    failures.push(`site.json: ${directive} must be ${expected.join(' ')}`);
   }
-
-  if (/\b(REQUIRED|TODO|localhost|api\.example)\b/.test(contents)) {
-    failures.push(`${page}: contains a placeholder or development host`);
-  }
-
-  const localReferences = [...contents.matchAll(/(?:href|src)="(\/[^"]*)"/g)].map(
-    ([, reference]) => reference,
-  );
-
-  for (const reference of localReferences) {
-    if (reference.startsWith('/assets/')) {
-      if (!existsSync(resolve(sourceRoot, reference.slice(1)))) {
-        failures.push(`${page}: missing asset ${reference}`);
-      }
-      continue;
-    }
-
-    if (!routeTargets.has(reference) && reference !== '/styles.css') {
-      failures.push(`${page}: unknown local route ${reference}`);
-    }
-  }
+}
+if (!csp['img-src']?.every((source) => ["'self'", 'data:'].includes(source))) {
+  failures.push("site.json: img-src may only allow 'self' and data:");
 }
 
 if (failures.length > 0) {
@@ -57,4 +38,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`Validated ${String(pages.length)} site pages and their local references.`);
+console.log(`Validated ${String(pages.length)} built site pages, their resources and the CSP.`);

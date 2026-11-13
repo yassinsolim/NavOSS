@@ -1,0 +1,26 @@
+Genuine Apple-signed App Attest vectors. Kept byte-for-byte; do not reformat or edit (any change
+breaks the signatures, nonces, or certificate chains these tests rely on).
+
+veehaitch-ios-14.2.yaml, veehaitch-ios-14.4.yaml
+  Source: https://github.com/veehaitch/devicecheck-appattest
+  Commit: cb26211f63c1e2e7949deafe2efdf352daca27fa
+  Paths:  src/test/resources/ios-14.2.yaml, src/test/resources/ios-14.4.yaml
+  License: Apache-2.0 (LICENSE-veehaitch-Apache-2.0, copied unchanged; the project has no NOTICE)
+  Contents: one attestation and one assertion of the same key, produced on real iPhones by a
+  development build of team 6MURL8TA57, bundle de.vincent-haupert.apple-appattest-poc, client data
+  "wurzelpfropf". Verify at each document's timestamp.
+  SHA-256 ios-14.2: e35f4a6fe60103ad84be295342b6ebaad4347271caacf331e723b79972746886
+  SHA-256 ios-14.4: 1910107374d02f412f4bc07d79089fc77cc235d122a8203183d434cf87a6f891
+
+takimoto3-apple-guide-attestation.b64
+  Source: https://github.com/takimoto3/app-attest
+  Commit: 9d7551c05804d3e35d5477b5aed1d82d8f8a2035
+  Path:   apple_guide_test.go, constant appleGuideAttestationObjectBase64
+  License: MIT (LICENSE-takimoto3-MIT, copied unchanged)
+  Origin: the sample attestation object Apple publishes in its "Attestation object validation
+  guide" (https://developer.apple.com/documentation/devicecheck/attestation-object-validation-guide);
+  identical to the string on that page as fetched 2026-11-12. Production key, team 1234567890,
+  bundle com.example.myapp, key id zgSY9YSD+7TaDXssY6WlOPVS1K3Lmk+pFhlcSWE+ZV0=. As the guide's
+  expected values show, its nonce was formed from the raw challenge "example_server_challenge"
+  rather than its SHA-256. Credential certificate valid 2026-04-20T18:13:12Z to 2026-04-23T18:13:12Z.
+  SHA-256: 9a9de536d3b885f1267ae644e4538d7480864dc5028efbfe4c8e7c7a23963cd0

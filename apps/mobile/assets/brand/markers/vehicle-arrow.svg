@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Navigation puck: the NavOSS folded arrow on a teal disc. Points north; MapLibre rotates it. -->
+  <circle cx="32" cy="32" r="29" fill="#0E1516" opacity="0.28"/>
+  <circle cx="32" cy="32" r="27" fill="#FFFFFF"/>
+  <circle cx="32" cy="32" r="23" fill="#0F8F7F"/>
+  <defs><clipPath id="left-face"><rect width="32" height="64"/></clipPath></defs>
+  <path d="M32 13.5 45 43 32 36.5 19 43Z" fill="#E2A92B" stroke="#E2A92B" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M32 13.5 45 43 32 36.5 19 43Z" fill="#F7C948" stroke="#F7C948" stroke-width="2.5" stroke-linejoin="round" clip-path="url(#left-face)"/>
+</svg>

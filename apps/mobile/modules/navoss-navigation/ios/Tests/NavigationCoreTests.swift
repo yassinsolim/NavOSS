@@ -779,7 +779,7 @@ final class NavigationCoreTests: XCTestCase {
       hasCurrentLocation: true
     )
     XCTAssertEqual(prepare?.key, "route-1:1:prepare")
-    XCTAssertEqual(prepare?.text, "In 450 meters, Turn right")
+    XCTAssertEqual(prepare?.text, "In 450 metres, turn right")
     XCTAssertNil(
       planner.prompt(
         trip: trip,

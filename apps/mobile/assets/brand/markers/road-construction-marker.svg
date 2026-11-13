@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Official construction: amber diamond with a traffic cone. -->
+  <path d="M32 2.5a4 4 0 0 1 2.8 1.2l25.5 25.5a4 4 0 0 1 0 5.6L34.8 60.3a4 4 0 0 1-5.6 0L3.7 34.8a4 4 0 0 1 0-5.6L29.2 3.7A4 4 0 0 1 32 2.5Z" fill="#FFFFFF" stroke="#0E1516" stroke-opacity="0.28" stroke-width="1.5"/>
+  <path d="M32 7.5a3 3 0 0 1 2 .9l23.6 23.6a3 3 0 0 1 0 4l-.1-.1L34 55.6a3 3 0 0 1-4 0L6.4 32a3 3 0 0 1 0-4L30 8.4a3 3 0 0 1 2-.9Z" fill="#F59E0B" transform="translate(0 -1)"/>
+  <path d="M29.5 17h5l6.5 23h-18Z" fill="#0E1516"/>
+  <path d="M27.5 24h9l1.2 4.5H26.3Zm-2.4 8.5h13.8l1.2 4.5H23.9Z" fill="#F59E0B"/>
+  <rect x="20" y="40" width="24" height="4" rx="1.5" fill="#0E1516"/>
+</svg>
