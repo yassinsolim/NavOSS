@@ -489,7 +489,10 @@ try {
         logPath: join(logsDirectory, 'pods.log'),
         timeoutMs: 300_000,
       });
-      const derivedData = resolve('/tmp/navoss-navigation-validation-derived');
+      // Concurrent worktrees on one Mac must not share (and delete) each other's build.
+      const derivedData = resolve(
+        process.env.NAVOSS_DERIVED_DATA_DIR ?? '/tmp/navoss-navigation-validation-derived',
+      );
       await rm(derivedData, { force: true, recursive: true });
       await run(
         'xcodebuild',
@@ -665,6 +668,10 @@ try {
         ['carplay-guidance-maneuver', 'guidance-maneuver', 'light'],
         ['carplay-guidance-night', 'guidance-night', 'dark'],
         ['carplay-guidance-annotations', 'guidance-annotations', 'light'],
+        ['carplay-community-reports', 'community-reports', 'light'],
+        ['carplay-flow-report-private', 'report-private', 'light'],
+        ['carplay-flow-report-shared', 'report-shared', 'light'],
+        ['carplay-flow-community-settings', 'community-settings', 'dark'],
         ['carplay-maneuver-symbols', 'maneuver-symbols', 'light'],
         // Real recorded /v2/routes responses: lanes, exits and signposts from the router.
         ['carplay-real-calgary-exit', 'real-calgary-exit', 'light'],

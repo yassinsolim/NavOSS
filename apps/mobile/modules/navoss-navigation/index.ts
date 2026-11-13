@@ -4,6 +4,10 @@ export interface NativeNavigationCapabilities {
   arrivalDetection: true;
   backgroundLocation: boolean;
   carPlayTripBridge: true;
+  /** Community road reports bridge (`submitCommunityReport` …). Absent on older native builds. */
+  communityReports?: true;
+  /** "Share traffic speeds" uploader. Absent on older native builds. */
+  communityTraffic?: true;
   courseMatching: true;
   deadReckoning: true;
   geometryGuidance: true;
@@ -81,7 +85,131 @@ export interface NativeSafetyCameraAlert {
   sequence: number;
 }
 
+/** The eight structured report types; no police, checkpoint, free text or photos. */
+export type NativeCommunityReportType =
+  | 'collision'
+  | 'construction'
+  | 'object-on-road'
+  | 'pothole'
+  | 'road-closure'
+  | 'road-hazard'
+  | 'slow-traffic'
+  | 'stalled-vehicle';
+
+/**
+ * A published community report: grid-snapped position (~55 m × 35 m), five-minute times, no
+ * reporter identity. Never official data; never changes a route.
+ */
+export interface NativeCommunityReport {
+  confirmations: number;
+  expiresAtMs: number;
+  id: string;
+  /** Submitted by this installation during this app session (kept in memory only). */
+  isOwn: boolean;
+  latitude: number;
+  longitude: number;
+  reportedAtMs: number;
+  state: 'confirmed' | 'unconfirmed';
+  type: NativeCommunityReportType;
+}
+
+/**
+ * "Share traffic speeds". `starts-later`: a new installation contributes from the next day
+ * (show "Traffic sharing starts tomorrow", not an error). `paused`: the server asked for a
+ * five-minute pause. `unavailable` lasts for the current trip.
+ */
+export type NativeTrafficSharingState =
+  | { state: 'off' | 'ready' | 'sharing' | 'starting' }
+  | { state: 'paused' | 'starts-later'; untilMs: number }
+  | {
+      reason: 'not-accepting' | 'offline' | 'rate-limited' | 'rejected' | 'unsupported';
+      state: 'unavailable';
+    };
+
+export interface NativeCommunityPreferences {
+  /** Speak a short alert for a report ahead (still subject to the guidance sound mode). */
+  announcesRoadReports: boolean;
+  /**
+   * "Share road reports": off by default. Until the driver knowingly turns it on, reports stay
+   * private drafts and `submitCommunityReport` answers `not-shared` without sending anything.
+   */
+  sharesRoadReports: boolean;
+  /** Off by default; shared with CarPlay settings. */
+  sharesTrafficSpeeds: boolean;
+}
+
+export interface NativeCommunityState {
+  /** This device/build can sign writes (App Attest; DEBUG Simulator builds: development key). */
+  canWrite: boolean;
+  /** A community installation key id is stored in the Keychain. */
+  hasIdentity: boolean;
+  preferences: NativeCommunityPreferences;
+  /** Active reports known natively (route corridor during guidance plus fetched areas). */
+  reports: NativeCommunityReport[];
+  /** `features.communityReports` from `/v2/config`; absent until the server answered. */
+  reportsLive?: boolean;
+  trafficSharing: NativeTrafficSharingState;
+}
+
+export type NativeCommunityError =
+  | 'already-voted'
+  | 'identity-lost'
+  | 'invalid-request'
+  | 'location-unavailable'
+  | 'near-private-place'
+  | 'not-found'
+  | 'not-shared'
+  | 'offline'
+  | 'out-of-coverage'
+  | 'own-report'
+  | 'rate-limited'
+  | 'rejected'
+  | 'too-far'
+  | 'too-new'
+  | 'unavailable'
+  | 'unsupported';
+
+export type NativeCommunityResult<T extends object = object> =
+  ({ ok: true } & T) | { error: NativeCommunityError; ok: false; retryAfterSeconds?: number };
+
+export interface NativeCommunityBounds {
+  east: number;
+  north: number;
+  south: number;
+  west: number;
+}
+
+export interface NativeCommunityReportSubmission extends NativeNavigationCoordinate {
+  /**
+   * Within 400 m of saved Home/Work or the trip's start, destination or stops a report is
+   * refused (`near-private-place`) unless the driver explicitly confirmed sharing it.
+   */
+  confirmNearPrivatePlace?: boolean;
+  /** Degrees 0-359, when known. */
+  heading?: number;
+  type: NativeCommunityReportType;
+}
+
+/** A report ahead on the route the driver was alerted to, while still ahead. */
+export interface NativeCommunityReportAlert {
+  distanceAheadMeters: number;
+  reportId: string;
+  sequence: number;
+  type: NativeCommunityReportType;
+}
+
+/**
+ * Ask "Still there?" (Present / Not present / Dismiss). Native raises it only after the report
+ * is passed and never near a maneuver; Dismiss must call `dismissStillThere` and sends nothing.
+ */
+export interface NativeStillTherePrompt {
+  reportId: string;
+  sequence: number;
+  type: NativeCommunityReportType;
+}
+
 export interface NativeNavigationSnapshot {
+  communityReportAlert?: NativeCommunityReportAlert;
   /** Name of the road being driven, from the route's current step, when the route names it. */
   currentRoadName?: string;
   distanceFromRouteMeters?: number;
@@ -97,6 +225,7 @@ export interface NativeNavigationSnapshot {
   rerouteMode?: NativeRerouteMode;
   rerouteProposal?: NativeRerouteProposal;
   guidance?: NativeCarPlayGuidance;
+  stillTherePrompt?: NativeStillTherePrompt;
   routeProgress: number;
   routeStatus: 'reroute-failed' | 'rerouting' | 'tracking';
   routeVersion: number;
@@ -289,6 +418,7 @@ export type NativeOfflineSearchResult =
 type NavOSSNavigationEvents = {
   onCarPlayNavigationEnded(event: { reason: 'carplay' }): void;
   onCarPlayStateChanged(state: NativeCarPlayState): void;
+  onCommunityStateChanged(state: NativeCommunityState): void;
   onNavigationPreferencesChanged(preferences: NativeNavigationPreferences): void;
   onNavigationSnapshot(snapshot: NativeNavigationSnapshot): void;
   onOfflineStateChanged(state: NativeOfflineState): void;
@@ -303,9 +433,14 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   deleteOfflineRegion(regionId: string): 'blocked-by-active-route' | 'deleted';
   downloadOfflineRegion(regionId: string): void;
   declineRerouteProposal(id: string): boolean;
+  dismissStillThere(reportId: string): void;
+  fetchCommunityReports(
+    bounds: NativeCommunityBounds,
+  ): Promise<NativeCommunityResult<{ reports: NativeCommunityReport[] }>>;
   getCarPlayState(): NativeCarPlayState;
   getAudioMode(): NativeNavigationAudioMode;
   getCapabilities(): NativeNavigationCapabilities;
+  getCommunityState(): Promise<NativeCommunityState>;
   getDestinationCatalog(): NativeDestinationCatalog;
   getGooglePlacesOpenSourceLicenseInfo(): string | null;
   getNavigationPreferences(): NativeNavigationPreferences;
@@ -327,6 +462,7 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   recordRecentDestination(destination: NativeNavigationDestination): void;
   refreshOfflineManifest(): Promise<NativeOfflineState>;
   replaceFavoriteDestinations(destinations: NativeNavigationDestination[]): void;
+  resetCommunityIdentity(): Promise<NativeCommunityResult>;
   searchOffline(
     query: string,
     latitude: number | null,
@@ -335,16 +471,27 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
     category: string | null,
   ): Promise<NativeOfflineSearchResult>;
   setHomeDestination(destination: NativeNavigationDestination | null): void;
+  setAnnounceRoadReports(enabled: boolean): void;
   setAudioMode(mode: NativeNavigationAudioMode): void;
   setPreferOfflineMaps(prefer: boolean): void;
   setRerouteMode(mode: NativeRerouteMode): void;
   setRoute(trip: NativeCarPlayTrip): NativeNavigationSnapshot;
   setRoutePreferences(preferences: NativeRoutePreferences): void;
+  setShareRoadReports(enabled: boolean): void;
+  setShareTrafficSpeeds(enabled: boolean): void;
   setSpeedingWarning(toleranceKph: number, audible: boolean): void;
   setWorkDestination(destination: NativeNavigationDestination | null): void;
   stopAnnouncements(): void;
+  submitCommunityReport(
+    report: NativeCommunityReportSubmission,
+  ): Promise<NativeCommunityResult<{ expiresAtMs: number; merged: boolean; reportId: string }>>;
   toggleFavoriteDestination(destination: NativeNavigationDestination): boolean;
   updateLocation(location: NativeNavigationLocationSample): NativeNavigationSnapshot;
+  voteCommunityReport(
+    reportId: string,
+    vote: 'not-present' | 'present',
+  ): Promise<NativeCommunityResult<{ active: boolean }>>;
+  withdrawCommunityReport(reportId: string): Promise<NativeCommunityResult>;
 }
 
 export default requireNativeModule<NavOSSNavigationModule>('NavOSSNavigation');

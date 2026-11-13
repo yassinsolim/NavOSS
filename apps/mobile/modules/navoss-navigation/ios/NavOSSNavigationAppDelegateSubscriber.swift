@@ -11,6 +11,9 @@ public final class NavOSSNavigationAppDelegateSubscriber: ExpoAppDelegateSubscri
     NavOSSNavigationAPIClient.offlineFallback = NavOSSOfflineRouter.shared
     Task { await NavOSSOfflineStore.shared.refreshManifest() }
     NavOSSNavigationService.shared.resumePersistedNavigation()
+    #if DEBUG && targetEnvironment(simulator)
+      NavOSSCommunitySimulatorHarness.runIfRequested()
+    #endif
     return true
   }
 }

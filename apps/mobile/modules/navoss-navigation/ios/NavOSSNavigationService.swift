@@ -249,6 +249,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     activeTripStore.clear()
     lock.unlock()
     stopNavigationClock(expectedGeneration: generation)
+    NavOSSCommunityService.shared.navigationDidEnd()
     NavOSSCarPlayTripStore.shared.clearTrip(
       generation: generation,
       sequence: update.snapshot.sequence
@@ -551,6 +552,20 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     case .publish:
       publish(versionedUpdate)
       evaluateReroute(for: versionedUpdate)
+      // Only real fixes during turn-by-turn guidance can become traffic probes, and only when
+      // the driver turned "Share traffic speeds" on; the community service enforces both.
+      if versionedUpdate.update.trip != nil, versionedUpdate.update.snapshot.phase == .tracking {
+        NavOSSCommunityService.shared.navigationDidReceiveFix(
+          NavOSSTrafficFix(
+            coordinate: NavOSSCarPlayCoordinate(
+              latitude: location.coordinate.latitude,
+              longitude: location.coordinate.longitude
+            ),
+            horizontalAccuracyMeters: location.horizontalAccuracy,
+            timestamp: location.timestamp
+          )
+        )
+      }
     case .wait:
       break
     }
@@ -804,6 +819,16 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     ), announcementState.allowsAlerts, let speedLimit = update.roadContext.speedLimitKph {
       utterances.append(navigationSpeedingWarningText(speedLimitKph: speedLimit))
     }
+    let snapshot = update.snapshot
+    if let reportAlert = NavOSSCommunityService.shared.navigationDidUpdate(
+      routeProgress: snapshot.routeProgress,
+      isTracking: snapshot.phase == .tracking && !snapshot.isOffRoute
+        && snapshot.rawCoordinate != nil && snapshot.matchedCoordinate != nil
+    ), announcementState.allowsAlerts,
+      NavOSSCommunityService.shared.preferences().announcesRoadReports
+    {
+      utterances.append(navOSSCommunityReportSpokenAlert(reportAlert.type))
+    }
     let speechPrompt =
       !announcementState.allowsManeuverGuidance
       ? nil
@@ -855,6 +880,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       speak(speechPrompt.text, expectedGeneration: versionedUpdate.generation)
     }
     if update.snapshot.phase == .arrived {
+      NavOSSCommunityService.shared.navigationDidEnd()
       stopNavigationClock(expectedGeneration: versionedUpdate.generation)
       reconcileLocationUpdates(expectedGeneration: versionedUpdate.generation)
     }
@@ -1111,6 +1137,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       update: update
     )
     lock.unlock()
+    NavOSSCommunityService.shared.navigationRouteDidChange(trip)
     cancelNavigationSpeech(expectedGeneration: versionedUpdate.generation)
     publish(versionedUpdate)
     ensureLocationUpdates()
@@ -1237,6 +1264,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
 
   private func navigationClockTick() {
     refreshSafetyCamerasIfNeeded()
+    NavOSSCommunityService.shared.navigationClockTick()
     let now = Date().timeIntervalSinceReferenceDate
     lock.lock()
     let current = navigationSession.currentUpdate()
@@ -1483,6 +1511,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       update: update
     )
     lock.unlock()
+    NavOSSCommunityService.shared.navigationDidStart(trip)
     cancelNavigationSpeech(expectedGeneration: versionedUpdate.generation)
     if publishInitialUpdate {
       publish(versionedUpdate)

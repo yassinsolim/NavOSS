@@ -1,0 +1,1426 @@
+[
+  {
+    "challenge": "PV9hpG78oQilP73HWUkvp0REWvoeqmN2J6DH9NdXVww",
+    "clientData": "navoss-community-v1\nsubmit-report\nPV9hpG78oQilP73HWUkvp0REWvoeqmN2J6DH9NdXVww\ncollision\n51.007813\n-114.007813\n-",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 51.0078125,
+        "longitude": -114.0078125
+      },
+      "kind": "submit-report",
+      "type": "collision"
+    },
+    "sha256": "525e5e4041ab34380c3e2588109ad115a13d685fc158ec6b62abbc30fbea2d21"
+  },
+  {
+    "challenge": "kGW_u-VzRKhb89g-fpRW6BrXnX5ZzyeNxhs5bfr1aIg",
+    "clientData": "navoss-community-v1\nsubmit-report\nkGW_u-VzRKhb89g-fpRW6BrXnX5ZzyeNxhs5bfr1aIg\nroad-closure\n51.023438\n-114.023438\n47",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 51.0234375,
+        "longitude": -114.0234375
+      },
+      "heading": 47,
+      "kind": "submit-report",
+      "type": "road-closure"
+    },
+    "sha256": "142ca35d50e70320eecd4faec917d8c2c44a512dd8ae4cb0a85328094d2fb9c0"
+  },
+  {
+    "challenge": "UwbCtaQOJNdqva-eSl0ZJzbCzCaA32DpQmkXassHtUE",
+    "clientData": "navoss-community-v1\nsubmit-report\nUwbCtaQOJNdqva-eSl0ZJzbCzCaA32DpQmkXassHtUE\nslow-traffic\n0.007813\n-0.007813\n94",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 0.0078125,
+        "longitude": -0.0078125
+      },
+      "heading": 94,
+      "kind": "submit-report",
+      "type": "slow-traffic"
+    },
+    "sha256": "61ec45d68209dd986717f760cfb080c2ebe5a8c5c8a9e0a284df99e70159f8ef"
+  },
+  {
+    "challenge": "eNzbgithAygHNMir6uKEEWRHjUWJ-erdpS_UVz5lni0",
+    "clientData": "navoss-community-v1\nsubmit-report\neNzbgithAygHNMir6uKEEWRHjUWJ-erdpS_UVz5lni0\nconstruction\n0.000000\n0.000000\n-",
+    "negativeZero": [true, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 0,
+        "longitude": 0
+      },
+      "kind": "submit-report",
+      "type": "construction"
+    },
+    "sha256": "b77b4951f1891ccd67fcf989b2e17bc7f3bfada82c7271ccd4eaac3381844818"
+  },
+  {
+    "challenge": "mk6h-PiUe-d6Mw9S5RihbbtrCi6szR7jgqJgArW9qbk",
+    "clientData": "navoss-community-v1\nsubmit-report\nmk6h-PiUe-d6Mw9S5RihbbtrCi6szR7jgqJgArW9qbk\npothole\n51.044700\n-114.072000\n188",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 51.0447005,
+        "longitude": -114.0719995
+      },
+      "heading": 188,
+      "kind": "submit-report",
+      "type": "pothole"
+    },
+    "sha256": "b99ccc7d7f173111ad5055c8cd2a437cb33e184cc8dd73ecf81d7de651517b4a"
+  },
+  {
+    "challenge": "aF4HM5mpdR4u4Nie_436dYgGBWUwr2yR6yX5wU4V40s",
+    "clientData": "navoss-community-v1\nsubmit-report\naF4HM5mpdR4u4Nie_436dYgGBWUwr2yR6yX5wU4V40s\nobject-on-road\n51.044700\n-114.071999\n235",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 51.04470049999999,
+        "longitude": -114.07199949999999
+      },
+      "heading": 235,
+      "kind": "submit-report",
+      "type": "object-on-road"
+    },
+    "sha256": "263385541675881c46a823a375e53ba18fb41c578d15acbab41ef9e21e3157ad"
+  },
+  {
+    "challenge": "WNbn1FpS2-jqY2WoyXglcniD67oJrgHKVknC5EDLh6M",
+    "clientData": "navoss-community-v1\nsubmit-report\nWNbn1FpS2-jqY2WoyXglcniD67oJrgHKVknC5EDLh6M\nroad-hazard\n51.000000\n-114.000000\n-",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 51,
+        "longitude": -114
+      },
+      "kind": "submit-report",
+      "type": "road-hazard"
+    },
+    "sha256": "0830a922340452b7dd655d56cf17d880123cb2e898aba5565f442d43e0d3654c"
+  },
+  {
+    "challenge": "S-NMcZmDLKcBn9kARC5n9k0upuqBTX7bhmL9UfKUNzM",
+    "clientData": "navoss-community-v1\nsubmit-report\nS-NMcZmDLKcBn9kARC5n9k0upuqBTX7bhmL9UfKUNzM\nstalled-vehicle\n50.000000\n-120.000000\n329",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 49.9999999,
+        "longitude": -120.0000001
+      },
+      "heading": 329,
+      "kind": "submit-report",
+      "type": "stalled-vehicle"
+    },
+    "sha256": "2fbf6c806146c81dcd86f5306045fa36c23546abd8bd89d68a13ce2502fe15b2"
+  },
+  {
+    "challenge": "VBD8mLg44Wnj_dXNZMILBOyOD7Z-h-hbieyIwvXd4zU",
+    "clientData": "navoss-community-v1\nsubmit-report\nVBD8mLg44Wnj_dXNZMILBOyOD7Z-h-hbieyIwvXd4zU\ncollision\n0.000000\n-0.000000\n16",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 4e-7,
+        "longitude": -4e-7
+      },
+      "heading": 16,
+      "kind": "submit-report",
+      "type": "collision"
+    },
+    "sha256": "4eea04d7d33ad8eff140e14f3ffe902dd9f7eb7f8a2d5e6bbf555d28a51cf18f"
+  },
+  {
+    "challenge": "wikRMgH1f2WlUQoJz1mOzhVEvKGKuphqoLl01wqm7fY",
+    "clientData": "navoss-community-v1\nsubmit-report\nwikRMgH1f2WlUQoJz1mOzhVEvKGKuphqoLl01wqm7fY\nroad-closure\n0.000000\n-0.000000\n-",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 5e-7,
+        "longitude": -5e-7
+      },
+      "kind": "submit-report",
+      "type": "road-closure"
+    },
+    "sha256": "ee5a41a156200811354a80384c71b2eb8dbcc9a34a02d39e950103b4e9cef498"
+  },
+  {
+    "challenge": "ohTlfsZm0QDDnZjkX2LD3D-x2-EHxZHCUblLIkr9xms",
+    "clientData": "navoss-community-v1\nsubmit-report\nohTlfsZm0QDDnZjkX2LD3D-x2-EHxZHCUblLIkr9xms\nslow-traffic\n90.000000\n-180.000000\n110",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 89.9999995,
+        "longitude": -179.9999995
+      },
+      "heading": 110,
+      "kind": "submit-report",
+      "type": "slow-traffic"
+    },
+    "sha256": "94c9e2b42d63b4460857e4d9d444ccf99733a83dc94e3578e5c23913d6a041bb"
+  },
+  {
+    "challenge": "Uvo-f0c5R_88SaoXGasp7jzrycPc1bdvIV4K3DiigD0",
+    "clientData": "navoss-community-v1\nsubmit-report\nUvo-f0c5R_88SaoXGasp7jzrycPc1bdvIV4K3DiigD0\nconstruction\n51.123457\n-114.987654\n157",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 51.123456789,
+        "longitude": -114.987654321
+      },
+      "heading": 157,
+      "kind": "submit-report",
+      "type": "construction"
+    },
+    "sha256": "cd2a46c054ce191c98ffef5d2d348589d039f5007933e65781e3cb95486d735f"
+  },
+  {
+    "challenge": "r9yCU-gBiI2hHMyuEMKn99t3YhTZFFFYhfems89Qvn8",
+    "clientData": "navoss-community-v1\nsubmit-report\nr9yCU-gBiI2hHMyuEMKn99t3YhTZFFFYhfems89Qvn8\npothole\n51.044700\n-114.071900\n0",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 51.0447,
+        "longitude": -114.0719
+      },
+      "heading": 0,
+      "kind": "submit-report",
+      "type": "pothole"
+    },
+    "sha256": "2ae81c36dc1ea6f11f50bb0689582e3f69314b7d850b5447582422b3789f7a83"
+  },
+  {
+    "challenge": "d3KtGx37OjQdNJc25QWqzGIbABJ0rZr7ULd0jPzy16c",
+    "clientData": "navoss-community-v1\nsubmit-report\nd3KtGx37OjQdNJc25QWqzGIbABJ0rZr7ULd0jPzy16c\npothole\n51.044700\n-114.071900\n1",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 51.0447,
+        "longitude": -114.0719
+      },
+      "heading": 1,
+      "kind": "submit-report",
+      "type": "pothole"
+    },
+    "sha256": "7c4ea24fea3715d21a1808ada351bb07e720bd6d396efe9c42dd359690951030"
+  },
+  {
+    "challenge": "n4dipNMVWIx1ZTnXCkKOjfs5FO-h633JhjOl4yf30GY",
+    "clientData": "navoss-community-v1\nsubmit-report\nn4dipNMVWIx1ZTnXCkKOjfs5FO-h633JhjOl4yf30GY\npothole\n51.044700\n-114.071900\n90",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 51.0447,
+        "longitude": -114.0719
+      },
+      "heading": 90,
+      "kind": "submit-report",
+      "type": "pothole"
+    },
+    "sha256": "ed82625322978e19c03fc7cc52b7700ffc542a26f3974c4a3bf788ebf6b3df30"
+  },
+  {
+    "challenge": "pg8OoxI4fAnq4TPBA55iPxVKzq3RWrNXJiYIjCp1WwU",
+    "clientData": "navoss-community-v1\nsubmit-report\npg8OoxI4fAnq4TPBA55iPxVKzq3RWrNXJiYIjCp1WwU\npothole\n51.044700\n-114.071900\n180",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 51.0447,
+        "longitude": -114.0719
+      },
+      "heading": 180,
+      "kind": "submit-report",
+      "type": "pothole"
+    },
+    "sha256": "88bd30c942914a7247fedf22db2c0ee5604efb5b67f64d7b79d59f8e8c771bbb"
+  },
+  {
+    "challenge": "gNs7Ye0E9DUHhm-TjsfOoMXGZMZ8cLh8T4lwsmihK2s",
+    "clientData": "navoss-community-v1\nsubmit-report\ngNs7Ye0E9DUHhm-TjsfOoMXGZMZ8cLh8T4lwsmihK2s\npothole\n51.044700\n-114.071900\n359",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 51.0447,
+        "longitude": -114.0719
+      },
+      "heading": 359,
+      "kind": "submit-report",
+      "type": "pothole"
+    },
+    "sha256": "78153ca81533f14288bedac74b99f4b0758e33c1d52f1a59583cb892f3bd2300"
+  },
+  {
+    "challenge": "oVwAcFL8uMLIKen90lPm2dL0ZwF43Me0zz3LdN43Sec",
+    "clientData": "navoss-community-v1\nsubmit-report\noVwAcFL8uMLIKen90lPm2dL0ZwF43Me0zz3LdN43Sec\npothole\n51.044700\n-114.071900\n-",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 51.0447,
+        "longitude": -114.0719
+      },
+      "kind": "submit-report",
+      "type": "pothole"
+    },
+    "sha256": "5cdb9d596c95d5202e649f6e7e1b4995f01da5ed0b82bf7ccfd62e8b7c84e913"
+  },
+  {
+    "challenge": "6MAh8ETdTAatExPEpMWLSojG7ZMzfHOIx8dE4Al9CMk",
+    "clientData": "navoss-community-v1\nsubmit-report\n6MAh8ETdTAatExPEpMWLSojG7ZMzfHOIx8dE4Al9CMk\ncollision\n48.958513\n-128.049713\n127",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 48.95851332445164,
+        "longitude": -128.04971321308986
+      },
+      "heading": 127,
+      "kind": "submit-report",
+      "type": "collision"
+    },
+    "sha256": "529e0588785c7ec2800558f15edf59e03b60557ec13569b9e44a0f38aa9bb3d7"
+  },
+  {
+    "challenge": "it6MjDw0dfKinPtVLlKwT-4EFskw5QFxOiGE3IB9DLQ",
+    "clientData": "navoss-community-v1\nvote\nit6MjDw0dfKinPtVLlKwT-4EFskw5QFxOiGE3IB9DLQ\n52f7e1c4-5195-4959-abb1-3eb19381e89c\nnot-present\n51.704953\n-125.384895",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 51.70495300807525,
+        "longitude": -125.38489529956132
+      },
+      "reportId": "52f7e1c4-5195-4959-abb1-3eb19381e89c",
+      "vote": "not-present"
+    },
+    "sha256": "0597d37b7def8b084cd6d19ee82268ce34e03d1176ee8a49c3c4a688428fc715"
+  },
+  {
+    "challenge": "c145jVsHMsivNw84oFhXuAvy4ZSTQu6tBB3TXQJiC9k",
+    "clientData": "navoss-community-v1\nsubmit-report\nc145jVsHMsivNw84oFhXuAvy4ZSTQu6tBB3TXQJiC9k\nslow-traffic\n56.670718\n-112.097553\n192",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 56.67071843517479,
+        "longitude": -112.09755337890238
+      },
+      "heading": 192,
+      "kind": "submit-report",
+      "type": "slow-traffic"
+    },
+    "sha256": "13ba642538fe42f613446d020d4d5f9b245eb94b408df2f87b662aa38f85be74"
+  },
+  {
+    "challenge": "XeRhw5Ng_IKNeCj9HwvUWvknTqL1laPFGblEg51AnwE",
+    "clientData": "navoss-community-v1\nvote\nXeRhw5Ng_IKNeCj9HwvUWvknTqL1laPFGblEg51AnwE\n4c3a55ad-c702-4a89-ae45-45bfa435a296\npresent\n55.785004\n-129.889293",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 55.785004252521325,
+        "longitude": -129.88929333621635
+      },
+      "reportId": "4c3a55ad-c702-4a89-ae45-45bfa435a296",
+      "vote": "present"
+    },
+    "sha256": "75b62474f0487992b94b3447a825b6cefc1f10a13fd2a956586eb23867852e04"
+  },
+  {
+    "challenge": "gJof21KMhSH5l9Ku6D4KP8ogSF-2VgX0XJGu2ri_vpw",
+    "clientData": "navoss-community-v1\nsubmit-report\ngJof21KMhSH5l9Ku6D4KP8ogSF-2VgX0XJGu2ri_vpw\npothole\n49.010894\n-127.238140\n215",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 49.010893907584254,
+        "longitude": -127.23814039928838
+      },
+      "heading": 215,
+      "kind": "submit-report",
+      "type": "pothole"
+    },
+    "sha256": "4045a7b59b7710fefaef1035dac7f6233823adcb3c8d9136523be4f19538b31e"
+  },
+  {
+    "challenge": "IqruZgXUwIG101A7O7EG2zEeLLsZNekWaFeGtxEmAic",
+    "clientData": "navoss-community-v1\nvote\nIqruZgXUwIG101A7O7EG2zEeLLsZNekWaFeGtxEmAic\n2b19ead8-46b1-444b-ab42-27c2853d8a45\nnot-present\n54.893259\n-128.526069",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 54.89325881302357,
+        "longitude": -128.52606892930342
+      },
+      "reportId": "2b19ead8-46b1-444b-ab42-27c2853d8a45",
+      "vote": "not-present"
+    },
+    "sha256": "cd5e837f37d0cfacc7ddd25e9b67177c68751f085f5e86e27dcd660916bbade0"
+  },
+  {
+    "challenge": "L0HEijBzkv26MEAT2OheE1wWGpedMccr19VzVG5RXjo",
+    "clientData": "navoss-community-v1\nsubmit-report\nL0HEijBzkv26MEAT2OheE1wWGpedMccr19VzVG5RXjo\nroad-hazard\n52.195483\n-138.286177\n154",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 52.19548340428155,
+        "longitude": -138.28617748413234
+      },
+      "heading": 154,
+      "kind": "submit-report",
+      "type": "road-hazard"
+    },
+    "sha256": "aa03396f7c78cb0fba1fc50d865d795cdca289c31b8a15a4928f3e65d8fca284"
+  },
+  {
+    "challenge": "Iu6_rhxFOYjpIsXFmNd4LSc48OKCnDw_LLAWTDCUYbw",
+    "clientData": "navoss-community-v1\nvote\nIu6_rhxFOYjpIsXFmNd4LSc48OKCnDw_LLAWTDCUYbw\ndb3b5b4c-42a1-4310-acd4-a9b759790ff5\nnot-present\n57.965708\n-138.453829",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 57.965708474954596,
+        "longitude": -138.45382939474658
+      },
+      "reportId": "db3b5b4c-42a1-4310-acd4-a9b759790ff5",
+      "vote": "not-present"
+    },
+    "sha256": "a48323d7de4251e3647dfa1478ec532acc8bf7b8272c4bd4df673a883c0ecc8a"
+  },
+  {
+    "challenge": "FjJqTE9M6CzkndrK8y79rlxp1RAtEcech32MmvlgVWo",
+    "clientData": "navoss-community-v1\nsubmit-report\nFjJqTE9M6CzkndrK8y79rlxp1RAtEcech32MmvlgVWo\ncollision\n56.004033\n-112.316215\n142",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 56.00403307287488,
+        "longitude": -112.31621468542143
+      },
+      "heading": 142,
+      "kind": "submit-report",
+      "type": "collision"
+    },
+    "sha256": "3273ef85f3de3b391f2fe8bd7ef6c6cc48d6d9673ca54551bab953258a5187fb"
+  },
+  {
+    "challenge": "n6TveX7R1O6d_3W8cTKDLQmYNuVVFWteHKQhjdVMkRU",
+    "clientData": "navoss-community-v1\nvote\nn6TveX7R1O6d_3W8cTKDLQmYNuVVFWteHKQhjdVMkRU\nd6a37bad-c563-4544-a6f3-6a21ec8bec17\nnot-present\n55.305284\n-134.571950",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 55.305284001142724,
+        "longitude": -134.57195004839448
+      },
+      "reportId": "d6a37bad-c563-4544-a6f3-6a21ec8bec17",
+      "vote": "not-present"
+    },
+    "sha256": "14c010bef9ebe25866b259f5691662bc08676b6a3bb40c8808867fa48a874416"
+  },
+  {
+    "challenge": "1Eg2gL5lmoiAMwK2smtTKqa0g-IWno6KTYm2BFTshBw",
+    "clientData": "navoss-community-v1\nsubmit-report\n1Eg2gL5lmoiAMwK2smtTKqa0g-IWno6KTYm2BFTshBw\nslow-traffic\n55.446195\n-114.363976\n-",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 55.44619478057139,
+        "longitude": -114.36397646460682
+      },
+      "kind": "submit-report",
+      "type": "slow-traffic"
+    },
+    "sha256": "f874a68b287ee437b2a91def1cd67055a37ff22a23a770caeac7994d3caabe7d"
+  },
+  {
+    "challenge": "V3qv8kHePdIkajnDXyG-9m5C7MUQFbfTP3GpL8UqLls",
+    "clientData": "navoss-community-v1\nvote\nV3qv8kHePdIkajnDXyG-9m5C7MUQFbfTP3GpL8UqLls\n66232a02-3b6c-44e6-addc-74bfd4bd2659\npresent\n49.260806\n-115.224173",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 49.26080628640484,
+        "longitude": -115.224173216708
+      },
+      "reportId": "66232a02-3b6c-44e6-addc-74bfd4bd2659",
+      "vote": "present"
+    },
+    "sha256": "9ba0a94383b8fc4ac7509e904955509116a6251278be70d13daefe92987f9915"
+  },
+  {
+    "challenge": "lCx-ONfg97HuywDQyJQ6Ei8IkxnIkwiGuTzsAVO2p-Y",
+    "clientData": "navoss-community-v1\nsubmit-report\nlCx-ONfg97HuywDQyJQ6Ei8IkxnIkwiGuTzsAVO2p-Y\npothole\n55.676129\n-129.035091\n305",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 55.67612898803782,
+        "longitude": -129.0350913863629
+      },
+      "heading": 305,
+      "kind": "submit-report",
+      "type": "pothole"
+    },
+    "sha256": "62d4ff7add0005301fea7ce36d1968ae2bb42cc7693858365d484932f507ef04"
+  },
+  {
+    "challenge": "Yu1Mz9JHJrOxHUq0UJ5BM0fB1tnrOB6hea812UWm_nQ",
+    "clientData": "navoss-community-v1\nvote\nYu1Mz9JHJrOxHUq0UJ5BM0fB1tnrOB6hea812UWm_nQ\nd0fa800a-705c-4254-a66f-60843ffce7d0\npresent\n55.468600\n-132.805443",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 55.468600456812425,
+        "longitude": -132.8054431247525
+      },
+      "reportId": "d0fa800a-705c-4254-a66f-60843ffce7d0",
+      "vote": "present"
+    },
+    "sha256": "dd151684d259773c3c80f42b9677f0e7a08f76724fff5954311d7a6b64703047"
+  },
+  {
+    "challenge": "BVmDLo2NEvVGvFTU8uEr8atGdK4IPPG_gCnBE8nbvcI",
+    "clientData": "navoss-community-v1\nsubmit-report\nBVmDLo2NEvVGvFTU8uEr8atGdK4IPPG_gCnBE8nbvcI\nroad-hazard\n54.956144\n-115.171499\n234",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 54.95614418382757,
+        "longitude": -115.17149918377399
+      },
+      "heading": 234,
+      "kind": "submit-report",
+      "type": "road-hazard"
+    },
+    "sha256": "fc67b9652d7394491928aa05712c6e708332e8473ba50b49603983ebc9f38e15"
+  },
+  {
+    "challenge": "buOiugigx2cw7U3iO5Af4F3TZBoSjJ7CUT8zqv6Xc-8",
+    "clientData": "navoss-community-v1\nvote\nbuOiugigx2cw7U3iO5Af4F3TZBoSjJ7CUT8zqv6Xc-8\na10b58fa-97f7-4066-a792-6d5f70ac3fe6\npresent\n49.782161\n-137.956491",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 49.782160657504576,
+        "longitude": -137.9564913845621
+      },
+      "reportId": "a10b58fa-97f7-4066-a792-6d5f70ac3fe6",
+      "vote": "present"
+    },
+    "sha256": "453ecd42ccb0c45be21a2a3cf54f463c6eeada54ae592e5ad4b4b933ef4c11dc"
+  },
+  {
+    "challenge": "dyOEw83ph-VVNuLcYlFL5GtKCJwmkKbm0qD0EA2C50Y",
+    "clientData": "navoss-community-v1\nsubmit-report\ndyOEw83ph-VVNuLcYlFL5GtKCJwmkKbm0qD0EA2C50Y\ncollision\n48.820140\n-114.746564\n-",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 48.82013960832265,
+        "longitude": -114.74656397132202
+      },
+      "kind": "submit-report",
+      "type": "collision"
+    },
+    "sha256": "6b2c1529b9bb753c9f74c53240e2250524e481c9959cbaef42bedd6f34cd29f6"
+  },
+  {
+    "challenge": "KDEErZ_7cCfUcHLrZQC5M8LeTOT6W-OhC95aHGOv6V4",
+    "clientData": "navoss-community-v1\nvote\nKDEErZ_7cCfUcHLrZQC5M8LeTOT6W-OhC95aHGOv6V4\nfab52301-a8a7-41aa-a465-40c6c8797790\npresent\n58.329024\n-120.750883",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 58.32902373007965,
+        "longitude": -120.75088258171454
+      },
+      "reportId": "fab52301-a8a7-41aa-a465-40c6c8797790",
+      "vote": "present"
+    },
+    "sha256": "1fa7a664add6f44b5201c6c59a9afaa70824f586b537ad1efd661e711e7c4361"
+  },
+  {
+    "challenge": "GumUAvQ8oyHbELn2Ug6Ikpv3JqL0alkFdO4QUpD_Mbs",
+    "clientData": "navoss-community-v1\nsubmit-report\nGumUAvQ8oyHbELn2Ug6Ikpv3JqL0alkFdO4QUpD_Mbs\nslow-traffic\n55.379572\n-133.560842\n277",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 55.37957243775018,
+        "longitude": -133.56084248842672
+      },
+      "heading": 277,
+      "kind": "submit-report",
+      "type": "slow-traffic"
+    },
+    "sha256": "5d020a45abcf1c2bc8b9d4271d93676a1222e8e0a195ec21e5eead69052d8526"
+  },
+  {
+    "challenge": "YpsCvHeenSDtA6pnPa83rGVa-H6otHAU2_TThZ-kRKQ",
+    "clientData": "navoss-community-v1\nvote\nYpsCvHeenSDtA6pnPa83rGVa-H6otHAU2_TThZ-kRKQ\n8e3eedff-14b7-4b5e-a924-b12bc1a35fcf\nnot-present\n51.899238\n-111.574057",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 51.89923807391897,
+        "longitude": -111.5740572928451
+      },
+      "reportId": "8e3eedff-14b7-4b5e-a924-b12bc1a35fcf",
+      "vote": "not-present"
+    },
+    "sha256": "38296a4e23ec5a2477af857d1ccb3909129dfd9295a5235f03bedc471e90f54e"
+  },
+  {
+    "challenge": "R_1BrOp9ulkwAiHHsAUacZ30MJqOa4mc0O3r6XxZjss",
+    "clientData": "navoss-community-v1\nsubmit-report\nR_1BrOp9ulkwAiHHsAUacZ30MJqOa4mc0O3r6XxZjss\npothole\n49.868445\n-118.009896\n228",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 49.868445380125195,
+        "longitude": -118.00989636750892
+      },
+      "heading": 228,
+      "kind": "submit-report",
+      "type": "pothole"
+    },
+    "sha256": "31f9958a45d6ad71b213caf0dc95a899ed9c47cd59a66e641f3759703a8fcd7d"
+  },
+  {
+    "challenge": "fmo0uwtZQPngSmlyUzxgTXR21_JqTLj_B3IcUfhedPA",
+    "clientData": "navoss-community-v1\nvote\nfmo0uwtZQPngSmlyUzxgTXR21_JqTLj_B3IcUfhedPA\n00b966fe-8ffa-4210-a578-8f00b88c2f6d\nnot-present\n52.529245\n-134.615685",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 52.52924498247449,
+        "longitude": -134.6156851556152
+      },
+      "reportId": "00b966fe-8ffa-4210-a578-8f00b88c2f6d",
+      "vote": "not-present"
+    },
+    "sha256": "52fcbf46bbde3b3647b66547b18edc78e6c36d4fea75d787e37249631ba4c5d7"
+  },
+  {
+    "challenge": "s-1EKebpXFirBwA893v8epNW4i2RfE5YnrbhXejgq1U",
+    "clientData": "navoss-community-v1\nsubmit-report\ns-1EKebpXFirBwA893v8epNW4i2RfE5YnrbhXejgq1U\nroad-hazard\n53.772079\n-133.450111\n221",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 53.77207874821033,
+        "longitude": -133.45011087376625
+      },
+      "heading": 221,
+      "kind": "submit-report",
+      "type": "road-hazard"
+    },
+    "sha256": "76e773802e99b7d537bf49402e05e15dcf407704fefeb379bc37f15211ada7b2"
+  },
+  {
+    "challenge": "cZ5XYtTqSq-LboaBmG0jm-It7GAq9KS9QYTa7rl26BI",
+    "clientData": "navoss-community-v1\nvote\ncZ5XYtTqSq-LboaBmG0jm-It7GAq9KS9QYTa7rl26BI\nf872fabb-ffdb-4e4a-a7ce-58f1a73de999\npresent\n52.377228\n-130.010831",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 52.37722804381047,
+        "longitude": -130.01083078719674
+      },
+      "reportId": "f872fabb-ffdb-4e4a-a7ce-58f1a73de999",
+      "vote": "present"
+    },
+    "sha256": "aa37be278b637a0ea53e6e35e2b332687c00c2143862c9a77a76b266e067b3f4"
+  },
+  {
+    "challenge": "sp0KNsvw6skSdq6T6yaRnXsVYjn6qs3km9QNEgv0VoQ",
+    "clientData": "navoss-community-v1\nsubmit-report\nsp0KNsvw6skSdq6T6yaRnXsVYjn6qs3km9QNEgv0VoQ\ncollision\n56.919441\n-122.006641\n163",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 56.919441306428055,
+        "longitude": -122.00664105340837
+      },
+      "heading": 163,
+      "kind": "submit-report",
+      "type": "collision"
+    },
+    "sha256": "36da99a6748e497d99e1b6d4d7ceb9b1c082c5181e4882488cc5e591914e1646"
+  },
+  {
+    "challenge": "h8tw-nf1R2yvmlj8sB1ho1bWTVGAiYwOzEhrl0-wTeU",
+    "clientData": "navoss-community-v1\nvote\nh8tw-nf1R2yvmlj8sB1ho1bWTVGAiYwOzEhrl0-wTeU\n1b7859d9-7373-4513-a3bf-acf96fb83ecf\npresent\n53.302969\n-122.283832",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 53.30296948484611,
+        "longitude": -122.28383223060519
+      },
+      "reportId": "1b7859d9-7373-4513-a3bf-acf96fb83ecf",
+      "vote": "present"
+    },
+    "sha256": "1e78e8976feda41769841b61ae7ef08309ecdacffbf2c87de98d3a5e417c73dc"
+  },
+  {
+    "challenge": "IVG4XzYsn679xt-EfD0ZGF6RzmuAhUnyvU3xRhUXl6A",
+    "clientData": "navoss-community-v1\nsubmit-report\nIVG4XzYsn679xt-EfD0ZGF6RzmuAhUnyvU3xRhUXl6A\nslow-traffic\n57.648464\n-129.616075\n175",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 57.64846361575183,
+        "longitude": -129.61607507532463
+      },
+      "heading": 175,
+      "kind": "submit-report",
+      "type": "slow-traffic"
+    },
+    "sha256": "380dd82f7291a5f920b820dac820c8b3c82c4e36c15b0268a4c95f3c23332a25"
+  },
+  {
+    "challenge": "ynW7x3qPUkTdqqqTGLz5KBJKTqvRZHdbRuqayuZFSF4",
+    "clientData": "navoss-community-v1\nvote\nynW7x3qPUkTdqqqTGLz5KBJKTqvRZHdbRuqayuZFSF4\nfbae3875-6a1c-413e-a019-8d72383f635e\nnot-present\n51.785154\n-127.451811",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 51.785154232592326,
+        "longitude": -127.4518107453361
+      },
+      "reportId": "fbae3875-6a1c-413e-a019-8d72383f635e",
+      "vote": "not-present"
+    },
+    "sha256": "ff4077969fa0fac4aa5d373c630e0d91c1026f6cb9b1e7c6c6d463af1a5d9254"
+  },
+  {
+    "challenge": "Tz_ZK-hbQ65MrRLpm21D0lbpPqy03TkFDXj5opaANpo",
+    "clientData": "navoss-community-v1\nsubmit-report\nTz_ZK-hbQ65MrRLpm21D0lbpPqy03TkFDXj5opaANpo\npothole\n57.260469\n-113.167885\n-",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 57.260469179693615,
+        "longitude": -113.1678850473836
+      },
+      "kind": "submit-report",
+      "type": "pothole"
+    },
+    "sha256": "a82115f1356a7f467d2ceb6939d350ef44de06bca51a6dc7575763becdfecbec"
+  },
+  {
+    "challenge": "ZPQQD6S4JcCU_N7_zBqxn5ZWlgqhatvHaCaPYJpLEmc",
+    "clientData": "navoss-community-v1\nvote\nZPQQD6S4JcCU_N7_zBqxn5ZWlgqhatvHaCaPYJpLEmc\n50d69d59-274c-44c5-ad29-3adb8d120458\npresent\n58.486883\n-126.950020",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 58.48688313390594,
+        "longitude": -126.95001990180462
+      },
+      "reportId": "50d69d59-274c-44c5-ad29-3adb8d120458",
+      "vote": "present"
+    },
+    "sha256": "88a75406f666e388fd5f4cba9145fd493cd301bf39a0beb49d2437ccca2cee81"
+  },
+  {
+    "challenge": "G9EINWJkw7qJsUHKrYKmGZ1Sua2K6KJEPx_pvg0mvJs",
+    "clientData": "navoss-community-v1\nsubmit-report\nG9EINWJkw7qJsUHKrYKmGZ1Sua2K6KJEPx_pvg0mvJs\nroad-hazard\n51.497823\n-117.001077\n231",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 51.49782280432992,
+        "longitude": -117.00107695600018
+      },
+      "heading": 231,
+      "kind": "submit-report",
+      "type": "road-hazard"
+    },
+    "sha256": "b3ca2eca20db2074a7fd91c0be3f385e0fe7b1184a87de7e4648725af1844116"
+  },
+  {
+    "challenge": "wcIbHkKbCKsQAfxh-pRVR3MkJfaDpy28EitQ4eC4uZg",
+    "clientData": "navoss-community-v1\nvote\nwcIbHkKbCKsQAfxh-pRVR3MkJfaDpy28EitQ4eC4uZg\n4c2bb486-7a68-4d6e-a3dd-76a830559624\nnot-present\n54.011073\n-133.510029",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 54.011073429766114,
+        "longitude": -133.5100287985988
+      },
+      "reportId": "4c2bb486-7a68-4d6e-a3dd-76a830559624",
+      "vote": "not-present"
+    },
+    "sha256": "e7b833556e3caa4290017c4bfe56763874d765b1e28f51fe177f5acb033abcbb"
+  },
+  {
+    "challenge": "zxknRrYzPo7vMLCJkVegM4yuvjiAUPJeqMwCtl1wUx0",
+    "clientData": "navoss-community-v1\nsubmit-report\nzxknRrYzPo7vMLCJkVegM4yuvjiAUPJeqMwCtl1wUx0\ncollision\n56.875464\n-118.923469\n171",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 56.875464104581624,
+        "longitude": -118.92346865134313
+      },
+      "heading": 171,
+      "kind": "submit-report",
+      "type": "collision"
+    },
+    "sha256": "ed082624e53b2ab70d8583090bdc3eebfe9c2b3d6afcf7f018aa8cc6abee3015"
+  },
+  {
+    "challenge": "qImwkyx04vvIs9KUOXGfVIbiZYAhqHm74kql_P7tnDE",
+    "clientData": "navoss-community-v1\nvote\nqImwkyx04vvIs9KUOXGfVIbiZYAhqHm74kql_P7tnDE\ne9567909-f3eb-4cfc-a297-a8d9beaa676b\nnot-present\n57.097045\n-135.417770",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 57.097044864040804,
+        "longitude": -135.41776974638924
+      },
+      "reportId": "e9567909-f3eb-4cfc-a297-a8d9beaa676b",
+      "vote": "not-present"
+    },
+    "sha256": "d0977116f148c3564a98c3434b4faf599bb1fdb25272202b8fbbf56a794de6ac"
+  },
+  {
+    "challenge": "NCOpFx3uFAatheBKxS4wlHpdt4zT5jQIrrOfSM8tO4A",
+    "clientData": "navoss-community-v1\nsubmit-report\nNCOpFx3uFAatheBKxS4wlHpdt4zT5jQIrrOfSM8tO4A\nslow-traffic\n57.220597\n-127.181688\n161",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 57.220597049174835,
+        "longitude": -127.18168846946209
+      },
+      "heading": 161,
+      "kind": "submit-report",
+      "type": "slow-traffic"
+    },
+    "sha256": "76bffe073c0f1aecf372172217c982ea4fdcb74d3aa099fe416016011e3aa2d5"
+  },
+  {
+    "challenge": "RBDjkUOVhLvFD-DBJ6yimf8Kv9jjJG6kb27PsAfYq-k",
+    "clientData": "navoss-community-v1\nvote\nRBDjkUOVhLvFD-DBJ6yimf8Kv9jjJG6kb27PsAfYq-k\n25fe03dd-078d-469e-a3e3-434f55ee2294\nnot-present\n58.361209\n-135.812728",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 58.36120914737694,
+        "longitude": -135.8127275074832
+      },
+      "reportId": "25fe03dd-078d-469e-a3e3-434f55ee2294",
+      "vote": "not-present"
+    },
+    "sha256": "f068003a660eb80f770779157dfb63af284656c9eb2a715dae87cc764af27e13"
+  },
+  {
+    "challenge": "2jwdxlxnBDTVB_7s0AHV-37O8lfl6K4wdqVtuIiRRo8",
+    "clientData": "navoss-community-v1\nsubmit-report\n2jwdxlxnBDTVB_7s0AHV-37O8lfl6K4wdqVtuIiRRo8\npothole\n55.873917\n-138.417641\n-",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 55.87391671186779,
+        "longitude": -138.4176408487372
+      },
+      "kind": "submit-report",
+      "type": "pothole"
+    },
+    "sha256": "9c5b7c5da23a230cb0bdb0bfce5d86f96dfd66afed482d3b87c77ed672f930cd"
+  },
+  {
+    "challenge": "p9zJvoLo25xqMWFVizFEQIksZDIG_gvjDXFS5bpOX-o",
+    "clientData": "navoss-community-v1\nvote\np9zJvoLo25xqMWFVizFEQIksZDIG_gvjDXFS5bpOX-o\na6c54b27-50f3-4733-aee4-2f01747f0729\nnot-present\n55.697766\n-124.339798",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 55.697766320174566,
+        "longitude": -124.33979824567213
+      },
+      "reportId": "a6c54b27-50f3-4733-aee4-2f01747f0729",
+      "vote": "not-present"
+    },
+    "sha256": "9b508f6f5281dbbb382088eff22e2a2d01460e2e3eded05e1fabcf9d833688ef"
+  },
+  {
+    "challenge": "8NdvcT1Q0iKxzpmZIdSQ5fQNh3sMCdt8dq3ojBGlGEw",
+    "clientData": "navoss-community-v1\nsubmit-report\n8NdvcT1Q0iKxzpmZIdSQ5fQNh3sMCdt8dq3ojBGlGEw\nroad-hazard\n58.011564\n-125.351100\n17",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 58.011563887912786,
+        "longitude": -125.35110045792534
+      },
+      "heading": 17,
+      "kind": "submit-report",
+      "type": "road-hazard"
+    },
+    "sha256": "0d295c959a4bb44729cc75147fa82b960b31b59241c84d680511fc647560e136"
+  },
+  {
+    "challenge": "YlWb0CMzzb22tw_u2xO6B9wCyDxhofDWu4EWPZbNgO0",
+    "clientData": "navoss-community-v1\nvote\nYlWb0CMzzb22tw_u2xO6B9wCyDxhofDWu4EWPZbNgO0\ne85635f5-f455-4630-a9c7-e70de7142711\npresent\n50.144968\n-136.409367",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 50.14496762498748,
+        "longitude": -136.40936681916938
+      },
+      "reportId": "e85635f5-f455-4630-a9c7-e70de7142711",
+      "vote": "present"
+    },
+    "sha256": "6e44391db146373358844f55abcdab55c103142e80de633d47d65e8705b68a9a"
+  },
+  {
+    "challenge": "I0e21uIM40pn7CHp-yrLNSrZyUvkyDPcxQ7jh0q9iw4",
+    "clientData": "navoss-community-v1\nsubmit-report\nI0e21uIM40pn7CHp-yrLNSrZyUvkyDPcxQ7jh0q9iw4\ncollision\n51.349643\n-124.570270\n-",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 51.3496430810541,
+        "longitude": -124.5702697877772
+      },
+      "kind": "submit-report",
+      "type": "collision"
+    },
+    "sha256": "76d3dc497bb97cd8b91caeab0bec253779378b047e274712616ce226927f7ee4"
+  },
+  {
+    "challenge": "ou0TExkf7tMENdaP3_8mwtcPTf-P4FAUwEJ1ydQTbOw",
+    "clientData": "navoss-community-v1\nvote\nou0TExkf7tMENdaP3_8mwtcPTf-P4FAUwEJ1ydQTbOw\n447652f6-8a57-444d-a8f7-469d1483ec92\nnot-present\n54.898427\n-117.285614",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 54.898426682967695,
+        "longitude": -117.2856142360717
+      },
+      "reportId": "447652f6-8a57-444d-a8f7-469d1483ec92",
+      "vote": "not-present"
+    },
+    "sha256": "95bfb1f09e8186ec7057501ffe0ac0f760061f1cac2bbf5df555042fdb202f2b"
+  },
+  {
+    "challenge": "0EuQXo6hfOdeRsLwMWdw6qO1388JoOCNiJlzZhU2svU",
+    "clientData": "navoss-community-v1\nsubmit-report\n0EuQXo6hfOdeRsLwMWdw6qO1388JoOCNiJlzZhU2svU\nslow-traffic\n59.451634\n-133.246091\n-",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 59.45163434371352,
+        "longitude": -133.24609090546144
+      },
+      "kind": "submit-report",
+      "type": "slow-traffic"
+    },
+    "sha256": "5910fc678f79306fb195ad994e749f9b0552980356774c4d1107e062e0c0a83e"
+  },
+  {
+    "challenge": "r44ZZUZHbDS4tGUxlFsQEJg2duEZQdiNYVsdf7jBRPU",
+    "clientData": "navoss-community-v1\nvote\nr44ZZUZHbDS4tGUxlFsQEJg2duEZQdiNYVsdf7jBRPU\nefb5a207-41d6-4f5c-a6b8-4bc947cf5ee0\nnot-present\n52.146087\n-111.378114",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 52.14608661856037,
+        "longitude": -111.37811377970502
+      },
+      "reportId": "efb5a207-41d6-4f5c-a6b8-4bc947cf5ee0",
+      "vote": "not-present"
+    },
+    "sha256": "d016c43e2ec27002facfe8b44ec996d22c8ef07c526766c96b0c30c55f33a7a5"
+  },
+  {
+    "challenge": "Ogy_yWwsbviUd1biZIp42wW_vzKVBZCt9j_6dgrqBhw",
+    "clientData": "navoss-community-v1\nsubmit-report\nOgy_yWwsbviUd1biZIp42wW_vzKVBZCt9j_6dgrqBhw\npothole\n55.238997\n-126.904573\n183",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 55.238996700593276,
+        "longitude": -126.90457321964203
+      },
+      "heading": 183,
+      "kind": "submit-report",
+      "type": "pothole"
+    },
+    "sha256": "f1c0672356eb2312bf82ea307b0342c5e99c3ed410d55062b7a01f6653ec56d6"
+  },
+  {
+    "challenge": "xwsXi7N_UJF3_P6Jr4Xf62CjaHkn2GmdGEI-5M5yiFE",
+    "clientData": "navoss-community-v1\nvote\nxwsXi7N_UJF3_P6Jr4Xf62CjaHkn2GmdGEI-5M5yiFE\na34f863e-f686-4d1e-aa98-79a1f41cac0d\nnot-present\n50.261650\n-115.746335",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 50.2616496315226,
+        "longitude": -115.7463349171914
+      },
+      "reportId": "a34f863e-f686-4d1e-aa98-79a1f41cac0d",
+      "vote": "not-present"
+    },
+    "sha256": "7c42fc0698a2b56f67b7ecaea0d0f9a3dd56979e1b8de6500a501f703a270873"
+  },
+  {
+    "challenge": "Il-ZiBNvN0-GnUJxCrga27kRjosP3kRF3SdYaJJIjmw",
+    "clientData": "navoss-community-v1\nsubmit-report\nIl-ZiBNvN0-GnUJxCrga27kRjosP3kRF3SdYaJJIjmw\nroad-hazard\n50.417638\n-118.871153\n32",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 50.41763844084926,
+        "longitude": -118.87115263557061
+      },
+      "heading": 32,
+      "kind": "submit-report",
+      "type": "road-hazard"
+    },
+    "sha256": "d9bf27cc45138062134f4a151b4237cae846d438f5d0036a5e9b9e283284e46c"
+  },
+  {
+    "challenge": "n8XRB8vQqOoSyoFrTAU9gGYbK8DRDTKOsDsrh3Glq7w",
+    "clientData": "navoss-community-v1\nvote\nn8XRB8vQqOoSyoFrTAU9gGYbK8DRDTKOsDsrh3Glq7w\n3452fbdd-7e2e-4d03-a458-803285a49a3f\npresent\n52.803231\n-123.125798",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 52.80323123075068,
+        "longitude": -123.12579787997528
+      },
+      "reportId": "3452fbdd-7e2e-4d03-a458-803285a49a3f",
+      "vote": "present"
+    },
+    "sha256": "f90b36c4ee6404ef8fd32359bd3fce7092181aae320e2b24593545ebb07058ab"
+  },
+  {
+    "challenge": "7LDbcY277awy_hHAYueAj5fCojXnZ-omPm0Cfn9-i2I",
+    "clientData": "navoss-community-v1\nsubmit-report\n7LDbcY277awy_hHAYueAj5fCojXnZ-omPm0Cfn9-i2I\ncollision\n54.149895\n-110.909378\n-",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 54.14989465856925,
+        "longitude": -110.90937780542299
+      },
+      "kind": "submit-report",
+      "type": "collision"
+    },
+    "sha256": "fafd58a85fa96068e8e74d6b825180730facac1e0db2ad8092ea70a36c10843f"
+  },
+  {
+    "challenge": "P4-AUr3hUdTOryzArlDUydB-Rlfikawau71VmllRSH4",
+    "clientData": "navoss-community-v1\nvote\nP4-AUr3hUdTOryzArlDUydB-Rlfikawau71VmllRSH4\n07067682-000f-4ce7-ac15-6c5a01bd16fb\nnot-present\n48.465310\n-117.124802",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 48.46530958327931,
+        "longitude": -117.12480191495268
+      },
+      "reportId": "07067682-000f-4ce7-ac15-6c5a01bd16fb",
+      "vote": "not-present"
+    },
+    "sha256": "05a077e47a6c5e477ecf1dbef3eb225b610781d94502289840cef07d0b107ca6"
+  },
+  {
+    "challenge": "Qwb2dMLUrq10GKGOvOeCI5foaQGmBPjmEV_7kNFKgG4",
+    "clientData": "navoss-community-v1\nsubmit-report\nQwb2dMLUrq10GKGOvOeCI5foaQGmBPjmEV_7kNFKgG4\nslow-traffic\n53.410383\n-126.789089\n153",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 53.41038303584792,
+        "longitude": -126.7890892229043
+      },
+      "heading": 153,
+      "kind": "submit-report",
+      "type": "slow-traffic"
+    },
+    "sha256": "29acde5cf5ae12fb38eadd4bec0cc2093aca9d6b9f9b7a7f5fb3dc9ca5d33611"
+  },
+  {
+    "challenge": "5QZ4l2N64b4fq3qRvaO5Q2GeDPUTUXZHb-GQYoOMbj0",
+    "clientData": "navoss-community-v1\nvote\n5QZ4l2N64b4fq3qRvaO5Q2GeDPUTUXZHb-GQYoOMbj0\n9f56d6d4-3431-4f6a-a988-2ac2bb50f801\nnot-present\n58.381149\n-128.398517",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 58.381148795131594,
+        "longitude": -128.39851691918446
+      },
+      "reportId": "9f56d6d4-3431-4f6a-a988-2ac2bb50f801",
+      "vote": "not-present"
+    },
+    "sha256": "3bcbdda418e765dbc643f3a197e2f3f2270ce62aceb7670c7a0379af9c1a168c"
+  },
+  {
+    "challenge": "5nwrjZHArJaePb2-HBzTi2n3AD5dfJ9jpgVdkzKLCTo",
+    "clientData": "navoss-community-v1\nsubmit-report\n5nwrjZHArJaePb2-HBzTi2n3AD5dfJ9jpgVdkzKLCTo\npothole\n57.963560\n-123.200404\n325",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 57.96355998909567,
+        "longitude": -123.20040393816306
+      },
+      "heading": 325,
+      "kind": "submit-report",
+      "type": "pothole"
+    },
+    "sha256": "7a19d1f8e48e3d88490557b6f5a5a767f606a61c4df43992368401767f9f0820"
+  },
+  {
+    "challenge": "VdwSVLKjHPTSvhKMNkDUvilL9JnSEKhSI0eR3K4ZWQQ",
+    "clientData": "navoss-community-v1\nvote\nVdwSVLKjHPTSvhKMNkDUvilL9JnSEKhSI0eR3K4ZWQQ\n48a4f725-4480-40ed-a9af-533bf1c76bf8\npresent\n52.193669\n-131.141275",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 52.193669212609535,
+        "longitude": -131.14127491721882
+      },
+      "reportId": "48a4f725-4480-40ed-a9af-533bf1c76bf8",
+      "vote": "present"
+    },
+    "sha256": "fd38f77028fddd3899eb58ed257af1e1313947e23f34270d0e527d19a2501c29"
+  },
+  {
+    "challenge": "-aMMJ9-ikdBoThAn0g5K_ydsdKduUT2I3LojJxZoTcY",
+    "clientData": "navoss-community-v1\nsubmit-report\n-aMMJ9-ikdBoThAn0g5K_ydsdKduUT2I3LojJxZoTcY\nroad-hazard\n57.873622\n-117.733917\n-",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 57.873621800122784,
+        "longitude": -117.7339166698046
+      },
+      "kind": "submit-report",
+      "type": "road-hazard"
+    },
+    "sha256": "6f6492d09867c5fdc33986f1d3867850a9c625abb5cdadf4806505cb547f7348"
+  },
+  {
+    "challenge": "l3M3h07z-rR5sjtMhg0JmpZ_ZhPfEsUQyaTUnA4olN0",
+    "clientData": "navoss-community-v1\nvote\nl3M3h07z-rR5sjtMhg0JmpZ_ZhPfEsUQyaTUnA4olN0\nf455a179-2e9f-41d9-a563-1bd079f4aad2\npresent\n48.951968\n-138.205811",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 48.95196788394824,
+        "longitude": -138.20581053141504
+      },
+      "reportId": "f455a179-2e9f-41d9-a563-1bd079f4aad2",
+      "vote": "present"
+    },
+    "sha256": "2c9371b9377f81c0cdc47f0d2e6fa650b06ceff7b720412011fed1fc185c089f"
+  },
+  {
+    "challenge": "9B0xQh72PiB6gLo4Qe6AW-SHjb81HVQG71mHYW05650",
+    "clientData": "navoss-community-v1\nsubmit-report\n9B0xQh72PiB6gLo4Qe6AW-SHjb81HVQG71mHYW05650\ncollision\n58.402471\n-111.836314\n305",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 58.40247058507521,
+        "longitude": -111.83631440894678
+      },
+      "heading": 305,
+      "kind": "submit-report",
+      "type": "collision"
+    },
+    "sha256": "d364849f991ef7703cc6d3930bc31a83cf0304f09bde71762a1be31c79f72df3"
+  },
+  {
+    "challenge": "hqxAvnhNETbrYUxW0B8bzlRE1mFXx679XW0OU6fZnHg",
+    "clientData": "navoss-community-v1\nvote\nhqxAvnhNETbrYUxW0B8bzlRE1mFXx679XW0OU6fZnHg\n73d86e7b-755e-47e5-a82a-31bd56c2b2ce\nnot-present\n53.865285\n-120.543279",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 53.86528456907254,
+        "longitude": -120.54327878411858
+      },
+      "reportId": "73d86e7b-755e-47e5-a82a-31bd56c2b2ce",
+      "vote": "not-present"
+    },
+    "sha256": "6ac68e5c943a10b34ea035fa4c6c568a4b57c9dfd6645f64826c3e4f301ff0b9"
+  },
+  {
+    "challenge": "LRDz7KDBoEdTa_qRed4mci-2jD6NnwKTtHoV-McqpUs",
+    "clientData": "navoss-community-v1\nsubmit-report\nLRDz7KDBoEdTa_qRed4mci-2jD6NnwKTtHoV-McqpUs\nslow-traffic\n55.652642\n-115.306087\n245",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 55.652642187871976,
+        "longitude": -115.30608704695477
+      },
+      "heading": 245,
+      "kind": "submit-report",
+      "type": "slow-traffic"
+    },
+    "sha256": "ccf6c9abe8f5d1dfb9261a093ce7e9b44590cc85dbc0c9ee7f6b610b9967f3d0"
+  },
+  {
+    "challenge": "HMFLyViwukYW3UldKrv7_HMhfKtuNix4CVQ7WHfV_04",
+    "clientData": "navoss-community-v1\nvote\nHMFLyViwukYW3UldKrv7_HMhfKtuNix4CVQ7WHfV_04\n54f8e4f8-9214-47a2-afab-d1ca7f07085f\npresent\n54.949781\n-137.282233",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 54.94978148660157,
+        "longitude": -137.28223278969526
+      },
+      "reportId": "54f8e4f8-9214-47a2-afab-d1ca7f07085f",
+      "vote": "present"
+    },
+    "sha256": "46a5543a2db70e8bdec636e7d693db611e73328b8ce887f00ff4ff05272c0c15"
+  },
+  {
+    "challenge": "zw6t6jJd3JY2sulh8RKkKxG74TURWCwP1EjEhVEOK8c",
+    "clientData": "navoss-community-v1\nsubmit-report\nzw6t6jJd3JY2sulh8RKkKxG74TURWCwP1EjEhVEOK8c\npothole\n59.778220\n-111.198145\n241",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 59.778219771059234,
+        "longitude": -111.19814486857503
+      },
+      "heading": 241,
+      "kind": "submit-report",
+      "type": "pothole"
+    },
+    "sha256": "b3d8f13842f682c4a2a34c4549c35508d62bd76a803f285551f49a096b10483b"
+  },
+  {
+    "challenge": "lvsIrqUMiVwCYdCPKhH7llE5Llrpr_zJxzc_LDzTOsA",
+    "clientData": "navoss-community-v1\nvote\nlvsIrqUMiVwCYdCPKhH7llE5Llrpr_zJxzc_LDzTOsA\nf0a3f1b0-d8b0-4272-ab9a-74f1d484035e\nnot-present\n58.870746\n-134.271309",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 58.870746035827324,
+        "longitude": -134.27130949497223
+      },
+      "reportId": "f0a3f1b0-d8b0-4272-ab9a-74f1d484035e",
+      "vote": "not-present"
+    },
+    "sha256": "d338aa49ff1e28c250c6050d42a7f3d72637cf3f026216d903027db1896a3902"
+  },
+  {
+    "challenge": "F3XcIer-nMI8urWqadfoZgEGLvW4UfQfBhllv_7TBrs",
+    "clientData": "navoss-community-v1\nsubmit-report\nF3XcIer-nMI8urWqadfoZgEGLvW4UfQfBhllv_7TBrs\nroad-hazard\n52.655999\n-135.502967\n-",
+    "negativeZero": [false, false],
+    "operation": {
+      "coordinate": {
+        "latitude": 52.65599856905174,
+        "longitude": -135.50296737449244
+      },
+      "kind": "submit-report",
+      "type": "road-hazard"
+    },
+    "sha256": "340438933e5c3d121fec1f783123502f516c1a31ac99892ff6bec468bd9e9d5a"
+  },
+  {
+    "challenge": "L8jCdhhLaPjmebxZlZMu-IvA9OiWggIMUa66PB6CiSI",
+    "clientData": "navoss-community-v1\nvote\nL8jCdhhLaPjmebxZlZMu-IvA9OiWggIMUa66PB6CiSI\nf5d0a5fa-8203-495a-ae5e-f5bfad4680e4\nnot-present\n50.837558\n-127.989288",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 50.837558207265104,
+        "longitude": -127.98928812900557
+      },
+      "reportId": "f5d0a5fa-8203-495a-ae5e-f5bfad4680e4",
+      "vote": "not-present"
+    },
+    "sha256": "4e7e22b47ed399a6c5909845dc9f261abfa6d7d1b6305f290f3bf1d2904f939b"
+  },
+  {
+    "challenge": "nRskW-PpLfSbh5-w0oiDvCqrRosh-bV8yh1JF8Z7wRw",
+    "clientData": "navoss-community-v1\nvote\nnRskW-PpLfSbh5-w0oiDvCqrRosh-bV8yh1JF8Z7wRw\n9bfd41e2-a2a8-4100-a79a-1c8297fddc29\nnot-present\n51.007813\n-114.007813",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 51.0078125,
+        "longitude": -114.0078125
+      },
+      "reportId": "9bfd41e2-a2a8-4100-a79a-1c8297fddc29",
+      "vote": "not-present"
+    },
+    "sha256": "a25204871206956d9f6c137929a75c2c73afee11d4fec5bfacdc95844e4119ed"
+  },
+  {
+    "challenge": "PQZ-wqErBVcsp84M2wFUF0-GjVgC4jTidvmF8VbXqbc",
+    "clientData": "navoss-community-v1\nvote\nPQZ-wqErBVcsp84M2wFUF0-GjVgC4jTidvmF8VbXqbc\n6aaec2cb-0c6a-4094-a58c-b9822f7416a5\nnot-present\n51.023438\n-114.023438",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 51.0234375,
+        "longitude": -114.0234375
+      },
+      "reportId": "6aaec2cb-0c6a-4094-a58c-b9822f7416a5",
+      "vote": "not-present"
+    },
+    "sha256": "5adf193d52fd68ec780c33b09bc43c958293d15e05fb0114600a5f93161dd87f"
+  },
+  {
+    "challenge": "akW1QCUEnLwaHbyFpHQWpXloaop-zcXUm_3P8sPT6pg",
+    "clientData": "navoss-community-v1\nvote\nakW1QCUEnLwaHbyFpHQWpXloaop-zcXUm_3P8sPT6pg\n179c7667-85ab-4d8d-a0f6-a768b800cd74\nnot-present\n0.007813\n-0.007813",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 0.0078125,
+        "longitude": -0.0078125
+      },
+      "reportId": "179c7667-85ab-4d8d-a0f6-a768b800cd74",
+      "vote": "not-present"
+    },
+    "sha256": "550b29720cfc8d41e5b7d9ef1d3d604c3d4047167ead4d5746d20a2d840e4228"
+  },
+  {
+    "challenge": "IKNlvLgdz_4zxYTHMlJV8OuKoquYXV-jQQdd9P5RgLM",
+    "clientData": "navoss-community-v1\nvote\nIKNlvLgdz_4zxYTHMlJV8OuKoquYXV-jQQdd9P5RgLM\n3d3718bd-78a4-47e4-a725-b548c6ba980d\nnot-present\n0.000000\n0.000000",
+    "negativeZero": [true, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 0,
+        "longitude": 0
+      },
+      "reportId": "3d3718bd-78a4-47e4-a725-b548c6ba980d",
+      "vote": "not-present"
+    },
+    "sha256": "f9b9e6bf6527c4444f3909f8fbad00050c9ab61267711dcd1ab0909f53a04539"
+  },
+  {
+    "challenge": "XnDbdKxgbfBABBqARXKg4y69bSqjtEFJSXCw7m0GdY4",
+    "clientData": "navoss-community-v1\nvote\nXnDbdKxgbfBABBqARXKg4y69bSqjtEFJSXCw7m0GdY4\nd4fd5e7f-bf1d-480d-a696-7c83ac94ed59\nnot-present\n51.044700\n-114.072000",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 51.0447005,
+        "longitude": -114.0719995
+      },
+      "reportId": "d4fd5e7f-bf1d-480d-a696-7c83ac94ed59",
+      "vote": "not-present"
+    },
+    "sha256": "7e9838889cc69bce9878386d460aec2c0927a6c28aa7cafab57d6a455cd6287d"
+  },
+  {
+    "challenge": "NsDv6ckNUplJLwl40rcXDf2084m69GH_3NOIHRF5KeQ",
+    "clientData": "navoss-community-v1\nvote\nNsDv6ckNUplJLwl40rcXDf2084m69GH_3NOIHRF5KeQ\na6808547-91de-47a5-ad6a-2d1af3b901de\nnot-present\n51.044700\n-114.071999",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 51.04470049999999,
+        "longitude": -114.07199949999999
+      },
+      "reportId": "a6808547-91de-47a5-ad6a-2d1af3b901de",
+      "vote": "not-present"
+    },
+    "sha256": "ecb171be389fef7c2c1dae178ce63ef8bd187f58c5e031d6bd655937ed9d54a0"
+  },
+  {
+    "challenge": "bs4GUQOiKSZScotltrhODO9CSTxAXuOdZldrEPV3ts8",
+    "clientData": "navoss-community-v1\nvote\nbs4GUQOiKSZScotltrhODO9CSTxAXuOdZldrEPV3ts8\na607f28c-c50f-4adf-ab37-5e01db5d1db4\nnot-present\n51.000000\n-114.000000",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 51,
+        "longitude": -114
+      },
+      "reportId": "a607f28c-c50f-4adf-ab37-5e01db5d1db4",
+      "vote": "not-present"
+    },
+    "sha256": "44796de6c117e879a54a5c3badacb6f0c01429a05b4074f978a59ff52ad2b4d2"
+  },
+  {
+    "challenge": "UQ0DaPYWMxIVZ3Qbu2C0AC7LDQzh6arVi0Nr4TMaLcA",
+    "clientData": "navoss-community-v1\nvote\nUQ0DaPYWMxIVZ3Qbu2C0AC7LDQzh6arVi0Nr4TMaLcA\n59b738b9-19e7-4cab-ad7b-4269bc5f1c52\nnot-present\n50.000000\n-120.000000",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 49.9999999,
+        "longitude": -120.0000001
+      },
+      "reportId": "59b738b9-19e7-4cab-ad7b-4269bc5f1c52",
+      "vote": "not-present"
+    },
+    "sha256": "22dfed8106d168b5508872dbd7fab3a52e3b47cc35695e82f7721411f78f39c7"
+  },
+  {
+    "challenge": "IDw5Y1BbA8dDR7T3hFUvljq9Yj6wpq3fefeCcca0Cgk",
+    "clientData": "navoss-community-v1\nvote\nIDw5Y1BbA8dDR7T3hFUvljq9Yj6wpq3fefeCcca0Cgk\n90e55f61-73ed-441d-a285-f77e2317d1f1\nnot-present\n0.000000\n-0.000000",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 4e-7,
+        "longitude": -4e-7
+      },
+      "reportId": "90e55f61-73ed-441d-a285-f77e2317d1f1",
+      "vote": "not-present"
+    },
+    "sha256": "f189a1849cb0997e06d32944e1661b031770f984c1b7ca338c9d0ca4c4aa3e63"
+  },
+  {
+    "challenge": "ebL5wmI4c_M4GBYBVM5hSdWtyjSpa0w3fXpA5k12uEo",
+    "clientData": "navoss-community-v1\nvote\nebL5wmI4c_M4GBYBVM5hSdWtyjSpa0w3fXpA5k12uEo\n8897d896-66f5-4e5c-a559-5a054352e35c\nnot-present\n0.000000\n-0.000000",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 5e-7,
+        "longitude": -5e-7
+      },
+      "reportId": "8897d896-66f5-4e5c-a559-5a054352e35c",
+      "vote": "not-present"
+    },
+    "sha256": "7fa6841f5466c4662b114593327b377dfb03d2d9a24ac0504dd45e6086fde282"
+  },
+  {
+    "challenge": "5hGXVdp1ZWvDK7EJXQVCjfjVjzjrqF-5b-dVfGF1xsU",
+    "clientData": "navoss-community-v1\nvote\n5hGXVdp1ZWvDK7EJXQVCjfjVjzjrqF-5b-dVfGF1xsU\n4aa42101-fd2e-43aa-a9cd-6f6793c3823c\nnot-present\n90.000000\n-180.000000",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 89.9999995,
+        "longitude": -179.9999995
+      },
+      "reportId": "4aa42101-fd2e-43aa-a9cd-6f6793c3823c",
+      "vote": "not-present"
+    },
+    "sha256": "8fddb209f4334f2d9602ff116c4ec4e40f9d25f505c4bad464f4c565545b3e83"
+  },
+  {
+    "challenge": "0QKapO0fcFIvIIsyQxpY-NLsUrO7C764ERwg84nOHhw",
+    "clientData": "navoss-community-v1\nvote\n0QKapO0fcFIvIIsyQxpY-NLsUrO7C764ERwg84nOHhw\n5fbce8a6-5ef0-4b02-a92f-4893cb856d90\nnot-present\n51.123457\n-114.987654",
+    "negativeZero": [false, false],
+    "operation": {
+      "kind": "vote",
+      "observedAt": {
+        "latitude": 51.123456789,
+        "longitude": -114.987654321
+      },
+      "reportId": "5fbce8a6-5ef0-4b02-a92f-4893cb856d90",
+      "vote": "not-present"
+    },
+    "sha256": "6ce818759263ad67d184a125e96adea5f9e4d8ba2fd699e8135bbfba78129c86"
+  },
+  {
+    "challenge": "F9AyLvJ5HdtrRDsLS_TxV-5bswdQCdhrWiunPQAd3TY",
+    "clientData": "navoss-community-v1\ndelete-report\nF9AyLvJ5HdtrRDsLS_TxV-5bswdQCdhrWiunPQAd3TY\nc3f2ef1f-43ce-4af2-aac7-32e865c69529",
+    "negativeZero": [],
+    "operation": {
+      "kind": "delete-report",
+      "reportId": "c3f2ef1f-43ce-4af2-aac7-32e865c69529"
+    },
+    "sha256": "282f85aed0910fada7490718300925d08d5a36be7774a1da90e8a2001e829a59"
+  },
+  {
+    "challenge": "UJ4O0CGaTGWPuXotPW84Nfs491-lrTM74XeKsEJDgfU",
+    "clientData": "navoss-community-v1\ndelete-installation\nUJ4O0CGaTGWPuXotPW84Nfs491-lrTM74XeKsEJDgfU",
+    "negativeZero": [],
+    "operation": {
+      "kind": "delete-installation"
+    },
+    "sha256": "2f9eb9640cdf5ca307177bf079fc675dc201f235d61e906def9004d1a26a4e10"
+  },
+  {
+    "challenge": "XnXrF5KSIIOAeiSxbjamv8rut8lwujnvXAjA-Pmh2xs",
+    "clientData": "navoss-community-v1\ntraffic-credential\nXnXrF5KSIIOAeiSxbjamv8rut8lwujnvXAjA-Pmh2xs",
+    "negativeZero": [],
+    "operation": {
+      "kind": "traffic-credential"
+    },
+    "sha256": "237a3a0b3cf917e804ccd2d98724885edc8bc19bea522bee9ab288521d2416f1"
+  }
+]
