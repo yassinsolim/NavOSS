@@ -69,12 +69,27 @@ unaligned or malformed annotations are omitted, not shifted onto another segment
 V2 `waypoints[].type` accepts `break` or `through`, defaulting to `break`. A through/rejoin point
 does not create an arrival/departure pair. V1 still rejects the extra waypoint field.
 
+The v2-only route hook is now connected to community traffic. In `COMMUNITY_TRAFFIC_MODE=live`,
+usable published flow adds geometry-aligned `route.congestion` (`unknown`, `free`, `slow`, `heavy`,
+`stopped`) and `route.traffic.observedFraction`. `source.trafficSource` uses
+`{ id: "navoss-community", attribution: "Traffic from opted-in NavOSS drivers" }`; only a result
+with that source advertises community traffic as `live`. An alternative without `traffic` is
+unavailable for that route, not implicitly free-flow-observed. The API returns the enrichment
+service's order unchanged. Off/collecting modes preserve the previous v2 result; licensed traffic
+is never double-adjusted with community speeds.
+
+The provincial matrix below is a free-flow benchmark: run it with community traffic off, or expect
+its explicit traffic-unavailable posture check to flag a live-annotated response.
+
 ### Real fixtures and exact serving version
 
 `apps/api/test/fixtures/valhalla/` contains decoded, trimmed captures from the repository's public
 FOSSGIS development endpoint (`https://valhalla1.openstreetmap.de/route`) and the exact local serving
 image `ghcr.io/valhalla/valhalla-scripted:3.8.2`. Captures retain timestamps, source URLs, raw-response
 hashes and only consumed protocol fields; tests re-encode those tags without changing route values.
+Fixtures are compact and retain only incoming/current maneuver edge fields; unreferenced node
+slots remain empty so recorded indices are unchanged. Trimming was checked against the normalized
+consumer output for every capture.
 Calgary Deerfoot/Glenmore and Metro Vancouver interchanges exercise multiple/valid/active lanes and
 native branch/toward sign elements. Real directions-only output covers absent lane/speed metadata.
 Real local break/through captures have respectively two/one legs and two/one arrival steps, with
@@ -87,7 +102,7 @@ V2 sends a **binary PBF request** with `Content-Type: application/x-protobuf`, a
 the pinned 3.8.2 `.proto` files, with source hashes and the MIT notice. The API uses the light
 protobuf runtime; source/code-generation scripts are not in the deployed API package.
 
-Normal routing makes one upstream request. Malformed/missing optional metadata is omitted while
+Base routing makes one upstream route request. Malformed/missing optional metadata is omitted while
 the valid route remains. Transport failures (including body reads) and Valhalla error status use
 the existing 503 path without retry. A received but undecodable base route gets exactly one legacy
 format fallback; only `ValhallaDecodeError` is logged, and `/ready` reports extended guidance as

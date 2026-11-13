@@ -168,5 +168,5 @@ const output = {
 };
 await writeFile(
   new URL(`../src/valhalla-proto-${version}.json`, import.meta.url),
-  `${JSON.stringify(output, null, 2)}\n`,
+  `${JSON.stringify(output)}\n`,
 );

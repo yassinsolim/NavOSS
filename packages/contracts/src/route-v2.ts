@@ -7,6 +7,7 @@ import {
   RouteResponseSchema,
   RouteStepSchema,
 } from './route.js';
+import { CommunityTrafficSourceSchema, RouteTrafficAnnotationSchema } from './traffic.js';
 
 export const RouteWaypointV2Schema = CoordinateSchema.extend({
   type: z.enum(['break', 'through']).default('break'),
@@ -109,6 +110,13 @@ export const RouteStepV2Schema = RouteStepSchema.extend({
 export type RouteStepV2 = z.infer<typeof RouteStepV2Schema>;
 
 export const RouteAlternativeV2Schema = RouteAlternativeSchema.safeExtend({
+  congestion: RouteTrafficAnnotationSchema.shape.congestion.optional(),
+  traffic: RouteAlternativeSchema.shape.traffic
+    .unwrap()
+    .extend({
+      observedFraction: RouteTrafficAnnotationSchema.shape.observedFraction.optional(),
+    })
+    .optional(),
   speedLimits: z
     .array(RouteSpeedLimitSchema)
     .min(1)
@@ -123,20 +131,31 @@ export const RouteAlternativeV2Schema = RouteAlternativeSchema.safeExtend({
       path: ['speedLimits'],
     });
   }
+  if (route.congestion !== undefined && route.congestion.length !== route.geometry.length - 1) {
+    context.addIssue({
+      code: 'custom',
+      message: 'congestion must align with route geometry segments',
+      path: ['congestion'],
+    });
+  }
 });
 export type RouteAlternativeV2 = z.infer<typeof RouteAlternativeV2Schema>;
 
-// Reuse legacy field shapes, not the legacy response's traffic-only refinement. This is the
-// versioned seam for future per-segment congestion/source detail without changing build 70.
+// Reuse legacy field shapes without v1's traffic-only refinement: community congestion/source
+// detail belongs only to v2, leaving the strict shipped response unchanged.
 export const RouteResponseV2Schema = z
   .object({
     ...RouteResponseSchema.shape,
     routes: z.array(RouteAlternativeV2Schema).min(1).max(3),
+    source: RouteResponseSchema.shape.source.extend({
+      trafficSource: CommunityTrafficSourceSchema.optional(),
+    }),
   })
   .strict()
   .superRefine((response, context) => {
     const production = response.source.mode === 'production';
     const mapboxTraffic = response.source.id === 'mapbox-traffic';
+    const communityTraffic = response.source.trafficSource !== undefined;
     if (response.degraded === production) {
       context.addIssue({
         code: 'custom',
@@ -152,8 +171,9 @@ export const RouteResponseV2Schema = z
       });
     }
     if (
-      mapboxTraffic !== (response.source.traffic === 'live') ||
-      mapboxTraffic !== (response.source.attribution === 'Routing and traffic by Mapbox')
+      (mapboxTraffic || communityTraffic) !== (response.source.traffic === 'live') ||
+      mapboxTraffic !== (response.source.attribution === 'Routing and traffic by Mapbox') ||
+      (communityTraffic && mapboxTraffic)
     ) {
       context.addIssue({
         code: 'custom',
@@ -162,13 +182,45 @@ export const RouteResponseV2Schema = z
       });
     }
     response.routes.forEach((route, index) => {
-      if (mapboxTraffic !== (route.traffic !== undefined)) {
+      if (
+        (!mapboxTraffic && !communityTraffic && route.traffic !== undefined) ||
+        (mapboxTraffic && route.traffic === undefined)
+      ) {
         context.addIssue({
           code: 'custom',
-          message: 'live routes require traffic detail and unavailable routes must omit it',
+          message: 'route traffic must describe the selected source',
           path: ['routes', index, 'traffic'],
         });
-      } else if (
+      }
+      if (
+        (route.congestion !== undefined || route.traffic?.observedFraction !== undefined) &&
+        !communityTraffic
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message: 'community route annotations require their traffic source',
+          path: ['source', 'trafficSource'],
+        });
+      }
+      if (
+        communityTraffic &&
+        route.traffic !== undefined &&
+        (route.congestion === undefined || route.traffic.observedFraction === undefined)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message: 'community traffic detail requires congestion and observed fraction',
+          path: ['routes', index, 'traffic'],
+        });
+      }
+      if (route.traffic === undefined && route.congestion !== undefined) {
+        context.addIssue({
+          code: 'custom',
+          message: 'a route without traffic must not publish congestion',
+          path: ['routes', index, 'congestion'],
+        });
+      }
+      if (
         route.traffic !== undefined &&
         Math.abs(
           route.traffic.delaySeconds -

@@ -163,7 +163,7 @@ describe('v2 waypoint and post-routing seams', () => {
     expect(fetchImplementation).toHaveBeenCalledTimes(2);
   });
   it('runs an injected post-routing enricher on v2 only', async () => {
-    const enrichRoutes = vi.fn((routes: RouteAlternativeV2[]) => routes);
+    const enrichRoutes = vi.fn((routes: RouteAlternativeV2[]) => ({ routes }));
     const fetchImplementation = vi.fn((_input: Parameters<typeof fetch>[0], init?: RequestInit) =>
       Promise.resolve(
         new Response(

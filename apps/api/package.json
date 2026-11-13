@@ -15,6 +15,7 @@
     "migrate": "node dist/migrate.js",
     "start": "node dist/server.js",
     "test": "vitest run",
+    "traffic:replay": "node ./scripts/traffic-replay.mjs",
     "test:search:live": "node ./scripts/search-quality.mjs",
     "test:routes:live": "node ./scripts/route-quality.mjs",
     "test:routes:alberta-bc": "ROUTE_QUALITY_CASES=./scripts/route-quality-alberta-bc.json node ./scripts/route-quality.mjs",

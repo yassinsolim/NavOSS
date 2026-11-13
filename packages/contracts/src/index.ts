@@ -220,3 +220,41 @@ export type {
 
 export { RouteRequestV2Schema, RouteWaypointV2Schema } from './route-v2.js';
 export type { RouteRequestV2, RouteWaypointV2 } from './route-v2.js';
+
+export {
+  COMMUNITY_TRAFFIC_ATTRIBUTION,
+  COMMUNITY_TRAFFIC_SOURCE_ID,
+  CommunityTrafficSourceSchema,
+  parseTrafficFlowBounds,
+  RouteCongestionLevelSchema,
+  RouteTrafficAnnotationSchema,
+  snapTrafficFlowBounds,
+  TRAFFIC_FLOW_GRID_DEGREES,
+  TRAFFIC_FLOW_MAX_SPAN_DEGREES,
+  TRAFFIC_PROBE_LIMITS,
+  TrafficCongestionLevelSchema,
+  TrafficCredentialRequestSchema,
+  TrafficCredentialResponseSchema,
+  TrafficCredentialSchema,
+  TrafficFlowFeatureSchema,
+  TrafficFlowQuerySchema,
+  TrafficFlowResponseSchema,
+  TrafficProbeBatchRequestSchema,
+  TrafficProbeBatchResponseSchema,
+  TrafficProbePointSchema,
+  TrafficStatusResponseSchema,
+} from './traffic.js';
+export type {
+  RouteCongestionLevel,
+  RouteTrafficAnnotation,
+  TrafficCongestionLevel,
+  TrafficCredentialRequest,
+  TrafficCredentialResponse,
+  TrafficFlowBounds,
+  TrafficFlowFeature,
+  TrafficFlowQuery,
+  TrafficFlowResponse,
+  TrafficProbeBatchRequest,
+  TrafficProbeBatchResponse,
+  TrafficStatusResponse,
+} from './traffic.js';

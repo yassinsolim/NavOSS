@@ -198,7 +198,7 @@ function buildValhallaRequest(request: RouteRequest): unknown {
  * position; it must track which route is actually quickest to drive, with distance breaking an
  * exact-duration tie.
  */
-function applyFastestLabel<T extends { distanceMeters: number; durationSeconds: number }>(
+export function applyFastestLabel<T extends { distanceMeters: number; durationSeconds: number }>(
   routes: T[],
 ): (T & { label: 'fastest' | 'alternative' })[] {
   let fastestIndex = 0;
