@@ -1,17 +1,13 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
 import { describe, expect, it } from 'vitest';
+
+import appConfig from '../app.json';
 
 interface AccessedApi {
   NSPrivacyAccessedAPIType: string;
   NSPrivacyAccessedAPITypeReasons: string[];
 }
 
-const appJson = JSON.parse(readFileSync(join(__dirname, '..', 'app.json'), 'utf8')) as {
-  expo: { ios: { privacyManifests: { NSPrivacyAccessedAPITypes: AccessedApi[] } } };
-};
-const accessed = appJson.expo.ios.privacyManifests.NSPrivacyAccessedAPITypes;
+const accessed: AccessedApi[] = appConfig.expo.ios.privacyManifests.NSPrivacyAccessedAPITypes;
 const reasons = (category: string) =>
   accessed.find((entry) => entry.NSPrivacyAccessedAPIType === category)
     ?.NSPrivacyAccessedAPITypeReasons;
