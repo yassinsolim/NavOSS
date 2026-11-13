@@ -42,44 +42,117 @@ private let plausibilityLagPenaltyFactor = 0.15
 /// A single accurate fix landing this far beyond the plausible travel is held as a multipath
 /// jump until a second fix agrees.
 private let implausibleJumpMarginMeters = 150.0
-private let implausibleJumpConfirmationCount = 2
 
-// Matching invariants. `bestProjection` and the held-jump confirmation in `updateLocation`
-// implement them together; `NavigationMatchingInvariantTests` asserts them over generated
-// loop, out-and-back and self-crossing routes.
+// MATCHING INVARIANTS
 //
-// A candidate FITS a fix when its lateral distance alone is inside the on-route band
-// (`offRouteDistanceThresholdMeters` plus the fix's accuracy). Heading never decides fitting: a
-// vehicle driving the matched road backwards still fits it, so it is ranked there and detected
-// as wrong-way, instead of being moved to whatever other road agrees with its heading.
+// The route can pass the same place more than once (a loop that ends near its start, the two
+// carriageways of a divided road, a parkade spiral, a self-crossing). A position cannot say
+// which pass the vehicle is on, and a GPS position can be wrong by a city block for as long as
+// the vehicle stands still. Everything below follows from taking both seriously.
+// `bestProjection` and `updateLocation` implement these rules;
+// `NavigationMatchingInvariantTests` asserts them over generated routes.
 //
-// A candidate is PLAUSIBLE when it is no further ahead of the last accepted match than travel
-// evidence allows (`plausibleAdvanceLimit`): reported speed times elapsed time when both are
-// usable, and otherwise only the always-eligible window ahead (untimed fixes, a repeated
-// timestamp, no speed, or a gap longer than ten minutes carry no travel evidence). Anything
-// further ahead is a JUMP.
+// Terms, for a candidate projection of a fix, relative to the last ACCEPTED match (the anchor):
+//   fits        lateral distance within the on-route band (`offRouteDistanceThresholdMeters`
+//               plus the fix's accuracy). Heading never decides fitting.
+//   direct      no further along the route from the anchor than the fix is from the last
+//               accepted fix on the ground, within a detour factor (`directAdvanceMeters`): the
+//               same pass of the same road, reached by moving there.
+//   explained   no further ahead than reported speed times elapsed time allows
+//               (`explainedAdvanceMeters`). The speed is the slower of the anchor's and the
+//               fix's; both must be reported and at most the plausible ceiling, and the gap at
+//               most ten minutes. A reported standstill explains only GPS noise.
+//   possible    no further ahead than the speed ceiling times elapsed time
+//               (`possibleAdvanceMeters`). Possible travel is not evidence of travel.
+//   believable  explained, where speeds are reported; where they are not, the multipath margin
+//               stands in for them. Never more than possible (`believableAdvanceMeters`).
+//   away        the fix is further from the last accepted fix than a GPS position can be wrong
+//               (`credibleBiasMeters` plus both accuracies).
 //
-// 1. A plausible candidate that fits always wins. Travel plausibility and heading rank the
-//    plausible fitting candidates among themselves (parallel roads, self-crossings, hairpins).
-// 2. Progress moves forward by more than the plausible limit only through a confirmed jump,
-//    which needs all of:
-//      a. no plausible candidate fits the fix (the position is not explained by where the
-//         vehicle already was);
-//      b. the fix is physically away from the last accepted fix, by more than the error a
-//         single multipath fix is allowed (`implausibleJumpMarginMeters` plus both accuracies).
-//         Near the last accepted fix, a position cannot show that the route between was
-//         driven: on a loop the start and the end are the same place;
-//      c. two consecutive fixes satisfy (a) and (b) and agree with each other along the route.
-//    The first such fix is held: it changes nothing that is published. (Untimed replay input
-//    has no "consecutive"; there one fix satisfying (a) and (b) is taken.)
-// 3. A held fix is never published: not as the matched position, not as progress, not as an
-//    arrival sample, and not by leaving the off-route state.
-// 4. Arrival needs two consecutive accepted (not held) fixes at the destination with progress
-//    at the end of the route, so it inherits 1 to 3: it cannot follow from fixes at the
-//    departure point of a loop unless reported speed and elapsed time cover the route.
-//    The first fix of a route has no earlier match and is placed wherever it fits best.
-// 5. A fix that neither fits plausibly nor qualifies as a jump is ranked as before among
-//    everything that is not an unqualified jump, and feeds off-route hysteresis.
+// A fix that was not captured after the previous one (the same sample delivered again, or an
+// older one arriving late) is not a new observation and changes nothing.
+//
+// What moves progress, and how many fixes it takes:
+//   1. Continuation. A direct, believable candidate that fits: one fix. Among such candidates
+//      the one that accounts for the fix with the least unexplained travel wins (distance,
+//      heading, advance beyond explained, regression). One that is further on than explained
+//      is not taken where an earlier pass fits the fix too; the fix is then a departure. This
+//      is ordinary driving.
+//   While the fix fits where the vehicle is or has been (a continuation, or an earlier pass),
+//   its position says nothing about a later pass; the earlier one is kept. Only this applies:
+//   2. Heading switch. A later pass, or the same one further on than explained, fits, is
+//      possible, and the heading of the moving vehicle agrees with it (within 45 degrees) and
+//      opposes the pass the vehicle was on (90 degrees or more): one fix, arrival deferred
+//      (rule 6). (The far side of a self-crossing; the other carriageway after a gap long
+//      enough to have turned round.)
+//   While the fix fits nowhere the vehicle is or has been:
+//   3. Explained switch. The fix is away, and a later pass fits that reported motion explains:
+//      one fix. (Leaving a tunnel around a bend.)
+//   4. Heading switch without a continuation. The fix is not away, and such a candidate fits,
+//      is possible, and agrees with the heading of the moving vehicle: one fix, arrival
+//      deferred. (A cloverleaf or a switchback through a short gap.)
+//   5. Jump. A candidate that fits qualifies if it is direct (the displacement itself is the
+//      travel) or the fix is away. Two consecutive qualifying fixes are needed, the second
+//      within `heldJumpMaximumAgeSeconds` of the first and agreeing with it along the route.
+//      The first is HELD. Arrival is deferred (rule 6). Untimed replay input has no "later";
+//      there one qualifying fix is taken. Live fixes are always timestamped; the service
+//      refuses others.
+//   Anything else is not progress. It is measured against the best candidate that is not a
+//   later pass and feeds off-route hysteresis; a reroute from the real position follows.
+//
+// What can never happen:
+//   6. Arrival straight after a heading switch or a jump. Arrival then needs the vehicle to be
+//      seen moving along the route afterwards (`arrivalCorroboration...`): repeated fixes in
+//      one place cannot supply that, wherever they are.
+//   7. A held fix being published: not as the matched position, not as progress, not as an
+//      arrival sample, not as a dead-reckoning anchor, and not by leaving the off-route state.
+//   8. Leaving the off-route state on a fix that is itself a departure (wrong way, backward).
+//   9. Progress onto a later pass from a fix within `credibleBiasMeters` of the last accepted
+//      fix, unless the vehicle is moving and its heading agrees with that pass. Progress along
+//      the same pass is bounded by how far the fix itself has moved (direct).
+//  10. The first fix of a route choosing a later pass over an earlier one that fits, unless the
+//      heading opposes the earlier and agrees with the later; arrival is then deferred like
+//      after any heading switch. A restored trip resumes from its saved progress instead
+//      (`NavigationResumeContext`), so its first fix is not a first fix.
+//
+// Minimum evidence for each irreversible transition:
+//   pass a maneuver  a fix that fits the road past it, no further on than the fix has moved
+//                    and than reported speed explains (one fix; without reported speeds, than
+//                    the multipath margin and the speed ceiling allow); further than that, two
+//                    fresh agreeing fixes; or a switch of pass.
+//   switch pass      heading of a moving vehicle agreeing with the later pass, which must be
+//                    possible in the time (one fix); or, when the fix fits nowhere the vehicle
+//                    has been and is away from the last accepted fix, reported motion that
+//                    covers it (one fix) or two fresh agreeing fixes.
+//   arrive           two consecutive accepted fixes within the arrival radius with progress at
+//                    the end of the route; after a heading switch or a jump, movement along
+//                    the route first.
+//
+// Not decidable from GPS alone, and resolved conservatively: a vehicle that really drove a loop
+// through a GPS outage and stops where an earlier pass also fits stays on the earlier pass; a
+// jump that lands on the destination and stays there does not arrive.
+//
+// Not decidable, and not prevented: fixes that move along the route, pair after pair, each
+// pair directly on from the last, are a vehicle driving it. Round a loop smaller than GPS error
+// that is indistinguishable from GPS error; progress then follows the fixes, but arrival still
+// needs them to move on along the route after the last jump (rule 6).
+
+/// How wrong a GPS position can credibly be while the vehicle stands still (urban multipath).
+private let credibleBiasMeters = 300.0
+/// A candidate is direct when it is no further along the route from the anchor than this many
+/// times the distance the fix itself is from the last accepted fix, plus both accuracies and
+/// this slack. The displacement of the fix is then the travel.
+private let directRouteDetourFactor = 1.25
+private let directRouteSlackMeters = 10.0
+/// A held jump is confirmed only by a fix captured within this long after it.
+private let heldJumpMaximumAgeSeconds = 10.0
+/// Heading opposes a candidate from this difference, and agrees with one up to the next.
+private let headingOpposesMinimumDifferenceDegrees = 90.0
+private let headingAgreesMaximumDifferenceDegrees = 45.0
+/// After a heading switch or a jump, arrival waits until the vehicle has advanced this far
+/// along the route and moved this far on the ground (plus both accuracies).
+private let arrivalCorroborationAlongMeters = 20.0
+private let arrivalCorroborationGroundMeters = 50.0
 
 /// Course and speed at which travel against the matched road counts as leaving the route.
 private let wrongWayMinimumCourseDifferenceDegrees = 150.0
@@ -219,6 +292,20 @@ func navOSSPersistedNavigationDecision(
 enum NavigationCoreError: Error, Equatable {
   case invalidCoordinate
   case invalidRoute
+  /// A live fix without a capture time. Only replay input may be untimed.
+  case untimedLiveFix
+}
+
+/// The fix as live ingestion may pass it on. Untimed input is for replays: the matcher takes a
+/// qualifying jump from it on one fix, because it has no way to ask for a later one (matching
+/// invariant 4). Everything that feeds the matcher from a device goes through here.
+func navOSSLiveNavigationFix(
+  _ sample: NavigationLocationSample
+) throws -> NavigationLocationSample {
+  guard sample.timestamp != nil else {
+    throw NavigationCoreError.untimedLiveFix
+  }
+  return sample
 }
 
 struct NavigationCoordinate: Equatable, Sendable {
@@ -301,25 +388,38 @@ struct NavigationSnapshot: Equatable, Sendable {
   var speedMetersPerSecond: Double? = nil
 }
 
+/// Where a trip that is being resumed had got to: its confirmed progress and when that was.
+struct NavigationResumeContext: Equatable, Sendable {
+  let alongMeters: Double
+  let timestamp: TimeInterval?
+}
+
 final class NavigationCore {
+  // The anchor: the last accepted match. Everything a new fix is judged against.
+  /// Whether there is one. False until the first fix of a route, unless the route was resumed.
+  private var hasAnchor = false
   /// Raw position and accuracy of the last accepted fix: where the vehicle was last known to be.
   private var anchorRawCoordinate: NavigationCoordinate?
   private var anchorAccuracyMeters = 0.0
+  /// Reported speed of the last accepted fix, when it is one that can be trusted.
+  private var anchorSpeed: Double?
   private var anchorTimestamp: TimeInterval?
+  /// Where arrival was deferred (invariant 6), until the vehicle is seen moving on from there.
+  private var arrivalDeferral: (alongMeters: Double, raw: NavigationCoordinate, accuracyMeters: Double)?
   private var arrivalSampleCount = 0
   private var departureSampleCount = 0
   /// Progress established by the latest real fix. Dead reckoning moves the published snapshot
   /// without touching this, so the next fix is judged against where the vehicle was last seen.
   private var fixProgress = 0.0
   private var hasArrived = false
-  private var implausibleJumpCount = 0
-  /// Along-route position and time of the latest fix counted towards `implausibleJumpCount`.
-  /// The next one confirms the jump only if it is where that fix could have travelled to.
-  private var heldJumpAlongMeters: Double?
-  private var heldJumpTimestamp: TimeInterval?
+  /// The held first fix of a jump (invariant 4): where it matched and when it was captured.
+  private var heldJump: (alongMeters: Double, timestamp: TimeInterval?)?
   private var isOffRoute = false
-  private var lastFixSpeed: Double?
-  private var lastFixTimestamp: TimeInterval?
+  /// Whether the latest real fix was accepted. Dead reckoning extrapolates only from one that
+  /// was, using the anchor's own time and speed.
+  private var isLatestFixAccepted = false
+  /// Capture time of the latest real fix, accepted or not.
+  private var latestFixTimestamp: TimeInterval?
   /// Snapshot produced by the latest real fix. A held fix falls back to this, never to a
   /// dead-reckoned guess or to the rejected projection.
   private var lastRealSnapshot: NavigationSnapshot?
@@ -409,10 +509,27 @@ final class NavigationCore {
     return candidates[index].projection.alongMeters
   }
 
+  /// Starts matching against a route. `resume` continues a trip that was already under way
+  /// (restored after a relaunch): the saved progress becomes the anchor, so the next fix is
+  /// judged from where the vehicle was instead of being placed anywhere on the route that fits.
   @discardableResult
-  func setRoute(_ coordinates: [NavigationCoordinate]) throws -> NavigationSnapshot {
-    route = try RoutePolyline(coordinates: coordinates)
+  func setRoute(
+    _ coordinates: [NavigationCoordinate],
+    resume: NavigationResumeContext? = nil
+  ) throws -> NavigationSnapshot {
+    let route = try RoutePolyline(coordinates: coordinates)
+    self.route = route
     resetTrackingState()
+    if let resume, resume.alongMeters.isFinite, resume.alongMeters > 0 {
+      let point = route.point(alongMeters: resume.alongMeters)
+      hasAnchor = true
+      fixProgress = point.progress
+      progressHighWaterMark = point.progress
+      anchorRawCoordinate = point.coordinate
+      // A point on the route, not a raw fix: the vehicle was within the on-route band of it.
+      anchorAccuracyMeters = offRouteDistanceThresholdMeters
+      anchorTimestamp = resume.timestamp
+    }
     routeVersion += 1
     sequence += 1
     snapshot = NavigationSnapshot(
@@ -423,7 +540,7 @@ final class NavigationCore {
       matchedCourseDegrees: nil,
       phase: .tracking,
       rawCoordinate: nil,
-      routeProgress: 0,
+      routeProgress: fixProgress,
       routeVersion: routeVersion,
       sequence: sequence
     )
@@ -464,11 +581,15 @@ final class NavigationCore {
       throw NavigationCoreError.invalidCoordinate
     }
 
-    sequence += 1
-    defer {
-      lastFixTimestamp = sample.timestamp
-      lastFixSpeed = sample.speedMetersPerSecond
+    // A fix that was not captured after the last one is the same observation delivered again,
+    // or an older one arriving late. It is not evidence of anything new.
+    if let timestamp = sample.timestamp, let latestFixTimestamp, timestamp <= latestFixTimestamp,
+      route != nil
+    {
+      return snapshot
     }
+    latestFixTimestamp = sample.timestamp ?? latestFixTimestamp
+    sequence += 1
     guard let route else {
       snapshot = NavigationSnapshot(
         distanceFromRouteMeters: nil,
@@ -487,41 +608,62 @@ final class NavigationCore {
     }
 
     let accuracyAllowanceMeters = sample.horizontalAccuracyMeters ?? 0
-    let anchorAlongMeters = snapshot.rawCoordinate == nil
-      ? nil
-      : fixProgress * route.totalDistanceMeters
-    let elapsedSeconds = sample.timestamp.flatMap { timestamp in
+    let anchorAlongMeters = hasAnchor ? fixProgress * route.totalDistanceMeters : nil
+    // Seconds since the anchor was captured, when both are timestamped and this fix is newer.
+    let sinceAnchorSeconds = sample.timestamp.flatMap { timestamp in
       anchorTimestamp.map { timestamp - $0 }
-    }.flatMap { $0 > 0 && $0 <= 600 ? $0 : nil }
-    let knownSpeeds = [sample.speedMetersPerSecond, lastFixSpeed].compactMap { $0 }
+    }.flatMap { $0 > 0 ? $0 : nil }
+    let elapsedSeconds = sinceAnchorSeconds.flatMap { $0 <= 600 ? $0 : nil }
+    // A reported speed above the ceiling is a bad reading, not a fast vehicle: it is ignored.
+    let sampleSpeed = sample.speedMetersPerSecond.flatMap {
+      $0 <= maximumPlausibleSpeedMetersPerSecond ? $0 : nil
+    }
+    let knownSpeeds = [sampleSpeed, anchorSpeed].compactMap { $0 }
     let expectedTravelMeters = elapsedSeconds.flatMap { elapsed in
       knownSpeeds.isEmpty
         ? nil
         : knownSpeeds.reduce(0, +) / Double(knownSpeeds.count) * elapsed
     }
-    // Invariant 2: how far ahead of the last accepted match a fix is believed without
-    // confirmation, and whether this fix is far enough from it to qualify as a jump at all.
-    let plausibleAdvanceLimitMeters: Double? = anchorAlongMeters.map { _ in
-      expectedTravelMeters.map {
-        1.5 * $0 + plausibilityBaseToleranceMeters + accuracyAllowanceMeters
-          + implausibleJumpMarginMeters
-      } ?? matchWindowMinimumForwardMeters + plausibilityBaseToleranceMeters
-        + accuracyAllowanceMeters
+    // The limits of the matching invariants, for this fix. Evidence of travel takes the slower
+    // of the two speeds, and needs both: one reading says nothing about the time between.
+    let toleranceMeters = plausibilityBaseToleranceMeters + accuracyAllowanceMeters
+    let evidencedTravelMeters = elapsedSeconds.flatMap { elapsed in
+      sampleSpeed.flatMap { speed in anchorSpeed.map { min(speed, $0) * elapsed } }
     }
-    let hasMovedAwayFromAnchor = anchorRawCoordinate.map {
-      navigationDistanceMeters(from: $0, to: sample.coordinate)
-        > implausibleJumpMarginMeters + accuracyAllowanceMeters + anchorAccuracyMeters
-    } ?? false
+    let explainedAdvanceMeters = 1.5 * (evidencedTravelMeters ?? 0) + toleranceMeters
+    // What the vehicle can have covered at all: the speed ceiling over the time since the
+    // anchor. A repeated timestamp allows nothing; untimed replay input, the eligible window.
+    let possibleAdvanceMeters = sample.timestamp == nil
+      ? matchWindowMinimumForwardMeters + toleranceMeters
+      : (sinceAnchorSeconds ?? 0) * maximumPlausibleSpeedMetersPerSecond + toleranceMeters
+    let limits = MatchLimits(
+      // Where both speeds are reported they are the evidence, and a fix beyond what they
+      // explain is held like any other jump. Where they are not, the multipath margin stands
+      // in for them. Never more than is possible.
+      believableAdvanceMeters: min(
+        possibleAdvanceMeters,
+        evidencedTravelMeters == nil
+          ? explainedAdvanceMeters + implausibleJumpMarginMeters
+          : explainedAdvanceMeters
+      ),
+      explainedAdvanceMeters: explainedAdvanceMeters,
+      possibleAdvanceMeters: possibleAdvanceMeters,
+      displacementMeters: anchorRawCoordinate.map {
+        navigationDistanceMeters(from: $0, to: sample.coordinate)
+      } ?? 0,
+      displacementToleranceMeters: accuracyAllowanceMeters + anchorAccuracyMeters
+    )
     let match = bestProjection(
       on: route,
       sample: sample,
       anchorAlongMeters: anchorAlongMeters,
       elapsedSeconds: elapsedSeconds,
       expectedTravelMeters: expectedTravelMeters,
-      plausibleAdvanceLimitMeters: plausibleAdvanceLimitMeters,
-      allowsJump: hasMovedAwayFromAnchor
+      limits: limits
     )
     let projection = match.projection
+    let isFirstPlacement = !hasAnchor
+    hasAnchor = true
 
     if hasArrived {
       snapshot = NavigationSnapshot(
@@ -540,40 +682,31 @@ final class NavigationCore {
       return snapshot
     }
 
-    // A single fix far beyond any believable travel since the last accepted one is almost
-    // always multipath. Hold the match for it; a second fix that agrees with it is accepted, so
-    // a genuinely stale speed reading, a teleport, or the first fix after a long gap delays the
-    // match by one sample at most.
-    let isImplausibleJump = match.isJump
-    if isImplausibleJump {
-      // Two outliers in different places are two outliers, not a confirmation.
-      let agreesWithHeldJump: Bool = {
-        guard let heldJumpAlongMeters else {
-          return false
-        }
-        // Untimed fixes and repeated timestamps allow no travel between the two.
-        let sinceHeldSeconds = sample.timestamp.flatMap { timestamp in
-          heldJumpTimestamp.map { timestamp - $0 }
-        } ?? 0
-        guard sinceHeldSeconds >= 0 else {
-          return false
-        }
-        return abs(projection.alongMeters - heldJumpAlongMeters)
-          <= plausibilityBaseToleranceMeters + accuracyAllowanceMeters
-          + sinceHeldSeconds * maximumPlausibleSpeedMetersPerSecond
-      }()
-      implausibleJumpCount = agreesWithHeldJump ? implausibleJumpCount + 1 : 1
-      heldJumpAlongMeters = projection.alongMeters
-      heldJumpTimestamp = sample.timestamp
-    } else {
-      implausibleJumpCount = 0
-      heldJumpAlongMeters = nil
-      heldJumpTimestamp = nil
-    }
-    // Untimed input (replays; Core Location always timestamps) has no notion of "the next
-    // fix a moment later", so a qualifying jump is taken at once. It still has to qualify.
-    let isHeldJump = isImplausibleJump && sample.timestamp != nil
-      && implausibleJumpCount < implausibleJumpConfirmationCount
+    // The first fix of a jump is held; a fix captured shortly after it that agrees with it
+    // along the route confirms it. A fix long after, or somewhere else, does not: it becomes
+    // the held fix instead. (The same sample delivered again never gets this far.)
+    let isHeldJump: Bool = {
+      guard match.kind == .jump else {
+        heldJump = nil
+        return false
+      }
+      guard let timestamp = sample.timestamp else {
+        // Untimed replay input has no "captured later".
+        heldJump = nil
+        return false
+      }
+      if let heldJump, let heldTimestamp = heldJump.timestamp,
+        timestamp - heldTimestamp <= heldJumpMaximumAgeSeconds,
+        abs(projection.alongMeters - heldJump.alongMeters)
+          <= toleranceMeters
+          + (timestamp - heldTimestamp) * maximumPlausibleSpeedMetersPerSecond
+      {
+        self.heldJump = nil
+        return false
+      }
+      heldJump = (projection.alongMeters, timestamp)
+      return true
+    }()
 
     let backwardProgressMeters = max(
       0,
@@ -612,9 +745,9 @@ final class NavigationCore {
     if isOffRoute {
       departureSampleCount = 0
       recoverySampleCount = isRecoverySample ? recoverySampleCount + 1 : 0
-      // Invariant 3: a held fix does not end the off-route state; it still counts towards
-      // recovery, so the fix that confirms it recovers at once.
-      if recoverySampleCount >= onRouteRecoverySampleCount, !isHeldJump {
+      // Invariants 7 and 8: neither a held fix nor a departure ends the off-route state. A held
+      // fix still counts towards recovery, so the fix that confirms it recovers at once.
+      if recoverySampleCount >= onRouteRecoverySampleCount, !isHeldJump, !isDepartureSample {
         isOffRoute = false
         recoverySampleCount = 0
       }
@@ -627,7 +760,19 @@ final class NavigationCore {
       }
     }
 
-    let isArrivalSample = !isOffRoute && !isHeldJump &&
+    // Invariant 6: after a heading switch or a jump, arrival waits for the vehicle to be seen
+    // moving on along the route. Fixes repeated in one place never satisfy this.
+    let isAcceptableFix = !isOffRoute && !isDepartureSample && !isHeldJump
+    if isAcceptableFix, match.kind == .jump || match.kind == .headingSwitch {
+      arrivalDeferral = (projection.alongMeters, sample.coordinate, accuracyAllowanceMeters)
+    } else if isAcceptableFix, let deferral = arrivalDeferral,
+      projection.alongMeters >= deferral.alongMeters + arrivalCorroborationAlongMeters,
+      navigationDistanceMeters(from: deferral.raw, to: sample.coordinate)
+        >= arrivalCorroborationGroundMeters + accuracyAllowanceMeters + deferral.accuracyMeters
+    {
+      arrivalDeferral = nil
+    }
+    let isArrivalSample = !isOffRoute && !isHeldJump && arrivalDeferral == nil &&
       projection.progress >= arrivalProgressThreshold &&
       sample.horizontalAccuracyMeters != nil &&
       route.distanceToDestination(from: sample.coordinate) + accuracyAllowanceMeters <=
@@ -669,24 +814,31 @@ final class NavigationCore {
     // rather than a value that drifts down with each tolerated backward step.
     if shouldAcceptProjection {
       progressHighWaterMark = max(progressHighWaterMark, projection.progress)
-      anchorTimestamp = sample.timestamp
     }
-    if shouldAcceptProjection || anchorRawCoordinate == nil {
+    // The anchor moves only with an accepted fix, and takes that fix's own time and speed. The
+    // first fix of a route is a placement: it becomes the anchor even when it is off the route.
+    isLatestFixAccepted = shouldAcceptProjection
+    if shouldAcceptProjection || isFirstPlacement {
       anchorRawCoordinate = sample.coordinate
       anchorAccuracyMeters = accuracyAllowanceMeters
+      anchorTimestamp = sample.timestamp
+      anchorSpeed = sampleSpeed
     }
     // A dead-reckoned snapshot is a guess; the held position falls back to the last real match.
+    // A rejected projection is published only as that first placement, never later (after the
+    // off-route state, or on a resumed trip, there is simply no matched position).
     let previous = lastRealSnapshot
     let previousMatchedCoordinate = previous?.matchedCoordinate
-    let provisionalMatchedCoordinate = previousMatchedCoordinate ?? projection.coordinate
-    let provisionalMatchedCourseDegrees = previous?.matchedCourseDegrees
-      ?? projection.courseDegrees
-    let provisionalGeometrySegmentIndex = previousMatchedCoordinate == nil
+    let provisionalMatchedCoordinate = isFirstPlacement
+      ? projection.coordinate
+      : previousMatchedCoordinate
+    let provisionalMatchedCourseDegrees = isFirstPlacement
+      ? projection.courseDegrees
+      : previous?.matchedCourseDegrees
+    let provisionalGeometrySegmentIndex = isFirstPlacement
       ? projection.geometrySegmentIndex
       : previous?.geometrySegmentIndex
-    let provisionalRouteProgress = previousMatchedCoordinate == nil
-      ? projection.progress
-      : fixProgress
+    let provisionalRouteProgress = isFirstPlacement ? projection.progress : fixProgress
     let routeProgress = shouldAcceptProjection
       ? projection.progress
       : isOffRoute ? fixProgress : provisionalRouteProgress
@@ -732,8 +884,8 @@ final class NavigationCore {
     maximumAlongMeters: Double? = nil
   ) -> NavigationSnapshot? {
     guard let route, !hasArrived, !isOffRoute, snapshot.phase == .tracking,
-      snapshot.matchedCoordinate != nil, let lastFixTimestamp, let lastFixSpeed,
-      lastFixTimestamp == anchorTimestamp,
+      snapshot.matchedCoordinate != nil, isLatestFixAccepted,
+      let lastFixTimestamp = anchorTimestamp, let lastFixSpeed = anchorSpeed,
       lastFixSpeed >= deadReckoningMinimumSpeedMetersPerSecond
     else {
       return nil
@@ -775,22 +927,56 @@ final class NavigationCore {
   }
 
   private func resetTrackingState() {
+    hasAnchor = false
     anchorRawCoordinate = nil
     anchorAccuracyMeters = 0
+    anchorSpeed = nil
     anchorTimestamp = nil
+    arrivalDeferral = nil
     lastRealSnapshot = nil
     arrivalSampleCount = 0
     departureSampleCount = 0
     fixProgress = 0
     hasArrived = false
-    heldJumpAlongMeters = nil
-    heldJumpTimestamp = nil
-    implausibleJumpCount = 0
+    heldJump = nil
+    isLatestFixAccepted = false
+    latestFixTimestamp = nil
     isOffRoute = false
-    lastFixSpeed = nil
-    lastFixTimestamp = nil
     progressHighWaterMark = 0
     recoverySampleCount = 0
+  }
+
+  /// How far ahead of the anchor a fix may be matched, and on what evidence. See the matching
+  /// invariants at the top of this file.
+  private struct MatchLimits {
+    let believableAdvanceMeters: Double
+    let explainedAdvanceMeters: Double
+    let possibleAdvanceMeters: Double
+    /// Straight-line distance of the fix from the last accepted fix, and the two accuracies.
+    let displacementMeters: Double
+    let displacementToleranceMeters: Double
+
+    var isAwayFromAnchor: Bool {
+      displacementMeters > credibleBiasMeters + displacementToleranceMeters
+    }
+
+    /// The most route the displacement of the fix can account for.
+    var directAdvanceMeters: Double {
+      directRouteDetourFactor * displacementMeters + displacementToleranceMeters
+        + directRouteSlackMeters
+    }
+  }
+
+  /// Which rule of the matching invariants produced a projection.
+  private enum MatchKind {
+    /// Rules 1 and 3, and the first placement: accepted as it is.
+    case continuation
+    /// Rule 2.
+    case headingSwitch
+    /// Rule 4: held until confirmed.
+    case jump
+    /// Rule 5: not progress.
+    case unqualified
   }
 
   private func bestProjection(
@@ -799,21 +985,51 @@ final class NavigationCore {
     anchorAlongMeters: Double?,
     elapsedSeconds: Double?,
     expectedTravelMeters: Double?,
-    plausibleAdvanceLimitMeters: Double?,
-    allowsJump: Bool
-  ) -> (projection: RouteProjection, isJump: Bool) {
+    limits: MatchLimits
+  ) -> (projection: RouteProjection, kind: MatchKind) {
     let accuracyAllowanceMeters = sample.horizontalAccuracyMeters ?? 0
+    let fittingLimitMeters = offRouteDistanceThresholdMeters + accuracyAllowanceMeters
+    // Heading is evidence only from a vehicle moving at a believable speed. Replay input may
+    // carry a course and no speed; a live fix never does.
+    let headingDegrees: Double? = {
+      guard let speed = sample.speedMetersPerSecond else {
+        return sample.timestamp == nil ? sample.courseDegrees : nil
+      }
+      return speed >= wrongWayMinimumSpeedMetersPerSecond
+        && speed <= maximumPlausibleSpeedMetersPerSecond ? sample.courseDegrees : nil
+    }()
+    func headingDifference(_ projection: RouteProjection) -> Double? {
+      headingDegrees.map { navigationCourseDifferenceDegrees($0, projection.courseDegrees) }
+    }
+    // Two projections of one fix are the same pass when the route between them is about as
+    // long as the straight line between them. Only the first placement asks this.
+    func isSamePass(_ projection: RouteProjection, as other: RouteProjection) -> Bool {
+      abs(projection.alongMeters - other.alongMeters)
+        <= directRouteDetourFactor
+        * navigationDistanceMeters(from: other.coordinate, to: projection.coordinate)
+        + fittingLimitMeters
+    }
+    let anchor = anchorAlongMeters.map { route.point(alongMeters: $0) }
+
+    // `best` is the lowest score overall and drives the search, as it always has. The others
+    // are the lowest score in each class of the matching invariants.
     var best: RouteProjection?
     var bestScore = Double.infinity
-    // See the matching invariants at the top of this file. `best` is the lowest score overall
-    // and drives the search itself; the three below are what can be returned.
-    var bestPlausibleFitting: RouteProjection?
-    var bestPlausibleFittingScore = Double.infinity
-    var bestFittingJump: RouteProjection?
-    var bestFittingJumpScore = Double.infinity
-    var bestUnqualified: RouteProjection?
-    var bestUnqualifiedScore = Double.infinity
-    let fittingLimitMeters = offRouteDistanceThresholdMeters + accuracyAllowanceMeters
+    var continuation: RouteProjection?
+    var continuationEvidenceScore = Double.infinity
+    var continuationAdvanceMeters = 0.0
+    var headingSwitch: RouteProjection?
+    var headingSwitchScore = Double.infinity
+    var explainedSwitch: RouteProjection?
+    var explainedSwitchScore = Double.infinity
+    var jump: RouteProjection?
+    var jumpScore = Double.infinity
+    var unqualified: RouteProjection?
+    var unqualifiedScore = Double.infinity
+    var earlierPass: RouteProjection?
+    var earlierPassScore = Double.infinity
+    // Only for the first placement, which has no anchor to classify against.
+    var fitting: [(projection: RouteProjection, score: Double)] = []
     var evaluated = 0
 
     func consider(_ index: Int) {
@@ -832,26 +1048,67 @@ final class NavigationCore {
         bestScore = score
       }
       let fits = projection.distanceMeters <= fittingLimitMeters
-      let isJump: Bool = {
-        guard let anchorAlongMeters, let plausibleAdvanceLimitMeters else {
-          return false
-        }
-        return projection.alongMeters - anchorAlongMeters > plausibleAdvanceLimitMeters
-      }()
-      if fits, isJump {
-        if score < bestFittingJumpScore {
-          bestFittingJump = projection
-          bestFittingJumpScore = score
+      guard let anchor else {
+        if fits {
+          fitting.append((projection, score))
         }
         return
       }
-      if score < bestUnqualifiedScore {
-        bestUnqualified = projection
-        bestUnqualifiedScore = score
+      let advanceMeters = projection.alongMeters - anchor.alongMeters
+      let isDirect = abs(advanceMeters) <= limits.directAdvanceMeters
+      // How well the candidate accounts for the fix without assuming travel that nothing
+      // reported: distance and heading, plus the part of its advance that is not explained and
+      // any move backward.
+      let evidenceScore = projection.distanceMeters
+        + coursePenalty(projection, courseDegrees: sample.courseDegrees)
+        + max(0, advanceMeters - limits.explainedAdvanceMeters) * plausibilityForwardPenaltyFactor
+        + max(0, -advanceMeters - continuityToleranceMeters) * backwardProgressPenaltyFactor
+      guard fits, advanceMeters > 0 || isDirect else {
+        // Off the road, or an earlier pass: never progress.
+        if evidenceScore < unqualifiedScore {
+          unqualified = projection
+          unqualifiedScore = evidenceScore
+        }
+        if fits, evidenceScore < earlierPassScore {
+          earlierPass = projection
+          earlierPassScore = evidenceScore
+        }
+        return
       }
-      if fits, score < bestPlausibleFittingScore {
-        bestPlausibleFitting = projection
-        bestPlausibleFittingScore = score
+      // A later pass, or this one further on than reported motion explains: the heading of a
+      // moving vehicle that agrees with it is evidence for it, if it is possible at all.
+      if !isDirect || advanceMeters > limits.explainedAdvanceMeters,
+        advanceMeters <= limits.possibleAdvanceMeters,
+        let difference = headingDifference(projection),
+        difference <= headingAgreesMaximumDifferenceDegrees, score < headingSwitchScore
+      {
+        headingSwitch = projection
+        headingSwitchScore = score
+      }
+      if isDirect {
+        if advanceMeters <= limits.believableAdvanceMeters {
+          if evidenceScore < continuationEvidenceScore {
+            continuation = projection
+            continuationEvidenceScore = evidenceScore
+            continuationAdvanceMeters = advanceMeters
+          }
+        } else if score < jumpScore {
+          // The same road further on than anything explains: the displacement is the travel.
+          jump = projection
+          jumpScore = score
+        }
+        return
+      }
+      // A later pass of the route.
+      if limits.isAwayFromAnchor, advanceMeters <= limits.explainedAdvanceMeters,
+        score < explainedSwitchScore
+      {
+        explainedSwitch = projection
+        explainedSwitchScore = score
+      }
+      if limits.isAwayFromAnchor, score < jumpScore {
+        jump = projection
+        jumpScore = score
       }
     }
 
@@ -887,6 +1144,16 @@ final class NavigationCore {
         where !window.contains(index) {
           consider(index)
         }
+      } else if continuation == nil || continuationAdvanceMeters > limits.explainedAdvanceMeters {
+        // The window's match is not ordinary driving. Before it is believed, everything else
+        // on the route that this fix fits has to be seen: an earlier pass under the fix means
+        // its position proves nothing (matching invariants). Ordinary driving never gets here.
+        for index in route.segmentIndices(
+          near: sample.coordinate,
+          radiusMeters: min(globalSearchMaximumRadiusMeters, fittingLimitMeters)
+        ) where !window.contains(index) {
+          consider(index)
+        }
       }
     } else {
       var radius = globalSearchInitialRadiusMeters
@@ -902,10 +1169,7 @@ final class NavigationCore {
         }
         best = nil
         bestScore = .infinity
-        bestPlausibleFitting = nil
-        bestPlausibleFittingScore = .infinity
-        bestUnqualified = nil
-        bestUnqualifiedScore = .infinity
+        fitting.removeAll(keepingCapacity: true)
         radius = min(globalSearchMaximumRadiusMeters, radius * 4)
       }
       // Only the first fix of a route far from all of it reaches a full scan; every later fix
@@ -916,20 +1180,65 @@ final class NavigationCore {
         }
       }
     }
-
     lastEvaluatedSegmentCount = evaluated
-    if let bestPlausibleFitting {
-      return (bestPlausibleFitting, false)
+
+    guard let anchor else {
+      // Invariant 10: the first placement takes the earliest pass that fits, unless the
+      // vehicle's heading opposes it and agrees with a later one; arrival is then deferred.
+      guard let earliest = fitting.min(by: { $0.projection.alongMeters < $1.projection.alongMeters })
+      else {
+        return (best!, .continuation)
+      }
+      let earliestPass = fitting
+        .filter { isSamePass($0.projection, as: earliest.projection) }
+        .min { $0.score < $1.score }!.projection
+      let agreeing = fitting
+        .filter { candidate in
+          (headingDifference(candidate.projection) ?? .infinity)
+            <= headingAgreesMaximumDifferenceDegrees
+        }
+        .min { $0.score < $1.score }
+      if let agreeing, let difference = headingDifference(earliestPass),
+        difference >= headingOpposesMinimumDifferenceDegrees
+      {
+        return (agreeing.projection, .headingSwitch)
+      }
+      return (earliestPass, .continuation)
     }
-    if allowsJump, let bestFittingJump {
-      return (bestFittingJump, true)
+
+    // Where an earlier pass fits the fix too, a continuation is only what reported motion
+    // explains.
+    let isContinuing = continuation != nil
+      && (earlierPass == nil || continuationAdvanceMeters <= limits.explainedAdvanceMeters)
+    // Where the vehicle is, or has been, on the route also fits this fix: its position cannot
+    // say that it is anywhere further on. Only the heading of a moving vehicle can.
+    if let here = continuation ?? earlierPass {
+      if let headingSwitch, let difference = headingDifference(here),
+        difference >= headingOpposesMinimumDifferenceDegrees
+      {
+        return (headingSwitch, .headingSwitch)
+      }
+      if isContinuing, let continuation {
+        return (continuation, .continuation)
+      }
+    } else {
+      if limits.isAwayFromAnchor, let explainedSwitch {
+        return (explainedSwitch, .continuation)
+      }
+      // Near the last accepted fix a position cannot tell two passes apart; heading can. Away
+      // from it the position can, and gets the chance to (rule 4).
+      if !limits.isAwayFromAnchor, let headingSwitch {
+        return (headingSwitch, .headingSwitch)
+      }
+      if let jump {
+        return (jump, .jump)
+      }
     }
-    if let bestUnqualified {
-      return (bestUnqualified, false)
+    if let unqualified {
+      return (unqualified, .unqualified)
     }
-    // Every candidate is a jump the fix does not qualify for. The vehicle is taken to be where
-    // it was, and the fix is measured from there.
-    let anchor = route.point(alongMeters: anchorAlongMeters ?? 0)
+    // Every candidate is a later pass the fix does not qualify for. The vehicle is taken to be
+    // where it was, and the fix is measured from there.
     return (
       RouteProjection(
         alongMeters: anchor.alongMeters,
@@ -939,7 +1248,7 @@ final class NavigationCore {
         geometrySegmentIndex: anchor.geometrySegmentIndex,
         progress: anchor.progress
       ),
-      false
+      .unqualified
     )
   }
 

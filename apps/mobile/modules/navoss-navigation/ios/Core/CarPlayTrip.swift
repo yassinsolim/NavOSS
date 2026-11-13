@@ -391,6 +391,18 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
     let trip: NavOSSCarPlayTrip
   }
 
+  /// How far the stored trip had got. Kept under its own key: it is rewritten during the trip
+  /// and the trip itself is large. It holds a distance along the route and a time, no position.
+  private struct StoredProgress: Codable {
+    let alongMeters: Double
+    let recordedAt: Date
+    let tripId: String
+  }
+
+  private var progressKey: String {
+    key + ".progress"
+  }
+
   private let clock: () -> Date
   private let defaults: UserDefaults
   private let expirationInterval: TimeInterval
@@ -414,6 +426,38 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
   public func clear() {
     lock.lock()
     defaults.removeObject(forKey: key)
+    defaults.removeObject(forKey: progressKey)
+    lock.unlock()
+  }
+
+  /// Confirmed progress of the stored trip, for resuming it where it was instead of placing the
+  /// first fix anywhere on the route. `nil` for a trip saved by a build that did not record it,
+  /// for another trip's progress, and for anything unreadable.
+  func loadProgress(for trip: NavOSSCarPlayTrip) -> NavigationResumeContext? {
+    lock.lock()
+    defer { lock.unlock() }
+    guard let data = defaults.data(forKey: progressKey),
+      let stored = try? JSONDecoder().decode(StoredProgress.self, from: data),
+      stored.tripId == trip.id, stored.alongMeters.isFinite, stored.alongMeters >= 0
+    else {
+      return nil
+    }
+    return NavigationResumeContext(
+      alongMeters: stored.alongMeters,
+      timestamp: stored.recordedAt.timeIntervalSinceReferenceDate
+    )
+  }
+
+  func saveProgress(alongMeters: Double, for trip: NavOSSCarPlayTrip) {
+    guard alongMeters.isFinite, alongMeters >= 0,
+      let data = try? JSONEncoder().encode(
+        StoredProgress(alongMeters: alongMeters, recordedAt: clock(), tripId: trip.id)
+      )
+    else {
+      return
+    }
+    lock.lock()
+    defaults.set(data, forKey: progressKey)
     lock.unlock()
   }
 
@@ -440,6 +484,8 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
     }
     lock.lock()
     defaults.set(data, forKey: key)
+    // A new route starts from its own beginning.
+    defaults.removeObject(forKey: progressKey)
     lock.unlock()
   }
 }

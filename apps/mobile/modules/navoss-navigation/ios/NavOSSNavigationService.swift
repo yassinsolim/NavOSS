@@ -97,6 +97,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private let speechPlanner = NavigationSpeechPlanner()
   private let speechSynthesizer = AVSpeechSynthesizer()
   private var stateVersion: UInt64 = 0
+  private var lastProgressPersistedAt: Date?
   private var validatesPersistedNavigation = false
   private var tripEndReason: NavOSSTripEndReason?
 
@@ -419,6 +420,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   }
 
   func ingest(_ sample: NavigationLocationSample) throws -> NavigationSnapshot {
+    let sample = try navOSSLiveNavigationFix(sample)
     let versionedUpdate: VersionedNavigationUpdate
     lock.lock()
     do {
@@ -435,11 +437,39 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     case .publish:
       publish(versionedUpdate)
       evaluateReroute(for: versionedUpdate)
+      persistProgressIfDue(versionedUpdate)
     case .wait:
       break
     }
     return versionedUpdate.update.snapshot
   }
+
+  /// Records how far the trip has got, so that a relaunch resumes it there. Written at most
+  /// every `progressPersistenceIntervalSeconds`, and only from a fix matched on the route.
+  private func persistProgressIfDue(_ versionedUpdate: VersionedNavigationUpdate) {
+    let snapshot = versionedUpdate.update.snapshot
+    guard let trip = versionedUpdate.update.trip, snapshot.phase == .tracking,
+      !snapshot.isOffRoute, !snapshot.isDeadReckoning, snapshot.matchedCoordinate != nil
+    else {
+      return
+    }
+    let now = Date()
+    lock.lock()
+    guard isCurrentLocked(versionedUpdate),
+      lastProgressPersistedAt.map({
+        now.timeIntervalSince($0) >= Self.progressPersistenceIntervalSeconds
+      }) ?? true,
+      let alongMeters = navigationSession.confirmedAlongMeters
+    else {
+      lock.unlock()
+      return
+    }
+    lastProgressPersistedAt = now
+    lock.unlock()
+    activeTripStore.saveProgress(alongMeters: alongMeters, for: trip)
+  }
+
+  private static let progressPersistenceIntervalSeconds = 15.0
 
   public func resumePersistedNavigation() {
     guard let trip = activeTripStore.load() else {
@@ -450,7 +480,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
         trip,
         persist: false,
         publishInitialUpdate: false,
-        validatesPersistedNavigation: true
+        validatesPersistedNavigation: true,
+        resume: activeTripStore.loadProgress(for: trip)
       )
     } catch {
       activeTripStore.clear()
@@ -566,6 +597,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     case .publish:
       publish(versionedUpdate)
       evaluateReroute(for: versionedUpdate)
+      persistProgressIfDue(versionedUpdate)
       // Only real fixes during turn-by-turn guidance can become traffic probes, and only when
       // the driver turned "Share traffic speeds" on; the community service enforces both.
       if versionedUpdate.update.trip != nil, versionedUpdate.update.snapshot.phase == .tracking {
@@ -1135,6 +1167,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       update = try navigationSession.start(trip)
       navigationGeneration &+= 1
       activeTripStore.save(trip)
+      lastProgressPersistedAt = nil
       rerouteCount += 1
       rerouteConsent.reset()
       routeStatus = .tracking
@@ -1498,12 +1531,14 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     _ trip: NavOSSCarPlayTrip,
     persist: Bool,
     publishInitialUpdate: Bool = true,
-    validatesPersistedNavigation: Bool = false
+    validatesPersistedNavigation: Bool = false,
+    resume: NavigationResumeContext? = nil
   ) throws {
     let update: NavigationSessionUpdate
     lock.lock()
     do {
-      update = try navigationSession.start(trip)
+      update = try navigationSession.start(trip, resume: resume)
+      lastProgressPersistedAt = nil
       navigationGeneration &+= 1
       rerouteTask?.cancel()
       rerouteTask = nil

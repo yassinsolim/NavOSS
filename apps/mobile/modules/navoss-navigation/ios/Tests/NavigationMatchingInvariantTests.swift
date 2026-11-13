@@ -140,31 +140,58 @@ final class NavigationMatchingInvariantTests: XCTestCase {
     XCTAssertTrue(snapshot.isOffRoute)
   }
 
-  /// The same after a gap in fixes: reappearing 300 m back on the outbound carriageway, heading
-  /// back, is far enough from the last accepted fix to qualify as a jump, and the return
-  /// carriageway agrees with the heading. The road under the fix still explains it.
-  func testReversingThroughAGapOnADividedRoadIsNotTheReturnCarriageway() throws {
-    for gapSeconds in [20.0, 700] {
-      let core = NavigationCore()
-      try core.setRoute(Trace.route([(0, 0), (2_000, 0), (2_000, 12), (0, 12)]))
-      for second in 0...40 {
-        try core.updateLocation(
-          Trace.sample(
-            x: Double(second) * 15, y: 0, courseDegrees: 90, speed: 15, time: Double(second))
-        )
-      }
-      let before = core.currentSnapshot()
-      var snapshot = before
-      for index in 0..<3 {
-        snapshot = try core.updateLocation(
-          Trace.sample(
-            x: 300 - Double(index) * 15, y: 0, courseDegrees: 270, speed: 15,
-            time: 40 + gapSeconds + Double(index))
-        )
-        XCTAssertEqual(along(snapshot, core), along(before, core), accuracy: 1)
-      }
-      XCTAssertTrue(snapshot.isOffRoute)
+  /// The same after a short gap in fixes: reappearing 300 m back on the outbound carriageway,
+  /// heading back. The return carriageway fits and agrees with the heading, but 20 s is not
+  /// enough to have driven to the far end and back: this is a U-turn.
+  func testReversingThroughAShortGapOnADividedRoadIsNotTheReturnCarriageway() throws {
+    let core = NavigationCore()
+    try core.setRoute(Trace.route([(0, 0), (2_000, 0), (2_000, 12), (0, 12)]))
+    for second in 0...40 {
+      try core.updateLocation(
+        Trace.sample(
+          x: Double(second) * 15, y: 0, courseDegrees: 90, speed: 15, time: Double(second))
+      )
     }
+    let before = core.currentSnapshot()
+    var snapshot = before
+    for index in 0..<3 {
+      snapshot = try core.updateLocation(
+        Trace.sample(
+          x: 300 - Double(index) * 15, y: 0, courseDegrees: 270, speed: 15,
+          time: 60 + Double(index))
+      )
+      XCTAssertEqual(along(snapshot, core), along(before, core), accuracy: 1)
+    }
+    XCTAssertTrue(snapshot.isOffRoute)
+  }
+
+  /// After a gap long enough to have driven to the far end and back, a vehicle moving the other
+  /// way beside the return carriageway is on it: heading at speed tells the two apart. Arrival
+  /// still waits for it to be seen moving on.
+  func testHeadingTellsTheCarriagewaysApartAfterAGapLongEnoughToHaveTurnedRound() throws {
+    let core = NavigationCore()
+    try core.setRoute(Trace.route([(0, 0), (2_000, 0), (2_000, 12), (0, 12)]))
+    for second in 0...40 {
+      try core.updateLocation(
+        Trace.sample(
+          x: Double(second) * 15, y: 0, courseDegrees: 90, speed: 15, time: Double(second))
+      )
+    }
+    let back = try core.updateLocation(
+      Trace.sample(x: 200, y: 6, courseDegrees: 270, speed: 15, time: 400)
+    )
+    XCTAssertFalse(back.isOffRoute)
+    XCTAssertEqual(along(back, core), 3_812, accuracy: 5)
+    var time = 401.0
+    var snapshot = back
+    for x in stride(from: 185.0, through: 0, by: -15) + [0, 0] {
+      snapshot = try core.updateLocation(
+        Trace.sample(x: x, y: 12, courseDegrees: 270, speed: x > 0 ? 15 : 0, time: time)
+      )
+      time += 1
+      XCTAssertFalse(snapshot.isOffRoute)
+    }
+    XCTAssertEqual(snapshot.phase, .arrived)
   }
 
   /// Invariant 1: a fix that the road within reach explains is not a jump, even where a later
@@ -314,9 +341,12 @@ final class NavigationMatchingInvariantTests: XCTestCase {
           time: -10)
       )
     }
-    for _ in 0..<2 {
+    // Stopping 40 m on from a moving fix is further than the two speeds explain: the first
+    // fix there is held, the second confirms it.
+    for earlier in [3.0, 2, 1, 0] {
       try core.updateLocation(
-        Trace.sample(x: shape.parked.x, y: shape.parked.y, speed: speed, time: time)
+        Trace.sample(
+          x: shape.parked.x, y: shape.parked.y, speed: speed, time: time.map { $0 - earlier })
       )
     }
     XCTAssertEqual(
@@ -433,8 +463,8 @@ final class NavigationMatchingInvariantTests: XCTestCase {
     var cases = 0
     for shape in shapes(seed: 0x5EED_0005, count: 12) {
       let positions = Trace.positions(along: shape.corners, every: 10)
-      for clock in [Clock.everySecond, .repeatedTimestamp, .longGap, .veryLongGap] {
-        for _ in 0..<4 {
+      for clock in [Clock.everySecond, .longGap, .veryLongGap] {
+        for _ in 0..<5 {
           let index = Int(abs(random.next(amplitude: 1)) * Double(positions.count - 3))
           let target = positions[index]
           let next = positions[index + 1]
@@ -505,6 +535,384 @@ final class NavigationMatchingInvariantTests: XCTestCase {
       }
       XCTAssertTrue(snapshot.isOffRoute)
     }
+  }
+
+  // MARK: Generated drives
+
+  /// Routes that pass their own neighbourhood again, each as the corners of its legs.
+  private func revisitingRoutes(seed: UInt64, count: Int) -> [(name: String, corners: [(Double, Double)])] {
+    var random = Trace.Noise(seed: seed)
+    func pick(_ low: Double, _ high: Double) -> Double {
+      ((low + high) / 2 + random.next(amplitude: (high - low) / 2)).rounded()
+    }
+    var routes: [(String, [(Double, Double)])] = []
+    for _ in 0..<count {
+      // A short loop, 100 to 500 m round, ending beside its start.
+      let side = pick(25, 120)
+      let gap = pick(8, 30)
+      routes.append(
+        ("short loop \(side) gap \(gap)", [(0, 0), (0, side), (side, side), (side, 0), (gap, 0)])
+      )
+      // An out-and-back, carriageways 12 to 250 m apart.
+      let length = pick(300, 2_500)
+      let separation = pick(12, 250)
+      routes.append(
+        (
+          "out-and-back \(length) separation \(separation)",
+          [(0, 0), (length, 0), (length, separation), (0, separation)]
+        )
+      )
+      // A parkade spiral: the same square driven three times, then out.
+      let ramp = pick(20, 40)
+      var spiral: [(Double, Double)] = [(0, -pick(150, 400)), (0, 0)]
+      for _ in 0..<3 {
+        spiral += [(0, ramp), (ramp, ramp), (ramp, 0), (0, 0)]
+      }
+      spiral.append((-pick(150, 400), 0))
+      routes.append(("spiral \(ramp)", spiral))
+      // A self-crossing.
+      let reach = pick(400, 2_000)
+      let rise = pick(200, 1_200)
+      routes.append(
+        (
+          "self-crossing \(reach) rise \(rise)",
+          [(0, 0), (reach, 0), (reach, rise), (reach / 2, rise), (reach / 2, -rise)]
+        )
+      )
+      // A long way round that ends near where it started.
+      let width = pick(800, 3_000)
+      let height = pick(800, 3_000)
+      routes.append(
+        (
+          "loop \(width)x\(height)",
+          [(0, 0), (0, height), (width, height), (width, 0), (pick(10, 60), 0)]
+        )
+      )
+    }
+    return routes
+  }
+
+  /// What a generated drive does to the fixes of a vehicle that follows the route.
+  private enum Disturbance: CaseIterable {
+    case none
+    /// Fixes stop for a while; the vehicle keeps driving (short gaps) or waits (long ones).
+    case gap
+    /// One fix somewhere else on the route.
+    case singleOutlier
+    /// The same fix delivered several times, timestamp included.
+    case repeatedSample
+    /// Two fixes with the same timestamp in different places.
+    case duplicatedTimestamp
+    /// One impossible speed reading.
+    case badSpeed
+    /// Two consecutive fixes displaced by the same 50 to 300 m.
+    case biasedPair
+  }
+
+  /// Drives every generated route from start to finish with one disturbance each, and checks
+  /// what must hold whatever the fixes say:
+  ///   - progress is never ahead of where the vehicle is by more than GPS error explains;
+  ///   - the trip does not end before the vehicle is at the destination;
+  ///   - undisturbed, the vehicle is followed all the way and arrives.
+  func testGeneratedDrivesNeverGetAheadOfTheVehicle() throws {
+    var random = Trace.Noise(seed: 0xD21E_0001)
+    var drives = 0
+    var arrivals = 0
+    for (name, corners) in revisitingRoutes(seed: 0xD21E_0002, count: 10) {
+      let speed = name.hasPrefix("spiral") || name.hasPrefix("short") ? 5.0 : 15.0
+      let truth = Trace.positions(along: corners, every: speed)
+      let total = truth[truth.count - 1].alongMeters
+      for disturbance in Disturbance.allCases {
+        for gapSeconds in disturbance == .gap ? [1.0, 7, 40, 300, 700, 7_200] : [0.0] {
+          drives += 1
+          let core = NavigationCore()
+          try core.setRoute(Trace.route(corners))
+          let at = 2 + Int(abs(random.next(amplitude: 1)) * Double(truth.count - 6))
+          let bias = (
+            random.next(amplitude: 1) >= 0 ? 1.0 : -1.0,
+            50 + abs(random.next(amplitude: 250))
+          )
+          let biasAngle = random.next(amplitude: .pi)
+          let outlier = truth[Int(abs(random.next(amplitude: 1)) * Double(truth.count - 1))]
+          var time = 0.0
+          var index = 0
+          var maximumErrorMeters = 0.0
+          var wasDisturbed = false
+          var sawOffRoute = false
+          var arrived = false
+          let context = "\(name), \(disturbance), gap \(gapSeconds), at \(at)"
+
+          func feed(
+            _ x: Double, _ y: Double, course: Double?, speed: Double?, time: TimeInterval,
+            truthAlong: Double
+          ) throws {
+            let snapshot = try core.updateLocation(
+              Trace.sample(x: x, y: y, courseDegrees: course, speed: speed, time: time)
+            )
+            sawOffRoute = sawOffRoute || snapshot.isOffRoute
+            if snapshot.phase == .arrived {
+              arrived = true
+              XCTAssertLessThanOrEqual(
+                total - truthAlong, 60 + maximumErrorMeters, "arrived early: \(context)"
+              )
+            } else {
+              XCTAssertLessThanOrEqual(
+                snapshot.routeProgress * total,
+                truthAlong + 200 + 1.5 * maximumErrorMeters,
+                "ahead of the vehicle: \(context)"
+              )
+            }
+          }
+
+          while index < truth.count, !arrived {
+            let position = truth[index]
+            if index == at {
+              wasDisturbed = disturbance != .none
+              switch disturbance {
+              case .none:
+                break
+              case .gap:
+                time += gapSeconds
+                // The vehicle keeps driving through a short gap and waits through a long one.
+                if gapSeconds <= 40 {
+                  index = min(truth.count - 1, index + Int(gapSeconds))
+                }
+              case .singleOutlier:
+                maximumErrorMeters = 0
+                try feed(
+                  outlier.x, outlier.y, course: nil, speed: 0, time: time,
+                  truthAlong: position.alongMeters)
+                time += 1
+              case .repeatedSample:
+                for _ in 0..<4 {
+                  try feed(
+                    outlier.x, outlier.y, course: nil, speed: 0, time: time,
+                    truthAlong: position.alongMeters)
+                }
+                time += 1
+              case .duplicatedTimestamp:
+                try feed(
+                  outlier.x, outlier.y, course: nil, speed: 0, time: time,
+                  truthAlong: position.alongMeters)
+                try feed(
+                  position.x, position.y, course: position.courseDegrees, speed: speed,
+                  time: time, truthAlong: position.alongMeters)
+                time += 1
+              case .badSpeed:
+                try feed(
+                  position.x, position.y, course: position.courseDegrees, speed: 100,
+                  time: time, truthAlong: position.alongMeters)
+                time += 1
+              case .biasedPair:
+                maximumErrorMeters = bias.1
+                for _ in 0..<2 {
+                  try feed(
+                    position.x + bias.1 * cos(biasAngle), position.y + bias.1 * sin(biasAngle),
+                    course: nil, speed: 0, time: time, truthAlong: position.alongMeters)
+                  time += 1
+                }
+              }
+            }
+            let current = truth[index]
+            try feed(
+              current.x + random.next(amplitude: 2), current.y + random.next(amplitude: 2),
+              course: current.courseDegrees, speed: speed, time: time,
+              truthAlong: current.alongMeters)
+            time += 1
+            index += 1
+          }
+          // Parked at the destination.
+          let last = truth[truth.count - 1]
+          for _ in 0..<3 where !arrived {
+            try feed(last.x, last.y, course: nil, speed: 0, time: time, truthAlong: total)
+            time += 1
+          }
+          if !wasDisturbed {
+            XCTAssertFalse(sawOffRoute, "left the route undisturbed: \(context)")
+            XCTAssertTrue(arrived, "did not arrive undisturbed: \(context)")
+          }
+          arrivals += arrived ? 1 : 0
+        }
+      }
+    }
+    XCTAssertGreaterThan(drives, 500)
+    // Most disturbed drives are still followed to the end; the rest end in a reroute.
+    XCTAssertGreaterThan(Double(arrivals), 0.6 * Double(drives))
+    print("GENERATED_DRIVES drives=\(drives) arrivals=\(arrivals)")
+  }
+
+  /// A vehicle that stands still on a generated route, with fixes that land anywhere within a
+  /// city block of it (on other passes of the route where there are any), timestamped in every
+  /// way live fixes can be, with no speed, a standstill or an impossible speed: the trip does
+  /// not end, and progress is never wrong by more than the fixes themselves are.
+  ///
+  /// Not covered, because it is not decidable: fixes that report a believable speed while they
+  /// move round a loop smaller than their own error are, to any matcher, a vehicle driving it.
+  func testAParkedVehicleStaysOnItsPassOnGeneratedRoutes() throws {
+    var random = Trace.Noise(seed: 0xD21E_0003)
+    var cases = 0
+    for (name, corners) in revisitingRoutes(seed: 0xD21E_0004, count: 10) {
+      let truth = Trace.positions(along: corners, every: 5)
+      let total = truth[truth.count - 1].alongMeters
+      for _ in 0..<6 {
+        // Parked somewhere with at least 80 m of route left.
+        let candidates = truth.filter { $0.alongMeters < total - 80 }
+        let parked = candidates[Int(abs(random.next(amplitude: 1)) * Double(candidates.count - 1))]
+        // Other places on the route within 300 m of the vehicle, and a point off it.
+        let nearby = truth.filter {
+          let distance = hypot($0.x - parked.x, $0.y - parked.y)
+          return distance > 20 && distance <= 290
+        }
+        // Anywhere within 290 m, the most a position is taken to be wrong by.
+        let bearing = random.next(amplitude: .pi)
+        let distance = 50 + abs(random.next(amplitude: 240))
+        var lures: [(Double, Double)] = [
+          (parked.x + distance * cos(bearing), parked.y + distance * sin(bearing))
+        ]
+        for _ in 0..<3 where !nearby.isEmpty {
+          let lure = nearby[Int(abs(random.next(amplitude: 1)) * Double(nearby.count - 1))]
+          lures.append((lure.x, lure.y))
+        }
+        for clock in Clock.allCases where clock != .untimed {
+          for speed in [0.0, nil, 100] as [Double?] {
+            for lure in lures {
+              cases += 1
+              let core = NavigationCore()
+              try core.setRoute(Trace.route(corners))
+              // Established on its pass by the fixes of the 60 m before it parks.
+              var time = -30.0
+              var isPlaced = false
+              for position in truth
+              where position.alongMeters <= parked.alongMeters
+                && position.alongMeters >= parked.alongMeters - 60
+              {
+                if !isPlaced {
+                  try core.setRoute(
+                    Trace.route(corners),
+                    resume: NavigationResumeContext(
+                      alongMeters: position.alongMeters, timestamp: Trace.time(time - 1))
+                  )
+                  isPlaced = true
+                }
+                try core.updateLocation(
+                  Trace.sample(
+                    x: position.x, y: position.y, courseDegrees: position.courseDegrees,
+                    speed: 5, time: time)
+                )
+                time += 1
+              }
+              try core.updateLocation(
+                Trace.sample(x: parked.x, y: parked.y, speed: 0, time: clock.time(0))
+              )
+              let home = (parked.x, parked.y)
+              for (index, place) in [lure, lure, lure, home, lure, home, home].enumerated() {
+                let snapshot = try core.updateLocation(
+                  Trace.sample(x: place.0, y: place.1, speed: speed, time: clock.time(index + 1))
+                )
+                let context = "\(name) at \(parked.alongMeters), \(clock), "
+                  + "speed \(String(describing: speed)), lure \(lure), fix \(index)"
+                XCTAssertEqual(snapshot.phase, .tracking, context)
+                // Wrong by no more than the fixes are: a fix this far from the vehicle can
+                // account for this much route, and no more.
+                let offset = hypot(lure.0 - parked.x, lure.1 - parked.y)
+                XCTAssertLessThanOrEqual(
+                  abs(snapshot.routeProgress * total - parked.alongMeters), 1.5 * offset + 60,
+                  context
+                )
+              }
+            }
+          }
+        }
+      }
+    }
+    XCTAssertGreaterThan(cases, 2_000)
+  }
+
+  /// Random fixes within a city block of a parked vehicle, singly and in agreeing pairs, on
+  /// other parts of the route and off it, however they are timestamped: the trip never ends
+  /// unless the destination itself is within reach of that error along the vehicle's own road.
+  func testRandomFixesAroundAParkedVehicleNeverEndTheTrip() throws {
+    var random = Trace.Noise(seed: 0xD21E_0005)
+    func unit() -> Double { abs(random.next(amplitude: 1)) }
+    var cases = 0
+    for (name, corners) in revisitingRoutes(seed: 0xD21E_0006, count: 60) {
+      let truth = Trace.positions(along: corners, every: 5)
+      let total = truth[truth.count - 1].alongMeters
+      let places = truth.filter { $0.alongMeters < total - 40 }
+      for _ in 0..<12 {
+        let parked = places[Int(unit() * Double(places.count - 1))]
+        let radius = [60.0, 150, 290][Int(unit() * 2.99)]
+        let nearby = truth.filter {
+          let distance = hypot($0.x - parked.x, $0.y - parked.y)
+          return distance > 5 && distance <= radius
+        }
+        let speed: Double? = [0.0, nil, 100][Int(unit() * 2.99)]
+        // 0: every second. 1: all with one timestamp. 2: after a 12-minute gap. 3: every 3 s.
+        let clock = Int(unit() * 3.99)
+        let core = NavigationCore()
+        var time = -30.0
+        var isPlaced = false
+        for position in truth
+        where position.alongMeters <= parked.alongMeters
+          && position.alongMeters >= parked.alongMeters - 60
+        {
+          if !isPlaced {
+            try core.setRoute(
+              Trace.route(corners),
+              resume: NavigationResumeContext(
+                alongMeters: position.alongMeters, timestamp: Trace.time(time - 1))
+            )
+            isPlaced = true
+          }
+          try core.updateLocation(
+            Trace.sample(
+              x: position.x, y: position.y, courseDegrees: position.courseDegrees, speed: 5,
+              time: time)
+          )
+          time += 1
+        }
+        try core.updateLocation(Trace.sample(x: parked.x, y: parked.y, speed: 0, time: 0))
+        cases += 1
+        var fixes: [(Double, Double)] = []
+        for _ in 0..<(1 + Int(unit() * 6)) {
+          let kind = unit()
+          if kind < 0.45, !nearby.isEmpty {
+            let place = nearby[Int(unit() * Double(nearby.count - 1))]
+            fixes.append((place.x, place.y))
+          } else if kind < 0.8 {
+            let bearing = random.next(amplitude: .pi)
+            let distance = unit() * radius
+            fixes.append((parked.x + distance * cos(bearing), parked.y + distance * sin(bearing)))
+          } else {
+            fixes.append((parked.x, parked.y))
+          }
+          if unit() < 0.5, let last = fixes.last {
+            fixes.append(last)
+          }
+        }
+        fixes += Array(repeating: (parked.x, parked.y), count: 3)
+        var now = clock == 2 ? 700.0 : 1.0
+        var furthest = 0.0
+        for fix in fixes {
+          furthest = max(furthest, hypot(fix.0 - parked.x, fix.1 - parked.y))
+          let snapshot = try core.updateLocation(
+            Trace.sample(x: fix.0, y: fix.1, speed: speed, time: now)
+          )
+          if clock != 1 {
+            now += clock == 3 ? 3 : 1
+          }
+          if snapshot.phase == .arrived {
+            XCTAssertLessThanOrEqual(
+              total - parked.alongMeters, 1.5 * furthest + 60,
+              "\(name) parked at \(parked.alongMeters), speed \(String(describing: speed)), "
+                + "clock \(clock), fixes \(fixes)"
+            )
+            break
+          }
+        }
+      }
+    }
+    XCTAssertGreaterThan(cases, 3_000)
   }
 
   // MARK: Support

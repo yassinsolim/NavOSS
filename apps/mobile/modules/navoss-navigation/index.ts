@@ -60,8 +60,8 @@ export interface NativeNavigationLocationSample extends NativeNavigationCoordina
   courseDegrees?: number;
   horizontalAccuracyMeters?: number;
   speedMetersPerSecond?: number;
-  /** Fix time in milliseconds since the Unix epoch. */
-  timestampMs?: number;
+  /** Capture time in milliseconds since the Unix epoch. The core refuses a fix without one. */
+  timestampMs: number;
 }
 
 export interface NativeRerouteProposal {
