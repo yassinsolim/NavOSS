@@ -33,12 +33,9 @@ struct NavOSSNavigationServiceState: Sendable {
   let trip: NavOSSCarPlayTrip?
 }
 
-/// Interval of the dead-reckoning tick while guidance is active.
-private let deadReckoningTickSeconds = 1.0
-/// Cameras are refreshed at most this often; the source updates monthly.
-private let safetyCameraRefreshSeconds: TimeInterval = 6 * 60 * 60
-/// A failed camera fetch is retried no sooner than this.
-private let safetyCameraRetrySeconds: TimeInterval = 5 * 60
+/// Interval of the navigation clock while guidance is active.
+private let navigationClockTickSeconds = 1.0
+
 
 public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   AVSpeechSynthesizerDelegate, @unchecked Sendable
@@ -60,7 +57,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   /// Voice capture owns the shared audio session while any connected CarPlay scene records.
   /// These methods run on the main actor alongside AVSpeechSynthesizer callbacks.
   private var carPlayVoiceInputLeases: Set<UUID> = []
-  private var deadReckoningTimer: DispatchSourceTimer?
+  private var navigationClockTimer: DispatchSourceTimer?
   private var deferredSpeech: (text: String, expectedGeneration: UInt64?)?
   private var isCarPlayVoiceInputActive: Bool { !carPlayVoiceInputLeases.isEmpty }
   private let lock = NSRecursiveLock()
@@ -135,7 +132,10 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   @discardableResult
   public func acceptRerouteProposal(id: String) -> Bool {
     lock.lock()
-    guard let replacement = rerouteConsent.accept(id: id),
+    guard let replacement = rerouteConsent.accept(
+      id: id,
+      now: Date().timeIntervalSinceReferenceDate
+    ),
       let tripId = navigationSession.trip?.id
     else {
       lock.unlock()
@@ -246,7 +246,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     stateVersion &+= 1
     activeTripStore.clear()
     lock.unlock()
-    stopDeadReckoning()
+    stopNavigationClock(expectedGeneration: generation)
     NavOSSCarPlayTripStore.shared.clearTrip(
       generation: generation,
       sequence: update.snapshot.sequence
@@ -607,6 +607,13 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
 
   public func speechSynthesizer(
     _ synthesizer: AVSpeechSynthesizer,
+    didStart utterance: AVSpeechUtterance
+  ) {
+    startSpeechUtterance(utterance)
+  }
+
+  public func speechSynthesizer(
+    _ synthesizer: AVSpeechSynthesizer,
     didFinish utterance: AVSpeechUtterance
   ) {
     completeSpeechUtterance(utterance)
@@ -815,7 +822,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       speak(speechPrompt.text, expectedGeneration: versionedUpdate.generation)
     }
     if update.snapshot.phase == .arrived {
-      stopDeadReckoning()
+      stopNavigationClock(expectedGeneration: versionedUpdate.generation)
       reconcileLocationUpdates(expectedGeneration: versionedUpdate.generation)
     }
   }
@@ -842,7 +849,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     ) {
     case .none:
       lock.unlock()
-    case .withdrew:
+    case .withdrew, .expired:
       routeStatus = .tracking
       stateVersion &+= 1
       lock.unlock()
@@ -939,18 +946,11 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
             waypoints: waypoints
           ).first
         }
-        let fetched: NavOSSCarPlayTrip?
-        if let rejoin {
-          do {
-            fetched = try await fetch([rejoin] + remainingWaypoints)
-          } catch NavOSSNavigationAPIError.invalidRequest {
-            // The rejoin point could not be routed through; recovering matters more than
-            // keeping the route.
-            fetched = try await fetch(remainingWaypoints)
-          }
-        } else {
-          fetched = try await fetch(remainingWaypoints)
-        }
+        let fetched = try await navigationFetchRecoveryRoute(
+          rejoin: rejoin,
+          remainingWaypoints: remainingWaypoints,
+          fetch: fetch
+        )
         guard !Task.isCancelled, let fetched else {
           throw NavOSSNavigationAPIError.invalidResponse
         }
@@ -1047,10 +1047,14 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     let update: NavigationSessionUpdate
     lock.lock()
     let current = navigationSession.currentUpdate()
-    guard navigationGeneration == expectedGeneration,
-      requestId.map({ $0 == rerouteRequestId }) ?? true,
-      current.trip?.id == expectedTripId,
-      current.snapshot.phase == .tracking
+    guard
+      navigationShouldInstallReplacement(
+        generationMatches: navigationGeneration == expectedGeneration,
+        requestMatches: requestId.map { $0 == rerouteRequestId } ?? true,
+        tripMatches: current.trip?.id == expectedTripId,
+        phase: current.snapshot.phase,
+        isOffRoute: current.snapshot.isOffRoute
+      )
     else {
       lock.unlock()
       return false
@@ -1142,13 +1146,12 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private func refreshSafetyCamerasIfNeeded() {
     lock.lock()
     let now = Date()
-    let isFresh = safetyCameraFetchedAt.map {
-      now.timeIntervalSince($0) < safetyCameraRefreshSeconds
-    } ?? false
-    let recentlyAttempted = safetyCameraFetchAttemptedAt.map {
-      now.timeIntervalSince($0) < safetyCameraRetrySeconds
-    } ?? false
-    guard !isFresh, !recentlyAttempted, safetyCameraTask == nil else {
+    guard navigationShouldFetchSafetyCameras(
+      fetchedAt: safetyCameraFetchedAt?.timeIntervalSinceReferenceDate,
+      attemptedAt: safetyCameraFetchAttemptedAt?.timeIntervalSinceReferenceDate,
+      isFetching: safetyCameraTask != nil,
+      now: now.timeIntervalSinceReferenceDate
+    ) else {
       lock.unlock()
       return
     }
@@ -1167,37 +1170,81 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     lock.unlock()
   }
 
-  /// Ticks dead reckoning while a trip is active, so a gap in fixes moves the puck and the
-  /// maneuver distance instead of freezing them. The core decides whether extrapolation is
-  /// allowed; most ticks are no-ops because a fresh fix arrived.
-  private func startDeadReckoning() {
+  /// A one-second clock while a trip is active. It dead-reckons through gaps in fixes (so the
+  /// puck and maneuver distance keep moving), applies reroute-consent deadlines even when no fix
+  /// arrives, and retries a failed camera fetch. Start and stop are bound to the navigation
+  /// generation that requested them, so a stale stop queued by an earlier trip cannot cancel
+  /// the clock a newer trip started.
+  private func startNavigationClock(expectedGeneration: UInt64) {
     DispatchQueue.main.async { [weak self] in
-      guard let self, self.deadReckoningTimer == nil else { return }
+      guard let self else { return }
+      let isCurrent = self.lock.withLock {
+        self.navigationGeneration == expectedGeneration && self.navigationSession.trip != nil
+      }
+      guard isCurrent, self.navigationClockTimer == nil else { return }
       let timer = DispatchSource.makeTimerSource(queue: .main)
       timer.schedule(
-        deadline: .now() + deadReckoningTickSeconds,
-        repeating: deadReckoningTickSeconds,
+        deadline: .now() + navigationClockTickSeconds,
+        repeating: navigationClockTickSeconds,
         leeway: .milliseconds(100)
       )
       timer.setEventHandler { [weak self] in
-        self?.deadReckonTick()
+        self?.navigationClockTick()
       }
-      self.deadReckoningTimer = timer
+      self.navigationClockTimer = timer
       timer.resume()
     }
   }
 
-  private func stopDeadReckoning() {
+  private func stopNavigationClock(expectedGeneration: UInt64) {
     DispatchQueue.main.async { [weak self] in
-      self?.deadReckoningTimer?.cancel()
-      self?.deadReckoningTimer = nil
+      guard let self else { return }
+      let isCurrent = self.lock.withLock { self.navigationGeneration == expectedGeneration }
+      guard isCurrent else { return }
+      self.navigationClockTimer?.cancel()
+      self.navigationClockTimer = nil
     }
   }
 
-  private func deadReckonTick() {
+  private func navigationClockTick() {
+    refreshSafetyCamerasIfNeeded()
+    let now = Date().timeIntervalSinceReferenceDate
     lock.lock()
+    let current = navigationSession.currentUpdate()
+    guard let trip = current.trip, current.snapshot.phase == .tracking else {
+      lock.unlock()
+      return
+    }
+    // Consent deadlines run on the clock: during a GPS outage no fix arrives to evaluate them.
+    // No request is made from here; the next real fix requests a fresh route.
+    if rerouteConsent.proposal != nil, current.snapshot.isOffRoute {
+      switch rerouteConsent.evaluate(
+        mode: navigationPreferences.rerouteMode,
+        isOffRoute: true,
+        canRequest: false,
+        now: now
+      ) {
+      case .expired:
+        stateVersion &+= 1
+        lock.unlock()
+        notificationCenter.post(name: .navOSSNavigationSnapshotDidChange, object: self)
+        lock.lock()
+      case .installProposal(let proposal):
+        let generation = navigationGeneration
+        lock.unlock()
+        _ = try? installReroute(
+          proposal.trip,
+          expectedGeneration: generation,
+          expectedTripId: trip.id,
+          requestId: nil
+        )
+        return
+      case .none, .request, .withdrew:
+        break
+      }
+    }
     guard !validatesPersistedNavigation,
-      let update = navigationSession.deadReckon(at: Date().timeIntervalSinceReferenceDate)
+      let update = navigationSession.deadReckon(at: now)
     else {
       lock.unlock()
       return
@@ -1278,13 +1325,26 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     }
   }
 
+  private func startSpeechUtterance(_ utterance: AVSpeechUtterance) {
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.pendingUtterances.start(
+        ObjectIdentifier(utterance),
+        now: Date().timeIntervalSinceReferenceDate
+      )
+    }
+  }
+
+  /// Not gated on `speechSynthesizer.isSpeaking`: between two queued prompts it can briefly read
+  /// false, which used to release the session under the next prompt. Lost callbacks are covered
+  /// by the ledger's deadlines instead.
   private func completeSpeechUtterance(_ utterance: AVSpeechUtterance) {
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
-      self.pendingUtterances.complete(ObjectIdentifier(utterance))
-      if !self.speechSynthesizer.isSpeaking {
-        self.pendingUtterances.removeAll()
-      }
+      self.pendingUtterances.complete(
+        ObjectIdentifier(utterance),
+        now: Date().timeIntervalSinceReferenceDate
+      )
       guard self.pendingUtterances.isEmpty else { return }
       self.attemptAudioSessionRelease(epoch: self.audioSessionOwnership.epoch)
     }
@@ -1399,7 +1459,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       publish(versionedUpdate)
     }
     ensureLocationUpdates()
-    startDeadReckoning()
+    startNavigationClock(expectedGeneration: versionedUpdate.generation)
     refreshSafetyCamerasIfNeeded()
   }
 

@@ -33,8 +33,9 @@ final class NavigationSpeechPlanner {
 
   /// Ground speed (≈70 km/h) from which highway timing applies.
   static let highwaySpeedMetersPerSecond = 19.5
-  /// The same words are not spoken twice within this window, whichever route or maneuver
-  /// produced them. A reroute that keeps the turn the driver was just told about stays quiet.
+  /// A physical maneuver announced at some urgency is not announced again at that urgency
+  /// within this window, whichever route produced it. A reroute that keeps the turn the driver
+  /// was just told about stays quiet.
   static let repeatSuppressionSeconds = 30.0
   /// Lower-urgency prompts wait this long after any prompt so two never run back to back.
   static let minimumGapSeconds = 3.0
@@ -42,14 +43,28 @@ final class NavigationSpeechPlanner {
   private var announcedLevels: [String: Level] = [:]
   private var arrivedTripIds: Set<String> = []
   private var lastPromptTime: TimeInterval?
-  private var recentTexts: [(text: String, time: TimeInterval)] = []
+  /// Maneuvers announced recently, by place and wording, so the same physical turn on a
+  /// replacement route is not announced again.
+  private var recentManeuvers: [RecentManeuver] = []
+
+  private struct RecentManeuver {
+    let instruction: String
+    let level: Level
+    let point: NavigationCoordinate
+    let time: TimeInterval
+  }
+
+  /// Two announcements describe the same physical maneuver when they are this close and use the
+  /// same words. Place alone is not enough (a test route may stack maneuvers), and words alone
+  /// are not either (two different right turns can read identically).
+  static let sameManeuverRadiusMeters = 30.0
 
   /// Forgets everything; for a new trip.
   func reset() {
     announcedLevels.removeAll()
     arrivedTripIds.removeAll()
     lastPromptTime = nil
-    recentTexts.removeAll()
+    recentManeuvers.removeAll()
   }
 
   /// For a replacement route on the same trip: maneuver bookkeeping restarts with the new
@@ -69,7 +84,7 @@ final class NavigationSpeechPlanner {
     guard hasCurrentLocation, !trip.steps.isEmpty else {
       return nil
     }
-    recentTexts.removeAll { now - $0.time > Self.repeatSuppressionSeconds }
+    recentManeuvers.removeAll { now - $0.time > Self.repeatSuppressionSeconds }
 
     if guidance.phase == .arrived {
       guard arrivedTripIds.insert(trip.id).inserted else {
@@ -103,9 +118,21 @@ final class NavigationSpeechPlanner {
       return nil
     }
 
-    var text = Self.spokenInstruction(
+    let instruction = Self.spokenInstruction(
       trip.steps[currentStepIndex].spokenInstruction ?? trip.steps[maneuverIndex].instruction
     )
+    let maneuverPoint = Self.maneuverPoint(trip, maneuverIndex)
+    // The same turn was just announced at this urgency (typically on the route a reroute
+    // replaced): it counts as announced for this route too.
+    if recentManeuvers.contains(where: {
+      $0.level >= level && $0.instruction == instruction
+        && navigationDistanceMeters(from: $0.point, to: maneuverPoint) <= Self.sameManeuverRadiusMeters
+    }) {
+      announcedLevels[maneuverKey] = level
+      return nil
+    }
+
+    var text = instruction
     // Two maneuvers close together: say both now, because there is no time between them for
     // a second prepare prompt.
     let followingIndex = maneuverIndex + 1
@@ -121,16 +148,23 @@ final class NavigationSpeechPlanner {
       if (announcedLevels[followingKey] ?? .early) < .prepare {
         announcedLevels[followingKey] = .prepare
       }
+      recentManeuvers.append(
+        RecentManeuver(
+          instruction: following,
+          level: .prepare,
+          point: Self.maneuverPoint(trip, followingIndex),
+          time: now
+        )
+      )
     }
     if level < .execute {
       text = "In \(Self.spokenDistance(guidance.distanceToManeuverMeters)), "
         + Self.lowercasingFirst(text)
     }
     announcedLevels[maneuverKey] = level
-
-    if recentTexts.contains(where: { $0.text == text }) {
-      return nil
-    }
+    recentManeuvers.append(
+      RecentManeuver(instruction: instruction, level: level, point: maneuverPoint, time: now)
+    )
     return emit(
       NavigationSpeechPrompt(key: "\(maneuverKey):\(level.keySuffix)", text: text),
       now: now
@@ -139,8 +173,12 @@ final class NavigationSpeechPlanner {
 
   private func emit(_ prompt: NavigationSpeechPrompt, now: TimeInterval) -> NavigationSpeechPrompt {
     lastPromptTime = now
-    recentTexts.append((prompt.text, now))
     return prompt
+  }
+
+  private static func maneuverPoint(_ trip: NavOSSCarPlayTrip, _ index: Int) -> NavigationCoordinate {
+    let point = trip.steps[index].geometry.first ?? trip.geometry[trip.geometry.count - 1]
+    return NavigationCoordinate(latitude: point.latitude, longitude: point.longitude)
   }
 
   static func effectiveSpeed(_ reported: Double?, guidance: NavOSSCarPlayGuidance) -> Double {

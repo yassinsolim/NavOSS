@@ -272,6 +272,9 @@ final class NavigationCore {
   private var isOffRoute = false
   private var lastFixSpeed: Double?
   private var lastFixTimestamp: TimeInterval?
+  /// Snapshot produced by the latest real fix. A held fix falls back to this, never to a
+  /// dead-reckoned guess or to the rejected projection.
+  private var lastRealSnapshot: NavigationSnapshot?
   private var progressHighWaterMark = 0.0
   private var recoverySampleCount = 0
   private var route: RoutePolyline?
@@ -299,6 +302,11 @@ final class NavigationCore {
 
   var routeLengthMeters: Double? {
     route?.totalDistanceMeters
+  }
+
+  /// Along-route position established by the latest real fix.
+  var fixAlongMeters: Double? {
+    route.map { fixProgress * $0.totalDistanceMeters }
   }
 
   func currentSnapshot() -> NavigationSnapshot {
@@ -537,7 +545,7 @@ final class NavigationCore {
       anchorTimestamp = sample.timestamp
     }
     // A dead-reckoned snapshot is a guess; the held position falls back to the last real match.
-    let previous = snapshot.isDeadReckoning ? nil : snapshot
+    let previous = lastRealSnapshot
     let previousMatchedCoordinate = previous?.matchedCoordinate
     let provisionalMatchedCoordinate = previousMatchedCoordinate ?? projection.coordinate
     let provisionalMatchedCourseDegrees = previous?.matchedCourseDegrees
@@ -572,6 +580,7 @@ final class NavigationCore {
       speedMetersPerSecond: sample.speedMetersPerSecond
     )
     fixProgress = routeProgress
+    lastRealSnapshot = snapshot
     return snapshot
   }
 
@@ -583,8 +592,14 @@ final class NavigationCore {
   /// `deadReckoningMaximumGapSeconds` or `deadReckoningMaximumDistanceMeters`, whichever is
   /// first. It never changes off-route, arrival or progress-mark state: the next real fix is
   /// judged against the last real match.
+  ///
+  /// `maximumAlongMeters` caps extrapolation, so it stops before the next maneuver the vehicle has
+  /// not been seen to take; only a real fix can confirm a turn.
   @discardableResult
-  func deadReckon(at timestamp: TimeInterval) -> NavigationSnapshot? {
+  func deadReckon(
+    at timestamp: TimeInterval,
+    maximumAlongMeters: Double? = nil
+  ) -> NavigationSnapshot? {
     guard let route, !hasArrived, !isOffRoute, snapshot.phase == .tracking,
       snapshot.matchedCoordinate != nil, let lastFixTimestamp, let lastFixSpeed,
       lastFixTimestamp == anchorTimestamp,
@@ -602,7 +617,8 @@ final class NavigationCore {
     // Stop short of the destination: arrival must come from real, accurate fixes.
     let alongMeters = min(
       fixAlongMeters + min(deadReckoningMaximumDistanceMeters, lastFixSpeed * gapSeconds),
-      route.totalDistanceMeters * arrivalProgressThreshold
+      route.totalDistanceMeters * arrivalProgressThreshold,
+      maximumAlongMeters ?? .infinity
     )
     guard alongMeters > snapshot.routeProgress * route.totalDistanceMeters else {
       return nil
@@ -629,6 +645,7 @@ final class NavigationCore {
 
   private func resetTrackingState() {
     anchorTimestamp = nil
+    lastRealSnapshot = nil
     arrivalSampleCount = 0
     departureSampleCount = 0
     fixProgress = 0
@@ -686,10 +703,13 @@ final class NavigationCore {
       for index in window {
         consider(index)
       }
-      // Nothing near the fix inside the window: the vehicle left the route, or rejoined it
-      // somewhere else. Look around the fix itself, still bounded by the grid radius.
+      // No convincing match inside the window: the vehicle left the route, rejoined it
+      // somewhere else, or the window's best candidate only fits by position while heading or
+      // travel time say otherwise (a self-crossing after an outage, a hairpin's other leg).
+      // Look around the fix itself, still bounded by the grid radius. The combined score, not
+      // lateral distance alone, decides.
       if let local = best,
-        local.distanceMeters > offRouteDistanceThresholdMeters + accuracyAllowanceMeters
+        bestScore > offRouteDistanceThresholdMeters + accuracyAllowanceMeters
       {
         let radius = min(
           globalSearchMaximumRadiusMeters,

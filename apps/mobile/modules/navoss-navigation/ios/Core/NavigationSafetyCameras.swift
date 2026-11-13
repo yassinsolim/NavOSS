@@ -43,6 +43,26 @@ public struct NavOSSSafetyCamera: Equatable, Sendable {
   }
 }
 
+/// Cameras are refreshed at most this often; the source updates monthly.
+let navigationSafetyCameraRefreshSeconds: TimeInterval = 6 * 60 * 60
+/// A failed camera fetch is retried this often while a trip is active, so a trip started
+/// offline gains alerts once connectivity returns.
+let navigationSafetyCameraRetrySeconds: TimeInterval = 60
+
+/// Whether to fetch cameras now. Called at trip start and on every navigation clock tick; the
+/// gates keep that to one request per retry interval.
+func navigationShouldFetchSafetyCameras(
+  fetchedAt: TimeInterval?,
+  attemptedAt: TimeInterval?,
+  isFetching: Bool,
+  now: TimeInterval
+) -> Bool {
+  guard !isFetching else { return false }
+  if let fetchedAt, now - fetchedAt < navigationSafetyCameraRefreshSeconds { return false }
+  if let attemptedAt, now - attemptedAt < navigationSafetyCameraRetrySeconds { return false }
+  return true
+}
+
 /// The camera alert the driver was given, while that camera is still ahead.
 struct NavigationSafetyCameraAlert: Equatable, Sendable {
   let cameraId: String

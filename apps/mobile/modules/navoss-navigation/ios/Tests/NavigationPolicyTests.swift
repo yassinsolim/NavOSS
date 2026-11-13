@@ -65,8 +65,8 @@ final class NavigationPolicyTests: XCTestCase {
     XCTAssertEqual(proposal.durationDeltaSeconds, 60)
     XCTAssertEqual(proposal.distanceDeltaMeters, 400)
     XCTAssertEqual(consent.evaluate(mode: .askFirst, isOffRoute: true, canRequest: true, now: 10), .none, "waiting on the driver")
-    XCTAssertNil(consent.accept(id: "stale"))
-    XCTAssertEqual(consent.accept(id: "p1")?.id, "r")
+    XCTAssertNil(consent.accept(id: "stale", now: 11))
+    XCTAssertEqual(consent.accept(id: "p1", now: 12)?.id, "r")
     XCTAssertNil(consent.proposal)
   }
 
@@ -75,7 +75,7 @@ final class NavigationPolicyTests: XCTestCase {
     _ = consent.evaluate(mode: .askFirst, isOffRoute: true, canRequest: true, now: 0)
     _ = consent.received(trip(id: "r"), mode: .askFirst, remainingDurationSeconds: nil, remainingDistanceMeters: nil, now: 1, id: "p1")
     XCTAssertEqual(consent.evaluate(mode: .askFirst, isOffRoute: false, canRequest: false, now: 5), .withdrew)
-    XCTAssertNil(consent.accept(id: "p1"), "a withdrawn proposal cannot be installed")
+    XCTAssertNil(consent.accept(id: "p1", now: 6), "a withdrawn proposal cannot be installed")
   }
 
   /// A CarPlay-only driver may never answer. Staying off the selected route must still end in a
@@ -203,21 +203,24 @@ final class NavigationPolicyTests: XCTestCase {
     let second = ObjectIdentifier(utterances[1])
     ledger.begin(first, characterCount: 30, now: 0)
     ledger.begin(second, characterCount: 30, now: 0)
-    XCTAssertFalse(ledger.complete(first))
-    XCTAssertFalse(ledger.complete(first), "a duplicate callback cannot release early")
-    XCTAssertTrue(ledger.complete(second))
+    XCTAssertFalse(ledger.complete(first, now: 3))
+    XCTAssertFalse(ledger.complete(first, now: 3), "a duplicate callback cannot release early")
+    XCTAssertTrue(ledger.complete(second, now: 6))
     XCTAssertTrue(ledger.isEmpty)
   }
 
-  /// The build 70 report: music stayed ducked. If the synthesizer never reports a queued
-  /// utterance finished, the ledger still lets the session go once it is overdue.
+  /// The build 70 report: music stayed ducked. If the synthesizer never reports an utterance
+  /// finished, the ledger still lets the session go once it is overdue.
   func testUtteranceLedgerExpiresAnUtteranceTheSynthesizerNeverReported() {
     var ledger = NavOSSSpeechUtteranceLedger()
-    let lost = ObjectIdentifier(NSObject())
+    let utterance = NSObject()
+    let lost = ObjectIdentifier(utterance)
     ledger.begin(lost, characterCount: 40, now: 100)
-    let deadline = NavOSSSpeechUtteranceLedger.deadline(forCharacterCount: 40, startedAt: 100)
+    ledger.start(lost, now: 101)
+    let deadline = 101 + 40 * NavOSSSpeechUtteranceLedger.secondsPerCharacter
+      + NavOSSSpeechUtteranceLedger.speakingGraceSeconds
     XCTAssertEqual(ledger.nextDeadline, deadline)
-    XCTAssertGreaterThan(deadline, 100 + 40 * 0.06, "never cuts off real speech")
+    XCTAssertGreaterThan(deadline, 101 + 40 * 0.06, "never cuts off real speech")
     XCTAssertFalse(ledger.expireOverdue(now: deadline - 0.1))
     XCTAssertTrue(ledger.expireOverdue(now: deadline + 0.1))
     XCTAssertTrue(ledger.isEmpty)
@@ -230,9 +233,19 @@ final class NavigationPolicyTests: XCTestCase {
     let lost = ObjectIdentifier(utterances[0])
     let current = ObjectIdentifier(utterances[1])
     ledger.begin(lost, characterCount: 10, now: 0)
-    ledger.begin(current, characterCount: 10, now: 20)
-    XCTAssertFalse(ledger.expireOverdue(now: 10), "the newer utterance still holds the session")
+    ledger.begin(current, characterCount: 10, now: 1)
+    XCTAssertFalse(ledger.expireOverdue(now: 10), "the next utterance still holds the session")
     XCTAssertEqual(ledger.count, 1)
-    XCTAssertTrue(ledger.complete(current))
+    XCTAssertTrue(ledger.complete(current, now: 11))
+  }
+
+  func testUtteranceStartingDropsAnythingTheSynthesizerSkipped() {
+    var ledger = NavOSSSpeechUtteranceLedger()
+    let utterances = [NSObject(), NSObject()]
+    ledger.begin(ObjectIdentifier(utterances[0]), characterCount: 10, now: 0)
+    ledger.begin(ObjectIdentifier(utterances[1]), characterCount: 10, now: 0)
+    ledger.start(ObjectIdentifier(utterances[1]), now: 1)
+    XCTAssertEqual(ledger.count, 1)
+    XCTAssertTrue(ledger.complete(ObjectIdentifier(utterances[1]), now: 3))
   }
 }

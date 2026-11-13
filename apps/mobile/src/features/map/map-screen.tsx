@@ -489,7 +489,7 @@ export function MapScreen() {
   const [cameraAnnouncementCount, setCameraAnnouncementCount] = useState(0);
   const [carPlayConnected, setCarPlayConnected] = useState(false);
   const [safetyCameraAlert, setSafetyCameraAlert] = useState<{
-    camera: SafetyCamera;
+    camera: Pick<SafetyCamera, 'location'>;
     distanceAheadMeters: number;
   }>();
   const [safetyCameras, setSafetyCameras] = useState<readonly SafetyCamera[]>([]);
@@ -1229,22 +1229,26 @@ export function MapScreen() {
       const nativeAlert = snapshot.safetyCameraAlert;
       const alertKey =
         nativeAlert === undefined ? undefined : `alert:${String(nativeAlert.sequence)}`;
-      if (nativeAlert !== undefined && alertKey !== undefined) {
-        const camera = safetyCamerasRef.current.find(
-          (candidate) => candidate.id === nativeAlert.cameraId,
-        );
-        if (!announcedCameraIdsRef.current.has(alertKey) && camera !== undefined) {
-          announcedCameraIdsRef.current.add(alertKey);
-          setCameraAnnouncementCount((currentCount) => currentCount + 1);
-          setSafetyCameraAlert({ camera, distanceAheadMeters: nativeAlert.distanceAheadMeters });
-          if (cameraAlertTimeoutRef.current !== undefined) {
-            clearTimeout(cameraAlertTimeoutRef.current);
-          }
-          cameraAlertTimeoutRef.current = setTimeout(() => {
-            setSafetyCameraAlert(undefined);
-            cameraAlertTimeoutRef.current = undefined;
-          }, 6_000);
+      // The payload carries everything the banner shows, so it renders even when the phone's
+      // own camera fetch failed (e.g. the screen was unlocked offline).
+      if (
+        nativeAlert !== undefined &&
+        alertKey !== undefined &&
+        !announcedCameraIdsRef.current.has(alertKey)
+      ) {
+        announcedCameraIdsRef.current.add(alertKey);
+        setCameraAnnouncementCount((currentCount) => currentCount + 1);
+        setSafetyCameraAlert({
+          camera: { location: nativeAlert.location },
+          distanceAheadMeters: nativeAlert.distanceAheadMeters,
+        });
+        if (cameraAlertTimeoutRef.current !== undefined) {
+          clearTimeout(cameraAlertTimeoutRef.current);
         }
+        cameraAlertTimeoutRef.current = setTimeout(() => {
+          setSafetyCameraAlert(undefined);
+          cameraAlertTimeoutRef.current = undefined;
+        }, 6_000);
       }
     };
     if (navigationSnapshot !== undefined) {

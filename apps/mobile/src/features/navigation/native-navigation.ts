@@ -32,6 +32,35 @@ interface NativeNavigationHarnessModule {
   isCarPlayVisualHarness(): boolean;
 }
 
+/** Oldest native navigation contract this JavaScript works with. */
+export const REQUIRED_NATIVE_NAVIGATION_VERSION = 9;
+
+/**
+ * Explains a JavaScript/native mismatch, or `undefined` when they match. New JavaScript on an
+ * older dev client would otherwise run silently without native features it relies on, such as
+ * camera alerts, which moved into native navigation in contract 9.
+ */
+export function nativeNavigationContractError(version: number | undefined): string | undefined {
+  if (version !== undefined && version >= REQUIRED_NATIVE_NAVIGATION_VERSION) {
+    return undefined;
+  }
+  return (
+    `NavOSS native navigation is contract ${version === undefined ? 'unknown' : `v${String(version)}`}, ` +
+    `but this JavaScript needs v${String(REQUIRED_NATIVE_NAVIGATION_VERSION)}. ` +
+    'Rebuild the iOS dev client (expo prebuild, then expo run:ios) so native and JavaScript match.'
+  );
+}
+
+let nativeNavigationContractVerified = false;
+
+function assertNativeNavigationContract(): void {
+  if (nativeNavigationContractVerified) return;
+  const version: number = NavOSSNavigation.getCapabilities().version;
+  const error = nativeNavigationContractError(version);
+  if (error !== undefined) throw new Error(error);
+  nativeNavigationContractVerified = true;
+}
+
 const nativeNavigationPreferences = NavOSSNavigation as NativeNavigationPreferencesModule;
 const nativeNavigationHarness = NavOSSNavigation as NativeNavigationHarnessModule;
 
@@ -80,6 +109,7 @@ export function declineRerouteProposal(id: string): boolean {
 }
 
 export function observeNavigationSnapshots(listener: (snapshot: NativeNavigationSnapshot) => void) {
+  assertNativeNavigationContract();
   return NavOSSNavigation.addListener('onNavigationSnapshot', listener);
 }
 
@@ -184,6 +214,7 @@ export function setNavigationRoute(
   traffic?: NativeTrafficInput,
   waypoints: SearchResult[] = [],
 ): NativeNavigationSnapshot {
+  assertNativeNavigationContract();
   const coordinate = ([longitude, latitude]: [number, number]) => ({ latitude, longitude });
   return NavOSSNavigation.setRoute({
     destination: nativeDestination(destination),

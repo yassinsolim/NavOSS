@@ -17,6 +17,9 @@ enum NavigationRerouteAction: Equatable, Sendable {
   case request
   /// The driver is back on the selected route; the pending proposal was withdrawn.
   case withdrew
+  /// The pending proposal passed its response window while no request could be made (a clock
+  /// tick during a GPS outage). It is gone; the next replacement installs directly.
+  case expired
   /// Install the pending proposal now (the mode no longer asks).
   case installProposal(NavigationRerouteProposal)
 }
@@ -75,7 +78,7 @@ struct NavigationRerouteConsent {
       }
       self.proposal = nil
       installsNextReplacement = true
-      return canRequest ? .request : .none
+      return canRequest ? .request : .expired
     }
     guard canRequest else {
       return .none
@@ -112,9 +115,11 @@ struct NavigationRerouteConsent {
   }
 
   /// The driver accepted proposal `id`. Returns the route to install, or `nil` if that proposal
-  /// is no longer pending.
-  mutating func accept(id: String) -> NavOSSCarPlayTrip? {
-    guard let proposal, proposal.id == id else {
+  /// is no longer pending or its response window has passed.
+  mutating func accept(id: String, now: TimeInterval) -> NavOSSCarPlayTrip? {
+    guard let proposal, proposal.id == id,
+      now - proposal.createdAt < Self.askFirstResponseSeconds
+    else {
       return nil
     }
     self.proposal = nil
@@ -151,4 +156,100 @@ func navigationKeepRouteRejoinAlongMeters(
     return nil
   }
   return target
+}
+
+/// How close a mid-route arrival must be to the rejoin point to be recognised as its boundary.
+let navigationRejoinBoundaryRadiusMeters = 50.0
+
+/// Removes the leg boundary a keep-route rejoin point introduces.
+///
+/// `/v1/routes` cannot mark a waypoint as pass-through, so the router treats the rejoin point
+/// as a stop: the first leg ends with an "arrive" step (and the step before it announces "You
+/// have arrived"), and the second leg starts with a "depart" step. The driver asked for no
+/// stop there. The arrival is dropped and the steps either side are merged into one, taking
+/// the second leg's spoken instruction so the next real maneuver is announced instead of the
+/// arrival. A route without such a boundary is returned unchanged.
+func navigationRemovingRejoinBoundary(
+  from trip: NavOSSCarPlayTrip,
+  rejoin: NavOSSCarPlayCoordinate
+) -> NavOSSCarPlayTrip {
+  let rejoinPoint = NavigationCoordinate(latitude: rejoin.latitude, longitude: rejoin.longitude)
+  let steps = trip.steps
+  guard let arrivalIndex = steps.indices.dropFirst().dropLast().first(where: { index in
+    guard steps[index].maneuverType == "arrive", let point = steps[index].geometry.first else {
+      return false
+    }
+    return navigationDistanceMeters(
+      from: NavigationCoordinate(latitude: point.latitude, longitude: point.longitude),
+      to: rejoinPoint
+    ) <= navigationRejoinBoundaryRadiusMeters
+  }), steps[arrivalIndex + 1].maneuverType == "depart"
+  else {
+    return trip
+  }
+  let before = steps[arrivalIndex - 1]
+  let arrival = steps[arrivalIndex]
+  let departure = steps[arrivalIndex + 1]
+  let merged = NavOSSCarPlayRouteStep(
+    distanceMeters: before.distanceMeters + arrival.distanceMeters + departure.distanceMeters,
+    durationSeconds: before.durationSeconds + arrival.durationSeconds + departure.durationSeconds,
+    geometry: before.geometry
+      + (departure.geometry.first == before.geometry.last
+        ? Array(departure.geometry.dropFirst())
+        : departure.geometry),
+    instruction: before.instruction,
+    maneuverType: before.maneuverType,
+    roadName: before.roadName,
+    spokenInstruction: departure.spokenInstruction
+  )
+  return NavOSSCarPlayTrip(
+    destination: trip.destination,
+    distanceMeters: trip.distanceMeters,
+    durationSeconds: trip.durationSeconds,
+    geometry: trip.geometry,
+    id: trip.id,
+    preferences: trip.preferences,
+    source: trip.source,
+    speedLimitsKph: trip.speedLimitsKph,
+    steps: Array(steps[..<(arrivalIndex - 1)]) + [merged] + Array(steps[(arrivalIndex + 2)...]),
+    traffic: trip.traffic,
+    waypoints: trip.waypoints
+  )
+}
+
+/// Whether a replacement route may still be installed. Evaluated under the service lock in the
+/// same transaction as the install, so a driver who rejoined the selected route after the
+/// replacement was fetched or accepted keeps the selected route.
+func navigationShouldInstallReplacement(
+  generationMatches: Bool,
+  requestMatches: Bool,
+  tripMatches: Bool,
+  phase: NavigationPhase,
+  isOffRoute: Bool
+) -> Bool {
+  generationMatches && requestMatches && tripMatches && phase == .tracking && isOffRoute
+}
+
+/// Fetches a recovery route. With a keep-route rejoin point the route goes back onto the
+/// selected route first, with the rejoin boundary removed; if that request fails for any reason
+/// (the API answers 400 for an unroutable request and 503 when the router fails), one plain
+/// recovery route is tried, because recovering matters more than keeping the route.
+func navigationFetchRecoveryRoute(
+  rejoin: NavOSSCarPlayDestination?,
+  remainingWaypoints: [NavOSSCarPlayDestination],
+  fetch: ([NavOSSCarPlayDestination]) async throws -> NavOSSCarPlayTrip?
+) async throws -> NavOSSCarPlayTrip? {
+  if let rejoin {
+    do {
+      if let fetched = try await fetch([rejoin] + remainingWaypoints) {
+        return navigationRemovingRejoinBoundary(
+          from: fetched,
+          rejoin: NavOSSCarPlayCoordinate(latitude: rejoin.latitude, longitude: rejoin.longitude)
+        )
+      }
+    } catch {
+      try Task.checkCancellation()
+    }
+  }
+  return try await fetch(remainingWaypoints)
 }

@@ -66,12 +66,24 @@ final class NavigationSession {
 
   /// Extrapolates through a gap in fixes; `nil` when the core declines (see
   /// `NavigationCore.deadReckon`).
+  ///
+  /// Extrapolation stops `deadReckoningManeuverMarginMeters` before the next maneuver after the
+  /// last real fix: a driver who loses GPS approaching a turn may slow, stop or miss it, so
+  /// guidance must not move on to later maneuvers until a fix confirms the turn.
   func deadReckon(at timestamp: TimeInterval) -> NavigationSessionUpdate? {
-    guard trip != nil, let snapshot = core.deadReckon(at: timestamp) else {
+    guard trip != nil, let stepGeometry, let fixAlong = core.fixAlongMeters else {
+      return nil
+    }
+    let maneuverCap = stepGeometry.nextStepStart(after: fixAlong).map {
+      $0 - Self.deadReckoningManeuverMarginMeters
+    }
+    guard let snapshot = core.deadReckon(at: timestamp, maximumAlongMeters: maneuverCap) else {
       return nil
     }
     return update(for: snapshot)
   }
+
+  static let deadReckoningManeuverMarginMeters = 15.0
 
   /// The on-route point `alongMeters` from the active route's origin.
   func routePoint(alongMeters: Double) -> NavigationCoordinate? {

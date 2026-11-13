@@ -34,7 +34,12 @@ struct NavigationStepGeometry: Equatable, Sendable {
 
     var starts: [Double] = []
     starts.reserveCapacity(trip.steps.count)
+    // Steps run in route order, so each search resumes after the previous step. That keeps an
+    // out-and-back (or a loop closing on its own start) from matching an earlier visit of the
+    // same coordinate, and makes alignment a single forward pass over the geometry.
     var searchFrom = 0
+    // Where the previous step's geometry ended, when it was an exact slice of the route.
+    var expectedStart: Int?
     var aligned = true
     for step in trip.steps {
       guard let first = step.geometry.first else {
@@ -42,27 +47,43 @@ struct NavigationStepGeometry: Equatable, Sendable {
         break
       }
       let target = NavigationCoordinate(latitude: first.latitude, longitude: first.longitude)
-      // Steps run in route order, so each search resumes where the previous step started. That
-      // keeps an out-and-back from matching the outbound vertex for a return-leg step, and makes
-      // the whole alignment a single pass over the geometry.
-      var found: Int?
-      var index = searchFrom
-      while index < geometry.count {
-        if geometry[index] == target
-          || navigationDistanceMeters(from: geometry[index], to: target)
-            <= Self.vertexMatchToleranceMeters
-        {
-          found = index
-          break
-        }
-        index += 1
+      let found: Int?
+      if let expectedStart, expectedStart < geometry.count, geometry[expectedStart] == target {
+        found = expectedStart
+      } else {
+        // Exact matches first: a nearby earlier vertex (a 2 m first step) must not win over
+        // the vertex the step actually starts at.
+        found = geometry[searchFrom...].firstIndex(of: target)
+          ?? geometry[searchFrom...].firstIndex {
+            navigationDistanceMeters(from: $0, to: target) <= Self.vertexMatchToleranceMeters
+          }
       }
       guard let found else {
         aligned = false
         break
       }
       starts.append(cumulative[found])
-      searchFrom = found
+
+      // Only a zero-length step (an arrival or a maneuver point) shares its start with the
+      // next step; anything longer consumes at least one vertex.
+      if step.geometry.allSatisfy({ $0 == first }) {
+        searchFrom = found
+        expectedStart = found
+        continue
+      }
+      let isExactSlice = found + step.geometry.count <= geometry.count
+        && step.geometry.indices.allSatisfy { offset in
+          let vertex = geometry[found + offset]
+          return vertex.latitude == step.geometry[offset].latitude
+            && vertex.longitude == step.geometry[offset].longitude
+        }
+      if isExactSlice {
+        expectedStart = found + step.geometry.count - 1
+        searchFrom = found + step.geometry.count - 1
+      } else {
+        expectedStart = nil
+        searchFrom = min(found + 1, geometry.count - 1)
+      }
     }
 
     if aligned, starts.count == trip.steps.count {
@@ -92,6 +113,11 @@ struct NavigationStepGeometry: Equatable, Sendable {
       }
     }
     return low
+  }
+
+  /// Along-route start of the first step beginning after `alongMeters`: the next maneuver ahead.
+  func nextStepStart(after alongMeters: Double) -> Double? {
+    stepStartAlongMeters.first { $0 > alongMeters + 0.5 }
   }
 
   /// Fraction of step `index`'s geometry still ahead of `alongMeters`, in 0...1.
