@@ -104,8 +104,44 @@ private struct CarPlayRouteStepRecord: Record {
   @Field
   var spokenInstruction: String?
 
+  @Field
+  var bearingAfterDegrees: Double?
+
+  @Field
+  var bearingBeforeDegrees: Double?
+
+  @Field
+  var currentRoadName: String?
+
+  @Field
+  var exitNumber: String?
+
+  @Field
+  var junctionName: String?
+
+  @Field
+  var lanes: [CarPlayLaneRecord]?
+
+  @Field
+  var maneuverModifier: String?
+
+  @Field
+  var roundaboutExit: Int?
+
+  @Field
+  var signpost: String?
+
+  @Field
+  var signpostBranch: [String]?
+
+  @Field
+  var signpostToward: [String]?
+
   var step: NavOSSCarPlayRouteStep {
-    NavOSSCarPlayRouteStep(
+    // A lane list with any unrecognised arrow is dropped whole: a partial strip would misplace
+    // the lanes it kept.
+    let decodedLanes = lanes?.map(\.lane)
+    return NavOSSCarPlayRouteStep(
       distanceMeters: distanceMeters,
       durationSeconds: durationSeconds,
       geometry: geometry.map { coordinate in
@@ -117,7 +153,44 @@ private struct CarPlayRouteStepRecord: Record {
       instruction: instruction,
       maneuverType: maneuverType,
       roadName: roadName,
-      spokenInstruction: spokenInstruction
+      spokenInstruction: spokenInstruction,
+      maneuverModifier: maneuverModifier,
+      roundaboutExit: roundaboutExit,
+      exitNumber: exitNumber,
+      signpost: signpost,
+      lanes: decodedLanes?.contains(where: { $0 == nil }) == false && decodedLanes?.isEmpty == false
+        ? decodedLanes?.compactMap { $0 } : nil,
+      currentRoadName: currentRoadName,
+      bearingBeforeDegrees: bearingBeforeDegrees,
+      bearingAfterDegrees: bearingAfterDegrees,
+      signpostBranch: signpostBranch,
+      signpostToward: signpostToward,
+      junctionName: junctionName
+    )
+  }
+}
+
+private struct CarPlayLaneRecord: Record {
+  @Field
+  var active: Bool?
+
+  @Field
+  var indications: [String] = []
+
+  @Field
+  var valid: Bool = false
+
+  @Field
+  var validIndication: String?
+
+  var lane: NavOSSCarPlayLane? {
+    let parsed = indications.compactMap(NavOSSCarPlayLaneIndication.init(rawValue:))
+    guard parsed.count == indications.count else { return nil }
+    return NavOSSCarPlayLane(
+      indications: parsed,
+      isValid: valid,
+      isPreferred: active ?? false,
+      activeIndication: validIndication.flatMap(NavOSSCarPlayLaneIndication.init(rawValue:))
     )
   }
 }
@@ -202,8 +275,16 @@ private struct CarPlayTripRecord: Record {
   @Field
   var waypoints: [NavigationDestinationRecord] = []
 
+  /// One level per geometry segment; dropped whole if any level is unrecognised.
+  @Field
+  var congestion: [String]?
+
+  @Field
+  var trafficSource: String?
+
   var trip: NavOSSCarPlayTrip {
-    NavOSSCarPlayTrip(
+    let levels = congestion?.compactMap(NavOSSCarPlayCongestionLevel.init(rawValue:))
+    return NavOSSCarPlayTrip(
       destination: destination.destination,
       distanceMeters: distanceMeters,
       durationSeconds: durationSeconds,
@@ -219,7 +300,9 @@ private struct CarPlayTripRecord: Record {
       speedLimitsKph: speedLimitsKph,
       steps: steps.map(\.step),
       traffic: traffic?.traffic,
-      waypoints: waypoints.isEmpty ? nil : waypoints.map(\.destination)
+      waypoints: waypoints.isEmpty ? nil : waypoints.map(\.destination),
+      congestion: levels?.count == congestion?.count ? levels : nil,
+      trafficSource: trafficSource
     )
   }
 }
@@ -413,7 +496,7 @@ public final class NavOSSNavigationModule: Module {
         "routeMatching": true,
         "safetyCameraAnnouncements": true,
         "speedingWarning": true,
-        "version": 9,
+        "version": 10,
       ]
     }
 
@@ -488,13 +571,7 @@ public final class NavOSSNavigationModule: Module {
     }
 
     Function("setRoute") { (trip: CarPlayTripRecord) throws -> [String: Any] in
-      // An offline route planned on this device keeps its lanes, signs and bearings, which the
-      // JavaScript route model does not carry.
-      let planned = trip.trip
-      let rich =
-        planned.source == navOSSOfflineRouteSource
-        ? NavOSSOfflineRouter.shared.recentTrip(matching: planned) : nil
-      try self.service.startNavigation(rich ?? planned)
+      try self.service.startNavigation(trip.trip)
       return self.serialize(self.service.currentState())
     }
 
@@ -580,6 +657,11 @@ public final class NavOSSNavigationModule: Module {
 
     Function("deleteOfflineRegion") { (regionId: String) -> String in
       NavOSSOfflineStore.shared.delete(regionId: regionId).rawValue
+    }
+
+    Function("offlineRegionCovers") { (points: [NavigationCoordinateRecord]) -> Bool in
+      NavOSSOfflineRouter.shared.covers(
+        points.map { NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude) })
     }
 
     Function("setPreferOfflineMaps") { (prefer: Bool) in
@@ -828,6 +910,34 @@ public final class NavOSSNavigationModule: Module {
         if let spokenInstruction = step.spokenInstruction {
           payload["spokenInstruction"] = spokenInstruction
         }
+        if let lanes = step.lanes {
+          payload["lanes"] = lanes.map { lane in
+            var value: [String: Any] = [
+              "active": lane.isPreferred,
+              "indications": lane.indications.map(\.rawValue),
+              "valid": lane.isValid,
+            ]
+            if let activeIndication = lane.activeIndication {
+              value["validIndication"] = activeIndication.rawValue
+            }
+            return value
+          }
+        }
+        let optionalFields: [String: Any?] = [
+          "bearingAfterDegrees": step.bearingAfterDegrees,
+          "bearingBeforeDegrees": step.bearingBeforeDegrees,
+          "currentRoadName": step.currentRoadName,
+          "exitNumber": step.exitNumber,
+          "junctionName": step.junctionName,
+          "maneuverModifier": step.maneuverModifier,
+          "roundaboutExit": step.roundaboutExit,
+          "signpost": step.signpost,
+          "signpostBranch": step.signpostBranch,
+          "signpostToward": step.signpostToward,
+        ]
+        for case let (key, value?) in optionalFields {
+          payload[key] = value
+        }
         return payload
       },
     ]
@@ -842,6 +952,12 @@ public final class NavOSSNavigationModule: Module {
         "delaySeconds": traffic.delaySeconds,
         "typicalDurationSeconds": traffic.typicalDurationSeconds,
       ]
+    }
+    if let congestion = trip.congestion {
+      payload["congestion"] = congestion.map(\.rawValue)
+    }
+    if let trafficSource = trip.trafficSource {
+      payload["trafficSource"] = trafficSource
     }
     if let waypoints = trip.waypoints {
       payload["waypoints"] = waypoints.map { waypoint in

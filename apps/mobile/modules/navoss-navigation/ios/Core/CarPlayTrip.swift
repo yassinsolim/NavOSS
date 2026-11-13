@@ -90,9 +90,11 @@ public struct NavOSSCarPlayRouteStep: Codable, Equatable, Sendable {
   public let instruction: String
   public let maneuverType: String
   public let roadName: String
+  /// What to say for this step's own maneuver (the `/v2/routes` meaning). Responses from
+  /// `/v1/routes`, where it described the following maneuver, are shifted when decoded.
   public let spokenInstruction: String?
-  /// Optional OSRM maneuver modifier ("left", "slight right", …). Absent today; the instruction
-  /// text is used instead.
+  /// Optional OSRM maneuver modifier ("left", "slight right", …) from `/v2/routes`. When absent
+  /// the instruction text is used instead.
   public let maneuverModifier: String?
   /// Optional 1-based roundabout exit count from the provider.
   public let roundaboutExit: Int?
@@ -192,9 +194,13 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
   public let steps: [NavOSSCarPlayRouteStep]
   public let traffic: NavOSSCarPlayTraffic?
   public let waypoints: [NavOSSCarPlayDestination]?
-  /// Optional observed congestion, one level per geometry segment like `speedLimitsKph`. Absent
-  /// until a real traffic source exists; a misaligned array is ignored by the renderer.
+  /// Optional observed congestion, one level per geometry segment like `speedLimitsKph`. Present
+  /// only when a real traffic source observed this route; a misaligned array is ignored by the
+  /// renderer.
   public let congestion: [NavOSSCarPlayCongestionLevel]?
+  /// Id of the traffic source behind `congestion`/`traffic` when it is not the routing provider
+  /// itself (`navoss-community` for opted-in NavOSS driver speeds). `nil` without such traffic.
+  public let trafficSource: String?
 
   public init(
     destination: NavOSSCarPlayDestination,
@@ -208,7 +214,8 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
     steps: [NavOSSCarPlayRouteStep],
     traffic: NavOSSCarPlayTraffic? = nil,
     waypoints: [NavOSSCarPlayDestination]? = nil,
-    congestion: [NavOSSCarPlayCongestionLevel]? = nil
+    congestion: [NavOSSCarPlayCongestionLevel]? = nil,
+    trafficSource: String? = nil
   ) {
     self.destination = destination
     self.distanceMeters = distanceMeters
@@ -222,6 +229,26 @@ public struct NavOSSCarPlayTrip: Codable, Equatable, Sendable {
     self.traffic = traffic
     self.waypoints = waypoints
     self.congestion = congestion
+    self.trafficSource = trafficSource
+  }
+
+  /// The same route with a different stop list; every other field is kept.
+  public func replacingWaypoints(_ waypoints: [NavOSSCarPlayDestination]?) -> NavOSSCarPlayTrip {
+    NavOSSCarPlayTrip(
+      destination: destination,
+      distanceMeters: distanceMeters,
+      durationSeconds: durationSeconds,
+      geometry: geometry,
+      id: id,
+      preferences: preferences,
+      source: source,
+      speedLimitsKph: speedLimitsKph,
+      steps: steps,
+      traffic: traffic,
+      waypoints: waypoints,
+      congestion: congestion,
+      trafficSource: trafficSource
+    )
   }
 
   var isValid: Bool {
@@ -372,7 +399,9 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
 
   public init(
     defaults: UserDefaults = .standard,
-    key: String = "org.navoss.mobile.active-navigation-trip",
+    // v2: steps carry `spokenInstruction` for their own maneuver. A trip saved by an older build
+    // (the v1 meaning) is not restored rather than announcing every maneuver one step late.
+    key: String = "org.navoss.mobile.active-navigation-trip.v2",
     expirationInterval: TimeInterval = 12 * 60 * 60,
     clock: @escaping () -> Date = Date.init
   ) {

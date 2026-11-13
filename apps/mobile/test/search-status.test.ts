@@ -8,6 +8,7 @@ import {
 
 const healthy = {
   apiConnection: 'online',
+  coverageName: 'Calgary and Kelowna service areas',
   locationState: 'visible',
   nearbySearchEnabled: true,
 } as const;
@@ -34,9 +35,12 @@ describe('explore service notice', () => {
   });
 
   it('explains missing coverage only once a location is known', () => {
-    expect(exploreServiceNotice({ ...healthy, nearbySearchEnabled: false })?.title).toBe(
-      'Outside current coverage',
-    );
+    expect(exploreServiceNotice({ ...healthy, nearbySearchEnabled: false })).toMatchObject({
+      // The server's declared coverage, not the provinces this build bundles.
+      message:
+        'Search and directions cover Calgary and Kelowna service areas. Your current location is outside that area.',
+      title: 'Outside current coverage',
+    });
     expect(
       exploreServiceNotice({ ...healthy, locationState: 'locating', nearbySearchEnabled: false }),
     ).toBeUndefined();
@@ -78,7 +82,7 @@ describe('search source label', () => {
   const source = { datasetVersion: '1', updatedAt: '2026-01-01T00:00:00Z' };
 
   it('never presents static or preview data as live', () => {
-    expect(searchSourceLabel(undefined)).toBe('Calgary place search');
+    expect(searchSourceLabel(undefined)).toBe('Place search');
     expect(searchSourceLabel({ ...source, freshness: 'static', id: 'calgary-fixtures' })).toBe(
       'Calgary place data · Not live',
     );

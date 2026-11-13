@@ -1,4 +1,10 @@
-import type { SafetyCamera, SearchResult } from '@navoss/contracts';
+import type {
+  RouteAlternativeV2,
+  RouteLaneIndication,
+  RouteResponseV2,
+  SafetyCamera,
+  SearchResult,
+} from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -20,6 +26,7 @@ import {
 } from '@/features/map/overlay-layout';
 import { rerouteDeltaLabel, type SpeedReadout } from '@/features/navigation/guidance-settings';
 import { audioModeOption } from '@/features/navigation/guidance-settings-sheet';
+import type { LaneStrip, ManeuverSignage } from '@/features/navigation/lane-guidance';
 import { maneuverText } from '@/features/navigation/maneuver-text';
 import {
   maneuverDirection,
@@ -30,9 +37,11 @@ import {
   formatArrivalTime,
   formatDistance,
   formatDuration,
+  routeTrafficLabel,
   type UpcomingManeuver,
 } from '@/features/navigation/route-progress';
 import type { RouteSource } from '@/features/navigation/route-ui-state';
+import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import type { VehicleMatchStatus } from '@/features/navigation/vehicle-puck';
 import {
   createThemedStyles,
@@ -53,6 +62,9 @@ import { PressableScale } from '@/ui/pressable-scale';
 import { BottomSheet, BottomSheetReveal, BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
 import { SectionTitle } from '@/ui/sheet/sheet-header';
 
+/** Lanes and arrows that do not follow the route: 3:1 against the guidance ink. */
+const LANE_DIM = '#667573';
+
 export function maneuverSymbol(direction: ManeuverDirection): SymbolName {
   switch (direction) {
     case 'arrive':
@@ -65,9 +77,81 @@ export function maneuverSymbol(direction: ManeuverDirection): SymbolName {
       return { android: 'roundabout_right', ios: 'arrow.clockwise' };
     case 'uturn':
       return { android: 'u_turn_left', ios: 'arrow.uturn.backward' };
+    case 'slight-left':
+      return { android: 'turn_slight_left', ios: 'arrow.up.left' };
+    case 'slight-right':
+      return { android: 'turn_slight_right', ios: 'arrow.up.right' };
     case 'straight':
       return { android: 'straight', ios: 'arrow.up' };
   }
+}
+
+function laneArrowSymbol(indication: RouteLaneIndication): SymbolName {
+  switch (indication) {
+    case 'uturn':
+      return { android: 'u_turn_left', ios: 'arrow.uturn.backward' };
+    case 'sharp_left':
+      return { android: 'turn_sharp_left', ios: 'arrow.down.left' };
+    case 'left':
+      return { android: 'turn_left', ios: 'arrow.turn.up.left' };
+    case 'slight_left':
+    case 'merge_left':
+      return { android: 'turn_slight_left', ios: 'arrow.up.left' };
+    case 'slight_right':
+    case 'merge_right':
+      return { android: 'turn_slight_right', ios: 'arrow.up.right' };
+    case 'right':
+      return { android: 'turn_right', ios: 'arrow.turn.up.right' };
+    case 'sharp_right':
+      return { android: 'turn_sharp_right', ios: 'arrow.down.right' };
+    case 'none':
+    case 'straight':
+      return { android: 'straight', ios: 'arrow.up' };
+  }
+}
+
+/**
+ * Which lanes to be in for the next maneuver, left to right, drawn only from the route's lane
+ * data. Lanes to use are bright with a teal bar beneath; the rest are dimmed. Arrows that lead
+ * elsewhere in a lane to use are dimmed too, so the arrow to follow stands out.
+ */
+export function LaneGuidanceStrip({ strip }: { strip: LaneStrip }) {
+  return (
+    <View
+      accessibilityLabel={strip.accessibilityLabel}
+      accessible
+      style={guidanceStyles.laneStrip}
+      testID="lane-guidance"
+    >
+      {strip.tiles.map((tile, index) => (
+        <View
+          // Lanes have no identity beyond their position.
+          // eslint-disable-next-line react/no-array-index-key
+          key={index}
+          style={[
+            guidanceStyles.laneTile,
+            tile.state === 'recommended' && guidanceStyles.laneTileOn,
+          ]}
+        >
+          {tile.arrows.map((arrow) => (
+            <SymbolView
+              key={arrow.indication}
+              name={laneArrowSymbol(arrow.indication)}
+              size={26}
+              style={guidanceStyles.laneArrow}
+              tintColor={
+                tile.state === 'other' || !arrow.highlighted
+                  ? LANE_DIM
+                  : tile.state === 'recommended'
+                    ? palette.white
+                    : guidanceColors.textSecondary
+              }
+            />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
 }
 
 interface ManeuverBannerProps {
@@ -80,6 +164,8 @@ interface ManeuverBannerProps {
   children?: ReactNode;
   distanceMeters: number;
   instruction: string;
+  /** Direction stated by the route (`/v2/routes`); the instruction text is read without it. */
+  maneuverModifier?: string | undefined;
   maneuverType: string;
   /**
    * Reports the banner's height including its gap to the status bar. A long instruction wraps to
@@ -88,6 +174,8 @@ interface ManeuverBannerProps {
   onHeightChange: (height: number) => void;
   roadName: string;
   safeAreaTop: number;
+  /** Exit number and signed destinations from the route; nothing is shown without them. */
+  signage?: ManeuverSignage | undefined;
   status: NavigationRouteStatus;
 }
 
@@ -99,10 +187,12 @@ export function ManeuverBanner({
   children,
   distanceMeters,
   instruction,
+  maneuverModifier,
   maneuverType,
   onHeightChange,
   roadName,
   safeAreaTop,
+  signage,
   status,
 }: ManeuverBannerProps) {
   const rerouting = status === 'rerouting';
@@ -118,6 +208,23 @@ export function ManeuverBanner({
       ? 'Check your connection'
       : roadName;
   const text = maneuverText(displayedInstruction, displayedRoadName);
+  const routeDetails = !rerouting && !failed;
+  const exitLabel = routeDetails ? signage?.exitLabel : undefined;
+  // The signed destinations, unless the instruction's own second line already names them.
+  const toward =
+    routeDetails &&
+    signage?.toward !== undefined &&
+    !text.secondary.toLocaleLowerCase('en-CA').includes(
+      signage.toward
+        .replace(/^toward /, '')
+        .split(' / ')[0]
+        ?.toLocaleLowerCase('en-CA') ?? '',
+    )
+      ? signage.toward
+      : undefined;
+  const secondary = [text.secondary, toward]
+    .filter((part) => part !== undefined && part !== '')
+    .join(' · ');
   const displayedDistance = rerouting
     ? 'Rerouting'
     : failed
@@ -126,7 +233,7 @@ export function ManeuverBanner({
 
   return (
     <Animated.View
-      accessibilityLabel={`${displayedDistance}, ${displayedInstruction}${displayedRoadName.length === 0 ? '' : `, ${displayedRoadName}`}`}
+      accessibilityLabel={`${displayedDistance}, ${exitLabel === undefined ? '' : `${exitLabel}, `}${displayedInstruction}${displayedRoadName.length === 0 ? '' : `, ${displayedRoadName}`}${toward === undefined ? '' : `, ${toward}`}`}
       accessibilityLiveRegion="polite"
       accessible
       entering={FadeInDown.duration(motion.duration.base).reduceMotion(ReduceMotion.System)}
@@ -144,40 +251,46 @@ export function ManeuverBanner({
                 ? { android: 'sync', ios: 'arrow.triangle.2.circlepath' }
                 : failed
                   ? { android: 'wifi_off', ios: 'wifi.slash' }
-                  : maneuverSymbol(maneuverDirection(maneuverType, instruction))
+                  : maneuverSymbol(maneuverDirection(maneuverType, instruction, maneuverModifier))
             }
             size={42}
             tintColor={palette.white}
           />
         </View>
         <View style={guidanceStyles.bannerCopy}>
-          <Text
-            maxFontSizeMultiplier={1.3}
-            adjustsFontSizeToFit
-            numberOfLines={1}
-            style={[guidanceStyles.distance, guidanceStyles.tabular]}
-          >
-            {displayedDistance}
-          </Text>
-          {/* The action is never cut off: it wraps to a second line, and only shrinks if a
-              second line is still not enough. Where it leads is the smaller line beneath. */}
-          <Text
-            maxFontSizeMultiplier={1.3}
-            adjustsFontSizeToFit
-            minimumFontScale={0.75}
-            numberOfLines={2}
-            style={guidanceStyles.instruction}
-          >
+          <View style={guidanceStyles.distanceRow}>
+            <Text
+              maxFontSizeMultiplier={1.3}
+              adjustsFontSizeToFit
+              numberOfLines={1}
+              style={[guidanceStyles.distance, guidanceStyles.tabular, guidanceStyles.distanceText]}
+            >
+              {displayedDistance}
+            </Text>
+            {exitLabel !== undefined && (
+              <View style={guidanceStyles.exitSign}>
+                <Text
+                  maxFontSizeMultiplier={1.2}
+                  style={[guidanceStyles.exitSignText, guidanceStyles.tabular]}
+                >
+                  {exitLabel}
+                </Text>
+              </View>
+            )}
+          </View>
+          {/* The action is never shrunk: it wraps (iOS shrank it to an unreadable size once the
+              lane strip shared the banner). Where it leads is the smaller line beneath. */}
+          <Text maxFontSizeMultiplier={1.3} numberOfLines={3} style={guidanceStyles.instruction}>
             {text.primary}
           </Text>
-          {text.secondary.length > 0 && (
-            <Text numberOfLines={2} style={guidanceStyles.road}>
-              {text.secondary}
+          {secondary.length > 0 && (
+            <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={guidanceStyles.road}>
+              {secondary}
             </Text>
           )}
         </View>
       </View>
-      {children}
+      {routeDetails && children}
     </Animated.View>
   );
 }
@@ -422,6 +535,8 @@ interface TripSheetProps {
   /** The matched position is being extrapolated through a short gap in GPS fixes. */
   positionEstimated: boolean;
   rerouteCount: number;
+  /** The route being driven, for its traffic status. */
+  route: Pick<RouteAlternativeV2, 'congestion' | 'traffic'> | undefined;
   routeSource: RouteSource | undefined;
   upcomingManeuvers: readonly UpcomingManeuver[];
 }
@@ -445,6 +560,7 @@ export function TripSheet({
   position,
   positionEstimated,
   rerouteCount,
+  route,
   routeSource,
   upcomingManeuvers,
 }: TripSheetProps) {
@@ -577,7 +693,11 @@ export function TripSheet({
                   <ListRow
                     accessibilityLabel={`After ${distance}, ${maneuver.instruction}${maneuver.roadName.length === 0 ? '' : `, ${maneuver.roadName}`}`}
                     icon={maneuverSymbol(
-                      maneuverDirection(maneuver.maneuverType, maneuver.instruction),
+                      maneuverDirection(
+                        maneuver.maneuverType,
+                        maneuver.instruction,
+                        maneuver.maneuverModifier,
+                      ),
                     )}
                     iconTint={colors.text}
                     key={maneuver.stepIndex}
@@ -599,7 +719,10 @@ export function TripSheet({
           )}
           <Text maxFontSizeMultiplier={1.4} style={styles.tripSource}>
             {routeSource?.attribution ?? 'Routing source unavailable'} ·{' '}
-            {routeSource?.traffic === 'live' ? 'Live traffic' : 'No live traffic'}
+            {routeTrafficLabel(
+              routeSource?.id === OFFLINE_ROUTE_SOURCE.id ? undefined : routeSource,
+              route,
+            )}
           </Text>
         </BottomSheetScrollView>
       </BottomSheetReveal>
@@ -677,7 +800,15 @@ const guidanceStyles = StyleSheet.create({
     ...elevation.high,
   },
   bannerCopy: { flex: 1, justifyContent: 'center' },
-  bannerRow: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: space.md },
+  // Grows into the banner's minimum height but never shrinks: a lane strip below must add
+  // height, not squeeze the instruction into a smaller font.
+  bannerRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexGrow: 1,
+    flexShrink: 0,
+    gap: space.md,
+  },
   cameraAlert: {
     alignItems: 'center',
     backgroundColor: palette.sun,
@@ -697,6 +828,24 @@ const guidanceStyles = StyleSheet.create({
   cameraAlertMeta: { ...typography.callout, color: palette.ink },
   cameraAlertTitle: { ...typography.title3, color: palette.ink },
   distance: { ...typography.guidanceDistance, color: guidanceColors.text },
+  // At large text sizes the exit sign wraps under the distance instead of truncating.
+  distanceRow: {
+    alignItems: 'center',
+    columnGap: space.sm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: space.xxs,
+  },
+  distanceText: { flexShrink: 0 },
+  exitSign: {
+    backgroundColor: palette.white,
+    flexShrink: 0,
+    borderCurve: 'continuous',
+    borderRadius: radius.sm,
+    paddingHorizontal: space.sm,
+    paddingVertical: 2,
+  },
+  exitSignText: { ...typography.label, color: palette.ink },
   instruction: { ...typography.guidanceInstruction, color: guidanceColors.text },
   maneuverTile: {
     alignItems: 'center',
@@ -708,6 +857,28 @@ const guidanceStyles = StyleSheet.create({
     width: 76,
   },
   maneuverTileFailed: { backgroundColor: palette.coral },
+  laneArrow: { height: 26, position: 'absolute', width: 26 },
+  laneStrip: {
+    borderTopColor: guidanceColors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.xs,
+    justifyContent: 'center',
+    paddingTop: space.sm,
+  },
+  laneTile: {
+    alignItems: 'center',
+    backgroundColor: guidanceColors.backgroundRaised,
+    borderBottomColor: 'transparent',
+    borderBottomWidth: 3,
+    borderCurve: 'continuous',
+    borderRadius: radius.sm,
+    height: 40,
+    justifyContent: 'center',
+    width: 36,
+  },
+  laneTileOn: { borderBottomColor: guidanceColors.maneuver },
   road: { ...typography.guidanceRoad, color: guidanceColors.textSecondary },
   rerouteAccept: { backgroundColor: guidanceColors.maneuver },
   rerouteActions: { flexDirection: 'row', gap: space.sm },

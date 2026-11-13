@@ -1,4 +1,9 @@
-import type { RouteAlternative, RoutePreferences, SearchResult } from '@navoss/contracts';
+import type {
+  RouteAlternativeV2,
+  RoutePreferences,
+  RouteResponseV2,
+  SearchResult,
+} from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
@@ -9,9 +14,11 @@ import {
   formatDistance,
   formatDuration,
   formatTrafficDelay,
+  routeTrafficLabel,
   routeViaLabel,
 } from '@/features/navigation/route-progress';
 import type { RouteSource } from '@/features/navigation/route-ui-state';
+import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
 import { createThemedStyles, radius, space, typography, useTheme } from '@/theme';
 import { Banner } from '@/ui/banner';
@@ -93,7 +100,7 @@ function RouteChoiceCard({
   selected,
 }: {
   onSelect: () => void;
-  route: RouteAlternative;
+  route: RouteAlternativeV2;
   selected: boolean;
 }) {
   const { colors } = useTheme();
@@ -156,7 +163,7 @@ interface RoutePreviewSheetProps {
   onCancel: () => void;
   onDetentChange?: (index: number) => void;
   onEditStops: () => void;
-  onSelectRoute: (route: RouteAlternative) => void;
+  onSelectRoute: (route: RouteAlternativeV2) => void;
   onStart: () => void;
   onToggleRoutePreference: (preference: keyof RoutePreferences) => void;
   onUseCurrentLocation: () => void;
@@ -166,8 +173,8 @@ interface RoutePreviewSheetProps {
   previewOriginLabel?: string;
   routePreferences: RoutePreferences;
   routeSource?: RouteSource;
-  routes: RouteAlternative[];
-  selectedRoute: RouteAlternative;
+  routes: RouteAlternativeV2[];
+  selectedRoute: RouteAlternativeV2;
   vehicleStyle: VehicleStyle;
   waypoints: SearchResult[];
 }
@@ -175,12 +182,9 @@ interface RoutePreviewSheetProps {
 /**
  * Route preview. The lowest detent is the decision (arrival, distance, Start); the detent it
  * opens to adds the alternatives and stops; dragging further reveals avoidances and the
- * navigation marker. Traffic is stated as it is: "No live traffic" unless the routing source
- * actually provides it.
- *
- * Wave 2 seam: per-route traffic (a delay chip on each `RouteChoiceCard`, the summary's traffic
- * line) already renders from `route.traffic` and `routeSource.traffic`; a traffic-aware source
- * needs no change here.
+ * navigation marker. Traffic is stated as it is (`routeTrafficLabel`): "No live traffic" unless
+ * the routing source provides it, and community traffic credited to its drivers only on a route
+ * it observed.
  */
 export function RoutePreviewSheet({
   destination,
@@ -206,9 +210,10 @@ export function RoutePreviewSheet({
   const styles = useStyles();
   const demoOrigin = previewOriginLabel !== undefined;
   const detents = routePreviewSheetDetents(metrics, { demoOrigin });
-  const selectedTrafficDelay = formatTrafficDelay(selectedRoute.traffic?.delaySeconds ?? 0);
-  const trafficStatus =
-    routeSource?.traffic === 'live' ? (selectedTrafficDelay ?? 'Live traffic') : 'No live traffic';
+  const trafficStatus = routeTrafficLabel(
+    routeSource?.id === OFFLINE_ROUTE_SOURCE.id ? undefined : routeSource,
+    selectedRoute,
+  );
 
   return (
     <BottomSheet

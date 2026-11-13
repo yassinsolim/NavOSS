@@ -238,8 +238,7 @@ time, and two-hour expiry. They remain private on the device and are not shown t
 police/checkpoint option or free text exists. This is an explicit testing state until the trust,
 moderation, rate-limit, confirmation, and expiry backend is implemented.
 
-The map is ready for data it does not have yet. Each of these inputs is optional and renders
-nothing while absent:
+Each of these inputs is optional and renders nothing while absent:
 
 - `NavOSSCarPlayTrip.congestion: [NavOSSCarPlayCongestionLevel]?` (one level per geometry segment)
   colours slow, heavy, and stopped stretches of the remaining route;
@@ -251,11 +250,15 @@ nothing while absent:
 
 The remaining gaps are primarily data and platform capabilities:
 
-- nothing publishes congestion or map alerts yet. Live traffic, incident-aware ETA, closures, and
-  shared reports need real sources first;
-- the native route client does not yet request or decode the enriched route contract, so lanes,
-  modifiers, exits, and signposts are absent at runtime. Maneuver types and roundabout exits are
-  read from the provider's instruction text, and turn angles are measured from route geometry;
+- congestion appears only when the server's community traffic is on and observed the route
+  (`trafficSource: navoss-community`, credited as "Traffic: NavOSS drivers"); map alerts still need
+  real publishers;
+- the native route client requests `/v2/routes` (discovered through `/v2/config`; a server that
+  declares only `/v1/routes`, or answers 404, gets `/v1/routes`; a newly planned route outside the
+  server's declared coverage is refused with "Outside NavOSS coverage") and decodes lanes, modifiers, exits, signposts, roundabout exits, bearings
+  and the current road. Where a road has no such data (and always on a v1-only server), maneuver
+  types and roundabout exits fall back to the instruction text and turn angles to route geometry.
+  Lane data comes from OpenStreetMap `turn:lanes` tagging and is only as complete as the map;
 - public crowd reports require the planned trust, moderation, expiry, and anti-abuse backend;
 - richer place imagery, ratings, entrances, and parking context require separately licensed data;
 - Dashboard, cluster, HUD, and CarPlay Ultra surfaces remain vehicle-dependent and unvalidated on

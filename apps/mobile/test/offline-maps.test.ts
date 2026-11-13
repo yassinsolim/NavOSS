@@ -161,6 +161,22 @@ describe('offline fallback', () => {
     );
   });
 
+  it('routes a trip outside the server coverage offline when a region covers it, and says so', async () => {
+    vi.mocked(NavOSSNavigation.planOfflineRoutes).mockResolvedValue({
+      ok: true,
+      trips: [trip('offline-1', 930)],
+    });
+    const fetchSpy = vi.fn(unreachable);
+    vi.stubGlobal('fetch', fetchSpy);
+    const planned = await fetchRoutesWithOfflineFallback(request, destination, [], {
+      servedOnline: false,
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(planned.source.attribution).toBe(
+      'Offline route · Outside the online service area · No traffic or closures',
+    );
+  });
+
   it('labels offline search results with the data date', async () => {
     vi.mocked(NavOSSNavigation.searchOffline).mockResolvedValue({
       bundleVersion: '2026-11-11-v1-798f5c442644',

@@ -1,33 +1,53 @@
 import type { Position } from './geo.js';
-import type { MatchedTrace } from './map-matcher.js';
+import type { MatchedEdge, MatchedTrace } from './map-matcher.js';
 import type { ProbePoint } from './probe-validation.js';
-import { isAggregatedRoad, isPublishableEdge, wayDirectionKey } from './segments.js';
+import { isPublishableEdge } from './segments.js';
 import type { TrafficSettings } from './settings.js';
 
+/** Movement shorter than this between two fixes is standing still, not driving. */
+const STATIONARY_METERS = 0.5;
+// A jump back along the path by more than this breaks a run: it is GPS noise or a re-match.
+const BACKWARD_JUMP_METERS = 5;
+// Moving speed is measured over this much path around each step, so that snapping noise on a
+// short edge does not decide its speed, while a jam still shows on the edges where it was.
+const SPEED_WINDOW_METERS = 150;
+
 /**
- * One speed sample for one whole road edge. It carries no position from the upload and no time:
- * the line is the edge's map geometry, and the service stamps the arrival epoch itself.
+ * What one batch drove on one road edge. It carries no position from the upload and no time: the
+ * line is the edge's whole map geometry, and positions are distances along the edge. The service
+ * stamps the arrival epoch itself.
  */
 export interface SegmentObservation {
   freeFlowKph: number;
+  /** Parts of the edge the batch drove, as `[from, to]` metres from the edge's start. */
+  intervals: [number, number][];
+  /** Full length of the edge. */
+  lengthMeters: number;
+  /** The whole edge's map geometry. */
   line: Position[];
+  /** Distance moved on the edge in this batch. */
+  meters: number;
   roadClass: string;
+  /** Time spent on the edge in this batch, including time standing still in a queue. */
+  seconds: number;
   segmentKey: string;
-  speedKph: number;
 }
 
-interface Traversal {
-  firstEdgeIndex: number;
-  lastEdgeIndex: number;
+interface MatchedFix {
+  edgeIndex: number;
   meters: number;
   seconds: number;
 }
 
 /**
- * Turns one map-matched batch into at most one speed sample per road edge that the batch drove
- * end to end on an aggregated road. Speed is measured over the batch's whole run on the edge's
- * way (distance along the matched edges divided by the time between the first and last point on
- * it), because single edges are often shorter than the distance between two fixes.
+ * Turns one map-matched batch into what it drove on each eligible road edge: the intervals of the
+ * edge covered, the distance moved and the time spent there. An edge is usually longer than a
+ * batch drives of it, so these are pieces; the cohorts join one contributor's pieces of an edge
+ * across batches until enough of it is covered to credit one sample (see `TrafficCohorts.add`).
+ *
+ * Movement between two consecutive fixes is spread over the edges between them by distance, so
+ * an edge crossed between two fixes is covered too. Time between two fixes that did not move is
+ * time spent standing on the edge where the vehicle stood: a stopped queue is the signal.
  */
 export function deriveObservations(
   matched: MatchedTrace,
@@ -51,82 +71,138 @@ export function deriveObservations(
     pathMeters += Number.isFinite(full) ? full : edge.lengthMeters;
   }
 
-  const traversals = new Map<string, Traversal>();
-  let run:
-    { key: string; lastMeters: number; lastSeconds: number; traversal: Traversal } | undefined;
+  // Continuous runs of matched fixes along the path.
+  const runs: MatchedFix[][] = [];
+  let run: MatchedFix[] | undefined;
   points.forEach((point, index) => {
     const match = matched.points[index];
-    const edge = match === undefined ? undefined : matched.edges[match.edgeIndex];
-    const key = edge === undefined || !isAggregatedRoad(edge) ? undefined : wayDirectionKey(edge);
     const meters =
       match === undefined
         ? Number.NaN
         : (edgeStartMeters[match.edgeIndex] ?? Number.NaN) +
           match.edgeFraction * (fullMeters[match.edgeIndex] ?? Number.NaN);
-    if (match === undefined || key === undefined || !Number.isFinite(meters)) {
+    if (match === undefined || !Number.isFinite(meters)) {
       run = undefined;
       return;
     }
-    // A new way, a break in the matched path, or a backwards jump starts a fresh traversal leg;
-    // only movement inside one continuous leg counts as distance.
-    if (run?.key !== key || match.startsNewPath || meters < run.lastMeters - 5) {
-      const traversal = traversals.get(key) ?? {
-        firstEdgeIndex: match.edgeIndex,
-        lastEdgeIndex: match.edgeIndex,
-        meters: 0,
-        seconds: 0,
-      };
-      traversals.set(key, traversal);
-      run = { key, lastMeters: meters, lastSeconds: point.offsetSeconds, traversal };
-    } else {
-      run.traversal.meters += Math.max(0, meters - run.lastMeters);
-      run.traversal.seconds += point.offsetSeconds - run.lastSeconds;
-      run.lastMeters = meters;
-      run.lastSeconds = point.offsetSeconds;
+    const last = run?.at(-1);
+    if (
+      run === undefined ||
+      last === undefined ||
+      match.startsNewPath ||
+      meters < last.meters - BACKWARD_JUMP_METERS
+    ) {
+      run = [];
+      runs.push(run);
     }
-    run.traversal.firstEdgeIndex = Math.min(run.traversal.firstEdgeIndex, match.edgeIndex);
-    run.traversal.lastEdgeIndex = Math.max(run.traversal.lastEdgeIndex, match.edgeIndex);
+    run.push({ edgeIndex: match.edgeIndex, meters, seconds: point.offsetSeconds });
   });
 
-  const observations = new Map<string, SegmentObservation>();
-  for (const [wayKey, traversal] of traversals) {
-    // A sample needs real distance, or enough time on the way to prove the vehicle was held up
-    // there; otherwise one stationary fix pair would report a jam.
+  const pieces = new Map<
+    number,
+    { intervals: [number, number][]; meters: number; seconds: number }
+  >();
+  const piece = (edgeIndex: number) => {
+    const existing = pieces.get(edgeIndex);
+    if (existing !== undefined) return existing;
+    const created = { intervals: [] as [number, number][], meters: 0, seconds: 0 };
+    pieces.set(edgeIndex, created);
+    return created;
+  };
+  for (const fixes of runs) {
+    const first = fixes[0];
+    const last = fixes.at(-1);
+    if (first === undefined || last === undefined) continue;
+    const runMeters = last.meters - first.meters;
+    const runSeconds = last.seconds - first.seconds;
+    // A run needs real distance, or enough time to prove the vehicle was held up; otherwise one
+    // stationary fix pair would report a jam. Faster than any road vehicle is a bad match.
     if (
-      traversal.seconds < settings.minSampleSeconds ||
-      (traversal.meters < settings.minSampleMeters &&
-        traversal.seconds < settings.slowSampleSeconds)
+      runSeconds < settings.minSampleSeconds ||
+      (runMeters < settings.minSampleMeters && runSeconds < settings.slowSampleSeconds) ||
+      (runMeters / runSeconds) * 3.6 > settings.maxSampleSpeedKph
     ) {
       continue;
     }
-    const speedKph = (traversal.meters / traversal.seconds) * 3.6;
-    if (speedKph > settings.maxSampleSpeedKph) continue;
-    matched.edges.forEach((edge, index) => {
-      // Only edges driven end to end count. The first and last matched edge start or stop where
-      // the trimmed trace did, so they are never credited, and an edge has no segment key at all
-      // unless Valhalla returned it whole. Short edges and edges the graph does not confirm as
-      // open through roads are never credited either.
-      if (
-        index === 0 ||
-        index === matched.edges.length - 1 ||
-        index < traversal.firstEdgeIndex ||
-        index > traversal.lastEdgeIndex ||
-        edge.segmentKey === undefined ||
-        !isPublishableEdge(edge) ||
-        wayDirectionKey(edge) !== wayKey
-      ) {
-        return;
+    const steps = fixes.slice(1).map((to, index) => {
+      const from = fixes[index] ?? to;
+      return { from, moved: to.meters - from.meters, seconds: to.seconds - from.seconds, to };
+    });
+    // Moving time of each step from the average moving speed over the window around it.
+    const movingSeconds = steps.map((step) => {
+      if (step.moved < STATIONARY_METERS) return step.seconds;
+      const middle = (step.from.meters + step.to.meters) / 2;
+      let meters = 0;
+      let seconds = 0;
+      for (const other of steps) {
+        if (other.moved < STATIONARY_METERS) continue;
+        const otherMiddle = (other.from.meters + other.to.meters) / 2;
+        if (Math.abs(otherMiddle - middle) > SPEED_WINDOW_METERS / 2) continue;
+        meters += other.moved;
+        seconds += other.seconds;
       }
-      observations.set(edge.segmentKey, {
-        freeFlowKph: Math.min(200, Math.max(1, Math.round(edge.speedKph))),
-        line: edge.line,
-        roadClass: edge.roadClass,
-        segmentKey: edge.segmentKey,
-        speedKph,
-      });
+      return seconds > 0 && meters > 0 ? (step.moved * seconds) / meters : step.seconds;
+    });
+    for (const [index, step] of steps.entries()) {
+      const { from, moved, to } = step;
+      const seconds = movingSeconds[index] ?? step.seconds;
+      // Standing still, or GPS jitter backwards within a run: the time belongs to the edge the
+      // vehicle stood on, and the next step measures distance from where this fix was matched.
+      if (moved < STATIONARY_METERS) {
+        const start = edgeStartMeters[from.edgeIndex] ?? 0;
+        const at = from.meters - start;
+        const standing = piece(from.edgeIndex);
+        standing.intervals.push([at, at]);
+        standing.seconds += seconds;
+        continue;
+      }
+      for (let edgeIndex = from.edgeIndex; edgeIndex <= to.edgeIndex; edgeIndex += 1) {
+        const start = edgeStartMeters[edgeIndex] ?? Number.NaN;
+        const full = fullMeters[edgeIndex] ?? Number.NaN;
+        if (!Number.isFinite(start) || !Number.isFinite(full)) continue;
+        const enter = Math.max(from.meters, start);
+        const leave = Math.min(to.meters, start + full);
+        if (leave <= enter) continue;
+        const driven = piece(edgeIndex);
+        driven.intervals.push([enter - start, leave - start]);
+        driven.meters += leave - enter;
+        driven.seconds += (seconds * (leave - enter)) / moved;
+      }
+    }
+  }
+
+  const observations = new Map<string, SegmentObservation>();
+  for (const [edgeIndex, driven] of pieces) {
+    const edge = matched.edges[edgeIndex];
+    const full = fullMeters[edgeIndex] ?? Number.NaN;
+    if (edge === undefined || !Number.isFinite(full) || driven.seconds <= 0) continue;
+    const whole = wholeEdgeOf(edge);
+    if (whole === undefined || !isPublishableEdge({ ...edge, lengthMeters: full })) continue;
+    const merged = observations.get(whole.segmentKey);
+    if (merged !== undefined) {
+      merged.intervals.push(...driven.intervals);
+      merged.meters += driven.meters;
+      merged.seconds += driven.seconds;
+      continue;
+    }
+    observations.set(whole.segmentKey, {
+      freeFlowKph: Math.min(200, Math.max(1, Math.round(edge.speedKph))),
+      intervals: driven.intervals,
+      lengthMeters: full,
+      line: whole.line,
+      meters: driven.meters,
+      roadClass: edge.roadClass,
+      seconds: driven.seconds,
+      segmentKey: whole.segmentKey,
     });
   }
   return [...observations.values()].sort((left, right) =>
     left.segmentKey.localeCompare(right.segmentKey),
   );
+}
+
+/** The key and whole geometry of the edge a matched edge lies on, when they are known. */
+function wholeEdgeOf(edge: MatchedEdge): { line: Position[]; segmentKey: string } | undefined {
+  if (edge.segmentKey !== undefined) return { line: edge.line, segmentKey: edge.segmentKey };
+  return edge.wholeEdge;
 }

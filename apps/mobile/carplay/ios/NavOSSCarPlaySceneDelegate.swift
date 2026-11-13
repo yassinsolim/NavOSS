@@ -599,7 +599,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     updateActiveTripControls(visible: true)
     let activeGuidance = state.guidance?.phase == .navigating || state.guidance?.phase == .arrived
     mapTemplate?.automaticallyHidesNavigationBar = activeGuidance
-    configureRouteAttribution(source: trip.source)
+    configureRouteAttribution(trip: trip)
     let presentation = state.guidance.flatMap {
       navOSSCarPlayGuidancePresentation(trip: trip, guidance: $0)
     }
@@ -788,12 +788,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     return systemTrip
   }
 
-  private func configureRouteAttribution(source: String?) {
-    let mapboxTraffic = source == "mapbox-traffic"
+  private func configureRouteAttribution(trip: NavOSSCarPlayTrip?) {
     mapTemplate?.trailingNavigationBarButtons =
-      mapboxTraffic
-      ? [CPBarButton(title: "Traffic: Mapbox") { _ in }]
-      : []
+      trip.flatMap(navOSSCarPlayTrafficAttribution).map { [CPBarButton(title: $0) { _ in }] } ?? []
   }
 
   private func resetManeuvers() {
@@ -2187,7 +2184,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     activeSystemTrip = nil
     activeTripId = nil
     placesTemplate = nil
-    configureRouteAttribution(source: nil)
+    configureRouteAttribution(trip: nil)
     mapViewController?.clearRoute()
     if let interfaceController, interfaceController.topTemplate !== mapTemplate {
       interfaceController.popToRootTemplate(animated: true, completion: nil)
@@ -2344,7 +2341,12 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
           requestGeneration == self.routeRequestGeneration
         else { return }
         self.routeTask = nil
-        self.showNavigationAlert(title: failureTitle, subtitle: failureSubtitle)
+        if case NavOSSNavigationAPIError.outsideCoverage(let coverageName) = error {
+          self.showNavigationAlert(
+            title: "Outside NavOSS coverage", subtitle: "Directions cover \(coverageName).")
+        } else {
+          self.showNavigationAlert(title: failureTitle, subtitle: failureSubtitle)
+        }
       }
     }
   }
@@ -2491,10 +2493,15 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
           return
         }
         self.routeTask = nil
-        self.showNavigationAlert(
-          title: "Route unavailable",
-          subtitle: "Check your connection and try again."
-        )
+        if case NavOSSNavigationAPIError.outsideCoverage(let coverageName) = error {
+          self.showNavigationAlert(
+            title: "Outside NavOSS coverage", subtitle: "Directions cover \(coverageName).")
+        } else {
+          self.showNavigationAlert(
+            title: "Route unavailable",
+            subtitle: "Check your connection and try again."
+          )
+        }
       }
     }
   }
@@ -2517,7 +2524,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     routePreviewReplacesActiveTrip = replacingActiveTrip
     let systemTrip = makeSystemTrip(routes)
     if let firstRoute = routes.first {
-      configureRouteAttribution(source: firstRoute.source)
+      configureRouteAttribution(trip: firstRoute)
       mapViewController?.display(
         route: firstRoute.geometry,
         routeId: firstRoute.id,
@@ -2556,7 +2563,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     else {
       return
     }
-    configureRouteAttribution(source: route.source)
+    configureRouteAttribution(trip: route)
     let alternateRoute = trip.routeChoices.lazy.compactMap { choice -> NavOSSCarPlayTrip? in
       guard let choiceIdentifier = choice.userInfo as? String,
         choiceIdentifier != route.id
@@ -2586,7 +2593,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       if state.guidance?.phase == .navigating || state.guidance?.phase == .arrived {
         apply(state)
       } else {
-        configureRouteAttribution(source: nil)
+        configureRouteAttribution(trip: nil)
         mapViewController?.clearRoute()
       }
       return

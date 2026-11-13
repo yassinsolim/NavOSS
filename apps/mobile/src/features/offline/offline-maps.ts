@@ -1,5 +1,6 @@
 import type {
-  RouteAlternative,
+  Coordinate,
+  RouteAlternativeV2,
   RouteRequest,
   SearchQuery,
   SearchResponse,
@@ -14,7 +15,11 @@ import NavOSSNavigation, {
   type NativeOfflineState,
 } from '../../../modules/navoss-navigation';
 import { isStyleSpecification } from '../map/map-preferences';
-import { OFFLINE_ROUTE_SOURCE, offlineRouteMessage } from './offline-copy';
+import {
+  OFFLINE_ROUTE_SOURCE,
+  OFFLINE_ROUTE_SOURCE_BEYOND_SERVICE,
+  offlineRouteMessage,
+} from './offline-copy';
 import { routeFromNativeTrip, type RouteSource } from '../navigation/route-ui-state';
 import { fetchRoutes, NavOssApiError, searchPlaces, type SearchPlacesOptions } from '../../lib/api';
 
@@ -49,6 +54,15 @@ export function useOfflineState(): NativeOfflineState {
     };
   }, []);
   return state;
+}
+
+/** Whether one installed region covers every point, which authorises an offline route there. */
+export function offlineRegionCovers(points: Coordinate[]): boolean {
+  try {
+    return NavOSSNavigation.offlineRegionCovers(points);
+  } catch {
+    return false;
+  }
 }
 
 export function hasInstalledOfflineRegion(state: NativeOfflineState): boolean {
@@ -131,11 +145,11 @@ export function isUnreachable(error: unknown): boolean {
 }
 
 export interface PlannedRoutes {
-  routes: RouteAlternative[];
+  routes: RouteAlternativeV2[];
   source: RouteSource;
 }
 
-function routesFromTrips(trips: NativeCarPlayTrip[]): RouteAlternative[] {
+function routesFromTrips(trips: NativeCarPlayTrip[]): RouteAlternativeV2[] {
   const routes = trips.map((trip) => routeFromNativeTrip({ ...trip }).route);
   let fastest = 0;
   routes.forEach((route, index) => {
@@ -164,7 +178,13 @@ export async function fetchRoutesWithOfflineFallback(
   request: RouteRequest,
   destination: SearchResult,
   waypoints: SearchResult[],
-  options: { signal?: AbortSignal } = {},
+  options: {
+    /** `false` when the server's declared coverage excludes the trip: only an installed
+     * region can route it, and the route says so. */
+    servedOnline?: boolean;
+    routesV2?: boolean;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<PlannedRoutes> {
   const state = getOfflineState();
   const offlineReady = hasInstalledOfflineRegion(state);
@@ -194,11 +214,20 @@ export async function fetchRoutesWithOfflineFallback(
       if (cause instanceof Error && !result.ok && result.code === 'engine-unavailable') throw cause;
       throw new NavOssApiError(offlineRouteMessage(result.ok ? 'no-route' : result.code), 0);
     }
-    return { routes: routesFromTrips(result.trips), source: OFFLINE_ROUTE_SOURCE };
+    return {
+      routes: routesFromTrips(result.trips),
+      source:
+        options.servedOnline === false ? OFFLINE_ROUTE_SOURCE_BEYOND_SERVICE : OFFLINE_ROUTE_SOURCE,
+    };
   };
-  if (offlineReady && !state.networkAvailable) return offline(undefined);
+  if (offlineReady && (!state.networkAvailable || options.servedOnline === false)) {
+    return offline(undefined);
+  }
   try {
-    const response = await fetchRoutes(request, options);
+    const response = await fetchRoutes(request, {
+      ...(options.routesV2 === undefined ? {} : { routesV2: options.routesV2 }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
     return { routes: response.routes, source: response.source };
   } catch (error: unknown) {
     if (options.signal?.aborted === true || !offlineReady || !isUnreachable(error)) throw error;

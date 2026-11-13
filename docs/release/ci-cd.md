@@ -8,7 +8,7 @@ The delivery path is:
 
 1. Pull request or push to `main`: run formatting, type checks, lint, tests, builds, license-notice freshness, and native Swift tests.
 2. Publish an `ios-v<app-version>` GitHub release, or dispatch `iOS TestFlight`: queue the EAS `production-carplay` build and automatic upload to App Store Connect.
-3. The internal `testers` group automatically receives builds. The upload-triggered workflow in `apps/mobile/.eas/workflows/testflight-distribute.yml` is configured to assign eligible builds to `NavOSS Friends` and submit Beta App Review. See the activation status below before relying on automatic external delivery.
+3. The internal `testers` group automatically receives builds. External delivery is manual: a maintainer runs `apps/mobile/.eas/workflows/testflight-distribute.yml` for a specific build to assign it to `NavOSS Friends` and submit Beta App Review. An upload alone never reaches external testers.
 4. Manually select the validated build in App Store Connect, complete metadata, and submit it for App Review.
 5. Choose manual, automatic-after-approval, or phased release in App Store Connect.
 
@@ -85,13 +85,19 @@ Its `asc_build_id` job was exercised successfully without purchasing a paid buil
 4. Watch the GitHub workflow until EAS accepts the build request, then monitor the EAS build/submission dashboard.
 5. Wait for App Store Connect processing and complete export-compliance prompts.
 6. Install from TestFlight with Metro disconnected and run the release smoke suite.
-7. Confirm the build is assigned to `NavOSS Friends` and Apple reports `IN_BETA_TESTING` before calling it distributed. Public App Store review and release remain separate manual decisions.
+7. To send the build to external testers, run the manual distribution workflow, then confirm the build is assigned to `NavOSS Friends` and Apple reports `IN_BETA_TESTING` before calling it distributed. Public App Store review and release remain separate manual decisions.
 
 Before promotion, audit the signed IPA for the approved `com.apple.developer.carplay-maps` entitlement, the CarPlay template scene, the `location` background mode, and the production API origin.
 
 The workflow rejects a tag that does not match `apps/mobile/app.json`.
 
 ## TestFlight auto-distribution activation
+
+**Status since 2026-11-13: the upload trigger is removed.** `testflight-distribute.yml` now runs only
+on manual dispatch, so a completed upload reaches the internal `testers` group and nothing else.
+The record below describes how the upload-triggered path was activated and proven, and is kept so
+it can be restored deliberately. Restoring it means every upload goes to `NavOSS Friends` and
+Beta App Review without a further decision.
 
 The workflow handles App Store Connect `build_upload` events with state `complete` for app
 `6792619727`, including uploads made outside GitHub Actions. It never starts a new binary build

@@ -1,12 +1,13 @@
-import type {
-  Coordinate,
-  RouteAlternative,
-  RoutePreferences,
-  SearchResult,
+import {
+  isCoordinateServed,
+  type Coordinate,
+  type RouteAlternativeV2,
+  type RoutePreferences,
+  type SearchResult,
+  type ServerConfig,
 } from '@navoss/contracts';
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from 'react';
 
-import { isSearchCoverageRegion, mapRegionForCoordinate } from '@/features/map/map-region';
 import {
   getNavigationRoutePreferences,
   setNavigationRoutePreferences,
@@ -18,7 +19,10 @@ import {
   type RouteUiState,
 } from '@/features/navigation/route-ui-state';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
-import { fetchRoutesWithOfflineFallback } from '@/features/offline/offline-maps';
+import {
+  fetchRoutesWithOfflineFallback,
+  offlineRegionCovers,
+} from '@/features/offline/offline-maps';
 import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
 import { NavOssApiError } from '@/lib/api';
 
@@ -58,11 +62,14 @@ export function useRoutePlanner({
   onPlanningStarted,
   onRoutePlanned,
   onServiceReachable,
+  serverConfig,
 }: {
   getCurrentRouteOrigin: (signal: AbortSignal) => Promise<RouteRequestOrigin | undefined>;
   onPlanningStarted: () => void;
-  onRoutePlanned: (route: RouteAlternative, demoOrigin: boolean) => void;
+  onRoutePlanned: (route: RouteAlternativeV2, demoOrigin: boolean) => void;
   onServiceReachable: () => void;
+  /** What the server declared; undefined until its config arrives. */
+  serverConfig: ServerConfig | undefined;
 }): RoutePlanner {
   const abortControllerRef = useRef<AbortController>(null);
   const [routeState, setRouteState] = useState<RouteUiState>(IDLE_ROUTE);
@@ -104,17 +111,19 @@ export function useRoutePlanner({
           ? await getCurrentRouteOrigin(controller.signal)
           : { origin: previewOrigin };
       if (routeOrigin === undefined || superseded()) return;
-      if (
-        previewOrigin === undefined &&
-        [
-          routeOrigin.origin,
-          ...waypoints.map((waypoint) => waypoint.center),
-          destination.center,
-        ].some((coordinate) => !isSearchCoverageRegion(mapRegionForCoordinate(coordinate)))
-      ) {
+      const places = [
+        routeOrigin.origin,
+        ...waypoints.map((waypoint) => waypoint.center),
+        destination.center,
+      ];
+      const servedOnline = places.every((coordinate) =>
+        isCoordinateServed(serverConfig?.coverage, coordinate),
+      );
+      // An installed offline region authorises a trip the server does not declare coverage for.
+      if (previewOrigin === undefined && !servedOnline && !offlineRegionCovers(places)) {
         setRouteState({
           ...plan,
-          message: 'This route includes a location outside current driving coverage.',
+          message: `Directions cover ${serverConfig?.coverage.displayName ?? 'the NavOSS service area'}. This route includes a place outside that area.`,
           type: 'error',
         });
         return;
@@ -133,7 +142,11 @@ export function useRoutePlanner({
         },
         destination,
         waypoints,
-        { signal: controller.signal },
+        {
+          ...(servedOnline ? {} : { servedOnline: false }),
+          ...(serverConfig === undefined ? {} : { routesV2: serverConfig.capabilities.routesV2 }),
+          signal: controller.signal,
+        },
       );
       if (superseded()) return;
       const fastestRoute = response.routes.at(0);

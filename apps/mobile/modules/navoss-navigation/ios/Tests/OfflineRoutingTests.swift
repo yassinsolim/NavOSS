@@ -75,9 +75,10 @@ final class OfflineRoutingTests: XCTestCase {
     let main = try XCTUnwrap(trips.first { $0.distanceMeters == 9_049 })
     XCTAssertEqual(main.durationSeconds, 929.408, accuracy: 0.001)
     XCTAssertEqual(main.steps[0].instruction, "Drive west.")
-    // Each step speaks the next maneuver, as the OSRM-format `voiceInstructions` do.
-    XCTAssertEqual(main.steps[0].spokenInstruction, "Turn right. Then Turn right onto 9 Avenue SW.")
-    XCTAssertNil(main.steps.last?.spokenInstruction)
+    // Contract v10: each step carries its own maneuver's announcement.
+    XCTAssertEqual(main.steps[0].spokenInstruction, "Drive west. Then Turn right.")
+    XCTAssertEqual(main.steps[1].spokenInstruction, "Turn right. Then Turn right onto 9 Avenue SW.")
+    XCTAssertEqual(main.steps.last?.spokenInstruction, "You have arrived at your destination.")
     XCTAssertEqual(main.steps[1].maneuverType, "turn")
     XCTAssertEqual(main.steps[1].maneuverModifier, "right")
     XCTAssertEqual(main.steps[1].bearingBeforeDegrees, 273)
@@ -194,5 +195,43 @@ final class OfflineRoutingTests: XCTestCase {
     for detail in details {
       XCTAssertTrue(detail?.hasPrefix("Offline, no traffic or closures") == true, detail ?? "nil")
     }
+  }
+}
+
+/// One offline drive through the real speech planner: every maneuver of the recorded trip is
+/// approached in turn, and the planner must speak that maneuver's own Valhalla announcement.
+final class OfflineSpeechTests: XCTestCase {
+  func testPlannerSpeaksEachOfflineManeuverInOrder() throws {
+    let destination = NavOSSCarPlayDestination(
+      id: "dest", label: "Destination", latitude: 51.0866, longitude: -114.1305,
+      name: "Destination")
+    let trip = try XCTUnwrap(
+      try navOSSOfflineTrips(
+        fromValhallaJSON: OfflineFixtures.data("calgary-downtown-north.response.json"),
+        destination: destination, waypoints: [], preferences: NavOSSRoutePreferences()
+      ).first { $0.distanceMeters == 9_049 })
+    let planner = NavigationSpeechPlanner()
+    var now = 10_000.0
+    var spoken: [String] = []
+    for index in 0..<(trip.steps.count - 1) {
+      let step = trip.steps[index + 1]
+      let guidance = NavOSSCarPlayGuidance(
+        distanceToManeuverMeters: 40, durationToManeuverSeconds: 4, instruction: step.instruction,
+        maneuverType: step.maneuverType, phase: .navigating, remainingDistanceMeters: 2_000,
+        remainingDurationSeconds: 200, roadName: step.roadName, stepIndex: index)
+      if let prompt = planner.prompt(
+        trip: trip, guidance: guidance, hasCurrentLocation: true, speedMetersPerSecond: 10,
+        now: now)
+      {
+        spoken.append(prompt.text)
+      }
+      now += 120
+    }
+    print("OFFLINE_SPOKEN_PROMPTS", spoken)
+    // The first maneuver after departure is announced with its own words, not the next one's.
+    XCTAssertTrue(spoken.first?.hasPrefix("Turn right") == true, spoken.first ?? "nil")
+    XCTAssertTrue(spoken.contains { $0.contains("2 Street") }, "\(spoken)")
+    XCTAssertTrue(spoken.contains { $0.localizedCaseInsensitiveContains("Crowchild") }, "\(spoken)")
+    XCTAssertGreaterThanOrEqual(spoken.count, trip.steps.count / 2)
   }
 }

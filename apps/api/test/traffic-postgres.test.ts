@@ -28,6 +28,8 @@ import {
 } from '../src/traffic/service.js';
 import type { TrafficSettings } from '../src/traffic/settings.js';
 import { createPostgresTrafficReleaseStore, TRAFFIC_POOL_CONFIG } from '../src/traffic/store.js';
+import type { MapMatcher } from '../src/traffic/map-matcher.js';
+import { edgeSegmentKey } from '../src/traffic/segments.js';
 import { createTestAppAttestAuthority, type TestDevice } from './support/app-attest-fixture.js';
 import {
   credentialFor,
@@ -109,6 +111,11 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
     /** `real` verifies assertions against the community installation tables in this database. */
     attestation?: 'fake' | 'real';
     attestationMode?: AttestationMode;
+    /** Replaces the recorded Liechtenstein matcher, together with its coverage. */
+    matcher?: {
+      isInCoverage: (coordinate: { latitude: number; longitude: number }) => boolean;
+      mapMatcher: MapMatcher;
+    };
     settings?: Partial<TrafficSettings>;
   }
 
@@ -135,10 +142,10 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
         : null;
     const attestation: TrafficAttestation = communityReports ?? fakeAttestation();
     const service = createTrafficService({
-      isInCoverage: isFixtureTrafficCoordinate,
+      isInCoverage: options.matcher?.isInCoverage ?? isFixtureTrafficCoordinate,
       attestation,
       clock,
-      mapMatcher: stub.matcher,
+      mapMatcher: options.matcher?.mapMatcher ?? stub.matcher,
       onMaintenanceFailure: (failure) => failures.push(failure),
       settings: { ...FIXTURE_SETTINGS, ...options.settings },
       store: createPostgresTrafficReleaseStore(trafficPool()),
@@ -314,6 +321,77 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
     }
   });
 
+  it('keeps partial coverage of an edge in process memory only, out of storage and the log', async () => {
+    // A matcher that places every batch inside one 1.5 km motorway edge, from 20% to 35% of it:
+    // 225 m, below the 300 m floor, as in a jam on a long edge.
+    const line: [number, number][] = [
+      [9.52, 47.15],
+      [9.54, 47.15],
+    ];
+    const segmentKey = edgeSegmentKey({ forward: true, wayId: 4242 }, line);
+    const mapMatcher: MapMatcher = {
+      matchTrace: (points) =>
+        Promise.resolve({
+          edges: [
+            {
+              beginShapeIndex: 0,
+              endShapeIndex: 1,
+              forward: true,
+              fromFraction: 0.2,
+              lengthMeters: 225,
+              line,
+              openThroughRoad: true,
+              roadClass: 'motorway',
+              speedKph: 100,
+              toFraction: 0.35,
+              use: 'road',
+              wayId: 4242,
+              wholeEdge: { line, segmentKey },
+            },
+          ],
+          points: points.map((_, index) => ({
+            edgeFraction: 0.2 + (0.15 * index) / Math.max(1, points.length - 1),
+            edgeIndex: 0,
+            startsNewPath: false,
+          })),
+        }),
+      walkRoute: () => Promise.resolve(undefined),
+    };
+    const { app, logLines, service } = await createApp({
+      matcher: { isInCoverage: isFixtureTrafficCoordinate, mapMatcher },
+    });
+    const before = await dumpDatabase();
+    for (const [index, device] of ['phone-1', 'phone-2', 'phone-3'].entries()) {
+      expect(
+        (
+          await post(
+            app,
+            await credentialFor(service, device),
+            JAMMED_GAPS,
+            `198.51.${String(100 + index)}.1`,
+          )
+        ).statusCode,
+      ).toBe(202);
+    }
+    // Three contributors, each with pieces below the floor: partial coverage, no samples.
+    expect(service.metrics()).toMatchObject({ pendingPartial: 3, pendingSamples: 0 });
+    await advanceEpoch(service);
+    expect(service.metrics().pendingPartial).toBe(3);
+
+    // Byte for byte what it was, and the log names no road, interval, tag or position.
+    expect(await dumpDatabase()).toBe(before);
+    app.log.info({ counters: service.metrics() }, 'Community traffic summary');
+    const logs = logLines.join('');
+    expect(logs).toContain('pendingPartial');
+    expect(logs).not.toContain(segmentKey);
+    expect(logs).not.toMatch(/w\d+[fb]-[0-9a-f]{12}/);
+    expect(logs).not.toContain('intervals');
+    for (const [longitude, latitude] of driveBatch('x'.repeat(64)).points) {
+      expect(logs).not.toContain(String(longitude));
+      expect(logs).not.toContain(String(latitude));
+    }
+  });
+
   it('stores nothing until a cohort of three is released at an epoch boundary', async () => {
     const { app, service } = await createApp();
     const before = await dumpDatabase();
@@ -429,8 +507,17 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
     expect(database).toMatch(/w\d+[fb]-[0-9a-f]{12}/);
 
     const uploaded = driveBatch('x'.repeat(64), JAMMED_GAPS).points;
+    // Map vertices: the matched shape, and the whole edges `/locate` returned for edges the batch
+    // drove only in part.
     const roadVertices = new Set(
-      decodePolyline6(DRIVE.traceResponse.shape).map((vertex) => vertex.join(',')),
+      [
+        ...decodePolyline6(DRIVE.traceResponse.shape),
+        ...DRIVE.locateResponse.flatMap((point) =>
+          (point.edges ?? []).flatMap(({ edge_info: info }) =>
+            info.shape === undefined ? [] : decodePolyline6(info.shape),
+          ),
+        ),
+      ].map((vertex) => vertex.join(',')),
     );
     // Through a pool whose search path includes the test schema: on a database without PostGIS
     // in `public`, the migration installs the extension there.

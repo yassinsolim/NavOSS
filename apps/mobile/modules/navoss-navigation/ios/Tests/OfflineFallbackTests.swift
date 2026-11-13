@@ -42,10 +42,20 @@ final class OfflineFallbackTests: XCTestCase {
   private final class StubProtocol: URLProtocol {
     nonisolated(unsafe) static var status: Int?
     nonisolated(unsafe) static var requests = 0
+    /// When set, `/v2/config` answers with this body (the server's declared coverage).
+    nonisolated(unsafe) static var config: Data?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
+      if request.url?.path == "/v2/config", let config = Self.config {
+        let response = HTTPURLResponse(
+          url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: config)
+        client?.urlProtocolDidFinishLoading(self)
+        return
+      }
       Self.requests += 1
       guard let status = Self.status else {
         client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost))
@@ -67,13 +77,16 @@ final class OfflineFallbackTests: XCTestCase {
   override func setUp() {
     StubProtocol.status = nil
     StubProtocol.requests = 0
+    StubProtocol.config = nil
   }
 
   private func client(_ fallback: Fallback?) throws -> NavOSSNavigationAPIClient {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [StubProtocol.self]
     return try NavOSSNavigationAPIClient(
-      baseURL: URL(string: "https://api.invalid")!, session: URLSession(configuration: configuration),
+      baseURL: URL(string: "https://api-\(UUID().uuidString).invalid")!,
+      session: URLSession(configuration: configuration),
+      routesDiscovery: NavOSSRoutesEndpointDiscovery(),
       offlineFallback: fallback)
   }
 
@@ -81,7 +94,7 @@ final class OfflineFallbackTests: XCTestCase {
     let fallback = Fallback()
     let trips = try await client(fallback).routes(
       origin: origin, destination: destination, preferences: NavOSSRoutePreferences())
-    XCTAssertEqual(StubProtocol.requests, 1, "online is always tried first")
+    XCTAssertGreaterThan(StubProtocol.requests, 0, "online is always tried first")
     XCTAssertEqual(fallback.routeCalls, 1)
     XCTAssertEqual(trips.first?.source, "offline-valhalla")
 
@@ -106,11 +119,41 @@ final class OfflineFallbackTests: XCTestCase {
       _ = try await client(fallback).routes(
         origin: origin, destination: destination, preferences: NavOSSRoutePreferences())
       XCTFail("a rejected request is not answered offline")
-    } catch {
-      XCTAssertEqual(error as? NavOSSNavigationAPIError, .invalidRequest)
+    } catch NavOSSNavigationAPIError.invalidRequest {
+      // Expected: the service answered.
     }
     XCTAssertGreaterThan(StubProtocol.requests, 0)
     XCTAssertEqual(fallback.routeCalls, 1)
+  }
+
+  func testAnInstalledRegionAuthorisesATripTheServerDoesNotDeclare() async throws {
+    // Production's pre-v2 server declares only Calgary and Kelowna; the trip is inside an
+    // installed region, so it is routed on the device instead of being refused.
+    let recorded = try JSONSerialization.jsonObject(
+      with: Data(
+        contentsOf: OfflineFixtures.repositoryRoot.appending(
+          path: "apps/mobile/test/fixtures/server-config/production-2026-11.v2-config.json")))
+    StubProtocol.config = try JSONSerialization.data(
+      withJSONObject: XCTUnwrap((recorded as? [String: Any])?["response"]))
+    StubProtocol.status = 200
+    let fallback = Fallback()
+    let edmonton = NavOSSCarPlayDestination(
+      id: "e", label: "E", latitude: 53.5461, longitude: -113.4938, name: "Edmonton")
+    let trips = try await client(fallback).routes(
+      origin: .init(latitude: 53.55, longitude: -113.5), destination: edmonton,
+      preferences: NavOSSRoutePreferences())
+    XCTAssertEqual(fallback.routeCalls, 1)
+    XCTAssertEqual(trips.first?.source, "offline-valhalla")
+    XCTAssertEqual(StubProtocol.requests, 0, "no route request goes to a server that refused it")
+
+    // Without an installed region the server's declaration still applies.
+    fallback.covered = false
+    do {
+      _ = try await client(fallback).routes(
+        origin: .init(latitude: 53.55, longitude: -113.5), destination: edmonton,
+        preferences: NavOSSRoutePreferences())
+      XCTFail("expected outsideCoverage")
+    } catch NavOSSNavigationAPIError.outsideCoverage {}
   }
 
   func testTripsOutsideInstalledCoverageStayOnline() async throws {

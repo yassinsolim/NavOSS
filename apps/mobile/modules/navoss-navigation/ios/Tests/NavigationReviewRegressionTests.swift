@@ -215,73 +215,9 @@ final class NavigationReviewRegressionTests: XCTestCase {
   }
 
   // MARK: 5. The keep-route rejoin point is not a destination
-
-  func testRejoinBoundaryInstructionsAreRemovedBeforeInstalling() throws {
-    func point(_ x: Double) -> NavOSSCarPlayCoordinate {
-      let coordinate = Trace.coordinate(x, 0)
-      return NavOSSCarPlayCoordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)
-    }
-    func plain(_ start: Double, _ end: Double, _ instruction: String, _ maneuver: String, spoken: String? = nil)
-      -> NavOSSCarPlayRouteStep
-    {
-      NavOSSCarPlayRouteStep(
-        distanceMeters: end - start, durationSeconds: (end - start) / 20,
-        geometry: [point(start), point(end)], instruction: instruction,
-        maneuverType: maneuver, roadName: "Test Road", spokenInstruction: spoken
-      )
-    }
-    let fetched = NavOSSCarPlayTrip(
-      destination: NavOSSCarPlayDestination(
-        id: "d", label: "d", latitude: point(3_000).latitude, longitude: point(3_000).longitude,
-        name: "Actual destination"
-      ),
-      distanceMeters: 3_000,
-      durationSeconds: 150,
-      geometry: [point(0), point(800), point(3_000)],
-      id: "rejoin",
-      steps: [
-        plain(0, 800, "Head east", "depart", spoken: "You have arrived at your destination."),
-        plain(800, 800, "You have arrived at your destination.", "arrive"),
-        plain(800, 3_000, "Head east", "depart", spoken: "You have arrived at your destination."),
-        plain(3_000, 3_000, "You have arrived at your destination.", "arrive"),
-      ]
-    )
-    let rejoin = point(800)
-    let cleaned = try XCTUnwrap(navigationRemovingRejoinBoundary(from: fetched, rejoin: rejoin))
-    XCTAssertTrue(cleaned.isValid)
-    XCTAssertEqual(cleaned.steps.map(\.maneuverType), ["depart", "arrive"])
-    XCTAssertEqual(cleaned.steps[0].distanceMeters, 3_000)
-    XCTAssertEqual(cleaned.steps[0].geometry.first, point(0))
-    XCTAssertEqual(cleaned.steps[0].geometry.last, point(3_000))
-
-    let session = NavigationSession()
-    try session.start(cleaned)
-    let approaching = try session.updateLocation(Trace.sample(x: 750, y: 0, courseDegrees: 90, speed: 10, time: 0))
-    let planner = NavigationSpeechPlanner()
-    XCTAssertNil(
-      planner.prompt(trip: cleaned, guidance: try XCTUnwrap(approaching.guidance), hasCurrentLocation: true, speedMetersPerSecond: 10, now: 0),
-      "no arrival announcement at the internal rejoin point"
-    )
-    XCTAssertEqual(approaching.guidance?.remainingDistanceMeters ?? 0, 2_250, accuracy: 5)
-  }
-
-  func testRouteWithoutARejoinBoundaryIsUnchanged() {
-    let plainTrip = trip(
-      [(0, 0), (1_000, 0)],
-      steps: [
-        step([(0, 0), (1_000, 0)], distance: 1_000, instruction: "Head east", maneuver: "depart"),
-        step([(1_000, 0), (1_000, 0)], distance: 0, instruction: "Arrive"),
-      ]
-    )
-    let far = Trace.coordinate(400, 300)
-    XCTAssertEqual(
-      navigationRemovingRejoinBoundary(
-        from: plainTrip,
-        rejoin: NavOSSCarPlayCoordinate(latitude: far.latitude, longitude: far.longitude)
-      ),
-      plainTrip
-    )
-  }
+  //
+  // The rejoin point is sent as a `/v2/routes` `through` waypoint instead of being merged away
+  // after the fact. `NavigationRoutesV2Tests` proves it with real recorded responses.
 
   // MARK: 8. Step boundary alignment
 
@@ -407,7 +343,7 @@ final class NavigationReviewRegressionTests: XCTestCase {
     let recovered = try await navigationFetchRecoveryRoute(
       rejoin: rejoin,
       remainingWaypoints: []
-    ) { waypoints in
+    ) { waypoints, _ in
       requests.append(waypoints.map(\.id))
       if !waypoints.isEmpty { throw NavOSSNavigationAPIError.serviceUnavailable }
       return self.recoveryTrip(id: "plain")
@@ -419,7 +355,7 @@ final class NavigationReviewRegressionTests: XCTestCase {
   func testRecoveryFailsNormallyWhenThePlainRouteAlsoFails() async {
     var attempts = 0
     do {
-      _ = try await navigationFetchRecoveryRoute(rejoin: rejoin, remainingWaypoints: []) { _ in
+      _ = try await navigationFetchRecoveryRoute(rejoin: rejoin, remainingWaypoints: []) { _, _ in
         attempts += 1
         throw NavOSSNavigationAPIError.serviceUnavailable
       }
@@ -431,7 +367,7 @@ final class NavigationReviewRegressionTests: XCTestCase {
 
   func testSuccessfulRejoinIsUsedWithoutAPlainRequest() async throws {
     var attempts = 0
-    let recovered = try await navigationFetchRecoveryRoute(rejoin: rejoin, remainingWaypoints: []) { _ in
+    let recovered = try await navigationFetchRecoveryRoute(rejoin: rejoin, remainingWaypoints: []) { _, _ in
       attempts += 1
       return self.recoveryTrip(id: "rejoined")
     }

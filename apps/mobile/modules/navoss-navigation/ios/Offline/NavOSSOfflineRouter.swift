@@ -15,9 +15,6 @@ public final class NavOSSOfflineRouter: @unchecked Sendable {
   private var engine: (key: String, actor: NavOSSValhallaActor)?
   private var searchDatabases: [String: NavOSSOfflineSearchDatabase] = [:]
   private var recipes: [String: (search: String, category: String, normalizer: NavOSSOfflineSearchNormalizer)] = [:]
-  /// Recent offline trips by ID, so a trip that round-trips through JavaScript keeps its lanes,
-  /// signs and bearings when navigation starts.
-  private var recentTrips: [NavOSSCarPlayTrip] = []
   private var tzdataReady = false
 
   /// Whether an installed region covers every point, so an offline answer is possible.
@@ -64,19 +61,8 @@ public final class NavOSSOfflineRouter: @unchecked Sendable {
             guard navOSSOfflineTripsStayInside(trips, region: installed.region) else {
               throw NavOSSOfflineRoutingError.routeLeavesCoverage
             }
-            self.recentTrips = Array((trips + self.recentTrips).prefix(12))
             return trips
           })
-      }
-    }
-  }
-
-  /// The full offline trip with this ID and geometry, when it was planned recently.
-  public func recentTrip(matching trip: NavOSSCarPlayTrip) -> NavOSSCarPlayTrip? {
-    queue.sync {
-      recentTrips.first {
-        $0.id == trip.id && $0.geometry.count == trip.geometry.count
-          && $0.steps.count == trip.steps.count
       }
     }
   }

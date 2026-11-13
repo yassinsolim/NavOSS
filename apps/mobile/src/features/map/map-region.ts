@@ -1,12 +1,10 @@
 import {
-  LOCAL_OVERLAY_AREAS,
+  isCoordinateInBounds,
   SERVICE_AREAS,
   serviceAreaForCoordinate,
   type Coordinate,
   type GeographicBounds,
 } from '@navoss/contracts';
-
-import { isCoordinateInCoverage } from '../navigation/route-coverage';
 
 export const CALGARY_REGION_BOUNDS: GeographicBounds = {
   northEast: { latitude: 51.212, longitude: -113.859 },
@@ -47,11 +45,13 @@ export const TORONTO_CAMERA_BOUNDS: GeographicBounds = {
   southWest: { latitude: 43.58, longitude: -79.64 },
 };
 
-// Province ids come from the shared registry, not a second client-only region enum.
+// Regional context for overlays and time zones. Province ids come from the shared registry, not a
+// second client-only region enum. Search and route eligibility never come from here: they follow
+// the coverage the server declares (`lib/server-config.ts`).
 export type MapRegion = string;
 
 function isInOntario(coordinate: Coordinate): boolean {
-  if (!isCoordinateInCoverage(coordinate, ONTARIO_REGION_BOUNDS)) return false;
+  if (!isCoordinateInBounds(coordinate, ONTARIO_REGION_BOUNDS)) return false;
   let inside = false;
   for (
     let currentIndex = 0, previousIndex = ONTARIO_REGION_POLYGON.length - 1;
@@ -73,8 +73,8 @@ function isInOntario(coordinate: Coordinate): boolean {
 
 export function mapRegionForCoordinate(coordinate: Coordinate | undefined): MapRegion {
   if (coordinate === undefined) return 'other';
-  if (isCoordinateInCoverage(coordinate, KELOWNA_REGION_BOUNDS)) return 'kelowna-bc';
-  if (isCoordinateInCoverage(coordinate, CALGARY_REGION_BOUNDS)) return 'calgary-ab';
+  if (isCoordinateInBounds(coordinate, KELOWNA_REGION_BOUNDS)) return 'kelowna-bc';
+  if (isCoordinateInBounds(coordinate, CALGARY_REGION_BOUNDS)) return 'calgary-ab';
   const serviceArea = serviceAreaForCoordinate(coordinate);
   if (serviceArea !== undefined) return serviceArea.id;
   // If Ontario is later added to the registry, only its sourced boundary may authorize search;
@@ -82,24 +82,4 @@ export function mapRegionForCoordinate(coordinate: Coordinate | undefined): MapR
   if (isInOntario(coordinate) && !SERVICE_AREAS.some((area) => area.id === 'ontario'))
     return 'ontario';
   return 'other';
-}
-
-export function searchCoverageBoundsForRegion(region: MapRegion): GeographicBounds | undefined {
-  const serviceAreaId =
-    LOCAL_OVERLAY_AREAS.find((overlay) => overlay.id === region)?.serviceAreaId ?? region;
-  return SERVICE_AREAS.find((area) => area.id === serviceAreaId)?.bounds;
-}
-
-// Ontario has overlays, but no routing/search dataset. Municipal overlays inherit their province.
-export function isSearchCoverageRegion(region: MapRegion): boolean {
-  return searchCoverageBoundsForRegion(region) !== undefined;
-}
-
-export function mapRegionLabel(region: MapRegion): string {
-  if (region === 'calgary-ab') return 'Calgary';
-  if (region === 'kelowna-bc') return 'Kelowna';
-  if (region === 'ontario') return 'Ontario';
-  const serviceArea = SERVICE_AREAS.find((area) => area.id === region);
-  if (serviceArea !== undefined) return serviceArea.displayName;
-  return 'Current location';
 }

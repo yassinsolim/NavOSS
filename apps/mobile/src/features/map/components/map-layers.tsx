@@ -2,12 +2,13 @@ import { GeoJSONSource, Layer, UserLocation } from '@maplibre/maplibre-react-nat
 import type {
   Coordinate,
   OfficialSafetyCamera,
-  RouteAlternative,
+  RouteAlternativeV2,
   SafetyCamera,
   SafetyFacility,
   SearchResult,
   TrafficCamera,
 } from '@navoss/contracts';
+import type { FeatureCollection, LineString } from 'geojson';
 import { useMemo } from 'react';
 
 import { headingConeFeature } from '@/features/map/heading-cone';
@@ -26,7 +27,7 @@ import { mapAlignedHeadingDegrees } from '@/features/navigation/vehicle-heading'
 import { VehiclePuck, type VehicleStyle } from '@/features/navigation/vehicle-puck';
 import { useRenderCounter } from '@/lib/render-counter';
 import { useStoreValue, type ValueStore } from '@/lib/value-store';
-import { palette } from '@/theme/tokens';
+import { palette, trafficColors } from '@/theme/tokens';
 
 // OpenFreeMap serves Noto Sans glyphs for every style NavOSS loads.
 const LABEL_FONT = ['Noto Sans Regular'];
@@ -70,14 +71,16 @@ function FacingConeLayer({
 }
 
 export interface MapLayersProps {
-  alternateRoutes: readonly RouteAlternative[];
+  alternateRoutes: readonly RouteAlternativeV2[];
   darkMap: boolean;
   deviceHeadingStore: ValueStore<number | undefined>;
-  displayedSelectedRoute: RouteAlternative | undefined;
+  displayedSelectedRoute: RouteAlternativeV2 | undefined;
   isNavigating: boolean;
   roadEvents: readonly MapRoadEvent[];
   routeColor: RouteColor;
   safetyCameras: readonly SafetyCamera[];
+  /** Congestion runs over the selected route; only when a live traffic source observed it. */
+  selectedRouteCongestion: FeatureCollection<LineString> | undefined;
   safetyFacilities: readonly SafetyFacility[];
   /** Results drawn as tappable dots. Empty unless the explore surface is showing results. */
   searchResults: readonly SearchResult[];
@@ -111,6 +114,7 @@ export function MapLayers({
   safetyCameras,
   safetyFacilities,
   searchResults,
+  selectedRouteCongestion,
   selectedResult,
   showRoadEvents,
   showSafetyCameras,
@@ -188,6 +192,27 @@ export function MapLayers({
             id="selected-route-line"
             layout={ROUND_LINE}
             paint={{ 'line-color': ROUTE_COLORS[routeColor], 'line-width': 6.5 }}
+            type="line"
+          />
+        </GeoJSONSource>
+      )}
+      {selectedRouteCongestion !== undefined && selectedRouteCongestion.features.length > 0 && (
+        <GeoJSONSource data={selectedRouteCongestion} id="selected-route-congestion">
+          <Layer
+            id="selected-route-congestion-line"
+            layout={ROUND_LINE}
+            paint={{
+              'line-color': [
+                'match',
+                ['get', 'level'],
+                'stopped',
+                trafficColors.stopped,
+                'heavy',
+                trafficColors.heavy,
+                trafficColors.slow,
+              ],
+              'line-width': 6.5,
+            }}
             type="line"
           />
         </GeoJSONSource>

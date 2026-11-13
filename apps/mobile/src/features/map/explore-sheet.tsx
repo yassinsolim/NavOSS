@@ -53,6 +53,8 @@ const NO_RECENT_DESTINATIONS: readonly string[] = [];
 export interface ExploreSheetProps {
   apiConnection: ApiConnectionState;
   catalog: NativeDestinationCatalog;
+  /** The server's declared coverage name. */
+  coverageName: string;
   locationState: 'denied' | 'error' | 'idle' | 'locating' | 'visible';
   metrics: ScreenMetrics;
   nearbySearchEnabled: boolean;
@@ -90,6 +92,7 @@ interface ResultSection {
 export function ExploreSheet({
   apiConnection,
   catalog,
+  coverageName,
   locationState,
   metrics,
   nearbySearchEnabled,
@@ -150,6 +153,7 @@ export function ExploreSheet({
   const offlineMapsInstalled = useOfflineMapsInstalled();
   const notice = exploreServiceNotice({
     apiConnection,
+    coverageName,
     locationState,
     nearbySearchEnabled,
     offlineMapsInstalled,

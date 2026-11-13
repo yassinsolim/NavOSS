@@ -132,10 +132,8 @@ private func offlineTrip(
     guard shape.count >= 2 else { throw NavOSSOfflineRoutingError.invalidResponse }
     geometry.append(contentsOf: geometry.isEmpty ? shape[...] : shape.dropFirst())
     var previousRoadName = ""
-    for (maneuverIndex, maneuver) in maneuvers.enumerated() {
-      let next = maneuverIndex + 1 < maneuvers.count ? maneuvers[maneuverIndex + 1] : nil
-      let step = try offlineStep(
-        maneuver, next: next, shape: shape, previousRoadName: previousRoadName)
+    for maneuver in maneuvers {
+      let step = try offlineStep(maneuver, shape: shape, previousRoadName: previousRoadName)
       previousRoadName = step.roadName
       steps.append(step)
     }
@@ -168,7 +166,6 @@ private func offlineTrip(
 
 private func offlineStep(
   _ maneuver: [String: Any],
-  next: [String: Any]?,
   shape: [NavOSSCarPlayCoordinate],
   previousRoadName: String
 ) throws -> NavOSSCarPlayRouteStep {
@@ -194,7 +191,8 @@ private func offlineStep(
     ? previousRoadName : streetNames.joined(separator: " / ")
   let currentRoadName = beginNames.isEmpty ? nil : beginNames.joined(separator: " / ")
   let sign = signFields(maneuver["sign"] as? [String: Any])
-  let spoken = (next?["verbal_pre_transition_instruction"] as? String).flatMap {
+  // Contract v10: each step carries its own maneuver's announcement.
+  let spoken = (maneuver["verbal_pre_transition_instruction"] as? String).flatMap {
     $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0
   }
   return NavOSSCarPlayRouteStep(

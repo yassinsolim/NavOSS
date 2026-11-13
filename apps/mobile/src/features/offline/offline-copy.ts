@@ -12,7 +12,14 @@ export const OFFLINE_ROUTE_SOURCE = {
   traffic: 'unavailable',
 } as const;
 
-export type OfflineRouteSource = typeof OFFLINE_ROUTE_SOURCE;
+/** An offline route for a trip the server's declared coverage does not include. */
+export const OFFLINE_ROUTE_SOURCE_BEYOND_SERVICE = {
+  ...OFFLINE_ROUTE_SOURCE,
+  attribution: 'Offline route · Outside the online service area · No traffic or closures',
+} as const;
+
+export type OfflineRouteSource =
+  typeof OFFLINE_ROUTE_SOURCE | typeof OFFLINE_ROUTE_SOURCE_BEYOND_SERVICE;
 
 /** Decimal units, as iOS reports storage. */
 export function formatBytes(bytes: number): string {
