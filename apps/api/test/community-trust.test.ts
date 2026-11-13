@@ -266,6 +266,27 @@ describe('abuse limits', () => {
     expect(networkBucket('203.0.113.7')).toBe(networkBucket('::ffff:203.0.113.200'));
     expect(networkBucket('2001:db8:1:2::1')).toBe(networkBucket('2001:db8:1:ffff::2'));
   });
+
+  it('keys every textual form of one IPv6 /48 to one network bucket', () => {
+    // The same /48 written with different compressions once produced different buckets, so
+    // rotating host or subnet bits bought a fresh quota.
+    const bucket = networkBucket('2001:db8::1');
+    for (const address of [
+      '2001:db8:0:1::1',
+      '2001:0db8:0000:ffff:0000:0000:0000:0002',
+      '2001:DB8::abcd:1',
+      '2001:db8:0::',
+      '2001:db8::1%en0',
+    ]) {
+      expect(networkBucket(address)).toBe(bucket);
+    }
+    expect(networkBucket('2001:db8:1::1')).not.toBe(bucket);
+    expect(networkBucket('2001:db9::1')).not.toBe(bucket);
+    // IPv4-mapped addresses in either spelling share the IPv4 /24.
+    expect(networkBucket('::ffff:c000:0201')).toBe(networkBucket('192.0.2.77'));
+    expect(networkBucket('::FFFF:192.0.2.9')).toBe(networkBucket('192.0.2.77'));
+    expect(networkBucket('::1')).toBe(networkBucket('0:0:0::1'));
+  });
 });
 
 describe('publication coarsening', () => {

@@ -36,97 +36,126 @@ batches of your driving positions to the NavOSS API. A batch is a list of positi
 number of seconds since the batch's first position, plus the time the batch started rounded down
 to the minute, plus an upload credential (described below). A batch covers about one minute of
 driving and never more than five. It contains no account, no name, no advertising identifier, no
-trip identifier, no destination and no planned route. It does contain a short stretch of the path
-you actually drove. There is no field that links one batch to another, but batches from one trip
-carry the same credential, come from the same network address, and continue where the previous
-one stopped, so the server and Cloudflare could link them while they are being delivered. NavOSS
-does not record that link.
+trip or sequence identifier, no destination and no planned route. It does contain a short stretch
+of the path you actually drove. Batches from one trip carry the same upload credential, come from
+the same network address, and continue where the previous one stopped, so the server and
+Cloudflare could link them while they are being delivered. NavOSS does not record that link.
 
-**Proof that the upload comes from a real copy of the app.** To stop made-up traffic, the server
-accepts batches only from an iPhone that has registered an Apple App Attest key for NavOSS. For
-that key the server stores a keyed hash of the key's identifier, the public key in encrypted
-form, a counter, whether Apple attested it, and the times it was registered and last used; it is
-deleted after 90 days without use. Using that key, the app obtains an upload credential that is
-valid for two hours. The server keeps no record of which installation a credential was issued
-to, and nothing it stores about traffic refers to an installation or a credential. Asking for a
-credential does update the key's "last used" time.
+**Upload credentials and abuse resistance.** To make made-up traffic harder, the server accepts
+batches only with an upload credential, and issues one only to an installation of the app that
+has registered an Apple App Attest key for NavOSS and signs a fresh request with it. For that key
+the server stores a keyed hash of the key's identifier, the public key in encrypted form, a
+counter, whether Apple attested it, and the times it was registered and last used. A periodic
+cleanup deletes a key after 90 days without use; it is best effort, so a key can remain somewhat
+longer if a cleanup run fails. A key registered less than a day earlier gets no credential yet.
+The credential is valid for two hours. The server keeps no record of which installation a
+credential was issued to, and nothing it stores about traffic refers to an installation or a
+credential, but asking for a credential does update the key's counter and "last used" time.
+
+App Attest shows that a request was signed by a genuine copy of the app on an Apple device. It
+does not show that the device was driving, and one iPhone can register several keys. A
+credential is a bearer token: whoever holds it can upload with it until it expires, from any
+device. A test setting makes the server accept software keys instead; the committed production
+configuration leaves it off, and the enablement checklist requires that.
 
 **When it is sent.** Only during active turn-by-turn navigation, including while the phone is
 locked or CarPlay is connected, about once a minute. Nothing is sent while you browse the map,
 search, preview a route, or drive without navigation, and nothing is sent when sharing is off.
+The server refuses a batch whose first position is more than 10 minutes old when it arrives.
 
 **What is left out.** The app is required not to record the first 400 metres or the last 400
 metres of a trip, or anything within 400 metres of your destination or a stop on the way, and to
 hold back the most recent 400 metres so that a trip you end early never sends its final stretch.
 The server cannot check this, because it is never told where a trip starts or ends. What the
 server itself does is discard the first and last 100 metres of every batch it receives and use
-only motorways, trunk roads, primary roads and secondary roads. Positions on smaller roads
-(tertiary and residential streets, service roads, driveways, tracks, and parking areas) may still
-be uploaded and matched to the map in memory, but nothing is kept from them. Roads marked private
-are left out only when they are mapped as one of those smaller road types, which is the usual
-case; the server does not check access restrictions separately.
+only motorways, trunk roads, primary roads and secondary roads. Of those, it uses only stretches
+at least 20 metres long that the routing software's map marks as open to cars and as neither
+private or destination-only access nor a dead end or the road into or out of an area with no
+other exit. That map check reaches only as far as the routing software looks: a large area with
+a single exit, such as a valley with its own road network, can still be used. Positions on other
+roads (tertiary and residential streets, service roads, driveways, tracks, and parking areas)
+may still be uploaded and matched to the map in memory, but nothing is kept from them.
 
 **What the server does.** The server matches a batch to roads in memory, works out one average
-speed for each stretch of road between two junctions that the batch drove completely, holds that
-speed in memory, and discards the batch. The NavOSS API does not write your positions, the batch,
-or its timing to its database, a backup, or its log. To match a batch to roads the API uses
-routing software (Valhalla) on the same NavOSS-controlled machine in Alberta and will only start
-if that software is at a local address; batches are not forwarded to another routing provider.
-Like every request to NavOSS, a batch is delivered through Cloudflare, which sees it in transit.
-NavOSS has not yet verified that the routing software, the reverse proxy's error handling, system
-swap, or crash dumps on the production machine never write any part of a batch, and will not
-switch publication on until it has.
+speed for each continuous run along one road in one direction, and gives that speed to each
+qualifying stretch between two junctions that the batch passed through from end to end according
+to the map matching. It holds those speeds in memory and discards the batch. The NavOSS API does
+not write your positions, the batch, or its timing to its database, a backup, or its log. To
+match a batch to roads and check the map the API uses routing software (Valhalla) that it
+requires to be at a local network address; on the production stack that is a container on the
+same NavOSS-controlled machine in Alberta. The address check by itself does not prove where the
+software runs or who operates it, and NavOSS will confirm the production deployment before
+switching publication on. Batches are not forwarded to another routing provider. The map check
+sends the routing software only points on the map's own roads, never your positions. Like every
+request to NavOSS, a batch is delivered through Cloudflare, which sees it in transit. NavOSS has
+not yet verified that the routing software, the reverse proxy's error handling, system swap, or
+crash dumps on the production machine never write any part of a batch, and will not switch
+publication on until it has.
 
 **What is kept, and for how long.**
 
 - _Before publication, in memory only._ For each stretch of road, the server's memory holds one
-  speed per contributor, the five-minute period in which it arrived, and a scrambled marker that
-  tells contributors apart. The marker is derived from your App Attest installation and that one
-  stretch of road using a secret that exists only in the running server's memory, so markers for
-  two roads cannot be matched to each other. This is dropped after at most 20 minutes and is lost
-  whenever the server restarts. It is never written to the database.
+  speed per contributor, the five-minute period in which it arrived, when the batch's driving
+  began, and a scrambled marker that tells contributors apart. The marker is derived from your
+  App Attest installation and that one stretch of road using a secret that exists only in the
+  running server's memory. Markers for two different roads are unrelated, so they cannot be
+  matched to each other by comparing them; your marker for one stretch stays the same across
+  five-minute periods and credentials until the server restarts. For an installation registered
+  in the last seven days, the memory also holds a scrambled marker of the network the batch came
+  from, so that several new keys on one network count once. This is dropped after at most 20
+  minutes and is lost whenever the server restarts. It is never written to the database.
 - _After publication, in the database._ Once at least three installations have driven the same
   stretch, the server stores one typical speed for it, rounded to 5 km/h, the public
   OpenStreetMap shape of that stretch, and the five-minute boundary at which it was published. It
-  is deleted 15 minutes later, erased whenever the server starts (including when the feature is
-  switched off), and excluded from database backups.
+  is never shown after 15 minutes. It is deleted at that point by the server's next successful
+  database update, which is normally at that moment and otherwise at a later five-minute
+  boundary; it is erased whenever the server starts (including when the feature is switched off,
+  in which case the server retries until the erasure succeeds); and it is excluded from database
+  backups. Nothing deletes it while the server is stopped.
 - _Abuse limits, in memory only._ The server keeps salted fingerprints of the source network and
   of the contributor, with request times, for up to 11 minutes after the last request.
+- _Operator counters._ Every 15 minutes the server logs running totals (batches, credentials,
+  stretches published, failures). They contain no road, position, address or installation and
+  are kept as long as other operational logs.
 
-Everything derived from a batch is gone within 35 minutes of its arrival. These periods, the
-minimum of three contributors, and the road types are fixed in the server's code and cannot be
-weakened by configuration.
+Everything derived from a batch leaves memory within 20 minutes of its arrival and is no longer
+shown within 35 minutes; physical deletion from the database can be later, as described above.
+These periods, the minimum of three contributors, and the road rules are fixed in the server's
+code and cannot be weakened by configuration.
 
 **What other drivers see.** A stretch of road is coloured, and can affect an estimated arrival
-time, only after at least three different App Attest installations have driven that same stretch
-within about 20 minutes, and only from the next five-minute boundary. A stretch driven by one or
-two contributors is never shown and never stored. Other drivers see, for each published stretch,
-its shape, a congestion colour, a typical speed rounded to 5 km/h, the road's normal speed, and
-the five-minute boundary at which it was published. They never see a vehicle, a trip, a count of
-contributors, or who contributed. With few contributors, most roads will show no traffic at all.
+time, only after at least three different App Attest installations have driven that same stretch,
+each in a batch whose driving began within the 15 minutes before a five-minute boundary, and only
+from that boundary. It stays shown for at most 15 minutes, so what other drivers see rests on
+driving at most 30 minutes old. Three installations are three keys, not necessarily three
+people. A stretch driven by one or two contributors is never shown and never stored. Other drivers
+see, for each published stretch, its shape, a congestion colour, a typical speed rounded to
+5 km/h, the road's normal speed, and the five-minute boundary at which it was published. They
+never see a vehicle, a trip, a count of contributors, or who contributed. With few contributors,
+most roads will show no traffic at all.
 
 **What NavOSS cannot rule out.** This is data minimisation with a threshold, not anonymity.
 
 - Three installations are not necessarily three unrelated people. They can be one household, or
-  one person who has registered several keys.
+  one person who has registered several keys and kept them for a week or used several networks.
 - On a quiet road, the fact that a stretch was driven by at least three contributors shortly
   before a given five-minute boundary becomes visible to anyone watching the map, and the small
   group who drive there may be guessable.
 - If two of the three contributors on a stretch cooperate, they can infer that a third person
-  drove it in that window and roughly how fast.
+  drove it in that window, roughly how fast, and at a junction which way they went.
 - Someone with access to the running server's memory, together with its database, could work out
   which installation contributed to a stretch that is still waiting for publication.
 - Cloudflare and the NavOSS server necessarily see each upload and its network address while it
   is being delivered, as they do for every request.
-- A home on a secondary or larger road is on a road the server uses. Only the trimming the app
-  performs and the three-contributor rule protect it.
+- A home on a secondary or larger through road is on a road the server uses. Only the trimming
+  the app performs and the three-contributor rule protect it.
 
 **How to turn it off.** Turn off **Share traffic speeds** in the app's About and Privacy screen.
 Uploads are required to stop immediately and anything not yet sent to be discarded. Ending
-navigation or removing the app has the same effect. What was contributed disappears on its own
-within 35 minutes. Nothing about traffic is stored with an account, an installation, or a trip
-identifier, so there is no per-person traffic record to look up or delete. You can see traffic
-from other drivers without sharing your own.
+navigation or removing the app has the same effect. What was contributed stops being shown
+within 35 minutes and is deleted as described above. Nothing about traffic is stored with an
+account, an installation, or a trip identifier, so there is no per-person traffic record to look
+up or delete. You can see traffic from other drivers without sharing your own.
 
 ### Search text and place details
 
@@ -164,7 +193,7 @@ NavOSS does not read the Contacts database and does not request Contacts permiss
 
 Call and website actions open the phone dialer or an external browser/app only after the user chooses them. **More reviews on Google Maps** is a separate external action and sends the selected public place name and coordinate to Google only when chosen. NavOSS never scrapes or caches review text. In a Google-enabled build, the place-details request described above can occur when a point-of-interest sheet opens; the external reviews search still occurs only after the user chooses it.
 
-The Contribute screen submits private beta feedback to NavOSS. A submission contains a fixed report type, user-entered description, optional place or road label, client creation time, and random draft and submission identifiers. It contains no account, device identifier, or precise coordinate. To limit abuse, the API keeps a salted, process-local fingerprint of the source network address for up to one hour; it is not logged or stored in PostgreSQL. Accepted submissions are visible only to the NavOSS beta-review workflow, are not public, and are scheduled for deletion from the live database after 90 days. Bounded database backups may retain a deleted row for up to 14 additional days. If submission fails, up to 25 pending attempts remain only on the device until retried, deleted, or the app is removed.
+The Contribute screen submits private beta feedback to NavOSS. A submission contains a fixed report type, user-entered description, optional place or road label, client creation time, and random draft and submission identifiers. It contains no account, device identifier, or precise coordinate. To limit abuse, the API keeps a salted, process-local fingerprint of the source network address for up to one hour after the last submission, plus up to one minute until the next cleanup; it is not logged or stored in PostgreSQL. Accepted submissions are visible only to the NavOSS beta-review workflow, are not public, and are scheduled for deletion from the live database after 90 days. Bounded database backups may retain a deleted row for up to 14 additional days. If submission fails, up to 25 pending attempts remain only on the device until retried, deleted, or the app is removed.
 
 NavOSS does not automatically transmit raw feedback descriptions to an AI provider. Operator policy requires reviewing raw text outside an AI conversation. The operator may manually create a deidentified engineering summary after removing names, private addresses, contact details, exact personal trips, credentials, and unnecessary timestamps. The summary is stored in an ignored local workspace artifact. Only when the operator explicitly invokes AI-assisted triage is that deidentified summary transmitted to the configured coding-assistant provider under its terms, to group reports, draft issues, or help implement a human-approved item. The summary contains no account or contributor identifier.
 
@@ -172,7 +201,7 @@ During active navigation, the report button can store up to 25 structured road-r
 
 ### Service and security data
 
-The default Google-disabled build has no account, advertising, analytics, crash-reporting, data-broker, cross-app tracking, or runtime AI service. It does not use an advertising identifier or create a persistent user or device identifier. A separately enabled Google place-details build links the Google Places SDK and is subject to the SDK declarations described above; NavOSS does not receive or operate that Google analytics data.
+The default Google-disabled build has no account, advertising, analytics, crash-reporting, data-broker, cross-app tracking, or runtime AI service. It does not use an advertising identifier or create a persistent user or device identifier, except that a phone which turns on traffic sharing or community reports registers an App Attest key, described under [Traffic sharing](#traffic-sharing-optional-off-by-default), which the server keeps until 90 days after its last use. A separately enabled Google place-details build links the Google Places SDK and is subject to the SDK declarations described above; NavOSS does not receive or operate that Google analytics data.
 
 Cloudflare provides public DNS, TLS termination, denial-of-service protection, and an outbound tunnel to the NavOSS server. Cloudflare necessarily processes the client IP address, request traffic, and routing/security metadata. NavOSS does not enable Cloudflare raw request-log export or store Cloudflare per-request access logs. Cloudflare may create and retain network or security data under its own privacy policy.
 
@@ -193,7 +222,7 @@ NavOSS does not sell personal information or use it for advertising, marketing p
 | [DriveBC](https://www.drivebc.ca/)                                                                 | Official Kelowna-area Open511 road events and ordinary highway-webcam metadata polled by NavOSS; receives no phone location or user data                                                                                                     | Government of British Columbia                                                      |
 | [Kelowna RCMP](https://rcmp.ca/en/bc/kelowna/contact)                                              | Published fixed public facility names, addresses, phones, and coordinates; no live police data                                                                                                                                               | Royal Canadian Mounted Police                                                       |
 | [Mapbox](https://www.mapbox.com/legal/privacy/)                                                    | Optional licensed live-traffic routing; receives route endpoints, preferences, and request network metadata only when explicitly enabled                                                                                                     | Global infrastructure; disabled in current production                               |
-| [Apple](https://www.apple.com/legal/privacy/)                                                      | TestFlight distribution, tester feedback, and the user-invoked system share sheet                                                                                                                                                            | Under Apple's policy                                                                |
+| [Apple](https://www.apple.com/legal/privacy/)                                                      | TestFlight distribution, tester feedback, the user-invoked system share sheet, and App Attest, which the phone uses to create the key that obtains traffic-upload credentials                                                                | Under Apple's policy                                                                |
 | [Google Places and Google Maps](https://policies.google.com/privacy)                               | Optional photos, rating/count, and reviews in an enabled build; Google SDK manifest declares location, device ID, other data, performance, interaction, and search-history collection; external review search only after the user chooses it | Under Google's policy                                                               |
 | [GitHub](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement) | Public issues and private vulnerability reports initiated by a user                                                                                                                                                                          | Under GitHub's policy                                                               |
 
@@ -201,30 +230,30 @@ Map and route data is derived from OpenStreetMap contributors. Search combines O
 
 ## Retention
 
-| Data                                               | NavOSS retention                                                                                                                                                                                                                     |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Search text, tapped-place name, and search origin  | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup                                                                                                                        |
-| Route and reroute coordinates                      | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup                                                                                                                        |
-| Traffic-sharing batches (only when switched on)    | Positions and timing processed in memory and discarded; not written by the NavOSS API to its database, log, or a backup                                                                                                              |
-| Unpublished traffic speeds                         | API memory only: one speed per contributor and road stretch with a per-road scrambled marker; dropped within 20 minutes; never in the database                                                                                       |
-| Published traffic speeds                           | Per road stretch: speed rounded to 5 km/h, public road shape, five-minute publication time; deleted after 15 minutes, erased on every server start, excluded from backups                                                            |
-| App Attest key for traffic sharing                 | Keyed hash of the key identifier, encrypted public key, counter, registration and last-use times; deleted after 90 days without use                                                                                                  |
-| Active route, trip progress and camera eligibility | Processed on the phone; the active route is erased when navigation ends or arrival is confirmed; no trip-history database                                                                                                            |
-| Recent and saved destinations                      | Up to 12 recent and 20 saved destination names, labels, and coordinates stored only on the device until cleared in About and Privacy or the app is removed                                                                           |
-| Map appearance preferences                         | Stored locally in app storage until the app is removed or the settings are changed; not transmitted to NavOSS                                                                                                                        |
-| Accepted beta contributions                        | Type, description, optional place/road label, timestamps, random draft/submission IDs, and review status retained in the live database for up to 90 days; no account, device ID, or precise coordinate                               |
-| Pending contribution retries                       | Up to 25 failed submissions stored only on the device until successfully retried, individually deleted, or the app is removed                                                                                                        |
-| Road-report test drafts                            | Up to 25 structured report types, precise coordinates, creation times, and expiry times stored only on the device; each expires after two hours and all are removed with the app                                                     |
-| Google-enabled place component                     | Selected public POI name and coordinate sent directly to Google; response not retained by NavOSS. Google's embedded manifest separately declares the SDK data categories and purposes listed above under Google's retention controls |
-| Google query safety counter                        | UTC month, aggregate used count, and last update time retained in the NavOSS database; contains no place, coordinate, account, device, or search data                                                                                |
-| Place and ETA share text                           | Created on the phone and not sent to NavOSS; controlled by Apple and the user-selected share destination                                                                                                                             |
-| Public Calgary business and parcel search index    | Current local mirror refreshed every 24 hours; reproducible index tables are excluded from logical backups                                                                                                                           |
-| API and service operational logs                   | Maximum seven days; routine HTTP access logging is disabled                                                                                                                                                                          |
-| Host authentication and firewall security logs     | Maximum seven days; may contain timestamp, source IP and port, local account, action, and outcome                                                                                                                                    |
-| Report database backups                            | Maximum 14 days; may contain accepted beta contributions but do not contain route or search requests or traffic speeds                                                                                                               |
-| Support messages                                   | Controlled by Apple or GitHub according to the channel selected by the user and that provider's policy                                                                                                                               |
+| Data                                               | NavOSS retention                                                                                                                                                                                                                         |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Search text, tapped-place name, and search origin  | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup                                                                                                                            |
+| Route and reroute coordinates                      | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup                                                                                                                            |
+| Traffic-sharing batches (only when switched on)    | Positions and timing processed in memory and discarded; not written by the NavOSS API to its database, log, or a backup                                                                                                                  |
+| Unpublished traffic speeds                         | API memory only: one speed per contributor and road stretch with a per-road scrambled marker (and, for keys registered in the last seven days, a scrambled network marker); dropped within 20 minutes; never in the database             |
+| Published traffic speeds                           | Per road stretch: speed rounded to 5 km/h, public road shape, five-minute publication time; never shown after 15 minutes; deleted by the next successful database update after that, erased on every server start, excluded from backups |
+| App Attest key for traffic sharing                 | Keyed hash of the key identifier, encrypted public key, counter, registration and last-use times; removed by a periodic best-effort cleanup after 90 days without use                                                                    |
+| Active route, trip progress and camera eligibility | Processed on the phone; the active route is erased when navigation ends or arrival is confirmed; no trip-history database                                                                                                                |
+| Recent and saved destinations                      | Up to 12 recent and 20 saved destination names, labels, and coordinates stored only on the device until cleared in About and Privacy or the app is removed                                                                               |
+| Map appearance preferences                         | Stored locally in app storage until the app is removed or the settings are changed; not transmitted to NavOSS                                                                                                                            |
+| Accepted beta contributions                        | Type, description, optional place/road label, timestamps, random draft/submission IDs, and review status retained in the live database for up to 90 days; no account, device ID, or precise coordinate                                   |
+| Pending contribution retries                       | Up to 25 failed submissions stored only on the device until successfully retried, individually deleted, or the app is removed                                                                                                            |
+| Road-report test drafts                            | Up to 25 structured report types, precise coordinates, creation times, and expiry times stored only on the device; each expires after two hours and all are removed with the app                                                         |
+| Google-enabled place component                     | Selected public POI name and coordinate sent directly to Google; response not retained by NavOSS. Google's embedded manifest separately declares the SDK data categories and purposes listed above under Google's retention controls     |
+| Google query safety counter                        | UTC month, aggregate used count, and last update time retained in the NavOSS database; contains no place, coordinate, account, device, or search data                                                                                    |
+| Place and ETA share text                           | Created on the phone and not sent to NavOSS; controlled by Apple and the user-selected share destination                                                                                                                                 |
+| Public Calgary business and parcel search index    | Current local mirror refreshed every 24 hours; reproducible index tables are excluded from logical backups                                                                                                                               |
+| API and service operational logs                   | Maximum seven days; routine HTTP access logging is disabled                                                                                                                                                                              |
+| Host authentication and firewall security logs     | Maximum seven days; may contain timestamp, source IP and port, local account, action, and outcome                                                                                                                                        |
+| Report database backups                            | Maximum 14 days; may contain accepted beta contributions but do not contain route or search requests or traffic speeds                                                                                                                   |
+| Support messages                                   | Controlled by Apple or GitHub according to the channel selected by the user and that provider's policy                                                                                                                                   |
 
-NavOSS operational logs are limited to timestamps, service/container identity, severity, lifecycle events, health failures, error names, and random request IDs where needed. They exclude HTTP request and response bodies, search text, route coordinates, shared traffic positions, and normal HTTP access events. When traffic sharing is enabled on the server, a periodic summary records only counts of batches, credentials, and road stretches, with no road, position, address, or installation. All six production containers write to the host journal, which enforces a seven-day and 512 MiB limit. Caddy access logs and automatic Fastify request logs are disabled.
+NavOSS operational logs are limited to timestamps, service/container identity, severity, lifecycle events, health failures, error names, and random request IDs where needed. The NavOSS API's own logs exclude HTTP request and response bodies, search text, route coordinates, shared traffic positions, and normal HTTP access events. NavOSS has not yet verified that the routing software and the reverse proxy never log request content or client addresses when a request fails; traffic publication stays off until it has. When traffic sharing is enabled on the server, a periodic summary records only counts of batches, credentials, and road stretches, with no road, position, address, or installation. All six production containers write to the host journal, which enforces a seven-day and 512 MiB limit. Caddy access logs and automatic Fastify request logs are disabled.
 
 Cloudflare and OpenFreeMap apply their own retention policies to data they process. Cloudflare's policy does not promise one fixed period for all end-user network/security data. OpenFreeMap states that anonymized logs may be retained indefinitely and incident IP logs for at most 30 days. These provider-controlled periods are not part of NavOSS's seven-day host limit.
 
@@ -238,7 +267,7 @@ You can use NavOSS without granting Contacts access because the app never asks f
 
 Traffic sharing is optional and off by default; turn **Share traffic speeds** off in About and Privacy to stop it, as described under Traffic sharing above.
 
-Because NavOSS has no account and does not retain server-side search, route, or trip records, it normally has no server history that can be exported or deleted. Shared traffic speeds are stored without an account, installation, or trip identifier and only as short-lived per-road values once three contributors agree; the residual ways a contribution could still be inferred are listed under Traffic sharing above. The local recent- and saved-destination lists can be deleted in the app as described above. A rights request may identify a support message or a recent security event. Include only enough information to locate that record. NavOSS may be unable to associate an IP-only, transient request with a person. Requests about Cloudflare, OpenFreeMap, Apple, or GitHub data may also need to be directed to that provider.
+Because NavOSS has no account and does not retain server-side search, route, or trip records, it normally has no server history that can be exported or deleted. Published traffic speeds are stored without an account, installation, or trip identifier and only as short-lived per-road values once at least three installations have driven a stretch (their speeds are combined into a median; they are not checked for agreement). Speeds waiting for publication are held only in memory, under markers the running server could recompute from an installation. The residual ways a contribution could still be inferred are listed under Traffic sharing above. The local recent- and saved-destination lists can be deleted in the app as described above. A rights request may identify a support message or a recent security event. Include only enough information to locate that record. NavOSS may be unable to associate an IP-only, transient request with a person. Requests about Cloudflare, OpenFreeMap, Apple, or GitHub data may also need to be directed to that provider.
 
 ## Children
 

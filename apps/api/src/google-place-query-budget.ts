@@ -65,18 +65,37 @@ export function createPostgresGooglePlaceQueryBudget(
   const clock = options.clock ?? (() => new Date());
   const limit = options.limit ?? GOOGLE_PLACE_QUERY_MONTHLY_LIMIT;
   const pool = new Pool();
-  const initialized = pool.query(`
+  // An idle connection the server drops is reported here; unheard, it would end the process.
+  pool.on('error', () => undefined);
+  // Created on the first reservation, inside its handled path: a database that is down at startup
+  // must not become an unhandled rejection that ends the process. A failed attempt is retried by
+  // the next reservation.
+  let initialized: Promise<void> | undefined;
+  const initialize = (): Promise<void> => {
+    initialized ??= pool
+      .query(
+        `
     CREATE TABLE IF NOT EXISTS google_place_query_budget (
       period text PRIMARY KEY CHECK (period ~ '^\\d{4}-\\d{2}$'),
       used integer NOT NULL CHECK (used >= 0),
       updated_at timestamptz NOT NULL DEFAULT now()
     )
-  `);
+  `,
+      )
+      .then(
+        () => undefined,
+        (error: unknown) => {
+          initialized = undefined;
+          throw error;
+        },
+      );
+    return initialized;
+  };
 
   return {
     close: () => pool.end(),
     reserve: async () => {
-      await initialized;
+      await initialize();
       const now = clock();
       const period = periodFor(now);
       const reservation = await pool.query<{ used: number }>(
