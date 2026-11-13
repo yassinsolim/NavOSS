@@ -14,6 +14,8 @@ cd "$compose_dir"
 docker compose exec -T reports-db pg_dump \
   --clean \
   --exclude-table='calgary_search_*' \
+  --exclude-table-data='community_*' \
+  --exclude-table-data='traffic_*' \
   --if-exists \
   --no-owner \
   --username navoss \

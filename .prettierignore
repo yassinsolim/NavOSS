@@ -5,3 +5,4 @@ coverage
 dist
 node_modules
 pnpm-lock.yaml
+apps/api/test/fixtures

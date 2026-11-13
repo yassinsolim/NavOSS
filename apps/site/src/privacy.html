@@ -7,23 +7,13 @@
       name="description"
       content="How the NavOSS navigation technical beta handles location, search, routing, regional overlays, and support data."
     />
-    <meta name="theme-color" content="#1b2526" />
     <link rel="canonical" href="https://navoss.yassin.app/privacy" />
-    <link rel="icon" href="/assets/navoss-chevron.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css" />
     <title>Privacy | NavOSS</title>
+    <!-- @head -->
   </head>
   <body>
-    <header class="site-header">
-      <a class="brand" href="/" aria-label="NavOSS home"
-        ><img src="/assets/navoss-chevron.svg" alt="" /><span>NavOSS</span></a
-      >
-      <nav class="site-nav" aria-label="Primary navigation">
-        <a href="/privacy">Privacy</a><a href="/support">Support</a><a href="/data-sources">Data</a
-        ><a class="source-link" href="https://github.com/yassinsolim/NavOSS">View source</a>
-      </nav>
-    </header>
-    <main class="document-shell">
+    <!-- @header -->
+    <main id="main" class="document-shell">
       <article class="document">
         <p class="document__meta">Internal beta policy · Effective July 31, 2026</p>
         <h1>Privacy without an account</h1>
@@ -37,7 +27,34 @@
           direct privacy and support email has been activated and tested.
         </div>
 
-        <h2>Location and active navigation</h2>
+        <nav class="toc" aria-labelledby="toc-title">
+          <h2 id="toc-title" class="toc__title">On this page</h2>
+          <ol>
+            <li><a href="#location-and-active-navigation">Location and active navigation</a></li>
+            <li><a href="#search-and-routing">Search and routing</a></li>
+            <li>
+              <a href="#sharing-and-external-place-actions">Sharing and external place actions</a>
+            </li>
+            <!-- Community data sections (traffic sharing, road reports) are listed here. -->
+            <li>
+              <a href="#no-advertising-or-cross-app-tracking"
+                >No advertising or cross-app tracking</a
+              >
+            </li>
+            <li><a href="#map-and-camera-data">Map and camera data</a></li>
+            <li><a href="#providers-and-retention">Providers and retention</a></li>
+            <li><a href="#your-choices-and-deletion">Your choices and deletion</a></li>
+            <li>
+              <a href="#security-and-international-processing"
+                >Security and international processing</a
+              >
+            </li>
+            <li><a href="#children-and-changes">Children and changes</a></li>
+            <li><a href="#contact">Contact</a></li>
+          </ol>
+        </nav>
+
+        <h2 id="location-and-active-navigation">Location and active navigation</h2>
         <p>
           When you grant When in Use location permission, precise location shows your position,
           chooses a route origin, matches progress to an active route, detects rerouting and
@@ -52,7 +69,7 @@
           NavOSS does not maintain a trip-history database.
         </p>
 
-        <h2>Search and routing</h2>
+        <h2 id="search-and-routing">Search and routing</h2>
         <p>
           Search text and, when available, a search origin rounded to three decimal places, or
           roughly 100-meter granularity, are sent in an encrypted request body to the NavOSS API.
@@ -110,7 +127,7 @@
           disable active-navigation safety warnings.
         </p>
 
-        <h2>Sharing and external place actions</h2>
+        <h2 id="sharing-and-external-place-actions">Sharing and external place actions</h2>
         <p>
           Place sharing and Share ETA use Apple's system share sheet. Place share text contains a
           public place name, displayed address or category, and OpenStreetMap link. ETA share text
@@ -156,7 +173,13 @@
           removing the app removes all remaining drafts.
         </p>
 
-        <h2>No advertising or cross-app tracking</h2>
+        <!--
+          Community data sections go here, in this order, mirrored from docs/privacy.md:
+          "Community traffic sharing (opt-in)" then "Community road reports". Add matching entries
+          to the "On this page" list above.
+        -->
+
+        <h2 id="no-advertising-or-cross-app-tracking">No advertising or cross-app tracking</h2>
         <p>
           The default Google-disabled build has no account system, ads, analytics SDK, advertising
           identifier, data broker integration, or cross-app tracking. Location is not used by NavOSS
@@ -165,7 +188,7 @@
           receive or operate that Google analytics data.
         </p>
 
-        <h2>Map and camera data</h2>
+        <h2 id="map-and-camera-data">Map and camera data</h2>
         <p>
           The phone requests map styles, tiles, fonts, and sprites directly from
           <a href="https://openfreemap.org/privacy/">OpenFreeMap</a>. The requested resources can
@@ -177,7 +200,7 @@
           cameras, and RCMP facilities are not live police locations.
         </p>
 
-        <h2>Providers and retention</h2>
+        <h2 id="providers-and-retention">Providers and retention</h2>
         <p>
           <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a> provides DNS, TLS,
           traffic delivery, and the outbound tunnel. It processes client IP and network/request
@@ -206,7 +229,7 @@
           incident IP logs for no more than 30 days.
         </p>
 
-        <h2>Your choices and deletion</h2>
+        <h2 id="your-choices-and-deletion">Your choices and deletion</h2>
         <p>
           You can deny or revoke location permission in iOS Settings and can stop an active trip
           with End navigation. Search and map browsing may remain available, while current-position
@@ -235,7 +258,7 @@
           also need to be directed to that provider.
         </p>
 
-        <h2>Security and international processing</h2>
+        <h2 id="security-and-international-processing">Security and international processing</h2>
         <p>
           App-to-API traffic uses HTTPS through Cloudflare. The Alberta origin uses an outbound
           tunnel rather than a public inbound port, key-only SSH, a default-deny firewall,
@@ -248,7 +271,7 @@
           destination may process data outside Canada as described in their policies.
         </p>
 
-        <h2>Children and changes</h2>
+        <h2 id="children-and-changes">Children and changes</h2>
         <p>
           NavOSS is a general-audience navigation utility and is not directed to children. It does
           not create profiles or knowingly maintain children's personal information. A parent or
@@ -260,7 +283,7 @@
           changed feature is tested.
         </p>
 
-        <h2>Contact</h2>
+        <h2 id="contact">Contact</h2>
         <p>
           Use the repository's
           <a href="https://github.com/yassinsolim/NavOSS/issues">public issue tracker</a> only for
@@ -275,14 +298,6 @@
         </p>
       </article>
     </main>
-    <footer class="site-footer">
-      <div class="footer__inner">
-        <span>NavOSS · Calgary, Alberta</span>
-        <nav aria-label="Footer navigation">
-          <a href="/privacy">Privacy</a><a href="/support">Support</a
-          ><a href="/data-sources">Data sources</a><a href="/licenses">Licenses</a>
-        </nav>
-      </div>
-    </footer>
+    <!-- @footer -->
   </body>
 </html>

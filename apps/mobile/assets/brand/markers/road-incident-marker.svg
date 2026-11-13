@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Official incident: coral warning triangle. -->
+  <path d="M32 4.5c1.6 0 3 .8 3.8 2.2L60 50.5c1.6 2.9-.5 6.5-3.8 6.5H7.8c-3.3 0-5.4-3.6-3.8-6.5L28.2 6.7c.8-1.4 2.2-2.2 3.8-2.2Z" fill="#FFFFFF" stroke="#0E1516" stroke-opacity="0.28" stroke-width="1.5"/>
+  <path d="M32 10.5c.6 0 1.2.3 1.5.9l21.9 39.4c.7 1.2-.2 2.7-1.6 2.7H10.2c-1.4 0-2.3-1.5-1.6-2.7L30.5 11.4c.3-.6.9-.9 1.5-.9Z" fill="#E5484D"/>
+  <rect x="28.5" y="22" width="7" height="17" rx="3.5" fill="#FFFFFF"/>
+  <circle cx="32" cy="45" r="3.8" fill="#FFFFFF"/>
+</svg>

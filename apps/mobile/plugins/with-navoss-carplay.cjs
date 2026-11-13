@@ -13,10 +13,13 @@ const vehicleArrowSource = path.join(__dirname, '..', 'assets', 'images', 'vehic
 const vehicleCarSource = path.join(__dirname, '..', 'assets', 'images', 'vehicle-car.png');
 const sourceFiles = [
   'NavOSSCarPlayMapViewController.swift',
+  'NavOSSCarPlayManeuverSymbols.swift',
   'NavOSSCarPlayDashboardSceneDelegate.swift',
+  'NavOSSCarPlayInstrumentClusterSceneDelegate.swift',
   'NavOSSCarPlaySceneDelegate.swift',
   'NavOSSCarPlayVoiceSearchCoordinator.swift',
   'NavOSSCarPlayVisualHarnessViewController.swift',
+  'NavOSSNavigationIntents.swift',
   'NavOSSPhoneSceneDelegate.swift',
 ];
 
@@ -75,8 +78,10 @@ function withNavOSSCarPlay(config) {
     const configurations = manifest.UISceneConfigurations ?? {};
     if (!carPlayEnabled) {
       delete manifest.CPSupportsDashboardNavigationScene;
+      delete manifest.CPSupportsInstrumentClusterNavigationScene;
       delete configurations.CPTemplateApplicationSceneSessionRoleApplication;
       delete configurations.CPTemplateApplicationDashboardSceneSessionRoleApplication;
+      delete configurations.CPTemplateApplicationInstrumentClusterSceneSessionRoleApplication;
       if (manifest.UISceneConfigurations !== undefined) {
         manifest.UISceneConfigurations = configurations;
         modConfig.modResults.UIApplicationSceneManifest = manifest;
@@ -105,7 +110,17 @@ function withNavOSSCarPlay(config) {
         UISceneDelegateClassName: 'NavOSSCarPlayDashboardSceneDelegate',
       },
     ];
+    // Instrument-cluster and HUD maps use Apple's public cluster scene (iOS 15.4+) under the same
+    // `carplay-maps` entitlement. The vehicle decides whether a cluster connects.
+    configurations.CPTemplateApplicationInstrumentClusterSceneSessionRoleApplication = [
+      {
+        UISceneClassName: 'CPTemplateApplicationInstrumentClusterScene',
+        UISceneConfigurationName: 'NavOSS CarPlay Instrument Cluster',
+        UISceneDelegateClassName: 'NavOSSCarPlayInstrumentClusterSceneDelegate',
+      },
+    ];
     manifest.CPSupportsDashboardNavigationScene = true;
+    manifest.CPSupportsInstrumentClusterNavigationScene = true;
     manifest.UIApplicationSupportsMultipleScenes = true;
     manifest.UISceneConfigurations = configurations;
     modConfig.modResults.UIApplicationSceneManifest = manifest;

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <!-- Open Graph image. Rendered to PNG by scripts/render-brand-assets.mjs with Atkinson Hyperlegible Next. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#16A391"/>
+      <stop offset="1" stop-color="#0A5A52"/>
+    </linearGradient>
+    <clipPath id="left-face"><rect width="512" height="1024"/></clipPath>
+    <clipPath id="tile"><rect x="790" y="155" width="320" height="320" rx="72"/></clipPath>
+  </defs>
+  <rect width="1200" height="630" fill="#0E1516"/>
+  <!-- Abstract street grid: original artwork, not map data. -->
+  <g fill="none" stroke="#1E2B2C" stroke-width="10" stroke-linecap="round">
+    <path d="M-20 120 C 240 150 420 60 700 110 S 1080 40 1240 70"/>
+    <path d="M-20 520 C 200 470 380 560 640 520 S 980 600 1240 560"/>
+    <path d="M610 -20 C 640 160 560 340 660 650"/>
+    <path d="M140 -20 L 260 650"/>
+  </g>
+  <path d="M250 650 C 310 560 440 530 600 530 S 760 480 790 420" fill="none" stroke="#3DD6B5" stroke-width="12" stroke-linecap="round" opacity="0.9"/>
+  <g clip-path="url(#tile)">
+    <rect x="790" y="155" width="320" height="320" fill="url(#sky)"/>
+    <g transform="translate(950 315) scale(0.3125) translate(-512 -512)">
+      <path d="M512 204 L774 800 L512 664 L250 800 Z" fill="#E2A92B" stroke="#E2A92B" stroke-width="40" stroke-linejoin="round"/>
+      <path d="M512 204 L774 800 L512 664 L250 800 Z" fill="#F7C948" stroke="#F7C948" stroke-width="40" stroke-linejoin="round" clip-path="url(#left-face)"/>
+    </g>
+  </g>
+  <rect x="790.5" y="155.5" width="319" height="319" rx="72" fill="none" stroke="#FFFFFF" stroke-opacity="0.18"/>
+  <text x="80" y="210" font-family="Atkinson Hyperlegible Next" font-weight="700" font-size="96" fill="#F6F7F3">NavOSS</text>
+  <text font-family="Atkinson Hyperlegible Next" font-size="44" fill="#F6F7F3">
+    <tspan x="80" y="290">Private, account-free navigation.</tspan>
+    <tspan x="80" y="346">Open source, built in Canada.</tspan>
+  </text>
+  <rect x="80" y="420" width="470" height="56" rx="28" fill="#1E2B2C"/>
+  <circle cx="110" cy="448" r="8" fill="#F7C948"/>
+  <text x="132" y="457" font-family="Atkinson Hyperlegible Next" font-weight="700" font-size="26" fill="#F6F7F3">iOS + CarPlay technical beta</text>
+</svg>
