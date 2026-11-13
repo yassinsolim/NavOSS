@@ -272,6 +272,23 @@ final class NavigationMatcherEvidenceTests: XCTestCase {
     }
   }
 
+  /// And crawling in that queue, still heading up the first leg, with speeds reported on both
+  /// sides of the gap that would cover the loop: a fix 44 m to the side is not the last leg.
+  func testReportedMotionDoesNotMoveAVehicleOntoAPassBesideIt() throws {
+    let core = NavigationCore()
+    try core.setRoute(Trace.route(Self.loopPastItsOwnStart))
+    try core.updateLocation(Trace.sample(x: 0, y: 200, courseDegrees: 0, speed: 20, time: 0))
+    for (index, x) in [44.0, 44, 44].enumerated() {
+      let snapshot = try core.updateLocation(
+        Trace.sample(
+          x: x, y: 300 + Double(index) * 20, courseDegrees: 0, speed: 20,
+          time: 300 + Double(index))
+      )
+      XCTAssertEqual(snapshot.phase, .tracking)
+      XCTAssertLessThan(along(snapshot, core), 400)
+    }
+  }
+
   /// Driving on from the queue is followed: the loop is finished by being driven.
   func testTheLoopIsFinishedByDrivingItAfterTheGap() throws {
     let core = NavigationCore()
