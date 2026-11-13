@@ -30,6 +30,9 @@ private let matchWindowMaximumForwardMeters = 3_000.0
 private let maximumPlausibleSpeedMetersPerSecond = 45.0
 private let globalSearchInitialRadiusMeters = 250.0
 private let globalSearchMaximumRadiusMeters = 1_000.0
+/// Route ahead this much further from the vehicle than the closest route ahead still counts as
+/// "where the vehicle is" when choosing a keep-route rejoin base.
+private let rejoinBaseDistanceBandMeters = 100.0
 
 // Transition plausibility. Only applies when fixes carry timestamps and a speed, which every
 // Core Location fix does; untimed replay input keeps the original continuity scoring.
@@ -40,6 +43,10 @@ private let plausibilityLagPenaltyFactor = 0.15
 /// jump until a second fix agrees.
 private let implausibleJumpMarginMeters = 150.0
 private let implausibleJumpConfirmationCount = 2
+/// A candidate "fits" a fix when its lateral distance plus heading disagreement is inside the
+/// band that counts as on route. Travel plausibility only ranks candidates that fit: it decides
+/// which of two roads under the fix is meant, never whether the road under the fix is believed.
+private let fittingCandidateToleranceMeters = offRouteDistanceThresholdMeters
 /// Course and speed at which travel against the matched road counts as leaving the route.
 private let wrongWayMinimumCourseDifferenceDegrees = 150.0
 private let wrongWayMinimumSpeedMetersPerSecond = 4.0
@@ -269,6 +276,10 @@ final class NavigationCore {
   private var fixProgress = 0.0
   private var hasArrived = false
   private var implausibleJumpCount = 0
+  /// Along-route position and time of the latest fix counted towards `implausibleJumpCount`.
+  /// The next one confirms the jump only if it is where that fix could have travelled to.
+  private var heldJumpAlongMeters: Double?
+  private var heldJumpTimestamp: TimeInterval?
   private var isOffRoute = false
   private var lastFixSpeed: Double?
   private var lastFixTimestamp: TimeInterval?
@@ -316,6 +327,45 @@ final class NavigationCore {
   /// The on-route point `alongMeters` from the route origin, or `nil` with no route.
   func routePoint(alongMeters: Double) -> NavigationCoordinate? {
     route?.point(alongMeters: alongMeters).coordinate
+  }
+
+  /// Where the vehicle is along the route for the purpose of rejoining it: the first place at
+  /// or after the last confirmed fix where the route comes about as close to `coordinate` as it
+  /// gets nearby. Off route the confirmed progress stays where the vehicle left the route, which
+  /// after a long gap can be kilometres behind it; a rejoin measured from there would send the
+  /// driver back. Taking the first such place, not the nearest, keeps an out-and-back route from
+  /// skipping to its return leg. Falls back to the confirmed fix when the route ahead is not
+  /// within the grid search radius.
+  func rejoinBaseAlongMeters(near coordinate: NavigationCoordinate) -> Double? {
+    guard let route, coordinate.isValid else {
+      return nil
+    }
+    let fixAlongMeters = fixProgress * route.totalDistanceMeters
+    var candidates: [RouteProjection] = []
+    for index in route.segmentIndices(
+      near: coordinate,
+      radiusMeters: globalSearchMaximumRadiusMeters
+    ) {
+      let projection = route.project(coordinate, ontoSegment: index)
+      if projection.alongMeters >= fixAlongMeters {
+        candidates.append(projection)
+      }
+    }
+    guard let nearestMeters = candidates.map(\.distanceMeters).min(),
+      var index = candidates.firstIndex(where: {
+        $0.distanceMeters <= nearestMeters + rejoinBaseDistanceBandMeters
+      })
+    else {
+      return fixAlongMeters
+    }
+    // Candidates are in route order. From the first one inside the band, follow the route to
+    // where it stops getting closer.
+    while index + 1 < candidates.count,
+      candidates[index + 1].distanceMeters <= candidates[index].distanceMeters
+    {
+      index += 1
+    }
+    return candidates[index].alongMeters
   }
 
   @discardableResult
@@ -434,20 +484,46 @@ final class NavigationCore {
     }
 
     // A single accurate fix far beyond any believable travel since the last accepted one is
-    // almost always multipath. Hold the match for it; a second agreeing fix is accepted, so a
-    // genuinely stale speed reading delays the match by one sample at most.
+    // almost always multipath. Hold the match for it; a second fix that agrees with it is
+    // accepted, so a genuinely stale speed reading, a teleport, or the first fix after a long
+    // gap delays the match by one sample at most. "Believable" uses the reported speeds when
+    // there are any and the speed ceiling otherwise, so a fix without a speed is held too.
     let isImplausibleJump: Bool = {
-      guard let anchorAlongMeters, let expectedTravelMeters,
+      guard let anchorAlongMeters, let elapsedSeconds,
         (sample.horizontalAccuracyMeters ?? .infinity) <= 50
       else {
         return false
       }
+      let reachMeters = expectedTravelMeters
+        ?? elapsedSeconds * maximumPlausibleSpeedMetersPerSecond
       let tolerance = plausibilityBaseToleranceMeters + accuracyAllowanceMeters
-        + 0.5 * expectedTravelMeters
+        + 0.5 * reachMeters
       return projection.alongMeters - anchorAlongMeters
-        > expectedTravelMeters + tolerance + implausibleJumpMarginMeters
+        > reachMeters + tolerance + implausibleJumpMarginMeters
     }()
-    implausibleJumpCount = isImplausibleJump ? implausibleJumpCount + 1 : 0
+    if isImplausibleJump {
+      // Two outliers in different places are two outliers, not a confirmation.
+      let agreesWithHeldJump: Bool = {
+        guard let heldJumpAlongMeters, let heldJumpTimestamp, let timestamp = sample.timestamp
+        else {
+          return false
+        }
+        let sinceHeldSeconds = timestamp - heldJumpTimestamp
+        guard sinceHeldSeconds >= 0 else {
+          return false
+        }
+        return abs(projection.alongMeters - heldJumpAlongMeters)
+          <= plausibilityBaseToleranceMeters + accuracyAllowanceMeters
+          + sinceHeldSeconds * maximumPlausibleSpeedMetersPerSecond
+      }()
+      implausibleJumpCount = agreesWithHeldJump ? implausibleJumpCount + 1 : 1
+      heldJumpAlongMeters = projection.alongMeters
+      heldJumpTimestamp = sample.timestamp
+    } else {
+      implausibleJumpCount = 0
+      heldJumpAlongMeters = nil
+      heldJumpTimestamp = nil
+    }
     let isHeldJump = isImplausibleJump && implausibleJumpCount < implausibleJumpConfirmationCount
 
     let backwardProgressMeters = max(
@@ -650,6 +726,8 @@ final class NavigationCore {
     departureSampleCount = 0
     fixProgress = 0
     hasArrived = false
+    heldJumpAlongMeters = nil
+    heldJumpTimestamp = nil
     implausibleJumpCount = 0
     isOffRoute = false
     lastFixSpeed = nil
@@ -668,13 +746,23 @@ final class NavigationCore {
     let accuracyAllowanceMeters = sample.horizontalAccuracyMeters ?? 0
     var best: RouteProjection?
     var bestScore = Double.infinity
+    // The best candidate among those the fix actually lies on. The transition penalty grows
+    // without bound with the distance from the previous match, so on its own it makes road a
+    // kilometre to the side of the fix beat the road under it once the vehicle is far enough
+    // from where it was last matched (a long gap, a resume, a ferry). The fix would then count
+    // as off route while on the route, and every later fix would be judged from the same stale
+    // anchor. Whether such a jump is believed is decided by the held-jump confirmation.
+    var bestFitting: RouteProjection?
+    var bestFittingScore = Double.infinity
+    let fittingLimitMeters = fittingCandidateToleranceMeters + accuracyAllowanceMeters
     var evaluated = 0
 
     func consider(_ index: Int) {
       evaluated += 1
       let projection = route.project(sample.coordinate, ontoSegment: index)
-      let score = projection.distanceMeters
+      let fit = projection.distanceMeters
         + coursePenalty(projection, courseDegrees: sample.courseDegrees)
+      let score = fit
         + transitionPenalty(
           projection,
           anchorAlongMeters: anchorAlongMeters,
@@ -684,6 +772,10 @@ final class NavigationCore {
       if score < bestScore {
         best = projection
         bestScore = score
+      }
+      if fit <= fittingLimitMeters, score < bestFittingScore {
+        bestFitting = projection
+        bestFittingScore = score
       }
     }
 
@@ -746,7 +838,7 @@ final class NavigationCore {
     }
 
     lastEvaluatedSegmentCount = evaluated
-    return best!
+    return bestFitting ?? best!
   }
 
   private func coursePenalty(_ projection: RouteProjection, courseDegrees: Double?) -> Double {
