@@ -20,11 +20,7 @@ import {
   placeWebsiteUrl,
 } from '@/features/map/map-place';
 import { MapPreferencesSheet } from '@/features/map/map-preferences-sheet';
-import {
-  CAMERA_ALERT_HEIGHT,
-  GUIDANCE_BANNER_HEIGHT,
-  REROUTE_CARD_HEIGHT,
-} from '@/features/map/overlay-layout';
+import { CAMERA_ALERT_HEIGHT, REROUTE_CARD_HEIGHT } from '@/features/map/overlay-layout';
 import { PlaceSheet } from '@/features/map/place-sheet';
 import { RoadReportSheet } from '@/features/map/road-report-sheet';
 import { SavedPlacesScreen } from '@/features/map/saved-places-screen';
@@ -185,7 +181,7 @@ export function MapScreen() {
             mapRegion: c.location.mapRegion,
             roadEventRegion: overlays.roadEventRegion,
           })}
-          bannerStackHeight={cameraAlertHeight + rerouteCardHeight}
+          bannerStackHeight={guidance.bannerHeight + cameraAlertHeight + rerouteCardHeight}
           locating={c.location.locationState === 'locating'}
           mapBearing={c.mapBearing}
           metrics={metrics}
@@ -386,6 +382,7 @@ export function MapScreen() {
           distanceMeters={guidance.remainingStep.distanceMeters}
           instruction={guidance.step.instruction}
           maneuverType={guidance.step.maneuverType}
+          onHeightChange={guidance.onBannerHeightChange}
           roadName={guidance.step.roadName}
           safeAreaTop={insets.top}
           status={guidance.routeStatus}
@@ -395,7 +392,7 @@ export function MapScreen() {
         <SafetyCameraAlertBanner
           camera={c.cameraAlert.camera}
           distanceAheadMeters={c.cameraAlert.distanceAheadMeters}
-          safeAreaTop={insets.top}
+          top={insets.top + guidance.bannerHeight + 8}
         />
       )}
       {guidance.rerouteProposal !== undefined && (
@@ -406,7 +403,7 @@ export function MapScreen() {
           durationSeconds={guidance.rerouteProposal.durationSeconds}
           onAccept={guidance.onAcceptReroute}
           onKeep={guidance.onKeepRoute}
-          top={insets.top + GUIDANCE_BANNER_HEIGHT + 8 + cameraAlertHeight}
+          top={insets.top + guidance.bannerHeight + 8 + cameraAlertHeight}
         />
       )}
       <MapNoticeToast
@@ -415,7 +412,7 @@ export function MapScreen() {
         top={
           insets.top +
           8 +
-          (navigating ? GUIDANCE_BANNER_HEIGHT + cameraAlertHeight + rerouteCardHeight : 0)
+          (navigating ? guidance.bannerHeight + cameraAlertHeight + rerouteCardHeight : 0)
         }
       />
 

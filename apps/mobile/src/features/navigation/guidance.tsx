@@ -78,6 +78,11 @@ interface ManeuverBannerProps {
   distanceMeters: number;
   instruction: string;
   maneuverType: string;
+  /**
+   * Reports the banner's height including its gap to the status bar. A long instruction wraps to
+   * a third line rather than shrinking, so whatever is stacked below follows the real height.
+   */
+  onHeightChange: (height: number) => void;
   roadName: string;
   safeAreaTop: number;
   status: NavigationRouteStatus;
@@ -92,6 +97,7 @@ export function ManeuverBanner({
   distanceMeters,
   instruction,
   maneuverType,
+  onHeightChange,
   roadName,
   safeAreaTop,
   status,
@@ -121,6 +127,9 @@ export function ManeuverBanner({
       accessible
       entering={FadeInDown.duration(motion.duration.base).reduceMotion(ReduceMotion.System)}
       exiting={FadeOutUp.duration(motion.duration.fast).reduceMotion(ReduceMotion.System)}
+      onLayout={(event) => {
+        onHeightChange(Math.ceil(event.nativeEvent.layout.height) + space.sm);
+      }}
       style={[guidanceStyles.banner, { top: safeAreaTop + space.sm }]}
     >
       <View style={guidanceStyles.bannerRow}>
@@ -145,12 +154,7 @@ export function ManeuverBanner({
           >
             {displayedDistance}
           </Text>
-          <Text
-            adjustsFontSizeToFit
-            minimumFontScale={0.8}
-            numberOfLines={2}
-            style={guidanceStyles.instruction}
-          >
+          <Text numberOfLines={3} style={guidanceStyles.instruction}>
             {displayedInstruction}
           </Text>
           {displayedRoadName.length > 0 && (
@@ -169,11 +173,11 @@ export function ManeuverBanner({
 export function SafetyCameraAlertBanner({
   camera,
   distanceAheadMeters,
-  safeAreaTop,
+  top,
 }: {
   camera: Pick<SafetyCamera, 'location'>;
   distanceAheadMeters: number;
-  safeAreaTop: number;
+  top: number;
 }) {
   const distance = formatDistance(distanceAheadMeters);
   return (
@@ -183,7 +187,7 @@ export function SafetyCameraAlertBanner({
       accessible
       entering={FadeInDown.duration(motion.duration.base).reduceMotion(ReduceMotion.System)}
       exiting={FadeOutUp.duration(motion.duration.fast).reduceMotion(ReduceMotion.System)}
-      style={[guidanceStyles.cameraAlert, { top: safeAreaTop + GUIDANCE_BANNER_HEIGHT + space.sm }]}
+      style={[guidanceStyles.cameraAlert, { top }]}
     >
       <SymbolView
         name={{ android: 'photo_camera', ios: 'camera.fill' }}

@@ -8,12 +8,7 @@ import Animated, {
   useAnimatedStyle,
 } from 'react-native-reanimated';
 
-import {
-  CONTROL_MARGIN,
-  controlsFollow,
-  GUIDANCE_BANNER_HEIGHT,
-  type ScreenMetrics,
-} from '@/features/map/overlay-layout';
+import { CONTROL_MARGIN, controlsFollow, type ScreenMetrics } from '@/features/map/overlay-layout';
 import type { NavigationMapOrientation } from '@/features/navigation/navigation-camera';
 import { useRenderCounter } from '@/lib/render-counter';
 import { createThemedStyles, motion, radius, space, typography, useTheme } from '@/theme';
@@ -21,7 +16,7 @@ import { IconButton } from '@/ui/icon-button';
 
 export interface MapControlsProps {
   attribution: string;
-  /** Height of banners stacked under the maneuver banner; the top controls sit below them. */
+  /** Height of the guidance banners at the top of the screen; the top controls sit below them. */
   bannerStackHeight: number;
   locating: boolean;
   mapBearing: SharedValue<number>;
@@ -83,9 +78,7 @@ export function MapControls({
     transform: [{ rotate: `${String(-mapBearing.value)}deg` }],
   }));
 
-  const topOffset =
-    metrics.topInset +
-    (guidance ? GUIDANCE_BANNER_HEIGHT + space.md + bannerStackHeight : space.sm);
+  const topOffset = metrics.topInset + (guidance ? bannerStackHeight + space.md : space.sm);
 
   return (
     <>

@@ -13,7 +13,11 @@ import {
   type NativeNavigationSnapshot,
   observeNavigationSnapshots,
 } from '@/features/navigation/native-navigation';
-import { routeFromNativeTrip, type RouteUiState } from '@/features/navigation/route-ui-state';
+import {
+  routeFromNativeTrip,
+  routeSourceForNativeTrip,
+  type RouteUiState,
+} from '@/features/navigation/route-ui-state';
 
 export type NavigationRouteStatus = NativeNavigationSnapshot['routeStatus'];
 
@@ -51,6 +55,9 @@ export function useNavigationSession({
   setRouteState: Dispatch<SetStateAction<RouteUiState>>;
 }): NavigationSession {
   const stateVersionRef = useRef(-1);
+  const adoptedTripRef = useRef<{ arrived: boolean; id: string; routeVersion: number } | undefined>(
+    undefined,
+  );
   const [snapshot, setSnapshot] = useState<NativeNavigationSnapshot>();
   const [routeStatus, setRouteStatus] = useState<NavigationRouteStatus>('tracking');
   const [rerouteCount, setRerouteCount] = useState(0);
@@ -65,26 +72,39 @@ export function useNavigationSession({
     onFix(next.rawCoordinate, next.matchedCourseDegrees);
     setStepIndex(next.guidance?.stepIndex ?? 0);
     if (next.trip === undefined) {
+      adoptedTripRef.current = undefined;
       onTripEnded();
       setRouteState((current) =>
         current.type === 'navigating' || current.type === 'arrived' ? { type: 'idle' } : current,
       );
       return;
     }
-    const { destination, route, routeSource, waypoints } = routeFromNativeTrip(next.trip);
-    setRouteSource(routeSource);
+    // Snapshots arrive about once a second. Rebuilding the route copies every polyline, so it
+    // happens only when the core reports a different route or a different phase of it.
+    const trip = next.trip;
+    const arrived = next.phase === 'arrived';
+    const adopted = adoptedTripRef.current;
+    const routeChanged =
+      adopted?.id !== trip.id ||
+      adopted.routeVersion !== next.routeVersion ||
+      adopted.arrived !== arrived;
+    adoptedTripRef.current = { arrived, id: trip.id, routeVersion: next.routeVersion };
     setRouteState((current) => {
-      if (
-        current.type === 'navigating' &&
-        current.route.id === route.id &&
-        next.phase !== 'arrived'
-      ) {
-        return current;
-      }
-      return next.phase === 'arrived'
-        ? { destination, route, routes: [route], type: 'arrived', waypoints }
-        : { destination, route, routes: [route], type: 'navigating', waypoints };
+      const showsTrip =
+        (current.type === 'navigating' || current.type === 'arrived') &&
+        current.route.id === trip.id &&
+        (current.type === 'arrived') === arrived;
+      if (showsTrip && !routeChanged) return current;
+      const { destination, route, waypoints } = routeFromNativeTrip(trip);
+      return {
+        destination,
+        route,
+        routes: [route],
+        type: arrived ? 'arrived' : 'navigating',
+        waypoints,
+      };
     });
+    if (routeChanged) setRouteSource(routeSourceForNativeTrip(trip.source));
   });
 
   useEffect(() => {
@@ -110,6 +130,15 @@ export function useNavigationSession({
   return {
     adoptSnapshot: (next) => {
       stateVersionRef.current = Math.max(stateVersionRef.current, next.stateVersion);
+      // The phone already holds this route; its first snapshot must not rebuild it.
+      adoptedTripRef.current =
+        next.trip === undefined
+          ? undefined
+          : {
+              arrived: next.phase === 'arrived',
+              id: next.trip.id,
+              routeVersion: next.routeVersion,
+            };
       setSnapshot(next);
     },
     rerouteCount,

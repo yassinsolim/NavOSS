@@ -52,6 +52,7 @@ import {
 } from '@/features/map/map-place';
 import { isSearchCoverageRegion, mapRegionForCoordinate } from '@/features/map/map-region';
 import {
+  GUIDANCE_BANNER_HEIGHT,
   routePreviewCameraPadding,
   type ScreenMetrics,
   searchResultsCameraPadding,
@@ -174,6 +175,8 @@ export function useMapController() {
   const noticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const noticeIdRef = useRef(0);
   const guidanceSettingsQueuedRef = useRef(false);
+  // Measured height of the maneuver banner; it grows when an instruction wraps.
+  const [guidanceBannerHeight, setGuidanceBannerHeight] = useState(GUIDANCE_BANNER_HEIGHT);
   // Where the driver left the route preview sheet, kept across the re-plan that remounts it.
   const [previewDetent, setPreviewDetent] = useState<number>();
 
@@ -1236,6 +1239,8 @@ export function useMapController() {
       visible: isGuidanceSettingsVisible,
     },
     guidance: {
+      bannerHeight: guidanceBannerHeight,
+      onBannerHeightChange: setGuidanceBannerHeight,
       currentRoadName: navigationSnapshot?.currentRoadName,
       onAcceptReroute: handleAcceptReroute,
       onKeepRoute: handleKeepRoute,
