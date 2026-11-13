@@ -1,19 +1,15 @@
 name: TestFlight distribution
 
-# Once the Expo GitHub connection is activated, App Store Connect uploads trigger distribution
-# to the existing beta group, including uploads made outside GitHub Actions. This does not build
-# a new binary for every commit. See docs/release/ci-cd.md for the current activation status.
+# Manual only. Assigning a build to the external `NavOSS Friends` group and submitting it for
+# Beta App Review is a deliberate maintainer decision, not a side effect of an upload: an upload
+# alone reaches only the internal `testers` group, which Apple distributes to automatically.
+# The earlier `app_store_connect.build_upload` trigger was removed for that reason; see
+# docs/release/ci-cd.md.
 #
-# Manual dispatch remains available to recover a missed upload event or change What to Test notes:
 #   eas workflow:run .eas/workflows/testflight-distribute.yml \
 #     -F asc_build_id=<id> -F changelog="..."
 
 on:
-  app_store_connect:
-    build_upload:
-      states:
-        - complete
-      if: ${{ app_store_connect.app.id == '6792619727' && app_store_connect.build_upload.build.id }}
   workflow_dispatch:
     inputs:
       asc_build_id:
@@ -34,9 +30,9 @@ jobs:
     name: Distribute to NavOSS Friends
     type: testflight
     params:
-      asc_build_id: ${{ inputs.asc_build_id || app_store_connect.build_upload.build.id }}
+      asc_build_id: ${{ inputs.asc_build_id }}
       # The internal `testers` group already has automatic distribution enabled in Apple.
       external_groups:
         - NavOSS Friends
-      changelog: ${{ inputs.changelog || 'Please test place search, route previews, and navigation. Test CarPlay only while parked or passenger-operated. Report issues through TestFlight.' }}
+      changelog: ${{ inputs.changelog }}
       submit_beta_review: ${{ inputs.submit_beta_review != false && inputs.submit_beta_review != 'false' }}
