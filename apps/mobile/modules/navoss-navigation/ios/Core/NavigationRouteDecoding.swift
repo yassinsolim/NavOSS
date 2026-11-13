@@ -341,3 +341,19 @@ func navigationTrips(
     )
   }
 }
+
+/// Decodes a `/v2/routes` response body into trips, exactly as the API client does. Used by the
+/// simulator CarPlay harness to render real recorded responses.
+public func navOSSTripsFromRoutesV2Response(
+  _ data: Data,
+  destination: NavOSSCarPlayDestination,
+  preferences: NavOSSRoutePreferences = NavOSSRoutePreferences()
+) throws -> [NavOSSCarPlayTrip] {
+  try navigationTrips(
+    from: JSONDecoder().decode(NavigationRouteResponseWire.self, from: data),
+    version: .v2,
+    destination: destination,
+    preferences: preferences,
+    waypoints: []
+  )
+}
