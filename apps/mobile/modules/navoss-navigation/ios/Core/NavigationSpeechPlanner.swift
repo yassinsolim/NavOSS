@@ -118,9 +118,7 @@ final class NavigationSpeechPlanner {
       return nil
     }
 
-    let instruction = Self.spokenInstruction(
-      trip.steps[currentStepIndex].spokenInstruction ?? trip.steps[maneuverIndex].instruction
-    )
+    let instruction = Self.maneuverPrompt(trip.steps[maneuverIndex])
     let maneuverPoint = Self.maneuverPoint(trip, maneuverIndex)
     // The same turn was just announced at this urgency (typically on the route a reroute
     // replaced): it counts as announced for this route too.
@@ -140,9 +138,7 @@ final class NavigationSpeechPlanner {
       trip.steps[maneuverIndex].distanceMeters <= (isHighway ? 400 : 150),
       !Self.containsThen(text)
     {
-      let following = Self.spokenInstruction(
-        trip.steps[maneuverIndex].spokenInstruction ?? trip.steps[followingIndex].instruction
-      )
+      let following = Self.maneuverPrompt(trip.steps[followingIndex])
       text = "\(Self.trimmingSentenceEnd(text)), then \(Self.lowercasingFirst(following))"
       let followingKey = "\(trip.id):\(followingIndex)"
       if (announcedLevels[followingKey] ?? .early) < .prepare {
@@ -251,6 +247,48 @@ final class NavigationSpeechPlanner {
         options: [.caseInsensitive, .regularExpression]
       )
     }
+  }
+
+  /// What to say for the maneuver that begins `step`. The provider's spoken text is used as it
+  /// is when it already names the exit number and the first signed destination. When it leaves
+  /// out signed data the route carries (a generic "Take the ramp on the right"), the prompt is
+  /// composed from the exit number, branch and "toward" destinations instead, so the driver hears
+  /// what the signs say: "Take exit 248 toward Banff". Absent data is never spoken.
+  static func maneuverPrompt(_ step: NavOSSCarPlayRouteStep) -> String {
+    let base = step.spokenInstruction ?? step.instruction
+    let exit = step.exitNumber
+    let toward = step.signpostToward.map { Array($0.prefix(2)).joined(separator: " and ") }
+    let branch = step.signpostBranch?.first
+    let lowerBase = base.lowercased()
+    let exitMissing = exit.map { !lowerBase.contains("exit \($0.lowercased())") } ?? false
+    let towardMissing =
+      step.signpostToward?.first.map { !lowerBase.contains($0.lowercased()) } ?? false
+    guard exitMissing || towardMissing else {
+      return spokenInstruction(base)
+    }
+    let modifier = (step.maneuverModifier ?? "").lowercased()
+    let side = modifier.contains("left") ? "left" : modifier.contains("right") ? "right" : nil
+    var phrase: String
+    switch step.maneuverType.lowercased() {
+    case "off ramp":
+      phrase = exit.map { "Take exit \($0)" } ?? "Take the exit" + (branch.map { " for \($0)" } ?? "")
+    case "fork":
+      phrase = "Keep \(side ?? "straight")"
+      if let target = exit.map({ "exit \($0)" }) ?? branch {
+        phrase += " for \(target)"
+      }
+    case "on ramp":
+      phrase = "Take the ramp" + (side.map { " on the \($0)" } ?? "")
+        + (branch.map { " onto \($0)" } ?? "")
+    default:
+      // Other maneuvers keep the provider's wording; only signed destinations are added.
+      guard towardMissing, let toward else { return spokenInstruction(base) }
+      return spokenInstruction("\(trimmingSentenceEnd(base)) toward \(toward).")
+    }
+    if let toward {
+      phrase += " toward \(toward)"
+    }
+    return spokenInstruction(phrase + ".")
   }
 
   private static func containsThen(_ text: String) -> Bool {

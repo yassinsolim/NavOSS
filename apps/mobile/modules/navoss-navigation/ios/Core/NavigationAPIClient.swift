@@ -9,6 +9,11 @@ public enum NavOSSNavigationAPIError: Error {
   case invalidRequest
   case invalidResponse
   case serviceUnavailable
+  /// The server answered 404: it does not offer the requested endpoint.
+  case endpointNotFound
+  /// A pass-through waypoint was requested from a server that only offers `/v1/routes`, which
+  /// would turn it into a stop.
+  case throughWaypointsUnsupported
 }
 
 private struct SearchRequest: Encodable {
@@ -31,16 +36,6 @@ private struct SearchResult: Decodable {
   let id: String
   let label: String
   let name: String
-}
-
-private struct RouteRequest: Encodable {
-  let alternatives: Int
-  let destination: NavOSSCarPlayCoordinate
-  let origin: NavOSSCarPlayCoordinate
-  let originHeadingDegrees: Double?
-  let originHorizontalAccuracyMeters: Double?
-  let preferences: NavOSSRoutePreferences
-  let waypoints: [NavOSSCarPlayCoordinate]?
 }
 
 public struct NavOSSNavigationRouteOrigin: Sendable {
@@ -99,30 +94,6 @@ public func navOSSShouldAcceptNavigationLocation(
     && latestTimestamp.map { $0 <= candidateTimestamp } ?? true
 }
 
-private struct RouteResponse: Decodable {
-  let routes: [Route]
-  let source: RouteSource
-}
-
-private struct RouteSource: Decodable {
-  let id: String
-}
-
-private struct Route: Decodable {
-  let distanceMeters: Double
-  let durationSeconds: Double
-  let geometry: [[Double]]
-  let id: String
-  let speedLimitsKph: [Int]?
-  let steps: [RouteStep]
-  let traffic: RouteTraffic?
-}
-
-private struct RouteTraffic: Decodable {
-  let delaySeconds: Double
-  let typicalDurationSeconds: Double
-}
-
 private struct SafetyCameraResponse: Decodable {
   let cameras: [SafetyCameraRecord]
 }
@@ -134,30 +105,23 @@ private struct SafetyCameraRecord: Decodable {
   let location: String
 }
 
-private struct RouteStep: Decodable {
-  let distanceMeters: Double
-  let durationSeconds: Double
-  let geometry: [[Double]]
-  let instruction: String
-  let maneuverType: String
-  let roadName: String
-  let spokenInstruction: String?
-}
-
 public final class NavOSSNavigationAPIClient: @unchecked Sendable {
   private let baseURL: URL
   private let decoder = JSONDecoder()
   private let encoder = JSONEncoder()
+  private let routesDiscovery: NavOSSRoutesEndpointDiscovery
   private let session: URLSession
 
   public init(
     baseURL: URL? = nil,
-    session: URLSession = .shared
+    session: URLSession = .shared,
+    routesDiscovery: NavOSSRoutesEndpointDiscovery = .shared
   ) throws {
     guard let resolvedBaseURL = baseURL ?? Self.configuredBaseURL() else {
       throw NavOSSNavigationAPIError.invalidConfiguration
     }
     self.baseURL = resolvedBaseURL
+    self.routesDiscovery = routesDiscovery
     self.session = session
   }
 
@@ -194,6 +158,10 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     }
   }
 
+  /// Fetches routes from `/v2/routes` when the server advertises it in `/v2/config`, otherwise
+  /// from `/v1/routes`. Waypoints whose id is in `passThroughWaypointIds` steer the route without
+  /// becoming stops (v2 `through` waypoints); a v1-only server cannot express that and the call
+  /// throws `throughWaypointsUnsupported` instead of silently adding a stop.
   public func routes(
     origin: NavOSSCarPlayCoordinate,
     originHeadingDegrees: Double? = nil,
@@ -201,76 +169,99 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     destination: NavOSSCarPlayDestination,
     preferences: NavOSSRoutePreferences,
     alternatives: Int = 2,
-    waypoints: [NavOSSCarPlayDestination] = []
+    waypoints: [NavOSSCarPlayDestination] = [],
+    passThroughWaypointIds: Set<String> = []
   ) async throws -> [NavOSSCarPlayTrip] {
-    let request = RouteRequest(
-      alternatives: alternatives,
-      destination: NavOSSCarPlayCoordinate(
-        latitude: destination.latitude,
-        longitude: destination.longitude
-      ),
-      origin: origin,
-      originHeadingDegrees: originHeadingDegrees,
-      originHorizontalAccuracyMeters: originHorizontalAccuracyMeters,
-      preferences: preferences,
-      waypoints: waypoints.isEmpty
-        ? nil
-        : waypoints.map {
-          NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
-        }
-    )
-    let response: RouteResponse
-    do {
-      response = try await post(path: "v1/routes", body: request)
-    } catch NavOSSNavigationAPIError.invalidRequest
-      where originHeadingDegrees != nil || originHorizontalAccuracyMeters != nil
-    {
-      let fallback = RouteRequest(
+    func request(_ version: NavigationRoutesAPIVersion) -> NavigationRouteRequest {
+      NavigationRouteRequest(
         alternatives: alternatives,
-        destination: request.destination,
+        destination: NavOSSCarPlayCoordinate(
+          latitude: destination.latitude,
+          longitude: destination.longitude
+        ),
         origin: origin,
-        originHeadingDegrees: nil,
-        originHorizontalAccuracyMeters: nil,
+        originHeadingDegrees: originHeadingDegrees,
+        originHorizontalAccuracyMeters: originHorizontalAccuracyMeters,
         preferences: preferences,
-        waypoints: request.waypoints
-      )
-      response = try await post(path: "v1/routes", body: fallback)
-    }
-    let trips = try response.routes.map { route in
-      NavOSSCarPlayTrip(
-        destination: destination,
-        distanceMeters: route.distanceMeters,
-        durationSeconds: route.durationSeconds,
-        geometry: try coordinates(route.geometry),
-        id: route.id,
-        preferences: preferences,
-        source: response.source.id,
-        speedLimitsKph: route.speedLimitsKph,
-        steps: try route.steps.map { step in
-          NavOSSCarPlayRouteStep(
-            distanceMeters: step.distanceMeters,
-            durationSeconds: step.durationSeconds,
-            geometry: try coordinates(step.geometry),
-            instruction: step.instruction,
-            maneuverType: step.maneuverType,
-            roadName: step.roadName,
-            spokenInstruction: step.spokenInstruction
-          )
-        },
-        traffic: route.traffic.map {
-          NavOSSCarPlayTraffic(
-            delaySeconds: $0.delaySeconds,
-            typicalDurationSeconds: $0.typicalDurationSeconds
-          )
-        },
-        waypoints: waypoints.isEmpty ? nil : waypoints
+        waypoints: waypoints.isEmpty
+          ? nil
+          : waypoints.map {
+            NavigationRouteWaypointRequest(
+              latitude: $0.latitude,
+              longitude: $0.longitude,
+              type: version == .v2 && passThroughWaypointIds.contains($0.id) ? "through" : nil
+            )
+          }
       )
     }
-    // Present the same order the API and phone client promise: mirrors the shared
-    // `compareRouteAlternatives` bucket-then-distance ordering so CarPlay does not depend on a
-    // coordinated server deploy. Fastest-name logic (`navOSSCarPlayFastestRouteIndex`) and route
-    // choice details already track raw duration independently of array position.
-    return navOSSCarPlayTripsOrderedForDisplay(trips)
+    let stops = waypoints.filter { !passThroughWaypointIds.contains($0.id) }
+    func trips(
+      _ response: NavigationRouteResponseWire,
+      _ version: NavigationRoutesAPIVersion
+    ) throws -> [NavOSSCarPlayTrip] {
+      // Present the same order the API and phone client promise: mirrors the shared
+      // `compareRouteAlternatives` bucket-then-distance ordering so CarPlay does not depend on a
+      // coordinated server deploy. Fastest-name logic (`navOSSCarPlayFastestRouteIndex`) and
+      // route choice details already track raw duration independently of array position.
+      navOSSCarPlayTripsOrderedForDisplay(
+        try navigationTrips(
+          from: response,
+          version: version,
+          destination: destination,
+          preferences: preferences,
+          waypoints: stops
+        )
+      )
+    }
+
+    if await routesVersion() != .v1 {
+      do {
+        return try trips(try await postRoutes(path: "v2/routes", request(.v2)), .v2)
+      } catch NavOSSNavigationAPIError.endpointNotFound {
+        routesDiscovery.record(.v1, for: baseURL)
+      }
+    }
+    guard waypoints.allSatisfy({ !passThroughWaypointIds.contains($0.id) }) else {
+      throw NavOSSNavigationAPIError.throughWaypointsUnsupported
+    }
+    return try trips(try await postRoutes(path: "v1/routes", request(.v1)), .v1)
+  }
+
+  /// What `/v2/config` says about routes, remembered per server. `nil` when the answer is
+  /// unknown (a transient failure); the caller then tries `/v2/routes` and falls back on 404.
+  private func routesVersion() async -> NavigationRoutesAPIVersion? {
+    if let known = routesDiscovery.version(for: baseURL) {
+      return known
+    }
+    var request = URLRequest(url: baseURL.appending(path: "v2/config"))
+    request.httpMethod = "GET"
+    request.timeoutInterval = 10
+    let version: NavigationRoutesAPIVersion
+    do {
+      let config: NavigationConfigDiscoveryResponse = try await send(request)
+      version = config.endpoints.routes == "/v2/routes" ? .v2 : .v1
+    } catch NavOSSNavigationAPIError.endpointNotFound {
+      version = .v1
+    } catch {
+      return nil
+    }
+    routesDiscovery.record(version, for: baseURL)
+    return version
+  }
+
+  /// Posts a route request, retrying once without origin heading/accuracy when the server
+  /// rejects them (an older API did not accept them).
+  private func postRoutes(
+    path: String,
+    _ request: NavigationRouteRequest
+  ) async throws -> NavigationRouteResponseWire {
+    do {
+      return try await post(path: path, body: request)
+    } catch NavOSSNavigationAPIError.invalidRequest
+      where request.originHeadingDegrees != nil || request.originHorizontalAccuracyMeters != nil
+    {
+      return try await post(path: path, body: request.withoutOriginMetadata())
+    }
   }
 
   /// Fixed safety cameras for native alert eligibility. Records with an unknown direction are
@@ -296,15 +287,6 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     }
   }
 
-  private func coordinates(_ values: [[Double]]) throws -> [NavOSSCarPlayCoordinate] {
-    try values.map { value in
-      guard value.count == 2 else {
-        throw NavOSSNavigationAPIError.invalidResponse
-      }
-      return NavOSSCarPlayCoordinate(latitude: value[1], longitude: value[0])
-    }
-  }
-
   private func post<Request: Encodable, Response: Decodable>(
     path: String,
     body: Request
@@ -324,6 +306,9 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     }
     guard response.statusCode != 400 else {
       throw NavOSSNavigationAPIError.invalidRequest
+    }
+    guard response.statusCode != 404 else {
+      throw NavOSSNavigationAPIError.endpointNotFound
     }
     guard (200..<300).contains(response.statusCode) else {
       throw NavOSSNavigationAPIError.serviceUnavailable

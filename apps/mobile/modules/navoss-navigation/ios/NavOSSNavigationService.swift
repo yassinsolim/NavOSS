@@ -968,7 +968,10 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       }
       do {
         let client = try NavOSSNavigationAPIClient()
-        func fetch(_ waypoints: [NavOSSCarPlayDestination]) async throws -> NavOSSCarPlayTrip? {
+        func fetch(
+          _ waypoints: [NavOSSCarPlayDestination],
+          passThroughWaypointIds: Set<String>
+        ) async throws -> NavOSSCarPlayTrip? {
           try await client.routes(
             origin: origin,
             originHeadingDegrees: rerouteOrigin?.headingDegrees,
@@ -976,7 +979,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
             destination: trip.destination,
             preferences: trip.preferences,
             alternatives: 0,
-            waypoints: waypoints
+            waypoints: waypoints,
+            passThroughWaypointIds: passThroughWaypointIds
           ).first
         }
         let fetched = try await navigationFetchRecoveryRoute(
@@ -988,18 +992,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
           throw NavOSSNavigationAPIError.invalidResponse
         }
         // The rejoin point steers the route; it is not a stop the driver asked for.
-        let replacement = NavOSSCarPlayTrip(
-          destination: fetched.destination,
-          distanceMeters: fetched.distanceMeters,
-          durationSeconds: fetched.durationSeconds,
-          geometry: fetched.geometry,
-          id: fetched.id,
-          preferences: fetched.preferences,
-          source: fetched.source,
-          speedLimitsKph: fetched.speedLimitsKph,
-          steps: fetched.steps,
-          traffic: fetched.traffic,
-          waypoints: remainingWaypoints.isEmpty ? nil : remainingWaypoints
+        let replacement = fetched.replacingWaypoints(
+          remainingWaypoints.isEmpty ? nil : remainingWaypoints
         )
         self.handleReplacement(
           replacement,

@@ -802,11 +802,11 @@ final class NavigationCoreTests: XCTestCase {
       ))
   }
 
-  func testManeuverSpeechUsesCurrentSegmentVoiceInstruction() {
+  func testManeuverSpeechUsesTheManeuverStepsOwnVoiceInstruction() {
     let planner = NavigationSpeechPlanner()
     let trip = makeNavigationSessionTrip(
-      currentSpokenInstruction: "Turn right onto Aspen Glen Way SW",
-      nextSpokenInstruction: "Turn left onto Aspen Summit Drive SW"
+      currentSpokenInstruction: "Head north on Centre Street",
+      nextSpokenInstruction: "Turn right onto Aspen Glen Way SW"
     )
 
     let execute = planner.prompt(

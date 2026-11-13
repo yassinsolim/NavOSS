@@ -158,65 +158,6 @@ func navigationKeepRouteRejoinAlongMeters(
   return target
 }
 
-/// How close a mid-route arrival must be to the rejoin point to be recognised as its boundary.
-let navigationRejoinBoundaryRadiusMeters = 50.0
-
-/// Removes the leg boundary a keep-route rejoin point introduces.
-///
-/// `/v1/routes` cannot mark a waypoint as pass-through, so the router treats the rejoin point
-/// as a stop: the first leg ends with an "arrive" step (and the step before it announces "You
-/// have arrived"), and the second leg starts with a "depart" step. The driver asked for no
-/// stop there. The arrival is dropped and the steps either side are merged into one, taking
-/// the second leg's spoken instruction so the next real maneuver is announced instead of the
-/// arrival. A route without such a boundary is returned unchanged.
-func navigationRemovingRejoinBoundary(
-  from trip: NavOSSCarPlayTrip,
-  rejoin: NavOSSCarPlayCoordinate
-) -> NavOSSCarPlayTrip {
-  let rejoinPoint = NavigationCoordinate(latitude: rejoin.latitude, longitude: rejoin.longitude)
-  let steps = trip.steps
-  guard let arrivalIndex = steps.indices.dropFirst().dropLast().first(where: { index in
-    guard steps[index].maneuverType == "arrive", let point = steps[index].geometry.first else {
-      return false
-    }
-    return navigationDistanceMeters(
-      from: NavigationCoordinate(latitude: point.latitude, longitude: point.longitude),
-      to: rejoinPoint
-    ) <= navigationRejoinBoundaryRadiusMeters
-  }), steps[arrivalIndex + 1].maneuverType == "depart"
-  else {
-    return trip
-  }
-  let before = steps[arrivalIndex - 1]
-  let arrival = steps[arrivalIndex]
-  let departure = steps[arrivalIndex + 1]
-  let merged = NavOSSCarPlayRouteStep(
-    distanceMeters: before.distanceMeters + arrival.distanceMeters + departure.distanceMeters,
-    durationSeconds: before.durationSeconds + arrival.durationSeconds + departure.durationSeconds,
-    geometry: before.geometry
-      + (departure.geometry.first == before.geometry.last
-        ? Array(departure.geometry.dropFirst())
-        : departure.geometry),
-    instruction: before.instruction,
-    maneuverType: before.maneuverType,
-    roadName: before.roadName,
-    spokenInstruction: departure.spokenInstruction
-  )
-  return NavOSSCarPlayTrip(
-    destination: trip.destination,
-    distanceMeters: trip.distanceMeters,
-    durationSeconds: trip.durationSeconds,
-    geometry: trip.geometry,
-    id: trip.id,
-    preferences: trip.preferences,
-    source: trip.source,
-    speedLimitsKph: trip.speedLimitsKph,
-    steps: Array(steps[..<(arrivalIndex - 1)]) + [merged] + Array(steps[(arrivalIndex + 2)...]),
-    traffic: trip.traffic,
-    waypoints: trip.waypoints
-  )
-}
-
 /// Whether a replacement route may still be installed. Evaluated under the service lock in the
 /// same transaction as the install, so a driver who rejoined the selected route after the
 /// replacement was fetched or accepted keeps the selected route.
@@ -231,25 +172,28 @@ func navigationShouldInstallReplacement(
 }
 
 /// Fetches a recovery route. With a keep-route rejoin point the route goes back onto the
-/// selected route first, with the rejoin boundary removed; if that request fails for any reason
-/// (the API answers 400 for an unroutable request and 503 when the router fails), one plain
-/// recovery route is tried, because recovering matters more than keeping the route.
+/// selected route first, passing through the rejoin point (a `/v2/routes` `through` waypoint,
+/// which adds no arrival or departure there). If that request fails for any reason (the API
+/// answers 400 for an unroutable request and 503 when the router fails, and a `/v1/routes`-only
+/// server cannot pass through a point at all), one plain recovery route is tried, because
+/// recovering matters more than keeping the route. A rejoin route that still stops at the rejoin
+/// point (more arrivals than real stops) is treated as a failure too.
 func navigationFetchRecoveryRoute(
   rejoin: NavOSSCarPlayDestination?,
   remainingWaypoints: [NavOSSCarPlayDestination],
-  fetch: ([NavOSSCarPlayDestination]) async throws -> NavOSSCarPlayTrip?
+  fetch: ([NavOSSCarPlayDestination], Set<String>) async throws -> NavOSSCarPlayTrip?
 ) async throws -> NavOSSCarPlayTrip? {
   if let rejoin {
     do {
-      if let fetched = try await fetch([rejoin] + remainingWaypoints) {
-        return navigationRemovingRejoinBoundary(
-          from: fetched,
-          rejoin: NavOSSCarPlayCoordinate(latitude: rejoin.latitude, longitude: rejoin.longitude)
-        )
+      if let fetched = try await fetch([rejoin] + remainingWaypoints, [rejoin.id]),
+        fetched.steps.filter({ $0.maneuverType == "arrive" }).count
+          <= remainingWaypoints.count + 1
+      {
+        return fetched
       }
     } catch {
       try Task.checkCancellation()
     }
   }
-  return try await fetch(remainingWaypoints)
+  return try await fetch(remainingWaypoints, [])
 }
