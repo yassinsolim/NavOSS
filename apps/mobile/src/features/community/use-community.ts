@@ -147,8 +147,16 @@ export function useCommunity({
     }
     // Native caches by area (fresh for 120 s), keeps a 20 s floor between requests and publishes
     // what it fetched through `onCommunityStateChanged`, so the answer itself is not needed here.
+    // A server that refuses (not found, unavailable, offline) is not asked again for this area
+    // until the view moves or the app returns to the foreground.
     const fetchArea = () => {
-      void fetchCommunityReports({ east, north, south, west }).catch(() => undefined);
+      void fetchCommunityReports({ east, north, south, west })
+        .then((result) => {
+          if (!result.ok && result.error !== 'rate-limited') clearInterval(interval);
+        })
+        .catch(() => {
+          clearInterval(interval);
+        });
     };
     const timeout = setTimeout(fetchArea, FETCH_DEBOUNCE_MS);
     const interval = setInterval(fetchArea, REFRESH_MS);
