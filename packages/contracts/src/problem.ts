@@ -2,7 +2,10 @@ import { z } from 'zod/v4';
 
 export const ProblemCodeSchema = z.enum([
   'invalid_request',
+  'unauthorized',
+  'forbidden',
   'not_found',
+  'conflict',
   'rate_limited',
   'service_unavailable',
   'internal_error',
