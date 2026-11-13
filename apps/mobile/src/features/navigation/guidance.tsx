@@ -277,15 +277,9 @@ export function ManeuverBanner({
               </View>
             )}
           </View>
-          {/* The action is never cut off: it wraps to a second line, and only shrinks if a
-              second line is still not enough. Where it leads is the smaller line beneath. */}
-          <Text
-            maxFontSizeMultiplier={1.3}
-            adjustsFontSizeToFit
-            minimumFontScale={0.75}
-            numberOfLines={2}
-            style={guidanceStyles.instruction}
-          >
+          {/* The action is never shrunk: it wraps (iOS shrank it to an unreadable size once the
+              lane strip shared the banner). Where it leads is the smaller line beneath. */}
+          <Text maxFontSizeMultiplier={1.3} numberOfLines={3} style={guidanceStyles.instruction}>
             {text.primary}
           </Text>
           {secondary.length > 0 && (
@@ -802,7 +796,15 @@ const guidanceStyles = StyleSheet.create({
     ...elevation.high,
   },
   bannerCopy: { flex: 1, justifyContent: 'center' },
-  bannerRow: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: space.md },
+  // Grows into the banner's minimum height but never shrinks: a lane strip below must add
+  // height, not squeeze the instruction into a smaller font.
+  bannerRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexGrow: 1,
+    flexShrink: 0,
+    gap: space.md,
+  },
   cameraAlert: {
     alignItems: 'center',
     backgroundColor: palette.sun,
@@ -822,10 +824,18 @@ const guidanceStyles = StyleSheet.create({
   cameraAlertMeta: { ...typography.callout, color: palette.ink },
   cameraAlertTitle: { ...typography.title3, color: palette.ink },
   distance: { ...typography.guidanceDistance, color: guidanceColors.text },
-  distanceRow: { alignItems: 'center', flexDirection: 'row', gap: space.sm },
+  // At large text sizes the exit sign wraps under the distance instead of truncating.
+  distanceRow: {
+    alignItems: 'center',
+    columnGap: space.sm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: space.xxs,
+  },
   distanceText: { flexShrink: 1 },
   exitSign: {
     backgroundColor: palette.white,
+    flexShrink: 0,
     borderCurve: 'continuous',
     borderRadius: radius.sm,
     paddingHorizontal: space.sm,
