@@ -12,6 +12,30 @@ struct CommunityBoundsRecord: Record {
   }
 }
 
+/// The phone's own fix behind a vote outside guidance. Accepted only within the bounds the
+/// navigation core applies to its own fixes (`navOSSNavigationRouteOrigin`: at most 15 s old,
+/// 100 m accuracy), so a stale or coarse position can never back a vote.
+struct CommunityVoteObservationRecord: Record {
+  @Field var horizontalAccuracyMeters: Double = .nan
+  @Field var latitude: Double = .nan
+  @Field var longitude: Double = .nan
+  @Field var timestampMs: Double = .nan
+
+  func validatedCoordinate(now: Date = Date()) -> NavOSSCarPlayCoordinate? {
+    guard latitude.isFinite, longitude.isFinite, (-90...90).contains(latitude),
+      (-180...180).contains(longitude), timestampMs.isFinite
+    else { return nil }
+    let coordinate = NavOSSCarPlayCoordinate(latitude: latitude, longitude: longitude)
+    return navOSSNavigationRouteOrigin(
+      coordinate: coordinate,
+      courseDegrees: nil,
+      speedMetersPerSecond: nil,
+      horizontalAccuracyMeters: horizontalAccuracyMeters,
+      ageSeconds: now.timeIntervalSince1970 - timestampMs / 1_000
+    )?.coordinate
+  }
+}
+
 struct CommunityReportSubmissionRecord: Record {
   /// The driver confirmed sharing a report near home or the trip's start/end.
   @Field var confirmNearPrivatePlace: Bool = false
@@ -162,12 +186,17 @@ enum NavOSSCommunityBridge {
   }
 
   /// Votes with the device's current position, which the server uses only for its proximity
-  /// check and then discards.
-  static func vote(reportId: String, rawVote: String) async -> [String: Any] {
+  /// check and then discards. The navigation core's fix wins; outside guidance, where the core
+  /// may have none, the phone passes the fix from its own foreground location watch.
+  static func vote(
+    reportId: String, rawVote: String, phoneCoordinate: NavOSSCarPlayCoordinate? = nil
+  ) async -> [String: Any] {
     guard let vote = NavOSSCommunityVote(rawValue: rawVote) else {
       return ["ok": false, "error": "invalid-request"]
     }
-    guard let coordinate = NavOSSNavigationService.shared.currentCoordinate() else {
+    guard
+      let coordinate = NavOSSNavigationService.shared.currentCoordinate() ?? phoneCoordinate
+    else {
       return ["ok": false, "error": "location-unavailable"]
     }
     do {

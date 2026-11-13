@@ -1,6 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View } from 'react-native';
 
+import {
+  REPORT_AHEAD_HEIGHT,
+  ReportAheadBanner,
+  STILL_THERE_HEIGHT,
+  StillTherePrompt,
+} from '@/features/community/community-guidance';
 import { AboutSheet } from '@/features/map/about-sheet';
 import { AppTabBar } from '@/features/map/app-tab-bar';
 import { CategoriesSheet } from '@/features/map/categories-sheet';
@@ -117,7 +123,8 @@ export function MapScreen() {
   const { overlays, mapPreferences, selectedResult } = c;
   const safetyCameraCount = mapPreferences.showSafetyCameras ? overlays.safetyCameras.length : 0;
   const roadEventCount = mapPreferences.showRoadEvents ? overlays.roadEvents.length : 0;
-  const mapSummary = `Map with ${String(safetyCameraCount)} official safety camera symbols and ${String(roadEventCount)} road events`;
+  const communityReportCount = c.community.reports.length;
+  const mapSummary = `Map with ${String(safetyCameraCount)} official safety camera symbols, ${String(roadEventCount)} road events and ${String(communityReportCount)} driver reports`;
   const selectedPlacePhoneUrl = placePhoneUrl(selectedResult?.details?.phone);
   const selectedPlaceWebsiteUrl = placeWebsiteUrl(selectedResult?.details?.website);
   const guidanceReady =
@@ -127,6 +134,12 @@ export function MapScreen() {
     guidance.remainingStep !== undefined;
   const cameraAlertHeight = navigating && c.cameraAlert !== undefined ? CAMERA_ALERT_HEIGHT : 0;
   const rerouteCardHeight = guidance.rerouteProposal === undefined ? 0 : REROUTE_CARD_HEIGHT;
+  const reportAheadHeight =
+    navigating && c.community.reportAhead !== undefined ? REPORT_AHEAD_HEIGHT : 0;
+  const stillThereHeight =
+    navigating && c.community.stillThere !== undefined ? STILL_THERE_HEIGHT : 0;
+  const guidanceStackTop =
+    insets.top + guidance.bannerHeight + 8 + cameraAlertHeight + rerouteCardHeight;
 
   return (
     <View style={styles.container}>
@@ -148,10 +161,13 @@ export function MapScreen() {
         onLoadError={c.onMapError}
         onLongPress={c.onMapLongPress}
         onPress={c.onMapPress}
+        onRegionDidChange={c.onRegionDidChange}
         vehicleCoordinate={c.camera.vehicleCoordinate}
       >
         <MapLayers
           alternateRoutes={route.alternateRoutes}
+          basemapLabelLayerId={c.basemapLabelLayerId}
+          communityReports={c.community.reports}
           darkMap={c.darkMap}
           deviceHeadingStore={c.location.deviceHeadingStore}
           displayedSelectedRoute={route.displayedSelectedRoute}
@@ -171,6 +187,7 @@ export function MapScreen() {
           }
           torontoSafetyCameras={overlays.torontoSafetyCameras}
           trafficCameras={overlays.kelownaTrafficCameras}
+          trafficFlow={c.community.trafficFlow}
           userCoordinate={c.location.userCoordinate}
           userHeading={c.location.userHeading}
           vehicleCoordinate={c.camera.vehicleCoordinate}
@@ -189,7 +206,13 @@ export function MapScreen() {
               roadEventRegion: overlays.roadEventRegion,
             })
           }
-          bannerStackHeight={guidance.bannerHeight + cameraAlertHeight + rerouteCardHeight}
+          bannerStackHeight={
+            guidance.bannerHeight +
+            cameraAlertHeight +
+            rerouteCardHeight +
+            reportAheadHeight +
+            stillThereHeight
+          }
           locating={c.location.locationState === 'locating'}
           mapBearing={c.mapBearing}
           metrics={metrics}
@@ -228,6 +251,7 @@ export function MapScreen() {
           }
           sheetPosition={c.sheetPosition}
           showRecenter={!c.camera.isNavigationFollowing}
+          trafficStatus={c.community.trafficStatus}
         />
       )}
 
@@ -421,17 +445,36 @@ export function MapScreen() {
           top={insets.top + guidance.bannerHeight + 8 + cameraAlertHeight}
         />
       )}
+      {navigating && c.community.reportAhead !== undefined && (
+        <ReportAheadBanner report={c.community.reportAhead} top={guidanceStackTop} />
+      )}
+      {navigating && c.community.stillThere !== undefined && (
+        <StillTherePrompt
+          busy={c.community.stillThereBusy}
+          onAnswer={c.community.onAnswerStillThere}
+          onDismiss={c.community.onDismissStillThere}
+          prompt={c.community.stillThere}
+          top={guidanceStackTop + reportAheadHeight}
+        />
+      )}
       <MapNoticeToast
         notice={c.notice}
         onDismiss={c.onDismissNotice}
         top={
           insets.top +
           8 +
-          (navigating ? guidance.bannerHeight + cameraAlertHeight + rerouteCardHeight : 0)
+          (navigating
+            ? guidance.bannerHeight +
+              cameraAlertHeight +
+              rerouteCardHeight +
+              reportAheadHeight +
+              stillThereHeight
+            : 0)
         }
       />
 
       <MapPreferencesSheet
+        community={c.community.settings}
         metrics={metrics}
         onChange={c.onUpdateMapPreferences}
         onClose={c.mapPreferencesSheet.close}
@@ -461,8 +504,13 @@ export function MapScreen() {
       />
       <RoadReportSheet
         isSaving={c.roadReport.saving}
+        nearPrivatePlace={c.roadReport.nearPrivatePlace}
         onCancel={c.roadReport.close}
+        onKeepPrivate={c.roadReport.keepPrivate}
         onSelect={c.roadReport.save}
+        onSetShareRoadReports={c.roadReport.setShareRoadReports}
+        onShareAnyway={c.roadReport.shareAnyway}
+        sharing={c.roadReport.sharing}
         visible={c.roadReport.visible}
       />
       <GuidanceSettingsSheet
@@ -473,7 +521,9 @@ export function MapScreen() {
         visible={c.guidanceSettings.visible}
       />
       <MapFeatureSheet
+        busyAction={c.communityActionBusy}
         detail={c.featureDetail}
+        onAction={c.onCommunityReportAction}
         onClose={c.onCloseFeatureDetail}
         onOpenLink={c.onOpenExternalUrl}
       />

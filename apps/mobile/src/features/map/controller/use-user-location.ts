@@ -37,6 +37,12 @@ export interface UserLocation {
   deviceHeadingStore: ValueStore<number | undefined>;
   /** Resolves a fresh, accurate origin for a route request, prompting for permission if needed. */
   getCurrentRouteOrigin: (signal: AbortSignal) => Promise<RouteRequestOrigin | undefined>;
+  /**
+   * A fresh, accurate fix (the route-origin rules: at most 15 s old, 100 m accuracy), asking for
+   * permission and a new fix when the cached one does not qualify. Throws when location is
+   * denied or no qualifying fix arrives; undefined only when aborted.
+   */
+  getFreshLocationSample: (signal: AbortSignal) => Promise<RouteOriginSample | undefined>;
   inTorontoCameraBounds: boolean;
   /** One-shot high-accuracy fix for the locate button. Returns the fix when one was obtained. */
   locate: () => Promise<Coordinate | undefined>;
@@ -74,14 +80,14 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     if (sample.headingDegrees !== undefined) setUserHeading(sample.headingDegrees);
   };
 
-  const getCurrentRouteOrigin = async (
+  const getFreshLocationSample = async (
     signal: AbortSignal,
-  ): Promise<RouteRequestOrigin | undefined> => {
+  ): Promise<RouteOriginSample | undefined> => {
     // Read through a function: the signal flips while these lookups are awaiting.
     const aborted = () => signal.aborted;
     if (aborted()) return undefined;
-    const cachedOrigin = routeRequestOriginFromSample(routeOriginSampleRef.current);
-    if (cachedOrigin !== undefined) return cachedOrigin;
+    const cached = routeOriginSampleRef.current;
+    if (routeRequestOriginFromSample(cached) !== undefined) return cached;
 
     setLocationState('locating');
     const granted = await ensureForegroundLocationPermission(
@@ -116,8 +122,13 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     if (aborted()) return undefined;
     applySample(selectedSample);
     setLocationState('visible');
-    return routeOrigin;
+    return selectedSample;
   };
+
+  const getCurrentRouteOrigin = async (
+    signal: AbortSignal,
+  ): Promise<RouteRequestOrigin | undefined> =>
+    routeRequestOriginFromSample(await getFreshLocationSample(signal));
 
   const locate = async (): Promise<Coordinate | undefined> => {
     setLocationState('locating');
@@ -162,6 +173,7 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     applySample,
     deviceHeadingStore,
     getCurrentRouteOrigin,
+    getFreshLocationSample,
     inTorontoCameraBounds:
       userCoordinate !== undefined && isCoordinateInBounds(userCoordinate, TORONTO_CAMERA_BOUNDS),
     locate,

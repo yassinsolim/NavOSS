@@ -5,7 +5,7 @@ It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
 
-Lockfile SHA-256: `fece19d1b070b74fe8fcddd59d6fe80c848a024f635d87687ffaddf93f111c19`
+Lockfile SHA-256: `be22f15c1f8dbdd74070867f4b31ab05262aa82f5720f52474650772bea1db63`
 
 Regenerate with:
 
@@ -50,7 +50,7 @@ corepack pnpm licenses:generate
 
 - `glob` - `13.0.6` - <https://github.com/isaacs/node-glob#readme>
 - `lru-cache` - `11.5.2` - <https://github.com/isaacs/node-lru-cache#readme>
-- `minimatch` - `10.2.5, 10.2.6` - <https://github.com/isaacs/minimatch#readme>
+- `minimatch` - `10.2.6` - <https://github.com/isaacs/minimatch#readme>
 - `minipass` - `7.1.3` - <https://github.com/isaacs/minipass#readme>
 - `path-scurry` - `2.0.2` - <https://github.com/isaacs/path-scurry#readme>
 - `sax` - `1.6.1` - <https://github.com/isaacs/sax-js#readme>
@@ -237,7 +237,7 @@ corepack pnpm licenses:generate
 - `@fastify/forwarded` - `3.0.1` - <https://github.com/fastify/forwarded#readme>
 - `@fastify/merge-json-schemas` - `0.2.1` - <https://github.com/fastify/merge-json-schemas#readme>
 - `@fastify/proxy-addr` - `5.1.0` - <https://github.com/fastify/proxy-addr#readme>
-- `@fastify/swagger` - `9.8.1` - <https://github.com/fastify/fastify-swagger#readme>
+- `@fastify/swagger` - `9.9.1` - <https://github.com/fastify/fastify-swagger#readme>
 - `@jest/schemas` - `29.6.3` - <https://github.com/jestjs/jest#readme>
 - `@jest/types` - `29.6.3` - <https://github.com/jestjs/jest#readme>
 - `@jridgewell/gen-mapping` - `0.3.13` - <https://github.com/jridgewell/sourcemaps/tree/main/packages/gen-mapping>
@@ -301,7 +301,7 @@ corepack pnpm licenses:generate
 - `@types/istanbul-lib-coverage` - `2.0.6` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-lib-coverage>
 - `@types/istanbul-lib-report` - `3.0.3` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-lib-report>
 - `@types/istanbul-reports` - `3.0.4` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-reports>
-- `@types/node` - `24.19.0` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node>
+- `@types/node` - `24.19.2, 26.4.1` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node>
 - `@types/react` - `19.2.17` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react>
 - `@types/react-test-renderer` - `19.1.0` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react-test-renderer>
 - `@types/yargs` - `17.0.35` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/yargs>
@@ -364,7 +364,7 @@ corepack pnpm licenses:generate
 - `css-in-js-utils` - `3.1.0` - <https://github.com/robinweser/css-in-js-utils#readme>
 - `css.escape` - `1.5.1` - <https://mths.be/cssescape>
 - `csstype` - `3.2.3` - <https://github.com/frenic/csstype#readme>
-- `csv-parse` - `6.1.0` - <https://csv.js.org/parse>
+- `csv-parse` - `6.2.1` - <https://csv.js.org/parse>
 - `debug` - `2.6.9, 3.2.7, 4.4.3` - <https://github.com/debug-js/debug#readme>
 - `decode-uri-component` - `0.2.2` - <https://github.com/SamVerschueren/decode-uri-component#readme>
 - `deepmerge` - `4.3.1` - <https://github.com/TehShrike/deepmerge>
@@ -418,7 +418,7 @@ corepack pnpm licenses:generate
 - `fast-deep-equal` - `3.1.3` - <https://github.com/epoberezkin/fast-deep-equal#readme>
 - `fast-json-stringify` - `7.0.1` - <https://github.com/fastify/fast-json-stringify#readme>
 - `fast-querystring` - `1.1.2` - <https://github.com/anonrig/fast-querystring#readme>
-- `fastify` - `5.10.0` - <https://fastify.dev/>
+- `fastify` - `5.12.5` - <https://fastify.dev/>
 - `fastify-plugin` - `6.0.0` - <https://github.com/fastify/fastify-plugin#readme>
 - `fastify-type-provider-zod` - `7.0.0` - <https://github.com/turkerdev/fastify-type-provider-zod>
 - `fbjs` - `3.0.5` - <https://github.com/facebook/fbjs#readme>
@@ -522,10 +522,10 @@ corepack pnpm licenses:generate
 - `parseurl` - `1.3.3` - <https://github.com/pillarjs/parseurl#readme>
 - `path-key` - `3.1.1` - <https://github.com/sindresorhus/path-key#readme>
 - `path-parse` - `1.0.7` - <https://github.com/jbgutierrez/path-parse#readme>
-- `pg` - `8.16.3` - <https://github.com/brianc/node-postgres>
-- `pg-connection-string` - `2.14.0` - <https://github.com/brianc/node-postgres/tree/master/packages/pg-connection-string>
+- `pg` - `8.23.1` - <https://github.com/brianc/node-postgres>
+- `pg-connection-string` - `2.14.1` - <https://github.com/brianc/node-postgres/tree/master/packages/pg-connection-string>
 - `pg-pool` - `3.14.0` - <https://github.com/brianc/node-postgres/tree/master/packages/pg-pool#readme>
-- `pg-protocol` - `1.15.0` - <https://github.com/brianc/node-postgres#readme>
+- `pg-protocol` - `1.16.1` - <https://github.com/brianc/node-postgres#readme>
 - `pg-types` - `2.2.0` - <https://github.com/brianc/node-pg-types>
 - `pgpass` - `1.0.5` - <https://github.com/hoegaarden/pgpass#readme>
 - `picomatch` - `2.3.2, 4.0.5` - <https://github.com/micromatch/picomatch>
@@ -541,7 +541,7 @@ corepack pnpm licenses:generate
 - `postgres-date` - `1.0.7` - <https://github.com/bendrucker/postgres-date#readme>
 - `postgres-interval` - `1.2.0` - <https://github.com/bendrucker/postgres-interval#readme>
 - `pretty-format` - `27.5.1, 29.7.0` - <https://github.com/jestjs/jest#readme>
-- `process-warning` - `4.0.1, 5.0.0` - <https://github.com/fastify/fastify-warning#readme>
+- `process-warning` - `4.0.1, 5.0.0, 5.1.1` - <https://github.com/fastify/fastify-warning#readme>
 - `progress` - `2.0.3` - <https://github.com/visionmedia/node-progress#readme>
 - `promise` - `7.3.1, 8.3.0` - <https://github.com/then/promise#readme>
 - `prompts` - `2.4.2` - <https://github.com/terkelg/prompts#readme>
@@ -629,7 +629,7 @@ corepack pnpm licenses:generate
 - `toqr` - `0.1.1` - <https://github.com/kitten/toqr#readme>
 - `tr46` - `0.0.3` - <https://github.com/Sebmaster/tr46.js#readme>
 - `ua-parser-js` - `0.7.41, 1.0.41` - <https://uaparser.dev>
-- `undici-types` - `7.24.6` - <https://undici.nodejs.org>
+- `undici-types` - `7.24.6, 8.3.0` - <https://undici.nodejs.org>
 - `unicode-canonical-property-names-ecmascript` - `2.0.1` - <https://github.com/mathiasbynens/unicode-canonical-property-names-ecmascript>
 - `unicode-match-property-ecmascript` - `2.0.0` - <https://github.com/mathiasbynens/unicode-match-property-ecmascript>
 - `unicode-match-property-value-ecmascript` - `2.2.1` - <https://github.com/mathiasbynens/unicode-match-property-value-ecmascript>
@@ -655,7 +655,7 @@ corepack pnpm licenses:generate
 - `xmlbuilder` - `11.0.1, 15.1.1` - <http://github.com/oozcitak/xmlbuilder-js>
 - `xtend` - `4.0.2` - <https://github.com/Raynos/xtend>
 - `yargs` - `17.7.3` - <https://yargs.js.org/>
-- `zod` - `3.25.76, 4.4.3` - <https://zod.dev>
+- `zod` - `3.25.76, 4.6.5` - <https://zod.dev>
 
 ## MIT AND Apache-2.0
 

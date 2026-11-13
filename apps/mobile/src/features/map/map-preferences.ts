@@ -32,9 +32,13 @@ export interface MapPreferences {
   navigationView: NavigationViewMode;
   routeColor: RouteColor;
   showBuildings: boolean;
+  /** Reports shared by other NavOSS drivers (drawn only where the server provides them). */
+  showCommunityReports: boolean;
   showPlaces: boolean;
   showRoadEvents: boolean;
   showSafetyCameras: boolean;
+  /** The community traffic-flow layer: opt-in, and only where the server publishes it. */
+  showTraffic: boolean;
   showTransit: boolean;
   stylePreset: MapStylePreset;
 }
@@ -44,9 +48,11 @@ export const DEFAULT_MAP_PREFERENCES: MapPreferences = {
   navigationView: 'tilted',
   routeColor: 'green',
   showBuildings: true,
+  showCommunityReports: true,
   showPlaces: true,
   showRoadEvents: true,
   showSafetyCameras: true,
+  showTraffic: false,
   showTransit: true,
   stylePreset: 'automatic',
 };
@@ -115,6 +121,9 @@ export function normalizeMapPreferences(value: unknown): MapPreferences {
     showBuildings: isBoolean(candidate.showBuildings)
       ? candidate.showBuildings
       : DEFAULT_MAP_PREFERENCES.showBuildings,
+    showCommunityReports: isBoolean(candidate.showCommunityReports)
+      ? candidate.showCommunityReports
+      : DEFAULT_MAP_PREFERENCES.showCommunityReports,
     showPlaces: isBoolean(candidate.showPlaces)
       ? candidate.showPlaces
       : DEFAULT_MAP_PREFERENCES.showPlaces,
@@ -124,6 +133,9 @@ export function normalizeMapPreferences(value: unknown): MapPreferences {
     showSafetyCameras: isBoolean(candidate.showSafetyCameras)
       ? candidate.showSafetyCameras
       : DEFAULT_MAP_PREFERENCES.showSafetyCameras,
+    showTraffic: isBoolean(candidate.showTraffic)
+      ? candidate.showTraffic
+      : DEFAULT_MAP_PREFERENCES.showTraffic,
     showTransit: isBoolean(candidate.showTransit)
       ? candidate.showTransit
       : DEFAULT_MAP_PREFERENCES.showTransit,

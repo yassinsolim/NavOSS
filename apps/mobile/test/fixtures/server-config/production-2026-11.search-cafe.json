@@ -1,1 +1,83 @@
-{"recorded":{"at":"2026-11-13T04:30Z","request":"POST /v1/search {\"q\":\"Coffee\",\"category\":\"cafe\",\"latitude\":51.045,\"longitude\":-114.063,\"limit\":5,\"sort\":\"distance\"}","server":"https://navoss-api.yassin.app (production, pre-#79 image)"},"response":{"degraded":false,"results":[{"category":"poi","center":{"latitude":51.0464762,"longitude":-114.067015},"confidence":0.55,"distanceMeters":325,"details":{"address":"Needs Must Cafe, 225, 7 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 2W2, Canada","category":"cafe"},"id":"nominatim:node:9807883307","label":"Needs Must Cafe, 225, 7 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 2W2, Canada","name":"Needs Must Cafe"},{"category":"poi","center":{"latitude":51.0476803,"longitude":-114.0656243},"confidence":0.55,"distanceMeters":350,"details":{"address":"Tim Hortons, 202, 6 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 2R9, Canada","category":"cafe"},"id":"nominatim:node:1110057527","label":"Tim Hortons, 202, 6 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 2R9, Canada","name":"Tim Hortons"},{"category":"poi","center":{"latitude":51.0498607,"longitude":-114.0629738},"confidence":0.55,"distanceMeters":540,"details":{"address":"Gong Cha, 303, Centre Street S, Downtown Commercial Core, Calgary, Alberta, T2G 2B8, Canada","category":"cafe"},"id":"nominatim:node:5446943875","label":"Gong Cha, 303, Centre Street S, Downtown Commercial Core, Calgary, Alberta, T2G 2B8, Canada","name":"Gong Cha"},{"category":"poi","center":{"latitude":51.0459554,"longitude":-114.0710147},"confidence":0.55,"distanceMeters":570,"details":{"address":"Tim Hortons, 751, 3 Street SW, Downtown Commercial Core, Calgary, Alberta, T2P 4K8, Canada","category":"cafe"},"id":"nominatim:node:9869228974","label":"Tim Hortons, 751, 3 Street SW, Downtown Commercial Core, Calgary, Alberta, T2P 4K8, Canada","name":"Tim Hortons"},{"category":"poi","center":{"latitude":51.051013,"longitude":-114.0624691},"confidence":0.55,"distanceMeters":670,"details":{"address":"S'more Please!, Centre Street S, Chinatown, Calgary, Alberta, T2G 2B6, Canada","category":"cafe"},"id":"nominatim:node:12992105955","label":"S'more Please!, Centre Street S, Chinatown, Calgary, Alberta, T2G 2B6, Canada","name":"S'more Please!"}],"source":{"datasetVersion":"alberta-british-columbia-geofabrik-2026-07-30","freshness":"fresh","id":"nominatim-self-hosted","updatedAt":"2026-11-13T04:22:31.641Z"}}}
+{
+  "recorded": {
+    "at": "2026-11-13T04:30Z",
+    "request": "POST /v1/search {\"q\":\"Coffee\",\"category\":\"cafe\",\"latitude\":51.045,\"longitude\":-114.063,\"limit\":5,\"sort\":\"distance\"}",
+    "server": "https://navoss-api.yassin.app (production, pre-#79 image)"
+  },
+  "response": {
+    "degraded": false,
+    "results": [
+      {
+        "category": "poi",
+        "center": { "latitude": 51.0464762, "longitude": -114.067015 },
+        "confidence": 0.55,
+        "distanceMeters": 325,
+        "details": {
+          "address": "Needs Must Cafe, 225, 7 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 2W2, Canada",
+          "category": "cafe"
+        },
+        "id": "nominatim:node:9807883307",
+        "label": "Needs Must Cafe, 225, 7 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 2W2, Canada",
+        "name": "Needs Must Cafe"
+      },
+      {
+        "category": "poi",
+        "center": { "latitude": 51.0476803, "longitude": -114.0656243 },
+        "confidence": 0.55,
+        "distanceMeters": 350,
+        "details": {
+          "address": "Tim Hortons, 202, 6 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 2R9, Canada",
+          "category": "cafe"
+        },
+        "id": "nominatim:node:1110057527",
+        "label": "Tim Hortons, 202, 6 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 2R9, Canada",
+        "name": "Tim Hortons"
+      },
+      {
+        "category": "poi",
+        "center": { "latitude": 51.0498607, "longitude": -114.0629738 },
+        "confidence": 0.55,
+        "distanceMeters": 540,
+        "details": {
+          "address": "Gong Cha, 303, Centre Street S, Downtown Commercial Core, Calgary, Alberta, T2G 2B8, Canada",
+          "category": "cafe"
+        },
+        "id": "nominatim:node:5446943875",
+        "label": "Gong Cha, 303, Centre Street S, Downtown Commercial Core, Calgary, Alberta, T2G 2B8, Canada",
+        "name": "Gong Cha"
+      },
+      {
+        "category": "poi",
+        "center": { "latitude": 51.0459554, "longitude": -114.0710147 },
+        "confidence": 0.55,
+        "distanceMeters": 570,
+        "details": {
+          "address": "Tim Hortons, 751, 3 Street SW, Downtown Commercial Core, Calgary, Alberta, T2P 4K8, Canada",
+          "category": "cafe"
+        },
+        "id": "nominatim:node:9869228974",
+        "label": "Tim Hortons, 751, 3 Street SW, Downtown Commercial Core, Calgary, Alberta, T2P 4K8, Canada",
+        "name": "Tim Hortons"
+      },
+      {
+        "category": "poi",
+        "center": { "latitude": 51.051013, "longitude": -114.0624691 },
+        "confidence": 0.55,
+        "distanceMeters": 670,
+        "details": {
+          "address": "S'more Please!, Centre Street S, Chinatown, Calgary, Alberta, T2G 2B6, Canada",
+          "category": "cafe"
+        },
+        "id": "nominatim:node:12992105955",
+        "label": "S'more Please!, Centre Street S, Chinatown, Calgary, Alberta, T2G 2B6, Canada",
+        "name": "S'more Please!"
+      }
+    ],
+    "source": {
+      "datasetVersion": "alberta-british-columbia-geofabrik-2026-07-30",
+      "freshness": "fresh",
+      "id": "nominatim-self-hosted",
+      "updatedAt": "2026-11-13T04:22:31.641Z"
+    }
+  }
+}

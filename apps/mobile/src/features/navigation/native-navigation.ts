@@ -16,6 +16,7 @@ import NavOSSNavigation, {
   type NativeDestinationCatalog,
   type NativeNavigationDestination,
   type NativeNavigationAudioMode,
+  type NativeVoteObservation,
   type NativeNavigationPreferences,
   type NativeNavigationSnapshot,
   type NativeRerouteMode,
@@ -100,6 +101,7 @@ export type {
   NativeCommunityResult,
   NativeCommunityState,
   NativeStillTherePrompt,
+  NativeVoteObservation,
   NativeTrafficSharingState,
   NativeDestinationCatalog,
   NativeNavigationSnapshot,
@@ -359,6 +361,11 @@ export function hasNativeCommunity(): boolean {
   return NavOSSNavigation.getCapabilities().communityReports === true;
 }
 
+/** Whether this native build has the "Share traffic speeds" uploader. */
+export function hasNativeCommunityTraffic(): boolean {
+  return NavOSSNavigation.getCapabilities().communityTraffic === true;
+}
+
 export function getCommunityState(): Promise<NativeCommunityState> {
   return NavOSSNavigation.getCommunityState();
 }
@@ -380,12 +387,19 @@ export function submitCommunityReport(
   return NavOSSNavigation.submitCommunityReport(report);
 }
 
-/** Votes from the device's current position (used by the server only to check proximity). */
+/**
+ * Votes from the device's current position (used by the server only to check proximity). The
+ * navigation core's fix is used when it has one; `observedAt` is the phone's own fresh fix for a
+ * vote outside guidance, which native accepts only within its own age and accuracy bounds.
+ */
 export function voteCommunityReport(
   reportId: string,
   vote: 'not-present' | 'present',
+  observedAt?: NativeVoteObservation,
 ): Promise<NativeCommunityResult<{ active: boolean }>> {
-  return NavOSSNavigation.voteCommunityReport(reportId, vote);
+  return observedAt === undefined
+    ? NavOSSNavigation.voteCommunityReport(reportId, vote)
+    : NavOSSNavigation.voteCommunityReport(reportId, vote, observedAt);
 }
 
 /** "Still there?" dismissed: sends nothing, and the prompt is not shown again this trip. */

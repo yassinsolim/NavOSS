@@ -47,9 +47,7 @@
       },
       "displayName": "Calgary, Alberta",
       "id": "calgary-ab",
-      "modes": [
-        "driving"
-      ]
+      "modes": ["driving"]
     }
   }
 }

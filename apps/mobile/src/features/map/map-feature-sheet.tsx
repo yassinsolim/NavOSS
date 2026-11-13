@@ -3,26 +3,30 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import type { CommunityReportAction } from '@/features/community/community';
 import type { MapFeatureDetail } from '@/features/map/controller/use-map-controller';
 import { createThemedStyles, radius, space, typography, useTheme } from '@/theme';
-import { Button } from '@/ui/button';
+import { Button, type SymbolName } from '@/ui/button';
 import { ModalSheet } from '@/ui/sheet/modal-sheet';
 import { SheetHeader } from '@/ui/sheet/sheet-header';
 
 /**
  * Details for a tapped overlay feature: an official road event, an enforcement camera, a traffic
  * webcam or a public safety facility. The body is the source's own wording plus NavOSS's
- * statement of what the data is and is not.
- *
- * Wave 2 seam: a community report opens this same sheet. Give `MapFeatureDetail` an optional
- * `actions` list (still there / not there) and render it above the link button.
+ * statement of what the data is and is not. A driver report adds its own actions: "Still there"
+ * and "Not there" when the driver may answer, or "Withdraw" for their own report.
  */
 export function MapFeatureSheet({
+  busyAction,
   detail,
+  onAction,
   onClose,
   onOpenLink,
 }: {
+  /** The action whose request is in flight; every action is disabled meanwhile. */
+  busyAction: CommunityReportAction | undefined;
   detail: MapFeatureDetail | undefined;
+  onAction: (action: CommunityReportAction) => void;
   onClose: () => void;
   onOpenLink: (url: string) => void;
 }) {
@@ -58,6 +62,34 @@ export function MapFeatureSheet({
               {shown.body}
             </Text>
           </View>
+          {shown.actions !== undefined && shown.actions.length > 0 && (
+            <View style={styles.actions}>
+              {shown.actions.map((action) => (
+                <Button
+                  disabled={busyAction !== undefined}
+                  icon={ACTION_ICONS[action]}
+                  key={action}
+                  label={ACTION_LABELS[action]}
+                  loading={busyAction === action}
+                  onPress={() => {
+                    onAction(action);
+                  }}
+                  size="driving"
+                  style={styles.action}
+                  variant={
+                    action === 'withdraw'
+                      ? 'dangerTonal'
+                      : action === 'present'
+                        ? 'primary'
+                        : 'secondary'
+                  }
+                />
+              ))}
+            </View>
+          )}
+          {shown.actionHint !== undefined && (
+            <Text style={styles.actionHint}>{shown.actionHint}</Text>
+          )}
           {shown.link !== undefined && (
             <Button
               accessibilityRole="link"
@@ -76,8 +108,33 @@ export function MapFeatureSheet({
   );
 }
 
+const ACTION_LABELS: Readonly<Record<CommunityReportAction, string>> = {
+  'not-present': 'Not there',
+  present: 'Still there',
+  withdraw: 'Withdraw report',
+};
+
+const ACTION_ICONS: Readonly<Record<CommunityReportAction, SymbolName>> = {
+  'not-present': { android: 'close', ios: 'xmark' },
+  present: { android: 'check', ios: 'checkmark' },
+  withdraw: { android: 'undo', ios: 'arrow.uturn.backward' },
+};
+
 const useStyles = createThemedStyles(({ colors }) =>
   StyleSheet.create({
+    action: { flex: 1 },
+    actionHint: {
+      ...typography.footnote,
+      color: colors.textSecondary,
+      paddingBottom: space.md,
+      paddingHorizontal: space.lg,
+    },
+    actions: {
+      flexDirection: 'row',
+      gap: space.sm,
+      paddingBottom: space.md,
+      paddingHorizontal: space.lg,
+    },
     body: {
       flexDirection: 'row',
       gap: space.md,

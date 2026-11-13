@@ -13,6 +13,7 @@ import {
   SearchResponseSchema,
   serverConfigFromPayload,
   TrafficCameraResponseSchema,
+  TrafficFlowResponseSchema,
   type ContributionSubmissionRequest,
   type ContributionSubmissionResponse,
   type GooglePlaceQueryGrantResponse,
@@ -32,6 +33,7 @@ import {
   type ServerConfig,
   type TrafficCameraRegion,
   type TrafficCameraResponse,
+  type TrafficFlowResponse,
 } from '@navoss/contracts';
 
 export class NavOssApiError extends Error {
@@ -105,6 +107,11 @@ export interface FetchTrafficCamerasOptions extends FetchSafetyCamerasOptions {
 
 export interface FetchSafetyFacilitiesOptions extends FetchSafetyCamerasOptions {
   region: SafetyFacilityRegion;
+}
+
+export interface FetchTrafficFlowOptions extends FetchSafetyCamerasOptions {
+  /** Grid-aligned `west,south,east,north` from `snapTrafficFlowBounds`. */
+  bbox: string;
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -372,6 +379,19 @@ export async function fetchTrafficCameras(
     options.signal === undefined ? undefined : { signal: options.signal },
   );
   return TrafficCameraResponseSchema.parse(await parseResponse(response));
+}
+
+/** Community traffic flow (`/v2/traffic/flow`). Ask only when the server declares live traffic. */
+export async function fetchTrafficFlow(
+  options: FetchTrafficFlowOptions,
+): Promise<TrafficFlowResponse> {
+  const fetchImplementation = options.fetchImplementation ?? fetch;
+  const query = new URLSearchParams({ bbox: options.bbox });
+  const response = await fetchImplementation(
+    `${normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl())}/v2/traffic/flow?${query.toString()}`,
+    options.signal === undefined ? undefined : { signal: options.signal },
+  );
+  return TrafficFlowResponseSchema.parse(await parseResponse(response));
 }
 
 export async function fetchSafetyFacilities(
