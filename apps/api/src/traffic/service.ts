@@ -100,6 +100,8 @@ export interface TrafficMetrics {
   credentialsIssued: number;
   epochFailures: number;
   flowResponses: number;
+  /** Contributor-edge pairs driven in part, not yet enough to credit a sample. */
+  pendingPartial: number;
   pendingSamples: number;
   pendingSegments: number;
   samplesIgnored: number;
@@ -531,8 +533,8 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
           },
           clock().getTime(),
         );
-        counters.samplesRecorded += recorded;
-        counters.samplesIgnored += observations.length - recorded;
+        counters.samplesRecorded += recorded.credited;
+        counters.samplesIgnored += recorded.ignored;
         counters.batchesAccepted += 1;
         return { status: 'accepted' };
       } catch {
@@ -565,7 +567,12 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
 
     metrics() {
       const pending = cohorts.pending();
-      return { ...counters, pendingSamples: pending.samples, pendingSegments: pending.segments };
+      return {
+        ...counters,
+        pendingPartial: pending.partial,
+        pendingSamples: pending.samples,
+        pendingSegments: pending.segments,
+      };
     },
     mode: settings.mode,
     runEpoch,
