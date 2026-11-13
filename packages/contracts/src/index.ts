@@ -11,6 +11,18 @@ export { AppConfigResponseSchema, LegacyAppConfigResponseSchema } from './config
 export type { AppConfigResponse, LegacyAppConfigResponse } from './config.js';
 
 export {
+  isCoordinateServed,
+  serverAreaForCoordinate,
+  serverConfigFromPayload,
+} from './client-config.js';
+export type {
+  ServerCapabilities,
+  ServerConfig,
+  ServerCoverage,
+  ServerCoverageArea,
+} from './client-config.js';
+
+export {
   CALGARY_REGION_BOUNDS,
   COVERAGE_BOUNDARY_SOURCE,
   CoverageBoundarySchema,

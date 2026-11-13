@@ -1,4 +1,4 @@
-import type { RouteAlternative } from '@navoss/contracts';
+import type { RouteAlternativeV2 } from '@navoss/contracts';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -13,11 +13,12 @@ import {
   getRemainingRouteSummary,
   getRemainingStepSummary,
   getUpcomingGuidanceStep,
+  routeTrafficLabel,
   getUpcomingManeuvers,
   routeViaLabel,
 } from '../src/features/navigation/route-progress.js';
 
-const route: RouteAlternative = {
+const route: RouteAlternativeV2 = {
   distanceMeters: 2_000,
   durationSeconds: 180,
   geometry: [
@@ -98,7 +99,7 @@ describe('route progress', () => {
   });
 
   it('removes completed route geometry while preserving the destination', () => {
-    const routeWithSegments: RouteAlternative = {
+    const routeWithSegments: RouteAlternativeV2 = {
       ...route,
       geometry: [
         [-114.08, 51.04],
@@ -168,7 +169,7 @@ describe('route progress', () => {
       instruction: string,
       maneuverType: string,
       roadName: string,
-    ): RouteAlternative['steps'][number] => ({
+    ): RouteAlternativeV2['steps'][number] => ({
       distanceMeters,
       durationSeconds: distanceMeters / 10,
       geometry: [
@@ -179,7 +180,7 @@ describe('route progress', () => {
       maneuverType,
       roadName,
     });
-    const cityRoute: RouteAlternative = {
+    const cityRoute: RouteAlternativeV2 = {
       ...route,
       steps: [
         step(400, 'Head north on Centre Street.', 'depart', 'Centre Street'),
@@ -240,5 +241,52 @@ describe('route progress', () => {
       expect(distinctRoadName('Keep left.', ' Deerfoot Trail ')).toBe('Deerfoot Trail');
       expect(distinctRoadName('Keep left.', '   ')).toBe('');
     });
+  });
+});
+
+describe('route traffic label', () => {
+  const valhalla = {
+    attribution: 'Routing by Valhalla using OpenStreetMap data' as const,
+    id: 'valhalla-self-hosted' as const,
+    mode: 'production' as const,
+    traffic: 'unavailable' as const,
+  };
+  const community = {
+    ...valhalla,
+    traffic: 'live' as const,
+    trafficSource: {
+      attribution: 'Traffic from opted-in NavOSS drivers' as const,
+      id: 'navoss-community' as const,
+    },
+  };
+
+  it('says there is no live traffic unless a source provides it', () => {
+    expect(routeTrafficLabel(valhalla, {})).toBe('No live traffic');
+    expect(routeTrafficLabel(undefined, undefined)).toBe('No live traffic');
+  });
+
+  it('credits community traffic only on a route it observed', () => {
+    expect(
+      routeTrafficLabel(community, {
+        congestion: ['slow'],
+        traffic: { delaySeconds: 60, observedFraction: 0.4, typicalDurationSeconds: 600 },
+      }),
+    ).toBe('Traffic from opted-in NavOSS drivers');
+    expect(routeTrafficLabel(community, {})).toBe('No live traffic on this route');
+  });
+
+  it('keeps the provider traffic wording', () => {
+    const mapbox = {
+      attribution: 'Routing and traffic by Mapbox' as const,
+      id: 'mapbox-traffic' as const,
+      mode: 'production' as const,
+      traffic: 'live' as const,
+    };
+    expect(
+      routeTrafficLabel(mapbox, { traffic: { delaySeconds: 300, typicalDurationSeconds: 600 } }),
+    ).toBe('+5 min traffic');
+    expect(
+      routeTrafficLabel(mapbox, { traffic: { delaySeconds: 0, typicalDurationSeconds: 600 } }),
+    ).toBe('Live traffic');
   });
 });

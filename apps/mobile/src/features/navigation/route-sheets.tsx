@@ -1,7 +1,7 @@
 import type {
-  RouteAlternative,
+  RouteAlternativeV2,
   RoutePreferences,
-  RouteResponse,
+  RouteResponseV2,
   SearchResult,
 } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
@@ -14,6 +14,7 @@ import {
   formatDistance,
   formatDuration,
   formatTrafficDelay,
+  routeTrafficLabel,
   routeViaLabel,
 } from '@/features/navigation/route-progress';
 import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
@@ -97,7 +98,7 @@ function RouteChoiceCard({
   selected,
 }: {
   onSelect: () => void;
-  route: RouteAlternative;
+  route: RouteAlternativeV2;
   selected: boolean;
 }) {
   const { colors } = useTheme();
@@ -160,7 +161,7 @@ interface RoutePreviewSheetProps {
   onCancel: () => void;
   onDetentChange?: (index: number) => void;
   onEditStops: () => void;
-  onSelectRoute: (route: RouteAlternative) => void;
+  onSelectRoute: (route: RouteAlternativeV2) => void;
   onStart: () => void;
   onToggleRoutePreference: (preference: keyof RoutePreferences) => void;
   onUseCurrentLocation: () => void;
@@ -169,9 +170,9 @@ interface RoutePreviewSheetProps {
   /** Set when the route was planned from a fixed demo origin rather than the driver's location. */
   previewOriginLabel?: string;
   routePreferences: RoutePreferences;
-  routeSource?: RouteResponse['source'];
-  routes: RouteAlternative[];
-  selectedRoute: RouteAlternative;
+  routeSource?: RouteResponseV2['source'];
+  routes: RouteAlternativeV2[];
+  selectedRoute: RouteAlternativeV2;
   vehicleStyle: VehicleStyle;
   waypoints: SearchResult[];
 }
@@ -179,12 +180,9 @@ interface RoutePreviewSheetProps {
 /**
  * Route preview. The lowest detent is the decision (arrival, distance, Start); the detent it
  * opens to adds the alternatives and stops; dragging further reveals avoidances and the
- * navigation marker. Traffic is stated as it is: "No live traffic" unless the routing source
- * actually provides it.
- *
- * Wave 2 seam: per-route traffic (a delay chip on each `RouteChoiceCard`, the summary's traffic
- * line) already renders from `route.traffic` and `routeSource.traffic`; a traffic-aware source
- * needs no change here.
+ * navigation marker. Traffic is stated as it is (`routeTrafficLabel`): "No live traffic" unless
+ * the routing source provides it, and community traffic credited to its drivers only on a route
+ * it observed.
  */
 export function RoutePreviewSheet({
   destination,
@@ -210,9 +208,7 @@ export function RoutePreviewSheet({
   const styles = useStyles();
   const demoOrigin = previewOriginLabel !== undefined;
   const detents = routePreviewSheetDetents(metrics, { demoOrigin });
-  const selectedTrafficDelay = formatTrafficDelay(selectedRoute.traffic?.delaySeconds ?? 0);
-  const trafficStatus =
-    routeSource?.traffic === 'live' ? (selectedTrafficDelay ?? 'Live traffic') : 'No live traffic';
+  const trafficStatus = routeTrafficLabel(routeSource, selectedRoute);
 
   return (
     <BottomSheet

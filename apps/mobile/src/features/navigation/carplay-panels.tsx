@@ -110,7 +110,9 @@ export function CarPlayCompanionPanel(props: CarPlayCompanionPanelProps) {
   const arrived = props.phase === 'arrived';
   const [next, ...later] = arrived ? [] : props.maneuvers;
   const nextDirection =
-    next === undefined ? 'arrive' : maneuverDirection(next.maneuverType, next.instruction);
+    next === undefined
+      ? 'arrive'
+      : maneuverDirection(next.maneuverType, next.instruction, next.maneuverModifier);
   const nextDistance = next === undefined ? undefined : formatDistance(next.distanceMeters);
   const arrivalTime = arrived ? '' : formatArrivalTime(props.durationSeconds);
   // Intl may bind the day period with a no-break space. At large sizes, wrap before PM/AM,
@@ -194,7 +196,11 @@ export function CarPlayCompanionPanel(props: CarPlayCompanionPanelProps) {
                 >
                   <SymbolView
                     name={maneuverSymbol(
-                      maneuverDirection(maneuver.maneuverType, maneuver.instruction),
+                      maneuverDirection(
+                        maneuver.maneuverType,
+                        maneuver.instruction,
+                        maneuver.maneuverModifier,
+                      ),
                     )}
                     size={22}
                     tintColor={guidanceColors.primary}

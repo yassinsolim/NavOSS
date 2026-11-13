@@ -1,4 +1,9 @@
-import type { Coordinate } from '@navoss/contracts';
+import {
+  isCoordinateInBounds,
+  serverAreaForCoordinate,
+  type Coordinate,
+  type ServerCoverage,
+} from '@navoss/contracts';
 import * as Location from 'expo-location';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { AppState } from 'react-native';
@@ -8,11 +13,8 @@ import { ensureForegroundLocationPermission } from '@/features/map/map-location'
 import {
   type MapRegion,
   mapRegionForCoordinate,
-  searchCoverageBoundsForRegion,
   TORONTO_CAMERA_BOUNDS,
 } from '@/features/map/map-region';
-import { searchOriginWithinBounds } from '@/features/map/search-proximity';
-import { isCoordinateInCoverage } from '@/features/navigation/route-coverage';
 import {
   newestValidRouteOriginSample,
   routeOriginSampleFromLocation,
@@ -40,7 +42,7 @@ export interface UserLocation {
   locate: () => Promise<Coordinate | undefined>;
   locationState: LocationState;
   mapRegion: MapRegion;
-  /** Clamped origin for nearby search, or undefined outside search coverage. */
+  /** Origin for nearby search, or undefined outside (or before) the server's declared coverage. */
   searchOrigin: Coordinate | undefined;
   setLocationState: (state: LocationState) => void;
   /** Position reported by the navigation core while a trip is active. */
@@ -59,7 +61,7 @@ export interface UserLocation {
  * Wave 2 seam: opt-in anonymised speed probes are sampled by the native navigation core, not
  * here. This hook is the place to read the consent flag if the idle watch ever needs it.
  */
-export function useUserLocation(): UserLocation {
+export function useUserLocation(coverage: ServerCoverage | undefined): UserLocation {
   const routeOriginSampleRef = useRef<RouteOriginSample | undefined>(undefined);
   const [deviceHeadingStore] = useState(() => createValueStore<number | undefined>(undefined));
   const [locationState, setLocationState] = useState<LocationState>('idle');
@@ -153,21 +155,19 @@ export function useUserLocation(): UserLocation {
   };
 
   const mapRegion = mapRegionForCoordinate(userCoordinate);
-  const searchBounds = searchCoverageBoundsForRegion(mapRegion);
+  const searchArea =
+    coverage === undefined ? undefined : serverAreaForCoordinate(coverage, userCoordinate);
 
   return {
     applySample,
     deviceHeadingStore,
     getCurrentRouteOrigin,
     inTorontoCameraBounds:
-      userCoordinate !== undefined && isCoordinateInCoverage(userCoordinate, TORONTO_CAMERA_BOUNDS),
+      userCoordinate !== undefined && isCoordinateInBounds(userCoordinate, TORONTO_CAMERA_BOUNDS),
     locate,
     locationState,
     mapRegion,
-    searchOrigin:
-      searchBounds === undefined
-        ? undefined
-        : searchOriginWithinBounds(userCoordinate, searchBounds),
+    searchOrigin: searchArea === undefined ? undefined : userCoordinate,
     setLocationState,
     setNavigationFix,
     userCoordinate,

@@ -16,7 +16,7 @@ export interface NativeNavigationCapabilities {
   routeMatching: true;
   safetyCameraAnnouncements: true;
   speedingWarning: true;
-  version: 9;
+  version: 10;
 }
 
 /**
@@ -124,13 +124,37 @@ export interface NativeCarPlayGuidance {
   stepIndex: number;
 }
 
+/** One approach lane, left to right; mirrors the `/v2/routes` step `lanes` contract. */
+export interface NativeRouteLane {
+  active?: boolean;
+  indications: string[];
+  valid: boolean;
+  validIndication?: string;
+}
+
+/**
+ * A route step. Contract 10 carries the optional `/v2/routes` step metadata through native, so a
+ * trip native rerouted or CarPlay started still has its lanes and signposts on the phone.
+ * `spokenInstruction` describes this step's own maneuver (the v2 meaning).
+ */
 export interface NativeCarPlayRouteStep {
+  bearingAfterDegrees?: number;
+  bearingBeforeDegrees?: number;
+  currentRoadName?: string;
   distanceMeters: number;
   durationSeconds: number;
+  exitNumber?: string;
   geometry: NativeNavigationCoordinate[];
   instruction: string;
+  junctionName?: string;
+  lanes?: NativeRouteLane[];
+  maneuverModifier?: string;
   maneuverType: string;
   roadName: string;
+  roundaboutExit?: number;
+  signpost?: string;
+  signpostBranch?: string[];
+  signpostToward?: string[];
   spokenInstruction?: string;
 }
 
@@ -142,6 +166,8 @@ export interface NativeRoutePreferences {
 }
 
 export interface NativeCarPlayTrip {
+  /** Per geometry segment, only on a route a live traffic source observed. */
+  congestion?: ('free' | 'heavy' | 'slow' | 'stopped' | 'unknown')[];
   destination: NativeNavigationDestination;
   distanceMeters: number;
   durationSeconds: number;
@@ -155,6 +181,8 @@ export interface NativeCarPlayTrip {
     delaySeconds: number;
     typicalDurationSeconds: number;
   };
+  /** `navoss-community` when `traffic`/`congestion` come from opted-in NavOSS drivers. */
+  trafficSource?: string;
   waypoints?: NativeNavigationDestination[];
 }
 

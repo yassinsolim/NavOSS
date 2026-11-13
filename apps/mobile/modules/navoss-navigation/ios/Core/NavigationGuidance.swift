@@ -135,7 +135,8 @@ struct NavigationStepGeometry: Equatable, Sendable {
 
 /// Context of the matched position that the route itself can vouch for.
 struct NavigationRoadContext: Equatable, Sendable {
-  /// Name of the road being driven, from the current step. `nil` when the route has none.
+  /// Name of the road being driven: the current step's `currentRoadName` (the road its geometry
+  /// follows) when the route states it, else the step's road name. `nil` when neither names it.
   let currentRoadName: String?
   /// Posted limit at the matched segment from the route's geometry-aligned annotations. `nil`
   /// when unknown, unmatched or off route; never guessed.
@@ -205,7 +206,8 @@ func navigationRoadContext(
   else {
     return .unknown
   }
-  let roadName = trip.steps[min(guidance.stepIndex, trip.steps.count - 1)].roadName
+  let drivenStep = trip.steps[min(guidance.stepIndex, trip.steps.count - 1)]
+  let roadName = (drivenStep.currentRoadName ?? drivenStep.roadName)
     .trimmingCharacters(in: .whitespacesAndNewlines)
   let speedLimit = snapshot.geometrySegmentIndex.flatMap { index -> Int? in
     guard let limits = trip.speedLimitsKph, limits.indices.contains(index), limits[index] > 0

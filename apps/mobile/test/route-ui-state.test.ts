@@ -1,4 +1,4 @@
-import type { RouteAlternative, SearchResult } from '@navoss/contracts';
+import type { RouteAlternativeV2, SearchResult } from '@navoss/contracts';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../modules/navoss-navigation/index.js', () => ({ default: {} }));
@@ -17,8 +17,8 @@ const destination: SearchResult = {
   label: 'YYC',
   name: 'Calgary International Airport',
 };
-const fastest = { id: 'fastest', label: 'fastest' } as RouteAlternative;
-const scenic = { id: 'scenic', label: 'alternative' } as RouteAlternative;
+const fastest = { id: 'fastest', label: 'fastest' } as RouteAlternativeV2;
+const scenic = { id: 'scenic', label: 'alternative' } as RouteAlternativeV2;
 
 describe('selected route', () => {
   it('follows the preview selection and the active trip, and has none while planning', () => {
@@ -123,5 +123,57 @@ describe('route from a native trip', () => {
     expect(routeSourceForNativeTrip('mapbox-traffic')?.traffic).toBe('live');
     expect(routeSourceForNativeTrip('something-new')).toBeUndefined();
     expect(routeSourceForNativeTrip(undefined)).toBeUndefined();
+  });
+
+  it('keeps the route detail native carries, so a rerouted trip keeps its lanes', () => {
+    const [step] = trip.steps;
+    const { route, routeSource } = routeFromNativeTrip({
+      ...trip,
+      congestion: ['slow'],
+      steps: [
+        {
+          ...step!,
+          exitNumber: '248',
+          lanes: [
+            { active: false, indications: ['straight'], valid: false },
+            { active: true, indications: ['right'], valid: true, validIndication: 'right' },
+          ],
+          maneuverModifier: 'slight right',
+          signpostToward: ['Glenmore Trail'],
+          spokenInstruction: 'Take exit 248 toward Glenmore Trail.',
+        },
+      ],
+      traffic: { delaySeconds: 60, typicalDurationSeconds: 1_140 },
+      trafficSource: 'navoss-community',
+    });
+    expect(route.steps[0]).toMatchObject({
+      exitNumber: '248',
+      maneuverModifier: 'slight right',
+      signpostToward: ['Glenmore Trail'],
+    });
+    expect(route.steps[0]?.lanes?.[1]).toEqual({
+      active: true,
+      indications: ['right'],
+      valid: true,
+      validIndication: 'right',
+    });
+    expect(route.congestion).toEqual(['slow']);
+    expect(routeSource).toMatchObject({
+      traffic: 'live',
+      trafficSource: { id: 'navoss-community' },
+    });
+  });
+
+  it('drops step detail outside the route contract instead of drawing it', () => {
+    const [step] = trip.steps;
+    const { route } = routeFromNativeTrip({
+      ...trip,
+      congestion: ['gridlock' as 'slow'],
+      steps: [{ ...step!, lanes: [{ indications: ['hover'], valid: true }], exitNumber: '12' }],
+    });
+    expect(route.steps[0]).not.toHaveProperty('lanes');
+    expect(route.steps[0]).not.toHaveProperty('exitNumber');
+    expect(route.steps[0]?.instruction).toBe('Drive north.');
+    expect(route).not.toHaveProperty('congestion');
   });
 });

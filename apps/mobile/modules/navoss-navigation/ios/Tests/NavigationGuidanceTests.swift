@@ -191,9 +191,9 @@ final class NavigationGuidanceTests: XCTestCase {
       geometry: geometry,
       id: "speech",
       steps: [
-        plain("Head west", 5_000, spoken: "Take exit 12 toward Banff."),
-        plain("Take exit 12", gapAfterFirstManeuver, spoken: "Turn left onto Bow Trail."),
-        plain("Turn left onto Bow Trail", 2_000),
+        plain("Head west", 5_000),
+        plain("Take exit 12", gapAfterFirstManeuver, spoken: "Take exit 12 toward Banff."),
+        plain("Turn left onto Bow Trail", 2_000, spoken: "Turn left onto Bow Trail."),
         plain("Arrive", 0),
       ]
     )
