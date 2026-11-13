@@ -25,6 +25,7 @@ const GeographySchema = z.discriminatedUnion('type', [
 ]);
 const RoadSchema = z
   .object({
+    '+delay': z.string().optional(),
     direction: z.enum(['BOTH', 'E', 'N', 'NONE', 'S', 'W']),
     from: z.string().optional(),
     name: z.string().min(1),

@@ -92,6 +92,27 @@ describe('DriveBC road event provider', () => {
       }),
     ]);
   });
+  it('accepts the optional DriveBC road delay extension without inventing a delay field', async () => {
+    // Live Open511 road on 2026-11-13: RIDE-104144 reported "+delay": "10 minutes".
+    const provider = createDriveBcRoadEventProvider({
+      fetchImplementation: () =>
+        Promise.resolve(
+          jsonResponse(
+            payload([
+              {
+                ...construction,
+                roads: [{ ...construction.roads[0], '+delay': '10 minutes' }],
+              },
+            ]),
+          ),
+        ),
+    });
+
+    const response = await provider.getRoadEvents();
+    expect(response.events).toHaveLength(1);
+    expect(response.events[0]?.id).toBe('drivebc-open511:DBC-93723');
+    expect(response).toMatchObject({ degraded: false, stale: false });
+  });
 
   it('interprets offsetless schedule intervals in the DriveBC local time zone', async () => {
     const provider = createDriveBcRoadEventProvider({

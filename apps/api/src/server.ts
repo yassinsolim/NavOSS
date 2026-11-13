@@ -17,7 +17,11 @@ const environment = ServerEnvironmentSchema.parse({
   HOST: process.env.HOST,
   PORT: process.env.PORT,
 });
-const eventProvider = createCalgaryRoadEventProvider();
+const eventProvider = createCalgaryRoadEventProvider({
+  onFailure: (failure) => {
+    app.log.warn(failure, 'Calgary road-event feed failed validation or loading');
+  },
+});
 const driveBcEventProvider = createDriveBcRoadEventProvider();
 const driveBcTrafficCameraProvider = createDriveBcTrafficCameraProvider();
 const ontarioEventProvider = createOntarioRoadEventProvider();
