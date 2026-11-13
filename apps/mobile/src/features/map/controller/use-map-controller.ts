@@ -28,6 +28,7 @@ import {
   type GeographicBox,
   privateDraftNotice,
   reportFetchBounds,
+  runCommunityReportAction,
   snapViewBox,
 } from '@/features/community/community';
 import type { CommunitySettingsProps } from '@/features/community/community-sheets';
@@ -1356,10 +1357,14 @@ export function useMapController() {
     if (report === undefined || communityActionBusy !== undefined) return;
     setCommunityActionBusy(action);
     try {
-      const notice =
-        action === 'withdraw'
-          ? await community.withdraw(report.id)
-          : await community.vote(report.id, action, userCoordinate);
+      const notice = await runCommunityReportAction({
+        action,
+        getFreshSample: () => location.getFreshLocationSample(new AbortController().signal),
+        nowMs: Date.now,
+        reportId: report.id,
+        vote: community.vote,
+        withdraw: community.withdraw,
+      });
       if (notice.tone === 'info') haptics.success();
       else haptics.warning();
       setSelectedCommunityReport(undefined);

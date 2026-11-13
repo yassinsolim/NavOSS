@@ -6,6 +6,7 @@ import {
   communityAvailability,
   type CommunityNotice,
   type GeographicBox,
+  type VoteObservation,
   reportSubmitOutcome,
   type ReportSubmitOutcome,
   resetIdentityNotice,
@@ -58,11 +59,14 @@ export interface Community {
     coordinate: Coordinate,
     options: { confirmNearPrivatePlace: boolean; heading: number | undefined },
   ) => Promise<ReportSubmitOutcome>;
-  /** `observedAt`: the phone's own fresh fix, for a vote outside guidance. */
+  /**
+   * `observedAt`: the phone's own fresh, validated fix for a vote outside guidance; without it
+   * native uses its own fix (guidance) or refuses with `location-unavailable`.
+   */
   vote: (
     reportId: string,
     vote: 'not-present' | 'present',
-    observedAt?: Coordinate,
+    observedAt?: VoteObservation,
   ) => Promise<CommunityNotice>;
   withdraw: (reportId: string) => Promise<CommunityNotice>;
 }

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { CommunityNotice } from '../src/features/community/community.js';
+import type { RouteOriginSample } from '../src/features/navigation/route-origin.js';
+
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: vi.fn(), setItem: vi.fn() },
 }));
@@ -15,6 +18,7 @@ import {
   reportSheetNotice,
   reportSubmitOutcome,
   resetIdentityNotice,
+  runCommunityReportAction,
   showsReportAhead,
   showsStillThere,
   snapViewBox,
@@ -341,5 +345,75 @@ describe('guidance prompts', () => {
     expect(showsStillThere({ ...base, competingPrompt: true, sharesRoadReports: true })).toBe(
       false,
     );
+  });
+});
+
+describe('answering a report needs a fresh, accurate fix', () => {
+  const fresh: RouteOriginSample = {
+    accuracyMeters: 12,
+    capturedAtMs: NOW - 2_000,
+    coordinate: { latitude: 51.0447, longitude: -114.0719 },
+  };
+  const thanks = { message: 'ok', title: 'Thanks', tone: 'info' as const };
+
+  async function answer(
+    getFreshSample: () => Promise<RouteOriginSample | undefined>,
+  ): Promise<{ notice: CommunityNotice; vote: ReturnType<typeof vi.fn> }> {
+    const vote = vi.fn(async () => thanks);
+    const withdraw = vi.fn(async () => thanks);
+    const notice = await runCommunityReportAction({
+      action: 'present',
+      getFreshSample,
+      nowMs: () => NOW,
+      reportId: 'r1',
+      vote,
+      withdraw,
+    });
+    expect(withdraw).not.toHaveBeenCalled();
+    return { notice, vote };
+  }
+
+  it('sends the vote with the fix the native side re-validates', async () => {
+    const { notice, vote } = await answer(async () => fresh);
+    expect(notice).toBe(thanks);
+    expect(vote).toHaveBeenCalledWith('r1', 'present', {
+      horizontalAccuracyMeters: 12,
+      latitude: 51.0447,
+      longitude: -114.0719,
+      timestampMs: NOW - 2_000,
+    });
+  });
+
+  const refused: [string, () => Promise<RouteOriginSample | undefined>][] = [
+    ['a stale fix', async () => ({ ...fresh, capturedAtMs: NOW - 60_000 })],
+    ['a coarse fix', async () => ({ ...fresh, accuracyMeters: 650 })],
+    ['a fix without accuracy', async () => ({ ...fresh, accuracyMeters: undefined })],
+    [
+      'denied location',
+      async () => {
+        throw new Error('denied');
+      },
+    ],
+    ['no fix', async () => undefined],
+  ];
+  it.each(refused)('requests nothing with %s', async (_label, getFreshSample) => {
+    const { notice, vote } = await answer(getFreshSample);
+    expect(vote).not.toHaveBeenCalled();
+    expect(notice.message).toBe('We need your current location to confirm this. Nothing was sent.');
+  });
+
+  it('withdraws an own report without asking for location', async () => {
+    const getFreshSample = vi.fn(async () => undefined);
+    const withdraw = vi.fn(async () => thanks);
+    await runCommunityReportAction({
+      action: 'withdraw',
+      getFreshSample,
+      nowMs: () => NOW,
+      reportId: 'r1',
+      vote: vi.fn(),
+      withdraw,
+    });
+    expect(withdraw).toHaveBeenCalledWith('r1');
+    expect(getFreshSample).not.toHaveBeenCalled();
   });
 });

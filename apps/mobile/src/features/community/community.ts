@@ -1,6 +1,7 @@
 import type { FeatureCollection, Point } from 'geojson';
 
 import { ROAD_REPORT_TYPES } from '../map/road-report-drafts';
+import { type RouteOriginSample, routeRequestOriginFromSample } from '../navigation/route-origin';
 import type {
   NativeCommunityError,
   NativeCommunityReport,
@@ -517,6 +518,70 @@ export function reportSheetNotice(sharing: {
     case 'not-available':
       return `Saved privately on this iPhone for two hours and not shown to other drivers yet. ${safety}`;
   }
+}
+
+// --- Answering and withdrawing ------------------------------------------------------------
+
+/** The position a vote is checked against, with what the native side needs to re-validate it. */
+export interface VoteObservation {
+  horizontalAccuracyMeters: number;
+  latitude: number;
+  longitude: number;
+  timestampMs: number;
+}
+
+/**
+ * A vote may rest only on a fresh, accurate fix: the same rules as a route origin (at most
+ * 15 s old, 100 m accuracy), which the native side applies again before sending anything.
+ */
+export function voteObservationFromSample(
+  sample: RouteOriginSample | undefined,
+  nowMs: number,
+): VoteObservation | undefined {
+  if (sample?.accuracyMeters === undefined) return undefined;
+  if (routeRequestOriginFromSample(sample, nowMs) === undefined) return undefined;
+  return {
+    horizontalAccuracyMeters: sample.accuracyMeters,
+    latitude: sample.coordinate.latitude,
+    longitude: sample.coordinate.longitude,
+    timestampMs: sample.capturedAtMs,
+  };
+}
+
+export const LOCATION_NEEDED_NOTICE: CommunityNotice = {
+  message: 'We need your current location to confirm this. Nothing was sent.',
+  title: 'Answer not sent',
+  tone: 'warning',
+};
+
+/**
+ * Runs a report action from the detail sheet. A withdrawal needs no position. A vote first gets
+ * a fresh fix; when location is denied, stale or inaccurate, nothing is requested.
+ */
+export async function runCommunityReportAction({
+  action,
+  getFreshSample,
+  nowMs,
+  reportId,
+  vote,
+  withdraw,
+}: {
+  action: CommunityReportAction;
+  getFreshSample: () => Promise<RouteOriginSample | undefined>;
+  nowMs: () => number;
+  reportId: string;
+  vote: (
+    reportId: string,
+    vote: 'not-present' | 'present',
+    observedAt: VoteObservation,
+  ) => Promise<CommunityNotice>;
+  withdraw: (reportId: string) => Promise<CommunityNotice>;
+}): Promise<CommunityNotice> {
+  if (action === 'withdraw') return withdraw(reportId);
+  const sample = await getFreshSample().catch(() => undefined);
+  const observation = voteObservationFromSample(sample, nowMs());
+  if (observation === undefined) return LOCATION_NEEDED_NOTICE;
+  return vote(reportId, action, observation);
 }
 
 // --- Settings copy --------------------------------------------------------------------------

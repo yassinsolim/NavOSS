@@ -12,16 +12,27 @@ struct CommunityBoundsRecord: Record {
   }
 }
 
-/// A fresh device position from the phone's own location watch, for a vote made outside guidance.
-struct CommunityCoordinateRecord: Record {
+/// The phone's own fix behind a vote outside guidance. Accepted only within the bounds the
+/// navigation core applies to its own fixes (`navOSSNavigationRouteOrigin`: at most 15 s old,
+/// 100 m accuracy), so a stale or coarse position can never back a vote.
+struct CommunityVoteObservationRecord: Record {
+  @Field var horizontalAccuracyMeters: Double = .nan
   @Field var latitude: Double = .nan
   @Field var longitude: Double = .nan
+  @Field var timestampMs: Double = .nan
 
-  var coordinate: NavOSSCarPlayCoordinate? {
+  func validatedCoordinate(now: Date = Date()) -> NavOSSCarPlayCoordinate? {
     guard latitude.isFinite, longitude.isFinite, (-90...90).contains(latitude),
-      (-180...180).contains(longitude)
+      (-180...180).contains(longitude), timestampMs.isFinite
     else { return nil }
-    return NavOSSCarPlayCoordinate(latitude: latitude, longitude: longitude)
+    let coordinate = NavOSSCarPlayCoordinate(latitude: latitude, longitude: longitude)
+    return navOSSNavigationRouteOrigin(
+      coordinate: coordinate,
+      courseDegrees: nil,
+      speedMetersPerSecond: nil,
+      horizontalAccuracyMeters: horizontalAccuracyMeters,
+      ageSeconds: now.timeIntervalSince1970 - timestampMs / 1_000
+    )?.coordinate
   }
 }
 

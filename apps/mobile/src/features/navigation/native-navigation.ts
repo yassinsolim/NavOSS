@@ -16,7 +16,7 @@ import NavOSSNavigation, {
   type NativeDestinationCatalog,
   type NativeNavigationDestination,
   type NativeNavigationAudioMode,
-  type NativeNavigationCoordinate,
+  type NativeVoteObservation,
   type NativeNavigationPreferences,
   type NativeNavigationSnapshot,
   type NativeRerouteMode,
@@ -101,6 +101,7 @@ export type {
   NativeCommunityResult,
   NativeCommunityState,
   NativeStillTherePrompt,
+  NativeVoteObservation,
   NativeTrafficSharingState,
   NativeDestinationCatalog,
   NativeNavigationSnapshot,
@@ -389,19 +390,16 @@ export function submitCommunityReport(
 /**
  * Votes from the device's current position (used by the server only to check proximity). The
  * navigation core's fix is used when it has one; `observedAt` is the phone's own fresh fix for a
- * vote outside guidance. Older native builds ignore it.
+ * vote outside guidance, which native accepts only within its own age and accuracy bounds.
  */
 export function voteCommunityReport(
   reportId: string,
   vote: 'not-present' | 'present',
-  observedAt?: NativeNavigationCoordinate,
+  observedAt?: NativeVoteObservation,
 ): Promise<NativeCommunityResult<{ active: boolean }>> {
   return observedAt === undefined
     ? NavOSSNavigation.voteCommunityReport(reportId, vote)
-    : NavOSSNavigation.voteCommunityReport(reportId, vote, {
-        latitude: observedAt.latitude,
-        longitude: observedAt.longitude,
-      });
+    : NavOSSNavigation.voteCommunityReport(reportId, vote, observedAt);
 }
 
 /** "Still there?" dismissed: sends nothing, and the prompt is not shown again this trip. */

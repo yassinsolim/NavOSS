@@ -666,9 +666,10 @@ public final class NavOSSNavigationModule: Module {
     }
 
     AsyncFunction("voteCommunityReport") {
-      (reportId: String, vote: String, observedAt: CommunityCoordinateRecord?) async -> [String: Any] in
+      (reportId: String, vote: String, observedAt: CommunityVoteObservationRecord?) async
+        -> [String: Any] in
       await NavOSSCommunityBridge.vote(
-        reportId: reportId, rawVote: vote, phoneCoordinate: observedAt?.coordinate)
+        reportId: reportId, rawVote: vote, phoneCoordinate: observedAt?.validatedCoordinate())
     }
 
     Function("dismissStillThere") { (reportId: String) in
