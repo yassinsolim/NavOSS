@@ -233,17 +233,28 @@ audio ducked.
 
 CarPlay reports use the same eight safety-oriented labels as the phone. During guidance the Report
 map button opens an eight-tile grid, and one more tap saves the report and returns to the map with
-a three-second confirmation. Reports are bounded native drafts with precise coordinate, creation
-time, and two-hour expiry. They remain private on the device and are not shown to other drivers; no
-police/checkpoint option or free text exists. This is an explicit testing state until the trust,
-moderation, rate-limit, confirmation, and expiry backend is implemented.
+a three-second confirmation. When the server's shared reports are live (`features.communityReports`)
+and the phone can attest, the tap submits through the native community client
+(`NavOSSCommunityService`, docs/architecture/community-reports.md) and the confirmation says it was
+sent; a failure says why in one line. Otherwise the report stays a bounded private draft with
+precise coordinate, creation time, and two-hour expiry, as before. No police/checkpoint option or
+free text exists.
+
+During guidance the community service keeps the reports on the route ahead fetched and publishes
+them to `NavOSSCarPlayMapAlertStore` (source `communityReports`; the camera monitor publishes under
+`cameras`, so neither clears the other). A report ahead gets a short banner (and, with **Spoken road
+reports** on and alerts allowed by the sound mode, a short spoken alert). After a report is passed,
+never near a maneuver and never stacked over another alert, a `CPNavigationAlert` asks "Still
+there?" with **Still there** and **Not there**; letting it time out sends nothing. **Settings ▸
+Community** holds **Share traffic speeds** (off by default; shared with the phone) and **Spoken road
+reports**.
 
 Each of these inputs is optional and renders nothing while absent:
 
 - `NavOSSCarPlayTrip.congestion: [NavOSSCarPlayCongestionLevel]?` (one level per geometry segment)
   colours slow, heavy, and stopped stretches of the remaining route;
-- `NavOSSCarPlayMapAlertStore.shared.publish([NavOSSCarPlayMapAlert])` draws camera and report
-  markers;
+- `NavOSSCarPlayMapAlertStore.shared.publish([NavOSSCarPlayMapAlert], source:)` draws camera and
+  community-report markers;
 - `NavOSSCarPlayRouteStep.lanes`, `maneuverModifier`, `roundaboutExit`, `exitNumber`, `signpost`,
   `signpostBranch`, `signpostToward`, `junctionName`, `currentRoadName`, `bearingBeforeDegrees`,
   and `bearingAfterDegrees` mirror the route contract's `/v2/routes` step enrichment and feed lane guidance, maneuver symbols, exit labels, and the current-road pill.
@@ -251,15 +262,14 @@ Each of these inputs is optional and renders nothing while absent:
 The remaining gaps are primarily data and platform capabilities:
 
 - congestion appears only when the server's community traffic is on and observed the route
-  (`trafficSource: navoss-community`, credited as "Traffic: NavOSS drivers"); map alerts still need
-  real publishers;
+  (`trafficSource: navoss-community`, credited as "Traffic: NavOSS drivers"); the client never
+  derives congestion from flow tiles. Camera alerts and community reports publish map alerts;
 - the native route client requests `/v2/routes` (discovered through `/v2/config`; a server that
   declares only `/v1/routes`, or answers 404, gets `/v1/routes`; a newly planned route outside the
   server's declared coverage is refused with "Outside NavOSS coverage") and decodes lanes, modifiers, exits, signposts, roundabout exits, bearings
   and the current road. Where a road has no such data (and always on a v1-only server), maneuver
   types and roundabout exits fall back to the instruction text and turn angles to route geometry.
   Lane data comes from OpenStreetMap `turn:lanes` tagging and is only as complete as the map;
-- public crowd reports require the planned trust, moderation, expiry, and anti-abuse backend;
 - richer place imagery, ratings, entrances, and parking context require separately licensed data;
 - Dashboard, cluster, HUD, and CarPlay Ultra surfaces remain vehicle-dependent and unvalidated on
   a real car.
@@ -437,7 +447,9 @@ visual scenario list. `guidance-maneuver` and `guidance-night` render an 800 × 
 with a guidance-card inset while approaching a turn: the maneuver arrow, the current-road pill
 (asserted), and the speed and limit badges. The night run uses the dark style and is over the limit.
 `guidance-annotations` feeds harness-only fixture congestion and camera/report markers through the
-optional inputs in overview. `maneuver-symbols` lays out every turn-card symbol for review.
+optional inputs in overview. `community-reports` publishes fixture reports through the community
+service's production cache and map-alert path and asserts that all four markers render.
+`maneuver-symbols` lays out every turn-card symbol for review.
 
 Simulators cannot host CarPlay templates on Xcode 27.2: Device Hub disables its CarPlay Simulator
 without a cabled physical iPhone. The `flow-*` scenarios therefore cover the whole journey on the

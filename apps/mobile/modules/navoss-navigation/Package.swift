@@ -16,7 +16,8 @@ let package = Package(
     .testTarget(
       name: "NavOSSNavigationCoreTests",
       dependencies: ["NavOSSNavigationCore"],
-      path: "ios/Tests"
+      path: "ios/Tests",
+      resources: [.copy("Fixtures")]
     )
   ]
 )

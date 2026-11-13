@@ -213,6 +213,16 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var styleLoadRetryCount = 0
   private var styleLoadWatchdog: DispatchWorkItem?
   private var styleSlug = "liberty"
+  /// The style URL last given to the map: hosted OpenFreeMap, or a bound offline style file.
+  private var loadedStyleURL: URL?
+  /// Set when the hosted style could not load and an installed offline region took over; cleared
+  /// when connectivity returns so the hosted map comes back.
+  private var offlineStyleFallback = false
+  nonisolated(unsafe) private var offlineStateObserver: NSObjectProtocol?
+  /// Draws the installed offline map regardless of connectivity (the visual harness's offline
+  /// scenarios). Set before the view loads.
+  var forcesOfflineStyle = false
+  private let attributionLabel = UILabel()
   private var vehicleMarker = NavOSSCarPlayVehicleMarker.arrow
   private(set) var mapView: MLNMapView!
   private let speedLabel = UILabel()
@@ -249,7 +259,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   override func loadView() {
     styleSlug = resolvedStyleSlug()
-    let styleURL = URL(string: "https://tiles.openfreemap.org/styles/\(styleSlug)")
+    let styleURL = resolvedStyleURL()
+    loadedStyleURL = styleURL
     let mapView = MLNMapView(frame: .zero, styleURL: styleURL)
     mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     mapView.isPitchEnabled = false
@@ -276,12 +287,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     let container = UIView(frame: .zero)
     overlayContentView = container
     container.addSubview(mapView)
-    let attributionLabel = UILabel()
     attributionLabel.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.78)
     attributionLabel.font = UIFont.systemFont(ofSize: 9, weight: .medium)
     attributionLabel.layer.cornerRadius = 3
     attributionLabel.clipsToBounds = true
-    attributionLabel.text = "  © OpenStreetMap contributors  "
+    updateAttribution()
     attributionLabel.textColor = .secondaryLabel
     attributionLabel.translatesAutoresizingMaskIntoConstraints = false
     container.addSubview(attributionLabel)
@@ -368,12 +378,91 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         self.installMapAlertsIfReady()
       }
     }
+    offlineStateObserver = NotificationCenter.default.addObserver(
+      forName: .navOSSOfflineStateDidChange,
+      object: NavOSSOfflineStore.shared,
+      queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        self?.offlineStateDidChange()
+      }
+    }
   }
 
   deinit {
     if let mapAlertObserver {
       NotificationCenter.default.removeObserver(mapAlertObserver)
     }
+    if let offlineStateObserver {
+      NotificationCenter.default.removeObserver(offlineStateObserver)
+    }
+  }
+
+  // MARK: - Offline map style
+
+  /// Where the map is, for choosing which installed offline region to draw.
+  private var styleFocus: NavOSSCarPlayCoordinate? {
+    if let latestPosition { return latestPosition.coordinate }
+    if let first = routeGeometry.first { return first }
+    guard let mapView else { return nil }
+    return NavOSSCarPlayCoordinate(
+      latitude: mapView.centerCoordinate.latitude, longitude: mapView.centerCoordinate.longitude)
+  }
+
+  /// The installed offline style when one should be drawn (no network, prefer-offline inside
+  /// coverage, or the hosted style failed); otherwise the hosted OpenFreeMap style. Offline
+  /// styles use the same slugs, so presets and road-label tuning apply unchanged.
+  private func resolvedStyleURL() -> URL? {
+    let store = NavOSSOfflineStore.shared
+    let focus = styleFocus
+    if forcesOfflineStyle || offlineStyleFallback || store.shouldUseOfflineMap(near: focus),
+      let offline = store.offlineStyleFile(slug: styleSlug, near: focus)
+    {
+      return offline
+    }
+    return URL(string: "\(Self.hostedStyleRoot)/\(styleSlug)")
+  }
+
+  /// Debug builds may point the hosted style at another root (for example a closed loopback
+  /// port) to exercise the offline fallback; release builds always use OpenFreeMap.
+  private static var hostedStyleRoot: String {
+    #if DEBUG
+      if let override = ProcessInfo.processInfo.environment["NAVOSS_DEBUG_MAP_STYLE_ROOT"],
+        !override.isEmpty
+      {
+        return override
+      }
+    #endif
+    return "https://tiles.openfreemap.org/styles"
+  }
+
+  /// Offline styles render OpenMapTiles-schema data built from OpenStreetMap; both are credited.
+  private func updateAttribution() {
+    attributionLabel.text =
+      loadedStyleURL?.isFileURL == true
+      ? "  Offline map · © OpenMapTiles · © OpenStreetMap contributors  "
+      : "  © OpenStreetMap contributors  "
+  }
+
+  private func offlineStateDidChange() {
+    guard isViewLoaded else { return }
+    if offlineStyleFallback, NavOSSOfflineStore.shared.isNetworkAvailable {
+      offlineStyleFallback = false
+    }
+    guard resolvedStyleURL() != loadedStyleURL else { return }
+    loadStyle(resetRetryCount: true)
+  }
+
+  /// After the hosted style has failed its retries, an installed region keeps the map usable.
+  private func fallBackToOfflineStyle() -> Bool {
+    guard !offlineStyleFallback,
+      NavOSSOfflineStore.shared.offlineStyleFile(slug: styleSlug, near: styleFocus) != nil
+    else {
+      return false
+    }
+    offlineStyleFallback = true
+    loadStyle(resetRetryCount: true)
+    return true
   }
 
   /// Overlay colours follow the resolved map style, not the system appearance, so a dark map never
@@ -467,6 +556,12 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   /// Road-label layers currently enlarged for guidance, for the visual harness.
   var enlargedRoadLabelLayerCount: Int { activeGuidance ? roadLabelFontSizes.count : 0 }
+  /// Camera and community-report markers drawn: the alerts received from the store, once their
+  /// symbol layer is installed in the loaded style.
+  var mapAlertMarkerCount: Int {
+    guard mapView.style?.layer(withIdentifier: mapAlertLayerIdentifier) != nil else { return 0 }
+    return mapAlerts.count
+  }
 
   /// The current-road pill's text while it is shown, for the visual harness.
   var currentRoadNameReadout: String? {
@@ -982,7 +1077,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       styleLoadRetryCount = 0
     }
     styleLoadWatchdog?.cancel()
-    mapView.styleURL = URL(string: "https://tiles.openfreemap.org/styles/\(styleSlug)")
+    let styleURL = resolvedStyleURL()
+    loadedStyleURL = styleURL
+    updateAttribution()
+    mapView.styleURL = styleURL
     scheduleStyleLoadWatchdog()
   }
 
@@ -999,6 +1097,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard styleLoadRetryCount < 2 else {
       styleLoadWatchdog?.cancel()
       styleLoadWatchdog = nil
+      _ = fallBackToOfflineStyle()
       return
     }
     styleLoadRetryCount += 1
@@ -1844,8 +1943,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   // MARK: Cameras and reports
 
-  /// Camera and road-report markers from `NavOSSCarPlayMapAlertStore`. The store is empty until a
-  /// real data source publishes into it, so this normally draws nothing.
+  /// Camera and road-report markers from `NavOSSCarPlayMapAlertStore`: the active safety camera
+  /// and community reports the server returned (`NavOSSCommunityService`).
   private func installMapAlertsIfReady() {
     guard let style = mapView.style else { return }
     let source = ensureShapeSource(mapAlertSourceIdentifier, in: style)

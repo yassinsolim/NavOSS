@@ -1,24 +1,27 @@
 # App Store Connect metadata draft
 
-Status: **internal TestFlight preparation. Do not submit for Beta App Review or public App Review while any field below is marked pending or blocked.**
+Status (refreshed 2026-11-12): **internal TestFlight preparation. Do not submit for Beta App Review or public App Review while any field below is marked pending or blocked.** The latest shipped build is `0.1.0 (70)`; the production service is still the older image (Calgary and Kelowna). Metadata describes only what the deployed service and a shipped build do:
+
+- **Lane guidance stays "not available"** in every description, What to Test and review note until the new server is deployed and returns lanes. The same holds for live traffic, shared road reports, Alberta and British Columbia coverage and offline maps.
+- Before a build that can reach a server with community reports or traffic enabled is uploaded, complete [Shared road reports and traffic sharing](#shared-road-reports-and-traffic-sharing) below. [next-build-checklist.md](next-build-checklist.md) lists the order.
 
 Use `docs/release/app-review.md` for the guideline-by-guideline risk assessment and `docs/release/testflight.md` for the release procedure.
 
 ## Readiness snapshot
 
-| Item                         | Status            | Evidence or next action                                                                                                                            |
-| ---------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Public product site          | Verified          | `https://navoss.yassin.app` returns HTTP 200 over HTTPS.                                                                                           |
-| Privacy URL                  | Verified internal | `/privacy` serves the July 24 provider, retention, security, deletion, and optional Google SDK policy. Direct email remains an external-beta gate. |
-| Support URL                  | Verified internal | `/support` returns HTTP 200 and links to public/private GitHub channels. Add and test direct contact before external review.                       |
-| Source repository            | Verified public   | `https://github.com/yassinsolim/NavOSS` is public.                                                                                                 |
-| Apple signing                | Verified ready    | EAS has the App Store distribution certificate and provisioning profile.                                                                           |
-| App Store Connect app record | Verified          | App `NavOSS`, bundle `org.navoss.mobile`, Apple ID `6792619727`.                                                                                   |
-| Production API               | Verified, soaking | Public checks and 17 route variants pass; controlled reboot recovery passed. Restore/rollback and soak gates remain.                               |
-| Review contact               | Pending           | Test the app-specific email and enter a reachable phone number in App Store Connect.                                                               |
-| App Privacy answers          | Decision pending  | NavOSS-controlled retention is frozen; classify Cloudflare/OpenFreeMap map and network metadata before upload.                                     |
-| Screenshots                  | Pending           | Capture the submitted production build after the backend and metadata are final.                                                                   |
-| External reviewer route      | Blocked           | Add manual Calgary origin selection or a visible Calgary route-preview flow.                                                                       |
+| Item                         | Status              | Evidence or next action                                                                                                                            |
+| ---------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public product site          | Verified            | `https://navoss.yassin.app` returns HTTP 200 over HTTPS.                                                                                           |
+| Privacy URL                  | Verified internal   | `/privacy` serves the July 24 provider, retention, security, deletion, and optional Google SDK policy. Direct email remains an external-beta gate. |
+| Support URL                  | Verified internal   | `/support` returns HTTP 200 and links to public/private GitHub channels. Add and test direct contact before external review.                       |
+| Source repository            | Verified public     | `https://github.com/yassinsolim/NavOSS` is public.                                                                                                 |
+| Apple signing                | Verified ready      | EAS has the App Store distribution certificate and provisioning profile.                                                                           |
+| App Store Connect app record | Verified            | App `NavOSS`, bundle `org.navoss.mobile`, Apple ID `6792619727`.                                                                                   |
+| Production API               | Verified, soaking   | Public checks and 17 route variants pass; controlled reboot recovery passed. Restore/rollback and soak gates remain.                               |
+| Review contact               | Pending             | Test the app-specific email and enter a reachable phone number in App Store Connect.                                                               |
+| App Privacy answers          | Decision pending    | NavOSS-controlled retention is frozen; classify Cloudflare/OpenFreeMap map and network metadata before upload.                                     |
+| Screenshots                  | Pending             | Capture the submitted production build after the backend and metadata are final.                                                                   |
+| External reviewer route      | Verified (build 17) | The visible Calgary Tower route preview exists (see `app-review.md`); re-verify it on the next candidate after the phone UI refresh.               |
 
 ## App information
 
@@ -145,6 +148,45 @@ The conservative unresolved option is to disclose provider-retained map/network 
 
 The app-level privacy manifest conservatively declares linked Other User Content for App Functionality and no tracking because accepted free-form contribution text is retained server-side and may itself contain identifying details. A Google-enabled artifact embeds additional Google Places declarations and requires the additive Google data types, linkage, purposes, hosted policy, review notes, and archive inspection to match App Store Connect.
 
+### Shared road reports and traffic sharing
+
+The native client for shared road reports and **Share traffic speeds** is in the app. It sends
+nothing until the server enables it (`features.communityReports` in `/v2/config`; traffic
+`probes.accepting` in `/v2/traffic/status`) and, for traffic, until the driver turns the switch
+on. Before a build that can reach a server with either enabled is submitted, update App Store
+Connect, the app privacy manifest, and the permission string together:
+
+- **Precise Location.** A report sends the reporter's precise coordinate (and heading), which the
+  server stores until 24 hours after the report expires; a "Still there?" answer sends a fresh
+  coordinate that is used for a proximity check and discarded; traffic batches send short
+  stretches of driven path. This is no longer covered by the real-time exception. Disclose
+  Precise Location for App Functionality, not used for tracking. Conservatively mark it linked:
+  reports are stored against a per-installation pseudonymous App Attest key that the server can
+  relate to that installation's other reports and votes (traffic batches are not).
+- **Device ID / other identifiers.** The App Attest key identifier is a per-installation
+  identifier created by the app (stored hashed on the server, deletable with **Reset community
+  identity**, replaced by reinstalling). Decide with the account holder whether Apple's Device ID
+  category applies; the conservative answer is to disclose it as linked, for App Functionality
+  (fraud prevention), not tracking.
+- **Permission string.** "Location is not retained after navigation ends" stops being true for a
+  driver who submits a report. Reword it (for example: "…Location is not retained after
+  navigation ends, except the place of a road report you choose to share.") in the same build.
+- **Review notes.** Replace "no live traffic" only when traffic is actually live for reviewers,
+  and describe reports as structured, expiring, unofficial, and never changing a route.
+
+### App Privacy answers needed before community features are enabled
+
+The answers for build 70 do not change until a build that contains the community client reaches a server that has the features on. The new answers are required in App Store Connect, the app privacy manifest and the permission string **before** that happens, not only before upload:
+
+| Data type / item                    | Needed answer                                                                                                                                                                                                                    |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Precise Location (reports, traffic) | Collected; App Functionality; not tracking; conservatively linked (per-installation App Attest key). No longer covered by the real-time exception.                                                                               |
+| Device ID / other identifiers       | The App Attest key identifier: decide with the account holder; conservative answer is linked, App Functionality, not tracking.                                                                                                   |
+| Permission string                   | Add "except the place of a road report you choose to share" (wording above); the current string would be untrue for a driver who sends a report.                                                                                 |
+| Review notes                        | Describe reports as structured, expiring, unofficial and never changing a route; remove "no live traffic" only when traffic is live for reviewers.                                                                               |
+| App Attest capability               | Capability on the App ID; EAS syncs it from the entitlement (`production` for every profile except `development`).                                                                                                               |
+| Offline maps (#83, merged)          | The app privacy manifest must declare the required-reason "Disk space" API category (#83 added `NSPrivacyAccessedAPICategoryDiskSpace` to `app.json`; confirm it in the signed archive), and the policy must describe downloads. |
+
 ## Location and permissions
 
 Current iOS purpose string:
@@ -164,7 +206,7 @@ Before upload, confirm the signed archive has:
 
 The legal owner must complete Apple's current questionnaire in App Store Connect. Use actual behavior, not a desired rating. Current factual inputs include:
 
-- no user-generated content displayed inside the app;
+- no user-generated content displayed inside the app (true for build 70; **no longer true** once a build shows other drivers' community reports, so re-answer the questionnaire and reassess Guideline 1.2 before enabling reports);
 - no advertising;
 - no gambling, contests, loot boxes, or purchases;
 - no alcohol, tobacco, drug, sexual, horror, violence, or medical content;
@@ -213,7 +255,7 @@ Use the exact submitted production build. Use fictional or public locations. Do 
 - [x] Create the App Store Connect app record and add its numeric Apple ID to `submit.production.ios.ascAppId`.
 - [x] Deploy the production API and production-capable providers.
 - [ ] Complete the 24-hour soak, PostgreSQL restore, and graph/index rollback exercises.
-- [ ] Add a reviewer-accessible manual Calgary origin or visible route preview before Beta App Review.
+- [x] Add a reviewer-accessible visible Calgary route preview before Beta App Review (shipped in build 16; re-verify after the phone UI refresh).
 - [x] Freeze NavOSS-controlled data flows, providers, regions, logs, retention, backups, and deletion behavior.
 - [x] Publish and verify the internal-beta privacy policy and support paths.
 - [ ] Activate and test `navoss@yassin.app` from an external sender through a successful reply.

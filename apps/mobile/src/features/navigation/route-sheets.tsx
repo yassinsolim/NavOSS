@@ -17,6 +17,8 @@ import {
   routeTrafficLabel,
   routeViaLabel,
 } from '@/features/navigation/route-progress';
+import type { RouteSource } from '@/features/navigation/route-ui-state';
+import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
 import { createThemedStyles, radius, space, typography, useTheme } from '@/theme';
 import { Banner } from '@/ui/banner';
@@ -170,7 +172,7 @@ interface RoutePreviewSheetProps {
   /** Set when the route was planned from a fixed demo origin rather than the driver's location. */
   previewOriginLabel?: string;
   routePreferences: RoutePreferences;
-  routeSource?: RouteResponseV2['source'];
+  routeSource?: RouteSource;
   routes: RouteAlternativeV2[];
   selectedRoute: RouteAlternativeV2;
   vehicleStyle: VehicleStyle;
@@ -208,7 +210,10 @@ export function RoutePreviewSheet({
   const styles = useStyles();
   const demoOrigin = previewOriginLabel !== undefined;
   const detents = routePreviewSheetDetents(metrics, { demoOrigin });
-  const trafficStatus = routeTrafficLabel(routeSource, selectedRoute);
+  const trafficStatus = routeTrafficLabel(
+    routeSource?.id === OFFLINE_ROUTE_SOURCE.id ? undefined : routeSource,
+    selectedRoute,
+  );
 
   return (
     <BottomSheet

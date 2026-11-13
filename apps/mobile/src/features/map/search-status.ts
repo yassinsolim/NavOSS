@@ -1,5 +1,7 @@
 import type { SearchSource } from '@navoss/contracts';
 
+import { offlineSearchSourceLabel } from '../offline/offline-copy';
+
 export type ApiConnectionState = 'connecting' | 'offline' | 'online';
 
 /** Names the data a result list came from, and says so when that data is not live. */
@@ -14,6 +16,7 @@ export function searchSourceLabel(source: SearchSource | undefined, degraded = f
 
 function searchSourceName(source: SearchSource | undefined): string {
   if (source === undefined) return 'Place search';
+  if (source.id === 'offline-osm') return offlineSearchSourceLabel(source.updatedAt);
   if (source.id === 'calgary-hybrid-search' || source.id === 'calgary-open-data-index') {
     return 'Calgary Open Data + OpenStreetMap';
   }
@@ -43,13 +46,24 @@ export function exploreServiceNotice({
   coverageName,
   locationState,
   nearbySearchEnabled,
+  offlineMapsInstalled = false,
 }: {
   apiConnection: ApiConnectionState;
   /** What the server declared, e.g. 'Alberta and British Columbia'. */
   coverageName: string;
   locationState: 'denied' | 'error' | 'idle' | 'locating' | 'visible';
   nearbySearchEnabled: boolean;
+  /** A downloaded offline region can answer search and routing without the service. */
+  offlineMapsInstalled?: boolean;
 }): ServiceNotice | undefined {
+  if (apiConnection === 'offline' && offlineMapsInstalled) {
+    return {
+      message:
+        'Search and routes use your downloaded offline maps: OpenStreetMap places, no live traffic or closures.',
+      title: 'Using offline maps',
+      tone: 'warning',
+    };
+  }
   if (apiConnection === 'offline') {
     return {
       message: 'Search and routing need a connection to the NavOSS service. The map still works.',

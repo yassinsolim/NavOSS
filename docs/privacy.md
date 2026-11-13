@@ -202,17 +202,64 @@ The Contribute screen submits private beta feedback to NavOSS. A submission cont
 
 NavOSS does not automatically transmit raw feedback descriptions to an AI provider. Operator policy requires reviewing raw text outside an AI conversation. The operator may manually create a deidentified engineering summary after removing names, private addresses, contact details, exact personal trips, credentials, and unnecessary timestamps. The summary is stored in an ignored local workspace artifact. Only when the operator explicitly invokes AI-assisted triage is that deidentified summary transmitted to the configured coding-assistant provider under its terms, to group reports, draft issues, or help implement a human-approved item. The summary contains no account or contributor identifier.
 
-During active navigation, the report button can store up to 25 structured road-report test drafts on the device. Each draft contains one of four fixed report types, the current precise coordinate, its creation time, and a two-hour expiry time. It contains no free text, photo, account, or public user name. These test drafts are not sent to NavOSS or a third party and are not shown to other drivers. Expired drafts are discarded when the local list is next read or written, and removing the app removes all remaining drafts.
+### Community road reports
+
+NavOSS can share structured road reports between drivers. The NavOSS server decides whether
+sharing is on (`features.communityReports`); it is off until the operator enables it. While it
+is off, or on a device that cannot use Apple App Attest, the app keeps the private drafts
+described at the end of this section and sends nothing. Sharing is not switched on in the
+deployed NavOSS service today, and no released version of the app (the latest is 0.1.0 (70))
+contains the sharing client: released builds keep only the private drafts. The paragraphs
+below describe the app version that adds **Share road reports**.
+
+**What a report sends.** Reports are shared only after you turn on **Share road reports** (off by default; until then every report stays a private draft). Within 400 m of your saved Home or Work, or of the current trip's start, destination or stops, a report stays private unless you explicitly confirm sharing it. When sharing is on and you choose a report type, the app sends one of
+eight fixed types (crash, road closed, slow traffic, construction, pothole, object on road, other
+hazard, stopped vehicle), your current precise coordinate, your direction of travel in whole
+degrees when known, and an App Attest signature with its key identifier. It contains no free
+text, photo, name, account, destination, or route. The server stores the precise coordinate and
+a copy snapped to a grid of about 55 m by 35 m. Other drivers receive only the snapped position,
+the type, the report and expiry times rounded to five minutes, and a confirmation count; never
+who reported it. A report expires after two hours; confirmations can extend it to at most 12
+hours after it was made, and "not there" answers shorten or end it. No report changes a route.
+
+**Reading reports.** The app asks the server for reports in the area you are viewing or, during
+guidance, in a box around the route ahead (at most half a degree each way). These requests carry
+no identity, and the app keeps the answers in memory only. The CarPlay map shows the same reports.
+During guidance the app can show, and if **Spoken road reports** is on and the guidance sound
+allows alerts, speak a short alert for a report ahead.
+
+**Still there?** After you pass a report, and never near a turn, the app may ask whether it is
+still there. **Still there** or **Not there** sends that answer with your current coordinate,
+which the server uses only to check that you are within 1.5 km of the report and then discards.
+Letting the question disappear sends nothing. The app does not ask about reports you made during the same app session.
+
+**Identity and deletion.** The first report registers an App Attest key for this installation.
+The phone stores only the key's identifier, in the iOS Keychain on this device; the key itself
+stays in the iPhone's Secure Enclave. The server stores the key as described under
+[Traffic sharing](#traffic-sharing-optional-off-by-default), plus, for 24 hours, the position of
+the installation's latest report or answer rounded to about 1 km, to reject impossible travel.
+You can withdraw a report you made in the same app session. **Reset community identity**
+deletes the installation from the server with all its reports and answers, and forgets the key on
+the phone; a later report registers a new key that is not linked to the old one. Development
+builds running in the iOS Simulator can use a software key that only a test server accepts;
+release builds cannot.
+
+**Private drafts.** When sharing is off or unavailable, the report button stores up to 25
+structured road-report drafts on the device. Each draft contains one of the eight fixed report
+types, the current precise coordinate, its creation time, and a two-hour expiry time. It contains
+no free text, photo, account, or public user name. Drafts are not sent to NavOSS or a third party
+and are not shown to other drivers. Expired drafts are discarded when the local list is next read
+or written, and removing the app removes all remaining drafts.
 
 ### Service and security data
 
-The default Google-disabled build has no account, advertising, analytics, crash-reporting, data-broker, cross-app tracking, or runtime AI service. It does not use an advertising identifier or create a persistent user or device identifier, except that a phone which turns on traffic sharing or community reports registers an App Attest key, described under [Traffic sharing](#traffic-sharing-optional-off-by-default), which the server keeps until 90 days after its last use. A separately enabled Google place-details build links the Google Places SDK and is subject to the SDK declarations described above; NavOSS does not receive or operate that Google analytics data.
+The default Google-disabled build has no account, advertising, analytics, crash-reporting, data-broker, cross-app tracking, or runtime AI service. It does not use an advertising identifier or create a persistent user or device identifier, except that a phone which turns on traffic sharing or community reports registers an App Attest key, described under [Traffic sharing](#traffic-sharing-optional-off-by-default) and [Community road reports](#community-road-reports), which the server keeps until 90 days after its last use. A separately enabled Google place-details build links the Google Places SDK and is subject to the SDK declarations described above; NavOSS does not receive or operate that Google analytics data.
 
 Cloudflare provides public DNS, TLS termination, denial-of-service protection, and an outbound tunnel to the NavOSS server. Cloudflare necessarily processes the client IP address, request traffic, and routing/security metadata. NavOSS does not enable Cloudflare raw request-log export or store Cloudflare per-request access logs. Cloudflare may create and retain network or security data under its own privacy policy.
 
 ## Purposes
 
-NavOSS uses data only to provide map rendering, road-event awareness, place details, search, routing, navigation, rerouting, arrival detection, safety-camera notices, community traffic for and from drivers who opt in, user-requested sharing and external actions, service reliability, abuse prevention, security, and user-requested support.
+NavOSS uses data only to provide map rendering, road-event awareness, place details, search, routing, navigation, rerouting, arrival detection, safety-camera notices, community road reports, community traffic for and from drivers who opt in, user-requested sharing and external actions, service reliability, abuse prevention, security, and user-requested support.
 
 NavOSS does not sell personal information or use it for advertising, marketing profiles, or cross-app tracking.
 
@@ -227,7 +274,7 @@ NavOSS does not sell personal information or use it for advertising, marketing p
 | [DriveBC](https://www.drivebc.ca/)                                                                 | Official Kelowna-area Open511 road events and ordinary highway-webcam metadata polled by NavOSS; receives no phone location or user data                                                                                                     | Government of British Columbia                                                      |
 | [Kelowna RCMP](https://rcmp.ca/en/bc/kelowna/contact)                                              | Published fixed public facility names, addresses, phones, and coordinates; no live police data                                                                                                                                               | Royal Canadian Mounted Police                                                       |
 | [Mapbox](https://www.mapbox.com/legal/privacy/)                                                    | Optional licensed live-traffic routing; receives route endpoints, preferences, and request network metadata only when explicitly enabled                                                                                                     | Global infrastructure; disabled in current production                               |
-| [Apple](https://www.apple.com/legal/privacy/)                                                      | TestFlight distribution, tester feedback, the user-invoked system share sheet, and App Attest, which the phone uses to create the key that obtains traffic-upload credentials                                                                | Under Apple's policy                                                                |
+| [Apple](https://www.apple.com/legal/privacy/)                                                      | TestFlight distribution, tester feedback, the user-invoked system share sheet, and App Attest, which the phone uses to create the key that signs community road reports and obtains traffic-upload credentials                               | Under Apple's policy                                                                |
 | [Google Places and Google Maps](https://policies.google.com/privacy)                               | Optional photos, rating/count, and reviews in an enabled build; Google SDK manifest declares location, device ID, other data, performance, interaction, and search-history collection; external review search only after the user chooses it | Under Google's policy                                                               |
 | [GitHub](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement) | Public issues and private vulnerability reports initiated by a user                                                                                                                                                                          | Under GitHub's policy                                                               |
 
@@ -248,7 +295,10 @@ Map and route data is derived from OpenStreetMap contributors. Search combines O
 | Map appearance preferences                         | Stored locally in app storage until the app is removed or the settings are changed; not transmitted to NavOSS                                                                                                                            |
 | Accepted beta contributions                        | Type, description, optional place/road label, timestamps, random draft/submission IDs, and review status retained in the live database for up to 90 days; no account, device ID, or precise coordinate                                   |
 | Pending contribution retries                       | Up to 25 failed submissions stored only on the device until successfully retried, individually deleted, or the app is removed                                                                                                            |
-| Road-report test drafts                            | Up to 25 structured report types, precise coordinates, creation times, and expiry times stored only on the device; each expires after two hours and all are removed with the app                                                         |
+| Community road reports                             | Type, precise and grid-snapped coordinates, heading, times, and the reporting installation; deleted 24 hours after expiry (immediately expired when withdrawn), at once with Reset community identity; excluded from backups             |
+| "Still there?" answers                             | Answer, time, and the answering installation; deleted with the report; the answer coordinate is discarded after the proximity check                                                                                                      |
+| Installation travel check position                 | Latest report or answer position rounded to about 1 km, kept for 24 hours                                                                                                                                                                |
+| Road-report private drafts                         | Only while sharing is off or unavailable: up to 25 structured report types, precise coordinates, creation times, and expiry times stored only on the device; each expires after two hours and all are removed with the app               |
 | Google-enabled place component                     | Selected public POI name and coordinate sent directly to Google; response not retained by NavOSS. Google's embedded manifest separately declares the SDK data categories and purposes listed above under Google's retention controls     |
 | Google query safety counter                        | UTC month, aggregate used count, and last update time retained in the NavOSS database; contains no place, coordinate, account, device, or search data                                                                                    |
 | Place and ETA share text                           | Created on the phone and not sent to NavOSS; controlled by Apple and the user-selected share destination                                                                                                                                 |
@@ -266,7 +316,7 @@ Cloudflare and OpenFreeMap apply their own retention policies to data they proce
 
 You can deny or revoke location in iOS Settings. Search and map browsing remain available, but current-position routing and active navigation will be limited. You can stop an active trip using End navigation, which stops background location and erases the transient active route.
 
-You can erase all locally stored recent and saved destinations at any time using **Clear saved and recent destinations** in the app's About and Privacy screen. Pending contribution retries can be deleted individually on the Contribute screen. Accepted beta feedback cannot be linked back to an account because NavOSS has no account or contributor identifier; contact support with the random submission ID if deletion before automatic expiry is required. Road-report test drafts expire after two hours. Removing the app removes all remaining local records.
+You can erase all locally stored recent and saved destinations at any time using **Clear saved and recent destinations** in the app's About and Privacy screen. Pending contribution retries can be deleted individually on the Contribute screen. Accepted beta feedback cannot be linked back to an account because NavOSS has no account or contributor identifier; contact support with the random submission ID if deletion before automatic expiry is required. Road-report private drafts expire after two hours. **Reset community identity** deletes this installation's shared road reports and answers from the server, as described under [Community road reports](#community-road-reports). Removing the app removes all remaining local records.
 
 You can use NavOSS without granting Contacts access because the app never asks for it. Sharing and the external reviews link are optional, user-initiated actions. Dismissing the system share sheet sends nothing to a recipient. In a Google-enabled build, opening a POI sheet can send its public coordinate for Google-rendered photos, ratings, and reviews; choosing no external reviews link sends no Google Maps search.
 

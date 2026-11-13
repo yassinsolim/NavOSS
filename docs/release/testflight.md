@@ -1,8 +1,21 @@
 # TestFlight beta runbook
 
-Date: 2026-07-28
+Status refreshed: 2026-11-12. The dated entries below are the release record and are not rewritten; this block is the current summary.
 
-## Current verdict
+## Current status
+
+| Item                        | State                                                                                                                                                                                                                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Latest shipped build        | `0.1.0 (70)` from `afa4067` (see its entry below): native contract v8, pre-refresh phone UI. No later binary has been built or uploaded.                                                                                                                                    |
+| On `main`, not in any build | Phone UI refresh (#78), native contract v10 (#75, #84), CarPlay quality pass (#77), `/v2/routes` clients (#84), community reports and traffic client (#85). Build 71 or later will carry them.                                                                              |
+| Production service          | Still the older API image (Calgary and Kelowna; no `/v2/routes`, community, traffic or offline manifest). It cannot be redeployed yet. The new client is built to run against it.                                                                                           |
+| Distribution                | Uploads reach the internal `testers` group. External distribution to `NavOSS Friends` is manual since #88; whether EAS has deregistered the old upload trigger is unverified.                                                                                               |
+| Next build                  | Not started. Preconditions, the head-unit checklist and the server enablement order are in [next-build-checklist.md](next-build-checklist.md). App Privacy answers and the permission string must change before a build can reach a server with community features enabled. |
+| Real-vehicle CarPlay        | Interactive CarPlay has never been run on this project's Mac (Xcode 27.2 has no CarPlay Simulator window). Only the maintainer's earlier on-car reports (builds 53, 54, 70) exist.                                                                                          |
+
+## Historical verdict (2026-07-28, builds 12 to 17)
+
+The table below is the verdict as written on 2026-07-28 and is out of date (it predates builds 18 to 70). It is kept as part of the record.
 
 | Stage                                      | Verdict | Reason                                                                                                                                                                                                    |
 | ------------------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

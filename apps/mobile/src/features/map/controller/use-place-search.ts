@@ -13,7 +13,10 @@ import {
   type SettledPlaceSearch,
 } from '@/features/map/search-proximity';
 import { getRecentDestinationIds } from '@/features/navigation/native-navigation';
-import { searchPlaces } from '@/lib/api';
+import {
+  OFFLINE_SEARCH_SOURCE_ID,
+  searchPlacesWithOfflineFallback,
+} from '@/features/offline/offline-maps';
 
 export type SearchState = 'error' | 'idle' | 'loading' | 'success';
 export type SearchResultBounds = [west: number, south: number, east: number, north: number];
@@ -102,7 +105,8 @@ export function usePlaceSearch({
     abortControllerRef.current = controller;
     if (announceLoading) setSearchState('loading');
 
-    void searchPlaces(normalizedQuery, {
+    // The service first; installed offline regions answer, labelled, when it cannot be reached.
+    void searchPlacesWithOfflineFallback(normalizedQuery, {
       ...searchProximityOptions(proximityOrigin),
       includeDetails: true,
       ...(category?.searchCategory === undefined ? {} : { category: category.searchCategory }),
@@ -121,7 +125,9 @@ export function usePlaceSearch({
               proximityOrigin,
             );
         startTransition(() => {
-          onConnectionChange('online');
+          onConnectionChange(
+            response.source.id === OFFLINE_SEARCH_SOURCE_ID ? 'offline' : 'online',
+          );
           setResults(rankedResults);
           setSearchSource(response.source);
           setResultsDegraded(response.degraded);

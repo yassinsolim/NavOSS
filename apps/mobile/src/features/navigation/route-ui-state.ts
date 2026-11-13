@@ -14,6 +14,10 @@ import {
   type NativeNavigationSnapshot,
 } from './native-navigation';
 import type { PhoneRouteStatus } from './phone-surface';
+import { OFFLINE_ROUTE_SOURCE, type OfflineRouteSource } from '../offline/offline-copy';
+
+/** Who routed a trip: the NavOSS service's provider, or the on-device offline engine. */
+export type RouteSource = RouteResponseV2['source'] | OfflineRouteSource;
 
 type NativeTrip = NonNullable<NativeNavigationSnapshot['trip']>;
 
@@ -84,7 +88,7 @@ export function selectedRouteOf(state: RouteUiState): RouteAlternativeV2 | undef
 export interface NativeTripRoute {
   destination: SearchResult;
   route: RouteAlternativeV2;
-  routeSource: RouteResponseV2['source'] | undefined;
+  routeSource: RouteSource | undefined;
   waypoints: SearchResult[];
 }
 
@@ -142,13 +146,14 @@ export function routeFromNativeTrip(trip: NativeTrip): NativeTripRoute {
 export function routeSourceForNativeTrip(
   source: string | undefined,
   trafficSource?: string,
-): RouteResponseV2['source'] | undefined {
+): RouteSource | undefined {
+  if (source === OFFLINE_ROUTE_SOURCE.id) return OFFLINE_ROUTE_SOURCE;
   if (
     trafficSource === COMMUNITY_TRAFFIC_SOURCE_ID &&
     (source === 'valhalla-self-hosted' || source === 'valhalla-development')
   ) {
     const routing = routeSourceForNativeTrip(source);
-    return routing === undefined
+    return routing === undefined || routing.id === OFFLINE_ROUTE_SOURCE.id
       ? undefined
       : {
           ...routing,

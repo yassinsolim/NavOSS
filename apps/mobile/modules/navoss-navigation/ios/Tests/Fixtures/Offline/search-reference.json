@@ -1,0 +1,267 @@
+{
+  "origin": {
+    "latitude": 51.0447,
+    "longitude": -114.0631
+  },
+  "limit": 8,
+  "fixtureDatabase": [
+    {
+      "query": "101 9 Avenue SE",
+      "ids": [102879173]
+    },
+    {
+      "query": "Calgar Tow",
+      "ids": [
+        102879173, 1168516945, 1168516953, 923097873, 2566712629, 680491541, 7780206776, 1928984321
+      ]
+    },
+    {
+      "query": "chinook centre",
+      "ids": [
+        78856121, 19274684848, 48998976664, 28310601804, 19911372652, 78856229, 5517692360,
+        819460092
+      ]
+    },
+    {
+      "query": "Café",
+      "ids": [
+        1729606933, 3248899640, 21645556464, 53180817516, 39231533228, 39231533240, 19035943684,
+        46249836320
+      ]
+    },
+    {
+      "query": "tim hortons",
+      "ids": [
+        4440230108, 9827344200, 9827344204, 39476915896, 39266463392, 33757432172, 3954409312,
+        31406506344
+      ]
+    },
+    {
+      "query": "crowfoot",
+      "ids": [
+        10451902480, 77400662, 26302372516, 10451902484, 10548474724, 10120371480, 21736179736,
+        5346986949
+      ]
+    },
+    {
+      "query": "1012 96 Avenue",
+      "ids": [5444312421]
+    },
+    {
+      "query": "peacekeepers way",
+      "ids": [
+        857724925, 5509097433, 5509097437, 5509097441, 5509097445, 5509097449, 5352878729,
+        5509097453
+      ]
+    },
+    {
+      "query": "Calgary International Airport",
+      "ids": [937987361, 1350086413, 62923862, 63016238]
+    },
+    {
+      "category": "cafe",
+      "radiusKm": 5,
+      "ids": [
+        6942924700, 37635629760, 7237363464, 21645556464, 53193439784, 19466515316, 48600255312,
+        53180817516
+      ]
+    },
+    {
+      "category": "fuel",
+      "radiusKm": 5,
+      "ids": [
+        19797637156, 10859885452, 4121059620, 5460251612, 11030267144, 4440230100, 29932051168,
+        20159990932
+      ]
+    },
+    {
+      "category": "pharmacy",
+      "radiusKm": 5,
+      "ids": [
+        39326547000, 40428509668, 40428691668, 2163398941, 18345699084, 7237182968, 53423393964,
+        18932480168
+      ]
+    }
+  ],
+  "calgaryDatabase": [
+    {
+      "query": "101 9 Avenue SE",
+      "ids": [102879173]
+    },
+    {
+      "query": "Calgar Tow",
+      "ids": [
+        102879173, 1168516945, 1168516953, 923097873, 2566712629, 680491541, 7780206776, 1928984321
+      ]
+    },
+    {
+      "query": "chinook centre",
+      "ids": [
+        78856121, 19274684848, 48998976664, 28310601804, 19911372652, 78856229, 5517692360,
+        819460092
+      ]
+    },
+    {
+      "query": "Café",
+      "ids": [
+        1729606933, 3248899640, 21645556464, 53180817516, 39231533228, 39231533240, 19035943684,
+        46249836320
+      ]
+    },
+    {
+      "query": "tim hortons",
+      "ids": [
+        4440230108, 9827344200, 9827344204, 39476915896, 39266463392, 33757432172, 3954409312,
+        31406506344
+      ]
+    },
+    {
+      "query": "crowfoot",
+      "ids": [
+        10451902480, 77400662, 26302372516, 10451902484, 10548474724, 10120371480, 21736179736,
+        5346986949
+      ]
+    },
+    {
+      "query": "1012 96 Avenue",
+      "ids": [5444312421]
+    },
+    {
+      "query": "peacekeepers way",
+      "ids": [
+        857724925, 5509097433, 5509097437, 5509097441, 5509097445, 5509097449, 5352878729,
+        5509097453
+      ]
+    },
+    {
+      "query": "Calgary International Airport",
+      "ids": [937987361, 1350086413, 62923862, 63016238]
+    },
+    {
+      "category": "cafe",
+      "radiusKm": 5,
+      "ids": [
+        6942924700, 37635629760, 7237363464, 21645556464, 53193439784, 19466515316, 48600255312,
+        53180817516
+      ]
+    },
+    {
+      "category": "fuel",
+      "radiusKm": 5,
+      "ids": [
+        19797637156, 10859885452, 4121059620, 5460251612, 11030267144, 4440230100, 29932051168,
+        20159990932
+      ]
+    },
+    {
+      "category": "pharmacy",
+      "radiusKm": 5,
+      "ids": [
+        39326547000, 40428509668, 40428691668, 2163398941, 18345699084, 7237182968, 53423393964,
+        18932480168
+      ]
+    }
+  ],
+  "normalization": [
+    {
+      "input": "101 9 Avenue SE",
+      "normalized": "101 9 av se",
+      "ftsQuery": "\"101\" AND \"9\" AND \"av\"* AND \"se\"*"
+    },
+    {
+      "input": "Calgar Tow",
+      "normalized": "calgar tow",
+      "ftsQuery": "\"calgar\"* AND \"tow\"*"
+    },
+    {
+      "input": "Café Ünïcode",
+      "normalized": "cafe unicode",
+      "ftsQuery": "\"cafe\"* AND \"unicode\"*"
+    },
+    {
+      "input": "A&W Restaurant",
+      "normalized": "a and w restaurant",
+      "ftsQuery": "\"a\"* AND \"and\"* AND \"w\"* AND \"restaurant\"*"
+    },
+    {
+      "input": "Crowfoot Crescent NW",
+      "normalized": "crowfoot cr nw",
+      "ftsQuery": "\"crowfoot\"* AND \"cr\"* AND \"nw\"*"
+    },
+    {
+      "input": "  multiple   spaces  ",
+      "normalized": "multiple spaces",
+      "ftsQuery": "\"multiple\"* AND \"spaces\"*"
+    },
+    {
+      "input": "snake_case-hyphen/slash",
+      "normalized": "snake case hyphen slash",
+      "ftsQuery": "\"snake\"* AND \"case\"* AND \"hyphen\"* AND \"slash\"*"
+    },
+    {
+      "input": "Tim Horton's",
+      "normalized": "tim horton s",
+      "ftsQuery": "\"tim\"* AND \"horton\"* AND \"s\"*"
+    },
+    {
+      "input": "17th Ave SW",
+      "normalized": "17th av sw",
+      "ftsQuery": "\"17th\"* AND \"av\"* AND \"sw\"*"
+    },
+    {
+      "input": "１２３ Ｍａｉｎ",
+      "normalized": "123 main",
+      "ftsQuery": "\"123\" AND \"main\"*"
+    },
+    {
+      "input": "straße",
+      "normalized": "straße",
+      "ftsQuery": "\"straße\"*"
+    },
+    {
+      "input": "Montréal Rd",
+      "normalized": "montreal rd",
+      "ftsQuery": "\"montreal\"* AND \"rd\"*"
+    },
+    {
+      "input": "42",
+      "normalized": "42",
+      "ftsQuery": "\"42\"*"
+    },
+    {
+      "input": "O'Brien Blvd",
+      "normalized": "o brien bv",
+      "ftsQuery": "\"o\"* AND \"brien\"* AND \"bv\"*"
+    },
+    {
+      "input": "Mount Royal",
+      "normalized": "mt royal",
+      "ftsQuery": "\"mt\"* AND \"royal\"*"
+    },
+    {
+      "input": "north east",
+      "normalized": "north e",
+      "ftsQuery": "\"north\"* AND \"e\"*"
+    },
+    {
+      "input": "Ⅻ roman",
+      "normalized": "xii roman",
+      "ftsQuery": "\"xii\"* AND \"roman\"*"
+    },
+    {
+      "input": "naïve coöperate",
+      "normalized": "naive cooperate",
+      "ftsQuery": "\"naive\"* AND \"cooperate\"*"
+    },
+    {
+      "input": "Ⓐ circled",
+      "normalized": "a circled",
+      "ftsQuery": "\"a\"* AND \"circled\"*"
+    },
+    {
+      "input": "½ half",
+      "normalized": "1 2 half",
+      "ftsQuery": "\"1\" AND \"2\" AND \"half\"*"
+    }
+  ]
+}

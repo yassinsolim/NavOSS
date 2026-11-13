@@ -269,10 +269,24 @@ final class CarPlayGuidancePresentationTests: XCTestCase {
       NavOSSCarPlayMapAlert(
         id: "bad", kind: .report(.pothole),
         coordinate: NavOSSCarPlayCoordinate(latitude: 200, longitude: 0)),
-    ])
+    ], source: .cameras)
     XCTAssertEqual(store.snapshot(), [camera])
-    store.publish([camera])
+    store.publish([camera], source: .cameras)
     XCTAssertEqual(notifications, 1)
+  }
+
+  func testMapAlertSourcesReplaceOnlyTheirOwnAlerts() {
+    let store = NavOSSCarPlayMapAlertStore(notificationCenter: NotificationCenter())
+    let camera = NavOSSCarPlayMapAlert(id: "camera-1", kind: .speedCamera, coordinate: corner)
+    let report = NavOSSCarPlayMapAlert(id: "report-1", kind: .report(.pothole), coordinate: origin)
+    store.publish([report], source: .communityReports)
+    store.publish([camera], source: .cameras)
+    XCTAssertEqual(store.snapshot(), [camera, report])
+    // The camera alert ending must not clear community reports from the map, or vice versa.
+    store.publish([], source: .cameras)
+    XCTAssertEqual(store.snapshot(), [report])
+    store.publish([], source: .communityReports)
+    XCTAssertEqual(store.snapshot(), [])
   }
 
   // MARK: Camera

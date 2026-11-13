@@ -1,5 +1,5 @@
 name: Route quality report
-description: Report an unsafe, illegal, inaccessible, or unexpectedly poor Calgary route.
+description: Report an unsafe, illegal, inaccessible, or unexpectedly poor route in a covered area (Calgary or Kelowna today).
 title: '[Route]: '
 labels: ['route-quality', 'needs-triage']
 body:

@@ -58,7 +58,7 @@ export interface UserLocation {
  * The subscriptions that feed it live in `useLocationWatches`, which runs once the screen knows
  * whether the phone map is visible.
  *
- * Wave 2 seam: opt-in anonymised speed probes are sampled by the native navigation core, not
+ * Wave 2 seam: opt-in speed probes are sampled by the native navigation core, not
  * here. This hook is the place to read the consent flag if the idle watch ever needs it.
  */
 export function useUserLocation(coverage: ServerCoverage | undefined): UserLocation {
