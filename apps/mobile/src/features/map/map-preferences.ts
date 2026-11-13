@@ -6,6 +6,19 @@ import type { NavigationMapOrientation } from '@/features/navigation/navigation-
 
 const STORAGE_KEY = 'navoss.map-preferences.v1';
 const OPEN_FREE_MAP_STYLE_ROOT = 'https://tiles.openfreemap.org/styles';
+
+/**
+ * The hosted style root. Development builds may point it elsewhere (for example a closed
+ * loopback port) to exercise the offline fallback when the hosted style cannot load; release
+ * builds always use OpenFreeMap.
+ */
+function hostedStyleRoot(): string {
+  const override = process.env.EXPO_PUBLIC_DEBUG_MAP_STYLE_ROOT;
+  const development = typeof __DEV__ !== 'undefined' && __DEV__;
+  return development && override !== undefined && override !== ''
+    ? override
+    : OPEN_FREE_MAP_STYLE_ROOT;
+}
 const styleCache = new Map<string, Promise<StyleSpecification>>();
 
 export type MapStylePreset = 'automatic' | 'contrast' | 'day' | 'minimal' | 'night';
@@ -134,7 +147,7 @@ export function mapStyleSlug(preset: MapStylePreset, colorScheme: ColorSchemeNam
 }
 
 export function mapStyleUrl(preset: MapStylePreset, colorScheme: ColorSchemeName): string {
-  return `${OPEN_FREE_MAP_STYLE_ROOT}/${mapStyleSlug(preset, colorScheme)}`;
+  return `${hostedStyleRoot()}/${mapStyleSlug(preset, colorScheme)}`;
 }
 
 /**

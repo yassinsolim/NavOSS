@@ -420,7 +420,20 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     {
       return offline
     }
-    return URL(string: "https://tiles.openfreemap.org/styles/\(styleSlug)")
+    return URL(string: "\(Self.hostedStyleRoot)/\(styleSlug)")
+  }
+
+  /// Debug builds may point the hosted style at another root (for example a closed loopback
+  /// port) to exercise the offline fallback; release builds always use OpenFreeMap.
+  private static var hostedStyleRoot: String {
+    #if DEBUG
+      if let override = ProcessInfo.processInfo.environment["NAVOSS_DEBUG_MAP_STYLE_ROOT"],
+        !override.isEmpty
+      {
+        return override
+      }
+    #endif
+    return "https://tiles.openfreemap.org/styles"
   }
 
   /// Offline styles render OpenMapTiles-schema data built from OpenStreetMap; both are credited.
