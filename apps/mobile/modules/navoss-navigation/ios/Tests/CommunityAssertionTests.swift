@@ -109,3 +109,41 @@ final class CommunityAssertionTests: XCTestCase {
     XCTAssertEqual(navOSSJavaScriptFixedDegrees(180), "180.000000")
   }
 }
+
+final class AppAttestFailureMappingTests: XCTestCase {
+  private let domain = "com.apple.devicecheck.error"
+
+  func testAMissingEntitlementDuringKeyGenerationOrAttestationMeansUnsupported() {
+    // Without the entitlement DeviceCheck reports unknownSystemFailure (0), invalidInput (2) or
+    // featureUnsupported (1), or an error from another domain.
+    for code in [0, 1, 2] {
+      XCTAssertEqual(navOSSAppAttestFailure(domain: domain, code: code, step: .generateKey), .unsupported)
+      XCTAssertEqual(navOSSAppAttestFailure(domain: domain, code: code, step: .attestKey), .unsupported)
+    }
+    XCTAssertEqual(
+      navOSSAppAttestFailure(domain: NSOSStatusErrorDomain, code: -34018, step: .generateKey),
+      .unsupported)
+  }
+
+  func testRecoverableErrorsKeepTheirMeaning() {
+    XCTAssertEqual(navOSSAppAttestFailure(domain: domain, code: 3, step: .generateAssertion), .invalidKey)
+    XCTAssertEqual(navOSSAppAttestFailure(domain: domain, code: 4, step: .attestKey), .serviceUnavailable)
+    XCTAssertEqual(navOSSAppAttestFailure(domain: domain, code: 0, step: .generateAssertion), .failed)
+  }
+
+  func testAnUnsupportedProviderNeverRegistersOrRetries() async {
+    let client = NavOSSCommunityClient(
+      baseURL: URL(string: "http://127.0.0.1:9")!,
+      provider: NavOSSUnavailableAttestationProvider(),
+      store: NavOSSCommunityMemorySecretStore())
+    XCTAssertFalse(client.canWrite)
+    for _ in 0..<3 {
+      do {
+        _ = try await client.trafficCredential()
+        XCTFail("must not proceed")
+      } catch {
+        XCTAssertEqual(error as? NavOSSCommunityFailure, .attestationUnsupported)
+      }
+    }
+  }
+}

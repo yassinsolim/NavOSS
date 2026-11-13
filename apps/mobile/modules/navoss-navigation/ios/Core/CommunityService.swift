@@ -116,8 +116,12 @@ public final class NavOSSCommunityService: @unchecked Sendable {
 
   static func defaultProvider(store: NavOSSCommunitySecretStore) -> NavOSSCommunityAttestationProvider {
     #if canImport(DeviceCheck) && os(iOS)
-      let appAttest = NavOSSAppAttestProvider()
-      if appAttest.isSupported { return appAttest }
+      // Only a build signed with the App Attest entitlement may use it; without it the app
+      // stays in the calm "not supported" state (reports private, traffic not available).
+      if Bundle.main.object(forInfoDictionaryKey: "NavOSSAppAttestEnabled") as? Bool == true {
+        let appAttest = NavOSSAppAttestProvider()
+        if appAttest.isSupported { return appAttest }
+      }
     #endif
     #if DEBUG
       // Simulator and other DEBUG builds without App Attest: a software key, accepted only by a
