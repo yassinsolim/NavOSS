@@ -2,50 +2,77 @@
 
 ## Product and safety
 
-- NavOSS is a privacy-first navigation technical beta, currently focused on Calgary and iOS/CarPlay.
-- Do not claim live traffic, traffic-aware ETA, lane guidance, offline routing, public incident crowdsourcing, or production-service guarantees unless those capabilities are actually added and validated.
+- NavOSS is a privacy-first navigation technical beta for iOS and CarPlay. The deployed service covers Calgary and Kelowna; Alberta and British Columbia coverage is merged but not deployed (see Current checkpoint).
+- Claim only what the **deployed** service and the **shipped build** do. Live traffic, community reports, lane guidance, signposts, and offline maps are merged code or in-flight work, not available capabilities, until the server is deployed, enabled, and validated. Do not describe them as available in the app, the site, App Store metadata, or docs.
 - Never invent route, traffic, closure, camera, place, or safety data. Fail conservatively.
 - Never log search text, route coordinates, raw location, or private trip history.
 - Driving tests must be passenger-operated or performed while safely parked.
+- Never touch the owner's physical iPhone, its signing identities, or its App Store Connect/TestFlight state except as the owner explicitly directs. Verify on simulators.
 - AI agents must never run the raw beta-feedback redaction command or query raw contribution text,
   labels, draft IDs, or timestamps. Only aggregate counts and the human-approved deidentified inbox
   under `artifacts/feedback/approved/` may enter AI context. The workspace PreToolUse hook enforces
   this boundary.
+- User-facing text about data collection must match `docs/privacy.md` (and `apps/site/src/privacy.html`). Change the policy in the same pull request as the behaviour.
+
+## Product design
+
+Any change to what a driver sees, hears, or is told (phone, CarPlay, spoken guidance, website, store text) loads the `product-design` skill at `.agents/skills/product-design/SKILL.md` first. It holds the request modes, the copy rules (honest capability claims, driving-safe wording, privacy copy), the states every surface must design (including the old-server state), the token and primitive inventory, and exemplars from merged PRs. Where no standard exists it points to `references/coverage-gaps.md`; record new gaps there instead of inventing rules.
 
 ## Architecture
 
 - `apps/mobile`: Expo 57, React Native 0.86, MapLibre, and the native Swift navigation/CarPlay module.
-- `apps/api`: Fastify API backed in production by self-hosted Alberta Nominatim, Valhalla, and Calgary camera data.
-- `packages/contracts`: shared strict Zod contracts.
-- Production API: `https://navoss-api.yassin.app`.
-- Bundle ID: `org.navoss.mobile`.
-- Native navigation contract v10 (v9 plus `/v2/routes` step metadata carried through native) owns location, matching (windowed, grid-indexed, speed-plausible, with short dead reckoning), geometry-derived step progress, rerouting with consent modes (`adaptive`, `ask-first`, `keep-route`, whose rejoin is a `through` waypoint), speech, fixed-camera alert eligibility, speeding state, arrival, and phone/CarPlay state. The phone only presents camera alerts and reroute proposals.
+  - `src/theme` (tokens) and `src/ui` (primitives, sheets) are the phone design system. `src/features/map` is the single map screen; behaviour lives in `features/map/controller/*` hooks and `map-screen.tsx` is a composition root. `src/features/navigation` presents guidance.
+  - `modules/navoss-navigation` is the native core (`ios/Core`): navigation (matching, guidance, rerouting, speech, cameras), the CarPlay presentation helpers, the routes client (`/v2/routes` with `/v1/routes` fallback, discovered through `/v2/config`), and the community client (App Attest, reports, traffic uploader) with its JS bridge in `src/features/navigation/native-navigation.ts`.
+  - `carplay/ios` holds the CarPlay scene delegates (main, Dashboard, instrument cluster), the map view controller, and the Siri/App Intent; `plugins/` copies them into the generated project.
+- `apps/api`: Fastify API. The code covers Alberta and British Columbia (`/v2/routes`, `/v2/config`), community reports (`/v2/community/*`, Apple App Attest, SQL migrations via `node dist/migrate.js`), community traffic (`/v2/traffic/*`, `off` by default), and the offline manifest (`GET /v1/offline/manifest`). **The deployed API is the older image** (Calgary and Kelowna; see Current checkpoint).
+- `packages/contracts`: shared strict Zod contracts, including the province registry (`coverage-data.ts`), `route-v2`, `community-report`, `traffic`, and `offline-bundle`.
+- `infra/offline`: reproducible offline bundle pipeline (PMTiles, Valhalla 3.9.1 graphs, SQLite search). The app side is PR #83; do not describe offline maps as a feature until it ships.
+- `apps/site`: static website (`site.json` CSP with `script-src 'none'`, no third-party requests).
+- Production API: `https://navoss-api.yassin.app`. Bundle ID: `org.navoss.mobile`.
+- Native navigation contract **v10** (build 70 shipped v8; v9 added indexed matching, geometry guidance, reroute consent, native camera alerts, speeding state; v10 carries `/v2/routes` step metadata) owns location, matching (windowed, grid-indexed, speed-plausible, with short dead reckoning), geometry-derived step progress, rerouting with consent modes (`adaptive`, `ask-first`, `keep-route`, whose rejoin is a `through` waypoint), speech, fixed-camera alert eligibility, speeding state, arrival, and phone/CarPlay state. The phone only presents camera alerts and reroute proposals.
 
 ## Toolchain and checks
 
-- Use Node 24.18.0 and pnpm 11.13.1. `mise.toml` pins both.
+- Use Node 24.18.0 and pnpm 11.13.1. `mise.toml` and `.node-version` pin Node; `packageManager` pins pnpm. System Node on the maintainer's Mac may be newer and lack Corepack; put a 24.18 toolchain first on `PATH`.
 - Install with `corepack pnpm install --frozen-lockfile`.
-- Before merging or releasing, run `corepack pnpm check`, `lint`, `test`, `build`, and `format:check`.
+- Before merging or releasing, run `corepack pnpm check`, `lint`, `test`, `build`, and `format:check`. CI also checks third-party notices (`licenses:generate` then no diff), the CarPlay splice control, `git diff --check`, native Swift tests, and CarPlay generated-source parity.
+- CI runs the PostGIS suites (community reports and traffic) against a `postgis/postgis:16-3.5-alpine` service with `NAVOSS_REQUIRE_TEST_DATABASE=1`. Locally those suites skip without a database; set the three `NAVOSS_*TEST_DATABASE*` variables to run them.
 - For native navigation changes, run `corepack pnpm --filter @navoss/mobile test:native:ios` and a full Xcode compile.
 - The deterministic iOS harness is `corepack pnpm validate:navigation:ios`; it also supports `--phone-only`, `--carplay-only`, and opt-in `--reuse-build`.
 - Local mobile development uses API port 3001 because port 3000 may be occupied.
+- The maintainer's Mac currently has Xcode 27.2. It has no CarPlay Simulator window (Device Hub disables it for simulators), so interactive CarPlay cannot be exercised here. Hosted CI/release runners use Xcode 26.6.
+- Dev-client tips that worked: start Metro with `REACT_NATIVE_PACKAGER_HOSTNAME=127.0.0.1` and without `--localhost` (otherwise it can bind only to `::1` and the dev client cannot connect); launch the installed app on its own instead of through the dev-client deep link; end any active trip first (an active trip is restored on relaunch); set the simulator location immediately before requesting a route. Rebuild the native client only after config, plugin, `carplay`, or module changes.
 
 ## Native and release constraints
 
 - `apps/mobile/ios` is generated and ignored. Change Expo config, plugins, `apps/mobile/carplay`, or `apps/mobile/modules`, then regenerate; do not treat generated iOS files as source.
 - Keep Apple Team IDs, credentials, certificates, provisioning profiles, tokens, and `.env` files local and out of Git.
 - CarPlay requires the approved `com.apple.developer.carplay-maps` entitlement and the `production-carplay` EAS profile.
+- App Attest: the plugin sets `com.apple.developer.devicecheck.appattest-environment` to `production` for every EAS profile except `development`; a Release build with the development value fails. The Simulator software key is `#if DEBUG` only.
 - Checked-in production profiles keep Google Places disabled. Do not enable Google without explicit approval, billing/key setup, and matching privacy disclosures.
 - For local EAS iOS archives, unset `CC` and `CXX` so ExpoModulesJSI uses Apple Clang.
 - Do not inspect or mutate an EAS local temporary build directory while Fastlane is compiling.
 
 ## Current checkpoint
 
-- The latest recorded TestFlight candidate is `0.1.0 (70)` from `afa4067`, built by GitHub Actions run `36604772860`; EAS submission `cf68625e-5ce1-4765-9dc8-e9eb24f06370` `FINISHED` on 2026-09-29, and the maintainer confirmed it in App Store Connect. Tester-group distribution and automatic installation are unconfirmed.
-- Build 55 carries PR #35's factual search-result place labels, replacing the generic `Point of interest` badge. Against the deployed API these render as `Cafe`, `Fast Food`, and `Gas station`; results with no `details.category` show no badge. The accented `Café` needs the undeployed API change. Build 55's upload fired the first App Store Connect-triggered distribution run, which enqueued the assignment; Apple-side group membership and Beta App Review are unconfirmed.
-- Build 54 bound the CarPlay vehicle render loop to the car display and added road-following position and corner-heading interpolation. The maintainer confirmed on 2026-09-09 that navigation with the phone's screen off now works, closing the screen-off freeze; cornering, wake-without-jump, reconnect, and Dashboard-only steps remain unreported.
-- Build numbers and source commits must come from current EAS/App Store Connect evidence and `docs/release/testflight.md`, not from an old checkpoint. Later source or test commits do not imply a new distributed binary.
-- The release source of truth is `docs/release/testflight.md`; CarPlay design and remaining gaps are in `docs/architecture/carplay.md`.
+- The latest shipped build is `0.1.0 (70)` from `afa4067` (native contract v8, the pre-refresh phone UI), built by GitHub Actions run `36604772860` with Xcode 26.6; EAS submission `cf68625e-5ce1-4765-9dc8-e9eb24f06370` `FINISHED` on 2026-09-29 and the maintainer confirmed it in App Store Connect. No later binary has been built or uploaded. Everything merged since (#73 to #88: phone UI refresh, native contract v9/v10, CarPlay quality pass, `/v2/routes` clients, community reports and traffic client) is on `main` only.
+- External TestFlight distribution is manual since #88: an upload no longer assigns to `NavOSS Friends` or starts Beta App Review; a maintainer runs `testflight-distribute.yml` for a chosen build. EAS reads event-triggered workflows from the default branch; whether the old trigger is deregistered is unverified. The internal `testers` group receives uploads.
+- **Production still runs the old API image**: Calgary and Kelowna service areas, no `/v2/routes`, no community or traffic endpoints, no offline manifest, `/v2/config` declaring `/v1/routes`. It cannot be redeployed yet. The new client must stay compatible with it: unknown `/v2/*` is a quiet "not available", never an error or a claim. #84 and #85 were exercised on the simulator against `https://navoss-api.yassin.app` (config accepted, preview, guidance without lanes, cameras, reroute, arrival; no community or traffic requests beyond one config and one traffic-status probe).
+- Merged on `main`, server code, **not deployed**: Alberta and BC coverage and `/v2/routes` lanes and signposts (#79, validated locally on a real AB+BC graph in #86), community reports (#73), community traffic (#76, #82, #86; off by default), offline bundle pipeline and manifest (#80; no hosting yet). Open: #83 (offline, app side).
+- Interactive CarPlay is unverified end to end. A hosted-runner probe (GitHub Actions, simulator host) showed the entitled icon but crashed Apple's `CarPlayTemplateUIHost` on iOS 26.4 (`CPSTemplateInstance vehicleSupportsDestinationSharing` unrecognized selector) before Search appeared, and host screen capture failed on 26.5. All CarPlay verification is the harness (production map, mocked template chrome) plus native tests; a head unit is required (`docs/release/next-build-checklist.md`).
+- Build numbers and source commits must come from current EAS/App Store Connect evidence and `docs/release/testflight.md`, not from this file. Later source or test commits do not imply a new distributed binary.
+- Release source of truth: `docs/release/testflight.md`; next build conditions: `docs/release/next-build-checklist.md`; CarPlay design and gaps: `docs/architecture/carplay.md`.
+
+## Lessons that cost time in the revival
+
+- **Tests written by the code's author share its assumptions.** Where an external convention exists (Apple App Attest, Valhalla, MapLibre, ECMAScript number formatting), test against independent vectors or the real thing: #85's assertion client data was proved with 97 vectors generated from the TypeScript helper; recorded real Valhalla and production responses are the route fixtures.
+- **Mutation-check regression tests for security and privacy fixes.** Remove the fix, run the test, and confirm it fails (and say how many assertions fail). A test that still passes with the guard removed protects nothing (#87 found a per-cell race test that did).
+- **Verify UI on the simulator, not from source.** The launch-tap bug, the Dynamic Type overflow, and the preview-camera bug in #78 were visible only on a render.
+- **Archive ignored artifacts before removing a worktree.** `artifacts/` is gitignored; deleting a worktree deletes unpushed evidence and built bundles. Copy what matters out first.
+- **Gate merges on the checks' own exit status.** Read the exit code or the CI conclusion of each gate; do not infer success from partial output, a cached run, or an earlier commit. Report what was run on the final commit.
+- **UI tests exercise behaviour, not source text.** Do not write tests that grep source files; test the extracted logic (#78 replaced four such tests).
+- **Compatibility is a test target.** A strict client schema rejected the deployed server's config in #84; test against the deployed server's real answers.
+- **Merge `origin/main` into a branch before opening a PR and again before reporting done.** Never force-push.
 
 ## Git discipline
 
@@ -58,7 +85,7 @@
 
 ## Immediate next work
 
-1. Confirm in App Store Connect that build 55 reached `NavOSS Friends` and clear Beta App Review. The upload-triggered path itself is proven; see `docs/release/ci-cd.md`.
-2. Distinguish Apple approval and group availability from testers' automatic-update device setting when reporting delivery.
-3. Preserve the locked-phone CarPlay verification checklist and record real head-unit outcomes when available.
-4. Run focused checks and the applicable release gates before publishing changes; record the exact build and distribution state rather than inferring it from a successful upload.
+1. Deploy the new API image (migrate, verify), then enable features in the order in `docs/release/next-build-checklist.md`. Until then the client must keep degrading quietly against the old server.
+2. Merge the open offline app side (#83) and the in-flight phone community UI and search quality work only with evidence, then build the next TestFlight candidate only after the pre-upload conditions in `docs/release/next-build-checklist.md` hold. App Privacy answers and the permission string must be updated before a build can reach a server with community features enabled.
+3. Record real head-unit outcomes against the CarPlay checklist when a build is available.
+4. Run focused checks and the applicable release gates before publishing changes; record exact build and distribution state rather than inferring it from a successful upload.

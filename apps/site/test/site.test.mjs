@@ -88,7 +88,10 @@ test('homepage states what NavOSS is and keeps unreleased features labelled', ()
   const hero = text(/<section class="hero"[\s\S]*?<\/section>/.exec(homepage)[0]);
   assert.match(hero, /private, account-free, open-source navigation/);
   assert.match(hero, /iOS \+ CarPlay technical beta/);
-  assert.match(hero, /Alberta and British Columbia are rolling out/);
+  assert.match(
+    hero,
+    /Calgary and Kelowna\. Alberta and British Columbia are planned and not live yet/,
+  );
 
   const shipping = text(section(homepage, 'features'));
   assert.doesNotMatch(shipping, /live traffic|offline|community|report/i);
@@ -157,6 +160,10 @@ test('legal and support pages keep their published commitments', () => {
     /Accepted submissions.*scheduled for deletion from the live database after 90 days/,
   );
   assert.match(privacy, /DriveBC webcams are not enforcement cameras/);
+  assert.match(privacy, /Community traffic sharing \(opt-in\)/);
+  assert.match(privacy, /Community road reports/);
+  assert.match(privacy, /not switched on in the deployed service/);
+  assert.match(privacy, /Effective November 12, 2026/);
   assert.match(
     dataSources,
     /Builds without the restricted Google key make no Google place-details request/,

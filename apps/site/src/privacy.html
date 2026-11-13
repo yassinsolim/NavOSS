@@ -15,7 +15,7 @@
     <!-- @header -->
     <main id="main" class="document-shell">
       <article class="document">
-        <p class="document__meta">Internal beta policy · Effective July 31, 2026</p>
+        <p class="document__meta">Internal beta policy · Effective November 12, 2026</p>
         <h1>Privacy without an account</h1>
         <p>
           NavOSS is operated by Yassin Soliman as an individual developer in Alberta, Canada. It is
@@ -26,6 +26,13 @@
           This policy is ready for internal TestFlight. External testing remains blocked until a
           direct privacy and support email has been activated and tested.
         </div>
+        <div class="callout callout--warning">
+          <strong>Community features are not switched on.</strong> Community traffic sharing and
+          shared community road reports are described below because the NavOSS server and the app
+          code support them, but neither is switched on in the deployed service, and no released
+          version of the app (the latest is 0.1.0 (70)) sends traffic observations or shares road
+          reports. This policy will say so until that changes.
+        </div>
 
         <nav class="toc" aria-labelledby="toc-title">
           <h2 id="toc-title" class="toc__title">On this page</h2>
@@ -35,7 +42,10 @@
             <li>
               <a href="#sharing-and-external-place-actions">Sharing and external place actions</a>
             </li>
-            <!-- Community data sections (traffic sharing, road reports) are listed here. -->
+            <li>
+              <a href="#community-traffic-sharing-opt-in">Community traffic sharing (opt-in)</a>
+            </li>
+            <li><a href="#community-road-reports">Community road reports</a></li>
             <li>
               <a href="#no-advertising-or-cross-app-tracking"
                 >No advertising or cross-app tracking</a
@@ -66,7 +76,10 @@
           location indicator. NavOSS does not request Always location. Updates stop on End or
           confirmed arrival. The current active route is stored transiently on the phone for
           operating-system recovery, then erased when navigation ends or arrival is confirmed;
-          NavOSS does not maintain a trip-history database.
+          NavOSS does not maintain a trip-history database. If you switch on traffic sharing,
+          positions along through roads are also sent during navigation as described under
+          <a href="#community-traffic-sharing-opt-in">Community traffic sharing</a>; it is off
+          unless you turn it on, and it is not switched on in the deployed service.
         </p>
 
         <h2 id="search-and-routing">Search and routing</h2>
@@ -164,28 +177,280 @@
           provider under its terms, to group reports, draft issues, or help implement a
           human-approved item. The summary contains no account or contributor identifier.
         </p>
+
+        <h2 id="community-traffic-sharing-opt-in">Community traffic sharing (opt-in)</h2>
+        <div class="callout callout--warning">
+          <strong>Not switched on.</strong> The NavOSS server supports traffic sharing, but it is
+          not switched on in the deployed service, and no released version of the app (the latest is
+          0.1.0 (70)) sends driving observations. This section describes the app version that adds
+          the <strong>Share traffic speeds</strong> switch and what the server does with what it
+          would receive. Statements about what the app does are requirements for that version; no
+          released app has been checked against them yet.
+        </div>
         <p>
-          During active navigation, the report button can store up to 25 structured road-report test
-          drafts on the device. Each contains one of four fixed report types, the current precise
-          coordinate, creation time, and a two-hour expiry time. Test drafts contain no free text,
-          photo, account, or public user name. They are not sent to NavOSS or shown to other
-          drivers. Expired drafts are discarded when the local list is next read or written, and
-          removing the app removes all remaining drafts.
+          NavOSS can build live traffic from the driving speeds of people who choose to share them.
+          Traffic sharing is <strong>off by default</strong>.
+        </p>
+        <p>
+          <strong>What is sent.</strong> While sharing is on and turn-by-turn navigation is active,
+          the app sends short batches of your driving positions to the NavOSS API. A batch is a list
+          of positions, each with the number of seconds since the batch's first position, plus the
+          time the batch started rounded down to the minute, plus an upload credential (described
+          below). A batch covers about one minute of driving and never more than five. It contains
+          no account, no name, no advertising identifier, no trip or sequence identifier, no
+          destination and no planned route. It does contain a short stretch of the path you actually
+          drove. Batches from one trip carry the same upload credential, come from the same network
+          address, and continue where the previous one stopped, so the server and Cloudflare could
+          link them while they are being delivered. NavOSS does not record that link.
+        </p>
+        <p>
+          <strong>Upload credentials and abuse resistance.</strong> To make made-up traffic harder,
+          the server accepts batches only with an upload credential, and issues one only to an
+          installation of the app that has registered an Apple App Attest key for NavOSS and signs a
+          fresh request with it. For that key the server stores a keyed hash of the key's
+          identifier, the public key in encrypted form, a counter, whether Apple attested it, and
+          the times it was registered and last used. A periodic cleanup deletes a key after 90 days
+          without use; it is best effort, so a key can remain somewhat longer if a cleanup run
+          fails. A key registered less than a day earlier gets no credential yet. The credential is
+          valid for two hours. The server keeps no record of which installation a credential was
+          issued to, and nothing it stores about traffic refers to an installation or a credential,
+          but asking for a credential does update the key's counter and &ldquo;last used&rdquo;
+          time.
+        </p>
+        <p>
+          App Attest shows that a request was signed by a genuine copy of the app on an Apple
+          device. It does not show that the device was driving, and one iPhone can register several
+          keys. A credential is a bearer token: whoever holds it can upload with it until it
+          expires, from any device. A test setting makes the server accept software keys instead;
+          the committed production configuration leaves it off, and the enablement checklist
+          requires that.
+        </p>
+        <p>
+          <strong>When it is sent.</strong> Only during active turn-by-turn navigation, including
+          while the phone is locked or CarPlay is connected, about once a minute. Nothing is sent
+          while you browse the map, search, preview a route, or drive without navigation, and
+          nothing is sent when sharing is off. The server refuses a batch whose first position is
+          more than 10 minutes old when it arrives.
+        </p>
+        <p>
+          <strong>What is left out.</strong> The app is required not to record the first 400 metres
+          or the last 400 metres of a trip, or anything within 400 metres of your destination or a
+          stop on the way, and to hold back the most recent 400 metres so that a trip you end early
+          never sends its final stretch. The server cannot check this, because it is never told
+          where a trip starts or ends. What the server itself does is discard the first and last 100
+          metres of every batch it receives and use only motorways, trunk roads, primary roads and
+          secondary roads. Of those, it uses only stretches at least 20 metres long that the routing
+          software's map marks as open to cars and as neither private or destination-only access nor
+          a dead end or the road into or out of an area with no other exit. That map check reaches
+          only as far as the routing software looks: a large area with a single exit, such as a
+          valley with its own road network, can still be used. Positions on other roads (tertiary
+          and residential streets, service roads, driveways, tracks, and parking areas) may still be
+          uploaded and matched to the map in memory, but nothing is kept from them.
+        </p>
+        <p>
+          <strong>What the server does.</strong> The server matches a batch to roads in memory and
+          works out, for each qualifying stretch between two junctions, which part of it the batch
+          drove (as distances along the stretch), how far you moved there and how long you spent
+          there, including time stopped. A stretch is often longer than one batch covers, so the
+          parts you drive of one stretch in successive batches are joined; once they cover 300
+          metres of it, or half of it if it is shorter, they become your one speed for that stretch
+          (distance over time). The speed is measured on the part driven and shown for the whole
+          stretch. It holds these figures in memory and discards the batch. The NavOSS API does not
+          write your positions, the batch, or its timing to its database, a backup, or its log. To
+          match a batch to roads and check the map the API uses routing software (Valhalla) that it
+          requires to be at a local network address; on the production stack that is a container on
+          the same NavOSS-controlled machine in Alberta. The address check by itself does not prove
+          where the software runs or who operates it, and NavOSS will confirm the production
+          deployment before switching publication on. Batches are not forwarded to another routing
+          provider. The map check sends the routing software only points on the map's own roads,
+          never your positions. Like every request to NavOSS, a batch is delivered through
+          Cloudflare, which sees it in transit. NavOSS has not yet verified that the routing
+          software, the reverse proxy's error handling, system swap, or crash dumps on the
+          production machine never write any part of a batch, and will not switch publication on
+          until it has.
+        </p>
+        <p><strong>What is kept, and for how long.</strong></p>
+        <ul>
+          <li>
+            <em>Before publication, in memory only.</em> For each stretch of road, the server's
+            memory holds one speed per contributor (or, until enough of the stretch is covered,
+            which parts of it the contributor has driven, how far and for how long), the five-minute
+            period in which it arrived, when the batch's driving began, and a scrambled marker that
+            tells contributors apart. The marker is derived from your App Attest installation and
+            that one stretch of road using a secret that exists only in the running server's memory.
+            Markers for two different roads are unrelated, so they cannot be matched to each other
+            by comparing them; your marker for one stretch stays the same across five-minute periods
+            and credentials until the server restarts. For an installation registered in the last
+            seven days, the memory also holds a scrambled marker of the network the batch came from,
+            so that several new keys on one network count once. This is dropped after at most 20
+            minutes and is lost whenever the server restarts. It is never written to the database.
+          </li>
+          <li>
+            <em>After publication, in the database.</em> Once at least three installations have
+            driven the same stretch, the server stores one typical speed for it, rounded to 5 km/h,
+            the public OpenStreetMap shape of that stretch, and the five-minute boundary at which it
+            was published. It is never shown after 15 minutes. It is deleted at that point by the
+            server's next successful database update, which is normally at that moment and otherwise
+            at a later five-minute boundary; it is erased whenever the server starts (including when
+            the feature is switched off, in which case the server retries until the erasure
+            succeeds); and it is excluded from database backups. Nothing deletes it while the server
+            is stopped.
+          </li>
+          <li>
+            <em>Abuse limits, in memory only.</em> The server keeps salted fingerprints of the
+            source network and of the contributor, with request times, for up to 11 minutes after
+            the last request.
+          </li>
+          <li>
+            <em>Operator counters.</em> Every 15 minutes the server logs running totals (batches,
+            credentials, stretches published, failures). They contain no road, position, address or
+            installation and are kept as long as other operational logs.
+          </li>
+        </ul>
+        <p>
+          Everything derived from a batch leaves memory within 20 minutes of its arrival and is no
+          longer shown within 35 minutes; physical deletion from the database can be later, as
+          described above. These periods, the minimum of three contributors, and the road rules are
+          fixed in the server's code and cannot be weakened by configuration.
+        </p>
+        <p>
+          <strong>What other drivers see.</strong> A stretch of road is coloured, and can affect an
+          estimated arrival time, only after at least three different App Attest installations have
+          each driven at least 300 metres (or half) of that same stretch, in batches whose driving
+          began within the 15 minutes before a five-minute boundary, and only from that boundary. It
+          stays shown for at most 15 minutes, so what other drivers see rests on driving at most 30
+          minutes old. Three installations are three keys, not necessarily three people. A stretch
+          driven by one or two contributors is never shown and never stored. Other drivers see, for
+          each published stretch, its shape, a congestion colour, a typical speed rounded to 5 km/h,
+          the road's normal speed, and the five-minute boundary at which it was published. They
+          never see a vehicle, a trip, a count of contributors, or who contributed. With few
+          contributors, most roads will show no traffic at all.
+        </p>
+        <p>
+          <strong>What NavOSS cannot rule out.</strong> This is data minimisation with a threshold,
+          not anonymity.
+        </p>
+        <ul>
+          <li>
+            Three installations are not necessarily three unrelated people. They can be one
+            household, or one person who has registered several keys and kept them for a week or
+            used several networks.
+          </li>
+          <li>
+            On a quiet road, the fact that a stretch was driven by at least three contributors
+            shortly before a given five-minute boundary becomes visible to anyone watching the map,
+            and the small group who drive there may be guessable.
+          </li>
+          <li>
+            If two of the three contributors on a stretch cooperate, they can infer that a third
+            person drove it in that window, roughly how fast, and at a junction which way they went.
+          </li>
+          <li>
+            Someone with access to the running server's memory, together with its database, could
+            work out which installation contributed to a stretch that is still waiting for
+            publication.
+          </li>
+          <li>
+            Cloudflare and the NavOSS server necessarily see each upload and its network address
+            while it is being delivered, as they do for every request.
+          </li>
+          <li>
+            A home on a secondary or larger through road is on a road the server uses. Only the
+            trimming the app performs and the three-contributor rule protect it.
+          </li>
+        </ul>
+        <p>
+          <strong>How to turn it off.</strong> Turn off <strong>Share traffic speeds</strong> in the
+          app's About and Privacy screen. Uploads are required to stop immediately and anything not
+          yet sent to be discarded. Ending navigation or removing the app has the same effect. What
+          was contributed stops being shown within 35 minutes and is deleted as described above.
+          Nothing about traffic is stored with an account, an installation, or a trip identifier, so
+          there is no per-person traffic record to look up or delete. You can see traffic from other
+          drivers without sharing your own.
         </p>
 
-        <!--
-          Community data sections go here, in this order, mirrored from docs/privacy.md:
-          "Community traffic sharing (opt-in)" then "Community road reports". Add matching entries
-          to the "On this page" list above.
-        -->
+        <h2 id="community-road-reports">Community road reports</h2>
+        <div class="callout callout--warning">
+          <strong>Not switched on.</strong> Sharing road reports is not switched on in the deployed
+          NavOSS service, and no released version of the app (the latest is 0.1.0 (70)) contains the
+          sharing client: released builds keep only the private drafts described at the end of this
+          section. The paragraphs below describe the app version that adds
+          <strong>Share road reports</strong>.
+        </div>
+        <p>
+          NavOSS can share structured road reports between drivers. The NavOSS server decides
+          whether sharing is on (<code>features.communityReports</code>); it is off until the
+          operator enables it. While it is off, or on a device that cannot use Apple App Attest, the
+          app keeps the private drafts described at the end of this section and sends nothing.
+        </p>
+        <p>
+          <strong>What a report sends.</strong> Reports are shared only after you turn on
+          <strong>Share road reports</strong> (off by default; until then every report stays a
+          private draft). Within 400 m of your saved Home or Work, or of the current trip's start,
+          destination or stops, a report stays private unless you explicitly confirm sharing it.
+          When sharing is on and you choose a report type, the app sends one of eight fixed types
+          (crash, road closed, slow traffic, construction, pothole, object on road, other hazard,
+          stopped vehicle), your current precise coordinate, your direction of travel in whole
+          degrees when known, and an App Attest signature with its key identifier. It contains no
+          free text, photo, name, account, destination, or route. The server stores the precise
+          coordinate and a copy snapped to a grid of about 55 m by 35 m. Other drivers receive only
+          the snapped position, the type, the report and expiry times rounded to five minutes, and a
+          confirmation count; never who reported it. A report expires after two hours; confirmations
+          can extend it to at most 12 hours after it was made, and &ldquo;not there&rdquo; answers
+          shorten or end it. No report changes a route.
+        </p>
+        <p>
+          <strong>Reading reports.</strong> The app asks the server for reports in the area you are
+          viewing or, during guidance, in a box around the route ahead (at most half a degree each
+          way). These requests carry no identity, and the app keeps the answers in memory only. The
+          CarPlay map shows the same reports. During guidance the app can show, and if
+          <strong>Spoken road reports</strong> is on and the guidance sound allows alerts, speak a
+          short alert for a report ahead.
+        </p>
+        <p>
+          <strong>Still there?</strong> After you pass a report, and never near a turn, the app may
+          ask whether it is still there. <strong>Still there</strong> or
+          <strong>Not there</strong> sends that answer with your current coordinate, which the
+          server uses only to check that you are within 1.5 km of the report and then discards.
+          Letting the question disappear sends nothing. The app does not ask about reports you made
+          during the same app session.
+        </p>
+        <p>
+          <strong>Identity and deletion.</strong> The first report registers an App Attest key for
+          this installation. The phone stores only the key's identifier, in the iOS Keychain on this
+          device; the key itself stays in the iPhone's Secure Enclave. The server stores the key as
+          described under <a href="#community-traffic-sharing-opt-in">Community traffic sharing</a>,
+          plus, for 24 hours, the position of the installation's latest report or answer rounded to
+          about 1 km, to reject impossible travel. You can withdraw a report you made in the same
+          app session. <strong>Reset community identity</strong> deletes the installation from the
+          server with all its reports and answers, and forgets the key on the phone; a later report
+          registers a new key that is not linked to the old one. Development builds running in the
+          iOS Simulator can use a software key that only a test server accepts; release builds
+          cannot.
+        </p>
+        <p>
+          <strong>Private drafts.</strong> When sharing is off or unavailable, the report button
+          stores up to 25 structured road-report drafts on the device. Each draft contains one of
+          the eight fixed report types, the current precise coordinate, its creation time, and a
+          two-hour expiry time. It contains no free text, photo, account, or public user name.
+          Drafts are not sent to NavOSS or a third party and are not shown to other drivers. Expired
+          drafts are discarded when the local list is next read or written, and removing the app
+          removes all remaining drafts.
+        </p>
 
         <h2 id="no-advertising-or-cross-app-tracking">No advertising or cross-app tracking</h2>
         <p>
           The default Google-disabled build has no account system, ads, analytics SDK, advertising
-          identifier, data broker integration, or cross-app tracking. Location is not used by NavOSS
-          for advertising or user profiling. A separately enabled Google place-details build links
-          the Google Places SDK and is subject to the SDK declarations above; NavOSS does not
-          receive or operate that Google analytics data.
+          identifier, data broker integration, or cross-app tracking. It does not use an advertising
+          identifier or create a persistent user or device identifier, except that a phone which
+          turns on traffic sharing or community road reports registers an App Attest key, described
+          under
+          <a href="#community-traffic-sharing-opt-in">Community traffic sharing</a> and
+          <a href="#community-road-reports">Community road reports</a>, which the server keeps until
+          90 days after its last use. Location is not used by NavOSS for advertising or user
+          profiling. A separately enabled Google place-details build links the Google Places SDK and
+          is subject to the SDK declarations above; NavOSS does not receive or operate that Google
+          analytics data.
         </p>
 
         <h2 id="map-and-camera-data">Map and camera data</h2>
@@ -205,11 +470,13 @@
           <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a> provides DNS, TLS,
           traffic delivery, and the outbound tunnel. It processes client IP and network/request
           metadata on its global network under its policy. NavOSS does not enable raw Cloudflare
-          request-log export. Map delivery uses OpenFreeMap; TestFlight feedback uses Apple; and
-          user-initiated support may use GitHub. Optional Google-rendered place details and a
-          user-selected external reviews action use
-          <a href="https://policies.google.com/privacy">Google under Google's policy</a>. Optional
-          licensed live-traffic routing may use
+          request-log export. Map delivery uses OpenFreeMap; TestFlight feedback, the user-invoked
+          system share sheet and App Attest, which the phone uses to create the key that signs
+          community road reports and obtains traffic-upload credentials, use
+          <a href="https://www.apple.com/legal/privacy/">Apple</a>; and user-initiated support may
+          use GitHub. Optional Google-rendered place details and a user-selected external reviews
+          action use <a href="https://policies.google.com/privacy">Google under Google's policy</a>.
+          Optional licensed live-traffic routing may use
           <a href="https://www.mapbox.com/legal/privacy/">Mapbox</a> and send route endpoints,
           preferences, and request network metadata; it is disabled in current production.
         </p>
@@ -221,6 +488,89 @@
           search-index tables are excluded. The Google query safety counter stores only the UTC
           month, aggregate used count, and last update time.
         </p>
+        <p>
+          NavOSS's operational logs exclude HTTP request and response bodies, search text, route
+          coordinates, shared traffic positions, and normal HTTP access events. NavOSS has not yet
+          verified that the routing software and the reverse proxy never log request content or
+          client addresses when a request fails; traffic publication stays off until it has. When
+          traffic sharing is enabled on the server, a periodic summary records only counts of
+          batches, credentials, and road stretches, with no road, position, address, or
+          installation.
+        </p>
+        <p>Retention of community data, if and when the features are switched on:</p>
+        <div class="table-wrap">
+          <table>
+            <caption class="visually-hidden">
+              Retention of community traffic and road-report data
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Data</th>
+                <th scope="col">NavOSS retention</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Traffic-sharing batches (only when switched on)</th>
+                <td>
+                  Positions and timing processed in memory and discarded; not written by the NavOSS
+                  API to its database, log, or a backup
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Unpublished traffic speeds</th>
+                <td>
+                  API memory only: one speed per contributor and road stretch with a per-road
+                  scrambled marker (and, for keys registered in the last seven days, a scrambled
+                  network marker); dropped within 20 minutes; never in the database
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Published traffic speeds</th>
+                <td>
+                  Per road stretch: speed rounded to 5 km/h, public road shape, five-minute
+                  publication time; never shown after 15 minutes; deleted by the next successful
+                  database update after that, erased on every server start, excluded from backups
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">App Attest key for traffic sharing</th>
+                <td>
+                  Keyed hash of the key identifier, encrypted public key, counter, registration and
+                  last-use times; removed by a periodic best-effort cleanup after 90 days without
+                  use
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Community road reports</th>
+                <td>
+                  Type, precise and grid-snapped coordinates, heading, times, and the reporting
+                  installation; deleted 24 hours after expiry (immediately expired when withdrawn),
+                  at once with Reset community identity; excluded from backups
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">&ldquo;Still there?&rdquo; answers</th>
+                <td>
+                  Answer, time, and the answering installation; deleted with the report; the answer
+                  coordinate is discarded after the proximity check
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Installation travel check position</th>
+                <td>Latest report or answer position rounded to about 1 km, kept for 24 hours</td>
+              </tr>
+              <tr>
+                <th scope="row">Road-report private drafts</th>
+                <td>
+                  Only while sharing is off or unavailable: up to 25 structured report types,
+                  precise coordinates, creation times, and expiry times stored only on the device;
+                  each expires after two hours and all are removed with the app
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <p>
           Operational logs may contain timestamps, service identity, severity, lifecycle or health
           events, error names, and random request IDs. SSH and firewall logs may contain source IP
@@ -241,8 +591,16 @@
           <strong>Clear saved and recent destinations</strong> in About and Privacy to erase both
           local lists. Pending contribution retries can be deleted individually on Contribute.
           Accepted feedback expires automatically after 90 days; its displayed random reference can
-          be provided to support for earlier deletion. Road-report test drafts expire after two
-          hours. Removing the app removes the remaining local records.
+          be provided to support for earlier deletion. Road-report private drafts expire after two
+          hours. <strong>Reset community identity</strong> deletes this installation's shared road
+          reports and answers from the server, as described under
+          <a href="#community-road-reports">Community road reports</a>. Removing the app removes the
+          remaining local records.
+        </p>
+        <p>
+          Traffic sharing is optional and off by default; turn <strong>Share traffic speeds</strong>
+          off in About and Privacy to stop it, as described under
+          <a href="#community-traffic-sharing-opt-in">Community traffic sharing</a>.
         </p>
         <p>
           Sharing and the external reviews link are optional. Dismissing the system share sheet
@@ -252,10 +610,16 @@
         </p>
         <p>
           Because NavOSS has no account and does not retain server-side search, route, or trip
-          records, it normally has no server history to export or delete. A rights request may
-          identify a support message or recent security event, but NavOSS may be unable to associate
-          a transient, IP-only request with a person. Requests about provider-controlled data may
-          also need to be directed to that provider.
+          records, it normally has no server history to export or delete. Published traffic speeds
+          are stored without an account, installation, or trip identifier and only as short-lived
+          per-road values once at least three installations have driven a stretch (their speeds are
+          combined into a median; they are not checked for agreement). Speeds waiting for
+          publication are held only in memory, under markers the running server could recompute from
+          an installation. The residual ways a contribution could still be inferred are listed under
+          Community traffic sharing above. A rights request may identify a support message or recent
+          security event, but NavOSS may be unable to associate a transient, IP-only request with a
+          person. Requests about provider-controlled data may also need to be directed to that
+          provider.
         </p>
 
         <h2 id="security-and-international-processing">Security and international processing</h2>
