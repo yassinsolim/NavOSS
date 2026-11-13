@@ -2,7 +2,7 @@ import { z } from 'zod/v4';
 
 import { cumulativeMeters, decodePolyline6, type Position } from './geo.js';
 import type { ProbePoint } from './probe-validation.js';
-import { edgeSegmentKey } from './segments.js';
+import { edgeSegmentKey, isAggregatedRoad, MIN_PUBLISHED_EDGE_METERS } from './segments.js';
 
 const TRACE_TIMEOUT_MS = 4_000;
 // Valhalla's default trace limits are 200 km and 16,000 shape points per request.
@@ -40,6 +40,31 @@ const ValhallaEdgeSchema = z.object({
   way_id: z.number().int().positive(),
 });
 
+/**
+ * The part of a verbose `/locate` answer the access check reads. `trace_attributes` in Valhalla
+ * 3.8.2 does not return these flags (checked against a real instance), but `/locate` reports them
+ * for the graph edges at a point.
+ */
+const ValhallaLocateSchema = z.array(
+  z.object({
+    edges: z
+      .array(
+        z.object({
+          edge: z.object({
+            access: z.object({ car: z.boolean() }),
+            deadend: z.boolean(),
+            destination_only: z.boolean(),
+            forward: z.boolean(),
+            not_thru: z.boolean(),
+          }),
+          edge_info: z.object({ way_id: z.number().int() }),
+        }),
+      )
+      .nullable()
+      .optional(),
+  }),
+);
+
 const ValhallaTraceSchema = z.object({
   edges: z.array(ValhallaEdgeSchema).min(1),
   matched_points: z
@@ -68,6 +93,13 @@ export interface MatchedEdge {
   lengthMeters: number;
   /** Road geometry of the matched part of the edge. This is map data, never uploaded positions. */
   line: Position[];
+  /**
+   * Set by `matchTrace` for a whole, aggregated edge of at least `MIN_PUBLISHED_EDGE_METERS`:
+   * true only when the graph confirms the way is open to cars, not destination-only (Valhalla's
+   * reading of `access=private`/`destination`), and in neither direction a dead end or the way
+   * into a no-through region. Unset or false means the edge must not be published.
+   */
+  openThroughRoad?: boolean;
   roadClass: string;
   /** Present only when the whole edge was matched; see `edgeSegmentKey`. */
   segmentKey?: string;
@@ -140,17 +172,36 @@ function normalizeEdges(
   });
 }
 
+/** The point halfway along a line by distance. */
+function midpoint(line: readonly Position[]): Position {
+  const distances = cumulativeMeters(line);
+  const half = (distances.at(-1) ?? 0) / 2;
+  const index = Math.max(
+    1,
+    distances.findIndex((distance) => distance >= half),
+  );
+  const from = line[index - 1] ?? line[0] ?? [0, 0];
+  const to = line[index] ?? from;
+  const span = (distances[index] ?? 0) - (distances[index - 1] ?? 0);
+  const share = span > 0 ? (half - (distances[index - 1] ?? 0)) / span : 0;
+  return [from[0] + (to[0] - from[0]) * share, from[1] + (to[1] - from[1]) * share];
+}
+
 export function createValhallaMapMatcher(options: ValhallaMapMatcherOptions): MapMatcher {
   const fetchImplementation = options.fetchImplementation ?? fetch;
 
+  const locateEndpoint = new URL('locate', options.endpoint).toString();
+
   // Errors deliberately carry no request or response content: both contain positions.
-  async function trace(
+  async function post<Schema extends z.ZodType>(
+    endpoint: string,
     body: Record<string, unknown>,
-  ): Promise<z.infer<typeof ValhallaTraceSchema> | undefined> {
+    schema: Schema,
+  ): Promise<z.infer<Schema> | undefined> {
     let response: Response;
     try {
-      response = await fetchImplementation(options.endpoint, {
-        body: JSON.stringify({ ...body, costing: 'auto', units: 'kilometers' }),
+      response = await fetchImplementation(endpoint, {
+        body: JSON.stringify(body),
         headers: { 'content-type': 'application/json' },
         method: 'POST',
         // The matcher is local; a redirect could only send positions somewhere else.
@@ -171,11 +222,59 @@ export function createValhallaMapMatcher(options: ValhallaMapMatcherOptions): Ma
     } catch {
       throw new MapMatcherError('The map matcher returned invalid JSON.');
     }
-    const parsed = ValhallaTraceSchema.safeParse(payload);
+    const parsed = schema.safeParse(payload);
     if (!parsed.success) {
       throw new MapMatcherError('The map matcher response failed validation.');
     }
     return parsed.data;
+  }
+
+  const trace = (body: Record<string, unknown>) =>
+    post(options.endpoint, { ...body, costing: 'auto', units: 'kilometers' }, ValhallaTraceSchema);
+
+  /**
+   * Marks each whole, aggregated, long-enough edge with whether the graph confirms it is an open
+   * through road. One `/locate` request per batch, carrying only map geometry: the midpoint of
+   * each candidate edge's own shape, never an uploaded position. Anything the answer does not
+   * confirm stays unpublishable.
+   */
+  async function screenEdges(edges: MatchedEdge[]): Promise<void> {
+    const candidates = edges.filter(
+      (edge) =>
+        edge.segmentKey !== undefined &&
+        isAggregatedRoad(edge) &&
+        edge.lengthMeters >= MIN_PUBLISHED_EDGE_METERS,
+    );
+    if (candidates.length === 0) return;
+    const located = await post(
+      locateEndpoint,
+      {
+        costing: 'auto',
+        locations: candidates.map((edge) => {
+          const [longitude, latitude] = midpoint(edge.line);
+          return { lat: latitude, lon: longitude };
+        }),
+        verbose: true,
+      },
+      ValhallaLocateSchema,
+    );
+    candidates.forEach((edge, index) => {
+      const sameWay = (located?.[index]?.edges ?? []).filter(
+        (candidate) => candidate.edge_info.way_id === edge.wayId,
+      );
+      const driven = sameWay.filter((candidate) => candidate.edge.forward === edge.forward);
+      edge.openThroughRoad =
+        driven.length > 0 &&
+        driven.every((candidate) => candidate.edge.access.car) &&
+        sameWay
+          .filter((candidate) => candidate.edge.access.car)
+          .every(
+            (candidate) =>
+              !candidate.edge.destination_only &&
+              !candidate.edge.deadend &&
+              !candidate.edge.not_thru,
+          );
+    });
   }
 
   return {
@@ -203,6 +302,7 @@ export function createValhallaMapMatcher(options: ValhallaMapMatcherOptions): Ma
       });
       if (payload?.matched_points?.length !== points.length) return undefined;
       const edges = normalizeEdges(payload.edges, decodePolyline6(payload.shape));
+      await screenEdges(edges);
       let pathBroken = false;
       const matched = payload.matched_points.map((point): MatchedPoint | undefined => {
         const startsNewPath = pathBroken || point.begin_route_discontinuity === true;
@@ -212,7 +312,10 @@ export function createValhallaMapMatcher(options: ValhallaMapMatcherOptions): Ma
           point.edge_index === undefined ||
           point.distance_along_edge === undefined ||
           point.edge_index >= edges.length ||
-          (point.distance_from_trace_point ?? 0) > MAX_SNAP_METERS
+          // Valhalla 3.8.2 returns this distance, in metres, for every matched point. A point
+          // without it is not evidence about the road.
+          point.distance_from_trace_point === undefined ||
+          point.distance_from_trace_point > MAX_SNAP_METERS
         ) {
           pathBroken = true;
           return undefined;

@@ -1,4 +1,8 @@
-import type { TrafficProbeBatchRequest } from '@navoss/contracts';
+import {
+  isCoordinateInServiceCoverage,
+  type Coordinate,
+  type TrafficProbeBatchRequest,
+} from '@navoss/contracts';
 
 import { cumulativeMeters, haversineMeters, type Position } from './geo.js';
 import type { TrafficSettings } from './settings.js';
@@ -21,17 +25,27 @@ export function findProbeRejection(
     TrafficSettings,
     'bounds' | 'maxBatchAgeSeconds' | 'maxFutureSeconds' | 'maxPointSpeedMetersPerSecond'
   >,
+  isInCoverage: (coordinate: Coordinate) => boolean = isCoordinateInServiceCoverage,
 ): ProbeRejection | undefined {
-  // Both checks use the batch's last point, the latest moment the batch claims to describe: a
-  // start time inside the allowed skew must not carry later offsets into the future.
-  const lastPointMs = Date.parse(batch.capturedAt) + (batch.points.at(-1)?.[2] ?? 0) * 1_000;
+  // The future check uses the batch's last point, the latest moment it claims to describe: a start
+  // time inside the allowed skew must not carry later offsets into the future. The age check uses
+  // its first point, the oldest driving in it, so no part of an accepted batch is older than the
+  // limit when it arrives.
+  const firstPointMs = Date.parse(batch.capturedAt);
+  const lastPointMs = firstPointMs + (batch.points.at(-1)?.[2] ?? 0) * 1_000;
   if (lastPointMs > nowMs + settings.maxFutureSeconds * 1_000) return 'future';
-  if (lastPointMs < nowMs - settings.maxBatchAgeSeconds * 1_000) return 'stale';
+  if (firstPointMs < nowMs - settings.maxBatchAgeSeconds * 1_000) return 'stale';
   const { east, north, south, west } = settings.bounds;
   let previous: TrafficProbeBatchRequest['points'][number] | undefined;
   for (const point of batch.points) {
     const [longitude, latitude, offsetSeconds] = point;
-    if (longitude < west || longitude > east || latitude < south || latitude > north) {
+    if (
+      longitude < west ||
+      longitude > east ||
+      latitude < south ||
+      latitude > north ||
+      !isInCoverage({ latitude, longitude })
+    ) {
       return 'outside_coverage';
     }
     if (previous !== undefined) {

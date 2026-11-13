@@ -1,6 +1,11 @@
 import { z } from 'zod/v4';
 
 import { GeographicBoundsSchema, IsoDateTimeSchema } from './common.js';
+import {
+  CoverageBoundarySourceSchema,
+  CoverageOverlaySchema,
+  ServiceAreaSchema,
+} from './coverage.js';
 const AppConfigBaseShape = {
   attribution: z.array(z.object({ label: z.string().min(1), url: z.url() }).strict()),
   endpoints: z
@@ -43,27 +48,15 @@ export const AppConfigResponseSchema = z
   .object({
     ...AppConfigBaseShape,
     apiVersion: z.literal('v2'),
+    endpoints: AppConfigBaseShape.endpoints.extend({ routes: z.literal('/v2/routes') }),
     coverage: z
       .object({
-        displayName: z.literal('Calgary and Kelowna service areas'),
-        id: z.literal('calgary-kelowna-service-areas'),
+        boundarySource: CoverageBoundarySourceSchema,
+        displayName: z.string().min(1),
+        id: z.string().min(1),
         modes: z.array(z.literal('driving')).min(1),
-        serviceAreas: z.tuple([
-          z
-            .object({
-              bounds: GeographicBoundsSchema,
-              displayName: z.literal('Calgary, Alberta'),
-              id: z.literal('calgary-ab'),
-            })
-            .strict(),
-          z
-            .object({
-              bounds: GeographicBoundsSchema,
-              displayName: z.literal('Kelowna, British Columbia'),
-              id: z.literal('kelowna-bc'),
-            })
-            .strict(),
-        ]),
+        overlays: z.array(CoverageOverlaySchema),
+        serviceAreas: z.array(ServiceAreaSchema).min(1),
       })
       .strict(),
   })

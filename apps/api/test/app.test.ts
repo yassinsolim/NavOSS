@@ -31,6 +31,7 @@ import { KelownaSafetyFacilityProviderError } from '../src/kelowna-safety-facili
 import { createFixtureSearchProvider } from '../src/search-provider.js';
 import { CameraProviderError } from '../src/safety-camera-provider.js';
 import { TorontoCameraProviderError } from '../src/toronto-safety-camera-provider.js';
+import { RouteProviderError } from '../src/route-provider.js';
 
 const FIXED_DATE = new Date('2026-07-15T12:00:00Z');
 const apps: FastifyInstance[] = [];
@@ -110,6 +111,43 @@ describe('system routes', () => {
     expect(body.status).toBe('not_ready');
   });
 
+  it('keeps running and reports not ready when PostgreSQL refuses connections', async () => {
+    // Every database-backed provider is built from the environment, as in production, against a
+    // database that refuses connections. That once ended the process with an uncaught
+    // ECONNREFUSED from the Google budget's startup query.
+    const unhandled: unknown[] = [];
+    const recordUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', recordUnhandled);
+    const previous = { PGHOST: process.env.PGHOST, PGPORT: process.env.PGPORT };
+    process.env.PGHOST = '127.0.0.1';
+    process.env.PGPORT = '1';
+    try {
+      const app = await createTestApp();
+      await app.ready();
+
+      // Each of these waits for a real refused connection, made after every provider's startup
+      // work has already been refused.
+      const ready = await app.inject({ method: 'GET', url: '/ready' });
+      const body = ReadinessResponseSchema.parse(ready.json());
+      expect(ready.statusCode).toBe(503);
+      expect(body.checks.database?.status).toBe('not_ready');
+      const grant = await app.inject({ method: 'POST', url: '/v1/google-place-query-grants' });
+      expect(grant.statusCode).toBe(503);
+      expect(ProblemDetailsSchema.parse(grant.json()).code).toBe('service_unavailable');
+      // Requests that do not need the database are still served.
+      expect((await app.inject({ method: 'GET', url: '/health' })).statusCode).toBe(200);
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', recordUnhandled);
+      if (previous.PGHOST === undefined) delete process.env.PGHOST;
+      else process.env.PGHOST = previous.PGHOST;
+      if (previous.PGPORT === undefined) delete process.env.PGPORT;
+      else process.env.PGPORT = previous.PGPORT;
+    }
+  });
+
   it('reports production provider readiness', async () => {
     const app = await createTestApp({
       productionSearch: true,
@@ -155,6 +193,20 @@ describe('client configuration', () => {
     expect(response.statusCode).toBe(200);
     expect(body.coverage.id).toBe('calgary-ab');
     expect(body.coverage.displayName).toBe('Calgary, Alberta');
+    expect(body.coverage).toEqual({
+      bounds: {
+        northEast: { latitude: 51.212, longitude: -113.859 },
+        southWest: { latitude: 50.842, longitude: -114.316 },
+      },
+      displayName: 'Calgary, Alberta',
+      id: 'calgary-ab',
+      modes: ['driving'],
+    });
+    expect(body.endpoints.routes).toBe('/v1/routes');
+    expect(body.attribution).toEqual([
+      { label: 'OpenStreetMap contributors', url: 'https://www.openstreetmap.org/copyright' },
+      { label: 'The City of Calgary', url: 'https://data.calgary.ca/' },
+    ]);
   });
 
   it('returns regional service areas to updated clients', async () => {
@@ -163,9 +215,14 @@ describe('client configuration', () => {
     const body = AppConfigResponseSchema.parse(response.json());
 
     expect(response.statusCode).toBe(200);
-    expect(body.coverage.id).toBe('calgary-kelowna-service-areas');
-    expect(body.coverage.displayName).toBe('Calgary and Kelowna service areas');
-    expect(body.coverage.serviceAreas.map(({ id }) => id)).toEqual(['calgary-ab', 'kelowna-bc']);
+    expect(body.coverage.id).toBe('alberta-british-columbia');
+    expect(body.coverage.displayName).toBe('Alberta and British Columbia');
+    expect(body.coverage.serviceAreas.map(({ id }) => id)).toEqual(['alberta', 'british-columbia']);
+    expect(body.coverage.overlays.map(({ id, scope }) => ({ id, scope }))).toEqual([
+      { id: 'calgary-ab', scope: 'local-overlay' },
+      { id: 'kelowna-bc', scope: 'local-overlay' },
+    ]);
+    expect(body.endpoints.routes).toBe('/v2/routes');
     expect(body.features).toEqual({
       communityReports: false,
       liveTraffic: false,
@@ -846,27 +903,28 @@ describe('search', () => {
     expect(response.statusCode).toBe(400);
     expect(ProblemDetailsSchema.parse(response.json())).toMatchObject({
       code: 'invalid_request',
-      detail:
-        'Nearby categories are currently available only in the Calgary and Kelowna service areas.',
+      detail: 'Nearby categories are available only for locations in Alberta and British Columbia.',
       status: 400,
       title: 'Search outside coverage',
     });
   });
 
-  it('rejects mountain coordinates between the two supported service areas', async () => {
+  it('allows mountain locations inside the supported provinces', async () => {
     let searchCalls = 0;
     let routeCalls = 0;
     const app = await createTestApp({
       routeProvider: {
         getRoutes: () => {
           routeCalls += 1;
-          return Promise.resolve([]);
+          return Promise.reject(
+            new RouteProviderError('Coverage accepted; test provider unavailable.'),
+          );
         },
       },
       searchProvider: {
-        search: () => {
+        search: (query) => {
           searchCalls += 1;
-          return Promise.reject(new Error('search must not run'));
+          return createFixtureSearchProvider([]).search(query);
         },
       },
     });
@@ -889,10 +947,11 @@ describe('search', () => {
       url: '/v1/routes',
     });
 
-    expect(searchResponse.statusCode).toBe(400);
-    expect(routeResponse.statusCode).toBe(400);
-    expect(searchCalls).toBe(0);
-    expect(routeCalls).toBe(0);
+    expect(searchResponse.statusCode).toBe(200);
+    expect(routeResponse.statusCode).toBe(503);
+    expect(ProblemDetailsSchema.parse(routeResponse.json()).title).toBe('Routing unavailable');
+    expect(searchCalls).toBe(1);
+    expect(routeCalls).toBe(1);
   });
 
   it('rejects locationless nearby categories but permits locationless typed search', async () => {
@@ -966,7 +1025,7 @@ describe('routes', () => {
     expect(ProblemDetailsSchema.parse(response.json())).toMatchObject({
       code: 'invalid_request',
       detail:
-        'Driving routes are currently available only between supported Calgary and Kelowna area locations.',
+        'Driving route origins, waypoints and destinations must be within Alberta and British Columbia.',
       title: 'Route outside coverage',
     });
   });
@@ -1106,6 +1165,7 @@ describe('OpenAPI', () => {
     expect(document.paths).toHaveProperty('/v1/cameras');
     expect(document.paths).toHaveProperty('/v1/routes');
     expect(document.paths).toHaveProperty('/v1/search');
+    expect(document.paths).toHaveProperty('/v2/routes');
     expect(document.paths).toHaveProperty('/v2/cameras');
     expect(document.paths).toHaveProperty('/v2/events');
     expect(document.paths).toHaveProperty('/v2/safety-facilities');

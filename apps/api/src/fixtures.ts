@@ -4,6 +4,16 @@ import type {
   SearchResult,
   SearchSource,
 } from '@navoss/contracts';
+import {
+  CALGARY_REGION_BOUNDS,
+  COVERAGE_BOUNDARY_SOURCE,
+  LOCAL_OVERLAY_AREAS,
+  SERVICE_AREAS,
+  SERVICE_COVERAGE_ID,
+  SERVICE_COVERAGE_NAME,
+} from '@navoss/contracts';
+
+const configuredServiceAreas = [...SERVICE_AREAS];
 
 export const SEARCH_SOURCE = {
   datasetVersion: 'fixture-v1',
@@ -140,14 +150,13 @@ export const CALGARY_SEARCH_FIXTURES = [
   },
 ] as const satisfies readonly SearchFixture[];
 
-export function createAppConfig(
+function createConfigBase(
   generatedAt: string,
-  productionSearch = false,
-  liveTraffic = false,
+  productionSearch: boolean,
+  liveTraffic: boolean,
   communityReports = false,
-): AppConfigResponse {
+): Omit<LegacyAppConfigResponse, 'apiVersion' | 'coverage'> {
   return {
-    apiVersion: 'v2',
     attribution: [
       {
         label: 'OpenStreetMap contributors',
@@ -158,29 +167,6 @@ export function createAppConfig(
         url: 'https://data.calgary.ca/',
       },
     ],
-    coverage: {
-      displayName: 'Calgary and Kelowna service areas',
-      id: 'calgary-kelowna-service-areas',
-      modes: ['driving'],
-      serviceAreas: [
-        {
-          bounds: {
-            northEast: { latitude: 51.212, longitude: -113.859 },
-            southWest: { latitude: 50.842, longitude: -114.316 },
-          },
-          displayName: 'Calgary, Alberta',
-          id: 'calgary-ab',
-        },
-        {
-          bounds: {
-            northEast: { latitude: 50.15, longitude: -119.2 },
-            southWest: { latitude: 49.7, longitude: -119.65 },
-          },
-          displayName: 'Kelowna, British Columbia',
-          id: 'kelowna-bc',
-        },
-      ],
-    },
     endpoints: {
       cameras: '/v1/cameras',
       events: '/v1/events',
@@ -199,21 +185,46 @@ export function createAppConfig(
   };
 }
 
+export function createAppConfig(
+  generatedAt: string,
+  productionSearch = false,
+  liveTraffic = false,
+  communityReports = false,
+): AppConfigResponse {
+  const base = createConfigBase(generatedAt, productionSearch, liveTraffic, communityReports);
+  return {
+    ...base,
+    apiVersion: 'v2',
+    attribution: [
+      ...base.attribution,
+      {
+        label: 'Statistics Canada (provincial coverage boundaries)',
+        url: COVERAGE_BOUNDARY_SOURCE.url,
+      },
+    ],
+    coverage: {
+      boundarySource: COVERAGE_BOUNDARY_SOURCE,
+      displayName: SERVICE_COVERAGE_NAME,
+      id: SERVICE_COVERAGE_ID,
+      modes: ['driving'],
+      overlays: LOCAL_OVERLAY_AREAS,
+      serviceAreas: configuredServiceAreas,
+    },
+    endpoints: { ...base.endpoints, routes: '/v2/routes' },
+  };
+}
+
 export function createLegacyAppConfig(
   generatedAt: string,
   productionSearch = false,
   liveTraffic = false,
   communityReports = false,
 ): LegacyAppConfigResponse {
-  const regional = createAppConfig(generatedAt, productionSearch, liveTraffic, communityReports);
   return {
-    ...regional,
+    ...createConfigBase(generatedAt, productionSearch, liveTraffic, communityReports),
     apiVersion: 'v1',
     coverage: {
-      bounds: {
-        northEast: { latitude: 51.212, longitude: -113.859 },
-        southWest: { latitude: 50.842, longitude: -114.316 },
-      },
+      bounds: CALGARY_REGION_BOUNDS,
       displayName: 'Calgary, Alberta',
       id: 'calgary-ab',
       modes: ['driving'],

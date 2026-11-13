@@ -23,23 +23,52 @@ interface PendingSegment {
   line: Position[];
   roadClass: string;
   /** Contributor tag to that contributor's single sample in the current cohort. */
-  samples: Map<string, { epochStartMs: number; speedKph: number }>;
+  samples: Map<string, PendingSample>;
+}
+
+interface PendingSample {
+  /** When the batch's driving began (its first point), never later than its arrival. */
+  drivenAtMs: number;
+  /** Arrival epoch, from the server clock. */
+  epochStartMs: number;
+  /** Salted network marker, kept only for a newly registered installation. */
+  newcomerNetwork: string | undefined;
+  speedKph: number;
+}
+
+/** One contributor's batch, as the cohorts see it. */
+export interface CohortContribution {
+  /**
+   * Start of the batch's driving (its `capturedAt`). It only ever makes a sample expire sooner:
+   * it is capped at the arrival time and decides nothing about which epoch the sample counts in.
+   */
+  drivenAtMs: number;
+  /**
+   * Salted marker of the network the batch came from, set only while the contributor's
+   * installation is newly registered. A cohort counts at most one newcomer per network.
+   */
+  newcomerNetwork?: string | undefined;
+  tagFor(segmentKey: string): string;
 }
 
 export interface TrafficCohorts {
   /**
    * Adds at most one sample per contributor per segment to the pending cohorts and returns how
    * many were new. A contributor already in a segment's cohort is ignored, whatever time the
-   * batch claims: a sample is stamped with the epoch it arrived in, never with client time.
+   * batch claims: a sample is stamped with the epoch it arrived in, never with client time. A
+   * newly registered installation is also ignored where another newcomer from the same network is
+   * already in the cohort.
    */
   add(
     observations: readonly SegmentObservation[],
-    tagFor: (segmentKey: string) => string,
+    contribution: CohortContribution,
     nowMs: number,
   ): number;
   clear(): void;
   /**
-   * Closes the epoch ending at `tickMs`. Samples older than the cohort lifetime are dropped. Every
+   * Closes the epoch ending at `tickMs`. Samples whose driving began, or which arrived, more than
+   * the cohort lifetime before the boundary are dropped, so a release only ever rests on driving
+   * from that window. Every
    * segment whose cohort then holds at least k contributors is released and its cohort is
    * consumed, so the next release needs k contributions of its own.
    */
@@ -71,22 +100,38 @@ export function createTrafficCohorts(
   const segments = new Map<string, PendingSegment>();
 
   return {
-    add(observations, tagFor, nowMs) {
+    add(observations, contribution, nowMs) {
       const epochStartMs = Math.floor(nowMs / epochMs) * epochMs;
+      const drivenAtMs = Math.min(contribution.drivenAtMs, nowMs);
+      const newcomerNetwork = contribution.newcomerNetwork;
       let added = 0;
       for (const observation of observations) {
-        const tag = tagFor(observation.segmentKey);
+        const tag = contribution.tagFor(observation.segmentKey);
         const existing = segments.get(observation.segmentKey);
         if (existing?.samples.has(tag) === true) continue;
+        if (
+          newcomerNetwork !== undefined &&
+          existing !== undefined &&
+          [...existing.samples.values()].some(
+            (sample) => sample.newcomerNetwork === newcomerNetwork,
+          )
+        ) {
+          continue;
+        }
         // Road attributes are fixed by the first observation. The key commits to the geometry,
         // so a later batch, counted or not, cannot change what would be drawn.
         const segment = existing ?? {
           freeFlowKph: observation.freeFlowKph,
           line: observation.line,
           roadClass: observation.roadClass,
-          samples: new Map<string, { epochStartMs: number; speedKph: number }>(),
+          samples: new Map<string, PendingSample>(),
         };
-        segment.samples.set(tag, { epochStartMs, speedKph: observation.speedKph });
+        segment.samples.set(tag, {
+          drivenAtMs,
+          epochStartMs,
+          newcomerNetwork,
+          speedKph: observation.speedKph,
+        });
         segments.set(observation.segmentKey, segment);
         added += 1;
       }
@@ -98,12 +143,14 @@ export function createTrafficCohorts(
     },
 
     closeEpoch(tickMs) {
-      const oldestEpochMs = tickMs - settings.cohortSeconds * 1_000;
+      const oldestMs = tickMs - settings.cohortSeconds * 1_000;
       const releases: TrafficRelease[] = [];
       for (const [segmentKey, segment] of segments) {
         const cohort: string[] = [];
         for (const [tag, sample] of segment.samples) {
-          if (sample.epochStartMs < oldestEpochMs) segment.samples.delete(tag);
+          if (sample.epochStartMs < oldestMs || sample.drivenAtMs < oldestMs) {
+            segment.samples.delete(tag);
+          }
           // A sample that arrived after the boundary belongs to the epoch that is still open.
           else if (sample.epochStartMs < tickMs) cohort.push(tag);
         }

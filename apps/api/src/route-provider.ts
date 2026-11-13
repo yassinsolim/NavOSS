@@ -5,8 +5,17 @@ import {
   RoutePositionSchema,
   type RouteAlternative,
   type RouteRequest,
+  type RouteAlternativeV2,
+  type RouteRequestV2,
 } from '@navoss/contracts';
 import { z } from 'zod/v4';
+
+import {
+  buildValhallaPbfRequest,
+  parseValhallaPbf,
+  ValhallaDecodeError,
+  ValhallaRoutingError,
+} from './valhalla-pbf.js';
 
 const DEFAULT_VALHALLA_URL = 'https://valhalla1.openstreetmap.de/route';
 const DEFAULT_MAPBOX_TRAFFIC_URL = 'https://api.mapbox.com/directions/v5/mapbox/driving-traffic';
@@ -93,6 +102,8 @@ export class RouteProviderError extends Error {
 
 export interface RouteProvider {
   getRoutes(request: RouteRequest): Promise<RouteAlternative[]>;
+  getEnrichedRoutes?(request: RouteRequestV2): Promise<RouteAlternativeV2[]>;
+  isEnrichmentDegraded?(): boolean;
   isReady?(): Promise<boolean>;
   source?: {
     attribution: 'Routing and traffic by Mapbox' | 'Routing by Valhalla using OpenStreetMap data';
@@ -115,6 +126,7 @@ export interface MapboxTrafficRouteProviderOptions {
 
 export function createConfiguredRouteProvider(
   environment: Readonly<Record<string, string | undefined>> = process.env,
+  valhallaOptions: ValhallaRouteProviderOptions = {},
 ): RouteProvider {
   const configuredToken = environment.MAPBOX_ACCESS_TOKEN?.trim();
   const accessToken = configuredToken === '' ? undefined : configuredToken;
@@ -125,12 +137,13 @@ export function createConfiguredRouteProvider(
       vehicleLicenseConfirmed,
     });
   }
-  return createValhallaRouteProvider();
+  return createValhallaRouteProvider(valhallaOptions);
 }
 
 export interface ValhallaRouteProviderOptions {
   endpoint?: string;
   fetchImplementation?: typeof fetch;
+  onDecodeFailure?: (errorName: string) => void;
   readinessEndpoint?: string;
 }
 
@@ -140,9 +153,10 @@ function buildValhallaRequest(request: RouteRequest): unknown {
       ? undefined
       : Math.ceil(Math.min(100, Math.max(15, request.originHorizontalAccuracyMeters * 2)));
   const locations = [request.origin, ...(request.waypoints ?? []), request.destination].map(
-    ({ latitude, longitude }, index) => ({
-      lat: latitude,
-      lon: longitude,
+    (coordinate, index) => ({
+      lat: coordinate.latitude,
+      lon: coordinate.longitude,
+      ...('type' in coordinate && coordinate.type === 'through' ? { type: 'through' } : {}),
       ...(index === 0 && request.originHeadingDegrees !== undefined
         ? { heading: request.originHeadingDegrees, heading_tolerance: 45 }
         : {}),
@@ -420,8 +434,55 @@ export function createValhallaRouteProvider(
   const fetchImplementation = options.fetchImplementation ?? fetch;
   const readinessEndpoint = options.readinessEndpoint ?? process.env.VALHALLA_STATUS_URL;
   const development = endpoint === DEFAULT_VALHALLA_URL;
+  let enrichmentDegraded = false;
 
-  return {
+  const provider: RouteProvider = {
+    async getEnrichedRoutes(request) {
+      let response: Response;
+      try {
+        response = await fetchImplementation(endpoint, {
+          body: buildValhallaPbfRequest(request) as BodyInit,
+          headers: { 'Content-Type': 'application/x-protobuf' },
+          method: 'POST',
+          signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),
+        });
+      } catch (error: unknown) {
+        throw new RouteProviderError('The routing provider could not be reached.', {
+          cause: error,
+        });
+      }
+      if (!response.ok) {
+        throw new RouteProviderError(
+          `The routing provider returned status ${String(response.status)}.`,
+        );
+      }
+      let bytes: Uint8Array;
+      try {
+        bytes = new Uint8Array(await response.arrayBuffer());
+      } catch (error: unknown) {
+        throw new RouteProviderError('The routing provider response could not be received.', {
+          cause: error,
+        });
+      }
+      try {
+        const routes = parseValhallaPbf(bytes);
+        enrichmentDegraded = false;
+        return applyFastestLabel(routes.sort(compareRouteAlternatives));
+      } catch (error: unknown) {
+        if (error instanceof ValhallaRoutingError) {
+          throw new RouteProviderError('The routing provider could not calculate a route.', {
+            cause: error,
+          });
+        }
+        if (!(error instanceof ValhallaDecodeError)) throw error;
+        // A protocol mismatch must not take routing down. Exactly one legacy fallback is
+        // permitted for a received but undecodable response, never for a transport/status error.
+        enrichmentDegraded = true;
+        options.onDecodeFailure?.(error.name);
+        return provider.getRoutes(request);
+      }
+    },
+    isEnrichmentDegraded: () => enrichmentDegraded,
     async getRoutes(request) {
       let response: Response;
 
@@ -491,4 +552,5 @@ export function createValhallaRouteProvider(
           traffic: 'unavailable',
         },
   };
+  return provider;
 }

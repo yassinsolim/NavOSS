@@ -24,6 +24,8 @@ export const ReadinessResponseSchema = z
   .object({
     checks: z
       .object({
+        /** Present when a database is configured. */
+        database: ReadinessCheckSchema.optional(),
         routingProvider: ReadinessCheckSchema.optional(),
         searchProvider: ReadinessCheckSchema.optional(),
         searchFixtures: ReadinessCheckSchema,

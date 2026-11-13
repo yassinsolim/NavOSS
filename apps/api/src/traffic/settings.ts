@@ -1,4 +1,4 @@
-import type { TrafficFlowBounds } from '@navoss/contracts';
+import { SERVICE_COVERAGE_BOUNDS, type TrafficFlowBounds } from '@navoss/contracts';
 import { z } from 'zod/v4';
 
 export type TrafficMode = 'off' | 'collect' | 'live';
@@ -8,7 +8,10 @@ export interface TrafficSettings {
   batchTrimMeters: number;
   /** Points outside these bounds reject the whole batch. */
   bounds: TrafficFlowBounds;
-  /** Longest an unpublished observation is held in memory, counted from its arrival epoch. */
+  /**
+   * Driving window of a cohort: a release rests only on samples whose driving began, and which
+   * arrived, within this long before its boundary. Also the longest a sample is held in memory.
+   */
   cohortSeconds: number;
   /** How long an upload credential is valid. */
   credentialSeconds: number;
@@ -17,7 +20,7 @@ export interface TrafficSettings {
   /** A segment at or above this share of its free-flow speed is `free`; delay counts below it. */
   freeRatio: number;
   heavyRatio: number;
-  /** A batch whose last point is older than this is refused. */
+  /** A batch whose first point (`capturedAt`) is older than this on arrival is refused. */
   maxBatchAgeSeconds: number;
   maxConcurrentMatches: number;
   maxFlowFeatures: number;
@@ -29,7 +32,17 @@ export interface TrafficSettings {
   minimumContributors: number;
   minSampleMeters: number;
   minSampleSeconds: number;
+  /**
+   * An installation registered more recently than this gets no upload credential, so App Attest
+   * keys made on the spot cannot contribute.
+   */
+  minimumInstallationAgeSeconds: number;
   mode: TrafficMode;
+  /**
+   * For this long after registration an installation is a newcomer: each cohort counts at most
+   * one newcomer per network bucket.
+   */
+  newcomerSeconds: number;
   rateLimitGlobal: number;
   rateLimitPerContributor: number;
   rateLimitPerNetwork: number;
@@ -59,17 +72,17 @@ export const TRAFFIC_PRIVACY_LIMITS = {
   minimumTripEndTrimMeters: 400,
 } as const;
 
-/** Alberta and British Columbia, the coverage target. */
-const ALBERTA_BC_BOUNDS: TrafficFlowBounds = {
-  east: -109.9,
-  north: 60.1,
-  south: 48.2,
-  west: -139.1,
+/** Retrieval envelope only. Probe eligibility additionally uses the shared province polygons. */
+const DEFAULT_TRAFFIC_BOUNDS: TrafficFlowBounds = {
+  east: SERVICE_COVERAGE_BOUNDS.northEast.longitude,
+  north: SERVICE_COVERAGE_BOUNDS.northEast.latitude,
+  south: SERVICE_COVERAGE_BOUNDS.southWest.latitude,
+  west: SERVICE_COVERAGE_BOUNDS.southWest.longitude,
 };
 
 export const DEFAULT_TRAFFIC_SETTINGS: TrafficSettings = {
   batchTrimMeters: 100,
-  bounds: ALBERTA_BC_BOUNDS,
+  bounds: DEFAULT_TRAFFIC_BOUNDS,
   cohortSeconds: 900,
   credentialSeconds: 7_200,
   epochSeconds: 300,
@@ -85,7 +98,9 @@ export const DEFAULT_TRAFFIC_SETTINGS: TrafficSettings = {
   minimumContributors: 3,
   minSampleMeters: 100,
   minSampleSeconds: 5,
+  minimumInstallationAgeSeconds: 86_400,
   mode: 'off',
+  newcomerSeconds: 7 * 86_400,
   rateLimitGlobal: 6_000,
   // The app uploads about once a minute; three times that leaves room for bursts after a tunnel.
   rateLimitPerContributor: 30,

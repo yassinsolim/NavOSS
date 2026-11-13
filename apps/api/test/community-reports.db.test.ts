@@ -8,7 +8,7 @@ import {
 } from '@navoss/contracts';
 import type { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { createAppAttestVerifier } from '../src/app-attest.js';
 import { buildApp } from '../src/app.js';
@@ -25,6 +25,7 @@ import {
   type TestAttestedDevice,
   type TestDevice,
 } from './support/app-attest-fixture.js';
+import borderPoints from '../../../packages/contracts/test/fixtures/coverage-border-points.json' with { type: 'json' };
 
 /**
  * Runs against a real PostGIS. Locally: `docker run --platform linux/amd64 -d --name
@@ -218,6 +219,10 @@ describe.skipIf(!available)('community reports on PostGIS', () => {
     );
   });
 
+  afterEach(async () => {
+    await Promise.all(apps.splice(0).map((app) => app.close()));
+  });
+
   afterAll(async () => {
     await Promise.all(apps.map((app) => app.close()));
     await admin.query(`DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE`);
@@ -400,6 +405,16 @@ describe.skipIf(!available)('community reports on PostGIS', () => {
     const kelowna = await submit(app, device, { latitude: 49.888, longitude: -119.496 });
     expect(kelowna.statusCode).toBe(403);
   });
+
+  it.each(borderPoints.cases)(
+    '$id enforces the shared provincial coverage on attested report submission',
+    async ({ coordinate, serviceAreaId }) => {
+      const { app } = await makeApp('attested');
+      const device = await register(app);
+      const response = await submit(app, device, coordinate);
+      expect(response.statusCode).toBe(serviceAreaId === null ? 400 : 201);
+    },
+  );
 
   it('gates development installations behind explicit configuration and limits them', async () => {
     const enforced = await makeApp('attested');

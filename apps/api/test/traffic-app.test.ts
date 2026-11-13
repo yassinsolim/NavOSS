@@ -12,7 +12,10 @@ import {
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { Pool } from 'pg';
+
 import { buildApp } from '../src/app.js';
+import { createCommunityReportService } from '../src/community-reports.js';
 import { CALGARY_SEARCH_FIXTURES } from '../src/fixtures.js';
 import { createFixtureSearchProvider } from '../src/search-provider.js';
 import {
@@ -23,12 +26,17 @@ import {
 } from '../src/traffic/service.js';
 import type { TrafficSettings } from '../src/traffic/settings.js';
 import {
+  createInMemoryTrafficReleaseStore,
+  type TrafficReleaseStore,
+} from '../src/traffic/store.js';
+import {
   assertionFor,
   credentialFor,
   DRIVE,
   driveBatch,
   fakeAttestation,
   FIXTURE_SETTINGS,
+  isFixtureTrafficCoordinate,
   JAMMED_GAPS,
   NOW,
   stubbedMatcher,
@@ -57,15 +65,18 @@ interface TrafficApp {
 async function createTrafficApp(
   settings: Partial<TrafficSettings> = {},
   attestation: TrafficAttestation | null = fakeAttestation(),
+  store?: TrafficReleaseStore,
 ): Promise<TrafficApp> {
   let nowMs = NOW.getTime();
   const clock = (): Date => new Date(nowMs);
   const stub = stubbedMatcher();
   const service = createTrafficService({
+    isInCoverage: isFixtureTrafficCoordinate,
     attestation: attestation ?? undefined,
     clock,
     mapMatcher: stub.matcher,
     settings: { ...FIXTURE_SETTINGS, ...settings },
+    ...(store === undefined ? {} : { store }),
   });
   const app = await buildApp({
     clock,
@@ -189,6 +200,96 @@ describe('community traffic over HTTP', () => {
     );
   });
 
+  it('never labels the previous contents as a new epoch, when read before the epoch job runs', async () => {
+    const traffic = await createTrafficApp();
+    for (const device of ['phone-1', 'phone-2', 'phone-3']) await traffic.upload(device);
+
+    // 0.2 s after the boundary. The timer runs a second after it; nothing has published yet, and
+    // the read is not preceded by runEpoch().
+    traffic.setClock(Date.parse('2026-11-12T18:05:00.200Z'));
+    const first = await flow(traffic.app);
+    expect(first.flow.generatedAt).toBe('2026-11-12T18:05:00.000Z');
+    expect(first.flow.validUntil).toBe('2026-11-12T18:10:00.000Z');
+    expect(first.flow.features.length).toBeGreaterThan(10);
+
+    // The epoch job running afterwards does not change what this epoch already served.
+    traffic.setClock(Date.parse('2026-11-12T18:05:01.000Z'));
+    await traffic.service.runEpoch();
+    expect((await flow(traffic.app)).body).toBe(first.body);
+  });
+
+  it('makes readers of an epoch wait for its publication, however slow the store is', async () => {
+    const memory = createInMemoryTrafficReleaseStore();
+    // The store finishes writing only when the test opens the gate.
+    let openGate: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    const store: TrafficReleaseStore = {
+      ...memory,
+      async publishEpoch(epochStartMs, releases) {
+        await gate;
+        await memory.publishEpoch(epochStartMs, releases);
+      },
+    };
+    const traffic = await createTrafficApp({}, fakeAttestation(), store);
+    for (const device of ['phone-1', 'phone-2', 'phone-3']) await traffic.upload(device);
+    traffic.setClock(Date.parse('2026-11-12T18:05:01Z'));
+
+    // The epoch job and two readers start while the store is still writing.
+    const job = traffic.service.runEpoch();
+    let answered = 0;
+    const readers = [traffic.app.inject(FLOW_URL), traffic.app.inject(FLOW_URL)].map((reading) =>
+      reading.then((response) => {
+        answered += 1;
+        return response;
+      }),
+    );
+    for (let turn = 0; turn < 20; turn += 1) await Promise.resolve();
+    expect(answered).toBe(0);
+
+    openGate();
+    await job;
+    const bodies = await Promise.all(readers);
+    for (const response of bodies) {
+      const body = TrafficFlowResponseSchema.parse(response.json());
+      expect(body.generatedAt).toBe('2026-11-12T18:05:00.000Z');
+      expect(body.features.length).toBeGreaterThan(10);
+    }
+    expect(bodies[0]?.body).toBe(bodies[1]?.body);
+  });
+
+  it('answers 503 rather than serve an epoch whose publication failed', async () => {
+    const memory = createInMemoryTrafficReleaseStore();
+    let failing = true;
+    const store: TrafficReleaseStore = {
+      ...memory,
+      publishEpoch: (epochStartMs, releases) =>
+        failing
+          ? Promise.reject(new Error('storage is down'))
+          : memory.publishEpoch(epochStartMs, releases),
+    };
+    const traffic = await createTrafficApp({}, fakeAttestation(), store);
+    for (const device of ['phone-1', 'phone-2', 'phone-3']) await traffic.upload(device);
+    traffic.setClock(Date.parse('2026-11-12T18:05:01Z'));
+
+    expect((await traffic.app.inject(FLOW_URL)).statusCode).toBe(503);
+    expect(traffic.service.metrics().epochFailures).toBe(1);
+
+    // The released values are offered again at the next boundary and are served from there,
+    // still with the boundary that released them and their original expiry.
+    failing = false;
+    traffic.setClock(Date.parse('2026-11-12T18:10:01Z'));
+    const recovered = await flow(traffic.app);
+    expect(recovered.flow.generatedAt).toBe('2026-11-12T18:10:00.000Z');
+    expect(recovered.flow.features.length).toBeGreaterThan(10);
+    for (const feature of recovered.flow.features) {
+      expect(feature.properties.observedAt).toBe('2026-11-12T18:05:00.000Z');
+    }
+    traffic.setClock(Date.parse('2026-11-12T18:20:01Z'));
+    expect((await flow(traffic.app)).flow.features).toEqual([]);
+  });
+
   it('takes a published value down on schedule when no new cohort replaces it', async () => {
     const traffic = await createTrafficApp();
     for (const device of ['phone-1', 'phone-2', 'phone-3']) await traffic.upload(device);
@@ -196,7 +297,7 @@ describe('community traffic over HTTP', () => {
 
     traffic.setClock(Date.parse('2026-11-12T18:19:59Z'));
     expect((await flow(traffic.app)).flow.features.length).toBeGreaterThan(10);
-    // 15 minutes after release, even if the epoch job has not run.
+    // 15 minutes after release, before the timer runs: the read completes that boundary first.
     traffic.setClock(Date.parse('2026-11-12T18:20:00Z'));
     expect((await flow(traffic.app)).flow.features).toEqual([]);
   });
@@ -315,6 +416,7 @@ describe('community traffic over HTTP', () => {
 
     // Issued by another process (or before a restart): not accepted here.
     const other = createTrafficService({
+      isInCoverage: isFixtureTrafficCoordinate,
       attestation: fakeAttestation(),
       clock: () => NOW,
       mapMatcher: stubbedMatcher().matcher,
@@ -329,6 +431,64 @@ describe('community traffic over HTTP', () => {
     expect((await post(valid)).statusCode).toBe(401);
     expect(traffic.stub.requests).toEqual([]);
     expect(traffic.service.metrics()).toMatchObject({ batchesUnauthorized: 3, pendingSamples: 0 });
+  });
+
+  it('reports probes as not accepting when the report service has no App Attest verifier', async () => {
+    // What production builds when PGHOST is set but the team id or installation secret is not:
+    // the report service exists, but no assertion can be verified.
+    const reports = createCommunityReportService({
+      attestationMode: 'enforce',
+      installationSecret: Buffer.alloc(32, 1),
+      isInCoverage: () => true,
+      pool: new Pool(),
+      publication: 'shadow',
+      verifier: undefined,
+    });
+    try {
+      const traffic = await createTrafficApp({}, reports);
+      const status = TrafficStatusResponseSchema.parse(
+        (await traffic.app.inject('/v2/traffic/status')).json(),
+      );
+      const response = await traffic.app.inject({
+        method: 'POST',
+        payload: { assertion: assertionFor('phone-1') },
+        url: '/v2/traffic/credentials',
+      });
+
+      expect(status.mode).toBe('live');
+      expect(status.probes.accepting).toBe(false);
+      expect(response.statusCode).toBe(503);
+    } finally {
+      await reports.close();
+    }
+  });
+
+  it('admits no installation registered moments ago, and counts one newcomer per network', async () => {
+    const traffic = await createTrafficApp();
+    const refused = await traffic.app.inject({
+      method: 'POST',
+      payload: { assertion: assertionFor('fresh-phone') },
+      url: '/v2/traffic/credentials',
+    });
+    expect(refused.statusCode).toBe(403);
+    expect(ProblemDetailsSchema.parse(refused.json()).code).toBe('forbidden');
+    // Registered an hour ago: a credential is available in the remaining 23 hours.
+    expect(refused.headers['retry-after']).toBe('82800');
+
+    // Three two-day-old keys behind one network, as one handset would have, and a fourth behind
+    // another spelling of the same /48: one vote.
+    for (const device of ['new-1', 'new-2', 'new-3']) {
+      expect((await traffic.upload(device, undefined, '2001:db8:5::1')).statusCode).toBe(202);
+    }
+    await traffic.upload('new-4', undefined, '2001:db8:5:0:0::2');
+    await traffic.advanceEpoch();
+    expect((await flow(traffic.app)).flow.features).toEqual([]);
+
+    // A newcomer elsewhere and an established installation complete the cohort with the first.
+    await traffic.upload('new-5', undefined, '203.0.113.9');
+    await traffic.upload('phone-1');
+    await traffic.advanceEpoch();
+    expect((await flow(traffic.app)).flow.features.length).toBeGreaterThan(10);
   });
 
   it('does not issue credentials or accept uploads when attestation is not configured', async () => {
@@ -461,6 +621,7 @@ describe('community traffic over HTTP', () => {
       finishMatch = resolve;
     });
     const service = createTrafficService({
+      isInCoverage: isFixtureTrafficCoordinate,
       attestation: fakeAttestation(),
       clock: () => NOW,
       mapMatcher: {
@@ -567,6 +728,7 @@ describe('community traffic over HTTP', () => {
     const build = (mode: TrafficSettings['mode']) => {
       const failures: string[] = [];
       const service = createTrafficService({
+        isInCoverage: isFixtureTrafficCoordinate,
         attestation: fakeAttestation(),
         mapMatcher: stubbedMatcher().matcher,
         onMaintenanceFailure: (failure) => failures.push(failure),
@@ -593,6 +755,44 @@ describe('community traffic over HTTP', () => {
     await Promise.all([off.service.close(), live.service.close()]);
   });
 
+  it('keeps retrying a failed purge while off until the releases are deleted', async () => {
+    vi.useFakeTimers({ now: NOW });
+    try {
+      let attempts = 0;
+      const failures: string[] = [];
+      const memory = createInMemoryTrafficReleaseStore();
+      const service = createTrafficService({
+        attestation: fakeAttestation(),
+        onMaintenanceFailure: (failure) => failures.push(failure),
+        settings: { ...FIXTURE_SETTINGS, mode: 'off' },
+        store: {
+          ...memory,
+          purge: () => {
+            attempts += 1;
+            // The database is unreachable for the first two attempts.
+            return attempts < 3 ? Promise.reject(new Error('storage is down')) : memory.purge();
+          },
+        },
+      });
+      await service.start();
+      expect(attempts).toBe(1);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(attempts).toBe(2);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(attempts).toBe(3);
+      expect(failures).toEqual(['purge', 'purge']);
+      expect(service.metrics().purgeFailures).toBe(2);
+
+      // Once a purge has succeeded nothing more is attempted.
+      await vi.advanceTimersByTimeAsync(60 * 60_000);
+      expect(attempts).toBe(3);
+      await service.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not let a database that never answers hold up startup while off', async () => {
     vi.useFakeTimers({ now: NOW });
     try {
@@ -600,6 +800,7 @@ describe('community traffic over HTTP', () => {
         const failures: string[] = [];
         let failPurge: (error: Error) => void = () => undefined;
         const service = createTrafficService({
+          isInCoverage: isFixtureTrafficCoordinate,
           attestation: fakeAttestation(),
           mapMatcher: stubbedMatcher().matcher,
           onMaintenanceFailure: (failure) => failures.push(failure),
@@ -735,7 +936,9 @@ describe('route traffic enrichment', () => {
   };
 
   async function jammedService(settings: Partial<TrafficSettings> = {}) {
-    const traffic = await createTrafficApp({ routeMinCoverage: 0.4, ...settings });
+    // Edges under 20 m and edges the graph does not confirm as open through roads are never
+    // published, so a little under 40% of this route can carry traffic.
+    const traffic = await createTrafficApp({ routeMinCoverage: 0.35, ...settings });
     for (const device of ['phone-1', 'phone-2', 'phone-3']) {
       await traffic.upload(device, JAMMED_GAPS);
     }
@@ -755,7 +958,7 @@ describe('route traffic enrichment', () => {
     });
     expect(enriched?.traffic?.typicalDurationSeconds).toBe(route.durationSeconds);
     expect(enriched?.traffic?.delaySeconds).toBeGreaterThan(20);
-    expect(enriched?.traffic?.observedFraction).toBeGreaterThanOrEqual(0.4);
+    expect(enriched?.traffic?.observedFraction).toBeGreaterThanOrEqual(0.35);
     expect(enriched?.durationSeconds).toBeCloseTo(
       route.durationSeconds + (enriched?.traffic?.delaySeconds ?? 0),
       3,
@@ -779,8 +982,48 @@ describe('route traffic enrichment', () => {
     ).toBe(true);
   });
 
+  it('reads every speed of a route from one epoch, even when the walk spans a boundary', async () => {
+    let nowMs = NOW.getTime();
+    const stub = stubbedMatcher();
+    const service = createTrafficService({
+      attestation: fakeAttestation(),
+      clock: () => new Date(nowMs),
+      // The recorded drive is in Liechtenstein, outside the provincial service coverage.
+      isInCoverage: isFixtureTrafficCoordinate,
+      mapMatcher: {
+        matchTrace: (points) => stub.matcher.matchTrace(points),
+        // Walking the route takes until after the next boundary.
+        walkRoute: async (geometry) => {
+          const edges = await stub.matcher.walkRoute(geometry);
+          nowMs = Date.parse('2026-11-12T18:10:05Z');
+          return edges;
+        },
+      },
+      settings: { ...FIXTURE_SETTINGS, routeMinCoverage: 0.35 },
+    });
+    const upload = async (device: string, gaps?: readonly number[]) => {
+      const capturedAt = new Date(Math.floor(nowMs / 60_000) * 60_000 - 300_000).toISOString();
+      // A batch refused here (for example as outside coverage) would leave nothing to read.
+      expect(
+        await service.ingest(driveBatch(await credentialFor(service, device), gaps, capturedAt)),
+      ).toEqual({ status: 'accepted' });
+    };
+    // 18:05 publishes a jam; a new cohort that drove freely replaces it at 18:10.
+    for (const device of ['phone-1', 'phone-2', 'phone-3']) await upload(device, JAMMED_GAPS);
+    nowMs = Date.parse('2026-11-12T18:05:05Z');
+    await service.runEpoch();
+    for (const device of ['phone-4', 'phone-5', 'phone-6']) await upload(device);
+
+    const result = await service.enrichRoutes([route]);
+    // Every edge is read from the 18:10 snapshot: fully covered and free, not a mixture of the
+    // jam and gaps where 18:10 had replaced 18:05.
+    expect(result.routes[0]?.traffic?.observedFraction).toBeGreaterThanOrEqual(0.35);
+    expect(result.routes[0]?.traffic?.delaySeconds).toBe(0);
+    await service.close();
+  });
+
   it('uses only what is published: a jam still below the threshold changes no route', async () => {
-    const traffic = await createTrafficApp({ routeMinCoverage: 0.4 });
+    const traffic = await createTrafficApp({ routeMinCoverage: 0.35 });
     await traffic.upload('phone-1', JAMMED_GAPS);
     await traffic.upload('phone-2', JAMMED_GAPS);
     await traffic.advanceEpoch();
