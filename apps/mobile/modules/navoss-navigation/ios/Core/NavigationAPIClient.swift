@@ -13,7 +13,7 @@ public enum NavOSSNavigationAPIError: Error {
 
 private struct SearchRequest: Encodable {
   let category: String?
-  let includeDetails = false
+  let includeDetails = true
   let latitude: Double?
   let limit: Int
   let longitude: Double?
@@ -27,10 +27,16 @@ private struct SearchResponse: Decodable {
 
 private struct SearchResult: Decodable {
   let category: String
+  let confidence: Double?
   let center: NavOSSCarPlayCoordinate
+  let details: SearchPlaceDetails?
   let id: String
   let label: String
   let name: String
+}
+
+private struct SearchPlaceDetails: Decodable {
+  let category: String?
 }
 
 private struct RouteRequest: Encodable {
@@ -179,12 +185,14 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
       limit: limit,
       longitude: roundedProximity?.longitude,
       q: query,
-      sort: roundedProximity == nil ? nil : "distance"
+      sort: category == nil ? "relevance" : roundedProximity == nil ? nil : "distance"
     )
     let response: SearchResponse = try await post(path: "v1/search", body: request)
     return response.results.map {
       NavOSSCarPlayDestination(
         category: $0.category,
+        placeCategory: $0.details?.category,
+        searchConfidence: $0.confidence,
         id: $0.id,
         label: $0.label,
         latitude: $0.center.latitude,

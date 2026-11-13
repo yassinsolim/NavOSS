@@ -1,0 +1,1601 @@
+{
+  "recordedAt": "2026-11-13T03:27:44.918Z",
+  "endpoint": "https://photon.komoot.io/api/",
+  "cases": [
+    {
+      "query": {
+        "q": "University",
+        "latitude": 51.0447,
+        "longitude": -114.0719
+      },
+      "status": 200,
+      "response": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 197609299,
+              "osm_key": "building",
+              "osm_value": "train_station",
+              "type": "house",
+              "name": "University",
+              "street": "Crowchild Trail NW",
+              "district": "University of Calgary",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2M 4K6",
+              "countrycode": "CA",
+              "extent": [
+                -114.1231539,
+                51.0801813,
+                -114.1227609,
+                51.0798138
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1229561,
+                51.0799978
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 4814074,
+              "osm_key": "amenity",
+              "osm_value": "university",
+              "type": "house",
+              "housenumber": "2500",
+              "name": "University of Calgary",
+              "street": "University Drive NW",
+              "district": "University of Calgary",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2N 1N4",
+              "countrycode": "CA",
+              "extent": [
+                -114.151945,
+                51.0833939,
+                -114.1201822,
+                51.0665854
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.138805,
+                51.075054
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 206185225,
+              "osm_key": "railway",
+              "osm_value": "platform",
+              "type": "house",
+              "name": "University",
+              "street": "Capitol Hill Crescent NW",
+              "district": "Banff Trail",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2M 4G4",
+              "countrycode": "CA",
+              "extent": [
+                -114.1232667,
+                51.0803484,
+                -114.1224906,
+                51.0794682
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1228736,
+                51.0799031
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 6575591757,
+              "osm_key": "railway",
+              "osm_value": "station",
+              "type": "house",
+              "name": "University",
+              "street": "Crowchild Trail NW",
+              "district": "University of Calgary",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2M 4K6",
+              "countrycode": "CA"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.122957,
+                51.0800072
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 7283215701,
+              "osm_key": "railway",
+              "osm_value": "stop",
+              "type": "house",
+              "name": "University",
+              "street": "Crowchild Trail NW",
+              "district": "Banff Trail",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2M 4K6",
+              "countrycode": "CA"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1231204,
+                51.0803244
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 7283215700,
+              "osm_key": "railway",
+              "osm_value": "stop",
+              "type": "house",
+              "name": "University",
+              "street": "Crowchild Trail NW",
+              "district": "University of Calgary",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2M 4G4",
+              "countrycode": "CA"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1226216,
+                51.0794693
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 18465560,
+              "osm_key": "place",
+              "osm_value": "suburb",
+              "type": "district",
+              "name": "University Heights",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "countrycode": "CA",
+              "extra": {
+                "admin_level": "10"
+              },
+              "extent": [
+                -114.1413188,
+                51.0744199,
+                -114.122479,
+                51.0663873
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1372308,
+                51.0707401
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 18465569,
+              "osm_key": "place",
+              "osm_value": "suburb",
+              "type": "district",
+              "name": "University District",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "countrycode": "CA",
+              "extra": {
+                "admin_level": "10"
+              },
+              "extent": [
+                -114.1521979,
+                51.0814816,
+                -114.1376925,
+                51.0661024
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1454744,
+                51.0743354
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "R",
+              "osm_id": 18465561,
+              "osm_key": "boundary",
+              "osm_value": "administrative",
+              "type": "district",
+              "name": "University of Calgary",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "countrycode": "CA",
+              "extra": {
+                "admin_level": "10"
+              },
+              "extent": [
+                -114.1410613,
+                51.0830645,
+                -114.1179514,
+                51.0669671
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1299504,
+                51.0750862
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 275792107,
+              "osm_key": "landuse",
+              "osm_value": "residential",
+              "type": "locality",
+              "name": "University City",
+              "district": "Brentwood",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "countrycode": "CA",
+              "extent": [
+                -114.1300576,
+                51.0876324,
+                -114.1274822,
+                51.0861675
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1287702,
+                51.0869249
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 4822872,
+              "osm_key": "highway",
+              "osm_value": "residential",
+              "type": "street",
+              "name": "University Drive NW",
+              "district": "St. Andrews Heights",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2N 3Y7",
+              "countrycode": "CA",
+              "extent": [
+                -114.1197707,
+                51.064062,
+                -114.1184235,
+                51.062161
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1189106,
+                51.0631367
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 461139284,
+              "osm_key": "highway",
+              "osm_value": "tertiary",
+              "type": "street",
+              "name": "University Drive NW",
+              "district": "St. Andrews Heights",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2N 3Y7",
+              "countrycode": "CA",
+              "extent": [
+                -114.1200473,
+                51.0647692,
+                -114.119795,
+                51.064455
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1199212,
+                51.0646121
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1471832630,
+              "osm_key": "highway",
+              "osm_value": "tertiary",
+              "type": "street",
+              "name": "University Drive NW",
+              "district": "St. Andrews Heights",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2N 3X3",
+              "countrycode": "CA",
+              "extent": [
+                -114.1224565,
+                51.0677781,
+                -114.1214122,
+                51.0665224
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1219302,
+                51.0671537
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 196472002,
+              "osm_key": "highway",
+              "osm_value": "tertiary",
+              "type": "street",
+              "name": "University Drive NW",
+              "district": "University Heights",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2N 4E1",
+              "countrycode": "CA",
+              "extent": [
+                -114.1273364,
+                51.0731328,
+                -114.1264918,
+                51.0721689
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1269052,
+                51.0726588
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1552357256,
+              "osm_key": "highway",
+              "osm_value": "tertiary",
+              "type": "street",
+              "name": "University Drive NW",
+              "district": "University Heights",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2N 4C2",
+              "countrycode": "CA",
+              "extent": [
+                -114.1264918,
+                51.0721689,
+                -114.1260368,
+                51.07164
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1262657,
+                51.0719033
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 202218552,
+              "osm_key": "highway",
+              "osm_value": "tertiary",
+              "type": "street",
+              "name": "University Drive NW",
+              "district": "University of Calgary",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2N 4E2",
+              "countrycode": "CA",
+              "extent": [
+                -114.128322,
+                51.0744941,
+                -114.1282148,
+                51.0743727
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1282684,
+                51.0744334
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 4651978,
+              "osm_key": "highway",
+              "osm_value": "tertiary",
+              "type": "street",
+              "name": "University Drive NW",
+              "district": "University of Calgary",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2N 4H5",
+              "countrycode": "CA",
+              "extent": [
+                -114.1286004,
+                51.075416,
+                -114.1284622,
+                51.0749759
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1285753,
+                51.0752096
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 4609303,
+              "osm_key": "highway",
+              "osm_value": "residential",
+              "type": "street",
+              "name": "University Gate NW",
+              "district": "University of Calgary",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2N 4V8",
+              "countrycode": "CA",
+              "extent": [
+                -114.1320318,
+                51.0753301,
+                -114.1312439,
+                51.0744311
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1315186,
+                51.0749801
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 95030935,
+              "osm_key": "highway",
+              "osm_value": "unclassified",
+              "type": "street",
+              "name": "University Court NW",
+              "district": "University of Calgary",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2N 1N4",
+              "countrycode": "CA",
+              "extent": [
+                -114.131368,
+                51.0769595,
+                -114.1311412,
+                51.0769042
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1312571,
+                51.0769443
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 461113674,
+              "osm_key": "highway",
+              "osm_value": "tertiary",
+              "type": "street",
+              "name": "University Boulevard NW",
+              "district": "University District",
+              "city": "Calgary",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T2N 4T1",
+              "countrycode": "CA",
+              "extent": [
+                -114.1419608,
+                51.0671529,
+                -114.1418017,
+                51.0670288
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -114.1418689,
+                51.067104
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "query": {
+        "q": "Costco",
+        "latitude": 53.5461,
+        "longitude": -113.4938
+      },
+      "status": 200,
+      "response": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 38071200,
+              "osm_key": "shop",
+              "osm_value": "wholesale",
+              "type": "house",
+              "name": "Costco",
+              "street": "149 Street NW",
+              "locality": "Gagnon Estate Industrial",
+              "district": "Northwest Industrial",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T5L 3C5",
+              "countrycode": "CA",
+              "extent": [
+                -113.5807799,
+                53.5796368,
+                -113.5791347,
+                53.5783876
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.5799967,
+                53.578914
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 49522096,
+              "osm_key": "shop",
+              "osm_value": "wholesale",
+              "type": "house",
+              "housenumber": "13650",
+              "name": "Costco",
+              "street": "50 Street NW",
+              "locality": "Kennedale Industrial",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T5A 4Z8",
+              "countrycode": "CA",
+              "extent": [
+                -113.4179419,
+                53.5963053,
+                -113.4158178,
+                53.595336
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.4169127,
+                53.595772
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 70647323,
+              "osm_key": "shop",
+              "osm_value": "wholesale",
+              "type": "house",
+              "housenumber": "2616",
+              "name": "Costco",
+              "street": "91 Street NW",
+              "locality": "Parsons Industrial",
+              "district": "South Industrial District",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T6N 1N2",
+              "countrycode": "CA",
+              "extent": [
+                -113.4705435,
+                53.4564265,
+                -113.4689085,
+                53.455064
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.4697919,
+                53.4558681
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 48891938,
+              "osm_key": "shop",
+              "osm_value": "wholesale",
+              "type": "house",
+              "name": "Costco",
+              "street": "Broadway Crescent",
+              "city": "Sherwood Park",
+              "county": "Strathcona",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T8H 2C1",
+              "countrycode": "CA",
+              "extent": [
+                -113.318216,
+                53.547266,
+                -113.316541,
+                53.545938
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.3173788,
+                53.5466885
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1571528825,
+              "osm_key": "landuse",
+              "osm_value": "construction",
+              "type": "other",
+              "name": "Costco",
+              "city": "Stony Plain",
+              "state": "Alberta",
+              "country": "Canada",
+              "countrycode": "CA",
+              "extent": [
+                -113.9749856,
+                53.5438783,
+                -113.96979,
+                53.5415827
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.972385,
+                53.5429017
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 259693030,
+              "osm_key": "shop",
+              "osm_value": "wholesale",
+              "type": "house",
+              "housenumber": "7259",
+              "name": "Costco",
+              "street": "Winterburn Rd",
+              "locality": "Granville",
+              "district": "The Grange",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T5T 4K2",
+              "countrycode": "CA",
+              "extent": [
+                -113.6860882,
+                53.5102091,
+                -113.6836121,
+                53.5088406
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.6850021,
+                53.5095352
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 359675818,
+              "osm_key": "shop",
+              "osm_value": "wholesale",
+              "type": "house",
+              "name": "Costco",
+              "street": "Neil Ross Road",
+              "locality": "Erin Ridge North",
+              "city": "St. Albert",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T8N 4K6",
+              "countrycode": "CA",
+              "extent": [
+                -113.6366366,
+                53.6722674,
+                -113.6342423,
+                53.6712915
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.6354605,
+                53.6717651
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 653835163,
+              "osm_key": "shop",
+              "osm_value": "wholesale",
+              "type": "house",
+              "housenumber": "2584",
+              "name": "Costco",
+              "street": "46 Avenue East",
+              "city": "Nisku",
+              "county": "Leduc",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T9E 1K2",
+              "countrycode": "CA",
+              "extent": [
+                -113.5589611,
+                53.307977,
+                -113.5567731,
+                53.3070057
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.5578671,
+                53.3076307
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 12718145158,
+              "osm_key": "shop",
+              "osm_value": "tyres",
+              "type": "house",
+              "name": "Costco Tire Centre",
+              "street": "Yellowhead Trail NW",
+              "locality": "Gagnon Estate Industrial",
+              "district": "Northwest Industrial",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T5V 1S5",
+              "countrycode": "CA"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.5803073,
+                53.5795154
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 766142698,
+              "osm_key": "amenity",
+              "osm_value": "fuel",
+              "type": "house",
+              "name": "Costco Gasoline",
+              "street": "Yellowhead Trail NW",
+              "locality": "Gagnon Estate Industrial",
+              "district": "Northwest Industrial",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T5V 1S5",
+              "countrycode": "CA"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.5805854,
+                53.5807134
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 12718141579,
+              "osm_key": "amenity",
+              "osm_value": "fast_food",
+              "type": "house",
+              "name": "Costco Food Court",
+              "street": "137 Avenue NW",
+              "locality": "Kennedale Industrial",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T5A 4Y3",
+              "countrycode": "CA"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.4161806,
+                53.5960762
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 12718145156,
+              "osm_key": "amenity",
+              "osm_value": "fast_food",
+              "type": "house",
+              "name": "Costco Food Court",
+              "street": "149 Street NW",
+              "locality": "Gagnon Estate Industrial",
+              "district": "Northwest Industrial",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T5V 1A2",
+              "countrycode": "CA"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.5795104,
+                53.5793985
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 12718145157,
+              "osm_key": "amenity",
+              "osm_value": "pharmacy",
+              "type": "house",
+              "name": "Costco Pharmacy",
+              "street": "149 Street NW",
+              "locality": "Gagnon Estate Industrial",
+              "district": "Northwest Industrial",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T5L 3C5",
+              "countrycode": "CA"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.5798356,
+                53.5793768
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 12718141580,
+              "osm_key": "amenity",
+              "osm_value": "pharmacy",
+              "type": "house",
+              "name": "Costco Pharmacy",
+              "street": "137 Avenue NW",
+              "locality": "Kennedale Industrial",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T5A 4Y3",
+              "countrycode": "CA"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.4169241,
+                53.5961321
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 326790941,
+              "osm_key": "amenity",
+              "osm_value": "fuel",
+              "type": "house",
+              "housenumber": "13650",
+              "name": "Costco Gasoline",
+              "street": "50 Street NW",
+              "locality": "Kennedale Industrial",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T5A 4Z8",
+              "countrycode": "CA",
+              "extent": [
+                -113.4176982,
+                53.5970889,
+                -113.4173772,
+                53.5968944
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.4175356,
+                53.5969955
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 12718141578,
+              "osm_key": "shop",
+              "osm_value": "tyres",
+              "type": "house",
+              "name": "Costco Tire Centre",
+              "street": "137 Avenue NW",
+              "locality": "Kennedale Industrial",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T5A 4Y3",
+              "countrycode": "CA"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.4162747,
+                53.5962115
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 12718147614,
+              "osm_key": "amenity",
+              "osm_value": "pharmacy",
+              "type": "house",
+              "name": "Costco Pharmacy",
+              "street": "92 Street NW",
+              "locality": "Parsons Industrial",
+              "district": "South Industrial District",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T6N 1N2",
+              "countrycode": "CA"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.4701593,
+                53.4557809
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 321178776,
+              "osm_key": "amenity",
+              "osm_value": "fuel",
+              "type": "house",
+              "name": "Costco Gasoline",
+              "street": "25 Avenue NW",
+              "locality": "Parsons Industrial",
+              "district": "South Industrial District",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T6N 0A5",
+              "countrycode": "CA",
+              "extent": [
+                -113.4704837,
+                53.4543378,
+                -113.4699242,
+                53.4542448
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.4702043,
+                53.4542902
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 13264249429,
+              "osm_key": "shop",
+              "osm_value": "alcohol",
+              "type": "house",
+              "housenumber": "2640",
+              "name": "Costco Liquor",
+              "street": "91 Street NW",
+              "locality": "Parsons Industrial",
+              "district": "South Industrial District",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T6N 1E6",
+              "countrycode": "CA"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.4688721,
+                53.4555616
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "N",
+              "osm_id": 12718147615,
+              "osm_key": "shop",
+              "osm_value": "tyres",
+              "type": "house",
+              "name": "Costco Tire Centre",
+              "street": "92 Street NW",
+              "locality": "Parsons Industrial",
+              "district": "South Industrial District",
+              "city": "Edmonton",
+              "state": "Alberta",
+              "country": "Canada",
+              "postcode": "T6N 1N2",
+              "countrycode": "CA"
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -113.4696182,
+                53.4551752
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "query": {
+        "q": "Stanley Park",
+        "latitude": 49.2827,
+        "longitude": -123.1207
+      },
+      "status": 200,
+      "response": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 37063023,
+              "osm_key": "leisure",
+              "osm_value": "park",
+              "type": "other",
+              "name": "Stanley Park",
+              "district": "West End",
+              "city": "Vancouver",
+              "county": "Metro Vancouver Regional District",
+              "state": "British Columbia",
+              "country": "Canada",
+              "countrycode": "CA",
+              "extent": [
+                -123.158835,
+                49.3140767,
+                -123.116406,
+                49.2899772
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -123.1413263,
+                49.3020684
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1417953338,
+              "osm_key": "landuse",
+              "osm_value": "construction",
+              "type": "other",
+              "name": "Stanley Park Water Pump Construction-Chilco",
+              "district": "West End",
+              "city": "Vancouver",
+              "county": "Metro Vancouver Regional District",
+              "state": "British Columbia",
+              "country": "Canada",
+              "countrycode": "CA",
+              "extent": [
+                -123.1383909,
+                49.2943098,
+                -123.1373951,
+                49.2936322
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -123.1379955,
+                49.2939677
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 43537866,
+              "osm_key": "highway",
+              "osm_value": "tertiary",
+              "type": "street",
+              "name": "Stanley Park Drive",
+              "city": "Vancouver",
+              "county": "Metro Vancouver Regional District",
+              "state": "British Columbia",
+              "country": "Canada",
+              "postcode": "V6G 3H1",
+              "countrycode": "CA",
+              "extent": [
+                -123.132111,
+                49.2986119,
+                -123.1202962,
+                49.2963919
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -123.1266364,
+                49.2975478
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 44032490,
+              "osm_key": "highway",
+              "osm_value": "trunk",
+              "type": "street",
+              "name": "Stanley Park Causeway",
+              "district": "Downtown",
+              "city": "Vancouver",
+              "county": "Metro Vancouver Regional District",
+              "state": "British Columbia",
+              "country": "Canada",
+              "postcode": "V6G 0A3",
+              "countrycode": "CA",
+              "extent": [
+                -123.1366867,
+                49.2946614,
+                -123.1365453,
+                49.2944876
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -123.136622,
+                49.2945696
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1044497040,
+              "osm_key": "highway",
+              "osm_value": "tertiary",
+              "type": "street",
+              "name": "Stanley Park Drive",
+              "city": "Vancouver",
+              "county": "Metro Vancouver Regional District",
+              "state": "British Columbia",
+              "country": "Canada",
+              "postcode": "V6C 0C3",
+              "countrycode": "CA",
+              "extent": [
+                -123.1204211,
+                49.3000483,
+                -123.1178826,
+                49.2994728
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -123.1190779,
+                49.2994904
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 4755898,
+              "osm_key": "highway",
+              "osm_value": "trunk",
+              "type": "street",
+              "name": "Stanley Park Causeway",
+              "city": "Vancouver",
+              "county": "Metro Vancouver Regional District",
+              "state": "British Columbia",
+              "country": "Canada",
+              "postcode": "V6G 3E2",
+              "countrycode": "CA",
+              "extent": [
+                -123.1366734,
+                49.2970617,
+                -123.1363777,
+                49.2964147
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -123.1364941,
+                49.2967524
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1044497059,
+              "osm_key": "highway",
+              "osm_value": "tertiary",
+              "type": "street",
+              "name": "Stanley Park Drive",
+              "city": "Vancouver",
+              "county": "Metro Vancouver Regional District",
+              "state": "British Columbia",
+              "country": "Canada",
+              "postcode": "V6G 3H2",
+              "countrycode": "CA",
+              "extent": [
+                -123.134103,
+                49.2974568,
+                -123.132913,
+                49.2970994
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -123.1335086,
+                49.2972845
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1044497058,
+              "osm_key": "highway",
+              "osm_value": "tertiary",
+              "type": "street",
+              "name": "Stanley Park Drive",
+              "city": "Vancouver",
+              "county": "Metro Vancouver Regional District",
+              "state": "British Columbia",
+              "country": "Canada",
+              "postcode": "V6G 0A3",
+              "countrycode": "CA",
+              "extent": [
+                -123.1349923,
+                49.2970994,
+                -123.134103,
+                49.2969151
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -123.1345476,
+                49.2970068
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 375504374,
+              "osm_key": "highway",
+              "osm_value": "tertiary",
+              "type": "street",
+              "name": "Stanley Park Drive",
+              "city": "Vancouver",
+              "county": "Metro Vancouver Regional District",
+              "state": "British Columbia",
+              "country": "Canada",
+              "postcode": "V6G 1Z4",
+              "countrycode": "CA",
+              "extent": [
+                -123.1472555,
+                49.2910007,
+                -123.1467043,
+                49.290784
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -123.1469819,
+                49.2908876
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 1353319157,
+              "osm_key": "highway",
+              "osm_value": "tertiary",
+              "type": "street",
+              "name": "Stanley Park Drive",
+              "city": "Vancouver",
+              "county": "Metro Vancouver Regional District",
+              "state": "British Columbia",
+              "country": "Canada",
+              "postcode": "V6G 4M9",
+              "countrycode": "CA",
+              "extent": [
+                -123.1306186,
+                49.3029109,
+                -123.1252382,
+                49.3014451
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -123.1277777,
+                49.3023971
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 70954663,
+              "osm_key": "highway",
+              "osm_value": "trunk",
+              "type": "street",
+              "name": "Stanley Park Causeway",
+              "city": "Vancouver",
+              "county": "Metro Vancouver Regional District",
+              "state": "British Columbia",
+              "country": "Canada",
+              "postcode": "V6G 4M9",
+              "countrycode": "CA",
+              "extent": [
+                -123.1432599,
+                49.3112075,
+                -123.1424644,
+                49.3103154
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -123.142868,
+                49.3107666
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 256879277,
+              "osm_key": "highway",
+              "osm_value": "residential",
+              "type": "street",
+              "name": "Stanley Park Drive",
+              "city": "Vancouver",
+              "county": "Metro Vancouver Regional District",
+              "state": "British Columbia",
+              "country": "Canada",
+              "postcode": "V6G 4M9",
+              "countrycode": "CA",
+              "extent": [
+                -123.144468,
+                49.3116023,
+                -123.1427903,
+                49.3098485
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -123.1438871,
+                49.3107127
+              ]
+            }
+          },
+          {
+            "type": "Feature",
+            "properties": {
+              "osm_type": "W",
+              "osm_id": 363404510,
+              "osm_key": "highway",
+              "osm_value": "tertiary",
+              "type": "street",
+              "name": "Stanley Park Drive",
+              "city": "Vancouver",
+              "county": "Metro Vancouver Regional District",
+              "state": "British Columbia",
+              "country": "Canada",
+              "postcode": "V7T 1B1",
+              "countrycode": "CA",
+              "extent": [
+                -123.1442897,
+                49.312537,
+                -123.1431901,
+                49.3124259
+              ]
+            },
+            "geometry": {
+              "type": "Point",
+              "coordinates": [
+                -123.1437389,
+                49.3124903
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

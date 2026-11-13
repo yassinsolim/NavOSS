@@ -4,17 +4,24 @@ export type ApiConnectionState = 'connecting' | 'offline' | 'online';
 
 /** Names the data a result list came from, and says so when that data is not live. */
 export function searchSourceLabel(source: SearchSource | undefined, degraded = false): string {
+  if (source?.id === 'photon-development' && degraded) {
+    return `${searchSourceName(source)} · Results may be incomplete`;
+  }
   return degraded
     ? `${searchSourceName(source)} · Some sources unavailable, results may be incomplete`
     : searchSourceName(source);
 }
 
 function searchSourceName(source: SearchSource | undefined): string {
-  if (source === undefined) return 'Calgary place search';
+  if (source === undefined) return 'Place search';
   if (source.id === 'calgary-hybrid-search' || source.id === 'calgary-open-data-index') {
     return 'Calgary Open Data + OpenStreetMap';
   }
-  if (source.freshness === 'static') return 'Calgary place data · Not live';
+  if (source.freshness === 'static') {
+    return source.id.startsWith('calgary-')
+      ? 'Calgary place data · Not live'
+      : 'Place data · Not live';
+  }
   return source.id === 'nominatim-self-hosted'
     ? 'OpenStreetMap search'
     : 'OpenStreetMap search · Preview data';

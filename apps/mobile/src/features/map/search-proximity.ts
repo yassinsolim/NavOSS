@@ -49,7 +49,7 @@ export function searchProximityOptions(origin: Coordinate | undefined) {
       : {
           latitude: approximateOrigin.latitude,
           longitude: approximateOrigin.longitude,
-          sort: 'distance' as const,
+          sort: 'relevance' as const,
         }),
     limit: approximateOrigin === undefined ? 8 : 20,
   };
@@ -142,6 +142,8 @@ export function rankSearchResults(
           },
     )
     .sort((left, right) => {
+      const relevanceDelta = right.confidence - left.confidence;
+      if (relevanceDelta !== 0) return relevanceDelta;
       if (origin !== undefined) {
         if (left.distanceMeters === undefined) {
           return right.distanceMeters === undefined ? 0 : 1;
@@ -212,9 +214,8 @@ export function rankCategoryResults(
 }
 
 /**
- * Moves results whose name is exactly what was typed to the front, keeping every other result
- * in its ranked order. Typing a place's full name should not leave it below nearer places that
- * merely share a word with it.
+ * Promotes a unique exact name, keeping the server's relevance order otherwise. Multiple
+ * same-name branches must keep their nearest-first order, including nearby prefix variants.
  */
 export function promoteExactNameMatches(
   results: readonly SearchResult[],
@@ -222,7 +223,28 @@ export function promoteExactNameMatches(
 ): SearchResult[] {
   const wanted = query.trim().toLocaleLowerCase('en-CA');
   if (wanted.length === 0) return [...results];
-  const isExact = (result: SearchResult) =>
-    result.name.trim().toLocaleLowerCase('en-CA') === wanted;
-  return [...results.filter(isExact), ...results.filter((result) => !isExact(result))];
+  let exactIndex = -1;
+  for (let index = 0; index < results.length; index += 1) {
+    if (results[index]?.name.trim().toLocaleLowerCase('en-CA') !== wanted) continue;
+    if (exactIndex !== -1) return [...results];
+    exactIndex = index;
+  }
+  const exact = results[exactIndex];
+  if (exact === undefined || (results[0]?.confidence === 1 && exact.confidence < 1))
+    return [...results];
+  return [exact, ...results.slice(0, exactIndex), ...results.slice(exactIndex + 1)];
+}
+
+/** Promote against the whole overfetch pool before limiting what the driver can see. */
+export function rankTypedSearchResults(
+  results: readonly SearchResult[],
+  query: string,
+  recentDestinationIds: readonly string[],
+  origin?: Coordinate,
+  limit = 8,
+): SearchResult[] {
+  return promoteExactNameMatches(
+    rankSearchResults(results, recentDestinationIds, origin, results.length),
+    query,
+  ).slice(0, limit);
 }

@@ -78,7 +78,7 @@ describe('search source label', () => {
   const source = { datasetVersion: '1', updatedAt: '2026-01-01T00:00:00Z' };
 
   it('never presents static or preview data as live', () => {
-    expect(searchSourceLabel(undefined)).toBe('Calgary place search');
+    expect(searchSourceLabel(undefined)).toBe('Place search');
     expect(searchSourceLabel({ ...source, freshness: 'static', id: 'calgary-fixtures' })).toBe(
       'Calgary place data · Not live',
     );
@@ -94,5 +94,17 @@ describe('search source label', () => {
     expect(searchSourceLabel({ ...source, freshness: 'fresh', id: 'calgary-hybrid-search' })).toBe(
       'Calgary Open Data + OpenStreetMap',
     );
+  });
+
+  it('does not call a functioning development provider unavailable', () => {
+    expect(
+      searchSourceLabel({ ...source, freshness: 'fresh', id: 'photon-development' }, true),
+    ).toBe('OpenStreetMap search · Preview data · Results may be incomplete');
+  });
+
+  it('keeps regional empty-fixture status free of a Calgary coverage claim', () => {
+    expect(
+      searchSourceLabel({ ...source, freshness: 'static', id: 'regional-empty-fixtures' }),
+    ).toBe('Place data · Not live');
   });
 });

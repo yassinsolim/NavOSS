@@ -21,7 +21,8 @@ final class NavigationAPIClientTests: XCTestCase {
       XCTAssertEqual(payload["q"] as? String, "Airport")
       XCTAssertEqual(payload["latitude"] as? Double, 51.123)
       XCTAssertEqual(payload["longitude"] as? Double, -114.988)
-      XCTAssertEqual(payload["sort"] as? String, "distance")
+      XCTAssertEqual(payload["sort"] as? String, "relevance")
+      XCTAssertEqual(payload["includeDetails"] as? Bool, true)
       return Self.response(
         request: request,
         json: """
@@ -54,6 +55,32 @@ final class NavigationAPIClientTests: XCTestCase {
 
     XCTAssertEqual(results.first?.id, "airport")
     XCTAssertEqual(results.first?.latitude, 51.13)
+    XCTAssertNil(results.first?.placeCategory)
+    XCTAssertEqual(results.first?.searchConfidence, 1)
+  }
+
+  func testSearchDecodesFactualCategoryAndToleratesMissingConfidence() async throws {
+    NavigationURLProtocol.handler = { request in
+      Self.response(request: request, json: """
+        {"results":[{"category":"poi","center":{"latitude":51.0432499,"longitude":-113.9174518},
+        "details":{"category":"warehouse store"},"id":"warehouse",
+        "label":"Costco, 75 East Hills Boulevard SE, Calgary","name":"Costco"}]}
+        """)
+    }
+    let results = try await makeClient().search(query: "Costco", proximity: nil)
+    XCTAssertEqual(results.first?.placeCategory, "warehouse store")
+    XCTAssertNil(results.first?.searchConfidence)
+  }
+
+  func testNearbyCategorySearchStillRequestsDistanceSorting() async throws {
+    NavigationURLProtocol.handler = { request in
+      let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.requestBody(request)) as? [String: Any])
+      XCTAssertEqual(payload["category"] as? String, "cafe")
+      XCTAssertEqual(payload["sort"] as? String, "distance")
+      XCTAssertEqual(payload["includeDetails"] as? Bool, true)
+      return Self.response(request: request, json: "{\"results\":[]}")
+    }
+    _ = try await makeClient().search(query: "Cafes", proximity: .init(latitude: 51.045, longitude: -114.072), category: "cafe")
   }
 
   func testRoutesPreserveCoordinateOrderPreferencesAndSpeech() async throws {

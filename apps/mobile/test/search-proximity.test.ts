@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { SearchResponseSchema } from '@navoss/contracts';
 
 import {
   approximateSearchCoordinate,
@@ -8,6 +10,7 @@ import {
   promoteExactNameMatches,
   rankCategoryResults,
   rankSearchResults,
+  rankTypedSearchResults,
   searchProximityKey,
   searchProximityOptions,
   searchOriginWithinBounds,
@@ -40,12 +43,12 @@ describe('search proximity', () => {
     expect(approximateSearchCoordinate(undefined)).toBeUndefined();
   });
 
-  it('requests a wider distance-sorted pool whenever location is available', () => {
+  it('requests a wider relevance-ranked pool whenever location is available', () => {
     expect(searchProximityOptions({ latitude: 51.0447312, longitude: -114.0719234 })).toEqual({
       latitude: 51.045,
       limit: 20,
       longitude: -114.072,
-      sort: 'distance',
+      sort: 'relevance',
     });
     expect(searchProximityOptions(undefined)).toEqual({ limit: 8 });
   });
@@ -324,5 +327,85 @@ describe('exact name matches', () => {
       'd',
     ]);
     expect(promoteExactNameMatches(ranked, '')).toEqual(ranked);
+  });
+});
+
+describe('typed ranking before the visible cap', () => {
+  const origin = { latitude: 51.0105, longitude: -114.0717 };
+  const recorded = JSON.parse(
+    readFileSync(new URL('./fixtures/elboya-search-response.json', import.meta.url), 'utf8'),
+  ) as { response: unknown };
+  const elboyaResponse = SearchResponseSchema.parse(recorded.response);
+
+  it('keeps Calgary Tower visible using the unmodified old production response from Elboya', () => {
+    const shown = rankTypedSearchResults(elboyaResponse.results, 'Calgary Tower', [], origin);
+    expect(shown).toHaveLength(8);
+    expect(shown[0]?.name).toBe('Calgary Tower');
+  });
+
+  it('promotes an exact name below eight higher opaque provider scores before slicing', () => {
+    const tower = elboyaResponse.results.find(({ name }) => name === 'Calgary Tower');
+    expect(tower).toBeDefined();
+    const oldProviderPool = [
+      ...Array.from({ length: 12 }, (_, index) => ({
+        category: 'poi' as const,
+        center: { latitude: origin.latitude + index * 0.0001, longitude: origin.longitude },
+        confidence: 0.99,
+        id: `test:${String(index)}`,
+        label: `Other Tower ${String(index)}, Calgary`,
+        name: `Other Tower ${String(index)}`,
+      })),
+      { ...tower!, confidence: 0.98 },
+    ];
+    expect(rankTypedSearchResults(oldProviderPool, 'Calgary Tower', [], origin)[0]?.name).toBe(
+      'Calgary Tower',
+    );
+  });
+
+  it('keeps same-name chain branches and prefix departments nearest-first', () => {
+    const place = (id: string, name: string, latitude: number, longitude: number) => ({
+      category: 'poi' as const,
+      center: { latitude, longitude },
+      confidence: 0.94,
+      id,
+      label: name,
+      name,
+    });
+    const pool = [
+      place('kelowna', 'Costco', 49.8799002, -119.4294067),
+      place('east-hills', 'Costco', 51.0432499, -113.9174518),
+      place('liquor', 'Costco Liquor', 50.9896247, -114.0463751),
+      place('warehouse', 'Costco', 50.9897629, -114.0463494),
+    ];
+    expect(
+      rankTypedSearchResults(pool, 'Costco', ['kelowna'], {
+        latitude: 51.0447,
+        longitude: -114.0719,
+      }).map(({ id }) => id),
+    ).toEqual(['warehouse', 'liquor', 'east-hills', 'kelowna']);
+  });
+
+  it('does not let a unique exact station name undo a stronger fixture alias', () => {
+    const campus = {
+      category: 'poi' as const,
+      center: { latitude: 51.07795, longitude: -114.13073 },
+      confidence: 1,
+      id: 'campus',
+      label: 'University of Calgary, Calgary',
+      name: 'University of Calgary',
+    };
+    const station = {
+      ...campus,
+      confidence: 0.98,
+      id: 'station',
+      name: 'University',
+      center: { latitude: 51.0799978, longitude: -114.1229561 },
+    };
+    expect(
+      rankTypedSearchResults([station, campus], 'University', [], {
+        latitude: 51.0447,
+        longitude: -114.0719,
+      }).map(({ id }) => id),
+    ).toEqual(['campus', 'station']);
   });
 });

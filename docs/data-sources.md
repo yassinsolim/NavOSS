@@ -62,8 +62,55 @@ than guessed. Parcel coordinates identify a civic parcel and are not guaranteed 
 an entrance, driveway, unit, or ideal vehicle arrival point.
 
 The production index stores public source records only. It does not store search text, search
-origins, selected results, routes, or user identities. Search results are ranked by exact text,
-prefix and word-prefix matches, typo similarity, and then optional proximity.
+origins, selected results, routes, or user identities. Text search uses query-specific name
+relevance (exact fixture aliases, exact names, prefixes, then incidental matches), then proximity.
+For a chain/brand with multiple same-name places, exact and prefix variants share a tier so nearby
+branches and departments precede a same-name warehouse hundreds of kilometres away. A locality-
+qualified query such as `Costco Kelowna` still prioritizes the explicitly named place. Explicit
+distance sorting retains its meaning; category discovery always remains nearest-first.
+
+With a supported origin, Nominatim starts a local text lookup (±0.35° latitude, ±0.5° longitude,
+clipped to the provincial retrieval envelope) and a province-wide lookup concurrently. Both share
+one four-second timeout budget. Pools are polygon-filtered, deduplicated and ranked before the
+result limit is applied. An unavailable pool marks the surviving results degraded; complete
+upstream failure retains the established fixture fallback. Calgary civic data and fixtures are
+not added to Edmonton, Vancouver or other searches outside the Calgary overlay.
+
+### Result identity and routing points
+
+Same normalized names, or narrowly defined variants (legal suffixes, `Costco`/`Costco Wholesale`,
+a tagged station's `LRT Station` suffix, or a curated fixture's city-qualified name), merge only
+when close together. The standard radius is 150 m: the recorded University station components
+span 101 m and duplicate Costco sources span 3–41 m. A matching complete civic number and street
+allow 250 m for address-point/building-centroid offsets. Only a tagged university campus and its
+same-name administrative boundary allow 1,000 m; the recorded Calgary campus node/way spread is
+821 m. Conflicting house numbers, units or known business kinds veto merging. Distinct complete
+same-provider node/way records are retained, even at one address, unless they are campus/station
+components or an explicitly tagged main entrance. Every member must match every other member:
+nearby records cannot form a chain that joins distant branches.
+
+Representative choice uses an explicitly tagged public main entrance (not private or explicitly
+vehicle-prohibited), a factual place kind (the station rather than its platform/stop), civic
+address quality, then coordinate representation. Existing curated fixture routing points are
+retained when equally described; otherwise physical way/relation centroids precede an unqualified
+node. Administrative boundaries never outrank a described campus. Public details are combined,
+preferring a usable street address over a bare administrative breadcrumb. This is not a guarantee
+of a verified driveway or vehicle entrance: Valhalla still snaps the selected point to its graph.
+Saddletowne's fixture point now matches recorded OSM station node `6575529216`.
+
+Phone and CarPlay rows show a compact street address (including a sourced unit) or neighbourhood
+plus city, a factual short category when available, and straight-line distance when an origin is
+known. Nominatim's legacy `class` and current `category`/`type` metadata are accepted; a light-rail
+tag can say `LRT station`, `university` says `University`, and `wholesale` says `Warehouse store`.
+Generic building/road/boundary tags are not place descriptions. Full original addresses remain in
+optional place details; missing addresses/categories are never invented.
+
+Development Photon results are merged with exact-alias fixtures too, so `University` retains
+`University of Calgary` rather than losing it among station platforms. The phone promotes against
+the complete overfetch pool before its eight-row cap, including when using an older API's scores.
+CarPlay merges fresh remote metadata into matching local destinations; at most two matching Home,
+Work or favourites stay visibly pinned as saved. Recents are ordinary ranked candidates, not
+pinned chain branches. Query relevance is in-memory only and is not persisted with destinations.
 
 Restaurants, Groceries, and Parks use a checked-in set of Nominatim special phrases that map the
 visible category to explicit OpenStreetMap tags. The same strict mapping covers all 35 Explore
@@ -98,8 +145,9 @@ one from the province name.
 The place sheet's Parking action searches around the selected place, not the device's position.
 It requires supported search coverage and does not start or replace a route. Text searches can
 highlight up to three matching recent destinations from the current results; the remaining list
-stays nearest-first. This history remains on the device. Submitting a search exposes the map
-markers through a compact results strip, with Show list available to return to the full list.
+preserves relevance for unique names and nearest-first order for chains. This history remains on
+the device. Submitting a search exposes map markers through a compact results strip, with Show
+list available to return to the full list.
 
 OpenStreetMap does not provide a Google-style review corpus. NavOSS does not scrape reviews or add
 Google values to its open-data result or shared contracts. An optional, key-gated Google Places UI
