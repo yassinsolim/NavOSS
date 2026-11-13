@@ -1,4 +1,5 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, createPublicKey, randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
@@ -259,6 +260,130 @@ describe('App Attest assertions', () => {
           publicKey: Buffer.from(development.publicKey, 'base64'),
         }),
       'key-id',
+    );
+  });
+});
+
+/**
+ * Genuine Apple-signed vectors from independent open-source verifiers (see
+ * test/fixtures/app-attest/PROVENANCE.txt). They are verified against the pinned production Apple
+ * root, with no test-root override, so they check Apple's conventions rather than our own signer.
+ */
+describe('genuine Apple App Attest vectors', () => {
+  const fixture = (name: string): string =>
+    readFileSync(new URL(`./fixtures/app-attest/${name}`, import.meta.url), 'utf8');
+  const field = (document: string, key: string): string => {
+    const match = new RegExp(`^${key}: '?([^'\\n]+)'?$`, 'm').exec(document);
+    if (match?.[1] === undefined) throw new Error(`Missing ${key}`);
+    return match[1];
+  };
+
+  for (const name of ['veehaitch-ios-14.2.yaml', 'veehaitch-ios-14.4.yaml']) {
+    const documents = fixture(name).split('\n---\n');
+    const attestation = documents.find((document) => /^type: attestation$/m.test(document)) ?? '';
+    const assertion = documents.find((document) => /^type: assertion$/m.test(document)) ?? '';
+    const verifierFor = (environment: 'development' | 'production') =>
+      createAppAttestVerifier({
+        bundleId: field(attestation, 'bundleIdentifier'),
+        environment,
+        teamId: field(attestation, 'teamIdentifier'),
+      });
+    const clientDataHash = createHash('sha256')
+      .update(Buffer.from(field(attestation, 'clientDataBase64'), 'base64'))
+      .digest();
+    const attest = (environment: 'development' | 'production') =>
+      verifierFor(environment).verifyAttestation({
+        attestationObject: Buffer.from(field(attestation, 'attestationBase64'), 'base64'),
+        clientDataHash,
+        keyId: Buffer.from(field(attestation, 'keyIdBase64'), 'base64'),
+        now: new Date(field(attestation, 'timestamp')),
+      });
+
+    it(`${name}: verifies the real attestation chain to Apple's root and extracts the key`, () => {
+      const verified = attest('development');
+      const expected = createPublicKey(
+        /-----BEGIN PUBLIC KEY-----[\s\S]+?-----END PUBLIC KEY-----/
+          .exec(attestation)?.[0]
+          .replace(/^ +/gm, '') ?? '',
+      ).export({ format: 'der', type: 'spki' });
+      expect(verified.publicKey.equals(expected)).toBe(true);
+      expectFailure(() => attest('production'), 'environment');
+    });
+
+    it(`${name}: verifies the real assertion signature and counter convention`, () => {
+      const { publicKey } = attest('development');
+      const verifier = verifierFor('development');
+      const assertionBytes = Buffer.from(field(assertion, 'assertionBase64'), 'base64');
+      const assertionClientDataHash = createHash('sha256')
+        .update(Buffer.from(field(assertion, 'clientDataBase64'), 'base64'))
+        .digest();
+      expect(
+        verifier.verifyAssertion({
+          assertion: assertionBytes,
+          clientDataHash: assertionClientDataHash,
+          previousSignCount: 0,
+          publicKey,
+        }),
+      ).toEqual({ signCount: Number(field(assertion, 'counter')) });
+      expectFailure(
+        () =>
+          verifier.verifyAssertion({
+            assertion: assertionBytes,
+            clientDataHash: sha256('wurzelpfropf2'),
+            previousSignCount: 0,
+            publicKey,
+          }),
+        'signature',
+      );
+      expectFailure(
+        () =>
+          verifier.verifyAssertion({
+            assertion: assertionBytes,
+            clientDataHash: assertionClientDataHash,
+            previousSignCount: 1,
+            publicKey,
+          }),
+        'counter',
+      );
+    });
+  }
+
+  it("verifies Apple's published production sample from the attestation validation guide", () => {
+    const verifier = createAppAttestVerifier({
+      bundleId: 'com.example.myapp',
+      environment: 'production',
+      teamId: '1234567890',
+    });
+    const input = {
+      attestationObject: Buffer.from(
+        fixture('takimoto3-apple-guide-attestation.b64').trim(),
+        'base64',
+      ),
+      keyId: Buffer.from('zgSY9YSD+7TaDXssY6WlOPVS1K3Lmk+pFhlcSWE+ZV0=', 'base64'),
+      now: new Date('2026-04-21T18:13:12Z'),
+    };
+    // Apple's sample was formed from the raw challenge, as its expected values show.
+    const verified = verifier.verifyAttestation({
+      ...input,
+      clientDataHash: Buffer.from('example_server_challenge', 'utf8'),
+    });
+    expect(verified.signCount).toBe(0);
+    expectFailure(
+      () =>
+        verifier.verifyAttestation({
+          ...input,
+          clientDataHash: sha256('example_server_challenge'),
+        }),
+      'nonce',
+    );
+    expectFailure(
+      () =>
+        verifier.verifyAttestation({
+          ...input,
+          clientDataHash: Buffer.from('example_server_challenge'),
+          now: new Date('2026-04-24T00:00:00Z'),
+        }),
+      'certificate',
     );
   });
 });

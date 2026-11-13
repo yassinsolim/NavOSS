@@ -142,7 +142,8 @@ function uncompressedPoint(key: KeyObject): Buffer {
 function assertionAuthenticatorData(rpIdHash: Buffer, counter: number): Buffer {
   const data = Buffer.alloc(37);
   rpIdHash.copy(data, 0);
-  data.writeUInt8(0x01, 32);
+  // Real devices set the attested-credential flag even in assertions.
+  data.writeUInt8(0x40, 32);
   data.writeUInt32BE(counter, 33);
   return data;
 }

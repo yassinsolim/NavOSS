@@ -29,7 +29,6 @@ const AAGUID = {
   development: Buffer.from('appattestdevelop', 'ascii'),
   production: Buffer.concat([Buffer.from('appattest', 'ascii'), Buffer.alloc(7)]),
 } as const;
-const ATTESTED_CREDENTIAL_DATA_FLAG = 0x40;
 
 export type AppAttestEnvironment = keyof typeof AAGUID;
 
@@ -67,7 +66,6 @@ export interface VerifiedKey {
 interface AuthenticatorData {
   aaguid?: Buffer;
   credentialId?: Buffer;
-  flags: number;
   rpIdHash: Buffer;
   signCount: number;
 }
@@ -78,16 +76,19 @@ export function sha256(...parts: Uint8Array[]): Buffer {
   return hash.digest();
 }
 
-function parseAuthenticatorData(data: Uint8Array): AuthenticatorData {
+/**
+ * Attestation authData always carries attested credential data. Assertion authData is the 37-byte
+ * prefix only, even though real devices still set the attested-credential flag (0x40) in it, so the
+ * flag must not decide how much to parse.
+ */
+function parseAuthenticatorData(data: Uint8Array, withCredential: boolean): AuthenticatorData {
   const bytes = Buffer.from(data);
   if (bytes.length < 37) throw new AppAttestError('malformed');
-  const flags = bytes.readUInt8(32);
   const parsed: AuthenticatorData = {
-    flags,
     rpIdHash: bytes.subarray(0, 32),
     signCount: bytes.readUInt32BE(33),
   };
-  if ((flags & ATTESTED_CREDENTIAL_DATA_FLAG) === 0) return parsed;
+  if (!withCredential) return parsed;
   if (bytes.length < 55) throw new AppAttestError('malformed');
   const credentialIdLength = bytes.readUInt16BE(53);
   if (bytes.length < 55 + credentialIdLength) throw new AppAttestError('malformed');
@@ -201,7 +202,7 @@ export function createAppAttestVerifier(options: AppAttestVerifierOptions): AppA
       const keyIdBuffer = Buffer.from(keyId);
       if (!sha256(point).equals(keyIdBuffer)) throw new AppAttestError('key-id');
 
-      const authData = parseAuthenticatorData(authDataBytes);
+      const authData = parseAuthenticatorData(authDataBytes, true);
       if (!authData.rpIdHash.equals(rpIdHash)) throw new AppAttestError('app-id');
       if (authData.signCount !== 0) throw new AppAttestError('counter');
       if (!authData.aaguid?.equals(expectedAaguid)) {
@@ -226,7 +227,7 @@ export function createAppAttestVerifier(options: AppAttestVerifierOptions): AppA
       } catch {
         throw new AppAttestError('malformed');
       }
-      const authData = parseAuthenticatorData(authDataBytes);
+      const authData = parseAuthenticatorData(authDataBytes, false);
       const nonce = sha256(authDataBytes, clientDataHash);
       const key = createPublicKey({ format: 'der', key: Buffer.from(publicKey), type: 'spki' });
       if (!verify('sha256', nonce, { dsaEncoding: 'der', key }, signature)) {
