@@ -201,16 +201,21 @@ Both sources use the [Calgary Open Data Terms of
 Use](https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa). Source timestamps, confidence, update
 frequency, dataset links, and attribution are returned with every API response. Construction start
 and end values are source-local civil times tagged as `America/Edmonton`; NavOSS does not reinterpret
-them as UTC. Expired construction records and malformed rows are excluded rather than guessed.
+them as UTC. The current incident feed uses UTC text timestamps and WKT points (or separate coordinate
+columns); its UTC times are converted to Edmonton wall time, including daylight saving transitions.
+Legacy local timestamps and GeoJSON points remain supported. Expired construction records and
+malformed rows are excluded rather than guessed. An isolated malformed row or up to 10% of a feed is
+dropped and counted; exceeding that threshold fails that dataset.
 
-The production API polls both feeds every five minutes even when no phone requests the endpoint and
-deduplicates overlapping refreshes. It also caches a complete validated snapshot for five minutes.
-If Calgary Open Data is temporarily unavailable, the API may return the last successful in-memory
-snapshot for no more than 24 hours with both `stale` and `degraded` set to `true`. After that bound,
-before any valid snapshot exists, or after an API restart during an upstream outage, the endpoint
-fails closed. The phone refreshes every five minutes, keeps its last validated response through a
-transient request failure, and visibly identifies a stale or delayed snapshot. Phones do not send
-user location to Calgary Open Data.
+The API polls both feeds every five minutes even when no phone requests the endpoint and
+deduplicates overlapping refreshes. It caches a validated snapshot for five minutes and individual
+datasets for at most 24 hours. If one feed fails, it serves the other with the last valid data for
+the failed feed within that bound, or without that feed if no valid data exists. Both `stale` and
+`degraded` are true for an incomplete or partially invalid snapshot. The v1 contract still requires
+both real source descriptors: if a descriptor cannot be fetched and no bounded cached descriptor
+exists, or no feed is available, the endpoint fails closed. The phone refreshes every five minutes,
+keeps its last validated response through a transient request failure, and visibly identifies a stale
+or delayed snapshot. Phones do not send user location to Calgary Open Data.
 
 Road-event markers are awareness information only. They do not change route selection, trigger
 rerouting or speech, alter ETA, or represent road speeds or congestion. They are not an input to
@@ -315,7 +320,8 @@ DriveBC publishes active road events through its official Open511 API under the
 [Open Government Licence - British Columbia](https://www2.gov.bc.ca/gov/content/data/open-data/open-government-license-bc).
 NavOSS requests the documented Kelowna-area bounding box every five minutes and exposes normalized
 construction, closure, and incident markers at `GET /v2/events?region=kelowna-bc`. The provider
-strictly validates Point and LineString geometry, uses an actual in-bounds geometry vertex, and
+strictly validates Point and LineString geometry, accepts DriveBC's optional road-level `+delay`
+extension without deriving routing delays from it, uses an actual in-bounds geometry vertex, and
 fails closed on unknown source structures. A validated in-memory snapshot may be served as marked
 stale for no more than 24 hours.
 
