@@ -729,8 +729,15 @@ public final class NavOSSOfflineStore: NSObject, @unchecked Sendable {
   private func restorePartialDownloads() {
     guard let manifest else { return }
     for region in manifest.regions {
+      // Only the region's own files mark it as started; the shared resources archive may have
+      // been staged by another region.
+      let ownStaged = NavOSSOfflineFile.allCases.contains { file in
+        let url = layout.staging(bundleVersion: manifest.bundleVersion, regionId: region.id)
+          .appending(path: file.rawValue)
+        return fileManager.fileExists(atPath: url.path) || partialSize(url) > 0
+      }
       let staged = stagedBytes(region: region)
-      guard staged > 0 else { continue }
+      guard ownStaged, staged > 0 else { continue }
       let total = region.regionDownloadBytes
         + (resourcesInstalled(region.resources.artifact.sha256) ? 0 : region.resources.artifact.byteSize)
       activities[region.id] = .paused(receivedBytes: min(staged, total), totalBytes: total)

@@ -123,7 +123,10 @@ export function offlineStyleSource(): OfflineStyleSource | undefined {
 /** Whether an online failure means the service could not be reached (not a rejected request). */
 export function isUnreachable(error: unknown): boolean {
   if (error instanceof NavOssApiError) return error.status === 0 || error.status >= 500;
-  return error instanceof TypeError;
+  // React Native's fetch rejects with a TypeError, Expo's iOS fetch with a plain Error
+  // ("fetch failed: Could not connect to the server."). A response that failed validation or a
+  // cancelled request is not an unreachable service.
+  return error instanceof Error && error.name !== 'ZodError' && error.name !== 'AbortError';
 }
 
 export interface PlannedRoutes {

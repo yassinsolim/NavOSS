@@ -110,7 +110,11 @@ describe('offline fallback', () => {
     expect(isUnreachable(new TypeError('Network request failed'))).toBe(true);
     expect(isUnreachable(new NavOssApiError('down', 503))).toBe(true);
     expect(isUnreachable(new NavOssApiError('bad', 400))).toBe(false);
-    expect(isUnreachable(new Error('other'))).toBe(false);
+    // Expo's iOS fetch rejects with a plain Error, seen on the simulator with the API stopped.
+    expect(isUnreachable(new Error('fetch failed: Could not connect to the server.'))).toBe(true);
+    const aborted = new Error('aborted');
+    aborted.name = 'AbortError';
+    expect(isUnreachable(aborted)).toBe(false);
   });
 
   it('answers with labelled offline routes when the service is unreachable', async () => {
