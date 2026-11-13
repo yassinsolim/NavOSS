@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Two queued cars seen from behind. -->
+  <path fill="currentColor" d="M20 15h14a3 3 0 0 1 2.9 2.2L38.6 24H40a2 2 0 0 1 2 2v5H12v-5a2 2 0 0 1 2-2h1.4l1.7-6.8A3 3 0 0 1 20 15Z" opacity="0.55"/>
+  <path fill="currentColor" d="M26 26h14a3 3 0 0 1 2.9 2.2L44.6 35H46a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2v2.5a1.5 1.5 0 0 1-3 0V47H25v2.5a1.5 1.5 0 0 1-3 0V47h-2a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1.4l1.7-6.8A3 3 0 0 1 26 26Z"/>
+  <path fill="var(--tile)" d="M26.4 29h13.2l1.4 6H25Zm-3.4 9.5h4v3h-4Zm16 0h4v3h-4Z"/>
+</svg>

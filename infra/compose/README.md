@@ -19,7 +19,7 @@ previous `valhalla-alberta-british-columbia-260730` artifact remains available f
 
 ## Storage
 
-- `/srv/navoss/state/postgres`: PostGIS state for the reproducible Calgary search index, short-lived community-traffic aggregates, and future community reports. Logical backups exclude `calgary_search_*` tables and the rows of `traffic_segments` and `traffic_flow_buckets`.
+- `/srv/navoss/state/postgres`: PostGIS state for the reproducible Calgary search index, community reports, and published community-traffic releases. Logical backups exclude `calgary_search_*` tables and the rows (not the schema) of the short-lived `community_*` and `traffic_*` tables.
 - `/srv/navoss/artifacts/imports`: official Alberta and British Columbia extracts plus the merged regional Nominatim input.
 - `/srv/navoss/artifacts/valhalla`: reproducible Alberta and British Columbia routing graph.
 - `/srv/navoss/artifacts/nominatim/postgres`: reproducible Alberta and British Columbia search index.
@@ -57,55 +57,74 @@ startup.
 ## Community traffic
 
 Community traffic is built from short driving batches that opted-in NavOSS drivers upload. The
-design, parameters and threat model are in
-[`docs/architecture/community-traffic.md`](../../docs/architecture/community-traffic.md). It is
-controlled by one value in `.env` and is `off` unless set:
+design, parameters and limits are in
+[`docs/architecture/community-traffic.md`](../../docs/architecture/community-traffic.md). Read
+"What this does not protect against" there before going `live`. It is controlled by one value in
+`.env` and is `off` unless set:
 
-| `COMMUNITY_TRAFFIC_MODE` | `POST /v1/traffic/probes` | Flow, route traffic, `features.liveTraffic` |
-| ------------------------ | ------------------------- | ------------------------------------------- |
-| `off` (default)          | 503                       | unavailable, `false`                        |
-| `collect`                | accepted and aggregated   | unavailable, `false`                        |
-| `live`                   | accepted and aggregated   | published above the threshold, `true`       |
+| `COMMUNITY_TRAFFIC_MODE` | `POST /v2/traffic/probes`            | Flow, route traffic, `features.liveTraffic` |
+| ------------------------ | ------------------------------------ | ------------------------------------------- |
+| `off` (default)          | 503                                  | unavailable, `false`                        |
+| `collect`                | accepted, counted, nothing stored    | unavailable, `false`                        |
+| `live`                   | accepted, published at the threshold | published at five-minute boundaries, `true` |
 
-Roll out in that order:
+Uploads need an App Attest installation, so `APP_ATTEST_TEAM_ID`, `COMMUNITY_INSTALLATION_SECRET`
+and `COMMUNITY_ATTESTATION_MODE=enforce` must be set as for community reports; without them the
+API issues no upload credential and `/v2/traffic/status` reports `probes.accepting: false`.
+
+The traffic table comes from the same migration command as community reports; there is one
+migration mechanism and one deploy step (see [Database migrations](#database-migrations-and-community-reports)). Roll
+out in this order:
 
 ```sh
 # 1. Deploy the image with the mode still off; nothing changes for clients.
 sudo docker compose build api
+sudo docker compose run --rm --no-deps api node dist/migrate.js
 sudo docker compose up -d --no-build --wait --wait-timeout 300 api caddy
 ./check-stack.sh
 
-# 2. Collect. The API creates the traffic tables on start; to apply them ahead of time instead:
-sudo docker compose run --rm --no-deps api node dist/traffic/migrate.js
+# 2. Collect.
 sed -i 's/^COMMUNITY_TRAFFIC_MODE=.*/COMMUNITY_TRAFFIC_MODE=collect/' .env
 sudo docker compose up -d --no-build --wait --wait-timeout 300 api
 COMMUNITY_TRAFFIC_MODE=collect ./check-stack.sh
 
-# 3. Publish, once the privacy policy and app release that describe sharing are out.
+# 3. Publish, once the privacy policy and app release that describe sharing are out and the
+#    unproven items in the architecture document have been checked on this host.
 sed -i 's/^COMMUNITY_TRAFFIC_MODE=.*/COMMUNITY_TRAFFIC_MODE=live/' .env
 sudo docker compose up -d --no-build --wait --wait-timeout 300 api
 COMMUNITY_TRAFFIC_MODE=live ./check-stack.sh
 ```
 
 While collecting or live, the API logs a `Community traffic summary` line every 15 minutes with
-batch counters and the number of observed and publishable segments. It contains no position, road,
-address or time. Use it to decide when there is enough data to go live.
+batch and credential counters, the number of samples and road edges pending in memory, and the
+number of edges released. It contains no position, road, address, installation or time, and none
+of it is available over HTTP. A failed purge or epoch write is logged at error level as
+`Community traffic maintenance failed` with only the name of the step.
 
 Operational facts:
 
-- The mode requires the self-hosted Valhalla (`VALHALLA_TRACE_URL`); the API refuses to start in
-  `collect` or `live` without it, and never sends a trace to a public routing server.
+- The mode requires the self-hosted Valhalla. `VALHALLA_TRACE_URL` must be loopback, a private
+  address, or a single-label service name such as `valhalla`; the API refuses to start in
+  `collect` or `live` with anything else and never follows a redirect from the matcher.
+- In `collect` or `live` the API refuses to start while a migration is pending. It never applies
+  one itself.
 - Probe matching may hold one of Valhalla's two worker threads; extra batches get 503 and are
   dropped by the app, so routing keeps the other thread.
-- Every API start empties `traffic_segments` and `traffic_flow_buckets`. Up to
-  `COMMUNITY_TRAFFIC_WINDOW_SECONDS` (30 minutes) of live traffic disappears on a restart and
-  rebuilds as drivers upload. This is deliberate: see the architecture document.
-- Run a single API container. Two would each empty the tables on start and could not compare
-  contributor tokens.
-- `backup-reports-db.sh` dumps the two traffic tables' structure only, never their rows.
-- Rollback: set `COMMUNITY_TRAFFIC_MODE=off` and restart `api`. To remove the schema as well:
-  `DROP TABLE traffic_flow_buckets, traffic_segments, traffic_schema_migrations;`.
-- Valhalla's `traffic_name` stays blank. Observed speeds are not fed into route selection yet.
+- Observations below the publication threshold live only in API memory. `traffic_releases` holds
+  published values only, is unlogged, and is emptied on **every** API start in **every** mode.
+  Up to 15 minutes of published traffic, and up to 20 minutes of pending observations, disappear
+  on a restart and rebuild as drivers upload. Upload credentials issued before the restart stop
+  working; the app requests a new one.
+- Restart the API whenever the Valhalla graph is replaced. Segment keys belong to one graph.
+- Run a single API container. Pending observations, credential keys and rate limits are per
+  process; this is not enforced.
+- The privacy limits (three contributors, 400 m trip trim, 100 m batch trim, five-minute
+  boundaries, 15-minute lifetimes, road classes) are fixed in code. `.env` can only raise the
+  contributor minimum and the trip trim.
+- `backup-reports-db.sh` dumps the structure of `traffic_*` tables only, never their rows.
+- Rollback: set `COMMUNITY_TRAFFIC_MODE=off` and restart `api`. The restart empties
+  `traffic_releases`; nothing else was stored. The table itself stays (migrations are additive).
+- Valhalla's `traffic_name` stays blank. Observed speeds are not fed into route selection.
 
 ## Regional extract preparation
 
@@ -238,6 +257,47 @@ sudo docker compose up -d --no-build --wait --wait-timeout 300 valhalla nominati
 Rollback restores the previous four `.env` values and reruns the same four-service command.
 Versioned artifacts are never deleted during deployment.
 
+## Database migrations and community reports
+
+Community-report and community-traffic tables are created by explicit, ordered SQL migrations
+(`apps/api/src/migrations.ts`), not at API startup. The API refuses community-report
+requests with `503` until every migration is applied, and refuses to start with community traffic
+in `collect` or `live`. Apply them before starting a new API image:
+
+```sh
+sudo docker compose build api
+sudo docker compose run --rm --no-deps api node dist/migrate.js
+sudo docker compose up -d --no-build --wait --wait-timeout 300 api caddy
+./check-stack.sh
+```
+
+`migrate.js` takes an advisory lock, applies each pending migration in its own transaction,
+records it in `navoss_schema_migrations`, and refuses to continue if an applied migration's SQL
+changed. It is safe to repeat. Migrations are additive; rolling the API image back leaves the new
+tables unused. The older runtime-created tables (contributions, search index, Google budget) are
+unchanged.
+
+Writes need `APP_ATTEST_TEAM_ID` and `COMMUNITY_INSTALLATION_SECRET` in `.env`; without them
+`/v2/community/*` writes return `503` and reads follow `COMMUNITY_REPORTS_PUBLICATION`. Keep the
+secret out of Git and do not rotate it casually: it keys the stored key-id hashes and seals the
+stored public keys, so rotation forces every phone to register a new App Attest key.
+
+Publication (`COMMUNITY_REPORTS_PUBLICATION`):
+
+- `shadow` (code and example default): store and score reports, show none. `features.communityReports`
+  in `/v1/config` and `/v2/config` is `false`.
+- `attested`: the beta setting for a small group of TestFlight drivers. A report from an App
+  Attest-verified installation is returned immediately as `unconfirmed` with `confirmations: 0`
+  and becomes `confirmed` after independent corroboration. Config reports `communityReports: true`.
+- `corroborated`: only reports with a sufficient lower confidence bound and at least two
+  independent installations are returned.
+
+To run the beta: set `COMMUNITY_REPORTS_PUBLICATION=attested`, the team id, and the secret; apply
+migrations; recreate `api`; then confirm `curl -s http://127.0.0.1:8080/v2/config` shows
+`"communityReports":true`. Set it back to `shadow` and recreate `api` to stop showing reports
+immediately (the kill switch). `COMMUNITY_ATTESTATION_MODE=allow-development` admits simulator
+installations as untrusted with much lower limits; never use it on the production API.
+
 ## First import
 
 For a new host with no live service to preserve, the two geospatial imports are intentionally
@@ -332,8 +392,16 @@ Do not start both initial imports simultaneously. During either import, monitor
   text and parameter values from error logs.
 - Cloudflare Tunnel forwards only the public API hostname to local Caddy.
 - Report-database dumps are mode 0640, compressed, and retained for 14 days.
-  They exclude the reproducible public search index and the rows of the community-traffic
-  tables, and do not contain user search, route, or trip data.
-- Community-traffic uploads are map-matched in memory and discarded. The database holds only
-  per-road-segment speed histograms in five-minute buckets, deleted within 36 minutes; no position,
-  trace, device, or trip identifier is stored or logged.
+  They exclude the reproducible public search index and the rows of the short-lived
+  community-report tables, and do not contain user search, route, or trip data.
+- Community reports: no accounts. Only a keyed hash of each App Attest key id and a sealed
+  public key are stored. Report positions are kept until 24 hours after expiry; each
+  installation's last write position is kept rounded to about 1 km for the impossible-travel
+  check and cleared after 24 hours; installations are deleted after 90 days without writes or on
+  request. Vote coordinates are checked for proximity and never stored. Coordinates are never
+  logged.
+- Community traffic: uploads are map-matched in memory and discarded. Observations below the
+  publication threshold exist only in API process memory. The database holds only already
+  published per-road-edge speeds (`traffic_releases`, an unlogged table), deleted 15 minutes after
+  release and erased on every API start; no position, trace, installation, or trip identifier is
+  stored or logged by the API.

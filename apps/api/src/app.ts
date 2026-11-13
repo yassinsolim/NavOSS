@@ -41,6 +41,11 @@ import {
   type SearchFixture,
 } from './fixtures.js';
 import {
+  createConfiguredCommunityReportService,
+  type CommunityReportService,
+} from './community-reports.js';
+import { registerCommunityRoutes } from './community-routes.js';
+import {
   ContributionProviderError,
   createConfiguredContributionProvider,
   type ContributionProvider,
@@ -96,7 +101,11 @@ import {
   type SafetyCameraProvider,
 } from './safety-camera-provider.js';
 import { registerTrafficRoutes } from './traffic/routes.js';
-import { createConfiguredTrafficService, type TrafficService } from './traffic/service.js';
+import {
+  createConfiguredTrafficService,
+  type TrafficMaintenanceFailure,
+  type TrafficService,
+} from './traffic/service.js';
 import {
   createTorontoSafetyCameraProvider,
   TorontoCameraProviderError,
@@ -112,8 +121,10 @@ function errorName(error: unknown): string {
 export interface BuildAppOptions {
   cameraProvider?: SafetyCameraProvider;
   clock?: () => Date;
+  /** `null` disables community reports; omitted builds them from the environment. */
+  communityReports?: CommunityReportService | null;
   contributionProvider?: ContributionProvider;
-  contributionRateLimiter?: ContributionRateLimiter;
+  contributionRateLimiter?: Pick<ContributionRateLimiter, 'consume'>;
   driveBcEventProvider?: DriveBcRoadEventProvider;
   driveBcTrafficCameraProvider?: DriveBcTrafficCameraProvider;
   eventProvider?: CalgaryRoadEventProvider;
@@ -126,7 +137,6 @@ export interface BuildAppOptions {
   searchProvider?: SearchProvider;
   searchFixtures?: readonly SearchFixture[];
   torontoCameraProvider?: TorontoSafetyCameraProvider;
-  trafficRateLimiter?: ContributionRateLimiter;
   trafficService?: TrafficService;
 }
 
@@ -135,9 +145,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const cameraProvider = options.cameraProvider ?? createCalgarySafetyCameraProvider();
   const contributionProvider =
     options.contributionProvider ?? createConfiguredContributionProvider({ clock });
-  const contributionRateLimiter =
+  const contributionRateLimiter: Pick<ContributionRateLimiter, 'consume'> &
+    Partial<Pick<ContributionRateLimiter, 'close'>> =
     options.contributionRateLimiter ??
     createContributionRateLimiter({ clock: () => clock().getTime() });
+  const communityReports =
+    options.communityReports === undefined
+      ? createConfiguredCommunityReportService({
+          clock,
+          isInCoverage: isSupportedSearchCoordinate,
+        })
+      : (options.communityReports ?? undefined);
+  const communityReportsLive =
+    communityReports !== undefined && communityReports.publication !== 'shadow';
   const driveBcEventProvider = options.driveBcEventProvider ?? createDriveBcRoadEventProvider();
   const driveBcTrafficCameraProvider =
     options.driveBcTrafficCameraProvider ?? createDriveBcTrafficCameraProvider();
@@ -150,14 +170,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.kelownaSafetyFacilityProvider ?? createKelownaSafetyFacilityProvider();
   const productionSearch = options.productionSearch ?? process.env.NOMINATIM_URL !== undefined;
   const routeProvider = options.routeProvider ?? createConfiguredRouteProvider();
-  const trafficService = options.trafficService ?? createConfiguredTrafficService({ clock });
-  const trafficRateLimiter =
-    options.trafficRateLimiter ??
-    createContributionRateLimiter({
-      clock: () => clock().getTime(),
-      globalLimit: trafficService.settings.rateLimitGlobal,
-      sourceLimit: trafficService.settings.rateLimitPerSource,
-      windowMs: trafficService.settings.rateLimitWindowSeconds * 1_000,
+  // Bound to the logger once the app exists. It is told which maintenance step failed, no data.
+  let reportTrafficFailure: (failure: TrafficMaintenanceFailure) => void = () => undefined;
+  const trafficService =
+    options.trafficService ??
+    createConfiguredTrafficService({
+      // Upload credentials are issued only to App Attest installations of community reports.
+      attestation: communityReports,
+      clock,
+      onMaintenanceFailure: (failure) => {
+        reportTrafficFailure(failure);
+      },
     });
   // `/v1/config` is frozen for shipped clients and reports the licensed provider only.
   const providerLiveTraffic = routeProvider.source?.traffic === 'live';
@@ -174,6 +197,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     logger: options.logger ?? false,
     trustProxy: 'loopback, linklocal, uniquelocal',
   });
+  reportTrafficFailure = (failure) => {
+    app.log.error({ failure }, 'Community traffic maintenance failed');
+  };
 
   app.addHook('onClose', async () => {
     driveBcEventProvider.stop?.();
@@ -181,13 +207,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     eventProvider.stop?.();
     ontarioEventProvider.stop?.();
     await Promise.all([
+      communityReports?.close(),
       contributionProvider.close?.(),
       googlePlaceQueryBudget.close?.(),
       trafficService.close(),
     ]);
+    contributionRateLimiter.close?.();
   });
 
   app.addHook('onReady', async () => {
+    communityReports?.start();
     contributionProvider.start?.();
     // Fails startup when traffic is enabled but its schema cannot be prepared.
     await trafficService.start();
@@ -206,6 +235,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       openapi: '3.1.0',
       tags: [
         { description: 'Official municipal safety-camera locations', name: 'cameras' },
+        {
+          description: 'Attested, account-free community road reports (unofficial)',
+          name: 'community',
+        },
         { description: 'Application configuration', name: 'config' },
         { description: 'Anonymous bounded beta feedback submissions', name: 'contributions' },
         { description: 'Official and source-qualified road events', name: 'events' },
@@ -493,7 +526,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         tags: ['config'],
       },
     },
-    () => createLegacyAppConfig(clock().toISOString(), productionSearch, providerLiveTraffic),
+    () =>
+      createLegacyAppConfig(
+        clock().toISOString(),
+        productionSearch,
+        providerLiveTraffic,
+        communityReportsLive,
+      ),
   );
 
   typedApp.get(
@@ -505,7 +544,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         tags: ['config'],
       },
     },
-    () => createAppConfig(clock().toISOString(), productionSearch, liveTraffic),
+    () =>
+      createAppConfig(clock().toISOString(), productionSearch, liveTraffic, communityReportsLive),
   );
 
   typedApp.post(
@@ -797,7 +837,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     },
   );
 
-  registerTrafficRoutes(app, trafficService, trafficRateLimiter);
+  registerTrafficRoutes(app, trafficService, { clock });
+  registerCommunityRoutes(typedApp, { clock, service: communityReports });
 
   typedApp.get(
     '/openapi.json',

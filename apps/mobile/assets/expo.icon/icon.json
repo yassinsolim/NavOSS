@@ -1,23 +1,76 @@
 {
   "fill": {
-    "solid": "extended-srgb:0.10588,0.14510,0.14902,1.00000"
+    "linear-gradient": [
+      "extended-srgb:0.08627,0.63922,0.56863,1.00000",
+      "extended-srgb:0.03922,0.35294,0.32157,1.00000"
+    ],
+    "orientation": {
+      "start": {
+        "x": 0.5,
+        "y": 0
+      },
+      "stop": {
+        "x": 0.5,
+        "y": 1
+      }
+    }
   },
+  "fill-specializations": [
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "extended-srgb:0.11765,0.16863,0.17255,1.00000",
+          "extended-srgb:0.05490,0.08235,0.08627,1.00000"
+        ],
+        "orientation": {
+          "start": {
+            "x": 0.5,
+            "y": 0
+          },
+          "stop": {
+            "x": 0.5,
+            "y": 1
+          }
+        }
+      }
+    }
+  ],
   "groups": [
     {
       "layers": [
         {
-          "image-name": "navoss-chevron.svg",
-          "name": "NavOSS Chevron",
-          "position": {
-            "scale": 0.88,
-            "translation-in-points": [0, 0]
-          }
+          "image-name": "arrow-face.svg",
+          "name": "Arrow light face",
+          "glass": true,
+          "fill-specializations": [
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:1.00000,1.00000"
+              }
+            }
+          ]
+        },
+        {
+          "image-name": "arrow-base.svg",
+          "name": "Arrow",
+          "glass": true,
+          "fill-specializations": [
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:0.70000,1.00000"
+              }
+            }
+          ]
         }
       ],
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.18
+        "opacity": 0.4
       },
+      "specular": true,
       "translucency": {
         "enabled": false,
         "value": 0
