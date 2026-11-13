@@ -86,8 +86,9 @@ allow 250 m for address-point/building-centroid offsets. Only a tagged universit
 same-name administrative boundary allow 1,000 m; the recorded Calgary campus node/way spread is
 821 m. Conflicting house numbers, units or known business kinds veto merging. Distinct complete
 same-provider node/way records are retained, even at one address, unless they are campus/station
-components or an explicitly tagged main entrance. Every member must match every other member:
-nearby records cannot form a chain that joins distant branches.
+components or an explicitly tagged main entrance. Every distinct entity must match every other
+member: nearby records cannot form a chain that joins distant branches. Multiple snapshots of
+the same ID contribute only the selected representative, not several old coordinate anchors.
 
 Representative choice uses an explicitly tagged public main entrance (not private or explicitly
 vehicle-prohibited), a factual place kind (the station rather than its platform/stop), civic

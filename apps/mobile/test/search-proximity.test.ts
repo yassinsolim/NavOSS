@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
 import { SearchResponseSchema } from '@navoss/contracts';
+
+import elboyaRecording from './fixtures/elboya-search-response.json';
 
 import {
   approximateSearchCoordinate,
@@ -13,25 +14,11 @@ import {
   rankTypedSearchResults,
   searchProximityKey,
   searchProximityOptions,
-  searchOriginWithinBounds,
   searchResultBounds,
   searchResultContext,
 } from '../src/features/map/search-proximity.js';
 
 describe('search proximity', () => {
-  const calgaryBounds = {
-    northEast: { latitude: 51.212, longitude: -113.859 },
-    southWest: { latitude: 50.842, longitude: -114.316 },
-  };
-
-  it('uses Calgary origins but excludes Ontario origins from proximity ranking', () => {
-    expect(
-      searchOriginWithinBounds({ latitude: 51.0447, longitude: -114.0719 }, calgaryBounds),
-    ).toEqual({ latitude: 51.0447, longitude: -114.0719 });
-    expect(
-      searchOriginWithinBounds({ latitude: 43.6532, longitude: -79.3832 }, calgaryBounds),
-    ).toBeUndefined();
-  });
   it('rounds precise user location before typed place search', () => {
     expect(approximateSearchCoordinate({ latitude: 51.0447312, longitude: -114.0719234 })).toEqual({
       latitude: 51.045,
@@ -332,10 +319,7 @@ describe('exact name matches', () => {
 
 describe('typed ranking before the visible cap', () => {
   const origin = { latitude: 51.0105, longitude: -114.0717 };
-  const recorded = JSON.parse(
-    readFileSync(new URL('./fixtures/elboya-search-response.json', import.meta.url), 'utf8'),
-  ) as { response: unknown };
-  const elboyaResponse = SearchResponseSchema.parse(recorded.response);
+  const elboyaResponse = SearchResponseSchema.parse(elboyaRecording.response);
 
   it('keeps Calgary Tower visible using the unmodified old production response from Elboya', () => {
     const shown = rankTypedSearchResults(elboyaResponse.results, 'Calgary Tower', [], origin);

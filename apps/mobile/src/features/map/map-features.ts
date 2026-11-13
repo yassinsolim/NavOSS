@@ -2,7 +2,7 @@ import type {
   Coordinate,
   OfficialRoadEvent,
   RoadEvent,
-  RouteAlternative,
+  RouteAlternativeV2,
   SafetyCamera,
   SafetyFacility,
   SearchResult,
@@ -73,7 +73,9 @@ export function searchResultFeatures(results: readonly SearchResult[]): FeatureC
   };
 }
 
-export function routeFeatures(routes: readonly RouteAlternative[]): FeatureCollection<LineString> {
+export function routeFeatures(
+  routes: readonly RouteAlternativeV2[],
+): FeatureCollection<LineString> {
   return {
     features: routes.map((route) => ({
       geometry: { coordinates: route.geometry, type: 'LineString' },
@@ -82,6 +84,81 @@ export function routeFeatures(routes: readonly RouteAlternative[]): FeatureColle
     })),
     type: 'FeatureCollection',
   };
+}
+
+const EARTH_METERS_PER_DEGREE = 111_320;
+
+function segmentMeters(start: [number, number], end: [number, number]): number {
+  const longitudeScale =
+    EARTH_METERS_PER_DEGREE * Math.cos((((start[1] + end[1]) / 2) * Math.PI) / 180);
+  return Math.hypot(
+    (end[1] - start[1]) * EARTH_METERS_PER_DEGREE,
+    (end[0] - start[0]) * longitudeScale,
+  );
+}
+
+/**
+ * Runs of slow, heavy or stopped traffic along a route, drawn over its line. Free-flowing and
+ * unknown segments draw nothing, so the route keeps its own colour there; a congestion array
+ * that does not line up with the geometry draws nothing at all rather than colouring the wrong
+ * road. Road already driven (before `progress`, a 0–1 fraction of the route) is dropped. Mirrors
+ * CarPlay's `navOSSCarPlayCongestionRuns`.
+ */
+export function congestionFeatures(
+  route: Pick<RouteAlternativeV2, 'congestion' | 'geometry'>,
+  progress = 0,
+): FeatureCollection<LineString> | undefined {
+  const { congestion, geometry } = route;
+  if (congestion?.length !== geometry.length - 1 || geometry.length < 2) return undefined;
+  const cumulative = [0];
+  for (let index = 1; index < geometry.length; index += 1) {
+    cumulative.push(
+      (cumulative[index - 1] ?? 0) +
+        segmentMeters(geometry[index - 1] ?? [0, 0], geometry[index] ?? [0, 0]),
+    );
+  }
+  const travelled =
+    (Number.isFinite(progress) ? Math.min(1, Math.max(0, progress)) : 0) * (cumulative.at(-1) ?? 0);
+  const features: FeatureCollection<LineString>['features'] = [];
+  let level: string | undefined;
+  let coordinates: [number, number][] = [];
+  const flush = () => {
+    if (level !== undefined && coordinates.length >= 2) {
+      features.push({
+        geometry: { coordinates, type: 'LineString' },
+        properties: { level },
+        type: 'Feature',
+      });
+    }
+    level = undefined;
+    coordinates = [];
+  };
+  congestion.forEach((segmentLevel, index) => {
+    const start = geometry[index] ?? [0, 0];
+    const end = geometry[index + 1] ?? [0, 0];
+    const startAlong = cumulative[index] ?? 0;
+    const endAlong = cumulative[index + 1] ?? 0;
+    if (segmentLevel === 'free' || segmentLevel === 'unknown' || endAlong <= travelled) {
+      flush();
+      return;
+    }
+    if (segmentLevel !== level || coordinates.length === 0) {
+      flush();
+      level = segmentLevel;
+      const length = endAlong - startAlong;
+      if (startAlong < travelled && length > 0) {
+        const fraction = (travelled - startAlong) / length;
+        coordinates = [
+          [start[0] + (end[0] - start[0]) * fraction, start[1] + (end[1] - start[1]) * fraction],
+        ];
+      } else {
+        coordinates = [start];
+      }
+    }
+    coordinates.push(end);
+  });
+  flush();
+  return { features, type: 'FeatureCollection' };
 }
 
 export function safetyCameraFeatures(
@@ -151,7 +228,7 @@ export function safetyFacilityFeatures(
  */
 export function itemsNearRoute<T extends { coordinate: Coordinate }>(
   items: readonly T[],
-  route: Pick<RouteAlternative, 'geometry'>,
+  route: Pick<RouteAlternativeV2, 'geometry'>,
   maxMeters: number,
 ): T[] {
   const geometry = route.geometry;
@@ -208,7 +285,7 @@ export function droppedPinResult(coordinate: Coordinate): SearchResult {
 }
 
 export function routeBounds(
-  route: RouteAlternative,
+  route: RouteAlternativeV2,
 ): [west: number, south: number, east: number, north: number] {
   return route.geometry.reduce<[number, number, number, number]>(
     (bounds, position) => [

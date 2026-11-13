@@ -490,9 +490,15 @@ final class NavigationAPIClientTests: XCTestCase {
   private func makeClient() throws -> NavOSSNavigationAPIClient {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [NavigationURLProtocol.self]
+    // These cases exercise `/v2/routes` directly; discovery and the v1 fallback are covered by
+    // `NavigationRoutesV2Tests`.
+    let baseURL = try XCTUnwrap(URL(string: "https://example.test"))
+    let discovery = NavOSSRoutesEndpointDiscovery()
+    discovery.record(.v2, for: baseURL)
     return try NavOSSNavigationAPIClient(
-      baseURL: URL(string: "https://example.test"),
-      session: URLSession(configuration: configuration)
+      baseURL: baseURL,
+      session: URLSession(configuration: configuration),
+      routesDiscovery: discovery
     )
   }
 

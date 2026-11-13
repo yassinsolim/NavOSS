@@ -985,9 +985,11 @@ function mergeResults(
   for (const result of resultGroups.flat()) {
     if (!isSupportedSearchCoordinate(result.center)) continue;
     const members = resultMetadata(result).members ?? [result];
-    const cluster = clusters.find((existing) =>
-      existing.members.every((left) => members.every((right) => samePlace(left, right))),
-    );
+    const cluster =
+      clusters.find((existing) => existing.members.some((member) => member.id === result.id)) ??
+      clusters.find((existing) =>
+        existing.members.every((left) => members.every((right) => samePlace(left, right))),
+      );
     if (cluster === undefined) {
       clusters.push({ members: [...members], result });
       continue;
@@ -1019,13 +1021,6 @@ function mergeResults(
       else descriptionsByDetails.set(details, categoryDescription);
     }
     const otherMetadata = resultMetadata(other);
-    // A missing kind on another snapshot of the very same ID is not a second place.
-    if (
-      preferred.id === other.id &&
-      otherMetadata.rawCategory === undefined &&
-      metadata.rawCategory !== undefined
-    )
-      otherMetadata.rawCategory = metadata.rawCategory;
     if (metadata.exactAlias === undefined && otherMetadata.exactAlias !== undefined) {
       metadata.exactAlias = otherMetadata.exactAlias;
     }
@@ -1051,7 +1046,17 @@ function mergeResults(
       ...(Object.keys(details).length === 0 ? {} : { details }),
     };
     metadataByResult.set(merged, metadata);
-    cluster.members.push(...members);
+    // One ID is one entity, not several spatial anchors from differently aged snapshots.
+    for (const member of members) {
+      const index = cluster.members.findIndex((existingMember) => existingMember.id === member.id);
+      const existingMember = cluster.members[index];
+      if (existingMember === undefined) cluster.members.push(member);
+      else if (representativeQuality(member) > representativeQuality(existingMember)) {
+        cluster.members[index] = member;
+      }
+    }
+    const representativeIndex = cluster.members.findIndex((member) => member.id === merged.id);
+    if (representativeIndex !== -1) cluster.members[representativeIndex] = merged;
     metadata.members = cluster.members;
     cluster.result = merged;
   }

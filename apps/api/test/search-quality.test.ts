@@ -605,3 +605,19 @@ describe('retrieval and branch edge cases', () => {
     });
   });
 });
+
+describe('record identity across dated snapshots', () => {
+  it('merges corrected Saddletowne fixtures with station components instead of anchoring the old point', async () => {
+    const recorded = recordedSearchCase('Saddletowne');
+    const response = await createRecordedSearchProvider(recorded).search(recorded.query);
+    const stations = response.results.filter(
+      ({ name }) => name === 'Saddletowne' || name === 'Saddletowne LRT Station',
+    );
+    expect(stations).toHaveLength(1);
+    expect(stations[0]).toMatchObject({
+      center: { latitude: 51.1256917, longitude: -113.9481904 },
+      details: { category: 'lrt station' },
+      id: 'poi:saddletowne-lrt',
+    });
+  });
+});

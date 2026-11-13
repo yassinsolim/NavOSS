@@ -1,3 +1,4 @@
+import type { RouteResponse, RouteResponseV2 } from '@navoss/contracts';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -12,9 +13,84 @@ import {
   NavOssApiError,
   reserveGooglePlaceQuery,
   resolveApiBaseUrl,
+  routeResponseFromV1,
   searchPlaces,
   submitContribution,
 } from '../src/lib/api.js';
+import { recordedRoutes } from './route-fixtures.js';
+
+const ROUTE_REQUEST = {
+  alternatives: 0,
+  destination: { latitude: 50.9881, longitude: -114.094978 },
+  origin: { latitude: 51.01428, longitude: -114.005743 },
+  preferences: {
+    avoidFerries: false,
+    avoidHighways: false,
+    avoidTolls: false,
+    avoidUnpaved: false,
+  },
+};
+
+describe('fetchRoutes against recorded /v2/routes responses', () => {
+  it('accepts the real Calgary interchange response with its lanes and signposts', async () => {
+    const urls: string[] = [];
+    const response = await fetchRoutes(ROUTE_REQUEST, {
+      baseUrl: 'http://127.0.0.1:3004',
+      fetchImplementation: async (input) => {
+        urls.push(String(input));
+        return new Response(JSON.stringify(recordedRoutes('calgary-deerfoot-glenmore.v2')));
+      },
+    });
+    expect(urls).toEqual(['http://127.0.0.1:3004/v2/routes']);
+    const exit = response.routes[0]?.steps[1];
+    expect(exit).toMatchObject({
+      exitNumber: '248',
+      maneuverModifier: 'slight right',
+      signpostToward: ['Glenmore Trail'],
+    });
+    expect(exit?.lanes?.map((lane) => lane.valid)).toEqual([false, false, true]);
+    expect(response.routes[0]?.speedLimits?.some((limit) => limit.status === 'unknown')).toBe(true);
+  });
+
+  it('accepts the real Metro Vancouver interchange response', async () => {
+    const response = await fetchRoutes(ROUTE_REQUEST, {
+      baseUrl: 'http://127.0.0.1:3004',
+      fetchImplementation: async () =>
+        new Response(JSON.stringify(recordedRoutes('vancouver-bc91-highway99.v2'))),
+    });
+    expect(response.routes[0]?.steps[1]?.exitNumber).toBe('23B');
+  });
+
+  it('falls back to /v1/routes on a server without /v2/routes and keeps the v2 speech meaning', async () => {
+    const urls: string[] = [];
+    const response = await fetchRoutes(ROUTE_REQUEST, {
+      baseUrl: 'http://127.0.0.1:3004',
+      fetchImplementation: async (input) => {
+        urls.push(String(input));
+        return String(input).endsWith('/v2/routes')
+          ? new Response(JSON.stringify({ status: 404, title: 'Not found' }), { status: 404 })
+          : new Response(JSON.stringify(recordedRoutes('calgary-deerfoot-glenmore.v1')));
+      },
+    });
+    expect(urls).toEqual(['http://127.0.0.1:3004/v2/routes', 'http://127.0.0.1:3004/v1/routes']);
+    // The two recordings are the same route: once v1's one-step-early announcements are moved
+    // to the maneuver they describe, every step says what v2 says.
+    const v2 = recordedRoutes('calgary-deerfoot-glenmore.v2') as RouteResponseV2;
+    expect(response.routes[0]?.steps.map((step) => step.spokenInstruction)).toEqual(
+      v2.routes[0]?.steps.map((step, index) => (index === 0 ? undefined : step.spokenInstruction)),
+    );
+    expect(response.routes[0]?.steps[1]?.lanes).toBeUndefined();
+  });
+
+  it('moves each v1 announcement to the maneuver it describes', () => {
+    const v1 = recordedRoutes('calgary-deerfoot-glenmore.v1') as RouteResponse;
+    const normalized = routeResponseFromV1(v1);
+    expect(normalized.routes[0]?.steps[0]?.spokenInstruction).toBeUndefined();
+    expect(normalized.routes[0]?.steps[1]?.spokenInstruction).toBe(
+      'Take exit 248 toward Glenmore Trail.',
+    );
+  });
+});
 
 describe('resolveApiBaseUrl', () => {
   it('uses the simulator API only for development', () => {
@@ -246,7 +322,7 @@ describe('fetchRoutes', () => {
       {
         baseUrl: 'http://127.0.0.1:3001/',
         fetchImplementation: async (input, init) => {
-          expect(input).toBe('http://127.0.0.1:3001/v1/routes');
+          expect(input).toBe('http://127.0.0.1:3001/v2/routes');
           capturedRequest = init;
           return new Response(
             JSON.stringify({

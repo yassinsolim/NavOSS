@@ -8,6 +8,7 @@ import {
 
 const healthy = {
   apiConnection: 'online',
+  coverageName: 'Calgary and Kelowna service areas',
   locationState: 'visible',
   nearbySearchEnabled: true,
 } as const;
@@ -34,9 +35,12 @@ describe('explore service notice', () => {
   });
 
   it('explains missing coverage only once a location is known', () => {
-    expect(exploreServiceNotice({ ...healthy, nearbySearchEnabled: false })?.title).toBe(
-      'Outside current coverage',
-    );
+    expect(exploreServiceNotice({ ...healthy, nearbySearchEnabled: false })).toMatchObject({
+      // The server's declared coverage, not the provinces this build bundles.
+      message:
+        'Search and directions cover Calgary and Kelowna service areas. Your current location is outside that area.',
+      title: 'Outside current coverage',
+    });
     expect(
       exploreServiceNotice({ ...healthy, locationState: 'locating', nearbySearchEnabled: false }),
     ).toBeUndefined();

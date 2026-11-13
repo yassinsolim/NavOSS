@@ -1,9 +1,11 @@
 import type { CameraRef, MapRef } from '@maplibre/maplibre-react-native';
-import type {
-  Coordinate,
-  RouteAlternative,
-  RoutePreferences,
-  SearchResult,
+import {
+  isCoordinateServed,
+  type Coordinate,
+  type RouteAlternativeV2,
+  type RoutePreferences,
+  type SearchResult,
+  type ServerConfig,
 } from '@navoss/contracts';
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import {
@@ -34,6 +36,7 @@ import {
 import { createLatestRequestGate } from '@/features/map/latest-request-gate';
 import {
   cameraDetailMessage,
+  congestionFeatures,
   droppedPinResult,
   itemsNearRoute,
   renderedFeatureId,
@@ -51,7 +54,6 @@ import {
   mapPlaceFromRenderedFeatures,
   placeShareMessage,
 } from '@/features/map/map-place';
-import { isSearchCoverageRegion, mapRegionForCoordinate } from '@/features/map/map-region';
 import {
   GUIDANCE_BANNER_HEIGHT,
   routePreviewCameraPadding,
@@ -98,6 +100,7 @@ import {
   guidanceSettingsFromNative,
   speedReadout,
 } from '@/features/navigation/guidance-settings';
+import { laneStrip } from '@/features/navigation/lane-guidance';
 import {
   navigationCameraBearing,
   toggleNavigationMapOrientation,
@@ -189,7 +192,8 @@ export function useMapController() {
   const sheetPosition = useSharedValue(0);
 
   const [apiConnection, setApiConnection] = useState<ApiConnectionState>('connecting');
-  const [coverageName, setCoverageName] = useState('Loading route coverage');
+  const [serverConfig, setServerConfig] = useState<ServerConfig>();
+  const coverageName = serverConfig?.coverage.displayName ?? 'Loading route coverage';
   const [isAppActive, setIsAppActive] = useState(() => AppState.currentState === 'active');
   const [activeTab, setActiveTab] = useState<AppTab>('explore');
   const [mapError, setMapError] = useState(false);
@@ -231,7 +235,7 @@ export function useMapController() {
 
   // --- Route planning and the navigation session -------------------------------------------
 
-  const location = useUserLocation();
+  const location = useUserLocation(serverConfig?.coverage);
   const { locationState, mapRegion, searchOrigin, userCoordinate, userHeading } = location;
 
   const planner = useRoutePlanner({
@@ -245,6 +249,7 @@ export function useMapController() {
     onServiceReachable: () => {
       setApiConnection('online');
     },
+    serverConfig,
   });
   const { routeState, setRouteState } = planner;
   const routeIsIdle = routeState.type === 'idle';
@@ -268,6 +273,8 @@ export function useMapController() {
     routeState.type === 'navigating'
       ? getUpcomingGuidanceStep(routeState.route, navigationStepIndex)
       : undefined;
+  const guidanceLanes = guidanceStep?.lanes;
+  const guidanceLaneStrip = useMemo(() => laneStrip(guidanceLanes), [guidanceLanes]);
   const remainingRoute =
     routeState.type === 'navigating'
       ? getRemainingRouteSummary(routeState.route, navigationStepIndex, progressCoordinate)
@@ -384,7 +391,7 @@ export function useMapController() {
     },
   );
 
-  function fitRoute(route: RouteAlternative, demoOrigin: boolean) {
+  function fitRoute(route: RouteAlternativeV2, demoOrigin: boolean) {
     cameraRef.current?.fitBounds(routeBounds(route), {
       // A preview is read north-up and flat, whatever the last trip left the camera at.
       bearing: 0,
@@ -405,10 +412,10 @@ export function useMapController() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void fetchAppConfig(controller.signal)
+    void fetchAppConfig({ signal: controller.signal })
       .then((config) => {
         setApiConnection('online');
-        setCoverageName(config.coverage.displayName);
+        setServerConfig(config);
       })
       .catch(() => {
         if (!controller.signal.aborted) setApiConnection('offline');
@@ -546,7 +553,7 @@ export function useMapController() {
   const handleCategoryPress = (category: ExploreCategory) => {
     if (!nearbySearchEnabled) {
       showNotice({
-        message: 'Nearby place categories are not available at your current location yet.',
+        message: `Nearby place categories cover ${coverageName}. Your current location is outside that area.`,
         title: 'Nearby search is unavailable here',
         tone: 'warning',
       });
@@ -779,7 +786,7 @@ export function useMapController() {
   const handleFindParking = () => {
     if (selectedResult === undefined || !routeIsIdle) return;
     const parkingOrigin = selectedResult.center;
-    if (!isSearchCoverageRegion(mapRegionForCoordinate(parkingOrigin))) {
+    if (!isCoordinateServed(serverConfig?.coverage, parkingOrigin)) {
       showNotice({
         message: 'Nearby parking search is not available for this location yet.',
         title: 'Parking search is unavailable here',
@@ -854,7 +861,7 @@ export function useMapController() {
     }
   };
 
-  const handleSelectRoute = (route: RouteAlternative) => {
+  const handleSelectRoute = (route: RouteAlternativeV2) => {
     if (routeState.type !== 'preview') return;
     if (route.id !== routeState.selectedRouteId) haptics.selection();
     setRouteState({ ...routeState, selectedRouteId: route.id });
@@ -939,6 +946,9 @@ export function useMapController() {
       planner.routeSource?.id,
       selectedRoute.traffic,
       routeState.waypoints,
+      selectedRoute.traffic === undefined && selectedRoute.congestion === undefined
+        ? undefined
+        : planner.routeSource?.trafficSource?.id,
     );
     session.adoptSnapshot(snapshot);
     setRouteState({
@@ -1139,6 +1149,14 @@ export function useMapController() {
       geometry: getRemainingRouteGeometry(selectedRoute, routeProgress, matchedCoordinate),
     };
   }, [matchedCoordinate, routeProgress, routeState.type, selectedRoute]);
+  // Congestion is drawn from the full route geometry it is aligned to, minus the road driven.
+  const selectedRouteCongestion = useMemo(
+    () =>
+      selectedRoute === undefined || routeState.type === 'arrived'
+        ? undefined
+        : congestionFeatures(selectedRoute, routeState.type === 'navigating' ? routeProgress : 0),
+    [routeProgress, routeState.type, selectedRoute],
+  );
   const vehicleMatchStatus: VehicleMatchStatus =
     navigationSnapshot?.rawCoordinate === undefined
       ? 'acquiring'
@@ -1273,6 +1291,7 @@ export function useMapController() {
         navigationSnapshot === undefined || routeState.type !== 'navigating'
           ? undefined
           : speedReadout(navigationSnapshot),
+      laneStrip: guidanceLaneStrip,
       step: guidanceStep,
       upcomingManeuvers,
       vehicleMatchStatus,
@@ -1375,6 +1394,7 @@ export function useMapController() {
       displayedSelectedRoute,
       preferences: planner.routePreferences,
       selectedRoute,
+      selectedRouteCongestion,
       setVehicleStyle: planner.setVehicleStyle,
       source: planner.routeSource,
       state: routeState,
