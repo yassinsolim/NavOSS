@@ -85,9 +85,9 @@ export function registerTrafficRoutes(
           'Exchanges one fresh App Attest assertion (operation `traffic-credential`) from a registered installation for a short-lived, opaque upload credential. The server keeps no record linking the credential, or anything uploaded with it, to the installation.',
         response: {
           200: TrafficCredentialResponseSchema,
+          400: ProblemDetailsSchema,
           401: ProblemDetailsSchema,
           403: ProblemDetailsSchema,
-          409: ProblemDetailsSchema,
           429: ProblemDetailsSchema,
           503: ProblemDetailsSchema,
         },

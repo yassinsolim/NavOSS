@@ -677,12 +677,28 @@ describe('community traffic over HTTP', () => {
 
   it('documents the traffic endpoints in OpenAPI', async () => {
     const { app } = await createTrafficApp();
-    const document = (await app.inject('/openapi.json')).json<{ paths: Record<string, unknown> }>();
+    const document = (await app.inject('/openapi.json')).json<{
+      paths: Record<string, Record<string, { responses: Record<string, unknown> }>>;
+    }>();
+    const statuses = (path: string, method: string) =>
+      Object.keys(document.paths[path]?.[method]?.responses ?? {}).sort();
 
-    expect(document.paths).toHaveProperty('/v2/traffic/credentials');
-    expect(document.paths).toHaveProperty('/v2/traffic/probes');
-    expect(document.paths).toHaveProperty('/v2/traffic/flow');
-    expect(document.paths).toHaveProperty('/v2/traffic/status');
+    // Every status the route's validation and handler can produce, and none they cannot.
+    expect(statuses('/v2/traffic/credentials', 'post')).toEqual([
+      '200',
+      '400',
+      '401',
+      '403',
+      '429',
+      '503',
+    ]);
+    expect(statuses('/v2/traffic/probes', 'post')).toEqual(['202', '400', '401', '429', '503']);
+    expect(statuses('/v2/traffic/flow', 'get')).toEqual(['200', '400', '503']);
+    expect(statuses('/v2/traffic/status', 'get')).toEqual(['200']);
+    // The routes of the first draft of this feature never shipped and are not served.
+    expect(Object.keys(document.paths).filter((path) => path.startsWith('/v1/traffic'))).toEqual(
+      [],
+    );
   });
 });
 
