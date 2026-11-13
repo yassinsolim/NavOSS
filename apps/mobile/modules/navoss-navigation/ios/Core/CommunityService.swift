@@ -305,10 +305,9 @@ public final class NavOSSCommunityService: @unchecked Sendable {
       monitor.setReports(cache.active(now: Date()))
       monitor.startTrip(geometry: trip.geometry, maneuverCoordinates: Self.maneuvers(trip))
     }
-    Task {
-      await startTrafficTrip()
-      await refreshCorridor()
-    }
+    // Independent: a slow credential request must not delay the reports on the route ahead.
+    Task { await startTrafficTrip() }
+    Task { await refreshCorridor() }
   }
 
   /// A reroute or edited stops on the same trip.
