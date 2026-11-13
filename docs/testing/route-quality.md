@@ -126,6 +126,66 @@ NAVOSS_API_URL=https://navoss-api.yassin.app \
 The local Calgary extract proves protocol compatibility, not Edmonton/BC/rural/ferry routing,
 production deployment, or phone/CarPlay/head-unit behavior.
 
+## Local provincial validation (local, graph dated 2026-11-11, not production)
+
+Run on 2026-11-13 on the maintainer's Mac, **not** on the production VM. The API (`apps/api/dist`,
+this branch, `NODE_ENV=production`, traffic `off`) routed against `ghcr.io/valhalla/valhalla-scripted:3.8.2`
+(`valhalla_service`, 2 threads, 2 CPUs, 2 GiB, as in `infra/compose/compose.yaml`) serving the
+real **Alberta + British Columbia** graph built by the offline-bundle pipeline (`graph.json`:
+`valhallaVersion` 3.8.2, `dataDate` 2026-11-11, graph id `eeaa7a1d…`, OpenStreetMapSpeeds
+profile `0a3f87cf…`; tiles mounted read-only). The image runs under amd64 emulation on Apple
+silicon, so latencies are indicative only. There is no local Nominatim; search was not tested.
+
+**22-route Alberta + BC matrix** (`route-quality-alberta-bc.json`, `alternatives: 1`):
+
+- `/v2/routes`: **22/22 pass**; latency p50 16 ms, p95 170 ms.
+- `/v1/routes`: 20/22 pass. The two failures are the Calgary interchange corridor's
+  `minimumLaneManeuvers` gate: the frozen v1 contract carries no lane fields, so the gate is a v2
+  gate and is not applicable to v1 (distances, durations and geometry are identical to v2).
+  Latency p50 13 ms, p95 170 ms. The script now takes `ROUTE_QUALITY_PATH` to run a benchmark
+  against another endpoint.
+
+| Route                                                                                              |    km |   min | Avg km/h | Alternatives | Lane maneuvers | Signpost maneuvers | v2   | v1                                       | v2 ms | Review warnings                                 |
+| -------------------------------------------------------------------------------------------------- | ----: | ----: | -------: | -----------: | -------------: | -----------------: | ---- | ---------------------------------------- | ----: | ----------------------------------------------- |
+| calgary-interchange-north-to-calgary-glenmore-west                                                 |  17.8 |  20.7 |       51 |            2 |              7 |                  7 | PASS | FAIL (missing interchange lane guidance) |   170 | high circuity                                   |
+| calgary-glenmore-west-to-calgary-interchange-north                                                 |  17.8 |  20.9 |       51 |            2 |              6 |                  9 | PASS | FAIL (missing interchange lane guidance) |    32 | high circuity                                   |
+| edmonton-downtown-to-edmonton-university-area                                                      |   4.4 |  11.3 |       23 |            2 |              1 |                  0 | PASS | PASS                                     |    45 | —                                               |
+| edmonton-university-area-to-edmonton-downtown                                                      |   4.4 |  11.7 |       23 |            2 |              5 |                  0 | PASS | PASS                                     |    16 | —                                               |
+| red-deer-downtown-to-red-deer-south                                                                |   2.2 |   5.7 |       23 |            2 |              1 |                  0 | PASS | PASS                                     |    17 | —                                               |
+| red-deer-south-to-red-deer-downtown                                                                |   1.7 |   4.1 |       25 |            1 |              0 |                  0 | PASS | PASS                                     |     7 | no alternate route                              |
+| lethbridge-downtown-to-lethbridge-west                                                             |   5.1 |   5.6 |       55 |            1 |              0 |                  2 | PASS | PASS                                     |    16 | no alternate route, high circuity               |
+| lethbridge-west-to-lethbridge-downtown                                                             |   4.3 |   5.0 |       51 |            1 |              0 |                  2 | PASS | PASS                                     |     7 | no alternate route                              |
+| banff-downtown-to-banff-south                                                                      |   2.2 |   3.6 |       37 |            1 |              0 |                  0 | PASS | PASS                                     |     9 | no alternate route, destination entrance review |
+| banff-south-to-banff-downtown                                                                      |   2.3 |   3.7 |       37 |            1 |              1 |                  0 | PASS | PASS                                     |     6 | no alternate route, origin entrance review      |
+| vancouver-downtown-to-richmond-yvr-area                                                            |  13.0 |  21.5 |       36 |            2 |              6 |                  6 | PASS | PASS                                     |    84 | —                                               |
+| richmond-yvr-area-to-vancouver-downtown                                                            |  13.1 |  24.4 |       32 |            2 |              2 |                  4 | PASS | PASS                                     |    84 | —                                               |
+| victoria-downtown-to-victoria-university-area                                                      |   8.1 |  16.6 |       29 |            2 |              2 |                  0 | PASS | PASS                                     |    33 | destination entrance review                     |
+| victoria-university-area-to-victoria-downtown                                                      |   7.7 |  15.9 |       29 |            2 |              2 |                  0 | PASS | PASS                                     |    15 | origin entrance review                          |
+| kelowna-downtown-to-kelowna-airport                                                                |  15.1 |  19.0 |       48 |            2 |              1 |                  0 | PASS | PASS                                     |    30 | destination entrance review                     |
+| kelowna-airport-to-kelowna-downtown                                                                |  15.1 |  18.5 |       49 |            2 |              1 |                  0 | PASS | PASS                                     |    13 | origin entrance review                          |
+| kamloops-downtown-to-kamloops-west                                                                 |   4.0 |   8.8 |       27 |            2 |              3 |                  0 | PASS | PASS                                     |    17 | —                                               |
+| kamloops-west-to-kamloops-downtown                                                                 |   3.8 |   8.2 |       28 |            2 |              2 |                  0 | PASS | PASS                                     |    12 | —                                               |
+| prince-george-downtown-to-prince-george-west                                                       |   4.0 |   7.5 |       32 |            2 |              0 |                  0 | PASS | PASS                                     |    14 | —                                               |
+| prince-george-west-to-prince-george-downtown                                                       |   4.0 |   7.6 |       32 |            2 |              0 |                  0 | PASS | PASS                                     |     8 | —                                               |
+| calgary-downtown-to-vancouver-downtown                                                             | 973.8 | 652.4 |       90 |            2 |              5 |                  2 | PASS | PASS                                     |   211 | —                                               |
+| vancouver-downtown-to-calgary-downtown                                                             | 973.9 | 653.8 |       89 |            2 |              6 |                  3 | PASS | PASS                                     |   163 | —                                               |
+| Distances and durations are plausible against the anchors (Calgary–Vancouver 974 km in 10 h 52 min |
+| at 90 km/h average; city routes 1.7–17.8 km at 23–51 km/h). Lanes appear on every motorway         |
+| interchange route (Calgary Deerfoot/Glenmore 6–7 lane maneuvers, Vancouver–Richmond 2–6,           |
+| Calgary–Vancouver 5–6) and signposts on the interchange, Vancouver–Richmond, Lethbridge and        |
+| Calgary–Vancouver routes. Red Deer, Lethbridge and Banff returned no alternative; the anchor       |
+| entrance and high-circuity warnings are review prompts, not failures.                              |
+
+**Calgary 50** (`route-quality-calgary-50.json`): `/v1/routes` **50/50**, p50 23 ms, p95 33 ms;
+`/v2/routes` **50/50**, p50 20 ms, p95 27 ms. No regression against the Calgary-only graph.
+
+Reproduce: start the API against such a Valhalla on port 3015, then
+
+```sh
+NAVOSS_API_URL=http://127.0.0.1:3015 ROUTE_QUALITY_CASES=./scripts/route-quality-alberta-bc.json \
+  ROUTE_QUALITY_PATH=/v1/routes node apps/api/scripts/route-quality.mjs
+```
+
 ## Verdict
 
 The fixed Calgary benchmark passed **50/50 directed routes in three consecutive runs** against the

@@ -76,10 +76,14 @@ a single exit, such as a valley with its own road network, can still be used. Po
 roads (tertiary and residential streets, service roads, driveways, tracks, and parking areas)
 may still be uploaded and matched to the map in memory, but nothing is kept from them.
 
-**What the server does.** The server matches a batch to roads in memory, works out one average
-speed for each continuous run along one road in one direction, and gives that speed to each
-qualifying stretch between two junctions that the batch passed through from end to end according
-to the map matching. It holds those speeds in memory and discards the batch. The NavOSS API does
+**What the server does.** The server matches a batch to roads in memory and works out, for each
+qualifying stretch between two junctions, which part of it the batch drove (as distances along
+the stretch), how far you moved there and how long you spent there, including time stopped. A
+stretch is often longer than one batch covers, so the parts you drive of one stretch in
+successive batches are joined; once they cover 300 metres of it, or half of it if it is shorter,
+they become your one speed for that stretch (distance over time). The speed is measured on the
+part driven and shown for the whole stretch. It holds these figures in memory and discards the
+batch. The NavOSS API does
 not write your positions, the batch, or its timing to its database, a backup, or its log. To
 match a batch to roads and check the map the API uses routing software (Valhalla) that it
 requires to be at a local network address; on the production stack that is a container on the
@@ -95,8 +99,9 @@ publication on until it has.
 **What is kept, and for how long.**
 
 - _Before publication, in memory only._ For each stretch of road, the server's memory holds one
-  speed per contributor, the five-minute period in which it arrived, when the batch's driving
-  began, and a scrambled marker that tells contributors apart. The marker is derived from your
+  speed per contributor (or, until enough of the stretch is covered, which parts of it the
+  contributor has driven, how far and for how long), the five-minute period in which it arrived,
+  when the batch's driving began, and a scrambled marker that tells contributors apart. The marker is derived from your
   App Attest installation and that one stretch of road using a secret that exists only in the
   running server's memory. Markers for two different roads are unrelated, so they cannot be
   matched to each other by comparing them; your marker for one stretch stays the same across
@@ -124,9 +129,9 @@ These periods, the minimum of three contributors, and the road rules are fixed i
 code and cannot be weakened by configuration.
 
 **What other drivers see.** A stretch of road is coloured, and can affect an estimated arrival
-time, only after at least three different App Attest installations have driven that same stretch,
-each in a batch whose driving began within the 15 minutes before a five-minute boundary, and only
-from that boundary. It stays shown for at most 15 minutes, so what other drivers see rests on
+time, only after at least three different App Attest installations have each driven at least
+300 metres (or half) of that same stretch, in batches whose driving began within the 15 minutes
+before a five-minute boundary, and only from that boundary. It stays shown for at most 15 minutes, so what other drivers see rests on
 driving at most 30 minutes old. Three installations are three keys, not necessarily three
 people. A stretch driven by one or two contributors is never shown and never stored. Other drivers
 see, for each published stretch, its shape, a congestion colour, a typical speed rounded to
