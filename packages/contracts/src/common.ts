@@ -39,4 +39,8 @@ export const GeographicBoundsSchema = z
 
 export type GeographicBounds = z.infer<typeof GeographicBoundsSchema>;
 
-export const IsoDateTimeSchema = z.iso.datetime({ offset: true });
+// Keep accepting ISO timestamps without seconds, as the previous Zod version did.
+export const IsoDateTimeSchema = z.union([
+  z.iso.datetime({ offset: true }),
+  z.iso.datetime({ offset: true, precision: -1 }),
+]);
