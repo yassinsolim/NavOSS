@@ -1,1 +1,63 @@
-{"recorded":{"at":"2026-11-13T04:30Z","request":"POST /v1/search {\"q\":\"Calgary Tower\",\"latitude\":51.045,\"longitude\":-114.063,\"limit\":5}","server":"https://navoss-api.yassin.app (production, pre-#79 image)"},"response":{"degraded":false,"results":[{"category":"landmark","center":{"latitude":51.04427,"longitude":-114.06309},"confidence":1,"distanceMeters":81,"id":"landmark:calgary-tower","label":"Calgary Tower, 101 9 Avenue SW","name":"Calgary Tower"},{"category":"poi","center":{"latitude":51.0391517,"longitude":-114.0709627},"confidence":0.9144260287284851,"distanceMeters":856,"id":"calgary-business:13800735","label":"Kingston Tower, 342 15 Av SW, Beltline, Calgary, AB","name":"Kingston Tower"},{"category":"poi","center":{"latitude":51.0380187,"longitude":-114.0762058},"confidence":0.9144260287284851,"distanceMeters":1206,"id":"calgary-business:12557120","label":"Ambassador Tower, 630 17 Av SW, Beltline, Calgary, AB","name":"Ambassador Tower"},{"category":"poi","center":{"latitude":51.0385117,"longitude":-114.0858941},"confidence":0.9144260287284851,"distanceMeters":1756,"id":"calgary-business:117747","label":"Skygate Towers, 1030 16 Av SW, Beltline, Calgary, AB","name":"Skygate Towers"},{"category":"poi","center":{"latitude":51.0844646,"longitude":-114.1288883},"confidence":0.9144260287284851,"distanceMeters":6360,"id":"calgary-business:728220","label":"Brentview Towers, 3524 31 St NW, Varsity, Calgary, AB","name":"Brentview Towers"}],"source":{"datasetVersion":"nominatim-self-hosted:alberta-british-columbia-geofabrik-2026-07-30+calgary-open-data-index:s8b3-j88p@2026-11-12T14:08:50.000Z+vdjc-pybd@2026-11-12T04:45:23.000Z","freshness":"fresh","id":"calgary-hybrid-search","updatedAt":"2026-11-12T14:57:37.585Z"}}}
+{
+  "recorded": {
+    "at": "2026-11-13T04:30Z",
+    "request": "POST /v1/search {\"q\":\"Calgary Tower\",\"latitude\":51.045,\"longitude\":-114.063,\"limit\":5}",
+    "server": "https://navoss-api.yassin.app (production, pre-#79 image)"
+  },
+  "response": {
+    "degraded": false,
+    "results": [
+      {
+        "category": "landmark",
+        "center": { "latitude": 51.04427, "longitude": -114.06309 },
+        "confidence": 1,
+        "distanceMeters": 81,
+        "id": "landmark:calgary-tower",
+        "label": "Calgary Tower, 101 9 Avenue SW",
+        "name": "Calgary Tower"
+      },
+      {
+        "category": "poi",
+        "center": { "latitude": 51.0391517, "longitude": -114.0709627 },
+        "confidence": 0.9144260287284851,
+        "distanceMeters": 856,
+        "id": "calgary-business:13800735",
+        "label": "Kingston Tower, 342 15 Av SW, Beltline, Calgary, AB",
+        "name": "Kingston Tower"
+      },
+      {
+        "category": "poi",
+        "center": { "latitude": 51.0380187, "longitude": -114.0762058 },
+        "confidence": 0.9144260287284851,
+        "distanceMeters": 1206,
+        "id": "calgary-business:12557120",
+        "label": "Ambassador Tower, 630 17 Av SW, Beltline, Calgary, AB",
+        "name": "Ambassador Tower"
+      },
+      {
+        "category": "poi",
+        "center": { "latitude": 51.0385117, "longitude": -114.0858941 },
+        "confidence": 0.9144260287284851,
+        "distanceMeters": 1756,
+        "id": "calgary-business:117747",
+        "label": "Skygate Towers, 1030 16 Av SW, Beltline, Calgary, AB",
+        "name": "Skygate Towers"
+      },
+      {
+        "category": "poi",
+        "center": { "latitude": 51.0844646, "longitude": -114.1288883 },
+        "confidence": 0.9144260287284851,
+        "distanceMeters": 6360,
+        "id": "calgary-business:728220",
+        "label": "Brentview Towers, 3524 31 St NW, Varsity, Calgary, AB",
+        "name": "Brentview Towers"
+      }
+    ],
+    "source": {
+      "datasetVersion": "nominatim-self-hosted:alberta-british-columbia-geofabrik-2026-07-30+calgary-open-data-index:s8b3-j88p@2026-11-12T14:08:50.000Z+vdjc-pybd@2026-11-12T04:45:23.000Z",
+      "freshness": "fresh",
+      "id": "calgary-hybrid-search",
+      "updatedAt": "2026-11-12T14:57:37.585Z"
+    }
+  }
+}

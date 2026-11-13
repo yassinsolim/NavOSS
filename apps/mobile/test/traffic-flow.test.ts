@@ -6,6 +6,7 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import {
+  trafficFlowAnchorLayerId,
   trafficFlowFeatures,
   trafficFlowQuery,
   trafficFlowRefreshDelayMs,
@@ -97,5 +98,22 @@ describe('traffic flow layer', () => {
     expect(
       trafficFlowStatus({ failed: false, response: undefined, tooWide: false }),
     ).toBeUndefined();
+  });
+});
+
+describe('traffic flow placement', () => {
+  it('draws above the last road line and beneath road names, not under an early water label', () => {
+    // The order of OpenFreeMap's dark style: a water label comes before the roads.
+    const layers = [
+      { id: 'background', type: 'background' },
+      { 'source-layer': 'water_name', id: 'water_name', type: 'symbol' },
+      { 'source-layer': 'transportation', id: 'highway_minor', type: 'line' },
+      { 'source-layer': 'transportation', id: 'road_oneway', type: 'symbol' },
+      { 'source-layer': 'transportation', id: 'railway', type: 'line' },
+      { 'source-layer': 'transportation_name', id: 'highway_name_other', type: 'symbol' },
+      { 'source-layer': 'place', id: 'place_city', type: 'symbol' },
+    ];
+    expect(trafficFlowAnchorLayerId(layers)).toBe('highway_name_other');
+    expect(trafficFlowAnchorLayerId([{ id: 'background', type: 'background' }])).toBeUndefined();
   });
 });

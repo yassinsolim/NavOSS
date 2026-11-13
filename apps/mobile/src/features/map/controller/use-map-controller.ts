@@ -34,6 +34,7 @@ import {
 import type { CommunitySettingsProps } from '@/features/community/community-sheets';
 import { useCommunityGuidance } from '@/features/community/community-guidance';
 import {
+  trafficFlowAnchorLayerId,
   trafficFlowFeatures,
   trafficFlowQuery,
   trafficFlowStatus,
@@ -1418,7 +1419,15 @@ export function useMapController() {
   const basemapLabelLayerId =
     typeof mapStyle === 'string'
       ? undefined
-      : mapStyle.layers.find((layer) => layer.type === 'symbol')?.id;
+      : trafficFlowAnchorLayerId(
+          mapStyle.layers.map((layer) => ({
+            id: layer.id,
+            type: layer.type,
+            ...('source-layer' in layer && typeof layer['source-layer'] === 'string'
+              ? { 'source-layer': layer['source-layer'] }
+              : {}),
+          })),
+        );
 
   const communitySettings: Omit<
     CommunitySettingsProps,

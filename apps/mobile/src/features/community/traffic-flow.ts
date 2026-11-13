@@ -38,6 +38,22 @@ export function trafficFlowFeatures(
   };
 }
 
+/**
+ * The basemap layer the traffic lines are drawn beneath when no route is shown: the first label
+ * layer above the last road line, so traffic sits on top of every road but under road and place
+ * names. (The first symbol layer of a style can be a water label drawn before the roads, which
+ * would hide the traffic under them.) Undefined when the style has no such layer.
+ */
+export function trafficFlowAnchorLayerId(
+  layers: readonly { id: string; 'source-layer'?: string; type: string }[],
+): string | undefined {
+  let lastRoad = -1;
+  layers.forEach((layer, index) => {
+    if (layer.type === 'line' && layer['source-layer'] === 'transportation') lastRoad = index;
+  });
+  return layers.find((layer, index) => index > lastRoad && layer.type === 'symbol')?.id;
+}
+
 /** When to ask again: the snapshot is constant until `validUntil`, so never poll before it. */
 export function trafficFlowRefreshDelayMs(
   response: Pick<TrafficFlowResponse, 'validUntil'>,
