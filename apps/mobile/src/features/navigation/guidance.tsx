@@ -361,9 +361,15 @@ export function DrivingStatus({
   speed: SpeedReadout | undefined;
 }) {
   const style = useAnimatedStyle(() => ({ bottom: sheetPosition.value + CONTROL_MARGIN + 44 }));
+  // Re-measure the road name when Dynamic Type changes mid-trip (see `ManeuverBanner`).
+  const { fontScale } = useWindowDimensions();
   if (speed === undefined && roadName === undefined) return null;
   return (
-    <Animated.View pointerEvents="none" style={[guidanceStyles.drivingStatus, style]}>
+    <Animated.View
+      key={String(fontScale)}
+      pointerEvents="none"
+      style={[guidanceStyles.drivingStatus, style]}
+    >
       {speed !== undefined && (
         <View
           accessibilityLabel={speed.accessibilityLabel}
@@ -578,6 +584,10 @@ export function TripSheet({
   const styles = useStyles();
   const detents = tripSheetDetents(metrics);
   const sound = audioModeOption(audioMode);
+  // As in the maneuver banner: iOS keeps text measured at the old size when Dynamic Type changes
+  // mid-trip ("End" drawn as "E…", the arrival time and action labels dropped). Keying the rows
+  // on the font scale makes them measure again.
+  const { fontScale } = useWindowDimensions();
   const matchStatusLabel = positionEstimated
     ? 'position estimated, waiting for GPS'
     : matchStatus === 'matched'
@@ -625,7 +635,7 @@ export function TripSheet({
       initialDetent={detents.initial}
       position={position}
     >
-      <View style={styles.tripSummary}>
+      <View key={`summary-${String(fontScale)}`} style={styles.tripSummary}>
         <View
           accessibilityLabel={`Navigation status, ${matchStatusLabel}, ${rerouteDetail}, ${cameraDetail}, arrive ${arrival}, ${formatDuration(durationSeconds)}, ${formatDistance(distanceMeters)}`}
           accessible
@@ -659,7 +669,7 @@ export function TripSheet({
           variant="danger"
         />
       </View>
-      <View style={styles.tripActions}>
+      <View key={`actions-${String(fontScale)}`} style={styles.tripActions}>
         <TripAction
           accessibilityHint="Opens guidance settings: sound, rerouting and speed warning"
           accessibilityLabel={`Guidance sound, ${sound.label}`}
