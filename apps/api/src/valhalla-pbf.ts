@@ -275,7 +275,7 @@ export function normalizeValhallaPbfResponse(payload: unknown): RouteAlternative
     let limitsComplete = true;
     let distanceMeters = 0;
     let durationSeconds = 0;
-    route.legs.forEach((leg, legIndex) => {
+    for (const [legIndex, leg] of route.legs.entries()) {
       const shape = decodePolyline6(leg.shape);
       if (shape.length < 2) throw new ValhallaDecodeError();
       // Adjacent legs share one waypoint vertex, not a duplicate geometry segment.
@@ -337,7 +337,7 @@ export function normalizeValhallaPbfResponse(payload: unknown): RouteAlternative
             : {}),
         });
       }
-    });
+    }
     const normalized = {
       distanceMeters,
       durationSeconds,

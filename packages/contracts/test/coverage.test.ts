@@ -1,5 +1,5 @@
+import { fixtureValue } from './fixture-value.js';
 import { describe, expect, it } from 'vitest';
-
 import {
   CoverageBoundarySchema,
   isCoordinateInBoundary,
@@ -11,7 +11,6 @@ import {
   serviceAreaForCoordinate,
 } from '../src/index.js';
 import borderPoints from './fixtures/coverage-border-points.json' with { type: 'json' };
-
 describe('provincial service coverage', () => {
   it.each(borderPoints.cases)(
     '$id follows the sourced province boundary',
@@ -20,27 +19,26 @@ describe('provincial service coverage', () => {
       expect(isCoordinateInServiceCoverage(coordinate)).toBe(serviceAreaId !== null);
     },
   );
-
   it('validates each sourced area and includes its recorded boundary vertices', () => {
     for (const area of SERVICE_AREAS) {
       expect(ServiceAreaSchema.safeParse(area).success).toBe(true);
-      const [longitude, latitude] = area.boundary.coordinates[0]![0]![0]!;
+      const [longitude, latitude] = fixtureValue(
+        fixtureValue(fixtureValue(area.boundary.coordinates[0])[0])[0],
+      );
       expect(isCoordinateInBoundary({ latitude, longitude }, area.boundary)).toBe(true);
     }
   });
-
   it('does not authorize foreign points just because they fit the BC retrieval envelope', () => {
-    const bc = SERVICE_AREAS.find(({ id }) => id === 'british-columbia')!;
+    const bc = fixtureValue(SERVICE_AREAS.find(({ id }) => id === 'british-columbia'));
     for (const id of ['point-roberts-outside', 'san-juan-island-outside', 'hyder-alaska-outside']) {
-      const { coordinate } = borderPoints.cases.find((entry) => entry.id === id)!;
+      const { coordinate } = fixtureValue(borderPoints.cases.find((entry) => entry.id === id));
       expect(isCoordinateInBounds(coordinate, bc.bounds)).toBe(true);
       expect(isCoordinateInBoundary(coordinate, bc.boundary)).toBe(false);
     }
   });
-
   it('keeps municipal overlays local after the province expansion', () => {
-    const calgary = LOCAL_OVERLAY_AREAS.find(({ id }) => id === 'calgary-ab')!;
-    const kelowna = LOCAL_OVERLAY_AREAS.find(({ id }) => id === 'kelowna-bc')!;
+    const calgary = fixtureValue(LOCAL_OVERLAY_AREAS.find(({ id }) => id === 'calgary-ab'));
+    const kelowna = fixtureValue(LOCAL_OVERLAY_AREAS.find(({ id }) => id === 'kelowna-bc'));
     expect(calgary.scope).toBe('local-overlay');
     expect(kelowna.scope).toBe('local-overlay');
     expect(calgary.services).toContain('civic-search');
@@ -52,7 +50,6 @@ describe('provincial service coverage', () => {
       false,
     );
   });
-
   it('accepts a data-defined area id instead of a fixed two-province tuple', () => {
     expect(
       ServiceAreaSchema.safeParse({
@@ -64,7 +61,7 @@ describe('provincial service coverage', () => {
     ).toBe(true);
     expect(
       ServiceAreaSchema.safeParse({
-        bounds: SERVICE_AREAS[0]!.bounds,
+        bounds: fixtureValue(SERVICE_AREAS[0]).bounds,
         id: 'alberta',
         displayName: 'Alberta',
         countryCode: 'CA',
@@ -72,7 +69,6 @@ describe('provincial service coverage', () => {
       }).success,
     ).toBe(false);
   });
-
   it('handles multipolygons and holes and rejects an unclosed ring', () => {
     const boundary = CoverageBoundarySchema.parse({
       type: 'MultiPolygon',

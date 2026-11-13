@@ -171,8 +171,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const routeProvider =
     options.routeProvider ??
     createConfiguredRouteProvider(undefined, {
-      onDecodeFailure: (errorName) =>
-        app.log.warn({ errorName }, 'Route metadata decoding failed; using legacy routing.'),
+      onDecodeFailure: (errorName) => {
+        app.log.warn({ errorName }, 'Route metadata decoding failed; using legacy routing.');
+      },
     });
   const liveTraffic = routeProvider.source?.traffic === 'live';
   const searchProvider =

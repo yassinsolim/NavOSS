@@ -17,6 +17,28 @@ known/unknown/unlimited posted-limit segment counts. Its Calgary interchange cor
 at least one lane-bearing maneuver. All previous structural, access, duration and explicit
 traffic-unavailable checks remain.
 
+### Local API/image evidence
+
+At `2026-11-13T01:31:38.981Z`, the API built by `infra/compose/api.Dockerfile` on
+`http://127.0.0.1:3013` routed against the exact 3.8.2 image and the public Calgary extract.
+Strict v1 configuration returned `calgary-ab`; v2 returned the two provincial service areas.
+The real Deerfoot/Glenmore route had **7 lane-bearing maneuvers** and **423 posted-limit segments**.
+At exit **248**, the two left straight lanes were invalid and the right-turn lane was valid/active
+with `validIndication: "right"`. The HTTP break/through probes returned respectively two/one arrival
+steps, and `/ready` was healthy.
+
+Ten warm requests per endpoint, interleaved after one excluded warm-up each, measured:
+
+| Local endpoint |   Median |      p95 |
+| -------------- | -------: | -------: |
+| `/v1/routes`   | 17.81 ms | 38.18 ms |
+| `/v2/routes`   | 18.63 ms | 26.81 ms |
+
+The observed median v2 overhead was **0.82 ms**. This small local sample is not a production SLA
+or a regional quality verdict. The clean Docker build's frozen-lockfile install succeeded with
+`protobufjs` postinstall denied; its deployed package excluded code-generation scripts/test
+fixtures and loaded the light runtime successfully.
+
 ### Versioned compatibility and fields
 
 Build 70's strict phone decoder rejects unfamiliar response keys. Therefore `/v1/config` retains
