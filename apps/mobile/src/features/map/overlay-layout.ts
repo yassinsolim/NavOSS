@@ -80,6 +80,12 @@ export interface CameraPadding {
 /** Height of the maneuver banner below the status bar, including its gap to the map. */
 export const GUIDANCE_BANNER_HEIGHT = 152;
 
+/** Space a safety-camera alert takes under the maneuver banner, including its gap. */
+export const CAMERA_ALERT_HEIGHT = 76;
+
+/** Space a reroute offer takes under the maneuver banner, including its gap. */
+export const REROUTE_CARD_HEIGHT = 176;
+
 /** Padding that frames a previewed route between the top controls and the preview sheet. */
 export function routePreviewCameraPadding(
   metrics: ScreenMetrics,

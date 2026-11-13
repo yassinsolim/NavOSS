@@ -12,6 +12,7 @@ import { fullSheetHeight, type ScreenMetrics } from '@/features/map/overlay-layo
 import type { NavigationMapOrientation } from '@/features/navigation/navigation-camera';
 import { createThemedStyles, radius, space, touchTarget, typography, useTheme } from '@/theme';
 import { haptics } from '@/theme/haptics';
+import { ListRow } from '@/ui/list-row';
 import { type SegmentOption, SegmentedControl } from '@/ui/segmented-control';
 import { BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
 import { ModalSheet } from '@/ui/sheet/modal-sheet';
@@ -98,12 +99,14 @@ export function MapPreferencesSheet({
   metrics,
   onChange,
   onClose,
+  onOpenGuidanceSettings,
   preferences,
   visible,
 }: {
   metrics: ScreenMetrics;
   onChange: (preferences: MapPreferences) => void;
   onClose: () => void;
+  onOpenGuidanceSettings: () => void;
   preferences: MapPreferences;
   visible: boolean;
 }) {
@@ -228,6 +231,19 @@ export function MapPreferencesSheet({
             })}
           </View>
         </View>
+        <View style={styles.section}>
+          <SectionTitle>Guidance</SectionTitle>
+          <View style={styles.linkCard}>
+            <ListRow
+              accessibilityLabel="Guidance settings"
+              icon={{ android: 'tune', ios: 'slider.horizontal.3' }}
+              onPress={onOpenGuidanceSettings}
+              subtitle="Sound, rerouting and speed warning"
+              title="Guidance settings"
+              trailing="chevron"
+            />
+          </View>
+        </View>
       </BottomSheetScrollView>
     </ModalSheet>
   );
@@ -242,6 +258,12 @@ const useStyles = createThemedStyles(({ colors }) =>
       paddingHorizontal: space.lg,
     },
     content: { gap: space.xl, paddingHorizontal: space.lg },
+    linkCard: {
+      backgroundColor: colors.surfaceSunken,
+      borderCurve: 'continuous',
+      borderRadius: radius.lg,
+      padding: space.xs,
+    },
     hint: { ...typography.footnote, color: colors.textTertiary },
     pressed: { opacity: 0.7 },
     section: { gap: space.sm },

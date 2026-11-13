@@ -1,88 +1,58 @@
-import type { RouteAlternative, SafetyCamera } from '@navoss/contracts';
 import { useEffect, useRef, useState } from 'react';
 
-import {
-  announceSafetyCamera,
-  type NativeNavigationSnapshot,
-} from '@/features/navigation/native-navigation';
-import {
-  findUpcomingSafetyCamera,
-  type UpcomingSafetyCamera,
-} from '@/features/navigation/safety-camera-alert';
+import type { NativeNavigationSnapshot } from '@/features/navigation/native-navigation';
 
 const ALERT_VISIBLE_MS = 6_000;
 
+export interface SafetyCameraAlert {
+  camera: { location: string };
+  distanceAheadMeters: number;
+}
+
 export interface SafetyCameraAlerts {
   /** The camera currently being warned about, cleared a few seconds after it was announced. */
-  alert: UpcomingSafetyCamera | undefined;
-  /** Alerts announced since the trip started. */
+  alert: SafetyCameraAlert | undefined;
+  /** Alerts presented since the trip started. */
   announcementCount: number;
-  /** Clears the banner but keeps the announced set: used when a trip ends or arrives. */
-  dismiss: () => void;
-  /** Forgets announced cameras and clears the banner: used when a new trip starts or is cancelled. */
+  /** Clears the banner and the count: used whenever a trip starts, ends or is cancelled. */
   reset: () => void;
 }
 
 /**
- * Safety-camera warnings for the active route.
- *
- * This file is the single owner of camera-alert eligibility on the phone. Integration seam
- * (native-core slice): once the navigation snapshot carries `safetyCameraAlert`, replace the
- * effect below with "show the banner when `snapshot.safetyCameraAlert.sequence` changes" and
- * delete the `findUpcomingSafetyCamera`/`announceSafetyCamera` path, which would double-speak.
+ * Presents safety-camera alerts. The navigation core decides which camera to warn about and
+ * speaks the warning, so alerts also work with the phone locked or only CarPlay on screen; the
+ * phone shows a banner built from the alert's own payload. Each alert has a unique `sequence`,
+ * so a repeated snapshot never re-shows a banner that has already timed out.
  */
-export function useSafetyCameraAlert({
-  cameras,
-  route,
-  snapshot,
-}: {
-  cameras: readonly SafetyCamera[];
-  /** The route being navigated, or undefined when no trip is active. */
-  route: RouteAlternative | undefined;
-  snapshot: NativeNavigationSnapshot | undefined;
-}): SafetyCameraAlerts {
-  const announcedCameraIdsRef = useRef(new Set<string>());
+export function useSafetyCameraAlert(
+  snapshot: NativeNavigationSnapshot | undefined,
+): SafetyCameraAlerts {
+  const presentedSequenceRef = useRef<number | undefined>(undefined);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const camerasRef = useRef(cameras);
-  const [alert, setAlert] = useState<UpcomingSafetyCamera>();
+  const [alert, setAlert] = useState<SafetyCameraAlert>();
   const [announcementCount, setAnnouncementCount] = useState(0);
+  const nativeAlert = snapshot?.phase === 'arrived' ? undefined : snapshot?.safetyCameraAlert;
+  const arrived = snapshot?.phase === 'arrived';
 
   useEffect(() => {
-    camerasRef.current = cameras;
-  }, [cameras]);
-
-  const dismiss = () => {
-    clearTimeout(timeoutRef.current);
-    timeoutRef.current = undefined;
-    setAlert(undefined);
-    setAnnouncementCount(0);
-  };
-
-  useEffect(() => {
-    if (route === undefined || snapshot === undefined) return;
-    if (snapshot.phase === 'arrived') {
+    if (arrived) {
       clearTimeout(timeoutRef.current);
       setAlert(undefined);
       return;
     }
-    if (snapshot.isOffRoute || snapshot.rawCoordinate === undefined) return;
-    const upcoming = findUpcomingSafetyCamera(
-      camerasRef.current,
-      route,
-      snapshot.routeProgress,
-      announcedCameraIdsRef.current,
-    );
-    if (upcoming === undefined) return;
-    announcedCameraIdsRef.current.add(upcoming.camera.id);
+    if (nativeAlert === undefined || presentedSequenceRef.current === nativeAlert.sequence) return;
+    presentedSequenceRef.current = nativeAlert.sequence;
     setAnnouncementCount((count) => count + 1);
-    setAlert(upcoming);
-    announceSafetyCamera();
+    setAlert({
+      camera: { location: nativeAlert.location },
+      distanceAheadMeters: nativeAlert.distanceAheadMeters,
+    });
     clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       setAlert(undefined);
       timeoutRef.current = undefined;
     }, ALERT_VISIBLE_MS);
-  }, [route, snapshot]);
+  }, [arrived, nativeAlert]);
 
   useEffect(
     () => () => {
@@ -94,10 +64,11 @@ export function useSafetyCameraAlert({
   return {
     alert,
     announcementCount,
-    dismiss,
     reset: () => {
-      announcedCameraIdsRef.current.clear();
-      dismiss();
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = undefined;
+      setAlert(undefined);
+      setAnnouncementCount(0);
     },
   };
 }

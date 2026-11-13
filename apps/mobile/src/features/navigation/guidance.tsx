@@ -18,7 +18,8 @@ import {
   type ScreenMetrics,
   tripSheetDetents,
 } from '@/features/map/overlay-layout';
-import { audioModeOption } from '@/features/navigation/audio-mode-sheet';
+import { rerouteDeltaLabel, type SpeedReadout } from '@/features/navigation/guidance-settings';
+import { audioModeOption } from '@/features/navigation/guidance-settings-sheet';
 import {
   maneuverDirection,
   type ManeuverDirection,
@@ -202,29 +203,129 @@ export function SafetyCameraAlertBanner({
 }
 
 /**
- * The posted limit for the road being driven, as a sign. It rides the trip panel's top edge.
- * Only limits present in the route data are shown; the phone has no current-speed reading.
- *
- * Wave 2 seam: when the navigation snapshot reports current speed, show it beside this sign.
+ * Current speed, the posted limit and the road being driven, riding the trip panel's top edge.
+ * All three come from the navigation core; each is shown only when it is known. The speed turns
+ * coral only when the core reports it over the limit plus the driver's tolerance.
  */
-export function SpeedLimitSign({
-  limitKph,
+export function DrivingStatus({
+  roadName,
   sheetPosition,
+  speed,
 }: {
-  limitKph: number | undefined;
+  roadName: string | undefined;
   sheetPosition: SharedValue<number>;
+  speed: SpeedReadout | undefined;
 }) {
   const style = useAnimatedStyle(() => ({ bottom: sheetPosition.value + CONTROL_MARGIN + 44 }));
-  if (limitKph === undefined) return null;
+  if (speed === undefined && roadName === undefined) return null;
+  return (
+    <Animated.View pointerEvents="none" style={[guidanceStyles.drivingStatus, style]}>
+      {speed !== undefined && (
+        <View
+          accessibilityLabel={speed.accessibilityLabel}
+          accessibilityLiveRegion={speed.overLimit ? 'polite' : 'none'}
+          accessible
+          style={guidanceStyles.speedGroup}
+        >
+          {speed.speedKph !== undefined && (
+            <View style={[guidanceStyles.speed, speed.overLimit && guidanceStyles.speedOver]}>
+              <Text
+                style={[
+                  guidanceStyles.speedValue,
+                  guidanceStyles.tabular,
+                  speed.overLimit && guidanceStyles.speedValueOver,
+                ]}
+              >
+                {speed.speedKph}
+              </Text>
+              <Text
+                style={[guidanceStyles.speedUnit, speed.overLimit && guidanceStyles.speedValueOver]}
+              >
+                km/h
+              </Text>
+            </View>
+          )}
+          {speed.limitKph !== undefined && (
+            <View style={guidanceStyles.speedSign}>
+              <Text style={guidanceStyles.speedSignCaption}>MAX</Text>
+              <Text style={[guidanceStyles.speedSignValue, guidanceStyles.tabular]}>
+                {speed.limitKph}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+      {roadName !== undefined && roadName.length > 0 && (
+        <View accessibilityLabel={`On ${roadName}`} accessible style={guidanceStyles.roadPill}>
+          <Text numberOfLines={1} style={guidanceStyles.roadPillText}>
+            {roadName}
+          </Text>
+        </View>
+      )}
+    </Animated.View>
+  );
+}
+
+/**
+ * The ask-first reroute offer. It states what the new route costs or saves against the route
+ * the driver chose and gives two large, equal choices. The navigation core withdraws the offer
+ * if the driver returns to the route, and applies it if they stay off route without answering.
+ */
+export function RerouteProposalCard({
+  distanceDeltaMeters,
+  distanceMeters,
+  durationDeltaSeconds,
+  durationSeconds,
+  onAccept,
+  onKeep,
+  top,
+}: {
+  distanceDeltaMeters: number;
+  distanceMeters: number;
+  durationDeltaSeconds: number;
+  durationSeconds: number;
+  onAccept: () => void;
+  onKeep: () => void;
+  top: number;
+}) {
+  const summary = `${formatDuration(durationSeconds)} · ${formatDistance(distanceMeters)}`;
+  const delta = rerouteDeltaLabel(durationDeltaSeconds, distanceDeltaMeters);
   return (
     <Animated.View
-      accessibilityLabel={`Speed limit ${String(limitKph)} kilometres per hour`}
-      accessible
-      style={[guidanceStyles.speedSign, style]}
+      accessibilityLabel={`You left the route. New route available, ${summary}, ${delta}`}
+      accessibilityLiveRegion="assertive"
+      accessibilityRole="alert"
+      entering={FadeInDown.duration(motion.duration.base).reduceMotion(ReduceMotion.System)}
+      exiting={FadeOutUp.duration(motion.duration.fast).reduceMotion(ReduceMotion.System)}
+      style={[guidanceStyles.rerouteCard, { top }]}
     >
-      <Text style={guidanceStyles.speedSignCaption}>MAX</Text>
-      <Text style={[guidanceStyles.speedSignValue, guidanceStyles.tabular]}>{limitKph}</Text>
-      <Text style={guidanceStyles.speedSignCaption}>km/h</Text>
+      <View style={guidanceStyles.rerouteCopy}>
+        <Text style={guidanceStyles.rerouteEyebrow}>You left the route</Text>
+        <Text style={[guidanceStyles.rerouteTitle, guidanceStyles.tabular]}>
+          New route: {summary}
+        </Text>
+        <Text style={[guidanceStyles.rerouteDelta, guidanceStyles.tabular]}>
+          {delta} · applies on its own if you stay off route
+        </Text>
+      </View>
+      <View style={guidanceStyles.rerouteActions}>
+        <PressableScale
+          accessibilityLabel="Keep route"
+          accessibilityRole="button"
+          onPress={onKeep}
+          style={[guidanceStyles.rerouteButton, guidanceStyles.rerouteKeep]}
+        >
+          <Text style={guidanceStyles.rerouteButtonText}>Keep route</Text>
+        </PressableScale>
+        <PressableScale
+          accessibilityLabel="Accept new route"
+          accessibilityRole="button"
+          onPress={onAccept}
+          style={[guidanceStyles.rerouteButton, guidanceStyles.rerouteAccept]}
+        >
+          <Text style={guidanceStyles.rerouteButtonText}>Accept</Text>
+        </PressableScale>
+      </View>
     </Animated.View>
   );
 }
@@ -273,6 +374,8 @@ interface TripSheetProps {
   onShare: () => void;
   onSound: () => void;
   position: SharedValue<number>;
+  /** The matched position is being extrapolated through a short gap in GPS fixes. */
+  positionEstimated: boolean;
   rerouteCount: number;
   routeSource: RouteResponse['source'] | undefined;
   upcomingManeuvers: readonly UpcomingManeuver[];
@@ -295,6 +398,7 @@ export function TripSheet({
   onShare,
   onSound,
   position,
+  positionEstimated,
   rerouteCount,
   routeSource,
   upcomingManeuvers,
@@ -303,8 +407,9 @@ export function TripSheet({
   const styles = useStyles();
   const detents = tripSheetDetents(metrics);
   const sound = audioModeOption(audioMode);
-  const matchStatusLabel =
-    matchStatus === 'matched'
+  const matchStatusLabel = positionEstimated
+    ? 'position estimated, waiting for GPS'
+    : matchStatus === 'matched'
       ? 'on route'
       : matchStatus === 'off-route'
         ? 'off route'
@@ -359,7 +464,7 @@ export function TripSheet({
       </View>
       <View style={styles.tripActions}>
         <TripAction
-          accessibilityHint="Choose maneuver and safety-alert speech"
+          accessibilityHint="Opens guidance settings: sound, rerouting and speed warning"
           accessibilityLabel={`Guidance sound, ${sound.label}`}
           icon={sound.icon}
           label={sound.label}
@@ -541,6 +646,65 @@ const guidanceStyles = StyleSheet.create({
   },
   maneuverTileFailed: { backgroundColor: palette.coral },
   road: { ...typography.guidanceRoad, color: guidanceColors.textSecondary },
+  rerouteAccept: { backgroundColor: guidanceColors.maneuver },
+  rerouteActions: { flexDirection: 'row', gap: space.sm },
+  rerouteButton: {
+    alignItems: 'center',
+    borderCurve: 'continuous',
+    borderRadius: radius.lg,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: touchTarget.driving,
+  },
+  rerouteButtonText: { ...typography.headline, color: guidanceColors.text, fontSize: 19 },
+  rerouteCard: {
+    backgroundColor: guidanceColors.backgroundRaised,
+    borderColor: palette.sun,
+    borderCurve: 'continuous',
+    borderRadius: radius.xl,
+    borderWidth: 2,
+    gap: space.md,
+    left: space.sm,
+    padding: space.md,
+    position: 'absolute',
+    right: space.sm,
+    ...elevation.high,
+  },
+  rerouteCopy: { gap: 2 },
+  rerouteDelta: { ...typography.callout, color: guidanceColors.textSecondary },
+  rerouteEyebrow: { ...typography.eyebrow, color: palette.sun },
+  rerouteKeep: { backgroundColor: '#3A4A4B' },
+  rerouteTitle: { ...typography.title2, color: guidanceColors.text },
+  drivingStatus: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: space.sm,
+    left: CONTROL_MARGIN,
+    position: 'absolute',
+    right: 84,
+  },
+  roadPill: {
+    backgroundColor: guidanceColors.background,
+    borderRadius: radius.pill,
+    flexShrink: 1,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm - 2,
+    ...elevation.medium,
+  },
+  roadPillText: { ...typography.label, color: guidanceColors.text },
+  speed: {
+    alignItems: 'center',
+    backgroundColor: guidanceColors.background,
+    borderColor: guidanceColors.border,
+    borderRadius: radius.pill,
+    borderWidth: 2,
+    height: 64,
+    justifyContent: 'center',
+    width: 64,
+    ...elevation.medium,
+  },
+  speedGroup: { alignItems: 'flex-end', flexDirection: 'row', gap: space.xs },
+  speedOver: { backgroundColor: palette.coral, borderColor: palette.white },
   speedSign: {
     alignItems: 'center',
     backgroundColor: palette.white,
@@ -548,15 +712,22 @@ const guidanceStyles = StyleSheet.create({
     borderCurve: 'continuous',
     borderRadius: radius.md,
     borderWidth: 2.5,
-    left: CONTROL_MARGIN,
-    minWidth: 58,
-    paddingHorizontal: space.sm,
-    paddingVertical: space.xs,
-    position: 'absolute',
+    justifyContent: 'center',
+    minHeight: 52,
+    minWidth: 46,
+    paddingHorizontal: space.xs,
     ...elevation.medium,
   },
-  speedSignCaption: { ...typography.caption, color: palette.ink, fontSize: 10, lineHeight: 12 },
-  speedSignValue: { ...typography.title1, color: palette.ink, lineHeight: 30 },
+  speedSignCaption: { ...typography.caption, color: palette.ink, fontSize: 9, lineHeight: 11 },
+  speedSignValue: { ...typography.title2, color: palette.ink, lineHeight: 26 },
+  speedUnit: {
+    ...typography.caption,
+    color: guidanceColors.textSecondary,
+    fontSize: 10,
+    lineHeight: 11,
+  },
+  speedValue: { ...typography.title2, color: guidanceColors.text, lineHeight: 26 },
+  speedValueOver: { color: palette.white },
   tabular: { fontVariant: ['tabular-nums'] },
 });
 

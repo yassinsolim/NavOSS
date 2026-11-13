@@ -67,27 +67,35 @@ import type { ApiConnectionState } from '@/features/map/search-status';
 import {
   clearCarPlayTrip,
   clearDestinationHistory,
+  acceptRerouteProposal,
   clearRecentDestinations,
+  declineRerouteProposal,
   getCarPlayState,
   getDestinationCatalog,
-  getNavigationAudioMode,
   getNavigationPreferences,
   isFavoriteDestination,
   isGooglePlaceRatingAvailable,
   type NativeDestinationCatalog,
   nativeDestinationToSearchResult,
-  type NavigationAudioMode,
   observeCarPlayNavigationEnded,
   observeCarPlayState,
   observeNavigationPreferences,
   recordRecentDestination,
   setHomeDestination,
   setNavigationAudioMode,
+  setNavigationRerouteMode,
   setNavigationRoute,
+  setNavigationSpeedingWarning,
   setWorkDestination,
   stopNavigationAnnouncements,
   toggleFavoriteDestination,
 } from '@/features/navigation/native-navigation';
+import {
+  DEFAULT_GUIDANCE_SETTINGS,
+  type GuidanceSettings,
+  guidanceSettingsFromNative,
+  speedReadout,
+} from '@/features/navigation/guidance-settings';
 import {
   navigationCameraBearing,
   toggleNavigationMapOrientation,
@@ -185,7 +193,7 @@ export function useMapController() {
   const [isRoadReportSaving, setIsRoadReportSaving] = useState(false);
   const [isRoadReportVisible, setIsRoadReportVisible] = useState(false);
   const [isRouteStopsVisible, setIsRouteStopsVisible] = useState(false);
-  const [isAudioModeVisible, setIsAudioModeVisible] = useState(false);
+  const [isGuidanceSettingsVisible, setIsGuidanceSettingsVisible] = useState(false);
   const [featureDetail, setFeatureDetail] = useState<MapFeatureDetail>();
   const [notice, setNotice] = useState<MapNotice>();
   const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
@@ -196,8 +204,8 @@ export function useMapController() {
   const [destinationCatalog, setDestinationCatalog] = useState<NativeDestinationCatalog>(() =>
     getDestinationCatalog(),
   );
-  const [navigationAudioMode, setNavigationAudioModeState] = useState<NavigationAudioMode>(() =>
-    getNavigationAudioMode(),
+  const [guidanceSettings, setGuidanceSettings] = useState<GuidanceSettings>(() =>
+    guidanceSettingsFromNative(DEFAULT_GUIDANCE_SETTINGS, getNavigationPreferences()),
   );
   const [carPlayConnected, setCarPlayConnected] = useState(false);
   const [isNavigationCameraFollowing, setIsNavigationCameraFollowing] = useState(true);
@@ -333,11 +341,9 @@ export function useMapController() {
   });
   const nearbySearchEnabled = searchOrigin !== undefined;
 
-  const cameraAlerts = useSafetyCameraAlert({
-    cameras: overlays.safetyCameras,
-    route: routeState.type === 'navigating' ? routeState.route : undefined,
-    snapshot: navigationSnapshot,
-  });
+  const cameraAlerts = useSafetyCameraAlert(
+    routeState.type === 'navigating' ? navigationSnapshot : undefined,
+  );
 
   // --- Camera follow ------------------------------------------------------------------------
 
@@ -1006,7 +1012,7 @@ export function useMapController() {
 
   const handleEndNavigation = () => {
     if (routeState.type !== 'navigating') return;
-    cameraAlerts.dismiss();
+    cameraAlerts.reset();
     endTrip();
   };
 
@@ -1016,11 +1022,36 @@ export function useMapController() {
     endTrip();
   };
 
-  const handleChooseAudioMode = (mode: NavigationAudioMode) => {
-    setNavigationAudioMode(mode);
-    setNavigationAudioModeState(mode);
+  /** Applies changed guidance settings to the navigation core, which shares them with CarPlay. */
+  const handleChangeGuidanceSettings = (next: GuidanceSettings) => {
+    if (next.audioMode !== guidanceSettings.audioMode) setNavigationAudioMode(next.audioMode);
+    if (next.rerouteMode !== guidanceSettings.rerouteMode) {
+      setNavigationRerouteMode(next.rerouteMode);
+    }
+    if (
+      next.speedingToleranceKph !== guidanceSettings.speedingToleranceKph ||
+      next.speedingAudibleWarning !== guidanceSettings.speedingAudibleWarning
+    ) {
+      setNavigationSpeedingWarning(next.speedingToleranceKph, next.speedingAudibleWarning);
+    }
+    setGuidanceSettings(next);
+  };
+
+  const rerouteProposal =
+    routeState.type === 'navigating' ? navigationSnapshot?.rerouteProposal : undefined;
+  const rerouteProposalId = rerouteProposal?.id;
+  useEffect(() => {
+    // An offer needs a decision while driving: make sure it is felt as well as seen.
+    if (rerouteProposalId !== undefined) haptics.warning();
+  }, [rerouteProposalId]);
+  const handleAcceptReroute = () => {
+    if (rerouteProposalId === undefined) return;
+    if (acceptRerouteProposal(rerouteProposalId)) haptics.success();
+  };
+  const handleKeepRoute = () => {
+    if (rerouteProposalId === undefined) return;
+    declineRerouteProposal(rerouteProposalId);
     haptics.selection();
-    setIsAudioModeVisible(false);
   };
 
   const handleToggleOrientation = () => {
@@ -1061,13 +1092,13 @@ export function useMapController() {
   useEffect(() => {
     const initialPreferences = getNavigationPreferences();
     setCarPlayConnected(getCarPlayState().connected);
-    setNavigationAudioModeState(initialPreferences.audioMode);
+    setGuidanceSettings((current) => guidanceSettingsFromNative(current, initialPreferences));
     adoptRoutePreferences(initialPreferences.routePreferences);
     const stateSubscription = observeCarPlayState((state) => {
       handleCarPlayStateChanged(state.connected);
     });
     const preferencesSubscription = observeNavigationPreferences((preferences) => {
-      setNavigationAudioModeState(preferences.audioMode);
+      setGuidanceSettings((current) => guidanceSettingsFromNative(current, preferences));
       adoptRoutePreferences(preferences.routePreferences);
     });
     const endedSubscription = observeCarPlayNavigationEnded(() => {
@@ -1134,6 +1165,10 @@ export function useMapController() {
     openAbout: useStableCallback(() => {
       setIsAboutVisible(true);
     }),
+    openGuidanceSettings: useStableCallback(() => {
+      setIsMapPreferencesVisible(false);
+      setIsGuidanceSettingsVisible(true);
+    }),
     openMapPreferences: useStableCallback(() => {
       setIsMapPreferencesVisible(true);
     }),
@@ -1156,26 +1191,13 @@ export function useMapController() {
     activeTab,
     apiConnection,
     appShellVisible,
-    audioMode: {
-      choose: handleChooseAudioMode,
-      close: () => {
-        setIsAudioModeVisible(false);
-      },
-      mode: navigationAudioMode,
-      open: () => {
-        setIsAudioModeVisible(true);
-      },
-      visible: isAudioModeVisible,
-    },
     camera: {
       idleCenter: idleCameraCenter,
       idleShouldFollow: idleCameraShouldFollow,
       isNavigationFollowing: isNavigationCameraFollowing,
-      matchedCoordinate,
       navigationBearing,
       onChange: handleCameraChange,
       recenter: stable.recenter,
-      routeProgress,
       vehicleCoordinate,
     },
     cameraAlert: cameraAlerts.alert,
@@ -1198,11 +1220,29 @@ export function useMapController() {
     exploreSheetRef,
     featureDetail,
     googlePlaceRatingAvailable,
+    guidanceSettings: {
+      change: handleChangeGuidanceSettings,
+      close: () => {
+        setIsGuidanceSettingsVisible(false);
+      },
+      open: stable.openGuidanceSettings,
+      settings: guidanceSettings,
+      visible: isGuidanceSettingsVisible,
+    },
     guidance: {
+      currentRoadName: navigationSnapshot?.currentRoadName,
+      onAcceptReroute: handleAcceptReroute,
+      onKeepRoute: handleKeepRoute,
+      positionEstimated: navigationSnapshot?.isDeadReckoning === true,
       remainingRoute,
       remainingStep,
       rerouteCount: session.rerouteCount,
+      rerouteProposal,
       routeStatus: session.routeStatus,
+      speed:
+        navigationSnapshot === undefined || routeState.type !== 'navigating'
+          ? undefined
+          : speedReadout(navigationSnapshot),
       step: guidanceStep,
       upcomingManeuvers,
       vehicleMatchStatus,

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- No-entry bar. -->
+  <circle cx="32" cy="31" r="15" fill="currentColor"/>
+  <rect x="22" y="27.5" width="20" height="7" rx="2" fill="var(--tile)"/>
+</svg>

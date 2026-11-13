@@ -40,9 +40,9 @@
       "package": "org.navoss.mobile",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#1B2526",
+        "backgroundColor": "#0F8F7F",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "monochromeImage": "./assets/images/android-icon-foreground.png"
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -59,10 +59,14 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#1B2526",
+          "backgroundColor": "#0F8F7F",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain"
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#0E1516",
+            "image": "./assets/images/splash-icon.png"
+          }
         }
       ],
       "@maplibre/maplibre-react-native",

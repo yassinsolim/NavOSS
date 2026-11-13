@@ -14,7 +14,6 @@ import {
   getRemainingStepSummary,
   getUpcomingGuidanceStep,
   getUpcomingManeuvers,
-  postedSpeedLimitKph,
   routeViaLabel,
 } from '../src/features/navigation/route-progress.js';
 
@@ -241,43 +240,5 @@ describe('route progress', () => {
       expect(distinctRoadName('Keep left.', ' Deerfoot Trail ')).toBe('Deerfoot Trail');
       expect(distinctRoadName('Keep left.', '   ')).toBe('');
     });
-  });
-});
-
-describe('posted speed limit', () => {
-  const limited = {
-    geometry: [
-      [-114.08, 51.04],
-      [-114.08, 51.05],
-      [-114.08, 51.06],
-      [-114.08, 51.07],
-    ] as [number, number][],
-    speedLimitsKph: [50, 0, 80],
-  };
-
-  it('reads the limit of the segment nearest the matched position', () => {
-    expect(postedSpeedLimitKph(limited, 0, { latitude: 51.044, longitude: -114.0801 })).toBe(50);
-    expect(postedSpeedLimitKph(limited, 0, { latitude: 51.066, longitude: -114.0799 })).toBe(80);
-  });
-
-  it('falls back to route progress when there is no matched position', () => {
-    expect(postedSpeedLimitKph(limited, 0)).toBe(50);
-    expect(postedSpeedLimitKph(limited, 0.9)).toBe(80);
-    expect(postedSpeedLimitKph(limited, 1)).toBe(80);
-  });
-
-  it('shows nothing where the source published no limit, rather than guessing one', () => {
-    expect(postedSpeedLimitKph(limited, 0.5)).toBeUndefined();
-    expect(
-      postedSpeedLimitKph(limited, 0, { latitude: 51.055, longitude: -114.08 }),
-    ).toBeUndefined();
-  });
-
-  it('ignores limits that do not line up with the route geometry', () => {
-    expect(postedSpeedLimitKph({ geometry: limited.geometry }, 0.2)).toBeUndefined();
-    expect(
-      postedSpeedLimitKph({ geometry: limited.geometry, speedLimitsKph: [50, 80] }, 0.2),
-    ).toBeUndefined();
-    expect(postedSpeedLimitKph(limited, Number.NaN)).toBeUndefined();
   });
 });

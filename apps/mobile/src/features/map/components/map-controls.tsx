@@ -19,12 +19,10 @@ import { useRenderCounter } from '@/lib/render-counter';
 import { createThemedStyles, motion, radius, space, typography, useTheme } from '@/theme';
 import { IconButton } from '@/ui/icon-button';
 
-const CAMERA_ALERT_HEIGHT = 76;
-
 export interface MapControlsProps {
   attribution: string;
-  /** Pushes the top controls below the safety-camera banner while it is showing. */
-  cameraAlertVisible: boolean;
+  /** Height of banners stacked under the maneuver banner; the top controls sit below them. */
+  bannerStackHeight: number;
   locating: boolean;
   mapBearing: SharedValue<number>;
   metrics: ScreenMetrics;
@@ -52,7 +50,7 @@ export interface MapControlsProps {
  */
 export function MapControls({
   attribution,
-  cameraAlertVisible,
+  bannerStackHeight,
   locating,
   mapBearing,
   metrics,
@@ -87,9 +85,7 @@ export function MapControls({
 
   const topOffset =
     metrics.topInset +
-    (guidance
-      ? GUIDANCE_BANNER_HEIGHT + space.md + (cameraAlertVisible ? CAMERA_ALERT_HEIGHT : 0)
-      : space.sm);
+    (guidance ? GUIDANCE_BANNER_HEIGHT + space.md + bannerStackHeight : space.sm);
 
   return (
     <>

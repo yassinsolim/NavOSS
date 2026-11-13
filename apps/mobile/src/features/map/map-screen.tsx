@@ -20,22 +20,26 @@ import {
   placeWebsiteUrl,
 } from '@/features/map/map-place';
 import { MapPreferencesSheet } from '@/features/map/map-preferences-sheet';
-import { GUIDANCE_BANNER_HEIGHT } from '@/features/map/overlay-layout';
+import {
+  CAMERA_ALERT_HEIGHT,
+  GUIDANCE_BANNER_HEIGHT,
+  REROUTE_CARD_HEIGHT,
+} from '@/features/map/overlay-layout';
 import { PlaceSheet } from '@/features/map/place-sheet';
 import { RoadReportSheet } from '@/features/map/road-report-sheet';
 import { SavedPlacesScreen } from '@/features/map/saved-places-screen';
 import { mapProblemLabels } from '@/features/map/search-status';
-import { AudioModeSheet } from '@/features/navigation/audio-mode-sheet';
 import { CarPlayCompanionPanel, CarPlayIdlePanel } from '@/features/navigation/carplay-panels';
 import {
   ArrivalSheet,
+  DrivingStatus,
   ManeuverBanner,
+  RerouteProposalCard,
   SafetyCameraAlertBanner,
-  SpeedLimitSign,
   TripSheet,
 } from '@/features/navigation/guidance';
+import { GuidanceSettingsSheet } from '@/features/navigation/guidance-settings-sheet';
 import { isCarPlayVisualHarness } from '@/features/navigation/native-navigation';
-import { postedSpeedLimitKph } from '@/features/navigation/route-progress';
 import { RoutePlanningSheet, RoutePreviewSheet } from '@/features/navigation/route-sheets';
 import { RouteStopsEditor } from '@/features/navigation/route-stops-editor';
 import { useRenderCounter } from '@/lib/render-counter';
@@ -121,6 +125,8 @@ export function MapScreen() {
     guidance.step !== undefined &&
     guidance.remainingRoute !== undefined &&
     guidance.remainingStep !== undefined;
+  const cameraAlertHeight = navigating && c.cameraAlert !== undefined ? CAMERA_ALERT_HEIGHT : 0;
+  const rerouteCardHeight = guidance.rerouteProposal === undefined ? 0 : REROUTE_CARD_HEIGHT;
 
   return (
     <View style={styles.container}>
@@ -179,7 +185,7 @@ export function MapScreen() {
             mapRegion: c.location.mapRegion,
             roadEventRegion: overlays.roadEventRegion,
           })}
-          cameraAlertVisible={c.cameraAlert !== undefined}
+          bannerStackHeight={cameraAlertHeight + rerouteCardHeight}
           locating={c.location.locationState === 'locating'}
           mapBearing={c.mapBearing}
           metrics={metrics}
@@ -222,13 +228,10 @@ export function MapScreen() {
       )}
 
       {navigating && (
-        <SpeedLimitSign
-          limitKph={postedSpeedLimitKph(
-            routeState.route,
-            c.camera.routeProgress,
-            c.camera.matchedCoordinate,
-          )}
+        <DrivingStatus
+          roadName={guidance.currentRoadName}
           sheetPosition={c.sheetPosition}
+          speed={guidance.speed}
         />
       )}
 
@@ -332,7 +335,7 @@ export function MapScreen() {
 
       {guidanceReady && guidance.remainingRoute !== undefined && (
         <TripSheet
-          audioMode={c.audioMode.mode}
+          audioMode={c.guidanceSettings.settings.audioMode}
           cameraAnnouncementCount={c.cameraAnnouncementCount}
           destinationName={routeState.destination.name}
           distanceMeters={guidance.remainingRoute.distanceMeters}
@@ -342,8 +345,9 @@ export function MapScreen() {
           onEnd={c.onEndNavigation}
           onReport={c.roadReport.open}
           onShare={c.onShareEta}
-          onSound={c.audioMode.open}
+          onSound={c.guidanceSettings.open}
           position={c.sheetPosition}
+          positionEstimated={guidance.positionEstimated}
           rerouteCount={guidance.rerouteCount}
           routeSource={route.source}
           upcomingManeuvers={guidance.upcomingManeuvers ?? []}
@@ -394,16 +398,32 @@ export function MapScreen() {
           safeAreaTop={insets.top}
         />
       )}
+      {guidance.rerouteProposal !== undefined && (
+        <RerouteProposalCard
+          distanceDeltaMeters={guidance.rerouteProposal.distanceDeltaMeters}
+          distanceMeters={guidance.rerouteProposal.distanceMeters}
+          durationDeltaSeconds={guidance.rerouteProposal.durationDeltaSeconds}
+          durationSeconds={guidance.rerouteProposal.durationSeconds}
+          onAccept={guidance.onAcceptReroute}
+          onKeep={guidance.onKeepRoute}
+          top={insets.top + GUIDANCE_BANNER_HEIGHT + 8 + cameraAlertHeight}
+        />
+      )}
       <MapNoticeToast
         notice={c.notice}
         onDismiss={c.onDismissNotice}
-        top={insets.top + (navigating ? GUIDANCE_BANNER_HEIGHT + 8 : 8)}
+        top={
+          insets.top +
+          8 +
+          (navigating ? GUIDANCE_BANNER_HEIGHT + cameraAlertHeight + rerouteCardHeight : 0)
+        }
       />
 
       <MapPreferencesSheet
         metrics={metrics}
         onChange={c.onUpdateMapPreferences}
         onClose={c.mapPreferencesSheet.close}
+        onOpenGuidanceSettings={c.guidanceSettings.open}
         preferences={mapPreferences}
         visible={c.mapPreferencesSheet.visible}
       />
@@ -426,11 +446,12 @@ export function MapScreen() {
         onSelect={c.roadReport.save}
         visible={c.roadReport.visible}
       />
-      <AudioModeSheet
-        mode={c.audioMode.mode}
-        onChoose={c.audioMode.choose}
-        onClose={c.audioMode.close}
-        visible={c.audioMode.visible}
+      <GuidanceSettingsSheet
+        metrics={metrics}
+        onChange={c.guidanceSettings.change}
+        onClose={c.guidanceSettings.close}
+        settings={c.guidanceSettings.settings}
+        visible={c.guidanceSettings.visible}
       />
       <MapFeatureSheet
         detail={c.featureDetail}
