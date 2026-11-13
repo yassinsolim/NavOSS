@@ -99,6 +99,7 @@ export function MapPreferencesSheet({
   metrics,
   onChange,
   onClose,
+  onClosed,
   onOpenGuidanceSettings,
   preferences,
   visible,
@@ -106,6 +107,8 @@ export function MapPreferencesSheet({
   metrics: ScreenMetrics;
   onChange: (preferences: MapPreferences) => void;
   onClose: () => void;
+  /** Called after the sheet has left the screen, when another sheet may be presented. */
+  onClosed: () => void;
   onOpenGuidanceSettings: () => void;
   preferences: MapPreferences;
   visible: boolean;
@@ -118,6 +121,7 @@ export function MapPreferencesSheet({
       accessibilityLabel="Map appearance"
       detents={[Math.round(metrics.windowHeight * 0.64), fullSheetHeight(metrics)]}
       onClose={onClose}
+      onClosed={onClosed}
       visible={visible}
     >
       <SheetHeader closeLabel="Close map appearance" onClose={onClose} title="Map appearance" />

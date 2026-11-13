@@ -18,6 +18,11 @@ export interface ModalSheetProps {
   initialDetent?: number;
   keyboardAware?: boolean;
   onClose: () => void;
+  /**
+   * Called once the sheet has fully left the screen. iOS cannot present one modal while another
+   * is still being dismissed, so a sheet that leads to another opens it from here.
+   */
+  onClosed?: () => void;
   visible: boolean;
 }
 
@@ -33,6 +38,7 @@ export function ModalSheet({
   initialDetent,
   keyboardAware,
   onClose,
+  onClosed,
   visible,
 }: ModalSheetProps) {
   const styles = useStyles();
@@ -52,6 +58,7 @@ export function ModalSheet({
   return (
     <Modal
       animationType="none"
+      onDismiss={onClosed}
       onRequestClose={onClose}
       statusBarTranslucent
       transparent

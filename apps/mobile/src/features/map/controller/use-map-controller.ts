@@ -173,6 +173,7 @@ export function useMapController() {
   const placeInteractionRef = useRef(createLatestRequestGate());
   const noticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const noticeIdRef = useRef(0);
+  const guidanceSettingsQueuedRef = useRef(false);
   // Where the driver left the route preview sheet, kept across the re-plan that remounts it.
   const [previewDetent, setPreviewDetent] = useState<number>();
 
@@ -1166,8 +1167,13 @@ export function useMapController() {
       setIsAboutVisible(true);
     }),
     openGuidanceSettings: useStableCallback(() => {
-      setIsMapPreferencesVisible(false);
-      setIsGuidanceSettingsVisible(true);
+      // From map appearance, guidance settings opens once that sheet has finished closing.
+      if (isMapPreferencesVisible) {
+        guidanceSettingsQueuedRef.current = true;
+        setIsMapPreferencesVisible(false);
+      } else {
+        setIsGuidanceSettingsVisible(true);
+      }
     }),
     openMapPreferences: useStableCallback(() => {
       setIsMapPreferencesVisible(true);
@@ -1262,6 +1268,11 @@ export function useMapController() {
     mapPreferencesSheet: {
       close: () => {
         setIsMapPreferencesVisible(false);
+      },
+      onClosed: () => {
+        if (!guidanceSettingsQueuedRef.current) return;
+        guidanceSettingsQueuedRef.current = false;
+        setIsGuidanceSettingsVisible(true);
       },
       open: stable.openMapPreferences,
       visible: isMapPreferencesVisible,

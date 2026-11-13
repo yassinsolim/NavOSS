@@ -423,6 +423,7 @@ export function MapScreen() {
         metrics={metrics}
         onChange={c.onUpdateMapPreferences}
         onClose={c.mapPreferencesSheet.close}
+        onClosed={c.mapPreferencesSheet.onClosed}
         onOpenGuidanceSettings={c.guidanceSettings.open}
         preferences={mapPreferences}
         visible={c.mapPreferencesSheet.visible}
