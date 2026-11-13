@@ -54,6 +54,13 @@ describe('offline maps copy', () => {
       'Update NavOSS to download offline maps',
     );
     expect(offlineCatalogNotice({ ...state, catalog: 'available' })).toBeUndefined();
+    // With the service down the saved list stays usable: installed regions can still be deleted,
+    // and the copy says why nothing new can be downloaded.
+    const stale = { ...installed, catalog: 'available' as const, stale: true };
+    expect(offlineCatalogNotice(stale)?.message).toContain('need a connection');
+    expect(regionActions({ ...region, installedVersion: 'v', state: 'installed' }, false)).toEqual([
+      'delete',
+    ]);
   });
 
   it('describes every region state and offers only valid actions', () => {

@@ -280,8 +280,24 @@ public final class NavOSSOfflineStore: NSObject, @unchecked Sendable {
     }
   }
 
-  /// Cancels any download and removes the region's staged and installed files.
-  public func delete(regionId: String) {
+  public enum DeleteResult: String, Sendable {
+    case deleted
+    /// An offline route over this region is being driven; end it first.
+    case blockedByActiveRoute = "blocked-by-active-route"
+  }
+
+  /// Cancels any download and removes the region's staged and installed files. The region leaves
+  /// `active.json` first, so phone and CarPlay switch off its offline style; the files go after a
+  /// short grace period. Refused while an offline route over the region is active.
+  @discardableResult
+  public func delete(regionId: String) -> DeleteResult {
+    let activeTrip = NavOSSNavigationService.shared.currentState().trip
+    let blocked = queue.sync {
+      snapshot.installed(regionId: regionId).map {
+        navOSSOfflineDeletionBlocked(region: $0.region, activeTrip: activeTrip)
+      } ?? false
+    }
+    if blocked { return .blockedByActiveRoute }
     queue.async {
       self.downloadQueue.removeAll { $0 == regionId }
       switch self.activities[regionId] {
@@ -300,17 +316,26 @@ public final class NavOSSOfflineStore: NSObject, @unchecked Sendable {
         try? self.saveSnapshot()
       }
       NavOSSOfflineRouter.shared.release(regionId: regionId)
-      try? self.fileManager.removeItem(
-        at: self.layout.regionsRoot.appending(path: regionId, directoryHint: .isDirectory))
-      for bundle in (try? self.fileManager.contentsOfDirectory(
-        at: self.layout.stagingRoot, includingPropertiesForKeys: nil)) ?? []
-      {
-        try? self.fileManager.removeItem(at: bundle.appending(path: regionId))
-      }
-      self.collectGarbage()
+      // Surfaces reload their style on this notification before any file disappears.
       self.publish()
+      self.queue.asyncAfter(deadline: .now() + navOSSOfflineDeletionGraceSeconds) {
+        // Downloaded again in the meantime: keep it.
+        guard self.snapshot.installed(regionId: regionId) == nil,
+          self.activeRegion != regionId
+        else { return }
+        try? self.fileManager.removeItem(
+          at: self.layout.regionsRoot.appending(path: regionId, directoryHint: .isDirectory))
+        for bundle in (try? self.fileManager.contentsOfDirectory(
+          at: self.layout.stagingRoot, includingPropertiesForKeys: nil)) ?? []
+        {
+          try? self.fileManager.removeItem(at: bundle.appending(path: regionId))
+        }
+        self.collectGarbage()
+        self.publish()
+      }
       self.pumpQueue()
     }
+    return .deleted
   }
 
   // MARK: - Map styles

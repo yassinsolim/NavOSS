@@ -272,7 +272,7 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   clearDestinationHistory(): void;
   clearRecentDestinations(): void;
   clearRoute(): NativeNavigationSnapshot;
-  deleteOfflineRegion(regionId: string): void;
+  deleteOfflineRegion(regionId: string): 'blocked-by-active-route' | 'deleted';
   downloadOfflineRegion(regionId: string): void;
   declineRerouteProposal(id: string): boolean;
   getCarPlayState(): NativeCarPlayState;

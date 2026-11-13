@@ -103,6 +103,37 @@ final class OfflineInstallTests: XCTestCase {
     XCTAssertEqual(try JSONDecoder().decode(NavOSSOfflineActiveSnapshot.self, from: encoded), snapshot)
   }
 
+  func testDeletionWaitsForAnOfflineRouteOverTheRegion() throws {
+    let manifest = try manifest()
+    let calgary = try XCTUnwrap(manifest.region(id: "calgary"))
+    let downtown = NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719)
+    let north = NavOSSCarPlayCoordinate(latitude: 51.0866, longitude: -114.1305)
+    let step = NavOSSCarPlayRouteStep(
+      distanceMeters: 1, durationSeconds: 1, geometry: [downtown, north], instruction: "Drive",
+      maneuverType: "depart", roadName: "")
+    func trip(source: String?, geometry: [NavOSSCarPlayCoordinate]) -> NavOSSCarPlayTrip {
+      NavOSSCarPlayTrip(
+        destination: NavOSSCarPlayDestination(
+          id: "d", label: "D", latitude: north.latitude, longitude: north.longitude, name: "D"),
+        distanceMeters: 1, durationSeconds: 1, geometry: geometry, id: "t", source: source,
+        steps: [step])
+    }
+    XCTAssertTrue(
+      navOSSOfflineDeletionBlocked(
+        region: calgary, activeTrip: trip(source: "offline-valhalla", geometry: [downtown, north])))
+    // An online route does not read the region's files.
+    XCTAssertFalse(
+      navOSSOfflineDeletionBlocked(
+        region: calgary, activeTrip: trip(source: "valhalla-self-hosted", geometry: [downtown, north])))
+    XCTAssertFalse(
+      navOSSOfflineDeletionBlocked(
+        region: calgary,
+        activeTrip: trip(
+          source: "offline-valhalla",
+          geometry: [.init(latitude: 53.5, longitude: -113.5), .init(latitude: 53.6, longitude: -113.5)])))
+    XCTAssertFalse(navOSSOfflineDeletionBlocked(region: calgary, activeTrip: nil))
+  }
+
   func testPolygonHolesAreExcluded() {
     func ring(_ west: Double, _ south: Double, _ east: Double, _ north: Double)
       -> [NavOSSCarPlayCoordinate]

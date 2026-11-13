@@ -64,7 +64,7 @@ export function offlineCatalogNotice(state: NativeOfflineState): OfflineNotice |
     case 'unreachable':
       return {
         message: installed
-          ? 'Regions on this device keep working. Connect to check for updates.'
+          ? 'Regions on this device keep working and can be deleted. Downloading and updating need a connection.'
           : 'Connect to the internet to see which regions you can download.',
         title: 'Can’t reach NavOSS',
         tone: 'warning',
@@ -78,7 +78,8 @@ export function offlineCatalogNotice(state: NativeOfflineState): OfflineNotice |
     case 'available':
       return state.stale
         ? {
-            message: 'These are the regions from your last check. Connect to see updates.',
+            message:
+              'These are the regions from your last check. Downloaded regions keep working and can be deleted; downloading and updating need a connection.',
             title: 'Showing saved list',
             tone: 'neutral',
           }

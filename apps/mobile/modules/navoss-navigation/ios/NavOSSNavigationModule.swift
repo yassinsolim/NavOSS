@@ -578,8 +578,8 @@ public final class NavOSSNavigationModule: Module {
       NavOSSOfflineStore.shared.pause(regionId: regionId)
     }
 
-    Function("deleteOfflineRegion") { (regionId: String) in
-      NavOSSOfflineStore.shared.delete(regionId: regionId)
+    Function("deleteOfflineRegion") { (regionId: String) -> String in
+      NavOSSOfflineStore.shared.delete(regionId: regionId).rawValue
     }
 
     Function("setPreferOfflineMaps") { (prefer: Bool) in

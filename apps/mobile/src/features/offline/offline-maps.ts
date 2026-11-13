@@ -82,8 +82,9 @@ export function pauseOfflineRegion(regionId: string): void {
   NavOSSNavigation.pauseOfflineRegion(regionId);
 }
 
-export function deleteOfflineRegion(regionId: string): void {
-  NavOSSNavigation.deleteOfflineRegion(regionId);
+/** `blocked-by-active-route` while an offline route over the region is being driven. */
+export function deleteOfflineRegion(regionId: string): 'blocked-by-active-route' | 'deleted' {
+  return NavOSSNavigation.deleteOfflineRegion(regionId);
 }
 
 export function setPreferOfflineMaps(prefer: boolean): void {

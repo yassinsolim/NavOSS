@@ -281,6 +281,19 @@ extension NavOSSOfflineRegion {
   }
 }
 
+/// Whether deleting `region` must wait: an on-device route is being driven over its files.
+public func navOSSOfflineDeletionBlocked(
+  region: NavOSSOfflineRegion,
+  activeTrip: NavOSSCarPlayTrip?
+) -> Bool {
+  guard let activeTrip, activeTrip.source == navOSSOfflineRouteSource else { return false }
+  return activeTrip.geometry.contains(where: region.covers)
+}
+
+/// How long a deleted region's files outlive its removal from `active.json`, so phone and
+/// CarPlay maps have switched off its offline style before MapLibre could read a deleted file.
+public let navOSSOfflineDeletionGraceSeconds = 2.0
+
 /// The single installed region whose coverage contains every point, preferring the widest
 /// (a bulk province pack over a city pack). Offline routes and the offline map read exactly one
 /// region's files; two packs are never stitched together.

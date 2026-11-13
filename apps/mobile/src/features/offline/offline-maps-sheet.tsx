@@ -45,6 +45,15 @@ function RegionRow({ canDownload, region }: { canDownload: boolean; region: Nati
   const failure = regionFailureMessage(region);
   const actions = regionActions(region, canDownload);
 
+  const removeRegion = () => {
+    if (deleteOfflineRegion(region.id) === 'blocked-by-active-route') {
+      Alert.alert(
+        'This region is in use',
+        'Your current route was planned offline in this region. End the route, then delete it.',
+      );
+    }
+  };
+
   const perform = (action: RegionAction) => {
     haptics.selection();
     switch (action) {
@@ -57,7 +66,7 @@ function RegionRow({ canDownload, region }: { canDownload: boolean; region: Nati
         pauseOfflineRegion(region.id);
         return;
       case 'cancel':
-        deleteOfflineRegion(region.id);
+        removeRegion();
         return;
       case 'delete':
         Alert.alert(
@@ -66,9 +75,7 @@ function RegionRow({ canDownload, region }: { canDownload: boolean; region: Nati
           [
             { style: 'cancel', text: 'Keep' },
             {
-              onPress: () => {
-                deleteOfflineRegion(region.id);
-              },
+              onPress: removeRegion,
               style: 'destructive',
               text: 'Delete',
             },
