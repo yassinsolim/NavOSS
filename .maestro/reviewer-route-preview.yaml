@@ -15,7 +15,7 @@ appId: org.navoss.mobile
     timeout: 20000
 - tapOn: 'Preview a supported route'
 - extendedWaitUntil:
-    visible: 'Preview only from Supported route demo'
+    visible: 'Preview starts at Calgary Tower'
     timeout: 20000
 - assertVisible: 'Use my location for navigation'
 - assertNotVisible: 'Start navigation'

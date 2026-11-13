@@ -355,9 +355,7 @@ export function MapScreen() {
           onUseCurrentLocation={c.onUseCurrentLocation}
           onVehicleStyleChange={route.setVehicleStyle}
           position={c.sheetPosition}
-          previewOriginLabel={
-            routeState.previewOrigin === undefined ? undefined : 'Supported route demo'
-          }
+          previewOriginLabel={routeState.previewOrigin === undefined ? undefined : 'Calgary Tower'}
           routePreferences={route.preferences}
           routeSource={route.source}
           routes={routeState.routes}
