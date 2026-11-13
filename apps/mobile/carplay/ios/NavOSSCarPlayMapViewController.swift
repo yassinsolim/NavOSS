@@ -467,13 +467,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   /// Road-label layers currently enlarged for guidance, for the visual harness.
   var enlargedRoadLabelLayerCount: Int { activeGuidance ? roadLabelFontSizes.count : 0 }
-  /// Camera and community-report markers currently in the map's alert source.
+  /// Camera and community-report markers drawn: the alerts received from the store, once their
+  /// symbol layer is installed in the loaded style.
   var mapAlertMarkerCount: Int {
-    guard let source = mapView.style?.source(withIdentifier: mapAlertSourceIdentifier)
-      as? MLNShapeSource,
-      let collection = source.shape as? MLNShapeCollectionFeature
-    else { return 0 }
-    return collection.shapes.count
+    guard mapView.style?.layer(withIdentifier: mapAlertLayerIdentifier) != nil else { return 0 }
+    return mapAlerts.count
   }
 
   /// The current-road pill's text while it is shown, for the visual harness.
