@@ -157,6 +157,7 @@ export function ExploreSheet({
       onDetentChange={setDetentIndex}
       position={position}
       ref={sheetRef}
+      restsImmediately
     >
       <View style={styles.searchRow}>
         <View style={[styles.searchField, focused && styles.searchFieldFocused]}>

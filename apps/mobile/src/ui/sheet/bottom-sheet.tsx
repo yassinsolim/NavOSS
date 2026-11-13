@@ -7,6 +7,7 @@ import {
   useEffectEvent,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import {
@@ -78,6 +79,11 @@ export interface BottomSheetProps {
    */
   position?: SharedValue<number>;
   ref?: Ref<BottomSheetRef>;
+  /**
+   * Skip the entrance animation when no other sheet was on screen. For the sheet that is there
+   * at launch: its controls must not move under a finger that is already on its way.
+   */
+  restsImmediately?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }
@@ -110,6 +116,7 @@ export function BottomSheet({
   onDismiss,
   position,
   ref,
+  restsImmediately = false,
   style,
   testID,
 }: BottomSheetProps) {
@@ -138,6 +145,7 @@ export function BottomSheet({
   const hasScroll = useSharedValue(false);
   const keyboardInset = useSharedValue(0);
   const closing = useSharedValue(false);
+  const hasRestedRef = useRef(false);
   const dismissible = onDismiss !== undefined;
 
   const settled = (index: number) => {
@@ -170,8 +178,25 @@ export function BottomSheet({
     maxHeight.value = tallest;
     restingHeight.value = target;
     if (closing.value || tallest <= 0) return;
+    if (restsImmediately && !hasRestedRef.current && height.value === 0) {
+      // Nothing to morph from: appear in place, so a control inside is where it will stay.
+      hasRestedRef.current = true;
+      height.value = target;
+      return;
+    }
+    hasRestedRef.current = true;
     height.value = withSpring(target, SPRING);
-  }, [closing, detentHeights, detentIndex, height, maxHeight, resolved, restingHeight, tallest]);
+  }, [
+    closing,
+    detentHeights,
+    detentIndex,
+    height,
+    maxHeight,
+    resolved,
+    restingHeight,
+    restsImmediately,
+    tallest,
+  ]);
 
   const reportedIndex = Math.min(detentIndex, Math.max(0, resolved.length - 1));
   const reportDetent = useEffectEvent((index: number) => {
