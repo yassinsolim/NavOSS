@@ -328,6 +328,17 @@ public func navOSSCarPlayManeuverTurnAngle(
 ) -> Double? {
   guard stepIndex > 0, stepIndex < steps.count else { return nil }
   let approach = steps[stepIndex - 1].geometry
+  // A roundabout step's geometry is the circulation itself, whose last segment runs around the
+  // ring rather than along the exit road. Measure the exit road (the next step) when there is one.
+  if measuresThroughStep, stepIndex + 1 < steps.count,
+    let entryBearing = navOSSCarPlayBearing(alongReversed: approach, meters: 25),
+    let exitBearing = navOSSCarPlayBearing(along: steps[stepIndex + 1].geometry, meters: 30)
+  {
+    var delta = exitBearing - entryBearing
+    while delta <= -180 { delta += 360 }
+    while delta > 180 { delta -= 360 }
+    return delta
+  }
   let exit = steps[stepIndex].geometry
   guard
     let entryBearing = navOSSCarPlayBearing(
@@ -829,20 +840,86 @@ public func navOSSCarPlaySmoothedBearing(
   return (current + next + 360).truncatingRemainder(dividingBy: 360)
 }
 
-// MARK: - Speed
+// MARK: - Live navigation state
 
-/// Default margin over the posted limit before the speed readout turns red.
-public let navOSSCarPlayDefaultSpeedingToleranceKph = 5
+/// What CarPlay needs from the navigation service beyond the trip store: the core's own road
+/// context, speeding verdict, ask-first reroute proposal, and active safety-camera alert. The
+/// service builds it (`NavOSSNavigationService.carPlayLiveGuidance()`); CarPlay never recomputes
+/// any of it.
+public struct NavOSSCarPlayLiveGuidance: Equatable, Sendable {
+  public struct RerouteProposal: Equatable, Sendable {
+    public let id: String
+    /// Replacement minus the selected route's remaining duration. Positive is slower.
+    public let durationDeltaSeconds: Double
+    /// Replacement minus the selected route's remaining distance. Positive is longer.
+    public let distanceDeltaMeters: Double
 
-/// Whether the driver is over the posted limit by at least `toleranceKph`. Unknown limits never
-/// produce a warning.
-public func navOSSCarPlayIsSpeeding(
-  speedKph: Int,
-  speedLimitKph: Int?,
-  toleranceKph: Int = navOSSCarPlayDefaultSpeedingToleranceKph
-) -> Bool {
-  guard let speedLimitKph, speedLimitKph > 0 else { return false }
-  return speedKph >= speedLimitKph + max(0, toleranceKph)
+    public init(id: String, durationDeltaSeconds: Double, distanceDeltaMeters: Double) {
+      self.id = id
+      self.durationDeltaSeconds = durationDeltaSeconds
+      self.distanceDeltaMeters = distanceDeltaMeters
+    }
+  }
+
+  public struct SafetyCameraAlert: Equatable, Sendable {
+    public let cameraId: String
+    public let distanceAheadMeters: Double
+    public let location: String
+    /// Increases for every new alert, so a presenter can tell a new alert from an update.
+    public let sequence: Int
+    public let coordinate: NavOSSCarPlayCoordinate?
+
+    public init(
+      cameraId: String,
+      distanceAheadMeters: Double,
+      location: String,
+      sequence: Int,
+      coordinate: NavOSSCarPlayCoordinate?
+    ) {
+      self.cameraId = cameraId
+      self.distanceAheadMeters = distanceAheadMeters
+      self.location = location
+      self.sequence = sequence
+      self.coordinate = coordinate
+    }
+  }
+
+  public let currentRoadName: String?
+  public let speedLimitKph: Int?
+  public let speedingState: NavOSSSpeedingState
+  public let rerouteProposal: RerouteProposal?
+  public let safetyCameraAlert: SafetyCameraAlert?
+
+  public init(
+    currentRoadName: String? = nil,
+    speedLimitKph: Int? = nil,
+    speedingState: NavOSSSpeedingState = .unknown,
+    rerouteProposal: RerouteProposal? = nil,
+    safetyCameraAlert: SafetyCameraAlert? = nil
+  ) {
+    self.currentRoadName = currentRoadName
+    self.speedLimitKph = speedLimitKph
+    self.speedingState = speedingState
+    self.rerouteProposal = rerouteProposal
+    self.safetyCameraAlert = safetyCameraAlert
+  }
+}
+
+/// Banner text for an ask-first reroute proposal, stating the real time and distance change.
+public func navOSSCarPlayRerouteProposalText(
+  _ proposal: NavOSSCarPlayLiveGuidance.RerouteProposal
+) -> (title: String, subtitle: String) {
+  let minutes = Int((proposal.durationDeltaSeconds / 60).rounded())
+  let time: String =
+    minutes == 0
+    ? "About the same time"
+    : minutes > 0 ? "\(minutes) min slower" : "\(-minutes) min faster"
+  let meters = proposal.distanceDeltaMeters
+  let distance: String =
+    abs(meters) < 50
+    ? "similar distance"
+    : "\(navOSSCarPlayDistanceLabel(abs(meters))) \(meters > 0 ? "longer" : "shorter")"
+  return ("New route from here", "\(time), \(distance).")
 }
 
 // MARK: - Search results
@@ -880,13 +957,12 @@ public func navOSSCarPlayDestinationsOrderedByDistance(
   from origin: NavOSSCarPlayCoordinate?
 ) -> [NavOSSCarPlayDestination] {
   guard let origin, origin.isValid else { return destinations }
-  return destinations.enumerated()
-    .map { (offset: $0.offset, destination: $0.element,
-            distance: navOSSCarPlayDistanceMeters(from: origin, to: $0.element)) }
-    .sorted { left, right in
-      left.distance != right.distance ? left.distance < right.distance : left.offset < right.offset
-    }
-    .map(\.destination)
+  let distances: [Double] = destinations.map { navOSSCarPlayDistanceMeters(from: origin, to: $0) }
+  let order: [Int] = destinations.indices.sorted { left, right in
+    if distances[left] != distances[right] { return distances[left] < distances[right] }
+    return left < right
+  }
+  return order.map { destinations[$0] }
 }
 
 // MARK: - Stops

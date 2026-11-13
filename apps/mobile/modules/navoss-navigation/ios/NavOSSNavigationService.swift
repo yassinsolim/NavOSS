@@ -3,7 +3,9 @@ import CoreLocation
 import Foundation
 
 extension Notification.Name {
-  static let navOSSNavigationSnapshotDidChange = Notification.Name(
+  /// Posted by `NavOSSNavigationService.shared` whenever navigation state changes, on the queue
+  /// that changed it.
+  public static let navOSSNavigationSnapshotDidChange = Notification.Name(
     "org.navoss.mobile.navigation-snapshot-did-change"
   )
 }
@@ -300,6 +302,37 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       }
     }
     return nil
+  }
+
+  /// The core's live road context, speeding, reroute-proposal, and camera-alert state, for
+  /// CarPlay surfaces outside this module.
+  public func carPlayLiveGuidance() -> NavOSSCarPlayLiveGuidance {
+    lock.lock()
+    defer { lock.unlock() }
+    let state = currentStateLocked()
+    return NavOSSCarPlayLiveGuidance(
+      currentRoadName: state.roadContext.currentRoadName,
+      speedLimitKph: state.roadContext.speedLimitKph,
+      speedingState: state.speedingState,
+      rerouteProposal: state.rerouteProposal.map {
+        NavOSSCarPlayLiveGuidance.RerouteProposal(
+          id: $0.id,
+          durationDeltaSeconds: $0.durationDeltaSeconds,
+          distanceDeltaMeters: $0.distanceDeltaMeters
+        )
+      },
+      safetyCameraAlert: state.safetyCameraAlert.map { alert in
+        NavOSSCarPlayLiveGuidance.SafetyCameraAlert(
+          cameraId: alert.cameraId,
+          distanceAheadMeters: alert.distanceAheadMeters,
+          location: alert.location,
+          sequence: alert.sequence,
+          coordinate: safetyCameraMonitor.camera(id: alert.cameraId).map {
+            NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+          }
+        )
+      }
+    )
   }
 
   func currentState() -> NavOSSNavigationServiceState {

@@ -37,6 +37,7 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
   private var mapViewController: NavOSSCarPlayMapViewController?
   private var preferencesObserver: NSObjectProtocol?
   private var stateObserver: NSObjectProtocol?
+  private var snapshotObserver: NSObjectProtocol?
 
   func templateApplicationDashboardScene(
     _ templateApplicationDashboardScene: CPTemplateApplicationDashboardScene,
@@ -77,6 +78,15 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
         self?.apply(NavOSSCarPlayTripStore.shared.snapshot())
       }
     }
+    snapshotObserver = NotificationCenter.default.addObserver(
+      forName: .navOSSNavigationSnapshotDidChange,
+      object: NavOSSNavigationService.shared,
+      queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        self?.apply(NavOSSCarPlayTripStore.shared.snapshot())
+      }
+    }
     preferencesObserver = NotificationCenter.default.addObserver(
       forName: .navOSSCarPlayPreferencesDidChange,
       object: NavOSSCarPlayPreferencesStore.shared,
@@ -100,6 +110,10 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
       NotificationCenter.default.removeObserver(stateObserver)
       self.stateObserver = nil
     }
+    if let snapshotObserver {
+      NotificationCenter.default.removeObserver(snapshotObserver)
+      self.snapshotObserver = nil
+    }
     if let preferencesObserver {
       NotificationCenter.default.removeObserver(preferencesObserver)
       self.preferencesObserver = nil
@@ -121,6 +135,7 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
     let presentation = state.guidance.flatMap {
       navOSSCarPlayGuidancePresentation(trip: trip, guidance: $0)
     }
+    let live = NavOSSNavigationService.shared.carPlayLiveGuidance()
     mapViewController.display(
       route: trip.geometry,
       routeId: trip.id,
@@ -128,17 +143,13 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
       position: state.position,
       routeProgress: state.routeProgress,
       distanceToManeuverMeters: state.guidance?.distanceToManeuverMeters,
-      speedLimitKph: navOSSCarPlaySpeedLimit(
-        trip.speedLimitsKph,
-        geometry: trip.geometry,
-        matchedCoordinate: state.position?.coordinate,
-        routeProgress: state.routeProgress
-      ),
+      speedLimitKph: live.speedLimitKph,
       overlay: NavOSSCarPlayGuidanceOverlay(
         maneuverArrow: presentation.map {
           navOSSCarPlayManeuverArrow(trip: trip, maneuverStepIndex: $0.primary.stepIndex)
         } ?? [],
-        congestion: trip.congestion
+        congestion: trip.congestion,
+        speeding: live.speedingState
       )
     )
   }

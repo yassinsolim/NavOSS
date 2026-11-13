@@ -363,7 +363,10 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         maneuverType: "turn", phase: .navigating, remainingDistanceMeters: 980,
         remainingDurationSeconds: 110, roadName: "", stepIndex: 0)
       // 450 m along the 1,560 m fixture, 200 m before the turn.
-      renderGuidance(trip: trip, guidance: guidance, position: position, progress: 0.29, speedLimitKph: 50)
+      // The night run stands in for the core's over-limit verdict (68 km/h in a 50 zone).
+      renderGuidance(
+        trip: trip, guidance: guidance, position: position, progress: 0.29, speedLimitKph: 50,
+        speeding: night ? .overLimit : .withinLimit)
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
         guard let self else { return }
         guard self.mapViewController.currentRoadNameReadout == "9 Avenue SW" else {
@@ -411,6 +414,10 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     case "maneuver-symbols":
       showManeuverSymbols()
       return
+    case "search-hub", "search-results", "preview-alternatives", "guidance-lanes-then",
+      "guidance-roundabout", "reroute-proposal", "arrival", "end", "dashboard":
+      renderFlowScenario()
+      return
     case "simulated-drive":
       // Not part of the pixel gate: drives the fixture trip at 1 Hz, like real GPS fixes, so the
       // eased camera, the turn, and arrival can be watched or recorded with `simctl io`.
@@ -445,7 +452,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     guidance: NavOSSCarPlayGuidance,
     position: NavOSSCarPlayPosition,
     progress: Double,
-    speedLimitKph: Int?
+    speedLimitKph: Int?,
+    speeding: NavOSSSpeedingState = .unknown
   ) {
     let presentation = navOSSCarPlayGuidancePresentation(trip: trip, guidance: guidance)
     mapViewController.display(
@@ -461,9 +469,454 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
           navOSSCarPlayManeuverArrow(trip: trip, maneuverStepIndex: $0.primary.stepIndex)
         } ?? [],
         currentRoadName: presentation?.currentRoadName,
-        congestion: trip.congestion
+        congestion: trip.congestion,
+        speeding: speeding
       )
     )
+  }
+
+  // MARK: Flow scenarios
+  //
+  // CarPlay draws its own templates (lists, grids, the turn card, alerts), and the simulator cannot
+  // host them on Xcode 27.2. These scenarios render the map exactly as production does and lay a
+  // clearly labelled mock over it whose *content* comes from the same production functions
+  // (presentation, ordering, symbols, lanes, alert text). The mock's look is an approximation.
+
+  private func renderFlowScenario() {
+    let frame = CGSize(width: 800, height: 480)
+    switch scenario {
+    case "search-hub":
+      useCarPlayFrame(frame, guidanceCardInset: 0)
+      mapViewController.displayIdleLocation(
+        NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07190), animated: false)
+      showMockGrid(
+        title: "Search",
+        bar: ["Categories", "⌨︎", "🎙"],
+        buttons: [
+          ("house.fill", "Home"), ("briefcase.fill", "Work"),
+          ("clock.arrow.circlepath", "Recents"), ("star.fill", "Saved"),
+          ("fuelpump.fill", "Gas"), ("cup.and.saucer.fill", "Coffee"),
+          ("fork.knife", "Food"), ("parkingsign.circle.fill", "Parking"),
+        ])
+    case "search-results":
+      useCarPlayFrame(frame, guidanceCardInset: 0)
+      mapViewController.displayIdleLocation(Self.here, animated: false)
+      // Harness fixture places, in provider order; production ordering and labels reorder them.
+      let ordered = navOSSCarPlayDestinationsOrderedByDistance(Self.fixtureCafes, from: Self.here)
+      showMockList(
+        title: "Coffee",
+        rows: ordered.map { place in
+          (
+            nil, place.name,
+            "\(navOSSCarPlayDistanceLabel(navOSSCarPlayDistanceMeters(from: Self.here, to: place))) · \(place.label)"
+          )
+        })
+    case "preview-alternatives":
+      useCarPlayFrame(frame, guidanceCardInset: 0)
+      let trip = Self.turnTrip
+      let alternate = trip.geometry.enumerated().map { index, coordinate in
+        NavOSSCarPlayCoordinate(
+          latitude: coordinate.latitude - (index == 1 || index == 2 ? 0.0030 : 0),
+          longitude: coordinate.longitude)
+      }
+      mapViewController.display(
+        route: trip.geometry, routeId: trip.id, activeGuidance: false, alternateRoute: alternate)
+      showMockList(
+        title: trip.destination.name,
+        rows: [
+          ("checkmark.circle.fill", "Fastest route · via 9 Avenue SW", "3 min · 1.6 km"),
+          (nil, "Alternative 1 · 400 m longer", "4 min · 2.0 km"),
+        ],
+        footer: "Go",
+        width: 300)
+    case "guidance-lanes-then":
+      useCarPlayFrame(frame, guidanceCardInset: 300)
+      let trip = Self.lanesThenTrip
+      let guidance = Self.guidance(stepIndex: 0, toManeuver: 140, remaining: 900)
+      renderGuidance(
+        trip: trip, guidance: guidance,
+        position: NavOSSCarPlayPosition(
+          coordinate: NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.06700),
+          courseDegrees: 90, speedMetersPerSecond: 11),
+        progress: 0.33, speedLimitKph: 50, speeding: .withinLimit)
+      showMockCard(trip: trip, guidance: guidance)
+    case "guidance-roundabout":
+      useCarPlayFrame(frame, guidanceCardInset: 300)
+      let trip = Self.roundaboutTrip
+      let guidance = Self.guidance(stepIndex: 0, toManeuver: 90, remaining: 700)
+      renderGuidance(
+        trip: trip, guidance: guidance,
+        position: NavOSSCarPlayPosition(
+          coordinate: NavOSSCarPlayCoordinate(latitude: 51.04640, longitude: -114.07000),
+          courseDegrees: 0, speedMetersPerSecond: 9),
+        progress: 0.4, speedLimitKph: 40, speeding: .withinLimit)
+      showMockCard(trip: trip, guidance: guidance)
+    case "reroute-proposal":
+      useCarPlayFrame(frame, guidanceCardInset: 300)
+      let trip = Self.turnTrip
+      let guidance = Self.guidance(stepIndex: 0, toManeuver: 400, remaining: 1_300)
+      renderGuidance(
+        trip: trip, guidance: guidance,
+        position: NavOSSCarPlayPosition(
+          coordinate: NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07200),
+          courseDegrees: 90, speedMetersPerSecond: 12),
+        progress: 0.15, speedLimitKph: 50, speeding: .withinLimit)
+      showMockCard(trip: trip, guidance: guidance)
+      // Harness fixture proposal; the text comes from the production formatter.
+      let text = navOSSCarPlayRerouteProposalText(
+        .init(id: "fixture", durationDeltaSeconds: 180, distanceDeltaMeters: 650))
+      showMockAlert(title: text.title, subtitle: text.subtitle, actions: ["Use new route", "Keep mine"])
+    case "arrival":
+      useCarPlayFrame(frame, guidanceCardInset: 300)
+      let trip = Self.turnTrip
+      let end = trip.geometry[trip.geometry.count - 1]
+      mapViewController.display(
+        route: trip.geometry, routeId: trip.id, activeGuidance: true,
+        position: NavOSSCarPlayPosition(coordinate: end, courseDegrees: 0, speedMetersPerSecond: 0),
+        routeProgress: 1, distanceToManeuverMeters: 0)
+      showMockAlert(
+        title: "You've arrived", subtitle: trip.destination.name, actions: ["Done", "Keep map"])
+    case "end":
+      useCarPlayFrame(frame, guidanceCardInset: 0)
+      let trip = Self.turnTrip
+      renderGuidance(
+        trip: trip, guidance: Self.guidance(stepIndex: 0, toManeuver: 300, remaining: 1_200),
+        position: NavOSSCarPlayPosition(
+          coordinate: NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07000),
+          courseDegrees: 90, speedMetersPerSecond: 12),
+        progress: 0.2, speedLimitKph: 50)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+        self?.mapViewController.clearRoute()
+        self?.mapViewController.displayIdleLocation(Self.here, animated: false)
+      }
+    case "dashboard":
+      // Dashboard tile proportions with the production Dashboard options.
+      useCarPlayFrame(CGSize(width: 440, height: 480), guidanceCardInset: 0)
+      mapViewController.showsRoadName = false
+      mapViewController.anchorsSpeedHUDToViewBounds = false
+      let trip = Self.turnTrip
+      renderGuidance(
+        trip: trip, guidance: Self.guidance(stepIndex: 0, toManeuver: 180, remaining: 980),
+        position: NavOSSCarPlayPosition(
+          coordinate: NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.06750),
+          courseDegrees: 90, speedMetersPerSecond: 12),
+        progress: 0.29, speedLimitKph: 50, speeding: .withinLimit)
+      showMockDashboardButtons()
+    default:
+      break
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in self?.markReady() }
+  }
+
+  private static let here = NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07190)
+
+  private static func fixtureCafe(_ name: String, _ latitude: Double, _ longitude: Double)
+    -> NavOSSCarPlayDestination
+  {
+    NavOSSCarPlayDestination(
+      category: "cafe", id: "fixture-\(name)", label: "Cafe · harness fixture",
+      latitude: latitude, longitude: longitude, name: name)
+  }
+
+  private static let fixtureCafes: [NavOSSCarPlayDestination] = [
+    fixtureCafe("Harness Cafe North", 51.0560, -114.0720),
+    fixtureCafe("Harness Cafe Close", 51.0452, -114.0712),
+    fixtureCafe("Harness Cafe East", 51.0447, -114.0600),
+    fixtureCafe("Harness Cafe Mid", 51.0480, -114.0750),
+  ]
+
+  private static func guidance(stepIndex: Int, toManeuver: Double, remaining: Double)
+    -> NavOSSCarPlayGuidance
+  {
+    NavOSSCarPlayGuidance(
+      distanceToManeuverMeters: toManeuver, durationToManeuverSeconds: toManeuver / 12,
+      instruction: "", maneuverType: "turn", phase: .navigating,
+      remainingDistanceMeters: remaining, remainingDurationSeconds: remaining / 12, roadName: "",
+      stepIndex: stepIndex)
+  }
+
+  /// Harness fixture: a left turn with lanes, then a right turn 180 m later.
+  private static var lanesThenTrip: NavOSSCarPlayTrip {
+    let a = NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07200)
+    let b = NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.06500)
+    let c = NavOSSCarPlayCoordinate(latitude: 51.04632, longitude: -114.06500)
+    let d = NavOSSCarPlayCoordinate(latitude: 51.04632, longitude: -114.05900)
+    return NavOSSCarPlayTrip(
+      destination: NavOSSCarPlayDestination(
+        id: "fixture-lanes", label: "Harness fixture", latitude: d.latitude,
+        longitude: d.longitude, name: "Fixture destination"),
+      distanceMeters: 1_100, durationSeconds: 120, geometry: [a, b, c, d], id: "visual-lanes",
+      steps: [
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 490, durationSeconds: 45, geometry: [a, b],
+          instruction: "Drive east on 9 Avenue SW.", maneuverType: "depart",
+          roadName: "9 Avenue SW"),
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 180, durationSeconds: 20, geometry: [b, c],
+          instruction: "Turn left onto Centre Street.", maneuverType: "turn",
+          roadName: "Centre Street",
+          lanes: [
+            NavOSSCarPlayLane(indications: [.left], isValid: true, isPreferred: true),
+            NavOSSCarPlayLane(indications: [.left, .straight], isValid: true),
+            NavOSSCarPlayLane(indications: [.straight], isValid: false),
+            NavOSSCarPlayLane(indications: [.straight, .right], isValid: false),
+          ]),
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 420, durationSeconds: 50, geometry: [c, d],
+          instruction: "Turn right onto 7 Avenue SE.", maneuverType: "turn",
+          roadName: "7 Avenue SE"),
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 0, durationSeconds: 0, geometry: [d, d],
+          instruction: "You have arrived.", maneuverType: "arrive", roadName: "7 Avenue SE"),
+      ])
+  }
+
+  /// Harness fixture: north into a roundabout, second exit continuing north.
+  private static var roundaboutTrip: NavOSSCarPlayTrip {
+    let center = (latitude: 51.04750, longitude: -114.07000)
+    let r = 0.00025
+    let lonR = r / cos(center.latitude * .pi / 180)
+    func ring(_ degrees: Double) -> NavOSSCarPlayCoordinate {
+      let radians = degrees * .pi / 180
+      return NavOSSCarPlayCoordinate(
+        latitude: center.latitude + r * cos(radians), longitude: center.longitude + lonR * sin(radians))
+    }
+    let start = NavOSSCarPlayCoordinate(latitude: 51.04550, longitude: -114.07000)
+    let entry = ring(180)
+    let circulation = [entry, ring(135), ring(90), ring(45), ring(0)]
+    let north = NavOSSCarPlayCoordinate(latitude: 51.04950, longitude: -114.07000)
+    return NavOSSCarPlayTrip(
+      destination: NavOSSCarPlayDestination(
+        id: "fixture-roundabout", label: "Harness fixture", latitude: north.latitude,
+        longitude: north.longitude, name: "Fixture destination"),
+      distanceMeters: 480, durationSeconds: 60,
+      geometry: [start] + circulation + [north], id: "visual-roundabout",
+      steps: [
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 190, durationSeconds: 20, geometry: [start, entry],
+          instruction: "Drive north on 1 Street SW.", maneuverType: "depart",
+          roadName: "1 Street SW"),
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 70, durationSeconds: 15, geometry: circulation,
+          instruction: "Enter the roundabout and take the 2nd exit onto 1 Street SW.",
+          maneuverType: "roundabout", roadName: "1 Street SW"),
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 220, durationSeconds: 25, geometry: [circulation[4], north],
+          instruction: "Exit the roundabout onto 1 Street SW.", maneuverType: "exit roundabout",
+          roadName: "1 Street SW"),
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 0, durationSeconds: 0, geometry: [north, north],
+          instruction: "You have arrived.", maneuverType: "arrive", roadName: "1 Street SW"),
+      ])
+  }
+
+  // MARK: Mock CarPlay chrome (harness only)
+
+  private var mockHost: UIView { mapViewController.view }
+
+  private func mockLabel(_ text: String, size: CGFloat, weight: UIFont.Weight, color: UIColor = .white)
+    -> UILabel
+  {
+    let label = UILabel()
+    label.text = text
+    label.font = .systemFont(ofSize: size, weight: weight)
+    label.textColor = color
+    label.numberOfLines = 2
+    return label
+  }
+
+  private func addMockBadge(to view: UIView) {
+    let badge = mockLabel("HARNESS MOCK · CarPlay draws the real template", size: 9, weight: .bold, color: .black)
+    badge.backgroundColor = UIColor(red: 0.97, green: 0.79, blue: 0.28, alpha: 1)
+    badge.textAlignment = .center
+    badge.frame = CGRect(x: view.bounds.width - 250, y: view.bounds.height - 16, width: 250, height: 16)
+    view.addSubview(badge)
+  }
+
+  private func mockPanel(width: CGFloat? = nil) -> UIView {
+    let bounds = mockHost.bounds
+    let panel = UIView(frame: CGRect(x: 0, y: 0, width: width ?? bounds.width, height: bounds.height))
+    panel.backgroundColor = UIColor(white: 0.08, alpha: width == nil ? 0.96 : 0.92)
+    mockHost.addSubview(panel)
+    return panel
+  }
+
+  private func showMockGrid(title: String, bar: [String], buttons: [(String, String)]) {
+    let panel = mockPanel()
+    let heading = mockLabel(title, size: 18, weight: .bold)
+    heading.frame = CGRect(x: 0, y: 10, width: panel.bounds.width, height: 26)
+    heading.textAlignment = .center
+    panel.addSubview(heading)
+    let barLabel = mockLabel(bar.joined(separator: "    "), size: 14, weight: .semibold,
+      color: UIColor(red: 0.24, green: 0.84, blue: 0.71, alpha: 1))
+    barLabel.frame = CGRect(x: 16, y: 10, width: panel.bounds.width - 32, height: 26)
+    barLabel.textAlignment = .right
+    panel.addSubview(barLabel)
+    let columns = 4
+    let cell = CGSize(width: (panel.bounds.width - 40) / CGFloat(columns), height: 180)
+    for (index, button) in buttons.enumerated() {
+      let x = 20 + CGFloat(index % columns) * cell.width
+      let y = 70 + CGFloat(index / columns) * cell.height
+      let icon = UIImageView(image: UIImage(systemName: button.0))
+      icon.tintColor = .white
+      icon.contentMode = .scaleAspectFit
+      icon.frame = CGRect(x: x + cell.width / 2 - 30, y: y, width: 60, height: 60)
+      panel.addSubview(icon)
+      let label = mockLabel(button.1, size: 15, weight: .semibold)
+      label.textAlignment = .center
+      label.frame = CGRect(x: x, y: y + 72, width: cell.width, height: 22)
+      panel.addSubview(label)
+    }
+    addMockBadge(to: panel)
+  }
+
+  private func showMockList(
+    title: String,
+    rows: [(String?, String, String)],
+    footer: String? = nil,
+    width: CGFloat? = nil
+  ) {
+    let panel = mockPanel(width: width)
+    let heading = mockLabel(title, size: 18, weight: .bold)
+    heading.frame = CGRect(x: 16, y: 10, width: panel.bounds.width - 32, height: 26)
+    panel.addSubview(heading)
+    for (index, row) in rows.enumerated() {
+      let y = 50 + CGFloat(index) * 64
+      let text = mockLabel(row.1, size: 16, weight: .semibold)
+      text.frame = CGRect(x: row.0 == nil ? 16 : 52, y: y, width: panel.bounds.width - 70, height: 22)
+      panel.addSubview(text)
+      let detail = mockLabel(row.2, size: 13, weight: .regular, color: UIColor(white: 0.7, alpha: 1))
+      detail.frame = CGRect(x: text.frame.minX, y: y + 24, width: text.frame.width, height: 18)
+      panel.addSubview(detail)
+      if let symbol = row.0 {
+        let icon = UIImageView(image: UIImage(systemName: symbol))
+        icon.tintColor = UIColor(red: 0.24, green: 0.84, blue: 0.71, alpha: 1)
+        icon.frame = CGRect(x: 16, y: y + 6, width: 26, height: 26)
+        panel.addSubview(icon)
+      }
+      let divider = UIView(frame: CGRect(x: 16, y: y + 54, width: panel.bounds.width - 32, height: 1))
+      divider.backgroundColor = UIColor(white: 1, alpha: 0.12)
+      panel.addSubview(divider)
+    }
+    if let footer {
+      let go = mockLabel(footer, size: 18, weight: .bold)
+      go.textAlignment = .center
+      go.backgroundColor = UIColor(red: 0.06, green: 0.56, blue: 0.50, alpha: 1)
+      go.layer.cornerRadius = 10
+      go.clipsToBounds = true
+      go.frame = CGRect(x: 16, y: panel.bounds.height - 70, width: panel.bounds.width - 32, height: 44)
+      panel.addSubview(go)
+    }
+    addMockBadge(to: panel)
+  }
+
+  /// The turn card from the production presentation: symbol, distance, instruction, lanes, then.
+  private func showMockCard(trip: NavOSSCarPlayTrip, guidance: NavOSSCarPlayGuidance) {
+    guard let presentation = navOSSCarPlayGuidancePresentation(trip: trip, guidance: guidance) else {
+      return
+    }
+    let card = UIView(frame: CGRect(x: 10, y: 10, width: 280, height: 0))
+    card.backgroundColor = UIColor(red: 0.08, green: 0.38, blue: 0.24, alpha: 1)
+    card.layer.cornerRadius = 12
+    card.clipsToBounds = true
+    mockHost.addSubview(card)
+    let primary = presentation.primary
+    let symbol = UIImageView(
+      image: NavOSSCarPlayManeuverSymbols.image(kind: primary.kind, angleDegrees: primary.turnAngleDegrees))
+    symbol.tintColor = .white
+    symbol.contentMode = .scaleAspectFit
+    symbol.frame = CGRect(x: 12, y: 12, width: 56, height: 56)
+    card.addSubview(symbol)
+    let distance = mockLabel(
+      navOSSCarPlayDistanceLabel(guidance.distanceToManeuverMeters), size: 24, weight: .bold)
+    distance.frame = CGRect(x: 80, y: 12, width: 190, height: 30)
+    card.addSubview(distance)
+    let instruction = mockLabel(primary.instructionVariants[0], size: 15, weight: .semibold)
+    instruction.frame = CGRect(x: 80, y: 42, width: 190, height: 40)
+    card.addSubview(instruction)
+    var y: CGFloat = 92
+    if let lanes = primary.lanes {
+      let laneWidth: CGFloat = 40
+      for (index, lane) in lanes.enumerated() {
+        let laneView = UIView(frame: CGRect(x: 12 + CGFloat(index) * (laneWidth + 6), y: y, width: laneWidth, height: 44))
+        laneView.backgroundColor = UIColor(white: 0, alpha: 0.25)
+        laneView.layer.cornerRadius = 6
+        for angle in lane.angles + (lane.highlightedAngle.map { [$0] } ?? []) {
+          let arrow = UIImageView(
+            image: NavOSSCarPlayManeuverSymbols.image(kind: .straight, angleDegrees: angle))
+          arrow.tintColor = angle == lane.highlightedAngle
+            ? .white : UIColor(white: 1, alpha: lane.status == .notGood ? 0.25 : 0.45)
+          arrow.frame = CGRect(x: 4, y: 4, width: 32, height: 36)
+          laneView.addSubview(arrow)
+        }
+        card.addSubview(laneView)
+      }
+      y += 52
+    }
+    if let then = presentation.then {
+      let thenRow = UIView(frame: CGRect(x: 0, y: y, width: 280, height: 40))
+      thenRow.backgroundColor = UIColor(white: 0, alpha: 0.25)
+      let label = mockLabel("Then", size: 14, weight: .semibold)
+      label.frame = CGRect(x: 12, y: 10, width: 50, height: 20)
+      thenRow.addSubview(label)
+      let thenSymbol = UIImageView(
+        image: NavOSSCarPlayManeuverSymbols.image(kind: then.kind, angleDegrees: then.turnAngleDegrees))
+      thenSymbol.tintColor = .white
+      thenSymbol.frame = CGRect(x: 60, y: 6, width: 28, height: 28)
+      thenRow.addSubview(thenSymbol)
+      card.addSubview(thenRow)
+      y += 40
+    }
+    let road = mockLabel(
+      "Now on \(presentation.currentRoadName ?? "an unnamed road")", size: 12, weight: .regular,
+      color: UIColor(white: 1, alpha: 0.8))
+    road.frame = CGRect(x: 12, y: y + 6, width: 260, height: 18)
+    card.addSubview(road)
+    card.frame.size.height = y + 30
+    addMockBadge(to: mockHost)
+  }
+
+  private func showMockAlert(title: String, subtitle: String, actions: [String]) {
+    let host = mockHost
+    let alert = UIView(frame: CGRect(x: host.bounds.width / 2 - 170, y: 20, width: 340, height: 120))
+    alert.backgroundColor = UIColor(white: 0.12, alpha: 0.97)
+    alert.layer.cornerRadius = 14
+    host.addSubview(alert)
+    let heading = mockLabel(title, size: 17, weight: .bold)
+    heading.textAlignment = .center
+    heading.frame = CGRect(x: 10, y: 12, width: 320, height: 22)
+    alert.addSubview(heading)
+    let detail = mockLabel(subtitle, size: 14, weight: .regular, color: UIColor(white: 0.8, alpha: 1))
+    detail.textAlignment = .center
+    detail.frame = CGRect(x: 10, y: 36, width: 320, height: 20)
+    alert.addSubview(detail)
+    let width = (320 - CGFloat(actions.count - 1) * 8) / CGFloat(actions.count)
+    for (index, action) in actions.enumerated() {
+      let button = mockLabel(action, size: 15, weight: .semibold)
+      button.textAlignment = .center
+      button.backgroundColor = index == 0
+        ? UIColor(red: 0.06, green: 0.56, blue: 0.50, alpha: 1) : UIColor(white: 0.3, alpha: 1)
+      button.layer.cornerRadius = 8
+      button.clipsToBounds = true
+      button.frame = CGRect(x: 10 + CGFloat(index) * (width + 8), y: 70, width: width, height: 38)
+      alert.addSubview(button)
+    }
+    addMockBadge(to: host)
+  }
+
+  private func showMockDashboardButtons() {
+    let host = mockHost
+    for (index, item) in [("arrow.triangle.turn.up.right.diamond.fill", "Go"), ("mic.fill", "Voice")]
+      .enumerated()
+    {
+      let button = mockLabel("  \(item.1)", size: 15, weight: .semibold)
+      button.backgroundColor = UIColor(white: 0.12, alpha: 0.92)
+      button.layer.cornerRadius = 10
+      button.clipsToBounds = true
+      button.frame = CGRect(x: 12 + CGFloat(index) * 110, y: host.bounds.height - 56, width: 100, height: 40)
+      host.addSubview(button)
+    }
+    addMockBadge(to: host)
   }
 
   private var driveTimer: Timer?

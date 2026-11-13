@@ -75,7 +75,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     case mapColors
     case mapDisplay
     case mapOrientation
+    case rerouting
     case routeOptions
+    case speedingWarning
     case volume
 
     var sectionHeader: String {
@@ -85,7 +87,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       case .mapColors: "Map appearance"
       case .mapDisplay: "Map content"
       case .mapOrientation: "Map orientation"
+      case .rerouting: "Rerouting"
       case .routeOptions: "Route options"
+      case .speedingWarning: "Speeding warning"
       }
     }
 
@@ -96,7 +100,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       case .mapColors: "Map colors"
       case .mapDisplay: "Map display"
       case .mapOrientation: "Map orientation"
+      case .rerouting: "Rerouting"
       case .routeOptions: "Route options"
+      case .speedingWarning: "Speeding warning"
       case .volume: "Volume"
       }
     }
@@ -202,6 +208,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private var voiceSearchCoordinator: NavOSSCarPlayVoiceSearchCoordinator?
   private var destinationObserver: NSObjectProtocol?
   private var intentObserver: NSObjectProtocol?
+  private var liveGuidanceObservers: [NSObjectProtocol] = []
   private var placesTemplate: CPListTemplate?
   private var stateObserver: NSObjectProtocol?
   private var settingsAudioOnly = false
@@ -376,6 +383,27 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         self?.applySharedPreferences()
       }
     }
+    liveGuidanceObservers = [
+      NotificationCenter.default.addObserver(
+        forName: .navOSSNavigationSnapshotDidChange,
+        object: NavOSSNavigationService.shared,
+        queue: .main
+      ) { [weak self] _ in
+        MainActor.assumeIsolated {
+          guard let self, self.navigationSession != nil else { return }
+          self.apply(NavOSSCarPlayTripStore.shared.snapshot())
+        }
+      },
+      NotificationCenter.default.addObserver(
+        forName: .navOSSNavigationPreferencesDidChange,
+        object: NavOSSNavigationPreferencesStore.shared,
+        queue: .main
+      ) { [weak self] _ in
+        MainActor.assumeIsolated {
+          self?.applySharedPreferences()
+        }
+      },
+    ]
     intentObserver = NotificationCenter.default.addObserver(
       forName: .navOSSCarPlayIntentDestinationRequested,
       object: nil,
@@ -421,6 +449,11 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       NotificationCenter.default.removeObserver(intentObserver)
       self.intentObserver = nil
     }
+    liveGuidanceObservers.forEach(NotificationCenter.default.removeObserver)
+    liveGuidanceObservers = []
+    presentedRerouteProposalId = nil
+    rerouteProposalAlert = nil
+    presentedCameraAlertSequence = nil
     routeRequestGeneration &+= 1
     routeTask?.cancel()
     routeTask = nil
@@ -570,6 +603,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     let presentation = state.guidance.flatMap {
       navOSSCarPlayGuidancePresentation(trip: trip, guidance: $0)
     }
+    let live = NavOSSNavigationService.shared.carPlayLiveGuidance()
     mapViewController?.display(
       route: trip.geometry,
       routeId: trip.id,
@@ -577,18 +611,14 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       position: state.position,
       routeProgress: state.routeProgress,
       distanceToManeuverMeters: state.guidance?.distanceToManeuverMeters,
-      speedLimitKph: navOSSCarPlaySpeedLimit(
-        trip.speedLimitsKph,
-        geometry: trip.geometry,
-        matchedCoordinate: state.position?.coordinate,
-        routeProgress: state.routeProgress
-      ),
+      speedLimitKph: live.speedLimitKph,
       overlay: NavOSSCarPlayGuidanceOverlay(
         maneuverArrow: presentation.map {
           navOSSCarPlayManeuverArrow(trip: trip, maneuverStepIndex: $0.primary.stepIndex)
         } ?? [],
-        currentRoadName: presentation?.currentRoadName,
-        congestion: trip.congestion
+        currentRoadName: live.currentRoadName ?? presentation?.currentRoadName,
+        congestion: trip.congestion,
+        speeding: live.speedingState
       )
     )
 
@@ -607,12 +637,16 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       // A route the driver chose in CarPlay updates `activeTripId` before it is published, so it
       // never reaches this branch.
       activeTripId = trip.id
-      showNavigationAlert(
-        title: "New route",
-        subtitle: "Rerouted from your current position.",
-        imageSystemName: "arrow.triangle.branch",
-        duration: 4
-      )
+      if acceptedRerouteProposal {
+        acceptedRerouteProposal = false
+      } else {
+        showNavigationAlert(
+          title: "New route",
+          subtitle: "Rerouted from your current position.",
+          imageSystemName: "arrow.triangle.branch",
+          duration: 4
+        )
+      }
     }
     if activeGuidance {
       prepareManeuvers(for: trip)
@@ -625,7 +659,75 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       )
       return
     }
-    updateGuidance(guidance, trip: trip, presentation: presentation, position: state.position)
+    updateGuidance(
+      guidance,
+      trip: trip,
+      presentation: presentation,
+      currentRoadName: live.currentRoadName ?? presentation?.currentRoadName,
+      position: state.position
+    )
+    presentLiveAlerts(live)
+  }
+
+  // MARK: Live alerts
+
+  private var presentedRerouteProposalId: String?
+  private var rerouteProposalAlert: CPNavigationAlert?
+  private var presentedCameraAlertSequence: Int?
+  private var acceptedRerouteProposal = false
+
+  /// Ask-first reroute proposals and safety-camera alerts from the navigation core. Each is shown
+  /// once; a proposal the core withdraws is dismissed.
+  private func presentLiveAlerts(_ live: NavOSSCarPlayLiveGuidance) {
+    guard let mapTemplate, navigationSession != nil else { return }
+    if let proposal = live.rerouteProposal {
+      if presentedRerouteProposalId != proposal.id {
+        presentedRerouteProposalId = proposal.id
+        let text = navOSSCarPlayRerouteProposalText(proposal)
+        let alert = CPNavigationAlert(
+          titleVariants: [text.title],
+          subtitleVariants: [text.subtitle],
+          image: UIImage(systemName: "arrow.triangle.branch"),
+          primaryAction: CPAlertAction(title: "Use new route", style: .default) { [weak self] _ in
+            // The driver just chose this route; do not announce it again as a reroute.
+            self?.acceptedRerouteProposal = true
+            NavOSSNavigationService.shared.acceptRerouteProposal(id: proposal.id)
+          },
+          secondaryAction: CPAlertAction(title: "Keep mine", style: .cancel) { _ in
+            NavOSSNavigationService.shared.declineRerouteProposal(id: proposal.id)
+          },
+          duration: 0
+        )
+        rerouteProposalAlert = alert
+        presentNavigationAlert(alert, on: mapTemplate)
+      }
+    } else if presentedRerouteProposalId != nil {
+      presentedRerouteProposalId = nil
+      if let rerouteProposalAlert, mapTemplate.currentNavigationAlert === rerouteProposalAlert {
+        mapTemplate.dismissNavigationAlert(animated: true) { _ in }
+      }
+      rerouteProposalAlert = nil
+    }
+
+    if let camera = live.safetyCameraAlert {
+      NavOSSCarPlayMapAlertStore.shared.publish(
+        camera.coordinate.map {
+          [NavOSSCarPlayMapAlert(id: "camera-\(camera.cameraId)", kind: .redLightAndSpeedCamera, coordinate: $0)]
+        } ?? []
+      )
+      if presentedCameraAlertSequence != camera.sequence, live.rerouteProposal == nil {
+        presentedCameraAlertSequence = camera.sequence
+        showNavigationAlert(
+          title: "Safety camera ahead",
+          subtitle: "\(navOSSCarPlayDistanceLabel(camera.distanceAheadMeters)) · \(camera.location)",
+          imageSystemName: "camera.fill",
+          duration: 6
+        )
+      }
+    } else if presentedCameraAlertSequence != nil {
+      presentedCameraAlertSequence = nil
+      NavOSSCarPlayMapAlertStore.shared.publish([])
+    }
   }
 
   private func makeSystemTrip(_ trip: NavOSSCarPlayTrip) -> CPTrip {
@@ -792,6 +894,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     _ guidance: NavOSSCarPlayGuidance,
     trip: NavOSSCarPlayTrip,
     presentation: NavOSSCarPlayGuidancePresentation?,
+    currentRoadName: String?,
     position: NavOSSCarPlayPosition?
   ) {
     guard let navigationSession else {
@@ -823,7 +926,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       for: primary
     )
     if #available(iOS 17.4, *) {
-      navigationSession.currentRoadNameVariants = presentation.currentRoadName.map { [$0] } ?? []
+      navigationSession.currentRoadNameVariants = currentRoadName.map { [$0] } ?? []
       let phase = navOSSCarPlayManeuverPhase(
         distanceToManeuverMeters: guidance.distanceToManeuverMeters,
         speedMetersPerSecond: position?.speedMetersPerSecond
@@ -1012,6 +1115,8 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         (.mapDisplay, "map.fill"),
         (.volume, "speaker.wave.2.fill"),
         (.drivingAvatar, "car.fill"),
+        (.rerouting, "arrow.triangle.branch"),
+        (.speedingWarning, "gauge.with.dots.needle.67percent"),
       ]
       let template = CPGridTemplate(
         title: "Settings",
@@ -1182,8 +1287,70 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       sections.append(
         CPListSection(items: [poiItem], header: "Map content", sectionIndexTitle: nil)
       )
+      sections.append(contentsOf: navigationPreferenceSections())
     }
     return sections
+  }
+
+  /// Rerouting and speeding settings live in the navigation core's preference store, shared with
+  /// the phone; CarPlay only edits them.
+  private func navigationPreferenceSections() -> [CPListSection] {
+    let store = NavOSSNavigationPreferencesStore.shared
+    let preferences = store.load()
+    let rerouteItems = NavOSSRerouteMode.allCases.map { mode in
+      let detail: String =
+        switch mode {
+        case .adaptive: "Switch to a new route automatically when you leave yours"
+        case .askFirst: "Show the time and distance change; you choose"
+        case .keepRoute: "Guide you back onto your chosen route"
+        }
+      let item = CPListItem(
+        text: selectedTitle(mode.label, selected: preferences.rerouteMode == mode),
+        detailText: detail,
+        image: UIImage(systemName: mode == .keepRoute ? "lock.fill" : "arrow.triangle.branch")
+      )
+      item.handler = { _, completion in
+        completion()
+        store.setRerouteMode(mode)
+      }
+      return item
+    }
+    let toleranceItems = [0, 5, 10].map { tolerance in
+      let item = CPListItem(
+        text: selectedTitle(
+          tolerance == 0 ? "At the limit" : "\(tolerance) km/h over",
+          selected: preferences.speedingToleranceKph == tolerance
+        ),
+        detailText: "Speed turns red here when the posted limit is known",
+        image: UIImage(systemName: "gauge.with.dots.needle.67percent")
+      )
+      item.handler = { _, completion in
+        completion()
+        let current = store.load()
+        store.setSpeedingWarning(toleranceKph: tolerance, audible: current.speedingAudibleWarning)
+      }
+      return item
+    }
+    let audibleItem = CPListItem(
+      text: selectedTitle("Spoken reminder", selected: preferences.speedingAudibleWarning),
+      detailText: preferences.speedingAudibleWarning
+        ? "Says the limit once when speeding starts"
+        : "Visual only",
+      image: UIImage(systemName: "speaker.wave.2.fill")
+    )
+    audibleItem.handler = { _, completion in
+      completion()
+      let current = store.load()
+      store.setSpeedingWarning(
+        toleranceKph: current.speedingToleranceKph,
+        audible: !current.speedingAudibleWarning
+      )
+    }
+    return [
+      CPListSection(items: rerouteItems, header: "Rerouting", sectionIndexTitle: nil),
+      CPListSection(
+        items: toleranceItems + [audibleItem], header: "Speeding warning", sectionIndexTitle: nil),
+    ]
   }
 
   /// Two taps from the driving map: Report, then the type. The grid never blocks guidance, and

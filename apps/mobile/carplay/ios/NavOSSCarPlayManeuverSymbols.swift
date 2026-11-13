@@ -69,10 +69,10 @@ enum NavOSSCarPlayManeuverSymbols {
     // A sharp turn doubles back, so its junction sits higher and its stem moves away from the
     // returning arm; otherwise the arrowhead lands on the stem.
     let sharp = abs(angle) > 110
-    let stemX: CGFloat = sharp ? (angle > 0 ? 17 : 33) : 25
-    let junction = CGPoint(x: stemX, y: sharp ? 14 : 26)
+    let stemX: CGFloat = sharp ? (angle > 0 ? 13 : 37) : 25
+    let junction = CGPoint(x: stemX, y: sharp ? 12 : 26)
     let stemStart = CGPoint(x: stemX, y: 48)
-    let armLength: CGFloat = sharp ? 26 : 19
+    let armLength: CGFloat = sharp ? 32 : 19
     let forward = direction(angle)
     let shaftEnd = CGPoint(
       x: junction.x + forward.x * (armLength - 9),

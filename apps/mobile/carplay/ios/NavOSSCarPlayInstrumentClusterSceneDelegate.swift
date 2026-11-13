@@ -21,6 +21,7 @@ final class NavOSSCarPlayInstrumentClusterSceneDelegate: UIResponder,
   private var mapViewController: NavOSSCarPlayMapViewController?
   private var preferencesObserver: NSObjectProtocol?
   private var stateObserver: NSObjectProtocol?
+  private var snapshotObserver: NSObjectProtocol?
 
   func templateApplicationInstrumentClusterScene(
     _ templateApplicationInstrumentClusterScene: CPTemplateApplicationInstrumentClusterScene,
@@ -64,6 +65,15 @@ final class NavOSSCarPlayInstrumentClusterSceneDelegate: UIResponder,
     stateObserver = NotificationCenter.default.addObserver(
       forName: .navOSSCarPlayStateDidChange,
       object: NavOSSCarPlayTripStore.shared,
+      queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        self?.apply(NavOSSCarPlayTripStore.shared.snapshot())
+      }
+    }
+    snapshotObserver = NotificationCenter.default.addObserver(
+      forName: .navOSSNavigationSnapshotDidChange,
+      object: NavOSSNavigationService.shared,
       queue: .main
     ) { [weak self] _ in
       MainActor.assumeIsolated {
@@ -117,10 +127,11 @@ final class NavOSSCarPlayInstrumentClusterSceneDelegate: UIResponder,
   private func tearDown() {
     guard mapViewController != nil else { return }
     NavOSSNavigationService.shared.setCarPlayConnected(false, scene: "instrument-cluster")
-    for observer in [stateObserver, preferencesObserver].compactMap({ $0 }) {
+    for observer in [stateObserver, snapshotObserver, preferencesObserver].compactMap({ $0 }) {
       NotificationCenter.default.removeObserver(observer)
     }
     stateObserver = nil
+    snapshotObserver = nil
     preferencesObserver = nil
     mapViewController?.clearRoute()
     mapViewController?.deactivate()
@@ -136,6 +147,7 @@ final class NavOSSCarPlayInstrumentClusterSceneDelegate: UIResponder,
     let presentation = state.guidance.flatMap {
       navOSSCarPlayGuidancePresentation(trip: trip, guidance: $0)
     }
+    let live = NavOSSNavigationService.shared.carPlayLiveGuidance()
     mapViewController.display(
       route: trip.geometry,
       routeId: trip.id,
@@ -143,17 +155,13 @@ final class NavOSSCarPlayInstrumentClusterSceneDelegate: UIResponder,
       position: state.position,
       routeProgress: state.routeProgress,
       distanceToManeuverMeters: state.guidance?.distanceToManeuverMeters,
-      speedLimitKph: navOSSCarPlaySpeedLimit(
-        trip.speedLimitsKph,
-        geometry: trip.geometry,
-        matchedCoordinate: state.position?.coordinate,
-        routeProgress: state.routeProgress
-      ),
+      speedLimitKph: live.speedLimitKph,
       overlay: NavOSSCarPlayGuidanceOverlay(
         maneuverArrow: presentation.map {
           navOSSCarPlayManeuverArrow(trip: trip, maneuverStepIndex: $0.primary.stepIndex)
         } ?? [],
-        congestion: trip.congestion
+        congestion: trip.congestion,
+        speeding: live.speedingState
       )
     )
   }

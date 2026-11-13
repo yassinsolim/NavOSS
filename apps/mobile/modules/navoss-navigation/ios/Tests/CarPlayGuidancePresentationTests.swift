@@ -320,15 +320,24 @@ final class CarPlayGuidancePresentationTests: XCTestCase {
 
   // MARK: Speed
 
-  func testSpeedingHonoursToleranceAndNeverWarnsWithoutALimit() {
-    XCTAssertFalse(navOSSCarPlayIsSpeeding(speedKph: 54, speedLimitKph: 50))
-    XCTAssertTrue(navOSSCarPlayIsSpeeding(speedKph: 55, speedLimitKph: 50))
-    XCTAssertTrue(navOSSCarPlayIsSpeeding(speedKph: 51, speedLimitKph: 50, toleranceKph: 0))
-    XCTAssertFalse(navOSSCarPlayIsSpeeding(speedKph: 59, speedLimitKph: 50, toleranceKph: 10))
-    XCTAssertFalse(navOSSCarPlayIsSpeeding(speedKph: 120, speedLimitKph: nil, toleranceKph: 0))
-    XCTAssertFalse(navOSSCarPlayIsSpeeding(speedKph: 120, speedLimitKph: 0, toleranceKph: 0))
+  func testRerouteProposalTextStatesTheRealChange() {
+    typealias Proposal = NavOSSCarPlayLiveGuidance.RerouteProposal
+    XCTAssertEqual(
+      navOSSCarPlayRerouteProposalText(
+        Proposal(id: "a", durationDeltaSeconds: 185, distanceDeltaMeters: 1_240)
+      ).subtitle,
+      "3 min slower, 1.2 km longer.")
+    XCTAssertEqual(
+      navOSSCarPlayRerouteProposalText(
+        Proposal(id: "b", durationDeltaSeconds: -120, distanceDeltaMeters: -400)
+      ).subtitle,
+      "2 min faster, 400 m shorter.")
+    XCTAssertEqual(
+      navOSSCarPlayRerouteProposalText(
+        Proposal(id: "c", durationDeltaSeconds: 10, distanceDeltaMeters: 20)
+      ).subtitle,
+      "About the same time, similar distance.")
   }
-
   // MARK: Search and stops
 
   func testDistanceLabels() {
@@ -475,5 +484,29 @@ final class CarPlayGuidancePresentationTests: XCTestCase {
     XCTAssertEqual(
       navOSSCarPlayManeuverInfo(trip: trip(), stepIndex: 1)?.instructionVariants,
       ["Turn right onto Left Bank Road.", "Left Bank Road"])
+  }
+
+  func testRoundaboutAngleUsesTheExitRoadNotTheRing() throws {
+    // North into a counter-clockwise ring, out of the second exit still heading north.
+    let south = NavOSSCarPlayCoordinate(latitude: 51.0450, longitude: -114.0700)
+    let entry = NavOSSCarPlayCoordinate(latitude: 51.04725, longitude: -114.0700)
+    let east = NavOSSCarPlayCoordinate(latitude: 51.0475, longitude: -114.06960)
+    let top = NavOSSCarPlayCoordinate(latitude: 51.04775, longitude: -114.0700)
+    let north = NavOSSCarPlayCoordinate(latitude: 51.0500, longitude: -114.0700)
+    let steps = [
+      NavOSSCarPlayRouteStep(
+        distanceMeters: 250, durationSeconds: 25, geometry: [south, entry],
+        instruction: "Drive north.", maneuverType: "depart", roadName: "A"),
+      NavOSSCarPlayRouteStep(
+        distanceMeters: 60, durationSeconds: 10, geometry: [entry, east, top],
+        instruction: "Enter the roundabout and take the 2nd exit.", maneuverType: "roundabout",
+        roadName: "A"),
+      NavOSSCarPlayRouteStep(
+        distanceMeters: 250, durationSeconds: 25, geometry: [top, north],
+        instruction: "Exit the roundabout.", maneuverType: "exit roundabout", roadName: "A"),
+    ]
+    let angle = try XCTUnwrap(
+      navOSSCarPlayManeuverTurnAngle(steps: steps, stepIndex: 1, measuresThroughStep: true))
+    XCTAssertEqual(angle, 0, accuracy: 3)
   }
 }

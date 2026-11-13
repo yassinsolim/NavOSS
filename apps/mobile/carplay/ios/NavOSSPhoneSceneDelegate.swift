@@ -22,7 +22,9 @@ final class NavOSSPhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
         "preview", "preview-short", "preview-resize", "progress-05",
         "guidance-position-fallback", "progress-60", "overview", "clear", "idle-location",
         "hud-wide-chrome", "guidance-maneuver", "guidance-night", "guidance-annotations",
-        "maneuver-symbols", "simulated-drive",
+        "maneuver-symbols", "simulated-drive", "search-hub", "search-results",
+        "preview-alternatives", "guidance-lanes-then", "guidance-roundabout", "reroute-proposal",
+        "arrival", "end", "dashboard",
         "audio-release", "idle-live-location",
       ]
       .contains(scenario)

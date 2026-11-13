@@ -664,6 +664,17 @@ try {
         ['carplay-guidance-night', 'guidance-night', 'dark'],
         ['carplay-guidance-annotations', 'guidance-annotations', 'light'],
         ['carplay-maneuver-symbols', 'maneuver-symbols', 'light'],
+        // Flow scenarios: production map plus a labelled mock of CarPlay's own template, whose
+        // content comes from production presentation code. See docs/architecture/carplay.md.
+        ['carplay-flow-search-hub', 'search-hub', 'light'],
+        ['carplay-flow-search-results', 'search-results', 'light'],
+        ['carplay-flow-preview-alternatives', 'preview-alternatives', 'light'],
+        ['carplay-flow-guidance-lanes-then', 'guidance-lanes-then', 'light'],
+        ['carplay-flow-guidance-roundabout', 'guidance-roundabout', 'dark'],
+        ['carplay-flow-reroute-proposal', 'reroute-proposal', 'light'],
+        ['carplay-flow-arrival', 'arrival', 'light'],
+        ['carplay-flow-end', 'end', 'light'],
+        ['carplay-flow-dashboard', 'dashboard', 'light'],
       ]) {
         await captureCarPlayScenario(name, scenario, appearance);
       }
@@ -727,6 +738,9 @@ try {
       metricsByName.get('carplay-overview.png'),
       metricsByName.get('carplay-guidance-maneuver.png'),
       metricsByName.get('carplay-guidance-night.png'),
+      metricsByName.get('carplay-flow-guidance-lanes-then.png'),
+      metricsByName.get('carplay-flow-guidance-roundabout.png'),
+      metricsByName.get('carplay-flow-dashboard.png'),
     ].filter((metric) => metric !== undefined);
     if (guidanceRouteMetrics.some((metric) => metric.routeGreenRatio < 0.0014)) {
       throw new Error('A CarPlay guidance scenario does not contain enough route-green pixels.');

@@ -317,8 +317,11 @@ traffic, lane, speed, or incident knowledge.
 - The current-road pill sits at the bottom centre of the live safe area. It shows only while
   following and only when the route names the road.
 - Current speed comes directly from valid Core Location speed and is shown in km/h in a round badge
-  during active guidance. It turns red at 5 km/h or more over a known posted limit; the tolerance is
-  an input for a future setting. The posted limit is a black-on-white MAX sign beside it.
+  during active guidance. It turns red only when the navigation core reports `overLimit`. The core
+  applies the driver's tolerance (0, 5, or 10 km/h over, set on CarPlay or the phone), confirms
+  over two fixes, and adds a 3 km/h release margin. Unknown limits never warn. An optional spoken
+  reminder is also the core's. The posted limit and the current-road name come from the core's
+  road context.
 - The main-display speed and speed-limit readouts anchor to the map content's top-right bounds,
   independently of transient template safe-area insets. They follow a real content resize but do not
   move when chrome appears or disappears. Dashboard rendering keeps its own safe-area behavior.
@@ -359,6 +362,15 @@ traffic, lane, speed, or incident knowledge.
   the route supplies lanes.
 - Per-maneuver estimates count down to the next maneuver. Each maneuver's `initialTravelEstimates`
   is its full leg, and trip estimates use the remaining distance and time.
+- In Ask first rerouting mode, the core's proposal appears as a persistent alert stating the real
+  time and distance change, with **Use new route** (`acceptRerouteProposal(id:)`) and **Keep
+  mine** (`declineRerouteProposal(id:)`). A proposal the core withdraws is dismissed. Accepting
+  does not also show "New route".
+- The core's native safety-camera alert appears once per alert as a six-second banner with the
+  distance and location, and a camera marker at the camera's position while it is ahead.
+- Settings adds Rerouting (Automatic, Ask first, Keep my route) and Speeding warning (tolerance
+  and spoken reminder). Both are written to the core's `NavOSSNavigationPreferencesStore`, shared
+  with the phone.
 - Arrival pauses the trip with the destination name and a persistent "You've arrived" alert with
   Done (ends the trip) or Keep map. A new route for the same destination while guiding is announced
   with a short "New route" alert. Only one navigation alert shows at a time; a newer message
@@ -422,7 +434,16 @@ visual scenario list. `guidance-maneuver` and `guidance-night` render an 800 × 
 with a guidance-card inset while approaching a turn: the maneuver arrow, the current-road pill
 (asserted), and the speed and limit badges. The night run uses the dark style and is over the limit.
 `guidance-annotations` feeds harness-only fixture congestion and camera/report markers through the
-optional inputs in overview. `maneuver-symbols` lays out every turn-card symbol for review. The opt-in `audio-release` scenario exercises the real navigation service and
+optional inputs in overview. `maneuver-symbols` lays out every turn-card symbol for review.
+
+Simulators cannot host CarPlay templates on Xcode 27.2: Device Hub disables its CarPlay Simulator
+without a cabled physical iPhone. The `flow-*` scenarios therefore cover the whole journey on the
+production map: search hub, results, preview with alternatives, guidance with lanes and "then", a
+roundabout at night, an ask-first reroute proposal, arrival, end, and Dashboard. Each lays a mock
+of CarPlay's own template over the map, with a yellow "HARNESS MOCK" badge. The mock's content
+comes from production code: guidance presentation, maneuver symbols, lane specs, result ordering
+and distance labels, and reroute proposal text. Its appearance only approximates CarPlay. Places,
+lanes, and proposals in these scenarios are harness fixtures. The opt-in `audio-release` scenario exercises the real navigation service and
 `AVSpeechSynthesizer`: speech activation, interruption by a recording lease, lease release, and
 natural speech-completion release. It requires working simulator speech output, records no
 microphone input, and is selected with `SIMCTL_CHILD_NAVOSS_CARPLAY_VISUAL_SCENARIO=audio-release`

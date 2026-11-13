@@ -19,40 +19,6 @@ public func navOSSCarPlayViewingDistance(_ distanceToManeuverMeters: Double?) ->
   return 1_200
 }
 
-public func navOSSCarPlaySpeedLimit(
-  _ speedLimitsKph: [Int]?,
-  geometry: [NavOSSCarPlayCoordinate],
-  matchedCoordinate: NavOSSCarPlayCoordinate?,
-  routeProgress: Double
-) -> Int? {
-  guard let speedLimitsKph, speedLimitsKph.count == geometry.count - 1,
-    !speedLimitsKph.isEmpty, routeProgress.isFinite
-  else {
-    return nil
-  }
-  let index =
-    matchedCoordinate.flatMap { coordinate in
-      geometry.indices.dropLast().min { left, right in
-        navOSSCarPlayDistanceToSegment(
-          coordinate,
-          start: geometry[left],
-          end: geometry[left + 1]
-        )
-          < navOSSCarPlayDistanceToSegment(
-            coordinate,
-            start: geometry[right],
-            end: geometry[right + 1]
-          )
-      }
-    }
-    ?? min(
-      speedLimitsKph.count - 1,
-      Int(floor(min(1, max(0, routeProgress)) * Double(speedLimitsKph.count)))
-    )
-  let speedLimit = speedLimitsKph[index]
-  return speedLimit > 0 ? speedLimit : nil
-}
-
 private func navOSSCarPlayDistanceToSegment(
   _ coordinate: NavOSSCarPlayCoordinate,
   start: NavOSSCarPlayCoordinate,

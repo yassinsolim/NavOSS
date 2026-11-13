@@ -108,8 +108,8 @@ struct NavOSSCarPlayGuidanceOverlay: Equatable {
   var currentRoadName: String?
   /// Per-segment congestion aligned to the route geometry, when a real source provides it.
   var congestion: [NavOSSCarPlayCongestionLevel]?
-  /// Margin over the posted limit before the speed readout turns red.
-  var speedingToleranceKph = navOSSCarPlayDefaultSpeedingToleranceKph
+  /// The navigation core's speeding verdict (tolerance and hysteresis applied there).
+  var speeding = NavOSSSpeedingState.unknown
 }
 
 @MainActor
@@ -614,6 +614,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
 
     idleLocationFollowEnabled = true
+    flattenCamera()
     // Do not let MapLibre center on an old cached `userLocation`. It takes over as soon as its
     // delegate supplies a fresh fix; until then, a separately validated service coordinate can
     // center the camera without becoming a fake live puck.
@@ -640,11 +641,23 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     else { return }
     // This is a camera fallback only. It deliberately does not synthesize a MapLibre user location
     // or change tracking mode, so an old service cache can never masquerade as a live puck.
+    flattenCamera()
     mapView.setCenter(
       CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude),
       zoomLevel: 15.5,
       animated: animated
     )
+  }
+
+  /// The idle map is flat: leaving guidance must not keep its tilted driving camera, which with
+  /// 3D buildings restored made the idle map read as a skyline instead of a map. Heading is kept
+  /// so heading-up idle tracking does not spin.
+  private func flattenCamera() {
+    guard mapView.camera.pitch != 0 else { return }
+    let flat = mapView.camera
+    flat.pitch = 0
+    mapView.setCamera(flat, withDuration: 0, animationTimingFunction: nil)
+    cameraPitch = .nan
   }
 
   func currentLocationCoordinate() -> NavOSSCarPlayCoordinate? {
@@ -757,8 +770,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     installMapAlertsIfReady()
     updateSpeedDisplay(
       effectivePosition?.speedMetersPerSecond,
-      speedLimitKph: speedLimitKph,
-      toleranceKph: overlay.speedingToleranceKph
+      speeding: overlay.speeding
     )
     updateSpeedLimitDisplay(speedLimitKph)
     updateRoadNameDisplay()
@@ -779,6 +791,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   func clearRoute() {
     routeFitGeneration &+= 1
+    if activeGuidance {
+      flattenCamera()
+    }
     activeGuidance = false
     latestOrigin = nil
     latestDestination = nil
@@ -1245,19 +1260,14 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   private func updateSpeedDisplay(
     _ speedMetersPerSecond: Double?,
-    speedLimitKph: Int?,
-    toleranceKph: Int
+    speeding: NavOSSSpeedingState
   ) {
     guard activeGuidance, showsCurrentSpeed, let speedMetersPerSecond else {
       speedLabel.isHidden = true
       return
     }
     let speedKph = Int((speedMetersPerSecond * 3.6).rounded())
-    let isSpeeding = navOSSCarPlayIsSpeeding(
-      speedKph: speedKph,
-      speedLimitKph: showsSpeedLimit ? speedLimitKph : nil,
-      toleranceKph: toleranceKph
-    )
+    let isSpeeding = speeding == .overLimit
     applySpeedColors(isSpeeding: isSpeeding)
     let text = NSMutableAttributedString(
       string: "\(speedKph)",
