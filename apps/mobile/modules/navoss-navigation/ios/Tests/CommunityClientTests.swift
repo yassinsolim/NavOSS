@@ -18,6 +18,8 @@ final class CommunityStubProtocol: URLProtocol {
   }
 
   nonisolated(unsafe) static var handler: ((Sent) -> (Int, Any, [String: String]))?
+  /// Network delay per request; the handler (the "server") sees requests in delivery order.
+  nonisolated(unsafe) static var delay: ((Sent) -> Double)?
   nonisolated(unsafe) static var sent: [Sent] = []
 
   override class func canInit(with request: URLRequest) -> Bool { true }
@@ -43,14 +45,31 @@ final class CommunityStubProtocol: URLProtocol {
       path: request.url?.path ?? "",
       query: request.url?.query
     )
-    Self.sent.append(sent)
-    let (status, body, headers) = Self.handler?(sent) ?? (500, [:], [:])
+    let deliver = { [self] in
+      Self.deliver(sent, to: self)
+    }
+    if let seconds = Self.delay?(sent), seconds > 0 {
+      DispatchQueue.global().asyncAfter(deadline: .now() + seconds, execute: deliver)
+    } else {
+      deliver()
+    }
+  }
+
+  private static let serverLock = NSLock()
+
+  private static func deliver(_ sent: Sent, to stub: CommunityStubProtocol) {
+    let (status, body, headers) = serverLock.withLock { () -> (Int, Any, [String: String]) in
+      Self.sent.append(sent)
+      return Self.handler?(sent) ?? (500, [:], [:])
+    }
+    let request = stub.request
+    let client = stub.client
     let data = (try? JSONSerialization.data(withJSONObject: body)) ?? Data()
     let response = HTTPURLResponse(
       url: request.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!
-    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-    client?.urlProtocol(self, didLoad: data)
-    client?.urlProtocolDidFinishLoading(self)
+    client?.urlProtocol(stub, didReceive: response, cacheStoragePolicy: .notAllowed)
+    client?.urlProtocol(stub, didLoad: data)
+    client?.urlProtocolDidFinishLoading(stub)
   }
 
   override func stopLoading() {}
@@ -365,13 +384,13 @@ final class CommunityClientTests: XCTestCase {
   func testConcurrentWritesReachTheServerInCounterOrder() async throws {
     serve()
     let inner = CommunityStubProtocol.handler!
-    // Writes that arrive at the server out of order would be rejected as replays.
-    CommunityStubProtocol.handler = { sent in
-      if sent.path == "/v2/community/challenges" {
-        Thread.sleep(forTimeInterval: Double.random(in: 0...0.03))
-      }
-      return inner(sent)
+    // The network delivers writes with random delays, so overlapping writes arrive out of order;
+    // the server rejects a lower assertion counter as a replay.
+    CommunityStubProtocol.handler = inner
+    CommunityStubProtocol.delay = { sent in
+      sent.path == "/v2/community/reports" ? Double.random(in: 0...0.08) : 0
     }
+    defer { CommunityStubProtocol.delay = nil }
     let client = makeClient()
     _ = try await client.submitReport(type: .pothole, coordinate: calgary, heading: nil)
     try await withThrowingTaskGroup(of: Void.self) { group in
