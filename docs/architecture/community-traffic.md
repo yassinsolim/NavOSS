@@ -667,17 +667,17 @@ updates the installation's counter and `last_active_at`, as every attested reque
 
 ## Configuration
 
-| Variable                                                                      | Default               | Notes                                                                            |
-| ----------------------------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------- |
-| `COMMUNITY_TRAFFIC_MODE`                                                      | `off`                 | `off`, `collect` (form cohorts, publish and store nothing), `live`               |
-| `VALHALLA_TRACE_URL`                                                          | from `VALHALLA_URL`   | `trace_attributes` endpoint; must be a local endpoint when the mode is not `off` |
-| `COMMUNITY_TRAFFIC_MIN_CONTRIBUTORS`                                          | `3`                   | 3 to 50                                                                          |
-| `COMMUNITY_TRAFFIC_TRIP_TRIM_METERS`                                          | `400`                 | 400 to 2,000; advertised to the app                                              |
-| `COMMUNITY_TRAFFIC_ROUTE_MIN_COVERAGE`                                        | `0.5`                 | 0.1 to 1                                                                         |
-| `COMMUNITY_TRAFFIC_RATE_LIMIT_GLOBAL`                                         | `6000`                | Authenticated batches per 10 minutes                                             |
-| `COMMUNITY_TRAFFIC_BOUNDS`                                                    | Alberta + BC          | `west,south,east,north`; for local testing against another graph                 |
-| `APP_ATTEST_*`, `COMMUNITY_ATTESTATION_MODE`, `COMMUNITY_INSTALLATION_SECRET` | see community reports | Required for uploads: without them no credential is issued                       |
-| `PGHOST` and the other `PG*` variables                                        | unset                 | Unset uses an in-memory release store, and no attestation, for development only  |
+| Variable                                                                      | Default               | Notes                                                                             |
+| ----------------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------- |
+| `COMMUNITY_TRAFFIC_MODE`                                                      | `off`                 | `off`, `collect` (form cohorts, publish and store nothing), `live`                |
+| `VALHALLA_TRACE_URL`                                                          | from `VALHALLA_URL`   | `trace_attributes` endpoint; must be a local endpoint when the mode is not `off`  |
+| `COMMUNITY_TRAFFIC_MIN_CONTRIBUTORS`                                          | `3`                   | 3 to 50                                                                           |
+| `COMMUNITY_TRAFFIC_TRIP_TRIM_METERS`                                          | `400`                 | 400 to 2,000; advertised to the app                                               |
+| `COMMUNITY_TRAFFIC_ROUTE_MIN_COVERAGE`                                        | `0.5`                 | 0.1 to 1                                                                          |
+| `COMMUNITY_TRAFFIC_RATE_LIMIT_GLOBAL`                                         | `6000`                | Authenticated batches per 10 minutes                                              |
+| `COMMUNITY_TRAFFIC_BOUNDS`                                                    | Alberta + BC          | `west,south,east,north`; can only narrow the provincial coverage, never extend it |
+| `APP_ATTEST_*`, `COMMUNITY_ATTESTATION_MODE`, `COMMUNITY_INSTALLATION_SECRET` | see community reports | Required for uploads: without them no credential is issued                        |
+| `PGHOST` and the other `PG*` variables                                        | unset                 | Unset uses an in-memory release store, and no attestation, for development only   |
 
 The privacy limits are enforced when the service is built (`assertTrafficPrivacyLimits`), not
 only when the environment is read: k below 3, a trip trim below 400 m, a batch trim below 100 m,

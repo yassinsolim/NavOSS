@@ -988,6 +988,8 @@ describe('route traffic enrichment', () => {
     const service = createTrafficService({
       attestation: fakeAttestation(),
       clock: () => new Date(nowMs),
+      // The recorded drive is in Liechtenstein, outside the provincial service coverage.
+      isInCoverage: isFixtureTrafficCoordinate,
       mapMatcher: {
         matchTrace: (points) => stub.matcher.matchTrace(points),
         // Walking the route takes until after the next boundary.
@@ -1001,7 +1003,10 @@ describe('route traffic enrichment', () => {
     });
     const upload = async (device: string, gaps?: readonly number[]) => {
       const capturedAt = new Date(Math.floor(nowMs / 60_000) * 60_000 - 300_000).toISOString();
-      await service.ingest(driveBatch(await credentialFor(service, device), gaps, capturedAt));
+      // A batch refused here (for example as outside coverage) would leave nothing to read.
+      expect(
+        await service.ingest(driveBatch(await credentialFor(service, device), gaps, capturedAt)),
+      ).toEqual({ status: 'accepted' });
     };
     // 18:05 publishes a jam; a new cohort that drove freely replaces it at 18:10.
     for (const device of ['phone-1', 'phone-2', 'phone-3']) await upload(device, JAMMED_GAPS);
