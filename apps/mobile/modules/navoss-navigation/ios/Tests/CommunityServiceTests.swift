@@ -178,6 +178,26 @@ final class CommunityServiceTests: XCTestCase {
       XCTAssertEqual(service.trafficSharingState(), .unavailable(reason: .notAccepting))
       XCTAssertEqual(navOSSCarPlayTrafficSharingDetail(service.trafficSharingState()), "Not available yet")
       service.navigationDidEnd()
+      // A second trip does not ask a server that answered 404 again.
+      service.navigationDidStart(trip())
+      try? await Task.sleep(nanoseconds: 100_000_000)
+      XCTAssertEqual(CommunityStubProtocol.sent.filter { $0.path == "/v2/traffic/status" }.count, 1)
+      service.navigationDidEnd()
     }
+  }
+
+  func testAConfigWithoutTheCommunityFlagMeansOff() async throws {
+    CommunityStubProtocol.sent = []
+    CommunityStubProtocol.handler = { _ in (200, ["features": ["liveTraffic": false]], [:]) }
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [CommunityStubProtocol.self]
+    let client = NavOSSCommunityClient(
+      baseURL: URL(string: "http://127.0.0.1:3001")!,
+      provider: NavOSSUnavailableAttestationProvider(),
+      store: NavOSSCommunityMemorySecretStore(),
+      session: URLSession(configuration: configuration)
+    )
+    let features = try await client.features()
+    XCTAssertFalse(features.communityReports)
   }
 }

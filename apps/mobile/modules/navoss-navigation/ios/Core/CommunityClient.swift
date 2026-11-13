@@ -186,14 +186,24 @@ public actor NavOSSCommunityClient {
 
   public func features() async throws -> NavOSSCommunityFeatures {
     struct Response: Decodable {
+      // Lenient like the rest of the native config: a missing or malformed flag means off.
       struct Features: Decodable {
-        let communityReports: Bool
+        let communityReports: Bool?
+
+        init(from decoder: Decoder) throws {
+          let container = try decoder.container(keyedBy: CodingKeys.self)
+          communityReports = try? container.decodeIfPresent(Bool.self, forKey: .communityReports)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+          case communityReports
+        }
       }
 
-      let features: Features
+      let features: Features?
     }
     let response: Response = try await send(request("GET", "/v2/config"))
-    return NavOSSCommunityFeatures(communityReports: response.features.communityReports)
+    return NavOSSCommunityFeatures(communityReports: response.features?.communityReports ?? false)
   }
 
   public func reports(in bounds: NavOSSCommunityBounds) async throws -> NavOSSCommunityReportPage {

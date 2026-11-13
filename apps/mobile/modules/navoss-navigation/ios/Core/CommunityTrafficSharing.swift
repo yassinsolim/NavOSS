@@ -55,6 +55,7 @@ public actor NavOSSTrafficSharingSession {
   private var pausedUntil: Date?
   private var queue: [NavOSSTrafficProbeBatch] = []
   private var startsLaterUntil: Date?
+  private var trafficNotOffered = false
   public private(set) var state: NavOSSTrafficSharingState = .off
   private let transport: NavOSSTrafficTransport
   private var trip: UInt64 = 0
@@ -93,12 +94,18 @@ public actor NavOSSTrafficSharingSession {
       set(.startsLater(until: startsLaterUntil))
       return
     }
+    // A server that answered 404 (no community traffic) is not asked again this launch.
+    if trafficNotOffered {
+      set(.unavailable(reason: .notAccepting))
+      return
+    }
     set(.starting)
     let status: NavOSSTrafficStatus
     do {
       status = try await transport.trafficStatus()
     } catch NavOSSCommunityFailure.notFound {
       // A server without community traffic (an older API) answers 404: not available, quietly.
+      trafficNotOffered = true
       if trip == current { set(.unavailable(reason: .notAccepting)) }
       return
     } catch {
