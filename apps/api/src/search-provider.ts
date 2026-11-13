@@ -486,7 +486,9 @@ function normalizePhotonResults(
           road: feature.properties.street,
           suburb: feature.properties.suburb ?? feature.properties.district,
         }),
-        osmType: feature.properties.osm_type,
+        ...(feature.properties.osm_type === undefined
+          ? {}
+          : { osmType: feature.properties.osm_type }),
         providerConfidence: normalized.confidence,
         ...(feature.properties.osm_value === undefined
           ? {}
@@ -796,16 +798,16 @@ function coordinateDistanceMeters(
 }
 
 function resultMetadata(result: SearchResult): SearchResultMetadata {
-  let metadata = metadataByResult.get(result);
-  if (metadata === undefined) {
-    metadata = {
-      location: searchLocation(result.name, result.label),
-      osmType: result.id.split(':')[1],
-      providerConfidence: result.confidence,
-      ...(result.details?.category === undefined ? {} : { rawCategory: result.details.category }),
-    };
-    metadataByResult.set(result, metadata);
-  }
+  const existing = metadataByResult.get(result);
+  if (existing !== undefined) return existing;
+  const osmType = result.id.split(':')[1];
+  const metadata: SearchResultMetadata = {
+    location: searchLocation(result.name, result.label),
+    ...(osmType === undefined ? {} : { osmType }),
+    providerConfidence: result.confidence,
+    ...(result.details?.category === undefined ? {} : { rawCategory: result.details.category }),
+  };
+  metadataByResult.set(result, metadata);
   return metadata;
 }
 
@@ -1018,8 +1020,15 @@ function mergeResults(
     }
     const otherMetadata = resultMetadata(other);
     // A missing kind on another snapshot of the very same ID is not a second place.
-    if (preferred.id === other.id) otherMetadata.rawCategory ??= metadata.rawCategory;
-    metadata.exactAlias ??= otherMetadata.exactAlias;
+    if (
+      preferred.id === other.id &&
+      otherMetadata.rawCategory === undefined &&
+      metadata.rawCategory !== undefined
+    )
+      otherMetadata.rawCategory = metadata.rawCategory;
+    if (metadata.exactAlias === undefined && otherMetadata.exactAlias !== undefined) {
+      metadata.exactAlias = otherMetadata.exactAlias;
+    }
     if (metadata.location.street === undefined && otherMetadata.location.street !== undefined) {
       metadata.location = otherMetadata.location;
     } else if (metadata.location.city === undefined && otherMetadata.location.city !== undefined) {
@@ -1030,8 +1039,12 @@ function mergeResults(
         subtitle: [metadata.location.subtitle, city].filter(Boolean).join(', '),
       };
     }
-    if (auxiliaryEntrance) metadata.rawCategory = otherMetadata.rawCategory;
-    else metadata.rawCategory ??= otherMetadata.rawCategory;
+    if (auxiliaryEntrance) {
+      if (otherMetadata.rawCategory === undefined) delete metadata.rawCategory;
+      else metadata.rawCategory = otherMetadata.rawCategory;
+    } else if (metadata.rawCategory === undefined && otherMetadata.rawCategory !== undefined) {
+      metadata.rawCategory = otherMetadata.rawCategory;
+    }
     const merged: SearchResult = {
       ...preferred,
       ...(auxiliaryEntrance ? { name: other.name } : {}),

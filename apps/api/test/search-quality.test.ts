@@ -1,3 +1,5 @@
+/// <reference lib="es2024.promise" />
+
 import { describe, expect, it } from 'vitest';
 import { SearchResponseSchema, type SearchQuery, type SearchResult } from '@navoss/contracts';
 
