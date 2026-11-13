@@ -217,6 +217,16 @@ final class CommunityPresentationTests: XCTestCase {
       navOSSCarPlayReportEntryDetail(sharesRoadReports: false), "Saved privately on this iPhone")
   }
 
+  func testTrafficSharingCopyDoesNotClaimAnonymity() {
+    for state: NavOSSTrafficSharingState in [.sharing, .off, .ready, .starting] {
+      let detail = navOSSCarPlayTrafficSharingDetail(state)
+      XCTAssertFalse(detail.lowercased().contains("anonym"), detail)
+    }
+    XCTAssertEqual(
+      navOSSCarPlayTrafficSharingDetail(.sharing),
+      "Sharing speeds without your identity; trip starts and ends are left out")
+  }
+
   func testPrivateDraftCopyIsBuild70CopyWhileTheServerHasNoSharedReports() {
     XCTAssertEqual(
       navOSSCarPlayPrivateReportSubtitle(reportsLive: false, nearPrivatePlace: false),

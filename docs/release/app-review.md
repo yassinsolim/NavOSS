@@ -1,6 +1,15 @@
 # App Review readiness
 
-Assessment date: 2026-07-28
+Assessment date: 2026-07-28 (body). Header refreshed: 2026-11-12.
+
+## What changed since this assessment
+
+The sections below were written against builds 12 to 17 and are kept as the record of that assessment. Since then:
+
+- The latest shipped build is `0.1.0 (70)`. External distribution is manual (#88); nothing has been sent to Beta App Review for the new code.
+- `main` now contains a community client (road reports and traffic sharing, Apple App Attest, a persistent per-installation identifier) that sends precise location off the device when the driver turns it on and a server enables it. That changes the guideline 5.1.1, 5.1.2 and 5.1.5 analysis and the App Privacy answers (see [App Store metadata](app-store-metadata.md#app-privacy-answers-needed-before-community-features-are-enabled)). Shared reports are also user-generated content shown to other users: **reassess Guideline 1.2** (and the age-rating inputs) before any build can see them. This has not been assessed here.
+- The production service still runs the older API image. Review notes must not describe lane guidance, live traffic, shared reports, Alberta and British Columbia coverage or offline maps as available until they are.
+- Items marked pending below (support email, App Privacy, age rating, export compliance, soak and recovery drills, on-road evidence, real CarPlay evidence) were not re-verified in this refresh.
 
 Status: **NO-GO for external TestFlight or App Store review.** Prepare a small internal TestFlight only after the P0 internal-build gates below pass.
 

@@ -1,6 +1,6 @@
 # NavOSS support page draft
 
-Status: **not ready to publish**. Host this page at `https://navoss.yassin.app/support` after the support alias and production service are live.
+Status: **mirrors the published support page** (`apps/site/src/support.html`). The direct support address below is not active; use GitHub until a delivery test passes.
 
 ## Contact
 
@@ -16,8 +16,9 @@ Issue tracker: <https://github.com/yassinsolim/NavOSS/issues>
 
 ## Before reporting a route issue
 
-NavOSS is a navigation technical beta with active turn-by-turn guidance in Calgary and selected
-official map overlays in Ontario and Kelowna. It has no live traffic. It must not be your only source
+NavOSS is a navigation technical beta with search and turn-by-turn guidance in Calgary and Kelowna
+and selected official map overlays in Ontario. The service it uses today has no live
+traffic. It must not be your only source
 for navigation, road closures, traffic, or safety-camera information. Follow posted signs and laws.
 Mount the phone before driving and have a passenger handle any interaction that cannot be completed
 safely.
@@ -42,10 +43,11 @@ Do not send a home address, precise trip history, or other sensitive information
 
 ## Known beta limitations
 
-- Calgary and Kelowna search and routing; Ontario currently provides selected official overlays only;
+- Calgary and Kelowna search and routing; Alberta and British Columbia coverage is planned but not live; Ontario currently provides selected official overlays only;
 - no live traffic or traffic-aware ETA;
-- no lane guidance, Android release, or offline routing;
-- CarPlay is available only in the dedicated tester build and has not completed real-vehicle validation;
+- no lane guidance, no Android release, and no offline maps or routing;
+- no shared community road reports: the report button keeps up to 25 two-hour private drafts on your phone, and nothing is sent or shown to other drivers;
+- CarPlay is available only in the dedicated tester build, and its templates have not been validated on a real head unit;
 - place search and route quality are still being expanded; and
 - safety-camera records may be incomplete or change between source updates; and
 - road-event markers are informational, construction updates twice daily, current incidents are

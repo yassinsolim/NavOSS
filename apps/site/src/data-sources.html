@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="NavOSS map, search, routing, regional road-event, camera, and public-facility data provenance and limitations."
+      content="NavOSS map, search, routing, province-boundary, regional road-event, camera, public-facility, and offline-pipeline data provenance and limitations."
     />
     <link rel="canonical" href="https://navoss.yassin.app/data-sources" />
     <title>Data sources | NavOSS</title>
@@ -46,6 +46,109 @@
           Alberta and British Columbia OpenStreetMap release as self-hosted Nominatim. Current live
           certification covers Calgary and Kelowna local routes plus both intercity directions.
           Route responses remain explicit that live traffic is unavailable.
+        </p>
+
+        <h2>Province boundaries (not yet in the deployed service)</h2>
+        <p>
+          The updated server code decides what is inside the Alberta and British Columbia service
+          area from Statistics Canada's 2021 Census province and territory digital boundary files
+          (PRUID 48 and 59, published 2022-09-21), under the
+          <a href="https://open.canada.ca/en/open-government-licence-canada"
+            >Open Government Licence &ndash; Canada</a
+          >. The polygons are simplified to about 0.001 degrees (up to roughly 110 m) and include
+          coastal waters and islands, so they are not a survey-grade or border-control geofence.
+          Adapted from Statistics Canada, 2021 Census &ndash; Province and territory digital
+          boundary files, 2021. This does not constitute an endorsement by Statistics Canada of this
+          product. Contains information licensed under the Open Government Licence &ndash; Canada.
+          That updated server is not deployed yet, so the deployed service still declares Calgary
+          and Kelowna.
+        </p>
+
+        <h2>Community road reports and traffic (not switched on)</h2>
+        <p>
+          Community road reports and community traffic come from NavOSS drivers who choose to share
+          them; they are not official data and are labelled as such. Neither is switched on in the
+          deployed service, and no released app sends them. Traffic road shapes and identifiers come
+          from OpenStreetMap through the self-hosted Valhalla graph. When traffic is shown it is
+          attributed &ldquo;Traffic from opted-in NavOSS drivers&rdquo; and published only where at
+          least three installations drove a road. NavOSS reviewed official Alberta and British
+          Columbia feeds on November 12, 2026 and found none with free, redistributable, real-time
+          road speeds, so none is used. See the <a href="/privacy">privacy policy</a> for what is
+          collected.
+        </p>
+
+        <h2>Offline map pipeline (not available to users)</h2>
+        <p>
+          The repository contains a build pipeline for downloadable Alberta and British Columbia
+          map, routing and search bundles. No bundle is hosted and the app cannot download one yet.
+          It uses public, dated OpenStreetMap extracts from Geofabrik, not OpenFreeMap's public
+          endpoint. If bundles ship, their attribution travels with them; the components and
+          licences are:
+        </p>
+        <div class="table-wrap">
+          <table>
+            <caption class="visually-hidden">
+              Offline pipeline components and licences
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Component</th>
+                <th scope="col">Source and licence</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Roads, places, addresses, routing graph</th>
+                <td>
+                  <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>
+                  via Geofabrik, ODbL 1.0
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Download footprints</th>
+                <td>
+                  Geofabrik clipping polygons (an OSM produced work), ODbL 1.0; not official
+                  province boundaries
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Vector tile schema</th>
+                <td>OpenMapTiles: CC BY 4.0 design, BSD-3-Clause code</td>
+              </tr>
+              <tr>
+                <th scope="row">Low-zoom background</th>
+                <td>Natural Earth, public domain</td>
+              </tr>
+              <tr>
+                <th scope="row">Water, lake and time-zone data</th>
+                <td>
+                  OSM water polygons, OSM Lakelines and Timezone Boundary Builder: ODbL 1.0 data,
+                  MIT processing where applicable
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Offline map styles</th>
+                <td>
+                  OpenFreeMap styles: BSD-3-Clause code, CC BY 4.0 design; the dark and light
+                  basemap styles also carry CC BY 3.0 credit to Carto, Stamen and Paul Norman
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Glyphs and sprites</th>
+                <td>Noto Sans glyphs, SIL Open Font License 1.1; Maki icons, CC0 1.0</td>
+              </tr>
+              <tr>
+                <th scope="row">Build and routing engines</th>
+                <td>
+                  Planetiler (Apache-2.0); Valhalla (MIT); Rallista valhalla-mobile 0.6.4 (MIT)
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          No search text, device location, trip history or community speed samples are inputs to the
+          offline build.
         </p>
 
         <h2>Safety cameras</h2>

@@ -1,6 +1,6 @@
 # Support
 
-NavOSS is currently a Calgary technical alpha.
+NavOSS is currently a technical beta for iPhone and CarPlay. The service it uses today covers Calgary and Kelowna, with no live traffic.
 
 - Usage questions and reproducible bugs: [GitHub Issues](https://github.com/yassinsolim/NavOSS/issues)
 - Security vulnerabilities: [private vulnerability report](https://github.com/yassinsolim/NavOSS/security/advisories/new)
