@@ -45,6 +45,23 @@ Victoria, Kelowna, Kamloops, Prince George and Calgary–Vancouver. It is ready 
 it has **not** been run against the production VM and is not a province-wide quality verdict.
 See [`../testing/route-quality.md`](../testing/route-quality.md) for contracts and reproduction.
 
+## Clients follow what the server declares
+
+Clients must keep working against every deployed server generation, so they read the config
+leniently (`serverConfigFromPayload` in `packages/contracts/src/client-config.ts`, mirrored natively
+by `NavigationServerConfig.swift`): fields newer than the oldest deployed server are optional,
+unknown fields, endpoints and features are ignored, and anything absent or malformed means "not
+available". `AppConfigResponseSchema` stays strict for what the current server emits.
+
+Search proximity, route eligibility and the coverage copy come from the server's declared service
+areas: a server that declares "Calgary and Kelowna service areas" (the pre-#79 image) gets Calgary
+and Kelowna; one that declares Alberta and British Columbia gets the provinces. A declared area is
+checked against the boundary the server sent, otherwise its rectangle; the bundled StatCan polygons
+are used only for a province the server declares without one. Before the config arrives nothing is
+refused locally (the server still refuses what it does not serve), and native reroutes are never
+refused for crossing uncovered roads. Recorded production and new-server configs live in
+`apps/mobile/test/fixtures/server-config`.
+
 ## Why the current stack is regional
 
 - `/v2/config` publishes data-defined Alberta and British Columbia service areas with sourced

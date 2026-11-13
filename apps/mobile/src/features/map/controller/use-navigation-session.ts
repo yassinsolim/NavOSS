@@ -1,4 +1,4 @@
-import type { Coordinate, RouteResponse } from '@navoss/contracts';
+import type { Coordinate, RouteResponseV2 } from '@navoss/contracts';
 import {
   type Dispatch,
   type SetStateAction,
@@ -51,7 +51,7 @@ export function useNavigationSession({
   onFix: (coordinate: Coordinate | undefined, courseDegrees: number | undefined) => void;
   onTripEnded: () => void;
   routeState: RouteUiState;
-  setRouteSource: (source: RouteResponse['source'] | undefined) => void;
+  setRouteSource: (source: RouteResponseV2['source'] | undefined) => void;
   setRouteState: Dispatch<SetStateAction<RouteUiState>>;
 }): NavigationSession {
   const stateVersionRef = useRef(-1);

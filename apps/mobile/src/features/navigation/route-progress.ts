@@ -1,4 +1,4 @@
-import type { Coordinate, RouteAlternative } from '@navoss/contracts';
+import type { Coordinate, RouteAlternativeV2, RouteResponseV2 } from '@navoss/contracts';
 
 const EARTH_RADIUS_METERS = 6_371_000;
 
@@ -23,7 +23,7 @@ function distanceMeters(
 
 function remainingStepFraction(
   coordinate: Coordinate,
-  geometry: RouteAlternative['geometry'],
+  geometry: RouteAlternativeV2['geometry'],
 ): number {
   const latitudeScale = Math.cos(toRadians(coordinate.latitude));
   let closestDistanceSquared = Number.POSITIVE_INFINITY;
@@ -70,10 +70,10 @@ function remainingStepFraction(
 }
 
 export function getRemainingRouteGeometry(
-  route: RouteAlternative,
+  route: RouteAlternativeV2,
   routeProgress: number,
   matchedCoordinate?: Coordinate,
-): RouteAlternative['geometry'] {
+): RouteAlternativeV2['geometry'] {
   const geometry = route.geometry;
   const segmentLengths = geometry
     .slice(0, -1)
@@ -114,7 +114,7 @@ export function getRemainingRouteGeometry(
   return [firstPosition, destination];
 }
 
-export function findNearestStepIndex(route: RouteAlternative, coordinate: Coordinate): number {
+export function findNearestStepIndex(route: RouteAlternativeV2, coordinate: Coordinate): number {
   let nearestStepIndex = 0;
   let nearestDistance = Number.POSITIVE_INFINITY;
 
@@ -132,7 +132,7 @@ export function findNearestStepIndex(route: RouteAlternative, coordinate: Coordi
 }
 
 export function getRemainingRouteSummary(
-  route: RouteAlternative,
+  route: RouteAlternativeV2,
   stepIndex: number,
   coordinate?: Coordinate,
 ): { distanceMeters: number; durationSeconds: number } {
@@ -155,7 +155,7 @@ export function getRemainingRouteSummary(
 }
 
 export function getRemainingStepSummary(
-  route: RouteAlternative,
+  route: RouteAlternativeV2,
   stepIndex: number,
   coordinate?: Coordinate,
 ): { distanceMeters: number; durationSeconds: number } {
@@ -170,9 +170,9 @@ export function getRemainingStepSummary(
 }
 
 export function getUpcomingGuidanceStep(
-  route: RouteAlternative,
+  route: RouteAlternativeV2,
   traversedStepIndex: number,
-): RouteAlternative['steps'][number] | undefined {
+): RouteAlternativeV2['steps'][number] | undefined {
   const currentStepIndex = Math.max(0, Math.min(traversedStepIndex, route.steps.length - 1));
   return route.steps[Math.min(currentStepIndex + 1, route.steps.length - 1)];
 }
@@ -191,6 +191,7 @@ export interface UpcomingManeuver {
   /// Live distance to the next maneuver; for later rows, the length of the leg leading into it.
   distanceMeters: number;
   instruction: string;
+  maneuverModifier?: string;
   maneuverType: string;
   /// Empty when the instruction already names the road.
   roadName: string;
@@ -199,7 +200,7 @@ export interface UpcomingManeuver {
 
 /// Every maneuver still ahead, starting with the one `getUpcomingGuidanceStep` announces.
 export function getUpcomingManeuvers(
-  route: RouteAlternative,
+  route: RouteAlternativeV2,
   traversedStepIndex: number,
   distanceToNextManeuverMeters: number,
 ): UpcomingManeuver[] {
@@ -216,6 +217,7 @@ export function getUpcomingManeuvers(
           ? Math.max(0, distanceToNextManeuverMeters)
           : route.steps[stepIndex - 1].distanceMeters,
       instruction: step.instruction,
+      ...(step.maneuverModifier === undefined ? {} : { maneuverModifier: step.maneuverModifier }),
       maneuverType: step.maneuverType,
       roadName: distinctRoadName(step.instruction, step.roadName),
       stepIndex,
@@ -267,7 +269,7 @@ export function buildEtaShareMessage(
   return `I'm heading to ${destinationName}. ETA ${formatArrivalTime(durationSeconds, now)}, with ${formatDuration(durationSeconds)} and ${formatDistance(distanceMetersValue)} remaining. Shared from NavOSS.`;
 }
 
-export function routeViaLabel(route: RouteAlternative): string {
+export function routeViaLabel(route: RouteAlternativeV2): string {
   const roadDistances = new Map<string, number>();
 
   route.steps.forEach((step) => {
@@ -286,4 +288,22 @@ export function routeViaLabel(route: RouteAlternative): string {
     .map(([roadName]) => roadName);
 
   return majorRoads.length === 0 ? 'Direct route' : `via ${majorRoads.join(' / ')}`;
+}
+
+/**
+ * What the route says about traffic, stated as it is. Provider traffic reads "Live traffic" (or
+ * its delay); community traffic is credited to its source, and only on a route it observed.
+ * Everything else reads "No live traffic".
+ */
+export function routeTrafficLabel(
+  source: RouteResponseV2['source'] | undefined,
+  route: Pick<RouteAlternativeV2, 'congestion' | 'traffic'> | undefined,
+): string {
+  if (source?.traffic !== 'live') return 'No live traffic';
+  if (source.trafficSource !== undefined) {
+    return route?.traffic !== undefined || route?.congestion !== undefined
+      ? source.trafficSource.attribution
+      : 'No live traffic on this route';
+  }
+  return formatTrafficDelay(route?.traffic?.delaySeconds ?? 0) ?? 'Live traffic';
 }

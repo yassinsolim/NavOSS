@@ -14,6 +14,7 @@ import {
   roadEventRegionForMapRegion,
 } from '@/features/map/map-features';
 import type { MapRegion } from '@/features/map/map-region';
+import { startRoadEventRefresh } from '@/features/map/road-event-refresh';
 import {
   fetchOfficialRoadEvents,
   fetchOfficialSafetyCameras,
@@ -23,7 +24,6 @@ import {
   fetchTrafficCameras,
 } from '@/lib/api';
 
-const ROAD_EVENT_REFRESH_INTERVAL_MS = 5 * 60 * 1_000;
 const NO_EVENTS: readonly MapRoadEvent[] = [];
 
 export interface OverlayData {
@@ -142,41 +142,21 @@ export function useOverlayData({
     setRoadEventRefreshDelayed(false);
     if (!showRoadEvents || roadEventRegion === undefined) return;
 
-    let controller: AbortController | undefined;
-    const refresh = () => {
-      controller?.abort();
-      const requestController = new AbortController();
-      controller = requestController;
-      const request =
+    return startRoadEventRefresh({
+      load: (signal) =>
         roadEventRegion === 'calgary'
-          ? fetchRoadEvents({ signal: requestController.signal }).then((response) => {
+          ? fetchRoadEvents({ signal }).then((response) => {
               startTransition(() => {
                 setRoadEventResponse(response);
               });
             })
-          : fetchOfficialRoadEvents({
-              region: roadEventRegion,
-              signal: requestController.signal,
-            }).then((response) => {
+          : fetchOfficialRoadEvents({ region: roadEventRegion, signal }).then((response) => {
               startTransition(() => {
                 setOfficialRoadEventResponse(response);
               });
-            });
-      void request
-        .then(() => {
-          setRoadEventRefreshDelayed(false);
-        })
-        .catch(() => {
-          if (!requestController.signal.aborted) setRoadEventRefreshDelayed(true);
-        });
-    };
-
-    refresh();
-    const interval = setInterval(refresh, ROAD_EVENT_REFRESH_INTERVAL_MS);
-    return () => {
-      clearInterval(interval);
-      controller?.abort();
-    };
+            }),
+      onDelayedChange: setRoadEventRefreshDelayed,
+    });
   }, [roadEventRegion, showRoadEvents]);
 
   const roadEventSnapshot =

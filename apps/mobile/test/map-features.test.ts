@@ -1,8 +1,9 @@
-import type { RoadEvent, RouteAlternative, SearchResult } from '@navoss/contracts';
+import type { RoadEvent, RouteAlternativeV2, SearchResult } from '@navoss/contracts';
 import { describe, expect, it } from 'vitest';
 
 import {
   cameraDetailMessage,
+  congestionFeatures,
   droppedPinResult,
   EMPTY_POINT_COLLECTION,
   itemsNearRoute,
@@ -135,7 +136,7 @@ describe('map feature builders', () => {
         [-114.01, 51.13],
       ],
       id: 'route-1',
-    } as RouteAlternative;
+    } as RouteAlternativeV2;
     expect(routeBounds(route)).toEqual([-114.2, 51.04, -114.01, 51.13]);
     expect(routeFeatures([route]).features[0]?.properties).toEqual({ id: 'route-1' });
   });
@@ -262,5 +263,42 @@ describe('items near a route', () => {
 
   it('returns nothing for a route without geometry', () => {
     expect(itemsNearRoute([at('a', 51.04, -114.08)], { geometry: [] }, 60)).toEqual([]);
+  });
+});
+
+describe('congestion features', () => {
+  const geometry: RouteAlternativeV2['geometry'] = [
+    [-114.1, 51.0],
+    [-114.09, 51.0],
+    [-114.08, 51.0],
+    [-114.07, 51.0],
+    [-114.06, 51.0],
+  ];
+
+  it('draws slow, heavy and stopped runs and leaves free or unknown road alone', () => {
+    const features = congestionFeatures({
+      congestion: ['free', 'slow', 'slow', 'stopped'],
+      geometry,
+    });
+    expect(features?.features.map((feature) => feature.properties)).toEqual([
+      { level: 'slow' },
+      { level: 'stopped' },
+    ]);
+    expect(features?.features[0]?.geometry.coordinates).toEqual(geometry.slice(1, 4));
+  });
+
+  it('draws nothing without aligned congestion', () => {
+    expect(congestionFeatures({ geometry })).toBeUndefined();
+    expect(congestionFeatures({ congestion: ['slow'], geometry })).toBeUndefined();
+  });
+
+  it('drops the part already driven', () => {
+    const features = congestionFeatures(
+      { congestion: ['heavy', 'heavy', 'heavy', 'heavy'], geometry },
+      0.5,
+    );
+    const coordinates = features?.features[0]?.geometry.coordinates;
+    expect(coordinates?.[0]?.[0]).toBeCloseTo(-114.08, 5);
+    expect(coordinates?.at(-1)).toEqual([-114.06, 51.0]);
   });
 });

@@ -105,7 +105,7 @@ final class CommunityClientTests: XCTestCase {
       provider: provider
         ?? NavOSSDevelopmentAttestationProvider(teamId: teamId, bundleId: bundleId, store: store),
       store: store,
-      session: URLSession(configuration: configuration)
+      session: URLSession(configuration: configuration), discovery: NavOSSRoutesEndpointDiscovery()
     )
   }
 
@@ -458,7 +458,8 @@ final class CommunityClientTests: XCTestCase {
     configuration.protocolClasses = [CommunityStubProtocol.self]
     let client = NavOSSCommunityClient(
       baseURL: URL(string: "http://127.0.0.1:3001")!, provider: flaky, store: store,
-      session: URLSession(configuration: configuration), attestationRetryDelaySeconds: 0.2)
+      session: URLSession(configuration: configuration), attestationRetryDelaySeconds: 0.2,
+      discovery: NavOSSRoutesEndpointDiscovery())
     do {
       _ = try await client.submitReport(type: .pothole, coordinate: calgary, heading: nil)
       XCTFail("expected the outage")

@@ -18,3 +18,16 @@ describe('maneuver direction', () => {
     expect(maneuverDirection('depart', 'Head north.')).toBe('straight');
   });
 });
+
+describe('maneuver direction from route data', () => {
+  it('prefers the stated modifier over reading the instruction', () => {
+    // Recorded Deerfoot Trail exit 248: the text says nothing about the side.
+    expect(
+      maneuverDirection('off ramp', 'Take exit 248 toward Glenmore Trail.', 'slight right'),
+    ).toBe('slight-right');
+    expect(maneuverDirection('turn', 'Turn right onto Left Bank Road.', 'right')).toBe('right');
+    expect(maneuverDirection('turn', 'Make a U-turn.', 'uturn')).toBe('uturn');
+    expect(maneuverDirection('roundabout', 'Enter the roundabout.', 'right')).toBe('roundabout');
+    expect(maneuverDirection('arrive', 'Your destination is on the left.', 'left')).toBe('arrive');
+  });
+});

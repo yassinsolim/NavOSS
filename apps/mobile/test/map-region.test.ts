@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  isSearchCoverageRegion,
-  mapRegionForCoordinate,
-  mapRegionLabel,
-} from '../src/features/map/map-region.js';
+import { mapRegionForCoordinate } from '../src/features/map/map-region.js';
 
 describe('map region', () => {
   it('selects regional context without a Calgary default', () => {
@@ -21,13 +17,15 @@ describe('map region', () => {
     expect(mapRegionForCoordinate({ latitude: 42.3314, longitude: -83.0458 })).toBe('other');
     expect(mapRegionForCoordinate({ latitude: 46.4953, longitude: -84.3453 })).toBe('other');
     expect(mapRegionForCoordinate(undefined)).toBe('other');
-    expect(mapRegionLabel('kelowna-bc')).toBe('Kelowna');
   });
 
-  it('backs nearby search only for Calgary and Kelowna, never Ontario or other regions', () => {
-    expect(isSearchCoverageRegion('calgary-ab')).toBe(true);
-    expect(isSearchCoverageRegion('kelowna-bc')).toBe(true);
-    expect(isSearchCoverageRegion('ontario')).toBe(false);
-    expect(isSearchCoverageRegion('other')).toBe(false);
+  it('shows provincial context outside the local overlays without claiming province-wide overlays', () => {
+    expect(mapRegionForCoordinate({ latitude: 53.5461, longitude: -113.4938 })).toBe('alberta');
+    expect(mapRegionForCoordinate({ latitude: 49.2827, longitude: -123.1207 })).toBe(
+      'british-columbia',
+    );
+    expect(mapRegionForCoordinate({ latitude: 48.4284, longitude: -123.3656 })).toBe(
+      'british-columbia',
+    );
   });
 });

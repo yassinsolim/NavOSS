@@ -1,7 +1,8 @@
 import type {
   Coordinate,
-  RouteAlternative,
+  RouteAlternativeV2,
   RoutePreferences,
+  RouteStepV2,
   SearchResult,
 } from '@navoss/contracts';
 
@@ -38,12 +39,13 @@ interface NativeNavigationHarnessModule {
 }
 
 /** Oldest native navigation contract this JavaScript works with. */
-export const REQUIRED_NATIVE_NAVIGATION_VERSION = 9;
+export const REQUIRED_NATIVE_NAVIGATION_VERSION = 10;
 
 /**
  * Explains a JavaScript/native mismatch, or `undefined` when they match. New JavaScript on an
  * older dev client would otherwise run silently without native features it relies on, such as
- * camera alerts, which moved into native navigation in contract 9.
+ * camera alerts, which moved into native navigation in contract 9, or the `/v2/routes` lanes and
+ * signposts native carries from contract 10.
  */
 export function nativeNavigationContractError(version: number | undefined): string | undefined {
   if (version !== undefined && version >= REQUIRED_NATIVE_NAVIGATION_VERSION) {
@@ -221,13 +223,54 @@ export function setWorkDestination(destination: SearchResult | undefined): void 
   );
 }
 
+/** The optional `/v2/routes` step fields native carries (contract 10), minus absent ones. */
+export type RouteStepMetadata = Pick<
+  RouteStepV2,
+  | 'bearingAfterDegrees'
+  | 'bearingBeforeDegrees'
+  | 'currentRoadName'
+  | 'exitNumber'
+  | 'junctionName'
+  | 'lanes'
+  | 'maneuverModifier'
+  | 'roundaboutExit'
+  | 'signpost'
+  | 'signpostBranch'
+  | 'signpostToward'
+  | 'spokenInstruction'
+>;
+
+const STEP_METADATA_KEYS = [
+  'bearingAfterDegrees',
+  'bearingBeforeDegrees',
+  'currentRoadName',
+  'exitNumber',
+  'junctionName',
+  'lanes',
+  'maneuverModifier',
+  'roundaboutExit',
+  'signpost',
+  'signpostBranch',
+  'signpostToward',
+  'spokenInstruction',
+] as const satisfies readonly (keyof RouteStepMetadata)[];
+
+export function definedStepMetadata(step: RouteStepMetadata): RouteStepMetadata {
+  const metadata: RouteStepMetadata = {};
+  for (const key of STEP_METADATA_KEYS) {
+    if (step[key] !== undefined) Object.assign(metadata, { [key]: step[key] });
+  }
+  return metadata;
+}
+
 export function setNavigationRoute(
-  route: RouteAlternative,
+  route: RouteAlternativeV2,
   destination: SearchResult,
   preferences: RoutePreferences,
   source?: string,
   traffic?: NativeTrafficInput,
   waypoints: SearchResult[] = [],
+  trafficSource?: string,
 ): NativeNavigationSnapshot {
   assertNativeNavigationContract();
   const coordinate = ([longitude, latitude]: [number, number]) => ({ latitude, longitude });
@@ -240,16 +283,16 @@ export function setNavigationRoute(
     preferences,
     ...(source === undefined ? {} : { source }),
     steps: route.steps.map((step) => ({
+      ...definedStepMetadata(step),
       distanceMeters: step.distanceMeters,
       durationSeconds: step.durationSeconds,
       geometry: step.geometry.map(coordinate),
       instruction: step.instruction,
       maneuverType: step.maneuverType,
       roadName: step.roadName,
-      ...(step.spokenInstruction === undefined
-        ? {}
-        : { spokenInstruction: step.spokenInstruction }),
     })),
+    ...(route.congestion === undefined ? {} : { congestion: route.congestion }),
+    ...(trafficSource === undefined ? {} : { trafficSource }),
     ...(traffic === undefined
       ? {}
       : {

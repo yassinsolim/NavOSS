@@ -52,6 +52,8 @@ const NO_RECENT_DESTINATIONS: readonly string[] = [];
 export interface ExploreSheetProps {
   apiConnection: ApiConnectionState;
   catalog: NativeDestinationCatalog;
+  /** The server's declared coverage name. */
+  coverageName: string;
   locationState: 'denied' | 'error' | 'idle' | 'locating' | 'visible';
   metrics: ScreenMetrics;
   nearbySearchEnabled: boolean;
@@ -89,6 +91,7 @@ interface ResultSection {
 export function ExploreSheet({
   apiConnection,
   catalog,
+  coverageName,
   locationState,
   metrics,
   nearbySearchEnabled,
@@ -146,7 +149,12 @@ export function ExploreSheet({
   );
   const showResults = query.trim().length >= 2 && (searchState !== 'idle' || results.length > 0);
   const listExpanded = detentIndex > 0;
-  const notice = exploreServiceNotice({ apiConnection, locationState, nearbySearchEnabled });
+  const notice = exploreServiceNotice({
+    apiConnection,
+    coverageName,
+    locationState,
+    nearbySearchEnabled,
+  });
 
   return (
     <BottomSheet

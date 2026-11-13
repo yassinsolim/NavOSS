@@ -24,6 +24,8 @@ final class NavOSSPhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
         "hud-wide-chrome", "guidance-maneuver", "guidance-night", "guidance-annotations",
         "community-reports", "report-private", "report-shared", "community-settings",
         "maneuver-symbols", "simulated-drive", "search-hub", "search-results",
+        "real-calgary-exit", "real-calgary-exit-night", "real-vancouver-exit",
+        "real-vancouver-lanes-night",
         "preview-alternatives", "guidance-lanes-then", "guidance-roundabout", "reroute-proposal",
         "arrival", "end", "dashboard",
         "audio-release", "idle-live-location",

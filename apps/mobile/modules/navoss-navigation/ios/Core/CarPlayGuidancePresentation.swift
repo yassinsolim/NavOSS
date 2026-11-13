@@ -2,9 +2,10 @@ import Foundation
 
 // MARK: - Optional route annotations
 //
-// Everything in this section is an optional input. The route contract does not carry lanes,
-// maneuver modifiers, exits, signposts, or congestion today, and NavOSS must never invent them, so
-// every consumer below treats `nil` (or a malformed value) as "render nothing" rather than guessing.
+// Everything in this section is an optional input. `/v2/routes` carries lanes, maneuver
+// modifiers, exits, signposts and (with community traffic) congestion when the map data has them;
+// `/v1/routes` and many roads have none, and NavOSS must never invent them, so every consumer
+// below treats `nil` (or a malformed value) as "render nothing" rather than guessing.
 
 /// One arrow painted on a lane, in the order drivers read them. Raw values match the OSRM/Valhalla
 /// lane `indications` vocabulary with spaces replaced by underscores.
@@ -529,7 +530,13 @@ public func navOSSCarPlayManeuverInfo(
     kind: kind,
     instructionVariants: variants,
     roadName: roadName.isEmpty ? nil : roadName,
-    turnAngleDegrees: measuredAngle ?? kind.nominalAngleDegrees,
+    // Valhalla's bearings at a ramp or fork barely differ (205° → 206° at Deerfoot exit 248), so a
+    // measured angle that is near zero or points the other way would draw a straight arrow for a
+    // right exit; the kind's own direction wins then.
+    turnAngleDegrees: measuredAngle.map { angle in
+      let nominal = kind.nominalAngleDegrees
+      return nominal != 0 && (abs(angle) < 15 || angle.sign != nominal.sign) ? nominal : angle
+    } ?? kind.nominalAngleDegrees,
     highwayExitLabel: exitNumber.flatMap { $0.isEmpty ? nil : "Exit \($0)" },
     lanes: navOSSCarPlayLaneSpecs(step.lanes),
     legDistanceMeters: stepIndex > 0 ? leg.distanceMeters : 0,
@@ -650,6 +657,16 @@ public func navOSSCarPlayManeuverArrow(
 }
 
 // MARK: - Congestion
+
+/// The short traffic credit CarPlay shows for a route, or `nil` when the route has no live
+/// traffic. Community traffic is credited only on a route it actually observed.
+public func navOSSCarPlayTrafficAttribution(_ trip: NavOSSCarPlayTrip) -> String? {
+  if trip.source == "mapbox-traffic" { return "Traffic: Mapbox" }
+  if trip.trafficSource == "navoss-community", trip.traffic != nil || trip.congestion != nil {
+    return "Traffic: NavOSS drivers"
+  }
+  return nil
+}
 
 /// A run of consecutive route segments that share a congestion level worth drawing.
 public struct NavOSSCarPlayCongestionRun: Equatable, Sendable {

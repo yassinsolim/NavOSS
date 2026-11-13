@@ -460,6 +460,10 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         self?.markReady()
       }
       return
+    case "real-calgary-exit", "real-calgary-exit-night", "real-vancouver-exit",
+      "real-vancouver-lanes-night":
+      // Ready is signalled below only when the recording decoded and rendered.
+      guard renderRecordedRouteScenario() else { return }
     case "maneuver-symbols":
       showManeuverSymbols()
       return
@@ -523,6 +527,102 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         speeding: speeding
       )
     )
+  }
+
+  // MARK: Recorded routes
+  //
+  // Real `/v2/routes` responses recorded from the NavOSS API with the public development Valhalla
+  // (apps/mobile/test/fixtures/routes-v2, read from the host through NAVOSS_ROUTE_FIXTURES_DIR).
+  // The lanes, exit numbers, signposts and posted limits shown are the router's; the harness only
+  // chooses where along the recorded route the vehicle is.
+
+  private func renderRecordedRouteScenario() -> Bool {
+    let (fixture, maneuverIndex, metersBefore): (String, Int, Double) =
+      switch scenario {
+      case "real-calgary-exit", "real-calgary-exit-night": ("calgary-deerfoot-glenmore.v2", 1, 450)
+      case "real-vancouver-exit": ("vancouver-bc91-highway99.v2", 1, 450)
+      default: ("vancouver-bc91-highway99.v2", 3, 160)
+      }
+    guard
+      let directory = ProcessInfo.processInfo.environment["NAVOSS_ROUTE_FIXTURES_DIR"],
+      let data = try? Data(
+        contentsOf: URL(fileURLWithPath: directory).appendingPathComponent("\(fixture).json")),
+      let document = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let response = document["response"],
+      let body = try? JSONSerialization.data(withJSONObject: response),
+      let request = document["request"] as? [String: Any],
+      let target = request["destination"] as? [String: Double],
+      let latitude = target["latitude"], let longitude = target["longitude"],
+      let trip = try? navOSSTripsFromRoutesV2Response(
+        body,
+        destination: NavOSSCarPlayDestination(
+          id: fixture, label: "Recorded route", latitude: latitude, longitude: longitude,
+          name: "Recorded destination")
+      ).first,
+      trip.steps.indices.contains(maneuverIndex), maneuverIndex > 0
+    else {
+      print("NAVOSS_CARPLAY_VISUAL_FAILED \(scenario): recorded route unavailable")
+      return false
+    }
+    useCarPlayFrame(CGSize(width: 800, height: 480), guidanceCardInset: 300)
+    let drivenIndex = maneuverIndex - 1
+    let driven = trip.steps[drivenIndex]
+    let toManeuver = min(metersBefore, driven.distanceMeters * 0.9)
+    // Walk back from the maneuver along the driven step's geometry.
+    var remainingBack = toManeuver
+    var position = driven.geometry[driven.geometry.count - 1]
+    var course = 0.0
+    for index in stride(from: driven.geometry.count - 1, to: 0, by: -1) {
+      let end = CLLocation(
+        latitude: driven.geometry[index].latitude, longitude: driven.geometry[index].longitude)
+      let start = CLLocation(
+        latitude: driven.geometry[index - 1].latitude,
+        longitude: driven.geometry[index - 1].longitude)
+      let length = start.distance(from: end)
+      course = start.bearing(to: end)
+      if length >= remainingBack, length > 0 {
+        let fraction = 1 - remainingBack / length
+        position = NavOSSCarPlayCoordinate(
+          latitude: start.coordinate.latitude
+            + (end.coordinate.latitude - start.coordinate.latitude) * fraction,
+          longitude: start.coordinate.longitude
+            + (end.coordinate.longitude - start.coordinate.longitude) * fraction)
+        break
+      }
+      remainingBack -= length
+      position = driven.geometry[index - 1]
+    }
+    let travelled =
+      trip.steps[..<drivenIndex].reduce(0) { $0 + $1.distanceMeters } + driven.distanceMeters
+      - toManeuver
+    let remaining = max(0, trip.distanceMeters - travelled)
+    let maneuver = trip.steps[maneuverIndex]
+    let guidance = NavOSSCarPlayGuidance(
+      distanceToManeuverMeters: toManeuver, durationToManeuverSeconds: toManeuver / 22,
+      instruction: maneuver.instruction, maneuverType: maneuver.maneuverType, phase: .navigating,
+      remainingDistanceMeters: remaining, remainingDurationSeconds: remaining / 18,
+      roadName: maneuver.roadName, stepIndex: drivenIndex)
+    // The recorded posted limit on the segment nearest the vehicle, if it is known.
+    let here = CLLocation(latitude: position.latitude, longitude: position.longitude)
+    let nearestSegment = trip.geometry.indices.dropLast().min { left, right in
+      here.distance(
+        from: CLLocation(
+          latitude: trip.geometry[left].latitude, longitude: trip.geometry[left].longitude))
+        < here.distance(
+          from: CLLocation(
+            latitude: trip.geometry[right].latitude, longitude: trip.geometry[right].longitude))
+    }
+    let limit = nearestSegment.flatMap { index in
+      trip.speedLimitsKph.flatMap { $0.indices.contains(index) && $0[index] > 0 ? $0[index] : nil }
+    }
+    renderGuidance(
+      trip: trip, guidance: guidance,
+      position: NavOSSCarPlayPosition(
+        coordinate: position, courseDegrees: course, speedMetersPerSecond: 22),
+      progress: trip.distanceMeters > 0 ? travelled / trip.distanceMeters : 0,
+      speedLimitKph: limit, speeding: limit == nil ? .unknown : .withinLimit)
+    showMockCard(trip: trip, guidance: guidance)
+    return true
   }
 
   // MARK: Flow scenarios

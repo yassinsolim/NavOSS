@@ -10,7 +10,7 @@ export function searchSourceLabel(source: SearchSource | undefined, degraded = f
 }
 
 function searchSourceName(source: SearchSource | undefined): string {
-  if (source === undefined) return 'Calgary place search';
+  if (source === undefined) return 'Place search';
   if (source.id === 'calgary-hybrid-search' || source.id === 'calgary-open-data-index') {
     return 'Calgary Open Data + OpenStreetMap';
   }
@@ -33,10 +33,13 @@ export interface ServiceNotice {
  */
 export function exploreServiceNotice({
   apiConnection,
+  coverageName,
   locationState,
   nearbySearchEnabled,
 }: {
   apiConnection: ApiConnectionState;
+  /** What the server declared, e.g. 'Alberta and British Columbia'. */
+  coverageName: string;
   locationState: 'denied' | 'error' | 'idle' | 'locating' | 'visible';
   nearbySearchEnabled: boolean;
 }): ServiceNotice | undefined {
@@ -66,7 +69,7 @@ export function exploreServiceNotice({
   }
   if (locationState === 'visible' && !nearbySearchEnabled) {
     return {
-      message: 'Nearby categories and directions are not available at your current location yet.',
+      message: `Search and directions cover ${coverageName}. Your current location is outside that area.`,
       title: 'Outside current coverage',
       tone: 'neutral',
     };

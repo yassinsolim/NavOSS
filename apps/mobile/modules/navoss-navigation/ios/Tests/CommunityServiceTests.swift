@@ -56,7 +56,7 @@ final class CommunityServiceTests: XCTestCase {
       baseURL: URL(string: "http://127.0.0.1:3001")!,
       provider: NavOSSUnavailableAttestationProvider(),
       store: NavOSSCommunityMemorySecretStore(),
-      session: URLSession(configuration: configuration)
+      session: URLSession(configuration: configuration), discovery: NavOSSRoutesEndpointDiscovery()
     )
     let defaults = UserDefaults(suiteName: "community-service-\(UUID().uuidString)")!
     return NavOSSCommunityService(
@@ -147,7 +147,7 @@ final class CommunityServiceTests: XCTestCase {
           teamId: "ABCDE12345", bundleId: "org.navoss.mobile",
           store: NavOSSCommunityMemorySecretStore()),
         store: NavOSSCommunityMemorySecretStore(),
-        session: URLSession(configuration: configuration)
+        session: URLSession(configuration: configuration), discovery: NavOSSRoutesEndpointDiscovery()
       )
       let defaults = UserDefaults(suiteName: "community-old-\(UUID().uuidString)")!
       let preferences = NavOSSCommunityPreferencesStore(defaults: defaults, notificationCenter: NotificationCenter())
@@ -195,7 +195,7 @@ final class CommunityServiceTests: XCTestCase {
       baseURL: URL(string: "http://127.0.0.1:3001")!,
       provider: NavOSSUnavailableAttestationProvider(),
       store: NavOSSCommunityMemorySecretStore(),
-      session: URLSession(configuration: configuration)
+      session: URLSession(configuration: configuration), discovery: NavOSSRoutesEndpointDiscovery()
     )
     let features = try await client.features()
     XCTAssertFalse(features.communityReports)
@@ -212,7 +212,7 @@ final class CommunityServiceTests: XCTestCase {
       baseURL: URL(string: "http://127.0.0.1:3001")!,
       provider: NavOSSUnavailableAttestationProvider(),
       store: NavOSSCommunityMemorySecretStore(),
-      session: URLSession(configuration: configuration))
+      session: URLSession(configuration: configuration), discovery: NavOSSRoutesEndpointDiscovery())
     let defaults = UserDefaults(suiteName: "community-consent-\(UUID().uuidString)")!
     let preferences = NavOSSCommunityPreferencesStore(defaults: defaults, notificationCenter: NotificationCenter())
     let service = NavOSSCommunityService(

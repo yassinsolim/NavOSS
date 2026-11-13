@@ -145,7 +145,8 @@ public enum NavOSSTrafficUploadOutcome: Equatable, Sendable {
 public actor NavOSSCommunityClient {
   static let keyIdAccount = "app-attest-key-id"
 
-  private let baseURL: URL
+  public nonisolated let baseURL: URL
+  private let discovery: NavOSSRoutesEndpointDiscovery
   private let decoder: JSONDecoder
   private let encoder = JSONEncoder()
   private let provider: NavOSSCommunityAttestationProvider
@@ -165,8 +166,10 @@ public actor NavOSSCommunityClient {
     provider: NavOSSCommunityAttestationProvider,
     store: NavOSSCommunitySecretStore,
     session: URLSession = .shared,
-    attestationRetryDelaySeconds: TimeInterval = 60
+    attestationRetryDelaySeconds: TimeInterval = 60,
+    discovery: NavOSSRoutesEndpointDiscovery = .shared
   ) {
+    self.discovery = discovery
     self.attestationRetryDelaySeconds = attestationRetryDelaySeconds
     self.baseURL = baseURL
     self.provider = provider
@@ -200,27 +203,21 @@ public actor NavOSSCommunityClient {
 
   // MARK: Reads (no identity)
 
+  /// `features.communityReports` from the server's `/v2/config`, through the same lenient
+  /// per-server config the route client uses (`NavigationServerConfig`): a missing or malformed
+  /// flag is off. A config another client already read is reused; a fresh read is recorded.
   public func features() async throws -> NavOSSCommunityFeatures {
-    struct Response: Decodable {
-      // Lenient like the rest of the native config: a missing or malformed flag means off.
-      struct Features: Decodable {
-        let communityReports: Bool?
-
-        init(from decoder: Decoder) throws {
-          let container = try decoder.container(keyedBy: CodingKeys.self)
-          communityReports = try? container.decodeIfPresent(Bool.self, forKey: .communityReports)
-        }
-
-        private enum CodingKeys: String, CodingKey {
-          case communityReports
-        }
-      }
-
-      let features: Features?
+    if let known = discovery.config(for: baseURL) {
+      return NavOSSCommunityFeatures(communityReports: known.communityReports)
     }
-    let response: Response = try await send(request("GET", "/v2/config"))
-    return NavOSSCommunityFeatures(communityReports: response.features?.communityReports ?? false)
+    let data = try await sendData(request("GET", "/v2/config"))
+    guard let config = try? JSONDecoder().decode(NavigationServerConfig.self, from: data) else {
+      return NavOSSCommunityFeatures(communityReports: false)
+    }
+    discovery.record(config, for: baseURL)
+    return NavOSSCommunityFeatures(communityReports: config.communityReports)
   }
+
 
   public func reports(in bounds: NavOSSCommunityBounds) async throws -> NavOSSCommunityReportPage {
     struct Response: Decodable {

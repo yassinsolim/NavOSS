@@ -353,6 +353,8 @@ async function captureCarPlayScenario(name, scenario, appearance) {
       env: {
         SIMCTL_CHILD_NAVOSS_CARPLAY_VISUAL_APPEARANCE: appearance,
         SIMCTL_CHILD_NAVOSS_CARPLAY_VISUAL_SCENARIO: scenario,
+        // Recorded /v2/routes responses for the real-* scenarios; the simulator reads host paths.
+        SIMCTL_CHILD_NAVOSS_ROUTE_FIXTURES_DIR: join(mobileDirectory, 'test/fixtures/routes-v2'),
       },
       logPath: join(logsDirectory, 'carplay.log'),
       // The first launch on a newly created hosted-runner simulator can exceed 30 s.
@@ -671,6 +673,11 @@ try {
         ['carplay-flow-report-shared', 'report-shared', 'light'],
         ['carplay-flow-community-settings', 'community-settings', 'dark'],
         ['carplay-maneuver-symbols', 'maneuver-symbols', 'light'],
+        // Real recorded /v2/routes responses: lanes, exits and signposts from the router.
+        ['carplay-real-calgary-exit', 'real-calgary-exit', 'light'],
+        ['carplay-real-calgary-exit-night', 'real-calgary-exit-night', 'dark'],
+        ['carplay-real-vancouver-exit', 'real-vancouver-exit', 'light'],
+        ['carplay-real-vancouver-lanes-night', 'real-vancouver-lanes-night', 'dark'],
         // Flow scenarios: production map plus a labelled mock of CarPlay's own template, whose
         // content comes from production presentation code. See docs/architecture/carplay.md.
         ['carplay-flow-search-hub', 'search-hub', 'light'],
@@ -748,9 +755,26 @@ try {
       metricsByName.get('carplay-flow-guidance-lanes-then.png'),
       metricsByName.get('carplay-flow-guidance-roundabout.png'),
       metricsByName.get('carplay-flow-dashboard.png'),
+      metricsByName.get('carplay-real-calgary-exit.png'),
+      metricsByName.get('carplay-real-calgary-exit-night.png'),
+      metricsByName.get('carplay-real-vancouver-exit.png'),
+      metricsByName.get('carplay-real-vancouver-lanes-night.png'),
     ].filter((metric) => metric !== undefined);
     if (guidanceRouteMetrics.some((metric) => metric.routeGreenRatio < 0.0014)) {
       throw new Error('A CarPlay guidance scenario does not contain enough route-green pixels.');
+    }
+    // The recorded routes' exit numbers come from the router; the turn card must show them.
+    for (const [name, exitNumber] of [
+      ['carplay-real-calgary-exit.png', '248'],
+      ['carplay-real-vancouver-exit.png', '23b'],
+    ]) {
+      const metric = metricsByName.get(name);
+      if (
+        metric !== undefined &&
+        !metric.recognizedText.join(' ').toLowerCase().includes(exitNumber)
+      ) {
+        throw new Error(`${name} does not show the recorded exit ${exitNumber}.`);
+      }
     }
     const previewRouteMetrics = [
       metricsByName.get('carplay-preview-light.png'),
