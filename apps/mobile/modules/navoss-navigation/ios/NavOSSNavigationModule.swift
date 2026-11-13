@@ -4,6 +4,7 @@ private let navigationSnapshotEvent = "onNavigationSnapshot"
 private let navigationPreferencesEvent = "onNavigationPreferencesChanged"
 private let carPlayStateEvent = "onCarPlayStateChanged"
 private let carPlayNavigationEndedEvent = "onCarPlayNavigationEnded"
+private let offlineStateEvent = "onOfflineStateChanged"
 
 private struct NavigationCoordinateRecord: Record {
   @Field
@@ -217,6 +218,29 @@ private struct RoutePreferencesRecord: Record {
   }
 }
 
+private struct OfflineRouteRequestRecord: Record {
+  @Field
+  var alternatives: Int = 2
+
+  @Field
+  var destination: NavigationDestinationRecord = NavigationDestinationRecord()
+
+  @Field
+  var origin: NavigationCoordinateRecord = NavigationCoordinateRecord()
+
+  @Field
+  var originHeadingDegrees: Double?
+
+  @Field
+  var originHorizontalAccuracyMeters: Double?
+
+  @Field
+  var preferences: RoutePreferencesRecord = RoutePreferencesRecord()
+
+  @Field
+  var waypoints: [NavigationDestinationRecord] = []
+}
+
 private struct CarPlayTripRecord: Record {
   @Field
   var destination: NavigationDestinationRecord = NavigationDestinationRecord()
@@ -351,6 +375,7 @@ public final class NavOSSNavigationModule: Module {
   private var communityStateObserver: NSObjectProtocol?
   private var navigationPreferencesObserver: NSObjectProtocol?
   private var navigationSnapshotObserver: NSObjectProtocol?
+  private var offlineStateObserver: NSObjectProtocol?
   private let service = NavOSSNavigationService.shared
 
   public func definition() -> ModuleDefinition {
@@ -376,10 +401,19 @@ public final class NavOSSNavigationModule: Module {
       navigationPreferencesEvent,
       carPlayStateEvent,
       carPlayNavigationEndedEvent,
+      offlineStateEvent,
       NavOSSCommunityBridge.stateEvent
     )
 
     OnCreate {
+      self.offlineStateObserver = NotificationCenter.default.addObserver(
+        forName: .navOSSOfflineStateDidChange,
+        object: NavOSSOfflineStore.shared,
+        queue: .main
+      ) { [weak self] _ in
+        self?.sendEvent(
+          offlineStateEvent, NavOSSOfflinePayloads.status(NavOSSOfflineStore.shared.status()))
+      }
       self.communityStateObserver = NotificationCenter.default.addObserver(
         forName: .navOSSCommunityStateDidChange,
         object: NavOSSCommunityService.shared,
@@ -431,6 +465,10 @@ public final class NavOSSNavigationModule: Module {
     }
 
     OnDestroy {
+      if let offlineStateObserver = self.offlineStateObserver {
+        NotificationCenter.default.removeObserver(offlineStateObserver)
+        self.offlineStateObserver = nil
+      }
       if let communityStateObserver = self.communityStateObserver {
         NotificationCenter.default.removeObserver(communityStateObserver)
         self.communityStateObserver = nil
@@ -657,6 +695,94 @@ public final class NavOSSNavigationModule: Module {
 
     Function("stopAnnouncements") { () in
       self.service.stopAnnouncements()
+    }
+
+    // MARK: Offline maps
+
+    Function("getOfflineState") { () -> [String: Any] in
+      NavOSSOfflinePayloads.status(NavOSSOfflineStore.shared.status())
+    }
+
+    AsyncFunction("refreshOfflineManifest") { () async -> [String: Any] in
+      await NavOSSOfflineStore.shared.refreshManifest()
+      return NavOSSOfflinePayloads.status(NavOSSOfflineStore.shared.status())
+    }
+
+    Function("downloadOfflineRegion") { (regionId: String) in
+      NavOSSOfflineStore.shared.download(regionId: regionId)
+    }
+
+    Function("pauseOfflineRegion") { (regionId: String) in
+      NavOSSOfflineStore.shared.pause(regionId: regionId)
+    }
+
+    Function("deleteOfflineRegion") { (regionId: String) -> String in
+      NavOSSOfflineStore.shared.delete(regionId: regionId).rawValue
+    }
+
+    Function("offlineRegionCovers") { (points: [NavigationCoordinateRecord]) -> Bool in
+      NavOSSOfflineRouter.shared.covers(
+        points.map { NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude) })
+    }
+
+    Function("setPreferOfflineMaps") { (prefer: Bool) in
+      NavOSSOfflineStore.shared.preferOffline = prefer
+    }
+
+    /// The bound offline style JSON for a hosted style slug, rendering the installed region that
+    /// covers the given point. `use` says whether the map should show it now (no network, or
+    /// prefer-offline inside coverage); a caller may still use it after a hosted style fails.
+    Function("getOfflineMapStyle") {
+      (slug: String, latitude: Double?, longitude: Double?) -> [String: Any]? in
+      let near = latitude.flatMap { latitude in
+        longitude.map { NavOSSCarPlayCoordinate(latitude: latitude, longitude: $0) }
+      }
+      let store = NavOSSOfflineStore.shared
+      guard let file = store.offlineStyleFile(slug: slug, near: near),
+        let json = try? String(contentsOf: file, encoding: .utf8)
+      else {
+        return nil
+      }
+      return ["style": json, "use": store.shouldUseOfflineMap(near: near)]
+    }
+
+    AsyncFunction("planOfflineRoutes") { (request: OfflineRouteRequestRecord) async -> [String: Any] in
+      do {
+        let trips = try await NavOSSOfflineRouter.shared.routes(
+          origin: NavOSSCarPlayCoordinate(
+            latitude: request.origin.latitude, longitude: request.origin.longitude),
+          originHeadingDegrees: request.originHeadingDegrees,
+          originHorizontalAccuracyMeters: request.originHorizontalAccuracyMeters,
+          destination: request.destination.destination,
+          preferences: request.preferences.preferences,
+          alternatives: request.alternatives,
+          waypoints: request.waypoints.map(\.destination)
+        )
+        return ["ok": true, "trips": trips.map { self.serialize($0) }]
+      } catch {
+        return ["ok": false, "code": NavOSSOfflinePayloads.errorCode(error)]
+      }
+    }
+
+    AsyncFunction("searchOffline") {
+      (query: String, latitude: Double?, longitude: Double?, limit: Int, category: String?) async
+        -> [String: Any] in
+      let proximity = latitude.flatMap { latitude in
+        longitude.map { NavOSSCarPlayCoordinate(latitude: latitude, longitude: $0) }
+      }
+      do {
+        let places = try await NavOSSOfflineRouter.shared.search(
+          query: query, proximity: proximity, limit: max(1, min(20, limit)), category: category)
+        let snapshot = NavOSSOfflineStore.shared.installedSnapshot
+        return [
+          "ok": true,
+          "results": places.map(NavOSSOfflinePayloads.place),
+          "bundleVersion": snapshot.regions.first?.bundleVersion ?? "",
+          "osmTimestamp": snapshot.regions.first?.osmTimestamp ?? "",
+        ]
+      } catch {
+        return ["ok": false, "code": NavOSSOfflinePayloads.errorCode(error)]
+      }
     }
   }
 

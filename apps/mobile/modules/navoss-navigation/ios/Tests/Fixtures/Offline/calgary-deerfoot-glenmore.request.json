@@ -1,0 +1,18 @@
+{
+  "alternates": 0,
+  "costing": "auto",
+  "costing_options": {
+    "auto": { "exclude_unpaved": false, "use_ferry": 0.5, "use_highways": 0.5, "use_tolls": 0.5 }
+  },
+  "directions_type": "instructions",
+  "format": "json",
+  "language": "en-US",
+  "locations": [
+    { "lat": 51.0626, "lon": -114.0201 },
+    { "lat": 50.9932, "lon": -114.0943 }
+  ],
+  "roundabout_exits": true,
+  "shape_format": "polyline6",
+  "turn_lanes": true,
+  "units": "kilometers"
+}

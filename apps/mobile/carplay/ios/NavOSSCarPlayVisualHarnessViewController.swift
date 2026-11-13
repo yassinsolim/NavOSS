@@ -26,6 +26,9 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       "NAVOSS_CARPLAY_VISUAL_APPEARANCE"
     ] == "dark"
     mapViewController.applyAppearance(darkAppearance ? .dark : .light)
+    // Offline scenarios draw the installed offline region's local style (needs a region
+    // installed on the simulator; see docs/architecture/offline.md).
+    mapViewController.forcesOfflineStyle = scenario.hasPrefix("offline-")
 
     mapViewController.setIdleLocationTrackingEnabled(false)
     addChild(mapViewController)
@@ -78,7 +81,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07190),
         animated: false
       )
-    case "preview":
+    case "preview", "offline-preview":
       mapViewController.display(
         route: route,
         routeId: "visual-preview",

@@ -1,0 +1,589 @@
+{
+  "trip": {
+    "locations": [
+      {
+        "type": "break",
+        "lat": 51.1506,
+        "lon": -114.1512,
+        "side_of_street": "right",
+        "original_index": 0
+      },
+      { "type": "break", "lat": 51.13157, "lon": -114.01055, "original_index": 1 }
+    ],
+    "legs": [
+      {
+        "maneuvers": [
+          {
+            "type": 2,
+            "instruction": "Drive east.",
+            "verbal_succinct_transition_instruction": "Drive east.",
+            "verbal_pre_transition_instruction": "Drive east.",
+            "verbal_post_transition_instruction": "Continue for 600 meters.",
+            "bearing_after": 87,
+            "time": 206.408,
+            "length": 0.572,
+            "cost": 236.779,
+            "begin_shape_index": 0,
+            "end_shape_index": 39,
+            "travel_mode": "drive",
+            "travel_type": "car"
+          },
+          {
+            "type": 15,
+            "instruction": "Turn left onto Hamptons Drive NW.",
+            "verbal_transition_alert_instruction": "Turn left onto Hamptons Drive NW.",
+            "verbal_succinct_transition_instruction": "Turn left.",
+            "verbal_pre_transition_instruction": "Turn left onto Hamptons Drive NW.",
+            "verbal_post_transition_instruction": "Continue for 1.5 kilometers.",
+            "street_names": ["Hamptons Drive NW"],
+            "bearing_before": 173,
+            "bearing_after": 91,
+            "time": 188.968,
+            "length": 1.671,
+            "cost": 286.577,
+            "begin_shape_index": 39,
+            "end_shape_index": 94,
+            "travel_mode": "drive",
+            "travel_type": "car"
+          },
+          {
+            "type": 15,
+            "instruction": "Turn left onto Country Hills Boulevard NW.",
+            "verbal_transition_alert_instruction": "Turn left onto Country Hills Boulevard NW.",
+            "verbal_succinct_transition_instruction": "Turn left.",
+            "verbal_pre_transition_instruction": "Turn left onto Country Hills Boulevard NW.",
+            "verbal_post_transition_instruction": "Continue for 500 meters.",
+            "street_names": ["Country Hills Boulevard NW"],
+            "bearing_before": 159,
+            "bearing_after": 71,
+            "time": 52.479,
+            "length": 0.538,
+            "cost": 84.067,
+            "begin_shape_index": 94,
+            "end_shape_index": 104,
+            "travel_mode": "drive",
+            "travel_type": "car"
+          },
+          {
+            "type": 21,
+            "instruction": "Take the exit on the left.",
+            "verbal_transition_alert_instruction": "Take the exit on the left.",
+            "verbal_pre_transition_instruction": "Take the exit on the left.",
+            "bearing_before": 66,
+            "bearing_after": 62,
+            "time": 19.025,
+            "length": 0.121,
+            "cost": 55.867,
+            "begin_shape_index": 104,
+            "end_shape_index": 111,
+            "travel_mode": "drive",
+            "travel_type": "car"
+          },
+          {
+            "type": 15,
+            "instruction": "Turn left onto Shaganappi Trail NW.",
+            "verbal_transition_alert_instruction": "Turn left onto Shaganappi Trail NW.",
+            "verbal_succinct_transition_instruction": "Turn left.",
+            "verbal_pre_transition_instruction": "Turn left onto Shaganappi Trail NW.",
+            "verbal_post_transition_instruction": "Continue for 1 kilometer.",
+            "street_names": ["Shaganappi Trail NW"],
+            "bearing_before": 35,
+            "bearing_after": 319,
+            "time": 94.143,
+            "length": 1.159,
+            "cost": 140.107,
+            "begin_shape_index": 111,
+            "end_shape_index": 132,
+            "travel_mode": "drive",
+            "travel_type": "car"
+          },
+          {
+            "type": 18,
+            "instruction": "Take the 201 East/Stoney Trail ramp.",
+            "verbal_transition_alert_instruction": "Take the 201 East ramp.",
+            "verbal_pre_transition_instruction": "Take the 201 East, Stoney Trail ramp.",
+            "verbal_post_transition_instruction": "Continue for 10 kilometers.",
+            "street_names": ["201"],
+            "bearing_before": 315,
+            "bearing_after": 328,
+            "time": 489.204,
+            "length": 10.071,
+            "cost": 564.998,
+            "begin_shape_index": 132,
+            "end_shape_index": 258,
+            "highway": true,
+            "sign": {
+              "exit_branch_elements": [{ "text": "201 East" }, { "text": "Stoney Trail" }]
+            },
+            "travel_mode": "drive",
+            "travel_type": "car"
+          },
+          {
+            "type": 20,
+            "instruction": "Take exit 60 onto 2 toward Deerfoot Trail/Calgary International Airport/Edmonton.",
+            "verbal_transition_alert_instruction": "Take exit 60.",
+            "verbal_pre_transition_instruction": "Take exit 60 onto 2 toward Deerfoot Trail, Calgary International Airport.",
+            "bearing_before": 91,
+            "bearing_after": 96,
+            "time": 21.353,
+            "length": 0.498,
+            "cost": 20.809,
+            "begin_shape_index": 258,
+            "end_shape_index": 269,
+            "sign": {
+              "exit_number_elements": [{ "text": "60" }],
+              "exit_branch_elements": [{ "text": "2" }],
+              "exit_toward_elements": [
+                { "text": "Deerfoot Trail" },
+                { "text": "Calgary International Airport" },
+                { "text": "Edmonton" }
+              ]
+            },
+            "travel_mode": "drive",
+            "travel_type": "car",
+            "lanes": [
+              { "directions": 2 },
+              { "directions": 2 },
+              { "directions": 544, "active": 32 },
+              { "directions": 32, "active": 32 }
+            ]
+          },
+          {
+            "type": 23,
+            "instruction": "Keep right to take 2 South/Deerfoot Trail toward City Centre.",
+            "verbal_transition_alert_instruction": "Keep right to take 2 South.",
+            "verbal_pre_transition_instruction": "Keep right to take 2 South, Deerfoot Trail toward City Centre.",
+            "verbal_post_transition_instruction": "Continue for 4 kilometers.",
+            "street_names": ["2", "Deerfoot Trail NE"],
+            "bearing_before": 109,
+            "bearing_after": 117,
+            "time": 178.628,
+            "length": 4.157,
+            "cost": 199.565,
+            "begin_shape_index": 269,
+            "end_shape_index": 323,
+            "highway": true,
+            "sign": {
+              "exit_branch_elements": [{ "text": "2 South" }, { "text": "Deerfoot Trail" }],
+              "exit_toward_elements": [{ "text": "City Centre" }]
+            },
+            "travel_mode": "drive",
+            "travel_type": "car",
+            "lanes": [{ "directions": 2 }, { "directions": 34, "active": 32 }]
+          },
+          {
+            "type": 20,
+            "instruction": "Take exit 266 toward Airport Trail/96 Avenue North/Calgary International Airport.",
+            "verbal_transition_alert_instruction": "Take exit 266.",
+            "verbal_pre_transition_instruction": "Take exit 266 toward Airport Trail, 96 Avenue North.",
+            "bearing_before": 216,
+            "bearing_after": 232,
+            "time": 42.61,
+            "length": 0.671,
+            "cost": 44.72,
+            "begin_shape_index": 323,
+            "end_shape_index": 336,
+            "sign": {
+              "exit_number_elements": [{ "text": "266" }],
+              "exit_toward_elements": [
+                { "text": "Airport Trail" },
+                { "text": "96 Avenue North" },
+                { "text": "Calgary International Airport" }
+              ]
+            },
+            "travel_mode": "drive",
+            "travel_type": "car",
+            "lanes": [
+              { "directions": 2 },
+              { "directions": 2 },
+              { "directions": 2 },
+              { "directions": 32, "active": 32 }
+            ]
+          },
+          {
+            "type": 24,
+            "instruction": "Keep left to take Airport Trail.",
+            "verbal_transition_alert_instruction": "Keep left to take Airport Trail.",
+            "verbal_pre_transition_instruction": "Keep left to take Airport Trail. Then Turn left onto Airport Trail NE.",
+            "bearing_before": 235,
+            "bearing_after": 223,
+            "time": 12.449,
+            "length": 0.16,
+            "cost": 30.471,
+            "begin_shape_index": 336,
+            "end_shape_index": 341,
+            "sign": { "exit_branch_elements": [{ "text": "Airport Trail" }] },
+            "verbal_multi_cue": true,
+            "travel_mode": "drive",
+            "travel_type": "car",
+            "lanes": [
+              { "directions": 2, "active": 2 },
+              { "directions": 2, "valid": 2 },
+              { "directions": 32 }
+            ]
+          },
+          {
+            "type": 15,
+            "instruction": "Turn left onto Airport Trail NE.",
+            "verbal_transition_alert_instruction": "Turn left onto Airport Trail NE.",
+            "verbal_succinct_transition_instruction": "Turn left.",
+            "verbal_pre_transition_instruction": "Turn left onto Airport Trail NE.",
+            "verbal_post_transition_instruction": "Continue for 2 kilometers.",
+            "street_names": ["Airport Trail NE"],
+            "bearing_before": 195,
+            "bearing_after": 104,
+            "time": 112.962,
+            "length": 2.19,
+            "cost": 130.874,
+            "begin_shape_index": 341,
+            "end_shape_index": 362,
+            "highway": true,
+            "travel_mode": "drive",
+            "travel_type": "car"
+          },
+          {
+            "type": 20,
+            "instruction": "Take the Barlow Trail exit toward Calgary International Airport.",
+            "verbal_transition_alert_instruction": "Take the Barlow Trail exit.",
+            "verbal_pre_transition_instruction": "Take the Barlow Trail exit toward Calgary International Airport.",
+            "bearing_before": 90,
+            "bearing_after": 94,
+            "time": 27.833,
+            "length": 0.291,
+            "cost": 29.215,
+            "begin_shape_index": 362,
+            "end_shape_index": 368,
+            "sign": {
+              "exit_branch_elements": [{ "text": "Barlow Trail" }],
+              "exit_toward_elements": [
+                { "text": "Calgary International Airport", "consecutive_count": 1 }
+              ]
+            },
+            "travel_mode": "drive",
+            "travel_type": "car",
+            "lanes": [
+              { "directions": 2 },
+              { "directions": 2 },
+              { "directions": 2 },
+              { "directions": 32, "active": 32 }
+            ]
+          },
+          {
+            "type": 23,
+            "instruction": "Keep right to take Barlow Trail NE toward Calgary International Airport.",
+            "verbal_transition_alert_instruction": "Keep right to take Barlow Trail NE.",
+            "verbal_pre_transition_instruction": "Keep right to take Barlow Trail NE toward Calgary International Airport.",
+            "street_names": ["Barlow Trail NE"],
+            "bearing_before": 128,
+            "bearing_after": 147,
+            "time": 105.698,
+            "length": 1.133,
+            "cost": 138.331,
+            "begin_shape_index": 368,
+            "end_shape_index": 399,
+            "sign": {
+              "exit_toward_elements": [
+                { "text": "Calgary International Airport", "consecutive_count": 1 },
+                { "text": "Barlow Trail South" }
+              ]
+            },
+            "travel_mode": "drive",
+            "travel_type": "car",
+            "lanes": [{ "directions": 16 }, { "directions": 2, "active": 2 }]
+          },
+          {
+            "type": 24,
+            "instruction": "Keep left toward Departures/Rental Car Return/Hotels/Départs.",
+            "verbal_transition_alert_instruction": "Keep left toward Departures.",
+            "verbal_pre_transition_instruction": "Keep left toward Departures, Rental Car Return.",
+            "verbal_post_transition_instruction": "Continue for 400 meters.",
+            "street_names": ["Airport Road NE"],
+            "bearing_before": 272,
+            "bearing_after": 265,
+            "time": 33.826,
+            "length": 0.42,
+            "cost": 37.041,
+            "begin_shape_index": 399,
+            "end_shape_index": 430,
+            "sign": {},
+            "travel_mode": "drive",
+            "travel_type": "car"
+          },
+          {
+            "type": 4,
+            "instruction": "You have arrived at your destination.",
+            "verbal_transition_alert_instruction": "You will arrive at your destination.",
+            "verbal_pre_transition_instruction": "You have arrived at your destination.",
+            "bearing_before": 150,
+            "time": 0.0,
+            "length": 0.0,
+            "cost": 0.0,
+            "begin_shape_index": 430,
+            "end_shape_index": 430,
+            "travel_mode": "drive",
+            "travel_type": "car",
+            "lanes": [{ "directions": 2 }, { "directions": 2 }, { "directions": 2 }]
+          }
+        ],
+        "summary": {
+          "level_changes": [[412, 1.0]],
+          "has_time_restrictions": false,
+          "has_toll": false,
+          "has_highway": true,
+          "has_ferry": false,
+          "min_lat": 51.131555,
+          "min_lon": -114.150904,
+          "max_lat": 51.175782,
+          "max_lon": -114.000583,
+          "time": 1585.591,
+          "length": 23.653,
+          "cost": 1999.429
+        },
+        "shape": "s~~p`Bn~evxERoA@qBsFmm@{@qIaByEmBiDaC_BsHax@Ae@CwEj@aRpBs_@dBcKfBoHvAeDjBaCtAiAvA_AjPgGpCeAjBcBdBoCdOq_@nAqBdAo@`AOtBNrCn@bARfZfJhDZjD[~C{@xNoFn@UbCs@vF{@jGs@lCYFmb@zCw]dLwe@dZc}@hBqF|]meAtU}m@frA}lBfF{IvEeIvB{EjBeF`I{TvHs^rBuOd@sEf@eFzC}e@|Bsk@VuGJyJ^c`@mBqhBGwF@wFb@mZpDiYjDcN`BsGnAkFrLyf@tKqYhImN`EmDzCkCjEiBxCmA|NFnNtJdAt@nB|AtAdAjW|Rrl@jh@bB|AhDtCzGnCjFdAhIR~KaApEuA~H_DdOiHjCuAxEcCuAgJq@iFwBmMuM__AgJcl@mK_m@_Q_{@gNit@_DmPca@szBgIwScJ}^kE_Ry@kD_AqBy@_A_DqDeGpJ}RxYkl@bjAyh@b{AuI|\\iEpTyQnz@iSv_As`AxcEmE`SwVfeAoIrYcHbTgPjd@aDdIcBtDcD|IgB`FuC`IuFdOyXvh@wKnKcFpGoGhHaKxLwHhJ{MvLyNrIiGfDuC~AsHvCcInBqGl@}FD_GQ}FgAkHkBwIsFaGiFwEeHcG{K_DuIyBeJqBkNuA}NkAgSy@oZeDqoAw@kn@eA}l@mAg_@mC_|@mDqw@oJo_ByDiQiQoxBcO_rAoM_bAgLox@ct@kvDirAezEe|@}|Bcy@ocB_c@gw@_PkXiU}]e\\ig@ySiYkOwSue@_l@oPoRi\\w^oMsMs]kZ{a@c^uc@q]im@_a@ux@{f@ee@yX{a@mV__@cUg_@}VqWgScNuKeUgSqQeQ}RgTiWiZyOgSoPgUuGqIsz@uvAoRo^gi@wmAc\\q~@_R}j@eHaWoQcs@mQyy@qQ{_AcP_eA{F{c@_E}^sHuv@kFgt@_Csa@iFioA{Acr@Yy[Ya^Ekq@f@o~@h@k]pB_m@rLmfELcHdOc`F`Hk|BdG}mB~Ail@nDyiAxAse@|C}bA~TamHd@aYZq`@\\wrCgFucCoGmrAiJuqAi_@}wDid@wfEcIq|@aQqqBcLmaBwHewA{DcoAoCsaCw@izMg@c_AaA_iBkCy|BmJu`Le@opBZ}nCHy{@R_qAtHenCvA{oA^}]h@{R|Ao^l@oTdAgT~AiTrA}RrCyY~CwVnN}n@zFiUnIq\\fPkh@jMc\\fOu_@`M{YxO{_@tLaZjKkVfJeR~GqLdMaQhH_I`H_HfJeHlIaGxIaDzGmC`LeD`JwB`QcBpJW~g@xAvdDvQpO~DfTjH`QpFbL`FzUnKdO`IxMzG`OrI|QjMzSnPpUdTnS~SrQjRfWdZhM~PfLzQrJvNhu@loA`M`UhaCvkEfKjRhkCfvElwFl{Jti@|_AtyCllFlEnHtzA~eClmAf{ArZl_@tFvNjdB|wBhNdR|MvWdKvZhLfi@vLjy@rSpjAtDrTzBdKdEtPvCzJvD|KzQd[~NlR~U`OxDfB`KfDh_@qiE~RitB~XukDbH}v@xHky@bHy|@lF}p@vIslAXiJ|@{XdBwg@nAcf@bAcn@e@olHAaeBAw{@?{gAAo~@@{Ku@gkEGe|CxEwuCfBei@nBkXhAwHxDkNjDqH~}@y_Ab_@c]p}@op@fe@eTjEqAbFoAjEm@lHi@jGUnLOzTpApEp@~Cl@rCx@vAn@xAdA`AxA|@nBz@pC|@dD^~CVjDJdFLvK^|c@C~s@ArkAA|nAA|dACbbAq@teAf@lVHfo@FdFZjFf@dE`AlFtAvEtAzCvBjDrC~C`D|BdIjE~HtDdBx@pBv@vBf@pC\\jIDvEBpJFtJDbFEnES`Ee@vEgAjEuAfFmBlHmDxFkEzDeDlBqB"
+      }
+    ],
+    "summary": {
+      "has_time_restrictions": false,
+      "has_toll": false,
+      "has_highway": true,
+      "has_ferry": false,
+      "min_lat": 51.131555,
+      "min_lon": -114.150904,
+      "max_lat": 51.175782,
+      "max_lon": -114.000583,
+      "time": 1585.591,
+      "length": 23.653,
+      "cost": 1999.429
+    },
+    "status_message": "Found route between points",
+    "status": 0,
+    "units": "kilometers",
+    "language": "en-US"
+  },
+  "alternates": [
+    {
+      "trip": {
+        "locations": [
+          {
+            "type": "break",
+            "lat": 51.1506,
+            "lon": -114.1512,
+            "side_of_street": "right",
+            "original_index": 0
+          },
+          { "type": "break", "lat": 51.13157, "lon": -114.01055, "original_index": 1 }
+        ],
+        "legs": [
+          {
+            "maneuvers": [
+              {
+                "type": 2,
+                "instruction": "Drive east.",
+                "verbal_succinct_transition_instruction": "Drive east.",
+                "verbal_pre_transition_instruction": "Drive east.",
+                "verbal_post_transition_instruction": "Continue for 600 meters.",
+                "bearing_after": 87,
+                "time": 206.408,
+                "length": 0.572,
+                "cost": 236.779,
+                "begin_shape_index": 0,
+                "end_shape_index": 39,
+                "travel_mode": "drive",
+                "travel_type": "car"
+              },
+              {
+                "type": 15,
+                "instruction": "Turn left onto Hamptons Drive NW.",
+                "verbal_transition_alert_instruction": "Turn left onto Hamptons Drive NW.",
+                "verbal_succinct_transition_instruction": "Turn left.",
+                "verbal_pre_transition_instruction": "Turn left onto Hamptons Drive NW.",
+                "verbal_post_transition_instruction": "Continue for 1.5 kilometers.",
+                "street_names": ["Hamptons Drive NW"],
+                "bearing_before": 173,
+                "bearing_after": 91,
+                "time": 188.968,
+                "length": 1.671,
+                "cost": 286.577,
+                "begin_shape_index": 39,
+                "end_shape_index": 94,
+                "travel_mode": "drive",
+                "travel_type": "car"
+              },
+              {
+                "type": 15,
+                "instruction": "Turn left onto Country Hills Boulevard NW.",
+                "verbal_transition_alert_instruction": "Turn left onto Country Hills Boulevard NW.",
+                "verbal_succinct_transition_instruction": "Turn left.",
+                "verbal_pre_transition_instruction": "Turn left onto Country Hills Boulevard NW.",
+                "verbal_post_transition_instruction": "Continue for 4 kilometers.",
+                "street_names": ["Country Hills Boulevard NW"],
+                "bearing_before": 159,
+                "bearing_after": 71,
+                "time": 410.975,
+                "length": 3.946,
+                "cost": 560.556,
+                "begin_shape_index": 94,
+                "end_shape_index": 163,
+                "travel_mode": "drive",
+                "travel_type": "car"
+              },
+              {
+                "type": 10,
+                "instruction": "Turn right onto Country Hills Drive NW.",
+                "verbal_transition_alert_instruction": "Turn right onto Country Hills Drive NW.",
+                "verbal_succinct_transition_instruction": "Turn right.",
+                "verbal_pre_transition_instruction": "Turn right onto Country Hills Drive NW.",
+                "verbal_post_transition_instruction": "Continue for 500 meters.",
+                "street_names": ["Country Hills Drive NW"],
+                "bearing_before": 73,
+                "bearing_after": 163,
+                "time": 84.945,
+                "length": 0.506,
+                "cost": 140.43,
+                "begin_shape_index": 163,
+                "end_shape_index": 187,
+                "travel_mode": "drive",
+                "travel_type": "car"
+              },
+              {
+                "type": 10,
+                "instruction": "Turn right onto Country Hills Road NW.",
+                "verbal_transition_alert_instruction": "Turn right onto Country Hills Road NW.",
+                "verbal_succinct_transition_instruction": "Turn right.",
+                "verbal_pre_transition_instruction": "Turn right onto Country Hills Road NW.",
+                "verbal_post_transition_instruction": "Continue for 5 kilometers.",
+                "street_names": ["Country Hills Road NW"],
+                "bearing_before": 68,
+                "bearing_after": 186,
+                "time": 453.968,
+                "length": 4.881,
+                "cost": 657.671,
+                "begin_shape_index": 187,
+                "end_shape_index": 284,
+                "highway": true,
+                "travel_mode": "drive",
+                "travel_type": "car",
+                "lanes": [{ "directions": 6 }, { "directions": 64, "active": 64 }]
+              },
+              {
+                "type": 20,
+                "instruction": "Take the Barlow Trail exit toward Calgary International Airport.",
+                "verbal_transition_alert_instruction": "Take the Barlow Trail exit.",
+                "verbal_pre_transition_instruction": "Take the Barlow Trail exit toward Calgary International Airport.",
+                "bearing_before": 90,
+                "bearing_after": 94,
+                "time": 27.833,
+                "length": 0.291,
+                "cost": 29.215,
+                "begin_shape_index": 284,
+                "end_shape_index": 290,
+                "sign": {
+                  "exit_branch_elements": [{ "text": "Barlow Trail" }],
+                  "exit_toward_elements": [
+                    { "text": "Calgary International Airport", "consecutive_count": 1 }
+                  ]
+                },
+                "travel_mode": "drive",
+                "travel_type": "car",
+                "lanes": [
+                  { "directions": 2 },
+                  { "directions": 2 },
+                  { "directions": 2 },
+                  { "directions": 32, "active": 32 }
+                ]
+              },
+              {
+                "type": 23,
+                "instruction": "Keep right to take Barlow Trail NE toward Calgary International Airport.",
+                "verbal_transition_alert_instruction": "Keep right to take Barlow Trail NE.",
+                "verbal_pre_transition_instruction": "Keep right to take Barlow Trail NE toward Calgary International Airport.",
+                "street_names": ["Barlow Trail NE"],
+                "bearing_before": 128,
+                "bearing_after": 147,
+                "time": 105.698,
+                "length": 1.133,
+                "cost": 138.331,
+                "begin_shape_index": 290,
+                "end_shape_index": 321,
+                "sign": {
+                  "exit_toward_elements": [
+                    { "text": "Calgary International Airport", "consecutive_count": 1 },
+                    { "text": "Barlow Trail South" }
+                  ]
+                },
+                "travel_mode": "drive",
+                "travel_type": "car",
+                "lanes": [{ "directions": 16 }, { "directions": 2, "active": 2 }]
+              },
+              {
+                "type": 24,
+                "instruction": "Keep left toward Departures/Rental Car Return/Hotels/Départs.",
+                "verbal_transition_alert_instruction": "Keep left toward Departures.",
+                "verbal_pre_transition_instruction": "Keep left toward Departures, Rental Car Return.",
+                "verbal_post_transition_instruction": "Continue for 400 meters.",
+                "street_names": ["Airport Road NE"],
+                "bearing_before": 272,
+                "bearing_after": 265,
+                "time": 33.826,
+                "length": 0.42,
+                "cost": 37.041,
+                "begin_shape_index": 321,
+                "end_shape_index": 352,
+                "sign": {},
+                "travel_mode": "drive",
+                "travel_type": "car"
+              },
+              {
+                "type": 4,
+                "instruction": "You have arrived at your destination.",
+                "verbal_transition_alert_instruction": "You will arrive at your destination.",
+                "verbal_pre_transition_instruction": "You have arrived at your destination.",
+                "bearing_before": 150,
+                "time": 0.0,
+                "length": 0.0,
+                "cost": 0.0,
+                "begin_shape_index": 352,
+                "end_shape_index": 352,
+                "travel_mode": "drive",
+                "travel_type": "car",
+                "lanes": [{ "directions": 2 }, { "directions": 2 }, { "directions": 2 }]
+              }
+            ],
+            "summary": {
+              "level_changes": [[334, 1.0]],
+              "has_time_restrictions": false,
+              "has_toll": false,
+              "has_highway": true,
+              "has_ferry": false,
+              "min_lat": 51.131555,
+              "min_lon": -114.150904,
+              "max_lat": 51.151309,
+              "max_lon": -114.000583,
+              "time": 1512.624,
+              "length": 13.422,
+              "cost": 2086.604
+            },
+            "shape": "s~~p`Bn~evxERoA@qBsFmm@{@qIaByEmBiDaC_BsHax@Ae@CwEj@aRpBs_@dBcKfBoHvAeDjBaCtAiAvA_AjPgGpCeAjBcBdBoCdOq_@nAqBdAo@`AOtBNrCn@bARfZfJhDZjD[~C{@xNoFn@UbCs@vF{@jGs@lCYFmb@zCw]dLwe@dZc}@hBqF|]meAtU}m@frA}lBfF{IvEeIvB{EjBeF`I{TvHs^rBuOd@sEf@eFzC}e@|Bsk@VuGJyJ^c`@mBqhBGwF@wFb@mZpDiYjDcN`BsGnAkFrLyf@tKqYhImN`EmDzCkCjEiBxCmA|NFnNtJdAt@nB|AtAdAjW|Rrl@jh@bB|AhDtCzGnCjFdAhIR~KaApEuA~H_DdOiHjCuAxEcCuAgJq@iFwBmMuM__AgJcl@mK_m@_Q_{@gNit@_DmPca@szB}Oy~@mCuO}@uEyBeLa_A_xE}Goa@{Ew]cEa_@sAwMmDcd@eBe\\y@cVq@q]WuYCq]rA_bAvDc~@~Fyu@fIq}@fN_zAjPm`Bd@yEh@aEjAyIl@uEp]cfD~K_nA`Ce[hB__@nAm]t@_a@`@o`@s@y|AsA_KkEgr@qD}h@iGck@uMchAaS}tA_a@usCac@saDwQ_rA}Jur@qTszAcH}d@iByJ_Gw[oJqa@kO_j@iDsLeI{YsHeZgEoS{DsUkDmYwFoh@kHcq@_Igt@eF{d@}Eox@EkFAuB?s@x@eEx@sB`AgB~LsEbV_J|O_NdKuKlFaJlI{OzEqLdCcKdCqLxA}GvEcg@xBw^|@qOX{PQoOW{JcCuLdGj@RBzz@uHvFkAlHcDhHcHnGqIjHuLpCyHnZiz@jE}LtEsMbFwN~CqHtRgk@pAkDjAmDjF{MdAcDrBmGhKyc@rEkWZ_BtBqPhA{IdCgXjAwRdA_Zb@kU?iD@aLEuHGmIi@c\\WoZHw]HmINeCjDkt@PgEh@}HVwDbF_x@hEky@vDq|@NuEv@c]l@oXb@qR`B{lA^qm@[oh@kAmv@oCwj@uEug@qGkb@{Lqo@}P}}@wCuPyAwJ_CwOsJyv@sHqv@iD}i@eAwYyA}o@UwZf@sv@dBom@tCwm@|Bi`@`BkWjBqRnIi{@xLkpAvSywBh_@qiE~RitB~XukDbH}v@xHky@bHy|@lF}p@vIslAXiJ|@{XdBwg@nAcf@bAcn@e@olHAaeBAw{@?{gAAo~@@{Ku@gkEGe|CxEwuCfBei@nBkXhAwHxDkNjDqH~}@y_Ab_@c]p}@op@fe@eTjEqAbFoAjEm@lHi@jGUnLOzTpApEp@~Cl@rCx@vAn@xAdA`AxA|@nBz@pC|@dD^~CVjDJdFLvK^|c@C~s@ArkAA|nAA|dACbbAq@teAf@lVHfo@FdFZjFf@dE`AlFtAvEtAzCvBjDrC~C`D|BdIjE~HtDdBx@pBv@vBf@pC\\jIDvEBpJFtJDbFEnES`Ee@vEgAjEuAfFmBlHmDxFkEzDeDlBqB"
+          }
+        ],
+        "summary": {
+          "has_time_restrictions": false,
+          "has_toll": false,
+          "has_highway": true,
+          "has_ferry": false,
+          "min_lat": 51.131555,
+          "min_lon": -114.150904,
+          "max_lat": 51.151309,
+          "max_lon": -114.000583,
+          "time": 1512.624,
+          "length": 13.422,
+          "cost": 2086.604
+        },
+        "status_message": "Found route between points",
+        "status": 0,
+        "units": "kilometers",
+        "language": "en-US"
+      }
+    }
+  ]
+}

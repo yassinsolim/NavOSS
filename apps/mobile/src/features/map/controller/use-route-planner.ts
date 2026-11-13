@@ -3,7 +3,6 @@ import {
   type Coordinate,
   type RouteAlternativeV2,
   type RoutePreferences,
-  type RouteResponseV2,
   type SearchResult,
   type ServerConfig,
 } from '@navoss/contracts';
@@ -14,9 +13,18 @@ import {
   setNavigationRoutePreferences,
 } from '@/features/navigation/native-navigation';
 import type { RouteRequestOrigin } from '@/features/navigation/route-origin';
-import { IDLE_ROUTE, type RouteUiState } from '@/features/navigation/route-ui-state';
+import {
+  IDLE_ROUTE,
+  type RouteSource,
+  type RouteUiState,
+} from '@/features/navigation/route-ui-state';
+import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
+import {
+  fetchRoutesWithOfflineFallback,
+  offlineRegionCovers,
+} from '@/features/offline/offline-maps';
 import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
-import { fetchRoutes, NavOssApiError } from '@/lib/api';
+import { NavOssApiError } from '@/lib/api';
 
 export interface RoutePlanner {
   /** Aborts an in-flight route request without changing the route state. */
@@ -32,11 +40,11 @@ export interface RoutePlanner {
     waypoints?: SearchResult[],
   ) => Promise<void>;
   routePreferences: RoutePreferences;
-  routeSource: RouteResponseV2['source'] | undefined;
+  routeSource: RouteSource | undefined;
   routeState: RouteUiState;
   /** Adopts preferences changed elsewhere (CarPlay) without writing them back to native. */
   setRoutePreferences: (preferences: RoutePreferences) => void;
-  setRouteSource: (source: RouteResponseV2['source'] | undefined) => void;
+  setRouteSource: (source: RouteSource | undefined) => void;
   setRouteState: Dispatch<SetStateAction<RouteUiState>>;
   setVehicleStyle: (style: VehicleStyle) => void;
   /** Persists changed avoidances to the navigation core, which shares them with CarPlay. */
@@ -68,7 +76,7 @@ export function useRoutePlanner({
   const [routePreferences, setRoutePreferences] = useState<RoutePreferences>(() =>
     getNavigationRoutePreferences(),
   );
-  const [routeSource, setRouteSource] = useState<RouteResponseV2['source']>();
+  const [routeSource, setRouteSource] = useState<RouteSource>();
   const [vehicleStyle, setVehicleStyle] = useState<VehicleStyle>('arrow');
 
   useEffect(
@@ -103,14 +111,16 @@ export function useRoutePlanner({
           ? await getCurrentRouteOrigin(controller.signal)
           : { origin: previewOrigin };
       if (routeOrigin === undefined || superseded()) return;
-      if (
-        previewOrigin === undefined &&
-        [
-          routeOrigin.origin,
-          ...waypoints.map((waypoint) => waypoint.center),
-          destination.center,
-        ].some((coordinate) => !isCoordinateServed(serverConfig?.coverage, coordinate))
-      ) {
+      const places = [
+        routeOrigin.origin,
+        ...waypoints.map((waypoint) => waypoint.center),
+        destination.center,
+      ];
+      const servedOnline = places.every((coordinate) =>
+        isCoordinateServed(serverConfig?.coverage, coordinate),
+      );
+      // An installed offline region authorises a trip the server does not declare coverage for.
+      if (previewOrigin === undefined && !servedOnline && !offlineRegionCovers(places)) {
         setRouteState({
           ...plan,
           message: `Directions cover ${serverConfig?.coverage.displayName ?? 'the NavOSS service area'}. This route includes a place outside that area.`,
@@ -119,7 +129,8 @@ export function useRoutePlanner({
         return;
       }
 
-      const response = await fetchRoutes(
+      // The service first; an installed offline region answers when it cannot be reached.
+      const response = await fetchRoutesWithOfflineFallback(
         {
           alternatives: 2,
           destination: destination.center,
@@ -129,7 +140,10 @@ export function useRoutePlanner({
             ? {}
             : { waypoints: waypoints.map((waypoint) => waypoint.center) }),
         },
+        destination,
+        waypoints,
         {
+          ...(servedOnline ? {} : { servedOnline: false }),
           ...(serverConfig === undefined ? {} : { routesV2: serverConfig.capabilities.routesV2 }),
           signal: controller.signal,
         },
@@ -141,7 +155,7 @@ export function useRoutePlanner({
         return;
       }
 
-      onServiceReachable();
+      if (response.source.id !== OFFLINE_ROUTE_SOURCE.id) onServiceReachable();
       setRouteSource(response.source);
       setRouteState({
         ...plan,

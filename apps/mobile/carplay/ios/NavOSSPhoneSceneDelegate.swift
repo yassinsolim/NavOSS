@@ -28,7 +28,7 @@ final class NavOSSPhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
         "real-vancouver-lanes-night",
         "preview-alternatives", "guidance-lanes-then", "guidance-roundabout", "reroute-proposal",
         "arrival", "end", "dashboard",
-        "audio-release", "idle-live-location",
+        "audio-release", "idle-live-location", "offline-preview",
       ]
       .contains(scenario)
     {
