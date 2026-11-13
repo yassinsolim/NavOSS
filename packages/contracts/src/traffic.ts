@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
 
 import { IsoDateTimeSchema, LatitudeSchema, LongitudeSchema } from './common.js';
+import { CommunityAssertedRequestSchema } from './community-report.js';
 
 export const COMMUNITY_TRAFFIC_SOURCE_ID = 'navoss-community';
 export const COMMUNITY_TRAFFIC_ATTRIBUTION = 'Traffic from opted-in NavOSS drivers';
@@ -31,6 +32,30 @@ export const CommunityTrafficSourceSchema = z
   })
   .strict();
 
+/**
+ * Opaque, short-lived upload credential issued to an attested installation by
+ * `POST /v2/traffic/credentials`. The app sends it back unchanged with every batch.
+ */
+export const TrafficCredentialSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9_-]+$/)
+  .min(32)
+  .max(256);
+
+/** One fresh App Attest assertion over the `traffic-credential` operation. */
+export const TrafficCredentialRequestSchema = CommunityAssertedRequestSchema;
+
+export type TrafficCredentialRequest = z.infer<typeof TrafficCredentialRequestSchema>;
+
+export const TrafficCredentialResponseSchema = z
+  .object({
+    credential: TrafficCredentialSchema,
+    expiresAt: IsoDateTimeSchema,
+  })
+  .strict();
+
+export type TrafficCredentialResponse = z.infer<typeof TrafficCredentialResponseSchema>;
+
 /** `[longitude, latitude, whole seconds since the first point]`. */
 export const TrafficProbePointSchema = z.tuple([
   LongitudeSchema,
@@ -43,6 +68,7 @@ export const TrafficProbeBatchRequestSchema = z
     capturedAt: IsoDateTimeSchema.describe(
       'UTC time of the first point, rounded down to the whole minute',
     ),
+    credential: TrafficCredentialSchema,
     points: z
       .array(TrafficProbePointSchema)
       .min(TRAFFIC_PROBE_LIMITS.minPoints)
@@ -150,23 +176,27 @@ export type TrafficFlowQuery = z.infer<typeof TrafficFlowQuerySchema>;
 
 const FlowPositionSchema = z.tuple([LongitudeSchema, LatitudeSchema]);
 
+/**
+ * One published road edge. It carries no contributor or sample count: every feature is backed by
+ * at least `coverage.minimumContributors` attested installations, and no finer number is released.
+ */
 export const TrafficFlowFeatureSchema = z
   .object({
     geometry: z
       .object({
-        coordinates: z.array(z.array(FlowPositionSchema).min(2)).min(1),
-        type: z.literal('MultiLineString'),
+        coordinates: z.array(FlowPositionSchema).min(2),
+        type: z.literal('LineString'),
       })
       .strict(),
-    id: z.string().min(1),
+    id: z.string().regex(/^w[0-9]+[fb]-[0-9a-f]{12}$/),
     properties: z
       .object({
-        ageSeconds: z.number().int().nonnegative(),
         congestion: TrafficCongestionLevelSchema,
         freeFlowKph: z.number().int().positive().max(200),
+        /** End of the publication epoch that released this value; always on the epoch grid. */
         observedAt: IsoDateTimeSchema,
-        sampleCount: z.number().int().positive(),
-        speedKph: z.number().int().nonnegative().max(200),
+        /** Rounded to 5 km/h. */
+        speedKph: z.number().int().nonnegative().max(200).multipleOf(5),
       })
       .strict(),
     type: z.literal('Feature'),
@@ -179,31 +209,28 @@ export const TrafficFlowResponseSchema = z
   .object({
     coverage: z
       .object({
-        minimumContributors: z.number().int().min(2),
-        publishedSegments: z.number().int().nonnegative(),
+        minimumContributors: z.number().int().min(3),
         truncated: z.boolean(),
-        windowSeconds: z.number().int().positive(),
       })
       .strict(),
     features: z.array(TrafficFlowFeatureSchema),
+    /** Start of the publication epoch this snapshot belongs to; the body is constant within it. */
     generatedAt: IsoDateTimeSchema,
     source: CommunityTrafficSourceSchema,
     type: z.literal('FeatureCollection'),
+    /** The next epoch boundary; nothing changes before it, so do not poll sooner. */
+    validUntil: IsoDateTimeSchema,
   })
   .strict();
 
 export type TrafficFlowResponse = z.infer<typeof TrafficFlowResponseSchema>;
 
+/**
+ * Public status: the mode and the rules, never a count of segments, samples or contributors.
+ * Those totals would let a caller probe whether an unpublished road has been driven.
+ */
 export const TrafficStatusResponseSchema = z
   .object({
-    coverage: z
-      .object({
-        observedSegments: z.number().int().nonnegative(),
-        publishedSegments: z.number().int().nonnegative(),
-        samples: z.number().int().nonnegative(),
-      })
-      .strict()
-      .optional(),
     generatedAt: IsoDateTimeSchema,
     mode: z.enum(['off', 'collecting', 'live']),
     probes: z
@@ -211,38 +238,39 @@ export const TrafficStatusResponseSchema = z
         accepting: z.boolean(),
         batchTargetMeters: z.number().int().positive(),
         batchTargetSeconds: z.number().int().positive(),
-        endpoint: z.literal('/v1/traffic/probes'),
+        /** Path distance the server removes from both ends of every batch before matching. */
+        batchTrimMeters: z.number().int().min(100),
+        credentialEndpoint: z.literal('/v2/traffic/credentials'),
+        endpoint: z.literal('/v2/traffic/probes'),
         maxBatchSeconds: z.number().int().positive(),
         maxGapSeconds: z.number().int().positive(),
         maxPoints: z.number().int().positive(),
         minPoints: z.number().int().positive(),
         sampleIntervalSeconds: z.number().int().positive(),
         schemaVersion: z.literal(TRAFFIC_PROBE_LIMITS.schemaVersion),
-        tripEndTrimMeters: z.number().int().positive(),
+        /** Distance the app must exclude at both ends of every trip; the server cannot check it. */
+        tripEndTrimMeters: z.number().int().min(400),
       })
       .strict(),
     publication: z
       .object({
-        bucketSeconds: z.number().int().positive(),
-        minimumContributors: z.number().int().min(2),
-        windowSeconds: z.number().int().positive(),
+        /** Longest time an unpublished observation is held (in memory) before it is dropped. */
+        cohortSeconds: z.number().int().positive(),
+        /** Flow changes only on this grid. */
+        epochSeconds: z.number().int().min(300),
+        minimumContributors: z.number().int().min(3),
+        /** How long a published value stays up unless a new cohort replaces it. */
+        releaseSeconds: z.number().int().positive(),
       })
       .strict(),
     source: CommunityTrafficSourceSchema,
   })
   .strict()
   .superRefine((status, context) => {
-    if ((status.mode === 'live') !== (status.coverage !== undefined)) {
+    if (status.probes.accepting && status.mode === 'off') {
       context.addIssue({
         code: 'custom',
-        message: 'coverage is reported exactly when traffic is live',
-        path: ['coverage'],
-      });
-    }
-    if (status.probes.accepting !== (status.mode !== 'off')) {
-      context.addIssue({
-        code: 'custom',
-        message: 'probes are accepted exactly when the pipeline is collecting or live',
+        message: 'probes are never accepted while the pipeline is off',
         path: ['probes', 'accepting'],
       });
     }

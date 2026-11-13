@@ -4,6 +4,7 @@ import {
   parseTrafficFlowBounds,
   RouteTrafficAnnotationSchema,
   snapTrafficFlowBounds,
+  TrafficFlowFeatureSchema,
   TrafficProbeBatchRequestSchema,
   TrafficStatusResponseSchema,
 } from '../src/index.js';
@@ -11,10 +12,13 @@ import {
 function batch(offsets: number[], capturedAt = '2026-11-12T18:00:00Z'): unknown {
   return {
     capturedAt,
+    credential: CREDENTIAL,
     points: offsets.map((offset, index) => [-114.06 + index * 0.0002, 51.05, offset]),
     schemaVersion: 1,
   };
 }
+
+const CREDENTIAL = 'a'.repeat(64);
 
 const TEN_OFFSETS = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18];
 
@@ -40,6 +44,19 @@ describe('TrafficProbeBatchRequestSchema', () => {
       TrafficProbeBatchRequestSchema.safeParse({
         ...(batch(TEN_OFFSETS) as object),
         installationId: 'a',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('requires an upload credential', () => {
+    const withoutCredential = Object.fromEntries(
+      Object.entries(batch(TEN_OFFSETS) as object).filter(([name]) => name !== 'credential'),
+    );
+    expect(TrafficProbeBatchRequestSchema.safeParse(withoutCredential).success).toBe(false);
+    expect(
+      TrafficProbeBatchRequestSchema.safeParse({
+        ...withoutCredential,
+        credential: 'not base64url!',
       }).success,
     ).toBe(false);
   });
@@ -124,7 +141,9 @@ describe('TrafficStatusResponseSchema', () => {
       accepting: false,
       batchTargetMeters: 600,
       batchTargetSeconds: 60,
-      endpoint: '/v1/traffic/probes',
+      batchTrimMeters: 100,
+      credentialEndpoint: '/v2/traffic/credentials',
+      endpoint: '/v2/traffic/probes',
       maxBatchSeconds: 300,
       maxGapSeconds: 15,
       maxPoints: 240,
@@ -133,7 +152,12 @@ describe('TrafficStatusResponseSchema', () => {
       schemaVersion: 1,
       tripEndTrimMeters: 400,
     },
-    publication: { bucketSeconds: 300, minimumContributors: 3, windowSeconds: 1800 },
+    publication: {
+      cohortSeconds: 900,
+      epochSeconds: 300,
+      minimumContributors: 3,
+      releaseSeconds: 900,
+    },
     source: { attribution: 'Traffic from opted-in NavOSS drivers', id: 'navoss-community' },
   };
 
@@ -147,11 +171,62 @@ describe('TrafficStatusResponseSchema', () => {
     ).toBe(false);
   });
 
-  it('cannot publish a single-contributor threshold', () => {
+  it('cannot advertise limits below the privacy floors', () => {
     expect(
       TrafficStatusResponseSchema.safeParse({
         ...status,
-        publication: { ...status.publication, minimumContributors: 1 },
+        publication: { ...status.publication, minimumContributors: 2 },
+      }).success,
+    ).toBe(false);
+    expect(
+      TrafficStatusResponseSchema.safeParse({
+        ...status,
+        probes: { ...status.probes, tripEndTrimMeters: 200 },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('has no place for segment, sample or contributor totals', () => {
+    expect(
+      TrafficStatusResponseSchema.safeParse({
+        ...status,
+        coverage: { observedSegments: 4, publishedSegments: 1, samples: 9 },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('TrafficFlowFeatureSchema', () => {
+  const feature = {
+    geometry: {
+      coordinates: [
+        [-114.06, 51.05],
+        [-114.061, 51.051],
+      ],
+      type: 'LineString',
+    },
+    id: 'w142596972b-0123456789ab',
+    properties: {
+      congestion: 'slow',
+      freeFlowKph: 50,
+      observedAt: '2026-11-12T18:00:00Z',
+      speedKph: 25,
+    },
+    type: 'Feature',
+  };
+
+  it('accepts a coarse speed and refuses exact speeds or sample counts', () => {
+    expect(TrafficFlowFeatureSchema.safeParse(feature).success).toBe(true);
+    expect(
+      TrafficFlowFeatureSchema.safeParse({
+        ...feature,
+        properties: { ...feature.properties, speedKph: 23 },
+      }).success,
+    ).toBe(false);
+    expect(
+      TrafficFlowFeatureSchema.safeParse({
+        ...feature,
+        properties: { ...feature.properties, sampleCount: 3 },
       }).success,
     ).toBe(false);
   });
