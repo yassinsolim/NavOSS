@@ -1062,12 +1062,14 @@ export function useMapController() {
       });
       return;
     }
+    setNearPrivateReport(undefined);
     setIsRoadReportVisible(true);
   };
 
+  // The near-home question is cleared when the sheet next opens, not here: changing the sheet's
+  // content while it animates away re-measures it and cancels the dismissal.
   const closeRoadReport = () => {
     setIsRoadReportVisible(false);
-    setNearPrivateReport(undefined);
   };
 
   /** The private draft: the only path before sharing existed, and the fallback after it. */
