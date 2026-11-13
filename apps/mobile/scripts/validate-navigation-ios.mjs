@@ -653,6 +653,19 @@ try {
         await installSimulatorApp();
       }
       await setLocationPrivacy('grant');
+      await run(
+        'xcrun',
+        ['simctl', 'launch', '--terminate-running-process', simulatorId, 'org.navoss.mobile'],
+        {
+          timeoutMs: 60_000,
+        },
+      );
+      await delay(5_000);
+      await runMaestroFlow(
+        resolve(rootDirectory, '.maestro/navigation-validation/accept-location-prompt.yaml'),
+        join(logsDirectory, 'accept-location-prompt.log'),
+        120_000,
+      );
       for (const [name, scenario, appearance] of [
         ['carplay-preview-light', 'preview', 'light'],
         ['carplay-preview-dark', 'preview', 'dark'],

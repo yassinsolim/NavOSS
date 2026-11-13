@@ -1,0 +1,10 @@
+appId: org.navoss.mobile
+---
+# `simctl privacy grant location` is not honoured by the iOS 26.5 simulator runtime: the
+# permission prompt still appears and covers every CarPlay capture. Answer it once; the answer
+# persists for the rest of the run.
+- runFlow:
+    when:
+      visible: 'Allow While Using App'
+    commands:
+      - tapOn: 'Allow While Using App'
