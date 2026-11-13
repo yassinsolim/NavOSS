@@ -654,6 +654,8 @@ export function TripSheet({
           label="End"
           onPress={onEnd}
           size="driving"
+          // The trip metrics give way at large text sizes; the End control never truncates.
+          style={styles.tripEnd}
           variant="danger"
         />
       </View>
@@ -1016,6 +1018,7 @@ const useStyles = createThemedStyles(({ colors }) =>
     },
     tripArrival: { ...typography.largeTitle, color: colors.text },
     tripDetails: { gap: space.lg, paddingHorizontal: space.md },
+    tripEnd: { flexShrink: 0 },
     tripMetrics: { flex: 1 },
     tripReveal: { flex: 1 },
     tripRemaining: { ...typography.headline, color: colors.textSecondary },
