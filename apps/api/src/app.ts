@@ -181,7 +181,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const driveBcEventProvider = options.driveBcEventProvider ?? createDriveBcRoadEventProvider();
   const driveBcTrafficCameraProvider =
     options.driveBcTrafficCameraProvider ?? createDriveBcTrafficCameraProvider();
-  const eventProvider = options.eventProvider ?? createCalgaryRoadEventProvider();
+  const eventProvider =
+    options.eventProvider ??
+    createCalgaryRoadEventProvider({
+      onFailure: (failure) => {
+        app.log.warn(failure, 'Calgary road-event feed failed validation or loading');
+      },
+    });
   const fixtures = options.searchFixtures ?? CALGARY_SEARCH_FIXTURES;
   const googlePlaceQueryBudget =
     options.googlePlaceQueryBudget ?? createConfiguredGooglePlaceQueryBudget({ clock });
