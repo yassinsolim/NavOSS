@@ -145,6 +145,46 @@ export function safetyFacilityFeatures(
   };
 }
 
+/**
+ * The items within `maxMeters` of a route. A route preview is drawn at city zoom, where every
+ * camera in the region would bury the line; only the ones the route actually passes matter.
+ */
+export function itemsNearRoute<T extends { coordinate: Coordinate }>(
+  items: readonly T[],
+  route: Pick<RouteAlternative, 'geometry'>,
+  maxMeters: number,
+): T[] {
+  const geometry = route.geometry;
+  if (geometry.length === 0) return [];
+  return items.filter(({ coordinate }) => {
+    const metresPerLongitude = 111_320 * Math.cos((coordinate.latitude * Math.PI) / 180);
+    const limitSquared = maxMeters ** 2;
+    let previousX = ((geometry[0]?.[0] ?? 0) - coordinate.longitude) * metresPerLongitude;
+    let previousY = ((geometry[0]?.[1] ?? 0) - coordinate.latitude) * 110_540;
+    if (previousX ** 2 + previousY ** 2 <= limitSquared) return true;
+    for (let index = 1; index < geometry.length; index += 1) {
+      const x = ((geometry[index]?.[0] ?? 0) - coordinate.longitude) * metresPerLongitude;
+      const y = ((geometry[index]?.[1] ?? 0) - coordinate.latitude) * 110_540;
+      const segmentX = x - previousX;
+      const segmentY = y - previousY;
+      const lengthSquared = segmentX ** 2 + segmentY ** 2;
+      const along =
+        lengthSquared === 0
+          ? 0
+          : Math.max(
+              0,
+              Math.min(1, -(previousX * segmentX + previousY * segmentY) / lengthSquared),
+            );
+      const nearestX = previousX + segmentX * along;
+      const nearestY = previousY + segmentY * along;
+      if (nearestX ** 2 + nearestY ** 2 <= limitSquared) return true;
+      previousX = x;
+      previousY = y;
+    }
+    return false;
+  });
+}
+
 /** The `id` property of the first rendered feature that carries one. */
 export function renderedFeatureId(
   features: readonly { properties?: Record<string, unknown> | null }[],

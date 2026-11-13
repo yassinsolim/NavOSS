@@ -88,6 +88,9 @@ describe('search source label', () => {
     expect(searchSourceLabel({ ...source, freshness: 'fresh', id: 'nominatim-self-hosted' })).toBe(
       'OpenStreetMap search',
     );
+    expect(
+      searchSourceLabel({ ...source, freshness: 'fresh', id: 'nominatim-self-hosted' }, true),
+    ).toBe('OpenStreetMap search · Some sources unavailable, results may be incomplete');
     expect(searchSourceLabel({ ...source, freshness: 'fresh', id: 'calgary-hybrid-search' })).toBe(
       'Calgary Open Data + OpenStreetMap',
     );

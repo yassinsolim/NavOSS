@@ -59,18 +59,23 @@ export function Chip({
           tintColor={selected ? colors.onPrimary : colors.primaryText}
         />
       )}
-      <Text numberOfLines={1} style={[styles.label, { color: foreground }]}>
+      <Text
+        maxFontSizeMultiplier={1.3}
+        numberOfLines={1}
+        style={[styles.label, { color: foreground }]}
+      >
         {label}
       </Text>
     </PressableScale>
   );
 }
 
-const useStyles = createThemedStyles(({ colors }) =>
+const useStyles = createThemedStyles(({ colors, scheme }) =>
   StyleSheet.create({
     chip: {
       alignItems: 'center',
-      backgroundColor: colors.surfaceSunken,
+      // Dark `surfaceSunken` is the page background, so a chip on a page would have no shape.
+      backgroundColor: scheme === 'dark' ? colors.surfaceRaised : colors.surfaceSunken,
       borderRadius: radius.pill,
       flexDirection: 'row',
       gap: space.sm - 2,

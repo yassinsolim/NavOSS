@@ -228,10 +228,15 @@ export function RoutePreviewSheet({
       />
       <View style={styles.summary}>
         <View style={styles.summaryCopy}>
-          <Text adjustsFontSizeToFit numberOfLines={1} style={styles.eta}>
+          <Text
+            maxFontSizeMultiplier={1.3}
+            adjustsFontSizeToFit
+            numberOfLines={1}
+            style={styles.eta}
+          >
             {formatDuration(selectedRoute.durationSeconds)}
           </Text>
-          <Text numberOfLines={1} style={styles.arrival}>
+          <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.arrival}>
             {formatDistance(selectedRoute.distanceMeters)} · arrive{' '}
             {formatArrivalTime(selectedRoute.durationSeconds)}
           </Text>

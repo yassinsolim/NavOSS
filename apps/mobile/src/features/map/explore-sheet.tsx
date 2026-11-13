@@ -66,6 +66,7 @@ export interface ExploreSheetProps {
   position: SharedValue<number>;
   query: string;
   results: SearchResult[];
+  resultsDegraded: boolean;
   searchSource: SearchSource | undefined;
   searchState: SearchState;
   selectedCategoryId: string | undefined;
@@ -102,6 +103,7 @@ export function ExploreSheet({
   position,
   query,
   results,
+  resultsDegraded,
   searchSource,
   searchState,
   selectedCategoryId,
@@ -312,7 +314,7 @@ export function ExploreSheet({
                   })}
                 </View>
               ))}
-            <Text style={styles.source}>{searchSourceLabel(searchSource)}</Text>
+            <Text style={styles.source}>{searchSourceLabel(searchSource, resultsDegraded)}</Text>
           </BottomSheetScrollView>
         </>
       ) : (

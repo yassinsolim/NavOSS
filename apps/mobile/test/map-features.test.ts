@@ -5,6 +5,7 @@ import {
   cameraDetailMessage,
   droppedPinResult,
   EMPTY_POINT_COLLECTION,
+  itemsNearRoute,
   mapAttributionLabel,
   renderedFeatureId,
   roadEventFeatures,
@@ -223,5 +224,43 @@ describe('overlay detail copy', () => {
         roadEventRegion: 'kelowna-bc',
       }),
     ).toBe('© OpenMapTiles · © OpenStreetMap · DriveBC · RCMP');
+  });
+});
+
+describe('items near a route', () => {
+  // A route running north along longitude -114.08 for about 2.2 km.
+  const route = {
+    geometry: [
+      [-114.08, 51.04],
+      [-114.08, 51.05],
+      [-114.08, 51.06],
+    ] as [number, number][],
+  };
+  const at = (id: string, latitude: number, longitude: number) => ({
+    coordinate: { latitude, longitude },
+    id,
+  });
+
+  it('keeps cameras the route passes and drops the rest of the city', () => {
+    const cameras = [
+      at('on-route', 51.045, -114.0801),
+      at('one-block-over', 51.045, -114.083),
+      at('past-the-end', 51.07, -114.08),
+      at('at-a-vertex', 51.05, -114.08),
+    ];
+    expect(itemsNearRoute(cameras, route, 60).map((camera) => camera.id)).toEqual([
+      'on-route',
+      'at-a-vertex',
+    ]);
+  });
+
+  it('measures to the line between vertices, not only to the vertices', () => {
+    const midSegment = at('mid', 51.055, -114.0804);
+    expect(itemsNearRoute([midSegment], route, 60)).toEqual([midSegment]);
+    expect(itemsNearRoute([midSegment], route, 10)).toEqual([]);
+  });
+
+  it('returns nothing for a route without geometry', () => {
+    expect(itemsNearRoute([at('a', 51.04, -114.08)], { geometry: [] }, 60)).toEqual([]);
   });
 });

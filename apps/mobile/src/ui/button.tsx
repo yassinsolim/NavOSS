@@ -89,6 +89,7 @@ export function Button({
         )
       )}
       <Text
+        maxFontSizeMultiplier={1.3}
         numberOfLines={1}
         style={[size === 'driving' ? styles.labelDriving : styles.label, { color: foreground }]}
       >

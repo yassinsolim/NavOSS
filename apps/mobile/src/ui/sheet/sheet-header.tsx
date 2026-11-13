@@ -30,15 +30,20 @@ export function SheetHeader({
     <View style={styles.header}>
       <View style={styles.copy}>
         {eyebrow !== undefined && (
-          <Text numberOfLines={1} style={styles.eyebrow}>
+          <Text maxFontSizeMultiplier={1.5} numberOfLines={1} style={styles.eyebrow}>
             {eyebrow}
           </Text>
         )}
-        <Text accessibilityRole="header" numberOfLines={titleLines} style={styles.title}>
+        <Text
+          maxFontSizeMultiplier={1.5}
+          accessibilityRole="header"
+          numberOfLines={titleLines}
+          style={styles.title}
+        >
           {title}
         </Text>
         {subtitle !== undefined && subtitle.length > 0 && (
-          <Text numberOfLines={2} style={styles.subtitle}>
+          <Text maxFontSizeMultiplier={1.5} numberOfLines={2} style={styles.subtitle}>
             {subtitle}
           </Text>
         )}
@@ -78,7 +83,7 @@ export function SectionTitle({ children, trailing }: { children: string; trailin
   const styles = useSectionStyles();
   return (
     <View style={styles.row}>
-      <Text accessibilityRole="header" style={styles.title}>
+      <Text maxFontSizeMultiplier={1.5} accessibilityRole="header" style={styles.title}>
         {children}
       </Text>
       {trailing}

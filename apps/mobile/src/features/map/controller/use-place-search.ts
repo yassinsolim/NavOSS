@@ -35,6 +35,8 @@ export interface PlaceSearch {
   query: string;
   /** Empties the result list and returns to the idle state. */
   resetResults: () => void;
+  /** The service answered, but one of its search sources did not. */
+  resultsDegraded: boolean;
   results: SearchResult[];
   run: (normalizedQuery: string, options?: RunPlaceSearchOptions) => AbortController;
   searchSource: SearchSource | undefined;
@@ -70,6 +72,7 @@ export function usePlaceSearch({
   const deferredQuery = useDeferredValue(query);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searchSource, setSearchSource] = useState<SearchSource>();
+  const [resultsDegraded, setResultsDegraded] = useState(false);
   const [searchState, setSearchState] = useState<SearchState>('idle');
   // The typed search the visible results answer; loading is announced only for a different query.
   const [settledSearch, setSettledSearch] = useState<SettledPlaceSearch>();
@@ -116,6 +119,7 @@ export function usePlaceSearch({
           onConnectionChange('online');
           setResults(rankedResults);
           setSearchSource(response.source);
+          setResultsDegraded(response.degraded);
           setSettledSearch(
             category === undefined
               ? { proximityKey: searchProximityKey(proximityOrigin), query: normalizedQuery }
@@ -203,6 +207,7 @@ export function usePlaceSearch({
       setSearchState('idle');
     },
     results,
+    resultsDegraded,
     run,
     searchSource,
     searchState,

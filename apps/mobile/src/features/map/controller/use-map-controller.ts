@@ -35,6 +35,7 @@ import { createLatestRequestGate } from '@/features/map/latest-request-gate';
 import {
   cameraDetailMessage,
   droppedPinResult,
+  itemsNearRoute,
   renderedFeatureId,
   ROAD_EVENT_LAYER_IDS,
   roadEventMessage,
@@ -126,6 +127,7 @@ import type { BottomSheetRef } from '@/ui/sheet/bottom-sheet';
 const CANADA_CENTER: [longitude: number, latitude: number] = [-106.3468, 56.1304];
 const CALGARY_TOWER_ROUTE_ORIGIN: Coordinate = { latitude: 51.04427, longitude: -114.06309 };
 const TAP_RADIUS = 18;
+const CAMERA_ROUTE_CORRIDOR_METERS = 60;
 const NOTICE_VISIBLE_MS = 5_000;
 
 /** Details of a tapped overlay feature, shown in the map-feature sheet. */
@@ -1149,6 +1151,20 @@ export function useMapController() {
           userHeading,
         )
       : undefined;
+  // While a route is being planned or previewed the map is at city zoom: draw only the cameras
+  // the selected route passes, so the line stays readable.
+  const planningRoute = routeState.type === 'preview' ? selectedRoute : undefined;
+  const hidesCameras = routeState.type === 'loading' || routeState.type === 'error';
+  const allSafetyCameras = overlays.safetyCameras;
+  const visibleSafetyCameras = useMemo(
+    () =>
+      hidesCameras
+        ? []
+        : planningRoute === undefined
+          ? allSafetyCameras
+          : itemsNearRoute(allSafetyCameras, planningRoute, CAMERA_ROUTE_CORRIDOR_METERS),
+    [allSafetyCameras, hidesCameras, planningRoute],
+  );
   const placeSheetVisible = routeIsIdle && selectedResult !== undefined;
   const appShellVisible = routeIsIdle && selectedResult === undefined;
 
@@ -1376,6 +1392,7 @@ export function useMapController() {
     sheetPosition,
     shortcutBeingSet,
     surface,
+    visibleSafetyCameras,
     zoomStepStore,
   };
 }

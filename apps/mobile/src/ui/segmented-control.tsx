@@ -48,6 +48,7 @@ export function SegmentedControl<T extends string>({
             ]}
           >
             <Text
+              maxFontSizeMultiplier={1.3}
               adjustsFontSizeToFit
               minimumFontScale={0.8}
               numberOfLines={1}

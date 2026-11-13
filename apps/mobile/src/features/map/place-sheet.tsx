@@ -81,7 +81,7 @@ function SecondaryAction({
       style={[styles.secondaryAction, selected && styles.secondaryActionSelected]}
     >
       <SymbolView name={icon} size={20} tintColor={colors.primaryText} />
-      <Text numberOfLines={1} style={styles.secondaryActionLabel}>
+      <Text maxFontSizeMultiplier={1.2} numberOfLines={1} style={styles.secondaryActionLabel}>
         {label}
       </Text>
     </PressableScale>

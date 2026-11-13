@@ -3,7 +3,13 @@ import type { SearchSource } from '@navoss/contracts';
 export type ApiConnectionState = 'connecting' | 'offline' | 'online';
 
 /** Names the data a result list came from, and says so when that data is not live. */
-export function searchSourceLabel(source: SearchSource | undefined): string {
+export function searchSourceLabel(source: SearchSource | undefined, degraded = false): string {
+  return degraded
+    ? `${searchSourceName(source)} · Some sources unavailable, results may be incomplete`
+    : searchSourceName(source);
+}
+
+function searchSourceName(source: SearchSource | undefined): string {
   if (source === undefined) return 'Calgary place search';
   if (source.id === 'calgary-hybrid-search' || source.id === 'calgary-open-data-index') {
     return 'Calgary Open Data + OpenStreetMap';

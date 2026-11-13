@@ -20,6 +20,7 @@ import {
 } from '@/features/map/overlay-layout';
 import { rerouteDeltaLabel, type SpeedReadout } from '@/features/navigation/guidance-settings';
 import { audioModeOption } from '@/features/navigation/guidance-settings-sheet';
+import { maneuverText } from '@/features/navigation/maneuver-text';
 import {
   maneuverDirection,
   type ManeuverDirection,
@@ -44,6 +45,7 @@ import {
   useTheme,
 } from '@/theme';
 import { palette } from '@/theme/tokens';
+import { Banner } from '@/ui/banner';
 import { Button, type SymbolName } from '@/ui/button';
 import { ListRow } from '@/ui/list-row';
 import { PressableScale } from '@/ui/pressable-scale';
@@ -114,6 +116,7 @@ export function ManeuverBanner({
     : failed
       ? 'Check your connection'
       : roadName;
+  const text = maneuverText(displayedInstruction, displayedRoadName);
   const displayedDistance = rerouting
     ? 'Rerouting'
     : failed
@@ -148,18 +151,27 @@ export function ManeuverBanner({
         </View>
         <View style={guidanceStyles.bannerCopy}>
           <Text
+            maxFontSizeMultiplier={1.3}
             adjustsFontSizeToFit
             numberOfLines={1}
             style={[guidanceStyles.distance, guidanceStyles.tabular]}
           >
             {displayedDistance}
           </Text>
-          <Text numberOfLines={3} style={guidanceStyles.instruction}>
-            {displayedInstruction}
+          {/* The action is never cut off: it wraps to a second line, and only shrinks if a
+              second line is still not enough. Where it leads is the smaller line beneath. */}
+          <Text
+            maxFontSizeMultiplier={1.3}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            numberOfLines={2}
+            style={guidanceStyles.instruction}
+          >
+            {text.primary}
           </Text>
-          {displayedRoadName.length > 0 && (
-            <Text numberOfLines={1} style={guidanceStyles.road}>
-              {displayedRoadName}
+          {text.secondary.length > 0 && (
+            <Text numberOfLines={2} style={guidanceStyles.road}>
+              {text.secondary}
             </Text>
           )}
         </View>
@@ -195,10 +207,14 @@ export function SafetyCameraAlertBanner({
         tintColor={palette.ink}
       />
       <View style={guidanceStyles.cameraAlertCopy}>
-        <Text numberOfLines={1} style={guidanceStyles.cameraAlertTitle}>
+        <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={guidanceStyles.cameraAlertTitle}>
           Red light + speed camera
         </Text>
-        <Text numberOfLines={1} style={[guidanceStyles.cameraAlertMeta, guidanceStyles.tabular]}>
+        <Text
+          maxFontSizeMultiplier={1.3}
+          numberOfLines={1}
+          style={[guidanceStyles.cameraAlertMeta, guidanceStyles.tabular]}
+        >
           {distance} · {camera.location}
         </Text>
       </View>
@@ -234,6 +250,7 @@ export function DrivingStatus({
           {speed.speedKph !== undefined && (
             <View style={[guidanceStyles.speed, speed.overLimit && guidanceStyles.speedOver]}>
               <Text
+                maxFontSizeMultiplier={1}
                 style={[
                   guidanceStyles.speedValue,
                   guidanceStyles.tabular,
@@ -243,6 +260,7 @@ export function DrivingStatus({
                 {speed.speedKph}
               </Text>
               <Text
+                maxFontSizeMultiplier={1}
                 style={[guidanceStyles.speedUnit, speed.overLimit && guidanceStyles.speedValueOver]}
               >
                 km/h
@@ -251,8 +269,13 @@ export function DrivingStatus({
           )}
           {speed.limitKph !== undefined && (
             <View style={guidanceStyles.speedSign}>
-              <Text style={guidanceStyles.speedSignCaption}>MAX</Text>
-              <Text style={[guidanceStyles.speedSignValue, guidanceStyles.tabular]}>
+              <Text maxFontSizeMultiplier={1} style={guidanceStyles.speedSignCaption}>
+                MAX
+              </Text>
+              <Text
+                maxFontSizeMultiplier={1}
+                style={[guidanceStyles.speedSignValue, guidanceStyles.tabular]}
+              >
                 {speed.limitKph}
               </Text>
             </View>
@@ -261,7 +284,7 @@ export function DrivingStatus({
       )}
       {roadName !== undefined && roadName.length > 0 && (
         <View accessibilityLabel={`On ${roadName}`} accessible style={guidanceStyles.roadPill}>
-          <Text numberOfLines={1} style={guidanceStyles.roadPillText}>
+          <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={guidanceStyles.roadPillText}>
             {roadName}
           </Text>
         </View>
@@ -304,11 +327,19 @@ export function RerouteProposalCard({
       style={[guidanceStyles.rerouteCard, { top }]}
     >
       <View style={guidanceStyles.rerouteCopy}>
-        <Text style={guidanceStyles.rerouteEyebrow}>You left the route</Text>
-        <Text style={[guidanceStyles.rerouteTitle, guidanceStyles.tabular]}>
+        <Text maxFontSizeMultiplier={1.3} style={guidanceStyles.rerouteEyebrow}>
+          You left the route
+        </Text>
+        <Text
+          maxFontSizeMultiplier={1.3}
+          style={[guidanceStyles.rerouteTitle, guidanceStyles.tabular]}
+        >
           New route: {summary}
         </Text>
-        <Text style={[guidanceStyles.rerouteDelta, guidanceStyles.tabular]}>
+        <Text
+          maxFontSizeMultiplier={1.3}
+          style={[guidanceStyles.rerouteDelta, guidanceStyles.tabular]}
+        >
           {delta} · applies on its own if you stay off route
         </Text>
       </View>
@@ -319,7 +350,9 @@ export function RerouteProposalCard({
           onPress={onKeep}
           style={[guidanceStyles.rerouteButton, guidanceStyles.rerouteKeep]}
         >
-          <Text style={guidanceStyles.rerouteButtonText}>Keep route</Text>
+          <Text maxFontSizeMultiplier={1.3} style={guidanceStyles.rerouteButtonText}>
+            Keep route
+          </Text>
         </PressableScale>
         <PressableScale
           accessibilityLabel="Accept new route"
@@ -327,7 +360,9 @@ export function RerouteProposalCard({
           onPress={onAccept}
           style={[guidanceStyles.rerouteButton, guidanceStyles.rerouteAccept]}
         >
-          <Text style={guidanceStyles.rerouteButtonText}>Accept</Text>
+          <Text maxFontSizeMultiplier={1.3} style={guidanceStyles.rerouteButtonText}>
+            Accept
+          </Text>
         </PressableScale>
       </View>
     </Animated.View>
@@ -358,7 +393,12 @@ function TripAction({
       style={styles.tripAction}
     >
       <SymbolView name={icon} size={20} tintColor={colors.primaryText} />
-      <Text adjustsFontSizeToFit numberOfLines={1} style={styles.tripActionLabel}>
+      <Text
+        maxFontSizeMultiplier={1.3}
+        adjustsFontSizeToFit
+        numberOfLines={1}
+        style={styles.tripActionLabel}
+      >
         {label}
       </Text>
     </PressableScale>
@@ -430,6 +470,25 @@ export function TripSheet({
       : cameraAnnouncementCount === 1
         ? 'one camera alert announced'
         : `${String(cameraAnnouncementCount)} camera alerts announced`;
+  // Shown only when the driver should know something: the status line is not a debug readout.
+  const tripNotice = positionEstimated
+    ? {
+        message: 'Your position is being estimated along the route until GPS returns.',
+        title: 'Weak GPS signal',
+      }
+    : matchStatus === 'acquiring'
+      ? { message: 'Guidance starts as soon as your position is known.', title: 'Waiting for GPS' }
+      : matchStatus === 'off-route'
+        ? { message: 'NavOSS is working out how to get you back on track.', title: 'Off route' }
+        : rerouteCount > 0
+          ? {
+              message:
+                rerouteCount === 1
+                  ? 'Your route was updated once on this trip.'
+                  : `Your route was updated ${String(rerouteCount)} times on this trip.`,
+              title: 'Route updated',
+            }
+          : undefined;
   const arrival = formatArrivalTime(durationSeconds);
 
   return (
@@ -446,6 +505,7 @@ export function TripSheet({
           style={styles.tripMetrics}
         >
           <Text
+            maxFontSizeMultiplier={1.3}
             adjustsFontSizeToFit
             minimumFontScale={0.7}
             numberOfLines={1}
@@ -453,7 +513,11 @@ export function TripSheet({
           >
             {arrival}
           </Text>
-          <Text numberOfLines={1} style={[styles.tripRemaining, guidanceStyles.tabular]}>
+          <Text
+            maxFontSizeMultiplier={1.3}
+            numberOfLines={1}
+            style={[styles.tripRemaining, guidanceStyles.tabular]}
+          >
             {formatDuration(durationSeconds)} · {formatDistance(distanceMeters)}
           </Text>
         </View>
@@ -497,28 +561,10 @@ export function TripSheet({
             { paddingBottom: metrics.bottomInset + space.xl },
           ]}
         >
-          <View style={styles.tripStatus}>
-            <SymbolView
-              name={
-                matchStatus === 'matched'
-                  ? { android: 'check_circle', ios: 'checkmark.circle.fill' }
-                  : matchStatus === 'off-route'
-                    ? { android: 'error', ios: 'exclamationmark.triangle.fill' }
-                    : { android: 'gps_not_fixed', ios: 'location.slash' }
-              }
-              size={18}
-              tintColor={
-                matchStatus === 'matched'
-                  ? colors.success
-                  : matchStatus === 'off-route'
-                    ? colors.warningText
-                    : colors.textTertiary
-              }
-            />
-            <Text style={styles.tripStatusText}>
-              To {destinationName} · {matchStatusLabel} · {rerouteDetail}
-            </Text>
-          </View>
+          {tripNotice !== undefined && (
+            <Banner announce message={tripNotice.message} title={tripNotice.title} tone="warning" />
+          )}
+          <Text style={styles.tripDestination}>To {destinationName}</Text>
           {upcomingManeuvers.length > 0 && (
             <View>
               <SectionTitle>Next</SectionTitle>
@@ -775,13 +821,11 @@ const useStyles = createThemedStyles(({ colors }) =>
     tripReveal: { flex: 1 },
     tripRemaining: { ...typography.headline, color: colors.textSecondary },
     tripSource: { ...typography.caption, color: colors.textTertiary, paddingHorizontal: space.sm },
-    tripStatus: {
-      alignItems: 'center',
-      flexDirection: 'row',
-      gap: space.sm,
+    tripDestination: {
+      ...typography.headline,
+      color: colors.text,
       paddingHorizontal: space.sm,
     },
-    tripStatusText: { ...typography.callout, color: colors.textSecondary, flex: 1 },
     tripStepDistance: { ...typography.label, color: colors.textSecondary },
     tripSummary: {
       alignItems: 'center',

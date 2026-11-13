@@ -55,7 +55,9 @@ function TabButton({
           tintColor={selected ? colors.primaryText : colors.textTertiary}
         />
       </Animated.View>
-      <Text style={[styles.label, selected && styles.labelSelected]}>{tab.label}</Text>
+      <Text maxFontSizeMultiplier={1.2} style={[styles.label, selected && styles.labelSelected]}>
+        {tab.label}
+      </Text>
     </Pressable>
   );
 }

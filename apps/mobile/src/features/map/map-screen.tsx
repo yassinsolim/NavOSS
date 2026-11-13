@@ -154,7 +154,7 @@ export function MapScreen() {
           isNavigating={navigating}
           roadEvents={overlays.roadEvents}
           routeColor={mapPreferences.routeColor}
-          safetyCameras={overlays.safetyCameras}
+          safetyCameras={c.visibleSafetyCameras}
           safetyFacilities={overlays.kelownaSafetyFacilities}
           searchResults={routeIsIdle ? c.search.results : NO_SEARCH_RESULTS}
           selectedResult={selectedResult}
@@ -249,6 +249,7 @@ export function MapScreen() {
           position={c.sheetPosition}
           query={c.search.query}
           results={c.search.results}
+          resultsDegraded={c.search.resultsDegraded}
           searchSource={c.search.searchSource}
           searchState={c.search.searchState}
           selectedCategoryId={c.search.selectedCategoryId}
