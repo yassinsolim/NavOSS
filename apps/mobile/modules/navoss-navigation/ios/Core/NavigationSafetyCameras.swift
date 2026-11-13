@@ -221,6 +221,11 @@ struct NavigationSafetyCameraMonitor {
   private var lastAlongMeters: Double?
   private var route: RoutePolyline?
 
+  /// The camera with `id`, so a presenter can place the active alert on the map.
+  func camera(id: String) -> NavOSSSafetyCamera? {
+    cameras.first { $0.id == id }
+  }
+
   var hasCameras: Bool {
     !cameras.isEmpty
   }

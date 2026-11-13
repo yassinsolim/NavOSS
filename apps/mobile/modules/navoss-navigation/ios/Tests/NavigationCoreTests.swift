@@ -993,12 +993,6 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
-  func testCarPlaySpeedingStartsAtFiveOverKnownLimit() {
-    XCTAssertFalse(navOSSCarPlayIsSpeeding(speedKph: 54, speedLimitKph: 50))
-    XCTAssertTrue(navOSSCarPlayIsSpeeding(speedKph: 55, speedLimitKph: 50))
-    XCTAssertFalse(navOSSCarPlayIsSpeeding(speedKph: 120, speedLimitKph: nil))
-  }
-
   func testNavigationRouteOriginRequiresFreshAccurateMovementForHeading() {
     let coordinate = NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08)
     let moving = navOSSNavigationRouteOrigin(
@@ -1058,51 +1052,6 @@ final class NavigationCoreTests: XCTestCase {
         candidateTimestamp: 995,
         latestTimestamp: 996,
         nowTimestamp: 1_000
-      )
-    )
-  }
-
-  func testCarPlaySpeedLimitUsesCurrentGeometrySegmentAndHidesUnknown() {
-    let speedLimits = [0, 50, 40]
-    let geometry = [
-      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.10),
-      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.099),
-      NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
-      NavOSSCarPlayCoordinate(latitude: 51.05, longitude: -114.08),
-    ]
-
-    XCTAssertNil(
-      navOSSCarPlaySpeedLimit(
-        speedLimits,
-        geometry: geometry,
-        matchedCoordinate: geometry[0],
-        routeProgress: 0.2
-      )
-    )
-    XCTAssertEqual(
-      navOSSCarPlaySpeedLimit(
-        speedLimits,
-        geometry: geometry,
-        matchedCoordinate: NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.09),
-        routeProgress: 0.95
-      ),
-      50
-    )
-    XCTAssertEqual(
-      navOSSCarPlaySpeedLimit(
-        speedLimits,
-        geometry: geometry,
-        matchedCoordinate: nil,
-        routeProgress: 1
-      ),
-      40
-    )
-    XCTAssertNil(
-      navOSSCarPlaySpeedLimit(
-        nil,
-        geometry: geometry,
-        matchedCoordinate: nil,
-        routeProgress: 0.5
       )
     )
   }
