@@ -215,9 +215,9 @@ export function promoteExactNameMatches(
     if (exactIndex !== -1) return [...results];
     exactIndex = index;
   }
+  if (exactIndex === -1) return [...results];
   const exact = results[exactIndex];
-  if (exact === undefined || (results[0]?.confidence === 1 && exact.confidence < 1))
-    return [...results];
+  if (results[0]?.confidence === 1 && exact.confidence < 1) return [...results];
   return [exact, ...results.slice(0, exactIndex), ...results.slice(exactIndex + 1)];
 }
 

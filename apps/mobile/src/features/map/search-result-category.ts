@@ -55,12 +55,13 @@ export function searchResultSubtitle(item: SearchResult): string {
         part,
       ),
   );
-  const first = visible[0];
+  const first = visible.at(0);
   if (first === undefined) return '';
+  const second = visible.at(1);
   const address =
-    /^\d+[\p{L}\d/-]*$/u.test(first) && visible[1] !== undefined ? `${first} ${visible[1]}` : first;
+    /^\d+[\p{L}\d/-]*$/u.test(first) && second !== undefined ? `${first} ${second}` : first;
   const city = visible.at(-1);
-  return city === undefined || city === address || (city === visible[1] && address !== first)
+  return city === undefined || city === address || (city === second && address !== first)
     ? address
     : `${address}, ${city}`;
 }
