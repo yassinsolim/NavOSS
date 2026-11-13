@@ -16,7 +16,7 @@ Say "No live traffic" unless the route response carries live traffic; say "No li
 
 ## rule/privacy-copy-matches-the-policy
 
-Text about what is sent, stored or shared must agree with `docs/privacy.md` and, for the site, `apps/site/src/privacy.html`. Do not call community traffic "anonymous": the policy says it is "data minimisation with a threshold, not anonymity". See `coverage-gaps.md` (the CarPlay setting detail currently says "anonymous speeds").
+Text about what is sent, stored or shared must agree with `docs/privacy.md` and, for the site, `apps/site/src/privacy.html`. Do not call community traffic "anonymous": the policy says it is "data minimisation with a threshold, not anonymity".
 
 ## rule/private-until-shared
 
