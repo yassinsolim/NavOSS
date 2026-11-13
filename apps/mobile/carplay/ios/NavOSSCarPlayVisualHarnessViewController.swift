@@ -464,6 +464,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       showManeuverSymbols()
       return
     case "search-hub", "search-results", "preview-alternatives", "guidance-lanes-then",
+      "report-private", "report-shared", "community-settings",
       "guidance-roundabout", "reroute-proposal", "arrival", "end", "dashboard":
       renderFlowScenario()
       return
@@ -534,6 +535,26 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
   private func renderFlowScenario() {
     let frame = CGSize(width: 800, height: 480)
     switch scenario {
+    case "report-private", "report-shared":
+      // The report grid as the driver sees it before choosing a type: its title says whether
+      // the report will be shared. Titles, labels and symbols come from production code.
+      useCarPlayFrame(frame, guidanceCardInset: 0)
+      mapViewController.displayIdleLocation(Self.here, animated: false)
+      showMockGrid(
+        title: navOSSCarPlayReportGridTitle(sharesRoadReports: scenario == "report-shared"),
+        bar: [],
+        buttons: NavOSSCarPlayReportType.allCases.map {
+          (navOSSCarPlayReportSymbolName($0), $0.label)
+        })
+    case "community-settings":
+      // Settings ▸ Community with the defaults: nothing is shared until switched on.
+      useCarPlayFrame(frame, guidanceCardInset: 0)
+      mapViewController.displayIdleLocation(Self.here, animated: false)
+      showMockList(
+        title: "Community",
+        rows: navOSSCarPlayCommunitySettingRows(
+          preferences: NavOSSCommunityPreferences(), trafficState: .off
+        ).map { (Optional($0.symbolName), $0.title, $0.detail) })
     case "search-hub":
       useCarPlayFrame(frame, guidanceCardInset: 0)
       mapViewController.displayIdleLocation(

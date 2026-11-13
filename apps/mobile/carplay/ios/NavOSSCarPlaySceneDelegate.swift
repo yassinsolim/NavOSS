@@ -813,46 +813,29 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   private func communitySection() -> CPListSection {
     let community = NavOSSCommunityService.shared
-    let preferences = community.preferences()
-    let trafficItem = CPListItem(
-      text: selectedTitle("Share traffic speeds", selected: preferences.sharesTrafficSpeeds),
-      detailText: preferences.sharesTrafficSpeeds
-        ? navOSSCarPlayTrafficSharingDetail(community.trafficSharingState())
-        : "Off",
-      image: UIImage(systemName: "car.2.fill")
-    )
-    trafficItem.handler = { _, completion in
-      completion()
-      let store = NavOSSCommunityPreferencesStore.shared
-      store.setSharesTrafficSpeeds(!store.load().sharesTrafficSpeeds)
+    let rows = navOSSCarPlayCommunitySettingRows(
+      preferences: community.preferences(), trafficState: community.trafficSharingState())
+    let items = rows.map { row in
+      let item = CPListItem(
+        text: selectedTitle(row.title, selected: row.isOn),
+        detailText: row.detail,
+        image: UIImage(systemName: row.symbolName)
+      )
+      item.handler = { _, completion in
+        completion()
+        let store = NavOSSCommunityPreferencesStore.shared
+        let current = store.load()
+        switch row.setting {
+        case .shareRoadReports: store.setSharesRoadReports(!current.sharesRoadReports)
+        case .shareTrafficSpeeds: store.setSharesTrafficSpeeds(!current.sharesTrafficSpeeds)
+        case .spokenRoadReports: store.setAnnouncesRoadReports(!current.announcesRoadReports)
+        }
+      }
+      return item
     }
-    let announceItem = CPListItem(
-      text: selectedTitle("Spoken road reports", selected: preferences.announcesRoadReports),
-      detailText: preferences.announcesRoadReports
-        ? "Says a short alert for a report ahead"
-        : "Visual only",
-      image: UIImage(systemName: "speaker.wave.2.fill")
-    )
-    announceItem.handler = { _, completion in
-      completion()
-      let store = NavOSSCommunityPreferencesStore.shared
-      store.setAnnouncesRoadReports(!store.load().announcesRoadReports)
-    }
-    let reportsItem = CPListItem(
-      text: selectedTitle("Share road reports", selected: preferences.sharesRoadReports),
-      detailText: preferences.sharesRoadReports
-        ? "Reports go to other drivers, never near home"
-        : "Off: reports stay private on this iPhone",
-      image: UIImage(systemName: "exclamationmark.bubble.fill")
-    )
-    reportsItem.handler = { _, completion in
-      completion()
-      let store = NavOSSCommunityPreferencesStore.shared
-      store.setSharesRoadReports(!store.load().sharesRoadReports)
-    }
-    return CPListSection(
-      items: [reportsItem, trafficItem, announceItem], header: "Community", sectionIndexTitle: nil)
+    return CPListSection(items: items, header: "Community", sectionIndexTitle: nil)
   }
+
 
   private func makeSystemTrip(_ trip: NavOSSCarPlayTrip) -> CPTrip {
     makeSystemTrip([trip])
@@ -1495,22 +1478,14 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     }
     let sharing = NavOSSCommunityService.shared.preferences().sharesRoadReports
     let template = CPGridTemplate(
-      title: sharing ? "Report to drivers" : "Report (private)", gridButtons: buttons)
+      title: navOSSCarPlayReportGridTitle(sharesRoadReports: sharing), gridButtons: buttons)
     interfaceController.pushTemplate(template, animated: true, completion: nil)
   }
 
   private func reportSymbolName(_ type: NavOSSCarPlayReportType) -> String {
-    switch type {
-    case .collision: "car.side.rear.and.collision.and.car.side.front"
-    case .construction: "cone.fill"
-    case .objectOnRoad: "shippingbox.fill"
-    case .pothole: "exclamationmark.triangle.fill"
-    case .roadClosure: "xmark.octagon.fill"
-    case .roadHazard: "exclamationmark.triangle"
-    case .slowTraffic: "car.2.fill"
-    case .stalledVehicle: "car.fill"
-    }
+    navOSSCarPlayReportSymbolName(type)
   }
+
   /// Submits to NavOSS community reports when the server has them live and this device can
   /// attest; otherwise keeps the private local draft as before.
   private func saveReport(_ type: NavOSSCarPlayReportType) {
@@ -1530,14 +1505,20 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       let community = NavOSSCommunityService.shared
       // Private unless the driver knowingly chose Share road reports (Settings ▸ Community).
       guard community.preferences().sharesRoadReports else {
-        self?.saveLocalDraft(type, coordinate: coordinate)
+        // Says how to share only where the server actually has shared reports.
+        let live = await community.availability().reportsLive == true
+        self?.saveLocalDraft(
+          type, coordinate: coordinate,
+          subtitle: navOSSCarPlayPrivateReportSubtitle(reportsLive: live, nearPrivatePlace: false))
         return
       }
       // Near home or the trip's ends a public report could reveal the place: keep it private.
+      // (The phone can ask for an explicit confirmation; CarPlay does not, to avoid a second
+      // decision while driving.)
       if community.isNearPrivatePlace(coordinate) {
         self?.saveLocalDraft(
           type, coordinate: coordinate,
-          subtitle: "Kept private: too close to home or your trip's start or end.")
+          subtitle: navOSSCarPlayPrivateReportSubtitle(reportsLive: true, nearPrivatePlace: true))
         return
       }
       let live = await community.refreshFeatures()
@@ -1568,7 +1549,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private func saveLocalDraft(
     _ type: NavOSSCarPlayReportType,
     coordinate: NavOSSCarPlayCoordinate,
-    subtitle: String = "Kept privately on this iPhone. Not shared with other drivers."
+    subtitle: String = navOSSCarPlayPrivateReportSubtitle(reportsLive: false, nearPrivatePlace: false)
   ) {
     guard reportStore.record(type, coordinate: coordinate) != nil else {
       showNavigationAlert(title: "Report not saved", subtitle: "Try again in a moment.")
@@ -2008,9 +1989,8 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       }
       let reportItem = CPListItem(
         text: "Report road condition",
-        detailText: NavOSSCommunityService.shared.preferences().sharesRoadReports
-          ? "Shared with other NavOSS drivers"
-          : "Saved privately on this iPhone",
+        detailText: navOSSCarPlayReportEntryDetail(
+          sharesRoadReports: NavOSSCommunityService.shared.preferences().sharesRoadReports),
         image: UIImage(systemName: "exclamationmark.bubble.fill")
       )
       reportItem.handler = { [weak self] _, completion in

@@ -504,3 +504,72 @@ public func navOSSCarPlayTrafficSharingDetail(_ state: NavOSSTrafficSharingState
 func navOSSCommunityManeuverAlongMeters(_ trip: NavOSSCarPlayTrip) -> [Double] {
   Array(NavigationStepGeometry(trip: trip).stepStartAlongMeters.dropFirst())
 }
+
+// MARK: - CarPlay community presentation (shared by the scene and the visual harness)
+
+/// One Settings ▸ Community row.
+public struct NavOSSCarPlayCommunitySettingRow: Equatable, Sendable {
+  public enum Setting: Sendable { case shareRoadReports, shareTrafficSpeeds, spokenRoadReports }
+  public let setting: Setting
+  public let title: String
+  public let detail: String
+  public let symbolName: String
+  public let isOn: Bool
+}
+
+public func navOSSCarPlayCommunitySettingRows(
+  preferences: NavOSSCommunityPreferences,
+  trafficState: NavOSSTrafficSharingState
+) -> [NavOSSCarPlayCommunitySettingRow] {
+  [
+    NavOSSCarPlayCommunitySettingRow(
+      setting: .shareRoadReports, title: "Share road reports",
+      detail: preferences.sharesRoadReports
+        ? "Other NavOSS drivers see your reports; never near home or trip ends"
+        : "Off: reports stay private on this iPhone",
+      symbolName: "exclamationmark.bubble.fill", isOn: preferences.sharesRoadReports),
+    NavOSSCarPlayCommunitySettingRow(
+      setting: .shareTrafficSpeeds, title: "Share traffic speeds",
+      detail: preferences.sharesTrafficSpeeds
+        ? navOSSCarPlayTrafficSharingDetail(trafficState) : "Off",
+      symbolName: "car.2.fill", isOn: preferences.sharesTrafficSpeeds),
+    NavOSSCarPlayCommunitySettingRow(
+      setting: .spokenRoadReports, title: "Spoken road reports",
+      detail: preferences.announcesRoadReports
+        ? "Says a short alert for a report ahead" : "Visual only",
+      symbolName: "speaker.wave.2.fill", isOn: preferences.announcesRoadReports),
+  ]
+}
+
+/// Report grid title: says before a type is chosen whether the report is shared.
+public func navOSSCarPlayReportGridTitle(sharesRoadReports: Bool) -> String {
+  sharesRoadReports ? "Report to drivers" : "Report (private)"
+}
+
+/// The Trip list's report entry detail.
+public func navOSSCarPlayReportEntryDetail(sharesRoadReports: Bool) -> String {
+  sharesRoadReports ? "Shared with other NavOSS drivers" : "Saved privately on this iPhone"
+}
+
+/// Confirmation after a private draft. Unchanged from build 70 unless the server has shared
+/// reports live (then it says how to share) or the place was near home or a trip end.
+public func navOSSCarPlayPrivateReportSubtitle(reportsLive: Bool, nearPrivatePlace: Bool) -> String {
+  if nearPrivatePlace { return "Kept private: too close to home or your trip's start or end." }
+  if reportsLive {
+    return "Kept private. To share reports with drivers, turn on Share road reports in Settings."
+  }
+  return "Kept privately on this iPhone. Not shared with other drivers."
+}
+
+public func navOSSCarPlayReportSymbolName(_ type: NavOSSCarPlayReportType) -> String {
+  switch type {
+  case .collision: "car.side.rear.and.collision.and.car.side.front"
+  case .construction: "cone.fill"
+  case .objectOnRoad: "shippingbox.fill"
+  case .pothole: "exclamationmark.triangle.fill"
+  case .roadClosure: "xmark.octagon.fill"
+  case .roadHazard: "exclamationmark.triangle"
+  case .slowTraffic: "car.2.fill"
+  case .stalledVehicle: "car.fill"
+  }
+}

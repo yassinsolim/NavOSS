@@ -205,6 +205,31 @@ final class CommunityReportsTests: XCTestCase {
   }
 }
 
+final class CommunityPresentationTests: XCTestCase {
+  func testDefaultsShareNothingAndSaySoBeforeAnythingIsSent() {
+    let rows = navOSSCarPlayCommunitySettingRows(
+      preferences: NavOSSCommunityPreferences(), trafficState: .off)
+    XCTAssertEqual(rows.map(\.isOn), [false, false, true])
+    XCTAssertEqual(rows[0].detail, "Off: reports stay private on this iPhone")
+    XCTAssertEqual(navOSSCarPlayReportGridTitle(sharesRoadReports: false), "Report (private)")
+    XCTAssertEqual(navOSSCarPlayReportGridTitle(sharesRoadReports: true), "Report to drivers")
+    XCTAssertEqual(
+      navOSSCarPlayReportEntryDetail(sharesRoadReports: false), "Saved privately on this iPhone")
+  }
+
+  func testPrivateDraftCopyIsBuild70CopyWhileTheServerHasNoSharedReports() {
+    XCTAssertEqual(
+      navOSSCarPlayPrivateReportSubtitle(reportsLive: false, nearPrivatePlace: false),
+      "Kept privately on this iPhone. Not shared with other drivers.")
+    XCTAssertTrue(
+      navOSSCarPlayPrivateReportSubtitle(reportsLive: true, nearPrivatePlace: false)
+        .contains("Share road reports"))
+    XCTAssertTrue(
+      navOSSCarPlayPrivateReportSubtitle(reportsLive: true, nearPrivatePlace: true)
+        .contains("too close to home"))
+  }
+}
+
 // MARK: - Traffic sharing session
 
 private actor FakeTrafficTransport: NavOSSTrafficTransport {

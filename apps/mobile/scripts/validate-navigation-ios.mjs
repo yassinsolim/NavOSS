@@ -667,6 +667,9 @@ try {
         ['carplay-guidance-night', 'guidance-night', 'dark'],
         ['carplay-guidance-annotations', 'guidance-annotations', 'light'],
         ['carplay-community-reports', 'community-reports', 'light'],
+        ['carplay-flow-report-private', 'report-private', 'light'],
+        ['carplay-flow-report-shared', 'report-shared', 'light'],
+        ['carplay-flow-community-settings', 'community-settings', 'dark'],
         ['carplay-maneuver-symbols', 'maneuver-symbols', 'light'],
         // Flow scenarios: production map plus a labelled mock of CarPlay's own template, whose
         // content comes from production presentation code. See docs/architecture/carplay.md.
