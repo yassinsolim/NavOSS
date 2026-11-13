@@ -7,6 +7,7 @@ import {
   routeFromNativeTrip,
   routeSourceForNativeTrip,
   selectedRouteOf,
+  tripEndNotice,
 } from '../src/features/navigation/route-ui-state.js';
 
 const destination: SearchResult = {
@@ -175,5 +176,16 @@ describe('route from a native trip', () => {
     expect(route.steps[0]).not.toHaveProperty('exitNumber');
     expect(route.steps[0]?.instruction).toBe('Drive north.');
     expect(route).not.toHaveProperty('congestion');
+  });
+});
+
+describe('trip end notice', () => {
+  it('tells the driver when a restored trip was dropped, and nothing otherwise', () => {
+    expect(tripEndNotice('restored-trip-off-route')).toEqual({
+      message: 'Your earlier trip was ended because you are no longer on its route.',
+      title: 'Trip ended',
+      tone: 'info',
+    });
+    expect(tripEndNotice(undefined)).toBeUndefined();
   });
 });
