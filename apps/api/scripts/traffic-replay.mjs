@@ -11,7 +11,12 @@
 //     COMMUNITY_TRAFFIC_MODE=live COMMUNITY_ATTESTATION_MODE=allow-development \
 //     APP_ATTEST_TEAM_ID=ABCDE12345 COMMUNITY_INSTALLATION_SECRET=$(openssl rand -hex 32) \
 //     VALHALLA_URL=http://127.0.0.1:8002/route PORT=3012 node apps/api/dist/server.js
-//   APP_ATTEST_TEAM_ID=ABCDE12345 corepack pnpm --filter @navoss/api traffic:replay
+//   PGHOST=127.0.0.1 PGPORT=5442 PGUSER=navoss PGPASSWORD=navoss PGDATABASE=navoss \
+//     APP_ATTEST_TEAM_ID=ABCDE12345 corepack pnpm --filter @navoss/api traffic:replay
+//
+// An installation gets no upload credential until it is a day old, so the script dates the
+// development installations it just registered two days back, directly in the API's database (the
+// PG* variables). They are still newcomers, so each uploads from its own network.
 //
 // It waits for two real epoch boundaries, so a run takes between five and ten minutes.
 //
@@ -31,6 +36,8 @@
 import { Buffer } from 'node:buffer';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
+
+import pg from 'pg';
 
 const apiUrl = (process.env.NAVOSS_API_URL ?? 'http://127.0.0.1:3012').replace(/\/$/, '');
 const parseCoordinate = (value, fallback) => {
@@ -325,8 +332,27 @@ async function nextEpoch() {
 if (epochMs - (Date.now() % epochMs) < 60_000) await nextEpoch();
 
 const installations = [];
+const registeredFrom = new Date(Date.now() - 60_000);
 for (let index = 0; index < threshold; index += 1) {
   installations.push(await registerInstallation());
+}
+{
+  // Development keys only (trust `untrusted`), registered by this run: as if two days ago.
+  const database = new pg.Pool({ max: 1 });
+  try {
+    const aged = await database.query(
+      `UPDATE community_installations SET registered_at = registered_at - interval '2 days'
+       WHERE trust = 'untrusted' AND registered_at >= $1`,
+      [registeredFrom],
+    );
+    if (aged.rowCount !== threshold) {
+      throw new Error(
+        `Expected to age ${String(threshold)} installations, aged ${String(aged.rowCount)}.`,
+      );
+    }
+  } finally {
+    await database.end();
+  }
 }
 const checks = [];
 

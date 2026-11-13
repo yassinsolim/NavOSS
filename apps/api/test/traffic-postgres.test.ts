@@ -27,7 +27,7 @@ import {
   type TrafficMaintenanceFailure,
 } from '../src/traffic/service.js';
 import type { TrafficSettings } from '../src/traffic/settings.js';
-import { createPostgresTrafficReleaseStore } from '../src/traffic/store.js';
+import { createPostgresTrafficReleaseStore, TRAFFIC_POOL_CONFIG } from '../src/traffic/store.js';
 import { createTestAppAttestAuthority, type TestDevice } from './support/app-attest-fixture.js';
 import {
   credentialFor,
@@ -90,6 +90,14 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
       options: `-c search_path=${SCHEMA},public`,
     });
 
+  /** The production traffic pool settings, including the server-side timeouts. */
+  const trafficPool = (): Pool =>
+    new Pool({
+      ...TRAFFIC_POOL_CONFIG,
+      connectionString: DATABASE_URL,
+      options: `-c search_path=${SCHEMA},public`,
+    });
+
   const emptyDatabasePool = (): Pool => {
     const url = new URL(DATABASE_URL);
     url.pathname = `/${EMPTY_DATABASE}`;
@@ -131,7 +139,7 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
       mapMatcher: stub.matcher,
       onMaintenanceFailure: (failure) => failures.push(failure),
       settings: { ...FIXTURE_SETTINGS, ...options.settings },
-      store: createPostgresTrafficReleaseStore(schemaPool()),
+      store: createPostgresTrafficReleaseStore(trafficPool()),
     });
     const app = await buildApp({
       clock,
@@ -339,7 +347,7 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
   });
 
   it('adjusts a route from the published rows', async () => {
-    const { app, service } = await createApp({ settings: { routeMinCoverage: 0.4 } });
+    const { app, service } = await createApp({ settings: { routeMinCoverage: 0.35 } });
     for (const device of ['phone-1', 'phone-2', 'phone-3']) {
       await post(app, await credentialFor(service, device), JAMMED_GAPS);
     }
@@ -463,13 +471,54 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
     await advanceEpoch(service);
     expect((await releaseRows()).rowCount).toBeGreaterThan(10);
 
-    // 18:20, the expiry boundary, before any cleanup has run: already not served.
+    // 18:20, the expiry boundary, before the timer has run: the first read of the new epoch
+    // completes that epoch's publication, which deletes the expired rows, before it reads.
     nowMs = Date.parse('2026-11-12T18:20:00Z');
     expect(await flowFeatures(app)).toEqual([]);
-    expect((await releaseRows()).rowCount).toBeGreaterThan(10);
-    await service.runEpoch();
     expect((await releaseRows()).rowCount).toBe(0);
   });
+
+  it('has PostgreSQL cancel a blocked epoch, and serves no snapshot it could not complete', async () => {
+    const { app, failures, service } = await createApp();
+    for (const device of ['phone-1', 'phone-2', 'phone-3']) {
+      await post(app, await credentialFor(service, device));
+    }
+    await advanceEpoch(service);
+    const published = (await releaseRows()).rowCount ?? 0;
+    expect(published).toBeGreaterThan(10);
+
+    // Something else holds the table at the expiry boundary.
+    const blocker = await admin.connect();
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query(`LOCK TABLE ${SCHEMA}.traffic_releases IN ACCESS EXCLUSIVE MODE`);
+      nowMs = Date.parse('2026-11-12T18:20:00Z');
+      const startedMs = Date.now();
+      const blocked = await app.inject(FLOW_URL);
+
+      // The server's lock timeout ended the wait: the epoch failed within its bound, and the
+      // stale rows are not relabelled as this epoch's snapshot.
+      expect(blocked.statusCode).toBe(503);
+      expect(Date.now() - startedMs).toBeLessThan(TRAFFIC_POOL_CONFIG.statement_timeout);
+      expect(failures).toContain('epoch');
+      // Nothing from the traffic pool is still running or waiting on the database.
+      const waiting = await admin.query<{ count: number }>(
+        `SELECT count(*)::int AS count FROM pg_stat_activity
+         WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+      );
+      expect(waiting.rows[0]?.count).toBe(0);
+      await blocker.query('ROLLBACK');
+    } finally {
+      blocker.release();
+    }
+    // Past their expiry the rows are still present until a publication succeeds.
+    expect((await releaseRows()).rowCount).toBe(published);
+
+    // The next boundary's publication succeeds on the same pool and deletes them.
+    nowMs = Date.parse('2026-11-12T18:25:05Z');
+    expect(await flowFeatures(app)).toEqual([]);
+    expect((await releaseRows()).rowCount).toBe(0);
+  }, 20_000);
 
   it('stores nothing at all while only collecting, even for a cohort of three', async () => {
     const { app, service } = await createApp({ settings: { mode: 'collect' } });
@@ -550,7 +599,11 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
       return response.json<{ challenge: string }>().challenge;
     }
 
-    async function register(app: FastifyInstance): Promise<TestDevice> {
+    /**
+     * Registers a new App Attest key and then dates its registration `ageDays` back, as if it had
+     * registered then: by default old enough to contribute and past the newcomer period.
+     */
+    async function register(app: FastifyInstance, ageDays = 8): Promise<TestDevice> {
       const device = authority.createDevice();
       const value = await challenge(app);
       const response = await app.inject({
@@ -564,8 +617,43 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
         url: '/v2/community/installations',
       });
       expect(response.statusCode).toBe(201);
+      await ageInstallations(ageDays);
       return device;
     }
+
+    /** Dates the registrations made just now `ageDays` back. */
+    async function ageInstallations(ageDays = 8): Promise<void> {
+      await admin.query(
+        `UPDATE ${SCHEMA}.community_installations SET registered_at = $1 WHERE registered_at >= $2`,
+        [new Date(nowMs - ageDays * 86_400_000), new Date(nowMs - 1_000)],
+      );
+    }
+
+    it('refuses a credential to a key registered moments ago, and caps newcomers per network', async () => {
+      const { app, service } = await createApp({ attestation: 'real' });
+      const fresh = await register(app, 0);
+      const refused = await requestCredential(app, fresh);
+      expect(refused.response.statusCode).toBe(403);
+      expect(Number(refused.response.headers['retry-after'])).toBe(86_400);
+
+      // Three keys two days old, one handset on one network: one newcomer counts per cohort.
+      const sybils = [await register(app, 2), await register(app, 2), await register(app, 2)];
+      for (const device of sybils) {
+        expect(
+          (await post(app, await credential(app, device), undefined, '2001:db8::7')).statusCode,
+        ).toBe(202);
+      }
+      await advanceEpoch(service);
+      expect(await flowFeatures(app)).toEqual([]);
+      expect(service.metrics().pendingSamples).toBeGreaterThan(0);
+
+      // Established installations elsewhere complete the cohort alongside the one newcomer.
+      for (const [index, device] of [await register(app), await register(app)].entries()) {
+        await post(app, await credential(app, device), undefined, `203.0.113.${String(index + 1)}`);
+      }
+      await advanceEpoch(service);
+      expect((await flowFeatures(app)).length).toBeGreaterThan(10);
+    });
 
     async function requestCredential(
       app: FastifyInstance,
@@ -654,6 +742,7 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
         url: '/v2/community/installations',
       });
       expect(registered.statusCode).toBe(201);
+      await ageInstallations();
       expect((await requestCredential(lenient.app, simulator)).response.statusCode).toBe(200);
 
       // The same, already registered, development installation against an enforcing server.

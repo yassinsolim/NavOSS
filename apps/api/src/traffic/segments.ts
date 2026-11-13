@@ -11,9 +11,9 @@ import type { TrafficSettings } from './settings.js';
  * end; on a sparse one, three contributors can still be one household. Tertiary roads stay out
  * until there is a way to tell a busy one from a rural one.
  *
- * Access is not checked: Valhalla 3.8.2 does not return `destination_only` from
- * `trace_attributes`. Private and destination-only roads are excluded only in so far as they are
- * mapped as service roads, tracks or minor classes, which is the usual case.
+ * Class and use are only the first filter. An edge is published only when it is also at least
+ * `MIN_PUBLISHED_EDGE_METERS` long and the graph confirms it is an open through road (see
+ * `MatchedEdge.openThroughRoad`).
  */
 const AGGREGATED_ROAD_CLASSES: ReadonlySet<string> = new Set([
   'motorway',
@@ -22,6 +22,12 @@ const AGGREGATED_ROAD_CLASSES: ReadonlySet<string> = new Set([
   'secondary',
 ]);
 const AGGREGATED_USES: ReadonlySet<string> = new Set(['road', 'ramp', 'turn_channel']);
+
+/**
+ * Shorter edges are junction connectors and slivers between splits. Publishing one says which
+ * branch of a junction a cohort took, which is the finest movement the threshold would expose.
+ */
+export const MIN_PUBLISHED_EDGE_METERS = 20;
 
 export interface EdgeRoad {
   forward: boolean;
@@ -37,6 +43,20 @@ export function isAggregatedRoad(edge: EdgeRoad): boolean {
     AGGREGATED_ROAD_CLASSES.has(edge.roadClass) &&
     AGGREGATED_USES.has(edge.use) &&
     edge.speedKph > 0
+  );
+}
+
+/**
+ * True when a whole edge may be credited and published: an aggregated road, long enough, and
+ * confirmed by the graph as an open through road.
+ */
+export function isPublishableEdge(
+  edge: EdgeRoad & { lengthMeters: number; openThroughRoad?: boolean },
+): boolean {
+  return (
+    isAggregatedRoad(edge) &&
+    edge.lengthMeters >= MIN_PUBLISHED_EDGE_METERS &&
+    edge.openThroughRoad === true
   );
 }
 

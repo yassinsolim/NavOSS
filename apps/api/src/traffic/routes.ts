@@ -18,7 +18,7 @@ import { COMMUNITY_REPORT_FAILURES } from '../community-routes.js';
 import { networkBucket } from '../community-trust.js';
 import { createContributionRateLimiter } from '../contribution-rate-limiter.js';
 import { createProblem } from '../problem.js';
-import type { TrafficService } from './service.js';
+import { InstallationTooNewError, type TrafficService } from './service.js';
 
 const PROBE_BODY_LIMIT_BYTES = 32 * 1_024;
 const SUMMARY_INTERVAL_MS = 15 * 60 * 1_000;
@@ -112,6 +112,19 @@ export function registerTrafficRoutes(
         }
         return issued;
       } catch (error: unknown) {
+        if (error instanceof InstallationTooNewError) {
+          reply
+            .status(403)
+            .header('retry-after', String(error.retryAfterSeconds))
+            .type('application/problem+json');
+          return createProblem(
+            request,
+            403,
+            'forbidden',
+            'Installation too new',
+            'This installation registered too recently to contribute traffic. Do not upload; ask again after the retry-after interval.',
+          );
+        }
         if (!(error instanceof CommunityReportError)) throw error;
         if (error.reason === 'unavailable') {
           request.log.error(
@@ -159,7 +172,7 @@ export function registerTrafficRoutes(
       if (service.mode !== 'off' && !probeLimiter.consume(networkBucket(request.ip))) {
         return rateLimited();
       }
-      const outcome = await service.ingest(request.body);
+      const outcome = await service.ingest(request.body, { network: networkBucket(request.ip) });
       if (outcome.status === 'rate_limited') return rateLimited();
       if (outcome.status === 'unauthorized') {
         reply.status(401).type('application/problem+json');

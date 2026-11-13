@@ -1,3 +1,5 @@
+import { createHmac, randomBytes } from 'node:crypto';
+
 import {
   COMMUNITY_TRAFFIC_ATTRIBUTION,
   COMMUNITY_TRAFFIC_SOURCE_ID,
@@ -16,7 +18,7 @@ import {
   type ContributionRateLimiter,
 } from '../contribution-rate-limiter.js';
 import { applyFastestLabel } from '../route-provider.js';
-import { createTrafficCohorts } from './cohorts.js';
+import { createTrafficCohorts, type TrafficRelease } from './cohorts.js';
 import { createTrafficCredentials, type TrafficCredentials } from './credentials.js';
 import type { Position } from './geo.js';
 import { createValhallaMapMatcher, type MapMatcher, type MatchedEdge } from './map-matcher.js';
@@ -42,9 +44,34 @@ import {
 } from './store.js';
 
 const MIN_MATCHED_POINTS = 5;
-// Releases are written just after the boundary so a clock that runs slightly early still sees it.
+// The timer fires just after the boundary so a timer that runs slightly early still sees it.
+// Readers do not wait for it: the first read of a new epoch starts that epoch's publication.
 const EPOCH_TIMER_SLACK_MS = 1_000;
 const OFF_MODE_PURGE_WAIT_MS = 3_000;
+// A failed purge is retried, with backoff, until it succeeds.
+const PURGE_RETRY_FIRST_MS = 30_000;
+const PURGE_RETRY_MAX_MS = 5 * 60_000;
+// A read that overlaps the next epoch's publication is repeated against that epoch.
+const SNAPSHOT_READ_ATTEMPTS = 3;
+
+/**
+ * The asserting installation registered too recently to contribute. Its assertion was verified
+ * and consumed; the app may ask again after `retryAfterSeconds`.
+ */
+export class InstallationTooNewError extends Error {
+  public constructor(public readonly retryAfterSeconds: number) {
+    super('The installation registered too recently to contribute traffic.');
+    this.name = 'InstallationTooNewError';
+  }
+}
+
+/** The snapshot of an epoch could not be read: its publication failed or kept being replaced. */
+export class TrafficSnapshotUnavailableError extends Error {
+  public constructor() {
+    super('The community traffic snapshot is unavailable.');
+    this.name = 'TrafficSnapshotUnavailableError';
+  }
+}
 
 export const COMMUNITY_TRAFFIC_SOURCE = {
   attribution: COMMUNITY_TRAFFIC_ATTRIBUTION,
@@ -74,6 +101,7 @@ export interface TrafficMetrics {
   flowResponses: number;
   pendingSamples: number;
   pendingSegments: number;
+  samplesIgnored: number;
   purgeFailures: number;
   routesAnnotated: number;
   routesWithoutTraffic: number;
@@ -83,10 +111,21 @@ export interface TrafficMetrics {
 
 /**
  * The part of the App Attest installation service community traffic depends on. It verifies a
- * fresh assertion for the `traffic-credential` operation and names the installation.
+ * fresh assertion for the `traffic-credential` operation and names the installation and when it
+ * registered.
  */
 export interface TrafficAttestation {
-  assertTrafficContributor(assertion: CommunityAssertion): Promise<{ installationId: string }>;
+  assertTrafficContributor(
+    assertion: CommunityAssertion,
+  ): Promise<{ installationId: string; registeredAt: Date }>;
+  /** False when App Attest is not configured, so no assertion can be verified. */
+  readonly attestationAvailable: boolean;
+}
+
+/** Where a batch came from, as far as the newcomer cap needs to know. */
+export interface IngestOrigin {
+  /** Network bucket of the uploading address (`networkBucket`); never stored or logged. */
+  network?: string;
 }
 
 /** A route as the routing layer computed it; only these fields are read or replaced. */
@@ -118,21 +157,30 @@ export interface TrafficService {
     routes: TrafficEnrichedRoute<Route>[];
     trafficSource?: typeof COMMUNITY_TRAFFIC_SOURCE;
   }>;
-  flow(bounds: TrafficFlowBounds): Promise<TrafficFlowResponse>;
-  ingest(batch: TrafficProbeBatchRequest): Promise<IngestOutcome>;
   /**
-   * Exchanges a verified assertion for an upload credential. Returns undefined when traffic is
-   * off or attestation is not configured; rejects with the attestation service's own error.
+   * The published snapshot of the current epoch. Waits for that epoch's publication (starting it
+   * if the boundary has passed and the timer has not run yet) and never labels older contents
+   * with the new epoch. Rejects with `TrafficSnapshotUnavailableError` when the publication
+   * failed.
+   */
+  flow(bounds: TrafficFlowBounds): Promise<TrafficFlowResponse>;
+  ingest(batch: TrafficProbeBatchRequest, origin?: IngestOrigin): Promise<IngestOutcome>;
+  /**
+   * Exchanges a verified assertion for an upload credential. Returns undefined when the pipeline
+   * cannot accept uploads (off, no matcher, or attestation not configured); rejects with
+   * `InstallationTooNewError` for an installation inside its minimum age, or with the attestation
+   * service's own error.
    */
   issueCredential(assertion: CommunityAssertion): Promise<TrafficCredentialResponse | undefined>;
   metrics(): TrafficMetrics;
   readonly mode: TrafficMode;
-  /** Closes the publication epoch that ended at the latest boundary, once. */
+  /** Closes and publishes the epoch that ended at the latest boundary, once. */
   runEpoch(): Promise<void>;
   readonly settings: TrafficSettings;
   /**
    * Erases stored releases in every mode, then, unless off, checks the schema and starts the
-   * epoch timer. Rejects when an enabled pipeline cannot prepare its storage.
+   * epoch timer. Rejects when an enabled pipeline cannot prepare its storage. With the mode off a
+   * failed purge does not hold up startup; it is retried in the background until it succeeds.
    */
   start(): Promise<void>;
   status(): TrafficStatusResponse;
@@ -177,6 +225,7 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
     credentialsIssued: 0,
     epochFailures: 0,
     flowResponses: 0,
+    samplesIgnored: 0,
     purgeFailures: 0,
     routesAnnotated: 0,
     routesWithoutTraffic: 0,
@@ -185,24 +234,93 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
   };
   const epochMs = settings.epochSeconds * 1_000;
   const epochStart = (): number => Math.floor(clock().getTime() / epochMs) * epochMs;
+  // Salts the network marker of newcomer samples; process memory only, like the credential keys.
+  const networkKey = randomBytes(32);
+  const accepting = (): boolean =>
+    settings.mode !== 'off' &&
+    mapMatcher !== undefined &&
+    options.attestation?.attestationAvailable === true;
   let matchesInFlight = 0;
-  let lastClosedEpochMs: number | undefined;
   let epochTimer: NodeJS.Timeout | undefined;
+  let purgeRetry: NodeJS.Timeout | undefined;
   let closed = false;
 
-  const runEpoch = async (): Promise<void> => {
+  /**
+   * The publication of one epoch. `done` settles once the epoch's releases are stored (true) or
+   * storing them failed (false); it never rejects. Publications run one after another.
+   */
+  interface Publication {
+    done: Promise<boolean>;
+    epochMs: number;
+  }
+  let publication: Publication | undefined;
+  // Releases whose epoch failed to store. They are offered again at the next boundary, until they
+  // expire, so a transient database error does not drop a published value early.
+  let unstored: TrafficRelease[] = [];
+
+  /** Starts the publication of the current epoch unless it has started already, and returns it. */
+  const publish = (): Publication => {
     const tickMs = epochStart();
-    if (lastClosedEpochMs !== undefined && tickMs <= lastClosedEpochMs) return;
-    lastClosedEpochMs = tickMs;
-    const releases = cohorts.closeEpoch(tickMs);
-    counters.segmentsReleased += releases.length;
-    try {
+    if (publication !== undefined && publication.epochMs >= tickMs) return publication;
+    // The cohort is consumed now, synchronously, so a sample arriving from here on belongs to the
+    // epoch that is still open, whatever the store does next.
+    const released = cohorts.closeEpoch(tickMs);
+    counters.segmentsReleased += released.length;
+    const previous = publication?.done ?? Promise.resolve(true);
+    const done = previous.then(async () => {
       // While only collecting, cohorts are counted and discarded: nothing is stored or served.
-      await store.publishEpoch(tickMs, settings.mode === 'live' ? releases : []);
-    } catch {
-      counters.epochFailures += 1;
-      options.onMaintenanceFailure?.('epoch');
+      const releases = settings.mode === 'live' ? mergeReleases(unstored, released, tickMs) : [];
+      unstored = [];
+      try {
+        await store.publishEpoch(tickMs, releases);
+        return true;
+      } catch {
+        counters.epochFailures += 1;
+        options.onMaintenanceFailure?.('epoch');
+        unstored = releases;
+        return false;
+      }
+    });
+    publication = { done, epochMs: tickMs };
+    return publication;
+  };
+
+  const runEpoch = async (): Promise<void> => {
+    await publish().done;
+  };
+
+  /**
+   * Runs `read` against the completed snapshot of the current epoch. The store's tables hold
+   * exactly that snapshot from the end of its publication until the next one starts; a read that
+   * overlaps the next publication is repeated against the newer epoch rather than returned.
+   */
+  const readSnapshot = async <T>(
+    read: (epochStartMs: number) => Promise<T>,
+  ): Promise<{ epochMs: number; value: T }> => {
+    for (let attempt = 0; attempt < SNAPSHOT_READ_ATTEMPTS; attempt += 1) {
+      const current = publish();
+      if (!(await current.done)) throw new TrafficSnapshotUnavailableError();
+      const value = await read(current.epochMs);
+      if (publication === current) return { epochMs: current.epochMs, value };
     }
+    throw new TrafficSnapshotUnavailableError();
+  };
+
+  const retryPurge = (delayMs: number): void => {
+    if (closed) return;
+    purgeRetry = setTimeout(() => {
+      store.purge().then(
+        () => {
+          purgeRetry = undefined;
+        },
+        () => {
+          counters.purgeFailures += 1;
+          options.onMaintenanceFailure?.('purge');
+          retryPurge(Math.min(delayMs * 2, PURGE_RETRY_MAX_MS));
+        },
+      );
+    }, delayMs);
+    purgeRetry.unref();
   };
 
   const scheduleEpoch = (): void => {
@@ -221,6 +339,7 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
     async close() {
       closed = true;
       clearTimeout(epochTimer);
+      clearTimeout(purgeRetry);
       cohorts.clear();
       contributorLimiter.close();
       await store.close();
@@ -231,7 +350,6 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
       if (settings.mode !== 'live' || mapMatcher === undefined || routes.length === 0) {
         return untouched;
       }
-      const tickMs = epochStart();
       try {
         const longitudes = routes.flatMap((route) =>
           route.geometry.map(([longitude]) => longitude),
@@ -239,17 +357,19 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
         const latitudes = routes.flatMap((route) => route.geometry.map(([, latitude]) => latitude));
         // Skip the map-matching round trips when nothing is published near the routes, which is
         // the normal case while few drivers contribute.
-        const nearby = await store.inBounds(
-          {
-            east: Math.max(...longitudes),
-            north: Math.max(...latitudes),
-            south: Math.min(...latitudes),
-            west: Math.min(...longitudes),
-          },
-          tickMs,
-          1,
+        const nearby = await readSnapshot((epochStartMs) =>
+          store.inBounds(
+            {
+              east: Math.max(...longitudes),
+              north: Math.max(...latitudes),
+              south: Math.min(...latitudes),
+              west: Math.min(...longitudes),
+            },
+            epochStartMs,
+            1,
+          ),
         );
-        if (nearby.releases.length === 0) {
+        if (nearby.value.releases.length === 0) {
           counters.routesWithoutTraffic += routes.length;
           return untouched;
         }
@@ -261,11 +381,11 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
             walks.flatMap((edges) => edges?.flatMap((edge) => edge.segmentKey ?? []) ?? []),
           ),
         ];
+        // Every speed comes from one epoch's snapshot, read after the walks, however long they
+        // took and whichever boundaries they spanned.
+        const published = await readSnapshot((epochStartMs) => store.byKeys(keys, epochStartMs));
         const speeds = new Map(
-          (await store.byKeys(keys, tickMs)).map((release) => [
-            release.segmentKey,
-            release.speedKph,
-          ]),
+          published.value.map((release) => [release.segmentKey, release.speedKph]),
         );
         const annotations = routes.map((route, index) => {
           const edges = walks[index];
@@ -321,11 +441,11 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
     },
 
     async flow(bounds) {
-      const tickMs = epochStart();
-      const { releases, truncated } = await store.inBounds(
-        bounds,
-        tickMs,
-        settings.maxFlowFeatures,
+      const {
+        epochMs: tickMs,
+        value: { releases, truncated },
+      } = await readSnapshot((epochStartMs) =>
+        store.inBounds(bounds, epochStartMs, settings.maxFlowFeatures),
       );
       counters.flowResponses += 1;
       return {
@@ -349,7 +469,7 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
       };
     },
 
-    async ingest(batch) {
+    async ingest(batch, origin = {}) {
       if (settings.mode === 'off' || mapMatcher === undefined) {
         counters.batchesUnavailable += 1;
         return { status: 'unavailable' };
@@ -357,12 +477,12 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
       const nowMs = clock().getTime();
       // The credential is checked before anything else is spent on the request, and only a valid
       // one draws on the shared quota, so junk cannot use up what real drivers need.
-      const seed = credentials.open(batch.credential, nowMs);
-      if (seed === undefined) {
+      const contributor = credentials.open(batch.credential, nowMs);
+      if (contributor === undefined) {
         counters.batchesUnauthorized += 1;
         return { status: 'unauthorized' };
       }
-      if (!contributorLimiter.consume(seed.toString('base64'))) {
+      if (!contributorLimiter.consume(contributor.seed.toString('base64'))) {
         counters.batchesRateLimited += 1;
         return { status: 'rate_limited' };
       }
@@ -393,12 +513,23 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
           return { status: 'accepted' };
         }
         // The arrival epoch comes from the server clock. Nothing the batch says about time
-        // decides where its samples count.
-        counters.samplesRecorded += cohorts.add(
+        // decides where its samples count; its start time can only make them expire sooner.
+        const recorded = cohorts.add(
           observations,
-          (segmentKey) => credentials.tagFor(seed, segmentKey),
+          {
+            drivenAtMs: Date.parse(batch.capturedAt),
+            newcomerNetwork: contributor.newInstallation
+              ? createHmac('sha256', networkKey)
+                  .update(origin.network ?? 'unknown')
+                  .digest('base64url')
+                  .slice(0, 16)
+              : undefined,
+            tagFor: (segmentKey) => credentials.tagFor(contributor.seed, segmentKey),
+          },
           clock().getTime(),
         );
+        counters.samplesRecorded += recorded;
+        counters.samplesIgnored += observations.length - recorded;
         counters.batchesAccepted += 1;
         return { status: 'accepted' };
       } catch {
@@ -411,10 +542,20 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
     },
 
     async issueCredential(assertion) {
-      if (settings.mode === 'off' || options.attestation === undefined) return undefined;
+      if (!accepting() || options.attestation === undefined) return undefined;
       // The installation id is read once to derive the seed and is not kept, logged or stored.
-      const { installationId } = await options.attestation.assertTrafficContributor(assertion);
-      const { credential, expiresAtMs } = credentials.issue(installationId, clock().getTime());
+      const { installationId, registeredAt } =
+        await options.attestation.assertTrafficContributor(assertion);
+      const nowMs = clock().getTime();
+      const eligibleAtMs = registeredAt.getTime() + settings.minimumInstallationAgeSeconds * 1_000;
+      if (eligibleAtMs > nowMs) {
+        throw new InstallationTooNewError(Math.ceil((eligibleAtMs - nowMs) / 1_000));
+      }
+      const { credential, expiresAtMs } = credentials.issue(
+        installationId,
+        nowMs,
+        registeredAt.getTime() + settings.newcomerSeconds * 1_000,
+      );
       counters.credentialsIssued += 1;
       return { credential, expiresAt: new Date(expiresAtMs).toISOString() };
     },
@@ -434,12 +575,14 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
       const purged = store.purge().catch((error: unknown) => {
         counters.purgeFailures += 1;
         options.onMaintenanceFailure?.('purge');
+        if (settings.mode === 'off') retryPurge(PURGE_RETRY_FIRST_MS);
         throw error;
       });
       if (settings.mode === 'off') {
         // The API runs with traffic off in production. A slow or unreachable database must not
-        // keep it from starting: wait briefly, then let the purge finish, or fail and be
-        // reported, on its own.
+        // keep it from starting: wait briefly, then let the purge finish on its own. A failed
+        // purge is reported and retried until it succeeds; until then old releases are past
+        // their expiry and never served, but they are not yet deleted.
         await Promise.race([
           purged.catch(() => undefined),
           new Promise<void>((resolve) => {
@@ -450,7 +593,8 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
       }
       await purged;
       await store.ready();
-      lastClosedEpochMs = epochStart();
+      // The store is empty, which is exactly the snapshot of the epoch the process starts in.
+      publication = { done: Promise.resolve(true), epochMs: epochStart() };
       scheduleEpoch();
     },
 
@@ -459,7 +603,9 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
         generatedAt: clock().toISOString(),
         mode: settings.mode === 'collect' ? 'collecting' : settings.mode,
         probes: {
-          accepting: settings.mode !== 'off' && options.attestation !== undefined,
+          // True only when a contributor can actually be admitted: the pipeline is on, has a
+          // matcher, and App Attest is configured to verify the credential assertion.
+          accepting: accepting(),
           batchTargetMeters: 600,
           batchTargetSeconds: 60,
           batchTrimMeters: settings.batchTrimMeters,
@@ -483,6 +629,23 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
       };
     },
   };
+}
+
+/**
+ * The releases to store at boundary `tickMs`: this epoch's, plus any from a failed earlier epoch
+ * that have not expired and were not replaced by a newer release of the same segment.
+ */
+function mergeReleases(
+  unstored: readonly TrafficRelease[],
+  released: readonly TrafficRelease[],
+  tickMs: number,
+): TrafficRelease[] {
+  const merged = new Map<string, TrafficRelease>();
+  for (const release of unstored) {
+    if (release.expiresAtMs > tickMs) merged.set(release.segmentKey, release);
+  }
+  for (const release of released) merged.set(release.segmentKey, release);
+  return [...merged.values()].sort((left, right) => (left.segmentKey < right.segmentKey ? -1 : 1));
 }
 
 /**
