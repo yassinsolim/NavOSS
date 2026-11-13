@@ -1,6 +1,130 @@
-# Calgary route-quality report
+# Regional route-quality reports and v2 guidance contract
 
 Date: 2026-08-01
+
+## Revival coverage and guidance validation
+
+The service-area source now declares **Alberta and British Columbia**. The historical Calgary
+measurements below are retained unchanged; they are not results for the new provincial matrix.
+`apps/api/scripts/route-quality-alberta-bc.json` defines 11 reciprocal corridor families (22 directed
+routes), including Edmonton, Red Deer, Lethbridge, Banff, Vancouver, Victoria, Kelowna, Kamloops,
+Prince George, a Calgary interchange, and Calgary–Vancouver. Public anchors are not claimed to be
+verified entrances. No production provincial-matrix result has been fabricated or recorded.
+
+The matrix selects `/v2/routes`; existing regional/Calgary suites keep `/v1/routes`. The shared
+script also reports actual lane/signpost maneuver counts, current-road-name coverage and
+known/unknown/unlimited posted-limit segment counts. Its Calgary interchange corridor requires
+at least one lane-bearing maneuver. All previous structural, access, duration and explicit
+traffic-unavailable checks remain.
+
+### Local API/image evidence
+
+At `2026-11-13T01:31:38.981Z`, the API built by `infra/compose/api.Dockerfile` on
+`http://127.0.0.1:3013` routed against the exact 3.8.2 image and the public Calgary extract.
+Strict v1 configuration returned `calgary-ab`; v2 returned the two provincial service areas.
+The real Deerfoot/Glenmore route had **7 lane-bearing maneuvers** and **423 posted-limit segments**.
+At exit **248**, the two left straight lanes were invalid and the right-turn lane was valid/active
+with `validIndication: "right"`. The HTTP break/through probes returned respectively two/one arrival
+steps, and `/ready` was healthy.
+
+Ten warm requests per endpoint, interleaved after one excluded warm-up each, measured:
+
+| Local endpoint |   Median |      p95 |
+| -------------- | -------: | -------: |
+| `/v1/routes`   | 17.81 ms | 38.18 ms |
+| `/v2/routes`   | 18.63 ms | 26.81 ms |
+
+The observed median v2 overhead was **0.82 ms**. This small local sample is not a production SLA
+or a regional quality verdict. The clean Docker build's frozen-lockfile install succeeded with
+`protobufjs` postinstall denied; its deployed package excluded code-generation scripts/test
+fixtures and loaded the light runtime successfully.
+
+### Versioned compatibility and fields
+
+Build 70's strict phone decoder rejects unfamiliar response keys. Therefore `/v1/config` retains
+`calgary-ab` and `/v1/routes` retains its legacy shape and OSRM request path. `/v2/config` advertises
+`/v2/routes`, and its service-area array contains sourced provincial polygons plus separately scoped
+Calgary/Kelowna overlays. Phone/native migration to v2 and lane UI integration are client-wave work,
+not claimed by the API change.
+
+The optional v2 step fields are:
+
+| Field                                          | Meaning                                                                                                                                                                     |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `currentRoadName`                              | Sourced name/reference of the road driven along this step's geometry; use the current step, not the upcoming one.                                                           |
+| `lanes`                                        | Left-to-right approach-lane array for the maneuver at the **beginning** of this step; count is `lanes.length`.                                                              |
+| `lanes[].indications`                          | `none`, `uturn`, `sharp_left`, `left`, `slight_left`, `straight`, `slight_right`, `right`, `sharp_right`, `merge_left`, `merge_right`; empty when the source mask is empty. |
+| `lanes[].valid` / `active` / `validIndication` | Usable lane, preferred lane, and the source-selected indication. Active implies valid; valid does not imply active.                                                         |
+| `maneuverModifier`                             | Directional modifier for the maneuver; omitted for departure/arrival side-of-street flags.                                                                                  |
+| `roundaboutExit`                               | Source roundabout exit count when present.                                                                                                                                  |
+| `bearingBeforeDegrees` / `bearingAfterDegrees` | Source maneuver headings, clockwise from true north; missing stays missing.                                                                                                 |
+| `exitNumber` / `junctionName`                  | Source exit/interchange text.                                                                                                                                               |
+| `signpost`                                     | Readable text composed from native source sign elements.                                                                                                                    |
+| `signpostBranch` / `signpostToward`            | Separate source string arrays; never guessed by splitting mixed OSRM `destinations` text.                                                                                   |
+
+Optional `route.speedLimits` is geometry-segment-aligned, with elements
+`{ status: "known", kph: number }`, `{ status: "unknown" }`, or `{ status: "unlimited" }`.
+Known values are positive. The legacy `speedLimitsKph` array keeps zero for unknown/unlimited;
+unaligned or malformed annotations are omitted, not shifted onto another segment.
+V2 `waypoints[].type` accepts `break` or `through`, defaulting to `break`. A through/rejoin point
+does not create an arrival/departure pair. V1 still rejects the extra waypoint field.
+
+The v2-only route hook is now connected to community traffic. In `COMMUNITY_TRAFFIC_MODE=live`,
+usable published flow adds geometry-aligned `route.congestion` (`unknown`, `free`, `slow`, `heavy`,
+`stopped`) and `route.traffic.observedFraction`. `source.trafficSource` uses
+`{ id: "navoss-community", attribution: "Traffic from opted-in NavOSS drivers" }`; only a result
+with that source advertises community traffic as `live`. An alternative without `traffic` is
+unavailable for that route, not implicitly free-flow-observed. The API returns the enrichment
+service's order unchanged. Off/collecting modes preserve the previous v2 result; licensed traffic
+is never double-adjusted with community speeds.
+
+The provincial matrix below is a free-flow benchmark: run it with community traffic off, or expect
+its explicit traffic-unavailable posture check to flag a live-annotated response.
+
+### Real fixtures and exact serving version
+
+`apps/api/test/fixtures/valhalla/` contains decoded, trimmed captures from the repository's public
+FOSSGIS development endpoint (`https://valhalla1.openstreetmap.de/route`) and the exact local serving
+image `ghcr.io/valhalla/valhalla-scripted:3.8.2`. Captures retain timestamps, source URLs, raw-response
+hashes and only consumed protocol fields; tests re-encode those tags without changing route values.
+Fixtures are compact and retain only incoming/current maneuver edge fields; unreferenced node
+slots remain empty so recorded indices are unchanged. Trimming was checked against the normalized
+consumer output for every capture.
+Calgary Deerfoot/Glenmore and Metro Vancouver interchanges exercise multiple/valid/active lanes and
+native branch/toward sign elements. Real directions-only output covers absent lane/speed metadata.
+Real local break/through captures have respectively two/one legs and two/one arrival steps, with
+424 posted-limit annotations aligned to 424 geometry segments. Roundabout fixtures deliberately
+preserve the different public/local source exit counts; they do not assert physical-road parity.
+
+V2 sends a **binary PBF request** with `Content-Type: application/x-protobuf`, asking for both
+`directions` and `trip`. Valhalla 3.8.2 does not parse a JSON `pbf_field_selector`; JSON requests with
+`format: "pbf"` otherwise return directions only. The checked-in protocol subset is generated from
+the pinned 3.8.2 `.proto` files, with source hashes and the MIT notice. The API uses the light
+protobuf runtime; source/code-generation scripts are not in the deployed API package.
+
+Base routing makes one upstream route request. Malformed/missing optional metadata is omitted while
+the valid route remains. Transport failures (including body reads) and Valhalla error status use
+the existing 503 path without retry. A received but undecodable base route gets exactly one legacy
+format fallback; only `ValhallaDecodeError` is logged, and `/ready` reports extended guidance as
+degraded-but-ready. A subsequent good PBF response clears that state. Through waypoint semantics
+are preserved in the legacy-format fallback.
+
+Regenerate the pinned descriptor, only when deliberately updating the serving protocol:
+
+```sh
+corepack pnpm --filter @navoss/api exec node scripts/generate-valhalla-protocol.mjs
+```
+
+Run the provincial matrix after deploying this API against a full Alberta+BC graph:
+
+```sh
+NAVOSS_API_URL=https://navoss-api.yassin.app \
+  ROUTE_QUALITY_OUTPUT=artifacts/route-quality-alberta-bc-22.json \
+  corepack pnpm --filter @navoss/api test:routes:alberta-bc
+```
+
+The local Calgary extract proves protocol compatibility, not Edmonton/BC/rural/ferry routing,
+production deployment, or phone/CarPlay/head-unit behavior.
 
 ## Verdict
 

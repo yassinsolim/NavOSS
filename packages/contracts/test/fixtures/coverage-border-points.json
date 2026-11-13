@@ -1,0 +1,352 @@
+{
+  "source": "https://geo.statcan.gc.ca/geo_wa/rest/services/2021/Digital_boundary_files/MapServer/0",
+  "licenseUrl": "https://open.canada.ca/en/open-government-licence-canada",
+  "description": "Public city anchors and offsets on each side of the source provincial boundaries. No route results.",
+  "cases": [
+    {
+      "id": "calgary",
+      "coordinate": {
+        "latitude": 51.04427,
+        "longitude": -114.06309
+      },
+      "serviceAreaId": "alberta"
+    },
+    {
+      "id": "edmonton",
+      "coordinate": {
+        "latitude": 53.5461,
+        "longitude": -113.4938
+      },
+      "serviceAreaId": "alberta"
+    },
+    {
+      "id": "red-deer",
+      "coordinate": {
+        "latitude": 52.2681,
+        "longitude": -113.8112
+      },
+      "serviceAreaId": "alberta"
+    },
+    {
+      "id": "lethbridge",
+      "coordinate": {
+        "latitude": 49.6956,
+        "longitude": -112.8451
+      },
+      "serviceAreaId": "alberta"
+    },
+    {
+      "id": "banff",
+      "coordinate": {
+        "latitude": 51.1784,
+        "longitude": -115.5708
+      },
+      "serviceAreaId": "alberta"
+    },
+    {
+      "id": "vancouver",
+      "coordinate": {
+        "latitude": 49.2827,
+        "longitude": -123.1207
+      },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "victoria",
+      "coordinate": {
+        "latitude": 48.4284,
+        "longitude": -123.3656
+      },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "kelowna",
+      "coordinate": {
+        "latitude": 49.8879,
+        "longitude": -119.496
+      },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "kamloops",
+      "coordinate": {
+        "latitude": 50.6745,
+        "longitude": -120.3273
+      },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "prince-george",
+      "coordinate": {
+        "latitude": 53.9171,
+        "longitude": -122.7497
+      },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "masset-haida-gwaii",
+      "coordinate": {
+        "latitude": 54.0105,
+        "longitude": -132.1479
+      },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "alberta-north-inside",
+      "coordinate": {
+        "latitude": 59.98,
+        "longitude": -115
+      },
+      "serviceAreaId": "alberta"
+    },
+    {
+      "id": "northwest-territories-outside",
+      "coordinate": {
+        "latitude": 60.02,
+        "longitude": -115
+      },
+      "serviceAreaId": null
+    },
+    {
+      "id": "alberta-east-inside",
+      "coordinate": {
+        "latitude": 53.3,
+        "longitude": -110.02
+      },
+      "serviceAreaId": "alberta"
+    },
+    {
+      "id": "saskatchewan-outside",
+      "coordinate": {
+        "latitude": 53.3,
+        "longitude": -109.98
+      },
+      "serviceAreaId": null
+    },
+    {
+      "id": "alberta-south-inside",
+      "coordinate": {
+        "latitude": 49.02,
+        "longitude": -112
+      },
+      "serviceAreaId": "alberta"
+    },
+    {
+      "id": "montana-outside",
+      "coordinate": {
+        "latitude": 48.98,
+        "longitude": -112
+      },
+      "serviceAreaId": null
+    },
+    {
+      "id": "bc-north-inside",
+      "coordinate": {
+        "latitude": 59.98,
+        "longitude": -130
+      },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "yukon-outside",
+      "coordinate": {
+        "latitude": 60.02,
+        "longitude": -130
+      },
+      "serviceAreaId": null
+    },
+    {
+      "id": "bc-mainland-south-inside",
+      "coordinate": {
+        "latitude": 49.02,
+        "longitude": -122.75
+      },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "washington-mainland-outside",
+      "coordinate": {
+        "latitude": 48.98,
+        "longitude": -122.75
+      },
+      "serviceAreaId": null
+    },
+    {
+      "id": "point-roberts-outside",
+      "coordinate": {
+        "latitude": 48.985,
+        "longitude": -123.052
+      },
+      "serviceAreaId": null
+    },
+    {
+      "id": "san-juan-island-outside",
+      "coordinate": {
+        "latitude": 48.5343,
+        "longitude": -123.0171
+      },
+      "serviceAreaId": null
+    },
+    {
+      "id": "port-angeles-outside",
+      "coordinate": {
+        "latitude": 48.1181,
+        "longitude": -123.4307
+      },
+      "serviceAreaId": null
+    },
+    {
+      "id": "seattle-outside",
+      "coordinate": {
+        "latitude": 47.6062,
+        "longitude": -122.3321
+      },
+      "serviceAreaId": null
+    },
+    {
+      "id": "stewart-bc-inside",
+      "coordinate": {
+        "latitude": 55.938,
+        "longitude": -129.9824
+      },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "hyder-alaska-outside",
+      "coordinate": {
+        "latitude": 55.9177,
+        "longitude": -130.0241
+      },
+      "serviceAreaId": null
+    },
+    {
+      "id": "toronto-overlay-not-route",
+      "coordinate": {
+        "latitude": 43.6532,
+        "longitude": -79.3832
+      },
+      "serviceAreaId": null
+    },
+    {
+      "id": "ab-bc-border-49.6-east",
+      "coordinate": {
+        "latitude": 49.6,
+        "longitude": -114.723903
+      },
+      "serviceAreaId": "alberta"
+    },
+    {
+      "id": "ab-bc-border-49.6-west",
+      "coordinate": {
+        "latitude": 49.6,
+        "longitude": -114.763903
+      },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "ab-bc-border-51.5-east",
+      "coordinate": {
+        "latitude": 51.5,
+        "longitude": -116.369246
+      },
+      "serviceAreaId": "alberta"
+    },
+    {
+      "id": "ab-bc-border-51.5-west",
+      "coordinate": {
+        "latitude": 51.5,
+        "longitude": -116.409246
+      },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "ab-bc-border-53.5-east",
+      "coordinate": {
+        "latitude": 53.5,
+        "longitude": -119.792592
+      },
+      "serviceAreaId": "alberta"
+    },
+    {
+      "id": "ab-bc-border-53.5-west",
+      "coordinate": {
+        "latitude": 53.5,
+        "longitude": -119.832592
+      },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "ab-bc-border-55.5-east",
+      "coordinate": {
+        "latitude": 55.5,
+        "longitude": -119.981707
+      },
+      "serviceAreaId": "alberta"
+    },
+    {
+      "id": "ab-bc-border-55.5-west",
+      "coordinate": {
+        "latitude": 55.5,
+        "longitude": -120.021707
+      },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "ab-bc-border-58-east",
+      "coordinate": {
+        "latitude": 58,
+        "longitude": -119.980018
+      },
+      "serviceAreaId": "alberta"
+    },
+    {
+      "id": "ab-bc-border-58-west",
+      "coordinate": {
+        "latitude": 58,
+        "longitude": -120.020018
+      },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "bc-alaska-border-inside",
+      "coordinate": {
+        "latitude": 58,
+        "longitude": -133.049483
+      },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "bc-alaska-border-outside",
+      "coordinate": {
+        "latitude": 58,
+        "longitude": -133.089483
+      },
+      "serviceAreaId": null
+    },
+    {
+      "id": "bc-nwt-north-inside",
+      "coordinate": { "latitude": 59.98, "longitude": -122 },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "bc-nwt-north-outside",
+      "coordinate": { "latitude": 60.02, "longitude": -122 },
+      "serviceAreaId": null
+    },
+    {
+      "id": "ab-bc-north-corner-alberta",
+      "coordinate": { "latitude": 59.98, "longitude": -119.98 },
+      "serviceAreaId": "alberta"
+    },
+    {
+      "id": "ab-bc-north-corner-bc",
+      "coordinate": { "latitude": 59.98, "longitude": -120.02 },
+      "serviceAreaId": "british-columbia"
+    },
+    {
+      "id": "nwt-shared-corner-outside",
+      "coordinate": { "latitude": 60.02, "longitude": -120.02 },
+      "serviceAreaId": null
+    }
+  ]
+}

@@ -5,8 +5,9 @@ Decision date: 2026-07-24
 ## Decision
 
 North America coverage is possible, but it is not a bounds-only change. NavOSS must expand routing,
-search, map operations, regional quality evidence, and support capacity together. Until those gates
-pass, the API contract and app continue to report Calgary as the only supported production coverage.
+search, map operations, regional quality evidence, and support capacity together. The selected source
+coverage is now Alberta and British Columbia, not the whole continent. The legacy `/v1/config`
+continues to identify Calgary for strict shipped clients; `/v2/config` declares the provincial areas.
 
 The preferred architecture keeps the current MapLibre and native NavOSS navigation experience:
 
@@ -22,16 +23,41 @@ expose a reusable live-traffic feed for the NavOSS server or MapLibre route geom
 This is an engineering decision record, not legal advice. A signed provider agreement controls over
 public documentation when they differ.
 
+## Alberta and British Columbia source milestone
+
+The revival source aligns search and route eligibility with the documented Alberta+BC Nominatim and
+Valhalla imports. One shared data registry contains Statistics Canada's simplified 2021 provincial
+digital boundaries. Eligibility uses those polygons, including islands and coastal waters, not the
+rectangular retrieval envelopes. Search results are polygon-filtered before limiting; every route
+origin, waypoint and destination is checked. Calgary civic search/cameras and Kelowna/DriveBC
+context remain separately labelled **local overlays**.
+
+`/v1/config` and `/v1/routes` remain legacy-shaped for TestFlight build 70. Optional lane, signpost,
+current-road, roundabout, bearing and posted-limit-status data is available at `/v2/routes`.
+V2 waypoints accept `type: "break" | "through"` (default `break`) so a keep-route rejoin anchor need
+not produce an intermediate arrival. Phone/native migration to the enriched endpoint is a separate
+client integration; API lane data is not a claim that the shipped app renders lane guidance.
+
+Validation includes sourced border fixtures and real Calgary/Metro Vancouver Valhalla responses,
+plus the exact production `valhalla-scripted:3.8.2` image with a local Calgary extract. The
+22-directed-route provincial matrix covers Edmonton, Red Deer, Lethbridge, Banff, Vancouver,
+Victoria, Kelowna, Kamloops, Prince George and Calgary–Vancouver. It is ready to run after deployment;
+it has **not** been run against the production VM and is not a province-wide quality verdict.
+See [`../testing/route-quality.md`](../testing/route-quality.md) for contracts and reproduction.
+
 ## Why the current stack is regional
 
-- `AppConfigResponse` identifies coverage as `calgary-ab`, with Calgary bounds and driving mode.
-- Production Valhalla and Nominatim import the Alberta Geofabrik extract.
+- `/v2/config` publishes data-defined Alberta and British Columbia service areas with sourced
+  boundaries and retrieval bounds; `/v1/config` preserves the Calgary response for shipped clients.
+- The VM deployment record contains Alberta+BC Nominatim and Valhalla artifacts, including
+  `valhalla-alberta-british-columbia-260730-ca-parent`. Deploying this API source remains a separate
+  rollout step; agents have not inspected or changed the production VM.
 - The Calgary business and parcel index improves local search but has no equivalent continent-wide
   source.
 - Official safety-camera data is a Calgary overlay and must remain labelled as such outside the
   routing/search coverage decision.
 - The production VM has 4 vCPU, 16 GiB RAM, and 160 GiB of artifact storage. It is appropriate for
-  the current Alberta services, not a full North America geocoder import and blue/green update set.
+  the current Alberta+BC services, not a full North America geocoder import and blue/green update set.
 
 As of 2026-07-24, Geofabrik's North America PBF is 17.9 GB: Canada is 6.0 GB, the United States is
 11.2 GB, and Mexico is 607 MB. The compressed source is only the beginning of the storage budget.
@@ -143,15 +169,15 @@ Safety cameras, parking, closures, and municipal place enrichment remain source-
 must publish their individual coverage and freshness rather than treating a Calgary dataset as a
 North America feature.
 
-The first selected expansion is Toronto/GTA, not all of Ontario at once. Start with a separate
-Ontario Valhalla and Nominatim staging deployment, Toronto/GTA route and search quality cases, and
-the City of Toronto's active red-light-camera feed. Keep the current `/v1` Calgary contract stable;
-regional clients use additive versioned endpoints until a migration build is broadly installed.
+Alberta and British Columbia are the selected routing/search area. Toronto/GTA remains an
+overlay-first future expansion: benchmark an Ontario Valhalla and Nominatim staging deployment and
+regional route/search cases before adding its boundary to the shared service-area registry. Keep the
+legacy `/v1` response stable; updated clients use the versioned coverage and routing contracts.
 
 The first code milestone provides a validated and deployed `/v2/cameras?region=toronto-on` feed and
 loads its markers only when the phone is inside Toronto bounds. On July 30, 2026, production returned
-301 daily-refreshed red-light-camera locations. This does not change the current Calgary
-production-coverage claim. Ontario search and routing remain blocked on the staging imports and
+301 daily-refreshed red-light-camera locations. This is still an overlay, not Ontario search or
+routing coverage. Ontario search and routing remain blocked on staging imports and
 quality gates above.
 
 Toronto's red-light-camera dataset identifies intersections but not enforced approach direction.
@@ -175,12 +201,11 @@ licensed flow pipeline described above.
 
 ## Staged rollout
 
-1. **Toronto/GTA internal coverage:** benchmark an Ontario import, deploy isolated staging
-   routing/search, validate GTA routes and addresses, retain source-labelled Toronto red-light
-   cameras, retain the cached Ontario 511 event endpoint, and add road-condition polylines only
-   after separate map and freshness validation.
-2. **Canada internal coverage:** generalize the coverage contract, deploy Canadian routing/search,
-   and add cross-province, bilingual, rural, ferry, winter-road, and border-adjacent route cases.
+1. **Alberta+BC source coverage:** deploy the polygon-enforced API, retain strict v1 compatibility,
+   run the provincial route matrix and regional search gates, and validate rollback and client use.
+2. **Ontario/Canada expansion:** benchmark Ontario staging imports and GTA routes/addresses first,
+   retain source-labelled Toronto cameras/Ontario 511 overlays, then add Canadian provinces as
+   registry data only when routing/search imports and regional quality gates are ready.
 3. **United States internal coverage:** add TIGER/postcode search enrichment, interstate/toll/express
    lane cases, unit-address cases, and multi-time-zone route checks.
 4. **Mexico internal coverage:** add Spanish search/instructions, toll-road, address-format, border,
@@ -218,6 +243,8 @@ North America is not ready to claim until all of the following are true:
 - [TomTom portal terms](https://docs.tomtom.com/legal/terms-and-conditions)
 - [Geofabrik North America extracts](https://download.geofabrik.de/north-america.html)
 - [Nominatim installation](https://nominatim.org/release-docs/latest/admin/Installation/)
+- [Statistics Canada 2021 province/territory digital boundaries](https://geo.statcan.gc.ca/geo_wa/rest/services/2021/Digital_boundary_files/MapServer/0)
+- [Open Government Licence – Canada](https://open.canada.ca/en/open-government-licence-canada)
 - [Nominatim import](https://nominatim.org/release-docs/latest/admin/Import/)
 - [Nominatim updates](https://nominatim.org/release-docs/latest/admin/Update/)
 - [Valhalla](https://github.com/valhalla/valhalla)

@@ -1,4 +1,13 @@
-import type { SearchCategory, SearchQuery, SearchResponse, SearchResult } from '@navoss/contracts';
+import {
+  CALGARY_REGION_BOUNDS,
+  isCoordinateInBounds,
+  isCoordinateInServiceCoverage,
+  SERVICE_COVERAGE_BOUNDS,
+  type SearchCategory,
+  type SearchQuery,
+  type SearchResponse,
+  type SearchResult,
+} from '@navoss/contracts';
 import { z } from 'zod/v4';
 
 import { createPostgresCalgarySearchProvider } from './calgary-search-provider.js';
@@ -8,19 +17,12 @@ import { normalizeSearchText, placeSearchQueryVariants } from './search-text.js'
 
 const DEFAULT_PHOTON_URL = 'https://photon.komoot.io/api/';
 const PHOTON_TIMEOUT_MS = 3_000;
-const SEARCH_BOUNDS = '-119.65,49.7,-113.8,51.25';
-const SEARCH_EAST = -113.8;
-const SEARCH_NORTH = 51.25;
-const SEARCH_SOUTH = 49.7;
-const SEARCH_WEST = -119.65;
-const CALGARY_EAST = -113.859;
-const CALGARY_NORTH = 51.212;
-const CALGARY_SOUTH = 50.842;
-const CALGARY_WEST = -114.316;
-const KELOWNA_EAST = -119.2;
-const KELOWNA_NORTH = 50.15;
-const KELOWNA_SOUTH = 49.7;
-const KELOWNA_WEST = -119.65;
+const SEARCH_BOUNDS = [
+  SERVICE_COVERAGE_BOUNDS.southWest.longitude,
+  SERVICE_COVERAGE_BOUNDS.southWest.latitude,
+  SERVICE_COVERAGE_BOUNDS.northEast.longitude,
+  SERVICE_COVERAGE_BOUNDS.northEast.latitude,
+].join(',');
 const NOMINATIM_TIMEOUT_MS = 4_000;
 const EARTH_RADIUS_METERS = 6_371_000;
 
@@ -28,25 +30,14 @@ export function isCalgarySearchCoordinate(coordinate: {
   latitude: number;
   longitude: number;
 }): boolean {
-  return (
-    coordinate.latitude >= CALGARY_SOUTH &&
-    coordinate.latitude <= CALGARY_NORTH &&
-    coordinate.longitude >= CALGARY_WEST &&
-    coordinate.longitude <= CALGARY_EAST
-  );
+  return isCoordinateInBounds(coordinate, CALGARY_REGION_BOUNDS);
 }
 
 export function isSupportedSearchCoordinate(coordinate: {
   latitude: number;
   longitude: number;
 }): boolean {
-  return (
-    isCalgarySearchCoordinate(coordinate) ||
-    (coordinate.latitude >= KELOWNA_SOUTH &&
-      coordinate.latitude <= KELOWNA_NORTH &&
-      coordinate.longitude >= KELOWNA_WEST &&
-      coordinate.longitude <= KELOWNA_EAST)
-  );
+  return isCoordinateInServiceCoverage(coordinate);
 }
 
 export const SEARCH_CATEGORY_TYPES = {
@@ -253,12 +244,29 @@ function nominatimViewbox(
     query.longitude === undefined ||
     radius === undefined
   ) {
-    return '-119.65,51.25,-113.8,49.7';
+    return [
+      SERVICE_COVERAGE_BOUNDS.southWest.longitude,
+      SERVICE_COVERAGE_BOUNDS.northEast.latitude,
+      SERVICE_COVERAGE_BOUNDS.northEast.longitude,
+      SERVICE_COVERAGE_BOUNDS.southWest.latitude,
+    ].join(',');
   }
-  const west = Math.max(SEARCH_WEST, query.longitude - radius.longitude);
-  const north = Math.min(SEARCH_NORTH, query.latitude + radius.latitude);
-  const east = Math.min(SEARCH_EAST, query.longitude + radius.longitude);
-  const south = Math.max(SEARCH_SOUTH, query.latitude - radius.latitude);
+  const west = Math.max(
+    SERVICE_COVERAGE_BOUNDS.southWest.longitude,
+    query.longitude - radius.longitude,
+  );
+  const north = Math.min(
+    SERVICE_COVERAGE_BOUNDS.northEast.latitude,
+    query.latitude + radius.latitude,
+  );
+  const east = Math.min(
+    SERVICE_COVERAGE_BOUNDS.northEast.longitude,
+    query.longitude + radius.longitude,
+  );
+  const south = Math.max(
+    SERVICE_COVERAGE_BOUNDS.southWest.latitude,
+    query.latitude - radius.latitude,
+  );
   return [west, north, east, south].map((value) => String(Number(value.toFixed(3)))).join(',');
 }
 
@@ -377,21 +385,31 @@ function normalizePhotonResults(
   limit: number,
   includeDetails: boolean,
 ): SearchResult[] {
-  return payload.features.slice(0, limit).map((feature, index) => {
-    const detailCategory = includeDetails ? nonEmptyText(feature.properties.osm_value) : undefined;
-    return {
-      category: categoryFor(feature.properties),
-      center: {
+  return payload.features
+    .filter((feature) =>
+      isSupportedSearchCoordinate({
         latitude: feature.geometry.coordinates[1],
         longitude: feature.geometry.coordinates[0],
-      },
-      confidence: Math.max(0.55, 0.92 - index * 0.06),
-      ...(detailCategory === undefined ? {} : { details: { category: detailCategory } }),
-      id: `photon:${feature.properties.osm_type ?? 'unknown'}:${String(feature.properties.osm_id)}`,
-      label: displayLabel(feature.properties),
-      name: displayName(feature.properties),
-    };
-  });
+      }),
+    )
+    .slice(0, limit)
+    .map((feature, index) => {
+      const detailCategory = includeDetails
+        ? nonEmptyText(feature.properties.osm_value)
+        : undefined;
+      return {
+        category: categoryFor(feature.properties),
+        center: {
+          latitude: feature.geometry.coordinates[1],
+          longitude: feature.geometry.coordinates[0],
+        },
+        confidence: Math.max(0.55, 0.92 - index * 0.06),
+        ...(detailCategory === undefined ? {} : { details: { category: detailCategory } }),
+        id: `photon:${feature.properties.osm_type ?? 'unknown'}:${String(feature.properties.osm_id)}`,
+        label: displayLabel(feature.properties),
+        name: displayName(feature.properties),
+      };
+    });
 }
 
 function nominatimCategory(
@@ -427,63 +445,71 @@ function normalizeNominatimResults(
   query: SearchQuery,
 ): SearchResult[] {
   const normalizedQuery = normalizeSearchText(query.q);
-  return payload.slice(0, query.limit).map((result) => {
-    const sourceName = nonEmptyText(result.name);
-    const displayName = nonEmptyText(result.display_name.split(',')[0]);
-    const name = sourceName ?? displayName ?? 'Unnamed place';
-    const normalizedName = normalizeSearchText(name);
-    const normalizedLabel = normalizeSearchText(result.display_name);
-    const words = normalizedQuery.split(' ').filter(Boolean);
-    let confidence = 0.55;
+  return payload
+    .filter((result) =>
+      isSupportedSearchCoordinate({
+        latitude: result.lat,
+        longitude: result.lon,
+      }),
+    )
+    .slice(0, query.limit)
+    .map((result) => {
+      const sourceName = nonEmptyText(result.name);
+      const displayName = nonEmptyText(result.display_name.split(',')[0]);
+      const name = sourceName ?? displayName ?? 'Unnamed place';
+      const normalizedName = normalizeSearchText(name);
+      const normalizedLabel = normalizeSearchText(result.display_name);
+      const words = normalizedQuery.split(' ').filter(Boolean);
+      let confidence = 0.55;
 
-    if (normalizedName === normalizedQuery || normalizedLabel === normalizedQuery) {
-      confidence = 0.98;
-    } else if (normalizedName.startsWith(normalizedQuery)) {
-      confidence = 0.94;
-    } else if (normalizedLabel.startsWith(normalizedQuery)) {
-      confidence = 0.92;
-    } else if (normalizedName.includes(normalizedQuery)) {
-      confidence = 0.86;
-    } else if (words.every((word) => normalizedLabel.includes(word))) {
-      confidence = 0.8;
-    }
+      if (normalizedName === normalizedQuery || normalizedLabel === normalizedQuery) {
+        confidence = 0.98;
+      } else if (normalizedName.startsWith(normalizedQuery)) {
+        confidence = 0.94;
+      } else if (normalizedLabel.startsWith(normalizedQuery)) {
+        confidence = 0.92;
+      } else if (normalizedName.includes(normalizedQuery)) {
+        confidence = 0.86;
+      } else if (words.every((word) => normalizedLabel.includes(word))) {
+        confidence = 0.8;
+      }
 
-    const openingHours = nonEmptyText(result.extratags?.opening_hours);
-    const phone = nonEmptyText(result.extratags?.phone ?? result.extratags?.['contact:phone']);
-    const website = nonEmptyText(
-      result.extratags?.website ?? result.extratags?.['contact:website'],
-    );
-    const wheelchair = nonEmptyText(result.extratags?.wheelchair);
-    const placeDescription =
-      query.includeDetails && result.type !== undefined
-        ? finalizeDetailCategory(result.type, result.extratags?.cuisine)
-        : undefined;
+      const openingHours = nonEmptyText(result.extratags?.opening_hours);
+      const phone = nonEmptyText(result.extratags?.phone ?? result.extratags?.['contact:phone']);
+      const website = nonEmptyText(
+        result.extratags?.website ?? result.extratags?.['contact:website'],
+      );
+      const wheelchair = nonEmptyText(result.extratags?.wheelchair);
+      const placeDescription =
+        query.includeDetails && result.type !== undefined
+          ? finalizeDetailCategory(result.type, result.extratags?.cuisine)
+          : undefined;
 
-    const normalized: SearchResult = {
-      category: nominatimCategory(result),
-      center: { latitude: result.lat, longitude: result.lon },
-      confidence,
-      ...(query.includeDetails
-        ? {
-            details: {
-              address: result.display_name,
-              ...(result.type === undefined ? {} : { category: result.type }),
-              ...(openingHours ? { openingHours } : {}),
-              ...(phone ? { phone } : {}),
-              ...(website ? { website } : {}),
-              ...(wheelchair ? { wheelchair } : {}),
-            },
-          }
-        : {}),
-      id: `nominatim:${result.osm_type}:${String(result.osm_id)}`,
-      label: result.display_name,
-      name,
-    };
-    if (placeDescription !== undefined && normalized.details !== undefined) {
-      descriptionsByDetails.set(normalized.details, placeDescription);
-    }
-    return normalized;
-  });
+      const normalized: SearchResult = {
+        category: nominatimCategory(result),
+        center: { latitude: result.lat, longitude: result.lon },
+        confidence,
+        ...(query.includeDetails
+          ? {
+              details: {
+                address: result.display_name,
+                ...(result.type === undefined ? {} : { category: result.type }),
+                ...(openingHours ? { openingHours } : {}),
+                ...(phone ? { phone } : {}),
+                ...(website ? { website } : {}),
+                ...(wheelchair ? { wheelchair } : {}),
+              },
+            }
+          : {}),
+        id: `nominatim:${result.osm_type}:${String(result.osm_id)}`,
+        label: result.display_name,
+        name,
+      };
+      if (placeDescription !== undefined && normalized.details !== undefined) {
+        descriptionsByDetails.set(normalized.details, placeDescription);
+      }
+      return normalized;
+    });
 }
 
 export function buildPhotonSearchUrl(query: SearchQuery, endpoint = DEFAULT_PHOTON_URL): string {
@@ -676,6 +702,7 @@ function mergeResults(
   };
   const ranked = resultGroups
     .flat()
+    .filter((result) => isSupportedSearchCoordinate(result.center))
     .map((result) => presentSearchResult(result, query))
     .sort((left, right) => {
       const distanceDelta = compareDistance(left, right);

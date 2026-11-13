@@ -6,6 +6,7 @@ import {
   TRAFFIC_PROBE_LIMITS,
   type CommunityAssertion,
   type RouteCongestionLevel,
+  type Coordinate,
   type TrafficCredentialResponse,
   type TrafficFlowBounds,
   type TrafficFlowResponse,
@@ -191,6 +192,8 @@ export interface TrafficServiceOptions {
   attestation?: TrafficAttestation | undefined;
   clock?: () => Date;
   credentials?: TrafficCredentials;
+  /** Tests may inject the recorded replay area; configured service coverage is always provincial. */
+  isInCoverage?: (coordinate: Coordinate) => boolean;
   mapMatcher?: MapMatcher;
   /** Told about failed maintenance so the operator sees it; receives no data. */
   onMaintenanceFailure?: (failure: TrafficMaintenanceFailure) => void;
@@ -486,7 +489,7 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
         counters.batchesRateLimited += 1;
         return { status: 'rate_limited' };
       }
-      const rejection = findProbeRejection(batch, nowMs, settings);
+      const rejection = findProbeRejection(batch, nowMs, settings, options.isInCoverage);
       if (rejection !== undefined) {
         counters.batchesRejected += 1;
         return { reason: rejection, status: 'rejected' };

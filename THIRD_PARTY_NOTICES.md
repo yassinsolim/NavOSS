@@ -5,7 +5,7 @@ It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
 
-Lockfile SHA-256: `68969253fa0444f3e4cdf52ed1866577bf30a46832d87f559d6947dcd55b4d8f`
+Lockfile SHA-256: `fece19d1b070b74fe8fcddd59d6fe80c848a024f635d87687ffaddf93f111c19`
 
 Regenerate with:
 
@@ -41,6 +41,7 @@ corepack pnpm licenses:generate
 - `exponential-backoff` - `3.1.3` - <https://github.com/coveooss/exponential-backoff#readme>
 - `fb-watchman` - `2.0.2` - <https://facebook.github.io/watchman/>
 - `lighthouse-logger` - `1.4.2`
+- `long` - `5.3.2` - <https://github.com/dcodeIO/long.js#readme>
 - `marky` - `1.3.0` - <https://github.com/nolanlawson/marky#readme>
 - `walker` - `1.0.8` - <https://github.com/daaku/nodejs-walker>
 - `xcode` - `3.0.1` - <https://github.com/apache/cordova-node-xcode#readme>
@@ -65,12 +66,23 @@ corepack pnpm licenses:generate
 ## BSD-3-Clause
 
 - `@expo/xcpretty` - `4.4.4` - <https://github.com/expo/expo-cli>
+- `@protobufjs/aspromise` - `1.1.2` - <https://github.com/dcodeIO/protobuf.js#readme>
+- `@protobufjs/base64` - `1.1.2` - <https://github.com/dcodeIO/protobuf.js#readme>
+- `@protobufjs/codegen` - `2.0.5` - <https://github.com/dcodeIO/protobuf.js#readme>
+- `@protobufjs/eventemitter` - `1.1.1` - <https://github.com/dcodeIO/protobuf.js#readme>
+- `@protobufjs/fetch` - `1.1.1` - <https://github.com/dcodeIO/protobuf.js#readme>
+- `@protobufjs/float` - `1.0.2` - <https://github.com/dcodeIO/protobuf.js#readme>
+- `@protobufjs/inquire` - `1.1.2` - <https://github.com/dcodeIO/protobuf.js#readme>
+- `@protobufjs/path` - `1.1.2` - <https://github.com/dcodeIO/protobuf.js#readme>
+- `@protobufjs/pool` - `1.1.0` - <https://github.com/dcodeIO/protobuf.js#readme>
+- `@protobufjs/utf8` - `1.1.2` - <https://github.com/protobufjs/protobuf.js#readme>
 - `@react-native/debugger-frontend` - `0.86.0` - <https://github.com/facebook/react-native/tree/HEAD/packages/debugger-frontend#readme>
 - `fast-uri` - `3.1.3, 4.1.0` - <https://github.com/fastify/fast-uri>
 - `hoist-non-react-statics` - `3.3.2` - <https://github.com/mridgway/hoist-non-react-statics#readme>
 - `hyphenate-style-name` - `1.1.0` - <https://github.com/rexxars/hyphenate-style-name#readme>
 - `light-my-request` - `6.6.0` - <https://github.com/fastify/light-my-request#readme>
 - `makeerror` - `1.0.12` - <https://github.com/daaku/nodejs-makeerror#readme>
+- `protobufjs` - `7.5.4` - <https://protobufjs.github.io/protobuf.js/>
 - `secure-json-parse` - `4.1.0` - <https://github.com/fastify/secure-json-parse#readme>
 - `source-map` - `0.5.7, 0.6.1` - <https://github.com/mozilla/source-map>
 - `source-map-js` - `1.2.1` - <https://github.com/7rulnik/source-map-js>

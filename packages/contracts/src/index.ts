@@ -11,6 +11,26 @@ export { AppConfigResponseSchema, LegacyAppConfigResponseSchema } from './config
 export type { AppConfigResponse, LegacyAppConfigResponse } from './config.js';
 
 export {
+  CALGARY_REGION_BOUNDS,
+  COVERAGE_BOUNDARY_SOURCE,
+  CoverageBoundarySchema,
+  CoverageBoundarySourceSchema,
+  CoverageOverlaySchema,
+  isCoordinateInBoundary,
+  isCoordinateInBounds,
+  isCoordinateInServiceCoverage,
+  KELOWNA_REGION_BOUNDS,
+  LOCAL_OVERLAY_AREAS,
+  SERVICE_AREAS,
+  SERVICE_COVERAGE_BOUNDS,
+  SERVICE_COVERAGE_ID,
+  SERVICE_COVERAGE_NAME,
+  ServiceAreaSchema,
+  serviceAreaForCoordinate,
+} from './coverage.js';
+export type { CoverageBoundary, ServiceArea } from './coverage.js';
+
+export {
   ContributionSubmissionRequestSchema,
   ContributionSubmissionResponseSchema,
   ContributionTypeSchema,
@@ -182,6 +202,26 @@ export type {
 } from './search.js';
 
 export { OfflineBundleManifestSchema, type OfflineBundleManifest } from './offline-bundle.js';
+export {
+  RouteAlternativeV2Schema,
+  RouteLaneIndicationSchema,
+  RouteLaneSchema,
+  RouteResponseV2Schema,
+  RouteSpeedLimitSchema,
+  RouteStepV2Schema,
+} from './route-v2.js';
+export type {
+  RouteAlternativeV2,
+  RouteLane,
+  RouteLaneIndication,
+  RouteResponseV2,
+  RouteSpeedLimit,
+  RouteStepV2,
+} from './route-v2.js';
+
+export { RouteRequestV2Schema, RouteWaypointV2Schema } from './route-v2.js';
+export type { RouteRequestV2, RouteWaypointV2 } from './route-v2.js';
+
 export {
   COMMUNITY_TRAFFIC_ATTRIBUTION,
   COMMUNITY_TRAFFIC_SOURCE_ID,

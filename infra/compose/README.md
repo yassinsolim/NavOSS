@@ -1,6 +1,6 @@
 # NavOSS production stack
 
-This stack serves the Calgary–Kelowna NavOSS API from the dedicated Proxmox VM.
+This stack serves the NavOSS API using the Alberta–British Columbia geospatial artifacts.
 All geospatial and database services remain private. Caddy binds only to
 `127.0.0.1:8080`; Cloudflare Tunnel is the sole public ingress.
 
@@ -307,6 +307,66 @@ migrations; recreate `api`; then confirm `curl -s http://127.0.0.1:8080/v2/confi
 `"communityReports":true`. Set it back to `shadow` and recreate `api` to stop showing reports
 immediately (the kill switch). `COMMUNITY_ATTESTATION_MODE=allow-development` admits simulator
 installations as untrusted with much lower limits; never use it on the production API.
+
+## Provincial coverage and API-v2 routing rollout
+
+This is an API-image cutover, not a graph/geocoder rebuild. Retain
+`ghcr.io/valhalla/valhalla-scripted:3.8.2` and the existing versioned Alberta+BC artifacts.
+V2 uses its binary request/response protocol for lane/sign/limit data; v1 stays legacy-shaped.
+Record the actual running API image id and tag **before** building, and retain a rollback tag:
+
+```sh
+api_container_before=$(sudo docker compose ps -q api)
+api_image_before=$(sudo docker inspect --format '{{.Image}}' "$api_container_before")
+api_tag_before=$(sudo docker inspect --format '{{.Config.Image}}' "$api_container_before")
+sudo docker image tag "$api_image_before" navoss-api:pre-provincial-v2
+
+sudo docker compose build api
+sudo docker compose run --rm --no-deps api node dist/migrate.js
+sudo docker compose up -d --no-build --wait --wait-timeout 300 api caddy
+
+curl --fail --silent http://127.0.0.1:8080/v1/config |
+  jq -e '.apiVersion == "v1" and .coverage.id == "calgary-ab" and .endpoints.routes == "/v1/routes"'
+curl --fail --silent http://127.0.0.1:8080/v2/config |
+  jq -e '.coverage.id == "alberta-british-columbia" and .endpoints.routes == "/v2/routes"
+    and all(.coverage.serviceAreas[]; .boundary.type == "MultiPolygon")'
+
+# This is a committed public Calgary fixture, never an operator's private location/trip.
+jq '.request' ../../apps/api/test/fixtures/valhalla/calgary-deerfoot-glenmore.json |
+  curl --fail --silent -H 'Content-Type: application/json' --data-binary @- \
+    http://127.0.0.1:8080/v2/routes |
+  jq -e '.source.id == "valhalla-self-hosted" and
+    any(.routes[].steps[]; .exitNumber == "248" and (.lanes | length) > 0)'
+curl --fail --silent http://127.0.0.1:8080/ready |
+  jq -e '.status == "ready" and
+    ((.checks.routingProvider.detail // "") | contains("degraded") | not)'
+```
+
+Then, from a validated repository checkout on the operator's machine, run the complete
+22-directed-route matrix against the deployed full Alberta+BC service:
+
+```sh
+NAVOSS_API_URL=https://navoss-api.yassin.app \
+  ROUTE_QUALITY_OUTPUT=artifacts/route-quality-alberta-bc-22.json \
+  corepack pnpm --filter @navoss/api test:routes:alberta-bc
+```
+
+The required order is migrations → API start → strict v1 configuration → provincial v2
+configuration → a lane-bearing v2 route → the regional matrix. Keep community-report publication
+settings unchanged. The local Calgary protocol fixture is not a substitute for the full matrix.
+Confirm v1 clients still route before rolling phone/native clients onto `/v2/routes`.
+
+If the candidate API fails its gates, restore the saved image to its **actual Compose tag** and
+recreate only the API; do not roll back/delete the geospatial artifacts or additive SQL migrations:
+
+```sh
+sudo docker image tag navoss-api:pre-provincial-v2 "$api_tag_before"
+sudo docker compose up -d --no-build --wait --wait-timeout 300 api caddy
+./check-stack.sh
+```
+
+Retain the old image tag and the image id/tag record until regional and client validation finish.
+No production cutover or rollback was performed by the routing agent.
 
 ## First import
 

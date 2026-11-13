@@ -1,4 +1,4 @@
-import type { Coordinate, GeographicBounds } from '@navoss/contracts';
+import type { Coordinate } from '@navoss/contracts';
 import * as Location from 'expo-location';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { AppState } from 'react-native';
@@ -6,11 +6,9 @@ import { AppState } from 'react-native';
 import { phoneIdleLocationWatchOptions } from '@/features/map/idle-camera-follow';
 import { ensureForegroundLocationPermission } from '@/features/map/map-location';
 import {
-  CALGARY_REGION_BOUNDS,
-  isSearchCoverageRegion,
-  KELOWNA_REGION_BOUNDS,
   type MapRegion,
   mapRegionForCoordinate,
+  searchCoverageBoundsForRegion,
   TORONTO_CAMERA_BOUNDS,
 } from '@/features/map/map-region';
 import { searchOriginWithinBounds } from '@/features/map/search-proximity';
@@ -26,19 +24,6 @@ import { NavOssApiError } from '@/lib/api';
 import { createValueStore, type ValueStore } from '@/lib/value-store';
 
 export type LocationState = 'denied' | 'error' | 'idle' | 'locating' | 'visible';
-
-/**
- * Bounds that clamp the nearby-search origin for a region. Regions that search accepts but this
- * function does not know return undefined, which disables proximity rather than guessing.
- *
- * Integration seam (coverage slice): replace this body with `searchCoverageBoundsForRegion` from
- * `map-region.ts` once that helper exists on `main`.
- */
-function searchBoundsForRegion(region: MapRegion): GeographicBounds | undefined {
-  if (region === 'calgary-ab') return CALGARY_REGION_BOUNDS;
-  if (region === 'kelowna-bc') return KELOWNA_REGION_BOUNDS;
-  return undefined;
-}
 
 export interface UserLocation {
   /** Records a fix from a location subscription. */
@@ -168,9 +153,7 @@ export function useUserLocation(): UserLocation {
   };
 
   const mapRegion = mapRegionForCoordinate(userCoordinate);
-  const searchBounds = isSearchCoverageRegion(mapRegion)
-    ? searchBoundsForRegion(mapRegion)
-    : undefined;
+  const searchBounds = searchCoverageBoundsForRegion(mapRegion);
 
   return {
     applySample,

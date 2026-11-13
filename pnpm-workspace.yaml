@@ -5,6 +5,7 @@ packages:
 
 allowBuilds:
   esbuild: true
+  protobufjs: false
 
 catalog:
   '@fastify/swagger': 9.8.1

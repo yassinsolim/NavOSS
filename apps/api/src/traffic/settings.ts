@@ -1,4 +1,4 @@
-import type { TrafficFlowBounds } from '@navoss/contracts';
+import { SERVICE_COVERAGE_BOUNDS, type TrafficFlowBounds } from '@navoss/contracts';
 import { z } from 'zod/v4';
 
 export type TrafficMode = 'off' | 'collect' | 'live';
@@ -72,17 +72,17 @@ export const TRAFFIC_PRIVACY_LIMITS = {
   minimumTripEndTrimMeters: 400,
 } as const;
 
-/** Alberta and British Columbia, the coverage target. */
-const ALBERTA_BC_BOUNDS: TrafficFlowBounds = {
-  east: -109.9,
-  north: 60.1,
-  south: 48.2,
-  west: -139.1,
+/** Retrieval envelope only. Probe eligibility additionally uses the shared province polygons. */
+const DEFAULT_TRAFFIC_BOUNDS: TrafficFlowBounds = {
+  east: SERVICE_COVERAGE_BOUNDS.northEast.longitude,
+  north: SERVICE_COVERAGE_BOUNDS.northEast.latitude,
+  south: SERVICE_COVERAGE_BOUNDS.southWest.latitude,
+  west: SERVICE_COVERAGE_BOUNDS.southWest.longitude,
 };
 
 export const DEFAULT_TRAFFIC_SETTINGS: TrafficSettings = {
   batchTrimMeters: 100,
-  bounds: ALBERTA_BC_BOUNDS,
+  bounds: DEFAULT_TRAFFIC_BOUNDS,
   cohortSeconds: 900,
   credentialSeconds: 7_200,
   epochSeconds: 300,

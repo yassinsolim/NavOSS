@@ -1,4 +1,8 @@
-import type { TrafficProbeBatchRequest } from '@navoss/contracts';
+import {
+  isCoordinateInServiceCoverage,
+  type Coordinate,
+  type TrafficProbeBatchRequest,
+} from '@navoss/contracts';
 
 import { cumulativeMeters, haversineMeters, type Position } from './geo.js';
 import type { TrafficSettings } from './settings.js';
@@ -21,6 +25,7 @@ export function findProbeRejection(
     TrafficSettings,
     'bounds' | 'maxBatchAgeSeconds' | 'maxFutureSeconds' | 'maxPointSpeedMetersPerSecond'
   >,
+  isInCoverage: (coordinate: Coordinate) => boolean = isCoordinateInServiceCoverage,
 ): ProbeRejection | undefined {
   // The future check uses the batch's last point, the latest moment it claims to describe: a start
   // time inside the allowed skew must not carry later offsets into the future. The age check uses
@@ -34,7 +39,13 @@ export function findProbeRejection(
   let previous: TrafficProbeBatchRequest['points'][number] | undefined;
   for (const point of batch.points) {
     const [longitude, latitude, offsetSeconds] = point;
-    if (longitude < west || longitude > east || latitude < south || latitude > north) {
+    if (
+      longitude < west ||
+      longitude > east ||
+      latitude < south ||
+      latitude > north ||
+      !isInCoverage({ latitude, longitude })
+    ) {
       return 'outside_coverage';
     }
     if (previous !== undefined) {
