@@ -1,0 +1,281 @@
+{
+  "benchmarkId": "alberta-british-columbia-22",
+  "expectedCaseCount": 22,
+  "routePath": "/v2/routes",
+  "description": "22 directed public-anchor routes, not measured results. Ranges are structural review gates; anchors are not verified entrances.",
+  "licenseUrl": "https://www.openstreetmap.org/copyright",
+  "anchors": {
+    "calgary-downtown": {
+      "coordinate": {
+        "latitude": 51.04427,
+        "longitude": -114.06309
+      },
+      "label": "Calgary downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/51.04427/-114.06309"
+    },
+    "calgary-interchange-north": {
+      "coordinate": {
+        "latitude": 51.0626,
+        "longitude": -114.0201
+      },
+      "label": "Calgary public interchange approach",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/51.0626/-114.0201"
+    },
+    "calgary-glenmore-west": {
+      "coordinate": {
+        "latitude": 50.9932,
+        "longitude": -114.0943
+      },
+      "label": "Calgary Glenmore-area street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/50.9932/-114.0943"
+    },
+    "edmonton-downtown": {
+      "coordinate": {
+        "latitude": 53.5461,
+        "longitude": -113.4938
+      },
+      "label": "Edmonton downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/53.5461/-113.4938"
+    },
+    "edmonton-university-area": {
+      "coordinate": {
+        "latitude": 53.5232,
+        "longitude": -113.5263
+      },
+      "label": "Edmonton university-area street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/53.5232/-113.5263"
+    },
+    "red-deer-downtown": {
+      "coordinate": {
+        "latitude": 52.2681,
+        "longitude": -113.8112
+      },
+      "label": "Red Deer downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/52.2681/-113.8112"
+    },
+    "red-deer-south": {
+      "coordinate": {
+        "latitude": 52.2538,
+        "longitude": -113.8131
+      },
+      "label": "Red Deer south urban street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/52.2538/-113.8131"
+    },
+    "lethbridge-downtown": {
+      "coordinate": {
+        "latitude": 49.6956,
+        "longitude": -112.8451
+      },
+      "label": "Lethbridge downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/49.6956/-112.8451"
+    },
+    "lethbridge-west": {
+      "coordinate": {
+        "latitude": 49.6791,
+        "longitude": -112.8672
+      },
+      "label": "Lethbridge west urban street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/49.6791/-112.8672"
+    },
+    "banff-downtown": {
+      "coordinate": {
+        "latitude": 51.1784,
+        "longitude": -115.5708
+      },
+      "label": "Banff downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/51.1784/-115.5708"
+    },
+    "banff-south": {
+      "coordinate": {
+        "latitude": 51.1668,
+        "longitude": -115.5803
+      },
+      "label": "Banff south street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/51.1668/-115.5803"
+    },
+    "vancouver-downtown": {
+      "coordinate": {
+        "latitude": 49.2827,
+        "longitude": -123.1207
+      },
+      "label": "Vancouver downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/49.2827/-123.1207"
+    },
+    "richmond-yvr-area": {
+      "coordinate": {
+        "latitude": 49.1949,
+        "longitude": -123.1328
+      },
+      "label": "Richmond/YVR-area public anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/49.1949/-123.1328"
+    },
+    "victoria-downtown": {
+      "coordinate": {
+        "latitude": 48.4284,
+        "longitude": -123.3656
+      },
+      "label": "Victoria downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/48.4284/-123.3656"
+    },
+    "victoria-university-area": {
+      "coordinate": {
+        "latitude": 48.4629,
+        "longitude": -123.3117
+      },
+      "label": "Victoria university-area street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/48.4629/-123.3117"
+    },
+    "kelowna-downtown": {
+      "coordinate": {
+        "latitude": 49.8879,
+        "longitude": -119.496
+      },
+      "label": "Kelowna downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/49.8879/-119.496"
+    },
+    "kelowna-airport": {
+      "coordinate": {
+        "latitude": 49.9561,
+        "longitude": -119.378
+      },
+      "label": "Kelowna airport-area public anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/49.9561/-119.378"
+    },
+    "kamloops-downtown": {
+      "coordinate": {
+        "latitude": 50.6745,
+        "longitude": -120.3273
+      },
+      "label": "Kamloops downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/50.6745/-120.3273"
+    },
+    "kamloops-west": {
+      "coordinate": {
+        "latitude": 50.6712,
+        "longitude": -120.3651
+      },
+      "label": "Kamloops west urban street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/50.6712/-120.3651"
+    },
+    "prince-george-downtown": {
+      "coordinate": {
+        "latitude": 53.9171,
+        "longitude": -122.7497
+      },
+      "label": "Prince George downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/53.9171/-122.7497"
+    },
+    "prince-george-west": {
+      "coordinate": {
+        "latitude": 53.912,
+        "longitude": -122.8004
+      },
+      "label": "Prince George west urban street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/53.912/-122.8004"
+    }
+  },
+  "corridors": [
+    {
+      "id": "calgary-interchange",
+      "minimumLaneManeuvers": 1,
+      "originAnchorId": "calgary-interchange-north",
+      "destinationAnchorId": "calgary-glenmore-west",
+      "distanceRangeKm": [8, 30],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["alberta", "calgary", "interchange"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "edmonton",
+      "originAnchorId": "edmonton-downtown",
+      "destinationAnchorId": "edmonton-university-area",
+      "distanceRangeKm": [2, 12],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["alberta", "edmonton", "urban", "river-crossing"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "red-deer",
+      "originAnchorId": "red-deer-downtown",
+      "destinationAnchorId": "red-deer-south",
+      "distanceRangeKm": [1, 10],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["alberta", "red-deer", "urban"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "lethbridge",
+      "originAnchorId": "lethbridge-downtown",
+      "destinationAnchorId": "lethbridge-west",
+      "distanceRangeKm": [2, 12],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["alberta", "lethbridge", "urban", "river-crossing"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "banff",
+      "originAnchorId": "banff-downtown",
+      "destinationAnchorId": "banff-south",
+      "distanceRangeKm": [1, 10],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["alberta", "banff", "mountain-town"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "vancouver",
+      "originAnchorId": "vancouver-downtown",
+      "destinationAnchorId": "richmond-yvr-area",
+      "distanceRangeKm": [10, 25],
+      "maximumEndpointOffsetMeters": 300,
+      "tags": ["british-columbia", "vancouver", "urban", "airport"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "victoria",
+      "originAnchorId": "victoria-downtown",
+      "destinationAnchorId": "victoria-university-area",
+      "distanceRangeKm": [3, 15],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["british-columbia", "victoria", "island", "urban"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "kelowna",
+      "originAnchorId": "kelowna-downtown",
+      "destinationAnchorId": "kelowna-airport",
+      "distanceRangeKm": [10, 22],
+      "maximumEndpointOffsetMeters": 300,
+      "tags": ["british-columbia", "kelowna", "airport"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "kamloops",
+      "originAnchorId": "kamloops-downtown",
+      "destinationAnchorId": "kamloops-west",
+      "distanceRangeKm": [1.5, 12],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["british-columbia", "kamloops", "urban"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "prince-george",
+      "originAnchorId": "prince-george-downtown",
+      "destinationAnchorId": "prince-george-west",
+      "distanceRangeKm": [2, 15],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["british-columbia", "prince-george", "northern-urban"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "calgary-vancouver",
+      "originAnchorId": "calgary-downtown",
+      "destinationAnchorId": "vancouver-downtown",
+      "distanceRangeKm": [900, 1150],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["alberta", "british-columbia", "inter-provincial", "mountain-highway"],
+      "maximumDurationMinutes": 1000,
+      "maximumSegmentMeters": 3000,
+      "lengthBand": "long"
+    }
+  ]
+}

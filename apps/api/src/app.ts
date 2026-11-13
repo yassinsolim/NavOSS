@@ -16,13 +16,17 @@ import {
   SafetyFacilityQuerySchema,
   SafetyFacilityResponseSchema,
   RouteRequestSchema,
+  RouteRequestV2Schema,
   RouteResponseSchema,
+  RouteResponseV2Schema,
+  SERVICE_COVERAGE_NAME,
   SafetyCameraResponseSchema,
   SearchQuerySchema,
   SearchResponseSchema,
   TrafficCameraQuerySchema,
   TrafficCameraResponseSchema,
   type ReadinessResponse,
+  type RouteAlternativeV2,
 } from '@navoss/contracts';
 import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import {
@@ -115,6 +119,9 @@ export interface BuildAppOptions {
   driveBcEventProvider?: DriveBcRoadEventProvider;
   driveBcTrafficCameraProvider?: DriveBcTrafficCameraProvider;
   eventProvider?: CalgaryRoadEventProvider;
+  enrichRoutes?: (
+    routes: RouteAlternativeV2[],
+  ) => RouteAlternativeV2[] | Promise<RouteAlternativeV2[]>;
   googlePlaceQueryBudget?: GooglePlaceQueryBudget;
   logger?: FastifyServerOptions['logger'];
   kelownaSafetyFacilityProvider?: KelownaSafetyFacilityProvider;
@@ -145,7 +152,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const kelownaSafetyFacilityProvider =
     options.kelownaSafetyFacilityProvider ?? createKelownaSafetyFacilityProvider();
   const productionSearch = options.productionSearch ?? process.env.NOMINATIM_URL !== undefined;
-  const routeProvider = options.routeProvider ?? createConfiguredRouteProvider();
+  const routeProvider =
+    options.routeProvider ??
+    createConfiguredRouteProvider(undefined, {
+      onDecodeFailure: (errorName) =>
+        app.log.warn({ errorName }, 'Route metadata decoding failed; using legacy routing.'),
+    });
   const liveTraffic = routeProvider.source?.traffic === 'live';
   const searchProvider =
     options.searchProvider ??
@@ -300,8 +312,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     async (request, reply) => {
       const timestamp = clock().toISOString();
       const searchFixturesReady = fixtures.length > 0;
+      const enrichmentDegraded = routeProvider.isEnrichmentDegraded?.() === true;
       const routingProviderReady =
-        routeProvider.isReady === undefined ? undefined : await routeProvider.isReady();
+        routeProvider.isReady === undefined
+          ? enrichmentDegraded
+            ? true
+            : undefined
+          : await routeProvider.isReady();
       const searchProviderReady =
         productionSearch && searchProvider.isReady !== undefined
           ? await searchProvider.isReady()
@@ -324,7 +341,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             : {
                 routingProvider: {
                   detail: routingProviderReady
-                    ? 'The routing provider is reachable.'
+                    ? enrichmentDegraded
+                      ? 'Routing is ready via the legacy format; extended guidance is degraded after a protobuf decoding failure.'
+                      : 'The routing provider is reachable.'
                     : 'The routing provider is unavailable.',
                   status: routingProviderReady ? ('ready' as const) : ('not_ready' as const),
                 },
@@ -701,79 +720,92 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           400,
           'invalid_request',
           'Search outside coverage',
-          'Nearby categories are currently available only in the Calgary and Kelowna service areas.',
+          `Nearby categories are available only for locations in ${SERVICE_COVERAGE_NAME}.`,
         );
       }
       return searchProvider.search(request.body);
     },
   );
 
-  typedApp.post(
-    '/v1/routes',
-    {
-      schema: {
-        body: RouteRequestSchema,
-        description: 'Calculates driving route alternatives for preview and guidance.',
-        response: {
-          200: RouteResponseSchema,
-          400: ProblemDetailsSchema,
-          503: ProblemDetailsSchema,
-        },
-        tags: ['routes'],
-      },
-    },
-    async (request, reply) => {
-      const routeCoordinates = [
-        request.body.origin,
-        ...(request.body.waypoints ?? []),
-        request.body.destination,
-      ];
-      if (routeCoordinates.some((coordinate) => !isSupportedSearchCoordinate(coordinate))) {
-        reply.status(400).type('application/problem+json');
-        return createProblem(
-          request,
-          400,
-          'invalid_request',
-          'Route outside coverage',
-          'Driving routes are currently available only between supported Calgary and Kelowna area locations.',
-        );
-      }
-      try {
-        const routes = await routeProvider.getRoutes(request.body);
-        const source = routeProvider.source ?? {
-          attribution: 'Routing by Valhalla using OpenStreetMap data' as const,
-          degraded: true,
-          id: 'valhalla-development' as const,
-          mode: 'development' as const,
-          traffic: 'unavailable' as const,
-        };
-        return {
-          degraded: source.degraded,
-          generatedAt: clock().toISOString(),
-          routes,
-          source: {
-            attribution: source.attribution,
-            id: source.id,
-            mode: source.mode,
-            traffic: source.traffic,
+  for (const version of ['v1', 'v2'] as const) {
+    typedApp.post(
+      `/${version}/routes`,
+      {
+        schema: {
+          body: version === 'v2' ? RouteRequestV2Schema : RouteRequestSchema,
+          description:
+            version === 'v2'
+              ? 'Calculates driving routes with optional lane guidance, signposts and posted-limit status.'
+              : 'Calculates driving route alternatives for preview and guidance.',
+          response: {
+            200: version === 'v2' ? RouteResponseV2Schema : RouteResponseSchema,
+            400: ProblemDetailsSchema,
+            503: ProblemDetailsSchema,
           },
-        };
-      } catch (error: unknown) {
-        if (error instanceof RouteProviderError) {
-          reply.status(503).type('application/problem+json');
+          tags: ['routes'],
+        },
+      },
+      async (request, reply) => {
+        const routeCoordinates = [
+          request.body.origin,
+          ...(request.body.waypoints ?? []),
+          request.body.destination,
+        ];
+        if (routeCoordinates.some((coordinate) => !isSupportedSearchCoordinate(coordinate))) {
+          reply.status(400).type('application/problem+json');
           return createProblem(
             request,
-            503,
-            'service_unavailable',
-            'Routing unavailable',
-            'A driving route could not be calculated right now.',
+            400,
+            'invalid_request',
+            'Route outside coverage',
+            `Driving route origins, waypoints and destinations must be within ${SERVICE_COVERAGE_NAME}.`,
           );
         }
+        try {
+          const providerRoutes =
+            version === 'v2' && routeProvider.getEnrichedRoutes !== undefined
+              ? await routeProvider.getEnrichedRoutes(request.body)
+              : await routeProvider.getRoutes(request.body);
+          // V2-only post-routing enrichment seam (e.g. the community traffic service).
+          const routes =
+            version === 'v2' && options.enrichRoutes !== undefined
+              ? await options.enrichRoutes(providerRoutes)
+              : providerRoutes;
+          const source = routeProvider.source ?? {
+            attribution: 'Routing by Valhalla using OpenStreetMap data' as const,
+            degraded: true,
+            id: 'valhalla-development' as const,
+            mode: 'development' as const,
+            traffic: 'unavailable' as const,
+          };
+          return {
+            degraded: source.degraded,
+            generatedAt: clock().toISOString(),
+            routes,
+            source: {
+              attribution: source.attribution,
+              id: source.id,
+              mode: source.mode,
+              traffic: source.traffic,
+            },
+          };
+        } catch (error: unknown) {
+          if (error instanceof RouteProviderError) {
+            reply.status(503).type('application/problem+json');
+            return createProblem(
+              request,
+              503,
+              'service_unavailable',
+              'Routing unavailable',
+              'A driving route could not be calculated right now.',
+            );
+          }
 
-        throw error;
-      }
-    },
-  );
+          throw error;
+        }
+      },
+    );
+  }
 
   typedApp.get(
     '/openapi.json',

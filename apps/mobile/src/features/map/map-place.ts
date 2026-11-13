@@ -445,11 +445,11 @@ function utcOffsetMinutes(date: Date, timeZone: string): number {
   return Math.round((asUtc - date.getTime()) / 60_000);
 }
 
-// The app's search coverage is currently limited to Calgary, AB and Kelowna, BC; each region maps
-// to exactly one fixed IANA time zone. Anywhere else returns undefined rather than guessing.
+// Alberta shares one IANA zone. BC has multiple zones, so only the known Kelowna overlay is
+// mapped here; other BC locations keep raw hours rather than guessing a zone from the province.
 function regionTimeZone(coordinate: Coordinate): string | undefined {
   const region = mapRegionForCoordinate(coordinate);
-  if (region === 'calgary-ab') return 'America/Edmonton';
+  if (region === 'calgary-ab' || region === 'alberta') return 'America/Edmonton';
   if (region === 'kelowna-bc') return 'America/Vancouver';
   return undefined;
 }

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { SearchCategorySchema, SearchResponseSchema } from '@navoss/contracts';
+import {
+  SearchCategorySchema,
+  SearchResponseSchema,
+  SERVICE_COVERAGE_BOUNDS,
+} from '@navoss/contracts';
 
 import {
   buildNominatimSearchUrl,
@@ -16,7 +20,7 @@ import {
 } from '../src/search-provider.js';
 
 describe('Photon search provider', () => {
-  it('builds a corridor-bounded, proximity-biased query', () => {
+  it('builds a province-envelope, proximity-biased query', () => {
     const url = new URL(
       buildPhotonSearchUrl({
         latitude: 51.0447,
@@ -27,7 +31,14 @@ describe('Photon search provider', () => {
     );
 
     expect(url.hostname).toBe('photon.komoot.io');
-    expect(url.searchParams.get('bbox')).toBe('-119.65,49.7,-113.8,51.25');
+    expect(url.searchParams.get('bbox')).toBe(
+      [
+        SERVICE_COVERAGE_BOUNDS.southWest.longitude,
+        SERVICE_COVERAGE_BOUNDS.southWest.latitude,
+        SERVICE_COVERAGE_BOUNDS.northEast.longitude,
+        SERVICE_COVERAGE_BOUNDS.northEast.latitude,
+      ].join(','),
+    );
     expect(url.searchParams.get('lat')).toBe('51.0447');
     expect(url.searchParams.get('lon')).toBe('-114.0719');
     expect(url.searchParams.get('q')).toBe('University of Calgary');
@@ -195,7 +206,7 @@ describe('place description response boundary', () => {
 });
 
 describe('Nominatim search provider', () => {
-  it('builds a corridor-bounded production query', () => {
+  it('builds a province-envelope production query', () => {
     const url = new URL(
       buildNominatimSearchUrl({ limit: 8, q: 'Calgary Tower' }, 'http://nominatim:8080/'),
     );
@@ -204,7 +215,14 @@ describe('Nominatim search provider', () => {
     expect(url.searchParams.get('bounded')).toBe('1');
     expect(url.searchParams.get('extratags')).toBe('1');
     expect(url.searchParams.get('format')).toBe('jsonv2');
-    expect(url.searchParams.get('viewbox')).toBe('-119.65,51.25,-113.8,49.7');
+    expect(url.searchParams.get('viewbox')).toBe(
+      [
+        SERVICE_COVERAGE_BOUNDS.southWest.longitude,
+        SERVICE_COVERAGE_BOUNDS.northEast.latitude,
+        SERVICE_COVERAGE_BOUNDS.northEast.longitude,
+        SERVICE_COVERAGE_BOUNDS.southWest.latitude,
+      ].join(','),
+    );
   });
 
   it('uses Nominatim special phrases for typed category discovery', () => {

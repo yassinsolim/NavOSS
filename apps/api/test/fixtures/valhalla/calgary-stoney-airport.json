@@ -1,0 +1,2440 @@
+{
+  "capturedAt": "2026-11-13T00:09:21.472Z",
+  "endpoint": "https://valhalla1.openstreetmap.de/route",
+  "decoderVersion": "3.8.2",
+  "attribution": "Routing by Valhalla using OpenStreetMap data",
+  "licenseUrl": "https://www.openstreetmap.org/copyright",
+  "rawResponseSha256": "beea69751c11afa635c1b279005692d4a44dbcf34737d7ac86848335b3db824f",
+  "rawResponseBytes": 42477,
+  "trimmed": "Decoded with the pinned 3.8.2 protocol subset. Unconsumed fields are not retained; no route values are changed. Tests re-encode these consumed tags.",
+  "request": {
+    "alternatives": 0,
+    "origin": {
+      "latitude": 51.1506,
+      "longitude": -114.1512
+    },
+    "destination": {
+      "latitude": 51.13157,
+      "longitude": -114.01055
+    },
+    "preferences": {
+      "avoidFerries": false,
+      "avoidHighways": false,
+      "avoidTolls": false,
+      "avoidUnpaved": false
+    }
+  },
+  "valhallaRequest": {
+    "options": {
+      "locations": [
+        {
+          "ll": {
+            "lat": 51.1506,
+            "lng": -114.1512
+          },
+          "type": 0
+        },
+        {
+          "ll": {
+            "lat": 51.13157,
+            "lng": -114.01055
+          },
+          "type": 0
+        }
+      ],
+      "filterAttributes": ["shape_attributes.speed_limit"],
+      "units": 0,
+      "language": "en-US",
+      "directionsType": 0,
+      "format": 3,
+      "action": 1,
+      "costingType": 10,
+      "costings": {
+        "10": {
+          "options": {
+            "useFerry": 0.5,
+            "useHighways": 0.5,
+            "useTolls": 0.5,
+            "excludeUnpaved": false
+          },
+          "type": 10,
+          "name": "auto"
+        }
+      },
+      "dateTimeType": 1,
+      "dateTime": "current",
+      "filterAction": 2,
+      "shapeFormat": 0,
+      "alternates": 0,
+      "roundaboutExits": true,
+      "pbfFieldSelector": {
+        "options": false,
+        "trip": true,
+        "directions": true
+      },
+      "voiceInstructions": true,
+      "turnLanes": true
+    }
+  },
+  "response": {
+    "trip": {
+      "routes": [
+        {
+          "legs": [
+            {
+              "node": [
+                {
+                  "edge": {
+                    "name": [],
+                    "turnLanes": [],
+                    "beginHeading": 87,
+                    "endHeading": 34,
+                    "endShapeIndex": 7
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [],
+                    "turnLanes": [],
+                    "beginHeading": 75,
+                    "endHeading": 76,
+                    "beginShapeIndex": 7,
+                    "endShapeIndex": 9
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [],
+                    "turnLanes": [],
+                    "beginHeading": 92,
+                    "endHeading": 189,
+                    "beginShapeIndex": 9,
+                    "endShapeIndex": 28
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [],
+                    "turnLanes": [],
+                    "beginHeading": 193,
+                    "endHeading": 189,
+                    "beginShapeIndex": 28,
+                    "endShapeIndex": 31
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [],
+                    "turnLanes": [],
+                    "beginHeading": 172,
+                    "endHeading": 163,
+                    "beginShapeIndex": 31,
+                    "endShapeIndex": 34
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [],
+                    "turnLanes": [],
+                    "beginHeading": 167,
+                    "endHeading": 171,
+                    "beginShapeIndex": 34,
+                    "endShapeIndex": 37
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [],
+                    "turnLanes": [],
+                    "beginHeading": 173,
+                    "endHeading": 173,
+                    "beginShapeIndex": 37,
+                    "endShapeIndex": 38
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [],
+                    "turnLanes": [],
+                    "beginHeading": 173,
+                    "endHeading": 173,
+                    "beginShapeIndex": 38,
+                    "endShapeIndex": 39
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 91,
+                    "endHeading": 125,
+                    "beginShapeIndex": 39,
+                    "endShapeIndex": 43
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 125,
+                    "endHeading": 125,
+                    "beginShapeIndex": 43,
+                    "endShapeIndex": 44
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 125,
+                    "endHeading": 137,
+                    "beginShapeIndex": 44,
+                    "endShapeIndex": 48
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 137,
+                    "endHeading": 137,
+                    "beginShapeIndex": 48,
+                    "endShapeIndex": 49
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 131,
+                    "endHeading": 131,
+                    "beginShapeIndex": 49,
+                    "endShapeIndex": 50
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 127,
+                    "endHeading": 127,
+                    "beginShapeIndex": 50,
+                    "endShapeIndex": 51
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 126,
+                    "endHeading": 110,
+                    "beginShapeIndex": 51,
+                    "endShapeIndex": 54
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 106,
+                    "endHeading": 106,
+                    "beginShapeIndex": 54,
+                    "endShapeIndex": 55
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 105,
+                    "endHeading": 105,
+                    "beginShapeIndex": 55,
+                    "endShapeIndex": 56
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 101,
+                    "endHeading": 98,
+                    "beginShapeIndex": 56,
+                    "endShapeIndex": 58
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 98,
+                    "endHeading": 98,
+                    "beginShapeIndex": 58,
+                    "endShapeIndex": 59
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 93,
+                    "endHeading": 93,
+                    "beginShapeIndex": 59,
+                    "endShapeIndex": 60
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 93,
+                    "endHeading": 87,
+                    "beginShapeIndex": 60,
+                    "endShapeIndex": 62
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 87,
+                    "endHeading": 87,
+                    "beginShapeIndex": 62,
+                    "endShapeIndex": 63
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 91,
+                    "endHeading": 91,
+                    "beginShapeIndex": 63,
+                    "endShapeIndex": 64
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 94,
+                    "endHeading": 119,
+                    "beginShapeIndex": 64,
+                    "endShapeIndex": 67
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 120,
+                    "endHeading": 120,
+                    "beginShapeIndex": 67,
+                    "endShapeIndex": 68
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 118,
+                    "endHeading": 118,
+                    "beginShapeIndex": 68,
+                    "endShapeIndex": 69
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 119,
+                    "endHeading": 119,
+                    "beginShapeIndex": 69,
+                    "endShapeIndex": 70
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 127,
+                    "endHeading": 145,
+                    "beginShapeIndex": 70,
+                    "endShapeIndex": 73
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 157,
+                    "endHeading": 157,
+                    "beginShapeIndex": 73,
+                    "endShapeIndex": 75
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 162,
+                    "endHeading": 162,
+                    "beginShapeIndex": 75,
+                    "endShapeIndex": 76
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 181,
+                    "endHeading": 205,
+                    "beginShapeIndex": 76,
+                    "endShapeIndex": 78
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 206,
+                    "endHeading": 206,
+                    "beginShapeIndex": 78,
+                    "endShapeIndex": 79
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 208,
+                    "endHeading": 208,
+                    "beginShapeIndex": 79,
+                    "endShapeIndex": 80
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 207,
+                    "endHeading": 207,
+                    "beginShapeIndex": 80,
+                    "endShapeIndex": 81
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 207,
+                    "endHeading": 207,
+                    "beginShapeIndex": 81,
+                    "endShapeIndex": 82
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 210,
+                    "endHeading": 210,
+                    "beginShapeIndex": 82,
+                    "endShapeIndex": 83
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 211,
+                    "endHeading": 211,
+                    "beginShapeIndex": 83,
+                    "endShapeIndex": 84
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 209,
+                    "endHeading": 209,
+                    "beginShapeIndex": 84,
+                    "endShapeIndex": 85
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 196,
+                    "endHeading": 160,
+                    "beginShapeIndex": 85,
+                    "endShapeIndex": 92
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 159,
+                    "endHeading": 159,
+                    "beginShapeIndex": 92,
+                    "endShapeIndex": 93
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Hamptons Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 159,
+                    "endHeading": 159,
+                    "beginShapeIndex": 93,
+                    "endShapeIndex": 94
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 69,
+                    "endHeading": 69,
+                    "beginShapeIndex": 94,
+                    "endShapeIndex": 95
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 71,
+                    "endHeading": 71,
+                    "beginShapeIndex": 95,
+                    "endShapeIndex": 96
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 68,
+                    "endHeading": 68,
+                    "beginShapeIndex": 96,
+                    "endShapeIndex": 97
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 70,
+                    "endHeading": 66,
+                    "beginShapeIndex": 97,
+                    "endShapeIndex": 103
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 66,
+                    "endHeading": 66,
+                    "beginShapeIndex": 103,
+                    "endShapeIndex": 104
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 67,
+                    "endHeading": 67,
+                    "beginShapeIndex": 104,
+                    "endShapeIndex": 106
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 65,
+                    "endHeading": 65,
+                    "beginShapeIndex": 106,
+                    "endShapeIndex": 107
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 65,
+                    "endHeading": 65,
+                    "beginShapeIndex": 107,
+                    "endShapeIndex": 108
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 65,
+                    "endHeading": 73,
+                    "beginShapeIndex": 108,
+                    "endShapeIndex": 112
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 75,
+                    "endHeading": 105,
+                    "beginShapeIndex": 112,
+                    "endShapeIndex": 123
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 105,
+                    "endHeading": 105,
+                    "beginShapeIndex": 123,
+                    "endShapeIndex": 124
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 106,
+                    "endHeading": 106,
+                    "beginShapeIndex": 124,
+                    "endShapeIndex": 125
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 106,
+                    "endHeading": 106,
+                    "beginShapeIndex": 125,
+                    "endShapeIndex": 126
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 109,
+                    "endHeading": 109,
+                    "beginShapeIndex": 126,
+                    "endShapeIndex": 127
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 109,
+                    "endHeading": 109,
+                    "beginShapeIndex": 127,
+                    "endShapeIndex": 128
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 109,
+                    "endHeading": 109,
+                    "beginShapeIndex": 128,
+                    "endShapeIndex": 129
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 106,
+                    "endHeading": 106,
+                    "beginShapeIndex": 129,
+                    "endShapeIndex": 130
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 64
+                      }
+                    ],
+                    "beginHeading": 105,
+                    "endHeading": 88,
+                    "beginShapeIndex": 130,
+                    "endShapeIndex": 137
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 73,
+                    "endHeading": 72,
+                    "beginShapeIndex": 137,
+                    "endShapeIndex": 142
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 70,
+                    "endHeading": 70,
+                    "beginShapeIndex": 142,
+                    "endShapeIndex": 143
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 70,
+                    "endHeading": 70,
+                    "beginShapeIndex": 143,
+                    "endShapeIndex": 144
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 71,
+                    "endHeading": 71,
+                    "beginShapeIndex": 144,
+                    "endShapeIndex": 145
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 70,
+                    "endHeading": 70,
+                    "beginShapeIndex": 145,
+                    "endShapeIndex": 146
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 70,
+                    "endHeading": 70,
+                    "beginShapeIndex": 146,
+                    "endShapeIndex": 147
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 69,
+                    "endHeading": 59,
+                    "beginShapeIndex": 147,
+                    "endShapeIndex": 153
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Boulevard NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 58,
+                    "endHeading": 73,
+                    "beginShapeIndex": 153,
+                    "endShapeIndex": 163
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [],
+                    "turnLanes": [],
+                    "beginHeading": 79,
+                    "endHeading": 85,
+                    "beginShapeIndex": 163,
+                    "endShapeIndex": 167
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [],
+                    "turnLanes": [],
+                    "beginHeading": 125,
+                    "endHeading": 125,
+                    "beginShapeIndex": 167,
+                    "endShapeIndex": 170
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 163,
+                    "endHeading": 163,
+                    "beginShapeIndex": 170,
+                    "endShapeIndex": 172
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 151,
+                    "endHeading": 139,
+                    "beginShapeIndex": 172,
+                    "endShapeIndex": 175
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 134,
+                    "endHeading": 117,
+                    "beginShapeIndex": 175,
+                    "endShapeIndex": 179
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 117,
+                    "endHeading": 117,
+                    "beginShapeIndex": 179,
+                    "endShapeIndex": 180
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 105,
+                    "endHeading": 101,
+                    "beginShapeIndex": 180,
+                    "endShapeIndex": 182
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Drive NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 101,
+                    "endHeading": 101,
+                    "beginShapeIndex": 182,
+                    "endShapeIndex": 183
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Drive NW"
+                      }
+                    ],
+                    "turnLanes": [
+                      {
+                        "directionsMask": 6
+                      },
+                      {
+                        "directionsMask": 64,
+                        "state": 2,
+                        "activeDirection": 64
+                      }
+                    ],
+                    "beginHeading": 94,
+                    "endHeading": 68,
+                    "beginShapeIndex": 183,
+                    "endShapeIndex": 187
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Road NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 186,
+                    "endHeading": 186,
+                    "beginShapeIndex": 187,
+                    "endShapeIndex": 188
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Road NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 175,
+                    "endHeading": 174,
+                    "beginShapeIndex": 188,
+                    "endShapeIndex": 190
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Road NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 166,
+                    "endHeading": 138,
+                    "beginShapeIndex": 190,
+                    "endShapeIndex": 195
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Road NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 127,
+                    "endHeading": 127,
+                    "beginShapeIndex": 195,
+                    "endShapeIndex": 196
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Road NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 126,
+                    "endHeading": 126,
+                    "beginShapeIndex": 196,
+                    "endShapeIndex": 199
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Road NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 126,
+                    "endHeading": 128,
+                    "beginShapeIndex": 199,
+                    "endShapeIndex": 201
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Road NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 125,
+                    "endHeading": 125,
+                    "beginShapeIndex": 201,
+                    "endShapeIndex": 202
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Country Hills Road NW"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 127,
+                    "endHeading": 127,
+                    "beginShapeIndex": 202,
+                    "endShapeIndex": 203
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 126,
+                    "endHeading": 126,
+                    "beginShapeIndex": 203,
+                    "endShapeIndex": 204
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 128,
+                    "endHeading": 128,
+                    "beginShapeIndex": 204,
+                    "endShapeIndex": 205
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 124,
+                    "endHeading": 124,
+                    "beginShapeIndex": 205,
+                    "endShapeIndex": 206
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 124,
+                    "endHeading": 124,
+                    "beginShapeIndex": 206,
+                    "endShapeIndex": 207
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 118,
+                    "endHeading": 114,
+                    "beginShapeIndex": 207,
+                    "endShapeIndex": 210
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 109,
+                    "endHeading": 109,
+                    "beginShapeIndex": 210,
+                    "endShapeIndex": 211
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 107,
+                    "endHeading": 101,
+                    "beginShapeIndex": 211,
+                    "endShapeIndex": 214
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 97,
+                    "endHeading": 93,
+                    "beginShapeIndex": 214,
+                    "endShapeIndex": 217
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 90,
+                    "endHeading": 90,
+                    "beginShapeIndex": 217,
+                    "endShapeIndex": 218
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 88,
+                    "endHeading": 88,
+                    "beginShapeIndex": 218,
+                    "endShapeIndex": 219
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 87,
+                    "endHeading": 94,
+                    "beginShapeIndex": 219,
+                    "endShapeIndex": 225
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 99,
+                    "endHeading": 99,
+                    "beginShapeIndex": 225,
+                    "endShapeIndex": 226
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 98,
+                    "endHeading": 98,
+                    "beginShapeIndex": 226,
+                    "endShapeIndex": 227
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 102,
+                    "endHeading": 102,
+                    "beginShapeIndex": 227,
+                    "endShapeIndex": 228
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 102,
+                    "endHeading": 102,
+                    "beginShapeIndex": 228,
+                    "endShapeIndex": 229
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 101,
+                    "endHeading": 100,
+                    "beginShapeIndex": 229,
+                    "endShapeIndex": 231
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 98,
+                    "endHeading": 98,
+                    "beginShapeIndex": 231,
+                    "endShapeIndex": 232
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 97,
+                    "endHeading": 97,
+                    "beginShapeIndex": 232,
+                    "endShapeIndex": 233
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 95,
+                    "endHeading": 95,
+                    "beginShapeIndex": 233,
+                    "endShapeIndex": 234
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 95,
+                    "endHeading": 95,
+                    "beginShapeIndex": 234,
+                    "endShapeIndex": 236
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 94,
+                    "endHeading": 86,
+                    "beginShapeIndex": 236,
+                    "endShapeIndex": 240
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 81,
+                    "endHeading": 67,
+                    "beginShapeIndex": 240,
+                    "endShapeIndex": 246
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 69,
+                    "endHeading": 69,
+                    "beginShapeIndex": 246,
+                    "endShapeIndex": 247
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 69,
+                    "endHeading": 101,
+                    "beginShapeIndex": 247,
+                    "endShapeIndex": 258
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 101,
+                    "endHeading": 105,
+                    "beginShapeIndex": 258,
+                    "endShapeIndex": 260
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 106,
+                    "endHeading": 106,
+                    "beginShapeIndex": 260,
+                    "endShapeIndex": 261
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 105,
+                    "endHeading": 105,
+                    "beginShapeIndex": 261,
+                    "endShapeIndex": 262
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "96 Avenue NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 105,
+                    "endHeading": 105,
+                    "beginShapeIndex": 262,
+                    "endShapeIndex": 263
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Trail NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 104,
+                    "endHeading": 105,
+                    "beginShapeIndex": 263,
+                    "endShapeIndex": 265
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Trail NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 103,
+                    "endHeading": 102,
+                    "beginShapeIndex": 265,
+                    "endShapeIndex": 271
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Trail NE"
+                      }
+                    ],
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 34,
+                        "state": 2,
+                        "activeDirection": 2
+                      }
+                    ],
+                    "beginHeading": 97,
+                    "endHeading": 94,
+                    "beginShapeIndex": 271,
+                    "endShapeIndex": 276
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Trail NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 90,
+                    "endHeading": 90,
+                    "beginShapeIndex": 276,
+                    "endShapeIndex": 281
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Trail NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 90,
+                    "endHeading": 90,
+                    "beginShapeIndex": 281,
+                    "endShapeIndex": 282
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Trail NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 89,
+                    "endHeading": 89,
+                    "beginShapeIndex": 282,
+                    "endShapeIndex": 283
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Trail NE"
+                      }
+                    ],
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2
+                      },
+                      {
+                        "directionsMask": 2
+                      },
+                      {
+                        "directionsMask": 2
+                      },
+                      {
+                        "directionsMask": 32,
+                        "state": 2,
+                        "activeDirection": 32
+                      }
+                    ],
+                    "beginHeading": 90,
+                    "endHeading": 90,
+                    "beginShapeIndex": 283,
+                    "endShapeIndex": 284
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [],
+                    "turnLanes": [],
+                    "beginHeading": 94,
+                    "endHeading": 97,
+                    "beginShapeIndex": 284,
+                    "endShapeIndex": 286
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [],
+                    "turnLanes": [
+                      {
+                        "directionsMask": 16
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      }
+                    ],
+                    "beginHeading": 102,
+                    "endHeading": 128,
+                    "beginShapeIndex": 286,
+                    "endShapeIndex": 290
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [],
+                    "turnLanes": [],
+                    "beginHeading": 147,
+                    "endHeading": 147,
+                    "beginShapeIndex": 290,
+                    "endShapeIndex": 291
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [],
+                    "turnLanes": [],
+                    "beginHeading": 150,
+                    "endHeading": 154,
+                    "beginShapeIndex": 291,
+                    "endShapeIndex": 293
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Barlow Trail NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 161,
+                    "endHeading": 179,
+                    "beginShapeIndex": 293,
+                    "endShapeIndex": 300
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Barlow Trail NE"
+                      }
+                    ],
+                    "turnLanes": [
+                      {
+                        "directionsMask": 64
+                      },
+                      {
+                        "directionsMask": 64
+                      }
+                    ],
+                    "beginHeading": 184,
+                    "endHeading": 198,
+                    "beginShapeIndex": 300,
+                    "endShapeIndex": 306
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Barlow Trail NE"
+                      }
+                    ],
+                    "turnLanes": [
+                      {
+                        "directionsMask": 64
+                      },
+                      {
+                        "directionsMask": 64
+                      }
+                    ],
+                    "beginHeading": 232,
+                    "endHeading": 268,
+                    "beginShapeIndex": 306,
+                    "endShapeIndex": 315
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Road NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 270,
+                    "endHeading": 270,
+                    "beginShapeIndex": 315,
+                    "endShapeIndex": 317
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Road NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 270,
+                    "endHeading": 270,
+                    "beginShapeIndex": 317,
+                    "endShapeIndex": 318
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Road NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 270,
+                    "endHeading": 270,
+                    "beginShapeIndex": 318,
+                    "endShapeIndex": 319
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Road NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 270,
+                    "endHeading": 270,
+                    "beginShapeIndex": 319,
+                    "endShapeIndex": 320
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Road NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 272,
+                    "endHeading": 272,
+                    "beginShapeIndex": 320,
+                    "endShapeIndex": 321
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Road NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 265,
+                    "endHeading": 265,
+                    "beginShapeIndex": 321,
+                    "endShapeIndex": 322
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Road NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 269,
+                    "endHeading": 269,
+                    "beginShapeIndex": 322,
+                    "endShapeIndex": 323
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Road NE"
+                      }
+                    ],
+                    "turnLanes": [],
+                    "beginHeading": 261,
+                    "endHeading": 200,
+                    "beginShapeIndex": 323,
+                    "endShapeIndex": 334
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Road NE"
+                      }
+                    ],
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      }
+                    ],
+                    "beginHeading": 195,
+                    "endHeading": 181,
+                    "beginShapeIndex": 334,
+                    "endShapeIndex": 339
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Road NE"
+                      }
+                    ],
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      }
+                    ],
+                    "beginHeading": 181,
+                    "endHeading": 181,
+                    "beginShapeIndex": 339,
+                    "endShapeIndex": 340
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Road NE"
+                      }
+                    ],
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      }
+                    ],
+                    "beginHeading": 181,
+                    "endHeading": 181,
+                    "beginShapeIndex": 340,
+                    "endShapeIndex": 341
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Road NE"
+                      }
+                    ],
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      }
+                    ],
+                    "beginHeading": 181,
+                    "endHeading": 180,
+                    "beginShapeIndex": 341,
+                    "endShapeIndex": 343
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Road NE"
+                      }
+                    ],
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      }
+                    ],
+                    "beginHeading": 175,
+                    "endHeading": 170,
+                    "beginShapeIndex": 343,
+                    "endShapeIndex": 346
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Road NE"
+                      }
+                    ],
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      }
+                    ],
+                    "beginHeading": 164,
+                    "endHeading": 161,
+                    "beginShapeIndex": 346,
+                    "endShapeIndex": 349
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Airport Road NE"
+                      }
+                    ],
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2
+                      },
+                      {
+                        "directionsMask": 2
+                      },
+                      {
+                        "directionsMask": 2
+                      }
+                    ],
+                    "beginHeading": 152,
+                    "endHeading": 150,
+                    "beginShapeIndex": 349,
+                    "endShapeIndex": 352
+                  }
+                },
+                {}
+              ],
+              "shapeAttributes": {
+                "speedLimit": [
+                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50,
+                  50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50,
+                  50, 50, 50, 30, 30, 30, 30, 30, 30, 30, 30, 50, 50, 50, 50, 50, 50, 50, 50, 50,
+                  50, 50, 50, 50, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 80, 80, 80, 80,
+                  80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80,
+                  80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 60, 60, 60, 60, 60, 60,
+                  60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 0, 0, 0, 0, 0, 0, 0, 50, 50,
+                  50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50,
+                  50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 60, 60, 60, 60, 60, 60, 60, 60, 60,
+                  60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60,
+                  60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60,
+                  60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 80,
+                  80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 50, 50,
+                  50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50,
+                  50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50,
+                  50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "directions": {
+      "routes": [
+        {
+          "legs": [
+            {
+              "maneuver": [
+                {
+                  "streetName": [],
+                  "type": 2,
+                  "textInstruction": "Drive east.",
+                  "length": 0.5727222561836243,
+                  "time": 206.4020233154297,
+                  "beginHeading": 87,
+                  "endShapeIndex": 39,
+                  "verbalPreTransitionInstruction": "Drive east.",
+                  "verbalSuccinctTransitionInstruction": "Drive east."
+                },
+                {
+                  "streetName": [
+                    {
+                      "value": "Hamptons Drive NW"
+                    }
+                  ],
+                  "type": 15,
+                  "textInstruction": "Turn left onto Hamptons Drive NW.",
+                  "length": 1.6710000038146973,
+                  "time": 188.96812438964844,
+                  "beginHeading": 91,
+                  "beginShapeIndex": 39,
+                  "endShapeIndex": 94,
+                  "verbalPreTransitionInstruction": "Turn left onto Hamptons Drive NW.",
+                  "beginPathIndex": 8,
+                  "turnDegree": 278,
+                  "verbalSuccinctTransitionInstruction": "Turn left."
+                },
+                {
+                  "streetName": [
+                    {
+                      "value": "Country Hills Boulevard NW"
+                    }
+                  ],
+                  "type": 15,
+                  "textInstruction": "Turn left onto Country Hills Boulevard NW.",
+                  "length": 3.946000099182129,
+                  "time": 342.6379699707031,
+                  "beginHeading": 71,
+                  "beginShapeIndex": 94,
+                  "endShapeIndex": 163,
+                  "verbalPreTransitionInstruction": "Turn left onto Country Hills Boulevard NW.",
+                  "beginPathIndex": 41,
+                  "turnDegree": 272,
+                  "verbalSuccinctTransitionInstruction": "Turn left."
+                },
+                {
+                  "streetName": [
+                    {
+                      "value": "Country Hills Drive NW"
+                    }
+                  ],
+                  "type": 10,
+                  "textInstruction": "Turn right onto Country Hills Drive NW.",
+                  "length": 0.5060000419616699,
+                  "time": 66.2861328125,
+                  "beginHeading": 163,
+                  "beginShapeIndex": 163,
+                  "endShapeIndex": 187,
+                  "verbalPreTransitionInstruction": "Turn right onto Country Hills Drive NW.",
+                  "beginPathIndex": 67,
+                  "turnDegree": 90,
+                  "verbalSuccinctTransitionInstruction": "Turn right."
+                },
+                {
+                  "streetName": [
+                    {
+                      "value": "Country Hills Road NW"
+                    }
+                  ],
+                  "type": 10,
+                  "textInstruction": "Turn right onto Country Hills Road NW.",
+                  "length": 4.881999969482422,
+                  "time": 365.86895751953125,
+                  "beginHeading": 186,
+                  "beginShapeIndex": 187,
+                  "endShapeIndex": 284,
+                  "verbalPreTransitionInstruction": "Turn right onto Country Hills Road NW.",
+                  "beginPathIndex": 76,
+                  "turnDegree": 118,
+                  "verbalSuccinctTransitionInstruction": "Turn right."
+                },
+                {
+                  "streetName": [],
+                  "type": 20,
+                  "textInstruction": "Take the Barlow Trail exit toward Calgary International Airport.",
+                  "length": 0.29100000858306885,
+                  "time": 27.833740234375,
+                  "beginHeading": 94,
+                  "beginShapeIndex": 284,
+                  "endShapeIndex": 290,
+                  "verbalPreTransitionInstruction": "Take the Barlow Trail exit toward Calgary International Airport.",
+                  "sign": {
+                    "exitNumbers": [],
+                    "exitOntoStreets": [
+                      {
+                        "text": "Barlow Trail"
+                      }
+                    ],
+                    "exitTowardLocations": [
+                      {
+                        "text": "Calgary International Airport"
+                      }
+                    ],
+                    "exitNames": [],
+                    "guideOntoStreets": [],
+                    "guideTowardLocations": [],
+                    "junctionNames": []
+                  },
+                  "beginPathIndex": 119,
+                  "turnDegree": 4
+                },
+                {
+                  "streetName": [
+                    {
+                      "value": "Barlow Trail NE"
+                    }
+                  ],
+                  "type": 23,
+                  "textInstruction": "Keep right to take Barlow Trail NE toward Calgary International Airport.",
+                  "length": 1.133000135421753,
+                  "time": 105.6982421875,
+                  "beginHeading": 147,
+                  "beginShapeIndex": 290,
+                  "endShapeIndex": 321,
+                  "verbalPreTransitionInstruction": "Keep right to take Barlow Trail NE toward Calgary International Airport.",
+                  "sign": {
+                    "exitNumbers": [],
+                    "exitOntoStreets": [],
+                    "exitTowardLocations": [
+                      {
+                        "text": "Calgary International Airport"
+                      },
+                      {
+                        "text": "Barlow Trail South"
+                      }
+                    ],
+                    "exitNames": [],
+                    "guideOntoStreets": [],
+                    "guideTowardLocations": [],
+                    "junctionNames": []
+                  },
+                  "beginPathIndex": 121,
+                  "turnDegree": 19
+                },
+                {
+                  "streetName": [
+                    {
+                      "value": "Airport Road NE"
+                    }
+                  ],
+                  "type": 24,
+                  "textInstruction": "Keep left toward Departures/Rental Car Return/Hotels/Départs.",
+                  "length": 0.4208710789680481,
+                  "time": 33.8265380859375,
+                  "beginHeading": 265,
+                  "beginShapeIndex": 321,
+                  "endShapeIndex": 352,
+                  "verbalPreTransitionInstruction": "Keep left toward Departures, Rental Car Return.",
+                  "sign": {
+                    "exitNumbers": [],
+                    "exitOntoStreets": [],
+                    "exitTowardLocations": [],
+                    "exitNames": [],
+                    "guideOntoStreets": [],
+                    "guideTowardLocations": [
+                      {
+                        "text": "Departures"
+                      },
+                      {
+                        "text": "Rental Car Return"
+                      },
+                      {
+                        "text": "Hotels"
+                      },
+                      {
+                        "text": "Départs"
+                      },
+                      {
+                        "text": "Retour de Voitures"
+                      },
+                      {
+                        "text": "Hôtels"
+                      }
+                    ],
+                    "junctionNames": []
+                  },
+                  "beginPathIndex": 131,
+                  "turnDegree": 353
+                },
+                {
+                  "streetName": [],
+                  "type": 4,
+                  "textInstruction": "You have arrived at your destination.",
+                  "beginShapeIndex": 352,
+                  "endShapeIndex": 352,
+                  "verbalPreTransitionInstruction": "You have arrived at your destination.",
+                  "beginPathIndex": 141
+                }
+              ],
+              "summary": {
+                "length": 13.42259407043457,
+                "time": 1337.521728515625
+              },
+              "shape": "s~~p`Bn~evxERoA@qBsFmm@{@qIaByEmBiDaC_BsHax@Ae@CwEj@aRpBs_@dBcKfBoHvAeDjBaCtAiAvA_AjPgGpCeAjBcBdBoCdOq_@nAqBdAo@`AOtBNrCn@bARfZfJhDZjD[~C{@xNoFn@UbCs@vF{@jGs@lCYFmb@zCw]dLwe@dZc}@hBqF|]meAtU}m@frA}lBfF{IvEeIvB{EjBeF`I{TvHs^rBuOd@sEf@eFzC}e@|Bsk@VuGJyJ^c`@mBqhBGwF@wFb@mZpDiYjDcN`BsGnAkFrLyf@tKqYhImN`EmDzCkCjEiBxCmA|NFnNtJdAt@nB|AtAdAjW|Rrl@jh@bB|AhDtCzGnCjFdAhIR|KaArEuA~H_DdOiHjCuAxEcCuAgJq@iFwBmMuM__AgJcl@mK_m@_Q_{@gNit@}CmPea@szB}Oy~@mCuO}@uEyBeLa_A_xE}Goa@{Ew]cEa_@sAwMmDcd@eBe\\y@cVq@q]WuYEq]tA_bAvDc~@~Fyu@fIq}@fN_zAjPm`Bd@yEh@aEjAyIl@uEp]cfD~K_nA`Ce[hB__@lAm]v@_a@^o`@q@y|AsA_KkEgr@qD}h@iGck@uMchAaS}tA_a@usCac@saDwQ_rA}Jur@qTszAcH}d@iByJ_Gw[oJqa@kO_j@iDsLeI{YsHeZgEoS{DsUkDmYwFoh@kHcq@_Igt@eF{d@}Eox@EkFAuB?s@x@eEx@sB`AgB~LsEbV_J|O_NdKuKnFaJjI{OzEqLdCcKdCqLxA}GvEcg@xBw^|@qOX{PQoOW{JcCuLdGj@RBzz@uHvFkAlHcDhHcHnGqIjHuLpCyHnZiz@jE}LtEsMbFwN~CqHtRgk@nAkDlAmDjF{MdAcDrBmGhKyc@pEkW\\_BtBqPhA{IdCgXjAwRdA_Zb@kU?iD@aLEuHGmIi@c\\WoZHw]HmINeCjDkt@PgEh@}HVwDbF_x@hEky@vDq|@NuEv@c]l@oXb@qR`B{lA^qm@]oh@iAmv@oCwj@uEug@qGkb@{Lqo@_Q}}@uCuPyAwJ_CwOsJyv@sHqv@iD}i@eAwYyA}o@UwZf@sv@dBom@tCwm@|Bi`@`BkWjBqRnIi{@xLkpAvSywBh_@qiE~RitB~XukD`H}v@zHky@bHy|@lF}p@vIslAXiJ|@{XdBwg@nAcf@bAcn@e@olHAaeBAw{@?{gAAo~@@{Ks@gkEIe|CxEwuCfBei@nBkXhAwHxDkNjDqH|}@y_Ad_@c]p}@op@fe@eTjEqAbFoAjEm@lHi@jGUnLOzTpApEp@~Cl@rCx@vAn@xAdA`AxA|@nBz@pC|@dD^~CVjDJdFLvK^|c@C~s@ArkAA|nAA|dACbbAq@teAf@lVHfo@FdFZjFf@dE`AlFtAvEtAzCvBjDrC~C`D|BdIjE~HtDdBx@pBv@vBf@pC\\jIDvEBpJFtJDbFEnES`Ee@vEgAjEuAfFmBlHmDxFkEzDeDlBqB"
+            }
+          ]
+        }
+      ]
+    },
+    "info": {
+      "errors": []
+    }
+  }
+}

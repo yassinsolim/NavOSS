@@ -1,5 +1,30 @@
 # Official Data Sources
 
+## Provincial Service-Area Boundaries
+
+Routing/search coverage is Alberta and British Columbia in the v2 configuration. The single registry
+is `packages/contracts/src/coverage-data.ts`; adding a Canadian province is a data change after its
+routing/search imports and quality gates are ready. V1 configuration remains Calgary-shaped for
+strict shipped clients. Calgary civic/camera data and Kelowna/DriveBC context are **local overlays**,
+not province-wide datasets.
+
+- Source: [Statistics Canada, 2021 Census province/territory digital boundaries](https://geo.statcan.gc.ca/geo_wa/rest/services/2021/Digital_boundary_files/MapServer/0), PRUID `48` and `59`, published 2022-09-21.
+- Licence declared by the service metadata: [Open Government Licence – Canada](https://open.canada.ca/en/open-government-licence-canada).
+- Retrieval: `outSR=4326`, `maxAllowableOffset=0.001`, `geometryPrecision=6`.
+- Adaptation: normalize polygons to GeoJSON MultiPolygon and compute retrieval envelopes. No
+  hand-drawn borders, province bounding-box eligibility, or omitted small-island filter is used.
+- Digital boundaries include coastal waters and islands, unlike land-only cartographic rings.
+  Simplification is approximately 0.001 degrees (up to about 110 m north/south), not a cadastral,
+  border-control or survey-grade geofence.
+
+Adapted from Statistics Canada, 2021 Census – Province and territory digital boundary files, 2021.
+This does not constitute an endorsement by Statistics Canada of this product. Contains information
+licensed under the Open Government Licence – Canada.
+
+The API and pure phone modules share the same polygon predicate. Nominatim/Photon viewboxes are
+retrieval envelopes only: results are polygon-filtered before limits are applied, and every route
+origin, waypoint and destination must lie in a supported province.
+
 ## Calgary Place and Address Search
 
 NavOSS combines a local copy of two City of Calgary datasets with its self-hosted
@@ -45,9 +70,10 @@ visible category to explicit OpenStreetMap tags. The same strict mapping covers 
 filters: every phone button has a shared contract category, every category has an exact server
 allowlist, and every allowlist is checked against the repeatable Nominatim phrase source. This
 prevents text collisions such as Bars matching barbershops or Car repair matching car washes.
-Location-aware category searches query three concentric Calgary-bounded viewboxes, merge and
-deduplicate the candidate pools, compute exact distances, and return the nearest valid OSM types
-first. Empty upstream names fall back to the first display-label component, and empty optional OSM
+Location-aware category searches query three concentric local viewboxes constrained to the
+provincial retrieval envelope, polygon-filter candidates, merge/deduplicate the pools and compute
+exact distances, returning the nearest valid OSM types first.
+Empty upstream names fall back to the first display-label component, and empty optional OSM
 details are omitted so unnamed parks and parking features remain contract-valid. The phrase import
 is additive and is reapplied after any replacement of the persistent Nominatim database.
 
@@ -61,11 +87,13 @@ Nominatim `extratags` may provide a public address, place category, opening hour
 official website, and wheelchair-access tag. These community-maintained fields may be absent,
 outdated, or expressed in raw OpenStreetMap syntax. NavOSS does not infer missing values.
 
-For Calgary and Kelowna places, the phone can derive Open, Closing soon (within one hour), or
-Closed from unambiguous weekly opening-hour rules using the region's local time zone. Holiday,
-seasonal, commented, and otherwise unsupported schedules retain their source text without a
+For Alberta places and the known Kelowna local overlay, the phone can derive Open, Closing soon
+(within one hour), or Closed from unambiguous weekly opening-hour rules using a known local time zone.
+Holiday, seasonal, commented, and otherwise unsupported schedules retain their source text without a
 guessed status. Missing hours remain missing, and community-maintained hours are not a guarantee
 that a business is currently operating.
+Other BC locations retain their raw hours: BC has multiple time zones and this code does not infer
+one from the province name.
 
 The place sheet's Parking action searches around the selected place, not the device's position.
 It requires supported search coverage and does not start or replace a route. Text searches can
@@ -88,9 +116,8 @@ and do not link that SDK.
 ## Live Traffic Routing
 
 The North America coverage, infrastructure, and provider decision is recorded in
-[`architecture/north-america.md`](architecture/north-america.md). It keeps Calgary as the only
-current production claim while defining the staged Canada, United States, Mexico, and licensed
-traffic gates.
+[`architecture/north-america.md`](architecture/north-america.md). V2 selects Alberta and British
+Columbia while retaining Calgary-shaped v1 compatibility and staged Canada/US/Mexico quality gates.
 
 NavOSS keeps live traffic disabled until a provider contract permits use in an
 open-source MapLibre app with CarPlay. The provider review reached these

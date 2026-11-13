@@ -6,6 +6,9 @@ import {
   compareRouteAlternatives,
   ContributionSubmissionRequestSchema,
   GeographicBoundsSchema,
+  COVERAGE_BOUNDARY_SOURCE,
+  LOCAL_OVERLAY_AREAS,
+  SERVICE_AREAS,
   GooglePlaceQueryGrantResponseSchema,
   OfficialRoadEventResponseSchema,
   OfficialSafetyCameraResponseSchema,
@@ -861,32 +864,17 @@ describe('AppConfigResponseSchema', () => {
         { label: 'OpenStreetMap contributors', url: 'https://www.openstreetmap.org/copyright' },
       ],
       coverage: {
-        displayName: 'Calgary and Kelowna service areas',
-        id: 'calgary-kelowna-service-areas',
+        displayName: 'Alberta and British Columbia',
+        id: 'alberta-british-columbia',
         modes: ['driving'],
-        serviceAreas: [
-          {
-            bounds: {
-              northEast: { latitude: 51.212, longitude: -113.859 },
-              southWest: { latitude: 50.842, longitude: -114.316 },
-            },
-            displayName: 'Calgary, Alberta',
-            id: 'calgary-ab',
-          },
-          {
-            bounds: {
-              northEast: { latitude: 50.15, longitude: -119.2 },
-              southWest: { latitude: 49.7, longitude: -119.65 },
-            },
-            displayName: 'Kelowna, British Columbia',
-            id: 'kelowna-bc',
-          },
-        ],
+        boundarySource: COVERAGE_BOUNDARY_SOURCE,
+        overlays: LOCAL_OVERLAY_AREAS,
+        serviceAreas: SERVICE_AREAS,
       },
       endpoints: {
         cameras: '/v1/cameras',
         events: '/v1/events',
-        routes: '/v1/routes',
+        routes: '/v2/routes',
         search: '/v1/search',
       },
       features: {

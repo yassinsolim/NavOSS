@@ -79,10 +79,9 @@ import { exploreCategoryById, type ExploreCategory } from '@/features/map/explor
 import { createLatestRequestGate } from '@/features/map/latest-request-gate';
 import { ensureForegroundLocationPermission } from '@/features/map/map-location';
 import {
-  CALGARY_REGION_BOUNDS,
   isSearchCoverageRegion,
-  KELOWNA_REGION_BOUNDS,
   mapRegionForCoordinate,
+  searchCoverageBoundsForRegion,
   TORONTO_CAMERA_BOUNDS,
 } from '@/features/map/map-region';
 import {
@@ -601,12 +600,11 @@ export function MapScreen() {
         ? officialRoadEventResponse
         : undefined;
   const roadEvents: readonly MapRoadEvent[] = roadEventSnapshot?.events ?? [];
-  const searchOrigin = isSearchCoverageRegion(mapRegion)
-    ? searchOriginWithinBounds(
-        userCoordinate,
-        mapRegion === 'calgary-ab' ? CALGARY_REGION_BOUNDS : KELOWNA_REGION_BOUNDS,
-      )
-    : undefined;
+  const searchCoverageBounds = searchCoverageBoundsForRegion(mapRegion);
+  const searchOrigin =
+    searchCoverageBounds === undefined
+      ? undefined
+      : searchOriginWithinBounds(userCoordinate, searchCoverageBounds);
   const searchEnabled = true;
   const nearbySearchEnabled = searchOrigin !== undefined;
   const searchOriginKey = searchProximityKey(searchOrigin);
