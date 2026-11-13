@@ -5,9 +5,8 @@ import type { ExploreCategory } from '@/features/map/explore-categories';
 import { createLatestRequestGate } from '@/features/map/latest-request-gate';
 import {
   planPlaceSearch,
-  promoteExactNameMatches,
   rankCategoryResults,
-  rankSearchResults,
+  rankTypedSearchResults,
   searchProximityKey,
   searchProximityOptions,
   searchResultBounds,
@@ -119,9 +118,11 @@ export function usePlaceSearch({
         }
         const rankedResults = nearestFirst
           ? rankCategoryResults(response.results, proximityOrigin)
-          : promoteExactNameMatches(
-              rankSearchResults(response.results, getRecentDestinationIds(), proximityOrigin),
+          : rankTypedSearchResults(
+              response.results,
               normalizedQuery,
+              getRecentDestinationIds(),
+              proximityOrigin,
             );
         startTransition(() => {
           onConnectionChange(

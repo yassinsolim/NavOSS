@@ -1,0 +1,267 @@
+{
+  "recordedAt": "2026-11-13T04:42:13.180Z",
+  "query": {
+    "q": "Calgary Tower",
+    "latitude": 51.0105,
+    "longitude": -114.0717,
+    "includeDetails": true,
+    "limit": 20,
+    "sort": "distance"
+  },
+  "status": 200,
+  "response": {
+    "degraded": false,
+    "results": [
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0063406,
+          "longitude": -114.056549
+        },
+        "confidence": 0.9072350271046162,
+        "distanceMeters": 1157,
+        "id": "calgary-business:13014170",
+        "label": "Tower Cleaners (manchester), 402 53 Av SE, Manchester Industrial, Calgary, AB",
+        "name": "Tower Cleaners (manchester)"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0297787,
+          "longitude": -114.0652942
+        },
+        "confidence": 0.9112434446811676,
+        "distanceMeters": 2190,
+        "id": "calgary-business:12443032",
+        "label": "Rouleau Premium Apartment South Tower, 124 26 Av SW, Mission, Calgary, AB",
+        "name": "Rouleau Premium Apartment South Tower"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0301326,
+          "longitude": -114.064817
+        },
+        "confidence": 0.9112434446811676,
+        "distanceMeters": 2236,
+        "id": "calgary-business:12344453",
+        "label": "Rouleau Premium Apartment North Tower, 111 25 Av SW, Mission, Calgary, AB",
+        "name": "Rouleau Premium Apartment North Tower"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0327333,
+          "longitude": -114.074425
+        },
+        "confidence": 0.9123951449990273,
+        "distanceMeters": 2480,
+        "id": "calgary-business:16524670",
+        "label": "Harvard Towers, 606 23 Av SW, Cliff Bungalow, Calgary, AB",
+        "name": "Harvard Towers"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0071599,
+          "longitude": -114.0362145
+        },
+        "confidence": 0.9112890295684338,
+        "distanceMeters": 2510,
+        "id": "calgary-business:13263322",
+        "label": "Western Tower Tech, 1919 Highfield Cr SE, Highfield, Calgary, AB",
+        "name": "Western Tower Tech"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0358659,
+          "longitude": -114.0848959
+        },
+        "confidence": 0.9101668849587441,
+        "distanceMeters": 2968,
+        "id": "calgary-business:16817991",
+        "label": "Starlight Towers, 1005 Cameron Av SW, Lower Mount Royal, Calgary, AB",
+        "name": "Starlight Towers"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0380187,
+          "longitude": -114.0762058
+        },
+        "confidence": 0.9144260287284851,
+        "distanceMeters": 3076,
+        "id": "calgary-business:12557120",
+        "label": "Ambassador Tower, 630 17 Av SW, Beltline, Calgary, AB",
+        "name": "Ambassador Tower"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0391517,
+          "longitude": -114.0709627
+        },
+        "confidence": 0.9144260287284851,
+        "distanceMeters": 3186,
+        "id": "calgary-business:13800735",
+        "label": "Kingston Tower, 342 15 Av SW, Beltline, Calgary, AB",
+        "name": "Kingston Tower"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0385117,
+          "longitude": -114.0858941
+        },
+        "confidence": 0.9144260287284851,
+        "distanceMeters": 3269,
+        "id": "calgary-business:117747",
+        "label": "Skygate Towers, 1030 16 Av SW, Beltline, Calgary, AB",
+        "name": "Skygate Towers"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0440938,
+          "longitude": -114.0624644
+        },
+        "confidence": 0.9060637585818768,
+        "distanceMeters": 3791,
+        "id": "calgary-business:43984",
+        "label": "Tower Drugs, #137 131 9 Av SW, Downtown Commercial Core, Calgary, AB",
+        "name": "Tower Drugs"
+      },
+      {
+        "category": "landmark",
+        "center": {
+          "latitude": 51.04427,
+          "longitude": -114.06309
+        },
+        "confidence": 1,
+        "distanceMeters": 3803,
+        "details": {
+          "address": "Calgary Tower, 101, 9 Avenue SE, Downtown Commercial Core, Calgary, Alberta, T2P 1J9, Canada",
+          "category": "tower"
+        },
+        "id": "landmark:calgary-tower",
+        "label": "Calgary Tower, 101 9 Avenue SW",
+        "name": "Calgary Tower"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0467657,
+          "longitude": -114.0822213
+        },
+        "confidence": 0.9079876646399498,
+        "distanceMeters": 4099,
+        "id": "calgary-business:16687188",
+        "label": "Garden Towers, #100 909 7 Av SW, Downtown Commercial Core, Calgary, AB",
+        "name": "Garden Towers"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0467651,
+          "longitude": -114.0830906
+        },
+        "confidence": 0.9092216737568378,
+        "distanceMeters": 4110,
+        "id": "calgary-business:791699",
+        "label": "O'neil Towers, 700 9 St SW, Downtown Commercial Core, Calgary, AB",
+        "name": "O'neil Towers"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0482575,
+          "longitude": -114.0817998
+        },
+        "confidence": 0.9101668849587441,
+        "distanceMeters": 4257,
+        "id": "calgary-business:13570940",
+        "label": "Vista Tower, 912 6 Av SW, Downtown Commercial Core, Calgary, AB",
+        "name": "Vista Tower"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0488411,
+          "longitude": -114.0683248
+        },
+        "confidence": 0.90625134781003,
+        "distanceMeters": 4270,
+        "id": "calgary-business:16662934",
+        "label": "Booster Juice - Stock Exchange Tower, #210 300 5 Av SW, Downtown Commercial Core, Calgary, AB",
+        "name": "Booster Juice - Stock Exchange Tower"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 50.9568888,
+          "longitude": -114.0732759
+        },
+        "confidence": 0.9047610003501178,
+        "distanceMeters": 5962,
+        "id": "calgary-business:13835434",
+        "label": "Tower Chrysler Dodge Jeep Ram, 10901 Macleod Tr SW, Southwood, Calgary, AB",
+        "name": "Tower Chrysler Dodge Jeep Ram"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0657108,
+          "longitude": -114.0878432
+        },
+        "confidence": 0.9050676595419646,
+        "distanceMeters": 6242,
+        "id": "calgary-business:16064032",
+        "label": "Begin Tower Dining Hall, #112 151 Dr Carpenter Ci NW, Hillhurst, Calgary, AB",
+        "name": "Begin Tower Dining Hall"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0148413,
+          "longitude": -114.1631955
+        },
+        "confidence": 0.9144260287284851,
+        "distanceMeters": 6419,
+        "id": "calgary-business:12465159",
+        "label": "Richmond Towers, 69 Glamis Dr SW, Glamorgan, Calgary, AB",
+        "name": "Richmond Towers"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0160061,
+          "longitude": -114.1632125
+        },
+        "confidence": 0.9144260287284851,
+        "distanceMeters": 6431,
+        "id": "calgary-business:12386124",
+        "label": "Richmond Towers, 71 Glamis Dr SW, Glamorgan, Calgary, AB",
+        "name": "Richmond Towers"
+      },
+      {
+        "category": "poi",
+        "center": {
+          "latitude": 51.0767236,
+          "longitude": -114.1265673
+        },
+        "confidence": 0.9103556260466575,
+        "distanceMeters": 8303,
+        "id": "calgary-business:16583759",
+        "label": "Goodearth Coffeehouse - Education Tower, 2750 University Wy NW, University Heights, Calgary, AB",
+        "name": "Goodearth Coffeehouse - Education Tower"
+      }
+    ],
+    "source": {
+      "datasetVersion": "nominatim-self-hosted:alberta-british-columbia-geofabrik-2026-07-30+calgary-open-data-index:s8b3-j88p@2026-11-12T14:08:50.000Z+vdjc-pybd@2026-11-12T04:45:23.000Z",
+      "freshness": "fresh",
+      "id": "calgary-hybrid-search",
+      "updatedAt": "2026-11-12T14:57:37.585Z"
+    }
+  }
+}

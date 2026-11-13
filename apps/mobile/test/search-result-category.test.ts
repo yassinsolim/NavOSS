@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SearchResult } from '@navoss/contracts';
 
-import { categoryLabel } from '../src/features/map/search-result-category.js';
+import { categoryLabel, searchResultSubtitle } from '../src/features/map/search-result-category.js';
 
 function poi(details?: SearchResult['details']): SearchResult {
   return {
@@ -102,5 +102,42 @@ describe('categoryLabel', () => {
         undefined,
       ),
     ).toBe('street');
+  });
+});
+
+describe('compact search result subtitles', () => {
+  it.each([
+    [
+      'Costco',
+      'Costco, 99, 6 Street SE, East Fairview Industrial, Calgary, Alberta, T2H 3A7, Canada',
+      '99 6 Street SE, Calgary',
+    ],
+    [
+      'University of Calgary',
+      'University of Calgary, 2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada',
+      '2500 University Drive NW, Calgary',
+    ],
+    [
+      'University',
+      'University, Crowchild Trail NW, Banff Trail, Calgary, Alberta, T2M 4K6, Canada',
+      'Crowchild Trail NW, Calgary',
+    ],
+    [
+      'Costco',
+      'Costco, Baron Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada',
+      'Baron Road, Kelowna',
+    ],
+    ['Test Place', 'Test Place, Beltline, Calgary, AB', 'Beltline, Calgary'],
+    ['2500 University Drive NW', '2500 University Drive NW, Calgary, AB', 'Calgary'],
+    ['Costco', 'Costco, #101 100 Test Road, Calgary', '#101 100 Test Road, Calgary'],
+    ['Test Place', 'Test Place', ''],
+  ])('formats %s without the Nominatim breadcrumb', (name, label, expected) => {
+    expect(searchResultSubtitle({ ...poi(), name, label })).toBe(expected);
+  });
+
+  it('preserves the sourced LRT acronym and human warehouse category', () => {
+    expect(categoryLabel(poi({ category: 'lrt station' }), undefined)).toBe('LRT station');
+    expect(categoryLabel(poi({ category: 'warehouse store' }), undefined)).toBe('Warehouse store');
+    expect(categoryLabel(poi({ category: 'university' }), undefined)).toBe('University');
   });
 });

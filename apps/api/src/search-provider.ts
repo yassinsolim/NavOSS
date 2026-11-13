@@ -14,6 +14,12 @@ import { createPostgresCalgarySearchProvider } from './calgary-search-provider.j
 import { CALGARY_SEARCH_FIXTURES, type SearchFixture } from './fixtures.js';
 import { searchFixtures } from './search.js';
 import { normalizeSearchText, placeSearchQueryVariants } from './search-text.js';
+import {
+  canonicalSearchName,
+  searchLocation,
+  searchNameConfidence,
+  type SearchLocation,
+} from './search-presentation.js';
 
 const DEFAULT_PHOTON_URL = 'https://photon.komoot.io/api/';
 const PHOTON_TIMEOUT_MS = 3_000;
@@ -25,6 +31,22 @@ const SEARCH_BOUNDS = [
 ].join(',');
 const NOMINATIM_TIMEOUT_MS = 4_000;
 const EARTH_RADIUS_METERS = 6_371_000;
+const DUPLICATE_RADIUS_METERS = 150;
+const ADDRESSED_PLACE_RADIUS_METERS = 250;
+const CAMPUS_DUPLICATE_RADIUS_METERS = 1_000;
+const NOMINATIM_TEXT_VIEWBOX_RADIUS = { latitude: 0.35, longitude: 0.5 };
+
+interface SearchResultMetadata {
+  exactAlias?: string;
+  isEntrance?: boolean;
+  location: SearchLocation;
+  members?: readonly SearchResult[];
+  osmType?: string;
+  providerConfidence: number;
+  rawCategory?: string;
+}
+
+const metadataByResult = new WeakMap<SearchResult, SearchResultMetadata>();
 
 export function isCalgarySearchCoordinate(coordinate: {
   latitude: number;
@@ -181,6 +203,14 @@ const OMITTED_PLACE_CATEGORIES: Record<string, true> = {
   shop: true,
   building: true,
   commercial: true,
+  administrative: true,
+  house: true,
+  residential: true,
+  primary: true,
+  secondary: true,
+  tertiary: true,
+  service: true,
+  road: true,
 };
 
 const RAW_CATEGORY_LABELS: Record<string, string> = {};
@@ -194,6 +224,40 @@ RAW_CATEGORY_LABELS.food_court = 'food court';
 RAW_CATEGORY_LABELS.pub = 'pub';
 RAW_CATEGORY_LABELS.biergarten = 'beer garden';
 RAW_CATEGORY_LABELS.retail = 'retail area';
+RAW_CATEGORY_LABELS.wholesale = 'warehouse store';
+RAW_CATEGORY_LABELS.university = 'university';
+RAW_CATEGORY_LABELS.college = 'college';
+RAW_CATEGORY_LABELS.aerodrome = 'airport';
+RAW_CATEGORY_LABELS.train_station = 'train station';
+RAW_CATEGORY_LABELS.station = 'train station';
+RAW_CATEGORY_LABELS.platform = 'transit platform';
+RAW_CATEGORY_LABELS.stop = 'transit stop';
+RAW_CATEGORY_LABELS.stop_position = 'transit stop';
+RAW_CATEGORY_LABELS.bus_stop = 'bus stop';
+RAW_CATEGORY_LABELS.alcohol = 'liquor store';
+
+function nominatimPlaceDescription(
+  result: z.infer<typeof NominatimResultSchema>,
+): string | undefined {
+  const osmClass = result.category ?? result.class;
+  if (osmClass === 'entrance') return result.type === 'main' ? 'main entrance' : 'entrance';
+  if (osmClass === 'highway' && result.type !== 'bus_stop') return undefined;
+  if (osmClass === 'boundary') return undefined;
+  if (
+    ['railway', 'public_transport', 'building'].includes(osmClass ?? '') &&
+    ['station', 'train_station', 'stop', 'stop_position', 'platform'].includes(result.type ?? '')
+  ) {
+    if (result.extratags?.station === 'light_rail' || result.extratags?.light_rail === 'yes') {
+      return 'LRT station';
+    }
+    if (result.extratags?.station === 'subway' || result.extratags?.subway === 'yes') {
+      return 'subway station';
+    }
+  }
+  return result.type === undefined
+    ? undefined
+    : finalizeDetailCategory(result.type, result.extratags?.cuisine);
+}
 
 // Use the first explicitly tagged cuisine, never a guess from a business name. Limit it to two
 // plain words so combining it with a place kind produces a useful short description.
@@ -231,18 +295,21 @@ function finalizeResultDetails(result: SearchResult): SearchResult {
   const finalized: SearchResult = { ...result };
   if (Object.keys(details).length === 0) delete finalized.details;
   else finalized.details = details;
+  metadataByResult.set(finalized, resultMetadata(result));
   return finalized;
 }
 
 function nominatimViewbox(
   query: SearchQuery,
-  radius = NOMINATIM_CATEGORY_VIEWBOX_RADII.at(-1),
+  radius: { latitude: number; longitude: number } | undefined = query.category === undefined
+    ? undefined
+    : NOMINATIM_CATEGORY_VIEWBOX_RADII.at(-1),
 ): string {
   if (
-    query.category === undefined ||
+    radius === undefined ||
     query.latitude === undefined ||
     query.longitude === undefined ||
-    radius === undefined
+    !isSupportedSearchCoordinate({ latitude: query.latitude, longitude: query.longitude })
   ) {
     return [
       SERVICE_COVERAGE_BOUNDS.southWest.longitude,
@@ -276,6 +343,7 @@ const PhotonFeatureSchema = z.object({
     type: z.literal('Point'),
   }),
   properties: z.looseObject({
+    district: z.string().optional(),
     city: z.string().optional(),
     country: z.string().optional(),
     housenumber: z.string().optional(),
@@ -286,6 +354,7 @@ const PhotonFeatureSchema = z.object({
     osm_value: z.string().optional(),
     postcode: z.string().optional(),
     state: z.string().optional(),
+    suburb: z.string().optional(),
     street: z.string().optional(),
     type: z.string().optional(),
   }),
@@ -298,8 +367,10 @@ const PhotonResponseSchema = z.object({
 });
 
 const NominatimResultSchema = z.looseObject({
+  address: z.record(z.string(), z.string()).optional(),
   addresstype: z.string().optional(),
   category: z.string().optional(),
+  class: z.string().optional(),
   display_name: z.string().min(1),
   extratags: z
     .record(z.string(), z.string())
@@ -353,8 +424,9 @@ function categoryFor(
 }
 
 function displayName(properties: z.infer<typeof PhotonFeatureSchema>['properties']): string {
-  if (properties.name !== undefined) {
-    return properties.name;
+  const name = nonEmptyText(properties.name);
+  if (name !== undefined) {
+    return name;
   }
   const address = [properties.housenumber, properties.street].filter(Boolean).join(' ');
   return address.length > 0 ? address : 'Unnamed place';
@@ -382,8 +454,7 @@ function displayLabel(properties: z.infer<typeof PhotonFeatureSchema>['propertie
 
 function normalizePhotonResults(
   payload: z.infer<typeof PhotonResponseSchema>,
-  limit: number,
-  includeDetails: boolean,
+  query: SearchQuery,
 ): SearchResult[] {
   return payload.features
     .filter((feature) =>
@@ -392,12 +463,11 @@ function normalizePhotonResults(
         longitude: feature.geometry.coordinates[0],
       }),
     )
-    .slice(0, limit)
     .map((feature, index) => {
-      const detailCategory = includeDetails
+      const detailCategory = query.includeDetails
         ? nonEmptyText(feature.properties.osm_value)
         : undefined;
-      return {
+      const normalized: SearchResult = {
         category: categoryFor(feature.properties),
         center: {
           latitude: feature.geometry.coordinates[1],
@@ -409,6 +479,22 @@ function normalizePhotonResults(
         label: displayLabel(feature.properties),
         name: displayName(feature.properties),
       };
+      metadataByResult.set(normalized, {
+        location: searchLocation(normalized.name, normalized.label, {
+          city: feature.properties.city,
+          house_number: feature.properties.housenumber,
+          road: feature.properties.street,
+          suburb: feature.properties.suburb ?? feature.properties.district,
+        }),
+        ...(feature.properties.osm_type === undefined
+          ? {}
+          : { osmType: feature.properties.osm_type }),
+        providerConfidence: normalized.confidence,
+        ...(feature.properties.osm_value === undefined
+          ? {}
+          : { rawCategory: feature.properties.osm_value }),
+      });
+      return normalized;
     });
 }
 
@@ -429,7 +515,11 @@ function nominatimCategory(
   ) {
     return 'neighborhood';
   }
-  if (['amenity', 'shop', 'tourism', 'leisure', 'aeroway'].includes(result.category ?? '')) {
+  if (
+    ['amenity', 'shop', 'tourism', 'leisure', 'aeroway', 'railway', 'public_transport'].includes(
+      result.category ?? result.class ?? '',
+    )
+  ) {
     return 'poi';
   }
   return 'landmark';
@@ -452,7 +542,6 @@ function normalizeNominatimResults(
         longitude: result.lon,
       }),
     )
-    .slice(0, query.limit)
     .map((result) => {
       const sourceName = nonEmptyText(result.name);
       const displayName = nonEmptyText(result.display_name.split(',')[0]);
@@ -480,10 +569,7 @@ function normalizeNominatimResults(
         result.extratags?.website ?? result.extratags?.['contact:website'],
       );
       const wheelchair = nonEmptyText(result.extratags?.wheelchair);
-      const placeDescription =
-        query.includeDetails && result.type !== undefined
-          ? finalizeDetailCategory(result.type, result.extratags?.cuisine)
-          : undefined;
+      const placeDescription = nominatimPlaceDescription(result);
 
       const normalized: SearchResult = {
         category: nominatimCategory(result),
@@ -505,7 +591,24 @@ function normalizeNominatimResults(
         label: result.display_name,
         name,
       };
-      if (placeDescription !== undefined && normalized.details !== undefined) {
+      metadataByResult.set(normalized, {
+        isEntrance:
+          (result.extratags?.entrance === 'main' ||
+            ((result.category ?? result.class) === 'entrance' && result.type === 'main')) &&
+          !['no', 'private'].includes(result.extratags?.access ?? '') &&
+          !['no', 'private'].includes(
+            result.extratags?.motor_vehicle ?? result.extratags?.vehicle ?? '',
+          ),
+        location: searchLocation(name, result.display_name, result.address),
+        osmType: result.osm_type,
+        providerConfidence: confidence,
+        ...(result.type === undefined ? {} : { rawCategory: result.type }),
+      });
+      if (
+        query.includeDetails &&
+        placeDescription !== undefined &&
+        normalized.details !== undefined
+      ) {
         descriptionsByDetails.set(normalized.details, placeDescription);
       }
       return normalized;
@@ -528,7 +631,7 @@ export function buildPhotonSearchUrl(query: SearchQuery, endpoint = DEFAULT_PHOT
 export function buildNominatimSearchUrl(
   query: SearchQuery,
   endpoint: string,
-  categoryRadius?: (typeof NOMINATIM_CATEGORY_VIEWBOX_RADII)[number],
+  categoryRadius?: { latitude: number; longitude: number },
 ): string {
   const url = new URL('search', endpoint.endsWith('/') ? endpoint : `${endpoint}/`);
   url.searchParams.set('accept-language', 'en-CA,en');
@@ -548,7 +651,24 @@ export function buildNominatimSearchUrl(
 export function createFixtureSearchProvider(
   fixtures: readonly SearchFixture[] = CALGARY_SEARCH_FIXTURES,
 ): SearchProvider {
-  return { search: (query) => Promise.resolve(searchFixtures(fixtures, query)) };
+  return {
+    search(query) {
+      const response = searchFixtures(fixtures, query);
+      for (const result of response.results) {
+        if (
+          result.confidence === 1 &&
+          normalizeSearchText(result.name) !== normalizeSearchText(query.q)
+        ) {
+          const metadata = resultMetadata(result);
+          metadata.exactAlias = normalizeSearchText(query.q);
+        }
+      }
+      return Promise.resolve({
+        ...response,
+        results: mergeResults([response.results], query, query.limit).map(finalizeResultDetails),
+      });
+    },
+  };
 }
 
 export function createPhotonSearchProvider(
@@ -570,7 +690,7 @@ export function createPhotonSearchProvider(
       const parsed = PhotonResponseSchema.parse(await response.json());
       return {
         degraded: true,
-        results: normalizePhotonResults(parsed, query.limit, query.includeDetails === true),
+        results: mergeResults([normalizePhotonResults(parsed, query)], query, query.limit),
         source: {
           datasetVersion: 'openstreetmap-continuous',
           freshness: 'fresh',
@@ -611,33 +731,45 @@ export function createNominatimSearchProvider(
     },
     async search(query) {
       const categoryRadii =
-        query.category !== undefined &&
         query.latitude !== undefined &&
-        query.longitude !== undefined
-          ? NOMINATIM_CATEGORY_VIEWBOX_RADII
+        query.longitude !== undefined &&
+        isSupportedSearchCoordinate({ latitude: query.latitude, longitude: query.longitude })
+          ? query.category === undefined
+            ? [NOMINATIM_TEXT_VIEWBOX_RADIUS, undefined]
+            : NOMINATIM_CATEGORY_VIEWBOX_RADII
           : [undefined];
       const urls = [
         ...new Set(categoryRadii.map((radius) => buildNominatimSearchUrl(query, endpoint, radius))),
       ];
-      const responses = await Promise.all(
-        urls.map((url) =>
-          fetchImplementation(url, {
+      // Local and provincial pools start together and share one timeout budget.
+      const signal = AbortSignal.timeout(NOMINATIM_TIMEOUT_MS);
+      const settled = await Promise.allSettled(
+        urls.map(async (url) => {
+          const response = await fetchImplementation(url, {
             headers: { accept: 'application/json', 'user-agent': 'NavOSS/0.1' },
-            signal: AbortSignal.timeout(NOMINATIM_TIMEOUT_MS),
-          }),
-        ),
+            signal,
+          });
+          if (!response.ok) {
+            throw new Error(`Nominatim returned status ${String(response.status)}.`);
+          }
+          return normalizeNominatimResults(
+            NominatimResponseSchema.parse(await response.json()),
+            query,
+          );
+        }),
       );
-      const failedResponse = responses.find((response) => !response.ok);
-      if (failedResponse !== undefined) {
-        throw new Error(`Nominatim returned status ${String(failedResponse.status)}.`);
+      const resultGroups = settled
+        .filter(
+          (result): result is PromiseFulfilledResult<SearchResult[]> =>
+            result.status === 'fulfilled',
+        )
+        .map((result) => result.value);
+      if (resultGroups.length === 0) {
+        const failed = settled.find((result) => result.status === 'rejected');
+        throw failed?.reason ?? new Error('Nominatim search returned no successful response.');
       }
-      const resultGroups = await Promise.all(
-        responses.map(async (response) =>
-          normalizeNominatimResults(NominatimResponseSchema.parse(await response.json()), query),
-        ),
-      );
       return {
-        degraded: false,
+        degraded: settled.some((result) => result.status === 'rejected'),
         results: mergeResults(resultGroups, query, query.limit),
         source: {
           datasetVersion,
@@ -650,44 +782,198 @@ export function createNominatimSearchProvider(
   };
 }
 
-function resultDistanceMeters(result: SearchResult, query: SearchQuery): number | undefined {
-  if (query.latitude === undefined || query.longitude === undefined) {
-    return undefined;
-  }
+function coordinateDistanceMeters(
+  left: { latitude: number; longitude: number },
+  right: { latitude: number; longitude: number },
+): number {
   const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
-  const latitudeDelta = toRadians(result.center.latitude - query.latitude);
-  const longitudeDelta = toRadians(result.center.longitude - query.longitude);
-  const originLatitude = toRadians(query.latitude);
-  const resultLatitude = toRadians(result.center.latitude);
+  const latitudeDelta = toRadians(right.latitude - left.latitude);
+  const longitudeDelta = toRadians(right.longitude - left.longitude);
   const haversine =
     Math.sin(latitudeDelta / 2) ** 2 +
-    Math.cos(originLatitude) * Math.cos(resultLatitude) * Math.sin(longitudeDelta / 2) ** 2;
-  return Math.round(2 * EARTH_RADIUS_METERS * Math.asin(Math.sqrt(haversine)));
+    Math.cos(toRadians(left.latitude)) *
+      Math.cos(toRadians(right.latitude)) *
+      Math.sin(longitudeDelta / 2) ** 2;
+  return 2 * EARTH_RADIUS_METERS * Math.asin(Math.sqrt(haversine));
+}
+
+function resultMetadata(result: SearchResult): SearchResultMetadata {
+  const existing = metadataByResult.get(result);
+  if (existing !== undefined) return existing;
+  const osmType = result.id.split(':')[1];
+  const metadata: SearchResultMetadata = {
+    location: searchLocation(result.name, result.label),
+    ...(osmType === undefined ? {} : { osmType }),
+    providerConfidence: result.confidence,
+    ...(result.details?.category === undefined ? {} : { rawCategory: result.details.category }),
+  };
+  metadataByResult.set(result, metadata);
+  return metadata;
 }
 
 function presentSearchResult(result: SearchResult, query: SearchQuery): SearchResult {
+  const metadata = resultMetadata(result);
   const name = result.name.replace(/\s+#\d{2,}\s*$/u, '').trim();
-  const label =
-    name === result.name || !result.label.startsWith(`${result.name},`)
-      ? result.label
-      : `${name}${result.label.slice(result.name.length)}`;
-  const distanceMeters = resultDistanceMeters(result, query);
-  return {
+  const label = metadata.location.subtitle === '' ? name : `${name}, ${metadata.location.subtitle}`;
+  const presented: SearchResult = {
     ...result,
-    ...(distanceMeters === undefined ? {} : { distanceMeters }),
+    confidence:
+      query.category !== undefined
+        ? result.confidence
+        : metadata.exactAlias === normalizeSearchText(query.q)
+          ? 1
+          : searchNameConfidence(name, label, query.q, metadata.providerConfidence),
+    ...(query.latitude === undefined || query.longitude === undefined
+      ? {}
+      : {
+          distanceMeters: Math.round(
+            coordinateDistanceMeters(
+              { latitude: query.latitude, longitude: query.longitude },
+              result.center,
+            ),
+          ),
+        }),
     label,
     name,
   };
+  metadataByResult.set(presented, metadata);
+  return presented;
+}
+
+function placeKind(result: SearchResult): string | undefined {
+  const metadata = resultMetadata(result);
+  const category = metadata.rawCategory?.toLocaleLowerCase('en-CA');
+  if (metadata.isEntrance === true && ['entrance', 'main', 'yes'].includes(category ?? ''))
+    return undefined;
+  if (category === undefined || OMITTED_PLACE_CATEGORIES[category] === true) return undefined;
+  if (
+    [
+      'station',
+      'train_station',
+      'stop',
+      'stop_position',
+      'platform',
+      'train station',
+      'transit stop',
+      'transit platform',
+      'lrt station',
+    ].includes(category)
+  )
+    return 'rail-station';
+  if (category === 'wholesale' || category === 'warehouse store') return 'wholesale';
+  if (category === 'cafe' || category === 'café') return 'cafe';
+  return category;
+}
+
+function representativeQuality(result: SearchResult): number {
+  const metadata = resultMetadata(result);
+  const rawCategory = metadata.rawCategory?.toLocaleLowerCase('en-CA');
+  const kind = placeKind(result);
+  const completeStation =
+    kind === 'rail-station' &&
+    ['station', 'train_station', 'train station', 'lrt station'].includes(rawCategory ?? '');
+  const geometry =
+    result.id.startsWith('poi:') || result.id.startsWith('landmark:')
+      ? 4 // Curated fixtures are established routing points, not derived polygon centroids.
+      : ['way', 'relation', 'W', 'R'].includes(metadata.osmType ?? '')
+        ? 3
+        : 2;
+  return (
+    (metadata.isEntrance === true ? 10_000 : 0) +
+    (completeStation ? 3_000 : kind === undefined ? 0 : 2_000) +
+    (metadata.location.houseNumber === undefined ? 0 : 200) +
+    (metadata.location.street === undefined ? 0 : 100) +
+    geometry * 10 +
+    metadata.providerConfidence
+  );
 }
 
 function samePlace(left: SearchResult, right: SearchResult): boolean {
   if (left.id === right.id) return true;
-  return (
-    left.id.split(':', 1)[0] !== right.id.split(':', 1)[0] &&
-    normalizeSearchText(left.name) === normalizeSearchText(right.name) &&
-    Math.abs(left.center.latitude - right.center.latitude) < 0.0003 &&
-    Math.abs(left.center.longitude - right.center.longitude) < 0.0004
-  );
+  const leftMetadata = resultMetadata(left);
+  const rightMetadata = resultMetadata(right);
+  const leftLocation = leftMetadata.location;
+  const rightLocation = rightMetadata.location;
+  const leftKind = placeKind(left);
+  const rightKind = placeKind(right);
+  const sameAddress =
+    leftLocation.houseNumber !== undefined &&
+    rightLocation.houseNumber !== undefined &&
+    normalizeSearchText(leftLocation.houseNumber) ===
+      normalizeSearchText(rightLocation.houseNumber) &&
+    leftLocation.street !== undefined &&
+    rightLocation.street !== undefined &&
+    normalizeSearchText(leftLocation.street) === normalizeSearchText(rightLocation.street);
+  const leftName = canonicalSearchName(left.name);
+  const rightName = canonicalSearchName(right.name);
+  const cityVariant =
+    sameAddress &&
+    (left.id.startsWith('poi:') ||
+      left.id.startsWith('landmark:') ||
+      right.id.startsWith('poi:') ||
+      right.id.startsWith('landmark:')) &&
+    ((leftLocation.city !== undefined &&
+      leftName === `${normalizeSearchText(leftLocation.city)} ${rightName}`) ||
+      (rightLocation.city !== undefined &&
+        rightName === `${normalizeSearchText(rightLocation.city)} ${leftName}`));
+  const stationVariant =
+    leftKind === 'rail-station' &&
+    rightKind === 'rail-station' &&
+    leftName.replace(/ (?:lrt |train |railway )?station$/u, '') ===
+      rightName.replace(/ (?:lrt |train |railway )?station$/u, '');
+  const entranceVariant =
+    (leftMetadata.isEntrance === true &&
+      leftName.replace(/ (?:main )?entrance$/u, '') === rightName) ||
+    (rightMetadata.isEntrance === true &&
+      rightName.replace(/ (?:main )?entrance$/u, '') === leftName);
+  if (leftName !== rightName && !cityVariant && !stationVariant && !entranceVariant) return false;
+  if (
+    leftLocation.houseNumber !== undefined &&
+    rightLocation.houseNumber !== undefined &&
+    normalizeSearchText(leftLocation.houseNumber) !== normalizeSearchText(rightLocation.houseNumber)
+  )
+    return false;
+  if (
+    leftLocation.unit !== undefined &&
+    rightLocation.unit !== undefined &&
+    normalizeSearchText(leftLocation.unit) !== normalizeSearchText(rightLocation.unit)
+  )
+    return false;
+  if (leftKind !== undefined && rightKind !== undefined && leftKind !== rightKind) return false;
+  if (
+    !sameAddress &&
+    !(leftKind === 'rail-station' && rightKind === 'rail-station') &&
+    (leftLocation.houseNumber === undefined || rightLocation.houseNumber === undefined) &&
+    leftLocation.street !== undefined &&
+    rightLocation.street !== undefined &&
+    normalizeSearchText(leftLocation.street) !== normalizeSearchText(rightLocation.street)
+  )
+    return false;
+  // Only a tagged campus may bridge its large node/way/boundary coordinate spread. Different
+  // civic addresses still veto merging, and all members must be mutually within this radius.
+  const campus =
+    (leftKind === 'university' &&
+      (rightKind === 'university' || rightMetadata.rawCategory === 'administrative')) ||
+    (rightKind === 'university' &&
+      (leftKind === 'university' || leftMetadata.rawCategory === 'administrative'));
+  const sameSource = left.id.split(':', 1)[0] === right.id.split(':', 1)[0];
+  if (
+    !campus &&
+    leftKind !== 'rail-station' &&
+    rightKind !== 'rail-station' &&
+    leftMetadata.isEntrance !== true &&
+    rightMetadata.isEntrance !== true &&
+    sameSource &&
+    (leftMetadata.osmType === rightMetadata.osmType ||
+      (left.id.startsWith('calgary-business:') && !sameAddress))
+  )
+    return false;
+  const radius = campus
+    ? CAMPUS_DUPLICATE_RADIUS_METERS
+    : sameAddress
+      ? ADDRESSED_PLACE_RADIUS_METERS
+      : DUPLICATE_RADIUS_METERS;
+  return coordinateDistanceMeters(left.center, right.center) <= radius;
 }
 
 function mergeResults(
@@ -695,51 +981,118 @@ function mergeResults(
   query: SearchQuery,
   limit: number,
 ): SearchResult[] {
-  const compareDistance = (left: SearchResult, right: SearchResult): number => {
-    if (left.distanceMeters === undefined) return right.distanceMeters === undefined ? 0 : 1;
-    if (right.distanceMeters === undefined) return -1;
-    return left.distanceMeters - right.distanceMeters;
-  };
-  const ranked = resultGroups
-    .flat()
-    .filter((result) => isSupportedSearchCoordinate(result.center))
-    .map((result) => presentSearchResult(result, query))
+  const clusters: { members: SearchResult[]; result: SearchResult }[] = [];
+  for (const result of resultGroups.flat()) {
+    if (!isSupportedSearchCoordinate(result.center)) continue;
+    const members = resultMetadata(result).members ?? [result];
+    const cluster =
+      clusters.find((existing) => existing.members.some((member) => member.id === result.id)) ??
+      clusters.find((existing) =>
+        existing.members.every((left) => members.every((right) => samePlace(left, right))),
+      );
+    if (cluster === undefined) {
+      clusters.push({ members: [...members], result });
+      continue;
+    }
+    const existing = cluster.result;
+    const preferred =
+      representativeQuality(result) > representativeQuality(existing) ? result : existing;
+    const other = preferred === result ? existing : result;
+    const details = { ...other.details, ...preferred.details };
+    if (
+      other.details?.address !== undefined &&
+      (preferred.details?.address === undefined ||
+        searchLocation(preferred.name, preferred.details.address).streetAddress === undefined)
+    ) {
+      details.address = other.details.address;
+    }
+    const description =
+      (preferred.details === undefined
+        ? undefined
+        : descriptionsByDetails.get(preferred.details)) ??
+      (other.details === undefined ? undefined : descriptionsByDetails.get(other.details));
+    if (description !== undefined) descriptionsByDetails.set(details, description);
+    const metadata = { ...resultMetadata(preferred) };
+    const auxiliaryEntrance = metadata.isEntrance === true && placeKind(preferred) === undefined;
+    if (auxiliaryEntrance && other.details?.category !== undefined) {
+      details.category = other.details.category;
+      const categoryDescription = descriptionsByDetails.get(other.details);
+      if (categoryDescription === undefined) descriptionsByDetails.delete(details);
+      else descriptionsByDetails.set(details, categoryDescription);
+    }
+    const otherMetadata = resultMetadata(other);
+    if (metadata.exactAlias === undefined && otherMetadata.exactAlias !== undefined) {
+      metadata.exactAlias = otherMetadata.exactAlias;
+    }
+    if (metadata.location.street === undefined && otherMetadata.location.street !== undefined) {
+      metadata.location = otherMetadata.location;
+    } else if (metadata.location.city === undefined && otherMetadata.location.city !== undefined) {
+      const city = otherMetadata.location.city;
+      metadata.location = {
+        ...metadata.location,
+        city,
+        subtitle: [metadata.location.subtitle, city].filter(Boolean).join(', '),
+      };
+    }
+    if (auxiliaryEntrance) {
+      if (otherMetadata.rawCategory === undefined) delete metadata.rawCategory;
+      else metadata.rawCategory = otherMetadata.rawCategory;
+    } else if (metadata.rawCategory === undefined && otherMetadata.rawCategory !== undefined) {
+      metadata.rawCategory = otherMetadata.rawCategory;
+    }
+    const merged: SearchResult = {
+      ...preferred,
+      ...(auxiliaryEntrance ? { name: other.name } : {}),
+      ...(Object.keys(details).length === 0 ? {} : { details }),
+    };
+    metadataByResult.set(merged, metadata);
+    // One ID is one entity, not several spatial anchors from differently aged snapshots.
+    for (const member of members) {
+      const index = cluster.members.findIndex((existingMember) => existingMember.id === member.id);
+      const existingMember = cluster.members[index];
+      if (existingMember === undefined) cluster.members.push(member);
+      else if (representativeQuality(member) > representativeQuality(existingMember)) {
+        cluster.members[index] = member;
+      }
+    }
+    const representativeIndex = cluster.members.findIndex((member) => member.id === merged.id);
+    if (representativeIndex !== -1) cluster.members[representativeIndex] = merged;
+    metadata.members = cluster.members;
+    cluster.result = merged;
+  }
+  const ranked = clusters.map(({ members, result }) => {
+    resultMetadata(result).members = members;
+    return presentSearchResult(result, query);
+  });
+  const counts = new Map<string, number>();
+  for (const result of ranked) {
+    const name = canonicalSearchName(result.name);
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  const wanted = canonicalSearchName(query.q);
+  const brandQuery = (counts.get(wanted) ?? 0) > 1;
+  if (brandQuery && query.category === undefined) {
+    // For a brand, exact and prefix matches share a tier: the nearest branch/department wins,
+    // not the source spelling or a warehouse hundreds of kilometres away.
+    for (const result of ranked) {
+      if (result.confidence === 0.98 || result.confidence === 0.94) result.confidence = 0.94;
+    }
+  }
+  return ranked
     .sort((left, right) => {
-      const distanceDelta = compareDistance(left, right);
+      const distanceDelta =
+        (left.distanceMeters ?? Number.POSITIVE_INFINITY) -
+        (right.distanceMeters ?? Number.POSITIVE_INFINITY);
       const confidenceDelta = right.confidence - left.confidence;
       return (
-        (query.sort === 'distance'
+        (query.sort === 'distance' || query.category !== undefined
           ? distanceDelta || confidenceDelta
           : confidenceDelta || distanceDelta) ||
         left.label.localeCompare(right.label, 'en-CA') ||
         left.id.localeCompare(right.id, 'en-CA')
       );
-    });
-  const deduplicated: SearchResult[] = [];
-  for (const result of ranked) {
-    const duplicateIndex = deduplicated.findIndex((existing) => samePlace(existing, result));
-    if (duplicateIndex === -1) {
-      if (deduplicated.length < limit) {
-        deduplicated.push(result);
-      }
-    } else if (result.details !== undefined) {
-      const existing = deduplicated[duplicateIndex];
-      if (existing !== undefined) {
-        const details = { ...result.details, ...existing.details };
-        const description =
-          (existing.details === undefined
-            ? undefined
-            : descriptionsByDetails.get(existing.details)) ??
-          descriptionsByDetails.get(result.details);
-        if (description !== undefined) descriptionsByDetails.set(details, description);
-        deduplicated[duplicateIndex] = {
-          ...existing,
-          details,
-        };
-      }
-    }
-  }
-  return deduplicated;
+    })
+    .slice(0, limit);
 }
 
 function matchesSearchCategory(result: SearchResult, query: SearchQuery): boolean {
@@ -801,11 +1154,17 @@ export function createDevelopmentSearchProvider(
             },
           };
       try {
-        const photonResponse = await photonProvider.search(query);
+        const photonResponse = await photonProvider.search({
+          ...query,
+          includeDetails: query.includeDetails === true || query.category !== undefined,
+          limit: Math.min(20, query.limit * 2),
+        });
         return {
           degraded: true,
           results: mergeResults(
-            [fixtureResponse.results, photonResponse.results],
+            [fixtureResponse.results, photonResponse.results].map((results) =>
+              results.filter((result) => matchesSearchCategory(result, query)),
+            ),
             query,
             query.limit,
           ).map(finalizeResultDetails),

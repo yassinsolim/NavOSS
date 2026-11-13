@@ -27,6 +27,11 @@ origin, waypoint and destination must lie in a supported province.
 
 ## Calgary Place and Address Search
 
+The result-quality behaviour below describes this implementation, not the shipped build. The
+deployed service still uses the older Calgary/Kelowna image; province-wide retrieval and expanded
+station/campus/variant deduplication are not live there until deployment. The new phone
+presentation accepts the older response shape, but is not in TestFlight build 70.
+
 NavOSS combines a local copy of two City of Calgary datasets with its self-hosted
 OpenStreetMap/Nominatim index. The local copy is refreshed every 24 hours and swapped
 atomically after a complete import, so user searches never query Calgary Open Data directly.
@@ -62,8 +67,56 @@ than guessed. Parcel coordinates identify a civic parcel and are not guaranteed 
 an entrance, driveway, unit, or ideal vehicle arrival point.
 
 The production index stores public source records only. It does not store search text, search
-origins, selected results, routes, or user identities. Search results are ranked by exact text,
-prefix and word-prefix matches, typo similarity, and then optional proximity.
+origins, selected results, routes, or user identities. Text search uses query-specific name
+relevance (exact fixture aliases, exact names, prefixes, then incidental matches), then proximity.
+For a chain/brand with multiple same-name places, exact and prefix variants share a tier so nearby
+branches and departments precede a same-name warehouse hundreds of kilometres away. A locality-
+qualified query such as `Costco Kelowna` still prioritizes the explicitly named place. Explicit
+distance sorting retains its meaning; category discovery always remains nearest-first.
+
+With a supported origin, Nominatim starts a local text lookup (±0.35° latitude, ±0.5° longitude,
+clipped to the provincial retrieval envelope) and a province-wide lookup concurrently. Both share
+one four-second timeout budget. Pools are polygon-filtered, deduplicated and ranked before the
+result limit is applied. An unavailable pool marks the surviving results degraded; complete
+upstream failure retains the established fixture fallback. Calgary civic data and fixtures are
+not added to Edmonton, Vancouver or other searches outside the Calgary overlay.
+
+### Result identity and routing points
+
+Same normalized names, or narrowly defined variants (legal suffixes, `Costco`/`Costco Wholesale`,
+a tagged station's `LRT Station` suffix, or a curated fixture's city-qualified name), merge only
+when close together. The standard radius is 150 m: the recorded University station components
+span 101 m and duplicate Costco sources span 3–41 m. A matching complete civic number and street
+allow 250 m for address-point/building-centroid offsets. Only a tagged university campus and its
+same-name administrative boundary allow 1,000 m; the recorded Calgary campus node/way spread is
+821 m. Conflicting house numbers, units or known business kinds veto merging. Distinct complete
+same-provider node/way records are retained, even at one address, unless they are campus/station
+components or an explicitly tagged main entrance. Every distinct entity must match every other
+member: nearby records cannot form a chain that joins distant branches. Multiple snapshots of
+the same ID contribute only the selected representative, not several old coordinate anchors.
+
+Representative choice uses an explicitly tagged public main entrance (not private or explicitly
+vehicle-prohibited), a factual place kind (the station rather than its platform/stop), civic
+address quality, then coordinate representation. Existing curated fixture routing points are
+retained when equally described; otherwise physical way/relation centroids precede an unqualified
+node. Administrative boundaries never outrank a described campus. Public details are combined,
+preferring a usable street address over a bare administrative breadcrumb. This is not a guarantee
+of a verified driveway or vehicle entrance: Valhalla still snaps the selected point to its graph.
+Saddletowne's fixture point now matches recorded OSM station node `6575529216`.
+
+Phone and CarPlay rows show a compact street address (including a sourced unit) or neighbourhood
+plus city, a factual short category when available, and straight-line distance when an origin is
+known. Nominatim's legacy `class` and current `category`/`type` metadata are accepted; a light-rail
+tag can say `LRT station`, `university` says `University`, and `wholesale` says `Warehouse store`.
+Generic building/road/boundary tags are not place descriptions. Full original addresses remain in
+optional place details; missing addresses/categories are never invented.
+
+Development Photon results are merged with exact-alias fixtures too, so `University` retains
+`University of Calgary` rather than losing it among station platforms. The phone promotes against
+the complete overfetch pool before its eight-row cap, including when using an older API's scores.
+CarPlay merges fresh remote metadata into matching local destinations; at most two matching Home,
+Work or favourites stay visibly pinned as saved. Recents are ordinary ranked candidates, not
+pinned chain branches. Query relevance is in-memory only and is not persisted with destinations.
 
 Restaurants, Groceries, and Parks use a checked-in set of Nominatim special phrases that map the
 visible category to explicit OpenStreetMap tags. The same strict mapping covers all 35 Explore
@@ -98,8 +151,9 @@ one from the province name.
 The place sheet's Parking action searches around the selected place, not the device's position.
 It requires supported search coverage and does not start or replace a route. Text searches can
 highlight up to three matching recent destinations from the current results; the remaining list
-stays nearest-first. This history remains on the device. Submitting a search exposes the map
-markers through a compact results strip, with Show list available to return to the full list.
+preserves relevance for unique names and nearest-first order for chains. This history remains on
+the device. Submitting a search exposes map markers through a compact results strip, with Show
+list available to return to the full list.
 
 OpenStreetMap does not provide a Google-style review corpus. NavOSS does not scrape reviews or add
 Google values to its open-data result or shared contracts. An optional, key-gated Google Places UI
@@ -201,16 +255,21 @@ Both sources use the [Calgary Open Data Terms of
 Use](https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa). Source timestamps, confidence, update
 frequency, dataset links, and attribution are returned with every API response. Construction start
 and end values are source-local civil times tagged as `America/Edmonton`; NavOSS does not reinterpret
-them as UTC. Expired construction records and malformed rows are excluded rather than guessed.
+them as UTC. The current incident feed uses UTC text timestamps and WKT points (or separate coordinate
+columns); its UTC times are converted to Edmonton wall time, including daylight saving transitions.
+Legacy local timestamps and GeoJSON points remain supported. Expired construction records and
+malformed rows are excluded rather than guessed. An isolated malformed row or up to 10% of a feed is
+dropped and counted; exceeding that threshold fails that dataset.
 
-The production API polls both feeds every five minutes even when no phone requests the endpoint and
-deduplicates overlapping refreshes. It also caches a complete validated snapshot for five minutes.
-If Calgary Open Data is temporarily unavailable, the API may return the last successful in-memory
-snapshot for no more than 24 hours with both `stale` and `degraded` set to `true`. After that bound,
-before any valid snapshot exists, or after an API restart during an upstream outage, the endpoint
-fails closed. The phone refreshes every five minutes, keeps its last validated response through a
-transient request failure, and visibly identifies a stale or delayed snapshot. Phones do not send
-user location to Calgary Open Data.
+The API polls both feeds every five minutes even when no phone requests the endpoint and
+deduplicates overlapping refreshes. It caches a validated snapshot for five minutes and individual
+datasets for at most 24 hours. If one feed fails, it serves the other with the last valid data for
+the failed feed within that bound, or without that feed if no valid data exists. Both `stale` and
+`degraded` are true for an incomplete or partially invalid snapshot. The v1 contract still requires
+both real source descriptors: if a descriptor cannot be fetched and no bounded cached descriptor
+exists, or no feed is available, the endpoint fails closed. The phone refreshes every five minutes,
+keeps its last validated response through a transient request failure, and visibly identifies a stale
+or delayed snapshot. Phones do not send user location to Calgary Open Data.
 
 Road-event markers are awareness information only. They do not change route selection, trigger
 rerouting or speech, alter ETA, or represent road speeds or congestion. They are not an input to
@@ -315,7 +374,8 @@ DriveBC publishes active road events through its official Open511 API under the
 [Open Government Licence - British Columbia](https://www2.gov.bc.ca/gov/content/data/open-data/open-government-license-bc).
 NavOSS requests the documented Kelowna-area bounding box every five minutes and exposes normalized
 construction, closure, and incident markers at `GET /v2/events?region=kelowna-bc`. The provider
-strictly validates Point and LineString geometry, uses an actual in-bounds geometry vertex, and
+strictly validates Point and LineString geometry, accepts DriveBC's optional road-level `+delay`
+extension without deriving routing delays from it, uses an actual in-bounds geometry vertex, and
 fails closed on unknown source structures. A validated in-memory snapshot may be served as marked
 stale for no more than 24 hours.
 

@@ -1,0 +1,21 @@
+{
+  "provenance": "Synthetic legacy incident adapted from the pre-existing Calgary provider test; construction is a trimmed real City of Calgary row recorded 2026-11-13. The old live incident response was not available for recording.",
+  "incident": [
+    {
+      "description": "Expect delays.",
+      "incident_info": "Stalled vehicle on Crowchild Trail NW",
+      "modified_dt": "2026-07-30T14:20:00.000",
+      "point": { "coordinates": [-114.1, 51.08], "type": "Point" },
+      "start_dt": "2026-07-30T14:00:00.000"
+    }
+  ],
+  "construction": [
+    {
+      "construction_info": "Edmonton Trail at 1 Avenue NE",
+      "description": "Right lane closed north bound on 1 AV NE  ",
+      "start_dt": "2025-06-01T09:00:00.000",
+      "end_dt": "2026-12-31T15:00:00.000",
+      "point": { "type": "Point", "coordinates": [-114.05028321045208, 51.053268688758585] }
+    }
+  ]
+}

@@ -20,12 +20,8 @@ import {
   type ScreenMetrics,
   TAB_BAR_HEIGHT,
 } from '@/features/map/overlay-layout';
-import {
-  formatSearchDistance,
-  groupRecentSearchResults,
-  searchResultContext,
-} from '@/features/map/search-proximity';
-import { categoryLabel } from '@/features/map/search-result-category';
+import { formatSearchDistance, groupRecentSearchResults } from '@/features/map/search-proximity';
+import { categoryLabel, searchResultSubtitle } from '@/features/map/search-result-category';
 import {
   type ApiConnectionState,
   exploreServiceNotice,
@@ -299,7 +295,7 @@ export function ExploreSheet({
                   {section.title !== undefined && <SectionTitle>{section.title}</SectionTitle>}
                   {section.data.map((item) => {
                     const distance = formatSearchDistance(item.distanceMeters);
-                    const context = searchResultContext(item);
+                    const context = searchResultSubtitle(item);
                     const badge = categoryLabel(item, activeCategoryLabel);
                     return (
                       <ListRow
@@ -427,7 +423,7 @@ export function ExploreSheet({
                     onPress={() => {
                       onChooseSavedPlace(place);
                     }}
-                    subtitle={place.label}
+                    subtitle={searchResultSubtitle(place)}
                     subtitleLines={1}
                     title={place.name}
                   />
@@ -446,7 +442,7 @@ export function ExploreSheet({
                     onPress={() => {
                       onChooseSavedPlace(place);
                     }}
-                    subtitle={place.label}
+                    subtitle={searchResultSubtitle(place)}
                     subtitleLines={1}
                     title={place.name}
                   />

@@ -1,0 +1,58 @@
+{
+  "retrievedOn": "2026-11-13",
+  "incident": {
+    "dataUrl": "https://data.calgary.ca/resource/4jah-h97u.json?$limit=1",
+    "metadataUrl": "https://data.calgary.ca/api/views/4jah-h97u.json",
+    "columns": {
+      "incident_info": "text",
+      "description": "text",
+      "start_dt_utc": "text",
+      "modified_dt_utc": "text",
+      "quadrant": "text",
+      "longitude": "text",
+      "latitude": "text",
+      "count": "text",
+      "point": "text"
+    },
+    "rows": [
+      {
+        "incident_info": "Eastbound Stoney Trail approaching Deerfoot Trail NE",
+        "description": "Traffic incident. On the right shoulder lane.",
+        "start_dt_utc": "2026-11-13 04:42:51+00:00",
+        "modified_dt_utc": "2026-11-13 04:44:40+00:00",
+        "quadrant": "NE",
+        "longitude": "-114.01728120020499",
+        "latitude": "51.175837660153775",
+        "count": "1",
+        "point": "POINT (-114.01728120020499 51.175837660153775)"
+      }
+    ]
+  },
+  "construction": {
+    "dataUrl": "https://data.calgary.ca/resource/w8zq-79bq.json?$limit=1",
+    "metadataUrl": "https://data.calgary.ca/api/views/w8zq-79bq.json",
+    "columns": {
+      "construction_info": "text",
+      "description": "text",
+      "start_dt": "calendar_date",
+      "end_dt": "calendar_date",
+      "longitude": "text",
+      "latitude": "text",
+      "point": "point"
+    },
+    "rows": [
+      {
+        "construction_info": "Edmonton Trail at 1 Avenue NE",
+        "description": "Right lane closed north bound on 1 AV NE  ",
+        "start_dt": "2025-06-01T09:00:00.000",
+        "end_dt": "2026-12-31T15:00:00.000",
+        "longitude": "-114.05028321045208",
+        "latitude": "51.053268688758585",
+        "point": {
+          "type": "Point",
+          "coordinates": [-114.05028321045208, 51.053268688758585]
+        }
+      }
+    ]
+  }
+}
