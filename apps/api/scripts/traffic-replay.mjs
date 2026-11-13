@@ -26,6 +26,8 @@
 //   APP_ATTEST_BUNDLE_ID              the API's bundle id (default org.navoss.mobile)
 //   TRAFFIC_REPLAY_ORIGIN             "lat,lon" (default downtown Calgary)
 //   TRAFFIC_REPLAY_DESTINATION        "lat,lon" (default Calgary International Airport)
+//   TRAFFIC_REPLAY_SPEED_KPH          the contributors' base speed (default 34; each drives a little
+//                                     faster than the one before)
 //   TRAFFIC_REPLAY_VALHALLA_ROUTE_URL take the drive from this Valhalla /route endpoint instead
 //                                     of the API; replay positions must remain inside AB+BC.
 //
@@ -47,6 +49,7 @@ const parseCoordinate = (value, fallback) => {
 const origin = parseCoordinate(process.env.TRAFFIC_REPLAY_ORIGIN, '51.0447,-114.0719');
 const destination = parseCoordinate(process.env.TRAFFIC_REPLAY_DESTINATION, '51.13157,-114.01055');
 const valhallaRouteUrl = process.env.TRAFFIC_REPLAY_VALHALLA_ROUTE_URL;
+const baseSpeedKph = Number(process.env.TRAFFIC_REPLAY_SPEED_KPH ?? '34');
 
 const SAMPLE_SECONDS = 2;
 const FLOW_GRID_DEGREES = 0.05;
@@ -85,7 +88,7 @@ async function loadDriveGeometry() {
     if (status !== 200) throw new Error(`Valhalla route failed with status ${String(status)}.`);
     return body.routes[0].geometry.coordinates;
   }
-  const { body, status } = await requestJson(`${apiUrl}/v1/routes`, {
+  const { body, status } = await requestJson(`${apiUrl}/v2/routes`, {
     body: JSON.stringify({ alternatives: 0, destination, origin }),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
@@ -150,10 +153,11 @@ function buildBatches(fixes, rules, driveEndMs, credential) {
     }
   });
   flush();
-  const driveSeconds = (fixes.length - 1) * SAMPLE_SECONDS;
   return batches.map((points) => {
-    // A long drive is squeezed into the last eight minutes so every batch still counts as current.
-    const startMs = driveEndMs - Math.min(480, driveSeconds - points[0].second) * 1_000;
+    // Every batch is dated as if it had just been driven: the server refuses a batch whose first
+    // point is over 10 minutes old and releases only driving from the 15 minutes before a
+    // boundary, so a long drive replayed at once must not carry its real elapsed time.
+    const startMs = driveEndMs - (points.at(-1).second - points[0].second) * 1_000;
     return {
       capturedAt: new Date(Math.floor(startMs / 60_000) * 60_000).toISOString(),
       credential,
@@ -358,7 +362,12 @@ const checks = [];
 
 // Threshold minus one installations, plus the last of them again from other networks.
 for (let index = 0; index < threshold - 1; index += 1) {
-  await upload(installations[index], `Installation ${String(index + 1)}`, 34 + index * 4, index);
+  await upload(
+    installations[index],
+    `Installation ${String(index + 1)}`,
+    baseSpeedKph + index * 4,
+    index,
+  );
 }
 for (const network of [20, 21, 22]) {
   await upload(
@@ -374,7 +383,7 @@ checks.push((await published(`${String(threshold - 1)} installations, epoch clos
 await upload(
   installations[threshold - 1],
   `Installation ${String(threshold)}`,
-  34 + threshold * 4,
+  baseSpeedKph + threshold * 4,
   threshold,
 );
 checks.push((await published(`${String(threshold)} installations, epoch still open`)) === 0);
@@ -387,6 +396,35 @@ if (checks.includes(false)) {
   );
   process.exit(1);
 }
+
+// The same trip through /v2/routes: annotated routes carry one congestion level per geometry
+// segment, and the order is the API's recommendation.
+const { body: planned, status: plannedStatus } = await requestJson(`${apiUrl}/v2/routes`, {
+  body: JSON.stringify({ alternatives: 2, destination, origin }),
+  headers: { 'content-type': 'application/json' },
+  method: 'POST',
+});
+if (plannedStatus !== 200)
+  throw new Error(`v2 routes failed with status ${String(plannedStatus)}.`);
+console.log(`  /v2/routes source.traffic=${String(planned.source.traffic)}`);
+let aligned = true;
+for (const route of planned.routes) {
+  const levels = {};
+  for (const level of route.congestion ?? []) levels[level] = (levels[level] ?? 0) + 1;
+  const ok =
+    route.congestion === undefined || route.congestion.length === route.geometry.length - 1;
+  aligned &&= ok;
+  console.log(
+    `  ${route.id} ${route.label}: ${String(Math.round(route.durationSeconds))} s` +
+      (route.traffic === undefined
+        ? ', no traffic'
+        : `, +${String(route.traffic.delaySeconds)} s over ${String(Math.round(route.traffic.typicalDurationSeconds))} s, observed ${String(route.traffic.observedFraction)}, congestion ${JSON.stringify(levels)} (${ok ? 'aligned' : 'MISALIGNED'})`),
+  );
+}
+if (!aligned || planned.routes.every((route) => route.traffic === undefined)) {
+  console.error('FAILED: /v2/routes must carry traffic aligned to each annotated route geometry.');
+  process.exit(1);
+}
 console.log(
-  `OK: nothing was published for ${String(threshold - 1)} installations however often one of them uploaded, nor before the epoch closed; edges appeared at the boundary after installation ${String(threshold)}.`,
+  `OK: nothing was published for ${String(threshold - 1)} installations however often one of them uploaded, nor before the epoch closed; edges appeared at the boundary after installation ${String(threshold)}, and /v2/routes carried them aligned to the route geometry.`,
 );

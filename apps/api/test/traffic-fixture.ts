@@ -37,6 +37,7 @@ interface DriveFixture {
 export interface LocatedPoint {
   edges:
     | {
+        distance?: number;
         edge: {
           access: { car: boolean };
           deadend: boolean;
@@ -44,7 +45,7 @@ export interface LocatedPoint {
           forward: boolean;
           not_thru: boolean;
         };
-        edge_info: { way_id: number };
+        edge_info: { shape?: string; way_id: number };
       }[]
     | null;
 }
