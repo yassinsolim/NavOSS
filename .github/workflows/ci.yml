@@ -22,6 +22,22 @@ jobs:
     name: JavaScript and TypeScript
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # PostGIS for the database suites (community reports and traffic). They create and drop their
+    # own schemas and databases, so one throwaway server serves both.
+    services:
+      postgis:
+        image: postgis/postgis:16-3.5-alpine
+        env:
+          POSTGRES_DB: navoss
+          POSTGRES_PASSWORD: navoss
+          POSTGRES_USER: navoss
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U navoss -d navoss"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -53,6 +69,11 @@ jobs:
 
       - name: Test
         run: corepack pnpm test
+        env:
+          # Fail instead of skipping when the database is unreachable.
+          NAVOSS_REQUIRE_TEST_DATABASE: '1'
+          NAVOSS_TEST_DATABASE_URL: postgres://navoss:navoss@127.0.0.1:5432/navoss
+          NAVOSS_TRAFFIC_TEST_DATABASE_URL: postgres://navoss:navoss@127.0.0.1:5432/navoss
 
       # The Swift doc comment for the splice lookback quotes this script's numbers. Running it here
       # keeps those numbers executable instead of a claim that drifts away from the code.

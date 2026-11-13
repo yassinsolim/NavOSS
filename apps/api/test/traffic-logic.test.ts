@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import type { TrafficProbeBatchRequest } from '@navoss/contracts';
 import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
@@ -117,6 +119,11 @@ function driveAcross(
     points.push({ offsetSeconds: fix * 5, position: [-114, 51] });
   }
   return { matched, points };
+}
+
+/** The speed an observation describes: distance moved over time spent. */
+function speedOf(observation: SegmentObservation): number {
+  return (observation.meters / observation.seconds) * 3.6;
 }
 
 function observe(edges: MatchedEdge[], speedKph: number): SegmentObservation[] {
@@ -284,15 +291,19 @@ describe('upload credentials', () => {
 });
 
 describe('publication cohorts', () => {
+  /** A whole 700 m edge driven end to end at `speedKph`. */
   const sample = (speedKph: number, key = 'w1f-000000000000'): SegmentObservation => ({
     freeFlowKph: 80,
+    intervals: [[0, 700]],
+    lengthMeters: 700,
     line: [
       [-114.06, 51.05],
       [-114.05, 51.05],
     ],
+    meters: 700,
     roadClass: 'motorway',
+    seconds: 700 / (speedKph / 3.6),
     segmentKey: key,
-    speedKph,
   });
   const as = (contributor: string, drivenAtMs = NOW_MS, newcomerNetwork?: string) => ({
     drivenAtMs,
@@ -300,14 +311,14 @@ describe('publication cohorts', () => {
     tagFor: () => contributor,
   });
   const add = (cohorts: TrafficCohorts, contributor: string, speedKph: number, nowMs = NOW_MS) =>
-    cohorts.add([sample(speedKph)], as(contributor, nowMs), nowMs);
+    cohorts.add([sample(speedKph)], as(contributor, nowMs), nowMs).credited;
 
   it('releases a segment only once three contributors are in its cohort, at the boundary', () => {
     const cohorts = createTrafficCohorts(SETTINGS);
     add(cohorts, 'a', 40);
     add(cohorts, 'b', 44);
     expect(cohorts.closeEpoch(NEXT_TICK)).toEqual([]);
-    expect(cohorts.pending()).toEqual({ samples: 2, segments: 1 });
+    expect(cohorts.pending()).toEqual({ partial: 0, samples: 2, segments: 1 });
 
     add(cohorts, 'c', 52, NEXT_TICK + 1_000);
     const releases = cohorts.closeEpoch(NEXT_TICK + EPOCH_MS);
@@ -324,7 +335,7 @@ describe('publication cohorts', () => {
         speedKph: 45,
       },
     ]);
-    expect(cohorts.pending()).toEqual({ samples: 0, segments: 0 });
+    expect(cohorts.pending()).toEqual({ partial: 0, samples: 0, segments: 0 });
   });
 
   it('gives one contributor one weight however often and whenever it uploads', () => {
@@ -391,11 +402,11 @@ describe('publication cohorts', () => {
     // A third contributor one epoch too late does not complete the cohort.
     add(cohorts, 'c', 60, lastUsefulTick + 1_000);
     expect(cohorts.closeEpoch(lastUsefulTick + EPOCH_MS)).toEqual([]);
-    expect(cohorts.pending()).toEqual({ samples: 1, segments: 1 });
+    expect(cohorts.pending()).toEqual({ partial: 0, samples: 1, segments: 1 });
     expect(
       cohorts.closeEpoch(lastUsefulTick + EPOCH_MS + SETTINGS.cohortSeconds * 1_000 + EPOCH_MS),
     ).toEqual([]);
-    expect(cohorts.pending()).toEqual({ samples: 0, segments: 0 });
+    expect(cohorts.pending()).toEqual({ partial: 0, samples: 0, segments: 0 });
   });
 
   it('releases only driving from the cohort window before the boundary, whenever it arrived', () => {
@@ -446,7 +457,8 @@ describe('publication cohorts', () => {
     // Three drivers cover edges 1 and 2 of a way; a fourth alone continues over edges 3 to 5.
     const short = [0, 1, 2, 3].map((index) => edge(index));
     const long = [0, 1, 2, 3, 4, 5, 6].map((index) => edge(index));
-    const shortKeys = [1, 2].map((index) => present(edge(index).segmentKey));
+    // A batch's partly driven first and last edges count too: 70% of 1 km is past the floor.
+    const shortKeys = [0, 1, 2, 3].map((index) => present(edge(index).segmentKey));
 
     expect(
       observe(short, 54)
@@ -464,7 +476,124 @@ describe('publication cohorts', () => {
       expect(shortKeys).toContain(edgeSegmentKey({ forward: true, wayId: 7 }, release.line));
     }
     // The stretch only one driver used stays unpublished and unreleased.
-    expect(cohorts.pending()).toEqual({ samples: 3, segments: 3 });
+    expect(cohorts.pending()).toEqual({ partial: 0, samples: 3, segments: 3 });
+  });
+
+  describe('coverage of one edge across batches', () => {
+    const KEY = 'w9f-0123456789ab';
+    /** What one batch drove of a 1.5 km motorway edge. */
+    const piece = (
+      intervals: [number, number][],
+      seconds: number,
+      overrides: Partial<SegmentObservation> = {},
+    ): SegmentObservation => ({
+      freeFlowKph: 100,
+      intervals,
+      lengthMeters: 1_500,
+      line: [
+        [-114.1, 51.1],
+        [-114.08, 51.1],
+      ],
+      meters: intervals.reduce((sum, [from, to]) => sum + to - from, 0),
+      roadClass: 'motorway',
+      seconds,
+      segmentKey: KEY,
+      ...overrides,
+    });
+
+    it('credits a contributor once its batches together cover 300 m, at their overall speed', () => {
+      const cohorts = createTrafficCohorts(SETTINGS);
+      // A 12 km/h jam: 200 m a minute, so no single batch covers 300 m of the edge.
+      for (const contributor of ['a', 'b', 'c']) {
+        expect(cohorts.add([piece([[0, 200]], 60)], as(contributor), NOW_MS).credited).toBe(0);
+      }
+      expect(cohorts.pending()).toEqual({ partial: 3, samples: 0, segments: 1 });
+      for (const contributor of ['a', 'b', 'c']) {
+        expect(cohorts.add([piece([[200, 400]], 60)], as(contributor), NOW_MS).credited).toBe(1);
+      }
+      const [release] = cohorts.closeEpoch(NEXT_TICK);
+      // 400 m in 120 s is 12 km/h, published in 5 km/h steps; the whole edge is drawn.
+      expect(release?.speedKph).toBe(10);
+      expect(release?.line).toEqual(piece([], 1).line);
+      expect(cohorts.pending()).toEqual({ partial: 0, samples: 0, segments: 0 });
+    });
+
+    it('does not let replayed or overlapping batches reach the floor sooner than driving', () => {
+      const cohorts = createTrafficCohorts(SETTINGS);
+      for (let replay = 0; replay < 5; replay += 1) {
+        expect(cohorts.add([piece([[0, 200]], 60)], as('a'), NOW_MS).credited).toBe(0);
+      }
+      // Overlapping coverage counts once: 260 m of the edge so far.
+      expect(cohorts.add([piece([[150, 260]], 30)], as('a'), NOW_MS).credited).toBe(0);
+      expect(cohorts.add([piece([[260, 300]], 12)], as('a'), NOW_MS).credited).toBe(1);
+      // And the contributor still has one weight.
+      expect(cohorts.add([piece([[300, 1_500]], 60)], as('a'), NOW_MS).credited).toBe(0);
+      expect(cohorts.pending()).toEqual({ partial: 0, samples: 1, segments: 1 });
+    });
+
+    it('counts time standing in a queue on the edge', () => {
+      const cohorts = createTrafficCohorts(SETTINGS);
+      for (const contributor of ['a', 'b', 'c']) {
+        cohorts.add([piece([[0, 200]], 60)], as(contributor), NOW_MS);
+        // Two minutes stopped at 200 m, then 120 m more.
+        cohorts.add(
+          [piece([[200, 200]], 120, { meters: 0 }), piece([[200, 320]], 36)],
+          as(contributor),
+          NOW_MS,
+        );
+      }
+      // 320 m in 216 s is 5.3 km/h.
+      const [release] = cohorts.closeEpoch(NEXT_TICK);
+      expect(release?.speedKph).toBe(5);
+      expect(classifyCongestion(release?.speedKph ?? 0, 100, SETTINGS)).toBe('stopped');
+    });
+
+    it('needs only half of a short edge', () => {
+      const cohorts = createTrafficCohorts(SETTINGS);
+      const short = (intervals: [number, number][]) => piece(intervals, 5, { lengthMeters: 100 });
+      expect(cohorts.add([short([[0, 40]])], as('a'), NOW_MS).credited).toBe(0);
+      expect(cohorts.add([short([[40, 55]])], as('a'), NOW_MS).credited).toBe(1);
+    });
+
+    it('forgets partial coverage with its cohort', () => {
+      const cohorts = createTrafficCohorts(SETTINGS);
+      cohorts.add([piece([[0, 200]], 60)], as('a'), NOW_MS);
+      cohorts.closeEpoch(EPOCH_START + SETTINGS.cohortSeconds * 1_000);
+      expect(cohorts.pending().partial).toBe(1);
+      cohorts.closeEpoch(EPOCH_START + SETTINGS.cohortSeconds * 1_000 + EPOCH_MS);
+      expect(cohorts.pending()).toEqual({ partial: 0, samples: 0, segments: 0 });
+      // Driving that resumes later starts from nothing.
+      expect(
+        cohorts.add([piece([[200, 400]], 60)], as('a', NEXT_TICK * 2), NEXT_TICK * 2).credited,
+      ).toBe(0);
+    });
+
+    it('keeps one contributor’s coverage of different edges apart, under per-edge tags', () => {
+      const cohorts = createTrafficCohorts(SETTINGS);
+      const perEdge = (contributor: string) => ({
+        drivenAtMs: NOW_MS,
+        tagFor: (segmentKey: string) => `${contributor}:${segmentKey}`,
+      });
+      const other = { segmentKey: 'w10f-0123456789ab' };
+      cohorts.add([piece([[0, 200]], 60), piece([[0, 200]], 60, other)], perEdge('a'), NOW_MS);
+      expect(cohorts.pending()).toEqual({ partial: 2, samples: 0, segments: 2 });
+      // Coverage of one edge does nothing for another.
+      expect(cohorts.add([piece([[200, 250]], 15, other)], perEdge('a'), NOW_MS).credited).toBe(0);
+      expect(cohorts.add([piece([[200, 300]], 30)], perEdge('a'), NOW_MS).credited).toBe(1);
+    });
+
+    it('credits at most one newcomer per network when coverage completes', () => {
+      const cohorts = createTrafficCohorts(SETTINGS);
+      for (const contributor of ['key-1', 'key-2']) {
+        cohorts.add([piece([[0, 200]], 60)], as(contributor, NOW_MS, 'network-a'), NOW_MS);
+      }
+      expect(
+        cohorts.add([piece([[200, 400]], 60)], as('key-1', NOW_MS, 'network-a'), NOW_MS).credited,
+      ).toBe(1);
+      expect(
+        cohorts.add([piece([[200, 400]], 60)], as('key-2', NOW_MS, 'network-a'), NOW_MS).credited,
+      ).toBe(0);
+    });
   });
 
   describe('geometry of a pending segment', () => {
@@ -478,8 +607,8 @@ describe('publication cohorts', () => {
       add(cohorts, 'a', 60);
       // Both later contributors count toward the threshold, and both carry another line. Nothing
       // after them restores the first one.
-      expect(cohorts.add([{ ...sample(60), line: planted }], as('b'), NOW_MS)).toBe(1);
-      expect(cohorts.add([{ ...sample(60), line: planted }], as('c'), NOW_MS)).toBe(1);
+      expect(cohorts.add([{ ...sample(60), line: planted }], as('b'), NOW_MS).credited).toBe(1);
+      expect(cohorts.add([{ ...sample(60), line: planted }], as('c'), NOW_MS).credited).toBe(1);
 
       expect(cohorts.closeEpoch(NEXT_TICK)[0]?.line).toEqual(sample(0).line);
     });
@@ -488,7 +617,7 @@ describe('publication cohorts', () => {
       const cohorts = createTrafficCohorts(SETTINGS);
       for (const contributor of ['a', 'b', 'c']) add(cohorts, contributor, 60);
       // The last thing to arrive is a de-duplicated repeat carrying another line.
-      expect(cohorts.add([{ ...sample(60), line: planted }], as('a'), NOW_MS)).toBe(0);
+      expect(cohorts.add([{ ...sample(60), line: planted }], as('a'), NOW_MS).credited).toBe(0);
 
       expect(cohorts.closeEpoch(NEXT_TICK)[0]?.line).toEqual(sample(0).line);
     });
@@ -550,7 +679,7 @@ describe('observations from a map-matched drive', () => {
     return { matched, observations: deriveObservations(matched, points, FIXTURE_SETTINGS), points };
   }
 
-  it('yields one sample per road edge at the speed that was driven', async () => {
+  it('yields what the batch drove of each road edge, at the speed that was driven', async () => {
     const { observations } = await observeDrive();
 
     expect(observations.length).toBeGreaterThan(10);
@@ -562,15 +691,23 @@ describe('observations from a map-matched drive', () => {
       expect(observation.roadClass).toBe('primary');
       expect(observation.freeFlowKph).toBe(51);
       // 22 m every 2 s is 39.6 km/h; the off-road nudge and snapping move it a little.
-      expect(observation.speedKph).toBeGreaterThanOrEqual(34);
-      expect(observation.speedKph).toBeLessThanOrEqual(46);
-      // No time and no position of the upload: only these five fields exist.
+      expect(speedOf(observation)).toBeGreaterThanOrEqual(34);
+      expect(speedOf(observation)).toBeLessThanOrEqual(46);
+      // Positions are distances along the edge, never coordinates of the upload.
+      for (const [from, to] of observation.intervals) {
+        expect(from).toBeGreaterThanOrEqual(0);
+        expect(to).toBeLessThanOrEqual(observation.lengthMeters + 1e-6);
+      }
+      // No time of day and no position of the upload: only these fields exist.
       expect(Object.keys(observation).sort()).toEqual([
         'freeFlowKph',
+        'intervals',
+        'lengthMeters',
         'line',
+        'meters',
         'roadClass',
+        'seconds',
         'segmentKey',
-        'speedKph',
       ]);
     }
   });
@@ -578,7 +715,7 @@ describe('observations from a map-matched drive', () => {
   it('sees the crawl only on the edges where it happened', async () => {
     const steady = (await observeDrive()).observations;
     const jammed = (await observeDrive(JAMMED_GAPS)).observations;
-    const slowed = jammed.filter(({ speedKph }) => speedKph < 25);
+    const slowed = jammed.filter((observation) => speedOf(observation) < 25);
 
     expect(slowed.length).toBeGreaterThan(0);
     expect(slowed.length).toBeLessThan(jammed.length);
@@ -587,11 +724,22 @@ describe('observations from a map-matched drive', () => {
     );
   });
 
-  it('keeps only whole-edge road geometry, never the ends of the drive or an uploaded fix', async () => {
+  it('keeps only whole-edge map geometry, never the ends of the drive or an uploaded fix', async () => {
     const { matched, observations, points } = await observeDrive();
     const shape = decodePolyline6(DRIVE.traceResponse.shape);
-    const roadVertices = new Set(shape.map((vertex) => vertex.join(',')));
+    // Map vertices: the matched shape and the whole edges `/locate` returned.
+    const roadVertices = new Set(
+      [
+        ...shape,
+        ...DRIVE.locateResponse.flatMap((point) =>
+          (point.edges ?? []).flatMap(({ edge_info: info }) =>
+            info.shape === undefined ? [] : decodePolyline6(info.shape),
+          ),
+        ),
+      ].map((vertex) => vertex.join(',')),
+    );
     const uploaded = new Set(points.map(({ position }) => position.join(',')));
+    // Where the trimmed batch was snapped on: positions derived from the upload, not map vertices.
     const endVertices = new Set([shape[0], shape.at(-1)].map((vertex) => vertex?.join(',')));
     const kept = observations.flatMap(({ line }) => line);
 
@@ -601,9 +749,15 @@ describe('observations from a map-matched drive', () => {
       expect(uploaded.has(vertex.join(','))).toBe(false);
       expect(endVertices.has(vertex.join(','))).toBe(false);
     }
-    // The partly driven first and last edge have no key and are never observed.
-    expect(matched.edges[0]?.segmentKey).toBeUndefined();
-    expect(matched.edges.at(-1)?.segmentKey).toBeUndefined();
+    // A partly driven edge is observed under its whole edge's key and geometry.
+    const partial = matched.edges.filter((edge) => edge.wholeEdge !== undefined);
+    expect(partial.length).toBeGreaterThan(0);
+    for (const edge of partial) {
+      expect(edge.segmentKey).toBeUndefined();
+      expect(observations.map(({ segmentKey }) => segmentKey)).toContain(
+        edge.wholeEdge?.segmentKey,
+      );
+    }
     for (const observation of observations) {
       expect(
         edgeSegmentKey(
@@ -635,8 +789,12 @@ describe('observations from a map-matched drive', () => {
         SETTINGS,
       );
 
-    // 35 m in 42 s is 3 km/h.
-    expect(derive(crawl).map(({ speedKph }) => Math.round(speedKph))).toEqual([3]);
+    // 35 m in 42 s is 3 km/h, on each of the two edges it touched.
+    const observed = derive(crawl);
+    expect(observed.map(({ segmentKey }) => segmentKey).sort()).toEqual(
+      [edges[0], edges[1]].map((driven) => present(driven?.segmentKey)).sort(),
+    );
+    expect(observed.map((observation) => Math.round(speedOf(observation)))).toEqual([3, 3]);
     expect(derive(crawl.slice(0, 2))).toEqual([]);
   });
 
@@ -647,8 +805,8 @@ describe('observations from a map-matched drive', () => {
         50,
       );
 
-    expect(derive('secondary', 'road')).toHaveLength(2);
-    expect(derive('motorway', 'ramp')).toHaveLength(2);
+    expect(derive('secondary', 'road')).toHaveLength(4);
+    expect(derive('motorway', 'ramp')).toHaveLength(4);
     expect(derive('tertiary', 'road')).toEqual([]);
     expect(derive('unclassified', 'road')).toEqual([]);
     expect(derive('residential', 'road')).toEqual([]);
@@ -664,7 +822,7 @@ describe('observations from a map-matched drive', () => {
     const keys = observe(edges, 50).map(({ segmentKey }) => segmentKey);
 
     expect(keys.sort()).toEqual(
-      [edge(1), edge(3)].map(({ segmentKey }) => present(segmentKey)).sort(),
+      [edge(0), edge(1), edge(3), edge(4)].map(({ segmentKey }) => present(segmentKey)).sort(),
     );
   });
 
@@ -696,7 +854,7 @@ describe('observations from a map-matched drive', () => {
     expect(observations.map(({ segmentKey }) => segmentKey).sort()).toEqual(
       [1, 2, 3].map((index) => present(edge(index).segmentKey)).sort(),
     );
-    for (const observation of observations) expect(observation.speedKph).toBeCloseTo(50.4, 0);
+    for (const observation of observations) expect(speedOf(observation)).toBeCloseTo(50.4, 0);
   });
 });
 
@@ -969,6 +1127,79 @@ describe('Valhalla responses', () => {
     expect(matched.points[41]?.startsNewPath).toBe(true);
   });
 
+  it('treats the no-edge sentinel Valhalla sends for a crawl as unmatched, not as an outage', async () => {
+    const crawl = JSON.parse(
+      readFileSync(new URL('./fixtures/valhalla-crawl-calgary.json', import.meta.url), 'utf8'),
+    ) as {
+      locateResponse: unknown;
+      points: TrafficProbeBatchRequest['points'];
+      traceResponse: { matched_points: { edge_index?: number }[] };
+    };
+    const sentinels = crawl.traceResponse.matched_points.flatMap((point, index) =>
+      (point.edge_index ?? 0) > Number.MAX_SAFE_INTEGER ? [index] : [],
+    );
+    expect(sentinels.length).toBeGreaterThan(0);
+    const matcher = createValhallaMapMatcher({
+      endpoint: 'http://valhalla.test/trace_attributes',
+      fetchImplementation: (input) =>
+        Promise.resolve(
+          Response.json(
+            requestUrl(input).endsWith('/locate') ? crawl.locateResponse : crawl.traceResponse,
+          ),
+        ),
+    });
+    const points = trimBatchEnds(crawl.points, 100);
+    // Rejecting the whole answer turned one in six batches of a 12 km/h jam into a 503.
+    const matched = present(await matcher.matchTrace(points));
+
+    for (const index of sentinels) expect(matched.points[index]).toBeUndefined();
+    expect(matched.points.filter((point) => point !== undefined).length).toBeGreaterThan(
+      points.length / 2,
+    );
+  });
+
+  it('places a partly matched real edge under its whole edge, confirmed by its geometry', async () => {
+    const crawl = JSON.parse(
+      readFileSync(new URL('./fixtures/valhalla-crawl-calgary.json', import.meta.url), 'utf8'),
+    ) as {
+      locateResponse: unknown;
+      points: TrafficProbeBatchRequest['points'];
+      traceResponse: unknown;
+    };
+    const matcher = createValhallaMapMatcher({
+      endpoint: 'http://valhalla.test/trace_attributes',
+      fetchImplementation: (input) =>
+        Promise.resolve(
+          Response.json(
+            requestUrl(input).endsWith('/locate') ? crawl.locateResponse : crawl.traceResponse,
+          ),
+        ),
+    });
+    const points = trimBatchEnds(crawl.points, 100);
+    const matched = present(await matcher.matchTrace(points));
+    const partial = matched.edges.filter((edge) => edge.wholeEdge !== undefined);
+
+    // A 12 km/h batch on Deerfoot Trail lies inside long edges it drives only in part.
+    expect(partial.length).toBeGreaterThan(0);
+    for (const edge of partial) {
+      const whole = present(edge.wholeEdge);
+      expect(whole.segmentKey).toBe(edgeSegmentKey(edge, whole.line));
+      // The matched part lies on the whole edge: its node end is the whole edge's end.
+      if (edge.fromFraction === 0) expect(edge.line[0]).toEqual(whole.line[0]);
+      if (edge.toFraction === 1) expect(edge.line.at(-1)).toEqual(whole.line.at(-1));
+    }
+    const observed = deriveObservations(matched, points, SETTINGS);
+    // The partly matched first edge is observed under its whole key (the last one was matched by a
+    // single fix after an unmatched one, which is no movement).
+    expect(observed.map(({ segmentKey }) => segmentKey)).toContain(
+      present(partial[0]?.wholeEdge).segmentKey,
+    );
+    for (const observation of observed) {
+      expect(speedOf(observation)).toBeGreaterThan(5);
+      expect(speedOf(observation)).toBeLessThan(20);
+    }
+  });
+
   it('treats a matched fix without a snap distance as unmatched', async () => {
     const points = trimBatchEnds(driveBatch(CREDENTIAL).points, 100);
     const recorded = DRIVE.traceResponse;
@@ -1053,15 +1284,21 @@ describe('which matched edges may be published', () => {
           }) ?? null,
       }));
 
-  it('publishes the recorded drive only on whole edges of at least 20 m confirmed open', async () => {
+  it('publishes the recorded drive only on edges of at least 20 m confirmed open', async () => {
     const stub = stubbedMatcher();
     const matched = present(await stub.matcher.matchTrace(points));
-    const keys = deriveObservations(matched, points, SETTINGS).map(({ segmentKey }) => segmentKey);
+    const observations = deriveObservations(matched, points, SETTINGS);
+    const keys = observations.map(({ segmentKey }) => segmentKey);
 
     expect(keys.length).toBeGreaterThan(10);
-    for (const key of keys) {
-      const edge = present(matched.edges.find(({ segmentKey }) => segmentKey === key));
-      expect(edge.lengthMeters).toBeGreaterThanOrEqual(20);
+    for (const observation of observations) {
+      const edge = present(
+        matched.edges.find(
+          (candidate) =>
+            (candidate.segmentKey ?? candidate.wholeEdge?.segmentKey) === observation.segmentKey,
+        ),
+      );
+      expect(observation.lengthMeters).toBeGreaterThanOrEqual(20);
       expect(edge.openThroughRoad).toBe(true);
     }
     // The recorded drive has whole aggregated edges shorter than 20 m; none is published.
@@ -1190,6 +1427,62 @@ describe('release storage', () => {
   it('bounds statements and lock waits on the server, not only in the client', () => {
     expect(TRAFFIC_POOL_CONFIG.statement_timeout).toBeLessThan(TRAFFIC_POOL_CONFIG.query_timeout);
     expect(TRAFFIC_POOL_CONFIG.lock_timeout).toBeLessThan(TRAFFIC_POOL_CONFIG.statement_timeout);
+  });
+});
+
+describe('walking real Alberta/BC routes', () => {
+  interface RecordedWalk {
+    distanceMeters: number;
+    geometry: Position[];
+    name: string;
+    responses: unknown[];
+  }
+  const recorded = JSON.parse(
+    readFileSync(new URL('./fixtures/valhalla-walks-alberta-bc.json', import.meta.url), 'utf8'),
+  ) as { routes: RecordedWalk[] };
+
+  it.each(recorded.routes.map((route) => [route.name, route] as const))(
+    'walks %s',
+    async (_name, route) => {
+      let call = 0;
+      const matcher = createValhallaMapMatcher({
+        endpoint: 'http://valhalla.test/trace_attributes',
+        fetchImplementation: () => {
+          const answer = route.responses[call];
+          call += 1;
+          return Promise.resolve(Response.json(answer));
+        },
+      });
+      // Valhalla repeated the last vertex of every chunk that ended part-way along an edge, and
+      // once added a zero-length edge; the walk once failed on all of them, so no route longer
+      // than 100 km (and many short ones) could carry traffic or be re-ranked.
+      const edges = present(await matcher.walkRoute(route.geometry));
+
+      expect(call).toBe(route.responses.length);
+      expect(edges[0]?.beginShapeIndex).toBe(0);
+      expect(edges.at(-1)?.endShapeIndex).toBe(route.geometry.length - 1);
+      edges.forEach((edge, index) => {
+        if (index > 0) expect(edge.beginShapeIndex).toBe(edges[index - 1]?.endShapeIndex);
+        // Each edge's line is the route's own geometry between its indexes.
+        expect(edge.line).toEqual(
+          route.geometry.slice(edge.beginShapeIndex, edge.endShapeIndex + 1),
+        );
+      });
+      const meters = edges.reduce((sum, edge) => sum + edge.lengthMeters, 0);
+      expect(Math.abs(meters - route.distanceMeters)).toBeLessThan(route.distanceMeters * 0.002);
+    },
+  );
+
+  it('refuses a walk whose vertices are not the route geometry', async () => {
+    const [route] = recorded.routes.filter(({ responses }) => responses.length === 1);
+    const shifted = present(route).geometry.map(([longitude, latitude], index): Position =>
+      index === 10 ? [longitude + 0.0001, latitude] : [longitude, latitude],
+    );
+    const matcher = createValhallaMapMatcher({
+      endpoint: 'http://valhalla.test/trace_attributes',
+      fetchImplementation: () => Promise.resolve(Response.json(present(route).responses[0])),
+    });
+    expect(await matcher.walkRoute(shifted)).toBeUndefined();
   });
 });
 
