@@ -143,6 +143,7 @@ export function PlaceSheet({
         onClose={onClose}
         subtitle={category}
         title={place.name}
+        titleLines={3}
       />
       <View style={styles.actions}>
         <Button

@@ -132,12 +132,16 @@ export function MapControls({
                 size={13}
                 tintColor={colors.warningText}
               />
-              <Text style={styles.problemText}>{problems}</Text>
+              <Text maxFontSizeMultiplier={1.2} style={styles.problemText}>
+                {problems}
+              </Text>
             </View>
           )}
           {roadEventStatus !== undefined && (
             <View style={styles.creditPill}>
-              <Text style={styles.statusText}>{roadEventStatus}</Text>
+              <Text maxFontSizeMultiplier={1.2} style={styles.statusText}>
+                {roadEventStatus}
+              </Text>
             </View>
           )}
           <Pressable
@@ -147,7 +151,7 @@ export function MapControls({
             onPress={onShowAttribution}
             style={styles.creditPill}
           >
-            <Text numberOfLines={2} style={styles.creditText}>
+            <Text maxFontSizeMultiplier={1.2} numberOfLines={2} style={styles.creditText}>
               {attribution}
             </Text>
           </Pressable>

@@ -564,7 +564,9 @@ export function TripSheet({
           {tripNotice !== undefined && (
             <Banner announce message={tripNotice.message} title={tripNotice.title} tone="warning" />
           )}
-          <Text style={styles.tripDestination}>To {destinationName}</Text>
+          <Text maxFontSizeMultiplier={1.4} style={styles.tripDestination}>
+            To {destinationName}
+          </Text>
           {upcomingManeuvers.length > 0 && (
             <View>
               <SectionTitle>Next</SectionTitle>
@@ -582,7 +584,10 @@ export function TripSheet({
                     title={maneuver.instruction}
                     titleLines={2}
                     trailing={
-                      <Text style={[styles.tripStepDistance, guidanceStyles.tabular]}>
+                      <Text
+                        maxFontSizeMultiplier={1.4}
+                        style={[styles.tripStepDistance, guidanceStyles.tabular]}
+                      >
                         {distance}
                       </Text>
                     }
@@ -591,7 +596,7 @@ export function TripSheet({
               })}
             </View>
           )}
-          <Text style={styles.tripSource}>
+          <Text maxFontSizeMultiplier={1.4} style={styles.tripSource}>
             {routeSource?.attribution ?? 'Routing source unavailable'} ·{' '}
             {routeSource?.traffic === 'live' ? 'Live traffic' : 'No live traffic'}
           </Text>
@@ -630,8 +635,15 @@ export function ArrivalSheet({
             />
           </View>
           <View style={styles.arrivalCopy}>
-            <Text style={styles.arrivalTitle}>You've arrived</Text>
-            <Text accessibilityRole="header" numberOfLines={2} style={styles.arrivalDestination}>
+            <Text maxFontSizeMultiplier={1.4} style={styles.arrivalTitle}>
+              You've arrived
+            </Text>
+            <Text
+              maxFontSizeMultiplier={1.4}
+              accessibilityRole="header"
+              numberOfLines={2}
+              style={styles.arrivalDestination}
+            >
               {destination.name}
             </Text>
           </View>

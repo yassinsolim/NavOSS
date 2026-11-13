@@ -219,7 +219,11 @@ export function ExploreSheet({
         <>
           {results.length > 0 && (
             <View style={styles.resultsHeader}>
-              <Text accessibilityRole="header" style={styles.resultsCount}>
+              <Text
+                maxFontSizeMultiplier={1.4}
+                accessibilityRole="header"
+                style={styles.resultsCount}
+              >
                 {results.length} {results.length === 1 ? 'place' : 'places'} found
               </Text>
               <Button
@@ -307,14 +311,20 @@ export function ExploreSheet({
                         subtitle={context}
                         title={item.name}
                         trailing={
-                          badge === '' ? undefined : <Text style={styles.badge}>{badge}</Text>
+                          badge === '' ? undefined : (
+                            <Text maxFontSizeMultiplier={1.4} style={styles.badge}>
+                              {badge}
+                            </Text>
+                          )
                         }
                       />
                     );
                   })}
                 </View>
               ))}
-            <Text style={styles.source}>{searchSourceLabel(searchSource, resultsDegraded)}</Text>
+            <Text maxFontSizeMultiplier={1.4} style={styles.source}>
+              {searchSourceLabel(searchSource, resultsDegraded)}
+            </Text>
           </BottomSheetScrollView>
         </>
       ) : (

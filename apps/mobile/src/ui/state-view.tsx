@@ -53,9 +53,13 @@ export function StateView({
         />
       )}
       <View style={block ? styles.blockCopy : styles.rowCopy}>
-        <Text style={[styles.title, block && styles.centered]}>{title}</Text>
+        <Text maxFontSizeMultiplier={1.5} style={[styles.title, block && styles.centered]}>
+          {title}
+        </Text>
         {message !== undefined && (
-          <Text style={[styles.message, block && styles.centered]}>{message}</Text>
+          <Text maxFontSizeMultiplier={1.5} style={[styles.message, block && styles.centered]}>
+            {message}
+          </Text>
         )}
       </View>
       {action}

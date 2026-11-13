@@ -60,19 +60,23 @@ export function ListRow({
             <SymbolView name={icon} size={19} tintColor={iconTint ?? colors.primaryText} />
           </View>
           {leadingCaption !== undefined && (
-            <Text numberOfLines={1} style={styles.leadingCaption}>
+            <Text maxFontSizeMultiplier={1.5} numberOfLines={1} style={styles.leadingCaption}>
               {leadingCaption}
             </Text>
           )}
         </View>
       )}
       <View style={styles.copy}>
-        {eyebrow !== undefined && <Text style={styles.eyebrow}>{eyebrow}</Text>}
-        <Text numberOfLines={titleLines} style={styles.title}>
+        {eyebrow !== undefined && (
+          <Text maxFontSizeMultiplier={1.5} style={styles.eyebrow}>
+            {eyebrow}
+          </Text>
+        )}
+        <Text maxFontSizeMultiplier={1.5} numberOfLines={titleLines} style={styles.title}>
           {title}
         </Text>
         {subtitle !== undefined && subtitle.length > 0 && (
-          <Text numberOfLines={subtitleLines} style={styles.subtitle}>
+          <Text maxFontSizeMultiplier={1.5} numberOfLines={subtitleLines} style={styles.subtitle}>
             {subtitle}
           </Text>
         )}

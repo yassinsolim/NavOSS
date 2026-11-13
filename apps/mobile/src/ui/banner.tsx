@@ -55,8 +55,16 @@ export function Banner({
     >
       <SymbolView name={icon ?? DEFAULT_ICONS[tone]} size={18} tintColor={tint} />
       <View style={styles.copy}>
-        {title !== undefined && <Text style={styles.title}>{title}</Text>}
-        {message !== undefined && <Text style={styles.message}>{message}</Text>}
+        {title !== undefined && (
+          <Text maxFontSizeMultiplier={1.5} style={styles.title}>
+            {title}
+          </Text>
+        )}
+        {message !== undefined && (
+          <Text maxFontSizeMultiplier={1.5} style={styles.message}>
+            {message}
+          </Text>
+        )}
       </View>
       {action}
     </View>

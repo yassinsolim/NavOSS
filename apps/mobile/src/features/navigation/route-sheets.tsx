@@ -116,7 +116,10 @@ function RouteChoiceCard({
       style={[styles.routeChoice, selected && styles.routeChoiceSelected]}
     >
       <View style={styles.routeChoiceHeading}>
-        <Text style={[styles.routeChoiceEta, selected && styles.routeChoiceEtaSelected]}>
+        <Text
+          maxFontSizeMultiplier={1.3}
+          style={[styles.routeChoiceEta, selected && styles.routeChoiceEtaSelected]}
+        >
           {formatDuration(route.durationSeconds)}
         </Text>
         {selected && (
@@ -127,10 +130,10 @@ function RouteChoiceCard({
           />
         )}
       </View>
-      <Text numberOfLines={1} style={styles.routeChoiceMeta}>
+      <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={styles.routeChoiceMeta}>
         {detail}
       </Text>
-      <Text numberOfLines={2} style={styles.routeChoiceVia}>
+      <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={styles.routeChoiceVia}>
         {viaLabel}
       </Text>
     </PressableScale>
@@ -224,7 +227,6 @@ export function RoutePreviewSheet({
         eyebrow="Route preview"
         onClose={onCancel}
         title={destination.name}
-        titleLines={1}
       />
       <View style={styles.summary}>
         <View style={styles.summaryCopy}>
@@ -296,10 +298,12 @@ export function RoutePreviewSheet({
         </ScrollView>
 
         <View style={styles.sourceRow}>
-          <Text numberOfLines={2} style={styles.sourceText}>
+          <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={styles.sourceText}>
             {routeSource?.attribution ?? 'Routing source unavailable'}
           </Text>
-          <Text style={styles.trafficText}>{trafficStatus}</Text>
+          <Text maxFontSizeMultiplier={1.3} style={styles.trafficText}>
+            {trafficStatus}
+          </Text>
         </View>
 
         <View style={styles.inset}>
