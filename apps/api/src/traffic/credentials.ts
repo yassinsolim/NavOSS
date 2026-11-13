@@ -3,16 +3,32 @@ import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:
 const SEED_BYTES = 16;
 const IV_BYTES = 12;
 const AUTH_TAG_BYTES = 16;
-const SEALED_BYTES = IV_BYTES + AUTH_TAG_BYTES + SEED_BYTES + 4;
+// Seed, expiry, and the end of the installation's newcomer period (both whole seconds).
+const PLAINTEXT_BYTES = SEED_BYTES + 4 + 4;
+const SEALED_BYTES = IV_BYTES + AUTH_TAG_BYTES + PLAINTEXT_BYTES;
+
+export interface OpenedCredential {
+  /**
+   * True while the installation that obtained the credential is still in its newcomer period.
+   * Newly registered installations are capped per network in each cohort.
+   */
+  newInstallation: boolean;
+  seed: Buffer;
+}
 
 export interface TrafficCredentials {
   /**
-   * Seals the installation's contributor seed and an expiry into an opaque credential. The
-   * installation id is used here and nowhere else: it is not in the credential and is not kept.
+   * Seals the installation's contributor seed, an expiry, and the end of its newcomer period into
+   * an opaque credential. The installation id is used here and nowhere else: it is not in the
+   * credential and is not kept.
    */
-  issue(installationId: string, nowMs: number): { credential: string; expiresAtMs: number };
-  /** The contributor seed inside a credential, or undefined when it is forged or expired. */
-  open(credential: string, nowMs: number): Buffer | undefined;
+  issue(
+    installationId: string,
+    nowMs: number,
+    newUntilMs: number,
+  ): { credential: string; expiresAtMs: number };
+  /** What a credential carries, or undefined when it is forged or expired. */
+  open(credential: string, nowMs: number): OpenedCredential | undefined;
   /**
    * Contributor tag for one segment. Tags of one contributor on different segments are unrelated,
    * so the cohorts held in memory cannot be joined into a path by tag equality.
@@ -43,17 +59,18 @@ export function createTrafficCredentials(
   const seedKey = createHmac('sha256', key).update('navoss-traffic-contributor-seed').digest();
 
   return {
-    issue(installationId, nowMs) {
+    issue(installationId, nowMs, newUntilMs) {
       const seed = createHmac('sha256', seedKey)
         .update(installationId)
         .digest()
         .subarray(0, SEED_BYTES);
       const expiresAtSeconds = Math.floor(nowMs / 1_000) + lifetimeSeconds;
-      const expiry = Buffer.alloc(4);
-      expiry.writeUInt32BE(expiresAtSeconds);
+      const times = Buffer.alloc(8);
+      times.writeUInt32BE(expiresAtSeconds, 0);
+      times.writeUInt32BE(Math.max(0, Math.ceil(newUntilMs / 1_000)), 4);
       const iv = randomBytes(IV_BYTES);
       const cipher = createCipheriv('aes-256-gcm', sealingKey, iv);
-      const sealed = Buffer.concat([cipher.update(seed), cipher.update(expiry), cipher.final()]);
+      const sealed = Buffer.concat([cipher.update(seed), cipher.update(times), cipher.final()]);
       return {
         credential: Buffer.concat([iv, cipher.getAuthTag(), sealed]).toString('base64url'),
         expiresAtMs: expiresAtSeconds * 1_000,
@@ -70,9 +87,11 @@ export function createTrafficCredentials(
           decipher.update(bytes.subarray(IV_BYTES + AUTH_TAG_BYTES)),
           decipher.final(),
         ]);
-        return opened.readUInt32BE(SEED_BYTES) * 1_000 > nowMs
-          ? opened.subarray(0, SEED_BYTES)
-          : undefined;
+        if (opened.readUInt32BE(SEED_BYTES) * 1_000 <= nowMs) return undefined;
+        return {
+          newInstallation: opened.readUInt32BE(SEED_BYTES + 4) * 1_000 > nowMs,
+          seed: opened.subarray(0, SEED_BYTES),
+        };
       } catch {
         return undefined;
       }

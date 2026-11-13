@@ -23,7 +23,7 @@
 
 ## Toolchain and checks
 
-- Use Node 24.18.0 and pnpm 11.13.0. `mise.toml` pins both.
+- Use Node 24.18.0 and pnpm 11.13.1. `mise.toml` pins both.
 - Install with `corepack pnpm install --frozen-lockfile`.
 - Before merging or releasing, run `corepack pnpm check`, `lint`, `test`, `build`, and `format:check`.
 - For native navigation changes, run `corepack pnpm --filter @navoss/mobile test:native:ios` and a full Xcode compile.

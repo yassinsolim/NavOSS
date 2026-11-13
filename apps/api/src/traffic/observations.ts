@@ -1,7 +1,7 @@
 import type { Position } from './geo.js';
 import type { MatchedTrace } from './map-matcher.js';
 import type { ProbePoint } from './probe-validation.js';
-import { isAggregatedRoad, wayDirectionKey } from './segments.js';
+import { isAggregatedRoad, isPublishableEdge, wayDirectionKey } from './segments.js';
 import type { TrafficSettings } from './settings.js';
 
 /**
@@ -104,14 +104,15 @@ export function deriveObservations(
     matched.edges.forEach((edge, index) => {
       // Only edges driven end to end count. The first and last matched edge start or stop where
       // the trimmed trace did, so they are never credited, and an edge has no segment key at all
-      // unless Valhalla returned it whole.
+      // unless Valhalla returned it whole. Short edges and edges the graph does not confirm as
+      // open through roads are never credited either.
       if (
         index === 0 ||
         index === matched.edges.length - 1 ||
         index < traversal.firstEdgeIndex ||
         index > traversal.lastEdgeIndex ||
         edge.segmentKey === undefined ||
-        !isAggregatedRoad(edge) ||
+        !isPublishableEdge(edge) ||
         wayDirectionKey(edge) !== wayKey
       ) {
         return;

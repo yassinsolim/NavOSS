@@ -201,6 +201,7 @@ export type {
   SearchSource,
 } from './search.js';
 
+export { OfflineBundleManifestSchema, type OfflineBundleManifest } from './offline-bundle.js';
 export {
   RouteAlternativeV2Schema,
   RouteLaneIndicationSchema,

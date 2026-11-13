@@ -1,4 +1,5 @@
 import type { TrafficProbeBatchRequest } from '@navoss/contracts';
+import type { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 
 import { createTrafficCohorts, type TrafficCohorts } from '../src/traffic/cohorts.js';
@@ -6,6 +7,7 @@ import { createTrafficCredentials } from '../src/traffic/credentials.js';
 import { decodePolyline6, haversineMeters, type Position } from '../src/traffic/geo.js';
 import {
   createValhallaMapMatcher,
+  MapMatcherError,
   type MatchedEdge,
   type MatchedTrace,
 } from '../src/traffic/map-matcher.js';
@@ -20,6 +22,7 @@ import {
 import { classifyCongestion, edgeSegmentKey } from '../src/traffic/segments.js';
 import { createTrafficService, isLocalMatcherEndpoint } from '../src/traffic/service.js';
 import { DEFAULT_TRAFFIC_SETTINGS, readTrafficSettings } from '../src/traffic/settings.js';
+import { createPostgresTrafficReleaseStore, TRAFFIC_POOL_CONFIG } from '../src/traffic/store.js';
 import {
   CAPTURED_AT,
   DRIVE,
@@ -28,7 +31,9 @@ import {
   isFixtureTrafficCoordinate,
   JAMMED_GAPS,
   NOW,
+  requestUrl,
   stubbedMatcher,
+  type LocatedPoint,
 } from './traffic-fixture.js';
 
 const SETTINGS = DEFAULT_TRAFFIC_SETTINGS;
@@ -77,6 +82,7 @@ function edge(index: number, overrides: Partial<MatchedEdge> = {}): MatchedEdge 
     fromFraction: 0,
     lengthMeters: 1_000,
     line,
+    openThroughRoad: true,
     roadClass: 'primary',
     speedKph: 60,
     toFraction: 1,
@@ -181,6 +187,15 @@ describe('probe plausibility', () => {
     expect(findProbeRejection(batch, NOW_MS - 10 * 60_000, limits)).toBe('future');
   });
 
+  it('judges age by the first point, so no driving in an accepted batch is over 10 minutes old', () => {
+    // Driving began 10 min 30 s ago and ended 30 s ago: the last point alone looked current.
+    const batch = straightBatch(30, 30, 10, '2026-11-12T17:50:00Z');
+    expect(findProbeRejection(batch, NOW_MS, limits)).toBe('stale');
+    expect(
+      findProbeRejection(straightBatch(30, 30, 10, '2026-11-12T17:51:00Z'), NOW_MS, limits),
+    ).toBeUndefined();
+  });
+
   it('judges the last point, so offsets cannot carry an in-skew start time into the future', () => {
     // Starts 30 s ahead of the server clock, which the skew allowance alone would let through,
     // but its last point is 290 s later still.
@@ -213,10 +228,10 @@ describe('upload credentials', () => {
   const credentials = createTrafficCredentials(7_200);
 
   it('gives one installation the same per-segment tag under every credential it holds', () => {
-    const first = credentials.issue('installation-a', NOW_MS);
-    const second = credentials.issue('installation-a', NOW_MS + 3_600_000);
-    const firstSeed = present(credentials.open(first.credential, NOW_MS + 1));
-    const secondSeed = present(credentials.open(second.credential, NOW_MS + 3_600_001));
+    const first = credentials.issue('installation-a', NOW_MS, 0);
+    const second = credentials.issue('installation-a', NOW_MS + 3_600_000, 0);
+    const firstSeed = present(credentials.open(first.credential, NOW_MS + 1)).seed;
+    const secondSeed = present(credentials.open(second.credential, NOW_MS + 3_600_001)).seed;
 
     // Two credentials of one installation are different strings but the same contributor.
     expect(first.credential).not.toBe(second.credential);
@@ -227,11 +242,11 @@ describe('upload credentials', () => {
 
   it('gives unrelated tags to different installations and to one installation on two roads', () => {
     const a = present(
-      credentials.open(credentials.issue('installation-a', NOW_MS).credential, NOW_MS),
-    );
+      credentials.open(credentials.issue('installation-a', NOW_MS, 0).credential, NOW_MS),
+    ).seed;
     const b = present(
-      credentials.open(credentials.issue('installation-b', NOW_MS).credential, NOW_MS),
-    );
+      credentials.open(credentials.issue('installation-b', NOW_MS, 0).credential, NOW_MS),
+    ).seed;
 
     expect(credentials.tagFor(a, 'w1f-000000000000')).not.toBe(
       credentials.tagFor(b, 'w1f-000000000000'),
@@ -243,9 +258,9 @@ describe('upload credentials', () => {
 
   it('carries nothing readable about the installation', () => {
     const installationId = '0b6f2d7e-5a57-4d0a-9b53-3f1f0f6c9a11';
-    const { credential } = credentials.issue(installationId, NOW_MS);
+    const { credential } = credentials.issue(installationId, NOW_MS, 0);
     const bytes = Buffer.from(credential, 'base64url');
-    const seed = present(credentials.open(credential, NOW_MS));
+    const { seed } = present(credentials.open(credential, NOW_MS));
 
     expect(bytes.includes(Buffer.from(installationId))).toBe(false);
     expect(bytes.includes(Buffer.from(installationId.replaceAll('-', ''), 'hex'))).toBe(false);
@@ -255,7 +270,7 @@ describe('upload credentials', () => {
   });
 
   it('refuses expired, altered and foreign credentials', () => {
-    const { credential, expiresAtMs } = credentials.issue('installation-a', NOW_MS);
+    const { credential, expiresAtMs } = credentials.issue('installation-a', NOW_MS, 0);
     const altered = `${credential.slice(0, -2)}${credential.endsWith('AA') ? 'BB' : 'AA'}`;
 
     expect(expiresAtMs).toBe(Math.floor(NOW_MS / 1_000) * 1_000 + 7_200_000);
@@ -279,8 +294,13 @@ describe('publication cohorts', () => {
     segmentKey: key,
     speedKph,
   });
+  const as = (contributor: string, drivenAtMs = NOW_MS, newcomerNetwork?: string) => ({
+    drivenAtMs,
+    newcomerNetwork,
+    tagFor: () => contributor,
+  });
   const add = (cohorts: TrafficCohorts, contributor: string, speedKph: number, nowMs = NOW_MS) =>
-    cohorts.add([sample(speedKph)], () => contributor, nowMs);
+    cohorts.add([sample(speedKph)], as(contributor, nowMs), nowMs);
 
   it('releases a segment only once three contributors are in its cohort, at the boundary', () => {
     const cohorts = createTrafficCohorts(SETTINGS);
@@ -378,6 +398,49 @@ describe('publication cohorts', () => {
     expect(cohorts.pending()).toEqual({ samples: 0, segments: 0 });
   });
 
+  it('releases only driving from the cohort window before the boundary, whenever it arrived', () => {
+    const tick = NEXT_TICK + 2 * EPOCH_MS;
+    const arrivalMs = tick - 60_000;
+    const window = SETTINGS.cohortSeconds * 1_000;
+    // Two batches arrive just before the boundary describing driving 16 minutes before it: in
+    // the reviewer's scenario these would have been published and served for 15 more minutes.
+    const stale = createTrafficCohorts(SETTINGS);
+    stale.add([sample(10)], as('a', tick - window - 60_000), arrivalMs);
+    stale.add([sample(10)], as('b', tick - window - 60_000), arrivalMs);
+    stale.add([sample(60)], as('c', tick - 120_000), arrivalMs);
+    expect(stale.closeEpoch(tick)).toEqual([]);
+    expect(stale.pending().samples).toBe(1);
+
+    // Driving that began exactly at the window's start still counts.
+    const fresh = createTrafficCohorts(SETTINGS);
+    fresh.add([sample(10)], as('a', tick - window), arrivalMs);
+    fresh.add([sample(10)], as('b', tick - window), arrivalMs);
+    fresh.add([sample(60)], as('c', tick - 120_000), arrivalMs);
+    expect(fresh.closeEpoch(tick)).toHaveLength(1);
+
+    // A start time claimed after arrival cannot keep a sample longer than its arrival allows.
+    const claimed = createTrafficCohorts(SETTINGS);
+    for (const contributor of ['a', 'b', 'c']) {
+      claimed.add([sample(60)], as(contributor, tick + window), tick - window - 1);
+    }
+    expect(claimed.closeEpoch(tick)).toEqual([]);
+  });
+
+  it('counts at most one newly registered installation per network in a cohort', () => {
+    const cohorts = createTrafficCohorts(SETTINGS);
+    // One handset with three new App Attest keys, all uploading over one network.
+    for (const contributor of ['key-1', 'key-2', 'key-3']) {
+      cohorts.add([sample(5)], as(contributor, NOW_MS, 'network-a'), NOW_MS);
+    }
+    expect(cohorts.pending().samples).toBe(1);
+    expect(cohorts.closeEpoch(NEXT_TICK)).toEqual([]);
+
+    // Established installations are not capped, and a newcomer on another network counts.
+    cohorts.add([sample(60)], as('established', NEXT_TICK + 1_000), NEXT_TICK + 1_000);
+    cohorts.add([sample(60)], as('key-4', NEXT_TICK + 1_000, 'network-b'), NEXT_TICK + 1_000);
+    expect(cohorts.closeEpoch(NEXT_TICK + EPOCH_MS)).toHaveLength(1);
+  });
+
   it('counts the threshold for each drawn edge, not for the way as a whole', () => {
     const cohorts = createTrafficCohorts(SETTINGS);
     // Three drivers cover edges 1 and 2 of a way; a fourth alone continues over edges 3 to 5.
@@ -390,9 +453,9 @@ describe('publication cohorts', () => {
         .map(({ segmentKey }) => segmentKey)
         .sort(),
     ).toEqual([...shortKeys].sort());
-    cohorts.add(observe(short, 54), () => 'a', NOW_MS);
-    cohorts.add(observe(short, 50), () => 'b', NOW_MS);
-    cohorts.add(observe(long, 58), () => 'solo', NOW_MS);
+    cohorts.add(observe(short, 54), as('a'), NOW_MS);
+    cohorts.add(observe(short, 50), as('b'), NOW_MS);
+    cohorts.add(observe(long, 58), as('solo'), NOW_MS);
     const releases = cohorts.closeEpoch(NEXT_TICK);
 
     expect(releases.map(({ segmentKey }) => segmentKey).sort()).toEqual([...shortKeys].sort());
@@ -415,8 +478,8 @@ describe('publication cohorts', () => {
       add(cohorts, 'a', 60);
       // Both later contributors count toward the threshold, and both carry another line. Nothing
       // after them restores the first one.
-      expect(cohorts.add([{ ...sample(60), line: planted }], () => 'b', NOW_MS)).toBe(1);
-      expect(cohorts.add([{ ...sample(60), line: planted }], () => 'c', NOW_MS)).toBe(1);
+      expect(cohorts.add([{ ...sample(60), line: planted }], as('b'), NOW_MS)).toBe(1);
+      expect(cohorts.add([{ ...sample(60), line: planted }], as('c'), NOW_MS)).toBe(1);
 
       expect(cohorts.closeEpoch(NEXT_TICK)[0]?.line).toEqual(sample(0).line);
     });
@@ -425,7 +488,7 @@ describe('publication cohorts', () => {
       const cohorts = createTrafficCohorts(SETTINGS);
       for (const contributor of ['a', 'b', 'c']) add(cohorts, contributor, 60);
       // The last thing to arrive is a de-duplicated repeat carrying another line.
-      expect(cohorts.add([{ ...sample(60), line: planted }], () => 'a', NOW_MS)).toBe(0);
+      expect(cohorts.add([{ ...sample(60), line: planted }], as('a'), NOW_MS)).toBe(0);
 
       expect(cohorts.closeEpoch(NEXT_TICK)[0]?.line).toEqual(sample(0).line);
     });
@@ -883,15 +946,19 @@ describe('Valhalla responses', () => {
     const recorded = DRIVE.traceResponse;
     const matcher = createValhallaMapMatcher({
       endpoint: 'http://valhalla.test/trace_attributes',
-      fetchImplementation: () =>
+      fetchImplementation: (input) =>
         Promise.resolve(
-          Response.json({
-            ...recorded,
-            matched_points: recorded.matched_points.map((point, index) => ({
-              ...point,
-              distance_from_trace_point: index === 40 ? 80 : 3,
-            })),
-          }),
+          Response.json(
+            requestUrl(input).endsWith('/locate')
+              ? DRIVE.locateResponse
+              : {
+                  ...recorded,
+                  matched_points: recorded.matched_points.map((point, index) => ({
+                    ...point,
+                    distance_from_trace_point: index === 40 ? 80 : 3,
+                  })),
+                },
+          ),
         ),
     });
     const matched = present(await matcher.matchTrace(points));
@@ -902,18 +969,227 @@ describe('Valhalla responses', () => {
     expect(matched.points[41]?.startsNewPath).toBe(true);
   });
 
+  it('treats a matched fix without a snap distance as unmatched', async () => {
+    const points = trimBatchEnds(driveBatch(CREDENTIAL).points, 100);
+    const recorded = DRIVE.traceResponse;
+    // The recorded Valhalla 3.8.2 answer has the distance for every point.
+    expect(recorded.matched_points.every((point) => 'distance_from_trace_point' in point)).toBe(
+      true,
+    );
+    const matcher = createValhallaMapMatcher({
+      endpoint: 'http://valhalla.test/trace_attributes',
+      fetchImplementation: (input) =>
+        Promise.resolve(
+          Response.json(
+            requestUrl(input).endsWith('/locate')
+              ? DRIVE.locateResponse
+              : {
+                  ...recorded,
+                  matched_points: recorded.matched_points.map((point, index) =>
+                    index === 40
+                      ? Object.fromEntries(
+                          Object.entries(point).filter(
+                            ([name]) => name !== 'distance_from_trace_point',
+                          ),
+                        )
+                      : point,
+                  ),
+                },
+          ),
+        ),
+    });
+    const matched = present(await matcher.matchTrace(points));
+
+    expect(matched.points[40]).toBeUndefined();
+    expect(matched.points[41]?.startsNewPath).toBe(true);
+  });
+
   it('never follows a redirect from the matcher', async () => {
     const seen: (RequestInit | undefined)[] = [];
     const matcher = createValhallaMapMatcher({
       endpoint: 'http://valhalla.test/trace_attributes',
-      fetchImplementation: (_input, init) => {
+      fetchImplementation: (input, init) => {
         seen.push(init);
-        return Promise.resolve(Response.json(DRIVE.traceResponse));
+        return Promise.resolve(
+          Response.json(
+            requestUrl(input).endsWith('/locate') ? DRIVE.locateResponse : DRIVE.traceResponse,
+          ),
+        );
       },
     });
     await matcher.matchTrace(trimBatchEnds(driveBatch(CREDENTIAL).points, 100));
 
-    expect(seen.map((init) => init?.redirect)).toEqual(['error']);
+    // The trace and the access check: neither follows a redirect.
+    expect(seen.map((init) => init?.redirect)).toEqual(['error', 'error']);
+  });
+});
+
+describe('which matched edges may be published', () => {
+  const points = trimBatchEnds(driveBatch(CREDENTIAL).points, 100);
+  const publishedKeys = async (stub = stubbedMatcher()) => {
+    const matched = present(await stub.matcher.matchTrace(points));
+    return deriveObservations(matched, points, SETTINGS).map(({ segmentKey }) => segmentKey);
+  };
+  /** Sets `flag` on every located edge of `wayId`, in the given direction or both. */
+  const mark =
+    (
+      wayId: number,
+      flag: 'deadend' | 'destination_only' | 'no_car' | 'not_thru',
+      forward?: boolean,
+    ) =>
+    (recorded: LocatedPoint[]): LocatedPoint[] =>
+      recorded.map((point) => ({
+        edges:
+          point.edges?.map((candidate) => {
+            if (
+              candidate.edge_info.way_id !== wayId ||
+              (forward !== undefined && candidate.edge.forward !== forward)
+            ) {
+              return candidate;
+            }
+            return flag === 'no_car'
+              ? { ...candidate, edge: { ...candidate.edge, access: { car: false } } }
+              : { ...candidate, edge: { ...candidate.edge, [flag]: true } };
+          }) ?? null,
+      }));
+
+  it('publishes the recorded drive only on whole edges of at least 20 m confirmed open', async () => {
+    const stub = stubbedMatcher();
+    const matched = present(await stub.matcher.matchTrace(points));
+    const keys = deriveObservations(matched, points, SETTINGS).map(({ segmentKey }) => segmentKey);
+
+    expect(keys.length).toBeGreaterThan(10);
+    for (const key of keys) {
+      const edge = present(matched.edges.find(({ segmentKey }) => segmentKey === key));
+      expect(edge.lengthMeters).toBeGreaterThanOrEqual(20);
+      expect(edge.openThroughRoad).toBe(true);
+    }
+    // The recorded drive has whole aggregated edges shorter than 20 m; none is published.
+    const short = matched.edges.filter(
+      (edge) => edge.segmentKey !== undefined && edge.lengthMeters < 20,
+    );
+    expect(short.length).toBeGreaterThan(0);
+    for (const edge of short) expect(keys).not.toContain(edge.segmentKey);
+  });
+
+  it('asks the graph about map points only, never an uploaded position', async () => {
+    const stub = stubbedMatcher();
+    await stub.matcher.matchTrace(points);
+
+    expect(stub.locateRequests).toHaveLength(1);
+    const uploaded = new Set(
+      DRIVE.batchPositions.map(
+        ([longitude, latitude]) => `${String(longitude)},${String(latitude)}`,
+      ),
+    );
+    const matched = present(await stubbedMatcher().matcher.matchTrace(points));
+    const shape = matched.edges.flatMap(({ line }) => line);
+    for (const { lat, lon } of stub.locateRequests[0]?.locations ?? []) {
+      expect(uploaded.has(`${lon.toFixed(5)},${lat.toFixed(5)}`)).toBe(false);
+      // Each point lies on the road geometry Valhalla returned.
+      const nearest = Math.min(...shape.map((vertex) => haversineMeters(vertex, [lon, lat])));
+      expect(nearest).toBeLessThan(200);
+    }
+  });
+
+  it.each([
+    ['destination-only (access=private or destination)', 'destination_only'],
+    ['a dead end', 'deadend'],
+    ['the way into a no-through region', 'not_thru'],
+    ['closed to cars', 'no_car'],
+  ] as const)('publishes no edge of a way the graph marks as %s', async (_label, flag) => {
+    const baseline = await publishedKeys();
+    const wayKeys = baseline.filter((key) => key.startsWith('w142596972'));
+    expect(wayKeys.length).toBeGreaterThan(0);
+
+    const stub = stubbedMatcher();
+    stub.locate(mark(142596972, flag));
+    const keys = await publishedKeys(stub);
+    expect(keys).toEqual(baseline.filter((key) => !wayKeys.includes(key)));
+  });
+
+  it('excludes a way when only the opposite direction leads into a dead end', async () => {
+    // Driving out of a cul-de-sac region is as revealing as driving into one.
+    const baseline = await publishedKeys();
+    const stub = stubbedMatcher();
+    stub.locate(mark(161683836, 'not_thru', false));
+    const keys = await publishedKeys(stub);
+    expect(keys.some((key) => key.startsWith('w161683836'))).toBe(false);
+    expect(keys.length).toBeLessThan(baseline.length);
+  });
+
+  it('fails closed when the graph does not confirm an edge, and on a lookup outage', async () => {
+    const unconfirmed = stubbedMatcher();
+    unconfirmed.locate((recorded) => recorded.map(() => ({ edges: null })));
+    expect(await publishedKeys(unconfirmed)).toEqual([]);
+
+    // Another way at the same point says nothing about the driven one.
+    const elsewhere = stubbedMatcher();
+    elsewhere.locate((recorded) =>
+      recorded.map((point) => ({
+        edges:
+          point.edges?.map((candidate) => ({
+            ...candidate,
+            edge_info: { way_id: candidate.edge_info.way_id + 1 },
+          })) ?? null,
+      })),
+    );
+    expect(await publishedKeys(elsewhere)).toEqual([]);
+
+    const down = stubbedMatcher();
+    down.locate(() => new Response('{}', { status: 502 }));
+    await expect(down.matcher.matchTrace(points)).rejects.toThrow(MapMatcherError);
+  });
+
+  it('ignores restrictions on other ways that meet the driven edge', async () => {
+    // The recorded answer already includes a private dead-end way at one junction of the drive.
+    const flagged = DRIVE.locateResponse.flatMap((point) =>
+      (point.edges ?? []).filter(
+        (candidate) => candidate.edge.destination_only || candidate.edge.deadend,
+      ),
+    );
+    expect(flagged.length).toBeGreaterThan(0);
+    expect((await publishedKeys()).length).toBeGreaterThan(10);
+  });
+});
+
+describe('release storage', () => {
+  const failingClient = (rollback: 'fails' | 'succeeds') => {
+    const released: unknown[] = [];
+    const client = {
+      query: (sql: string) => {
+        if (sql === 'BEGIN') return Promise.resolve({ rows: [] });
+        if (sql === 'ROLLBACK') {
+          return rollback === 'fails'
+            ? Promise.reject(new Error('Query read timeout'))
+            : Promise.resolve({ rows: [] });
+        }
+        return Promise.reject(new Error('canceling statement due to lock timeout'));
+      },
+      release: (error?: unknown) => {
+        released.push(error);
+      },
+    };
+    const pool = { connect: () => Promise.resolve(client) } as unknown as Pool;
+    return { released, store: createPostgresTrafficReleaseStore(pool) };
+  };
+
+  it('destroys a connection whose rollback cannot be confirmed', async () => {
+    const { released, store } = failingClient('fails');
+    await expect(store.publishEpoch(NEXT_TICK, [])).rejects.toThrow(/lock timeout/);
+    expect(released).toHaveLength(1);
+    expect(released[0]).toBeInstanceOf(Error);
+  });
+
+  it('returns a connection to the pool once its rollback is confirmed', async () => {
+    const { released, store } = failingClient('succeeds');
+    await expect(store.publishEpoch(NEXT_TICK, [])).rejects.toThrow(/lock timeout/);
+    expect(released).toEqual([undefined]);
+  });
+
+  it('bounds statements and lock waits on the server, not only in the client', () => {
+    expect(TRAFFIC_POOL_CONFIG.statement_timeout).toBeLessThan(TRAFFIC_POOL_CONFIG.query_timeout);
+    expect(TRAFFIC_POOL_CONFIG.lock_timeout).toBeLessThan(TRAFFIC_POOL_CONFIG.statement_timeout);
   });
 });
 

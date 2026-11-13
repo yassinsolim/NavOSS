@@ -1,33 +1,36 @@
 import type { Coordinate, SearchResult } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
-import { Spacing } from '@/constants/theme';
+import { createLatestRequestGate } from '@/features/map/latest-request-gate';
+import { fullSheetHeight, type ScreenMetrics } from '@/features/map/overlay-layout';
 import {
   formatSearchDistance,
   rankSearchResults,
   searchProximityOptions,
   searchResultContext,
 } from '@/features/map/search-proximity';
-import { createLatestRequestGate } from '@/features/map/latest-request-gate';
+import {
+  MAX_ROUTE_DESTINATIONS,
+  moveRouteStop,
+  routeStopRole,
+} from '@/features/navigation/route-stops';
 import { searchPlaces } from '@/lib/api';
+import { createThemedStyles, radius, space, typography, useTheme } from '@/theme';
+import { haptics } from '@/theme/haptics';
+import { Button } from '@/ui/button';
+import { IconButton } from '@/ui/icon-button';
+import { ListRow } from '@/ui/list-row';
+import { BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
+import { ModalSheet } from '@/ui/sheet/modal-sheet';
+import { SectionTitle, SheetHeader } from '@/ui/sheet/sheet-header';
+import { StateView } from '@/ui/state-view';
 
 interface RouteStopsEditorProps {
   destinations: readonly SearchResult[];
+  metrics: ScreenMetrics;
   onApply: (destinations: SearchResult[]) => void;
   onClose: () => void;
   origin?: Coordinate;
@@ -36,23 +39,29 @@ interface RouteStopsEditorProps {
 
 type StopSearchState = 'error' | 'idle' | 'loading' | 'success';
 
+/**
+ * Edits the ordered stops of a previewed route. Changes are a draft until Done applies them;
+ * closing the sheet discards them. The draft is seeded once when the sheet opens, so a parent
+ * re-render with a new array identity cannot overwrite edits in progress.
+ */
 export function RouteStopsEditor({
   destinations,
+  metrics,
   onApply,
   onClose,
   origin,
   visible,
 }: RouteStopsEditorProps) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
-  const [draft, setDraft] = useState<SearchResult[]>([]);
+  const [draft, setDraft] = useState<readonly SearchResult[]>([]);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searchState, setSearchState] = useState<StopSearchState>('idle');
   const [searchFocused, setSearchFocused] = useState(false);
   const previousVisibleRef = useRef(false);
   const originRef = useRef(origin);
-  const scrollViewRef = useRef<ScrollView>(null);
-  const addSectionOffsetRef = useRef(0);
   const [searchRequestGate] = useState(createLatestRequestGate);
 
   useEffect(() => {
@@ -123,26 +132,6 @@ export function RouteStopsEditor({
     setSearchState('idle');
   };
 
-  const scrollToSearchSection = useCallback(() => {
-    requestAnimationFrame(() => {
-      scrollViewRef.current?.scrollTo({ animated: true, y: addSectionOffsetRef.current });
-    });
-  }, []);
-
-  const moveDestination = (index: number, offset: -1 | 1) => {
-    const nextIndex = index + offset;
-    if (nextIndex < 0 || nextIndex >= draft.length) return;
-    setDraft((current) => {
-      const next = [...current];
-      const destination = next[index];
-      const neighbor = next[nextIndex];
-      if (destination === undefined || neighbor === undefined) return current;
-      next[index] = neighbor;
-      next[nextIndex] = destination;
-      return next;
-    });
-  };
-
   const runSearch = () => {
     const normalizedQuery = query.trim();
     if (normalizedQuery.length < 2) return;
@@ -154,546 +143,265 @@ export function RouteStopsEditor({
 
   const canSearch = query.trim().length >= 2;
   const showSearchResults = canSearch && searchState !== 'idle';
+  const canAddStop = draft.length < MAX_ROUTE_DESTINATIONS;
 
   return (
-    <Modal
-      animationType="slide"
-      onRequestClose={onClose}
-      presentationStyle="fullScreen"
+    <ModalSheet
+      accessibilityLabel="Edit stops"
+      detents={[fullSheetHeight(metrics)]}
+      keyboardAware
+      onClose={onClose}
       visible={visible}
     >
-      <View style={[styles.safeArea, { paddingBottom: insets.bottom, paddingTop: insets.top }]}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={0}
-          style={styles.keyboardSurface}
-        >
-          <View style={styles.header}>
-            <Pressable
-              accessibilityLabel="Cancel editing stops"
-              accessibilityRole="button"
-              onPress={onClose}
-              style={({ pressed }) => [styles.headerButton, pressed && styles.controlPressed]}
-            >
-              <SymbolView
-                name={{ android: 'close', ios: 'xmark' }}
-                size={20}
-                tintColor={NavOssColors.asphalt}
-              />
-            </Pressable>
-            <Text style={styles.title}>Edit stops</Text>
-            <Pressable
-              accessibilityLabel="Apply route stops"
-              accessibilityRole="button"
-              accessibilityState={{ disabled: draft.length === 0 }}
-              disabled={draft.length === 0}
-              onPress={() => {
-                onApply(draft);
-              }}
-              style={({ pressed }) => [
-                styles.doneButton,
-                draft.length === 0 && styles.buttonDisabled,
-                pressed && styles.primaryPressed,
-              ]}
-            >
-              <Text style={styles.doneText}>Done</Text>
-            </Pressable>
-          </View>
-
-          <ScrollView
-            contentContainerStyle={styles.content}
-            keyboardDismissMode="on-drag"
-            keyboardShouldPersistTaps="handled"
-            onContentSizeChange={() => {
-              if (searchFocused) scrollToSearchSection();
+      <SheetHeader
+        closeLabel="Cancel editing stops"
+        onClose={onClose}
+        title="Edit stops"
+        trailing={
+          <Button
+            accessibilityLabel="Apply route stops"
+            disabled={draft.length === 0}
+            label="Done"
+            onPress={() => {
+              haptics.success();
+              onApply([...draft]);
             }}
-            onLayout={() => {
-              if (searchFocused) {
-                scrollToSearchSection();
-              }
-            }}
-            ref={scrollViewRef}
-          >
-            <View style={styles.sectionHeading}>
-              <Text accessibilityRole="header" style={styles.sectionTitle}>
-                Route order
-              </Text>
-              <Text style={styles.sectionHint}>
-                {draft.length === 0
-                  ? 'Search below to add a destination.'
-                  : 'The last place is your destination. Use the arrows to change the order.'}
-              </Text>
-            </View>
-            <View style={styles.routeList}>
-              <View style={styles.routeRow}>
-                <View style={styles.originMarker}>
-                  <SymbolView
-                    name={{ android: 'my_location', ios: 'location.fill' }}
-                    size={16}
-                    tintColor={NavOssColors.paper}
-                  />
-                </View>
-                <View style={styles.routeCopy}>
-                  <Text style={styles.routeKind}>START</Text>
-                  <Text numberOfLines={1} style={styles.routeName}>
-                    My location
-                  </Text>
-                </View>
-              </View>
-
-              {draft.map((destination, index) => {
-                const finalDestination = index === draft.length - 1;
-                return (
-                  <View
-                    key={`${destination.id}:${String(index)}`}
-                    style={[styles.routeRow, styles.editableRouteRow]}
-                  >
-                    <View style={styles.stopHeading}>
-                      <View style={finalDestination ? styles.destinationMarker : styles.stopMarker}>
-                        <Text style={styles.markerText}>
-                          {finalDestination ? 'B' : String(index + 1)}
-                        </Text>
-                      </View>
-                      <View style={styles.routeCopy}>
-                        <Text style={styles.routeKind}>
-                          {finalDestination ? 'DESTINATION' : `STOP ${String(index + 1)}`}
-                        </Text>
-                        <Text numberOfLines={2} style={styles.routeName}>
-                          {destination.name}
-                        </Text>
-                        <Text numberOfLines={2} style={styles.routeContext}>
-                          {searchResultContext(destination)}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.rowActions}>
-                      <Pressable
-                        accessibilityLabel={`Move ${destination.name} up`}
-                        accessibilityRole="button"
-                        accessibilityState={{ disabled: index === 0 }}
-                        disabled={index === 0}
-                        onPress={() => {
-                          moveDestination(index, -1);
-                        }}
-                        style={({ pressed }) => [
-                          styles.iconButton,
-                          index === 0 && styles.buttonDisabled,
-                          pressed && styles.controlPressed,
-                        ]}
-                      >
-                        <SymbolView
-                          name={{ android: 'arrow_upward', ios: 'arrow.up' }}
-                          size={17}
-                          tintColor={NavOssColors.asphalt}
-                        />
-                      </Pressable>
-                      <Pressable
-                        accessibilityLabel={`Move ${destination.name} down`}
-                        accessibilityRole="button"
-                        accessibilityState={{ disabled: finalDestination }}
-                        disabled={finalDestination}
-                        onPress={() => {
-                          moveDestination(index, 1);
-                        }}
-                        style={({ pressed }) => [
-                          styles.iconButton,
-                          finalDestination && styles.buttonDisabled,
-                          pressed && styles.controlPressed,
-                        ]}
-                      >
-                        <SymbolView
-                          name={{ android: 'arrow_downward', ios: 'arrow.down' }}
-                          size={17}
-                          tintColor={NavOssColors.asphalt}
-                        />
-                      </Pressable>
-                      <Pressable
-                        accessibilityLabel={`Remove ${destination.name}`}
-                        accessibilityRole="button"
-                        accessibilityState={{ disabled: draft.length === 1 }}
-                        disabled={draft.length === 1}
-                        onPress={() => {
-                          setDraft((current) =>
-                            current.filter((_, itemIndex) => itemIndex !== index),
-                          );
-                        }}
-                        style={({ pressed }) => [
-                          styles.iconButton,
-                          draft.length === 1 && styles.buttonDisabled,
-                          pressed && styles.controlPressed,
-                        ]}
-                      >
-                        <SymbolView
-                          name={{ android: 'delete', ios: 'trash' }}
-                          size={17}
-                          tintColor={NavOssColors.coral}
-                        />
-                      </Pressable>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-
-            {draft.length < 9 ? (
-              <View
-                onLayout={(event) => {
-                  addSectionOffsetRef.current = event.nativeEvent.layout.y;
-                  if (searchFocused) {
-                    scrollToSearchSection();
-                  }
+            size="sm"
+          />
+        }
+      />
+      <BottomSheetScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.xxl }]}
+        keyboardDismissMode="on-drag"
+      >
+        {canAddStop ? (
+          <View style={styles.section}>
+            <SectionTitle>Add a stop</SectionTitle>
+            <View style={styles.searchRow}>
+              <TextInput
+                accessibilityLabel="Search for a stop"
+                autoCapitalize="words"
+                autoCorrect={false}
+                enterKeyHint="search"
+                onBlur={() => {
+                  setSearchFocused(false);
                 }}
-                style={styles.addSection}
-              >
-                <Text accessibilityRole="header" style={styles.sectionTitle}>
-                  Add a stop
-                </Text>
-                <Text style={styles.sectionHint}>
-                  New places are added to the end of your route.
-                </Text>
-                <View style={styles.searchRow}>
-                  <TextInput
-                    accessibilityLabel="Search for a stop"
-                    autoCapitalize="words"
-                    autoCorrect={false}
-                    blurOnSubmit={false}
-                    enterKeyHint="search"
-                    onBlur={() => {
-                      setSearchFocused(false);
-                    }}
-                    onFocus={() => {
-                      setSearchFocused(true);
-                      scrollToSearchSection();
-                    }}
-                    onChangeText={updateQuery}
-                    onSubmitEditing={runSearch}
-                    placeholder="Place name or address"
-                    placeholderTextColor={NavOssColors.muted}
-                    returnKeyType="search"
-                    style={[styles.searchInput, searchFocused && styles.searchInputFocused]}
-                    value={query}
+                onChangeText={updateQuery}
+                onFocus={() => {
+                  setSearchFocused(true);
+                }}
+                onSubmitEditing={runSearch}
+                placeholder="Place name or address"
+                placeholderTextColor={colors.textTertiary}
+                returnKeyType="search"
+                selectionColor={colors.primary}
+                style={[styles.searchInput, searchFocused && styles.searchInputFocused]}
+                submitBehavior="submit"
+                value={query}
+              />
+              <IconButton
+                accessibilityLabel="Search stops"
+                accessibilityState={{ busy: searchState === 'loading' }}
+                disabled={!canSearch}
+                icon={{ android: 'search', ios: 'magnifyingglass' }}
+                onPress={runSearch}
+                size={50}
+                variant="primary"
+              />
+            </View>
+            <Text style={styles.hint}>
+              {query.trim().length === 1
+                ? 'Type at least 2 characters to search.'
+                : 'New places are added to the end of your route.'}
+            </Text>
+            {showSearchResults && (
+              <View style={styles.card}>
+                {searchState === 'loading' && (
+                  <StateView title="Finding matching places" visual="loading" />
+                )}
+                {searchState === 'error' && (
+                  <StateView
+                    message="Try again with the search button."
+                    title="Search is unavailable right now"
+                    tone="danger"
+                    visual={{ android: 'wifi_off', ios: 'network.slash' }}
                   />
-                  <Pressable
-                    accessibilityLabel="Search stops"
-                    accessibilityRole="button"
-                    accessibilityState={{ busy: searchState === 'loading', disabled: !canSearch }}
-                    disabled={!canSearch}
-                    onPress={runSearch}
-                    style={({ pressed }) => [
-                      styles.searchButton,
-                      !canSearch && styles.buttonDisabled,
-                      pressed && styles.primaryPressed,
-                    ]}
-                  >
-                    {searchState === 'loading' ? (
-                      <ActivityIndicator color={NavOssColors.paper} size="small" />
-                    ) : (
-                      <SymbolView
-                        name={{ android: 'search', ios: 'magnifyingglass' }}
-                        size={19}
-                        tintColor={NavOssColors.paper}
-                      />
-                    )}
-                  </Pressable>
-                </View>
-                {query.trim().length === 1 && (
-                  <Text style={styles.sectionHint}>Type at least 2 characters to search.</Text>
                 )}
-                {showSearchResults && (
-                  <View style={styles.results}>
-                    {searchState === 'loading' && (
-                      <View accessibilityLiveRegion="polite" style={styles.searchState}>
-                        <ActivityIndicator color={NavOssColors.green} size="small" />
-                        <Text style={styles.searchStateText}>Finding matching places</Text>
-                      </View>
-                    )}
-                    {searchState === 'error' && (
-                      <View
-                        accessibilityLiveRegion="polite"
-                        accessibilityRole="alert"
-                        style={styles.searchState}
-                      >
-                        <Text style={styles.searchStateText}>
-                          Search is unavailable right now. Try again with the search button.
-                        </Text>
-                      </View>
-                    )}
-                    {searchState === 'success' && results.length === 0 && (
-                      <View accessibilityLiveRegion="polite" style={styles.searchState}>
-                        <Text style={styles.searchStateText}>
-                          No matches found. Try another place name or street.
-                        </Text>
-                      </View>
-                    )}
-                    {results.map((result) => {
-                      const distance = formatSearchDistance(result.distanceMeters);
-                      const context = searchResultContext(result);
-                      return (
-                        <Pressable
-                          accessibilityLabel={`Add ${result.name} as a stop, ${context}${distance === undefined ? '' : `, ${distance} away`}`}
-                          accessibilityRole="button"
-                          key={result.id}
-                          onPress={() => {
-                            setDraft((current) => [...current, result]);
-                            clearSearch();
-                          }}
-                          style={({ pressed }) => [
-                            styles.resultRow,
-                            pressed && styles.controlPressed,
-                          ]}
-                        >
-                          <SymbolView
-                            name={{ android: 'add_location', ios: 'plus.circle.fill' }}
-                            size={21}
-                            tintColor={NavOssColors.green}
-                          />
-                          <View style={styles.resultCopy}>
-                            <Text numberOfLines={1} style={styles.resultName}>
-                              {result.name}
-                            </Text>
-                            <Text numberOfLines={2} style={styles.resultContext}>
-                              {context}
-                            </Text>
-                          </View>
-                          <View style={styles.resultMeta}>
-                            {distance !== undefined && (
-                              <Text style={styles.distance}>{distance}</Text>
-                            )}
-                            <Text style={styles.addResultLabel}>Add stop</Text>
-                          </View>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
+                {searchState === 'success' && results.length === 0 && (
+                  <StateView
+                    message="Try another place name or street."
+                    title="No matches found"
+                    visual={{ android: 'search_off', ios: 'magnifyingglass' }}
+                  />
                 )}
+                {results.map((result) => {
+                  const distance = formatSearchDistance(result.distanceMeters);
+                  const context = searchResultContext(result);
+                  return (
+                    <ListRow
+                      accessibilityLabel={`Add ${result.name} as a stop, ${context}${distance === undefined ? '' : `, ${distance} away`}`}
+                      icon={{ android: 'add_location', ios: 'plus.circle.fill' }}
+                      key={result.id}
+                      leadingCaption={distance}
+                      onPress={() => {
+                        haptics.selection();
+                        setDraft((current) => [...current, result]);
+                        clearSearch();
+                      }}
+                      subtitle={context}
+                      title={result.name}
+                      trailing={<Text style={styles.addLabel}>Add stop</Text>}
+                    />
+                  );
+                })}
               </View>
-            ) : (
-              <Text style={styles.sectionHint}>
-                Your route has 8 stops and a destination. Remove a place to add another.
-              </Text>
             )}
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+          </View>
+        ) : (
+          <Text style={styles.hint}>
+            Your route has 8 stops and a destination. Remove a place to add another.
+          </Text>
+        )}
+
+        <View style={styles.section}>
+          <SectionTitle>Route order</SectionTitle>
+          <Text style={styles.hint}>
+            {draft.length === 0
+              ? 'Search above to add a destination.'
+              : 'The last place is your destination. Use the arrows to change the order.'}
+          </Text>
+          <View style={styles.card}>
+            <View style={styles.stopRow}>
+              <View style={[styles.marker, styles.originMarker]}>
+                <SymbolView
+                  name={{ android: 'my_location', ios: 'location.fill' }}
+                  size={15}
+                  tintColor={colors.onPrimary}
+                />
+              </View>
+              <View style={styles.stopCopy}>
+                <Text style={styles.stopKind}>Start</Text>
+                <Text numberOfLines={1} style={styles.stopName}>
+                  My location
+                </Text>
+              </View>
+            </View>
+            {draft.map((destination, index) => {
+              const role = routeStopRole(index, draft.length);
+              return (
+                <View key={`${destination.id}:${String(index)}`} style={styles.stopBlock}>
+                  <View style={styles.stopRow}>
+                    <View
+                      style={[styles.marker, role.kind === 'destination' && styles.finalMarker]}
+                    >
+                      <Text style={styles.markerText}>{role.marker}</Text>
+                    </View>
+                    <View style={styles.stopCopy}>
+                      <Text style={styles.stopKind}>{role.label}</Text>
+                      <Text numberOfLines={2} style={styles.stopName}>
+                        {destination.name}
+                      </Text>
+                      <Text numberOfLines={1} style={styles.stopContext}>
+                        {searchResultContext(destination)}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.stopActions}>
+                    <IconButton
+                      accessibilityLabel={`Move ${destination.name} up`}
+                      disabled={index === 0}
+                      icon={{ android: 'arrow_upward', ios: 'arrow.up' }}
+                      iconSize={17}
+                      onPress={() => {
+                        setDraft((current) => moveRouteStop(current, index, -1));
+                      }}
+                    />
+                    <IconButton
+                      accessibilityLabel={`Move ${destination.name} down`}
+                      disabled={role.kind === 'destination'}
+                      icon={{ android: 'arrow_downward', ios: 'arrow.down' }}
+                      iconSize={17}
+                      onPress={() => {
+                        setDraft((current) => moveRouteStop(current, index, 1));
+                      }}
+                    />
+                    <IconButton
+                      accessibilityLabel={`Remove ${destination.name}`}
+                      disabled={draft.length === 1}
+                      icon={{ android: 'delete', ios: 'trash' }}
+                      iconSize={17}
+                      onPress={() => {
+                        setDraft((current) =>
+                          current.filter((_, itemIndex) => itemIndex !== index),
+                        );
+                      }}
+                      tintColor={colors.dangerText}
+                    />
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      </BottomSheetScrollView>
+    </ModalSheet>
   );
 }
 
-const styles = StyleSheet.create({
-  addSection: { gap: Spacing.two },
-  addResultLabel: {
-    color: NavOssColors.green,
-    fontFamily: NavOssFonts.semibold,
-    fontSize: 12,
-    letterSpacing: 0,
-  },
-  buttonDisabled: { opacity: 0.4 },
-  content: { gap: Spacing.four, padding: Spacing.three, paddingBottom: Spacing.five },
-  controlPressed: { backgroundColor: NavOssColors.sky },
-  primaryPressed: { backgroundColor: NavOssColors.asphalt },
-  destinationMarker: {
-    alignItems: 'center',
-    backgroundColor: NavOssColors.sun,
-    borderRadius: 16,
-    height: 32,
-    justifyContent: 'center',
-    width: 32,
-  },
-  distance: {
-    color: NavOssColors.muted,
-    fontFamily: NavOssFonts.medium,
-    fontSize: 14,
-    letterSpacing: 0,
-  },
-  doneButton: {
-    alignItems: 'center',
-    backgroundColor: NavOssColors.green,
-    borderRadius: Spacing.two,
-    minHeight: 44,
-    justifyContent: 'center',
-    minWidth: 72,
-    paddingHorizontal: Spacing.three,
-  },
-  doneText: {
-    color: NavOssColors.paper,
-    fontFamily: NavOssFonts.semibold,
-    fontSize: 16,
-    letterSpacing: 0,
-  },
-  header: {
-    alignItems: 'center',
-    borderBottomColor: NavOssColors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: Spacing.six,
-    paddingHorizontal: Spacing.three,
-  },
-  headerButton: {
-    alignItems: 'center',
-    borderRadius: Spacing.four,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  iconButton: {
-    alignItems: 'center',
-    backgroundColor: NavOssColors.fog,
-    borderRadius: Spacing.two,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  keyboardSurface: { flex: 1 },
-  markerText: {
-    color: NavOssColors.asphalt,
-    fontFamily: NavOssFonts.bold,
-    fontSize: 14,
-    letterSpacing: 0,
-  },
-  originMarker: {
-    alignItems: 'center',
-    backgroundColor: NavOssColors.green,
-    borderRadius: 16,
-    height: 32,
-    justifyContent: 'center',
-    width: 32,
-  },
-  resultContext: {
-    color: NavOssColors.muted,
-    fontFamily: NavOssFonts.regular,
-    fontSize: 14,
-    letterSpacing: 0,
-    lineHeight: 20,
-  },
-  resultCopy: { flex: 1, gap: Spacing.one, minWidth: 0 },
-  resultMeta: { alignItems: 'flex-end', gap: Spacing.one },
-  resultName: {
-    color: NavOssColors.asphalt,
-    fontFamily: NavOssFonts.semibold,
-    fontSize: 16,
-    letterSpacing: 0,
-  },
-  resultRow: {
-    alignItems: 'center',
-    borderBottomColor: NavOssColors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    gap: Spacing.two,
-    minHeight: Spacing.six,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
-  results: {
-    borderColor: NavOssColors.border,
-    borderRadius: Spacing.two,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  routeContext: {
-    color: NavOssColors.muted,
-    fontFamily: NavOssFonts.regular,
-    fontSize: 14,
-    letterSpacing: 0,
-    lineHeight: 20,
-  },
-  routeCopy: { flex: 1, gap: Spacing.one, minWidth: 0 },
-  routeKind: {
-    color: NavOssColors.green,
-    fontFamily: NavOssFonts.bold,
-    fontSize: 12,
-    letterSpacing: 0,
-  },
-  routeList: {
-    borderColor: NavOssColors.border,
-    borderRadius: Spacing.two,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  routeName: {
-    color: NavOssColors.asphalt,
-    fontFamily: NavOssFonts.semibold,
-    fontSize: 16,
-    letterSpacing: 0,
-  },
-  routeRow: {
-    alignItems: 'center',
-    backgroundColor: NavOssColors.paper,
-    borderBottomColor: NavOssColors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    gap: Spacing.two,
-    minHeight: Spacing.six,
-    padding: Spacing.three,
-  },
-  editableRouteRow: { alignItems: 'stretch', flexDirection: 'column' },
-  stopHeading: { alignItems: 'center', flexDirection: 'row', gap: Spacing.two },
-  rowActions: { flexDirection: 'row', gap: Spacing.two, justifyContent: 'flex-end' },
-  safeArea: { backgroundColor: NavOssColors.paper, flex: 1 },
-  searchButton: {
-    alignItems: 'center',
-    backgroundColor: NavOssColors.green,
-    borderRadius: Spacing.two,
-    height: 48,
-    justifyContent: 'center',
-    width: 48,
-  },
-  searchState: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: Spacing.two,
-    minHeight: Spacing.six,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-  },
-  searchStateText: {
-    color: NavOssColors.muted,
-    flex: 1,
-    fontFamily: NavOssFonts.medium,
-    fontSize: 14,
-    letterSpacing: 0,
-    lineHeight: 20,
-  },
-  searchInput: {
-    backgroundColor: NavOssColors.paper,
-    borderColor: NavOssColors.border,
-    borderRadius: Spacing.two,
-    borderWidth: 2,
-    color: NavOssColors.asphalt,
-    flex: 1,
-    fontFamily: NavOssFonts.regular,
-    fontSize: 17,
-    height: 48,
-    letterSpacing: 0,
-    paddingHorizontal: Spacing.three,
-  },
-  searchInputFocused: { borderColor: NavOssColors.green },
-  searchRow: { flexDirection: 'row', gap: Spacing.two },
-  sectionHeading: { gap: Spacing.two },
-  sectionHint: {
-    color: NavOssColors.muted,
-    fontFamily: NavOssFonts.regular,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  sectionTitle: {
-    color: NavOssColors.asphalt,
-    fontFamily: NavOssFonts.bold,
-    fontSize: 18,
-    letterSpacing: 0,
-  },
-  stopMarker: {
-    alignItems: 'center',
-    backgroundColor: NavOssColors.sky,
-    borderRadius: 16,
-    height: 32,
-    justifyContent: 'center',
-    width: 32,
-  },
-  title: {
-    color: NavOssColors.asphalt,
-    fontFamily: NavOssFonts.bold,
-    fontSize: 20,
-    letterSpacing: 0,
-  },
-});
+const useStyles = createThemedStyles(({ colors }) =>
+  StyleSheet.create({
+    addLabel: { ...typography.footnoteStrong, color: colors.primaryText },
+    card: {
+      backgroundColor: colors.surfaceSunken,
+      borderCurve: 'continuous',
+      borderRadius: radius.lg,
+      padding: space.xs,
+    },
+    content: { gap: space.xl, paddingHorizontal: space.lg },
+    finalMarker: { backgroundColor: colors.danger },
+    hint: { ...typography.footnote, color: colors.textSecondary },
+    marker: {
+      alignItems: 'center',
+      backgroundColor: colors.text,
+      borderRadius: radius.pill,
+      height: 30,
+      justifyContent: 'center',
+      width: 30,
+    },
+    markerText: { ...typography.footnoteStrong, color: colors.surface },
+    originMarker: { backgroundColor: colors.primary },
+    searchInput: {
+      ...typography.body,
+      backgroundColor: colors.surfaceSunken,
+      borderColor: 'transparent',
+      borderCurve: 'continuous',
+      borderRadius: radius.md,
+      borderWidth: 1.5,
+      color: colors.text,
+      flex: 1,
+      height: 50,
+      lineHeight: undefined,
+      paddingHorizontal: space.md,
+      paddingVertical: 0,
+    },
+    searchInputFocused: { borderColor: colors.primary },
+    searchRow: { alignItems: 'center', flexDirection: 'row', gap: space.sm },
+    section: { gap: space.sm },
+    stopActions: {
+      flexDirection: 'row',
+      gap: space.sm,
+      justifyContent: 'flex-end',
+      paddingBottom: space.sm,
+      paddingRight: space.sm,
+    },
+    stopBlock: {
+      borderTopColor: colors.border,
+      borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    stopContext: { ...typography.footnote, color: colors.textSecondary },
+    stopCopy: { flex: 1, gap: 1 },
+    stopKind: { ...typography.eyebrow, color: colors.textTertiary, fontSize: 11 },
+    stopName: { ...typography.bodyStrong, color: colors.text },
+    stopRow: { alignItems: 'center', flexDirection: 'row', gap: space.md, padding: space.sm },
+  }),
+);

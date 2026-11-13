@@ -59,7 +59,8 @@ startup.
 Community traffic is built from short driving batches that opted-in NavOSS drivers upload. The
 design, parameters and limits are in
 [`docs/architecture/community-traffic.md`](../../docs/architecture/community-traffic.md). Read
-"What this does not protect against" there before going `live`. It is controlled by one value in
+"What this does not protect against" there, and tick its "Enablement checklist" for the mode,
+before changing it. It is controlled by one value in
 `.env` and is `off` unless set:
 
 | `COMMUNITY_TRAFFIC_MODE` | `POST /v2/traffic/probes`            | Flow, route traffic, `features.liveTraffic` |

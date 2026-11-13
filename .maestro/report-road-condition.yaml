@@ -11,7 +11,7 @@ appId: org.navoss.mobile
     text: 'Reload'
     optional: true
 - extendedWaitUntil:
-    visible: 'Search Calgary'
+    visible: 'Search places'
     timeout: 20000
 - longPressOn:
     point: 78%,45%
@@ -35,7 +35,8 @@ appId: org.navoss.mobile
 - tapOn: 'Report Construction'
 - assertVisible: 'Saved for testing'
 - assertVisible: '.*not shown to other drivers yet.*'
-- tapOn: 'OK'
 - assertVisible: 'End navigation'
 - tapOn: 'End navigation'
-- assertVisible: 'Route preview'
+- extendedWaitUntil:
+    visible: 'Search places'
+    timeout: 10000

@@ -1,5 +1,5 @@
 import type { TrafficFlowBounds } from '@navoss/contracts';
-import { Pool } from 'pg';
+import { Pool, type PoolConfig } from 'pg';
 
 import { pendingMigrations } from '../migrations.js';
 import type { TrafficRelease } from './cohorts.js';
@@ -119,10 +119,33 @@ function toRelease(row: ReleaseRow): TrafficRelease {
   };
 }
 
+/**
+ * Bounded waits, enforced by PostgreSQL itself: the server cancels a statement or a lock wait that
+ * runs too long and aborts its transaction, so a stuck epoch cannot hold locks or a backend beyond
+ * these limits. `query_timeout` is only a client-side margin for a server that stops answering;
+ * on its own it would abandon the wait without cancelling anything on the server.
+ */
+export const TRAFFIC_POOL_CONFIG = {
+  connectionTimeoutMillis: 5_000,
+  idle_in_transaction_session_timeout: 15_000,
+  lock_timeout: 5_000,
+  max: 4,
+  query_timeout: 15_000,
+  statement_timeout: 10_000,
+} as const satisfies PoolConfig;
+
+function createTrafficPool(): Pool {
+  const pool = new Pool(TRAFFIC_POOL_CONFIG);
+  // An idle connection that the server closes (a restart, a terminated backend) is reported here;
+  // without a listener it would be an uncaught error that ends the process.
+  pool.on('error', () => undefined);
+  return pool;
+}
+
 export function createPostgresTrafficReleaseStore(
   // Bounded waits: an unreachable or stuck database becomes an error the caller reports, never a
   // request or a startup that hangs.
-  pool: Pool = new Pool({ connectionTimeoutMillis: 5_000, max: 4, query_timeout: 10_000 }),
+  pool: Pool = createTrafficPool(),
 ): TrafficReleaseStore {
   return {
     async byKeys(keys, epochStartMs) {
@@ -152,6 +175,7 @@ export function createPostgresTrafficReleaseStore(
     },
     async publishEpoch(epochStartMs, releases) {
       const client = await pool.connect();
+      let discard: Error | undefined;
       try {
         // One transaction and one insert per epoch for every segment released in it, in key
         // order: row versions and physical order say which epoch, never which upload.
@@ -195,10 +219,16 @@ export function createPostgresTrafficReleaseStore(
         }
         await client.query('COMMIT');
       } catch (error: unknown) {
-        await client.query('ROLLBACK').catch(() => undefined);
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError: unknown) {
+          // The connection may still be inside the transaction, or still running the statement
+          // that failed. It must never go back to the pool: destroy it.
+          discard = rollbackError instanceof Error ? rollbackError : new Error('Rollback failed.');
+        }
         throw error;
       } finally {
-        client.release();
+        client.release(discard);
       }
     },
     async purge() {

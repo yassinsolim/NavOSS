@@ -67,7 +67,7 @@ The mobile client remains independent of provider-specific route models. Public 
 
 ## Local API
 
-Use Node.js 24.18.0 and pnpm 11.13.0 through Corepack.
+Use Node.js 24.18.0 and pnpm 11.13.1 through Corepack.
 
 ```sh
 corepack pnpm install --frozen-lockfile

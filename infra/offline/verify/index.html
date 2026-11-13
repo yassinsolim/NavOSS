@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NavOSS offline bundle verifier</title>
+    <link rel="stylesheet" href="/vendor/maplibre/maplibre-gl.css" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        font-family: system-ui, sans-serif;
+        color: #0e1516;
+        background: #f6f7f3;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 18px;
+        border-bottom: 1px solid #d9dfdb;
+      }
+      h1 {
+        font-size: 17px;
+        margin: 0;
+      }
+      label {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      button,
+      select {
+        padding: 10px 14px;
+        border: 1px solid #b7c8c2;
+        border-radius: 6px;
+        background: white;
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      #status {
+        margin-left: auto;
+        font-size: 13px;
+        color: #0f8f7f;
+      }
+      #status.error {
+        color: #b3261e;
+      }
+      #map {
+        flex: 1;
+        min-height: 0;
+      }
+      footer {
+        font-size: 12px;
+        padding: 8px 18px;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+    </style>
+  </head>
+  <body data-ready="false">
+    <header>
+      <h1>NavOSS · Offline bundle verifier</h1>
+      <label
+        >Style
+        <select id="style">
+          <option value="liberty">Liberty</option>
+          <option value="bright">Bright</option>
+          <option value="positron">Positron</option>
+          <option value="dark">Dark</option>
+        </select></label
+      >
+      <button id="city" type="button">City zoom</button>
+      <button id="street" type="button">Street zoom</button>
+      <span id="status">Loading local resources…</span>
+    </header>
+    <main id="map" aria-label="Offline regional map"></main>
+    <footer>
+      <span id="region"></span
+      ><span>External network denied · MapLibre GL JS 6.18.0 · PMTiles 4.5.0</span>
+    </footer>
+    <script src="/vendor/pmtiles/pmtiles.js"></script>
+    <script type="module">
+      import * as maplibregl from '/vendor/maplibre/maplibre-gl.mjs';
+      const config = await (await fetch('/config.json')).json();
+      document.querySelector('#region').textContent =
+        `${config.region} · OSM ${config.dataDate} · ${config.mapsByteSize.toLocaleString()} map bytes`;
+      const protocol = new pmtiles.Protocol();
+      maplibregl.addProtocol('pmtiles', protocol.tile);
+      const sourceStyle = await (await fetch('/style.json?name=liberty')).json();
+      const map = new maplibregl.Map({
+        container: 'map',
+        style: sourceStyle,
+        center: [-114.057541, 51.0456064],
+        zoom: 11,
+        attributionControl: false,
+        preserveDrawingBuffer: true,
+      });
+      map.addControl(new maplibregl.AttributionControl({ compact: false }), 'bottom-right');
+      const state = {
+        style: 'liberty',
+        view: 'city',
+        zoom: 11,
+        errors: [],
+        renderedFeatures: 0,
+        ready: false,
+      };
+      window.offlineVerification = state;
+      const status = document.querySelector('#status');
+      function pending() {
+        state.ready = false;
+        document.body.dataset.ready = 'false';
+        status.textContent = 'Rendering local tiles…';
+      }
+      function inspect() {
+        if (!map.loaded() || !map.isStyleLoaded() || map.isMoving()) return;
+        state.zoom = map.getZoom();
+        state.renderedFeatures = map.queryRenderedFeatures().length;
+        state.ready = state.errors.length === 0 && state.renderedFeatures > 0;
+        document.body.dataset.ready = String(state.ready);
+        status.classList.toggle('error', !state.ready);
+        status.textContent = state.ready
+          ? `Ready · z${state.zoom.toFixed(0)} · ${state.renderedFeatures.toLocaleString()} rendered features`
+          : `Failed · ${state.errors.join('; ') || 'No rendered features'}`;
+      }
+      map.on('idle', inspect);
+      map.on('error', (event) => {
+        state.errors.push(String(event.error));
+        state.ready = false;
+        document.body.dataset.ready = 'false';
+        status.classList.add('error');
+        status.textContent = `Failed · ${state.errors.at(-1)}`;
+      });
+      document.querySelector('#style').addEventListener('change', async (event) => {
+        pending();
+        state.style = event.target.value;
+        state.errors = [];
+        const style = await (
+          await fetch(`/style.json?name=${encodeURIComponent(state.style)}`)
+        ).json();
+        map.setStyle(style);
+      });
+      document.querySelector('#city').addEventListener('click', () => {
+        pending();
+        state.view = 'city';
+        map.jumpTo({ center: [-114.057541, 51.0456064], zoom: 11, pitch: 0, bearing: 0 });
+        inspect();
+      });
+      document.querySelector('#street').addEventListener('click', () => {
+        pending();
+        state.view = 'street';
+        map.jumpTo({ center: [-114.0631347, 51.0442998], zoom: 17, pitch: 40, bearing: 0 });
+        inspect();
+      });
+    </script>
+  </body>
+</html>

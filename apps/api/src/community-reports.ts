@@ -90,10 +90,15 @@ export class CommunityReportError extends Error {
 
 export interface CommunityReportService {
   /**
-   * Verifies a fresh `traffic-credential` assertion and names the asserting installation. Used
-   * only to issue a community-traffic upload credential; nothing about traffic is stored here.
+   * Verifies a fresh `traffic-credential` assertion and names the asserting installation and when
+   * it registered. Used only to issue a community-traffic upload credential; nothing about traffic
+   * is stored here.
    */
-  assertTrafficContributor(assertion: CommunityAssertion): Promise<{ installationId: string }>;
+  assertTrafficContributor(
+    assertion: CommunityAssertion,
+  ): Promise<{ installationId: string; registeredAt: Date }>;
+  /** True only when App Attest is configured, so assertions can be verified at all. */
+  readonly attestationAvailable: boolean;
   close(): Promise<void>;
   deleteInstallation(assertion: CommunityAssertion): Promise<void>;
   deleteReport(reportId: string, assertion: CommunityAssertion): Promise<void>;
@@ -130,6 +135,7 @@ interface InstallationRow {
   last_write_at: Date | null;
   last_write_latitude: number | null;
   last_write_longitude: number | null;
+  registered_at: Date;
   sealed_public_key: Buffer;
   sign_count: string;
   trust: CommunityInstallationTrust;
@@ -138,6 +144,7 @@ interface InstallationRow {
 interface AssertedInstallation {
   evidence: Evidence;
   id: string;
+  registeredAt: Date;
   lastWrite: { at: Date; position: Coordinate } | undefined;
   trust: CommunityInstallationTrust;
 }
@@ -318,6 +325,7 @@ export function createCommunityReportService(
     const locked = await client.query<InstallationRow>(
       `SELECT id, trust, sealed_public_key, sign_count::text AS sign_count,
               evidence_support, evidence_contradict, evidence_updated_at, last_write_at,
+              registered_at,
               ST_Y(last_write_position::geometry) AS last_write_latitude,
               ST_X(last_write_position::geometry) AS last_write_longitude
        FROM community_installations WHERE id = ANY($1::uuid[])
@@ -360,6 +368,7 @@ export function createCommunityReportService(
         COMMUNITY_TRUST_RULES.installationEvidenceHalfLifeMs,
       ),
       id: row.id,
+      registeredAt: row.registered_at,
       lastWrite:
         row.last_write_at === null ||
         row.last_write_latitude === null ||
@@ -524,6 +533,7 @@ export function createCommunityReportService(
   };
 
   return {
+    attestationAvailable: options.verifier !== undefined,
     publication: options.publication,
 
     async close() {
@@ -845,7 +855,7 @@ export function createCommunityReportService(
           { kind: 'traffic-credential' },
           now,
         );
-        return { installationId: installation.id };
+        return { installationId: installation.id, registeredAt: installation.registeredAt };
       });
     },
 
@@ -933,6 +943,9 @@ export function createConfiguredCommunityReportService(input: {
   const writable =
     environment.APP_ATTEST_TEAM_ID !== undefined &&
     environment.COMMUNITY_INSTALLATION_SECRET !== undefined;
+  const pool = new Pool({ max: 5 });
+  // An idle connection the server drops is reported here; unheard, it would end the process.
+  pool.on('error', () => undefined);
   return createCommunityReportService({
     attestationMode: environment.COMMUNITY_ATTESTATION_MODE,
     ...(input.clock === undefined ? {} : { clock: input.clock }),
@@ -941,7 +954,7 @@ export function createConfiguredCommunityReportService(input: {
       'utf8',
     ),
     isInCoverage: input.isInCoverage,
-    pool: new Pool({ max: 5 }),
+    pool,
     publication: environment.COMMUNITY_REPORTS_PUBLICATION,
     verifier:
       writable && environment.APP_ATTEST_TEAM_ID !== undefined

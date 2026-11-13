@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-11-12",
+  "sources": [
+    {
+      "name": "openfreemap-styles.tar.gz",
+      "url": "https://codeload.github.com/hyperknot/openfreemap-styles/tar.gz/006ea5796803ba2df4330888836cb0a8f17473b4",
+      "sha256": "b5f2906c612b62a4841588b47671fe4c16cc34fcf910d4e8343b352407db7477",
+      "license": "BSD-3-Clause / CC-BY-4.0 / CC-BY-3.0 / MIT / CC0-1.0"
+    },
+    {
+      "name": "maplibre-demotiles.tar.gz",
+      "url": "https://codeload.github.com/maplibre/demotiles/tar.gz/601ae60796ceceda2cbd2ed3d2ea92d17a84be4b",
+      "sha256": "559b4c9b0d7a6f3825ca1282c3d33c9f97b21eeec0185f84d3d09b4df524cd5f",
+      "license": "OFL-1.1 (Noto Sans glyphs)"
+    },
+    {
+      "name": "lake_centerline.shp.zip",
+      "url": "https://github.com/acalcutt/osm-lakelines/releases/download/v12/lake_centerline.shp.zip",
+      "sha256": "6c900507c88fc9f5b5a386f90fd0a42d0495e8755a03d075538fb9a6801a3192",
+      "license": "ODbL-1.0 (data) / MIT (processing)"
+    },
+    {
+      "name": "water-polygons-split-3857.zip",
+      "url": "https://osmdata.openstreetmap.de/download/water-polygons-split-3857.zip",
+      "sha256": "0aaff66edae7d14e05aa2cde70f8fd11cbf97e3503844ec8c65f3e87d5966520",
+      "license": "ODbL-1.0"
+    },
+    {
+      "name": "natural_earth_vector.sqlite.zip",
+      "url": "https://naciscdn.org/naturalearth/packages/natural_earth_vector.sqlite.zip",
+      "sha256": "375da61836d4779dffa8b87887bc4faa94dac77745ba0ee3914bd7cbedf40a02",
+      "license": "Public domain"
+    },
+    {
+      "name": "timezones-with-oceans-1970.shapefile.zip",
+      "url": "https://github.com/evansiroky/timezone-boundary-builder/releases/download/2026b/timezones-with-oceans-1970.shapefile.zip",
+      "sha256": "39c8bba629d74132ec65989be6272226aa2ff8af4b443efb658b3639a76159c2",
+      "license": "ODbL-1.0 (OSM-derived boundary data) / MIT (processing)"
+    }
+  ]
+}

@@ -88,6 +88,8 @@ export function createPostgresContributionProvider(
   const maximumPendingSubmissions = options.maximumPendingSubmissions ?? MAX_PENDING_SUBMISSIONS;
   const retentionSweepIntervalMs = options.retentionSweepIntervalMs ?? RETENTION_SWEEP_INTERVAL_MS;
   const pool = new Pool();
+  // An idle connection the server drops is reported here; unheard, it would end the process.
+  pool.on('error', () => undefined);
   let retentionSweep: ReturnType<typeof setInterval> | undefined;
   let sweeping = false;
 

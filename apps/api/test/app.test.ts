@@ -111,6 +111,43 @@ describe('system routes', () => {
     expect(body.status).toBe('not_ready');
   });
 
+  it('keeps running and reports not ready when PostgreSQL refuses connections', async () => {
+    // Every database-backed provider is built from the environment, as in production, against a
+    // database that refuses connections. That once ended the process with an uncaught
+    // ECONNREFUSED from the Google budget's startup query.
+    const unhandled: unknown[] = [];
+    const recordUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', recordUnhandled);
+    const previous = { PGHOST: process.env.PGHOST, PGPORT: process.env.PGPORT };
+    process.env.PGHOST = '127.0.0.1';
+    process.env.PGPORT = '1';
+    try {
+      const app = await createTestApp();
+      await app.ready();
+
+      // Each of these waits for a real refused connection, made after every provider's startup
+      // work has already been refused.
+      const ready = await app.inject({ method: 'GET', url: '/ready' });
+      const body = ReadinessResponseSchema.parse(ready.json());
+      expect(ready.statusCode).toBe(503);
+      expect(body.checks.database?.status).toBe('not_ready');
+      const grant = await app.inject({ method: 'POST', url: '/v1/google-place-query-grants' });
+      expect(grant.statusCode).toBe(503);
+      expect(ProblemDetailsSchema.parse(grant.json()).code).toBe('service_unavailable');
+      // Requests that do not need the database are still served.
+      expect((await app.inject({ method: 'GET', url: '/health' })).statusCode).toBe(200);
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', recordUnhandled);
+      if (previous.PGHOST === undefined) delete process.env.PGHOST;
+      else process.env.PGHOST = previous.PGHOST;
+      if (previous.PGPORT === undefined) delete process.env.PGPORT;
+      else process.env.PGPORT = previous.PGPORT;
+    }
+  });
+
   it('reports production provider readiness', async () => {
     const app = await createTestApp({
       productionSearch: true,

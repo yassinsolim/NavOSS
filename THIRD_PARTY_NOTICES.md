@@ -5,7 +5,7 @@ It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
 
-Lockfile SHA-256: `71ee9e115df3a0e2c206f8d767fd8e7b58f594498c9d0b4e20452b9441257474`
+Lockfile SHA-256: `fece19d1b070b74fe8fcddd59d6fe80c848a024f635d87687ffaddf93f111c19`
 
 Regenerate with:
 
@@ -396,6 +396,7 @@ corepack pnpm licenses:generate
 - `expo-file-system` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/filesystem/>
 - `expo-font` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/font/>
 - `expo-glass-effect` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/glass-effect/>
+- `expo-haptics` - `57.0.3` - <https://docs.expo.dev/versions/latest/sdk/haptics/>
 - `expo-image` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/image/>
 - `expo-json-utils` - `57.0.0` - <https://docs.expo.dev>
 - `expo-keep-awake` - `57.0.0` - <https://docs.expo.dev/versions/latest/sdk/keep-awake/>

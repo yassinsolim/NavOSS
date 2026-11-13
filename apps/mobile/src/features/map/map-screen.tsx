@@ -1,2224 +1,90 @@
-import {
-  Camera,
-  GeoJSONSource,
-  Images,
-  Layer,
-  Map,
-  Marker,
-  UserLocation,
-  type CameraRef,
-  type MapRef,
-  type StyleSpecification,
-} from '@maplibre/maplibre-react-native';
-import { headingConeFeature } from '@/features/map/heading-cone';
-import {
-  idleCameraCenterForFollow,
-  idleCameraFollowIntentAfterRegionChange,
-  phoneIdleLocationWatchOptions,
-  shouldFollowIdleCamera,
-  shouldWatchPhoneIdleLocation,
-} from '@/features/map/idle-camera-follow';
-import {
-  newestValidRouteOriginSample,
-  routeOriginSampleFromLocation,
-  routeRequestOriginFromSample,
-  type RouteOriginSample,
-  type RouteRequestOrigin,
-} from '@/features/navigation/route-origin';
-import type {
-  AppConfigResponse,
-  Coordinate,
-  GeographicBounds,
-  OfficialRoadEvent,
-  OfficialRoadEventResponse,
-  OfficialSafetyCamera,
-  RoadEvent,
-  RoadEventResponse,
-  RouteAlternative,
-  RoutePreferences,
-  RouteResponse,
-  SafetyCamera,
-  SafetyFacility,
-  SearchResult,
-  SearchSource,
-  TrafficCamera,
-} from '@navoss/contracts';
-import { SymbolView } from 'expo-symbols';
 import { StatusBar } from 'expo-status-bar';
-import * as Location from 'expo-location';
-import {
-  Alert,
-  AppState,
-  Keyboard,
-  Linking,
-  Pressable,
-  Share,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  useWindowDimensions,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  startTransition,
-  useDeferredValue,
-  useEffect,
-  useEffectEvent,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import type { FeatureCollection, LineString, Point } from 'geojson';
+import { StyleSheet, View } from 'react-native';
 
-import { NavOssColors, NavOssFonts } from '@/constants/navoss-theme';
-import { APP_TAB_BAR_HEIGHT, AppTabBar, type AppTab } from '@/features/map/app-tab-bar';
+import { AboutSheet } from '@/features/map/about-sheet';
+import { AppTabBar } from '@/features/map/app-tab-bar';
+import { CategoriesSheet } from '@/features/map/categories-sheet';
+import { MapCanvas } from '@/features/map/components/map-canvas';
+import { MapControls } from '@/features/map/components/map-controls';
+import { MapLayers } from '@/features/map/components/map-layers';
+import { MapNoticeToast } from '@/features/map/components/map-notice';
 import { ContributeScreen } from '@/features/map/contribute-screen';
-import { ExploreCategoryBar } from '@/features/map/explore-category-bar';
-import { exploreCategoryById, type ExploreCategory } from '@/features/map/explore-categories';
-import { createLatestRequestGate } from '@/features/map/latest-request-gate';
-import { ensureForegroundLocationPermission } from '@/features/map/map-location';
+import { useMapController } from '@/features/map/controller/use-map-controller';
+import { ExploreSheet } from '@/features/map/explore-sheet';
+import { mapAttributionLabel, roadEventStatusLabel } from '@/features/map/map-features';
+import { MapFeatureSheet } from '@/features/map/map-feature-sheet';
 import {
-  isSearchCoverageRegion,
-  mapRegionForCoordinate,
-  searchCoverageBoundsForRegion,
-  TORONTO_CAMERA_BOUNDS,
-} from '@/features/map/map-region';
-import {
-  enrichMapPlace,
-  MAP_PLACE_LAYER_IDS,
-  mapPlaceFromRenderedFeatures,
   placePhoneUrl,
   placeReviewsUrl,
-  placeShareMessage,
   placeWebsiteLabel,
   placeWebsiteUrl,
 } from '@/features/map/map-place';
-import {
-  DEFAULT_MAP_PREFERENCES,
-  loadCustomizedMapStyle,
-  loadMapPreferences,
-  type MapPreferences,
-  mapStyleUrl,
-  ROUTE_COLORS,
-  saveMapPreferences,
-} from '@/features/map/map-preferences';
-import { MapPreferencesPanel } from '@/features/map/map-preferences-panel';
+import { MapPreferencesSheet } from '@/features/map/map-preferences-sheet';
+import { CAMERA_ALERT_HEIGHT, REROUTE_CARD_HEIGHT } from '@/features/map/overlay-layout';
 import { PlaceSheet } from '@/features/map/place-sheet';
-import {
-  createRoadReportDraft,
-  loadRoadReportDrafts,
-  saveRoadReportDrafts,
-  type RoadReportType,
-} from '@/features/map/road-report-drafts';
 import { RoadReportSheet } from '@/features/map/road-report-sheet';
 import { SavedPlacesScreen } from '@/features/map/saved-places-screen';
+import { mapProblemLabels } from '@/features/map/search-status';
+import { CarPlayCompanionPanel, CarPlayIdlePanel } from '@/features/navigation/carplay-panels';
 import {
-  planPlaceSearch,
-  rankCategoryResults,
-  rankSearchResults,
-  searchOriginWithinBounds,
-  searchProximityKey,
-  searchProximityOptions,
-  searchResultBounds,
-  type SettledPlaceSearch,
-} from '@/features/map/search-proximity';
-import {
-  type ApiConnectionState,
-  SearchPanel,
-  type SearchState,
-} from '@/features/map/search-panel';
-import {
-  ArrivalPanel,
-  CarPlayCompanionPanel,
-  CarPlayIdlePanel,
-  NavigationBanner,
-  type NavigationRouteStatus,
-  NavigationStatusBar,
-  NAVIGATION_STATUS_COMPACT_WIDTH,
-  RoutePlanningPanel,
-  RoutePreviewPanel,
+  ArrivalSheet,
+  DrivingStatus,
+  ManeuverBanner,
+  RerouteProposalCard,
   SafetyCameraAlertBanner,
-} from '@/features/navigation/route-panels';
-import {
-  type PhoneRouteStatus,
-  phoneSurface,
-  releasesPhoneRouteOnCarPlayConnect,
-} from '@/features/navigation/phone-surface';
+  TripSheet,
+} from '@/features/navigation/guidance';
+import { GuidanceSettingsSheet } from '@/features/navigation/guidance-settings-sheet';
+import { isCarPlayVisualHarness } from '@/features/navigation/native-navigation';
+import { RoutePlanningSheet, RoutePreviewSheet } from '@/features/navigation/route-sheets';
 import { RouteStopsEditor } from '@/features/navigation/route-stops-editor';
-import {
-  buildEtaShareMessage,
-  findNearestStepIndex,
-  getRemainingRouteGeometry,
-  getRemainingRouteSummary,
-  getRemainingStepSummary,
-  getUpcomingGuidanceStep,
-  getUpcomingManeuvers,
-} from '@/features/navigation/route-progress';
-import { isCoordinateInCoverage } from '@/features/navigation/route-coverage';
-import {
-  clearCarPlayTrip,
-  clearDestinationHistory,
-  clearNavigationRoute,
-  clearRecentDestinations,
-  getDestinationCatalog,
-  getNavigationAudioMode,
-  getNavigationPreferences,
-  getNavigationRoutePreferences,
-  getNavigationSnapshot,
-  isCarPlayVisualHarness,
-  getCarPlayState,
-  getRecentDestinationIds,
-  isFavoriteDestination,
-  isGooglePlaceRatingAvailable,
-  nativeDestinationToSearchResult,
-  type NativeDestinationCatalog,
-  type NativeNavigationSnapshot,
-  observeCarPlayNavigationEnded,
-  observeCarPlayState,
-  observeNavigationSnapshots,
-  observeNavigationPreferences,
-  recordRecentDestination,
-  type NavigationAudioMode,
-  setNavigationRoute,
-  setNavigationAudioMode,
-  setNavigationRoutePreferences,
-  setHomeDestination,
-  setWorkDestination,
-  stopNavigationAnnouncements,
-  toggleFavoriteDestination,
-} from '@/features/navigation/native-navigation';
-import {
-  NAVIGATION_CAMERA_TRANSITION,
-  navigationCameraBearing,
-  toggleNavigationMapOrientation,
-} from '@/features/navigation/navigation-camera';
-import {
-  type VehicleMatchStatus,
-  VehiclePuck,
-  type VehicleStyle,
-} from '@/features/navigation/vehicle-puck';
-import { mapAlignedHeadingDegrees } from '@/features/navigation/vehicle-heading';
-import {
-  fetchAppConfig,
-  fetchOfficialRoadEvents,
-  fetchOfficialSafetyCameras,
-  fetchRoadEvents,
-  fetchRoutes,
-  fetchSafetyFacilities,
-  fetchSafetyCameras,
-  fetchTrafficCameras,
-  NavOssApiError,
-  searchPlaces,
-} from '@/lib/api';
+import { useRenderCounter } from '@/lib/render-counter';
+import { createThemedStyles } from '@/theme';
 
-const CANADA_CENTER: [longitude: number, latitude: number] = [-106.3468, 56.1304];
-const CALGARY_TOWER_ROUTE_ORIGIN: Coordinate = {
-  latitude: 51.04427,
-  longitude: -114.06309,
-};
-const EMPTY_FEATURE_COLLECTION: FeatureCollection<Point> = {
-  features: [],
-  type: 'FeatureCollection',
-};
-const ROAD_EVENT_REFRESH_INTERVAL_MS = 5 * 60 * 1_000;
-const ROAD_EVENT_LAYER_IDS = [
-  'official-construction-events',
-  'road-closure-events',
-  'road-incident-events',
-] as const;
-const SAFETY_CAMERA_LAYER_IDS = ['safety-camera-symbols', 'toronto-safety-camera-symbols'] as const;
-const MAP_IMAGES = {
-  'road-closure': require('@/assets/images/road-closure-marker.png'),
-  'road-construction': require('@/assets/images/road-construction-marker.png'),
-  'road-incident': require('@/assets/images/road-incident-marker.png'),
-  'safety-camera': require('@/assets/images/camera-marker.png'),
-  'vehicle-arrow': require('@/assets/images/vehicle-arrow.png'),
-  'vehicle-car': require('@/assets/images/vehicle-car.png'),
-};
+const NO_SEARCH_RESULTS: readonly never[] = [];
 
-type LocationState = 'idle' | 'locating' | 'visible' | 'denied' | 'error';
-type MapRoadEvent = RoadEvent | OfficialRoadEvent;
-type RoadEventRegion = 'calgary' | 'kelowna-bc' | 'ontario';
-type RouteUiState =
-  | { type: 'idle' }
-  | {
-      destination: SearchResult;
-      previewOrigin?: Coordinate;
-      type: 'loading';
-      waypoints: SearchResult[];
-    }
-  | {
-      destination: SearchResult;
-      message: string;
-      previewOrigin?: Coordinate;
-      type: 'error';
-      waypoints: SearchResult[];
-    }
-  | {
-      destination: SearchResult;
-      previewOrigin?: Coordinate;
-      routes: RouteAlternative[];
-      selectedRouteId: string;
-      type: 'preview';
-      waypoints: SearchResult[];
-    }
-  | {
-      destination: SearchResult;
-      route: RouteAlternative;
-      routes: RouteAlternative[];
-      type: 'navigating';
-      waypoints: SearchResult[];
-    }
-  | {
-      destination: SearchResult;
-      route: RouteAlternative;
-      routes: RouteAlternative[];
-      type: 'arrived';
-      waypoints: SearchResult[];
-    };
-
-function selectedFeature(result: SearchResult | undefined): FeatureCollection<Point> {
-  if (result === undefined) {
-    return EMPTY_FEATURE_COLLECTION;
-  }
-
-  return {
-    features: [
-      {
-        geometry: {
-          coordinates: [result.center.longitude, result.center.latitude],
-          type: 'Point',
-        },
-        properties: { id: result.id },
-        type: 'Feature',
-      },
-    ],
-    type: 'FeatureCollection',
-  };
-}
-
-function routeFeatures(routes: RouteAlternative[]): FeatureCollection<LineString> {
-  return {
-    features: routes.map((route) => ({
-      geometry: {
-        coordinates: route.geometry,
-        type: 'LineString',
-      },
-      properties: { id: route.id },
-      type: 'Feature',
-    })),
-    type: 'FeatureCollection',
-  };
-}
-
-function droppedPinResult(coordinate: Coordinate): SearchResult {
-  const latitude = coordinate.latitude.toFixed(5);
-  const longitude = coordinate.longitude.toFixed(5);
-  return {
-    category: 'landmark',
-    center: coordinate,
-    confidence: 1,
-    id: `dropped-pin:${latitude}:${longitude}`,
-    label: `${latitude}, ${longitude}`,
-    name: 'Dropped pin',
-  };
-}
-
-function safetyCameraFeatures(
-  cameras: readonly (Pick<SafetyCamera, 'coordinate' | 'id' | 'location'> &
-    Partial<Pick<SafetyCamera, 'direction'>> & {
-      enforcement: readonly SafetyCamera['enforcement'][number][];
-    })[],
-): FeatureCollection<Point> {
-  return {
-    features: cameras.map((camera) => ({
-      geometry: {
-        coordinates: [camera.coordinate.longitude, camera.coordinate.latitude],
-        type: 'Point',
-      },
-      properties: {
-        ...(camera.direction === undefined ? {} : { direction: camera.direction }),
-        enforcement: camera.enforcement.join(','),
-        id: camera.id,
-        location: camera.location,
-      },
-      type: 'Feature',
-    })),
-    type: 'FeatureCollection',
-  };
-}
-
-// Authoritative metadata only: enforced direction describes which traffic flow is monitored, not
-// which way the camera optically faces, and neither source publishes optical facing. Never infer
-// either from a road name.
-function cameraDetailAlertMessage(
-  enforcement: readonly string[],
-  direction: string | undefined,
-): string {
-  const enforcementLabel = enforcement
-    .map((type) =>
-      type === 'red-light' ? 'red light' : type === 'speed-on-green' ? 'speed on green' : type,
-    )
-    .join(' and ');
-  const directionLine =
-    direction === undefined
-      ? 'Enforced direction: unspecified by this source.'
-      : `Enforced direction: ${direction} traffic. This is the monitored traffic flow, not the camera's optical facing, which this source does not publish.`;
-  return `${enforcementLabel.length > 0 ? enforcementLabel : 'Unspecified'} enforcement camera.\n${directionLine}`;
-}
-
-function roadEventFeatures(
-  events: readonly MapRoadEvent[],
-  type: MapRoadEvent['type'],
-): FeatureCollection<Point> {
-  return {
-    features: events
-      .filter((event) => event.type === type)
-      .map((event) => ({
-        geometry: {
-          coordinates: [event.coordinate.longitude, event.coordinate.latitude],
-          type: 'Point',
-        },
-        properties: { id: event.id },
-        type: 'Feature',
-      })),
-    type: 'FeatureCollection',
-  };
-}
-
-function roadEventAlertMessage(event: MapRoadEvent): string {
-  if ('regionId' in event) {
-    const end = event.endsAt === undefined ? '' : `\nEnds: ${event.endsAt.replace('T', ' ')}`;
-    const source = event.regionId === 'ontario' ? 'Ontario 511' : 'DriveBC Open511';
-    return `Official ${source} road information\n\n${event.description}\n\nStarts: ${event.startsAt.replace('T', ' ')}${end}`;
-  }
-
-  const confidence =
-    event.confidence === 'official'
-      ? 'Official City of Calgary construction information'
-      : 'Unverified current incident information';
-  const end =
-    event.endsAtLocal === undefined ? '' : `\nEnds: ${event.endsAtLocal.replace('T', ' ')}`;
-  return `${confidence}\n\n${event.description}\n\nStarts: ${event.startsAtLocal.replace('T', ' ')}${end}\nTime zone: America/Edmonton`;
-}
-
-function routeBounds(
-  route: RouteAlternative,
-): [west: number, south: number, east: number, north: number] {
-  return route.geometry.reduce<[number, number, number, number]>(
-    (bounds, position) => [
-      Math.min(bounds[0], position[0]),
-      Math.min(bounds[1], position[1]),
-      Math.max(bounds[2], position[0]),
-      Math.max(bounds[3], position[1]),
-    ],
-    [
-      Number.POSITIVE_INFINITY,
-      Number.POSITIVE_INFINITY,
-      Number.NEGATIVE_INFINITY,
-      Number.NEGATIVE_INFINITY,
-    ],
-  );
-}
-
-function persistMapPreferences(preferences: MapPreferences): void {
-  void saveMapPreferences(preferences).catch(() => {
-    console.warn('Map preferences could not be saved locally.');
-  });
-}
-
+/**
+ * The app's one screen: a map with whichever sheet the current task needs on top of it. All
+ * behaviour lives in `useMapController`; this component only decides what is on screen.
+ *
+ * Layering, back to front: map, floating controls, the active sheet, full-screen tabs and the
+ * tab bar, banners that must stay above sheets (maneuver, camera alert, notices), then modal
+ * sheets.
+ */
 export function MapScreen() {
-  const insets = useSafeAreaInsets();
-  const colorScheme = useColorScheme();
-  const { height, width } = useWindowDimensions();
-  const cameraRef = useRef<CameraRef>(null);
-  const mapRef = useRef<MapRef>(null);
-  const announcedCameraIdsRef = useRef(new Set<string>());
-  const cameraAlertTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const routeAbortControllerRef = useRef<AbortController>(null);
-  const routeOriginSampleRef = useRef<RouteOriginSample | undefined>(undefined);
-  const nativeStateVersionRef = useRef(-1);
-  const placeAbortControllerRef = useRef<AbortController>(null);
-  const placeInteractionRef = useRef(createLatestRequestGate());
-  const searchAbortControllerRef = useRef<AbortController>(null);
-  const searchRequestGateRef = useRef(createLatestRequestGate());
-  const displayedSearchRef = useRef<SettledPlaceSearch | undefined>(undefined);
-  const categorySearchActiveRef = useRef(false);
-  const safetyCamerasRef = useRef<readonly SafetyCamera[]>([]);
-  const [apiConnection, setApiConnection] = useState<ApiConnectionState>('connecting');
-  const [isAppActive, setIsAppActive] = useState(() => AppState.currentState === 'active');
-  const [activeTab, setActiveTab] = useState<AppTab>('explore');
-  const [coverageName, setCoverageName] = useState('Loading route coverage');
-  const [locationState, setLocationState] = useState<LocationState>('idle');
-  const [mapError, setMapError] = useState(false);
-  const [mapPreferences, setMapPreferences] = useState(DEFAULT_MAP_PREFERENCES);
-  const [mapStyle, setMapStyle] = useState<string | StyleSpecification>(
-    mapStyleUrl(DEFAULT_MAP_PREFERENCES.stylePreset, colorScheme),
-  );
-  const [isMapPreferencesVisible, setIsMapPreferencesVisible] = useState(false);
-  const [isMoreCategoriesVisible, setIsMoreCategoriesVisible] = useState(false);
-  const [isRoadReportSaving, setIsRoadReportSaving] = useState(false);
-  const [isRoadReportVisible, setIsRoadReportVisible] = useState(false);
-  const [isRouteStopsVisible, setIsRouteStopsVisible] = useState(false);
-  const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
-  const [googlePlaceRatingAvailable] = useState(() => isGooglePlaceRatingAvailable());
-  const [selectedPlaceSaved, setSelectedPlaceSaved] = useState(false);
-  const [query, setQuery] = useState('');
-  const deferredQuery = useDeferredValue(query);
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [searchSource, setSearchSource] = useState<SearchSource>();
-  const [searchState, setSearchState] = useState<SearchState>('idle');
-  // The typed search the visible results answer; loading is announced only for a different query.
-  const [settledSearch, setSettledSearch] = useState<SettledPlaceSearch>();
-  const [selectedResult, setSelectedResult] = useState<SearchResult>();
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>();
-  const [shortcutBeingSet, setShortcutBeingSet] = useState<'home' | 'work'>();
-  const [destinationCatalog, setDestinationCatalog] = useState<NativeDestinationCatalog>(() =>
-    getDestinationCatalog(),
-  );
-  const [routeState, setRouteState] = useState<RouteUiState>({ type: 'idle' });
-  const [routePreferences, setRoutePreferences] = useState<RoutePreferences>(() =>
-    getNavigationRoutePreferences(),
-  );
-  const [navigationAudioMode, setNavigationAudioModeState] = useState<NavigationAudioMode>(() =>
-    getNavigationAudioMode(),
-  );
-  const [routeSource, setRouteSource] = useState<RouteResponse['source']>();
-  const [cameraAnnouncementCount, setCameraAnnouncementCount] = useState(0);
-  const [carPlayConnected, setCarPlayConnected] = useState(false);
-  const [safetyCameraAlert, setSafetyCameraAlert] = useState<{
-    camera: Pick<SafetyCamera, 'location'>;
-    distanceAheadMeters: number;
-  }>();
-  const [safetyCameras, setSafetyCameras] = useState<readonly SafetyCamera[]>([]);
-  const [roadEventResponse, setRoadEventResponse] = useState<RoadEventResponse>();
-  const [officialRoadEventResponse, setOfficialRoadEventResponse] =
-    useState<OfficialRoadEventResponse>();
-  const [roadEventRefreshDelayed, setRoadEventRefreshDelayed] = useState(false);
-  const [torontoSafetyCameras, setTorontoSafetyCameras] = useState<readonly OfficialSafetyCamera[]>(
-    [],
-  );
-  const [kelownaTrafficCameras, setKelownaTrafficCameras] = useState<readonly TrafficCamera[]>([]);
-  const [kelownaSafetyFacilities, setKelownaSafetyFacilities] = useState<readonly SafetyFacility[]>(
-    [],
-  );
-  const [navigationSnapshot, setNavigationSnapshot] = useState<NativeNavigationSnapshot>();
-  const [navigationRouteStatus, setNavigationRouteStatus] =
-    useState<NavigationRouteStatus>('tracking');
-  const [rerouteCount, setRerouteCount] = useState(0);
-  const [navigationStepIndex, setNavigationStepIndex] = useState(0);
-  const [isNavigationCameraFollowing, setIsNavigationCameraFollowing] = useState(true);
-  const [isIdleCameraFollowing, setIsIdleCameraFollowing] = useState(true);
-  const [userHeading, setUserHeading] = useState(0);
-  // Compass facing, distinct from userHeading: course over ground is direction of travel and is
-  // gated on movement, so it is unavailable exactly when a parked driver wants to see which way
-  // the car points.
-  const [deviceFacingHeading, setDeviceFacingHeading] = useState<number | undefined>(undefined);
-  const [mapBearing, setMapBearing] = useState(0);
-  // Quantised: onRegionIsChanging fires per frame, and the cone only needs to resize perceptibly.
-  const [mapZoomStep, setMapZoomStep] = useState<number | undefined>(undefined);
-  const [vehicleStyle, setVehicleStyle] = useState<VehicleStyle>('arrow');
-  const [userCoordinate, setUserCoordinate] = useState<{
-    latitude: number;
-    longitude: number;
-  }>();
-  const facingConeCoordinate = navigationSnapshot?.matchedCoordinate ?? userCoordinate;
-  // Compass first: it answers "which way am I pointing" even stopped. Course over ground is the
-  // fallback for devices without a usable magnetometer, where it is the only bearing available.
-  const facingConeHeading =
-    deviceFacingHeading ?? (routeState.type === 'navigating' ? userHeading : undefined);
-  // The magnetometer ticks far faster than the map needs, and each tick rebuilds a 14-point ring.
-  const facingConeFeature = useMemo(
-    () => headingConeFeature(facingConeCoordinate, facingConeHeading, mapZoomStep),
-    [facingConeCoordinate, facingConeHeading, mapZoomStep],
-  );
-  const guidanceStep =
-    routeState.type === 'navigating'
-      ? getUpcomingGuidanceStep(routeState.route, navigationStepIndex)
-      : undefined;
-  const remainingRoute =
-    routeState.type === 'navigating'
-      ? getRemainingRouteSummary(
-          routeState.route,
-          navigationStepIndex,
-          navigationSnapshot?.matchedCoordinate ?? userCoordinate,
-        )
-      : undefined;
-  const remainingStep =
-    routeState.type === 'navigating'
-      ? getRemainingStepSummary(
-          routeState.route,
-          navigationStepIndex,
-          navigationSnapshot?.matchedCoordinate ?? userCoordinate,
-        )
-      : undefined;
-  // The resolved maneuver decides both the companion and whether the phone keeps its map. The
-  // companion mirrors the car screen, so it prefers the native guidance CarPlay itself renders.
-  const nativeGuidance =
-    navigationSnapshot?.guidance?.phase === 'navigating' &&
-    navigationSnapshot.guidance.stepIndex === navigationStepIndex
-      ? navigationSnapshot.guidance
-      : undefined;
-  const carPlayGuidance =
-    routeState.type === 'navigating' &&
-    carPlayConnected &&
-    guidanceStep !== undefined &&
-    remainingRoute !== undefined &&
-    remainingStep !== undefined
-      ? {
-          destination: routeState.destination,
-          maneuvers: getUpcomingManeuvers(
-            routeState.route,
-            navigationStepIndex,
-            nativeGuidance?.distanceToManeuverMeters ?? remainingStep.distanceMeters,
-          ),
-          remainingDistanceMeters:
-            nativeGuidance?.remainingDistanceMeters ?? remainingRoute.distanceMeters,
-          remainingDurationSeconds:
-            nativeGuidance?.remainingDurationSeconds ?? remainingRoute.durationSeconds,
-        }
-      : undefined;
-  const surface = phoneSurface({
-    carPlayConnected,
-    guidanceResolved: carPlayGuidance !== undefined,
-    routeStatus: routeState.type,
-  });
-  const mapRegion = mapRegionForCoordinate(userCoordinate);
-  const roadEventRegion: RoadEventRegion | undefined =
-    mapRegion === 'calgary-ab'
-      ? 'calgary'
-      : mapRegion === 'ontario' || mapRegion === 'kelowna-bc'
-        ? mapRegion
-        : undefined;
-  const roadEventSnapshot =
-    roadEventRegion === 'calgary'
-      ? roadEventResponse
-      : roadEventRegion !== undefined && officialRoadEventResponse?.regionId === roadEventRegion
-        ? officialRoadEventResponse
-        : undefined;
-  const roadEvents: readonly MapRoadEvent[] = roadEventSnapshot?.events ?? [];
-  const searchCoverageBounds = searchCoverageBoundsForRegion(mapRegion);
-  const searchOrigin =
-    searchCoverageBounds === undefined
-      ? undefined
-      : searchOriginWithinBounds(userCoordinate, searchCoverageBounds);
-  const searchEnabled = true;
-  const nearbySearchEnabled = searchOrigin !== undefined;
-  const searchOriginKey = searchProximityKey(searchOrigin);
-  const displayedSearch = searchState === 'success' ? settledSearch : undefined;
-  const recentDestinationIds = useMemo(
-    () => destinationCatalog.recents.map((destination) => destination.id),
-    [destinationCatalog.recents],
-  );
-  const phoneMapVisible =
-    isAppActive && surface === 'map' && (routeState.type !== 'idle' || activeTab === 'explore');
-  const hasTransientDestination =
-    selectedResult !== undefined || query.trim().length > 0 || searchState !== 'idle';
-  // CarPlay owns location only while it owns the handset surface; its connected planning map needs
-  // the foreground watch for a live puck and idle camera follow.
-  const shouldRunPhoneIdleLocationWatch = shouldWatchPhoneIdleLocation({
-    appIsActive: isAppActive,
-    carPlayConnected: carPlayConnected && surface !== 'map',
-    locationIsVisible: locationState === 'visible',
-    mapTabIsVisible: activeTab === 'explore',
-    routeIsIdle: routeState.type === 'idle',
-  });
-  const idleCameraShouldFollow = shouldFollowIdleCamera({
-    appIsActive: isAppActive,
-    hasTransientDestination,
-    hasUserCoordinate: userCoordinate !== undefined,
-    intent: isIdleCameraFollowing,
-    phoneMapVisible,
-    routeIsIdle: routeState.type === 'idle',
-  });
-  const idleCameraCenter = useMemo(
-    () => idleCameraCenterForFollow(userCoordinate, idleCameraShouldFollow),
-    [idleCameraShouldFollow, userCoordinate],
-  );
-
-  const invalidatePlaceInteraction = (): number => {
-    const interactionGeneration = placeInteractionRef.current.advance();
-    placeAbortControllerRef.current?.abort();
-    placeAbortControllerRef.current = null;
-    setPlaceDetailsLoading(false);
-    return interactionGeneration;
-  };
-
-  const refreshDestinationCatalog = () => {
-    setDestinationCatalog(getDestinationCatalog());
-  };
-
-  const invalidateSearchRequest = (): number => {
-    const requestGeneration = searchRequestGateRef.current.advance();
-    searchAbortControllerRef.current?.abort();
-    searchAbortControllerRef.current = null;
-    return requestGeneration;
-  };
-
-  const runPlaceSearch = (
-    normalizedQuery: string,
-    fitResults: boolean,
-    nearestFirst = false,
-    category?: ExploreCategory,
-    proximityOrigin: Coordinate | undefined = searchOrigin,
-    announceLoading = true,
-  ): AbortController => {
-    const requestGeneration = invalidateSearchRequest();
-    const controller = new AbortController();
-    searchAbortControllerRef.current = controller;
-    if (announceLoading) setSearchState('loading');
-    const proximityOptions = searchProximityOptions(proximityOrigin);
-
-    const categoryQueries = [normalizedQuery];
-    void Promise.all(
-      categoryQueries.map((query) =>
-        searchPlaces(query, {
-          ...proximityOptions,
-          includeDetails: true,
-          ...(category?.searchCategory === undefined ? {} : { category: category.searchCategory }),
-          signal: controller.signal,
-        }),
-      ),
-    )
-      .then((responses) => {
-        if (
-          controller.signal.aborted ||
-          !searchRequestGateRef.current.isCurrent(requestGeneration)
-        ) {
-          return;
-        }
-        const firstResponse = responses[0];
-        if (firstResponse === undefined) return;
-        const seenResultIds = new Set<string>();
-        const mergedResults = responses
-          .flatMap((response) => response.results)
-          .filter((result) => {
-            if (seenResultIds.has(result.id)) return false;
-            seenResultIds.add(result.id);
-            return true;
-          });
-        const rankedResults = nearestFirst
-          ? rankCategoryResults(mergedResults, proximityOrigin)
-          : rankSearchResults(mergedResults, getRecentDestinationIds(), proximityOrigin);
-        startTransition(() => {
-          setApiConnection('online');
-          setResults(rankedResults);
-          setSearchSource(firstResponse.source);
-          setSettledSearch(
-            category === undefined
-              ? { proximityKey: searchProximityKey(proximityOrigin), query: normalizedQuery }
-              : undefined,
-          );
-          setSearchState('success');
-        });
-        if (fitResults) {
-          const bounds = searchResultBounds(rankedResults);
-          if (bounds !== undefined) {
-            requestAnimationFrame(() => {
-              cameraRef.current?.fitBounds(bounds, {
-                duration: 700,
-                padding: {
-                  bottom: APP_TAB_BAR_HEIGHT + insets.bottom + 34,
-                  left: 54,
-                  right: 54,
-                  top: 282,
-                },
-              });
-            });
-          }
-        }
-      })
-      .catch(() => {
-        if (
-          !controller.signal.aborted &&
-          searchRequestGateRef.current.isCurrent(requestGeneration)
-        ) {
-          startTransition(() => {
-            setApiConnection('offline');
-            setResults([]);
-            setSearchState('error');
-          });
-        }
-      })
-      .finally(() => {
-        if (searchAbortControllerRef.current === controller) {
-          searchAbortControllerRef.current = null;
-        }
-      });
-    return controller;
-  };
-
-  useEffect(() => {
-    if (isCarPlayVisualHarness()) return;
-    let active = true;
-    void loadMapPreferences().then((preferences) => {
-      if (active) {
-        setMapPreferences(preferences);
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    void loadRoadReportDrafts()
-      .then((reports) => saveRoadReportDrafts(reports))
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    if (
-      userCoordinate === undefined ||
-      !isCoordinateInCoverage(userCoordinate, TORONTO_CAMERA_BOUNDS)
-    ) {
-      setTorontoSafetyCameras([]);
-      return;
-    }
-
-    const controller = new AbortController();
-
-    void fetchOfficialSafetyCameras({ region: 'toronto-on', signal: controller.signal })
-      .then((response) => {
-        startTransition(() => {
-          setTorontoSafetyCameras(response.cameras);
-        });
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setTorontoSafetyCameras([]);
-      });
-
-    return () => {
-      controller.abort();
-    };
-  }, [userCoordinate]);
-
-  useEffect(() => {
-    if (mapRegion !== 'kelowna-bc') {
-      setKelownaTrafficCameras([]);
-      setKelownaSafetyFacilities([]);
-      return;
-    }
-
-    const controller = new AbortController();
-    void Promise.all([
-      fetchTrafficCameras({ region: 'kelowna-bc', signal: controller.signal }),
-      fetchSafetyFacilities({ region: 'kelowna-bc', signal: controller.signal }),
-    ])
-      .then(([cameraResponse, facilityResponse]) => {
-        startTransition(() => {
-          setKelownaTrafficCameras(cameraResponse.cameras);
-          setKelownaSafetyFacilities(facilityResponse.facilities);
-        });
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) {
-          setKelownaTrafficCameras([]);
-          setKelownaSafetyFacilities([]);
-        }
-      });
-
-    return () => {
-      controller.abort();
-    };
-  }, [mapRegion]);
-
-  useEffect(() => {
-    let active = true;
-    const fallbackStyle = mapStyleUrl(mapPreferences.stylePreset, colorScheme);
-    void loadCustomizedMapStyle(mapPreferences, colorScheme)
-      .then((style) => {
-        if (active) {
-          setMapStyle(style);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setMapStyle(fallbackStyle);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [colorScheme, mapPreferences]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    void fetchAppConfig(controller.signal)
-      .then((config) => {
-        startTransition(() => {
-          setApiConnection('online');
-          setCoverageName(config.coverage.displayName);
-        });
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) {
-          startTransition(() => {
-            setApiConnection('offline');
-          });
-        }
-      });
-
-    return () => {
-      controller.abort();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!mapPreferences.showRoadEvents || roadEventRegion === undefined) {
-      setRoadEventRefreshDelayed(false);
-      return;
-    }
-
-    setRoadEventRefreshDelayed(false);
-    let controller: AbortController | undefined;
-    const refresh = () => {
-      controller?.abort();
-      const requestController = new AbortController();
-      controller = requestController;
-      const request =
-        roadEventRegion !== 'calgary'
-          ? fetchOfficialRoadEvents({
-              region: roadEventRegion,
-              signal: requestController.signal,
-            }).then((response) => {
-              startTransition(() => {
-                setOfficialRoadEventResponse(response);
-              });
-            })
-          : fetchRoadEvents({ signal: requestController.signal }).then((response) => {
-              startTransition(() => {
-                setRoadEventResponse(response);
-              });
-            });
-      void request
-        .then(() => {
-          setRoadEventRefreshDelayed(false);
-        })
-        .catch(() => {
-          if (!requestController.signal.aborted) {
-            setRoadEventRefreshDelayed(true);
-          }
-        });
-    };
-
-    refresh();
-    const interval = setInterval(refresh, ROAD_EVENT_REFRESH_INTERVAL_MS);
-    return () => {
-      clearInterval(interval);
-      controller?.abort();
-    };
-  }, [mapPreferences.showRoadEvents, roadEventRegion]);
-
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      setIsAppActive(nextAppState === 'active');
-    });
-    return () => {
-      subscription.remove();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!phoneMapVisible) return;
-    let active = true;
-    setLocationState('locating');
-    void ensureForegroundLocationPermission(
-      Location.getForegroundPermissionsAsync,
-      Location.requestForegroundPermissionsAsync,
-    )
-      .then(async (granted) => {
-        if (!active) return;
-        if (!granted) {
-          setLocationState('denied');
-          return;
-        }
-        const lastKnown = await Location.getLastKnownPositionAsync({
-          maxAge: 60_000,
-          requiredAccuracy: 500,
-        });
-        if (!active) return;
-        const location =
-          lastKnown ??
-          (await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          }));
-        if (!active) return;
-        const sample = routeOriginSampleFromLocation(location);
-        routeOriginSampleRef.current = sample;
-        setUserCoordinate(sample.coordinate);
-        if (sample.headingDegrees !== undefined) setUserHeading(sample.headingDegrees);
-        setLocationState('visible');
-      })
-      .catch(() => {
-        if (active) setLocationState('error');
-      });
-    return () => {
-      active = false;
-    };
-  }, [phoneMapVisible]);
-
-  useEffect(() => {
-    if (locationState !== 'visible' || !phoneMapVisible) return;
-    let active = true;
-    let subscription: Location.LocationSubscription | undefined;
-    void Location.watchHeadingAsync((heading) => {
-      if (!active) return;
-      // trueHeading is -1 until the magnetometer has a bearing to true north; magHeading still
-      // points the right way, so prefer true and fall back rather than showing nothing.
-      const facing = heading.trueHeading >= 0 ? heading.trueHeading : heading.magHeading;
-      setDeviceFacingHeading(Number.isFinite(facing) && facing >= 0 ? facing : undefined);
-    })
-      .then((nextSubscription) => {
-        if (active) subscription = nextSubscription;
-        else nextSubscription.remove();
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-      subscription?.remove();
-    };
-  }, [locationState, phoneMapVisible]);
-
-  useEffect(() => {
-    if (!shouldRunPhoneIdleLocationWatch) return;
-    let active = true;
-    let subscription: Location.LocationSubscription | undefined;
-    void Location.watchPositionAsync(
-      phoneIdleLocationWatchOptions(Location.Accuracy.High),
-      (position) => {
-        if (!active) return;
-        const sample = routeOriginSampleFromLocation(position);
-        routeOriginSampleRef.current = sample;
-        setUserCoordinate(sample.coordinate);
-        if (sample.headingDegrees !== undefined) setUserHeading(sample.headingDegrees);
-      },
-    )
-      .then((nextSubscription) => {
-        if (active) subscription = nextSubscription;
-        else nextSubscription.remove();
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-      subscription?.remove();
-    };
-  }, [shouldRunPhoneIdleLocationWatch]);
-
-  useEffect(() => {
-    if (mapRegion !== 'calgary-ab') {
-      safetyCamerasRef.current = [];
-      setSafetyCameras([]);
-      return;
-    }
-
-    const controller = new AbortController();
-
-    void fetchSafetyCameras({ signal: controller.signal })
-      .then((response) => {
-        safetyCamerasRef.current = response.cameras;
-        startTransition(() => {
-          setSafetyCameras(response.cameras);
-        });
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) {
-          safetyCamerasRef.current = [];
-          setSafetyCameras([]);
-        }
-      });
-
-    return () => {
-      controller.abort();
-    };
-  }, [mapRegion]);
-
-  useEffect(() => {
-    displayedSearchRef.current = displayedSearch;
-  }, [displayedSearch]);
-
-  useEffect(() => {
-    const normalizedQuery = deferredQuery.trim();
-
-    if (
-      !searchEnabled ||
-      categorySearchActiveRef.current ||
-      normalizedQuery.length < 2 ||
-      normalizedQuery.toLocaleLowerCase('en-CA') === selectedResult?.name.toLocaleLowerCase('en-CA')
-    ) {
-      return;
-    }
-
-    // Location fixes keep arriving while results are open. Only a new proximity cell may requery,
-    // and a requery of the query already on screen must not re-announce loading over its results.
-    // The loading flag is read through a ref so announcing loading cannot re-run and abort this
-    // search. The committed settled identity is a dependency instead: a refresh that lands after
-    // the location moved back must be replanned against the current cell, not stranded.
-    const plan = planPlaceSearch(normalizedQuery, searchOriginKey, displayedSearchRef.current);
-    if (plan === 'skip') return;
-
-    let searchController: AbortController | undefined;
-    const timeout = setTimeout(() => {
-      searchController = runPlaceSearch(
-        normalizedQuery,
-        false,
-        false,
-        undefined,
-        searchOrigin,
-        plan === 'search',
-      );
-    }, 250);
-
-    return () => {
-      clearTimeout(timeout);
-      searchController?.abort();
-    };
-  }, [
-    deferredQuery,
-    searchEnabled,
-    searchOriginKey,
-    selectedResult?.name,
-    settledSearch?.proximityKey,
-    settledSearch?.query,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      if (cameraAlertTimeoutRef.current !== undefined) {
-        clearTimeout(cameraAlertTimeoutRef.current);
-      }
-      stopNavigationAnnouncements();
-      routeAbortControllerRef.current?.abort();
-      invalidateSearchRequest();
-      placeInteractionRef.current.advance();
-      placeAbortControllerRef.current?.abort();
-    };
-  }, []);
-
-  useEffect(() => {
-    const applyNativeSnapshot = (snapshot: NativeNavigationSnapshot) => {
-      if (snapshot.stateVersion < nativeStateVersionRef.current) {
-        return;
-      }
-      nativeStateVersionRef.current = snapshot.stateVersion;
-      setNavigationSnapshot(snapshot);
-      setNavigationRouteStatus(snapshot.routeStatus);
-      setRerouteCount(snapshot.rerouteCount);
-      if (snapshot.rawCoordinate !== undefined) {
-        setUserCoordinate(snapshot.rawCoordinate);
-      }
-      if (snapshot.matchedCourseDegrees !== undefined) {
-        setUserHeading(snapshot.matchedCourseDegrees);
-      }
-      setNavigationStepIndex(snapshot.guidance?.stepIndex ?? 0);
-      if (snapshot.trip === undefined) {
-        setIsIdleCameraFollowing(true);
-        setRouteState((current) =>
-          current.type === 'navigating' || current.type === 'arrived' ? { type: 'idle' } : current,
-        );
-        return;
-      }
-      const route: RouteAlternative = {
-        distanceMeters: snapshot.trip.distanceMeters,
-        durationSeconds: snapshot.trip.durationSeconds,
-        geometry: snapshot.trip.geometry.map(({ latitude, longitude }) => [longitude, latitude]),
-        id: snapshot.trip.id,
-        label: 'fastest',
-        ...(snapshot.trip.speedLimitsKph === undefined
-          ? {}
-          : { speedLimitsKph: snapshot.trip.speedLimitsKph }),
-        steps: snapshot.trip.steps.map((step) => ({
-          distanceMeters: step.distanceMeters,
-          durationSeconds: step.durationSeconds,
-          geometry: step.geometry.map(({ latitude, longitude }) => [longitude, latitude]),
-          instruction: step.instruction,
-          maneuverType: step.maneuverType,
-          roadName: step.roadName,
-          ...(step.spokenInstruction === undefined
-            ? {}
-            : { spokenInstruction: step.spokenInstruction }),
-        })),
-        ...(snapshot.trip.traffic === undefined ? {} : { traffic: snapshot.trip.traffic }),
-      };
-      const destination: SearchResult = {
-        category: 'landmark',
-        center: {
-          latitude: snapshot.trip.destination.latitude,
-          longitude: snapshot.trip.destination.longitude,
-        },
-        confidence: 1,
-        id: snapshot.trip.destination.id,
-        label: snapshot.trip.destination.label,
-        name: snapshot.trip.destination.name,
-      };
-      const waypoints = (snapshot.trip.waypoints ?? []).map(nativeDestinationToSearchResult);
-      if (snapshot.trip.source === 'mapbox-traffic') {
-        setRouteSource({
-          attribution: 'Routing and traffic by Mapbox',
-          id: 'mapbox-traffic',
-          mode: 'production',
-          traffic: 'live',
-        });
-      } else if (snapshot.trip.source === 'valhalla-self-hosted') {
-        setRouteSource({
-          attribution: 'Routing by Valhalla using OpenStreetMap data',
-          id: 'valhalla-self-hosted',
-          mode: 'production',
-          traffic: 'unavailable',
-        });
-      } else if (snapshot.trip.source === 'valhalla-development') {
-        setRouteSource({
-          attribution: 'Routing by Valhalla using OpenStreetMap data',
-          id: 'valhalla-development',
-          mode: 'development',
-          traffic: 'unavailable',
-        });
-      } else {
-        setRouteSource(undefined);
-      }
-      setRouteState((current) => {
-        if (
-          current.type === 'navigating' &&
-          current.route.id === route.id &&
-          snapshot.phase !== 'arrived'
-        ) {
-          return current;
-        }
-        return snapshot.phase === 'arrived'
-          ? { destination, route, routes: [route], type: 'arrived', waypoints }
-          : { destination, route, routes: [route], type: 'navigating', waypoints };
-      });
-    };
-    const subscription = observeNavigationSnapshots(applyNativeSnapshot);
-    applyNativeSnapshot(getNavigationSnapshot());
-    return () => {
-      subscription.remove();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (routeState.type !== 'navigating') {
-      return;
-    }
-
-    const route = routeState.route;
-    const handleSnapshot = (snapshot: NativeNavigationSnapshot) => {
-      if (snapshot.phase === 'arrived') {
-        if (cameraAlertTimeoutRef.current !== undefined) {
-          clearTimeout(cameraAlertTimeoutRef.current);
-        }
-        setSafetyCameraAlert(undefined);
-        setNavigationStepIndex(Math.max(0, route.steps.length - 1));
-        setRouteState({
-          destination: routeState.destination,
-          route,
-          routes: routeState.routes,
-          type: 'arrived',
-          waypoints: routeState.waypoints,
-        });
-        return;
-      }
-
-      // Native navigation decides camera eligibility and speaks the alert (so it also works with
-      // the phone locked or only CarPlay on screen); the phone only presents it. Each alert has a
-      // unique `sequence`, recorded here so a repeated snapshot does not re-show the banner.
-      const nativeAlert = snapshot.safetyCameraAlert;
-      const alertKey =
-        nativeAlert === undefined ? undefined : `alert:${String(nativeAlert.sequence)}`;
-      // The payload carries everything the banner shows, so it renders even when the phone's
-      // own camera fetch failed (e.g. the screen was unlocked offline).
-      if (
-        nativeAlert !== undefined &&
-        alertKey !== undefined &&
-        !announcedCameraIdsRef.current.has(alertKey)
-      ) {
-        announcedCameraIdsRef.current.add(alertKey);
-        setCameraAnnouncementCount((currentCount) => currentCount + 1);
-        setSafetyCameraAlert({
-          camera: { location: nativeAlert.location },
-          distanceAheadMeters: nativeAlert.distanceAheadMeters,
-        });
-        if (cameraAlertTimeoutRef.current !== undefined) {
-          clearTimeout(cameraAlertTimeoutRef.current);
-        }
-        cameraAlertTimeoutRef.current = setTimeout(() => {
-          setSafetyCameraAlert(undefined);
-          cameraAlertTimeoutRef.current = undefined;
-        }, 6_000);
-      }
-    };
-    if (navigationSnapshot !== undefined) {
-      handleSnapshot(navigationSnapshot);
-    }
-  }, [navigationSnapshot, routeState]);
-
-  const fitRoute = (route: RouteAlternative) => {
-    cameraRef.current?.fitBounds(routeBounds(route), {
-      duration: 750,
-      padding: { bottom: 280 + insets.bottom, left: 34, right: 34, top: 170 },
-    });
-  };
-
-  const getCurrentRouteOrigin = async (
-    signal: AbortSignal,
-  ): Promise<RouteRequestOrigin | undefined> => {
-    if (signal.aborted) return undefined;
-    const cachedOrigin = routeRequestOriginFromSample(routeOriginSampleRef.current);
-    if (cachedOrigin !== undefined) return cachedOrigin;
-
-    setLocationState('locating');
-    const granted = await ensureForegroundLocationPermission(
-      Location.getForegroundPermissionsAsync,
-      Location.requestForegroundPermissionsAsync,
-    );
-    if (signal.aborted) return undefined;
-    if (!granted) {
-      setLocationState('denied');
-      throw new NavOssApiError(
-        'Allow NavOSS to use your location in iPhone Settings to calculate a route.',
-        0,
-      );
-    }
-
-    const lastKnown = await Location.getLastKnownPositionAsync({
-      maxAge: 15_000,
-      requiredAccuracy: 100,
-    });
-    const location =
-      lastKnown ??
-      (await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      }));
-    if (signal.aborted) return undefined;
-    const sample = routeOriginSampleFromLocation(location);
-    const selectedSample = newestValidRouteOriginSample(sample, routeOriginSampleRef.current);
-    const routeOrigin = routeRequestOriginFromSample(selectedSample);
-    if (selectedSample === undefined || routeOrigin === undefined) {
-      throw new NavOssApiError(
-        'A fresh, accurate location fix is needed. Wait for GPS to update, then try again.',
-        0,
-      );
-    }
-    if (signal.aborted) return undefined;
-    routeOriginSampleRef.current = selectedSample;
-    setUserCoordinate(selectedSample.coordinate);
-    if (selectedSample.headingDegrees !== undefined) setUserHeading(selectedSample.headingDegrees);
-    setLocationState('visible');
-    return routeOrigin;
-  };
-
-  const calculateRoute = async (
-    destination: SearchResult,
-    preferences: RoutePreferences = routePreferences,
-    previewOrigin?: Coordinate,
-    waypoints: SearchResult[] = [],
-  ) => {
-    routeAbortControllerRef.current?.abort();
-    const controller = new AbortController();
-    routeAbortControllerRef.current = controller;
-    setIsIdleCameraFollowing(false);
-    setRouteState({
-      destination,
-      ...(previewOrigin === undefined ? {} : { previewOrigin }),
-      type: 'loading',
-      waypoints,
-    });
-
-    try {
-      const routeOrigin =
-        previewOrigin === undefined
-          ? await getCurrentRouteOrigin(controller.signal)
-          : { origin: previewOrigin };
-      if (routeOrigin === undefined || controller.signal.aborted) return;
-      const origin = routeOrigin.origin;
-      if (
-        previewOrigin === undefined &&
-        [origin, ...waypoints.map((waypoint) => waypoint.center), destination.center].some(
-          (coordinate) => {
-            const region = mapRegionForCoordinate(coordinate);
-            return !isSearchCoverageRegion(region);
-          },
-        )
-      ) {
-        setRouteState({
-          destination,
-          message: 'This route includes a location outside current driving coverage.',
-          ...(previewOrigin === undefined ? {} : { previewOrigin }),
-          type: 'error',
-          waypoints,
-        });
-        return;
-      }
-
-      const response = await fetchRoutes(
-        {
-          alternatives: 2,
-          destination: destination.center,
-          ...routeOrigin,
-          preferences,
-          ...(waypoints.length === 0
-            ? {}
-            : { waypoints: waypoints.map((waypoint) => waypoint.center) }),
-        },
-        { signal: controller.signal },
-      );
-      const fastestRoute = response.routes[0];
-      if (controller.signal.aborted) {
-        return;
-      }
-      if (fastestRoute === undefined) {
-        setRouteState({
-          destination,
-          message: 'No driving route was found.',
-          ...(previewOrigin === undefined ? {} : { previewOrigin }),
-          type: 'error',
-          waypoints,
-        });
-        return;
-      }
-
-      setApiConnection('online');
-      setRouteSource(response.source);
-      setRouteState({
-        destination,
-        ...(previewOrigin === undefined ? {} : { previewOrigin }),
-        routes: response.routes,
-        selectedRouteId: fastestRoute.id,
-        type: 'preview',
-        waypoints,
-      });
-      requestAnimationFrame(() => {
-        fitRoute(fastestRoute);
-      });
-    } catch (error: unknown) {
-      if (controller.signal.aborted) {
-        return;
-      }
-
-      setRouteState({
-        destination,
-        message:
-          error instanceof NavOssApiError
-            ? error.message
-            : 'A route could not be calculated. Check the connection and try again.',
-        ...(previewOrigin === undefined ? {} : { previewOrigin }),
-        type: 'error',
-        waypoints,
-      });
-    }
-  };
-
-  const handleChangeQuery = (value: string) => {
-    if (!searchEnabled) return;
-    categorySearchActiveRef.current = false;
-    invalidatePlaceInteraction();
-    setSelectedCategoryId(undefined);
-    setQuery(value);
-    setSelectedResult(undefined);
-    if (value.trim().length > 0) {
-      setIsIdleCameraFollowing(false);
-    }
-
-    if (value.trim().length < 2) {
-      setResults([]);
-      setSearchState('idle');
-    }
-  };
-
-  const handleClear = () => {
-    announcedCameraIdsRef.current.clear();
-    if (cameraAlertTimeoutRef.current !== undefined) {
-      clearTimeout(cameraAlertTimeoutRef.current);
-      cameraAlertTimeoutRef.current = undefined;
-    }
-    setSafetyCameraAlert(undefined);
-    setCameraAnnouncementCount(0);
-    stopNavigationAnnouncements();
-    categorySearchActiveRef.current = false;
-    invalidateSearchRequest();
-    invalidatePlaceInteraction();
-    routeAbortControllerRef.current?.abort();
-    setIsNavigationCameraFollowing(true);
-    setIsIdleCameraFollowing(true);
-    setQuery('');
-    setResults([]);
-    setSearchState('idle');
-    setSelectedCategoryId(undefined);
-    setShortcutBeingSet(undefined);
-    setSelectedResult(undefined);
-    setRouteState({ type: 'idle' });
-  };
-
-  const handleSelectResult = (result: SearchResult) => {
-    Keyboard.dismiss();
-    categorySearchActiveRef.current = false;
-    invalidateSearchRequest();
-    const interactionId = invalidatePlaceInteraction();
-    routeAbortControllerRef.current?.abort();
-    setIsIdleCameraFollowing(false);
-    setRouteState({ type: 'idle' });
-    setQuery(result.name);
-    setResults([]);
-    setSearchState('idle');
-    setSelectedCategoryId(undefined);
-    setSelectedResult(result);
-    if (shortcutBeingSet === 'home') {
-      setHomeDestination(result);
-      refreshDestinationCatalog();
-      setShortcutBeingSet(undefined);
-    } else if (shortcutBeingSet === 'work') {
-      setWorkDestination(result);
-      refreshDestinationCatalog();
-      setShortcutBeingSet(undefined);
-    }
-    setSelectedPlaceSaved(isFavoriteDestination(result.id));
-    setPlaceDetailsLoading(true);
-    cameraRef.current?.flyTo({
-      center: [result.center.longitude, result.center.latitude],
-      duration: 650,
-      zoom: 16,
-    });
-
-    const controller = new AbortController();
-    placeAbortControllerRef.current = controller;
-    void searchPlaces(result.name, {
-      includeDetails: true,
-      latitude: result.center.latitude,
-      limit: 20,
-      longitude: result.center.longitude,
-      signal: controller.signal,
-    })
-      .then((response) => {
-        if (!controller.signal.aborted && placeInteractionRef.current.isCurrent(interactionId)) {
-          setSelectedResult((current) =>
-            current?.id === result.id ? enrichMapPlace(result, response.results) : current,
-          );
-        }
-      })
-      .catch(() => {
-        // The selected result remains usable when optional metadata is unavailable.
-      })
-      .finally(() => {
-        if (
-          placeAbortControllerRef.current === controller &&
-          placeInteractionRef.current.isCurrent(interactionId)
-        ) {
-          placeAbortControllerRef.current = null;
-          setPlaceDetailsLoading(false);
-        }
-      });
-  };
-
-  const handleCategoryPress = (category: ExploreCategory) => {
-    if (!nearbySearchEnabled) {
-      Alert.alert(
-        'Nearby search is unavailable here',
-        'Nearby place categories are not available at your current location yet.',
-        [{ text: 'Close' }],
-      );
-      return;
-    }
-    Keyboard.dismiss();
-    categorySearchActiveRef.current = true;
-    invalidatePlaceInteraction();
-    routeAbortControllerRef.current?.abort();
-    setIsIdleCameraFollowing(false);
-    setActiveTab('explore');
-    setIsMoreCategoriesVisible(false);
-    setShortcutBeingSet(undefined);
-    setSelectedCategoryId(category.id);
-    setSelectedResult(undefined);
-    setRouteState({ type: 'idle' });
-    setQuery(category.label);
-    setResults([]);
-    runPlaceSearch(category.query, true, true, category);
-  };
-
-  const beginShortcutSetup = (shortcut: 'home' | 'work') => {
-    categorySearchActiveRef.current = false;
-    invalidateSearchRequest();
-    setActiveTab('explore');
-    setIsMoreCategoriesVisible(false);
-    setSelectedCategoryId(undefined);
-    setSelectedResult(undefined);
-    setIsIdleCameraFollowing(false);
-    setQuery('');
-    setResults([]);
-    setSearchState('idle');
-    setShortcutBeingSet(shortcut);
-  };
-
-  const handleWorkPress = () => {
-    if (destinationCatalog.work === undefined) {
-      beginShortcutSetup('work');
-      return;
-    }
-    setActiveTab('explore');
-    handleSelectResult(nativeDestinationToSearchResult(destinationCatalog.work));
-  };
-
-  const handleSubmit = () => {
-    Keyboard.dismiss();
-    const bounds = searchResultBounds(results);
-    if (bounds === undefined) return;
-
-    invalidatePlaceInteraction();
-    routeAbortControllerRef.current?.abort();
-    setIsIdleCameraFollowing(false);
-    setSelectedResult(undefined);
-    setRouteState({ type: 'idle' });
-    if (results.length === 1) {
-      const result = results[0];
-      if (result !== undefined) {
-        cameraRef.current?.flyTo({
-          center: [result.center.longitude, result.center.latitude],
-          duration: 650,
-          zoom: 15,
-        });
-      }
-      return;
-    }
-    cameraRef.current?.fitBounds(bounds, {
-      duration: 700,
-      padding: { bottom: 120 + insets.bottom, left: 54, right: 54, top: 260 },
-    });
-  };
-
-  const handleMapLongPress = (coordinate: Coordinate) => {
-    if (routeState.type === 'navigating' || routeState.type === 'arrived') {
-      return;
-    }
-
-    Keyboard.dismiss();
-    invalidatePlaceInteraction();
-    const destination = droppedPinResult(coordinate);
-    setQuery('');
-    setResults([]);
-    setSearchState('idle');
-    setSelectedResult(destination);
-    void calculateRoute(destination);
-  };
-
-  const handleMapPress = async (point: [number, number], coordinate: Coordinate) => {
-    if (
-      routeState.type !== 'idle' ||
-      (!mapPreferences.showPlaces &&
-        !mapPreferences.showRoadEvents &&
-        !mapPreferences.showSafetyCameras) ||
-      mapRef.current === null
-    ) {
-      return;
-    }
-
-    // Reserved once, before the first native hit-test await, so a newer interaction (another tap,
-    // a search selection, or clearing the sheet) can never be overtaken by this tap resolving late.
-    const interactionId = invalidatePlaceInteraction();
-    const isCurrentInteraction = () => placeInteractionRef.current.isCurrent(interactionId);
-
-    if (mapPreferences.showSafetyCameras) {
-      try {
-        const tapRadius = 18;
-        const features = await mapRef.current.queryRenderedFeatures(
-          [
-            [point[0] - tapRadius, point[1] - tapRadius],
-            [point[0] + tapRadius, point[1] + tapRadius],
-          ],
-          { layers: [...SAFETY_CAMERA_LAYER_IDS] },
-        );
-        if (!isCurrentInteraction()) {
-          return;
-        }
-        const cameraFeature = features[0];
-        const cameraProperties = cameraFeature?.properties;
-        if (cameraProperties !== undefined && cameraProperties !== null) {
-          const location =
-            typeof cameraProperties.location === 'string' ? cameraProperties.location : 'Camera';
-          const enforcement =
-            typeof cameraProperties.enforcement === 'string'
-              ? cameraProperties.enforcement.split(',')
-              : [];
-          const direction =
-            typeof cameraProperties.direction === 'string' ? cameraProperties.direction : undefined;
-          Keyboard.dismiss();
-          Alert.alert(location, cameraDetailAlertMessage(enforcement, direction), [
-            { text: 'Close' },
-          ]);
-          return;
-        }
-      } catch {
-        // Continue to road-event and place hit-testing while the camera layer reloads.
-      }
-    }
-
-    if (mapPreferences.showRoadEvents && roadEventSnapshot !== undefined) {
-      try {
-        const tapRadius = 18;
-        const features = await mapRef.current.queryRenderedFeatures(
-          [
-            [point[0] - tapRadius, point[1] - tapRadius],
-            [point[0] + tapRadius, point[1] + tapRadius],
-          ],
-          { layers: [...ROAD_EVENT_LAYER_IDS] },
-        );
-        if (!isCurrentInteraction()) {
-          return;
-        }
-        const eventId = features
-          .map((feature) => feature.properties?.id)
-          .find((id): id is string => typeof id === 'string');
-        const event = roadEvents.find((candidate) => candidate.id === eventId);
-        if (event !== undefined) {
-          Keyboard.dismiss();
-          Alert.alert(event.title, roadEventAlertMessage(event), [{ text: 'Close' }]);
-          return;
-        }
-      } catch {
-        // Continue to place hit-testing while map event layers reload.
-      }
-    }
-
-    if (!mapPreferences.showPlaces) {
-      return;
-    }
-
-    try {
-      const tapRadius = 18;
-      const features = await mapRef.current.queryRenderedFeatures(
-        [
-          [point[0] - tapRadius, point[1] - tapRadius],
-          [point[0] + tapRadius, point[1] + tapRadius],
-        ],
-        { layers: [...MAP_PLACE_LAYER_IDS] },
-      );
-      if (!isCurrentInteraction()) {
-        return;
-      }
-      const place = mapPlaceFromRenderedFeatures(features, coordinate);
-
-      if (place === undefined) {
-        setPlaceDetailsLoading(false);
-        setSelectedResult(undefined);
-        return;
-      }
-
-      Keyboard.dismiss();
-      setQuery('');
-      setResults([]);
-      setSearchState('idle');
-      setSelectedResult(place);
-      setIsIdleCameraFollowing(false);
-      setSelectedPlaceSaved(isFavoriteDestination(place.id));
-      setPlaceDetailsLoading(true);
-
-      const controller = new AbortController();
-      placeAbortControllerRef.current = controller;
-      try {
-        const response = await searchPlaces(place.name, {
-          includeDetails: true,
-          latitude: place.center.latitude,
-          limit: 20,
-          longitude: place.center.longitude,
-          signal: controller.signal,
-        });
-        if (!controller.signal.aborted && isCurrentInteraction()) {
-          setSelectedResult((current) =>
-            current?.id === place.id ? enrichMapPlace(place, response.results) : current,
-          );
-        }
-      } catch {
-        // The rendered map feature remains usable when optional metadata is unavailable.
-      } finally {
-        if (placeAbortControllerRef.current === controller && isCurrentInteraction()) {
-          placeAbortControllerRef.current = null;
-          setPlaceDetailsLoading(false);
-        }
-      }
-    } catch {
-      if (isCurrentInteraction()) {
-        setPlaceDetailsLoading(false);
-      }
-    }
-  };
-
-  const handleClosePlace = () => {
-    invalidatePlaceInteraction();
-    setSelectedResult(undefined);
-    setSelectedPlaceSaved(false);
-  };
-
-  const handleClearDestinationHistory = () => {
-    clearDestinationHistory();
-    setSelectedPlaceSaved(false);
-    refreshDestinationCatalog();
-  };
-
-  const handlePlaceDirections = () => {
-    if (selectedResult === undefined || routeState.type !== 'idle') {
-      return;
-    }
-
-    const destination = selectedResult;
-    invalidatePlaceInteraction();
-    recordRecentDestination(destination);
-    refreshDestinationCatalog();
-    void calculateRoute(destination);
-  };
-
-  const handleFindParking = () => {
-    if (selectedResult === undefined || routeState.type !== 'idle') {
-      return;
-    }
-
-    const parkingOrigin = selectedResult.center;
-    if (!isSearchCoverageRegion(mapRegionForCoordinate(parkingOrigin))) {
-      Alert.alert(
-        'Parking search is unavailable here',
-        'Nearby parking search is not available for this location yet.',
-        [{ text: 'Close' }],
-      );
-      return;
-    }
-    const parkingCategory = exploreCategoryById('parking');
-    Keyboard.dismiss();
-    categorySearchActiveRef.current = true;
-    invalidatePlaceInteraction();
-    setSelectedPlaceSaved(false);
-    setSelectedResult(undefined);
-    setSelectedCategoryId(parkingCategory?.id);
-    setQuery(parkingCategory?.label ?? 'Parking');
-    setResults([]);
-    runPlaceSearch(parkingCategory?.query ?? 'parking', true, true, parkingCategory, parkingOrigin);
-  };
-
-  const openExternalPlaceUrl = (url: string) => {
-    void Linking.openURL(url).catch(() => {
-      console.warn('The external place link could not be opened.');
-    });
-  };
-
-  const handleLocate = async () => {
-    setIsIdleCameraFollowing(true);
-    setLocationState('locating');
-
-    try {
-      const granted = await ensureForegroundLocationPermission(
-        Location.getForegroundPermissionsAsync,
-        Location.requestForegroundPermissionsAsync,
-      );
-      if (AppState.currentState !== 'active') return;
-      if (!granted) {
-        setLocationState('denied');
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      if (AppState.currentState !== 'active') return;
-      const sample = routeOriginSampleFromLocation(location);
-      routeOriginSampleRef.current = sample;
-      setUserCoordinate(sample.coordinate);
-      if (sample.headingDegrees !== undefined) setUserHeading(sample.headingDegrees);
-      setLocationState('visible');
-      if (hasTransientDestination) {
-        cameraRef.current?.flyTo({
-          center: [sample.coordinate.longitude, sample.coordinate.latitude],
-          duration: 750,
-          zoom: 15,
-        });
-      }
-    } catch {
-      setLocationState('error');
-    }
-  };
-
-  const handleCancelRoute = () => {
-    invalidatePlaceInteraction();
-    announcedCameraIdsRef.current.clear();
-    if (cameraAlertTimeoutRef.current !== undefined) {
-      clearTimeout(cameraAlertTimeoutRef.current);
-      cameraAlertTimeoutRef.current = undefined;
-    }
-    setSafetyCameraAlert(undefined);
-    setCameraAnnouncementCount(0);
-    stopNavigationAnnouncements();
-    routeAbortControllerRef.current?.abort();
-    setIsNavigationCameraFollowing(true);
-    setIsIdleCameraFollowing(true);
-    setRouteState({ type: 'idle' });
-    setSelectedResult(undefined);
-    setQuery('');
-    if (userCoordinate === undefined) {
-      cameraRef.current?.flyTo({
-        center: CANADA_CENTER,
-        duration: 650,
-        zoom: 3.2,
-      });
-    }
-  };
-
-  const handleSelectRoute = (route: RouteAlternative) => {
-    if (routeState.type !== 'preview') {
-      return;
-    }
-
-    setRouteState({ ...routeState, selectedRouteId: route.id });
-    fitRoute(route);
-  };
-
-  const handleToggleRoutePreference = (preference: keyof RoutePreferences) => {
-    if (routeState.type !== 'preview') {
-      return;
-    }
-
-    const preferences = {
-      ...routePreferences,
-      [preference]: !routePreferences[preference],
-    };
-    setRoutePreferences(preferences);
-    setNavigationRoutePreferences(preferences);
-    void calculateRoute(
-      routeState.destination,
-      preferences,
-      routeState.previewOrigin,
-      routeState.waypoints,
-    );
-  };
-
-  const handleApplyRouteStops = (destinations: SearchResult[]) => {
-    const destination = destinations.at(-1);
-    if (routeState.type !== 'preview' || destination === undefined) return;
-    const waypoints = destinations.slice(0, -1);
-    setIsRouteStopsVisible(false);
-    void calculateRoute(destination, routePreferences, routeState.previewOrigin, waypoints);
-  };
-
-  const handleOpenNavigationAudioMode = () => {
-    const chooseMode = (mode: NavigationAudioMode) => {
-      setNavigationAudioMode(mode);
-      setNavigationAudioModeState(mode);
-    };
-    Alert.alert('Guidance sound', 'Choose what NavOSS speaks during navigation.', [
-      {
-        text: 'All guidance',
-        onPress: () => {
-          chooseMode('all-guidance');
-        },
-      },
-      {
-        text: 'Alerts only',
-        onPress: () => {
-          chooseMode('alerts-only');
-        },
-      },
-      {
-        text: 'Muted',
-        onPress: () => {
-          chooseMode('muted');
-        },
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
-
-  const selectedRoute =
-    routeState.type === 'preview'
-      ? routeState.routes.find((route) => route.id === routeState.selectedRouteId)
-      : routeState.type === 'navigating' || routeState.type === 'arrived'
-        ? routeState.route
-        : undefined;
-  const alternateRoutes =
-    routeState.type === 'preview' && selectedRoute !== undefined
-      ? routeState.routes.filter((route) => route.id !== selectedRoute.id)
-      : [];
-  const vehicleMatchStatus: VehicleMatchStatus =
-    navigationSnapshot?.rawCoordinate === undefined
-      ? 'acquiring'
-      : navigationSnapshot.isOffRoute
-        ? 'off-route'
-        : 'matched';
-  const navigationCameraCoordinate =
-    routeState.type === 'navigating'
-      ? (navigationSnapshot?.matchedCoordinate ?? userCoordinate)
-      : undefined;
-  const navigationCameraCenter: [longitude: number, latitude: number] | undefined =
-    navigationCameraCoordinate === undefined
-      ? undefined
-      : [navigationCameraCoordinate.longitude, navigationCameraCoordinate.latitude];
-  const navigationBearing =
-    routeState.type === 'navigating'
-      ? navigationCameraBearing(
-          mapPreferences.navigationOrientation,
-          navigationSnapshot?.matchedCourseDegrees,
-          userHeading,
-        )
-      : undefined;
-  const displayedSelectedRoute =
-    routeState.type === 'navigating' && selectedRoute !== undefined
-      ? {
-          ...selectedRoute,
-          geometry: getRemainingRouteGeometry(
-            selectedRoute,
-            navigationSnapshot?.routeProgress ?? 0,
-            navigationSnapshot?.matchedCoordinate,
-          ),
-        }
-      : routeState.type === 'arrived'
-        ? undefined
-        : selectedRoute;
-
-  const handleStartNavigation = () => {
-    if (
-      routeState.type !== 'preview' ||
-      routeState.previewOrigin !== undefined ||
-      selectedRoute === undefined
-    ) {
-      return;
-    }
-
-    announcedCameraIdsRef.current.clear();
-    if (cameraAlertTimeoutRef.current !== undefined) {
-      clearTimeout(cameraAlertTimeoutRef.current);
-      cameraAlertTimeoutRef.current = undefined;
-    }
-    setSafetyCameraAlert(undefined);
-    setCameraAnnouncementCount(0);
-    stopNavigationAnnouncements();
-    setNavigationStepIndex(0);
-    setNavigationRouteStatus('tracking');
-    setRerouteCount(0);
-    setIsNavigationCameraFollowing(true);
-    const snapshot = setNavigationRoute(
-      selectedRoute,
-      routeState.destination,
-      routePreferences,
-      routeSource?.id,
-      selectedRoute.traffic,
-      routeState.waypoints,
-    );
-    nativeStateVersionRef.current = Math.max(nativeStateVersionRef.current, snapshot.stateVersion);
-    setNavigationSnapshot(snapshot);
-    setRouteState({
-      destination: routeState.destination,
-      route: selectedRoute,
-      routes: routeState.routes,
-      type: 'navigating',
-      waypoints: routeState.waypoints,
-    });
-  };
-
-  const handleShareEta = () => {
-    if (routeState.type !== 'navigating' || remainingRoute === undefined) {
-      return;
-    }
-
-    void Share.share({
-      message: buildEtaShareMessage(
-        routeState.destination.name,
-        remainingRoute.durationSeconds,
-        remainingRoute.distanceMeters,
-      ),
-      title: `ETA to ${routeState.destination.name}`,
-    });
-  };
-
-  const handleOpenRoadReport = () => {
-    if (navigationSnapshot?.matchedCoordinate === undefined && userCoordinate === undefined) {
-      Alert.alert('Location unavailable', 'Wait for your location before recording a report.');
-      return;
-    }
-    setIsRoadReportVisible(true);
-  };
-
-  const handleSaveRoadReport = async (type: RoadReportType) => {
-    const coordinate = navigationSnapshot?.matchedCoordinate ?? userCoordinate;
-    if (coordinate === undefined || isRoadReportSaving) return;
-
-    setIsRoadReportSaving(true);
-    try {
-      const currentReports = await loadRoadReportDrafts();
-      await saveRoadReportDrafts([createRoadReportDraft(type, coordinate), ...currentReports]);
-      setIsRoadReportVisible(false);
-      Alert.alert(
-        'Saved for testing',
-        'This report stays on this phone and is not shown to other drivers yet.',
-      );
-    } catch {
-      Alert.alert('Report not saved', 'The report could not be stored on this phone.');
-    } finally {
-      setIsRoadReportSaving(false);
-    }
-  };
-
-  const handleEndNavigation = () => {
-    if (routeState.type !== 'navigating') {
-      return;
-    }
-
-    if (cameraAlertTimeoutRef.current !== undefined) {
-      clearTimeout(cameraAlertTimeoutRef.current);
-      cameraAlertTimeoutRef.current = undefined;
-    }
-    setSafetyCameraAlert(undefined);
-    setCameraAnnouncementCount(0);
-    clearCarPlayTrip();
-    stopNavigationAnnouncements();
-    setNavigationStepIndex(0);
-    setNavigationRouteStatus('tracking');
-    setRerouteCount(0);
-    setIsNavigationCameraFollowing(true);
-    setIsIdleCameraFollowing(true);
-    setSelectedResult(undefined);
-    setQuery('');
-    setRouteState({ type: 'idle' });
-  };
-
-  const handleFinishArrival = () => {
-    if (routeState.type !== 'arrived') {
-      return;
-    }
-
-    announcedCameraIdsRef.current.clear();
-    if (cameraAlertTimeoutRef.current !== undefined) {
-      clearTimeout(cameraAlertTimeoutRef.current);
-      cameraAlertTimeoutRef.current = undefined;
-    }
-    setSafetyCameraAlert(undefined);
-    setCameraAnnouncementCount(0);
-    clearCarPlayTrip();
-    stopNavigationAnnouncements();
-    setNavigationStepIndex(0);
-    setNavigationRouteStatus('tracking');
-    setRerouteCount(0);
-    setIsNavigationCameraFollowing(true);
-    setIsIdleCameraFollowing(true);
-    setQuery('');
-    setSelectedResult(undefined);
-    setRouteState({ type: 'idle' });
-  };
-
-  const handleCarPlayNavigationEnded = useEffectEvent(() => {
-    if (routeState.type === 'arrived') {
-      handleFinishArrival();
-      return;
-    }
-    handleEndNavigation();
-  });
-
-  // Both directions, so adding or removing a route state on either side fails the build rather
-  // than leaving `phoneSurface` silently deciding for a state it no longer knows about.
-  const _routeStatusParity: PhoneRouteStatus extends RouteUiState['type']
-    ? RouteUiState['type'] extends PhoneRouteStatus
-      ? true
-      : never
-    : never = true;
-  void _routeStatusParity;
-
-  const handleCarPlayStateChanged = useEffectEvent((connected: boolean) => {
-    const justConnected = connected && !carPlayConnected;
-    setCarPlayConnected(connected);
-    if (!justConnected) return;
-    // The connected handset keeps planning controls, so this policy must retain its in-flight
-    // route rather than discarding work the driver can still finish on the phone.
-    if (releasesPhoneRouteOnCarPlayConnect(routeState.type)) {
-      handleCancelRoute();
-    }
-  });
-
-  useEffect(() => {
-    const initialCarPlayState = getCarPlayState();
-    const initialPreferences = getNavigationPreferences();
-    setCarPlayConnected(initialCarPlayState.connected);
-    setNavigationAudioModeState(initialPreferences.audioMode);
-    setRoutePreferences(initialPreferences.routePreferences);
-    const stateSubscription = observeCarPlayState((state) => {
-      handleCarPlayStateChanged(state.connected);
-    });
-    const preferencesSubscription = observeNavigationPreferences((preferences) => {
-      setNavigationAudioModeState(preferences.audioMode);
-      setRoutePreferences(preferences.routePreferences);
-    });
-    const endedSubscription = observeCarPlayNavigationEnded(() => {
-      handleCarPlayNavigationEnded();
-    });
-    return () => {
-      stateSubscription.remove();
-      preferencesSubscription.remove();
-      endedSubscription.remove();
-    };
-  }, []);
-
-  const placeSheetVisible = routeState.type === 'idle' && selectedResult !== undefined;
-  const appShellVisible = routeState.type === 'idle' && selectedResult === undefined;
-  const appTabBarHeight = appShellVisible ? APP_TAB_BAR_HEIGHT + insets.bottom : 0;
-  const placeDetailRowCount =
-    selectedResult === undefined
-      ? 0
-      : [
-          selectedResult.details?.address,
-          selectedResult.details?.openingHours,
-          selectedResult.details?.phone,
-          selectedResult.details?.website,
-          selectedResult.details?.wheelchair,
-        ].filter((value) => value !== undefined).length;
-  const placeSheetHeight = Math.min(
-    height * (selectedResult?.category === 'poi' && googlePlaceRatingAvailable ? 0.72 : 0.56),
-    242 +
-      Math.max(1, placeDetailRowCount) * 48 +
-      (selectedResult?.category === 'poi' ? (googlePlaceRatingAvailable ? 386 : 122) : 0) +
-      insets.bottom,
-  );
-  const selectedPanelHeight =
-    routeState.type === 'preview'
-      ? (routeState.previewOrigin === undefined ? 416 : 484) + insets.bottom
-      : routeState.type === 'loading'
-        ? 156 + insets.bottom
-        : routeState.type === 'error'
-          ? 224 + insets.bottom
-          : routeState.type === 'arrived'
-            ? 170 + insets.bottom
-            : routeState.type === 'navigating'
-              ? (width < NAVIGATION_STATUS_COMPACT_WIDTH ? 154 : 102) + insets.bottom
-              : placeSheetVisible
-                ? placeSheetHeight
-                : 0;
-  const controlBottom = selectedPanelHeight + appTabBarHeight + 18;
-  const resultsHeight = Math.min(360, Math.max(180, height * 0.42));
-  const darkMap =
-    mapPreferences.stylePreset === 'night' ||
-    (mapPreferences.stylePreset === 'automatic' && colorScheme === 'dark');
-  const selectedPlacePhoneUrl = placePhoneUrl(selectedResult?.details?.phone);
-  const selectedPlaceWebsiteUrl = placeWebsiteUrl(selectedResult?.details?.website);
-  const selectedPlaceWebsiteLabel = placeWebsiteLabel(selectedResult?.details?.website);
-
-  if (surface === 'guidance' && carPlayGuidance !== undefined) {
+  useRenderCounter('MapScreen');
+  const styles = useStyles();
+  const c = useMapController();
+  const { metrics, route, guidance } = c;
+  const routeState = route.state;
+  const insets = { bottom: metrics.bottomInset, top: metrics.topInset };
+
+  if (c.surface === 'guidance' && c.carPlayGuidance !== undefined) {
     return (
       <View style={styles.container}>
         <StatusBar style="light" />
         <CarPlayCompanionPanel
           bottomInset={insets.bottom}
-          destinationName={carPlayGuidance.destination.name}
-          durationSeconds={carPlayGuidance.remainingDurationSeconds}
-          maneuvers={carPlayGuidance.maneuvers}
-          onAction={handleEndNavigation}
+          destinationName={c.carPlayGuidance.destination.name}
+          durationSeconds={c.carPlayGuidance.remainingDurationSeconds}
+          maneuvers={c.carPlayGuidance.maneuvers}
+          onAction={c.onEndNavigation}
           phase="navigating"
-          remainingDistanceMeters={carPlayGuidance.remainingDistanceMeters}
+          remainingDistanceMeters={c.carPlayGuidance.remainingDistanceMeters}
           safeAreaTop={insets.top}
         />
       </View>
     );
   }
 
-  if (surface === 'arrival' && routeState.type === 'arrived') {
+  if (c.surface === 'arrival' && routeState.type === 'arrived') {
     return (
       <View style={styles.container}>
         <StatusBar style="light" />
         <CarPlayCompanionPanel
           bottomInset={insets.bottom}
           destinationName={routeState.destination.name}
-          onAction={handleFinishArrival}
+          onAction={c.onFinishArrival}
           phase="arrived"
           safeAreaTop={insets.top}
         />
@@ -2226,13 +92,13 @@ export function MapScreen() {
     );
   }
 
-  if (surface === 'carplay-idle') {
+  if (c.surface === 'carplay-idle') {
     return (
       <View style={styles.container}>
         <StatusBar style="light" />
         <CarPlayIdlePanel
           bottomInset={insets.bottom}
-          onEnd={handleEndNavigation}
+          onEnd={c.onEndNavigation}
           safeAreaTop={insets.top}
         />
       </View>
@@ -2241,1006 +107,373 @@ export function MapScreen() {
 
   if (isCarPlayVisualHarness()) return null;
 
+  const exploring = c.activeTab === 'explore';
+  const navigating = routeState.type === 'navigating';
+  const routeIsIdle = routeState.type === 'idle';
+  const mapChromeVisible = exploring || !c.appShellVisible;
+  const { overlays, mapPreferences, selectedResult } = c;
+  const safetyCameraCount = mapPreferences.showSafetyCameras ? overlays.safetyCameras.length : 0;
+  const roadEventCount = mapPreferences.showRoadEvents ? overlays.roadEvents.length : 0;
+  const mapSummary = `Map with ${String(safetyCameraCount)} official safety camera symbols and ${String(roadEventCount)} road events`;
+  const selectedPlacePhoneUrl = placePhoneUrl(selectedResult?.details?.phone);
+  const selectedPlaceWebsiteUrl = placeWebsiteUrl(selectedResult?.details?.website);
+  const guidanceReady =
+    routeState.type === 'navigating' &&
+    guidance.step !== undefined &&
+    guidance.remainingRoute !== undefined &&
+    guidance.remainingStep !== undefined;
+  const cameraAlertHeight = navigating && c.cameraAlert !== undefined ? CAMERA_ALERT_HEIGHT : 0;
+  const rerouteCardHeight = guidance.rerouteProposal === undefined ? 0 : REROUTE_CARD_HEIGHT;
+
   return (
     <View style={styles.container}>
-      <StatusBar style={activeTab === 'explore' && darkMap ? 'light' : 'dark'} />
-      <Map
-        accessibilityLabel={`Map with ${String(mapPreferences.showSafetyCameras ? safetyCameras.length : 0)} official safety camera symbols and ${String(mapPreferences.showRoadEvents ? roadEvents.length : 0)} road events`}
-        accessibilityElementsHidden={activeTab !== 'explore'}
-        attribution={false}
-        compass={routeState.type !== 'navigating'}
-        compassPosition={{ right: 14, top: insets.top + 118 }}
-        logo={false}
-        mapStyle={mapStyle}
-        importantForAccessibility={activeTab === 'explore' ? 'auto' : 'no-hide-descendants'}
-        onDidFailLoadingMap={() => {
-          setMapError(true);
-        }}
-        onDidFinishLoadingMap={() => {
-          setMapError(false);
-        }}
-        onLongPress={({ nativeEvent }) => {
-          const [longitude, latitude] = nativeEvent.lngLat;
-          handleMapLongPress({ latitude, longitude });
-        }}
-        onPress={({ nativeEvent }) => {
-          const [longitude, latitude] = nativeEvent.lngLat;
-          void handleMapPress(nativeEvent.point, { latitude, longitude });
-        }}
-        onRegionIsChanging={({ nativeEvent }) => {
-          setMapBearing(nativeEvent.bearing);
-          setMapZoomStep(Math.round(nativeEvent.zoom * 4) / 4);
-          if (routeState.type === 'navigating' && nativeEvent.userInteraction) {
-            setIsNavigationCameraFollowing(false);
-          } else if (routeState.type === 'idle') {
-            setIsIdleCameraFollowing((currentIntent) =>
-              idleCameraFollowIntentAfterRegionChange(
-                currentIntent,
-                nativeEvent.userInteraction === true,
-              ),
-            );
-          }
-        }}
-        preferredFramesPerSecond={60}
-        ref={mapRef}
-        style={styles.map}
-        tintColor={NavOssColors.asphalt}
+      <StatusBar style={navigating || (exploring && c.darkMap) ? 'light' : 'auto'} />
+      <MapCanvas
+        accessibilityLabel={mapSummary}
+        cameraRef={c.cameraRef}
+        hidden={!exploring}
+        idleCenter={c.camera.idleCenter}
+        idleShouldFollow={c.camera.idleShouldFollow}
+        isNavigating={navigating}
+        isNavigationFollowing={c.camera.isNavigationFollowing}
+        mapRef={c.mapRef}
+        mapStyle={c.mapStyle}
+        metrics={metrics}
+        navigationBearing={c.camera.navigationBearing}
+        navigationView={mapPreferences.navigationView}
+        onCameraChange={c.camera.onChange}
+        onLoadError={c.onMapError}
+        onLongPress={c.onMapLongPress}
+        onPress={c.onMapPress}
+        vehicleCoordinate={c.camera.vehicleCoordinate}
       >
-        <Images images={MAP_IMAGES} />
-        <Camera
-          bearing={
-            routeState.type === 'navigating' && isNavigationCameraFollowing
-              ? navigationBearing
-              : undefined
+        <MapLayers
+          alternateRoutes={route.alternateRoutes}
+          darkMap={c.darkMap}
+          deviceHeadingStore={c.location.deviceHeadingStore}
+          displayedSelectedRoute={route.displayedSelectedRoute}
+          isNavigating={navigating}
+          roadEvents={overlays.roadEvents}
+          routeColor={mapPreferences.routeColor}
+          safetyCameras={c.visibleSafetyCameras}
+          safetyFacilities={overlays.kelownaSafetyFacilities}
+          searchResults={routeIsIdle ? c.search.results : NO_SEARCH_RESULTS}
+          selectedResult={selectedResult}
+          showRoadEvents={mapPreferences.showRoadEvents && overlays.roadEventSnapshot !== undefined}
+          showSafetyCameras={mapPreferences.showSafetyCameras}
+          showSafetyFacilities={mapPreferences.showPlaces}
+          showUserLocation={
+            c.location.locationState === 'visible' && !navigating && c.phoneMapVisible
           }
-          center={
-            routeState.type === 'navigating'
-              ? isNavigationCameraFollowing
-                ? navigationCameraCenter
-                : undefined
-              : idleCameraShouldFollow
-                ? idleCameraCenter
-                : undefined
-          }
-          duration={
-            routeState.type === 'navigating' || idleCameraShouldFollow
-              ? NAVIGATION_CAMERA_TRANSITION.duration
-              : undefined
-          }
-          easing={
-            routeState.type === 'navigating' || idleCameraShouldFollow
-              ? NAVIGATION_CAMERA_TRANSITION.easing
-              : undefined
-          }
-          initialViewState={{
-            center: CANADA_CENTER,
-            zoom: 3.2,
-          }}
-          maxZoom={19}
-          minZoom={0}
-          padding={
-            routeState.type === 'navigating'
-              ? { bottom: 138 + insets.bottom, left: 24, right: 24, top: 170 }
-              : undefined
-          }
-          pitch={
-            routeState.type === 'navigating' && isNavigationCameraFollowing
-              ? mapPreferences.navigationView === 'tilted'
-                ? 42
-                : 0
-              : undefined
-          }
-          ref={cameraRef}
-          zoom={
-            routeState.type === 'navigating' && isNavigationCameraFollowing
-              ? 16
-              : idleCameraShouldFollow
-                ? 15
-                : undefined
-          }
+          torontoSafetyCameras={overlays.torontoSafetyCameras}
+          trafficCameras={overlays.kelownaTrafficCameras}
+          userCoordinate={c.location.userCoordinate}
+          userHeading={c.location.userHeading}
+          vehicleCoordinate={c.camera.vehicleCoordinate}
+          vehicleStyle={route.vehicleStyle}
+          zoomStepStore={c.zoomStepStore}
         />
-        {facingConeFeature !== undefined && (
-          <GeoJSONSource data={facingConeFeature} id="navoss-facing-cone">
-            <Layer
-              id="navoss-facing-cone-fill"
-              paint={{ 'fill-color': NavOssColors.green, 'fill-opacity': 0.25 }}
-              type="fill"
-            />
-          </GeoJSONSource>
-        )}
-        {locationState === 'visible' && routeState.type !== 'navigating' && phoneMapVisible && (
-          <UserLocation accuracy heading />
-        )}
-        {routeState.type === 'navigating' && userCoordinate !== undefined && (
-          <VehiclePuck
-            coordinate={navigationSnapshot?.matchedCoordinate ?? userCoordinate}
-            heading={mapAlignedHeadingDegrees(userHeading)}
-            vehicleStyle={vehicleStyle}
-          />
-        )}
-        {routeState.type === 'idle' &&
-          results.map((result) => (
-            <Marker
-              anchor="bottom"
-              id={`search-result:${result.id}`}
-              key={result.id}
-              lngLat={[result.center.longitude, result.center.latitude]}
-              onPress={() => {
-                handleSelectResult(result);
-              }}
-            >
-              <View style={styles.searchResultMarker}>
-                <SymbolView
-                  name={{ android: 'location_on', ios: 'mappin.circle.fill' }}
-                  size={25}
-                  tintColor={NavOssColors.coral}
-                />
-              </View>
-            </Marker>
-          ))}
-        {mapPreferences.showSafetyCameras &&
-          kelownaTrafficCameras.map((camera) => (
-            <Marker
-              anchor="bottom"
-              id={`traffic-camera:${camera.id}`}
-              key={camera.id}
-              lngLat={[camera.coordinate.longitude, camera.coordinate.latitude]}
-              onPress={() => {
-                Alert.alert(
-                  `${camera.name} · Traffic webcam`,
-                  `${camera.caption}\n\nThis is a DriveBC traffic webcam, not an enforcement camera.`,
-                  [
-                    { text: 'Close' },
-                    {
-                      onPress: () => {
-                        void Linking.openURL(camera.pageUrl);
-                      },
-                      text: 'View camera',
-                    },
-                  ],
-                );
-              }}
-            >
-              <View style={styles.regionalMarker}>
-                <SymbolView
-                  name={{ android: 'videocam', ios: 'video.fill' }}
-                  size={21}
-                  tintColor={NavOssColors.green}
-                />
-              </View>
-            </Marker>
-          ))}
-        {mapPreferences.showPlaces &&
-          kelownaSafetyFacilities.map((facility) => (
-            <Marker
-              anchor="bottom"
-              id={`safety-facility:${facility.id}`}
-              key={facility.id}
-              lngLat={[facility.coordinate.longitude, facility.coordinate.latitude]}
-              onPress={() => {
-                Alert.alert(
-                  `${facility.name} · RCMP facility`,
-                  `${facility.address}\n${facility.phone}\n\nFixed public facility. This is not a live police location.`,
-                  [
-                    { text: 'Close' },
-                    {
-                      onPress: () => {
-                        void Linking.openURL(facility.pageUrl);
-                      },
-                      text: 'Official details',
-                    },
-                  ],
-                );
-              }}
-            >
-              <View style={styles.regionalMarker}>
-                <SymbolView
-                  name={{ android: 'local_police', ios: 'building.2.fill' }}
-                  size={21}
-                  tintColor={NavOssColors.asphalt}
-                />
-              </View>
-            </Marker>
-          ))}
-        <GeoJSONSource data={selectedFeature(selectedResult)} id="selected-place">
-          <Layer
-            id="selected-place-halo"
-            paint={{
-              'circle-color': NavOssColors.coral,
-              'circle-opacity': 0.2,
-              'circle-radius': 18,
-            }}
-            type="circle"
-          />
-          <Layer
-            id="selected-place-dot"
-            paint={{
-              'circle-color': NavOssColors.coral,
-              'circle-radius': 8,
-              'circle-stroke-color': NavOssColors.white,
-              'circle-stroke-width': 3,
-            }}
-            type="circle"
-          />
-        </GeoJSONSource>
-        {alternateRoutes.length > 0 && (
-          <GeoJSONSource data={routeFeatures(alternateRoutes)} id="alternate-routes">
-            <Layer
-              id="alternate-route-lines"
-              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-              paint={{
-                'line-color': '#81908E',
-                'line-opacity': 0.65,
-                'line-width': 4,
-              }}
-              type="line"
-            />
-          </GeoJSONSource>
-        )}
-        {displayedSelectedRoute !== undefined && (
-          <GeoJSONSource data={routeFeatures([displayedSelectedRoute])} id="selected-route">
-            <Layer
-              id="selected-route-casing"
-              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-              paint={{ 'line-color': NavOssColors.white, 'line-width': 9 }}
-              type="line"
-            />
-            <Layer
-              id="selected-route-line"
-              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-              paint={{ 'line-color': ROUTE_COLORS[mapPreferences.routeColor], 'line-width': 6 }}
-              type="line"
-            />
-          </GeoJSONSource>
-        )}
-        {mapPreferences.showSafetyCameras && safetyCameras.length > 0 && (
-          <GeoJSONSource data={safetyCameraFeatures(safetyCameras)} id="safety-cameras">
-            <Layer
-              id="safety-camera-symbols"
-              layout={{
-                'icon-allow-overlap': true,
-                'icon-ignore-placement': true,
-                'icon-image': 'safety-camera',
-                'icon-size': 0.5,
-              }}
-              type="symbol"
-            />
-          </GeoJSONSource>
-        )}
-        {mapPreferences.showSafetyCameras && torontoSafetyCameras.length > 0 && (
-          <GeoJSONSource
-            data={safetyCameraFeatures(torontoSafetyCameras)}
-            id="toronto-safety-cameras"
-          >
-            <Layer
-              id="toronto-safety-camera-symbols"
-              layout={{
-                'icon-allow-overlap': true,
-                'icon-ignore-placement': true,
-                'icon-image': 'safety-camera',
-                'icon-size': 0.5,
-              }}
-              type="symbol"
-            />
-          </GeoJSONSource>
-        )}
-        {mapPreferences.showRoadEvents && roadEventSnapshot !== undefined && (
-          <>
-            <GeoJSONSource
-              data={roadEventFeatures(roadEvents, 'construction')}
-              id="official-construction-events-source"
-            >
-              <Layer
-                id="official-construction-events"
-                layout={{
-                  'icon-allow-overlap': false,
-                  'icon-ignore-placement': false,
-                  'icon-image': 'road-construction',
-                  'icon-size': 0.58,
-                }}
-                type="symbol"
-              />
-            </GeoJSONSource>
-            <GeoJSONSource
-              data={roadEventFeatures(roadEvents, 'closure')}
-              id="road-closure-events-source"
-            >
-              <Layer
-                id="road-closure-events"
-                layout={{
-                  'icon-allow-overlap': false,
-                  'icon-ignore-placement': false,
-                  'icon-image': 'road-closure',
-                  'icon-size': 0.58,
-                }}
-                type="symbol"
-              />
-            </GeoJSONSource>
-            <GeoJSONSource
-              data={roadEventFeatures(roadEvents, 'incident')}
-              id="road-incident-events-source"
-            >
-              <Layer
-                id="road-incident-events"
-                layout={{
-                  'icon-allow-overlap': false,
-                  'icon-ignore-placement': false,
-                  'icon-image': 'road-incident',
-                  'icon-size': 0.58,
-                }}
-                type="symbol"
-              />
-            </GeoJSONSource>
-          </>
-        )}
-      </Map>
+      </MapCanvas>
 
-      {routeState.type === 'navigating' && (
-        <Pressable
-          accessibilityHint="Toggles between keeping the road ahead at the top and keeping north at the top"
-          accessibilityLabel={
-            mapPreferences.navigationOrientation === 'heading-up'
-              ? 'Switch map to north up'
-              : 'Switch map to heading up'
+      {mapChromeVisible && (
+        <MapControls
+          attribution={mapAttributionLabel({
+            hasTorontoCameras: overlays.torontoSafetyCameras.length > 0,
+            mapRegion: c.location.mapRegion,
+            roadEventRegion: overlays.roadEventRegion,
+          })}
+          bannerStackHeight={guidance.bannerHeight + cameraAlertHeight + rerouteCardHeight}
+          locating={c.location.locationState === 'locating'}
+          mapBearing={c.mapBearing}
+          metrics={metrics}
+          mode={
+            navigating
+              ? 'guidance'
+              : routeState.type === 'arrived'
+                ? 'arrived'
+                : c.appShellVisible
+                  ? 'explore'
+                  : 'planning'
           }
-          onPress={() => {
-            const navigationOrientation = toggleNavigationMapOrientation(
-              mapPreferences.navigationOrientation,
-            );
-            const preferences = { ...mapPreferences, navigationOrientation };
-            setMapPreferences(preferences);
-            persistMapPreferences(preferences);
-          }}
-          style={({ pressed }) => [
-            styles.compassButton,
-            { top: insets.top + (safetyCameraAlert === undefined ? 136 : 210) },
-            mapPreferences.navigationOrientation === 'north-up' && styles.compassButtonSelected,
-            pressed && styles.controlPressed,
-          ]}
-        >
-          <View style={{ transform: [{ rotate: `${String(-mapBearing)}deg` }] }}>
-            <SymbolView
-              name={{ android: 'navigation', ios: 'location.north.line.fill' }}
-              size={23}
-              tintColor={
-                mapPreferences.navigationOrientation === 'north-up'
-                  ? NavOssColors.white
-                  : NavOssColors.asphalt
-              }
-            />
-          </View>
-        </Pressable>
+          onLocate={c.location.locate}
+          onOpenAbout={c.about.open}
+          onOpenMapPreferences={c.mapPreferencesSheet.open}
+          onOpenReport={c.roadReport.open}
+          onRecenter={c.camera.recenter}
+          onShowAttribution={c.onShowAttribution}
+          onToggleOrientation={c.onToggleOrientation}
+          orientation={mapPreferences.navigationOrientation}
+          problems={mapProblemLabels({
+            apiConnection: c.apiConnection,
+            locationState: c.location.locationState,
+            mapError: c.mapError,
+            routeIsIdle,
+          }).join(' · ')}
+          roadEventStatus={
+            mapPreferences.showRoadEvents
+              ? roadEventStatusLabel({
+                  hasSnapshot: overlays.roadEventSnapshot !== undefined,
+                  refreshDelayed: overlays.roadEventRefreshDelayed,
+                  region: overlays.roadEventRegion,
+                  stale: overlays.roadEventSnapshot?.stale === true,
+                })
+              : undefined
+          }
+          sheetPosition={c.sheetPosition}
+          showRecenter={!c.camera.isNavigationFollowing}
+        />
       )}
 
-      {routeState.type === 'navigating' && !isNavigationCameraFollowing && (
-        <Pressable
-          accessibilityLabel="Recenter map on vehicle"
-          onPress={() => {
-            setIsNavigationCameraFollowing(true);
-          }}
-          style={({ pressed }) => [
-            styles.recenterButton,
-            { bottom: selectedPanelHeight + 70 },
-            pressed && styles.controlPressed,
-          ]}
-        >
-          <SymbolView
-            name={{ android: 'my_location', ios: 'location.fill' }}
-            size={22}
-            tintColor={NavOssColors.asphalt}
-          />
-        </Pressable>
+      {navigating && (
+        <DrivingStatus
+          roadName={guidance.currentRoadName}
+          sheetPosition={c.sheetPosition}
+          speed={guidance.speed}
+        />
       )}
 
-      {(activeTab === 'explore' || !appShellVisible) && (
-        <Pressable
-          accessibilityLabel="Map appearance"
-          onPress={() => {
-            setIsMapPreferencesVisible(true);
-          }}
-          style={({ pressed }) => [
-            styles.mapPreferencesButton,
-            {
-              bottom:
-                routeState.type === 'navigating' || routeState.type === 'arrived'
-                  ? selectedPanelHeight + 18
-                  : controlBottom + 62,
-            },
-            pressed && styles.controlPressed,
-          ]}
-        >
-          <SymbolView
-            name={{ android: 'layers', ios: 'square.3.layers.3d' }}
-            size={22}
-            tintColor={NavOssColors.asphalt}
-          />
-        </Pressable>
+      {c.appShellVisible && exploring && (
+        <ExploreSheet
+          apiConnection={c.apiConnection}
+          catalog={c.destinationCatalog}
+          locationState={c.location.locationState}
+          metrics={metrics}
+          nearbySearchEnabled={c.location.nearbySearchEnabled}
+          onCategoryPress={c.categories.onPress}
+          onChangeQuery={c.onChangeQuery}
+          onChooseSavedPlace={c.onChooseSavedPlace}
+          onClear={c.onClearSearch}
+          onOpenMoreCategories={c.categories.open}
+          onSelectResult={c.onSelectResult}
+          onShortcutPress={c.onShortcutPress}
+          onSubmit={c.onSubmitSearch}
+          position={c.sheetPosition}
+          query={c.search.query}
+          results={c.search.results}
+          resultsDegraded={c.search.resultsDegraded}
+          searchSource={c.search.searchSource}
+          searchState={c.search.searchState}
+          selectedCategoryId={c.search.selectedCategoryId}
+          sheetRef={c.exploreSheetRef}
+          shortcutBeingSet={c.shortcutBeingSet}
+        />
       )}
 
-      {(activeTab === 'explore' || !appShellVisible) && routeState.type !== 'navigating' && (
-        <Pressable
-          accessibilityHint="Opens the road report sheet for hazards, closures, and other road conditions"
-          accessibilityLabel="Report a road condition"
-          onPress={handleOpenRoadReport}
-          style={({ pressed }) => [
-            styles.reportButton,
-            {
-              bottom:
-                (routeState.type === 'arrived' ? selectedPanelHeight + 18 : controlBottom + 62) +
-                54,
-            },
-            pressed && styles.controlPressed,
-          ]}
-        >
-          <SymbolView
-            name={{ android: 'report_problem', ios: 'exclamationmark.bubble.fill' }}
-            size={21}
-            tintColor={NavOssColors.asphalt}
-          />
-        </Pressable>
-      )}
-
-      {(activeTab === 'explore' || !appShellVisible) &&
-        mapPreferences.showRoadEvents &&
-        (roadEventSnapshot !== undefined || roadEventRefreshDelayed) && (
-          <View
-            pointerEvents="none"
-            style={[
-              styles.roadEventAttribution,
-              { bottom: selectedPanelHeight + appTabBarHeight + 34 },
-            ]}
-          >
-            <Text style={styles.roadEventAttributionText}>
-              {roadEventSnapshot === undefined
-                ? 'Road events unavailable'
-                : `${roadEventRegion === 'ontario' ? 'Road events · Ontario 511 · Official' : roadEventRegion === 'kelowna-bc' ? 'Road events · DriveBC · Official' : 'Road events · City of Calgary · Incidents unverified'}${roadEventSnapshot.stale ? ' · Stale snapshot' : ''}${roadEventRefreshDelayed ? ' · Refresh delayed' : ''}`}
-            </Text>
-          </View>
-        )}
-
-      <MapPreferencesPanel
-        onChange={(preferences) => {
-          setMapPreferences(preferences);
-          persistMapPreferences(preferences);
-        }}
-        onClose={() => {
-          setIsMapPreferencesVisible(false);
-        }}
-        preferences={mapPreferences}
-        visible={isMapPreferencesVisible}
-      />
-
-      {routeState.type === 'idle' && selectedResult !== undefined && (
+      {c.placeSheetVisible && selectedResult !== undefined && (
         <PlaceSheet
-          bottomInset={insets.bottom}
-          height={placeSheetHeight}
-          loading={placeDetailsLoading}
-          onClose={handleClosePlace}
-          onDirections={handlePlaceDirections}
-          onFindParking={handleFindParking}
+          loading={c.placeDetailsLoading}
+          metrics={metrics}
+          onClose={c.onClosePlace}
+          onDirections={c.onPlaceDirections}
+          onFindParking={c.onFindParking}
           onReadReviews={() => {
-            openExternalPlaceUrl(placeReviewsUrl(selectedResult));
+            c.onOpenExternalUrl(placeReviewsUrl(selectedResult));
           }}
-          onSave={() => {
-            setSelectedPlaceSaved(toggleFavoriteDestination(selectedResult));
-            refreshDestinationCatalog();
-          }}
-          onShare={() => {
-            void Share.share({
-              message: placeShareMessage(selectedResult),
-              title: selectedResult.name,
-            });
-          }}
+          onSave={c.onToggleSaved}
+          onShare={c.onSharePlace}
           {...(selectedPlacePhoneUrl === undefined
             ? {}
             : {
                 onCall: () => {
-                  openExternalPlaceUrl(selectedPlacePhoneUrl);
+                  c.onOpenExternalUrl(selectedPlacePhoneUrl);
                 },
               })}
           {...(selectedPlaceWebsiteUrl === undefined
             ? {}
             : {
                 onWebsite: () => {
-                  openExternalPlaceUrl(selectedPlaceWebsiteUrl);
+                  c.onOpenExternalUrl(selectedPlaceWebsiteUrl);
                 },
               })}
           place={selectedResult}
-          ratingAvailable={googlePlaceRatingAvailable}
-          saved={selectedPlaceSaved}
-          websiteLabel={selectedPlaceWebsiteLabel}
+          position={c.sheetPosition}
+          ratingAvailable={c.googlePlaceRatingAvailable}
+          saved={c.selectedPlaceSaved}
+          websiteLabel={placeWebsiteLabel(selectedResult.details?.website)}
         />
-      )}
-
-      {routeState.type !== 'navigating' &&
-        routeState.type !== 'arrived' &&
-        activeTab === 'explore' && (
-          <View
-            pointerEvents="box-none"
-            style={[styles.topOverlay, { paddingTop: insets.top + 10 }]}
-          >
-            <SearchPanel
-              activeCategoryLabel={selectedCategoryId === undefined ? undefined : query}
-              apiConnection={apiConnection}
-              coverageName={coverageName}
-              darkMap={darkMap}
-              discoveryActions={
-                appShellVisible ? (
-                  <ExploreCategoryBar
-                    onCategoryPress={handleCategoryPress}
-                    onCloseMore={() => {
-                      setIsMoreCategoriesVisible(false);
-                    }}
-                    onOpenMore={() => {
-                      setIsMoreCategoriesVisible(true);
-                    }}
-                    onWorkPress={handleWorkPress}
-                    selectedCategoryId={selectedCategoryId}
-                    settingWork={shortcutBeingSet === 'work'}
-                    showMore={isMoreCategoriesVisible}
-                    workSaved={destinationCatalog.work !== undefined}
-                  />
-                ) : undefined
-              }
-              maximumResultsHeight={resultsHeight}
-              onChangeQuery={handleChangeQuery}
-              onClear={handleClear}
-              onClearDestinationHistory={handleClearDestinationHistory}
-              onSelectResult={handleSelectResult}
-              onSubmit={handleSubmit}
-              query={query}
-              recentDestinationIds={recentDestinationIds}
-              results={results}
-              searchEnabled={searchEnabled}
-              searchPlaceholder={
-                shortcutBeingSet === undefined
-                  ? 'Where to?'
-                  : `Search to set ${shortcutBeingSet === 'home' ? 'Home' : 'Work'}`
-              }
-              searchSource={searchSource}
-              searchState={searchState}
-            />
-          </View>
-        )}
-
-      {appShellVisible && activeTab === 'saved' && (
-        <SavedPlacesScreen
-          bottomInset={insets.bottom}
-          catalog={destinationCatalog}
-          onChoose={(place) => {
-            setActiveTab('explore');
-            handleSelectResult(place);
-          }}
-          onChangeHome={() => {
-            beginShortcutSetup('home');
-          }}
-          onChangeWork={() => {
-            beginShortcutSetup('work');
-          }}
-          onClearHistory={() => {
-            clearRecentDestinations();
-            refreshDestinationCatalog();
-          }}
-          onRemoveHome={() => {
-            setHomeDestination(undefined);
-            refreshDestinationCatalog();
-          }}
-          onRemoveWork={() => {
-            setWorkDestination(undefined);
-            refreshDestinationCatalog();
-          }}
-          onSetHome={() => {
-            beginShortcutSetup('home');
-          }}
-          onSetWork={() => {
-            beginShortcutSetup('work');
-          }}
-          safeAreaTop={insets.top}
-        />
-      )}
-
-      {appShellVisible && activeTab === 'contribute' && (
-        <ContributeScreen bottomInset={insets.bottom} safeAreaTop={insets.top} />
-      )}
-
-      {activeTab === 'explore' &&
-        (mapError ||
-          (routeState.type === 'idle' &&
-            (locationState === 'denied' || locationState === 'error'))) && (
-          <View style={[styles.notice, { bottom: controlBottom + 66 }]}>
-            <SymbolView
-              name={{ android: 'warning', ios: 'exclamationmark.triangle.fill' }}
-              size={17}
-              tintColor={NavOssColors.coral}
-            />
-            <Text style={styles.noticeText}>
-              {mapError
-                ? 'Basemap unavailable'
-                : locationState === 'denied'
-                  ? 'Location access is off'
-                  : 'Current location unavailable'}
-            </Text>
-          </View>
-        )}
-
-      {activeTab === 'explore' &&
-        routeState.type !== 'navigating' &&
-        routeState.type !== 'arrived' && (
-          <Pressable
-            accessibilityLabel="Center map on my location"
-            disabled={locationState === 'locating'}
-            onPress={() => {
-              void handleLocate();
-            }}
-            style={({ pressed }) => [
-              styles.locationButton,
-              { bottom: controlBottom },
-              pressed && styles.controlPressed,
-            ]}
-          >
-            <SymbolView
-              animationSpec={
-                locationState === 'locating' ? { effect: { type: 'pulse' } } : undefined
-              }
-              name={{ android: 'my_location', ios: 'location.fill' }}
-              size={23}
-              tintColor={NavOssColors.asphalt}
-            />
-          </Pressable>
-        )}
-
-      {(activeTab === 'explore' || !appShellVisible) && (
-        <Pressable
-          accessibilityLabel="Map attribution"
-          onPress={() => {
-            void mapRef.current?.showAttribution();
-          }}
-          style={[styles.attribution, { bottom: selectedPanelHeight + appTabBarHeight + 8 }]}
-        >
-          <Text style={styles.attributionText}>
-            © OpenMapTiles · © OpenStreetMap
-            {roadEventRegion === 'calgary' ? ' · © City of Calgary' : ''}
-            {torontoSafetyCameras.length > 0 ? ' · © City of Toronto' : ''}
-            {roadEventRegion === 'ontario' ? ' · Ontario 511' : ''}
-            {mapRegion === 'kelowna-bc' ? ' · DriveBC · RCMP' : ''}
-          </Text>
-        </Pressable>
       )}
 
       {(routeState.type === 'loading' || routeState.type === 'error') && (
-        <RoutePlanningPanel
+        <RoutePlanningSheet
           bottomInset={insets.bottom}
           destination={routeState.destination}
           errorMessage={routeState.type === 'error' ? routeState.message : undefined}
-          onCancel={handleCancelRoute}
-          onPreviewSupportedRoute={() => {
-            void calculateRoute(
-              routeState.destination,
-              routePreferences,
-              CALGARY_TOWER_ROUTE_ORIGIN,
-              routeState.waypoints,
-            );
-          }}
-          onRetry={() => {
-            void calculateRoute(
-              routeState.destination,
-              routePreferences,
-              routeState.previewOrigin,
-              routeState.waypoints,
-            );
-          }}
+          onCancel={c.onCancelRoute}
+          onPreviewSupportedRoute={c.onPreviewSupportedRoute}
+          onRetry={c.onRetryRoute}
+          position={c.sheetPosition}
         />
       )}
 
-      {routeState.type === 'preview' && selectedRoute !== undefined && (
-        <RoutePreviewPanel
-          bottomInset={insets.bottom}
+      {routeState.type === 'preview' && route.selectedRoute !== undefined && (
+        <RoutePreviewSheet
           destination={routeState.destination}
-          onCancel={handleCancelRoute}
-          onEditStops={() => {
-            setIsRouteStopsVisible(true);
-          }}
-          onSelectRoute={handleSelectRoute}
-          onStart={handleStartNavigation}
-          onToggleRoutePreference={handleToggleRoutePreference}
-          onUseCurrentLocation={() => {
-            void calculateRoute(
-              routeState.destination,
-              routePreferences,
-              undefined,
-              routeState.waypoints,
-            );
-          }}
-          onVehicleStyleChange={setVehicleStyle}
+          initialDetent={route.previewDetent}
+          metrics={metrics}
+          onCancel={c.onCancelRoute}
+          onDetentChange={route.onPreviewDetentChange}
+          onEditStops={c.routeStops.open}
+          onSelectRoute={c.onSelectRoute}
+          onStart={c.onStartNavigation}
+          onToggleRoutePreference={c.onToggleRoutePreference}
+          onUseCurrentLocation={c.onUseCurrentLocation}
+          onVehicleStyleChange={route.setVehicleStyle}
+          position={c.sheetPosition}
           previewOriginLabel={
             routeState.previewOrigin === undefined ? undefined : 'Supported route demo'
           }
+          routePreferences={route.preferences}
+          routeSource={route.source}
           routes={routeState.routes}
-          selectedRoute={selectedRoute}
-          routeSource={routeSource}
-          routePreferences={routePreferences}
-          vehicleStyle={vehicleStyle}
+          selectedRoute={route.selectedRoute}
+          vehicleStyle={route.vehicleStyle}
           waypoints={routeState.waypoints}
         />
       )}
 
-      {routeState.type === 'preview' && (
-        <RouteStopsEditor
-          destinations={[...routeState.waypoints, routeState.destination]}
-          onApply={handleApplyRouteStops}
-          onClose={() => {
-            setIsRouteStopsVisible(false);
-          }}
-          origin={userCoordinate}
-          visible={isRouteStopsVisible}
-        />
-      )}
-
-      {routeState.type === 'navigating' &&
-        guidanceStep !== undefined &&
-        remainingRoute !== undefined &&
-        remainingStep !== undefined && (
-          <>
-            <NavigationBanner
-              distanceMeters={remainingStep.distanceMeters}
-              instruction={guidanceStep.instruction}
-              maneuverType={guidanceStep.maneuverType}
-              roadName={guidanceStep.roadName}
-              safeAreaTop={insets.top}
-              status={navigationRouteStatus}
-            />
-            <NavigationStatusBar
-              audioMode={navigationAudioMode}
-              bottomInset={insets.bottom}
-              cameraAnnouncementCount={cameraAnnouncementCount}
-              distanceMeters={remainingRoute.distanceMeters}
-              durationSeconds={remainingRoute.durationSeconds}
-              matchStatus={vehicleMatchStatus}
-              onEnd={handleEndNavigation}
-              onSound={handleOpenNavigationAudioMode}
-              onReport={handleOpenRoadReport}
-              onShare={handleShareEta}
-              rerouteCount={rerouteCount}
-            />
-          </>
-        )}
-
-      <RoadReportSheet
-        bottomInset={insets.bottom}
-        isSaving={isRoadReportSaving}
-        onCancel={() => {
-          if (!isRoadReportSaving) setIsRoadReportVisible(false);
-        }}
-        onSelect={(type) => {
-          void handleSaveRoadReport(type);
-        }}
-        visible={isRoadReportVisible}
-      />
-
-      {routeState.type === 'navigating' && safetyCameraAlert !== undefined && (
-        <SafetyCameraAlertBanner
-          camera={safetyCameraAlert.camera}
-          distanceAheadMeters={safetyCameraAlert.distanceAheadMeters}
-          safeAreaTop={insets.top}
+      {guidanceReady && guidance.remainingRoute !== undefined && (
+        <TripSheet
+          audioMode={c.guidanceSettings.settings.audioMode}
+          cameraAnnouncementCount={c.cameraAnnouncementCount}
+          destinationName={routeState.destination.name}
+          distanceMeters={guidance.remainingRoute.distanceMeters}
+          durationSeconds={guidance.remainingRoute.durationSeconds}
+          matchStatus={guidance.vehicleMatchStatus}
+          metrics={metrics}
+          onEnd={c.onEndNavigation}
+          onReport={c.roadReport.open}
+          onShare={c.onShareEta}
+          onSound={c.guidanceSettings.open}
+          position={c.sheetPosition}
+          positionEstimated={guidance.positionEstimated}
+          rerouteCount={guidance.rerouteCount}
+          routeSource={route.source}
+          upcomingManeuvers={guidance.upcomingManeuvers ?? []}
         />
       )}
 
       {routeState.type === 'arrived' && (
-        <ArrivalPanel
+        <ArrivalSheet
           bottomInset={insets.bottom}
           destination={routeState.destination}
-          onDone={handleFinishArrival}
+          onDone={c.onFinishArrival}
+          position={c.sheetPosition}
         />
       )}
 
-      {appShellVisible && (
-        <AppTabBar
-          activeTab={activeTab}
+      {c.appShellVisible && c.activeTab === 'saved' && (
+        <SavedPlacesScreen
           bottomInset={insets.bottom}
-          onSelect={(tab) => {
-            Keyboard.dismiss();
-            if (tab !== 'explore') {
-              categorySearchActiveRef.current = false;
-              invalidateSearchRequest();
-            }
-            setActiveTab(tab);
-            if (tab !== 'explore') {
-              setShortcutBeingSet(undefined);
-            }
-            if (tab === 'saved') {
-              refreshDestinationCatalog();
-            }
-          }}
+          catalog={c.destinationCatalog}
+          onChoose={c.onChooseSavedPlace}
+          onClearHistory={c.onClearRecents}
+          onRemoveShortcut={c.onRemoveShortcut}
+          onSetShortcut={c.onBeginShortcutSetup}
+          safeAreaTop={insets.top}
+        />
+      )}
+      {c.appShellVisible && c.activeTab === 'contribute' && (
+        <ContributeScreen bottomInset={insets.bottom} safeAreaTop={insets.top} />
+      )}
+      {c.appShellVisible && (
+        <AppTabBar activeTab={c.activeTab} bottomInset={insets.bottom} onSelect={c.onSelectTab} />
+      )}
+
+      {guidanceReady && guidance.step !== undefined && guidance.remainingStep !== undefined && (
+        <ManeuverBanner
+          distanceMeters={guidance.remainingStep.distanceMeters}
+          instruction={guidance.step.instruction}
+          maneuverType={guidance.step.maneuverType}
+          onHeightChange={guidance.onBannerHeightChange}
+          roadName={guidance.step.roadName}
+          safeAreaTop={insets.top}
+          status={guidance.routeStatus}
+        />
+      )}
+      {navigating && c.cameraAlert !== undefined && (
+        <SafetyCameraAlertBanner
+          camera={c.cameraAlert.camera}
+          distanceAheadMeters={c.cameraAlert.distanceAheadMeters}
+          top={insets.top + guidance.bannerHeight + 8}
+        />
+      )}
+      {guidance.rerouteProposal !== undefined && (
+        <RerouteProposalCard
+          distanceDeltaMeters={guidance.rerouteProposal.distanceDeltaMeters}
+          distanceMeters={guidance.rerouteProposal.distanceMeters}
+          durationDeltaSeconds={guidance.rerouteProposal.durationDeltaSeconds}
+          durationSeconds={guidance.rerouteProposal.durationSeconds}
+          onAccept={guidance.onAcceptReroute}
+          onKeep={guidance.onKeepRoute}
+          top={insets.top + guidance.bannerHeight + 8 + cameraAlertHeight}
+        />
+      )}
+      <MapNoticeToast
+        notice={c.notice}
+        onDismiss={c.onDismissNotice}
+        top={
+          insets.top +
+          8 +
+          (navigating ? guidance.bannerHeight + cameraAlertHeight + rerouteCardHeight : 0)
+        }
+      />
+
+      <MapPreferencesSheet
+        metrics={metrics}
+        onChange={c.onUpdateMapPreferences}
+        onClose={c.mapPreferencesSheet.close}
+        onClosed={c.mapPreferencesSheet.onClosed}
+        onOpenGuidanceSettings={c.guidanceSettings.open}
+        preferences={mapPreferences}
+        visible={c.mapPreferencesSheet.visible}
+      />
+      <AboutSheet
+        coverageName={c.coverageName}
+        metrics={metrics}
+        onClearDestinationHistory={c.onClearDestinationHistory}
+        onClose={c.about.close}
+        visible={c.about.visible}
+      />
+      <CategoriesSheet
+        metrics={metrics}
+        onCategoryPress={c.categories.onPress}
+        onClose={c.categories.close}
+        visible={c.categories.visible}
+      />
+      <RoadReportSheet
+        isSaving={c.roadReport.saving}
+        onCancel={c.roadReport.close}
+        onSelect={c.roadReport.save}
+        visible={c.roadReport.visible}
+      />
+      <GuidanceSettingsSheet
+        metrics={metrics}
+        onChange={c.guidanceSettings.change}
+        onClose={c.guidanceSettings.close}
+        settings={c.guidanceSettings.settings}
+        visible={c.guidanceSettings.visible}
+      />
+      <MapFeatureSheet
+        detail={c.featureDetail}
+        onClose={c.onCloseFeatureDetail}
+        onOpenLink={c.onOpenExternalUrl}
+      />
+      {routeState.type === 'preview' && (
+        <RouteStopsEditor
+          destinations={[...routeState.waypoints, routeState.destination]}
+          metrics={metrics}
+          onApply={c.onApplyRouteStops}
+          onClose={c.routeStops.close}
+          origin={c.location.userCoordinate}
+          visible={c.routeStops.visible}
         />
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  attribution: {
-    backgroundColor: 'rgba(255,255,255,0.88)',
-    borderBottomRightRadius: 4,
-    borderTopRightRadius: 4,
-    left: 0,
-    paddingLeft: 8,
-    paddingRight: 6,
-    paddingVertical: 4,
-    position: 'absolute',
-  },
-  attributionText: {
-    color: NavOssColors.muted,
-    fontFamily: NavOssFonts.medium,
-    fontSize: 10,
-    letterSpacing: 0,
-  },
-  roadEventAttribution: {
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderBottomRightRadius: 4,
-    borderTopRightRadius: 4,
-    left: 0,
-    maxWidth: 310,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    position: 'absolute',
-  },
-  roadEventAttributionText: {
-    color: NavOssColors.asphalt,
-    fontFamily: NavOssFonts.semibold,
-    fontSize: 10,
-    letterSpacing: 0,
-  },
-  container: {
-    backgroundColor: NavOssColors.fog,
-    flex: 1,
-  },
-  compassButton: {
-    alignItems: 'center',
-    backgroundColor: NavOssColors.white,
-    borderColor: NavOssColors.border,
-    borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth,
-    height: 44,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 14,
-    shadowColor: '#000000',
-    shadowOffset: { height: 3, width: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    width: 44,
-    zIndex: 28,
-  },
-  compassButtonSelected: {
-    backgroundColor: NavOssColors.green,
-    borderColor: NavOssColors.green,
-  },
-  controlPressed: {
-    opacity: 0.72,
-    transform: [{ scale: 0.97 }],
-  },
-  locationButton: {
-    alignItems: 'center',
-    backgroundColor: NavOssColors.white,
-    borderColor: NavOssColors.border,
-    borderRadius: 26,
-    borderWidth: StyleSheet.hairlineWidth,
-    height: 52,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 14,
-    shadowColor: '#000000',
-    shadowOffset: { height: 3, width: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    width: 52,
-  },
-  mapPreferencesButton: {
-    alignItems: 'center',
-    backgroundColor: NavOssColors.white,
-    borderColor: NavOssColors.border,
-    borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth,
-    height: 44,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 18,
-    shadowColor: '#000000',
-    shadowOffset: { height: 3, width: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    width: 44,
-    zIndex: 27,
-  },
-  reportButton: {
-    alignItems: 'center',
-    backgroundColor: NavOssColors.white,
-    borderColor: NavOssColors.border,
-    borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth,
-    height: 44,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 18,
-    shadowColor: '#000000',
-    shadowOffset: { height: 3, width: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    width: 44,
-    zIndex: 26,
-  },
-  recenterButton: {
-    alignItems: 'center',
-    backgroundColor: NavOssColors.white,
-    borderColor: NavOssColors.border,
-    borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth,
-    height: 44,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 18,
-    shadowColor: '#000000',
-    shadowOffset: { height: 3, width: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    width: 44,
-    zIndex: 28,
-  },
-  regionalMarker: {
-    alignItems: 'center',
-    backgroundColor: NavOssColors.white,
-    borderColor: NavOssColors.border,
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    height: 36,
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { height: 2, width: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    width: 36,
-  },
-  searchResultMarker: {
-    alignItems: 'center',
-    backgroundColor: NavOssColors.white,
-    borderColor: NavOssColors.border,
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    height: 36,
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { height: 2, width: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    width: 36,
-  },
-  map: {
-    flex: 1,
-  },
-  notice: {
-    alignItems: 'center',
-    alignSelf: 'center',
-    backgroundColor: NavOssColors.white,
-    borderColor: NavOssColors.border,
-    borderRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    gap: 8,
-    maxWidth: '82%',
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    position: 'absolute',
-  },
-  noticeText: {
-    color: NavOssColors.asphalt,
-    fontFamily: NavOssFonts.medium,
-    fontSize: 14,
-    letterSpacing: 0,
-  },
-  topOverlay: {
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-  },
-});
+const useStyles = createThemedStyles(({ colors }) =>
+  StyleSheet.create({
+    container: { backgroundColor: colors.background, flex: 1 },
+  }),
+);

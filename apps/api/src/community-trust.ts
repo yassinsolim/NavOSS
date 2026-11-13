@@ -1,3 +1,5 @@
+import { isIPv6 } from 'node:net';
+
 import type {
   CommunityInstallationTrust,
   CommunityReportPublication,
@@ -345,10 +347,40 @@ export function voteLimitExceeded(
   return installationVotesLastHour >= COMMUNITY_WRITE_LIMITS[trust].votesPerHour;
 }
 
-/** Network risk bucket: IPv4 /24 or IPv6 /48. Only ever used as an in-memory salted hash key. */
+/** The eight 16-bit groups of an IPv6 address in any textual form, or undefined. */
+function ipv6Groups(address: string): number[] | undefined {
+  // A zone index (`fe80::1%en0`) names a local interface, not part of the address.
+  const bare = (address.split('%')[0] ?? '').toLowerCase();
+  if (!isIPv6(bare)) return undefined;
+  // An embedded dotted IPv4 tail is the last two groups.
+  const text = bare.replace(
+    /(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/,
+    (_match, a: string, b: string, c: string, d: string) =>
+      `${((Number(a) << 8) | Number(b)).toString(16)}:${((Number(c) << 8) | Number(d)).toString(16)}`,
+  );
+  const [head = '', tail] = text.split('::');
+  const leading = head === '' ? [] : head.split(':');
+  const trailing = tail === undefined || tail === '' ? [] : tail.split(':');
+  const zeros = tail === undefined ? 0 : 8 - leading.length - trailing.length;
+  const groups = [...leading, ...Array<string>(zeros).fill('0'), ...trailing].map((group) =>
+    Number.parseInt(group, 16),
+  );
+  return groups.length === 8 ? groups : undefined;
+}
+
+/**
+ * Network risk bucket: IPv4 /24 or IPv6 /48. Only ever used as an in-memory salted hash key. IPv6
+ * is parsed to its numeric groups, so every textual spelling of one /48 (compressed or not) is
+ * one bucket, and an IPv4-mapped address shares its IPv4 /24.
+ */
 export function networkBucket(address: string): string {
-  const ipv4 = /^(?:::ffff:)?(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}$/i.exec(address);
+  const ipv4 = /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}$/.exec(address);
   if (ipv4?.[1] !== undefined) return `v4:${ipv4[1]}`;
-  const groups = address.toLowerCase().split('::')[0]?.split(':') ?? [];
-  return `v6:${groups.slice(0, 3).join(':')}`;
+  const groups = ipv6Groups(address);
+  if (groups === undefined) return `other:${address}`;
+  const [g0 = 0, g1 = 0, g2 = 0, g3 = 0, g4 = 0, g5 = 0, g6 = 0, g7 = 0] = groups;
+  if (g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0xffff) {
+    return `v4:${String(g6 >> 8)}.${String(g6 & 0xff)}.${String(g7 >> 8)}`;
+  }
+  return `v6:${[g0, g1, g2].map((group) => group.toString(16)).join(':')}`;
 }
