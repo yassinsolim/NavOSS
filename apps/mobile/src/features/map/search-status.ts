@@ -1,4 +1,4 @@
-import { SERVICE_COVERAGE_NAME, type SearchSource } from '@navoss/contracts';
+import type { SearchSource } from '@navoss/contracts';
 
 export type ApiConnectionState = 'connecting' | 'offline' | 'online';
 
@@ -33,10 +33,13 @@ export interface ServiceNotice {
  */
 export function exploreServiceNotice({
   apiConnection,
+  coverageName,
   locationState,
   nearbySearchEnabled,
 }: {
   apiConnection: ApiConnectionState;
+  /** What the server declared, e.g. 'Alberta and British Columbia'. */
+  coverageName: string;
   locationState: 'denied' | 'error' | 'idle' | 'locating' | 'visible';
   nearbySearchEnabled: boolean;
 }): ServiceNotice | undefined {
@@ -66,7 +69,7 @@ export function exploreServiceNotice({
   }
   if (locationState === 'visible' && !nearbySearchEnabled) {
     return {
-      message: `Search and directions cover ${SERVICE_COVERAGE_NAME}. Your current location is outside that area.`,
+      message: `Search and directions cover ${coverageName}. Your current location is outside that area.`,
       title: 'Outside current coverage',
       tone: 'neutral',
     };

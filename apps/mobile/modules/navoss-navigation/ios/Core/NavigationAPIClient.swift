@@ -14,6 +14,9 @@ public enum NavOSSNavigationAPIError: Error {
   /// A pass-through waypoint was requested from a server that only offers `/v1/routes`, which
   /// would turn it into a stop.
   case throughWaypointsUnsupported
+  /// A place on a newly planned route is outside the coverage the server declares, named here
+  /// as the server names it (e.g. "Calgary and Kelowna service areas").
+  case outsideCoverage(String)
 }
 
 private struct SearchRequest: Encodable {
@@ -158,10 +161,14 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     }
   }
 
-  /// Fetches routes from `/v2/routes` when the server advertises it in `/v2/config`, otherwise
-  /// from `/v1/routes`. Waypoints whose id is in `passThroughWaypointIds` steer the route without
+  /// Fetches routes from `/v2/routes` unless the server's `/v2/config` declares only
+  /// `/v1/routes`. Waypoints whose id is in `passThroughWaypointIds` steer the route without
   /// becoming stops (v2 `through` waypoints); a v1-only server cannot express that and the call
   /// throws `throughWaypointsUnsupported` instead of silently adding a stop.
+  ///
+  /// With `requireCoverage`, a route whose origin, stops or destination lie outside the coverage
+  /// the server declares is refused with `outsideCoverage` before any route request. A reroute
+  /// passes `false`: a trip between two covered places may cross uncovered roads.
   public func routes(
     origin: NavOSSCarPlayCoordinate,
     originHeadingDegrees: Double? = nil,
@@ -170,7 +177,8 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     preferences: NavOSSRoutePreferences,
     alternatives: Int = 2,
     waypoints: [NavOSSCarPlayDestination] = [],
-    passThroughWaypointIds: Set<String> = []
+    passThroughWaypointIds: Set<String> = [],
+    requireCoverage: Bool = true
   ) async throws -> [NavOSSCarPlayTrip] {
     func request(_ version: NavigationRoutesAPIVersion) -> NavigationRouteRequest {
       NavigationRouteRequest(
@@ -214,7 +222,18 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
       )
     }
 
-    if await routesVersion() != .v1 {
+    let config = await serverConfig()
+    if requireCoverage, let coverage = config?.coverage {
+      let places =
+        [origin]
+        + (waypoints + [destination]).map {
+          NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+        }
+      guard places.allSatisfy(coverage.serves) else {
+        throw NavOSSNavigationAPIError.outsideCoverage(coverage.displayName)
+      }
+    }
+    if config?.routesVersion != .v1 {
       do {
         return try trips(try await postRoutes(path: "v2/routes", request(.v2)), .v2)
       } catch NavOSSNavigationAPIError.endpointNotFound {
@@ -227,26 +246,27 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     return try trips(try await postRoutes(path: "v1/routes", request(.v1)), .v1)
   }
 
-  /// What `/v2/config` says about routes, remembered per server. `nil` when the answer is
-  /// unknown (a transient failure); the caller then tries `/v2/routes` and falls back on 404.
-  private func routesVersion() async -> NavigationRoutesAPIVersion? {
-    if let known = routesDiscovery.version(for: baseURL) {
+  /// What the server's `/v2/config` declares, remembered per server. `nil` when the answer is
+  /// unknown (a transient failure or an unreadable config); the caller then tries `/v2/routes`,
+  /// falls back on 404 and refuses nothing locally. A server without `/v2/config` predates
+  /// `/v2/routes`.
+  private func serverConfig() async -> NavigationServerConfig? {
+    if let known = routesDiscovery.config(for: baseURL) {
       return known
     }
     var request = URLRequest(url: baseURL.appending(path: "v2/config"))
     request.httpMethod = "GET"
     request.timeoutInterval = 10
-    let version: NavigationRoutesAPIVersion
+    let config: NavigationServerConfig
     do {
-      let config: NavigationConfigDiscoveryResponse = try await send(request)
-      version = config.endpoints.routes == "/v2/routes" ? .v2 : .v1
+      config = try await send(request)
     } catch NavOSSNavigationAPIError.endpointNotFound {
-      version = .v1
+      config = NavigationServerConfig(routesVersion: .v1)
     } catch {
       return nil
     }
-    routesDiscovery.record(version, for: baseURL)
-    return version
+    routesDiscovery.record(config, for: baseURL)
+    return config
   }
 
   /// Posts a route request, retrying once without origin heading/accuracy when the server

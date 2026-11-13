@@ -13,52 +13,6 @@ import Foundation
 // maneuver). In v2 it describes the step's own maneuver. `NavOSSCarPlayRouteStep` uses the v2
 // meaning, so v1 responses are shifted by one step when they are decoded.
 
-/// Which `routes` endpoint a server offers.
-enum NavigationRoutesAPIVersion: Equatable, Sendable {
-  case v1
-  case v2
-}
-
-/// Remembers, per server, whether `/v2/config` advertised `/v2/routes`. A server that lacks it
-/// is asked again after `timeToLive`, so an upgraded server is picked up without a relaunch.
-public final class NavOSSRoutesEndpointDiscovery: @unchecked Sendable {
-  public static let shared = NavOSSRoutesEndpointDiscovery()
-
-  private let clock: () -> Date
-  private var entries: [String: (version: NavigationRoutesAPIVersion, expiresAt: Date)] = [:]
-  private let lock = NSLock()
-  private let timeToLive: TimeInterval
-
-  public init(timeToLive: TimeInterval = 60 * 60, clock: @escaping () -> Date = Date.init) {
-    self.clock = clock
-    self.timeToLive = timeToLive
-  }
-
-  func version(for baseURL: URL) -> NavigationRoutesAPIVersion? {
-    lock.lock()
-    defer { lock.unlock() }
-    guard let entry = entries[baseURL.absoluteString], entry.expiresAt > clock() else {
-      return nil
-    }
-    return entry.version
-  }
-
-  func record(_ version: NavigationRoutesAPIVersion, for baseURL: URL) {
-    lock.lock()
-    entries[baseURL.absoluteString] = (version, clock().addingTimeInterval(timeToLive))
-    lock.unlock()
-  }
-}
-
-/// The part of `/v2/config` route discovery needs.
-struct NavigationConfigDiscoveryResponse: Decodable {
-  struct Endpoints: Decodable {
-    let routes: String
-  }
-
-  let endpoints: Endpoints
-}
-
 struct NavigationRouteWaypointRequest: Encodable {
   let latitude: Double
   let longitude: Double

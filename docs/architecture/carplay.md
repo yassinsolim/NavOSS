@@ -253,8 +253,9 @@ The remaining gaps are primarily data and platform capabilities:
 - congestion appears only when the server's community traffic is on and observed the route
   (`trafficSource: navoss-community`, credited as "Traffic: NavOSS drivers"); map alerts still need
   real publishers;
-- the native route client requests `/v2/routes` (discovered through `/v2/config`; a server without
-  it gets `/v1/routes`) and decodes lanes, modifiers, exits, signposts, roundabout exits, bearings
+- the native route client requests `/v2/routes` (discovered through `/v2/config`; a server that
+  declares only `/v1/routes`, or answers 404, gets `/v1/routes`; a newly planned route outside the
+  server's declared coverage is refused with "Outside NavOSS coverage") and decodes lanes, modifiers, exits, signposts, roundabout exits, bearings
   and the current road. Where a road has no such data (and always on a v1-only server), maneuver
   types and roundabout exits fall back to the instruction text and turn angles to route geometry.
   Lane data comes from OpenStreetMap `turn:lanes` tagging and is only as complete as the map;

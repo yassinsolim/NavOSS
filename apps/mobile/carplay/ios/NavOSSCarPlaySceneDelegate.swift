@@ -2341,7 +2341,12 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
           requestGeneration == self.routeRequestGeneration
         else { return }
         self.routeTask = nil
-        self.showNavigationAlert(title: failureTitle, subtitle: failureSubtitle)
+        if case NavOSSNavigationAPIError.outsideCoverage(let coverageName) = error {
+          self.showNavigationAlert(
+            title: "Outside NavOSS coverage", subtitle: "Directions cover \(coverageName).")
+        } else {
+          self.showNavigationAlert(title: failureTitle, subtitle: failureSubtitle)
+        }
       }
     }
   }
@@ -2488,10 +2493,15 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
           return
         }
         self.routeTask = nil
-        self.showNavigationAlert(
-          title: "Route unavailable",
-          subtitle: "Check your connection and try again."
-        )
+        if case NavOSSNavigationAPIError.outsideCoverage(let coverageName) = error {
+          self.showNavigationAlert(
+            title: "Outside NavOSS coverage", subtitle: "Directions cover \(coverageName).")
+        } else {
+          self.showNavigationAlert(
+            title: "Route unavailable",
+            subtitle: "Check your connection and try again."
+          )
+        }
       }
     }
   }

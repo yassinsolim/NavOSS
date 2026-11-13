@@ -1,14 +1,14 @@
 import {
-  SERVICE_COVERAGE_NAME,
+  isCoordinateServed,
   type Coordinate,
   type RouteAlternativeV2,
   type RoutePreferences,
   type RouteResponseV2,
   type SearchResult,
+  type ServerConfig,
 } from '@navoss/contracts';
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from 'react';
 
-import { isSearchCoverageRegion, mapRegionForCoordinate } from '@/features/map/map-region';
 import {
   getNavigationRoutePreferences,
   setNavigationRoutePreferences,
@@ -54,11 +54,14 @@ export function useRoutePlanner({
   onPlanningStarted,
   onRoutePlanned,
   onServiceReachable,
+  serverConfig,
 }: {
   getCurrentRouteOrigin: (signal: AbortSignal) => Promise<RouteRequestOrigin | undefined>;
   onPlanningStarted: () => void;
   onRoutePlanned: (route: RouteAlternativeV2, demoOrigin: boolean) => void;
   onServiceReachable: () => void;
+  /** What the server declared; undefined until its config arrives. */
+  serverConfig: ServerConfig | undefined;
 }): RoutePlanner {
   const abortControllerRef = useRef<AbortController>(null);
   const [routeState, setRouteState] = useState<RouteUiState>(IDLE_ROUTE);
@@ -106,11 +109,11 @@ export function useRoutePlanner({
           routeOrigin.origin,
           ...waypoints.map((waypoint) => waypoint.center),
           destination.center,
-        ].some((coordinate) => !isSearchCoverageRegion(mapRegionForCoordinate(coordinate)))
+        ].some((coordinate) => !isCoordinateServed(serverConfig?.coverage, coordinate))
       ) {
         setRouteState({
           ...plan,
-          message: `Directions cover ${SERVICE_COVERAGE_NAME}. This route includes a place outside that area.`,
+          message: `Directions cover ${serverConfig?.coverage.displayName ?? 'the NavOSS service area'}. This route includes a place outside that area.`,
           type: 'error',
         });
         return;
@@ -126,7 +129,10 @@ export function useRoutePlanner({
             ? {}
             : { waypoints: waypoints.map((waypoint) => waypoint.center) }),
         },
-        { signal: controller.signal },
+        {
+          ...(serverConfig === undefined ? {} : { routesV2: serverConfig.capabilities.routesV2 }),
+          signal: controller.signal,
+        },
       );
       if (superseded()) return;
       const fastestRoute = response.routes.at(0);

@@ -1,10 +1,11 @@
 import type { CameraRef, MapRef } from '@maplibre/maplibre-react-native';
 import {
-  SERVICE_COVERAGE_NAME,
+  isCoordinateServed,
   type Coordinate,
   type RouteAlternativeV2,
   type RoutePreferences,
   type SearchResult,
+  type ServerConfig,
 } from '@navoss/contracts';
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import {
@@ -53,7 +54,6 @@ import {
   mapPlaceFromRenderedFeatures,
   placeShareMessage,
 } from '@/features/map/map-place';
-import { isSearchCoverageRegion, mapRegionForCoordinate } from '@/features/map/map-region';
 import {
   GUIDANCE_BANNER_HEIGHT,
   routePreviewCameraPadding,
@@ -192,7 +192,8 @@ export function useMapController() {
   const sheetPosition = useSharedValue(0);
 
   const [apiConnection, setApiConnection] = useState<ApiConnectionState>('connecting');
-  const [coverageName, setCoverageName] = useState('Loading route coverage');
+  const [serverConfig, setServerConfig] = useState<ServerConfig>();
+  const coverageName = serverConfig?.coverage.displayName ?? 'Loading route coverage';
   const [isAppActive, setIsAppActive] = useState(() => AppState.currentState === 'active');
   const [activeTab, setActiveTab] = useState<AppTab>('explore');
   const [mapError, setMapError] = useState(false);
@@ -234,7 +235,7 @@ export function useMapController() {
 
   // --- Route planning and the navigation session -------------------------------------------
 
-  const location = useUserLocation();
+  const location = useUserLocation(serverConfig?.coverage);
   const { locationState, mapRegion, searchOrigin, userCoordinate, userHeading } = location;
 
   const planner = useRoutePlanner({
@@ -248,6 +249,7 @@ export function useMapController() {
     onServiceReachable: () => {
       setApiConnection('online');
     },
+    serverConfig,
   });
   const { routeState, setRouteState } = planner;
   const routeIsIdle = routeState.type === 'idle';
@@ -410,10 +412,10 @@ export function useMapController() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void fetchAppConfig(controller.signal)
+    void fetchAppConfig({ signal: controller.signal })
       .then((config) => {
         setApiConnection('online');
-        setCoverageName(config.coverage.displayName);
+        setServerConfig(config);
       })
       .catch(() => {
         if (!controller.signal.aborted) setApiConnection('offline');
@@ -551,7 +553,7 @@ export function useMapController() {
   const handleCategoryPress = (category: ExploreCategory) => {
     if (!nearbySearchEnabled) {
       showNotice({
-        message: `Nearby place categories cover ${SERVICE_COVERAGE_NAME}. Your current location is outside that area.`,
+        message: `Nearby place categories cover ${coverageName}. Your current location is outside that area.`,
         title: 'Nearby search is unavailable here',
         tone: 'warning',
       });
@@ -784,7 +786,7 @@ export function useMapController() {
   const handleFindParking = () => {
     if (selectedResult === undefined || !routeIsIdle) return;
     const parkingOrigin = selectedResult.center;
-    if (!isSearchCoverageRegion(mapRegionForCoordinate(parkingOrigin))) {
+    if (!isCoordinateServed(serverConfig?.coverage, parkingOrigin)) {
       showNotice({
         message: 'Nearby parking search is not available for this location yet.',
         title: 'Parking search is unavailable here',

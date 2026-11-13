@@ -980,7 +980,9 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
             preferences: trip.preferences,
             alternatives: 0,
             waypoints: waypoints,
-            passThroughWaypointIds: passThroughWaypointIds
+            passThroughWaypointIds: passThroughWaypointIds,
+            // The trip was planned inside coverage; the roads between may not be.
+            requireCoverage: false
           ).first
         }
         let fetched = try await navigationFetchRecoveryRoute(

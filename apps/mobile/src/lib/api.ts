@@ -1,5 +1,4 @@
 import {
-  AppConfigResponseSchema,
   compareRouteAlternatives,
   ContributionSubmissionResponseSchema,
   GooglePlaceQueryGrantResponseSchema,
@@ -12,8 +11,8 @@ import {
   SafetyCameraResponseSchema,
   SafetyFacilityResponseSchema,
   SearchResponseSchema,
+  serverConfigFromPayload,
   TrafficCameraResponseSchema,
-  type AppConfigResponse,
   type ContributionSubmissionRequest,
   type ContributionSubmissionResponse,
   type GooglePlaceQueryGrantResponse,
@@ -21,15 +20,16 @@ import {
   type OfficialRoadEventResponse,
   type OfficialSafetyCameraRegion,
   type OfficialSafetyCameraResponse,
+  type RoadEventResponse,
   type RouteRequest,
   type RouteResponse,
   type RouteResponseV2,
-  type RoadEventResponse,
   type SafetyCameraResponse,
   type SafetyFacilityRegion,
   type SafetyFacilityResponse,
   type SearchQuery,
   type SearchResponse,
+  type ServerConfig,
   type TrafficCameraRegion,
   type TrafficCameraResponse,
 } from '@navoss/contracts';
@@ -57,6 +57,17 @@ export interface SearchPlacesOptions {
 }
 
 export interface FetchRoutesOptions {
+  baseUrl?: string;
+  fetchImplementation?: typeof fetch;
+  /**
+   * What the server's config declared. `false` goes straight to `/v1/routes`; `true` or unknown
+   * asks `/v2/routes` first and falls back to `/v1/routes` on 404.
+   */
+  routesV2?: boolean;
+  signal?: AbortSignal;
+}
+
+export interface FetchAppConfigOptions {
   baseUrl?: string;
   fetchImplementation?: typeof fetch;
   signal?: AbortSignal;
@@ -154,7 +165,11 @@ export function buildSearchRequest(query: string, options: SearchPlacesOptions =
 }
 
 async function parseResponse(response: Response): Promise<unknown> {
-  const payload: unknown = await response.json();
+  // An error from something in front of the API (a proxy's HTML 404 page) still carries its
+  // status: a missing endpoint must read as 404, not as a malformed response.
+  const payload: unknown = response.ok
+    ? await response.json()
+    : await response.json().catch(() => undefined);
 
   if (!response.ok) {
     const problem = ProblemDetailsSchema.safeParse(payload);
@@ -169,12 +184,20 @@ async function parseResponse(response: Response): Promise<unknown> {
   return payload;
 }
 
-export async function fetchAppConfig(signal?: AbortSignal): Promise<AppConfigResponse> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/v2/config`,
-    signal === undefined ? undefined : { signal },
+/**
+ * The server's declared capabilities and coverage, from any server generation: `/v2/config`, or
+ * `/v1/config` on a server that predates it. See `server-config.ts` for the lenient model.
+ */
+export async function fetchAppConfig(options: FetchAppConfigOptions = {}): Promise<ServerConfig> {
+  const fetchImplementation = options.fetchImplementation ?? fetch;
+  const baseUrl = normalizeBaseUrl(options.baseUrl ?? getApiBaseUrl());
+  const init = options.signal === undefined ? undefined : { signal: options.signal };
+  const response = await fetchImplementation(`${baseUrl}/v2/config`, init);
+  return serverConfigFromPayload(
+    await parseResponse(
+      response.status === 404 ? await fetchImplementation(`${baseUrl}/v1/config`, init) : response,
+    ),
   );
-  return AppConfigResponseSchema.parse(await parseResponse(response));
 }
 
 export async function reserveGooglePlaceQuery(
@@ -248,7 +271,8 @@ export function routeResponseFromV1(response: RouteResponse): RouteResponseV2 {
 
 /**
  * Plans routes with `/v2/routes` (lanes, signposts, current road names, speed-limit states and
- * optional community traffic). A server that predates it answers 404, and the request is sent to
+ * optional community traffic). A server whose config declares only `/v1/routes` is asked there
+ * directly; one that has not said answers 404 on `/v2/routes`, and the request is sent to
  * `/v1/routes` instead, so an older deployment keeps routing without the extra detail.
  */
 export async function fetchRoutes(
@@ -278,9 +302,9 @@ export async function fetchRoutes(
     delete fallback.originHorizontalAccuracyMeters;
     return post(fallback);
   };
-  const v2Response = await send('/v2/routes');
+  const v2Response = options.routesV2 === false ? undefined : await send('/v2/routes');
   const validated =
-    v2Response.status === 404
+    v2Response === undefined || v2Response.status === 404
       ? routeResponseFromV1(
           RouteResponseSchema.parse(await parseResponse(await send('/v1/routes'))),
         )

@@ -239,6 +239,7 @@ export function MapScreen() {
         <ExploreSheet
           apiConnection={c.apiConnection}
           catalog={c.destinationCatalog}
+          coverageName={c.coverageName}
           locationState={c.location.locationState}
           metrics={metrics}
           nearbySearchEnabled={c.location.nearbySearchEnabled}
