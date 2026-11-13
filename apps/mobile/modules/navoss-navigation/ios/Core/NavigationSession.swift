@@ -85,6 +85,11 @@ final class NavigationSession {
 
   static let deadReckoningManeuverMarginMeters = 15.0
 
+  /// See `NavigationCore.rejoinBaseAlongMeters(near:)`.
+  func rejoinBaseAlongMeters(near coordinate: NavigationCoordinate) -> Double? {
+    core.rejoinBaseAlongMeters(near: coordinate)
+  }
+
   /// The on-route point `alongMeters` from the active route's origin.
   func routePoint(alongMeters: Double) -> NavigationCoordinate? {
     core.routePoint(alongMeters: alongMeters)
