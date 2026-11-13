@@ -82,7 +82,7 @@ describe('Photon search provider', () => {
     expect(response.results[0]).toMatchObject({
       category: 'address',
       center: { latitude: 51.075054, longitude: -114.138805 },
-      label: 'University of Calgary, 2500 University Drive NW, Calgary, Alberta, T2N 1N4',
+      label: 'University of Calgary, 2500 University Drive NW, Calgary',
       name: 'University of Calgary',
     });
     expect(response.source.id).toBe('photon-development');
@@ -690,7 +690,7 @@ describe('Nominatim search provider', () => {
     ]);
     expect(response.results[0]).toMatchObject({
       distanceMeters: 34,
-      label: 'Starbucks Coffee, 315 8 Avenue SW, Calgary, AB',
+      label: 'Starbucks Coffee, 315 8 Avenue SW, Calgary',
       name: 'Starbucks Coffee',
     });
     expect(response.results[1]?.distanceMeters).toBeGreaterThan(1_000);

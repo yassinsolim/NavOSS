@@ -1,0 +1,3730 @@
+{
+  "recordedAt": "2026-11-13T03:04:20.821Z",
+  "endpoint": "https://navoss-api.yassin.app/v1/search",
+  "note": "Generic public-place queries only. Recorded normalized provider results, not raw Nominatim HTTP responses.",
+  "cases": [
+    {
+      "query": {
+        "q": "University",
+        "latitude": 51.0447,
+        "longitude": -114.0719,
+        "includeDetails": true,
+        "limit": 20
+      },
+      "status": 200,
+      "response": {
+        "degraded": false,
+        "results": [
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.07795,
+              "longitude": -114.13073
+            },
+            "confidence": 1,
+            "distanceMeters": 5529,
+            "id": "poi:university-of-calgary",
+            "label": "University of Calgary, 2500 University Drive NW",
+            "name": "University of Calgary"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.0794693,
+              "longitude": -114.1226216
+            },
+            "confidence": 0.98,
+            "distanceMeters": 5245,
+            "details": {
+              "address": "University, Crowchild Trail NW, University of Calgary, Calgary, Alberta, T2M 4G4, Canada",
+              "category": "stop"
+            },
+            "id": "nominatim:node:7283215700",
+            "label": "University, Crowchild Trail NW, University of Calgary, Calgary, Alberta, T2M 4G4, Canada",
+            "name": "University"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.0799031,
+              "longitude": -114.1228736
+            },
+            "confidence": 0.98,
+            "distanceMeters": 5293,
+            "details": {
+              "address": "University, Crowchild Trail NW, Banff Trail, Calgary, Alberta, T2M 4G4, Canada",
+              "category": "platform"
+            },
+            "id": "nominatim:way:206185225",
+            "label": "University, Crowchild Trail NW, Banff Trail, Calgary, Alberta, T2M 4G4, Canada",
+            "name": "University"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.0799978,
+              "longitude": -114.1229561
+            },
+            "confidence": 0.98,
+            "distanceMeters": 5304,
+            "details": {
+              "address": "University, Crowchild Trail NW, Banff Trail, Calgary, Alberta, T2M 4K6, Canada",
+              "category": "train_station"
+            },
+            "id": "nominatim:way:197609299",
+            "label": "University, Crowchild Trail NW, Banff Trail, Calgary, Alberta, T2M 4K6, Canada",
+            "name": "University"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.0800072,
+              "longitude": -114.122957
+            },
+            "confidence": 0.98,
+            "distanceMeters": 5305,
+            "details": {
+              "address": "University, Crowchild Trail NW, University of Calgary, Calgary, Alberta, T2M 4K6, Canada",
+              "category": "station"
+            },
+            "id": "nominatim:node:6575591757",
+            "label": "University, Crowchild Trail NW, University of Calgary, Calgary, Alberta, T2M 4K6, Canada",
+            "name": "University"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.0803244,
+              "longitude": -114.1231204
+            },
+            "confidence": 0.98,
+            "distanceMeters": 5339,
+            "details": {
+              "address": "University, Crowchild Trail NW, Banff Trail, Calgary, Alberta, T2M 4K6, Canada",
+              "category": "stop"
+            },
+            "id": "nominatim:node:7283215701",
+            "label": "University, Crowchild Trail NW, Banff Trail, Calgary, Alberta, T2M 4K6, Canada",
+            "name": "University"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0851309,
+              "longitude": -114.1220466
+            },
+            "confidence": 0.97,
+            "distanceMeters": 5700,
+            "id": "calgary-business:16593261",
+            "label": "University Lodging House, 3532 Charleswood Dr NW, Charleswood, Calgary, AB",
+            "name": "University Lodging House"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.07873,
+              "longitude": -114.1452917
+            },
+            "confidence": 0.97,
+            "distanceMeters": 6374,
+            "id": "calgary-business:16756611",
+            "label": "University District Vet Clinic, 3109 39 St NW, University District, Calgary, AB",
+            "name": "University District Vet Clinic"
+          },
+          {
+            "category": "neighborhood",
+            "center": {
+              "latitude": 51.0750862,
+              "longitude": -114.1299504
+            },
+            "confidence": 0.94,
+            "distanceMeters": 5280,
+            "details": {
+              "address": "University of Calgary, Calgary, Alberta, Canada",
+              "category": "administrative"
+            },
+            "id": "nominatim:relation:18465561",
+            "label": "University of Calgary, Calgary, Alberta, Canada",
+            "name": "University of Calgary"
+          },
+          {
+            "category": "neighborhood",
+            "center": {
+              "latitude": 51.0707401,
+              "longitude": -114.1372308
+            },
+            "confidence": 0.94,
+            "distanceMeters": 5407,
+            "details": {
+              "address": "University Heights, Calgary, Alberta, Canada",
+              "category": "administrative"
+            },
+            "id": "nominatim:relation:18465560",
+            "label": "University Heights, Calgary, Alberta, Canada",
+            "name": "University Heights"
+          },
+          {
+            "category": "neighborhood",
+            "center": {
+              "latitude": 51.0743354,
+              "longitude": -114.1454744
+            },
+            "confidence": 0.94,
+            "distanceMeters": 6107,
+            "details": {
+              "address": "University District, Calgary, Alberta, Canada",
+              "category": "administrative"
+            },
+            "id": "nominatim:relation:18465569",
+            "label": "University District, Calgary, Alberta, Canada",
+            "name": "University District"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0786134,
+              "longitude": -114.1416102
+            },
+            "confidence": 0.9086545176804066,
+            "distanceMeters": 6161,
+            "id": "calgary-business:16797219",
+            "label": "Analog Coffee University, 3810 University Av NW, University District, Calgary, AB",
+            "name": "Analog Coffee University"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0786131,
+              "longitude": -114.143214
+            },
+            "confidence": 0.9086545176804066,
+            "distanceMeters": 6250,
+            "id": "calgary-business:16540049",
+            "label": "Pho Pham University District, 3908 University Av NW, University District, Calgary, AB",
+            "name": "Pho Pham University District"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0781221,
+              "longitude": -114.1439494
+            },
+            "confidence": 0.9086545176804066,
+            "distanceMeters": 6258,
+            "id": "calgary-business:16084790",
+            "label": "Cineplex Cinemas University District Vip, #250 3953 University Av NW, University District, Calgary, AB",
+            "name": "Cineplex Cinemas University District Vip"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0785904,
+              "longitude": -114.1452431
+            },
+            "confidence": 0.9086545176804066,
+            "distanceMeters": 6362,
+            "id": "calgary-business:16559809",
+            "label": "Native Tongues University District, 4014 University Av NW, University District, Calgary, AB",
+            "name": "Native Tongues University District"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0786005,
+              "longitude": -114.1461205
+            },
+            "confidence": 0.9082745634019375,
+            "distanceMeters": 6412,
+            "id": "calgary-business:16442915",
+            "label": "Hot Yoga On University District, 3108 Thirsk St NW, University District, Calgary, AB",
+            "name": "Hot Yoga On University District"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.0625848283485,
+              "longitude": -114.11858180123316
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 3821,
+            "id": "calgary-address:431f614aa02f4588d268",
+            "label": "1307 University Drive NW, Calgary, AB",
+            "name": "1307 University Drive NW"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.062713175109536,
+              "longitude": -114.1187051319281
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 3836,
+            "id": "calgary-address:e4f5b35a7277800c8b26",
+            "label": "1311 University Drive NW, Calgary, AB",
+            "name": "1311 University Drive NW"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.062852347277634,
+              "longitude": -114.1188177200387
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 3851,
+            "id": "calgary-address:696c0294f4aeaedb48e0",
+            "label": "1315 University Drive NW, Calgary, AB",
+            "name": "1315 University Drive NW"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.062987453223386,
+              "longitude": -114.11893302325862
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 3866,
+            "id": "calgary-address:54b9896c91b606c2653a",
+            "label": "1319 University Drive NW, Calgary, AB",
+            "name": "1319 University Drive NW"
+          }
+        ],
+        "source": {
+          "datasetVersion": "nominatim-self-hosted:alberta-british-columbia-geofabrik-2026-07-30+calgary-open-data-index:s8b3-j88p@2026-11-12T14:08:50.000Z+vdjc-pybd@2026-11-12T04:45:23.000Z",
+          "freshness": "fresh",
+          "id": "calgary-hybrid-search",
+          "updatedAt": "2026-11-12T14:57:37.585Z"
+        }
+      }
+    },
+    {
+      "query": {
+        "q": "University of Calgary",
+        "latitude": 51.0447,
+        "longitude": -114.0719,
+        "includeDetails": true,
+        "limit": 20
+      },
+      "status": 200,
+      "response": {
+        "degraded": false,
+        "results": [
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.07795,
+              "longitude": -114.13073
+            },
+            "confidence": 1,
+            "distanceMeters": 5529,
+            "id": "poi:university-of-calgary",
+            "label": "University of Calgary, 2500 University Drive NW",
+            "name": "University of Calgary"
+          },
+          {
+            "category": "neighborhood",
+            "center": {
+              "latitude": 51.0750862,
+              "longitude": -114.1299504
+            },
+            "confidence": 0.98,
+            "distanceMeters": 5280,
+            "details": {
+              "address": "University of Calgary, Calgary, Alberta, Canada",
+              "category": "administrative"
+            },
+            "id": "nominatim:relation:18465561",
+            "label": "University of Calgary, Calgary, Alberta, Canada",
+            "name": "University of Calgary"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0783651,
+              "longitude": -114.1283072
+            },
+            "confidence": 0.98,
+            "distanceMeters": 5436,
+            "details": {
+              "address": "University of Calgary, 2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+              "category": "university"
+            },
+            "id": "nominatim:node:29023292",
+            "label": "University of Calgary, 2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+            "name": "University of Calgary"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.075054,
+              "longitude": -114.138805
+            },
+            "confidence": 0.98,
+            "distanceMeters": 5767,
+            "details": {
+              "address": "University of Calgary, 2500, University Drive NW, University Heights, Calgary, Alberta, T2N 1N4, Canada",
+              "category": "university"
+            },
+            "id": "nominatim:way:4814074",
+            "label": "University of Calgary, 2500, University Drive NW, University Heights, Calgary, Alberta, T2N 1N4, Canada",
+            "name": "University of Calgary"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0738113,
+              "longitude": -114.1264222
+            },
+            "confidence": 0.9500000000000001,
+            "distanceMeters": 5000,
+            "id": "calgary-business:953646",
+            "label": "Lifemark Health, 2424 University Dr NW, University Of Calgary, Calgary, AB",
+            "name": "Lifemark Health"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0738113,
+              "longitude": -114.1264222
+            },
+            "confidence": 0.9500000000000001,
+            "distanceMeters": 5000,
+            "id": "calgary-business:15005176",
+            "label": "Ml Snack House, 2424 University Dr NW, University Of Calgary, Calgary, AB",
+            "name": "Ml Snack House"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0737834,
+              "longitude": -114.1274938
+            },
+            "confidence": 0.9500000000000001,
+            "distanceMeters": 5055,
+            "id": "calgary-business:14922678",
+            "label": "Bold Athlete, 2424 University Dr NW, University Of Calgary, Calgary, AB",
+            "name": "Bold Athlete"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0713863,
+              "longitude": -114.1222163
+            },
+            "confidence": 0.9472479194402695,
+            "distanceMeters": 4601,
+            "id": "calgary-business:12403374",
+            "label": "Calgary Flames (mcmahon Stadium), #c 1817 Crowchild Tr NW, University Of Calgary, Calgary, AB",
+            "name": "Calgary Flames (mcmahon Stadium)"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0745912,
+              "longitude": -114.128642
+            },
+            "confidence": 0.9419982433319092,
+            "distanceMeters": 5174,
+            "id": "calgary-business:558007",
+            "label": "Bookstore U Of C, #170n 2500 University Dr NW, University Heights, Calgary, AB",
+            "name": "Bookstore U Of C"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0694965,
+              "longitude": -114.1209315
+            },
+            "confidence": 0.9404617577791214,
+            "distanceMeters": 4398,
+            "id": "calgary-business:15898430",
+            "label": "Glow Gardens, 1817 Crowchild Tr NW, University Of Calgary, Calgary, AB",
+            "name": "Glow Gardens"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0694965,
+              "longitude": -114.1209315
+            },
+            "confidence": 0.9404617577791214,
+            "distanceMeters": 4398,
+            "id": "calgary-business:335984",
+            "label": "Mcmahon Stadium Society (the)*, 1817 Crowchild Tr NW, University Of Calgary, Calgary, AB",
+            "name": "Mcmahon Stadium Society (the)*"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0694965,
+              "longitude": -114.1209315
+            },
+            "confidence": 0.9404617577791214,
+            "distanceMeters": 4398,
+            "id": "calgary-business:13630017",
+            "label": "Stamp's Store Fanantic, 1817 Crowchild Tr NW, University Of Calgary, Calgary, AB",
+            "name": "Stamp's Store Fanantic"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0724734,
+              "longitude": -114.1190988
+            },
+            "confidence": 0.9404617577791214,
+            "distanceMeters": 4519,
+            "id": "calgary-business:13019211",
+            "label": "Absolute Baseball Academy, 2221 Crowchild Tr NW, University Of Calgary, Calgary, AB",
+            "name": "Absolute Baseball Academy"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0713863,
+              "longitude": -114.1222163
+            },
+            "confidence": 0.9404617577791214,
+            "distanceMeters": 4601,
+            "id": "calgary-business:12377982",
+            "label": "Red And White Club (the), 1833 Crowchild Tr NW, University Of Calgary, Calgary, AB",
+            "name": "Red And White Club (the)"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0748561,
+              "longitude": -114.1369023
+            },
+            "confidence": 0.9404617577791214,
+            "distanceMeters": 5646,
+            "id": "calgary-business:588939",
+            "label": "Braceworks Custom Orthotics, #1 3500 24 Av NW, University Of Calgary, Calgary, AB",
+            "name": "Braceworks Custom Orthotics"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0748561,
+              "longitude": -114.1369023
+            },
+            "confidence": 0.9404617577791214,
+            "distanceMeters": 5646,
+            "id": "calgary-business:16064164",
+            "label": "Domino's Pizza, #40 3500 24 Av NW, University Of Calgary, Calgary, AB",
+            "name": "Domino's Pizza"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0748561,
+              "longitude": -114.1369023
+            },
+            "confidence": 0.9404617577791214,
+            "distanceMeters": 5646,
+            "id": "calgary-business:15669278",
+            "label": "Starbucks Yamnuska, #50 3500 24 Av NW, University Of Calgary, Calgary, AB",
+            "name": "Starbucks Yamnuska"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0782159,
+              "longitude": -114.1317287
+            },
+            "confidence": 0.9229030191898346,
+            "distanceMeters": 5601,
+            "id": "calgary-business:13692991",
+            "label": "A & W - U Of C, #250d 402 Collegiate Bv NW, University Heights, Calgary, AB",
+            "name": "A & W - U Of C"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0773736,
+              "longitude": -114.1247843
+            },
+            "confidence": 0.9204043716192246,
+            "distanceMeters": 5183,
+            "id": "calgary-business:16370215",
+            "label": "Aramark - U Of C Mathison Hall, 215 Haskayne Pl NW, University Heights, Calgary, AB",
+            "name": "Aramark - U Of C Mathison Hall"
+          }
+        ],
+        "source": {
+          "datasetVersion": "nominatim-self-hosted:alberta-british-columbia-geofabrik-2026-07-30+calgary-open-data-index:s8b3-j88p@2026-11-12T14:08:50.000Z+vdjc-pybd@2026-11-12T04:45:23.000Z",
+          "freshness": "fresh",
+          "id": "calgary-hybrid-search",
+          "updatedAt": "2026-11-12T14:57:37.585Z"
+        }
+      }
+    },
+    {
+      "query": {
+        "q": "Costco",
+        "latitude": 51.0447,
+        "longitude": -114.0719,
+        "includeDetails": true,
+        "limit": 20
+      },
+      "status": 200,
+      "response": {
+        "degraded": false,
+        "results": [
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.9897629,
+              "longitude": -114.0463494
+            },
+            "confidence": 0.98,
+            "distanceMeters": 6365,
+            "details": {
+              "address": "Costco, 99, 6 Street SE, East Fairview Industrial, Calgary, Alberta, T2H 3A7, Canada",
+              "category": "wholesale"
+            },
+            "id": "nominatim:way:123813629",
+            "label": "Costco, 99, 6 Street SE, East Fairview Industrial, Calgary, Alberta, T2H 3A7, Canada",
+            "name": "Costco"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0432499,
+              "longitude": -113.9174518
+            },
+            "confidence": 0.98,
+            "distanceMeters": 10799,
+            "details": {
+              "address": "Costco, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+              "category": "wholesale"
+            },
+            "id": "nominatim:way:489111304",
+            "label": "Costco, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+            "name": "Costco"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1547923,
+              "longitude": -114.1553219
+            },
+            "confidence": 0.98,
+            "distanceMeters": 13557,
+            "details": {
+              "address": "Costco, 11588, Sarcee Trail NW, Sherwood, Calgary, Alberta, T3R 0A1, Canada",
+              "category": "wholesale"
+            },
+            "id": "nominatim:way:480637908",
+            "label": "Costco, 11588, Sarcee Trail NW, Sherwood, Calgary, Alberta, T3R 0A1, Canada",
+            "name": "Costco"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.2112296,
+              "longitude": -113.9832671
+            },
+            "confidence": 0.98,
+            "distanceMeters": 19523,
+            "details": {
+              "address": "Costco, 293020, Crossiron Common, CrossIron, Rocky View County, Alberta, T4A 0J6, Canada",
+              "category": "wholesale"
+            },
+            "id": "nominatim:way:151473662",
+            "label": "Costco, 293020, Crossiron Common, CrossIron, Rocky View County, Alberta, T4A 0J6, Canada",
+            "name": "Costco"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.706224,
+              "longitude": -113.9459696
+            },
+            "confidence": 0.98,
+            "distanceMeters": 38660,
+            "details": {
+              "address": "Costco, Southbank Boulevard, Southbank Centre, Okotoks, Town of Okotoks, Alberta, T1S 2N7, Canada",
+              "category": "wholesale"
+            },
+            "id": "nominatim:way:727403934",
+            "label": "Costco, Southbank Boulevard, Southbank Centre, Okotoks, Town of Okotoks, Alberta, T1S 2N7, Canada",
+            "name": "Costco"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 49.8799002,
+              "longitude": -119.4294067
+            },
+            "confidence": 0.98,
+            "distanceMeters": 400628,
+            "details": {
+              "address": "Costco, Baron Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+              "category": "wholesale"
+            },
+            "id": "nominatim:way:1136603092",
+            "label": "Costco, Baron Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+            "name": "Costco"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.9896247,
+              "longitude": -114.0463751
+            },
+            "confidence": 0.97,
+            "distanceMeters": 6379,
+            "id": "calgary-business:13058953",
+            "label": "Costco Liquor, 83 Heritage Ga SE, East Fairview Industrial, Calgary, AB",
+            "name": "Costco Liquor"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.9896247,
+              "longitude": -114.0463751
+            },
+            "confidence": 0.97,
+            "distanceMeters": 6379,
+            "id": "calgary-business:185298",
+            "label": "Costco Wholesale, 99 Heritage Ga SE, East Fairview Industrial, Calgary, AB",
+            "name": "Costco Wholesale"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0436073,
+              "longitude": -113.917582
+            },
+            "confidence": 0.97,
+            "distanceMeters": 10789,
+            "id": "calgary-business:14231039",
+            "label": "Costco Wholesale, 75 East Hills Bv SE, Belvedere, Calgary, AB",
+            "name": "Costco Wholesale"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.04319,
+              "longitude": -113.9167406
+            },
+            "confidence": 0.97,
+            "distanceMeters": 10849,
+            "id": "calgary-business:14240295",
+            "label": "Costco Liquor, 73 East Hills Bv SE, Belvedere, Calgary, AB",
+            "name": "Costco Liquor"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1547621,
+              "longitude": -114.1553248
+            },
+            "confidence": 0.97,
+            "distanceMeters": 13554,
+            "id": "calgary-business:12471389",
+            "label": "Costco Canada Liquor, 11592 Sarcee Tr NW, Sherwood, Calgary, AB",
+            "name": "Costco Canada Liquor"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1547621,
+              "longitude": -114.1553248
+            },
+            "confidence": 0.97,
+            "distanceMeters": 13554,
+            "id": "calgary-business:12471371",
+            "label": "Costco Wholesale, 11588 Sarcee Tr NW, Sherwood, Calgary, AB",
+            "name": "Costco Wholesale"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.9898772,
+              "longitude": -114.0446946
+            },
+            "confidence": 0.94,
+            "distanceMeters": 6386,
+            "details": {
+              "address": "Costco Gasoline, Heritage Gate SE, East Fairview Industrial, Calgary, Alberta, T2H 3A7, Canada",
+              "category": "fuel"
+            },
+            "id": "nominatim:way:436810752",
+            "label": "Costco Gasoline, Heritage Gate SE, East Fairview Industrial, Calgary, Alberta, T2H 3A7, Canada",
+            "name": "Costco Gasoline"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.9890231,
+              "longitude": -114.0468334
+            },
+            "confidence": 0.94,
+            "distanceMeters": 6435,
+            "details": {
+              "address": "Costco Liquor, 6 Street SE, East Fairview Industrial, Calgary, Alberta, T2H 2L9, Canada",
+              "category": "alcohol"
+            },
+            "id": "nominatim:way:1266881389",
+            "label": "Costco Liquor, 6 Street SE, East Fairview Industrial, Calgary, Alberta, T2H 2L9, Canada",
+            "name": "Costco Liquor"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0416137,
+              "longitude": -113.9176307
+            },
+            "confidence": 0.94,
+            "distanceMeters": 10791,
+            "details": {
+              "address": "Costco Gasoline, 9 Avenue SE, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+              "category": "fuel"
+            },
+            "id": "nominatim:way:492850245",
+            "label": "Costco Gasoline, 9 Avenue SE, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+            "name": "Costco Gasoline"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0428816,
+              "longitude": -113.9173773
+            },
+            "confidence": 0.94,
+            "distanceMeters": 10805,
+            "details": {
+              "address": "Costco Pharmacy, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+              "category": "pharmacy"
+            },
+            "id": "nominatim:node:12718075973",
+            "label": "Costco Pharmacy, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+            "name": "Costco Pharmacy"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.042876,
+              "longitude": -113.9170339
+            },
+            "confidence": 0.94,
+            "distanceMeters": 10829,
+            "details": {
+              "address": "Costco Food Court, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+              "category": "fast_food"
+            },
+            "id": "nominatim:node:12718075972",
+            "label": "Costco Food Court, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+            "name": "Costco Food Court"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0433134,
+              "longitude": -113.9169546
+            },
+            "confidence": 0.94,
+            "distanceMeters": 10833,
+            "details": {
+              "address": "Costco Tire Centre, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+              "category": "tyres"
+            },
+            "id": "nominatim:node:12718075974",
+            "label": "Costco Tire Centre, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+            "name": "Costco Tire Centre"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.2114424,
+              "longitude": -113.985586
+            },
+            "confidence": 0.94,
+            "distanceMeters": 19495,
+            "details": {
+              "address": "Costco Gasoline, 300-261200, CrossIron Boulevard, RONA+ Neighbourhood, Goldwyn, CrossIron, Rocky View County, Alberta, T4A 0J6, Canada",
+              "category": "fuel"
+            },
+            "id": "nominatim:way:151473664",
+            "label": "Costco Gasoline, 300-261200, CrossIron Boulevard, RONA+ Neighbourhood, Goldwyn, CrossIron, Rocky View County, Alberta, T4A 0J6, Canada",
+            "name": "Costco Gasoline"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.7069005,
+              "longitude": -113.9472076
+            },
+            "confidence": 0.94,
+            "distanceMeters": 38567,
+            "details": {
+              "address": "Costco Gasoline, 104, Southbank Boulevard, Southbank Centre, Okotoks, Town of Okotoks, Alberta, T1S 0K4, Canada",
+              "category": "fuel"
+            },
+            "id": "nominatim:way:726990622",
+            "label": "Costco Gasoline, 104, Southbank Boulevard, Southbank Centre, Okotoks, Town of Okotoks, Alberta, T1S 0K4, Canada",
+            "name": "Costco Gasoline"
+          }
+        ],
+        "source": {
+          "datasetVersion": "nominatim-self-hosted:alberta-british-columbia-geofabrik-2026-07-30+calgary-open-data-index:s8b3-j88p@2026-11-12T14:08:50.000Z+vdjc-pybd@2026-11-12T04:45:23.000Z",
+          "freshness": "fresh",
+          "id": "calgary-hybrid-search",
+          "updatedAt": "2026-11-12T14:57:37.585Z"
+        }
+      }
+    },
+    {
+      "query": {
+        "q": "Costco Kelowna",
+        "latitude": 51.0447,
+        "longitude": -114.0719,
+        "includeDetails": true,
+        "limit": 20
+      },
+      "status": 200,
+      "response": {
+        "degraded": false,
+        "results": [
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 49.8801538,
+              "longitude": -119.4285118
+            },
+            "confidence": 0.8,
+            "distanceMeters": 400558,
+            "details": {
+              "address": "Costco Tire Centre, Springfield Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+              "category": "tyres"
+            },
+            "id": "nominatim:node:12718090499",
+            "label": "Costco Tire Centre, Springfield Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+            "name": "Costco Tire Centre"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 49.8803837,
+              "longitude": -119.4287936
+            },
+            "confidence": 0.8,
+            "distanceMeters": 400568,
+            "details": {
+              "address": "Costco Food Court, Springfield Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+              "category": "fast_food"
+            },
+            "id": "nominatim:node:12718090500",
+            "label": "Costco Food Court, Springfield Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+            "name": "Costco Food Court"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 49.8799002,
+              "longitude": -119.4294067
+            },
+            "confidence": 0.8,
+            "distanceMeters": 400628,
+            "details": {
+              "address": "Costco, Baron Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+              "category": "wholesale"
+            },
+            "id": "nominatim:way:1136603092",
+            "label": "Costco, Baron Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+            "name": "Costco"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 49.8798219,
+              "longitude": -119.4295729
+            },
+            "confidence": 0.8,
+            "distanceMeters": 400642,
+            "details": {
+              "address": "Costco Pharmacy, Springfield Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+              "category": "pharmacy"
+            },
+            "id": "nominatim:node:12718105301",
+            "label": "Costco Pharmacy, Springfield Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+            "name": "Costco Pharmacy"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 49.8792937,
+              "longitude": -119.4341939
+            },
+            "confidence": 0.8,
+            "distanceMeters": 400973,
+            "details": {
+              "address": "Costco Gasoline, Baron Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+              "category": "fuel"
+            },
+            "id": "nominatim:way:1148731112",
+            "label": "Costco Gasoline, Baron Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+            "name": "Costco Gasoline"
+          }
+        ],
+        "source": {
+          "datasetVersion": "nominatim-self-hosted:alberta-british-columbia-geofabrik-2026-07-30+calgary-open-data-index:s8b3-j88p@2026-11-12T14:08:50.000Z+vdjc-pybd@2026-11-12T04:45:23.000Z",
+          "freshness": "fresh",
+          "id": "calgary-hybrid-search",
+          "updatedAt": "2026-11-12T14:57:37.585Z"
+        }
+      }
+    },
+    {
+      "query": {
+        "q": "Calgary Tower",
+        "latitude": 51.0447,
+        "longitude": -114.0719,
+        "includeDetails": true,
+        "limit": 20
+      },
+      "status": 200,
+      "response": {
+        "degraded": false,
+        "results": [
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.04427,
+              "longitude": -114.06309
+            },
+            "confidence": 1,
+            "distanceMeters": 618,
+            "details": {
+              "address": "Calgary Tower, 101, 9 Avenue SE, Downtown Commercial Core, Calgary, Alberta, T2P 1J9, Canada",
+              "category": "tower"
+            },
+            "id": "landmark:calgary-tower",
+            "label": "Calgary Tower, 101 9 Avenue SW",
+            "name": "Calgary Tower"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0391517,
+              "longitude": -114.0709627
+            },
+            "confidence": 0.9144260287284851,
+            "distanceMeters": 620,
+            "id": "calgary-business:13800735",
+            "label": "Kingston Tower, 342 15 Av SW, Beltline, Calgary, AB",
+            "name": "Kingston Tower"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0380187,
+              "longitude": -114.0762058
+            },
+            "confidence": 0.9144260287284851,
+            "distanceMeters": 802,
+            "id": "calgary-business:12557120",
+            "label": "Ambassador Tower, 630 17 Av SW, Beltline, Calgary, AB",
+            "name": "Ambassador Tower"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0385117,
+              "longitude": -114.0858941
+            },
+            "confidence": 0.9144260287284851,
+            "distanceMeters": 1196,
+            "id": "calgary-business:117747",
+            "label": "Skygate Towers, 1030 16 Av SW, Beltline, Calgary, AB",
+            "name": "Skygate Towers"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0844646,
+              "longitude": -114.1288883
+            },
+            "confidence": 0.9144260287284851,
+            "distanceMeters": 5951,
+            "id": "calgary-business:728220",
+            "label": "Brentview Towers, 3524 31 St NW, Varsity, Calgary, AB",
+            "name": "Brentview Towers"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0165855,
+              "longitude": -114.1631941
+            },
+            "confidence": 0.9144260287284851,
+            "distanceMeters": 7109,
+            "id": "calgary-business:12465167",
+            "label": "Richmond Towers, 73 Glamis Dr SW, Glamorgan, Calgary, AB",
+            "name": "Richmond Towers"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0160061,
+              "longitude": -114.1632125
+            },
+            "confidence": 0.9144260287284851,
+            "distanceMeters": 7138,
+            "id": "calgary-business:12386124",
+            "label": "Richmond Towers, 71 Glamis Dr SW, Glamorgan, Calgary, AB",
+            "name": "Richmond Towers"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0148413,
+              "longitude": -114.1631955
+            },
+            "confidence": 0.9144260287284851,
+            "distanceMeters": 7196,
+            "id": "calgary-business:12465159",
+            "label": "Richmond Towers, 69 Glamis Dr SW, Glamorgan, Calgary, AB",
+            "name": "Richmond Towers"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0327333,
+              "longitude": -114.074425
+            },
+            "confidence": 0.9123951449990273,
+            "distanceMeters": 1342,
+            "id": "calgary-business:16524670",
+            "label": "Harvard Towers, 606 23 Av SW, Cliff Bungalow, Calgary, AB",
+            "name": "Harvard Towers"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.980794,
+              "longitude": -113.9615623
+            },
+            "confidence": 0.9123951449990273,
+            "distanceMeters": 10492,
+            "id": "calgary-business:12488201",
+            "label": "Tower Mechanical, 5122 80 Av SE, Foothills, Calgary, AB",
+            "name": "Tower Mechanical"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0071599,
+              "longitude": -114.0362145
+            },
+            "confidence": 0.9112890295684338,
+            "distanceMeters": 4863,
+            "id": "calgary-business:13263322",
+            "label": "Western Tower Tech, 1919 Highfield Cr SE, Highfield, Calgary, AB",
+            "name": "Western Tower Tech"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0301326,
+              "longitude": -114.064817
+            },
+            "confidence": 0.9112434446811676,
+            "distanceMeters": 1694,
+            "id": "calgary-business:12344453",
+            "label": "Rouleau Premium Apartment North Tower, 111 25 Av SW, Mission, Calgary, AB",
+            "name": "Rouleau Premium Apartment North Tower"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0297787,
+              "longitude": -114.0652942
+            },
+            "confidence": 0.9112434446811676,
+            "distanceMeters": 1722,
+            "id": "calgary-business:12443032",
+            "label": "Rouleau Premium Apartment South Tower, 124 26 Av SW, Mission, Calgary, AB",
+            "name": "Rouleau Premium Apartment South Tower"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0767236,
+              "longitude": -114.1265673
+            },
+            "confidence": 0.9103556260466575,
+            "distanceMeters": 5223,
+            "id": "calgary-business:16583759",
+            "label": "Goodearth Coffeehouse - Education Tower, 2750 University Wy NW, University Heights, Calgary, AB",
+            "name": "Goodearth Coffeehouse - Education Tower"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0482575,
+              "longitude": -114.0817998
+            },
+            "confidence": 0.9101668849587441,
+            "distanceMeters": 797,
+            "id": "calgary-business:13570940",
+            "label": "Vista Tower, 912 6 Av SW, Downtown Commercial Core, Calgary, AB",
+            "name": "Vista Tower"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0358659,
+              "longitude": -114.0848959
+            },
+            "confidence": 0.9101668849587441,
+            "distanceMeters": 1338,
+            "id": "calgary-business:16817991",
+            "label": "Starlight Towers, 1005 Cameron Av SW, Lower Mount Royal, Calgary, AB",
+            "name": "Starlight Towers"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.9768959,
+              "longitude": -113.951132
+            },
+            "confidence": 0.9101668849587441,
+            "distanceMeters": 11324,
+            "id": "calgary-business:13715628",
+            "label": "Canada Towers, #150 5842 86 Av SE, Section 23, Calgary, AB",
+            "name": "Canada Towers"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0467651,
+              "longitude": -114.0830906
+            },
+            "confidence": 0.9092216737568378,
+            "distanceMeters": 815,
+            "id": "calgary-business:791699",
+            "label": "O'neil Towers, 700 9 St SW, Downtown Commercial Core, Calgary, AB",
+            "name": "O'neil Towers"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0467657,
+              "longitude": -114.0822213
+            },
+            "confidence": 0.9079876646399498,
+            "distanceMeters": 757,
+            "id": "calgary-business:16687188",
+            "label": "Garden Towers, #100 909 7 Av SW, Downtown Commercial Core, Calgary, AB",
+            "name": "Garden Towers"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0590798,
+              "longitude": -114.2105419
+            },
+            "confidence": 0.9079876646399498,
+            "distanceMeters": 9822,
+            "id": "calgary-business:16816092",
+            "label": "Tower Cannabis, #130 922 85 St SW, West Springs, Calgary, AB",
+            "name": "Tower Cannabis"
+          }
+        ],
+        "source": {
+          "datasetVersion": "nominatim-self-hosted:alberta-british-columbia-geofabrik-2026-07-30+calgary-open-data-index:s8b3-j88p@2026-11-12T14:08:50.000Z+vdjc-pybd@2026-11-12T04:45:23.000Z",
+          "freshness": "fresh",
+          "id": "calgary-hybrid-search",
+          "updatedAt": "2026-11-12T14:57:37.585Z"
+        }
+      }
+    },
+    {
+      "query": {
+        "q": "Central Library",
+        "latitude": 51.0447,
+        "longitude": -114.0719,
+        "includeDetails": true,
+        "limit": 20
+      },
+      "status": 200,
+      "response": {
+        "degraded": false,
+        "results": [
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.04513,
+              "longitude": -114.05789
+            },
+            "confidence": 1,
+            "distanceMeters": 981,
+            "id": "poi:calgary-central-library",
+            "label": "Central Library, 800 3 Street SE",
+            "name": "Central Library"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0455213,
+              "longitude": -114.0550679
+            },
+            "confidence": 0.86,
+            "distanceMeters": 1180,
+            "details": {
+              "address": "Calgary Central Library, 800, 3 Street SE, Downtown Commercial Core, Calgary, Alberta, T2G 2E7, Canada",
+              "category": "library"
+            },
+            "id": "nominatim:way:496824026",
+            "label": "Calgary Central Library, 800, 3 Street SE, Downtown Commercial Core, Calgary, Alberta, T2G 2E7, Canada",
+            "name": "Calgary Central Library"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 49.8623571,
+              "longitude": -119.4794089
+            },
+            "confidence": 0.8,
+            "distanceMeters": 404672,
+            "details": {
+              "address": "LIbrary, Campus West Road, Pandosy, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1Y 4X8, Canada",
+              "category": "yes"
+            },
+            "id": "nominatim:way:151323121",
+            "label": "LIbrary, Campus West Road, Pandosy, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1Y 4X8, Canada",
+            "name": "LIbrary"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.0468082,
+              "longitude": -114.0576095
+            },
+            "confidence": 0.55,
+            "distanceMeters": 1026,
+            "details": {
+              "address": "W.R. Castell Building, 616, Macleod Trail SE, Downtown Commercial Core, Calgary, Alberta, T2G 2M2, Canada",
+              "category": "library"
+            },
+            "id": "nominatim:way:495532173",
+            "label": "W.R. Castell Building, 616, Macleod Trail SE, Downtown Commercial Core, Calgary, Alberta, T2G 2M2, Canada",
+            "name": "W.R. Castell Building"
+          }
+        ],
+        "source": {
+          "datasetVersion": "nominatim-self-hosted:alberta-british-columbia-geofabrik-2026-07-30+calgary-open-data-index:s8b3-j88p@2026-11-12T14:08:50.000Z+vdjc-pybd@2026-11-12T04:45:23.000Z",
+          "freshness": "fresh",
+          "id": "calgary-hybrid-search",
+          "updatedAt": "2026-11-12T14:57:37.585Z"
+        }
+      }
+    },
+    {
+      "query": {
+        "q": "YYC airport",
+        "latitude": 51.0447,
+        "longitude": -114.0719,
+        "includeDetails": true,
+        "limit": 20
+      },
+      "status": 200,
+      "response": {
+        "degraded": false,
+        "results": [
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1310716,
+              "longitude": -114.0111217
+            },
+            "confidence": 0.9263315588235855,
+            "distanceMeters": 10500,
+            "id": "calgary-business:16288763",
+            "label": "Chachis Yyc, #5106e 2000m Airport Rd NE, Calgary International Airport, Calgary, AB",
+            "name": "Chachis Yyc"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1303398,
+              "longitude": -114.0045825
+            },
+            "confidence": 0.9250489950180054,
+            "distanceMeters": 10620,
+            "id": "calgary-business:14210132",
+            "label": "Vin Room Yyc, #1701at 2016d Airport Rd NE, Calgary International Airport, Calgary, AB",
+            "name": "Vin Room Yyc"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1345943,
+              "longitude": -114.0039222
+            },
+            "confidence": 0.923852089047432,
+            "distanceMeters": 11066,
+            "id": "calgary-business:16457780",
+            "label": "Yyc Shell, #105 9182 Airport Li NE, Calgary International Airport, Calgary, AB",
+            "name": "Yyc Shell"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1318175,
+              "longitude": -114.0116903
+            },
+            "confidence": 0.922242458164692,
+            "distanceMeters": 10560,
+            "id": "calgary-business:15952666",
+            "label": "Westjet Elevation Lounge Yyc, 2000d Airport Rd NE, Calgary International Airport, Calgary, AB",
+            "name": "Westjet Elevation Lounge Yyc"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1222952,
+              "longitude": -114.0063339
+            },
+            "confidence": 0.8,
+            "distanceMeters": 9768,
+            "details": {
+              "address": "YYC, 78 Avenue NE, McCall North Aviation Park, Calgary International Airport, Calgary, Alberta, T2E 3J1, Canada",
+              "category": "parking"
+            },
+            "id": "nominatim:way:337909931",
+            "label": "YYC, 78 Avenue NE, McCall North Aviation Park, Calgary International Airport, Calgary, Alberta, T2E 3J1, Canada",
+            "name": "YYC"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.13157,
+              "longitude": -114.01055
+            },
+            "confidence": 0.74,
+            "distanceMeters": 10567,
+            "id": "poi:yyc-airport",
+            "label": "YYC Calgary International Airport",
+            "name": "Calgary International Airport"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1222604,
+              "longitude": -114.013541
+            },
+            "confidence": 0.55,
+            "distanceMeters": 9539,
+            "details": {
+              "address": "Calgary International Airport, 2000, Airport Road NE, Calgary International Airport, Calgary, Alberta, T2E 6W5, Canada",
+              "category": "aerodrome"
+            },
+            "id": "nominatim:way:234496840",
+            "label": "Calgary International Airport, 2000, Airport Road NE, Calgary International Airport, Calgary, Alberta, T2E 6W5, Canada",
+            "name": "Calgary International Airport"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1298786,
+              "longitude": -114.0118166
+            },
+            "confidence": 0.55,
+            "distanceMeters": 10359,
+            "details": {
+              "address": "Domestic Terminal, Airport Road NE, Calgary International Airport, Calgary, Alberta, T2E 3B9, Canada",
+              "category": "terminal"
+            },
+            "id": "nominatim:way:1163393309",
+            "label": "Domestic Terminal, Airport Road NE, Calgary International Airport, Calgary, Alberta, T2E 3B9, Canada",
+            "name": "Domestic Terminal"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1308592,
+              "longitude": -114.010689
+            },
+            "confidence": 0.55,
+            "distanceMeters": 10491,
+            "details": {
+              "address": "Calgary International Airport-Domestic Terminal, 2000, Airport Road NE, Calgary International Airport, Calgary, Alberta, T3K 5K3, Canada",
+              "category": "terminal"
+            },
+            "id": "nominatim:relation:15730965",
+            "label": "Calgary International Airport-Domestic Terminal, 2000, Airport Road NE, Calgary International Airport, Calgary, Alberta, T3K 5K3, Canada",
+            "name": "Calgary International Airport-Domestic Terminal"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1328745,
+              "longitude": -114.014881
+            },
+            "confidence": 0.55,
+            "distanceMeters": 10582,
+            "details": {
+              "address": "Domestic Terminal, Airport Road NE, Calgary International Airport, Calgary, Alberta, T3K 5K3, Canada",
+              "category": "terminal"
+            },
+            "id": "nominatim:way:1163089032",
+            "label": "Domestic Terminal, Airport Road NE, Calgary International Airport, Calgary, Alberta, T3K 5K3, Canada",
+            "name": "Domestic Terminal"
+          }
+        ],
+        "source": {
+          "datasetVersion": "nominatim-self-hosted:alberta-british-columbia-geofabrik-2026-07-30+calgary-open-data-index:s8b3-j88p@2026-11-12T14:08:50.000Z+vdjc-pybd@2026-11-12T04:45:23.000Z",
+          "freshness": "fresh",
+          "id": "calgary-hybrid-search",
+          "updatedAt": "2026-11-12T14:57:37.585Z"
+        }
+      }
+    },
+    {
+      "query": {
+        "q": "2500 University Drive NW",
+        "latitude": 51.0447,
+        "longitude": -114.0719,
+        "includeDetails": true,
+        "limit": 20
+      },
+      "status": 200,
+      "response": {
+        "degraded": false,
+        "results": [
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.07458444622404,
+              "longitude": -114.12862768882589
+            },
+            "confidence": 0.99,
+            "distanceMeters": 5173,
+            "id": "calgary-address:6bee85bc790d1666747f",
+            "label": "2500 University Drive NW, Calgary, AB",
+            "name": "2500 University Drive NW"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0745912,
+              "longitude": -114.128642
+            },
+            "confidence": 0.9500000000000001,
+            "distanceMeters": 5174,
+            "id": "calgary-business:558007",
+            "label": "Bookstore U Of C, #170n 2500 University Dr NW, University Heights, Calgary, AB",
+            "name": "Bookstore U Of C"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0745912,
+              "longitude": -114.128642
+            },
+            "confidence": 0.9500000000000001,
+            "distanceMeters": 5174,
+            "id": "calgary-business:557538",
+            "label": "Bound & Copied Students Union, #140b 2500 University Dr NW, University Heights, Calgary, AB",
+            "name": "Bound & Copied Students Union"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0745912,
+              "longitude": -114.128642
+            },
+            "confidence": 0.9500000000000001,
+            "distanceMeters": 5174,
+            "id": "calgary-business:16505794",
+            "label": "Dopamine Dreams, 2500 University Dr NW, University Heights, Calgary, AB",
+            "name": "Dopamine Dreams"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0745912,
+              "longitude": -114.128642
+            },
+            "confidence": 0.9500000000000001,
+            "distanceMeters": 5174,
+            "id": "calgary-business:16189433",
+            "label": "Mr Pretzels, #200a 2500 University Dr NW, University Heights, Calgary, AB",
+            "name": "Mr Pretzels"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0745912,
+              "longitude": -114.128642
+            },
+            "confidence": 0.9500000000000001,
+            "distanceMeters": 5174,
+            "id": "calgary-business:13252291",
+            "label": "Museo, #128 2500 University Dr NW, University Heights, Calgary, AB",
+            "name": "Museo"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0745912,
+              "longitude": -114.128642
+            },
+            "confidence": 0.9500000000000001,
+            "distanceMeters": 5174,
+            "id": "calgary-business:15669062",
+            "label": "Starbucks Bookstore, 2500 University Dr NW, University Heights, Calgary, AB",
+            "name": "Starbucks Bookstore"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0745912,
+              "longitude": -114.128642
+            },
+            "confidence": 0.9500000000000001,
+            "distanceMeters": 5174,
+            "id": "calgary-business:923474",
+            "label": "Students' Union Convenience Store, #278 2500 University Dr NW, University Heights, Calgary, AB",
+            "name": "Students' Union Convenience Store"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.0749209,
+              "longitude": -114.128233
+            },
+            "confidence": 0.92,
+            "distanceMeters": 5176,
+            "details": {
+              "address": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 4E2, Canada",
+              "category": "sign"
+            },
+            "id": "nominatim:node:5517415709",
+            "label": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 4E2, Canada",
+            "name": "2500"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.0675953,
+              "longitude": -114.1421423
+            },
+            "confidence": 0.92,
+            "distanceMeters": 5530,
+            "details": {
+              "address": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+              "category": "motorway_junction"
+            },
+            "id": "nominatim:node:360096530",
+            "label": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+            "name": "2500"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0782459,
+              "longitude": -114.1303696
+            },
+            "confidence": 0.92,
+            "distanceMeters": 5533,
+            "details": {
+              "address": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+              "category": "bicycle_parking"
+            },
+            "id": "nominatim:node:12242173901",
+            "label": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+            "name": "2500"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.078149,
+              "longitude": -114.1310887
+            },
+            "confidence": 0.92,
+            "distanceMeters": 5563,
+            "details": {
+              "address": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+              "category": "picnic_table"
+            },
+            "id": "nominatim:node:12269866759",
+            "label": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+            "name": "2500"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0782572,
+              "longitude": -114.1311237
+            },
+            "confidence": 0.92,
+            "distanceMeters": 5573,
+            "details": {
+              "address": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+              "category": "recycling"
+            },
+            "id": "nominatim:node:12269890225",
+            "label": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+            "name": "2500"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.078273,
+              "longitude": -114.131126
+            },
+            "confidence": 0.92,
+            "distanceMeters": 5574,
+            "details": {
+              "address": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+              "category": "waste_basket"
+            },
+            "id": "nominatim:node:12269833294",
+            "label": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+            "name": "2500"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.0799973,
+              "longitude": -114.1305924
+            },
+            "confidence": 0.92,
+            "distanceMeters": 5677,
+            "details": {
+              "address": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+              "category": "elevator"
+            },
+            "id": "nominatim:node:12289143079",
+            "label": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+            "name": "2500"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0790812,
+              "longitude": -114.1329201
+            },
+            "confidence": 0.92,
+            "distanceMeters": 5727,
+            "details": {
+              "address": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+              "category": "vending_machine"
+            },
+            "id": "nominatim:node:12283543902",
+            "label": "2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+            "name": "2500"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.07795,
+              "longitude": -114.13073
+            },
+            "confidence": 0.82,
+            "distanceMeters": 5529,
+            "id": "poi:university-of-calgary",
+            "label": "University of Calgary, 2500 University Drive NW",
+            "name": "University of Calgary"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.0746863,
+              "longitude": -114.1283551
+            },
+            "confidence": 0.8,
+            "distanceMeters": 5166,
+            "details": {
+              "address": "NB University DR @ 24 AV NW, 2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+              "category": "bus_stop"
+            },
+            "id": "nominatim:node:10812229856",
+            "label": "NB University DR @ 24 AV NW, 2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+            "name": "NB University DR @ 24 AV NW"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0783852,
+              "longitude": -114.1309848
+            },
+            "confidence": 0.8,
+            "distanceMeters": 5575,
+            "details": {
+              "address": "True Eats, 2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+              "category": "fast_food"
+            },
+            "id": "nominatim:node:301299589",
+            "label": "True Eats, 2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+            "name": "True Eats"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0783634,
+              "longitude": -114.1310403
+            },
+            "confidence": 0.8,
+            "distanceMeters": 5576,
+            "details": {
+              "address": "Campus Vision, 2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+              "category": "optician"
+            },
+            "id": "nominatim:node:12251409155",
+            "label": "Campus Vision, 2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+            "name": "Campus Vision"
+          }
+        ],
+        "source": {
+          "datasetVersion": "nominatim-self-hosted:alberta-british-columbia-geofabrik-2026-07-30+calgary-open-data-index:s8b3-j88p@2026-11-12T14:08:50.000Z+vdjc-pybd@2026-11-12T04:45:23.000Z",
+          "freshness": "fresh",
+          "id": "calgary-hybrid-search",
+          "updatedAt": "2026-11-12T14:57:37.585Z"
+        }
+      }
+    },
+    {
+      "query": {
+        "q": "Cafes",
+        "category": "cafe",
+        "sort": "distance",
+        "latitude": 51.0447,
+        "longitude": -114.0719,
+        "includeDetails": true,
+        "limit": 20
+      },
+      "status": 200,
+      "response": {
+        "degraded": false,
+        "results": [
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0459554,
+              "longitude": -114.0710147
+            },
+            "confidence": 0.55,
+            "distanceMeters": 153,
+            "details": {
+              "address": "Tim Hortons, 751, 3 Street SW, Downtown Commercial Core, Calgary, Alberta, T2P 4K8, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:9869228974",
+            "label": "Tim Hortons, 751, 3 Street SW, Downtown Commercial Core, Calgary, Alberta, T2P 4K8, Canada",
+            "name": "Tim Hortons"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0478689,
+              "longitude": -114.0735482
+            },
+            "confidence": 0.55,
+            "distanceMeters": 371,
+            "details": {
+              "address": "Caffe Levant, 550, 6 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 0S2, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:13130130577",
+            "label": "Caffe Levant, 550, 6 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 0S2, Canada",
+            "name": "Caffe Levant"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0485109,
+              "longitude": -114.0729974
+            },
+            "confidence": 0.55,
+            "distanceMeters": 431,
+            "details": {
+              "address": "Prologue Cafe | Cocktail, 525, 5 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 1P7, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:11562455663",
+            "label": "Prologue Cafe | Cocktail, 525, 5 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 1P7, Canada",
+            "name": "Prologue Cafe | Cocktail"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0487658,
+              "longitude": -114.0713238
+            },
+            "confidence": 0.55,
+            "distanceMeters": 454,
+            "details": {
+              "address": "Tim Hortons, 444, 5 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 2T8, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:988602328",
+            "label": "Tim Hortons, 444, 5 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 2T8, Canada",
+            "name": "Tim Hortons"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0476803,
+              "longitude": -114.0656243
+            },
+            "confidence": 0.55,
+            "distanceMeters": 550,
+            "details": {
+              "address": "Tim Hortons, 202, 6 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 2R9, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:1110057527",
+            "label": "Tim Hortons, 202, 6 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 2R9, Canada",
+            "name": "Tim Hortons"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0490779,
+              "longitude": -114.0672945
+            },
+            "confidence": 0.55,
+            "distanceMeters": 584,
+            "details": {
+              "address": "Monogram Coffee, 420, 2 Street SW, Downtown Commercial Core, Calgary, Alberta, T2P 3K4, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:5514235222",
+            "label": "Monogram Coffee, 420, 2 Street SW, Downtown Commercial Core, Calgary, Alberta, T2P 3K4, Canada",
+            "name": "Monogram Coffee"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0498305,
+              "longitude": -114.069863
+            },
+            "confidence": 0.55,
+            "distanceMeters": 588,
+            "details": {
+              "address": "Starbucks, 320, 4 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 2S6, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:988602324",
+            "label": "Starbucks, 320, 4 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 2S6, Canada",
+            "name": "Starbucks"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0501198,
+              "longitude": -114.0704744
+            },
+            "confidence": 0.55,
+            "distanceMeters": 611,
+            "details": {
+              "address": "Caffe Artigiano, 4 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 0J7, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:1660083421",
+            "label": "Caffe Artigiano, 4 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 0J7, Canada",
+            "name": "Caffe Artigiano"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0481047,
+              "longitude": -114.0633705
+            },
+            "confidence": 0.55,
+            "distanceMeters": 706,
+            "details": {
+              "address": "Barrow Coffee Roasters, 111, 5 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 3Y6, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:11563447525",
+            "label": "Barrow Coffee Roasters, 111, 5 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 3Y6, Canada",
+            "name": "Barrow Coffee Roasters"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0498607,
+              "longitude": -114.0629738
+            },
+            "confidence": 0.55,
+            "distanceMeters": 848,
+            "details": {
+              "address": "Gong Cha, 303, Centre Street S, Downtown Commercial Core, Calgary, Alberta, T2G 2B8, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:5446943875",
+            "label": "Gong Cha, 303, Centre Street S, Downtown Commercial Core, Calgary, Alberta, T2G 2B8, Canada",
+            "name": "Gong Cha"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0515586,
+              "longitude": -114.0781769
+            },
+            "confidence": 0.55,
+            "distanceMeters": 880,
+            "details": {
+              "address": "Alforno Bakery & Cafe, 227, 7 Street SW, Eau Claire, Calgary, Alberta, T2P 0E4, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:6577746785",
+            "label": "Alforno Bakery & Cafe, 227, 7 Street SW, Eau Claire, Calgary, Alberta, T2P 0E4, Canada",
+            "name": "Alforno Bakery & Cafe"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0514776,
+              "longitude": -114.0643954
+            },
+            "confidence": 0.55,
+            "distanceMeters": 918,
+            "details": {
+              "address": "Peerless Pearl Tea Shop, 2 Avenue SW, Chinatown, Calgary, Alberta, T2P 0B9, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:934572818",
+            "label": "Peerless Pearl Tea Shop, 2 Avenue SW, Chinatown, Calgary, Alberta, T2P 0B9, Canada",
+            "name": "Peerless Pearl Tea Shop"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0524577,
+              "longitude": -114.067287
+            },
+            "confidence": 0.55,
+            "distanceMeters": 921,
+            "details": {
+              "address": "Cafe Gravity, 240, Riverfront Avenue SW, Chinatown, Calgary, Alberta, T2P 0A5, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:3512748532",
+            "label": "Cafe Gravity, 240, Riverfront Avenue SW, Chinatown, Calgary, Alberta, T2P 0A5, Canada",
+            "name": "Cafe Gravity"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0382362,
+              "longitude": -114.080292
+            },
+            "confidence": 0.55,
+            "distanceMeters": 928,
+            "details": {
+              "address": "PurrTea, 816A, 16 Avenue SW, 17th Ave Retail & Entertainment District, Beltline, Calgary, Alberta, T2R 0S9, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:9697510231",
+            "label": "PurrTea, 816A, 16 Avenue SW, 17th Ave Retail & Entertainment District, Beltline, Calgary, Alberta, T2R 0S9, Canada",
+            "name": "PurrTea"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0521425,
+              "longitude": -114.0781475
+            },
+            "confidence": 0.55,
+            "distanceMeters": 936,
+            "details": {
+              "address": "Hutch Cafe, 795, 1 Avenue SW, Eau Claire, Calgary, Alberta, T2P 3B5, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:11563447513",
+            "label": "Hutch Cafe, 795, 1 Avenue SW, Eau Claire, Calgary, Alberta, T2P 3B5, Canada",
+            "name": "Hutch Cafe"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0524403,
+              "longitude": -114.0663344
+            },
+            "confidence": 0.55,
+            "distanceMeters": 945,
+            "details": {
+              "address": "Tiger Sugar, 210, Riverfront Avenue SW, Chinatown, Calgary, Alberta, T2P 0A5, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:12272533480",
+            "label": "Tiger Sugar, 210, Riverfront Avenue SW, Chinatown, Calgary, Alberta, T2P 0A5, Canada",
+            "name": "Tiger Sugar"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.051013,
+              "longitude": -114.0624691
+            },
+            "confidence": 0.55,
+            "distanceMeters": 963,
+            "details": {
+              "address": "S'more Please!, Centre Street S, Chinatown, Calgary, Alberta, T2G 2B6, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:12992105955",
+            "label": "S'more Please!, Centre Street S, Chinatown, Calgary, Alberta, T2G 2B6, Canada",
+            "name": "S'more Please!"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0479858,
+              "longitude": -114.0866527
+            },
+            "confidence": 0.55,
+            "distanceMeters": 1094,
+            "details": {
+              "address": "Rendezvous Cafe, 1111, 6 Avenue SW, Downtown West End, Calgary, Alberta, T2P 5M5, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:node:331689261",
+            "label": "Rendezvous Cafe, 1111, 6 Avenue SW, Downtown West End, Calgary, Alberta, T2P 5M5, Canada",
+            "name": "Rendezvous Cafe"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0549081,
+              "longitude": -114.0716264
+            },
+            "confidence": 0.55,
+            "distanceMeters": 1135,
+            "details": {
+              "address": "River Café, 25, Bow River Pathway (South), Eau Claire, Calgary, Alberta, T2P 0R1, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:way:221143394",
+            "label": "River Café, 25, Bow River Pathway (South), Eau Claire, Calgary, Alberta, T2P 0R1, Canada",
+            "name": "River Café"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0530339,
+              "longitude": -114.0856142
+            },
+            "confidence": 0.55,
+            "distanceMeters": 1333,
+            "details": {
+              "address": "vitaminboba, 130, 10 Street NW, Kensington BRZ, Hillhurst, Calgary, Alberta, T2N 1V3, Canada",
+              "category": "cafe"
+            },
+            "id": "nominatim:way:274890986",
+            "label": "vitaminboba, 130, 10 Street NW, Kensington BRZ, Hillhurst, Calgary, Alberta, T2N 1V3, Canada",
+            "name": "vitaminboba"
+          }
+        ],
+        "source": {
+          "datasetVersion": "alberta-british-columbia-geofabrik-2026-07-30",
+          "freshness": "fresh",
+          "id": "nominatim-self-hosted",
+          "updatedAt": "2026-11-13T03:04:06.244Z"
+        }
+      }
+    },
+    {
+      "query": {
+        "q": "Groceries",
+        "category": "grocery",
+        "sort": "distance",
+        "latitude": 51.0447,
+        "longitude": -114.0719,
+        "includeDetails": true,
+        "limit": 20
+      },
+      "status": 200,
+      "response": {
+        "degraded": false,
+        "results": [
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0454316,
+              "longitude": -114.0688944
+            },
+            "confidence": 0.55,
+            "distanceMeters": 225,
+            "details": {
+              "address": "Sunterra, 8 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 0T1, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:node:13109410701",
+            "label": "Sunterra, 8 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 0T1, Canada",
+            "name": "Sunterra"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0423399,
+              "longitude": -114.0800853
+            },
+            "confidence": 0.55,
+            "distanceMeters": 630,
+            "details": {
+              "address": "Safeway, 813, 11 Avenue SW, Connaught, Beltline, Calgary, Alberta, T2R 0E6, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:way:160843468",
+            "label": "Safeway, 813, 11 Avenue SW, Connaught, Beltline, Calgary, Alberta, T2R 0E6, Canada",
+            "name": "Safeway"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0478599,
+              "longitude": -114.0826967
+            },
+            "confidence": 0.55,
+            "distanceMeters": 833,
+            "details": {
+              "address": "Kay's Food Market, 931, 6 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 0V7, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:node:1488051634",
+            "label": "Kay's Food Market, 931, 6 Avenue SW, Downtown Commercial Core, Calgary, Alberta, T2P 0V7, Canada",
+            "name": "Kay's Food Market"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0414979,
+              "longitude": -114.0605577
+            },
+            "confidence": 0.55,
+            "distanceMeters": 869,
+            "details": {
+              "address": "Sunterra Market, 200, 12 Ave Cycle Track, Connaught, Beltline, Calgary, Alberta, T2R 0Z5, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:node:3167035072",
+            "label": "Sunterra Market, 200, 12 Ave Cycle Track, Connaught, Beltline, Calgary, Alberta, T2R 0Z5, Canada",
+            "name": "Sunterra Market"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0399682,
+              "longitude": -114.060616
+            },
+            "confidence": 0.55,
+            "distanceMeters": 948,
+            "details": {
+              "address": "H Mart, 1308, 1 Street SE, Victoria Park, Beltline, Calgary, Alberta, T2G 2C3, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:node:13383690493",
+            "label": "H Mart, 1308, 1 Street SE, Victoria Park, Beltline, Calgary, Alberta, T2G 2C3, Canada",
+            "name": "H Mart"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0382891,
+              "longitude": -114.082277
+            },
+            "confidence": 0.55,
+            "distanceMeters": 1017,
+            "details": {
+              "address": "Save-On-Foods, 906, 16 Avenue SW, 17th Ave Retail & Entertainment District, Beltline, Calgary, Alberta, T2R 1C1, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:node:7576466276",
+            "label": "Save-On-Foods, 906, 16 Avenue SW, 17th Ave Retail & Entertainment District, Beltline, Calgary, Alberta, T2R 1C1, Canada",
+            "name": "Save-On-Foods"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0454885,
+              "longitude": -114.0882539
+            },
+            "confidence": 0.55,
+            "distanceMeters": 1147,
+            "details": {
+              "address": "No Frills, 870, 11 Street SW, Downtown West End, Calgary, Alberta, T2P 3N7, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:node:12807326327",
+            "label": "No Frills, 870, 11 Street SW, Downtown West End, Calgary, Alberta, T2P 3N7, Canada",
+            "name": "No Frills"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0435995,
+              "longitude": -114.0882353
+            },
+            "confidence": 0.98,
+            "distanceMeters": 1149,
+            "details": {
+              "address": "Calgary Co-op, 1130, 11 Avenue SW, Connaught, Beltline, Calgary, Alberta, T2R 0G4, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:way:218183994",
+            "label": "Calgary Co-op, 1130, 11 Avenue SW, Connaught, Beltline, Calgary, Alberta, T2R 0G4, Canada",
+            "name": "Calgary Co-op"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0444761,
+              "longitude": -114.0915061
+            },
+            "confidence": 0.55,
+            "distanceMeters": 1371,
+            "details": {
+              "address": "Community Natural Foods, 1304, 10 Avenue SW, Beltline, Calgary, Alberta, T3C 0J2, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:way:41109374",
+            "label": "Community Natural Foods, 1304, 10 Avenue SW, Beltline, Calgary, Alberta, T3C 0J2, Canada",
+            "name": "Community Natural Foods"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0446032,
+              "longitude": -114.092534
+            },
+            "confidence": 0.55,
+            "distanceMeters": 1443,
+            "details": {
+              "address": "A-Mart, 1324, 10 Avenue SW, Beltline, Calgary, Alberta, T3C 0J2, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:node:6359242798",
+            "label": "A-Mart, 1324, 10 Avenue SW, Beltline, Calgary, Alberta, T3C 0J2, Canada",
+            "name": "A-Mart"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0554973,
+              "longitude": -114.0855104
+            },
+            "confidence": 0.55,
+            "distanceMeters": 1532,
+            "details": {
+              "address": "Sunnyside Natural Market, 338, 3 Avenue NW, Kensington BRZ, Sunnyside, Calgary, Alberta, T2N 1V8, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:node:885793624",
+            "label": "Sunnyside Natural Market, 338, 3 Avenue NW, Kensington BRZ, Sunnyside, Calgary, Alberta, T2N 1V8, Canada",
+            "name": "Sunnyside Natural Market"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0561277,
+              "longitude": -114.0852278
+            },
+            "confidence": 0.55,
+            "distanceMeters": 1576,
+            "details": {
+              "address": "Safeway, 410, 10 Street NW, Kensington BRZ, Sunnyside, Calgary, Alberta, T2N 1V9, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:way:19001459",
+            "label": "Safeway, 410, 10 Street NW, Kensington BRZ, Sunnyside, Calgary, Alberta, T2N 1V9, Canada",
+            "name": "Safeway"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0302821,
+              "longitude": -114.0727072
+            },
+            "confidence": 0.55,
+            "distanceMeters": 1604,
+            "details": {
+              "address": "Safeway, 524, Elbow Drive SW, Cliff Bungalow, Calgary, Alberta, T2S 2H6, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:way:217972734",
+            "label": "Safeway, 524, Elbow Drive SW, Cliff Bungalow, Calgary, Alberta, T2S 2H6, Canada",
+            "name": "Safeway"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0388074,
+              "longitude": -114.0944652
+            },
+            "confidence": 0.55,
+            "distanceMeters": 1708,
+            "details": {
+              "address": "Global Variety Store, 1514, 14 Street SW, Beltline, Calgary, Alberta, T3C 1C9, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:way:395701596",
+            "label": "Global Variety Store, 1514, 14 Street SW, Beltline, Calgary, Alberta, T3C 1C9, Canada",
+            "name": "Global Variety Store"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0649276,
+              "longitude": -114.0633139
+            },
+            "confidence": 0.55,
+            "distanceMeters": 2328,
+            "details": {
+              "address": "Lambda Oriental Foods Market, 14 Avenue NW, Crescent Heights, Calgary, Alberta, T2M 0E2, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:node:297058148",
+            "label": "Lambda Oriental Foods Market, 14 Avenue NW, Crescent Heights, Calgary, Alberta, T2M 0E2, Canada",
+            "name": "Lambda Oriental Foods Market"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0666584,
+              "longitude": -114.0638739
+            },
+            "confidence": 0.55,
+            "distanceMeters": 2505,
+            "details": {
+              "address": "Tops Supermarket, 1623, 16 Avenue NW, Crescent Heights, Calgary, Alberta, T2M 0H5, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:node:13889737904",
+            "label": "Tops Supermarket, 1623, 16 Avenue NW, Crescent Heights, Calgary, Alberta, T2M 0H5, Canada",
+            "name": "Tops Supermarket"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0683361,
+              "longitude": -114.060989
+            },
+            "confidence": 0.55,
+            "distanceMeters": 2737,
+            "details": {
+              "address": "Safeway, 1818, Centre Street N, Balmoral, Tuxedo Park, Calgary, Alberta, T2E 2T9, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:way:1338787624",
+            "label": "Safeway, 1818, Centre Street N, Balmoral, Tuxedo Park, Calgary, Alberta, T2E 2T9, Canada",
+            "name": "Safeway"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0674046,
+              "longitude": -114.0520661
+            },
+            "confidence": 0.55,
+            "distanceMeters": 2880,
+            "details": {
+              "address": "Co-op, 540, 16 Avenue NE, Winston Heights/Mountview, Calgary, Alberta, T2E 1K4, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:way:1537079832",
+            "label": "Co-op, 540, 16 Avenue NE, Winston Heights/Mountview, Calgary, Alberta, T2E 1K4, Canada",
+            "name": "Co-op"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0703154,
+              "longitude": -114.0566459
+            },
+            "confidence": 0.55,
+            "distanceMeters": 3041,
+            "details": {
+              "address": "The Italian Supermarket, 265, 20 Avenue NE, Balmoral, Tuxedo Park, Calgary, Alberta, T2E 1R1, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:node:5219029695",
+            "label": "The Italian Supermarket, 265, 20 Avenue NE, Balmoral, Tuxedo Park, Calgary, Alberta, T2E 1R1, Canada",
+            "name": "The Italian Supermarket"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0703692,
+              "longitude": -114.0876063
+            },
+            "confidence": 0.55,
+            "distanceMeters": 3058,
+            "details": {
+              "address": "Brown's Grocery, 1201, 20 Avenue NW, Capitol Hill, Calgary, Alberta, T2M 1G2, Canada",
+              "category": "supermarket"
+            },
+            "id": "nominatim:node:13648518299",
+            "label": "Brown's Grocery, 1201, 20 Avenue NW, Capitol Hill, Calgary, Alberta, T2M 1G2, Canada",
+            "name": "Brown's Grocery"
+          }
+        ],
+        "source": {
+          "datasetVersion": "alberta-british-columbia-geofabrik-2026-07-30",
+          "freshness": "fresh",
+          "id": "nominatim-self-hosted",
+          "updatedAt": "2026-11-13T03:04:08.386Z"
+        }
+      }
+    },
+    {
+      "query": {
+        "q": "University station",
+        "latitude": 51.0447,
+        "longitude": -114.0719,
+        "includeDetails": true,
+        "limit": 20
+      },
+      "status": 200,
+      "response": {
+        "degraded": false,
+        "results": [
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.0110658,
+              "longitude": -114.1260808
+            },
+            "confidence": 0.86,
+            "distanceMeters": 5324,
+            "details": {
+              "address": "Mount Royal University Station (NB), Richard Road SW, Lincoln Park, Calgary, Alberta, T3E 6L1, Canada",
+              "category": "bus_stop"
+            },
+            "id": "nominatim:node:5313118269",
+            "label": "Mount Royal University Station (NB), Richard Road SW, Lincoln Park, Calgary, Alberta, T3E 6L1, Canada",
+            "name": "Mount Royal University Station (NB)"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.010921,
+              "longitude": -114.1278848
+            },
+            "confidence": 0.86,
+            "distanceMeters": 5426,
+            "details": {
+              "address": "Mount Royal University Station (SB), Richard Road SW, Lincoln Park, Calgary, Alberta, T3E 7N5, Canada",
+              "category": "bus_stop"
+            },
+            "id": "nominatim:node:5313118267",
+            "label": "Mount Royal University Station (SB), Richard Road SW, Lincoln Park, Calgary, Alberta, T3E 7N5, Canada",
+            "name": "Mount Royal University Station (SB)"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.0799497,
+              "longitude": -114.1245269
+            },
+            "confidence": 0.8,
+            "distanceMeters": 5375,
+            "details": {
+              "address": "University LRT Station (NB), 2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+              "category": "bus_stop"
+            },
+            "id": "nominatim:node:10139147850",
+            "label": "University LRT Station (NB), 2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+            "name": "University LRT Station (NB)"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.0803706,
+              "longitude": -114.1251996
+            },
+            "confidence": 0.8,
+            "distanceMeters": 5441,
+            "details": {
+              "address": "University LRT Station (SB), 2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+              "category": "bus_stop"
+            },
+            "id": "nominatim:node:10139147849",
+            "label": "University LRT Station (SB), 2500, University Drive NW, University of Calgary, Calgary, Alberta, T2N 1N4, Canada",
+            "name": "University LRT Station (SB)"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0272877,
+              "longitude": -115.0335813
+            },
+            "confidence": 0.8,
+            "distanceMeters": 67271,
+            "details": {
+              "address": "University of Calgary - Biogeoscience Institute - Barrier Lake Field Station, Barrier Lake Forestry Trails - History Loop, Kananaskis Improvement District, Alberta, Canada",
+              "category": "university"
+            },
+            "id": "nominatim:way:492217616",
+            "label": "University of Calgary - Biogeoscience Institute - Barrier Lake Field Station, Barrier Lake Forestry Trails - History Loop, Kananaskis Improvement District, Alberta, Canada",
+            "name": "University of Calgary - Biogeoscience Institute - Barrier Lake Field Station"
+          }
+        ],
+        "source": {
+          "datasetVersion": "nominatim-self-hosted:alberta-british-columbia-geofabrik-2026-07-30+calgary-open-data-index:s8b3-j88p@2026-11-12T14:08:50.000Z+vdjc-pybd@2026-11-12T04:45:23.000Z",
+          "freshness": "fresh",
+          "id": "calgary-hybrid-search",
+          "updatedAt": "2026-11-12T14:57:37.585Z"
+        }
+      }
+    },
+    {
+      "query": {
+        "q": "Saddletowne",
+        "latitude": 51.0447,
+        "longitude": -114.0719,
+        "includeDetails": true,
+        "limit": 20
+      },
+      "status": 200,
+      "response": {
+        "degraded": false,
+        "results": [
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.12075,
+              "longitude": -113.94678
+            },
+            "confidence": 1,
+            "distanceMeters": 12161,
+            "id": "poi:saddletowne-lrt",
+            "label": "Saddletowne LRT Station, Saddletowne Circle NE",
+            "name": "Saddletowne LRT Station"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.1252488,
+              "longitude": -113.9484063
+            },
+            "confidence": 0.98,
+            "distanceMeters": 12435,
+            "details": {
+              "address": "Saddletowne, Sadddletowne East Bus Terminal, Saddle Ridge, Calgary, Alberta, T3J 0C9, Canada",
+              "category": "stop"
+            },
+            "id": "nominatim:node:7317546449",
+            "label": "Saddletowne, Sadddletowne East Bus Terminal, Saddle Ridge, Calgary, Alberta, T3J 0C9, Canada",
+            "name": "Saddletowne"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.1256917,
+              "longitude": -113.9481904
+            },
+            "confidence": 0.98,
+            "distanceMeters": 12481,
+            "details": {
+              "address": "Saddletowne, Sadddletowne East Bus Terminal, Saddle Ridge, Calgary, Alberta, T3J 0C9, Canada",
+              "category": "station"
+            },
+            "id": "nominatim:node:6575529216",
+            "label": "Saddletowne, Sadddletowne East Bus Terminal, Saddle Ridge, Calgary, Alberta, T3J 0C9, Canada",
+            "name": "Saddletowne"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.1257067,
+              "longitude": -113.948189
+            },
+            "confidence": 0.98,
+            "distanceMeters": 12482,
+            "details": {
+              "address": "Saddletowne, Sadddletowne East Bus Terminal, Saddle Ridge, Calgary, Alberta, T3J 0C9, Canada",
+              "category": "platform"
+            },
+            "id": "nominatim:way:198245069",
+            "label": "Saddletowne, Sadddletowne East Bus Terminal, Saddle Ridge, Calgary, Alberta, T3J 0C9, Canada",
+            "name": "Saddletowne"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1247597,
+              "longitude": -113.9307873
+            },
+            "confidence": 0.97,
+            "distanceMeters": 13282,
+            "id": "calgary-business:16716961",
+            "label": "Saddletowne Optometry, #331 7171 80 Av NE, Taradale, Calgary, AB",
+            "name": "Saddletowne Optometry"
+          },
+          {
+            "category": "street",
+            "center": {
+              "latitude": 51.1245772,
+              "longitude": -113.9493273
+            },
+            "confidence": 0.94,
+            "distanceMeters": 12337,
+            "details": {
+              "address": "Saddletowne Circle NE, Saddle Ridge, Calgary, Alberta, T3J 0C9, Canada",
+              "category": "secondary"
+            },
+            "id": "nominatim:way:198245347",
+            "label": "Saddletowne Circle NE, Saddle Ridge, Calgary, Alberta, T3J 0C9, Canada",
+            "name": "Saddletowne Circle NE"
+          },
+          {
+            "category": "street",
+            "center": {
+              "latitude": 51.1233119,
+              "longitude": -113.9471603
+            },
+            "confidence": 0.94,
+            "distanceMeters": 12342,
+            "details": {
+              "address": "Saddletowne Circle NE, Martindale, Calgary, Alberta, T3J 0C9, Canada",
+              "category": "secondary"
+            },
+            "id": "nominatim:way:201317789",
+            "label": "Saddletowne Circle NE, Martindale, Calgary, Alberta, T3J 0C9, Canada",
+            "name": "Saddletowne Circle NE"
+          },
+          {
+            "category": "street",
+            "center": {
+              "latitude": 51.1232209,
+              "longitude": -113.9442477
+            },
+            "confidence": 0.94,
+            "distanceMeters": 12479,
+            "details": {
+              "address": "Saddletowne Circle NE, Taradale, Calgary, Alberta, T3J 0H5, Canada",
+              "category": "secondary"
+            },
+            "id": "nominatim:way:201317801",
+            "label": "Saddletowne Circle NE, Taradale, Calgary, Alberta, T3J 0H5, Canada",
+            "name": "Saddletowne Circle NE"
+          },
+          {
+            "category": "street",
+            "center": {
+              "latitude": 51.1249072,
+              "longitude": -113.9442593
+            },
+            "confidence": 0.94,
+            "distanceMeters": 12611,
+            "details": {
+              "address": "Saddletowne Circle NE, Taradale, Calgary, Alberta, T3J 5M0, Canada",
+              "category": "secondary"
+            },
+            "id": "nominatim:way:462331577",
+            "label": "Saddletowne Circle NE, Taradale, Calgary, Alberta, T3J 5M0, Canada",
+            "name": "Saddletowne Circle NE"
+          },
+          {
+            "category": "street",
+            "center": {
+              "latitude": 51.1262867,
+              "longitude": -113.9454938
+            },
+            "confidence": 0.94,
+            "distanceMeters": 12659,
+            "details": {
+              "address": "Saddletowne Circle NE, Saddle Ridge, Calgary, Alberta, T3J 5M0, Canada",
+              "category": "secondary"
+            },
+            "id": "nominatim:way:198245344",
+            "label": "Saddletowne Circle NE, Saddle Ridge, Calgary, Alberta, T3J 5M0, Canada",
+            "name": "Saddletowne Circle NE"
+          },
+          {
+            "category": "street",
+            "center": {
+              "latitude": 51.1260333,
+              "longitude": -113.9447408
+            },
+            "confidence": 0.94,
+            "distanceMeters": 12676,
+            "details": {
+              "address": "Saddletowne Circle NE, Saddle Ridge, Calgary, Alberta, T3J 4J2, Canada",
+              "category": "secondary"
+            },
+            "id": "nominatim:way:1339315294",
+            "label": "Saddletowne Circle NE, Saddle Ridge, Calgary, Alberta, T3J 4J2, Canada",
+            "name": "Saddletowne Circle NE"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.122243419075964,
+              "longitude": -113.94705166543028
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 12264,
+            "id": "calgary-address:d585cc8c393ac450a5f2",
+            "label": "45 Saddletowne Circle NE, Calgary, AB",
+            "name": "45 Saddletowne Circle NE"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.12131216471847,
+              "longitude": -113.94525075051945
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 12282,
+            "id": "calgary-address:e978551bb7a4c4347631",
+            "label": "11 Saddletowne Circle NE, Calgary, AB",
+            "name": "11 Saddletowne Circle NE"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.121608923175664,
+              "longitude": -113.94546724946512
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 12294,
+            "id": "calgary-address:577e90d4d11b5b2b35aa",
+            "label": "10 Saddletowne Circle NE, Calgary, AB",
+            "name": "10 Saddletowne Circle NE"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.12433001600184,
+              "longitude": -113.94932434297972
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 12317,
+            "id": "calgary-address:bc9273bbb370a363e9da",
+            "label": "305 Saddletowne Circle NE, Calgary, AB",
+            "name": "305 Saddletowne Circle NE"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.12285001970443,
+              "longitude": -113.94661550391596
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 12333,
+            "id": "calgary-address:4a9e305196f1d0e7b810",
+            "label": "60 Saddletowne Circle NE, Calgary, AB",
+            "name": "60 Saddletowne Circle NE"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.12445563283215,
+              "longitude": -113.94877866948858
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 12353,
+            "id": "calgary-address:783514304f2559657779",
+            "label": "222 Saddletowne Circle NE, Calgary, AB",
+            "name": "222 Saddletowne Circle NE"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.12458608110478,
+              "longitude": -113.94900503138203
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 12353,
+            "id": "calgary-address:dfbe4bf9fff08a78aa71",
+            "label": "304 Saddletowne Circle NE, Calgary, AB",
+            "name": "304 Saddletowne Circle NE"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.12332659289476,
+              "longitude": -113.94688722316165
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 12357,
+            "id": "calgary-address:b8953003b46c5ee49271",
+            "label": "80 Saddletowne Circle NE, Calgary, AB",
+            "name": "80 Saddletowne Circle NE"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.124855906456446,
+              "longitude": -113.94932031051948
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 12359,
+            "id": "calgary-address:c40050d0fa99dc1b8bb8",
+            "label": "336 Saddletowne Circle NE, Calgary, AB",
+            "name": "336 Saddletowne Circle NE"
+          }
+        ],
+        "source": {
+          "datasetVersion": "nominatim-self-hosted:alberta-british-columbia-geofabrik-2026-07-30+calgary-open-data-index:s8b3-j88p@2026-11-12T14:08:50.000Z+vdjc-pybd@2026-11-12T04:45:23.000Z",
+          "freshness": "fresh",
+          "id": "calgary-hybrid-search",
+          "updatedAt": "2026-11-12T14:57:37.585Z"
+        }
+      }
+    },
+    {
+      "query": {
+        "q": "Cost",
+        "latitude": 51.0447,
+        "longitude": -114.0719,
+        "includeDetails": true,
+        "limit": 20
+      },
+      "status": 200,
+      "response": {
+        "degraded": false,
+        "results": [
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0156165,
+              "longitude": -114.0494021
+            },
+            "confidence": 0.97,
+            "distanceMeters": 3596,
+            "id": "calgary-business:373761",
+            "label": "Costume Shoppe (the), 4307 Blackfoot Tr SE, Manchester Industrial, Calgary, AB",
+            "name": "Costume Shoppe (the)"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.9896247,
+              "longitude": -114.0463751
+            },
+            "confidence": 0.97,
+            "distanceMeters": 6379,
+            "id": "calgary-business:13058953",
+            "label": "Costco Liquor, 83 Heritage Ga SE, East Fairview Industrial, Calgary, AB",
+            "name": "Costco Liquor"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.9896247,
+              "longitude": -114.0463751
+            },
+            "confidence": 0.97,
+            "distanceMeters": 6379,
+            "id": "calgary-business:185298",
+            "label": "Costco Wholesale, 99 Heritage Ga SE, East Fairview Industrial, Calgary, AB",
+            "name": "Costco Wholesale"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.965728,
+              "longitude": -114.0742259
+            },
+            "confidence": 0.97,
+            "distanceMeters": 8783,
+            "id": "calgary-business:13740626",
+            "label": "Costa Vida Fresh Mexican Grill, #640 9737 Macleod Tr SW, Haysboro, Calgary, AB",
+            "name": "Costa Vida Fresh Mexican Grill"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0436073,
+              "longitude": -113.917582
+            },
+            "confidence": 0.97,
+            "distanceMeters": 10789,
+            "id": "calgary-business:14231039",
+            "label": "Costco Wholesale, 75 East Hills Bv SE, Belvedere, Calgary, AB",
+            "name": "Costco Wholesale"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.04319,
+              "longitude": -113.9167406
+            },
+            "confidence": 0.97,
+            "distanceMeters": 10849,
+            "id": "calgary-business:14240295",
+            "label": "Costco Liquor, 73 East Hills Bv SE, Belvedere, Calgary, AB",
+            "name": "Costco Liquor"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1547621,
+              "longitude": -114.1553248
+            },
+            "confidence": 0.97,
+            "distanceMeters": 13554,
+            "id": "calgary-business:12471389",
+            "label": "Costco Canada Liquor, 11592 Sarcee Tr NW, Sherwood, Calgary, AB",
+            "name": "Costco Canada Liquor"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1547621,
+              "longitude": -114.1553248
+            },
+            "confidence": 0.97,
+            "distanceMeters": 13554,
+            "id": "calgary-business:12471371",
+            "label": "Costco Wholesale, 11588 Sarcee Tr NW, Sherwood, Calgary, AB",
+            "name": "Costco Wholesale"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1520637,
+              "longitude": -114.2100466
+            },
+            "confidence": 0.97,
+            "distanceMeters": 15349,
+            "id": "calgary-business:13821269",
+            "label": "Costa Vida Fresh Mexican Grill, #2118 8650 112 Av NW, Royal Vista, Calgary, AB",
+            "name": "Costa Vida Fresh Mexican Grill"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0174286,
+              "longitude": -114.161443
+            },
+            "confidence": 0.94,
+            "distanceMeters": 6957,
+            "details": {
+              "address": "Cost Cannabis, 5253, Richmond Road SW, Glamorgan, Calgary, Alberta, T3E 7C4, Canada",
+              "category": "cannabis"
+            },
+            "id": "nominatim:node:2311981491",
+            "label": "Cost Cannabis, 5253, Richmond Road SW, Glamorgan, Calgary, Alberta, T3E 7C4, Canada",
+            "name": "Cost Cannabis"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.9627525,
+              "longitude": -114.0600606
+            },
+            "confidence": 0.94,
+            "distanceMeters": 9150,
+            "details": {
+              "address": "Cost Cannabis, Southland Drive SE, Willow Park, Calgary, Alberta, T2J 0R9, Canada",
+              "category": "cannabis"
+            },
+            "id": "nominatim:node:4760827282",
+            "label": "Cost Cannabis, Southland Drive SE, Willow Park, Calgary, Alberta, T2J 0R9, Canada",
+            "name": "Cost Cannabis"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.017534,
+              "longitude": -114.0181565
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 4822,
+            "id": "calgary-business:336701",
+            "label": "Lo-Cost Auto Electric, 4123 Ogden Rd SE, Alyth/Bonnybrook, Calgary, AB",
+            "name": "Lo-Cost Auto Electric"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.992957,
+              "longitude": -114.0495856
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 5962,
+            "id": "calgary-business:14696603",
+            "label": "Stardom Dance Costumes, 7004e 5 St SE, Fairview Industrial, Calgary, AB",
+            "name": "Stardom Dance Costumes"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0385487,
+              "longitude": -113.972545
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 6980,
+            "id": "calgary-business:16383127",
+            "label": "La Costa, 1724 42 St SE, Forest Lawn, Calgary, AB",
+            "name": "La Costa"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.084883648410155,
+              "longitude": -113.93446952839399
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 10592,
+            "id": "calgary-address:f9b437f85f732780b546",
+            "label": "203 Costa Mesa Close NE, Calgary, AB",
+            "name": "203 Costa Mesa Close NE"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.08488364049408,
+              "longitude": -113.9343432554322
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 10600,
+            "id": "calgary-address:3c7f501d7272edb8afb4",
+            "label": "207 Costa Mesa Close NE, Calgary, AB",
+            "name": "207 Costa Mesa Close NE"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.085073802932584,
+              "longitude": -113.93436622272257
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 10608,
+            "id": "calgary-address:7bd5194065c76725be97",
+            "label": "206 Costa Mesa Close NE, Calgary, AB",
+            "name": "206 Costa Mesa Close NE"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.08488363003231,
+              "longitude": -113.93421270058276
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 10608,
+            "id": "calgary-address:cb40d90df6d713743cb0",
+            "label": "213 Costa Mesa Close NE, Calgary, AB",
+            "name": "213 Costa Mesa Close NE"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.08506724537084,
+              "longitude": -113.93423096652235
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 10616,
+            "id": "calgary-address:196b1d6deaabdb8ae31b",
+            "label": "210 Costa Mesa Close NE, Calgary, AB",
+            "name": "210 Costa Mesa Close NE"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.08612448322352,
+              "longitude": -113.93469353676443
+            },
+            "confidence": 0.907599088549614,
+            "distanceMeters": 10637,
+            "id": "calgary-address:da4076e2630a94ed3911",
+            "label": "199 Costa Mesa Close NE, Calgary, AB",
+            "name": "199 Costa Mesa Close NE"
+          }
+        ],
+        "source": {
+          "datasetVersion": "nominatim-self-hosted:alberta-british-columbia-geofabrik-2026-07-30+calgary-open-data-index:s8b3-j88p@2026-11-12T14:08:50.000Z+vdjc-pybd@2026-11-12T04:45:23.000Z",
+          "freshness": "fresh",
+          "id": "calgary-hybrid-search",
+          "updatedAt": "2026-11-12T14:57:37.585Z"
+        }
+      }
+    },
+    {
+      "query": {
+        "q": "Costco",
+        "latitude": 53.5461,
+        "longitude": -113.4938,
+        "includeDetails": true,
+        "limit": 20
+      },
+      "status": 200,
+      "response": {
+        "degraded": false,
+        "results": [
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.2112296,
+              "longitude": -113.9832671
+            },
+            "confidence": 0.98,
+            "distanceMeters": 261741,
+            "details": {
+              "address": "Costco, 293020, Crossiron Common, CrossIron, Rocky View County, Alberta, T4A 0J6, Canada",
+              "category": "wholesale"
+            },
+            "id": "nominatim:way:151473662",
+            "label": "Costco, 293020, Crossiron Common, CrossIron, Rocky View County, Alberta, T4A 0J6, Canada",
+            "name": "Costco"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.1547923,
+              "longitude": -114.1553219
+            },
+            "confidence": 0.98,
+            "distanceMeters": 269667,
+            "details": {
+              "address": "Costco, 11588, Sarcee Trail NW, Sherwood, Calgary, Alberta, T3R 0A1, Canada",
+              "category": "wholesale"
+            },
+            "id": "nominatim:way:480637908",
+            "label": "Costco, 11588, Sarcee Trail NW, Sherwood, Calgary, Alberta, T3R 0A1, Canada",
+            "name": "Costco"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0432499,
+              "longitude": -113.9174518
+            },
+            "confidence": 0.98,
+            "distanceMeters": 279790,
+            "details": {
+              "address": "Costco, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+              "category": "wholesale"
+            },
+            "id": "nominatim:way:489111304",
+            "label": "Costco, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+            "name": "Costco"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.9897629,
+              "longitude": -114.0463494
+            },
+            "confidence": 0.98,
+            "distanceMeters": 286725,
+            "details": {
+              "address": "Costco, 99, 6 Street SE, East Fairview Industrial, Calgary, Alberta, T2H 3A7, Canada",
+              "category": "wholesale"
+            },
+            "id": "nominatim:way:123813629",
+            "label": "Costco, 99, 6 Street SE, East Fairview Industrial, Calgary, Alberta, T2H 3A7, Canada",
+            "name": "Costco"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.706224,
+              "longitude": -113.9459696
+            },
+            "confidence": 0.98,
+            "distanceMeters": 317283,
+            "details": {
+              "address": "Costco, Southbank Boulevard, Southbank Centre, Okotoks, Town of Okotoks, Alberta, T1S 2N7, Canada",
+              "category": "wholesale"
+            },
+            "id": "nominatim:way:727403934",
+            "label": "Costco, Southbank Boulevard, Southbank Centre, Okotoks, Town of Okotoks, Alberta, T1S 2N7, Canada",
+            "name": "Costco"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 49.8799002,
+              "longitude": -119.4294067
+            },
+            "confidence": 0.98,
+            "distanceMeters": 577061,
+            "details": {
+              "address": "Costco, Baron Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+              "category": "wholesale"
+            },
+            "id": "nominatim:way:1136603092",
+            "label": "Costco, Baron Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+            "name": "Costco"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.2114424,
+              "longitude": -113.985586
+            },
+            "confidence": 0.94,
+            "distanceMeters": 261738,
+            "details": {
+              "address": "Costco Gasoline, 300-261200, CrossIron Boulevard, RONA+ Neighbourhood, Goldwyn, CrossIron, Rocky View County, Alberta, T4A 0J6, Canada",
+              "category": "fuel"
+            },
+            "id": "nominatim:way:151473664",
+            "label": "Costco Gasoline, 300-261200, CrossIron Boulevard, RONA+ Neighbourhood, Goldwyn, CrossIron, Rocky View County, Alberta, T4A 0J6, Canada",
+            "name": "Costco Gasoline"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0433134,
+              "longitude": -113.9169546
+            },
+            "confidence": 0.94,
+            "distanceMeters": 279780,
+            "details": {
+              "address": "Costco Tire Centre, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+              "category": "tyres"
+            },
+            "id": "nominatim:node:12718075974",
+            "label": "Costco Tire Centre, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+            "name": "Costco Tire Centre"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.042876,
+              "longitude": -113.9170339
+            },
+            "confidence": 0.94,
+            "distanceMeters": 279829,
+            "details": {
+              "address": "Costco Food Court, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+              "category": "fast_food"
+            },
+            "id": "nominatim:node:12718075972",
+            "label": "Costco Food Court, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+            "name": "Costco Food Court"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0428816,
+              "longitude": -113.9173773
+            },
+            "confidence": 0.94,
+            "distanceMeters": 279830,
+            "details": {
+              "address": "Costco Pharmacy, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+              "category": "pharmacy"
+            },
+            "id": "nominatim:node:12718075973",
+            "label": "Costco Pharmacy, 75, East Hills Boulevard SE, East Hills, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+            "name": "Costco Pharmacy"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0416137,
+              "longitude": -113.9176307
+            },
+            "confidence": 0.94,
+            "distanceMeters": 279972,
+            "details": {
+              "address": "Costco Gasoline, 9 Avenue SE, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+              "category": "fuel"
+            },
+            "id": "nominatim:way:492850245",
+            "label": "Costco Gasoline, 9 Avenue SE, Belvedere, Calgary, Alberta, T2A 6J8, Canada",
+            "name": "Costco Gasoline"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.9898772,
+              "longitude": -114.0446946
+            },
+            "confidence": 0.94,
+            "distanceMeters": 286698,
+            "details": {
+              "address": "Costco Gasoline, Heritage Gate SE, East Fairview Industrial, Calgary, Alberta, T2H 3A7, Canada",
+              "category": "fuel"
+            },
+            "id": "nominatim:way:436810752",
+            "label": "Costco Gasoline, Heritage Gate SE, East Fairview Industrial, Calgary, Alberta, T2H 3A7, Canada",
+            "name": "Costco Gasoline"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.9890231,
+              "longitude": -114.0468334
+            },
+            "confidence": 0.94,
+            "distanceMeters": 286811,
+            "details": {
+              "address": "Costco Liquor, 6 Street SE, East Fairview Industrial, Calgary, Alberta, T2H 2L9, Canada",
+              "category": "alcohol"
+            },
+            "id": "nominatim:way:1266881389",
+            "label": "Costco Liquor, 6 Street SE, East Fairview Industrial, Calgary, Alberta, T2H 2L9, Canada",
+            "name": "Costco Liquor"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.7069005,
+              "longitude": -113.9472076
+            },
+            "confidence": 0.94,
+            "distanceMeters": 317216,
+            "details": {
+              "address": "Costco Gasoline, 104, Southbank Boulevard, Southbank Centre, Okotoks, Town of Okotoks, Alberta, T1S 0K4, Canada",
+              "category": "fuel"
+            },
+            "id": "nominatim:way:726990622",
+            "label": "Costco Gasoline, 104, Southbank Boulevard, Southbank Centre, Okotoks, Town of Okotoks, Alberta, T1S 0K4, Canada",
+            "name": "Costco Gasoline"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.7062718,
+              "longitude": -113.9462168
+            },
+            "confidence": 0.94,
+            "distanceMeters": 317279,
+            "details": {
+              "address": "Costco Pharmacy, Southbank Boulevard, Southbank Centre, Okotoks, Town of Okotoks, Alberta, T1S 2N7, Canada",
+              "category": "pharmacy"
+            },
+            "id": "nominatim:node:12718111456",
+            "label": "Costco Pharmacy, Southbank Boulevard, Southbank Centre, Okotoks, Town of Okotoks, Alberta, T1S 2N7, Canada",
+            "name": "Costco Pharmacy"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.706231,
+              "longitude": -113.9466352
+            },
+            "confidence": 0.94,
+            "distanceMeters": 317287,
+            "details": {
+              "address": "Costco Tire Centre, Southbank Boulevard, Southbank Centre, Okotoks, Town of Okotoks, Alberta, T1S 2N7, Canada",
+              "category": "tyres"
+            },
+            "id": "nominatim:node:12718111457",
+            "label": "Costco Tire Centre, Southbank Boulevard, Southbank Centre, Okotoks, Town of Okotoks, Alberta, T1S 2N7, Canada",
+            "name": "Costco Tire Centre"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 50.7059456,
+              "longitude": -113.9467264
+            },
+            "confidence": 0.94,
+            "distanceMeters": 317319,
+            "details": {
+              "address": "Costco Food Court, Southbank Boulevard, Southbank Centre, Okotoks, Town of Okotoks, Alberta, T1S 2N7, Canada",
+              "category": "fast_food"
+            },
+            "id": "nominatim:node:12718111455",
+            "label": "Costco Food Court, Southbank Boulevard, Southbank Centre, Okotoks, Town of Okotoks, Alberta, T1S 2N7, Canada",
+            "name": "Costco Food Court"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 49.8803837,
+              "longitude": -119.4287936
+            },
+            "confidence": 0.94,
+            "distanceMeters": 576991,
+            "details": {
+              "address": "Costco Food Court, Springfield Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+              "category": "fast_food"
+            },
+            "id": "nominatim:node:12718090500",
+            "label": "Costco Food Court, Springfield Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+            "name": "Costco Food Court"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 49.8801538,
+              "longitude": -119.4285118
+            },
+            "confidence": 0.94,
+            "distanceMeters": 576996,
+            "details": {
+              "address": "Costco Tire Centre, Springfield Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+              "category": "tyres"
+            },
+            "id": "nominatim:node:12718090499",
+            "label": "Costco Tire Centre, Springfield Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+            "name": "Costco Tire Centre"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 49.8798219,
+              "longitude": -119.4295729
+            },
+            "confidence": 0.94,
+            "distanceMeters": 577075,
+            "details": {
+              "address": "Costco Pharmacy, Springfield Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+              "category": "pharmacy"
+            },
+            "id": "nominatim:node:12718105301",
+            "label": "Costco Pharmacy, Springfield Road, Midtown, Kelowna, Westbank First Nation #9, Regional District of Central Okanagan, British Columbia, V1X 4H9, Canada",
+            "name": "Costco Pharmacy"
+          }
+        ],
+        "source": {
+          "datasetVersion": "alberta-british-columbia-geofabrik-2026-07-30",
+          "freshness": "fresh",
+          "id": "nominatim-self-hosted",
+          "updatedAt": "2026-11-13T03:04:16.753Z"
+        }
+      }
+    },
+    {
+      "query": {
+        "q": "Stanley",
+        "latitude": 49.2827,
+        "longitude": -123.1207,
+        "includeDetails": true,
+        "limit": 20
+      },
+      "status": 200,
+      "response": {
+        "degraded": false,
+        "results": [
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 49.9884574,
+              "longitude": -118.9170013
+            },
+            "confidence": 0.94,
+            "distanceMeters": 312688,
+            "details": {
+              "address": "Stanley Creek, East Central Okanagan Electoral Area, Regional District of Central Okanagan, British Columbia, Canada",
+              "category": "stream"
+            },
+            "id": "nominatim:way:1268036110",
+            "label": "Stanley Creek, East Central Okanagan Electoral Area, Regional District of Central Okanagan, British Columbia, Canada",
+            "name": "Stanley Creek"
+          },
+          {
+            "category": "street",
+            "center": {
+              "latitude": 50.5519407,
+              "longitude": -119.1415343
+            },
+            "confidence": 0.94,
+            "distanceMeters": 317882,
+            "details": {
+              "address": "Stanley Avenue, Enderby, Regional District of North Okanagan, British Columbia, V0E 1V0, Canada",
+              "category": "residential"
+            },
+            "id": "nominatim:way:143903975",
+            "label": "Stanley Avenue, Enderby, Regional District of North Okanagan, British Columbia, V0E 1V0, Canada",
+            "name": "Stanley Avenue"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 50.110481,
+              "longitude": -116.7930375
+            },
+            "confidence": 0.94,
+            "distanceMeters": 464178,
+            "details": {
+              "address": "Stanley Creek, Area D (Lardeau Valley/Duncan Lake), Regional District of Central Kootenay, British Columbia, Canada",
+              "category": "stream"
+            },
+            "id": "nominatim:way:332368013",
+            "label": "Stanley Creek, Area D (Lardeau Valley/Duncan Lake), Regional District of Central Kootenay, British Columbia, Canada",
+            "name": "Stanley Creek"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.1703,
+              "longitude": -116.0544
+            },
+            "confidence": 0.94,
+            "distanceMeters": 544453,
+            "details": {
+              "address": "Stanley Peak, Area G (Forster Creek/Mount Assiniboine), Regional District of East Kootenay, British Columbia, Canada",
+              "category": "peak"
+            },
+            "id": "nominatim:node:2687661402",
+            "label": "Stanley Peak, Area G (Forster Creek/Mount Assiniboine), Regional District of East Kootenay, British Columbia, Canada",
+            "name": "Stanley Peak"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.2031476,
+              "longitude": -116.0702522
+            },
+            "confidence": 0.94,
+            "distanceMeters": 544672,
+            "details": {
+              "address": "Stanley Creek, Area G (Forster Creek/Mount Assiniboine), Regional District of East Kootenay, British Columbia, Canada",
+              "category": "stream"
+            },
+            "id": "nominatim:way:409310239",
+            "label": "Stanley Creek, Area G (Forster Creek/Mount Assiniboine), Regional District of East Kootenay, British Columbia, Canada",
+            "name": "Stanley Creek"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.169887,
+              "longitude": -116.0361175
+            },
+            "confidence": 0.94,
+            "distanceMeters": 545636,
+            "details": {
+              "address": "Stanley Peak E1.3, Improvement District No. 9, Alberta, Canada",
+              "category": "peak"
+            },
+            "id": "nominatim:node:12446853025",
+            "label": "Stanley Peak E1.3, Improvement District No. 9, Alberta, Canada",
+            "name": "Stanley Peak E1.3"
+          },
+          {
+            "category": "street",
+            "center": {
+              "latitude": 51.0098968,
+              "longitude": -114.070407
+            },
+            "confidence": 0.94,
+            "distanceMeters": 672384,
+            "details": {
+              "address": "Stanley Crescent SW, Elboya, Calgary, Alberta, T2S 1H3, Canada",
+              "category": "residential"
+            },
+            "id": "nominatim:way:4860585",
+            "label": "Stanley Crescent SW, Elboya, Calgary, Alberta, T2S 1H3, Canada",
+            "name": "Stanley Crescent SW"
+          },
+          {
+            "category": "street",
+            "center": {
+              "latitude": 51.0131432,
+              "longitude": -114.070861
+            },
+            "confidence": 0.94,
+            "distanceMeters": 672435,
+            "details": {
+              "address": "Stanley Drive SW, Parkhill, Calgary, Alberta, T2S 2P9, Canada",
+              "category": "residential"
+            },
+            "id": "nominatim:way:502911716",
+            "label": "Stanley Drive SW, Parkhill, Calgary, Alberta, T2S 2P9, Canada",
+            "name": "Stanley Drive SW"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.0163635,
+              "longitude": -114.0706645
+            },
+            "confidence": 0.94,
+            "distanceMeters": 672529,
+            "details": {
+              "address": "Stanley Park Depot, Parkhill, Calgary, Alberta, Canada",
+              "category": "industrial"
+            },
+            "id": "nominatim:way:1123933667",
+            "label": "Stanley Park Depot, Parkhill, Calgary, Alberta, Canada",
+            "name": "Stanley Park Depot"
+          },
+          {
+            "category": "landmark",
+            "center": {
+              "latitude": 51.0118266,
+              "longitude": -114.0670804
+            },
+            "confidence": 0.94,
+            "distanceMeters": 672659,
+            "details": {
+              "address": "Stanley Park Apartments, Elboya, Calgary, Alberta, Canada",
+              "category": "residential"
+            },
+            "id": "nominatim:way:167712926",
+            "label": "Stanley Park Apartments, Elboya, Calgary, Alberta, Canada",
+            "name": "Stanley Park Apartments"
+          },
+          {
+            "category": "poi",
+            "center": {
+              "latitude": 51.0185246,
+              "longitude": -114.0678983
+            },
+            "confidence": 0.94,
+            "distanceMeters": 672772,
+            "details": {
+              "address": "Stanley Park, Parkhill, Calgary, Alberta, Canada",
+              "category": "park"
+            },
+            "id": "nominatim:way:222211676",
+            "label": "Stanley Park, Parkhill, Calgary, Alberta, Canada",
+            "name": "Stanley Park"
+          },
+          {
+            "category": "street",
+            "center": {
+              "latitude": 51.0167843,
+              "longitude": -114.065581
+            },
+            "confidence": 0.94,
+            "distanceMeters": 672886,
+            "details": {
+              "address": "Stanley Road SW, Parkhill, Calgary, Alberta, T2S 3B3, Canada",
+              "category": "residential"
+            },
+            "id": "nominatim:way:493152575",
+            "label": "Stanley Road SW, Parkhill, Calgary, Alberta, T2S 3B3, Canada",
+            "name": "Stanley Road SW"
+          },
+          {
+            "category": "street",
+            "center": {
+              "latitude": 50.7242744,
+              "longitude": -113.9611759
+            },
+            "confidence": 0.94,
+            "distanceMeters": 673481,
+            "details": {
+              "address": "Stanley Avenue, Heritage Okotoks, Okotoks, Town of Okotoks, Alberta, T1S 2N7, Canada",
+              "category": "residential"
+            },
+            "id": "nominatim:way:32156439",
+            "label": "Stanley Avenue, Heritage Okotoks, Okotoks, Town of Okotoks, Alberta, T1S 2N7, Canada",
+            "name": "Stanley Avenue"
+          },
+          {
+            "category": "address",
+            "center": {
+              "latitude": 51.0342621,
+              "longitude": -114.0728571
+            },
+            "confidence": 0.55,
+            "distanceMeters": 672835,
+            "details": {
+              "address": "21 Avenue SW, Fourth Street BRZ, Cliff Bungalow, Calgary, Alberta, T2S 0G9, Canada",
+              "category": "residential"
+            },
+            "id": "nominatim:way:4830624",
+            "label": "21 Avenue SW, Fourth Street BRZ, Cliff Bungalow, Calgary, Alberta, T2S 0G9, Canada",
+            "name": "21 Avenue SW"
+          }
+        ],
+        "source": {
+          "datasetVersion": "alberta-british-columbia-geofabrik-2026-07-30",
+          "freshness": "fresh",
+          "id": "nominatim-self-hosted",
+          "updatedAt": "2026-11-13T03:04:18.893Z"
+        }
+      }
+    }
+  ]
+}

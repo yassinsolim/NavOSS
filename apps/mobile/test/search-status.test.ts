@@ -99,4 +99,16 @@ describe('search source label', () => {
       'Calgary Open Data + OpenStreetMap',
     );
   });
+
+  it('does not call a functioning development provider unavailable', () => {
+    expect(
+      searchSourceLabel({ ...source, freshness: 'fresh', id: 'photon-development' }, true),
+    ).toBe('OpenStreetMap search · Preview data · Results may be incomplete');
+  });
+
+  it('keeps regional empty-fixture status free of a Calgary coverage claim', () => {
+    expect(
+      searchSourceLabel({ ...source, freshness: 'static', id: 'regional-empty-fixtures' }),
+    ).toBe('Place data · Not live');
+  });
 });

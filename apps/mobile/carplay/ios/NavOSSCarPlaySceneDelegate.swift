@@ -220,6 +220,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private var routeChoicesByIdentifier: [String: NavOSSCarPlayTrip] = [:]
   private var routePreviewLocationLease: UUID?
   private var searchDestinationsByIdentifier: [String: NavOSSCarPlayDestination] = [:]
+  private var savedSearchPrefixes: [String: String] = [:]
 
   /// Returning to NavOSS (from Music, a call, or another CarPlay app) keeps the driver's place:
   /// the template stack, an open route preview, and its choices survive. Only state that changed
@@ -1757,7 +1758,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         let origin = self.mapViewController?.currentLocationCoordinate()
           ?? NavOSSNavigationService.shared.currentCoordinate()
         var sections = [
-          CPListSection(items: matches.map { self.destinationItem($0, distanceFrom: origin) })
+          CPListSection(items: matches.map {
+            self.destinationItem($0, prefix: self.savedSearchPrefixes[$0.id], distanceFrom: origin)
+          })
         ]
         if remoteSearchFailed {
           sections.insert(
@@ -1884,6 +1887,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   ) {
     searchRequestGeneration &+= 1
     let requestGeneration = searchRequestGeneration
+    savedSearchPrefixes = [:]
     searchTask?.cancel()
     searchTask = Task { [weak self] in
       guard let self else {
@@ -1907,7 +1911,14 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
           completion(.cancelled)
           return
         }
-        let matches = self.uniqueDestinations(localMatches + remoteMatches)
+        let presentation = navOSSCarPlaySearchPresentation(
+          remoteDestinations: remoteMatches,
+          catalog: NavOSSCarPlayDestinationStore.shared.snapshot(),
+          query: query,
+          origin: proximity
+        )
+        let matches = presentation.destinations
+        self.savedSearchPrefixes = presentation.savedPrefixes
         self.searchTask = nil
         self.searchDestinationsByIdentifier = Dictionary(
           uniqueKeysWithValues: matches.map { ($0.id, $0) }
@@ -2357,9 +2368,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     let distance = origin.map {
       navOSSCarPlayDistanceLabel(navOSSCarPlayDistanceMeters(from: $0, to: destination))
     }
-    let detail = [distance, destination.label.isEmpty ? nil : destination.label]
-      .compactMap { $0 }
-      .joined(separator: " · ")
+    let detail = navOSSCarPlayDestinationDetail(destination, distanceLabel: distance)
     let item = CPListItem(text: title, detailText: detail.isEmpty ? nil : detail)
     item.userInfo = destination.id
     item.handler = { [weak self] _, completion in
@@ -2859,7 +2868,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         case let .results(matches, remoteSearchFailed):
           let origin = self.mapViewController?.currentLocationCoordinate()
             ?? NavOSSNavigationService.shared.currentCoordinate()
-          var items = matches.map { self.destinationItem($0, distanceFrom: origin) }
+          var items = matches.map {
+            self.destinationItem($0, prefix: self.savedSearchPrefixes[$0.id], distanceFrom: origin)
+          }
           if items.isEmpty {
             items = [
               self.messageItem(
