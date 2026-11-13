@@ -247,19 +247,30 @@ rules 1, 2, 3 and 5; they are obligations on the app release, not properties of 
 5. **Map match** the remaining points with `trace_attributes` (`map_snap`) on the local Valhalla.
    A fix that Valhalla snapped from more than 35 m away, or for which it reports no snap
    distance, counts as unmatched. (Valhalla 3.8.2 reports `distance_from_trace_point` in metres
-   for every matched point; checked against a real instance.) Then, for every whole edge of an
-   aggregated road at least 20 m long, one `/locate` request to the same Valhalla asks what the
-   graph knows at the midpoint of the edge's own shape. That request carries only those map
-   points, never an uploaded position. See [Which roads](#which-roads).
-6. **Derive samples.** For each stretch the batch drove on one way and direction, speed is
-   distance along the matched edges between the first and last point there, divided by the
-   elapsed time. A sample needs at least 5 s and either 100 m of travel or 30 s (so a crawl
-   counts and two stationary fixes do not). Speeds above 180 km/h are dropped. That speed is
-   credited to every **whole, eligible edge** of the stretch; the partly driven first and last matched
-   edge of a batch are never credited.
-7. **Add to cohorts.** One sample per contributor per edge joins that edge's pending cohort,
-   stamped with the publication epoch in which it **arrived** (server clock) and with the time
-   its driving began (`capturedAt`, capped at the arrival time). Nothing in the batch decides
+   for every matched point; checked against a real instance.) Then, for every edge of an
+   aggregated road whose full length is at least 20 m, whole or partly matched, one `/locate`
+   request to the same Valhalla asks what the graph knows at the midpoint of the matched part of
+   the edge. That is a point on the road geometry Valhalla returned, never an uploaded fix; for a
+   partly matched edge it can lie between a snapped position and a node. For a partly matched
+   edge the answer also gives the whole edge's geometry, accepted only when it contains the
+   matched part. See [Which roads](#which-roads).
+6. **Derive pieces.** For each continuous run of matched fixes, movement between two fixes is
+   spread over the edges between them by distance, at the average moving speed over the 150 m of
+   path around it (so snapping noise on a short edge does not decide its speed), and time
+   between two fixes that did not move is time spent standing on the edge where the vehicle
+   stood. The result, per eligible edge, is a **piece**: the intervals of the edge driven (metres
+   from the edge's start), the distance moved and the time spent. A run needs at least 5 s and
+   either 100 m of travel or 30 s (so a crawl counts and two stationary fixes do not), and is
+   dropped above 180 km/h. A batch boundary is not a trip end: the edges where a batch begins or
+   ends contribute pieces like any other. Trip ends are protected by the client's 400 m trims,
+   which the server cannot verify.
+7. **Add to cohorts.** A contributor's pieces of an edge accumulate in memory, under that
+   contributor's per-edge tag, as the **union** of driven intervals plus total distance and total
+   time (see [Coverage across batches](#coverage-across-batches)). Once the union covers
+   300 m of the edge, or half of it when that is less, it becomes the contributor's one sample
+   for the edge, at total distance over total time. The sample joins the edge's pending cohort,
+   stamped with the publication epoch in which it was **completed** (server clock) and with the
+   time its earliest piece's driving began (`capturedAt`, capped at the arrival time). Nothing in the batch decides
    which epoch it counts in; its start time can only make the sample expire sooner. A
    contributor already in the cohort is ignored, and so is a newcomer whose network already has
    a newcomer in the cohort.
@@ -318,7 +329,9 @@ the first 12 hex digits of SHA-256 over the edge's own geometry at six decimals.
 - **The threshold applies to exactly what is drawn.** An earlier design keyed on the whole way
   and drew the union of whatever edges individual batches covered, so a stretch one person drove
   appeared under a threshold other people had met elsewhere on the way. Now an edge is released
-  only when three installations drove that edge end to end.
+  only when three installations each drove at least 300 m of that edge (or half of it), and the
+  line drawn is the whole edge, which runs node to node: a vehicle on an edge drives all of it
+  unless its trip starts or ends there.
 - **Geometry cannot be influenced by a batch.** The key commits to the geometry, which is map
   data. Every contributor who drives an edge derives the same key and the same line; a cohort
   keeps the line it was created with. There is no geometry update, before or after
@@ -328,8 +341,11 @@ the first 12 hex digits of SHA-256 over the edge's own geometry at six decimals.
 - **No graph-internal id.** Valhalla's edge id would be shorter but means nothing outside one
   graph build.
 
-Cost: an edge is short, so speed is measured over the batch's run on the way and credited to its
-whole edges, and edges where batches happen to begin and end are credited less often. A way
+A partly matched edge gets its key from the whole-edge geometry `/locate` returns, accepted only
+when it contains the matched part (its node end is that edge's end, its interior vertices are
+that edge's vertices, the lengths agree). On the Alberta/BC graph that geometry is identical to
+the line `trace_attributes` returns when the edge is matched whole (99 of 99 edges compared), so
+both give the same key. A way
 edited in OpenStreetMap, or re-split by a new graph build, gets new keys; because the API erases
 all releases on every start and the graph is only replaced with a restart of the stack, old keys
 do not outlive a graph. A graph swapped without restarting the API would leave releases keyed to
@@ -339,6 +355,67 @@ The free-flow reference is the Valhalla speed of that edge (from `maxspeed` and 
 OpenStreetMapSpeeds defaults NavOSS builds with).
 
 ## Aggregation and publication
+
+### Coverage across batches
+
+Batches are about a minute long, and in a jam a minute is 100–300 m. On the Alberta/BC graph most
+through-road length is in edges longer than that: 70% of Calgary motorway length and 86–98% of
+rural Alberta highway length is in edges over 400 m. Requiring one batch to drive an edge end to
+end meant jams on long edges could never be published: three contributors at 12–24 km/h on
+Deerfoot Trail published 0 of 17.7 km. Each contributor's pieces of an edge are therefore joined
+across that contributor's batches.
+
+- **Union of intervals, not summed lengths.** Coverage is the length of the union of driven
+  intervals along the edge, so a replayed or overlapping batch adds nothing (tested: replaying
+  every batch twice plus a half-overlapping copy credits exactly the same samples as driving
+  once).
+- **Floor:** 300 m of the edge, or half of it when that is less. Then the pieces become one
+  sample at total distance over total time, time standing still included: a stopped queue is the
+  signal. The plausibility rules above still bound each run.
+- **One weight.** A contributor that already has a sample on the edge in the cohort adds
+  nothing more; the newcomer cap is applied when the sample is completed.
+- **Same identifier, no new linkage.** Partial coverage is keyed by the same per-edge contributor
+  tag as samples, so it adds no identifier across edges or epochs. It lives only in API process
+  memory, alongside the pending samples, is never written or logged (the operator summary counts
+  it as `pendingPartial`), and expires with its cohort: it is dropped at the first boundary more
+  than 15 minutes after the earliest piece's driving began or arrived. Tested: the database is
+  unchanged by uploads below the threshold, and the API log contains no segment key or tag.
+- **Accuracy trade-off.** The published speed is measured on the part of the edge that was
+  driven, at least 300 m or half, and is drawn for the whole edge. On the undriven remainder
+  of a credited edge the speed is inferred, not observed: a queue that ends part-way along a
+  1.5 km edge is drawn along all of it. Edges, not their parts, remain the published unit; three
+  contributors are still needed on each.
+
+**Flagged for the next independent review:** this subsection, the change to step 6 and the use of
+`/locate` geometry for partly matched edges.
+
+Measured on the same 40-route samples per area, with three contributors per route at 1.0, 1.1 and
+1.2 times the stated speed (local, graph dated 2026-11-11):
+
+| Area                                              | Eligible length on the routes | Jam, 15 km/h: before |     after | Free-flowing, 70 km/h: before |     after |
+| ------------------------------------------------- | ----------------------------: | -------------------: | --------: | ----------------------------: | --------: |
+| Calgary                                           |                        517 km |                 7.8% | **84.1%** |                         21.6% | **79.7%** |
+| Rural Alberta (Mountain View / Red Deer counties) |                        959 km |                 2.3% | **96.8%** |                          8.0% | **97.2%** |
+| Metro Vancouver                                   |                        506 km |                11.1% | **73.7%** |                         23.2% | **73.1%** |
+
+Eligible length is the motorway-to-secondary edges of at least 20 m on the walked routes; the
+share is the length of those edges published after one epoch. The rest is mostly where the
+client's 400 m trip-end trims fall and edges the three contributors cover in their first or last
+pieces. At 70 km/h every published edge was `free` except three in Vancouver (before: one or
+two per area), so free-flow classification did not get worse.
+
+Simulated on Deerfoot Trail / Glenmore Trail (17.7 km) through the service with the real
+Valhalla:
+
+| Contributors (km/h)                                                                      | Before: edges / km published |        After: edges / km published | Published levels after      |   Median published speed |
+| ---------------------------------------------------------------------------------------- | ---------------------------: | ---------------------------------: | --------------------------- | -----------------------: |
+| 12, 16, 24 (steady jam)                                                                  |                      3 / 0.5 |                          31 / 11.0 | 20 stopped, 9 heavy, 2 slow | 15 km/h (true median 16) |
+| 5, 5, 5 stop-and-go (20 s moving, 20 s stopped)                                          |                     11 / 1.2 |                          46 / 14.6 | 42 stopped, 4 heavy         |                   5 km/h |
+| 90, 95, 100 (free flow)                                                                  |                      3 / 1.5 |                          38 / 11.5 | 38 free                     | 95 km/h (true median 95) |
+| 12, 16, 24, the first contributor sending every batch twice plus a half-overlapping copy |                            — | 31 / 11.0, identical samples (137) | as steady                   |                  15 km/h |
+
+The 400 m trip-end trims, tertiary connectors and edges under 20 m make up the unpublished rest of
+the 17.7 km.
 
 | Parameter                | Value            | Configurable                            |
 | ------------------------ | ---------------- | --------------------------------------- |
@@ -467,10 +544,8 @@ every 15 minutes as `Community traffic summary` and are not reachable over HTTP.
 ### Route traffic
 
 `trafficService.enrichRoutes(routes)` takes the routes the routing layer computed and returns
-them with traffic applied. **It has no HTTP surface yet**: `/v1/routes` is frozen for shipped
-clients and never carries traffic fields, and `/v2/routes` lives on another branch. It is a
-self-contained function plus schema fragments (`RouteTrafficAnnotationSchema`,
-`RouteCongestionLevelSchema`, `CommunityTrafficSourceSchema`).
+them with traffic applied. `/v2/routes` calls it and returns its routes in its order;
+`/v1/routes` is frozen for shipped clients and never carries traffic fields.
 
 If anything is published inside the routes' bounding box, it resolves **every** route's geometry
 to edges with `trace_attributes` (`edge_walk`, one request per 100 km, sequential, at most
@@ -508,19 +583,10 @@ routes in the returned order and must not select by the `fastest` label or re-so
 duration. When at least one route was adjusted the result carries `trafficSource`
 (`navoss-community`). Any failure leaves every route untouched.
 
-**Merge seam for `/v2/routes`** (unchanged by this revision; the wiring is in progress on
-`revival/api-routing`, so at this revision enabling `live` serves flow and status only, not
-community-adjusted routes):
-
-1. Call `trafficService.enrichRoutes(routes)` in the v2 handler and return its `routes`.
-2. When `trafficSource` is set, put it on `source.trafficSource` and report
-   `source.traffic: "live"`.
-3. The v2 route schema needs optional `route.congestion` (aligned to geometry segments, includes
-   `unknown`), `route.traffic.{delaySeconds, observedFraction, typicalDurationSeconds}` and
-   `source.trafficSource`, and must allow routes without `traffic` under a live community source.
-4. `trafficService` is a local in `buildApp`; the v2 handler needs it in scope.
-5. Clients must present routes in the returned order and must not re-sort by duration, or the
-   ranking bound is lost.
+In `/v2/routes`, when `trafficSource` is set it becomes `source.trafficSource` with
+`source.traffic: "live"`; routes without enough published flow carry no `traffic` or
+`congestion`. Clients must present routes in the returned order and must not re-sort by
+duration, or the ranking bound is lost.
 
 ### Config
 
@@ -544,31 +610,181 @@ licensed provider only.
 | Viewport disclosure through flow requests           | Bounds snapped to a 0.05° grid, comparable to a map-tile request                                                                                                                                                                                                                                  | The request still shows which ~4 km cell is on screen, as tile requests already do                                                                                                                                                                                                                                     |
 | Traces sent to a third party                        | The matcher endpoint must be loopback, a private or link-local address literal, or a single-label host name (a Compose service); redirects are refused                                                                                                                                            | An operator can still run a forwarding proxy at a local address. Single-label names are not resolved or pinned by the guard, and the address check does not prove same-machine processing or operator ownership                                                                                                        |
 
+Established locally on the real Alberta/BC graph (see
+[Local validation](#local-validation-on-the-albertabc-graph)), and therefore no longer unknown:
+eligibility rates by road class, the `/locate` latency per batch, route walks over 100 km,
+publication only after the threshold on real Calgary roads, `/v2/routes` congestion alignment and
+the ranking bound on a real reordering, and that Valhalla 3.8.2 with its default logging writes
+no positions (request line, status, size and error text only, including for failed matches).
+
 Unproven, and to be established before `live`:
 
-- **Valhalla request logging.** The matcher receives trimmed positions and relative times.
-  Whether the production Valhalla container writes request bodies to journald has not been
-  checked on the production host.
+- **Valhalla logging on the production host.** Locally, Valhalla 3.8.2 logged no coordinates in
+  8,369 lines covering matches, `/locate`, route walks and deliberately failing traces. The
+  production container's log configuration and journald retention still need the same check.
 - **Proxy, swap and crash artifacts.** Caddy access logging is off, but error-path logging of
   headers (which include the client address) and the absence of swap and core dumps for the API
-  and Valhalla have not been verified.
-- **Map-match quality.** Apart from the 35 m snap limit, a poor match is accepted as Valhalla
-  returns it. `walkRoute` checks that the walk returns as many vertices as it was sent and that
-  its edges tile them, not that the coordinates are equal. Real GPS traces have not been run
-  through the pipeline.
-- **Eligibility on the real graph.** The `/locate` flags were read on a Liechtenstein extract.
-  How many Alberta/BC secondary-and-larger edges are `destination_only`, `deadend` or
-  `not_thru`, and how many long dead-end regions escape Valhalla's no-through search, has not
-  been measured. The extra `/locate` request per batch has not been load-tested.
+  and Valhalla have not been verified. Production only.
+- **Map-match quality on real GPS.** Synthetic traces built from real route geometry (with
+  jitter, 2 s fixes, 5–100 km/h) match on the Alberta/BC graph; real phone traces, with urban
+  canyon and tunnel noise, have not been run through the pipeline.
+- **Speed on the undriven part of a credited edge.** Since coverage is joined across batches, a
+  published speed is measured on at least 300 m (or half) of an edge and drawn for all of it.
+  How far that misplaces the end of a real queue on long rural edges has not been measured
+  against real traffic.
+- **Long dead-end regions.** Measured: Valhalla's flags do not mark them (Alberta 66 and 546, BC 4
+  and 37A). The mask that would is costed but not built.
 - **Raw batch lifetime in memory.** The batch lives in the request body, local arrays and the
   matcher request until garbage collection; it is not zeroed, and the matcher request has a
   four-second timeout rather than a hard bound on that lifetime.
-- **Behaviour on an Alberta/BC graph, under load, and behind Cloudflare and Caddy.** Tested
-  against Valhalla 3.8.2 on a Liechtenstein extract only.
-- **Route ETA.** `enrichRoutes` has no HTTP path at this revision, and no client presents
-  adjusted routes; their safety in a real client is unverified.
+- **Load, and the production path.** Local latencies are single-client under CPU emulation. Load
+  at the expected contributor count, and behaviour behind Cloudflare and Caddy, are untested.
+- **Route ETA in a client.** `/v2/routes` returns adjusted routes; no client presents them yet.
 - **The admission controls in practice.** How often carrier NAT puts two genuine newcomers in one
   /24 within one cohort, and how much coverage the 24-hour wait costs, is unknown.
+
+## Local validation on the Alberta/BC graph
+
+Measured on 2026-11-13 on the maintainer's Mac, **local, graph dated 2026-11-11, not production**:
+`ghcr.io/valhalla/valhalla-scripted:3.8.2` (`valhalla_service`, 2 threads, 2 CPUs, 2 GiB, amd64
+emulation on Apple silicon) serving the real Alberta + British Columbia graph from the
+offline-bundle pipeline (1,006,695 drivable ways, 3,949,177 directed drivable edges), the API from
+this branch in `live` with `allow-development`, and PostGIS 16-3.5. Latencies are indicative only.
+
+### Defects it exposed, fixed here
+
+1. **Route walks failed for every route longer than 100 km, and for some short ones.** Valhalla
+   3.8.2 `edge_walk` repeats the last vertex when a request ends part-way along an edge (every
+   100 km chunk boundary) and can add a zero-length edge; `walkRoute` then saw one vertex too
+   many and refused the whole route, so long routes never carried traffic and were never
+   re-ranked. Before the fix 124 of 133 routes of the two benchmarks walked (all over 100 km
+   failed); after it 131 of 133 (the two are 1,207 km alternatives beyond the twelve-request cap,
+   by design). The walk now drops only a repeat that Valhalla added, and also checks that the
+   echoed vertices equal the route's own coordinates, which the earlier review noted it did not.
+   Regression tests replay recorded real walks (Calgary–Edmonton, four requests; Banff, whose
+   route repeats its own first vertex).
+2. **A crawl was answered with 503.** For some interpolated points Valhalla 3.8.2 returns
+   `edge_index` 2^64 − 1 (no edge). That is outside JavaScript's safe-integer range, the schema
+   refused the whole response, and one in six batches of a 12 km/h jam on Deerfoot Trail became
+   a matcher outage, telling the app to stop for five minutes exactly when traffic is worth
+   reporting. Such points now count as unmatched. Regression test on a recorded Calgary batch.
+3. **Jams on long edges could never be published.** See
+   [Coverage across batches](#coverage-across-batches): pieces of an edge are now joined across a
+   contributor's batches.
+4. **The replay script could not publish on a real route.** It dated a long drive's batches up
+   to eight minutes back, which the 15-minute driving window (added with the freshness fix) then
+   dropped before the second boundary. It now dates each batch as just driven, takes its drive
+   from `/v2/routes`, and checks `/v2/routes` in `live` mode at the end.
+
+### Eligibility on real roads
+
+Forty random origin–destination routes per area, walked with `edge_walk`; every distinct edge on
+them classified by the same rules the server applies (class/use, 20 m, then `/locate` for the
+rest). Sampling by routes weights roads by how often trips use them.
+
+**Calgary**
+
+| Road class    | Edges |    km | Excluded: class/use | Excluded: < 20 m | Excluded: graph flags | Eligible (length) | Eligible (edge count) |
+| ------------- | ----: | ----: | ------------------: | ---------------: | --------------------: | ----------------: | --------------------: |
+| motorway      |  1049 | 363.0 |                0.0% |             0.1% |                  0.0% |             99.9% |                 98.1% |
+| trunk         |   328 |  27.6 |                0.0% |             4.4% |                  0.0% |             95.6% |                 68.9% |
+| primary       |   225 |  52.0 |                0.0% |             1.0% |                  0.0% |             99.0% |                 76.9% |
+| secondary     |   958 |  92.6 |                0.0% |             3.5% |                  0.0% |             96.5% |                 65.9% |
+| tertiary      |   684 |  74.3 |              100.0% |             0.0% |                  0.0% |              0.0% |                  0.0% |
+| unclassified  |    89 |  17.0 |              100.0% |             0.0% |                  0.0% |              0.0% |                  0.0% |
+| residential   |   328 |  21.6 |              100.0% |             0.0% |                  0.0% |              0.0% |                  0.0% |
+| service_other |    73 |  17.6 |              100.0% |             0.0% |                  0.0% |              0.0% |                  0.0% |
+
+**Rural Alberta (Mountain View / Red Deer counties)**
+
+| Road class    | Edges |    km | Excluded: class/use | Excluded: < 20 m | Excluded: graph flags | Eligible (length) | Eligible (edge count) |
+| ------------- | ----: | ----: | ------------------: | ---------------: | --------------------: | ----------------: | --------------------: |
+| motorway      |    23 |  43.9 |                0.0% |             0.0% |                  0.0% |            100.0% |                100.0% |
+| trunk         |    15 |  19.7 |                0.0% |             0.0% |                  0.0% |            100.0% |                100.0% |
+| primary       |   768 | 430.5 |                0.0% |             0.3% |                  0.0% |             99.7% |                 85.8% |
+| secondary     |   565 | 466.5 |                0.0% |             0.1% |                  0.0% |             99.9% |                 90.3% |
+| tertiary      |    75 |  54.6 |              100.0% |             0.0% |                  0.0% |              0.0% |                  0.0% |
+| unclassified  |   271 | 211.0 |              100.0% |             0.0% |                  0.0% |              0.0% |                  0.0% |
+| residential   |    17 |   1.1 |              100.0% |             0.0% |                  0.0% |              0.0% |                  0.0% |
+| service_other |     7 |   1.5 |              100.0% |             0.0% |                  0.0% |              0.0% |                  0.0% |
+
+**Metro Vancouver**
+
+| Road class    | Edges |    km | Excluded: class/use | Excluded: < 20 m | Excluded: graph flags | Eligible (length) | Eligible (edge count) |
+| ------------- | ----: | ----: | ------------------: | ---------------: | --------------------: | ----------------: | --------------------: |
+| motorway      |   603 | 193.2 |                0.0% |             0.1% |                  0.0% |             99.9% |                 97.0% |
+| trunk         |  1269 | 113.9 |                0.0% |             4.3% |                  0.0% |             95.7% |                 61.6% |
+| primary       |  2680 | 144.6 |                0.0% |             7.7% |                  0.0% |             92.3% |                 59.9% |
+| secondary     |  1425 |  76.7 |                0.0% |             7.8% |                  0.0% |             92.2% |                 59.9% |
+| tertiary      |   901 |  51.5 |              100.0% |             0.0% |                  0.0% |              0.0% |                  0.0% |
+| unclassified  |   255 |  18.8 |              100.0% |             0.0% |                  0.0% |              0.0% |                  0.0% |
+| residential   |   292 |  16.0 |              100.0% |             0.0% |                  0.0% |              0.0% |                  0.0% |
+| service_other |   115 |  13.4 |              100.0% |             0.0% |                  0.0% |              0.0% |                  0.0% |
+
+- The graph flags almost never fire on routed through roads: on the sampled routes no eligible-
+  class edge was destination-only, a dead end or no-through. Probing every secondary-or-larger
+  edge near 4,000 random points per area found them on 5 of 8,809 edges in Calgary, 3 of 13,682
+  in Edmonton, 12 of 18,553 in Metro Vancouver and none of 725 in rural Alberta (for example a
+  dead-end stub of 130 Avenue SE in Calgary and unnamed destination-only connectors). The access check matters for traces that
+  leave the network at a trip end, which is what it is for, not for coverage.
+- What actually limits coverage is the class rule (tertiary and below: 100%) and the 20 m minimum:
+  1–8% of trunk/primary/secondary length in the cities (up to 40% of edges by count), under 0.5%
+  in rural Alberta.
+- `/locate` costs one extra request per batch with a candidate edge: p50 5–6 ms, p95 6–16 ms for
+  the 1.5–5 candidate edges a one-minute batch has (trace match p50 5 ms on the same batches),
+  and p50 10 ms, p95 17 ms for 40 edges.
+
+### Dead-end valleys on the real graph
+
+`/locate` reported every secondary-or-larger edge on these roads as an open through road:
+
+| Road                                                           | Kind                        | Length checked | Flagged |
+| -------------------------------------------------------------- | --------------------------- | -------------: | ------: |
+| Alberta 66, Elbow Falls Trail (Bragg Creek to Little Elbow)    | dead-end valley, primary    |          31 km |       0 |
+| Alberta 546, Sheep River Trail (Turner Valley to the road end) | dead-end valley, secondary  |          28 km |       0 |
+| Alberta 40, Kananaskis Trail (Highway 1 to Kananaskis Village) | through road (control)      |          29 km |       0 |
+| BC 4, Pacific Rim Highway (Port Alberni to Tofino)             | dead-end peninsula, primary |         126 km |       0 |
+| BC 37A, Glacier Highway (Meziadin Junction to Stewart)         | dead-end valley, secondary  |          62 km |       0 |
+
+The weakness documented after the Liechtenstein check holds at provincial scale: Valhalla's
+no-through search is bounded, so a valley with its own road network is a through road to it.
+Anyone living along these roads is protected only by the app's trip-end trimming and the
+three-contributor threshold.
+
+**What a dead-end mask would cost.** The graph has 1.0 M drivable ways and 3.95 M directed edges;
+Valhalla's own tools enumerate all of them in 2–5 s here (`valhalla_ways_to_edges`,
+`valhalla_export_edges`). A mask needs node topology, so it would be built from the same OSM extract
+(for example with osmium) rather than from those exports: find bridges of the drivable road graph
+(Tarjan, linear time), take the side of each bridge that does not contain the main network as a
+dead-end region, and add edges within 400 m along the network of a terminal. That is seconds of
+CPU in C++ or a few minutes in Python per graph build, a mask of a few MB keyed by way and
+direction (or segment key) versioned with the graph id, and a set lookup per candidate edge at
+run time. The work is roughly one to two days for the build step, its tests and the fail-closed
+check that the mask and graph versions match. It is not built; the checklist keeps it a `live`
+precondition.
+
+### End to end on Calgary
+
+`traffic:replay` against the live API (this branch, `allow-development`, PostGIS) and the real
+graph, three development installations driving the 17.8 km Deerfoot Trail / Glenmore Trail route
+(`/v2/routes` geometry, 2 s fixes, the client's 400 m trims, batches closed at the advertised
+60 s and 600 m) at 12, 16 and
+24 km/h, the second also re-uploading from three more networks:
+
+- After two installations and the epoch boundary: **0** published edges. With the third uploaded
+  but the epoch open: **0**. At the next boundary: **24** edges (14 `stopped`, 8 `heavy`,
+  2 `slow`). Before coverage was joined across batches the same replay published 0 edges at the
+  boundary.
+- `/v2/routes` for the same trip in `live` mode: `source.traffic: "live"` with the community
+  source. The engine's first route (Deerfoot) carried the jam: +1,243 s, capped at 100% of its
+  1,243 s, observed 0.61, and `congestion` with 423 entries for 424 geometry vertices. It moved
+  from first to last; the two alternatives, unobserved and without `traffic`, moved ahead.
+- The ranking bound held on that real reordering: all three routes have 1,352 m of minor road
+  (the shared residential start), so neither promotion added minor road.
+- Route walks over 100 km now succeed on the real graph: Calgary–Edmonton (299 and 306 km, three
+  and four requests) and Calgary–Vancouver (974 km, ten requests) walked edge for edge with the
+  route geometry, 38–107 ms. The 1,207 km Calgary–Vancouver alternative exceeds the
+  twelve-request cap and is, by design, never walked or promoted.
 
 ## Enablement checklist
 
@@ -601,7 +817,7 @@ Collection receives exactly the inputs `live` does, so this group is about the i
       hold-back, memory-only batches, handling of `401`, `403`, `429` and `503`.
 - [ ] Valhalla's container logs, at its configured level, contain no request bodies for
       `trace_attributes` and `/locate`, including on errors (send a malformed trace and read the
-      journal).
+      journal). Established locally for 3.8.2 at its default logging; repeat on the host.
 - [ ] Caddy logs no request headers or client addresses on proxy errors.
 - [ ] Swap is off or encrypted, and core dumps are disabled, for the API and Valhalla
       containers.
@@ -614,14 +830,16 @@ Collection receives exactly the inputs `live` does, so this group is about the i
 Everything above, and:
 
 - [ ] Real GPS traces, from the app release, have been run through the pipeline on the Alberta/BC
-      graph: snap distances, the eligibility rules and the share of each road class published
-      have been looked at.
-- [ ] The eligibility rules have been measured on the Alberta/BC graph, and either a
-      topology-derived dead-end mask (dead-end components, or edges within 400 m of a terminal
-      along the network, built from the same extract and versioned with the graph) is in place
-      or the operator accepts that long dead-end regions are not detected.
+      graph: snap distances and the share of each road class published have been looked at.
+      (Synthetic traces on real routes: done locally.)
+- [ ] Either a topology-derived dead-end mask (dead-end components, or edges within 400 m of a
+      terminal along the network, built from the same extract and versioned with the graph) is in
+      place, or the operator accepts that long dead-end regions are not detected. The rules
+      themselves are measured on the Alberta/BC graph (locally, graph of 2026-11-11), and real
+      dead-end valleys were confirmed undetected.
 - [ ] Load: Valhalla answers routes within their budget while probes, `/locate` and route walks
-      run at the expected contributor count (`maxConcurrentMatches` stays 1).
+      run at the expected contributor count (`maxConcurrentMatches` stays 1). Single-client
+      latencies are measured locally; load is not.
 - [ ] `/v2/routes` presents community-adjusted routes only after its own review: returned order
       preserved, `fastest` label not used to select, `observedAt` shown.
 - [ ] The residual risks below are accepted in writing, or admission is strengthened first.
@@ -645,13 +863,14 @@ Enabling `live` means accepting these plainly:
 
 ## Retention
 
-| What                                                                                             | Where                                    | How long                                                                                                                                                                                     |
-| ------------------------------------------------------------------------------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Uploaded positions, offsets, `capturedAt`                                                        | Request memory                           | Until the request finishes (not zeroed)                                                                                                                                                      |
-| Pending sample: tag, speed, arrival epoch, driving start; newcomers also a salted network marker | API process memory                       | Until released, or dropped at the first boundary more than 15 min after its driving began or its arrival epoch: at most 20 min                                                               |
-| Release: edge, speed, boundaries, edge geometry                                                  | `traffic_releases`                       | Never served after the boundary 15 min after release. Deleted by the first successful publication at or after that boundary; erased on every API start, and retried until erased while `off` |
-| Credential and seed                                                                              | Phone memory; never stored by the server | Credential valid 2 h; unusable after an API restart                                                                                                                                          |
-| Network and installation rate-limit fingerprints                                                 | API process memory                       | Salted hash and request times; removed within 11 minutes of the last request; cleared on shutdown                                                                                            |
+| What                                                                                                                      | Where                                    | How long                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Uploaded positions, offsets, `capturedAt`                                                                                 | Request memory                           | Until the request finishes (not zeroed)                                                                                                                                                      |
+| Pending sample: tag, speed, arrival epoch, driving start; newcomers also a salted network marker                          | API process memory                       | Until released, or dropped at the first boundary more than 15 min after its driving began or its arrival epoch: at most 20 min                                                               |
+| Partial coverage: tag, driven intervals along the edge (metres), distance, time, earliest arrival epoch and driving start | API process memory                       | Until it completes a sample, or dropped at the first boundary more than 15 min after its earliest piece: at most 20 min                                                                      |
+| Release: edge, speed, boundaries, edge geometry                                                                           | `traffic_releases`                       | Never served after the boundary 15 min after release. Deleted by the first successful publication at or after that boundary; erased on every API start, and retried until erased while `off` |
+| Credential and seed                                                                                                       | Phone memory; never stored by the server | Credential valid 2 h; unusable after an API restart                                                                                                                                          |
+| Network and installation rate-limit fingerprints                                                                          | API process memory                       | Salted hash and request times; removed within 11 minutes of the last request; cleared on shutdown                                                                                            |
 
 Logical visibility and physical deletion differ. Everything derived from a batch is out of
 memory within 20 minutes of its arrival and no longer served within 35 minutes. A published row
@@ -745,7 +964,11 @@ out of scope for the same privacy reasons that keep retention at about half an h
   privacy limits, observation derivation (road classes, the first-edge sliver), eligibility
   (20 m minimum; destination-only, dead-end, no-through and car-closed ways in either
   direction; failing closed), route delay cap and ranking bound, the matcher (redirects, snap
-  distance present and absent, endpoint allowlist), the release store's handling of an
+  distance present and absent, the 2^64 − 1 edge-index sentinel), coverage across batches
+  (union of intervals, replays and overlaps, standing time, the floor on short edges, expiry,
+  per-edge tags, the newcomer cap at completion), whole-edge geometry for partly matched real
+  edges, recorded real Alberta/BC route walks (repeated chunk-end vertices, a zero-length edge, a
+  route that repeats its own vertex, coordinate equality), the release store's handling of an
   unconfirmed rollback, and the multi-request walk of a 260 km route, with no external service.
 - `apps/api/test/traffic-app.test.ts`: the HTTP surface, modes, credentials, the minimum
   installation age and the newcomer cap, rate limiting, epoch snapshots (read before the epoch
@@ -758,8 +981,9 @@ out of scope for the same privacy reasons that keep retention at about half an h
   migration runner, including: nothing stored below the threshold, one transaction per epoch, no
   uploaded position, address or credential in the database or API log, purge on start in every
   mode, credentials issued against real installation rows with a test App Attest authority
-  (including the 24-hour age and the newcomer cap), and a blocked epoch cancelled by the
-  server's lock timeout without serving its stale rows.
+  (including the 24-hour age and the newcomer cap), a blocked epoch cancelled by the
+  server's lock timeout without serving its stale rows, and partial coverage kept out of the
+  database and the log.
   It needs PostGIS on `127.0.0.1:5442` (or `NAVOSS_TRAFFIC_TEST_DATABASE_URL`) and skips when
   that is not reachable unless `NAVOSS_REQUIRE_TEST_DATABASE=1`:
 
@@ -771,12 +995,15 @@ out of scope for the same privacy reasons that keep retention at about half an h
 
 - Valhalla is stubbed with responses recorded from Valhalla 3.8.2
   (`apps/api/test/fixtures/traffic-drive.json`: `trace_attributes` with snap distances, the
-  route walk, and the trimmed verbose `/locate` answer for the drive's candidate edges); the
-  long-route walk uses a synthetic matcher.
+  route walk, and the trimmed verbose `/locate` answer, with whole-edge shapes, for the drive's
+  candidate edges), and from the Alberta/BC graph (`valhalla-walks-alberta-bc.json`,
+  `valhalla-crawl-calgary.json`); the 260 km walk uses a synthetic matcher.
 - `corepack pnpm --filter @navoss/api traffic:replay` registers development installations
   against a local API with PostGIS and Valhalla, replays a synthetic drive, and fails unless
   edges stay hidden for two installations (however often one of them uploads, from whatever
-  network) and until the epoch closes, then appear at the boundary after the third. It needs
+  network) and until the epoch closes, then appear at the boundary after the third, and
+  `/v2/routes` returns them as congestion aligned to the route geometry.
+  `TRAFFIC_REPLAY_SPEED_KPH` sets the contributors' speed (12 reproduces a Deerfoot jam). It needs
   `COMMUNITY_ATTESTATION_MODE=allow-development` and the API's `PG*` variables (it dates its
   installations two days back, past the 24-hour minimum), and takes five to ten minutes because
   it waits for real epoch boundaries; the script header lists the commands.

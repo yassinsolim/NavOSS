@@ -53,9 +53,10 @@ const cases = expandCases(casesPayload);
 const benchmarkId = Array.isArray(casesPayload)
   ? 'regional-route-quality'
   : casesPayload.benchmarkId;
-const routePath = Array.isArray(casesPayload)
-  ? '/v1/routes'
-  : (casesPayload.routePath ?? '/v1/routes');
+// ROUTE_QUALITY_PATH runs a benchmark against another route endpoint (for example `/v1/routes`).
+const routePath =
+  process.env.ROUTE_QUALITY_PATH ??
+  (Array.isArray(casesPayload) ? '/v1/routes' : (casesPayload.routePath ?? '/v1/routes'));
 if (
   !Array.isArray(casesPayload) &&
   casesPayload.expectedCaseCount !== undefined &&
