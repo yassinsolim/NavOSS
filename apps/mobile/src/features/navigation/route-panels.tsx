@@ -744,7 +744,7 @@ export function CarPlayIdlePanel({ bottomInset, onEnd, safeAreaTop }: CarPlayIdl
 }
 
 interface SafetyCameraAlertBannerProps {
-  camera: SafetyCamera;
+  camera: Pick<SafetyCamera, 'location'>;
   distanceAheadMeters: number;
   safeAreaTop: number;
 }

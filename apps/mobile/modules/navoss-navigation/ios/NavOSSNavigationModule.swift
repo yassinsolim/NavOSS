@@ -30,11 +30,22 @@ private struct NavigationLocationRecord: Record {
   @Field
   var longitude: Double = 0
 
+  @Field
+  var speedMetersPerSecond: Double?
+
+  /// Fix time in milliseconds since the Unix epoch, as JavaScript reports it.
+  @Field
+  var timestampMs: Double?
+
   var sample: NavigationLocationSample {
     NavigationLocationSample(
       coordinate: NavigationCoordinate(latitude: latitude, longitude: longitude),
       courseDegrees: courseDegrees,
-      horizontalAccuracyMeters: horizontalAccuracyMeters
+      horizontalAccuracyMeters: horizontalAccuracyMeters,
+      speedMetersPerSecond: speedMetersPerSecond,
+      timestamp: timestampMs.map {
+        Date(timeIntervalSince1970: $0 / 1_000).timeIntervalSinceReferenceDate
+      }
     )
   }
 }
@@ -254,6 +265,7 @@ public final class NavOSSNavigationModule: Module {
   private var carPlayNavigationEndedObserver: NSObjectProtocol?
   private var carPlayPreferencesObserver: NSObjectProtocol?
   private var carPlayStateObserver: NSObjectProtocol?
+  private var navigationPreferencesObserver: NSObjectProtocol?
   private var navigationSnapshotObserver: NSObjectProtocol?
   private let service = NavOSSNavigationService.shared
 
@@ -302,11 +314,14 @@ public final class NavOSSNavigationModule: Module {
         object: NavOSSCarPlayPreferencesStore.shared,
         queue: .main
       ) { [weak self] _ in
-        guard let self else { return }
-        self.sendEvent(
-          navigationPreferencesEvent,
-          self.serialize(NavOSSCarPlayPreferencesStore.shared.load())
-        )
+        self?.emitNavigationPreferences()
+      }
+      self.navigationPreferencesObserver = NotificationCenter.default.addObserver(
+        forName: .navOSSNavigationPreferencesDidChange,
+        object: NavOSSNavigationPreferencesStore.shared,
+        queue: .main
+      ) { [weak self] _ in
+        self?.emitNavigationPreferences()
       }
       self.navigationSnapshotObserver = NotificationCenter.default.addObserver(
         forName: .navOSSNavigationSnapshotDidChange,
@@ -333,6 +348,10 @@ public final class NavOSSNavigationModule: Module {
         NotificationCenter.default.removeObserver(carPlayPreferencesObserver)
         self.carPlayPreferencesObserver = nil
       }
+      if let navigationPreferencesObserver = self.navigationPreferencesObserver {
+        NotificationCenter.default.removeObserver(navigationPreferencesObserver)
+        self.navigationPreferencesObserver = nil
+      }
       if let navigationSnapshotObserver = self.navigationSnapshotObserver {
         NotificationCenter.default.removeObserver(navigationSnapshotObserver)
         self.navigationSnapshotObserver = nil
@@ -345,13 +364,18 @@ public final class NavOSSNavigationModule: Module {
         "backgroundLocation": self.service.backgroundLocationEnabled,
         "carPlayTripBridge": true,
         "courseMatching": true,
+        "deadReckoning": true,
+        "geometryGuidance": true,
         "implementation": "native-ios",
+        "nativeSafetyCameraAlerts": true,
         "offRouteDetection": true,
         "replayInput": true,
+        "rerouteConsent": true,
         "routeContinuity": true,
         "routeMatching": true,
         "safetyCameraAnnouncements": true,
-        "version": 8,
+        "speedingWarning": true,
+        "version": 9,
       ]
     }
 
@@ -380,7 +404,27 @@ public final class NavOSSNavigationModule: Module {
     }
 
     Function("getNavigationPreferences") { () -> [String: Any] in
-      self.serialize(NavOSSCarPlayPreferencesStore.shared.load())
+      self.navigationPreferencesPayload()
+    }
+
+    Function("setRerouteMode") { (rawValue: String) in
+      guard let mode = NavOSSRerouteMode(rawValue: rawValue) else { return }
+      NavOSSNavigationPreferencesStore.shared.setRerouteMode(mode)
+    }
+
+    Function("setSpeedingWarning") { (toleranceKph: Int, audible: Bool) in
+      NavOSSNavigationPreferencesStore.shared.setSpeedingWarning(
+        toleranceKph: toleranceKph,
+        audible: audible
+      )
+    }
+
+    Function("acceptRerouteProposal") { (id: String) -> Bool in
+      self.service.acceptRerouteProposal(id: id)
+    }
+
+    Function("declineRerouteProposal") { (id: String) -> Bool in
+      self.service.declineRerouteProposal(id: id)
     }
 
     Function("getAudioMode") { () -> String in
@@ -467,13 +511,22 @@ public final class NavOSSNavigationModule: Module {
       self.service.clearNavigation()
     }
 
-    Function("announceSafetyCamera") { () in
-      self.service.announceSafetyCamera()
-    }
-
     Function("stopAnnouncements") { () in
       self.service.stopAnnouncements()
     }
+  }
+
+  private func emitNavigationPreferences() {
+    sendEvent(navigationPreferencesEvent, navigationPreferencesPayload())
+  }
+
+  private func navigationPreferencesPayload() -> [String: Any] {
+    var payload = serialize(NavOSSCarPlayPreferencesStore.shared.load())
+    let navigation = NavOSSNavigationPreferencesStore.shared.load()
+    payload["rerouteMode"] = navigation.rerouteMode.rawValue
+    payload["speedingAudibleWarning"] = navigation.speedingAudibleWarning
+    payload["speedingToleranceKph"] = navigation.speedingToleranceKph
+    return payload
   }
 
   private func emitCarPlayState() {
@@ -542,7 +595,41 @@ public final class NavOSSNavigationModule: Module {
       "routeVersion": snapshot.routeVersion,
       "sequence": snapshot.sequence,
       "stateVersion": state.stateVersion,
+      "isDeadReckoning": snapshot.isDeadReckoning,
+      "rerouteMode": state.rerouteMode.rawValue,
+      "speedingState": state.speedingState.rawValue,
     ]
+
+    if let speedMetersPerSecond = snapshot.speedMetersPerSecond {
+      payload["speedMetersPerSecond"] = speedMetersPerSecond
+    }
+    if let speedLimitKph = state.roadContext.speedLimitKph {
+      payload["speedLimitKph"] = speedLimitKph
+    }
+    if let currentRoadName = state.roadContext.currentRoadName {
+      payload["currentRoadName"] = currentRoadName
+    }
+    if let proposal = state.rerouteProposal {
+      payload["rerouteProposal"] = [
+        "createdAtMs": Date(timeIntervalSinceReferenceDate: proposal.createdAt)
+          .timeIntervalSince1970 * 1_000,
+        "distanceDeltaMeters": proposal.distanceDeltaMeters,
+        "distanceMeters": proposal.trip.distanceMeters,
+        "durationDeltaSeconds": proposal.durationDeltaSeconds,
+        "durationSeconds": proposal.trip.durationSeconds,
+        "id": proposal.id,
+        "respondWithinSeconds": NavigationRerouteConsent.askFirstResponseSeconds,
+        "trip": serialize(proposal.trip),
+      ] as [String: Any]
+    }
+    if let alert = state.safetyCameraAlert {
+      payload["safetyCameraAlert"] = [
+        "cameraId": alert.cameraId,
+        "distanceAheadMeters": alert.distanceAheadMeters,
+        "location": alert.location,
+        "sequence": alert.sequence,
+      ] as [String: Any]
+    }
 
     if let rawCoordinate = snapshot.rawCoordinate {
       payload["rawCoordinate"] = serialize(rawCoordinate)
