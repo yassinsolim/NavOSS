@@ -411,6 +411,12 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     case "maneuver-symbols":
       showManeuverSymbols()
       return
+    case "simulated-drive":
+      // Not part of the pixel gate: drives the fixture trip at 1 Hz, like real GPS fixes, so the
+      // eased camera, the turn, and arrival can be watched or recorded with `simctl io`.
+      useCarPlayFrame(CGSize(width: 800, height: 480), guidanceCardInset: 300)
+      startSimulatedDrive()
+      return
     default:
       assertionFailure("Unknown CarPlay visual scenario: \(scenario)")
     }
@@ -458,6 +464,58 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         congestion: trip.congestion
       )
     )
+  }
+
+  private var driveTimer: Timer?
+
+  private func startSimulatedDrive() {
+    let trip = Self.turnTrip
+    let geometry = trip.geometry
+    var cumulative = [0.0]
+    for index in 1..<geometry.count {
+      let a = CLLocation(latitude: geometry[index - 1].latitude, longitude: geometry[index - 1].longitude)
+      let b = CLLocation(latitude: geometry[index].latitude, longitude: geometry[index].longitude)
+      cumulative.append(cumulative[index - 1] + b.distance(from: a))
+    }
+    let total = cumulative[cumulative.count - 1]
+    let firstLeg = trip.steps[0].distanceMeters
+    var travelled = 0.0
+    let speed = 16.0
+    markReady()
+    driveTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
+      MainActor.assumeIsolated {
+        guard let self else { return timer.invalidate() }
+        travelled = min(total, travelled + speed)
+        var segment = 0
+        while segment < geometry.count - 2, cumulative[segment + 1] < travelled { segment += 1 }
+        let start = geometry[segment]
+        let end = geometry[segment + 1]
+        let fraction = (travelled - cumulative[segment]) / max(1, cumulative[segment + 1] - cumulative[segment])
+        let coordinate = NavOSSCarPlayCoordinate(
+          latitude: start.latitude + (end.latitude - start.latitude) * fraction,
+          longitude: start.longitude + (end.longitude - start.longitude) * fraction)
+        let course = CLLocation(latitude: start.latitude, longitude: start.longitude)
+          .bearing(to: CLLocation(latitude: end.latitude, longitude: end.longitude))
+        let onFirstLeg = travelled < firstLeg
+        let guidance = NavOSSCarPlayGuidance(
+          distanceToManeuverMeters: onFirstLeg ? firstLeg - travelled : total - travelled,
+          durationToManeuverSeconds: (onFirstLeg ? firstLeg - travelled : total - travelled) / speed,
+          instruction: "", maneuverType: "turn",
+          phase: travelled >= total ? .arrived : .navigating,
+          remainingDistanceMeters: total - travelled,
+          remainingDurationSeconds: (total - travelled) / speed, roadName: "",
+          stepIndex: onFirstLeg ? 0 : 1)
+        self.renderGuidance(
+          trip: trip, guidance: guidance,
+          position: NavOSSCarPlayPosition(
+            coordinate: coordinate, courseDegrees: course, speedMetersPerSecond: speed),
+          progress: travelled / total,
+          speedLimitKph: 50)
+        print("NAVOSS_CARPLAY_DRIVE \(Int(travelled)) / \(Int(total))")
+        fflush(stdout)
+        if travelled >= total { timer.invalidate() }
+      }
+    }
   }
 
   /// Every turn-card symbol the renderer draws, on the guidance-card green, for visual review.
@@ -640,5 +698,20 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     NavOSSCarPlayCoordinate(latitude: 51.04620, longitude: -114.06880),
     NavOSSCarPlayCoordinate(latitude: 51.04800, longitude: -114.06520),
   ]
+}
+#endif
+
+#if targetEnvironment(simulator)
+extension CLLocation {
+  fileprivate func bearing(to other: CLLocation) -> Double {
+    let lat1 = coordinate.latitude * .pi / 180
+    let lat2 = other.coordinate.latitude * .pi / 180
+    let deltaLongitude = (other.coordinate.longitude - coordinate.longitude) * .pi / 180
+    let degrees = atan2(
+      sin(deltaLongitude) * cos(lat2),
+      cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(deltaLongitude)
+    ) * 180 / .pi
+    return degrees >= 0 ? degrees : degrees + 360
+  }
 }
 #endif
