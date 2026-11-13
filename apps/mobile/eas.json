@@ -11,17 +11,24 @@
       "developmentClient": true,
       "distribution": "internal",
       "environment": "development",
-      "extends": "base"
+      "extends": "base",
+      "env": {
+        "NAVOSS_APP_ATTEST_ENVIRONMENT": "development"
+      }
     },
     "preview": {
       "distribution": "internal",
       "environment": "preview",
-      "extends": "base"
+      "extends": "base",
+      "env": {
+        "NAVOSS_APP_ATTEST_ENVIRONMENT": "production"
+      }
     },
     "internal-carplay": {
       "distribution": "internal",
       "environment": "production",
       "env": {
+        "NAVOSS_APP_ATTEST_ENVIRONMENT": "production",
         "NAVOSS_CARPLAY_ENABLED": "1",
         "NAVOSS_CARPLAY_ENTITLEMENT_ENABLED": "1",
         "NAVOSS_GOOGLE_PLACES_ENABLED": "0"
@@ -32,6 +39,7 @@
       "autoIncrement": true,
       "environment": "production",
       "env": {
+        "NAVOSS_APP_ATTEST_ENVIRONMENT": "production",
         "NAVOSS_CARPLAY_ENABLED": "0",
         "NAVOSS_CARPLAY_ENTITLEMENT_ENABLED": "0",
         "NAVOSS_GOOGLE_PLACES_ENABLED": "0"
@@ -42,6 +50,7 @@
       "autoIncrement": true,
       "environment": "production",
       "env": {
+        "NAVOSS_APP_ATTEST_ENVIRONMENT": "production",
         "NAVOSS_CARPLAY_ENABLED": "1",
         "NAVOSS_CARPLAY_ENTITLEMENT_ENABLED": "1",
         "NAVOSS_GOOGLE_PLACES_ENABLED": "0"
@@ -52,6 +61,7 @@
       "autoIncrement": true,
       "environment": "production",
       "env": {
+        "NAVOSS_APP_ATTEST_ENVIRONMENT": "production",
         "NAVOSS_CARPLAY_ENABLED": "1",
         "NAVOSS_CARPLAY_ENTITLEMENT_ENABLED": "1",
         "NAVOSS_GOOGLE_PLACES_ENABLED": "1"

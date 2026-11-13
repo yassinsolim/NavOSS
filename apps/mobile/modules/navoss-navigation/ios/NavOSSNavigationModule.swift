@@ -348,6 +348,7 @@ public final class NavOSSNavigationModule: Module {
   private var carPlayNavigationEndedObserver: NSObjectProtocol?
   private var carPlayPreferencesObserver: NSObjectProtocol?
   private var carPlayStateObserver: NSObjectProtocol?
+  private var communityStateObserver: NSObjectProtocol?
   private var navigationPreferencesObserver: NSObjectProtocol?
   private var navigationSnapshotObserver: NSObjectProtocol?
   private let service = NavOSSNavigationService.shared
@@ -374,10 +375,21 @@ public final class NavOSSNavigationModule: Module {
       navigationSnapshotEvent,
       navigationPreferencesEvent,
       carPlayStateEvent,
-      carPlayNavigationEndedEvent
+      carPlayNavigationEndedEvent,
+      NavOSSCommunityBridge.stateEvent
     )
 
     OnCreate {
+      self.communityStateObserver = NotificationCenter.default.addObserver(
+        forName: .navOSSCommunityStateDidChange,
+        object: NavOSSCommunityService.shared,
+        queue: .main
+      ) { [weak self] _ in
+        Task { [weak self] in
+          let payload = await NavOSSCommunityBridge.statePayload()
+          self?.sendEvent(NavOSSCommunityBridge.stateEvent, payload)
+        }
+      }
       self.carPlayStateObserver = NotificationCenter.default.addObserver(
         forName: .navOSSCarPlayStateDidChange,
         object: NavOSSCarPlayTripStore.shared,
@@ -419,6 +431,10 @@ public final class NavOSSNavigationModule: Module {
     }
 
     OnDestroy {
+      if let communityStateObserver = self.communityStateObserver {
+        NotificationCenter.default.removeObserver(communityStateObserver)
+        self.communityStateObserver = nil
+      }
       if let carPlayNavigationEndedObserver = self.carPlayNavigationEndedObserver {
         NotificationCenter.default.removeObserver(carPlayNavigationEndedObserver)
         self.carPlayNavigationEndedObserver = nil
@@ -458,6 +474,8 @@ public final class NavOSSNavigationModule: Module {
         "routeMatching": true,
         "safetyCameraAnnouncements": true,
         "speedingWarning": true,
+        "communityReports": true,
+        "communityTraffic": true,
         "version": 10,
       ]
     }
@@ -594,6 +612,49 @@ public final class NavOSSNavigationModule: Module {
       self.service.clearNavigation()
     }
 
+    // Community reports and traffic sharing (native, shared with CarPlay).
+    AsyncFunction("getCommunityState") { () async -> [String: Any] in
+      await NavOSSCommunityService.shared.refreshFeatures()
+      return await NavOSSCommunityBridge.statePayload()
+    }
+
+    AsyncFunction("fetchCommunityReports") { (bounds: CommunityBoundsRecord) async -> [String: Any] in
+      await NavOSSCommunityBridge.fetchReports(bounds)
+    }
+
+    AsyncFunction("submitCommunityReport") {
+      (report: CommunityReportSubmissionRecord) async -> [String: Any] in
+      await NavOSSCommunityBridge.submitReport(report)
+    }
+
+    AsyncFunction("voteCommunityReport") { (reportId: String, vote: String) async -> [String: Any] in
+      await NavOSSCommunityBridge.vote(reportId: reportId, rawVote: vote)
+    }
+
+    Function("dismissStillThere") { (reportId: String) in
+      NavOSSCommunityService.shared.dismissStillThere(reportId: reportId)
+    }
+
+    AsyncFunction("withdrawCommunityReport") { (reportId: String) async -> [String: Any] in
+      await NavOSSCommunityBridge.withdraw(reportId: reportId)
+    }
+
+    AsyncFunction("resetCommunityIdentity") { () async -> [String: Any] in
+      await NavOSSCommunityBridge.resetIdentity()
+    }
+
+    Function("setShareTrafficSpeeds") { (enabled: Bool) in
+      NavOSSCommunityPreferencesStore.shared.setSharesTrafficSpeeds(enabled)
+    }
+
+    Function("setShareRoadReports") { (enabled: Bool) in
+      NavOSSCommunityPreferencesStore.shared.setSharesRoadReports(enabled)
+    }
+
+    Function("setAnnounceRoadReports") { (enabled: Bool) in
+      NavOSSCommunityPreferencesStore.shared.setAnnouncesRoadReports(enabled)
+    }
+
     Function("stopAnnouncements") { () in
       self.service.stopAnnouncements()
     }
@@ -682,6 +743,7 @@ public final class NavOSSNavigationModule: Module {
       "rerouteMode": state.rerouteMode.rawValue,
       "speedingState": state.speedingState.rawValue,
     ]
+    payload.merge(NavOSSCommunityBridge.navigationAlertsPayload()) { current, _ in current }
 
     if let speedMetersPerSecond = snapshot.speedMetersPerSecond {
       payload["speedMetersPerSecond"] = speedMetersPerSecond

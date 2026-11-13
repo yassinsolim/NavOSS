@@ -8,6 +8,11 @@ import type {
 
 import NavOSSNavigation, {
   type NativeCarPlayState,
+  type NativeCommunityBounds,
+  type NativeCommunityReport,
+  type NativeCommunityReportSubmission,
+  type NativeCommunityResult,
+  type NativeCommunityState,
   type NativeDestinationCatalog,
   type NativeNavigationDestination,
   type NativeNavigationAudioMode,
@@ -86,6 +91,16 @@ export type NavigationAudioMode = NativeNavigationAudioMode;
 
 export type {
   NativeCarPlayState,
+  NativeCommunityBounds,
+  NativeCommunityError,
+  NativeCommunityReport,
+  NativeCommunityReportAlert,
+  NativeCommunityReportSubmission,
+  NativeCommunityReportType,
+  NativeCommunityResult,
+  NativeCommunityState,
+  NativeStillTherePrompt,
+  NativeTrafficSharingState,
   NativeDestinationCatalog,
   NativeNavigationSnapshot,
   NativeRerouteMode,
@@ -334,4 +349,68 @@ export function clearNavigationRoute(): NativeNavigationSnapshot {
 
 export function stopNavigationAnnouncements(): void {
   NavOSSNavigation.stopAnnouncements();
+}
+
+// Community reports and traffic sharing. Networking and App Attest live natively and are
+// shared with CarPlay; these wrappers never touch identity material.
+
+/** Whether this native build has the community bridge (older dev clients do not). */
+export function hasNativeCommunity(): boolean {
+  return NavOSSNavigation.getCapabilities().communityReports === true;
+}
+
+export function getCommunityState(): Promise<NativeCommunityState> {
+  return NavOSSNavigation.getCommunityState();
+}
+
+export function observeCommunityState(listener: (state: NativeCommunityState) => void) {
+  return NavOSSNavigation.addListener('onCommunityStateChanged', listener);
+}
+
+/** Reports in a box of at most 0.5° per side; served from cache while a fresh answer covers it. */
+export function fetchCommunityReports(
+  bounds: NativeCommunityBounds,
+): Promise<NativeCommunityResult<{ reports: NativeCommunityReport[] }>> {
+  return NavOSSNavigation.fetchCommunityReports(bounds);
+}
+
+export function submitCommunityReport(
+  report: NativeCommunityReportSubmission,
+): Promise<NativeCommunityResult<{ expiresAtMs: number; merged: boolean; reportId: string }>> {
+  return NavOSSNavigation.submitCommunityReport(report);
+}
+
+/** Votes from the device's current position (used by the server only to check proximity). */
+export function voteCommunityReport(
+  reportId: string,
+  vote: 'not-present' | 'present',
+): Promise<NativeCommunityResult<{ active: boolean }>> {
+  return NavOSSNavigation.voteCommunityReport(reportId, vote);
+}
+
+/** "Still there?" dismissed: sends nothing, and the prompt is not shown again this trip. */
+export function dismissStillThere(reportId: string): void {
+  NavOSSNavigation.dismissStillThere(reportId);
+}
+
+export function withdrawCommunityReport(reportId: string): Promise<NativeCommunityResult> {
+  return NavOSSNavigation.withdrawCommunityReport(reportId);
+}
+
+/** Deletes this installation with its reports and votes on the server, then forgets the key. */
+export function resetCommunityIdentity(): Promise<NativeCommunityResult> {
+  return NavOSSNavigation.resetCommunityIdentity();
+}
+
+/** Only after the driver has read and accepted that reports are shared with other drivers. */
+export function setShareRoadReports(enabled: boolean): void {
+  NavOSSNavigation.setShareRoadReports(enabled);
+}
+
+export function setShareTrafficSpeeds(enabled: boolean): void {
+  NavOSSNavigation.setShareTrafficSpeeds(enabled);
+}
+
+export function setAnnounceRoadReports(enabled: boolean): void {
+  NavOSSNavigation.setAnnounceRoadReports(enabled);
 }

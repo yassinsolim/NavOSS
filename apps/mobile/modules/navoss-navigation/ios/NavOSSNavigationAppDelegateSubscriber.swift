@@ -7,6 +7,9 @@ public final class NavOSSNavigationAppDelegateSubscriber: ExpoAppDelegateSubscri
   ) -> Bool {
     NavOSSGooglePlacesConfiguration.configure()
     NavOSSNavigationService.shared.resumePersistedNavigation()
+    #if DEBUG && targetEnvironment(simulator)
+      NavOSSCommunitySimulatorHarness.runIfRequested()
+    #endif
     return true
   }
 }
