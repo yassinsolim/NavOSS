@@ -115,9 +115,11 @@ Operational facts:
   Up to 15 minutes of published traffic, and up to 20 minutes of pending observations, disappear
   on a restart and rebuild as drivers upload. Upload credentials issued before the restart stop
   working; the app requests a new one.
-- With the mode `off` the purge never blocks startup: the API waits at most three seconds for it
-  and then starts regardless; a purge that fails or times out is logged as
-  `Community traffic maintenance failed`. In `collect` or `live` a failed purge stops startup.
+- With the mode `off`, community traffic adds no unbounded wait on PostgreSQL to API startup: the
+  API waits at most three seconds for the purge, then carries on, and a purge that fails or times
+  out is logged as `Community traffic maintenance failed`. In `collect` or `live` a failed purge
+  stops startup. (Whether the API as a whole starts while PostgreSQL is down is decided by its
+  other PostgreSQL-backed providers, not by this feature.)
 - Restart the API whenever the Valhalla graph is replaced. Segment keys belong to one graph.
 - Run a single API container. Pending observations, credential keys and rate limits are per
   process; this is not enforced.
