@@ -1,4 +1,4 @@
-const { withEntitlementsPlist, withInfoPlist } = require('@expo/config-plugins');
+const { withEntitlementsPlist, withInfoPlist, withXcodeProject } = require('@expo/config-plugins');
 
 // App Attest for community reports and traffic credentials. Apple issues keys in the
 // environment named by this entitlement, and the API checks the matching AAGUID
@@ -41,6 +41,24 @@ function developmentTeamId(environment = process.env) {
   return value;
 }
 
+const GUARD_PHASE_NAME = 'NavOSS App Attest environment guard';
+
+/**
+ * Fails a Release build whose entitlements do not say `production`, so a local
+ * `expo prebuild` (development by default) followed by a Release archive cannot ship a
+ * development App Attest environment.
+ */
+const RELEASE_GUARD_SCRIPT = [
+  'if [ "$CONFIGURATION" = "Release" ]; then',
+  '  file="$SRCROOT/$CODE_SIGN_ENTITLEMENTS"',
+  `  value=$(/usr/libexec/PlistBuddy -c "Print :${ENTITLEMENT}" "$file" 2>/dev/null)`,
+  '  if [ "$value" != "production" ]; then',
+  '    echo "error: Release builds must use the production App Attest environment; run expo prebuild with NAVOSS_APP_ATTEST_ENVIRONMENT=production."',
+  '    exit 1',
+  '  fi',
+  'fi',
+].join('\n');
+
 function withNavOSSAppAttest(config) {
   const environment = appAttestEnvironment();
   const teamId = environment === 'development' ? developmentTeamId() : undefined;
@@ -56,10 +74,31 @@ function withNavOSSAppAttest(config) {
     }
     return modConfig;
   });
+  config = withXcodeProject(config, (modConfig) => {
+    const project = modConfig.modResults;
+    const phases = project.hash.project.objects.PBXShellScriptBuildPhase ?? {};
+    const present = Object.values(phases).some(
+      (phase) => typeof phase === 'object' && phase.name === `"${GUARD_PHASE_NAME}"`,
+    );
+    if (!present) {
+      project.addBuildPhase(
+        [],
+        'PBXShellScriptBuildPhase',
+        GUARD_PHASE_NAME,
+        project.getFirstTarget().uuid,
+        {
+          shellPath: '/bin/sh',
+          shellScript: RELEASE_GUARD_SCRIPT,
+        },
+      );
+    }
+    return modConfig;
+  });
   return config;
 }
 
 module.exports = withNavOSSAppAttest;
+module.exports.RELEASE_GUARD_SCRIPT = RELEASE_GUARD_SCRIPT;
 module.exports.appAttestEnvironment = appAttestEnvironment;
 module.exports.developmentTeamId = developmentTeamId;
 module.exports.ENTITLEMENT = ENTITLEMENT;
