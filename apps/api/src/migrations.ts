@@ -188,7 +188,9 @@ export async function pendingMigrations(
   migrations: readonly Migration[] = MIGRATIONS,
 ): Promise<string[]> {
   const table = await pool.query<{ present: boolean }>(
-    'SELECT to_regclass($1) IS NOT NULL AS present',
+    // Only the current schema counts: the bookkeeping table is created there, and a migrated
+    // schema later in search_path (such as public) must not make this one look current.
+    "SELECT to_regclass(format('%I.%I', current_schema(), $1::text)) IS NOT NULL AS present",
     [MIGRATIONS_TABLE],
   );
   if (table.rows[0]?.present !== true) return migrations.map((migration) => migration.id);
