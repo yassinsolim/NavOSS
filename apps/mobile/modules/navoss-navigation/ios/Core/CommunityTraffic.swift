@@ -118,7 +118,11 @@ func navOSSRoundedToFiveDecimals(_ value: Double) -> Double {
 public struct NavOSSTrafficProbeCollector: Sendable {
   private struct PathFix {
     let coordinate: NavOSSCarPlayCoordinate
+    /// Credited path up to this fix: a lower bound on how far the trip has really gone.
     let pathMeters: Double
+    /// An upper bound on how far along the path this fix may lie (uncredited displacement and
+    /// both positions' uncertainty included). Release compares the current lower bound with it.
+    let upperPathMeters: Double
     let timestamp: Date
   }
 
@@ -131,7 +135,7 @@ public struct NavOSSTrafficProbeCollector: Sendable {
   public let rules: NavOSSTrafficProbeRules
   private var protectedPoints: [NavOSSCarPlayCoordinate]
   private var lastAccepted: PathFix?
-  private var movementAnchor: NavOSSCarPlayCoordinate?
+  private var movementAnchor: (coordinate: NavOSSCarPlayCoordinate, accuracy: Double)?
   /// Displacement from the movement anchor below which a fix counts as standing still.
   static let minimumCredibleMovementMeters = 20.0
   static let maximumPlausibleSpeedMetersPerSecond = 70.0
@@ -145,10 +149,21 @@ public struct NavOSSTrafficProbeCollector: Sendable {
 
   /// A stop added or a destination changed mid-trip: its surroundings are protected from now on,
   /// including fixes still held back.
-  public mutating func protect(_ coordinates: [NavOSSCarPlayCoordinate]) {
+  ///
+  /// Everything not yet sent (held-back fixes and the open batch) is discarded, because some of
+  /// it may lie inside the new zone; the caller must also drop batches it has queued.
+  @discardableResult
+  public mutating func protect(_ coordinates: [NavOSSCarPlayCoordinate]) -> Bool {
+    var added = false
     for coordinate in coordinates where coordinate.isValid && !protectedPoints.contains(coordinate) {
       protectedPoints.append(coordinate)
+      added = true
     }
+    if added, lastAccepted != nil {
+      pending.removeAll()
+      open = nil
+    }
+    return added
   }
 
   /// Adds a fix and returns the batches it completes.
@@ -161,6 +176,7 @@ public struct NavOSSTrafficProbeCollector: Sendable {
       return ready
     }
     let pathMeters: Double
+    let upper: Double
     if let lastAccepted {
       let elapsed = fix.timestamp.timeIntervalSince(lastAccepted.timestamp)
       guard elapsed >= rules.sampleIntervalSeconds - 0.25 else { return ready }
@@ -171,25 +187,33 @@ public struct NavOSSTrafficProbeCollector: Sendable {
       // anchor by more than its accuracy allows, so GPS jitter while parked never adds up to
       // the 400 m that would release a trip's protected end. Stationary fixes still queue, so
       // a stopped car reports low speed once it has really moved on.
-      let anchor = movementAnchor ?? lastAccepted.coordinate
-      let fromAnchor = Self.distance(anchor, fix.coordinate)
-      if fromAnchor > max(Self.minimumCredibleMovementMeters, 2 * fix.horizontalAccuracyMeters) {
-        pathMeters = lastAccepted.pathMeters + fromAnchor
-        movementAnchor = fix.coordinate
+      // Movement is credited only beyond both positions' uncertainty, and only the part that
+      // exceeds it: alternating fixes inside their (even improving) accuracy earn nothing.
+      let anchor = movementAnchor ?? (lastAccepted.coordinate, fix.horizontalAccuracyMeters)
+      let fromAnchor = Self.distance(anchor.coordinate, fix.coordinate)
+      let uncertainty = anchor.accuracy + fix.horizontalAccuracyMeters
+      if fromAnchor > max(Self.minimumCredibleMovementMeters, uncertainty) {
+        pathMeters = lastAccepted.pathMeters + (fromAnchor - uncertainty)
+        movementAnchor = (fix.coordinate, fix.horizontalAccuracyMeters)
+        upper = pathMeters + uncertainty
       } else {
         pathMeters = lastAccepted.pathMeters
+        upper = pathMeters + fromAnchor + uncertainty
       }
     } else {
       // The first fix of the trip is protected wherever the route said the trip began.
       protect([fix.coordinate])
-      movementAnchor = fix.coordinate
+      movementAnchor = (fix.coordinate, fix.horizontalAccuracyMeters)
       pathMeters = 0
+      upper = 2 * fix.horizontalAccuracyMeters
     }
-    let accepted = PathFix(coordinate: fix.coordinate, pathMeters: pathMeters, timestamp: fix.timestamp)
+    let accepted = PathFix(
+      coordinate: fix.coordinate, pathMeters: pathMeters, upperPathMeters: upper,
+      timestamp: fix.timestamp)
     lastAccepted = accepted
     pending.append(accepted)
     // Release only what the path has left at least `tripEndTrimMeters` behind.
-    while let first = pending.first, pathMeters - first.pathMeters >= rules.tripEndTrimMeters {
+    while let first = pending.first, pathMeters - first.upperPathMeters >= rules.tripEndTrimMeters {
       pending.removeFirst()
       ready += release(first)
     }

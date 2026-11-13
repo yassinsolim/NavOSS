@@ -13,6 +13,8 @@ struct CommunityBoundsRecord: Record {
 }
 
 struct CommunityReportSubmissionRecord: Record {
+  /// The driver confirmed sharing a report near home or the trip's start/end.
+  @Field var confirmNearPrivatePlace: Bool = false
   @Field var heading: Double?
   @Field var latitude: Double = 0
   @Field var longitude: Double = 0
@@ -37,6 +39,7 @@ enum NavOSSCommunityBridge {
       "hasIdentity": availability.hasIdentity,
       "preferences": [
         "announcesRoadReports": preferences.announcesRoadReports,
+        "sharesRoadReports": preferences.sharesRoadReports,
         "sharesTrafficSpeeds": preferences.sharesTrafficSpeeds,
       ],
       "reports": service.reports().map(reportPayload),
@@ -113,6 +116,9 @@ enum NavOSSCommunityBridge {
     case .selfVote: return ["ok": false, "error": "own-report"]
     case .rejected: return ["ok": false, "error": "rejected"]
     case .invalidRequest: return ["ok": false, "error": "invalid-request"]
+    case .identityUnavailable: return ["ok": false, "error": "identity-lost"]
+    case .notShared: return ["ok": false, "error": "not-shared"]
+    case .nearPrivatePlace: return ["ok": false, "error": "near-private-place"]
     case .network: return ["ok": false, "error": "offline"]
     case .invalidResponse: return ["ok": false, "error": "unavailable"]
     }
@@ -141,7 +147,8 @@ enum NavOSSCommunityBridge {
       let submission = try await NavOSSCommunityService.shared.submitReport(
         type: type,
         coordinate: NavOSSCarPlayCoordinate(latitude: record.latitude, longitude: record.longitude),
-        heading: record.heading.flatMap { $0.isFinite ? Int($0.rounded()) : nil }
+        heading: record.heading.flatMap { $0.isFinite ? Int($0.rounded()) : nil },
+        confirmedNearPrivatePlace: record.confirmNearPrivatePlace
       )
       return [
         "expiresAtMs": milliseconds(submission.expiresAt),

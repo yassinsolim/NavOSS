@@ -12,10 +12,18 @@ public struct NavOSSCommunityPreferences: Equatable, Sendable {
   public let sharesTrafficSpeeds: Bool
   /// Speak a short alert for a road report ahead (still subject to the guidance sound mode).
   public let announcesRoadReports: Bool
+  /// "Share road reports": the driver knowingly chose to send reports to other drivers. Off by
+  /// default; while off every report stays a private draft on this iPhone.
+  public let sharesRoadReports: Bool
 
-  public init(sharesTrafficSpeeds: Bool = false, announcesRoadReports: Bool = true) {
+  public init(
+    sharesTrafficSpeeds: Bool = false,
+    announcesRoadReports: Bool = true,
+    sharesRoadReports: Bool = false
+  ) {
     self.sharesTrafficSpeeds = sharesTrafficSpeeds
     self.announcesRoadReports = announcesRoadReports
+    self.sharesRoadReports = sharesRoadReports
   }
 }
 
@@ -24,6 +32,7 @@ public final class NavOSSCommunityPreferencesStore: @unchecked Sendable {
 
   private let sharesTrafficSpeedsKey = "org.navoss.mobile.community.share-traffic-speeds"
   private let announcesRoadReportsKey = "org.navoss.mobile.community.announce-road-reports"
+  private let sharesRoadReportsKey = "org.navoss.mobile.community.share-road-reports"
   private let defaults: UserDefaults
   private let lock = NSLock()
   private let notificationCenter: NotificationCenter
@@ -38,13 +47,19 @@ public final class NavOSSCommunityPreferencesStore: @unchecked Sendable {
       NavOSSCommunityPreferences(
         sharesTrafficSpeeds: defaults.bool(forKey: sharesTrafficSpeedsKey),
         announcesRoadReports: defaults.object(forKey: announcesRoadReportsKey) == nil
-          ? true : defaults.bool(forKey: announcesRoadReportsKey)
+          ? true : defaults.bool(forKey: announcesRoadReportsKey),
+        sharesRoadReports: defaults.bool(forKey: sharesRoadReportsKey)
       )
     }
   }
 
   public func setSharesTrafficSpeeds(_ value: Bool) {
     lock.withLock { defaults.set(value, forKey: sharesTrafficSpeedsKey) }
+    notificationCenter.post(name: .navOSSCommunityPreferencesDidChange, object: self)
+  }
+
+  public func setSharesRoadReports(_ value: Bool) {
+    lock.withLock { defaults.set(value, forKey: sharesRoadReportsKey) }
     notificationCenter.post(name: .navOSSCommunityPreferencesDidChange, object: self)
   }
 
@@ -469,7 +484,7 @@ public func navOSSCarPlayCommunityFailureText(_ failure: NavOSSCommunityFailure)
   case .outOfCoverage: "Reports are accepted only inside NavOSS coverage."
   case .network: "No connection. Try again in a moment."
   case .attestationUnsupported: "This iPhone cannot send community reports."
-  case .rejected, .installationTooNew: "NavOSS could not verify this report."
+  case .rejected, .installationTooNew, .identityUnavailable: "NavOSS could not verify this report."
   default: "Try again in a moment."
   }
 }

@@ -290,7 +290,8 @@ final class CommunityTrafficTests: XCTestCase {
       for (previous, next) in zip(batch.points, batch.points.dropFirst()) {
         XCTAssertGreaterThanOrEqual(next.offsetSeconds - previous.offsetSeconds, 1)
       }
-      XCTAssertLessThanOrEqual(batch.points.count, 31)
+      // About one point per 2 s however fast fixes arrive.
+      XCTAssertLessThanOrEqual(batch.points.count, (batch.points.last?.offsetSeconds ?? 0) / 2 + 2)
     }
   }
 
@@ -448,6 +449,78 @@ final class CommunityTrafficTests: XCTestCase {
     assertValid(batches)
     assertNothingWithin(400, of: [stop], in: batches)
     assertNothingWithin(1, of: jumps, in: batches)
+  }
+
+  func testChangingTheDestinationDropsUnsentDataInsideTheNewZone() {
+    let far = offset(origin, north: 0, east: 20_000)
+    let newDestination = offset(origin, north: 0, east: 900)
+    let fixes = drive([origin, far])
+    var collector = NavOSSTrafficProbeCollector(rules: rules, protectedPoints: [origin, far])
+    var batches: [NavOSSTrafficProbeBatch] = []
+    var changed = false
+    for fix in fixes {
+      // About 1.4 km in, the driver picks a new destination on the stretch just driven.
+      if !changed, distance(fix.coordinate, origin) > 1_400 {
+        collector.protect([newDestination])
+        changed = true
+      }
+      batches += collector.ingest(fix)
+      if distance(fix.coordinate, origin) > 3_000 { break }
+    }
+    XCTAssertTrue(changed)
+    assertValid(batches)
+    assertNothingWithin(400, of: [newDestination], in: batches)
+  }
+
+  func testImprovingAccuracyNeverTurnsParkedJitterIntoPath() {
+    // The reviewer's counterexample: anchor 25 m to one side at 25 m accuracy, then fixes
+    // alternating across the true position with shrinking reported accuracy.
+    let destination = offset(origin, north: 0, east: 20_000)
+    let stop = offset(origin, north: 0, east: 3_000)
+    let drove = drive([origin, stop])
+    var clock = drove.last!.timestamp
+    var parked: [NavOSSTrafficFix] = [
+      NavOSSTrafficFix(coordinate: offset(stop, north: 25, east: 0), horizontalAccuracyMeters: 25, timestamp: clock.addingTimeInterval(2))
+    ]
+    clock = clock.addingTimeInterval(2)
+    var error = 24.8
+    for index in 0..<300 {
+      clock = clock.addingTimeInterval(2)
+      let sign = index % 2 == 0 ? -1.0 : 1.0
+      parked.append(NavOSSTrafficFix(
+        coordinate: offset(stop, north: sign * error, east: 0),
+        horizontalAccuracyMeters: error, timestamp: clock))
+      error = max(5.2, error - 0.2)
+    }
+    var collector = NavOSSTrafficProbeCollector(rules: rules, protectedPoints: [origin, destination])
+    var batches: [NavOSSTrafficProbeBatch] = []
+    for fix in drove + parked { batches += collector.ingest(fix) }
+    collector.finish()
+    assertValid(batches)
+    assertNothingWithin(400, of: [stop], in: batches)
+  }
+
+  func testSlowFixesBetweenAnchorsAreNotReleasedEarly() {
+    // 2 m/s with 5 m accuracy: intermediate fixes sit between credited anchors. Drive ~1.4 km,
+    // then stay parked (fixes keep coming) and let batches age-close before navigation ends.
+    let destination = offset(origin, north: 0, east: 20_000)
+    let stop = offset(origin, north: 0, east: 1_392)
+    let drove = drive([origin, stop], speed: 2, accuracy: 5)
+    var clock = drove.last!.timestamp
+    var parked: [NavOSSTrafficFix] = []
+    for _ in 0..<300 {
+      clock = clock.addingTimeInterval(2)
+      parked.append(NavOSSTrafficFix(coordinate: stop, horizontalAccuracyMeters: 5, timestamp: clock))
+    }
+    var collector = NavOSSTrafficProbeCollector(rules: rules, protectedPoints: [origin, destination])
+    var batches: [NavOSSTrafficProbeBatch] = []
+    for fix in drove + parked {
+      batches += collector.ingest(fix)
+      batches += collector.tick(now: fix.timestamp)
+    }
+    collector.finish()
+    assertValid(batches)
+    assertNothingWithin(400, of: [stop], in: batches)
   }
 
   func testFinishingTheTripDiscardsEverythingHeldBack() {

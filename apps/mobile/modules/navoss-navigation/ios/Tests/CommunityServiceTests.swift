@@ -200,4 +200,46 @@ final class CommunityServiceTests: XCTestCase {
     let features = try await client.features()
     XCTAssertFalse(features.communityReports)
   }
+
+  func testNothingIsSharedUntilTheDriverOptsInAndNeverNearHomeWithoutConfirmation() async throws {
+    CommunityStubProtocol.sent = []
+    CommunityStubProtocol.handler = { sent in
+      sent.path == "/v2/config" ? (200, ["features": ["communityReports": true]], [:]) : (503, [:], [:])
+    }
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [CommunityStubProtocol.self]
+    let client = NavOSSCommunityClient(
+      baseURL: URL(string: "http://127.0.0.1:3001")!,
+      provider: NavOSSUnavailableAttestationProvider(),
+      store: NavOSSCommunityMemorySecretStore(),
+      session: URLSession(configuration: configuration))
+    let defaults = UserDefaults(suiteName: "community-consent-\(UUID().uuidString)")!
+    let preferences = NavOSSCommunityPreferencesStore(defaults: defaults, notificationCenter: NotificationCenter())
+    let service = NavOSSCommunityService(
+      client: client, preferencesStore: preferences,
+      alertStore: NavOSSCarPlayMapAlertStore(notificationCenter: NotificationCenter()),
+      notificationCenter: NotificationCenter())
+    let home = point(3_000)
+    service.homeAndWork = { [home] }
+    XCTAssertFalse(preferences.load().sharesRoadReports, "off by default")
+    do {
+      _ = try await service.submitReport(type: .pothole, coordinate: point(1_000), heading: nil)
+      XCTFail("must not send before opting in")
+    } catch {
+      XCTAssertEqual(error as? NavOSSCommunityFailure, .notShared)
+    }
+    preferences.setSharesRoadReports(true)
+    do {
+      _ = try await service.submitReport(type: .pothole, coordinate: point(3_200), heading: nil)
+      XCTFail("must not send near home without confirmation")
+    } catch {
+      XCTAssertEqual(error as? NavOSSCommunityFailure, .nearPrivatePlace)
+    }
+    service.navigationDidStart(trip())
+    XCTAssertTrue(service.isNearPrivatePlace(point(100)), "trip start")
+    XCTAssertTrue(service.isNearPrivatePlace(point(4_800)), "destination")
+    XCTAssertFalse(service.isNearPrivatePlace(point(1_500)))
+    service.navigationDidEnd()
+    XCTAssertFalse(CommunityStubProtocol.sent.contains { $0.path.hasPrefix("/v2/community") })
+  }
 }

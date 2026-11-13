@@ -22,6 +22,13 @@ public enum NavOSSCommunityFailure: Error, Equatable, Sendable {
   /// Attestation, replay, development key under `enforce`, or impossible travel.
   case rejected
   case invalidRequest
+  /// The local key can no longer sign (restored or migrated device), so the server could not be
+  /// told to delete the installation. The local identity has been forgotten.
+  case identityUnavailable
+  /// Shared reports are not switched on by the driver, or the place is near home/the trip ends
+  /// and was not explicitly confirmed. Nothing was sent.
+  case notShared
+  case nearPrivatePlace
   case network
   case invalidResponse
 }
@@ -143,6 +150,10 @@ public actor NavOSSCommunityClient {
   private let encoder = JSONEncoder()
   private let provider: NavOSSCommunityAttestationProvider
   private var registration: Task<String, Error>?
+  /// One asserted write at a time, challenge to response, so assertion counters reach the server
+  /// in order (it rejects a lower counter as a replay) and identity changes never interleave.
+  private var writeBusy = false
+  private var writeWaiters: [CheckedContinuation<Void, Never>] = []
   private let session: URLSession
   private let store: NavOSSCommunitySecretStore
 
@@ -498,6 +509,8 @@ public actor NavOSSCommunityClient {
     reRegister: Bool = true,
     makeRequest: (AssertionBody) throws -> URLRequest
   ) async throws -> Response {
+    await acquireWrite()
+    defer { releaseWrite() }
     var attempt = 0
     while true {
       attempt += 1
@@ -522,10 +535,30 @@ public actor NavOSSCommunityClient {
       } catch let failure as RetryableFailure {
         if let keyId, failure != .usedChallenge {
           forget(keyId: keyId)
-          guard reRegister else { throw NavOSSCommunityFailure.notFound }
+          guard reRegister else {
+            // Server said it does not know us: truly gone. A dead local key: we could not ask.
+            throw failure == .unknownInstallation
+              ? NavOSSCommunityFailure.notFound : NavOSSCommunityFailure.identityUnavailable
+          }
         }
         guard attempt == 1 else { throw NavOSSCommunityFailure.rejected }
       }
+    }
+  }
+
+  private func acquireWrite() async {
+    guard writeBusy else {
+      writeBusy = true
+      return
+    }
+    await withCheckedContinuation { writeWaiters.append($0) }
+  }
+
+  private func releaseWrite() {
+    if writeWaiters.isEmpty {
+      writeBusy = false
+    } else {
+      writeWaiters.removeFirst().resume()
     }
   }
 

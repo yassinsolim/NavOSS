@@ -564,6 +564,10 @@ public final class NavOSSNavigationModule: Module {
       NavOSSCommunityPreferencesStore.shared.setSharesTrafficSpeeds(enabled)
     }
 
+    Function("setShareRoadReports") { (enabled: Bool) in
+      NavOSSCommunityPreferencesStore.shared.setSharesRoadReports(enabled)
+    }
+
     Function("setAnnounceRoadReports") { (enabled: Bool) in
       NavOSSCommunityPreferencesStore.shared.setAnnouncesRoadReports(enabled)
     }

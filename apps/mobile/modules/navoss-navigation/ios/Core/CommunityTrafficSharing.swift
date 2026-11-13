@@ -124,8 +124,12 @@ public actor NavOSSTrafficSharingSession {
     set(.sharing)
   }
 
+  /// A new destination or stop: the collector drops its unsent fixes and batches, and anything
+  /// queued for upload is dropped too, so nothing inside the new zone is sent.
   public func protect(_ coordinates: [NavOSSCarPlayCoordinate]) {
-    collector?.protect(coordinates)
+    if collector?.protect(coordinates) == true {
+      queue.removeAll()
+    }
   }
 
   /// Arrival, cancellation, or the switch turned off. Held-back fixes and the open batch are

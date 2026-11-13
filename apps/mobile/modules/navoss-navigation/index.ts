@@ -129,6 +129,11 @@ export type NativeTrafficSharingState =
 export interface NativeCommunityPreferences {
   /** Speak a short alert for a report ahead (still subject to the guidance sound mode). */
   announcesRoadReports: boolean;
+  /**
+   * "Share road reports": off by default. Until the driver knowingly turns it on, reports stay
+   * private drafts and `submitCommunityReport` answers `not-shared` without sending anything.
+   */
+  sharesRoadReports: boolean;
   /** Off by default; shared with CarPlay settings. */
   sharesTrafficSpeeds: boolean;
 }
@@ -148,9 +153,12 @@ export interface NativeCommunityState {
 
 export type NativeCommunityError =
   | 'already-voted'
+  | 'identity-lost'
   | 'invalid-request'
   | 'location-unavailable'
+  | 'near-private-place'
   | 'not-found'
+  | 'not-shared'
   | 'offline'
   | 'out-of-coverage'
   | 'own-report'
@@ -172,6 +180,11 @@ export interface NativeCommunityBounds {
 }
 
 export interface NativeCommunityReportSubmission extends NativeNavigationCoordinate {
+  /**
+   * Within 400 m of saved Home/Work or the trip's start, destination or stops a report is
+   * refused (`near-private-place`) unless the driver explicitly confirmed sharing it.
+   */
+  confirmNearPrivatePlace?: boolean;
   /** Degrees 0-359, when known. */
   heading?: number;
   type: NativeCommunityReportType;
@@ -330,6 +343,7 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   setRerouteMode(mode: NativeRerouteMode): void;
   setRoute(trip: NativeCarPlayTrip): NativeNavigationSnapshot;
   setRoutePreferences(preferences: NativeRoutePreferences): void;
+  setShareRoadReports(enabled: boolean): void;
   setShareTrafficSpeeds(enabled: boolean): void;
   setSpeedingWarning(toleranceKph: number, audible: boolean): void;
   setWorkDestination(destination: NativeNavigationDestination | null): void;

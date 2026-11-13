@@ -57,6 +57,13 @@ public final class NavOSSCommunityService: @unchecked Sendable {
   private let traffic: NavOSSTrafficSharingSession?
   private var trafficState: NavOSSTrafficSharingState = .off
   private let alertStore: NavOSSCarPlayMapAlertStore
+  /// Saved Home and Work, which a public report must not reveal without confirmation.
+  var homeAndWork: () -> [NavOSSCarPlayCoordinate] = {
+    let catalog = NavOSSCarPlayDestinationStore.shared.snapshot()
+    return [catalog.home, catalog.work].compactMap { $0 }.map {
+      NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+    }
+  }
 
   init(
     client: NavOSSCommunityClient? = NavOSSCommunityService.defaultClient(),
@@ -98,7 +105,13 @@ public final class NavOSSCommunityService: @unchecked Sendable {
       return nil
     }
     let keychain = NavOSSCommunityKeychain()
-    return NavOSSCommunityClient(baseURL: url, provider: defaultProvider(store: keychain), store: keychain)
+    // Ephemeral: no disk URL cache, so report answers and credentials stay in memory only.
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.urlCache = nil
+    configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+    return NavOSSCommunityClient(
+      baseURL: url, provider: defaultProvider(store: keychain), store: keychain,
+      session: URLSession(configuration: configuration))
   }
 
   static func defaultProvider(store: NavOSSCommunitySecretStore) -> NavOSSCommunityAttestationProvider {
@@ -226,12 +239,31 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     return lock.withLock { cache.active(now: Date()).filter { bounds.contains($0.coordinate) } }
   }
 
+  /// Places a public report could reveal: within `tripEndTrimMeters` of the current trip's
+  /// start, destination or stops, or of saved Home and Work.
+  public func isNearPrivatePlace(_ coordinate: NavOSSCarPlayCoordinate) -> Bool {
+    let catalog = homeAndWork()
+    let places = lock.withLock { protectedPoints } + catalog
+    let point = NavigationCoordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)
+    return places.contains {
+      navigationDistanceMeters(
+        from: point, to: NavigationCoordinate(latitude: $0.latitude, longitude: $0.longitude)) < 400
+    }
+  }
+
+  /// Submits a public report. Refused, with nothing sent, unless the driver has switched
+  /// **Share road reports** on, and near a private place unless `confirmedNearPrivatePlace`.
   public func submitReport(
     type: NavOSSCarPlayReportType,
     coordinate: NavOSSCarPlayCoordinate,
-    heading: Int?
+    heading: Int?,
+    confirmedNearPrivatePlace: Bool = false
   ) async throws -> NavOSSCommunitySubmission {
     guard let client else { throw NavOSSCommunityFailure.serviceUnavailable(retryAfterSeconds: nil) }
+    guard preferencesStore.load().sharesRoadReports else { throw NavOSSCommunityFailure.notShared }
+    guard confirmedNearPrivatePlace || !isNearPrivatePlace(coordinate) else {
+      throw NavOSSCommunityFailure.nearPrivatePlace
+    }
     guard await refreshFeatures() else {
       throw NavOSSCommunityFailure.serviceUnavailable(retryAfterSeconds: nil)
     }

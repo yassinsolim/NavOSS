@@ -359,6 +359,11 @@ export function resetCommunityIdentity(): Promise<NativeCommunityResult> {
   return NavOSSNavigation.resetCommunityIdentity();
 }
 
+/** Only after the driver has read and accepted that reports are shared with other drivers. */
+export function setShareRoadReports(enabled: boolean): void {
+  NavOSSNavigation.setShareRoadReports(enabled);
+}
+
 export function setShareTrafficSpeeds(enabled: boolean): void {
   NavOSSNavigation.setShareTrafficSpeeds(enabled);
 }

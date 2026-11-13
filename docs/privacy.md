@@ -209,7 +209,7 @@ sharing is on (`features.communityReports`); it is off until the operator enable
 is off, or on a device that cannot use Apple App Attest, the app keeps the private drafts
 described at the end of this section and sends nothing.
 
-**What a report sends.** When sharing is on and you choose a report type, the app sends one of
+**What a report sends.** Reports are shared only after you turn on **Share road reports** (off by default; until then every report stays a private draft). Within 400 m of your saved Home or Work, or of the current trip's start, destination or stops, a report stays private unless you explicitly confirm sharing it. When sharing is on and you choose a report type, the app sends one of
 eight fixed types (crash, road closed, slow traffic, construction, pothole, object on road, other
 hazard, stopped vehicle), your current precise coordinate, your direction of travel in whole
 degrees when known, and an App Attest signature with its key identifier. It contains no free

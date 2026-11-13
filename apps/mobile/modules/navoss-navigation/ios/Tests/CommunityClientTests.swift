@@ -361,4 +361,47 @@ final class CommunityClientTests: XCTestCase {
       XCTAssertEqual(outcome, expected, "status \(status)")
     }
   }
+
+  func testConcurrentWritesReachTheServerInCounterOrder() async throws {
+    serve()
+    let inner = CommunityStubProtocol.handler!
+    // Writes that arrive at the server out of order would be rejected as replays.
+    CommunityStubProtocol.handler = { sent in
+      if sent.path == "/v2/community/challenges" {
+        Thread.sleep(forTimeInterval: Double.random(in: 0...0.03))
+      }
+      return inner(sent)
+    }
+    let client = makeClient()
+    _ = try await client.submitReport(type: .pothole, coordinate: calgary, heading: nil)
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for _ in 0..<6 {
+        group.addTask {
+          _ = try await client.submitReport(type: .pothole, coordinate: self.calgary, heading: nil)
+        }
+      }
+      try await group.waitForAll()
+    }
+  }
+
+  func testResetWithADeadLocalKeyDoesNotClaimTheServerDeletedIt() async throws {
+    serve()
+    let store = self.store
+    let client = makeClient()
+    _ = try await client.submitReport(type: .pothole, coordinate: calgary, heading: nil)
+    // The Keychain kept the key id but the signing key is gone (restore to another device).
+    for account in ["development-key." + String(data: store.data(for: NavOSSCommunityClient.keyIdAccount)!, encoding: .utf8)!] {
+      store.remove(account)
+    }
+    do {
+      try await client.deleteInstallation()
+      XCTFail("must not report success")
+    } catch {
+      XCTAssertEqual(error as? NavOSSCommunityFailure, .identityUnavailable)
+    }
+    XCTAssertFalse(CommunityStubProtocol.sent.contains { $0.method == "DELETE" })
+    // Never stuck: the dead identity is forgotten and the next write registers a fresh key.
+    XCTAssertNil(store.data(for: NavOSSCommunityClient.keyIdAccount))
+    _ = try await client.submitReport(type: .pothole, coordinate: calgary, heading: nil)
+  }
 }
