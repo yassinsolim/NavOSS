@@ -343,7 +343,7 @@ public final class NavOSSCommunityService: @unchecked Sendable {
       routeProgress = 0
       protectedPoints = Self.protectedPoints(trip)
       monitor.setReports(cache.active(now: Date()))
-      monitor.startTrip(geometry: trip.geometry, maneuverCoordinates: Self.maneuvers(trip))
+      monitor.startTrip(geometry: trip.geometry, maneuverAlongMeters: Self.maneuvers(trip))
     }
     // Independent: a slow credential request must not delay the reports on the route ahead.
     Task { await startTrafficTrip() }
@@ -356,7 +356,7 @@ public final class NavOSSCommunityService: @unchecked Sendable {
       routeGeometry = trip.geometry
       routeLengthMeters = navOSSRouteLengthMeters(trip.geometry)
       routeProgress = 0
-      monitor.replaceRoute(geometry: trip.geometry, maneuverCoordinates: Self.maneuvers(trip))
+      monitor.replaceRoute(geometry: trip.geometry, maneuverAlongMeters: Self.maneuvers(trip))
       let added = Self.protectedPoints(trip).filter { !protectedPoints.contains($0) }
       protectedPoints += added
       return added
@@ -502,8 +502,8 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     return points.filter(\.isValid)
   }
 
-  private static func maneuvers(_ trip: NavOSSCarPlayTrip) -> [NavOSSCarPlayCoordinate] {
-    trip.steps.dropFirst().compactMap(\.geometry.first)
+  private static func maneuvers(_ trip: NavOSSCarPlayTrip) -> [Double] {
+    navOSSCommunityManeuverAlongMeters(trip)
   }
 }
 

@@ -150,6 +150,9 @@ public actor NavOSSCommunityClient {
   private let encoder = JSONEncoder()
   private let provider: NavOSSCommunityAttestationProvider
   private var registration: Task<String, Error>?
+  /// A key Apple could not attest because its service was unavailable, kept for a retry.
+  private var pendingAttestation: (keyId: String, retryAfter: Date)?
+  private let attestationRetryDelaySeconds: TimeInterval
   /// One asserted write at a time, challenge to response, so assertion counters reach the server
   /// in order (it rejects a lower counter as a replay) and identity changes never interleave.
   private var writeBusy = false
@@ -161,8 +164,10 @@ public actor NavOSSCommunityClient {
     baseURL: URL,
     provider: NavOSSCommunityAttestationProvider,
     store: NavOSSCommunitySecretStore,
-    session: URLSession = .shared
+    session: URLSession = .shared,
+    attestationRetryDelaySeconds: TimeInterval = 60
   ) {
+    self.attestationRetryDelaySeconds = attestationRetryDelaySeconds
     self.baseURL = baseURL
     self.provider = provider
     self.session = session
@@ -465,14 +470,34 @@ public actor NavOSSCommunityClient {
       let publicKey: String?
     }
     guard provider.isSupported else { throw NavOSSCommunityFailure.attestationUnsupported }
-    let keyId = try await mapped { try await self.provider.generateKey() }
+    // After Apple's attestation service was unavailable, wait, then retry with the same key
+    // (Apple's flow) instead of generating a new one.
+    if let pending = pendingAttestation, Date() < pending.retryAfter {
+      throw NavOSSCommunityFailure.serviceUnavailable(
+        retryAfterSeconds: Int(pending.retryAfter.timeIntervalSinceNow.rounded(.up)))
+    }
+    let keyId: String
+    if let pending = pendingAttestation {
+      keyId = pending.keyId
+    } else {
+      keyId = try await mapped { try await self.provider.generateKey() }
+    }
+    pendingAttestation = nil
     do {
       let challenge = try await challenge()
-      let material = try await mapped {
-        try await self.provider.registrationMaterial(
+      let material: NavOSSCommunityRegistrationMaterial
+      do {
+        material = try await provider.registrationMaterial(
           keyId: keyId,
           clientDataHash: navOSSSHA256(Data(challenge.utf8))
         )
+      } catch NavOSSCommunityAttestationError.serviceUnavailable {
+        pendingAttestation = (keyId, Date().addingTimeInterval(attestationRetryDelaySeconds))
+        throw NavOSSCommunityFailure.serviceUnavailable(
+          retryAfterSeconds: Int(attestationRetryDelaySeconds))
+      } catch {
+        _ = try await mapped { throw error }
+        throw error
       }
       let body: Body
       switch material {
@@ -491,7 +516,9 @@ public actor NavOSSCommunityClient {
       }
       return keyId
     } catch {
-      provider.discardKey(keyId: keyId)
+      if pendingAttestation?.keyId != keyId {
+        provider.discardKey(keyId: keyId)
+      }
       throw error
     }
   }

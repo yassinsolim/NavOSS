@@ -423,4 +423,57 @@ final class CommunityClientTests: XCTestCase {
     XCTAssertNil(store.data(for: NavOSSCommunityClient.keyIdAccount))
     _ = try await client.submitReport(type: .pothole, coordinate: calgary, heading: nil)
   }
+
+  func testAppleOutageRetriesTheSameKeyAfterADelayInsteadOfANewOne() async throws {
+    final class FlakyAttest: NavOSSCommunityAttestationProvider, @unchecked Sendable {
+      let inner: NavOSSDevelopmentAttestationProvider
+      var generated = 0
+      var failuresLeft = 1
+      var attestedKeys: [String] = []
+      init(inner: NavOSSDevelopmentAttestationProvider) { self.inner = inner }
+      var isSupported: Bool { true }
+      func generateKey() async throws -> String {
+        generated += 1
+        return try await inner.generateKey()
+      }
+      func registrationMaterial(keyId: String, clientDataHash: Data) async throws
+        -> NavOSSCommunityRegistrationMaterial
+      {
+        attestedKeys.append(keyId)
+        if failuresLeft > 0 {
+          failuresLeft -= 1
+          throw NavOSSCommunityAttestationError.serviceUnavailable
+        }
+        return try await inner.registrationMaterial(keyId: keyId, clientDataHash: clientDataHash)
+      }
+      func assertion(keyId: String, clientDataHash: Data) async throws -> Data {
+        try await inner.assertion(keyId: keyId, clientDataHash: clientDataHash)
+      }
+      func discardKey(keyId: String) { inner.discardKey(keyId: keyId) }
+    }
+    serve()
+    let flaky = FlakyAttest(
+      inner: NavOSSDevelopmentAttestationProvider(teamId: teamId, bundleId: bundleId, store: store))
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [CommunityStubProtocol.self]
+    let client = NavOSSCommunityClient(
+      baseURL: URL(string: "http://127.0.0.1:3001")!, provider: flaky, store: store,
+      session: URLSession(configuration: configuration), attestationRetryDelaySeconds: 0.2)
+    do {
+      _ = try await client.submitReport(type: .pothole, coordinate: calgary, heading: nil)
+      XCTFail("expected the outage")
+    } catch {
+      XCTAssertEqual(error as? NavOSSCommunityFailure, .serviceUnavailable(retryAfterSeconds: 0))
+    }
+    // Inside the delay nothing is tried again.
+    do {
+      _ = try await client.submitReport(type: .pothole, coordinate: calgary, heading: nil)
+      XCTFail("expected the delay")
+    } catch {}
+    XCTAssertEqual(flaky.attestedKeys.count, 1)
+    try await Task.sleep(nanoseconds: 300_000_000)
+    _ = try await client.submitReport(type: .pothole, coordinate: calgary, heading: nil)
+    XCTAssertEqual(flaky.generated, 1, "the same key is retried")
+    XCTAssertEqual(Set(flaky.attestedKeys).count, 1)
+  }
 }

@@ -87,7 +87,7 @@ final class CommunityReportsTests: XCTestCase {
     monitor.setReports(reports)
     monitor.startTrip(
       geometry: stride(from: 0.0, through: 5_000, by: 250).map { point($0) },
-      maneuverCoordinates: [point(3_000)]
+      maneuverAlongMeters: [3_000]
     )
     return monitor
   }
@@ -133,6 +133,47 @@ final class CommunityReportsTests: XCTestCase {
       XCTAssertFalse((2_500..<3_150).contains(prompt.along), "\(prompt)")
     }
     XCTAssertGreaterThanOrEqual(prompts[0].along, 1_060)
+  }
+
+  func testATurnAtAPlaceVisitedTwiceIsPlacedAtTheVisitWhereItHappens() {
+    // South to north through X, around a block, back west into X, then a right turn onto the
+    // first road (northbound) again. The turn happens on the second visit of X.
+    func xy(_ east: Double, _ north: Double) -> NavOSSCarPlayCoordinate {
+      NavOSSCarPlayCoordinate(
+        latitude: 51.0447 + north / navigationMetersPerDegreeLatitude,
+        longitude: -114.2 + east / metersPerDegreeLongitude)
+    }
+    let loop = [xy(0, -600), xy(0, 0), xy(0, 600), xy(600, 600), xy(600, 0), xy(0, 0)]
+    let after = [xy(0, 0), xy(-800, 0)]
+    let geometry = loop + [after[1]]
+    let trip = NavOSSCarPlayTrip(
+      destination: NavOSSCarPlayDestination(
+        category: nil, id: "d", label: "D", latitude: after[1].latitude,
+        longitude: after[1].longitude, name: "D"),
+      distanceMeters: 3_800, durationSeconds: 300, geometry: geometry, id: "loop",
+      steps: [
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 3_000, durationSeconds: 240, geometry: loop, instruction: "Go",
+          maneuverType: "depart", roadName: "A"),
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 800, durationSeconds: 60, geometry: after, instruction: "Turn",
+          maneuverType: "turn", roadName: "B"),
+      ])
+    var monitor = NavigationCommunityReportMonitor()
+    // On the westbound approach to the second visit, 500 m before the turn.
+    let report = xy(500, 10)
+    monitor.setReports([self.report("r", report.latitude, report.longitude)])
+    monitor.startTrip(
+      geometry: geometry,
+      maneuverAlongMeters: navOSSCommunityManeuverAlongMeters(trip))
+    var prompted: Double?
+    var time = 0.0
+    for along in stride(from: 0.0, through: 3_000, by: 10) {
+      time += 400
+      _ = monitor.update(alongMeters: along, isTracking: true, now: time)
+      if prompted == nil, monitor.stillTherePrompt != nil { prompted = along }
+    }
+    XCTAssertNil(prompted, "asked \(prompted ?? 0) m along, just before the turn")
   }
 
   func testNoPromptForTheInstallationsOwnReportsOrTwiceForOneReport() {

@@ -248,7 +248,6 @@ public struct NavigationCommunityReportMonitor: Sendable {
   private var reports: [NavOSSCommunityReport] = []
   private var route: RoutePolyline?
   private var sequence = 0
-  private var stepStarts: [NavigationCoordinate] = []
 
   public init() {}
 
@@ -271,28 +270,28 @@ public struct NavigationCommunityReportMonitor: Sendable {
     }
   }
 
-  /// `stepStarts` are the first coordinates of each route step after the first: the maneuvers.
+  /// `maneuverAlongMeters` are the along-route starts of each step after the first (from the
+  /// occurrence-aware step alignment), so a turn at a place the route passes twice is placed
+  /// at the visit where it happens.
   public mutating func startTrip(
     geometry: [NavOSSCarPlayCoordinate],
-    maneuverCoordinates: [NavOSSCarPlayCoordinate]
+    maneuverAlongMeters: [Double]
   ) {
     alertedIds.removeAll()
     askedIds.removeAll()
     lastPromptAt = nil
-    replaceRoute(geometry: geometry, maneuverCoordinates: maneuverCoordinates)
+    replaceRoute(geometry: geometry, maneuverAlongMeters: maneuverAlongMeters)
   }
 
   /// A reroute keeps the trip: reports already alerted or asked about stay quiet.
   public mutating func replaceRoute(
     geometry: [NavOSSCarPlayCoordinate],
-    maneuverCoordinates: [NavOSSCarPlayCoordinate]
+    maneuverAlongMeters: [Double]
   ) {
     route = try? RoutePolyline(
       coordinates: geometry.map { NavigationCoordinate(latitude: $0.latitude, longitude: $0.longitude) }
     )
-    stepStarts = maneuverCoordinates.map {
-      NavigationCoordinate(latitude: $0.latitude, longitude: $0.longitude)
-    }
+    self.maneuverAlongMeters = maneuverAlongMeters
     activeAlert = nil
     activeAlertAlongMeters = nil
     stillTherePrompt = nil
@@ -422,10 +421,8 @@ public struct NavigationCommunityReportMonitor: Sendable {
   private mutating func rebuild() {
     guard let route else {
       placements = []
-      maneuverAlongMeters = []
       return
     }
-    maneuverAlongMeters = stepStarts.compactMap { Self.along(of: $0, on: route, within: 40) }
     placements = reports.compactMap { report in
       guard !ownReportIds.contains(report.id), report.coordinate.isValid,
         let along = Self.along(
@@ -500,4 +497,10 @@ public func navOSSCarPlayTrafficSharingDetail(_ state: NavOSSTrafficSharingState
   case .unavailable: "Not sharing on this trip"
   case .off, .ready, .starting: "Shares anonymous speeds during guidance, never trip ends"
   }
+}
+
+/// Along-route starts of every step after the first, from the occurrence-aware step alignment
+/// (a turn at a place the route passes twice belongs to the visit where it happens).
+func navOSSCommunityManeuverAlongMeters(_ trip: NavOSSCarPlayTrip) -> [Double] {
+  Array(NavigationStepGeometry(trip: trip).stepStartAlongMeters.dropFirst())
 }
