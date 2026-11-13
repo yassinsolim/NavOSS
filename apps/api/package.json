@@ -24,11 +24,11 @@
   "dependencies": {
     "@fastify/swagger": "catalog:",
     "@navoss/contracts": "workspace:*",
-    "csv-parse": "6.1.0",
+    "csv-parse": "6.2.1",
     "fastify": "catalog:",
     "fastify-type-provider-zod": "catalog:",
     "openapi-types": "catalog:",
-    "pg": "8.16.3",
+    "pg": "8.23.1",
     "protobufjs": "7.5.4",
     "zod": "catalog:"
   },

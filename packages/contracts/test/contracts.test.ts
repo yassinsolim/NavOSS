@@ -10,6 +10,7 @@ import {
   LOCAL_OVERLAY_AREAS,
   SERVICE_AREAS,
   GooglePlaceQueryGrantResponseSchema,
+  IsoDateTimeSchema,
   OfficialRoadEventResponseSchema,
   OfficialSafetyCameraResponseSchema,
   RoadEventResponseSchema,
@@ -30,6 +31,30 @@ describe('GeographicBoundsSchema', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe('IsoDateTimeSchema', () => {
+  it('accepts minute and second precision with UTC or an offset', () => {
+    for (const value of [
+      '2026-07-30T23:00Z',
+      '2026-07-30T23:00-06:00',
+      '2026-07-30T23:00:00Z',
+      '2026-07-30T23:00:00.123+01:00',
+    ]) {
+      expect(IsoDateTimeSchema.safeParse(value).success).toBe(true);
+    }
+  });
+
+  it('still rejects invalid dates, times, and timestamps without a zone', () => {
+    for (const value of [
+      '2026-02-30T23:00Z',
+      '2026-07-30T24:00Z',
+      '2026-07-30T23:00',
+      '2026-07-30T23:00.123Z',
+    ]) {
+      expect(IsoDateTimeSchema.safeParse(value).success).toBe(false);
+    }
   });
 });
 
