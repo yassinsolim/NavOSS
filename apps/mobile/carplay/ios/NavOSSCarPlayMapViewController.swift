@@ -99,17 +99,50 @@ final class NavOSSCarPlayLocationManager: NSObject, @preconcurrency MLNLocationM
   }
 }
 
+/// Optional guidance decorations the scene delegate derives from the active trip. Every field may
+/// be empty; the map then simply draws less.
+struct NavOSSCarPlayGuidanceOverlay: Equatable {
+  /// Road geometry around the next maneuver, drawn as a white arrow.
+  var maneuverArrow: [NavOSSCarPlayCoordinate] = []
+  /// Road currently being driven, shown in the bottom pill.
+  var currentRoadName: String?
+  /// Per-segment congestion aligned to the route geometry, when a real source provides it.
+  var congestion: [NavOSSCarPlayCongestionLevel]?
+  /// The navigation core's speeding verdict (tolerance and hysteresis applied there).
+  var speeding = NavOSSSpeedingState.unknown
+}
+
 @MainActor
 final class NavOSSCarPlayMapViewController: UIViewController,
   @preconcurrency MLNMapViewDelegate
 {
+  /// Layout constants for the speed and speed-limit readouts. Shared with the visual harness so its
+  /// layout assertions follow the production values.
+  static let hudMargin: CGFloat = 8
+  static let hudGap: CGFloat = 6
+  static let speedBadgeSize = CGSize(width: 52, height: 52)
+  static let speedLimitBadgeSize = CGSize(width: 46, height: 56)
+
   private let calgaryCenter = CLLocationCoordinate2D(latitude: 51.0447, longitude: -114.0719)
   private let destinationLayerIdentifier = "navoss-carplay-destination"
   private let destinationSourceIdentifier = "navoss-carplay-destination-source"
   private let originLayerIdentifier = "navoss-carplay-origin"
   private let originSourceIdentifier = "navoss-carplay-origin-source"
   private let alternateRouteLayerIdentifier = "navoss-carplay-alternate-route"
+  private let alternateRouteCasingLayerIdentifier = "navoss-carplay-alternate-route-casing"
   private let alternateRouteSourceIdentifier = "navoss-carplay-alternate-route-source"
+  private let travelledRouteLayerIdentifier = "navoss-carplay-travelled-route"
+  private let travelledRouteSourceIdentifier = "navoss-carplay-travelled-route-source"
+  private let congestionLayerIdentifier = "navoss-carplay-congestion"
+  private let congestionSourceIdentifier = "navoss-carplay-congestion-source"
+  private let maneuverArrowCasingLayerIdentifier = "navoss-carplay-maneuver-arrow-casing"
+  private let maneuverArrowLayerIdentifier = "navoss-carplay-maneuver-arrow"
+  private let maneuverArrowHeadLayerIdentifier = "navoss-carplay-maneuver-arrow-head"
+  private let maneuverArrowSourceIdentifier = "navoss-carplay-maneuver-arrow-source"
+  private let maneuverArrowHeadSourceIdentifier = "navoss-carplay-maneuver-arrow-head-source"
+  private let maneuverArrowHeadImageIdentifier = "navoss-carplay-maneuver-arrow-head-image"
+  private let mapAlertLayerIdentifier = "navoss-carplay-map-alerts"
+  private let mapAlertSourceIdentifier = "navoss-carplay-map-alerts-source"
   private let headingConeLayerIdentifier = "navoss-carplay-heading-cone"
   private let headingConeSourceIdentifier = "navoss-carplay-heading-cone-source"
   private let headingConeRadiusMeters = 30.0
@@ -129,6 +162,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private let routeHeadLayerIdentifier = "navoss-carplay-route-head"
   private var activeGuidance = false
   private var appearance = NavOSSCarPlayAppearance.automatic
+  /// The vehicle's suggested map style from `CPTemplateApplicationScene.contentStyle`. It takes
+  /// precedence over the window's trait collection in Automatic mode, because the car may keep
+  /// maps dark while its other chrome is light.
+  private var systemContentStyle: UIUserInterfaceStyle?
   private var displayLink: CADisplayLink?
   private var displayLinkScreen: UIScreen?
   private var interpolationFromPosition: NavOSSCarPlayPosition?
@@ -144,14 +181,33 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var lastRenderedCourseDegrees: Double?
   private var lastHeadingConeApex: NavOSSCarPlayCoordinate?
   private var lastHeadingConeHeadingDegrees: Double?
-  private var navigationViewingDistance = 850.0
+  /// Where the follow camera is heading, and where it is now. The camera eases toward the target
+  /// every frame instead of jumping when speed or the next maneuver changes the ideal view.
+  private var cameraTarget = navOSSCarPlayCameraTarget(
+    speedMetersPerSecond: nil,
+    distanceToManeuverMeters: nil
+  )
+  private var cameraDistance = Double.nan
+  private var cameraPitch = Double.nan
+  private var cameraHeading = Double.nan
+  private var cameraFrameAt: CFTimeInterval?
+  /// Driver zoom on top of the automatic camera distance; 1 is automatic.
+  private var navigationZoomScale = 1.0
+  private var latestDistanceToManeuverMeters: Double?
   private var presentsRouteOverview = false
   private var guidanceHiddenLayerIdentifiers: Set<String> = []
+  /// Original text sizes of road-label layers, kept so guidance can enlarge them and restore them.
+  private var roadLabelFontSizes: [String: NSExpression] = [:]
+  private var roadLabelHaloWidths: [String: NSExpression] = [:]
   private var lastLaidOutMapSize = CGSize.zero
   private var routeFitGeneration: UInt64 = 0
   private var alternateRouteCoordinates: [CLLocationCoordinate2D] = []
   private var routeCoordinates: [CLLocationCoordinate2D] = []
   private var routeGeometry: [NavOSSCarPlayCoordinate] = []
+  private var routeProgress = 0.0
+  private var guidanceOverlay = NavOSSCarPlayGuidanceOverlay()
+  private var mapAlerts: [NavOSSCarPlayMapAlert] = []
+  nonisolated(unsafe) private var mapAlertObserver: NSObjectProtocol?
   private var routeId: String?
   private var showsPointsOfInterest = true
   private var styleLoadRetryCount = 0
@@ -161,6 +217,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private(set) var mapView: MLNMapView!
   private let speedLabel = UILabel()
   private let speedLimitLabel = UILabel()
+  private let roadNameLabel = NavOSSCarPlayInsetLabel()
   private weak var overlayContentView: UIView?
   private var overlayTopConstraint: NSLayoutConstraint?
   private var overlayTrailingConstraint: NSLayoutConstraint?
@@ -178,6 +235,14 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   var anchorsSpeedHUDToViewBounds = false {
     didSet { updateOverlayAnchors() }
   }
+  /// Whether the speed-limit sign may be drawn. The instrument cluster turns this off when the
+  /// vehicle's own cluster setting hides speed limits.
+  var showsSpeedLimit = true
+  /// Whether the current-road pill may be drawn. Small surfaces such as the cluster turn it off.
+  var showsRoadName = true
+  /// Whether the current-speed badge may be drawn. The instrument cluster already shows the
+  /// vehicle's own speedometer.
+  var showsCurrentSpeed = true
   var onStyleLoaded: (() -> Void)?
   var reservesRouteChoiceSheet = true
   private(set) var requestsUserLocation = true
@@ -189,6 +254,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     mapView.isPitchEnabled = false
     mapView.isRotateEnabled = false
+    // The vehicle and camera are animated every frame; let MapLibre render as fast as the car
+    // display allows instead of its adaptive default.
+    mapView.preferredFramesPerSecond = MLNMapViewPreferredFramesPerSecond.maximum
     // MapLibre reports real gesture reasons to the delegate, so an explicit idle pan can pause
     // follow without treating our own camera animations as a driver gesture.
     mapView.isScrollEnabled = true
@@ -217,33 +285,43 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     attributionLabel.textColor = .secondaryLabel
     attributionLabel.translatesAutoresizingMaskIntoConstraints = false
     container.addSubview(attributionLabel)
-    speedLabel.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.94)
-    speedLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
-    speedLabel.layer.borderColor = UIColor.black.withAlphaComponent(0.65).cgColor
-    speedLabel.layer.borderWidth = 1.5
-    speedLabel.layer.cornerRadius = 5
+    speedLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 20, weight: .bold)
+    speedLabel.layer.borderWidth = 2
+    speedLabel.layer.cornerRadius = Self.speedBadgeSize.width / 2
     speedLabel.clipsToBounds = true
     speedLabel.numberOfLines = 2
     speedLabel.textAlignment = .center
-    speedLabel.textColor = .label
     speedLabel.translatesAutoresizingMaskIntoConstraints = false
     speedLabel.isHidden = true
+    speedLabel.accessibilityIdentifier = "carplay-speed"
     container.addSubview(speedLabel)
+    // Canadian regulatory signs are black on white with a black border; the badge stays that way
+    // in both appearances so it reads as a sign rather than app chrome.
     speedLimitLabel.backgroundColor = .white
-    speedLimitLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .bold)
     speedLimitLabel.layer.borderColor = UIColor.black.cgColor
-    speedLimitLabel.layer.borderWidth = 1.5
-    speedLimitLabel.layer.cornerRadius = 5
+    speedLimitLabel.layer.borderWidth = 2.5
+    speedLimitLabel.layer.cornerRadius = 6
     speedLimitLabel.clipsToBounds = true
     speedLimitLabel.numberOfLines = 2
     speedLimitLabel.textAlignment = .center
     speedLimitLabel.textColor = .black
     speedLimitLabel.translatesAutoresizingMaskIntoConstraints = false
     speedLimitLabel.isHidden = true
+    speedLimitLabel.accessibilityIdentifier = "carplay-speed-limit"
     container.addSubview(speedLimitLabel)
+    roadNameLabel.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
+    roadNameLabel.textAlignment = .center
+    roadNameLabel.lineBreakMode = .byTruncatingTail
+    roadNameLabel.layer.cornerRadius = 15
+    roadNameLabel.layer.borderWidth = 1
+    roadNameLabel.clipsToBounds = true
+    roadNameLabel.translatesAutoresizingMaskIntoConstraints = false
+    roadNameLabel.isHidden = true
+    roadNameLabel.accessibilityIdentifier = "carplay-current-road"
+    container.addSubview(roadNameLabel)
     let speedTrailing = speedLabel.trailingAnchor.constraint(
       equalTo: speedLimitLabel.trailingAnchor,
-      constant: -(38 + 4)
+      constant: -(Self.speedLimitBadgeSize.width + Self.hudGap)
     )
     NSLayoutConstraint.activate([
       attributionLabel.leadingAnchor.constraint(
@@ -255,16 +333,79 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         constant: -6
       ),
       attributionLabel.heightAnchor.constraint(equalToConstant: 18),
-      speedLimitLabel.widthAnchor.constraint(equalToConstant: 38),
-      speedLimitLabel.heightAnchor.constraint(equalToConstant: 36),
+      speedLimitLabel.widthAnchor.constraint(equalToConstant: Self.speedLimitBadgeSize.width),
+      speedLimitLabel.heightAnchor.constraint(equalToConstant: Self.speedLimitBadgeSize.height),
       speedTrailing,
-      speedLabel.topAnchor.constraint(equalTo: speedLimitLabel.topAnchor),
-      speedLabel.widthAnchor.constraint(equalToConstant: 38),
-      speedLabel.heightAnchor.constraint(equalToConstant: 36),
+      speedLabel.centerYAnchor.constraint(equalTo: speedLimitLabel.centerYAnchor),
+      speedLabel.widthAnchor.constraint(equalToConstant: Self.speedBadgeSize.width),
+      speedLabel.heightAnchor.constraint(equalToConstant: Self.speedBadgeSize.height),
+      // The road pill sits at the bottom centre of the live safe area, so CarPlay's guidance card
+      // and map buttons never cover it; a bottom anchor is unaffected by the transient top chrome.
+      roadNameLabel.centerXAnchor.constraint(equalTo: container.safeAreaLayoutGuide.centerXAnchor),
+      roadNameLabel.bottomAnchor.constraint(
+        equalTo: container.safeAreaLayoutGuide.bottomAnchor,
+        constant: -10
+      ),
+      roadNameLabel.heightAnchor.constraint(equalToConstant: 30),
+      roadNameLabel.widthAnchor.constraint(
+        lessThanOrEqualTo: container.safeAreaLayoutGuide.widthAnchor,
+        multiplier: 0.5
+      ),
     ])
     speedTrailingConstraint = speedTrailing
     updateOverlayAnchors()
+    applyOverlayColors()
     view = container
+    mapAlerts = NavOSSCarPlayMapAlertStore.shared.snapshot()
+    mapAlertObserver = NotificationCenter.default.addObserver(
+      forName: .navOSSCarPlayMapAlertsDidChange,
+      object: NavOSSCarPlayMapAlertStore.shared,
+      queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        self.mapAlerts = NavOSSCarPlayMapAlertStore.shared.snapshot()
+        self.installMapAlertsIfReady()
+      }
+    }
+  }
+
+  deinit {
+    if let mapAlertObserver {
+      NotificationCenter.default.removeObserver(mapAlertObserver)
+    }
+  }
+
+  /// Overlay colours follow the resolved map style, not the system appearance, so a dark map never
+  /// carries light chips.
+  private func applyOverlayColors() {
+    let dark = styleSlug == "dark"
+    roadNameLabel.backgroundColor =
+      dark
+      ? UIColor(red: 0.118, green: 0.169, blue: 0.173, alpha: 0.94)
+      : UIColor(white: 1, alpha: 0.95)
+    roadNameLabel.textColor = dark ? UIColor(white: 0.96, alpha: 1) : UIColor(red: 0.055, green: 0.082, blue: 0.086, alpha: 1)
+    roadNameLabel.layer.borderColor =
+      (dark ? UIColor(white: 1, alpha: 0.12) : UIColor(red: 0.85, green: 0.87, blue: 0.86, alpha: 1))
+      .cgColor
+    applySpeedColors(isSpeeding: speedLabel.tag == 1)
+  }
+
+  private func applySpeedColors(isSpeeding: Bool) {
+    let dark = styleSlug == "dark"
+    speedLabel.tag = isSpeeding ? 1 : 0
+    if isSpeeding {
+      speedLabel.backgroundColor = UIColor(red: 0.898, green: 0.282, blue: 0.302, alpha: 1)
+      speedLabel.layer.borderColor = UIColor.white.cgColor
+      speedLabel.textColor = .white
+    } else {
+      speedLabel.backgroundColor =
+        dark ? UIColor(red: 0.118, green: 0.169, blue: 0.173, alpha: 0.96) : UIColor(white: 1, alpha: 0.97)
+      speedLabel.layer.borderColor =
+        (dark ? UIColor(white: 1, alpha: 0.18) : UIColor(red: 0.85, green: 0.87, blue: 0.86, alpha: 1))
+        .cgColor
+      speedLabel.textColor = dark ? .white : UIColor(red: 0.055, green: 0.082, blue: 0.086, alpha: 1)
+    }
   }
 
   /// Re-anchors the speed / speed-limit readouts per `anchorsSpeedHUDToViewBounds`, replacing
@@ -277,20 +418,21 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     overlayTrailingConstraint?.isActive = false
     let top: NSLayoutConstraint
     let trailing: NSLayoutConstraint
+    let margin = Self.hudMargin
     if anchorsSpeedHUDToViewBounds {
-      top = speedLimitLabel.topAnchor.constraint(equalTo: container.topAnchor, constant: 8)
+      top = speedLimitLabel.topAnchor.constraint(equalTo: container.topAnchor, constant: margin)
       trailing = speedLimitLabel.trailingAnchor.constraint(
         equalTo: container.trailingAnchor,
-        constant: -8
+        constant: -margin
       )
     } else {
       top = speedLimitLabel.topAnchor.constraint(
         equalTo: container.safeAreaLayoutGuide.topAnchor,
-        constant: 8
+        constant: margin
       )
       trailing = speedLimitLabel.trailingAnchor.constraint(
         equalTo: container.safeAreaLayoutGuide.trailingAnchor,
-        constant: -8
+        constant: -margin
       )
     }
     NSLayoutConstraint.activate([top, trailing])
@@ -304,7 +446,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   /// trailing slot instead of leaving a blank badge-width gap where an unknown limit would
   /// have been.
   private func updateSpeedTrailingConstraint(limitVisible: Bool) {
-    speedTrailingConstraint?.constant = limitVisible ? -(38 + 4) : 0
+    speedTrailingConstraint?.constant =
+      limitVisible ? -(Self.speedLimitBadgeSize.width + Self.hudGap) : 0
   }
 
   /// The current-speed readout's frame in `view` coordinates. Exposed (not `private`) so the
@@ -322,20 +465,25 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     speedLimitLabel.isHidden ? nil : speedLimitLabel.frame
   }
 
+  /// Road-label layers currently enlarged for guidance, for the visual harness.
+  var enlargedRoadLabelLayerCount: Int { activeGuidance ? roadLabelFontSizes.count : 0 }
+
+  /// The current-road pill's text while it is shown, for the visual harness.
+  var currentRoadNameReadout: String? {
+    roadNameLabel.isHidden ? nil : roadNameLabel.text
+  }
+
   override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
     super.traitCollectionDidChange(previousTraitCollection)
     guard traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) else {
       return
     }
-    guard appearance == .automatic else {
-      return
-    }
-    let nextStyleSlug = resolvedStyleSlug()
-    guard nextStyleSlug != styleSlug else {
-      return
-    }
-    styleSlug = nextStyleSlug
-    loadStyle(resetRetryCount: true)
+    reloadStyleIfNeeded()
+  }
+
+  override func viewSafeAreaInsetsDidChange() {
+    super.viewSafeAreaInsetsDidChange()
+    updateGuidanceContentInset()
   }
 
   override func viewDidLayoutSubviews() {
@@ -352,6 +500,20 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
   }
 
+  /// During guidance the vehicle is centred in the part of the map CarPlay leaves visible beside
+  /// the guidance card. Only horizontal insets are used: the top inset changes whenever the
+  /// navigation bar appears, and following it would bounce the camera on every touch.
+  private func updateGuidanceContentInset() {
+    guard isViewLoaded else { return }
+    let insets = view.safeAreaInsets
+    let target =
+      activeGuidance && !presentsRouteOverview
+      ? UIEdgeInsets(top: 0, left: insets.left, bottom: 0, right: insets.right)
+      : .zero
+    guard mapView.contentInset != target else { return }
+    mapView.setContentInset(target, animated: false, completionHandler: nil)
+  }
+
   func applyAppearance(_ appearance: NavOSSCarPlayAppearance) {
     self.appearance = appearance
     overrideUserInterfaceStyle =
@@ -360,6 +522,18 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       case .dark: .dark
       case .light: .light
       }
+    reloadStyleIfNeeded()
+  }
+
+  /// Applies the vehicle's suggested content style (`CPTemplateApplicationScene.contentStyle`). In
+  /// Automatic mode this decides light or dark maps, so the map follows the car's headlights or
+  /// night setting rather than only the phone's appearance.
+  func applyContentStyle(_ contentStyle: UIUserInterfaceStyle) {
+    systemContentStyle = contentStyle == .unspecified ? nil : contentStyle
+    reloadStyleIfNeeded()
+  }
+
+  private func reloadStyleIfNeeded() {
     guard isViewLoaded else {
       return
     }
@@ -368,6 +542,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       return
     }
     styleSlug = nextStyleSlug
+    applyOverlayColors()
     loadStyle(resetRetryCount: true)
   }
 
@@ -409,7 +584,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private func resolvedStyleSlug() -> String {
     switch appearance {
     case .automatic:
-      traitCollection.userInterfaceStyle == .dark ? "dark" : "liberty"
+      (systemContentStyle ?? traitCollection.userInterfaceStyle) == .dark ? "dark" : "liberty"
     case .dark:
       "dark"
     case .light:
@@ -439,6 +614,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
 
     idleLocationFollowEnabled = true
+    flattenCamera()
     // Do not let MapLibre center on an old cached `userLocation`. It takes over as soon as its
     // delegate supplies a fresh fix; until then, a separately validated service coordinate can
     // center the camera without becoming a fake live puck.
@@ -465,11 +641,23 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     else { return }
     // This is a camera fallback only. It deliberately does not synthesize a MapLibre user location
     // or change tracking mode, so an old service cache can never masquerade as a live puck.
+    flattenCamera()
     mapView.setCenter(
       CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude),
       zoomLevel: 15.5,
       animated: animated
     )
+  }
+
+  /// The idle map is flat: leaving guidance must not keep its tilted driving camera, which with
+  /// 3D buildings restored made the idle map read as a skyline instead of a map. Heading is kept
+  /// so heading-up idle tracking does not spin.
+  private func flattenCamera() {
+    guard mapView.camera.pitch != 0 else { return }
+    let flat = mapView.camera
+    flat.pitch = 0
+    mapView.setCamera(flat, withDuration: 0, animationTimingFunction: nil)
+    cameraPitch = .nan
   }
 
   func currentLocationCoordinate() -> NavOSSCarPlayCoordinate? {
@@ -493,6 +681,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   func toggleRouteOverview() -> Bool {
     presentsRouteOverview.toggle()
+    updateGuidanceContentInset()
+    updateGuidanceDecorations()
     if presentsRouteOverview {
       fitRoute(animated: true)
     } else {
@@ -509,7 +699,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     routeProgress: Double = 0,
     alternateRoute: [NavOSSCarPlayCoordinate]? = nil,
     distanceToManeuverMeters: Double? = nil,
-    speedLimitKph: Int? = nil
+    speedLimitKph: Int? = nil,
+    overlay: NavOSSCarPlayGuidanceOverlay = NavOSSCarPlayGuidanceOverlay()
   ) {
     let routeOriginPosition = route.first.map {
       NavOSSCarPlayPosition(
@@ -537,9 +728,14 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       lastRenderedCourseDegrees = nil
       lastTargetAt = nil
     }
-    if activeGuidance && !presentsRouteOverview {
-      navigationViewingDistance = navOSSCarPlayViewingDistance(distanceToManeuverMeters)
-    }
+    latestDistanceToManeuverMeters = activeGuidance ? distanceToManeuverMeters : nil
+    cameraTarget = navOSSCarPlayCameraTarget(
+      speedMetersPerSecond: effectivePosition?.speedMetersPerSecond,
+      distanceToManeuverMeters: latestDistanceToManeuverMeters
+    )
+    self.routeProgress = routeProgress
+    guidanceOverlay = activeGuidance ? overlay : NavOSSCarPlayGuidanceOverlay()
+    updateGuidanceContentInset()
     mapView.showsUserLocation = requestsUserLocation && !activeGuidance
     self.routeId = routeId
     let displayedRoute =
@@ -568,8 +764,16 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     installOriginOverlayIfReady()
     installDestinationOverlayIfReady()
     installPositionOverlayIfReady()
-    updateSpeedDisplay(effectivePosition?.speedMetersPerSecond, speedLimitKph: speedLimitKph)
+    installTravelledRouteIfReady()
+    installCongestionIfReady()
+    installManeuverArrowIfReady()
+    installMapAlertsIfReady()
+    updateSpeedDisplay(
+      effectivePosition?.speedMetersPerSecond,
+      speeding: overlay.speeding
+    )
     updateSpeedLimitDisplay(speedLimitKph)
+    updateRoadNameDisplay()
     updateGuidanceDeclutter()
     updatePointOfInterestVisibility()
     if activeGuidance, let effectivePosition {
@@ -587,6 +791,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   func clearRoute() {
     routeFitGeneration &+= 1
+    if activeGuidance {
+      flattenCamera()
+    }
     activeGuidance = false
     latestOrigin = nil
     latestDestination = nil
@@ -599,15 +806,27 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     invalidateDisplayLink()
     speedLabel.isHidden = true
     speedLimitLabel.isHidden = true
+    roadNameLabel.isHidden = true
     updateSpeedTrailingConstraint(limitVisible: false)
-    navigationViewingDistance = 850
+    resetCamera()
     presentsRouteOverview = false
     routeId = nil
     alternateRouteCoordinates = []
     routeCoordinates = []
     routeGeometry = []
+    routeProgress = 0
+    guidanceOverlay = NavOSSCarPlayGuidanceOverlay()
+    latestDistanceToManeuverMeters = nil
+    updateGuidanceContentInset()
     mapView.isScrollEnabled = true
     mapView.showsUserLocation = requestsUserLocation
+    for identifier in [
+      travelledRouteSourceIdentifier, congestionSourceIdentifier, maneuverArrowSourceIdentifier,
+      maneuverArrowHeadSourceIdentifier,
+    ] {
+      (mapView.style?.source(withIdentifier: identifier) as? MLNShapeSource)?.shape = nil
+    }
+    updateGuidanceDeclutter()
     if let source = mapView.style?.source(withIdentifier: routeSourceIdentifier)
       as? MLNShapeSource
     {
@@ -665,10 +884,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   func zoom(by delta: Double) {
     if activeGuidance {
-      navigationViewingDistance = max(
-        250,
-        min(5_000, navigationViewingDistance * pow(2, -delta))
-      )
+      navigationZoomScale = max(0.4, min(4, navigationZoomScale * pow(2, -delta)))
       recenter()
     } else {
       idleLocationFollowEnabled = false
@@ -677,16 +893,33 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
   }
 
+  /// Forgets the follow camera's eased state so the next follow starts from the ideal view.
+  private func resetCamera() {
+    cameraDistance = .nan
+    cameraPitch = .nan
+    cameraHeading = .nan
+    cameraFrameAt = nil
+    navigationZoomScale = 1
+  }
+
   func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
     styleLoadWatchdog?.cancel()
     styleLoadWatchdog = nil
     styleLoadRetryCount = 0
     lastHeadingConeApex = nil
     lastHeadingConeHeadingDegrees = nil
+    roadLabelFontSizes = [:]
+    roadLabelHaloWidths = [:]
+    guidanceHiddenLayerIdentifiers = []
+    applyOverlayColors()
     installAlternateRouteOverlayIfReady()
     installRouteOverlayIfReady()
+    installTravelledRouteIfReady()
+    installCongestionIfReady()
+    installManeuverArrowIfReady()
     installOriginOverlayIfReady()
     installDestinationOverlayIfReady()
+    installMapAlertsIfReady()
     installPositionOverlayIfReady()
     updateGuidanceDeclutter()
     updatePointOfInterestVisibility()
@@ -838,29 +1071,58 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     ]
   }
 
-  private func follow(_ position: NavOSSCarPlayPosition, duration: TimeInterval) {
+  /// Points the follow camera at `position`.
+  ///
+  /// A positive `duration` is an explicit recenter: the camera jumps its eased state to the ideal
+  /// view and animates there. Zero is a render-loop frame: distance, pitch, and heading each ease
+  /// toward the target with a frame-rate-independent time constant, so speed changes, a nearing
+  /// maneuver, or a corner never snap the view. Returns whether the camera has settled.
+  @discardableResult
+  private func follow(_ position: NavOSSCarPlayPosition, duration: TimeInterval) -> Bool {
     let center = CLLocationCoordinate2D(
       latitude: position.coordinate.latitude,
       longitude: position.coordinate.longitude
     )
-    let movementHeading = position.courseDegrees ?? mapView.direction
+    let travelHeading =
+      validCourseDegrees(position.courseDegrees) ?? lastRenderedCourseDegrees ?? mapView.direction
+    let targetHeading = mapOrientation == .northUp ? 0 : travelHeading
+    let targetDistance = cameraTarget.viewingDistanceMeters * navigationZoomScale
+    let targetPitch = cameraTarget.pitchDegrees
+    let now = CACurrentMediaTime()
+    if duration > 0 || !cameraDistance.isFinite || !cameraPitch.isFinite || !cameraHeading.isFinite {
+      cameraDistance = targetDistance
+      cameraPitch = targetPitch
+      cameraHeading = targetHeading
+    } else {
+      let elapsed = min(0.1, max(0, now - (cameraFrameAt ?? now)))
+      cameraDistance = navOSSCarPlaySmoothed(
+        cameraDistance, toward: targetDistance, elapsedSeconds: elapsed, timeConstantSeconds: 1.4)
+      cameraPitch = navOSSCarPlaySmoothed(
+        cameraPitch, toward: targetPitch, elapsedSeconds: elapsed, timeConstantSeconds: 1.4)
+      cameraHeading = navOSSCarPlaySmoothedBearing(
+        cameraHeading, toward: targetHeading, elapsedSeconds: elapsed, timeConstantSeconds: 0.35)
+    }
+    cameraFrameAt = now
     let lookAheadCenter = coordinate(
       from: center,
-      distanceMeters: navigationViewingDistance * 0.16,
-      bearingDegrees: movementHeading
+      distanceMeters: cameraDistance * cameraTarget.lookAheadFraction,
+      bearingDegrees: travelHeading
     )
     let camera = MLNMapCamera(
       lookingAtCenter: lookAheadCenter,
-      acrossDistance: navigationViewingDistance,
-      pitch: 38,
-      heading: mapOrientation == .northUp ? 0 : movementHeading
+      acrossDistance: cameraDistance,
+      pitch: cameraPitch,
+      heading: cameraHeading
     )
     mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
     mapView.setCamera(
       camera,
       withDuration: duration,
-      animationTimingFunction: CAMediaTimingFunction(name: .linear)
+      animationTimingFunction: CAMediaTimingFunction(name: duration > 0 ? .easeInEaseOut : .linear)
     )
+    let headingDelta = abs((targetHeading - cameraHeading + 540).truncatingRemainder(dividingBy: 360) - 180)
+    return abs(cameraDistance - targetDistance) < 2 && abs(cameraPitch - targetPitch) < 0.2
+      && headingDelta < 0.2
   }
 
   private func updateTargetPosition(_ position: NavOSSCarPlayPosition) {
@@ -909,10 +1171,12 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     let link =
       screen?.displayLink(withTarget: self, selector: #selector(renderPositionFrame))
       ?? CADisplayLink(target: self, selector: #selector(renderPositionFrame))
+    // 60 fps keeps the vehicle and the eased camera smooth on car displays that run at 60 Hz;
+    // the system may still lower it under thermal or power pressure, never below 30.
     link.preferredFrameRateRange = CAFrameRateRange(
-      minimum: 20,
-      maximum: 30,
-      preferred: 30
+      minimum: 30,
+      maximum: 60,
+      preferred: 60
     )
     link.add(to: .main, forMode: .common)
     return link
@@ -970,12 +1234,21 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       installRouteHeadIfReady()
     }
     installPositionOverlayIfReady()
+    var cameraSettled = true
     if !presentsRouteOverview, let renderedPosition {
-      follow(renderedPosition, duration: 0)
+      cameraSettled = follow(renderedPosition, duration: 0)
     }
-    if progress >= 1 {
+    // Keep rendering until both the vehicle has reached its fix and the camera has finished
+    // easing; stopping at the fix alone froze a half-finished zoom until the next GPS sample.
+    if progress >= 1, cameraSettled {
       invalidateDisplayLink()
     }
+  }
+
+  /// Restarts the render loop so the eased camera can reach a new target between fixes.
+  private func ensureRenderLoop() {
+    guard activeGuidance, latestPosition != nil, displayLink == nil else { return }
+    displayLink = makeRenderDisplayLink(on: renderScreen())
   }
 
   private func interpolatedCourse(from: Double?, to: Double?, progress: Double) -> Double? {
@@ -987,39 +1260,71 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   private func updateSpeedDisplay(
     _ speedMetersPerSecond: Double?,
-    speedLimitKph: Int?
+    speeding: NavOSSSpeedingState
   ) {
-    guard activeGuidance, let speedMetersPerSecond else {
+    guard activeGuidance, showsCurrentSpeed, let speedMetersPerSecond else {
       speedLabel.isHidden = true
       return
     }
     let speedKph = Int((speedMetersPerSecond * 3.6).rounded())
-    let isSpeeding = navOSSCarPlayIsSpeeding(
-      speedKph: speedKph,
-      speedLimitKph: speedLimitKph
+    let isSpeeding = speeding == .overLimit
+    applySpeedColors(isSpeeding: isSpeeding)
+    let text = NSMutableAttributedString(
+      string: "\(speedKph)",
+      attributes: [.font: UIFont.monospacedDigitSystemFont(ofSize: 21, weight: .bold)]
     )
-    speedLabel.backgroundColor =
-      isSpeeding
-      ? UIColor.systemRed.withAlphaComponent(0.88)
-      : UIColor.secondarySystemBackground.withAlphaComponent(0.94)
-    speedLabel.layer.borderColor =
-      isSpeeding
-      ? UIColor.systemRed.withAlphaComponent(1).cgColor
-      : UIColor.black.withAlphaComponent(0.65).cgColor
-    speedLabel.textColor = isSpeeding ? .white : .label
-    speedLabel.text = "\(speedKph)\nkm/h"
+    text.append(
+      NSAttributedString(
+        string: "\nkm/h",
+        attributes: [.font: UIFont.systemFont(ofSize: 10, weight: .semibold)]
+      )
+    )
+    speedLabel.attributedText = text
+    speedLabel.accessibilityLabel = isSpeeding
+      ? "\(speedKph) kilometres per hour, over the limit"
+      : "\(speedKph) kilometres per hour"
     speedLabel.isHidden = false
   }
 
   private func updateSpeedLimitDisplay(_ speedLimitKph: Int?) {
-    guard activeGuidance, let speedLimitKph else {
+    guard activeGuidance, showsSpeedLimit, let speedLimitKph else {
       speedLimitLabel.isHidden = true
       updateSpeedTrailingConstraint(limitVisible: false)
       return
     }
-    speedLimitLabel.text = "MAX\n\(speedLimitKph)"
+    let text = NSMutableAttributedString(
+      string: "MAX\n",
+      attributes: [.font: UIFont.systemFont(ofSize: 10, weight: .heavy)]
+    )
+    text.append(
+      NSAttributedString(
+        string: "\(speedLimitKph)",
+        attributes: [.font: UIFont.monospacedDigitSystemFont(ofSize: 22, weight: .heavy)]
+      )
+    )
+    speedLimitLabel.attributedText = text
+    speedLimitLabel.accessibilityLabel = "Speed limit \(speedLimitKph)"
     speedLimitLabel.isHidden = false
     updateSpeedTrailingConstraint(limitVisible: true)
+  }
+
+  /// The current road, shown only while following: the overview has no single current road.
+  private func updateRoadNameDisplay() {
+    guard showsRoadName, activeGuidance, !presentsRouteOverview,
+      let name = guidanceOverlay.currentRoadName?.trimmingCharacters(in: .whitespacesAndNewlines),
+      !name.isEmpty
+    else {
+      roadNameLabel.isHidden = true
+      return
+    }
+    roadNameLabel.text = name
+    roadNameLabel.isHidden = false
+  }
+
+  /// Decorations that depend on follow vs overview.
+  private func updateGuidanceDecorations() {
+    updateRoadNameDisplay()
+    installManeuverArrowIfReady()
   }
 
   private func updatePointOfInterestVisibility() {
@@ -1044,6 +1349,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       }
       guidanceHiddenLayerIdentifiers.removeAll()
     }
+    updateRoadLabelLegibility(in: style)
   }
 
   /// Colours and widths shared by the route line and its moving head, so the two sources render
@@ -1051,8 +1357,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   /// Widths for both casings and both lines. Only depends on `activeGuidance`, so it runs on
   /// route/state changes rather than on the display link.
   private func applyRouteLineWidths(in style: MLNStyle) {
-    let casingWidth = NSExpression(forConstantValue: activeGuidance ? 11 : 7)
-    let lineWidth = NSExpression(forConstantValue: activeGuidance ? 7 : 4)
+    let casingWidth = NSExpression(forConstantValue: activeGuidance ? 15 : 8)
+    let lineWidth = NSExpression(forConstantValue: activeGuidance ? 10 : 5)
     for identifier in [routeCasingLayerIdentifier, routeHeadCasingLayerIdentifier] {
       (style.layer(withIdentifier: identifier) as? MLNLineStyleLayer)?.lineWidth = casingWidth
     }
@@ -1096,11 +1402,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       let layer = MLNLineStyleLayer(identifier: identifier, source: source)
       layer.lineCap = NSExpression(forConstantValue: "round")
       layer.lineJoin = NSExpression(forConstantValue: "round")
-      layer.lineColor = NSExpression(
-        forConstantValue: styleSlug == "dark"
-          ? UIColor(red: 0.04, green: 0.08, blue: 0.08, alpha: 1)
-          : UIColor.white
-      )
+      layer.lineColor = NSExpression(forConstantValue: routeCasingColor)
       layer.lineOpacity = NSExpression(forConstantValue: 0.96)
       return layer
     }
@@ -1108,11 +1410,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       let layer = MLNLineStyleLayer(identifier: identifier, source: source)
       layer.lineCap = NSExpression(forConstantValue: "round")
       layer.lineJoin = NSExpression(forConstantValue: "round")
-      layer.lineColor = NSExpression(
-        forConstantValue: styleSlug == "dark"
-          ? UIColor(red: 0.20, green: 0.78, blue: 0.55, alpha: 1)
-          : UIColor(red: 0.11, green: 0.49, blue: 0.31, alpha: 1)
-      )
+      layer.lineColor = NSExpression(forConstantValue: routeLineColor)
       return layer
     }
     // Any missing layer means the set is being built for the first time on this style, or the
@@ -1315,6 +1613,13 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
 
     if style.layer(withIdentifier: alternateRouteLayerIdentifier) == nil {
+      // Alternates sit under the selected route, with a casing so they stay legible on busy tiles.
+      let below = style.layer(withIdentifier: routeCasingLayerIdentifier)
+      let casing = MLNLineStyleLayer(identifier: alternateRouteCasingLayerIdentifier, source: source)
+      casing.lineCap = NSExpression(forConstantValue: "round")
+      casing.lineJoin = NSExpression(forConstantValue: "round")
+      casing.lineColor = NSExpression(forConstantValue: routeCasingColor)
+      casing.lineWidth = NSExpression(forConstantValue: 8)
       let alternateRoute = MLNLineStyleLayer(
         identifier: alternateRouteLayerIdentifier,
         source: source
@@ -1322,11 +1627,288 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       alternateRoute.lineCap = NSExpression(forConstantValue: "round")
       alternateRoute.lineJoin = NSExpression(forConstantValue: "round")
       alternateRoute.lineColor = NSExpression(
-        forConstantValue: UIColor(red: 0.51, green: 0.56, blue: 0.56, alpha: 1)
+        forConstantValue: styleSlug == "dark"
+          ? UIColor(red: 0.42, green: 0.50, blue: 0.50, alpha: 1)
+          : UIColor(red: 0.60, green: 0.66, blue: 0.65, alpha: 1)
       )
-      alternateRoute.lineOpacity = NSExpression(forConstantValue: 0.65)
-      alternateRoute.lineWidth = NSExpression(forConstantValue: 4)
-      style.addLayer(alternateRoute)
+      alternateRoute.lineWidth = NSExpression(forConstantValue: 5)
+      if let below {
+        style.insertLayer(casing, below: below)
+        style.insertLayer(alternateRoute, below: below)
+      } else {
+        style.addLayer(casing)
+        style.addLayer(alternateRoute)
+      }
+    }
+  }
+
+  // MARK: Route colours
+
+  /// Selected route. Teal-green from the NavOSS palette, tuned to stay distinct from park fills.
+  private var routeLineColor: UIColor {
+    styleSlug == "dark"
+      ? UIColor(red: 0.239, green: 0.839, blue: 0.710, alpha: 1)  // #3DD6B5
+      : UIColor(red: 0.055, green: 0.541, blue: 0.416, alpha: 1)  // #0E8A6A
+  }
+
+  private var routeCasingColor: UIColor {
+    styleSlug == "dark"
+      ? UIColor(red: 0.055, green: 0.082, blue: 0.086, alpha: 1)  // ink
+      : UIColor.white
+  }
+
+  private var travelledRouteColor: UIColor {
+    styleSlug == "dark"
+      ? UIColor(red: 0.33, green: 0.40, blue: 0.40, alpha: 1)
+      : UIColor(red: 0.66, green: 0.71, blue: 0.70, alpha: 1)
+  }
+
+  private func congestionColor(_ level: NavOSSCarPlayCongestionLevel) -> UIColor {
+    switch level {
+    case .slow: UIColor(red: 0.961, green: 0.647, blue: 0.141, alpha: 1)  // #F5A524
+    case .heavy: UIColor(red: 0.898, green: 0.282, blue: 0.302, alpha: 1)  // #E5484D
+    case .stopped: UIColor(red: 0.545, green: 0.118, blue: 0.176, alpha: 1)  // #8B1E2D
+    case .free, .unknown: routeLineColor
+    }
+  }
+
+  /// Inserts `layer` just under the vehicle so route decorations never cover the puck, or appends
+  /// it when no vehicle layer exists yet.
+  private func insertBelowVehicle(_ layer: MLNStyleLayer, in style: MLNStyle) {
+    if let vehicle = style.layer(withIdentifier: shadowLayerIdentifier)
+      ?? style.layer(withIdentifier: positionLayerIdentifier)
+    {
+      style.insertLayer(layer, below: vehicle)
+    } else {
+      style.addLayer(layer)
+    }
+  }
+
+  // MARK: Travelled route
+
+  /// The whole route in grey under the remaining route, so road already driven reads as done
+  /// rather than disappearing. Static per route: it never changes between frames.
+  private func installTravelledRouteIfReady() {
+    guard let style = mapView.style else { return }
+    let source = ensureShapeSource(travelledRouteSourceIdentifier, in: style)
+    guard activeGuidance, routeGeometry.count >= 2 else {
+      source.shape = nil
+      return
+    }
+    if style.layer(withIdentifier: travelledRouteLayerIdentifier) == nil {
+      let layer = MLNLineStyleLayer(identifier: travelledRouteLayerIdentifier, source: source)
+      layer.lineCap = NSExpression(forConstantValue: "round")
+      layer.lineJoin = NSExpression(forConstantValue: "round")
+      layer.lineColor = NSExpression(forConstantValue: travelledRouteColor)
+      layer.lineWidth = NSExpression(forConstantValue: 8)
+      if let casing = style.layer(withIdentifier: routeCasingLayerIdentifier) {
+        style.insertLayer(layer, below: casing)
+      } else {
+        insertBelowVehicle(layer, in: style)
+      }
+    }
+    source.shape = polylineFeature(
+      routeGeometry.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+    )
+  }
+
+  // MARK: Congestion
+
+  /// Colours slow, heavy, and stopped stretches of the remaining route. Draws nothing unless the
+  /// trip carries real per-segment congestion.
+  private func installCongestionIfReady() {
+    guard let style = mapView.style else { return }
+    let source = ensureShapeSource(congestionSourceIdentifier, in: style)
+    let runs =
+      activeGuidance
+      ? navOSSCarPlayCongestionRuns(
+        geometry: routeGeometry,
+        levels: guidanceOverlay.congestion,
+        startingAtProgress: routeProgress
+      )
+      : []
+    guard !runs.isEmpty else {
+      source.shape = nil
+      return
+    }
+    if style.layer(withIdentifier: congestionLayerIdentifier) == nil {
+      let layer = MLNLineStyleLayer(identifier: congestionLayerIdentifier, source: source)
+      layer.lineCap = NSExpression(forConstantValue: "round")
+      layer.lineJoin = NSExpression(forConstantValue: "round")
+      layer.lineWidth = NSExpression(forConstantValue: 10)
+      layer.lineColor = NSExpression(
+        forMLNMatchingKey: NSExpression(forKeyPath: "level"),
+        in: [
+          NSExpression(forConstantValue: "slow"): NSExpression(forConstantValue: congestionColor(.slow)),
+          NSExpression(forConstantValue: "heavy"): NSExpression(forConstantValue: congestionColor(.heavy)),
+          NSExpression(forConstantValue: "stopped"):
+            NSExpression(forConstantValue: congestionColor(.stopped)),
+        ],
+        default: NSExpression(forConstantValue: routeLineColor)
+      )
+      if let head = style.layer(withIdentifier: routeHeadLayerIdentifier) {
+        style.insertLayer(layer, above: head)
+      } else {
+        insertBelowVehicle(layer, in: style)
+      }
+    }
+    source.shape = MLNShapeCollectionFeature(
+      shapes: runs.map { run in
+        let feature = polylineFeature(
+          run.coordinates.map {
+            CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
+          }
+        )
+        feature.attributes = ["level": run.level.rawValue]
+        return feature
+      }
+    )
+  }
+
+  // MARK: Maneuver arrow
+
+  /// Distance from the next maneuver at which its arrow appears on the road.
+  private let maneuverArrowVisibleMeters = 1_000.0
+
+  /// A white arrow on the road at the next turn, like the card's symbol but placed where it
+  /// happens. Hidden in overview, far from the maneuver, and when there is no maneuver geometry.
+  private func installManeuverArrowIfReady() {
+    guard let style = mapView.style else { return }
+    let lineSource = ensureShapeSource(maneuverArrowSourceIdentifier, in: style)
+    let headSource = ensureShapeSource(maneuverArrowHeadSourceIdentifier, in: style)
+    let arrow = guidanceOverlay.maneuverArrow
+    guard activeGuidance, !presentsRouteOverview, arrow.count >= 2,
+      let distance = latestDistanceToManeuverMeters, distance <= maneuverArrowVisibleMeters
+    else {
+      lineSource.shape = nil
+      headSource.shape = nil
+      return
+    }
+    if style.image(forName: maneuverArrowHeadImageIdentifier) == nil {
+      style.setImage(maneuverArrowHeadImage(), forName: maneuverArrowHeadImageIdentifier)
+    }
+    if style.layer(withIdentifier: maneuverArrowLayerIdentifier) == nil {
+      let casing = MLNLineStyleLayer(identifier: maneuverArrowCasingLayerIdentifier, source: lineSource)
+      casing.lineCap = NSExpression(forConstantValue: "butt")
+      casing.lineJoin = NSExpression(forConstantValue: "round")
+      casing.lineColor = NSExpression(
+        forConstantValue: UIColor(red: 0.055, green: 0.082, blue: 0.086, alpha: 0.85))
+      casing.lineWidth = NSExpression(forConstantValue: 14)
+      let line = MLNLineStyleLayer(identifier: maneuverArrowLayerIdentifier, source: lineSource)
+      line.lineCap = NSExpression(forConstantValue: "butt")
+      line.lineJoin = NSExpression(forConstantValue: "round")
+      line.lineColor = NSExpression(forConstantValue: UIColor.white)
+      line.lineWidth = NSExpression(forConstantValue: 9)
+      let head = MLNSymbolStyleLayer(identifier: maneuverArrowHeadLayerIdentifier, source: headSource)
+      head.iconImageName = NSExpression(forConstantValue: maneuverArrowHeadImageIdentifier)
+      head.iconAllowsOverlap = NSExpression(forConstantValue: true)
+      head.iconIgnoresPlacement = NSExpression(forConstantValue: true)
+      head.iconRotationAlignment = NSExpression(forConstantValue: "map")
+      head.iconPitchAlignment = NSExpression(forConstantValue: "map")
+      head.iconRotation = NSExpression(forKeyPath: "bearing")
+      head.iconScale = NSExpression(forConstantValue: 0.62)
+      for layer in [casing, line, head] as [MLNStyleLayer] {
+        insertBelowVehicle(layer, in: style)
+      }
+    }
+    let coordinates = arrow.map {
+      CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
+    }
+    lineSource.shape = polylineFeature(coordinates)
+    let tip = MLNPointFeature()
+    tip.coordinate = coordinates[coordinates.count - 1]
+    tip.attributes = [
+      "bearing": navOSSCarPlayBearingDegreesForDisplay(
+        from: arrow[arrow.count - 2], to: arrow[arrow.count - 1])
+    ]
+    headSource.shape = tip
+  }
+
+  private func maneuverArrowHeadImage() -> UIImage {
+    let size = CGSize(width: 56, height: 56)
+    return UIGraphicsImageRenderer(size: size).image { context in
+      let path = UIBezierPath()
+      path.move(to: CGPoint(x: 28, y: 6))
+      path.addLine(to: CGPoint(x: 50, y: 44))
+      path.addLine(to: CGPoint(x: 6, y: 44))
+      path.close()
+      UIColor(red: 0.055, green: 0.082, blue: 0.086, alpha: 0.85).setStroke()
+      path.lineWidth = 5
+      path.lineJoinStyle = .round
+      path.stroke()
+      UIColor.white.setFill()
+      path.fill()
+      _ = context
+    }
+  }
+
+  // MARK: Cameras and reports
+
+  /// Camera and road-report markers from `NavOSSCarPlayMapAlertStore`. The store is empty until a
+  /// real data source publishes into it, so this normally draws nothing.
+  private func installMapAlertsIfReady() {
+    guard let style = mapView.style else { return }
+    let source = ensureShapeSource(mapAlertSourceIdentifier, in: style)
+    guard !mapAlerts.isEmpty else {
+      source.shape = nil
+      return
+    }
+    for kind in NavOSSCarPlayMapAlertIcon.allCases where style.image(forName: kind.imageName) == nil {
+      style.setImage(kind.image(), forName: kind.imageName)
+    }
+    if style.layer(withIdentifier: mapAlertLayerIdentifier) == nil {
+      let layer = MLNSymbolStyleLayer(identifier: mapAlertLayerIdentifier, source: source)
+      layer.iconImageName = NSExpression(forKeyPath: "icon")
+      layer.iconAllowsOverlap = NSExpression(forConstantValue: true)
+      layer.iconScale = NSExpression(forConstantValue: 0.5)
+      layer.iconPitchAlignment = NSExpression(forConstantValue: "viewport")
+      layer.iconRotationAlignment = NSExpression(forConstantValue: "viewport")
+      layer.iconAnchor = NSExpression(forConstantValue: "bottom")
+      insertBelowVehicle(layer, in: style)
+    }
+    source.shape = MLNShapeCollectionFeature(
+      shapes: mapAlerts.map { alert in
+        let point = MLNPointFeature()
+        point.coordinate = CLLocationCoordinate2D(
+          latitude: alert.coordinate.latitude,
+          longitude: alert.coordinate.longitude
+        )
+        point.identifier = alert.id
+        point.attributes = ["icon": NavOSSCarPlayMapAlertIcon(alert.kind).imageName]
+        return point
+      }
+    )
+  }
+
+  // MARK: Road labels
+
+  /// Enlarges road names during guidance so they stay readable at driving zoom and pitch, and
+  /// restores the style's own sizes afterwards. Only constant sizes and zoom-interpolated stops
+  /// are scaled; any other expression is left alone rather than risking an invalid style.
+  private func updateRoadLabelLegibility(in style: MLNStyle) {
+    let scale = 1.22
+    for layer in style.layers {
+      guard let symbol = layer as? MLNSymbolStyleLayer,
+        symbol.sourceLayerIdentifier == "transportation_name"
+      else { continue }
+      let identifier = symbol.identifier
+      if activeGuidance {
+        if roadLabelFontSizes[identifier] == nil {
+          roadLabelFontSizes[identifier] = symbol.textFontSize
+          roadLabelHaloWidths[identifier] = symbol.textHaloWidth
+        }
+        if let original = roadLabelFontSizes[identifier],
+          let scaled = navOSSScaledSizeExpression(original, by: scale)
+        {
+          symbol.textFontSize = scaled
+        }
+        symbol.textHaloWidth = NSExpression(forConstantValue: 1.6)
+      } else if let original = roadLabelFontSizes.removeValue(forKey: identifier) {
+        symbol.textFontSize = original
+        if let halo = roadLabelHaloWidths.removeValue(forKey: identifier) {
+          symbol.textHaloWidth = halo
+        }
+      }
     }
   }
 
@@ -1707,6 +2289,135 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     return CLLocationCoordinate2D(
       latitude: destinationLatitude * 180 / .pi,
       longitude: destinationLongitude * 180 / .pi
+    )
+  }
+}
+
+/// Scales a text-size expression when it is a constant or a zoom-interpolated curve with constant
+/// stops; returns `nil` for anything else.
+private func navOSSScaledSizeExpression(_ expression: NSExpression, by scale: Double) -> NSExpression? {
+  if expression.expressionType == .constantValue, let value = expression.constantValue as? NSNumber {
+    return NSExpression(forConstantValue: value.doubleValue * scale)
+  }
+  guard expression.expressionType == .function,
+    expression.function == "mgl_interpolate:withCurveType:parameters:stops:",
+    let arguments = expression.arguments, arguments.count == 4,
+    arguments[3].expressionType == .constantValue,
+    let stops = arguments[3].constantValue as? [NSNumber: NSExpression]
+  else {
+    return nil
+  }
+  var scaledStops: [NSNumber: NSExpression] = [:]
+  for (zoom, value) in stops {
+    guard value.expressionType == .constantValue, let size = value.constantValue as? NSNumber else {
+      return nil
+    }
+    scaledStops[zoom] = NSExpression(forConstantValue: size.doubleValue * scale)
+  }
+  return NSExpression(
+    forFunction: expression.operand,
+    selectorName: "mgl_interpolate:withCurveType:parameters:stops:",
+    arguments: [arguments[0], arguments[1], arguments[2], NSExpression(forConstantValue: scaledStops)]
+  )
+}
+
+/// Map-rotation bearing from `start` to `end`, 0° north, clockwise.
+private func navOSSCarPlayBearingDegreesForDisplay(
+  from start: NavOSSCarPlayCoordinate,
+  to end: NavOSSCarPlayCoordinate
+) -> Double {
+  let meanLatitude = (start.latitude + end.latitude) / 2 * .pi / 180
+  let degrees =
+    atan2((end.longitude - start.longitude) * cos(meanLatitude), end.latitude - start.latitude)
+    * 180 / .pi
+  return degrees >= 0 ? degrees : degrees + 360
+}
+
+/// Marker artwork for camera and report alerts.
+enum NavOSSCarPlayMapAlertIcon: CaseIterable {
+  case camera
+  case hazard
+  case closure
+  case construction
+  case traffic
+
+  init(_ kind: NavOSSCarPlayMapAlert.Kind) {
+    switch kind {
+    case .redLightCamera, .speedCamera, .redLightAndSpeedCamera: self = .camera
+    case let .report(type):
+      switch type {
+      case .roadClosure: self = .closure
+      case .construction: self = .construction
+      case .slowTraffic: self = .traffic
+      case .collision, .objectOnRoad, .pothole, .roadHazard, .stalledVehicle: self = .hazard
+      }
+    }
+  }
+
+  var imageName: String { "navoss-carplay-alert-\(self)" }
+
+  private var symbolName: String {
+    switch self {
+    case .camera: "camera.fill"
+    case .hazard: "exclamationmark.triangle.fill"
+    case .closure: "xmark.octagon.fill"
+    case .construction: "cone.fill"
+    case .traffic: "car.2.fill"
+    }
+  }
+
+  private var fill: UIColor {
+    switch self {
+    case .camera: UIColor(red: 0.118, green: 0.169, blue: 0.173, alpha: 1)
+    case .hazard, .construction, .traffic: UIColor(red: 0.961, green: 0.620, blue: 0.043, alpha: 1)
+    case .closure: UIColor(red: 0.898, green: 0.282, blue: 0.302, alpha: 1)
+    }
+  }
+
+  /// A round badge with a pointer, drawn at 2× so `iconScale = 0.5` stays crisp.
+  func image() -> UIImage {
+    let size = CGSize(width: 72, height: 88)
+    return UIGraphicsImageRenderer(size: size).image { _ in
+      let circle = CGRect(x: 6, y: 4, width: 60, height: 60)
+      let pointer = UIBezierPath()
+      pointer.move(to: CGPoint(x: 24, y: 58))
+      pointer.addLine(to: CGPoint(x: 36, y: 84))
+      pointer.addLine(to: CGPoint(x: 48, y: 58))
+      pointer.close()
+      UIColor.white.setFill()
+      UIBezierPath(ovalIn: circle.insetBy(dx: -4, dy: -4)).fill()
+      pointer.fill()
+      fill.setFill()
+      UIBezierPath(ovalIn: circle).fill()
+      let configuration = UIImage.SymbolConfiguration(pointSize: 28, weight: .bold)
+      if let glyph = UIImage(systemName: symbolName, withConfiguration: configuration)?
+        .withTintColor(.white, renderingMode: .alwaysOriginal)
+      {
+        let glyphRect = CGRect(
+          x: circle.midX - glyph.size.width / 2,
+          y: circle.midY - glyph.size.height / 2,
+          width: glyph.size.width,
+          height: glyph.size.height
+        )
+        glyph.draw(in: glyphRect)
+      }
+    }
+  }
+}
+
+/// A label with horizontal padding, used for the current-road pill.
+final class NavOSSCarPlayInsetLabel: UILabel {
+  var contentInsets = UIEdgeInsets(top: 0, left: 14, bottom: 0, right: 14)
+
+  override func drawText(in rect: CGRect) {
+    super.drawText(in: rect.inset(by: contentInsets))
+  }
+
+  override var intrinsicContentSize: CGSize {
+    let size = super.intrinsicContentSize
+    return CGSize(
+      width: size.width + contentInsets.left + contentInsets.right,
+      height: size.height + contentInsets.top + contentInsets.bottom
     )
   }
 }

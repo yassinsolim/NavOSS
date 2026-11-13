@@ -37,6 +37,7 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
   private var mapViewController: NavOSSCarPlayMapViewController?
   private var preferencesObserver: NSObjectProtocol?
   private var stateObserver: NSObjectProtocol?
+  private var snapshotObserver: NSObjectProtocol?
 
   func templateApplicationDashboardScene(
     _ templateApplicationDashboardScene: CPTemplateApplicationDashboardScene,
@@ -50,6 +51,9 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
     dashboardWindow = window
     let mapViewController = NavOSSCarPlayMapViewController()
     mapViewController.reservesRouteChoiceSheet = false
+    // Dashboard is a small tile beside other apps: keep the route, arrow, and speed, but leave the
+    // road name to the guidance card CarPlay draws beside it.
+    mapViewController.showsRoadName = false
     mapViewController.setIdleLocationTrackingEnabled(true)
     applyPreferences(to: mapViewController)
     self.mapViewController = mapViewController
@@ -68,6 +72,15 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
     stateObserver = NotificationCenter.default.addObserver(
       forName: .navOSSCarPlayStateDidChange,
       object: NavOSSCarPlayTripStore.shared,
+      queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        self?.apply(NavOSSCarPlayTripStore.shared.snapshot())
+      }
+    }
+    snapshotObserver = NotificationCenter.default.addObserver(
+      forName: .navOSSNavigationSnapshotDidChange,
+      object: NavOSSNavigationService.shared,
       queue: .main
     ) { [weak self] _ in
       MainActor.assumeIsolated {
@@ -97,6 +110,10 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
       NotificationCenter.default.removeObserver(stateObserver)
       self.stateObserver = nil
     }
+    if let snapshotObserver {
+      NotificationCenter.default.removeObserver(snapshotObserver)
+      self.snapshotObserver = nil
+    }
     if let preferencesObserver {
       NotificationCenter.default.removeObserver(preferencesObserver)
       self.preferencesObserver = nil
@@ -112,10 +129,13 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
     guard let mapViewController else { return }
     guard let trip = state.trip else {
       mapViewController.clearRoute()
-      mapViewController.recenter()
       return
     }
     let activeGuidance = state.guidance?.phase == .navigating || state.guidance?.phase == .arrived
+    let presentation = state.guidance.flatMap {
+      navOSSCarPlayGuidancePresentation(trip: trip, guidance: $0)
+    }
+    let live = NavOSSNavigationService.shared.carPlayLiveGuidance()
     mapViewController.display(
       route: trip.geometry,
       routeId: trip.id,
@@ -123,11 +143,13 @@ final class NavOSSCarPlayDashboardSceneDelegate: UIResponder,
       position: state.position,
       routeProgress: state.routeProgress,
       distanceToManeuverMeters: state.guidance?.distanceToManeuverMeters,
-      speedLimitKph: navOSSCarPlaySpeedLimit(
-        trip.speedLimitsKph,
-        geometry: trip.geometry,
-        matchedCoordinate: state.position?.coordinate,
-        routeProgress: state.routeProgress
+      speedLimitKph: live.speedLimitKph,
+      overlay: NavOSSCarPlayGuidanceOverlay(
+        maneuverArrow: presentation.map {
+          navOSSCarPlayManeuverArrow(trip: trip, maneuverStepIndex: $0.primary.stepIndex)
+        } ?? [],
+        congestion: trip.congestion,
+        speeding: live.speedingState
       )
     )
   }

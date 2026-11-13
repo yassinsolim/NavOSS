@@ -123,6 +123,17 @@ private struct RouteTraffic: Decodable {
   let typicalDurationSeconds: Double
 }
 
+private struct SafetyCameraResponse: Decodable {
+  let cameras: [SafetyCameraRecord]
+}
+
+private struct SafetyCameraRecord: Decodable {
+  let coordinate: NavOSSCarPlayCoordinate
+  let direction: String
+  let id: String
+  let location: String
+}
+
 private struct RouteStep: Decodable {
   let distanceMeters: Double
   let durationSeconds: Double
@@ -262,6 +273,29 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     return navOSSCarPlayTripsOrderedForDisplay(trips)
   }
 
+  /// Fixed safety cameras for native alert eligibility. Records with an unknown direction are
+  /// dropped rather than guessed.
+  public func safetyCameras() async throws -> [NavOSSSafetyCamera] {
+    var request = URLRequest(url: baseURL.appending(path: "v1/cameras"))
+    request.httpMethod = "GET"
+    request.timeoutInterval = 20
+    let response: SafetyCameraResponse = try await send(request)
+    return response.cameras.compactMap { record in
+      guard let direction = NavOSSSafetyCamera.Direction(rawValue: record.direction),
+        record.coordinate.isValid
+      else {
+        return nil
+      }
+      return NavOSSSafetyCamera(
+        id: record.id,
+        latitude: record.coordinate.latitude,
+        longitude: record.coordinate.longitude,
+        direction: direction,
+        location: record.location
+      )
+    }
+  }
+
   private func coordinates(_ values: [[Double]]) throws -> [NavOSSCarPlayCoordinate] {
     try values.map { value in
       guard value.count == 2 else {
@@ -280,7 +314,10 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "content-type")
     request.timeoutInterval = 20
+    return try await send(request)
+  }
 
+  private func send<Response: Decodable>(_ request: URLRequest) async throws -> Response {
     let (data, urlResponse) = try await session.data(for: request)
     guard let response = urlResponse as? HTTPURLResponse else {
       throw NavOSSNavigationAPIError.invalidResponse

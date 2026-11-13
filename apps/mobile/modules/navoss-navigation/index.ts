@@ -5,14 +5,31 @@ export interface NativeNavigationCapabilities {
   backgroundLocation: boolean;
   carPlayTripBridge: true;
   courseMatching: true;
+  deadReckoning: true;
+  geometryGuidance: true;
   implementation: 'native-ios';
+  nativeSafetyCameraAlerts: true;
   offRouteDetection: true;
   replayInput: true;
+  rerouteConsent: true;
   routeContinuity: true;
   routeMatching: true;
   safetyCameraAnnouncements: true;
-  version: 8;
+  speedingWarning: true;
+  version: 9;
 }
+
+/**
+ * How native navigation recovers once the driver leaves the selected route. NavOSS never swaps
+ * routes merely to save time.
+ * - `adaptive`: install the fastest replacement automatically.
+ * - `ask-first`: offer `rerouteProposal`; it is withdrawn if the driver returns to the route and
+ *   replaced by an automatic recovery if unanswered for `respondWithinSeconds` while off route.
+ * - `keep-route`: route back onto the selected route ahead of the vehicle, never behind it.
+ */
+export type NativeRerouteMode = 'adaptive' | 'ask-first' | 'keep-route';
+
+export type NativeSpeedingState = 'over-limit' | 'unknown' | 'within-limit';
 
 export type NativeNavigationAudioMode = 'alerts-only' | 'all-guidance' | 'muted';
 
@@ -38,22 +55,57 @@ export interface NativeDestinationCatalog {
 export interface NativeNavigationLocationSample extends NativeNavigationCoordinate {
   courseDegrees?: number;
   horizontalAccuracyMeters?: number;
+  speedMetersPerSecond?: number;
+  /** Fix time in milliseconds since the Unix epoch. */
+  timestampMs?: number;
+}
+
+export interface NativeRerouteProposal {
+  createdAtMs: number;
+  /** Replacement minus the selected route's remaining distance; positive is longer. */
+  distanceDeltaMeters: number;
+  distanceMeters: number;
+  /** Replacement minus the selected route's remaining duration; positive is slower. */
+  durationDeltaSeconds: number;
+  durationSeconds: number;
+  id: string;
+  respondWithinSeconds: number;
+  trip: NativeCarPlayTrip;
+}
+
+/** Present while the announced camera is still ahead. `sequence` changes per new alert. */
+export interface NativeSafetyCameraAlert {
+  cameraId: string;
+  distanceAheadMeters: number;
+  location: string;
+  sequence: number;
 }
 
 export interface NativeNavigationSnapshot {
+  /** Name of the road being driven, from the route's current step, when the route names it. */
+  currentRoadName?: string;
   distanceFromRouteMeters?: number;
   horizontalAccuracyMeters?: number;
+  /** The matched position is extrapolated along the route through a short gap in fixes. */
+  isDeadReckoning?: boolean;
   isOffRoute: boolean;
   matchedCoordinate?: NativeNavigationCoordinate;
   matchedCourseDegrees?: number;
   phase: 'arrived' | 'idle' | 'tracking';
   rawCoordinate?: NativeNavigationCoordinate;
   rerouteCount: number;
+  rerouteMode?: NativeRerouteMode;
+  rerouteProposal?: NativeRerouteProposal;
   guidance?: NativeCarPlayGuidance;
   routeProgress: number;
   routeStatus: 'reroute-failed' | 'rerouting' | 'tracking';
   routeVersion: number;
+  safetyCameraAlert?: NativeSafetyCameraAlert;
   sequence: number;
+  /** Posted limit at the matched position from route annotations; absent when unknown. */
+  speedLimitKph?: number;
+  speedMetersPerSecond?: number;
+  speedingState?: NativeSpeedingState;
   stateVersion: number;
   trip?: NativeCarPlayTrip;
 }
@@ -114,7 +166,11 @@ export interface NativeCarPlayState {
 
 export interface NativeNavigationPreferences {
   audioMode: NativeNavigationAudioMode;
+  rerouteMode?: NativeRerouteMode;
   routePreferences: NativeRoutePreferences;
+  speedingAudibleWarning?: boolean;
+  /** km/h over the posted limit before `speedingState` turns `over-limit` (0-20, default 5). */
+  speedingToleranceKph?: number;
 }
 
 type NavOSSNavigationEvents = {
@@ -125,11 +181,12 @@ type NavOSSNavigationEvents = {
 };
 
 declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents> {
-  announceSafetyCamera(): void;
+  acceptRerouteProposal(id: string): boolean;
   clearCarPlayTrip(): void;
   clearDestinationHistory(): void;
   clearRecentDestinations(): void;
   clearRoute(): NativeNavigationSnapshot;
+  declineRerouteProposal(id: string): boolean;
   getCarPlayState(): NativeCarPlayState;
   getAudioMode(): NativeNavigationAudioMode;
   getCapabilities(): NativeNavigationCapabilities;
@@ -146,8 +203,10 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   replaceFavoriteDestinations(destinations: NativeNavigationDestination[]): void;
   setHomeDestination(destination: NativeNavigationDestination | null): void;
   setAudioMode(mode: NativeNavigationAudioMode): void;
+  setRerouteMode(mode: NativeRerouteMode): void;
   setRoute(trip: NativeCarPlayTrip): NativeNavigationSnapshot;
   setRoutePreferences(preferences: NativeRoutePreferences): void;
+  setSpeedingWarning(toleranceKph: number, audible: boolean): void;
   setWorkDestination(destination: NativeNavigationDestination | null): void;
   stopAnnouncements(): void;
   toggleFavoriteDestination(destination: NativeNavigationDestination): boolean;
