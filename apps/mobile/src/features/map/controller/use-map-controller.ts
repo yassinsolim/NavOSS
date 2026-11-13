@@ -126,6 +126,7 @@ import {
 import { laneStrip } from '@/features/navigation/lane-guidance';
 import {
   navigationCameraBearing,
+  navigationCameraCenter,
   toggleNavigationMapOrientation,
 } from '@/features/navigation/navigation-camera';
 import {
@@ -1306,6 +1307,10 @@ export function useMapController() {
         ? 'off-route'
         : 'matched';
   const vehicleCoordinate = matchedCoordinate ?? userCoordinate;
+  const followCenter = navigationCameraCenter(
+    vehicleCoordinate,
+    routeState.type === 'navigating' ? selectedRoute?.geometry : undefined,
+  );
   const navigationBearing =
     routeState.type === 'navigating'
       ? navigationCameraBearing(
@@ -1514,6 +1519,7 @@ export function useMapController() {
       isNavigationFollowing: isNavigationCameraFollowing,
       navigationBearing,
       onChange: handleCameraChange,
+      followCenter,
       recenter: stable.recenter,
       vehicleCoordinate,
     },

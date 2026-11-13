@@ -103,4 +103,8 @@ appId: org.navoss.mobile
 - takeScreenshot: 'navoss-validation-phone-report'
 - tapOn: 'Cancel report'
 - tapOn: 'End navigation'
-- assertVisible: 'Route preview'
+# Ending a trip returns to Explore (the trip's route is not kept as a preview).
+- extendedWaitUntil:
+    visible: 'Search places'
+    timeout: 10000
+- assertNotVisible: 'End navigation'

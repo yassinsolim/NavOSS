@@ -162,7 +162,7 @@ export function MapScreen() {
         onLongPress={c.onMapLongPress}
         onPress={c.onMapPress}
         onRegionDidChange={c.onRegionDidChange}
-        vehicleCoordinate={c.camera.vehicleCoordinate}
+        vehicleCoordinate={c.camera.followCenter}
       >
         <MapLayers
           alternateRoutes={route.alternateRoutes}
