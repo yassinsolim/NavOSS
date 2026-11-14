@@ -645,8 +645,7 @@ grid and the lifetime to 15 minutes.
   locked). A connection whose `ROLLBACK` cannot be confirmed is destroyed, never returned to the
   pool, in both pools. A credential assertion blocked on its installation's row lock fails with a
   retryable `503` after the lock timeout and rolls back its counter update; its challenge stays
-  consumed. Tested on PostGIS: seven concurrent assertions against a held lock all fail within
-  13 s, no session is left running or in a transaction, shutdown completes while one is blocked,
+  consumed. Tested on PostGIS: seven concurrent assertions against a held lock all fail within the bound the limits set. A request takes a pooled connection twice (to burn its challenge, then for its transaction) and waits for the lock once, so with the 5 s connection and lock timeouts the bound is 15 s plus handshake and queries (asserted under 18 s; GitHub's Linux runner measured 15.0 s, which an earlier 13 s assertion wrongly failed), no session is left running or in a transaction, shutdown completes while one is blocked,
   the counter is unchanged, the burned challenges stay refused, and a fresh assertion and a new
   registration then succeed.
 
