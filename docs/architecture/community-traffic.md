@@ -406,15 +406,23 @@ across that contributor's batches.
   summed: on a 1.5 km edge, 100 m in 50 s then 200 m in 10 s is 18 km/h (published 20), and
   replaying the slow piece nine times made it 8.6 km/h, so three such installations moved the
   release to 10 (regression-tested through the released median and the credit count).
-- **What is still not idempotent.** A client that re-batches the same trace can add up to just
-  under a minute of standing per short stop it replays this way, and a client that fabricates
-  `capturedAt` can claim any standing it likes; both are fabricated traffic, bounded by the
-  admission controls and the median, not by this rule.
+- **Where time idempotence stops.** Distance is exactly idempotent. Standing time is not, because
+  the upload carries only a minute-rounded start and the server cannot tell a re-batched copy of
+  a stop from the next minute of the same stop: a client that re-cuts the same trace into
+  batches with different starts can add up to just under a minute of standing per stop each time
+  (an exact repeat adds nothing), and a client that fabricates `capturedAt` can claim any
+  standing it likes. Closing this would need finer timestamps or a batch identifier, which the
+  upload deliberately does not carry. Both cases are fabricated traffic, bounded only by the
+  admission controls, the rate limits and the median.
 - **Floor:** 300 m of the edge, or half of it when that is less. Then the pieces become one
   sample at counted distance over counted time, time standing still included: a stopped queue is
   the signal. The plausibility rules above still bound each run.
-- **One weight.** A contributor that already has a sample on the edge in the cohort adds
-  nothing more; the newcomer cap is applied when the sample is completed.
+- **One weight.** A contributor that already has a sample on the edge in the cohort gets no
+  second sample; the newcomer cap is applied when the sample is completed. Until the sample is
+  released its evidence still grows, each metre and each standing time once, and its speed is
+  read at the release, so a queue that forms after the 300 m floor was reached (or a stop
+  confirmed later) is not lost. A released sample is consumed; nothing changes a published
+  epoch.
 - **Same identifier, no new linkage.** Partial coverage is keyed by the same cohort tag as
   samples, so it adds no identifier across edges or cohorts. It lives only in API process
   memory, alongside the pending samples, is never written or logged (the operator summary counts
@@ -438,25 +446,37 @@ is now **held**, as time only, and counted once the trip is seen going on:
   nearest such edge whose map geometry is within 25 m of where it stood, at that distance along
   the edge. It never starts coverage of its own, so a stop on a road the contributor was not
   already driving, or a trip that begins standing still, never counts.
-- It counts only when that contributor's own movement on **the same edge** brackets it: movement
-  that ended before it, and movement that began after it and reaches at least 50 m beyond it (both
-  judged on claimed time, allowing for the minute rounding). Movement that had already passed it
-  before it began contradicts it, and it is dropped.
+- It counts only when that contributor's own movement brackets it: movement on the same edge
+  that ended before it, and movement that began after it and reaches at least **125 m** beyond it
+  (the 100 m batch trim plus the 25 m placement uncertainty), either along the same edge or onward
+  across its end node, through edges of one batch that each start where the previous ends. Both
+  are judged on claimed time, allowing for the minute rounding. So a dwell is counted only once
+  the contributor has demonstrably driven on at least as far as the trim protects. Movement that
+  had already passed it before it began contradicts it, and it is dropped.
+- Going on across the end node is recognised only for an edge whose whole map geometry starts at
+  exactly the vertex (to six decimals) where the held edge's geometry ends; both geometries are
+  graph data, never an upload. The contributor's state on the held edge is found with the
+  current request's credential, exactly as for any edge, and nothing linking the two edges is
+  kept. Coordinate equality is not graph node identity: two nodes at one coordinate (a
+  grade-separated crossing modelled with coincident nodes) would read as connected. Proving node
+  identity needs Valhalla's node id for each edge end (`edge.end_node`/begin node in
+  `trace_attributes`), which the matcher does not request today.
 - A dwell that is never followed by movement, because the trip ended or sharing was cancelled at
   the stop, is never counted. It expires with the contributor's partial coverage, within the same
   15-minute window, and nothing about it leaves memory. Holding it releases no part of the
   protected tail: its position is never kept, only its distance along an edge the contributor was
   already driving, and it changes only that contributor's time on that edge.
 - It is counted like any other stop (once per place and claimed time), so an uploaded-twice
-  stationary batch adds nothing.
+  stationary batch adds nothing. It counts on a contributor's pending sample as well as on partial
+  coverage.
 
-What does **not** count, precisely: standing at a batch boundary when the movement after it is on
-another edge (typically a queue at a signal near the end of an edge, where the next batch's trimmed
-movement starts on the next edge), or when the contributor's sample on the edge was already
-complete; standing whose bracketing movement does not fit inside one 15-minute cohort window (a
-stop-and-go on one edge lasting longer than that publishes nothing); and standing in a moving
-batch's kept part that GPS jitter makes look like movement. Standing in the middle of a moving
-batch counts as before.
+What does **not** count, precisely: standing where the trip then turns off onto an edge that does
+not start at the held edge's end vertex, or goes on less than 125 m in total; going on whose
+next edges are not eligible (they produce no piece to measure the continuation with); standing
+whose bracketing movement does not fit inside one 15-minute cohort window (a stop-and-go on one
+edge lasting longer than that publishes nothing); standing after the sample was released; and
+standing in a moving batch's kept part that GPS jitter makes look like movement. Standing in the
+middle of a moving batch counts as before.
 
 Tested through `POST /v2/traffic/probes` on batches recorded against Valhalla 3.8.2 on the
 Alberta/BC graph (one 1.18 km Deerfoot Trail edge, `apps/api/test/fixtures/valhalla-dwell-calgary.json`,
@@ -464,7 +484,11 @@ three contributors): two moving batches at 36 km/h with their trimmed standing p
 (35 before this change); a 98 s stationary batch between them publishes 10; the same stationary
 batch uploaded twice still 10; a further, jittery stationary batch 5; the same trip ending at the
 stop, or beginning more than 15 minutes before the boundary, publishes nothing. Stationary batches
-are never sent to the matcher.
+are never sent to the matcher. A second recording stops 22 m before the end of that edge, after an
+approach that already completed the contributor's sample (580 m), and goes on across the node
+(`valhalla-dwell-next-edge-calgary.json`): the edge publishes 20 km/h with the standing trimmed off
+the two moving batches, 10 with a stationary batch between them (also when that batch is
+uploaded twice), and 35, its moving speed, when the trip ends at the stop.
 
 **Flagged for the next independent review:** this subsection, [Coverage across
 batches](#coverage-across-batches), the change to step 6 and the use of `/locate` geometry for
@@ -1003,7 +1027,7 @@ Enabling `live` means accepting these plainly:
 | What                                                                                                                                                                                                                                                          | Where                                    | How long                                                                                                                                                                                     |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Uploaded positions, offsets, `capturedAt`                                                                                                                                                                                                                     | Request memory                           | Until the request finishes (not zeroed)                                                                                                                                                      |
-| Pending sample: cohort tag, speed, arrival epoch, driving start, cohort salt; newcomers also a cohort-salted network marker                                                                                                                                   | API process memory                       | Until released, or dropped at the first boundary more than 15 min after its driving began or its arrival epoch: at most 20 min                                                               |
+| Pending sample: cohort tag, arrival epoch, driving start, cohort salt, and its evidence (as for partial coverage, below); newcomers also a cohort-salted network marker                                                                                       | API process memory                       | Until released, or dropped at the first boundary more than 15 min after its driving began or its arrival epoch: at most 20 min                                                               |
 | Partial coverage: cohort tag, driven intervals along the edge (metres), counted distance and time, each batch's driven span (metres, claimed times), stops and held dwells (distance along the edge, claimed times), earliest arrival epoch and driving start | API process memory                       | Until it completes a sample, or dropped at the first boundary more than 15 min after its earliest piece: at most 20 min                                                                      |
 | Publication record: the boundary the stored rows are, and their count                                                                                                                                                                                         | `traffic_publication`                    | Rewritten at every boundary; erased on every API start                                                                                                                                       |
 | Release: edge, speed, boundaries, edge geometry                                                                                                                                                                                                               | `traffic_releases`                       | Never served after the boundary 15 min after release. Deleted by the first successful publication at or after that boundary; erased on every API start, and retried until erased while `off` |
