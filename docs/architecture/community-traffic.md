@@ -899,6 +899,14 @@ graph, three development installations driving the 17.8 km Deerfoot Trail / Glen
   from first to last; the two alternatives, unobserved and without `traffic`, moved ahead.
 - The ranking bound held on that real reordering: all three routes have 1,352 m of minor road
   (the shared residential start), so neither promotion added minor road.
+- Repeated on 2026-11-14 (local, same graph, Valhalla 3.8.2 serving `connected.tar` with id
+  `eeaa7a1d…1857`) with this revision in `live`, which now requires the dead-end mask for that
+  graph (the API refused to start without it): **0** edges after two installations and at the
+  boundary, **0** with the third before the boundary, **29** at the next boundary (14 `stopped`,
+  10 `slow`, 5 `heavy`); `/v2/routes` carried `snapshotAt` and `oldestObservedAt` at that
+  boundary, distinct from its `generatedAt`. The start epoch answered `503`. A PostgreSQL
+  immediate shutdown and restart inside the published epoch emptied both unlogged tables, and flow
+  answered `503` for the rest of that epoch instead of an empty body under its label.
 - Route walks over 100 km now succeed on the real graph: Calgary–Edmonton (299 and 306 km, three
   and four requests) and Calgary–Vancouver (974 km, ten requests) walked edge for edge with the
   route geometry, 38–107 ms. The 1,207 km Calgary–Vancouver alternative exceeds the
