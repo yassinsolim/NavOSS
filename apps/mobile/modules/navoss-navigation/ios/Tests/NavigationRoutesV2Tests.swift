@@ -90,6 +90,27 @@ final class NavigationRoutesV2Tests: XCTestCase {
     )
   }
 
+  func testV2RecommendationOrderIsKeptAndFastestFollowsDuration() async throws {
+    RoutesURLProtocol.handler = { request in
+      switch request.url!.path {
+      case "/v2/config": return Self.response(request, Self.v2Config)
+      case "/v2/routes":
+        return Self.response(request, try Self.fixture("community-protected-order.v2"))
+      default: return Self.response(request, Data("{}".utf8), status: 404)
+      }
+    }
+    let trips = try await makeClient().routes(
+      origin: Self.calgaryOrigin, destination: Self.calgaryDestination,
+      preferences: NavOSSRoutePreferences(), alternatives: 1
+    )
+    // The server kept the recommended route ahead of a faster, unobserved minor-road route.
+    XCTAssertEqual(trips.map(\.id), ["recommended", "unobserved-minor"])
+    // CarPlay names the faster one "Fastest route", by duration, not the first one.
+    XCTAssertEqual(navOSSCarPlayFastestRouteIndex(trips), 1)
+    XCTAssertNotNil(navOSSCarPlayTrafficAttribution(trips[0]))
+    XCTAssertNil(navOSSCarPlayTrafficAttribution(trips[1]))
+  }
+
   func testVancouverInterchangeDecodesFromTheRealResponse() throws {
     let trip = try XCTUnwrap(try Self.trips("vancouver-bc91-highway99.v2", version: .v2).first)
     XCTAssertTrue(trip.isValid)
@@ -386,7 +407,7 @@ final class NavigationRoutesV2Tests: XCTestCase {
     let utc = try XCTUnwrap(TimeZone(identifier: "UTC"))
     let attribution = try XCTUnwrap(
       navOSSCarPlayTrafficAttribution(fresh, locale: Locale(identifier: "en_CA"), timeZone: utc))
-    XCTAssertTrue(attribution.hasPrefix("Traffic: NavOSS drivers · as of 6:00"), attribution)
+    XCTAssertTrue(attribution.hasPrefix("Traffic: NavOSS drivers · updated 6:00"), attribution)
     XCTAssertFalse(attribution.contains("6:05") || attribution.contains("6:07"), attribution)
     // An older server, or an unreadable boundary: the route keeps its traffic, without a time.
     for traffic in [

@@ -1,0 +1,84 @@
+{
+  "description": "Community traffic re-ranking held back by the minor-road bound: the recommended route is slower with traffic than an unobserved alternative on minor roads, which the server labels fastest but keeps second",
+  "recorded": {
+    "capturedAt": "2026-11-14",
+    "endpoint": "/v2/routes",
+    "api": "apps/api at a8768376f2befff17a9b5da68db80c0f91b1a5f1, in-process, live community traffic with two published releases (18:00 and 18:05 boundaries)",
+    "upstream": "Synthetic route provider and edge walk in the independent PR #104 verifier (/tmp/verify-traffic-invariants/invariants.mts, 'route protocol mixed release boundaries'); not a real road",
+    "trimmed": "The response body is unmodified."
+  },
+  "response": {
+    "degraded": true,
+    "generatedAt": "2026-11-14T18:05:05.000Z",
+    "routes": [
+      {
+        "distanceMeters": 1000,
+        "durationSeconds": 200,
+        "geometry": [
+          [-114, 51.01],
+          [-114, 51.01449660506317],
+          [-114, 51.018993210126354]
+        ],
+        "id": "recommended",
+        "label": "alternative",
+        "steps": [
+          {
+            "distanceMeters": 1000,
+            "durationSeconds": 200,
+            "geometry": [
+              [-114, 51.01],
+              [-114, 51.01449660506317],
+              [-114, 51.018993210126354]
+            ],
+            "instruction": "Continue",
+            "maneuverType": "depart",
+            "roadName": "Synthetic probe road"
+          }
+        ],
+        "traffic": {
+          "delaySeconds": 100,
+          "typicalDurationSeconds": 100,
+          "observedFraction": 1,
+          "oldestObservedAt": "2026-11-14T18:00:00.000Z",
+          "snapshotAt": "2026-11-14T18:05:00.000Z"
+        },
+        "congestion": ["stopped", "stopped"]
+      },
+      {
+        "distanceMeters": 1000,
+        "durationSeconds": 50,
+        "geometry": [
+          [-114.001, 51.01],
+          [-114.001, 51.01449660506317],
+          [-114.001, 51.018993210126354]
+        ],
+        "id": "unobserved-minor",
+        "label": "fastest",
+        "steps": [
+          {
+            "distanceMeters": 1000,
+            "durationSeconds": 50,
+            "geometry": [
+              [-114.001, 51.01],
+              [-114.001, 51.01449660506317],
+              [-114.001, 51.018993210126354]
+            ],
+            "instruction": "Continue",
+            "maneuverType": "depart",
+            "roadName": "Synthetic probe road"
+          }
+        ]
+      }
+    ],
+    "source": {
+      "attribution": "Routing by Valhalla using OpenStreetMap data",
+      "id": "valhalla-development",
+      "mode": "development",
+      "traffic": "live",
+      "trafficSource": {
+        "attribution": "Traffic from opted-in NavOSS drivers",
+        "id": "navoss-community"
+      }
+    }
+  }
+}

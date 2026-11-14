@@ -312,17 +312,22 @@ export async function fetchRoutes(
     return post(fallback);
   };
   const v2Response = options.routesV2 === false ? undefined : await send('/v2/routes');
-  const validated =
-    v2Response === undefined || v2Response.status === 404
-      ? routeResponseFromV1(
-          RouteResponseSchema.parse(await parseResponse(await send('/v1/routes'))),
-        )
-      : RouteResponseV2Schema.parse(await parseResponse(v2Response));
-  // Present the same order the server intends for phone and CarPlay: an already-deployed API
-  // may still return routes ordered by raw duration, so re-apply the shared bucket-then-distance
-  // comparator here rather than depending on a coordinated server deploy. `fastest`/durations are
-  // untouched — only display order changes.
-  validated.routes.sort(compareRouteAlternatives);
+  let validated: RouteResponseV2;
+  if (v2Response === undefined || v2Response.status === 404) {
+    validated = routeResponseFromV1(
+      RouteResponseSchema.parse(await parseResponse(await send('/v1/routes'))),
+    );
+    // The deployed server, which has only /v1/routes and no community traffic, may still order
+    // routes by raw duration: re-apply the shared bucket-then-distance comparator so phone and
+    // CarPlay present its routes in the order a current server would. Labels and durations are
+    // untouched.
+    validated.routes.sort(compareRouteAlternatives);
+  } else {
+    // A /v2/routes order is the server's recommendation, kept as sent: traffic may only reorder
+    // routes within its own safety bounds (never onto more minor roads), and re-sorting by
+    // duration here would undo them.
+    validated = RouteResponseV2Schema.parse(await parseResponse(v2Response));
+  }
   for (const route of validated.routes) {
     for (const step of route.steps) {
       step.instruction = presentedInstruction(step.instruction, step.maneuverType);

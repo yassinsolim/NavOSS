@@ -71,7 +71,12 @@ describe('traffic flow layer', () => {
 
   it('always credits the source and says the data is limited, with the reason', () => {
     const status = trafficFlowStatus({ failed: false, response, tooWide: false });
-    expect(status?.text).toBe(`${COMMUNITY_TRAFFIC_ATTRIBUTION} · Limited data`);
+    const updated = `updated ${new Date('2026-11-12T18:00:00.000Z').toLocaleTimeString('en-CA', {
+      hour: 'numeric',
+      minute: '2-digit',
+    })}`;
+    expect(status?.text).toBe(`${COMMUNITY_TRAFFIC_ATTRIBUTION} · ${updated} · Limited data`);
+    expect(status?.accessibilityLabel).toContain(`${COMMUNITY_TRAFFIC_ATTRIBUTION}, ${updated}.`);
     expect(status?.accessibilityLabel).toContain('at least 3 drivers');
 
     const empty = trafficFlowStatus({
@@ -86,6 +91,33 @@ describe('traffic flow layer', () => {
     expect(empty?.text).toBe(
       `${COMMUNITY_TRAFFIC_ATTRIBUTION} · Limited data · None here yet · Zoom in for more`,
     );
+  });
+
+  it('says when the roads shown were updated: the oldest publication among them, not the fetch', () => {
+    const feature = response.features[0];
+    if (feature === undefined) throw new Error('fixture has a feature');
+    const older = {
+      ...feature,
+      id: 'w124f-0123456789ab',
+      properties: { ...feature.properties, observedAt: '2026-11-12T17:50:00.000Z' },
+    };
+    const status = trafficFlowStatus({
+      failed: false,
+      response: { ...response, features: [feature, older] },
+      tooWide: false,
+    });
+    const at = (iso: string) =>
+      new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
+    expect(status?.text).toContain(`updated ${at('2026-11-12T17:50:00.000Z')}`);
+    expect(status?.text).not.toContain(at('2026-11-12T18:00:00.000Z'));
+    // No roads in view: no time is claimed (`generatedAt` is not when anything was observed).
+    const empty = trafficFlowStatus({
+      failed: false,
+      response: { ...response, features: [] },
+      tooWide: false,
+    });
+    expect(empty?.text).not.toContain('updated');
+    expect(empty?.accessibilityLabel).not.toContain('updated');
   });
 
   it('tells the driver to zoom in rather than showing an empty map as "no traffic"', () => {

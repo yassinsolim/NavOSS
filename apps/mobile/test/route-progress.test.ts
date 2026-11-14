@@ -275,7 +275,7 @@ describe('route traffic label', () => {
     expect(routeTrafficLabel(community, {})).toBe('No live traffic on this route');
   });
 
-  it('says how fresh community traffic is from the oldest release it used, not the request', () => {
+  it('says when community traffic was updated, from the oldest release it used, not the request', () => {
     const observed = new Date(2026, 10, 13, 18, 0, 0);
     const label = routeTrafficLabel(community, {
       congestion: ['slow'],
@@ -287,8 +287,10 @@ describe('route traffic label', () => {
         typicalDurationSeconds: 600,
       },
     });
-    expect(label).toMatch(/^Traffic from opted-in NavOSS drivers · as of 6:00/);
+    // The oldest publication boundary used, said as an update time, not as when anyone drove.
+    expect(label).toMatch(/^Traffic from opted-in NavOSS drivers · updated 6:00/);
     expect(label).not.toContain('6:05');
+    expect(label).not.toContain('as of');
     // An unobserved alternative claims no traffic, so no freshness either.
     expect(routeTrafficLabel(community, {})).toBe('No live traffic on this route');
   });

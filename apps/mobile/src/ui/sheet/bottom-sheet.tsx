@@ -122,7 +122,7 @@ export function BottomSheet({
 }: BottomSheetProps) {
   const styles = useStyles();
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
+  const { fontScale, height: windowHeight } = useWindowDimensions();
   const [contentHeight, setContentHeight] = useState(0);
   const sizedByContent = detents.includes('content');
   const available = windowHeight - insets.top - space.sm - bottomOffset;
@@ -363,7 +363,10 @@ export function BottomSheet({
             <View style={styles.grabber} />
           </View>
           <SheetContext value={context}>
+            {/* Re-measured when Dynamic Type changes while the sheet is open: text drawn at the
+                new size in boxes measured at the old one is clipped (see AppTabBar). */}
             <Animated.View
+              key={String(fontScale)}
               onLayout={
                 sizedByContent
                   ? (event) => {

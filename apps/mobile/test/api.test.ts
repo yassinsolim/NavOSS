@@ -17,6 +17,10 @@ import {
   searchPlaces,
   submitContribution,
 } from '../src/lib/api.js';
+import {
+  routeChoiceAccessibilityLabel,
+  routeTrafficLabel,
+} from '../src/features/navigation/route-progress.js';
 import { recordedRoutes } from './route-fixtures.js';
 
 const ROUTE_REQUEST = {
@@ -458,7 +462,7 @@ describe('fetchRoutes', () => {
     expect(bodies[1]).not.toHaveProperty('originHorizontalAccuracyMeters');
   });
 
-  it('reorders a raw-time-sorted server payload to put the shorter route first within a shared displayed minute', async () => {
+  it('reorders a raw-time-sorted /v1-only server payload to put the shorter route first within a shared displayed minute', async () => {
     const quickerRawRoute = {
       distanceMeters: 9_200,
       durationSeconds: 595,
@@ -520,24 +524,27 @@ describe('fetchRoutes', () => {
       },
       {
         baseUrl: 'http://127.0.0.1:3001/',
-        fetchImplementation: () =>
+        // The deployed server: no /v2/routes.
+        fetchImplementation: (input) =>
           Promise.resolve(
-            new Response(
-              JSON.stringify({
-                degraded: true,
-                generatedAt: '2026-07-15T12:00:00Z',
-                // Server orders by raw duration ascending: the quicker-raw route first even though
-                // both routes round to the same displayed minute.
-                routes: [quickerRawRoute, shorterDistanceRoute],
-                source: {
-                  attribution: 'Routing by Valhalla using OpenStreetMap data',
-                  id: 'valhalla-development',
-                  mode: 'development',
-                  traffic: 'unavailable',
-                },
-              }),
-              { headers: { 'content-type': 'application/json' }, status: 200 },
-            ),
+            String(input).endsWith('/v2/routes')
+              ? new Response('{"status":404,"title":"Not found"}', { status: 404 })
+              : new Response(
+                  JSON.stringify({
+                    degraded: true,
+                    generatedAt: '2026-07-15T12:00:00Z',
+                    // Server orders by raw duration ascending: the quicker-raw route first even though
+                    // both routes round to the same displayed minute.
+                    routes: [quickerRawRoute, shorterDistanceRoute],
+                    source: {
+                      attribution: 'Routing by Valhalla using OpenStreetMap data',
+                      id: 'valhalla-development',
+                      mode: 'development',
+                      traffic: 'unavailable',
+                    },
+                  }),
+                  { headers: { 'content-type': 'application/json' }, status: 200 },
+                ),
           ),
       },
     );
@@ -551,7 +558,7 @@ describe('fetchRoutes', () => {
     expect(response.routes[1]).toEqual(quickerRawRoute);
   });
 
-  it('keeps the faster-displayed-minute route first even when the server lists it second', async () => {
+  it('keeps the faster-displayed-minute route first even when a /v1-only server lists it second', async () => {
     const slowerMinuteRoute = {
       distanceMeters: 5_000,
       durationSeconds: 650,
@@ -613,22 +620,25 @@ describe('fetchRoutes', () => {
       },
       {
         baseUrl: 'http://127.0.0.1:3001/',
-        fetchImplementation: () =>
+        // The deployed server: no /v2/routes.
+        fetchImplementation: (input) =>
           Promise.resolve(
-            new Response(
-              JSON.stringify({
-                degraded: true,
-                generatedAt: '2026-07-15T12:00:00Z',
-                routes: [slowerMinuteRoute, fasterMinuteRoute],
-                source: {
-                  attribution: 'Routing by Valhalla using OpenStreetMap data',
-                  id: 'valhalla-development',
-                  mode: 'development',
-                  traffic: 'unavailable',
-                },
-              }),
-              { headers: { 'content-type': 'application/json' }, status: 200 },
-            ),
+            String(input).endsWith('/v2/routes')
+              ? new Response('{"status":404,"title":"Not found"}', { status: 404 })
+              : new Response(
+                  JSON.stringify({
+                    degraded: true,
+                    generatedAt: '2026-07-15T12:00:00Z',
+                    routes: [slowerMinuteRoute, fasterMinuteRoute],
+                    source: {
+                      attribution: 'Routing by Valhalla using OpenStreetMap data',
+                      id: 'valhalla-development',
+                      mode: 'development',
+                      traffic: 'unavailable',
+                    },
+                  }),
+                  { headers: { 'content-type': 'application/json' }, status: 200 },
+                ),
           ),
       },
     );
@@ -639,6 +649,35 @@ describe('fetchRoutes', () => {
     ]);
     expect(response.routes[0]).toEqual(fasterMinuteRoute);
     expect(response.routes[1]).toEqual(slowerMinuteRoute);
+  });
+});
+
+describe('fetchRoutes and its consumers keep the /v2/routes recommendation order', () => {
+  it('keeps a recommended route ahead of a faster unobserved minor-road alternative, and labels each truthfully', async () => {
+    // Recorded from the API: community traffic made the recommended route slower than an
+    // unobserved alternative on minor roads, which the server labels fastest but keeps second.
+    const response = await fetchRoutes(ROUTE_REQUEST, {
+      baseUrl: 'http://127.0.0.1:3004',
+      fetchImplementation: async () =>
+        new Response(JSON.stringify(recordedRoutes('community-protected-order.v2'))),
+    });
+    expect(response.routes.map((route) => [route.id, route.label, route.durationSeconds])).toEqual([
+      ['recommended', 'alternative', 200],
+      ['unobserved-minor', 'fastest', 50],
+    ]);
+    const [recommended, minor] = response.routes;
+    if (recommended === undefined || minor === undefined) throw new Error('two routes');
+    // The first route is what the planner selects; VoiceOver never calls it the fastest, and
+    // calls the faster one so, by its duration.
+    expect(routeChoiceAccessibilityLabel(recommended)).toMatch(/^Route, 3 min, /);
+    expect(routeChoiceAccessibilityLabel(minor)).toMatch(/^Fastest route, 1 min, /);
+    // Traffic is credited, with when it was updated, only on the route it observed.
+    expect(routeChoiceAccessibilityLabel(recommended)).toContain('traffic updated ');
+    expect(routeChoiceAccessibilityLabel(minor)).not.toContain('traffic');
+    expect(routeTrafficLabel(response.source, recommended)).toMatch(
+      /^Traffic from opted-in NavOSS drivers · updated /,
+    );
+    expect(routeTrafficLabel(response.source, minor)).toBe('No live traffic on this route');
   });
 });
 

@@ -6,6 +6,7 @@ import {
 import type { FeatureCollection, LineString } from 'geojson';
 
 import type { GeographicBox } from '@/features/community/community';
+import { communityTrafficUpdated } from '../navigation/route-progress';
 
 /** Never ask again sooner than this, even if the server's epoch ends earlier. */
 const MINIMUM_REFRESH_MS = 30_000;
@@ -73,7 +74,9 @@ export interface TrafficFlowStatus {
 /**
  * The credit and coverage line shown while the traffic layer is on. The server publishes a road
  * only once enough drivers have driven it, so most roads show nothing: the line always says the
- * data is limited, and why, rather than letting an empty map read as "no traffic".
+ * data is limited, and why, rather than letting an empty map read as "no traffic". When roads are
+ * shown, it says when they were updated: the oldest publication boundary among them, as each
+ * road's `observedAt` states it, never when the layer was fetched.
  */
 export function trafficFlowStatus({
   failed,
@@ -99,14 +102,18 @@ export function trafficFlowStatus({
       : undefined;
   }
   const minimum = response.coverage.minimumContributors;
+  const updated = communityTrafficUpdated(
+    response.features.map((feature) => feature.properties.observedAt),
+  );
   const parts = [
     response.source.attribution,
+    ...(updated === undefined ? [] : [updated]),
     'Limited data',
     ...(response.features.length === 0 ? ['None here yet'] : []),
     ...(response.coverage.truncated ? ['Zoom in for more'] : []),
   ];
   return {
-    accessibilityLabel: `${response.source.attribution}. Limited data: a road is shown only after at least ${String(minimum)} drivers sharing speeds have driven it recently.${response.features.length === 0 ? ' No roads in view have enough data yet.' : ''}${response.coverage.truncated ? ' Zoom in to see every road.' : ''}`,
+    accessibilityLabel: `${response.source.attribution}${updated === undefined ? '' : `, ${updated}`}. Limited data: a road is shown only after at least ${String(minimum)} drivers sharing speeds have driven it recently.${response.features.length === 0 ? ' No roads in view have enough data yet.' : ''}${response.coverage.truncated ? ' Zoom in to see every road.' : ''}`,
     text: parts.join(' · '),
   };
 }

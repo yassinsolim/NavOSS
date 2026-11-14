@@ -10,11 +10,11 @@ import type { SharedValue } from 'react-native-reanimated';
 
 import { routePreviewSheetDetents, type ScreenMetrics } from '@/features/map/overlay-layout';
 import {
-  communityTrafficFreshness,
   formatArrivalTime,
   formatDistance,
   formatDuration,
   formatTrafficDelay,
+  routeChoiceAccessibilityLabel,
   routeTrafficLabel,
   routeViaLabel,
 } from '@/features/navigation/route-progress';
@@ -107,14 +107,12 @@ function RouteChoiceCard({
   const { colors } = useTheme();
   const styles = useStyles();
   const trafficDelay = formatTrafficDelay(route.traffic?.delaySeconds ?? 0);
-  // Spoken with the delay; the sheet's traffic line shows it for the selected route.
-  const trafficFreshness = communityTrafficFreshness(route.traffic);
   const viaLabel = routeViaLabel(route);
   const detail = `${route.label === 'fastest' ? 'Fastest · ' : ''}${formatDistance(route.distanceMeters)}${trafficDelay === undefined ? '' : ` · ${trafficDelay}`}`;
 
   return (
     <PressableScale
-      accessibilityLabel={`Select ${route.label} ${formatDuration(route.durationSeconds)} route, ${formatDistance(route.distanceMeters)}, ${viaLabel}${trafficDelay === undefined ? '' : `, ${trafficDelay}${trafficFreshness === undefined ? '' : ` ${trafficFreshness}`}`}`}
+      accessibilityLabel={routeChoiceAccessibilityLabel(route)}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onSelect}
@@ -302,12 +300,14 @@ export function RoutePreviewSheet({
           ))}
         </ScrollView>
 
+        {/* Each on its own full-width line, so neither the routing credit nor the traffic line
+            is squeezed or cut off by the other, at any text size. */}
         <View style={styles.sourceRow}>
-          <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={styles.sourceText}>
-            {routeSource?.attribution ?? 'Routing source unavailable'}
-          </Text>
           <Text maxFontSizeMultiplier={1.3} style={styles.trafficText}>
             {trafficStatus}
+          </Text>
+          <Text maxFontSizeMultiplier={1.3} style={styles.sourceText}>
+            {routeSource?.attribution ?? 'Routing source unavailable'}
           </Text>
         </View>
 
@@ -409,14 +409,8 @@ const useStyles = createThemedStyles(({ colors }) =>
     routeChoiceVia: { ...typography.footnote, color: colors.textSecondary },
     routeChoices: { gap: space.sm, paddingHorizontal: space.lg },
     section: { gap: space.sm },
-    sourceRow: {
-      alignItems: 'center',
-      flexDirection: 'row',
-      gap: space.md,
-      justifyContent: 'space-between',
-      paddingHorizontal: space.lg,
-    },
-    sourceText: { ...typography.caption, color: colors.textTertiary, flex: 1 },
+    sourceRow: { gap: space.xs, paddingHorizontal: space.lg },
+    sourceText: { ...typography.caption, color: colors.textTertiary },
     startButton: { minWidth: 148 },
     summary: {
       alignItems: 'center',
