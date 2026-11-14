@@ -92,7 +92,11 @@ interface HeldDwell {
 }
 
 interface PartialCoverage {
-  /** Earliest driving start among the pieces; the partial state expires from it. */
+  /**
+   * Start of the earliest evidence counted: the batch start of a piece that added distance or
+   * time, or the start of standing time a held dwell added. Evidence that counted nothing never
+   * moves it. The partial state, and the sample it becomes, expire from it.
+   */
   drivenAtMs: number;
   /** Arrival epoch of the earliest piece. */
   epochStartMs: number;
@@ -110,7 +114,10 @@ interface PartialCoverage {
 }
 
 interface PendingSample {
-  /** When the driving began (the earliest piece's batch start), never later than its arrival. */
+  /**
+   * When the driving began, never later than its arrival: the start of the earliest evidence
+   * counted, including evidence counted after the sample completed.
+   */
   drivenAtMs: number;
   /** Arrival epoch of the batch that completed the sample, from the server clock. */
   epochStartMs: number;
@@ -146,8 +153,9 @@ export interface DwellObservation {
 export interface CohortContribution {
   /**
    * Start of the batch's driving (its `capturedAt`). Offsets are placed in time from it, to tell a
-   * repeat from new evidence. It only ever makes a sample expire sooner: it is capped at the
-   * arrival time and decides nothing about which epoch the sample counts in.
+   * repeat from new evidence. It only ever makes a sample expire sooner, and only when the batch
+   * counted something: it is capped at the arrival time and decides nothing about which epoch the
+   * sample counts in.
    */
   drivenAtMs: number;
   /**
@@ -184,9 +192,10 @@ export interface TrafficCohorts {
   ): { credited: number; ignored: number };
   clear(): void;
   /**
-   * Closes the epoch ending at `tickMs`. Samples and partial coverage whose driving began, or
-   * which arrived, more than the cohort lifetime before the boundary are dropped, so a release
-   * only ever rests on driving from that window. Every segment whose cohort then holds at least k
+   * Closes the epoch ending at `tickMs`. Samples and partial coverage whose oldest counted
+   * evidence began, or which arrived, more than the cohort lifetime before the boundary are
+   * dropped, so a release only ever rests on driving from that window, including evidence a
+   * sample took after it completed. Every segment whose cohort then holds at least k
    * contributors is released and its cohort is consumed, so the next release needs k
    * contributions of its own.
    */
@@ -265,23 +274,37 @@ function projectOnto(
 
 /**
  * Counts standing still at `at` during the claimed window `[startMs, endMs]`, returning the
- * seconds not already counted at that place. A window wholly inside what was counted there is a
- * repeat and adds nothing. An overlap shorter than the `capturedAt` rounding is what two honest
- * consecutive batches of one long stop can show, so the window counts in full; a longer overlap
- * cannot be honest, and only the time outside what was counted is added.
+ * seconds not already counted at that place and when the counted time begins. A window wholly
+ * inside what was counted there is a repeat and adds nothing. An overlap shorter than the
+ * `capturedAt` rounding is what two honest consecutive batches of one long stop can show, so the
+ * window counts in full; a longer overlap cannot be honest, and only the time outside what was
+ * counted is added.
  */
-function countStop(partial: PartialCoverage, at: number, startMs: number, endMs: number): number {
-  if (endMs <= startMs) return 0;
+function countStop(
+  partial: PartialCoverage,
+  at: number,
+  startMs: number,
+  endMs: number,
+): { fromMs: number; seconds: number } {
+  if (endMs <= startMs) return { fromMs: startMs, seconds: 0 };
   let place = partial.stops.find((stop) => Math.abs(stop.at - at) <= SAME_STOP_METERS);
   if (place === undefined) {
     place = { at, windows: [] };
     partial.stops.push(place);
   }
   const overlap = overlapLength(place.windows, startMs, endMs);
+  // The first instant of the window not already counted there.
+  let fromMs = startMs;
+  for (const [start, end] of place.windows) {
+    if (start > fromMs) break;
+    fromMs = Math.max(fromMs, end);
+  }
   place.windows = unite([...place.windows, [startMs, endMs]]);
   const length = endMs - startMs;
-  if (overlap >= length) return 0;
-  return (overlap < CAPTURED_AT_ROUNDING_MS ? length : length - overlap) / 1_000;
+  if (overlap >= length) return { fromMs: startMs, seconds: 0 };
+  return overlap < CAPTURED_AT_ROUNDING_MS
+    ? { fromMs: startMs, seconds: length / 1_000 }
+    : { fromMs, seconds: (length - overlap) / 1_000 };
 }
 
 /**
@@ -323,7 +346,11 @@ function confirmHeldDwells(
           next.startMs >= dwell.endMs - CAPTURED_AT_ROUNDING_MS,
       );
     if (!approached || !continued) return true;
-    partial.seconds += countStop(partial, dwell.at, dwell.startMs, dwell.endMs);
+    const counted = countStop(partial, dwell.at, dwell.startMs, dwell.endMs);
+    if (counted.seconds > 0) {
+      partial.seconds += counted.seconds;
+      partial.drivenAtMs = Math.min(partial.drivenAtMs, counted.fromMs);
+    }
     return false;
   });
 }
@@ -393,7 +420,8 @@ export function createTrafficCohorts(
 
       const startPartial = (segment: PendingSegment, tag: string, generation: Buffer) => {
         const partial: PartialCoverage = {
-          drivenAtMs,
+          // Nothing counted yet: the first evidence counted pulls this back.
+          drivenAtMs: nowMs,
           epochStartMs,
           generation,
           held: [],
@@ -407,23 +435,35 @@ export function createTrafficCohorts(
         return partial;
       };
 
-      /** Adds one observation's evidence, each metre and each standing time counted once. */
-      const record = (evidence: PartialCoverage, observation: SegmentObservation): void => {
+      /**
+       * Adds one observation's evidence, each metre and each standing time counted once, and
+       * returns whether anything was counted. Only evidence counted moves the driving time back
+       * to this batch's start: a repeat that adds nothing leaves the expiry where it was.
+       */
+      const record = (evidence: PartialCoverage, observation: SegmentObservation): boolean => {
+        let counted = false;
         for (const move of observation.moves) {
           const length = move.to - move.from;
           if (length <= 0) continue;
           const fresh = length - overlapLength(evidence.intervals, move.from, move.to);
-          evidence.meters += fresh;
-          evidence.seconds += (move.seconds * fresh) / length;
+          if (fresh > 0) {
+            evidence.meters += fresh;
+            evidence.seconds += (move.seconds * fresh) / length;
+            counted = true;
+          }
           evidence.intervals = unite([...evidence.intervals, [move.from, move.to]]);
         }
         for (const stop of observation.stops) {
-          evidence.seconds += countStop(
+          const { seconds } = countStop(
             evidence,
             stop.at,
             claimed(stop.startSeconds),
             claimed(stop.endSeconds),
           );
+          if (seconds > 0) {
+            evidence.seconds += seconds;
+            counted = true;
+          }
         }
         if (observation.moves.length > 0) {
           evidence.spans.push({
@@ -433,6 +473,8 @@ export function createTrafficCohorts(
             to: Math.max(...observation.moves.map((move) => move.to)),
           });
         }
+        if (counted) evidence.drivenAtMs = Math.min(evidence.drivenAtMs, drivenAtMs);
+        return counted;
       };
 
       for (const observation of observations) {
@@ -451,8 +493,11 @@ export function createTrafficCohorts(
         segments.set(observation.segmentKey, segment);
         const found = lookup(segment, base);
         if (found.sample !== undefined) {
-          // One weight: no second sample. Its evidence still counts once, until it is released.
-          record(found.sample.evidence, observation);
+          // One weight: no second sample. Its evidence still counts once, until it is released,
+          // and evidence it counts from earlier driving makes it expire as early as that driving.
+          if (record(found.sample.evidence, observation)) {
+            found.sample.drivenAtMs = Math.min(found.sample.drivenAtMs, drivenAtMs);
+          }
           touch(observation.segmentKey, found.sample.evidence, found.tag, true);
           ignored += 1;
           continue;
@@ -460,7 +505,6 @@ export function createTrafficCohorts(
         const partial =
           found.evidence ??
           startPartial(segment, found.tag, segment.generations.at(-1) ?? randomBytes(32));
-        partial.drivenAtMs = Math.min(partial.drivenAtMs, drivenAtMs);
         partial.epochStartMs = Math.min(partial.epochStartMs, epochStartMs);
         record(partial, observation);
         touch(observation.segmentKey, partial, found.tag, false);
@@ -597,6 +641,8 @@ export function createTrafficCohorts(
         }
         const cohort: string[] = [];
         for (const [tag, sample] of segment.samples) {
+          // Evidence counted after completion (a dwell confirmed later, say) may be the oldest.
+          sample.drivenAtMs = Math.min(sample.drivenAtMs, sample.evidence.drivenAtMs);
           if (sample.epochStartMs < oldestMs || sample.drivenAtMs < oldestMs) {
             segment.samples.delete(tag);
           }
