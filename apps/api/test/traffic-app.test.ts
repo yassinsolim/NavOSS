@@ -1139,20 +1139,24 @@ describe('standing still across batch boundaries, through HTTP on a recorded rea
    * Batches along one 1.18 km Deerfoot Trail edge, with the Valhalla 3.8.2 answers the server
    * received for them on the Alberta/BC graph (see the fixture's note).
    */
-  const DWELL = JSON.parse(
-    readFileSync(new URL('./fixtures/valhalla-dwell-calgary.json', import.meta.url), 'utf8'),
-  ) as {
+  interface Recording {
     batches: Record<
       'approach' | 'resume' | 'stationary' | 'stationaryJitter',
       TrafficProbeBatchRequest['points']
     >;
     exchanges: { path: string; request: unknown; response: unknown }[];
-  };
+  }
+  const recording = (name: string) =>
+    JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8')) as Recording;
+  const DWELL = recording('valhalla-dwell-calgary.json');
+  /** The same road, stopping 22 m before the end of the edge and going on across its node. */
+  const NEXT_EDGE = recording('valhalla-dwell-next-edge-calgary.json');
   const MINUTE = 60_000;
   // A boundary; every trip below begins exactly then, so it is inside its 15-minute window.
   const T0 = Date.parse('2026-11-14T18:00:00Z');
-  const longitudes = Object.values(DWELL.batches).flatMap((points) => points.map(([lon]) => lon));
-  const latitudes = Object.values(DWELL.batches).flatMap((points) => points.map(([, lat]) => lat));
+  const everywhere = [DWELL, NEXT_EDGE].flatMap(({ batches }) => Object.values(batches).flat());
+  const longitudes = everywhere.map(([lon]) => lon);
+  const latitudes = everywhere.map(([, lat]) => lat);
   const FLOW = `/v2/traffic/flow?bbox=${String(
     snapTrafficFlowBounds({
       east: Math.max(...longitudes),
@@ -1169,12 +1173,12 @@ describe('standing still across batch boundaries, through HTTP on a recorded rea
   }
 
   /** Answers the matcher's requests from the recording; refuses any it was not recorded with. */
-  function recordedValhalla(requests: string[]): typeof fetch {
+  function recordedValhalla(requests: string[], recorded: Recording = DWELL): typeof fetch {
     return (input, init) => {
       const path = new URL(requestUrl(input)).pathname;
       const request = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as unknown;
       requests.push(path);
-      const exchange = DWELL.exchanges.find(
+      const exchange = recorded.exchanges.find(
         (candidate) =>
           candidate.path === path && JSON.stringify(candidate.request) === JSON.stringify(request),
       );
@@ -1186,6 +1190,7 @@ describe('standing still across batch boundaries, through HTTP on a recorded rea
   async function drive(
     trips: Upload[][],
     build?: (clock: () => Date, requests: string[]) => TrafficService,
+    recorded: Recording = DWELL,
   ) {
     let nowMs = T0;
     const clock = (): Date => new Date(nowMs);
@@ -1197,7 +1202,7 @@ describe('standing still across batch boundaries, through HTTP on a recorded rea
         clock,
         mapMatcher: createValhallaMapMatcher({
           endpoint: 'http://valhalla.test/trace_attributes',
-          fetchImplementation: recordedValhalla(matcherRequests),
+          fetchImplementation: recordedValhalla(matcherRequests, recorded),
         }),
         settings: { ...DEFAULT_TRAFFIC_SETTINGS, mode: 'live' },
       });
@@ -1214,7 +1219,7 @@ describe('standing still across batch boundaries, through HTTP on a recorded rea
       )
       .sort((left, right) => left.startMs - right.startMs);
     for (const { device, name, startMs } of uploads) {
-      const points = DWELL.batches[name];
+      const points = recorded.batches[name];
       // Each batch arrives five seconds after its last fix.
       nowMs = startMs + (points.at(-1)?.[2] ?? 0) * 1_000 + 5_000;
       const response = await app.inject({
@@ -1230,19 +1235,23 @@ describe('standing still across batch boundaries, through HTTP on a recorded rea
       });
       expect(response.statusCode).toBe(202);
     }
+    /** Closes the epoch at `boundaryMs` and reads the flow layer's releases then. */
+    async function releasedAt(boundaryMs: number) {
+      nowMs = boundaryMs + 5_000;
+      await service.runEpoch();
+      const response = await app.inject(FLOW);
+      expect(response.statusCode).toBe(200);
+      return TrafficFlowResponseSchema.parse(response.json()).features.map(
+        ({ id, properties }) => ({ id, speedKph: properties.speedKph }),
+      );
+    }
     return {
       matcherRequests,
       service,
       /** Closes the epoch at `boundaryMs` and reads the flow layer then. */
-      publishedAt: async (boundaryMs: number) => {
-        nowMs = boundaryMs + 5_000;
-        await service.runEpoch();
-        const response = await app.inject(FLOW);
-        expect(response.statusCode).toBe(200);
-        return TrafficFlowResponseSchema.parse(response.json()).features.map(
-          ({ properties }) => properties.speedKph,
-        );
-      },
+      publishedAt: async (boundaryMs: number) =>
+        (await releasedAt(boundaryMs)).map(({ speedKph }) => speedKph),
+      releasedAt,
     };
   }
 
@@ -1301,6 +1310,42 @@ describe('standing still across batch boundaries, through HTTP on a recorded rea
     expect(
       await published([approach, stopped(T0 + 70_000), resume(T0 + 170_000)], T0 + 20 * MINUTE),
     ).toEqual([]);
+  });
+
+  describe('a stop just before an edge ends, where the trip goes on across its node', () => {
+    // The approach alone covers 580 m of the 1.18 km edge: that sample is complete, but not yet
+    // published, before the stop is seen.
+    const EDGE = 'w551687611f-0148888c022f';
+    const approachNext: Upload = { name: 'approach', startMs: T0 };
+    const stopNext = (startMs: number): Upload => ({ name: 'stationary', startMs });
+    const goOn = (startMs: number): Upload => ({ name: 'resume', startMs });
+    const edgeSpeed = async (trip: Upload[]) => {
+      const { releasedAt } = await drive(threeDrivers(trip), undefined, NEXT_EDGE);
+      return (await releasedAt(T0 + 10 * MINUTE)).find(({ id }) => id === EDGE)?.speedKph;
+    };
+
+    it('counts the stop on the edge it was on once the trip goes on along the next edges', async () => {
+      // Moving only, 580 m in 58 s is 36 km/h (35); that is what an ended trip publishes, below.
+      // With the 28 s + 28 s standing trimmed off the two moving batches, confirmed by the
+      // movement onto the next edges: 18.3 km/h, published as 20. With a 98 s stationary batch
+      // as well: 9.8 km/h, published as 10.
+      expect(await edgeSpeed([approachNext, goOn(T0 + 112_000)])).toBe(20);
+      expect(await edgeSpeed([approachNext, stopNext(T0 + 112_000), goOn(T0 + 212_000)])).toBe(10);
+      // Uploading the stationary batch again changes nothing.
+      expect(
+        await edgeSpeed([
+          approachNext,
+          stopNext(T0 + 112_000),
+          stopNext(T0 + 112_000),
+          goOn(T0 + 212_000),
+        ]),
+      ).toBe(10);
+    });
+
+    it('never counts the stop when the trip ends there', async () => {
+      // The completed sample is published at its moving speed; the stop stays discarded.
+      expect(await edgeSpeed([approachNext, stopNext(T0 + 112_000)])).toBe(35);
+    });
   });
 
   describe('the configured service and the dead-end mask', () => {

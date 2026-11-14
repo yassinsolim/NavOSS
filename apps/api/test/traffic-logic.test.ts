@@ -808,6 +808,51 @@ describe('publication cohorts', () => {
         expect(speeds([approach, shortResume, late, onward])).toEqual([10]);
       });
 
+      it('needs the trip to go on at least the server trim, plus placement slack, past a dwell', () => {
+        // Movement resuming 110 m past the stop is not enough; 130 m is.
+        const short: Batch = {
+          ...resume,
+          observations: [piece([[300, 410]], 30, {}, 150)],
+        };
+        const enough: Batch = {
+          ...resume,
+          observations: [piece([[300, 430]], 30, {}, 150)],
+        };
+        // Not counted: 310 m in 90 s moving, 12.4 km/h, published as 10 (with the standing, 5).
+        expect(run([approach, short]).releases.map(({ speedKph }) => speedKph)).toEqual([10]);
+        // Counted: 330 m in 90 s moving and 180 s standing, 4.4 km/h, published as 5.
+        expect(run([approach, enough]).releases.map(({ speedKph }) => speedKph)).toEqual([5]);
+      });
+
+      it('takes going on across the end node only onto an edge that starts there', () => {
+        const nearEnd: Batch = {
+          claimedMs: start,
+          dwells: [dwell(1_480, 75, 135)],
+          observations: [piece([[1_000, 1_400]], 60)],
+        };
+        const next = (line: Position[]): Batch => ({
+          claimedMs: start + 3 * minute,
+          dwells: [],
+          observations: [
+            piece([[0, 300]], 30, { line, lengthMeters: 300, segmentKey: 'w9f-00000000000b' }, 150),
+          ],
+        });
+        // The 1.5 km test edge's line ends at -114.08, 51.1.
+        const joined = next([
+          [-114.08, 51.1],
+          [-114.076, 51.1],
+        ]);
+        const apart = next([
+          [-114.079, 51.1],
+          [-114.075, 51.1],
+        ]);
+        const speedOn = (batches: Batch[]) =>
+          run(batches).releases.find(({ segmentKey }) => segmentKey === KEY)?.speedKph;
+        // 400 m in 60 s moving: 24 km/h (25); with 60 s standing confirmed, 12 km/h (10).
+        expect(speedOn([nearEnd, joined])).toBe(10);
+        expect(speedOn([nearEnd, apart])).toBe(25);
+      });
+
       it('places standing only on an edge where the contributor already moves', () => {
         // Same contributor, another edge: a dwell beside the first edge is not put there.
         const other = { segmentKey: 'w10f-0123456789ab' };

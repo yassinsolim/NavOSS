@@ -41,8 +41,13 @@ export const CAPTURED_AT_ROUNDING_MS = 60_000;
 export const SAME_STOP_METERS = 25;
 /** A held dwell must lie this close to the edge's map geometry to be placed on it. */
 export const DWELL_EDGE_METERS = 25;
-/** Movement after a dwell must reach this far past it to show that the trip went on. */
-export const DWELL_CONTINUATION_METERS = 50;
+/**
+ * Movement after a dwell must reach this far past it to show that the trip went on: the 100 m the
+ * server trims off every batch end, plus the 25 m uncertainty of where the dwell was placed. A
+ * dwell is therefore only ever counted once the contributor has driven on at least as far as the
+ * trim protects, however the batches were cut.
+ */
+export const DWELL_CONTINUATION_METERS = 125;
 
 interface PendingSegment {
   freeFlowKph: number;
@@ -109,10 +114,22 @@ interface PendingSample {
   drivenAtMs: number;
   /** Arrival epoch of the batch that completed the sample, from the server clock. */
   epochStartMs: number;
+  /**
+   * The contributor's evidence on the edge. Until the sample is released it still takes evidence
+   * that counts once (a stop confirmed later, a dwell): the speed is read at release, so a sample
+   * completed before a queue formed does not stay free-flowing. The contributor keeps one weight.
+   */
+  evidence: PartialCoverage;
   generation: Buffer;
   /** Newcomer network marker under the sample's cohort salt, only for a new installation. */
   newcomerMarker: string | undefined;
-  speedKph: number;
+}
+
+/** Movement that continued past an edge's end onto the edge that starts there. */
+interface Onward {
+  /** Metres driven on the next edge, from its start. */
+  reach: number;
+  startMs: number;
 }
 
 /**
@@ -207,6 +224,12 @@ function overlapLength(intervals: readonly [number, number][], from: number, to:
   return inside;
 }
 
+/** Two whole-edge geometries meet at this vertex: the same map node, to six decimals. */
+function sameVertex(left: Position | undefined, right: Position | undefined): boolean {
+  if (left === undefined || right === undefined) return false;
+  return left[0].toFixed(6) === right[0].toFixed(6) && left[1].toFixed(6) === right[1].toFixed(6);
+}
+
 function scoped(salt: Buffer, value: string): string {
   return createHmac('sha256', salt).update(value).digest('base64url').slice(0, 16);
 }
@@ -268,7 +291,11 @@ function countStop(partial: PartialCoverage, at: number, startMs: number, endMs:
  * it before it began is dropped. One that is never followed by movement, such as a trip that
  * ended at the stop, is never counted and expires with the partial coverage.
  */
-function confirmHeldDwells(partial: PartialCoverage): void {
+function confirmHeldDwells(
+  partial: PartialCoverage,
+  lengthMeters: number,
+  onward: readonly Onward[] = [],
+): void {
   partial.held = partial.held.filter((dwell) => {
     const passedBefore = partial.spans.some(
       (span) =>
@@ -281,12 +308,20 @@ function confirmHeldDwells(partial: PartialCoverage): void {
         span.to <= dwell.at + SAME_STOP_METERS &&
         span.endMs <= dwell.startMs + CAPTURED_AT_ROUNDING_MS,
     );
-    const continued = partial.spans.some(
-      (span) =>
-        span.from >= dwell.at - SAME_STOP_METERS &&
-        span.to >= dwell.at + DWELL_CONTINUATION_METERS &&
-        span.startMs >= dwell.endMs - CAPTURED_AT_ROUNDING_MS,
-    );
+    const continued =
+      partial.spans.some(
+        (span) =>
+          span.from >= dwell.at - SAME_STOP_METERS &&
+          span.to >= dwell.at + DWELL_CONTINUATION_METERS &&
+          span.startMs >= dwell.endMs - CAPTURED_AT_ROUNDING_MS,
+      ) ||
+      // Onto the edge that starts where this one ends: the rest of this edge, plus what was
+      // driven of the next, must reach as far.
+      onward.some(
+        (next) =>
+          lengthMeters - dwell.at + next.reach >= DWELL_CONTINUATION_METERS &&
+          next.startMs >= dwell.endMs - CAPTURED_AT_ROUNDING_MS,
+      );
     if (!approached || !continued) return true;
     partial.seconds += countStop(partial, dwell.at, dwell.startMs, dwell.endMs);
     return false;
@@ -312,22 +347,24 @@ export function createTrafficCohorts(
   const epochMs = settings.epochSeconds * 1_000;
   const segments = new Map<string, PendingSegment>();
 
-  /** The contributor's state on a segment, under whichever live cohort salt it was keyed by. */
+  /**
+   * The contributor's state on a segment, under whichever live cohort salt it was keyed by: its
+   * pending sample, or its partial coverage, with the evidence either holds.
+   */
   const lookup = (
     segment: PendingSegment,
     base: string,
-  ): { partial?: PartialCoverage; sampled: boolean; tag: string } => {
-    let partial: { partial: PartialCoverage; tag: string } | undefined;
+  ): { evidence?: PartialCoverage; sample?: PendingSample; tag: string } => {
+    let partial: { evidence: PartialCoverage; tag: string } | undefined;
     for (const salt of segment.generations) {
       const tag = scoped(salt, base);
-      if (segment.samples.has(tag)) return { sampled: true, tag };
+      const sample = segment.samples.get(tag);
+      if (sample !== undefined) return { evidence: sample.evidence, sample, tag };
       const found = segment.partial.get(tag);
-      if (found !== undefined) partial = { partial: found, tag };
+      if (found !== undefined) partial = { evidence: found, tag };
     }
     const current = segment.generations.at(-1) ?? randomBytes(32);
-    return partial === undefined
-      ? { sampled: false, tag: scoped(current, base) }
-      : { ...partial, sampled: false };
+    return partial ?? { tag: scoped(current, base) };
   };
 
   return {
@@ -336,7 +373,22 @@ export function createTrafficCohorts(
       const claimedStartMs = contribution.drivenAtMs;
       const drivenAtMs = Math.min(contribution.drivenAtMs, nowMs);
       const claimed = (seconds: number): number => claimedStartMs + seconds * 1_000;
-      const touched = new Map<string, { partial: PartialCoverage; tag: string }>();
+      // Held only for this request: the per-edge state this batch touched, and movement that went
+      // on from the end of an edge onto the next. Nothing here outlives the call.
+      const touched = new Map<
+        string,
+        { evidence: PartialCoverage; onward: Onward[]; sampled: boolean; tag: string }
+      >();
+      const touch = (
+        segmentKey: string,
+        evidence: PartialCoverage,
+        tag: string,
+        sampled: boolean,
+      ) => {
+        const entry = touched.get(segmentKey) ?? { evidence, onward: [], sampled, tag };
+        touched.set(segmentKey, entry);
+        return entry;
+      };
       let ignored = 0;
 
       const startPartial = (segment: PendingSegment, tag: string, generation: Buffer) => {
@@ -355,6 +407,34 @@ export function createTrafficCohorts(
         return partial;
       };
 
+      /** Adds one observation's evidence, each metre and each standing time counted once. */
+      const record = (evidence: PartialCoverage, observation: SegmentObservation): void => {
+        for (const move of observation.moves) {
+          const length = move.to - move.from;
+          if (length <= 0) continue;
+          const fresh = length - overlapLength(evidence.intervals, move.from, move.to);
+          evidence.meters += fresh;
+          evidence.seconds += (move.seconds * fresh) / length;
+          evidence.intervals = unite([...evidence.intervals, [move.from, move.to]]);
+        }
+        for (const stop of observation.stops) {
+          evidence.seconds += countStop(
+            evidence,
+            stop.at,
+            claimed(stop.startSeconds),
+            claimed(stop.endSeconds),
+          );
+        }
+        if (observation.moves.length > 0) {
+          evidence.spans.push({
+            endMs: claimed(Math.max(...observation.moves.map((move) => move.endSeconds))),
+            from: Math.min(...observation.moves.map((move) => move.from)),
+            startMs: claimed(Math.min(...observation.moves.map((move) => move.startSeconds))),
+            to: Math.max(...observation.moves.map((move) => move.to)),
+          });
+        }
+      };
+
       for (const observation of observations) {
         const base = contribution.tagFor(observation.segmentKey);
         // Road attributes are fixed by the first observation. The key commits to the geometry,
@@ -370,51 +450,63 @@ export function createTrafficCohorts(
         };
         segments.set(observation.segmentKey, segment);
         const found = lookup(segment, base);
-        if (found.sampled) {
+        if (found.sample !== undefined) {
+          // One weight: no second sample. Its evidence still counts once, until it is released.
+          record(found.sample.evidence, observation);
+          touch(observation.segmentKey, found.sample.evidence, found.tag, true);
           ignored += 1;
           continue;
         }
         const partial =
-          found.partial ??
+          found.evidence ??
           startPartial(segment, found.tag, segment.generations.at(-1) ?? randomBytes(32));
         partial.drivenAtMs = Math.min(partial.drivenAtMs, drivenAtMs);
         partial.epochStartMs = Math.min(partial.epochStartMs, epochStartMs);
-        // Each metre once: a step adds only the part of the edge not driven before, and only
-        // that part's share of its moving time.
-        for (const move of observation.moves) {
-          const length = move.to - move.from;
-          if (length <= 0) continue;
-          const fresh = length - overlapLength(partial.intervals, move.from, move.to);
-          partial.meters += fresh;
-          partial.seconds += (move.seconds * fresh) / length;
-          partial.intervals = unite([...partial.intervals, [move.from, move.to]]);
-        }
-        for (const stop of observation.stops) {
-          partial.seconds += countStop(
-            partial,
-            stop.at,
-            claimed(stop.startSeconds),
-            claimed(stop.endSeconds),
+        record(partial, observation);
+        touch(observation.segmentKey, partial, found.tag, false);
+      }
+
+      // Movement onto an edge that starts at another edge's end node (the same map vertex, as
+      // both whole-edge geometries give it) continues a dwell held near that edge's end. The
+      // contributor's state on the earlier edge is found with this request's credential, as for
+      // any edge; no link between the two edges is kept.
+      for (const observation of observations) {
+        const begin = observation.line[0];
+        if (begin === undefined || observation.moves.length === 0) continue;
+        const startMs = claimed(Math.min(...observation.moves.map((move) => move.startSeconds)));
+        // How far this batch went on from `begin`: along this edge, then along the edges of the
+        // same batch that each start where the previous one ends.
+        let reach = 0;
+        let next: SegmentObservation | undefined = observation;
+        const seen = new Set<string>();
+        while (next !== undefined && !seen.has(next.segmentKey)) {
+          seen.add(next.segmentKey);
+          reach += Math.max(0, ...next.moves.map((move) => move.to));
+          const end = next.line.at(-1);
+          next = observations.find(
+            (candidate) => candidate.moves.length > 0 && sameVertex(candidate.line[0], end),
           );
         }
-        if (observation.moves.length > 0) {
-          partial.spans.push({
-            endMs: claimed(Math.max(...observation.moves.map((move) => move.endSeconds))),
-            from: Math.min(...observation.moves.map((move) => move.from)),
-            startMs: claimed(Math.min(...observation.moves.map((move) => move.startSeconds))),
-            to: Math.max(...observation.moves.map((move) => move.to)),
+        for (const [segmentKey, segment] of segments) {
+          if (segmentKey === observation.segmentKey || !sameVertex(segment.line.at(-1), begin)) {
+            continue;
+          }
+          const found = lookup(segment, contribution.tagFor(segmentKey));
+          if (found.evidence === undefined || found.evidence.held.length === 0) continue;
+          touch(segmentKey, found.evidence, found.tag, found.sample !== undefined).onward.push({
+            reach,
+            startMs,
           });
         }
-        touched.set(observation.segmentKey, { partial, tag: found.tag });
       }
 
       // A dwell is placed only on an edge where the contributor already has movement pending:
       // the nearest such edge to where it stood. It never starts coverage of its own.
       for (const dwell of dwells) {
         let best:
-          { at: number; key: string; offMeters: number; partial: PartialCoverage } | undefined;
+          { at: number; evidence: PartialCoverage; key: string; offMeters: number } | undefined;
         for (const [segmentKey, segment] of segments) {
-          if (segment.partial.size === 0) continue;
+          if (segment.partial.size === 0 && segment.samples.size === 0) continue;
           const { offMeters, share } = projectOnto(segment.line, dwell.position);
           if (
             offMeters > DWELL_EDGE_METERS ||
@@ -423,14 +515,14 @@ export function createTrafficCohorts(
             continue;
           }
           const found = lookup(segment, contribution.tagFor(segmentKey));
-          if (found.partial === undefined) continue;
+          if (found.evidence === undefined) continue;
           best = {
             at: share * segment.lengthMeters,
+            evidence: found.evidence,
             key: segmentKey,
             offMeters,
-            partial: found.partial,
           };
-          touched.set(segmentKey, { partial: found.partial, tag: found.tag });
+          touch(segmentKey, found.evidence, found.tag, found.sample !== undefined);
         }
         if (best === undefined) continue;
         const held = {
@@ -439,32 +531,32 @@ export function createTrafficCohorts(
           startMs: claimed(dwell.startSeconds),
         };
         if (
-          !best.partial.held.some(
+          !best.evidence.held.some(
             (other) => other.startMs === held.startMs && other.endMs === held.endMs,
           )
         ) {
-          best.partial.held.push(held);
+          best.evidence.held.push(held);
         }
       }
 
       let credited = 0;
-      for (const [segmentKey, { partial, tag }] of touched) {
+      for (const [segmentKey, { evidence, onward, sampled, tag }] of touched) {
         const segment = segments.get(segmentKey);
         if (segment === undefined) continue;
-        if (segment.partial.get(tag) !== partial) continue;
-        confirmHeldDwells(partial);
-        const covered = partial.intervals.reduce((sum, [from, to]) => sum + to - from, 0);
+        confirmHeldDwells(evidence, segment.lengthMeters, onward);
+        if (sampled || segment.partial.get(tag) !== evidence) continue;
+        const covered = evidence.intervals.reduce((sum, [from, to]) => sum + to - from, 0);
         const needed = Math.min(
           CREDIT_COVERAGE_METERS,
           segment.lengthMeters * CREDIT_COVERAGE_SHARE,
         );
-        if (covered < needed || partial.seconds <= 0) continue;
+        if (covered < needed || evidence.seconds <= 0) continue;
         segment.partial.delete(tag);
-        const speedKph = (partial.meters / partial.seconds) * 3.6;
+        const speedKph = (evidence.meters / evidence.seconds) * 3.6;
         const newcomerMarker =
           contribution.newcomerNetwork === undefined
             ? undefined
-            : scoped(partial.generation, contribution.newcomerNetwork);
+            : scoped(evidence.generation, contribution.newcomerNetwork);
         if (
           speedKph > settings.maxSampleSpeedKph ||
           (contribution.newcomerNetwork !== undefined &&
@@ -479,11 +571,11 @@ export function createTrafficCohorts(
           continue;
         }
         segment.samples.set(tag, {
-          drivenAtMs: partial.drivenAtMs,
+          drivenAtMs: evidence.drivenAtMs,
           epochStartMs,
-          generation: partial.generation,
+          evidence,
+          generation: evidence.generation,
           newcomerMarker,
-          speedKph,
         });
         credited += 1;
       }
@@ -512,7 +604,13 @@ export function createTrafficCohorts(
           else if (sample.epochStartMs < tickMs) cohort.push(tag);
         }
         if (cohort.length >= settings.minimumContributors) {
-          const speeds = cohort.map((tag) => segment.samples.get(tag)?.speedKph ?? 0);
+          // Read at release, from all the evidence counted until now.
+          const speeds = cohort.map((tag) => {
+            const evidence = segment.samples.get(tag)?.evidence;
+            return evidence === undefined || evidence.seconds <= 0
+              ? 0
+              : Math.min(settings.maxSampleSpeedKph, (evidence.meters / evidence.seconds) * 3.6);
+          });
           releases.push({
             expiresAtMs: tickMs + settings.releaseSeconds * 1_000,
             freeFlowKph: segment.freeFlowKph,
