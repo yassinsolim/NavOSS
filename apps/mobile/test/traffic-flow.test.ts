@@ -14,6 +14,8 @@ import {
 } from '../src/features/community/traffic-flow.js';
 
 const NOW = Date.parse('2026-11-12T18:02:00.000Z');
+/** A visible box around the fixture's road. */
+const VIEW = { east: -114.05, north: 51.06, south: 51.03, west: -114.08 };
 
 // Validated against the server contract, so the test cannot drift from what `/v2/traffic/flow`
 // actually returns.
@@ -70,7 +72,7 @@ describe('traffic flow layer', () => {
   });
 
   it('always credits the source and says the data is limited, with the reason', () => {
-    const status = trafficFlowStatus({ failed: false, response, tooWide: false });
+    const status = trafficFlowStatus({ failed: false, response, tooWide: false, view: VIEW });
     const updated = `updated ${new Date('2026-11-12T18:00:00.000Z').toLocaleTimeString('en-CA', {
       hour: 'numeric',
       minute: '2-digit',
@@ -87,6 +89,7 @@ describe('traffic flow layer', () => {
         features: [],
       },
       tooWide: false,
+      view: VIEW,
     });
     expect(empty?.text).toBe(
       `${COMMUNITY_TRAFFIC_ATTRIBUTION} · Limited data · None here yet · Zoom in for more`,
@@ -105,6 +108,7 @@ describe('traffic flow layer', () => {
       failed: false,
       response: { ...response, features: [feature, older] },
       tooWide: false,
+      view: VIEW,
     });
     const at = (iso: string) =>
       new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
@@ -115,20 +119,30 @@ describe('traffic flow layer', () => {
       failed: false,
       response: { ...response, features: [] },
       tooWide: false,
+      view: VIEW,
     });
     expect(empty?.text).not.toContain('updated');
     expect(empty?.accessibilityLabel).not.toContain('updated');
   });
 
+  it('dates and counts only the roads in view, not those fetched around it', () => {
+    // The response covers a grid cell around the view; its one road lies outside this view.
+    const elsewhere = { east: -113.95, north: 51.02, south: 51.0, west: -114.0 };
+    const status = trafficFlowStatus({ failed: false, response, tooWide: false, view: elsewhere });
+    expect(status?.text).toBe(`${COMMUNITY_TRAFFIC_ATTRIBUTION} · Limited data · None here yet`);
+    expect(status?.accessibilityLabel).toContain('No roads in view have enough data yet.');
+    expect(status?.accessibilityLabel).not.toContain('updated');
+  });
+
   it('tells the driver to zoom in rather than showing an empty map as "no traffic"', () => {
-    expect(trafficFlowStatus({ failed: false, response: undefined, tooWide: true })?.text).toBe(
-      'Traffic · Zoom in to see traffic',
-    );
-    expect(trafficFlowStatus({ failed: true, response: undefined, tooWide: false })?.text).toBe(
-      'Traffic unavailable right now',
-    );
     expect(
-      trafficFlowStatus({ failed: false, response: undefined, tooWide: false }),
+      trafficFlowStatus({ failed: false, response: undefined, tooWide: true, view: VIEW })?.text,
+    ).toBe('Traffic · Zoom in to see traffic');
+    expect(
+      trafficFlowStatus({ failed: true, response: undefined, tooWide: false, view: VIEW })?.text,
+    ).toBe('Traffic unavailable right now');
+    expect(
+      trafficFlowStatus({ failed: false, response: undefined, tooWide: false, view: VIEW }),
     ).toBeUndefined();
   });
 });

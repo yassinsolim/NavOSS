@@ -1423,6 +1423,7 @@ export function useMapController() {
         failed: overlays.trafficFlowFailed,
         response: overlays.trafficFlow,
         tooWide: viewBox !== undefined && flowQuery === undefined,
+        view: viewBox,
       })
     : undefined;
   // Traffic is drawn beneath the basemap's labels when no route is on the map.

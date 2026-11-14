@@ -75,17 +75,20 @@ export interface TrafficFlowStatus {
  * The credit and coverage line shown while the traffic layer is on. The server publishes a road
  * only once enough drivers have driven it, so most roads show nothing: the line always says the
  * data is limited, and why, rather than letting an empty map read as "no traffic". When roads are
- * shown, it says when they were updated: the oldest publication boundary among them, as each
- * road's `observedAt` states it, never when the layer was fetched.
+ * shown in view, it says when they were updated: the oldest publication boundary among them, as
+ * each road's `observedAt` states it, never when the layer was fetched.
  */
 export function trafficFlowStatus({
   failed,
   response,
   tooWide,
+  view,
 }: {
   failed: boolean;
   response: TrafficFlowResponse | undefined;
   tooWide: boolean;
+  /** The map's visible box: the response covers a grid-snapped box around it. */
+  view: GeographicBox | undefined;
 }): TrafficFlowStatus | undefined {
   if (tooWide) {
     return {
@@ -102,18 +105,31 @@ export function trafficFlowStatus({
       : undefined;
   }
   const minimum = response.coverage.minimumContributors;
-  const updated = communityTrafficUpdated(
-    response.features.map((feature) => feature.properties.observedAt),
-  );
+  // Only roads that reach into the visible box: the response also holds roads up to a grid cell
+  // beyond it, which the driver cannot see.
+  const visible =
+    view === undefined
+      ? []
+      : response.features.filter(({ geometry }) => {
+          const longitudes = geometry.coordinates.map(([longitude]) => longitude);
+          const latitudes = geometry.coordinates.map(([, latitude]) => latitude);
+          return (
+            Math.min(...longitudes) <= view.east &&
+            Math.max(...longitudes) >= view.west &&
+            Math.min(...latitudes) <= view.north &&
+            Math.max(...latitudes) >= view.south
+          );
+        });
+  const updated = communityTrafficUpdated(visible.map((feature) => feature.properties.observedAt));
   const parts = [
     response.source.attribution,
     ...(updated === undefined ? [] : [updated]),
     'Limited data',
-    ...(response.features.length === 0 ? ['None here yet'] : []),
+    ...(visible.length === 0 ? ['None here yet'] : []),
     ...(response.coverage.truncated ? ['Zoom in for more'] : []),
   ];
   return {
-    accessibilityLabel: `${response.source.attribution}${updated === undefined ? '' : `, ${updated}`}. Limited data: a road is shown only after at least ${String(minimum)} drivers sharing speeds have driven it recently.${response.features.length === 0 ? ' No roads in view have enough data yet.' : ''}${response.coverage.truncated ? ' Zoom in to see every road.' : ''}`,
+    accessibilityLabel: `${response.source.attribution}${updated === undefined ? '' : `, ${updated}`}. Limited data: a road is shown only after at least ${String(minimum)} drivers sharing speeds have driven it recently.${visible.length === 0 ? ' No roads in view have enough data yet.' : ''}${response.coverage.truncated ? ' Zoom in to see every road.' : ''}`,
     text: parts.join(' · '),
   };
 }
