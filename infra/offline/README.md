@@ -117,9 +117,10 @@ VM checks. The measured compatibility/delta table is in the architecture documen
 
 ### Community-traffic dead-end mask
 
-`dead-end-mask.mts` builds the topology mask that `live` community traffic requires from the same
-dated input and connected graph, and `verify/dead-end-mask.mts` checks it against a local
-Valhalla serving that graph. See [dead-end-mask.md](dead-end-mask.md).
+`serving-graph.mts` builds the Valhalla 3.8.2 graph the online stack serves for `live` community
+traffic, with a provenance record binding it to the verified extract; `dead-end-mask.mts` builds
+the topology mask for that graph from the same input, and `verify/dead-end-mask.mts` checks both
+against a local Valhalla serving the directory. See [dead-end-mask.md](dead-end-mask.md).
 
 ### Search
 

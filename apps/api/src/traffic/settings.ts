@@ -1,7 +1,10 @@
+import { join } from 'node:path';
+
 import { SERVICE_COVERAGE_BOUNDS, type TrafficFlowBounds } from '@navoss/contracts';
 import { z } from 'zod/v4';
 
-import { loadDeadEndMask, type DeadEndMask } from './dead-end-mask.js';
+import { DeadEndMaskError, loadDeadEndMask, type DeadEndMask } from './dead-end-mask.js';
+import { SERVING_GRAPH_FILES, verifyServingGraph } from './serving-graph.js';
 
 export type TrafficMode = 'off' | 'collect' | 'live';
 
@@ -201,32 +204,47 @@ export function readTrafficSettings(
 const GraphIdSchema = z.string().regex(/^[0-9a-f]{64}$/);
 
 /**
- * Loads the dead-end mask the environment names, bound to the graph the stack serves:
- * `COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH` (the mask file) and `COMMUNITY_TRAFFIC_GRAPH_ID` (the
- * SHA-256 of the graph tar Valhalla serves, `graphId` in the graph's `graph.json`).
+ * Loads the dead-end mask of the graph Valhalla serves, after verifying that graph:
+ * `COMMUNITY_TRAFFIC_GRAPH_DIR` is the serving graph directory as mounted (read-only) in both
+ * Valhalla's and the API's container (`/graph` under `compose.traffic-graph.yaml`), and
+ * `COMMUNITY_TRAFFIC_GRAPH_ID` the graph id the operator enables, from that directory's
+ * `graph.json`. `verifyServingGraph` hashes the archive Valhalla's configuration names; the mask
+ * (`dead-end-mask.json` in the same directory) must be bound to the same graph, the same
+ * provenance record and the same extract.
  *
- * - `off`: not read.
- * - `collect`: optional; when a path is set the graph id is required and the mask must load.
- * - `live`: both are required. A missing, malformed, other-version or other-graph mask refuses
- *   to start; there is no permissive fallback.
+ * - `off`: nothing is read.
+ * - `collect`: optional (collection publishes nothing); a configured directory must verify.
+ * - `live`: both are required. A missing or mismatched archive, configuration, provenance or
+ *   mask refuses to start; there is no permissive fallback.
  */
 export function loadConfiguredDeadEndMask(
   mode: TrafficMode,
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): DeadEndMask | undefined {
   if (mode === 'off') return undefined;
-  const path = environment.COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH?.trim() ?? '';
+  const directory = environment.COMMUNITY_TRAFFIC_GRAPH_DIR?.trim() ?? '';
   const graphId = environment.COMMUNITY_TRAFFIC_GRAPH_ID?.trim() ?? '';
-  if (mode === 'live' && (path === '' || graphId === '')) {
+  if (mode === 'live' && (directory === '' || graphId === '')) {
     throw new Error(
-      'COMMUNITY_TRAFFIC_MODE=live requires COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH and COMMUNITY_TRAFFIC_GRAPH_ID.',
+      'COMMUNITY_TRAFFIC_MODE=live requires COMMUNITY_TRAFFIC_GRAPH_DIR and COMMUNITY_TRAFFIC_GRAPH_ID.',
     );
   }
-  if (path === '') return undefined;
+  if (directory === '') return undefined;
   if (!GraphIdSchema.safeParse(graphId).success) {
     throw new Error(
-      'COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH requires COMMUNITY_TRAFFIC_GRAPH_ID: the 64-hex SHA-256 of the graph Valhalla serves.',
+      'COMMUNITY_TRAFFIC_GRAPH_DIR requires COMMUNITY_TRAFFIC_GRAPH_ID: the 64-hex SHA-256 of the graph Valhalla serves.',
     );
   }
-  return loadDeadEndMask(path, { graphId });
+  const graph = verifyServingGraph(directory, graphId);
+  const mask = loadDeadEndMask(join(directory, SERVING_GRAPH_FILES.mask), { graphId });
+  if (
+    mask.identity.provenanceSha256 !== graph.provenanceSha256 ||
+    mask.identity.pbfSha256 !== graph.pbfSha256 ||
+    mask.identity.dataDate !== graph.dataDate
+  ) {
+    throw new DeadEndMaskError(
+      'The dead-end mask was built from another extract or graph build than the one served.',
+    );
+  }
+  return mask;
 }

@@ -19,8 +19,6 @@ services:
       COMMUNITY_ATTESTATION_MODE: ${COMMUNITY_ATTESTATION_MODE:-enforce}
       COMMUNITY_INSTALLATION_SECRET: ${COMMUNITY_INSTALLATION_SECRET:-}
       COMMUNITY_REPORTS_PUBLICATION: ${COMMUNITY_REPORTS_PUBLICATION:-shadow}
-      COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH: ${COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH:-}
-      COMMUNITY_TRAFFIC_GRAPH_ID: ${COMMUNITY_TRAFFIC_GRAPH_ID:-}
       COMMUNITY_TRAFFIC_MIN_CONTRIBUTORS: ${COMMUNITY_TRAFFIC_MIN_CONTRIBUTORS:-}
       COMMUNITY_TRAFFIC_MODE: ${COMMUNITY_TRAFFIC_MODE:-off}
       COMMUNITY_TRAFFIC_ROUTE_MIN_COVERAGE: ${COMMUNITY_TRAFFIC_ROUTE_MIN_COVERAGE:-}
@@ -60,10 +58,6 @@ services:
       - no-new-privileges:true
     tmpfs:
       - /tmp:size=32m,mode=1777
-    volumes:
-      # The serving graph's directory, read-only: its graph.json and the dead-end mask built for
-      # it (`/graph/dead-end-mask.json`). Map data only.
-      - ${VALHALLA_DATA_DIR:?Set VALHALLA_DATA_DIR to a versioned artifact directory}:/graph:ro
 
   search-indexer:
     build:

@@ -14,7 +14,16 @@ import type { Position } from './geo.js';
  * along the way, the way's own node coordinates.
  */
 export const DEAD_END_MASK_FORMAT = 'navoss-traffic-dead-end-mask';
-export const DEAD_END_MASK_FORMAT_VERSION = 1;
+/**
+ * Version 2 binds the digest to every member, records the serving graph's provenance and
+ * requires the corrected topology policy; version 1 masks (built with the policy, core and
+ * duplicate-road errors fixed in version 2) are refused.
+ */
+export const DEAD_END_MASK_FORMAT_VERSION = 2;
+/** `POLICY_VERSION` of `infra/offline/dead-end-extract.py` the mask must be built with. */
+export const DEAD_END_MASK_POLICY_VERSION = 2;
+/** The routing engine whose graph the mask describes (production serves Valhalla 3.8.2). */
+export const DEAD_END_MASK_ROUTING_ENGINE_VERSION = '3.8.2';
 /** The mask must exclude at least this much road from every true road end. */
 export const DEAD_END_MASK_MINIMUM_TERMINAL_METERS = 400;
 
@@ -32,14 +41,16 @@ export const DeadEndMaskFileSchema = z.strictObject({
   format: z.literal(DEAD_END_MASK_FORMAT),
   formatVersion: z.literal(DEAD_END_MASK_FORMAT_VERSION),
   graph: z.strictObject({
-    dataDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    dataDate: z.iso.date(),
     graphId: Sha256Schema,
-    routingEngineVersion: z.string().min(1),
+    /** SHA-256 of the serving graph's `provenance.json` (`serving-graph.mts`). */
+    provenanceSha256: Sha256Schema,
+    routingEngineVersion: z.literal(DEAD_END_MASK_ROUTING_ENGINE_VERSION),
   }),
   inputs: z.strictObject({
-    extractPolicyVersion: z.number().int().positive(),
-    osmTimestamp: z.string().min(1),
-    pbf: z.string().min(1),
+    extractPolicyVersion: z.literal(DEAD_END_MASK_POLICY_VERSION),
+    osmTimestamp: z.iso.datetime(),
+    pbf: z.string().regex(/^alberta-british-columbia-\d{6}\.osm\.pbf$/),
     pbfSha256: Sha256Schema,
   }),
   rules: z.strictObject({
@@ -62,7 +73,8 @@ export const DeadEndMaskFileSchema = z.strictObject({
       ]),
     ),
   }),
-  payloadSha256: Sha256Schema,
+  /** SHA-256 of every other member (`deadEndMaskContentDigest`). */
+  contentSha256: Sha256Schema,
 });
 
 export type DeadEndMaskFile = z.infer<typeof DeadEndMaskFileSchema>;
@@ -80,6 +92,8 @@ export interface DeadEndMaskIdentity {
   formatVersion: number;
   graphId: string;
   pbfSha256: string;
+  policyVersion: number;
+  provenanceSha256: string;
 }
 
 export interface DeadEndMask {
@@ -92,9 +106,30 @@ export interface DeadEndMask {
   status(edge: { forward: boolean; wayId: number }, line: readonly Position[]): DeadEndMaskStatus;
 }
 
-/** Digest of the `ways` member exactly as written; detects truncated or edited masks. */
-export function deadEndMaskPayloadDigest(ways: DeadEndMaskWays): string {
-  return createHash('sha256').update(JSON.stringify(ways)).digest('hex');
+/** JSON with object keys sorted at every level: one text for one value, whatever the key order. */
+export function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * Digest of every member of the mask except the digest itself (metadata, rules, summary and
+ * ways), over canonical JSON. It detects a truncated, edited or re-labelled mask. It is an
+ * integrity check, not authentication: anyone who can write the file can recompute it, so the
+ * file's protection is the read-only install and the graph binding checked at start-up.
+ */
+export function deadEndMaskContentDigest(
+  mask: Omit<DeadEndMaskFile, 'contentSha256'> & { contentSha256?: string },
+): string {
+  return createHash('sha256')
+    .update(canonicalJson({ ...mask, contentSha256: undefined }))
+    .digest('hex');
 }
 
 /** Encodes ascending ids as their first value followed by differences. */
@@ -141,7 +176,18 @@ export function parseDeadEndMask(text: string, expected: { graphId: string }): D
   } catch {
     throw new DeadEndMaskError('The dead-end mask is not valid JSON.');
   }
-  const header = z.object({ format: z.unknown(), formatVersion: z.unknown() }).safeParse(raw);
+  const header = z
+    .object({
+      format: z.unknown(),
+      formatVersion: z.unknown(),
+      graph: z
+        .looseObject({ routingEngineVersion: z.unknown() })
+        .catch({ routingEngineVersion: undefined }),
+      inputs: z
+        .looseObject({ extractPolicyVersion: z.unknown() })
+        .catch({ extractPolicyVersion: undefined }),
+    })
+    .safeParse(raw);
   if (!header.success || header.data.format !== DEAD_END_MASK_FORMAT) {
     throw new DeadEndMaskError('The file is not a NavOSS traffic dead-end mask.');
   }
@@ -150,10 +196,20 @@ export function parseDeadEndMask(text: string, expected: { graphId: string }): D
       `The dead-end mask has format version ${String(header.data.formatVersion)}; this API reads version ${String(DEAD_END_MASK_FORMAT_VERSION)}.`,
     );
   }
+  if (header.data.inputs.extractPolicyVersion !== DEAD_END_MASK_POLICY_VERSION) {
+    throw new DeadEndMaskError(
+      `The dead-end mask was built with topology policy ${String(header.data.inputs.extractPolicyVersion)}; this API requires policy ${String(DEAD_END_MASK_POLICY_VERSION)}.`,
+    );
+  }
+  if (header.data.graph.routingEngineVersion !== DEAD_END_MASK_ROUTING_ENGINE_VERSION) {
+    throw new DeadEndMaskError(
+      `The dead-end mask describes a routing engine ${String(header.data.graph.routingEngineVersion)} graph; this API serves ${DEAD_END_MASK_ROUTING_ENGINE_VERSION}.`,
+    );
+  }
   const parsed = DeadEndMaskFileSchema.safeParse(raw);
   if (!parsed.success) throw new DeadEndMaskError('The dead-end mask failed validation.');
   const mask = parsed.data;
-  if (deadEndMaskPayloadDigest(mask.ways) !== mask.payloadSha256) {
+  if (deadEndMaskContentDigest(mask) !== mask.contentSha256) {
     throw new DeadEndMaskError('The dead-end mask content does not match its digest.');
   }
   if (mask.graph.graphId !== expected.graphId) {
@@ -198,6 +254,8 @@ export function parseDeadEndMask(text: string, expected: { graphId: string }): D
       formatVersion: mask.formatVersion,
       graphId: mask.graph.graphId,
       pbfSha256: mask.inputs.pbfSha256,
+      policyVersion: mask.inputs.extractPolicyVersion,
+      provenanceSha256: mask.graph.provenanceSha256,
     },
     status(edge, line) {
       const code = uniform.get(edge.wayId);
