@@ -21,7 +21,7 @@ export const DEAD_END_MASK_FORMAT = 'navoss-traffic-dead-end-mask';
  */
 export const DEAD_END_MASK_FORMAT_VERSION = 2;
 /** `POLICY_VERSION` of `infra/offline/dead-end-extract.py` the mask must be built with. */
-export const DEAD_END_MASK_POLICY_VERSION = 2;
+export const DEAD_END_MASK_POLICY_VERSION = 3;
 /** The routing engine whose graph the mask describes (production serves Valhalla 3.8.2). */
 export const DEAD_END_MASK_ROUTING_ENGINE_VERSION = '3.8.2';
 /** The mask must exclude at least this much road from every true road end. */

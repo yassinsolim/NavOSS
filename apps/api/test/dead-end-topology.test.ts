@@ -9,6 +9,7 @@ import {
   dominators,
   ELIGIBLE,
   EXCLUDED,
+  EXTRACT_POLICY_VERSION,
   FORWARD,
   NODE_BARRIER,
   NODE_CLIPPED,
@@ -450,7 +451,7 @@ describe('dead-end mask topology', () => {
           routingEngineVersion: '3.8.2',
         },
         inputs: {
-          extractPolicyVersion: 2,
+          extractPolicyVersion: EXTRACT_POLICY_VERSION,
           osmTimestamp: '2026-11-11T21:22:47Z',
           pbf: 'alberta-british-columbia-261111.osm.pbf',
           pbfSha256: 'e'.repeat(64),
@@ -567,6 +568,44 @@ describe('dead-end mask topology', () => {
     );
     expect(distinct.statusOf(24).every((status) => status === ELIGIBLE)).toBe(true);
     expect(distinct.statusOf(25).every((status) => status === ELIGIBLE)).toBe(true);
+  });
+
+  it('starts the 400 m rule at a road end when any copy of its stretch is of a terminal class', () => {
+    const m = 1 / 111_320 / Math.cos((51 * Math.PI) / 180);
+    // A main-network triangle of secondary roads with a vertex every 100 m along road 1, and a
+    // 100 m spur from its corner 1 drawn twice over the same nodes: once as a secondary road, once
+    // as a residential street. Which copy represents the stretch must not matter.
+    const positions: Record<number, Position> = { 1: [-114, 51], 2: [-114 + 1000 * m, 51] };
+    for (let at = 1; at < 10; at += 1) positions[100 + at] = [-114 + at * 100 * m, 51];
+    positions[3] = [-114 + 500 * m, 51 + 0.0078];
+    positions[10] = [-114 - 100 * m, 51];
+    const arterial: FixtureWay = {
+      id: 1,
+      nodes: [1, 101, 102, 103, 104, 105, 106, 107, 108, 109, 2],
+    };
+    const core: FixtureWay[] = [arterial, { id: 2, nodes: [2, 3] }, { id: 3, nodes: [3, 1] }];
+    const secondary: FixtureWay = { id: 20, nodes: [1, 10], road: 'secondary' };
+    const residential: FixtureWay = { id: 21, nodes: [1, 10], road: 'residential' };
+    for (const spur of [
+      [secondary, residential],
+      [residential, secondary],
+    ]) {
+      const { analysis, reasonOf, statusOf } = analyse(topologyOf(positions, [...core, ...spur]));
+      expect(analysis.stats.trueTerminals).toBe(1);
+      // The spur end is about 100 m from corner 1: the arterial's first 300 m are excluded (and
+      // the interval touching 300 m, rounded out), the rest from 400 m on is not.
+      expect(statusOf(1).slice(0, 3)).toEqual([EXCLUDED, EXCLUDED, EXCLUDED]);
+      expect(
+        statusOf(1)
+          .slice(4)
+          .every((status) => status === ELIGIBLE),
+      ).toBe(true);
+      expect(reasonOf(1)[0]).toBe(REASON.terminal);
+    }
+    // A residential spur alone ends no terminal-class road: the arterial stays eligible.
+    const alone = analyse(topologyOf(positions, [...core, residential]));
+    expect(alone.analysis.stats.trueTerminals).toBe(0);
+    expect(alone.statusOf(1).every((status) => status === ELIGIBLE)).toBe(true);
   });
 
   it('finds the outermost common dominator exactly as the ancestor walk does', () => {

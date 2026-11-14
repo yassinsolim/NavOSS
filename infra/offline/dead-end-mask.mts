@@ -722,13 +722,21 @@ export function analyzeTopology(topology: Topology, options: AnalysisOptions): A
   }
 
   // 5. Distance from true terminals, bounded at the terminal distance (multi-source Dijkstra).
+  // A road end qualifies when any retained copy of its physical stretch is of a terminal class,
+  // whichever copy represents the stretch (a secondary and a residential way drawn over one spur
+  // end a secondary road).
+  const terminalStretch = new Uint8Array(segments);
+  for (let segment = 0; segment < segments; segment += 1) {
+    if (options.terminalClasses.has(runClass[segRun[segment] ?? 0] ?? 0))
+      terminalStretch[segPhys[segment] ?? segment] = 1;
+  }
   const terminalDistance = new Float64Array(nodes).fill(Infinity);
   const heap = new Heap();
   let trueTerminals = 0;
   for (let node = 0; node < nodes; node += 1) {
     if (degree(node) !== 1 || clipped[node] === 1) continue;
     const segment = undirected.list[undirected.start[node] ?? 0] ?? 0;
-    if (!options.terminalClasses.has(runClass[segRun[segment] ?? 0] ?? 0)) continue;
+    if (terminalStretch[segment] !== 1) continue;
     trueTerminals += 1;
     terminalDistance[node] = 0;
     heap.push(0, node);
@@ -1231,7 +1239,9 @@ export async function buildDeadEndMask(args: string[]) {
     const extractScript = [
       'set -euo pipefail',
       `osmium tags-filter --no-progress -o /work/roads.osm.pbf /inputs/${input.name} w/highway w/route=ferry`,
-      'osmium tags-filter --no-progress -R -o /work/barriers.osm.pbf /work/roads.osm.pbf n/barrier n/impassable=yes n/smoothness=impassable',
+      // The node filter is the extractor's own (`NODE_FILTER`): barriers, impassable nodes and
+      // every node with a car access key, so access-only restrictions reach `barrier_blocks`.
+      'osmium tags-filter --no-progress -R -o /work/barriers.osm.pbf /work/roads.osm.pbf $(python3 /scripts/dead-end-extract.py --print-node-filter)',
       'python3 /scripts/dead-end-extract.py --roads /work/roads.osm.pbf --barriers /work/barriers.osm.pbf --output /work/topology',
     ].join('\n');
     await exec(

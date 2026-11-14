@@ -115,9 +115,9 @@ describe('dead-end mask', () => {
     // Masks built with the uncorrected topology policy, or none recorded, are refused.
     refuse(
       JSON.stringify(
-        maskFile({ eligible: [5] }, { inputs: { ...valid.inputs, extractPolicyVersion: 1 as 2 } }),
+        maskFile({ eligible: [5] }, { inputs: { ...valid.inputs, extractPolicyVersion: 2 as 3 } }),
       ),
-      /topology policy 1; this API requires policy 2/,
+      /topology policy 2; this API requires policy 3/,
     );
     refuse(
       tampered(valid, (copy) => {

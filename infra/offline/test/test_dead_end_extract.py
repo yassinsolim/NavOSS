@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -27,11 +28,18 @@ def write_osm(path, nodes, ways, node_tags=None):
     path.write_text("\n".join(xml))
 
 
-def run_extract(directory, nodes, ways, node_tags=None):
+def run_extract(directory, nodes, ways, node_tags=None, node_filter=False):
+    """Runs the extractor; with `node_filter`, the barrier input is produced as the build produces
+    it, by `osmium tags-filter` with the extractor's own NODE_FILTER."""
     source = Path(directory) / "roads.osm"
     write_osm(source, nodes, ways, node_tags)
     output = Path(directory) / "topology"
-    header = extract.extract(source, source, output)
+    barriers = source
+    if node_filter:
+        barriers = Path(directory) / "barriers.osm.pbf"
+        subprocess.run(["osmium", "tags-filter", "--no-progress", "-R", "-o", str(barriers), str(source),
+                        *extract.NODE_FILTER], check=True)
+    header = extract.extract(source, barriers, output)
 
     def read(name):
         info = header["arrays"][name]
@@ -90,6 +98,16 @@ class PolicyTests(unittest.TestCase):
         self.assertTrue(extract.barrier_blocks({"barrier": "gate", "access": "destination"}))
         self.assertTrue(extract.barrier_blocks({"barrier": "gate", "motor_vehicle": "yes;no"}))
         self.assertTrue(extract.barrier_blocks({"impassable": "yes"}))
+        # Car access on a node decides whatever its barrier tag: none, `no` or a type.
+        self.assertTrue(extract.barrier_blocks({"access": "no"}))
+        self.assertTrue(extract.barrier_blocks({"motor_vehicle": "no"}))
+        self.assertTrue(extract.barrier_blocks({"barrier": "no", "access": "no"}))
+        self.assertTrue(extract.barrier_blocks({"access": "destination"}))
+        self.assertTrue(extract.barrier_blocks({"motor_vehicle:conditional": "no @ (Nov-Apr)"}))
+        self.assertFalse(extract.barrier_blocks({"access": "no", "motor_vehicle": "yes"}))
+        self.assertFalse(extract.barrier_blocks({"access": "yes"}))
+        self.assertFalse(extract.barrier_blocks({"motor_vehicle": "||no"}))
+        self.assertFalse(extract.barrier_blocks({"highway": "crossing"}))
         self.assertFalse(extract.barrier_blocks({"impassable": "yes", "motor_vehicle": "yes"}))
 
     def test_review_vectors_supply_no_car_connection(self):
@@ -192,7 +210,7 @@ class ExtractTests(unittest.TestCase):
             offsets = dict(zip(read("run_way").tolist(), read("run_coord_offset").tolist()))
             self.assertEqual(offsets[11], 0xFFFFFFFF)
             self.assertEqual(len(read("coords")), 2 * (3 + 3))
-            self.assertEqual(json.loads((output / "header.json").read_text())["policyVersion"], 2)
+            self.assertEqual(json.loads((output / "header.json").read_text())["policyVersion"], 3)
 
 
     def test_secondary_outlet_with_a_closure_is_no_second_exit(self):
@@ -261,6 +279,60 @@ class ExtractTests(unittest.TestCase):
             read = run_extract(directory, nodes, base + [(7, [12, 13, 3], {"highway": "residential"})],
                                {13: {"impassable": "yes"}})
             self.assertEqual(int((read("node_flags") & extract.NODE_BARRIER > 0).sum()), 2)
+
+    def test_access_only_node_on_the_second_outlet_is_no_second_exit(self):
+        """The pocket's second outlet is two ways meeting at node 13. Car access on node 13 alone
+        (no barrier tag, or `barrier=no`) must cut it, through the build's own node filter."""
+        nodes = {1: (51.0, -114.0), 2: (51.0, -113.99), 3: (51.01, -113.99), 4: (51.01, -114.0),
+                 10: (50.99, -114.01), 11: (50.98, -114.01), 12: (50.98, -114.0), 13: (51.0, -113.98)}
+        ways = [
+            (1, [1, 2], {"highway": "secondary"}), (2, [2, 3], {"highway": "secondary"}),
+            (3, [3, 4], {"highway": "secondary"}), (4, [4, 1], {"highway": "secondary"}),
+            (5, [1, 10, 11], {"highway": "residential"}), (6, [11, 12, 10], {"highway": "residential"}),
+            (7, [12, 13], {"highway": "residential"}), (8, [13, 3], {"highway": "residential"}),
+        ]
+
+        def second_exit(node_tags):
+            with tempfile.TemporaryDirectory() as directory:
+                read = run_extract(directory, nodes, ways, {13: node_tags}, node_filter=True)
+                lonlat = read("node_lonlat").reshape(-1, 2)
+
+                def index(osm):
+                    lat, lon = nodes[osm]
+                    found = np.flatnonzero((lonlat[:, 0] == round(lon * 1e7)) & (lonlat[:, 1] == round(lat * 1e7)))
+                    return [int(value) for value in found]
+                arcs = set()
+                for a, b, d in zip(read("seg_from").tolist(), read("seg_to").tolist(), read("seg_dir").tolist()):
+                    if d & extract.FORWARD:
+                        arcs.add((a, b))
+                    if d & extract.BACKWARD:
+                        arcs.add((b, a))
+                choke = index(1)[0]
+
+                def reaches(start, goal):
+                    seen, queue = {start}, [start]
+                    while queue:
+                        node = queue.pop()
+                        for a, b in arcs:
+                            if a == node and b != choke and b not in seen:
+                                seen.add(b)
+                                queue.append(b)
+                    return goal in seen
+                pocket, core = index(11)[0], index(3)[0]
+                return reaches(pocket, core) and reaches(core, pocket)
+
+        self.assertTrue(second_exit({}))
+        self.assertTrue(second_exit({"access": "no", "motor_vehicle": "yes"}))
+        self.assertTrue(second_exit({"motor_vehicle": "||no"}))
+        for name, tags in [
+            ("access", {"access": "no"}),
+            ("motor_vehicle", {"motor_vehicle": "no"}),
+            ("barrier=no", {"barrier": "no", "access": "no"}),
+            ("vehicle", {"vehicle": "private"}),
+            ("conditional", {"motorcar:conditional": "no @ (Nov-Apr)"}),
+        ]:
+            with self.subTest(name):
+                self.assertFalse(second_exit(tags))
 
     def test_retraced_and_overlapping_stretches_are_one_road(self):
         nodes = {1: (51.0, -114.0), 2: (51.0, -113.99), 3: (51.0, -113.98), 4: (51.01, -113.99),

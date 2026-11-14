@@ -32,9 +32,11 @@ from pathlib import Path
 import numpy as np
 import osmium
 
-# Version 2: destination-only values, all `;` members, discouraged/psv, directional access,
-# impassable ways and nodes, conditional closures on ferries. Masks of version 1 are refused.
-POLICY_VERSION = 2
+# Version 3: car access on any node (with or without a barrier tag) stops cars, as Valhalla's node
+# access mask does. Version 2: destination-only values, all `;` members, discouraged/psv,
+# directional access, impassable ways and nodes, conditional closures on ferries. Masks of
+# earlier versions are refused.
+POLICY_VERSION = 3
 
 CLASS_CODES = {
     "motorway": 1, "motorway_link": 2, "trunk": 3, "trunk_link": 4,
@@ -69,6 +71,10 @@ ACCESS_KEYS = ("motorcar", "motor_vehicle", "vehicle", "access")
 OVERRIDE_KEYS = ("motorcar", "motor_vehicle", "vehicle")
 CONDITIONAL_KEYS = tuple(f"{key}:conditional" for key in ACCESS_KEYS)
 CONDITION = re.compile(r"(?:^|;)\s*([A-Za-z_]+)\s*@")
+# `osmium tags-filter` expressions for the nodes `barrier_blocks` must see: barriers, impassable
+# nodes and every node with a car access key, barrier or not.
+NODE_FILTER = ("n/barrier", "n/impassable=yes", "n/smoothness=impassable",
+               *(f"n/{key}" for key in ACCESS_KEYS + CONDITIONAL_KEYS))
 PASSABLE_BARRIERS = {
     "gate", "lift_gate", "swing_gate", "sliding_gate", "hampshire_gate", "cattle_grid",
     "toll_booth", "border_control", "entrance", "height_restrictor",
@@ -223,20 +229,22 @@ def way_policy(tags):
 
 
 def barrier_blocks(tags):
-    """True for a node cars cannot pass: an impassable node without an explicit car permission,
-    a barrier with a conditional or destination-only restriction, or a barrier whose car access
-    (or, untagged, whose type) stops cars."""
+    """True for a node cars cannot pass. Car access on the node decides first, whatever its
+    `barrier` tag (none, `no` or a type): Valhalla applies a node's access mask to every edge
+    through it. So an impassable node without an explicit car permission, a conditional or
+    destination-only restriction, or a recognised non-public car value (most specific key first)
+    blocks. Without car access tags, only a barrier type that stops cars blocks."""
     if tags.get("impassable") == "yes" or tags.get("smoothness") == "impassable":
         if car_verdict(tags, OVERRIDE_KEYS) != "public":
             return True
-    barrier = tags.get("barrier")
-    if barrier is None or barrier == "no":
-        return False
     if seasonal_closure(tags) or destination_only(tags):
         return True
     verdict = car_verdict(tags)
     if verdict is not None:
         return verdict != "public"
+    barrier = tags.get("barrier")
+    if barrier is None or barrier == "no":
+        return False
     return barrier not in PASSABLE_BARRIERS
 
 
@@ -532,10 +540,17 @@ def extract(roads_pbf, barriers_pbf, output):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--roads", required=True, type=Path, help="highway/ferry ways with their nodes")
-    parser.add_argument("--barriers", type=Path, help="barrier nodes of those ways")
-    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--roads", type=Path, help="highway/ferry ways with their nodes")
+    parser.add_argument("--barriers", type=Path, help="nodes of those ways matching NODE_FILTER")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--print-node-filter", action="store_true",
+                        help="print the osmium tags-filter expressions for --barriers and exit")
     options = parser.parse_args(argv)
+    if options.print_node_filter:
+        print(" ".join(NODE_FILTER))
+        return 0
+    if options.roads is None or options.output is None:
+        parser.error("--roads and --output are required")
     header = extract(options.roads, options.barriers, options.output)
     print(json.dumps({key: header[key] for key in ("nodes", "segments", "runs", "policyVersion")}))
     return 0

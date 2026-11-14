@@ -59,22 +59,23 @@ built from `alberta-british-columbia-261111.osm.pbf`
 (`0c94f9e2fbd67ceb44070c6300f28aba7ba5db936786a4629743c199f8179558`).
 
 Measured on the maintainer's Mac (local, 2026-11-14, extract of 2026-11-11, graph
-`2c24dd40…457c`):
+`2c24dd40…457c`, policy 3):
 
 | Step                                                     |        Time | Peak memory                         |
 | -------------------------------------------------------- | ----------: | ----------------------------------- |
 | `serving-graph.mts` (admins, tiles, canonical archive)   | 4.5–6.5 min | not measured                        |
 | Verify PBF and serving graph (2.2 GB + 0.6 GB)           |       1–3 s | streaming                           |
-| Extraction (`osmium tags-filter`, `dead-end-extract.py`) |        67 s | not re-measured                     |
-| Analysis and mask (Node)                                 |       1.6 s | 0.64 GB RSS (whole builder process) |
-| **Total `dead-end-mask.mts`**                            |    **70 s** |                                     |
+| Extraction (`osmium tags-filter`, `dead-end-extract.py`) |        52 s | not re-measured                     |
+| Analysis and mask (Node)                                 |       1.0 s | 0.68 GB RSS (whole builder process) |
+| **Total `dead-end-mask.mts`**                            |    **54 s** |                                     |
 
-1,133,353 topology nodes and 1,433,129 segments (39 of them copies of another stretch). The mask
-is **422 KB** (96,402 publishable-class ways, 401 with per-interval geometry).
+1,133,526 topology nodes and 1,433,161 segments (39 of them copies of another stretch). The mask
+is **422 KB** (SHA-256 `e265cb11…e572`; 96,402 publishable-class ways, 401 with per-interval
+geometry).
 
 ## What counts as a road
 
-`dead-end-extract.py` (policy version 2) keeps a way only when the public may drive a private car
+`dead-end-extract.py` (policy version 3) keeps a way only when the public may drive a private car
 through it at any time. It follows Valhalla 3.8.2's
 [`lua/graph.lua`](https://github.com/valhalla/valhalla/blob/3.8.2/lua/graph.lua) and is stricter
 where they differ:
@@ -110,15 +111,22 @@ where they differ:
 - **Ferries** count only with explicit public car access on `motorcar` or `motor_vehicle`, then
   under all the rules above, so Vancouver Island joins the mainland through its car ferries and a
   passenger or seasonal ferry is no exit.
-- **Barriers.** A barrier that stops cars (bollard, block and similar by default; a gate only
-  when its car access is not public, destination-only or conditionally closed) splits the road
-  into two separate road ends.
+- **Nodes.** Car access on a node decides first, whether or not it has a `barrier` tag (none,
+  `barrier=no` or a type): Valhalla applies a node's access to every edge through it. A node whose
+  most specific recognised car key is not public, or that is destination-only, conditionally
+  closed or impassable without explicit car permission, stops cars; without car access tags,
+  only a barrier type that stops cars does (bollard, block and similar; not gates, cattle grids
+  or toll booths). A stopping node splits the road into two separate road ends. The build's node
+  filter is the extractor's own (`--print-node-filter`): barriers, impassable nodes and every node
+  with a car access key or its `:conditional`.
 
 Removing a road can only add single-access regions, never remove one, so every doubtful case
 errs towards exclusion. A publishable-class way removed this way is listed in the mask as
 excluded. On the 2026-11-11 extract, 259 publishable-class ways are removed (182 access,
 74 conditional, 3 one-way); against the format-1 mask of 2026-11-14, 138 ways are no longer
-eligible and none became eligible.
+eligible and none became eligible. Policy 3 (car access on nodes) changed the status of no
+publishable way on this extract: stopping nodes add 173 topology nodes and 528 more nodes are
+isolated, none of them on a publishable interval.
 
 Topology nodes are OSM nodes shared by two kept ways (or used twice by one), way ends and the
 two sides of each stopping barrier. A segment is a stretch of one way between two topology nodes.
@@ -170,7 +178,10 @@ All steps are iterative (no recursion) over typed arrays.
    _clipped_ node. A single-access region or isolated component containing one is **unknown**, not
    excluded and never eligible: the road may continue outside the extract and come back, or not.
 5. **Road ends.** Multi-source Dijkstra from every _true terminal_ (a road end that is not
-   clipped) of a publishable or tertiary road, bounded at 400 m. Any node-to-node interval of a
+   clipped) of a publishable or tertiary road, bounded at 400 m. A road end qualifies when **any
+   copy** of its physical stretch is of such a class, whichever copy represents it; the stretch
+   still counts once for degree and length, and a stretch with only residential copies does not
+   qualify. Any node-to-node interval of a
    publishable way that comes within 400 m of such an end along the network is excluded.
    - Every road end of any class is inside a single-access region and is excluded with it,
      whatever its length. The terminal list only decides how far exclusion spills past that
@@ -229,7 +240,7 @@ access checks.
   names exactly `<dir>/connected.tar`, has no existing `tile_dir`, no `tile_url` and no traffic
   extract, and is the configuration recorded in `provenance.json`; `provenance.json` is for that
   graph and its `SHA256SUMS` lists the extract it names; `connected.tar` hashes to the id with the
-  recorded size; and `dead-end-mask.json` is format 2, policy 2, engine 3.8.2, matches its digest,
+  recorded size; and `dead-end-mask.json` is format 2, policy 3, engine 3.8.2, matches its digest,
   and names the same graph id, provenance record, extract and data date. Anything else throws
   `DeadEndMaskError`. Messages carry no map content.
 - **Modes.** `off`: nothing is read. `collect`: optional (collection publishes nothing); a
@@ -253,16 +264,24 @@ The mask belongs to exactly one graph build, and the API must read the bytes Val
    `docker compose -f compose.yaml -f compose.traffic-graph.yaml up -d --force-recreate valhalla api`.
    The overlay replaces the scripted Valhalla (which may build tiles and serves
    `/custom_files/valhalla_tiles.tar`) with `valhalla_service` on the read-only directory at
-   `/graph`, with a read-only root file system and no egress; its entrypoint refuses to serve
-   unless `graph.json` is the configured id, `connected.tar` hashes to it and the configuration
-   and provenance name only that archive. The API mounts the same directory read-only at `/graph`.
+   `/graph`, with a read-only root file system and no egress. Its entrypoint is exactly
+   `/bin/sh /navoss/serve-verified-graph.sh` with no command: `valhalla-serve-verified.sh`,
+   mounted read-only, which refuses to serve unless `graph.json` is the configured id,
+   `connected.tar` hashes to it and the configuration and provenance name only that archive,
+   then runs `valhalla_service /graph/valhalla-serving.json 2`. The API mounts the same directory read-only at `/graph`.
    The base `compose.yaml` is unchanged: its API has no graph directory and cannot start `live`.
 4. `infra/compose/verify-traffic-graph.sh`, run by the operator with the existing Docker access
    (the API never gets the Docker socket), re-checks the directory and inspects the **running**
-   containers: Valhalla runs the pinned 3.8.2 image with the verifying entrypoint and is healthy;
-   Valhalla and the API each mount only this directory, read-only, at `/graph`, with read-only
-   root file systems; the API has the directory and id; and both started after the directory last
-   changed. Only then set `live`. `check-stack.sh` runs it whenever the mode is `live`.
+   containers: Valhalla runs the pinned 3.8.2 image, healthy, with **exactly** that entrypoint,
+   no command and no other arguments, and mounts only this directory and the repository's
+   `valhalla-serve-verified.sh`, both read-only; the API mounts only this directory, read-only,
+   with the directory and id configured; both have read-only root file systems and started after
+   the directory or the entrypoint script last changed. The API's matcher endpoint, selected as
+   the traffic service selects it (`VALHALLA_TRACE_URL` when set, even empty, otherwise
+   `trace_attributes` resolved against `VALHALLA_URL`), must be exactly
+   `http://valhalla:8002/trace_attributes`, and on every network the API shares with it the
+   inspected Valhalla must be the only container answering to `valhalla`. It needs `docker`,
+   `jq`, `perl` and `sha256sum` or `shasum`. Only then set `live`. `check-stack.sh` runs it whenever the mode is `live`.
 5. A new graph means a new directory, a new mask, the new id, recreating both Valhalla and the
    API, and clearing traffic observations and releases of the old graph. Nothing replaces a graph
    under a running stack; a container started before the directory changed fails step 4.
@@ -270,9 +289,15 @@ The mask belongs to exactly one graph build, and the API must read the bytes Val
 Tested locally (2026-11-14, Docker Desktop, the real `2c24dd40…` directory): the overlay serves
 the graph and routes; Valhalla exits before serving for a wrong configured id, a truncated archive
 under matching manifests, and a configuration naming `/graph/valhalla_tiles.tar`; the API image
-loads in `live` and refuses a wrong id, a truncated archive, a policy-1 mask and a configuration
-naming `/custom_files/valhalla_tiles.tar`; the verifier passes the running stack and refuses a
-writable Valhalla mount and a directory changed after start.
+loads in `live` and refuses a wrong id, a truncated archive, an old-policy mask and a
+configuration naming `/custom_files/valhalla_tiles.tar`; the verifier passes the running stack
+and refuses a writable Valhalla mount and a directory changed after start.
+`scripts/verify-traffic-graph.test.mjs` (CI) runs the real verifier against a real directory and
+recorded-shape container records and checks that it refuses an expected `exec` hidden in a
+comment before another configuration, an extra command, another entrypoint script, a writable
+mount, a matcher at another private Valhalla, an empty trace URL, a `VALHALLA_URL` fallback to
+another host, no shared `valhalla` alias, a second container answering to `valhalla`, and a
+container started before the directory changed.
 
 ## Verification on the real Alberta/BC graph
 
@@ -281,7 +306,8 @@ routes with Valhalla 3.8.2 serving that directory through the overlay, walks eac
 `edge_walk` (the API's own `walkRoute`), and looks up every publishable whole edge of at least
 20 m. It also runs synthetic traces (route geometry, 2 s fixes, 60 km/h) through the API's matcher
 with and without the mask, and, with `--topology`, names the choke junction and region behind each
-refused edge. Throwaway local run, 2026-11-14, graph `2c24dd40…457c`.
+refused edge. Throwaway local run, 2026-11-14, graph `2c24dd40…457c`, policy-3 mask (every
+figure below is the same as with the policy-2 mask).
 
 **What is sampled and what is exhaustive.** Routed edges are samples: 40 random routes per city
 box and fixed routes. The region analysis (choke, region length, whether it leaves the extract)
@@ -354,10 +380,12 @@ Whole OSM ways under the routed edges:
   a second exit; a divided entry and two roads from one junction are one access; one-way motorway
   carriageways with a diverge and a merge stay eligible; isolated and unknown regions; a stopping
   barrier; the 400 m rule on curved, hairpin and sparse geometry; a boundary-crossing way read
-  back by the API; province boundaries. Mutation-checked: letting bridges qualify, counting
-  copies, and querying the node itself each fail a test.
+  back by the API; province boundaries; a road end whose stretch has a secondary and a
+  residential copy starts the 400 m rule whichever copy represents it, and a residential-only
+  spur does not. Mutation-checked: letting bridges qualify, counting copies, querying the node
+  itself, and qualifying a road end by its representative copy only each fail a test.
 - `apps/api/test/dead-end-mask.test.ts` (CI): uniform and mixed lookups; refusal of malformed,
-  other-format, format-1, policy-1 or missing-policy, other-engine, edited ways and re-labelled
+  other-format, format-1, earlier-policy or missing-policy, other-engine, edited ways and re-labelled
   metadata, other-graph and invalid masks; the configured serving graph: a wrong archive under
   matching manifests, a missing archive, configurations naming another archive or with a tile
   fallback, missing, unsupported and re-issued provenance, missing and format-1 masks, and a
@@ -369,9 +397,12 @@ Whole OSM ways under the routed edges:
   more, directional access, and real secondary-outlet pockets through the extractor with an
   independent reachability oracle (no route between pocket and core avoiding the choke in both
   directions for each closure; a public outlet and `||no` keep one); retraced and overlapping
-  stretches collapse while distinct geometry does not; an impassable node. Mutation-checked:
-  destination-only as public, first member only, ferries skipping closures, ignoring directional
-  access, ignoring impassable, and not collapsing each fail tests.
+  stretches collapse while distinct geometry does not; an impassable node; a pocket whose second
+  outlet passes a node with car access alone (`access=no`, `motor_vehicle=no`, `barrier=no` with
+  `access=no`, `vehicle=private`, a conditional closure) through the build's own `osmium` node
+  filter. Mutation-checked: destination-only as public, first member only, ferries skipping
+  closures, ignoring directional access, ignoring impassable, not collapsing, the barrier
+  shortcut before node access, and a node filter without access keys each fail tests.
 
 ## Limitations
 
