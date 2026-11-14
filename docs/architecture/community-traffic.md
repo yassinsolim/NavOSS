@@ -643,9 +643,8 @@ grid and the lifetime to 15 minutes.
   which together bound shutdown (`pool.end()` waits only for checked-out clients). A blocked epoch
   is cancelled on the server and its transaction aborted (tested against PostGIS with the table
   locked). A connection whose `ROLLBACK` cannot be confirmed is destroyed, never returned to the
-  pool, in both pools. A credential assertion blocked on its installation's row lock fails with a
-  retryable `503` after the lock timeout and rolls back its counter update; its challenge stays
-  consumed. Tested on PostGIS: seven concurrent assertions against a held lock all fail within the bound the limits set. A request takes a pooled connection twice (to burn its challenge, then for its transaction) and waits for the lock once, so with the 5 s connection and lock timeouts the bound is 15 s plus handshake and queries (asserted under 18 s; GitHub's Linux runner measured 15.0 s, which an earlier 13 s assertion wrongly failed), no session is left running or in a transaction, shutdown completes while one is blocked,
+  pool, in both pools. A credential assertion blocked on its installation's row lock fails with a retryable `503` once its wait is cut (`lock_timeout` or `statement_timeout`) and rolls back its counter update; its challenge stays
+  consumed. Tested on PostGIS: seven concurrent assertions against a held lock all fail with a retryable `503`. Each wait is bounded on its own, and there is no single request deadline: a request waits for a pooled connection twice (to burn its challenge, then for its transaction), at most 5 s each; its row lock wait is cut at 5 s per lock acquisition (`lock_timeout`), but `FOR UPDATE` can wait on the tuple lock and then on the holder's transaction, so only `statement_timeout` (10 s) bounds that statement. The worst case for one credential request is therefore about 20 s plus queries (the test asserts under 23 s; GitHub's Linux runner measured 15.0 s, which an earlier 13 s assertion wrongly failed). In that test no session is left running or in a transaction, shutdown completes while one is blocked,
   the counter is unchanged, the burned challenges stay refused, and a fresh assertion and a new
   registration then succeed.
 

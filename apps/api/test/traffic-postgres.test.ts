@@ -982,13 +982,15 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
         await blocker.query(`SELECT 1 FROM ${SCHEMA}.community_installations FOR UPDATE`);
         const started = Date.now();
         const responses = await Promise.all(prepared.map(ask));
-        // Each request takes a pooled connection twice, to burn its challenge and then for its
-        // transaction, and waits for the installation lock once. Each wait is ended by its own
-        // limit (`connectionTimeoutMillis`, and PostgreSQL's `lock_timeout`), so all seven fail,
-        // retryably, within those three waits plus a few seconds of handshake and queries.
+        // Each wait is bounded on its own; there is no single request deadline. A request takes a
+        // pooled connection twice (to burn its challenge, then for its transaction), each wait
+        // ended by `connectionTimeoutMillis`. Its FOR UPDATE can wait on the tuple lock and then
+        // on the holder's transaction; `lock_timeout` applies to each acquisition, so only
+        // `statement_timeout` limits the statement. All seven therefore fail, retryably, within
+        // two pool waits plus one statement, plus a few seconds of handshake and queries.
         expect(Date.now() - started).toBeLessThan(
           2 * BOUNDED_POOL_LIMITS.connectionTimeoutMillis +
-            BOUNDED_POOL_LIMITS.lock_timeout +
+            BOUNDED_POOL_LIMITS.statement_timeout +
             3_000,
         );
         expect(responses.map(({ statusCode }) => statusCode)).toEqual(Array(7).fill(503));
