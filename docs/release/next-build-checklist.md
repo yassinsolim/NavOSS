@@ -1,16 +1,18 @@
 # Next build checklist
 
-Status refreshed: 2026-11-14. The latest shipped build is `0.1.0 (70)` from `afa4067`. Build 73 was signed but its upload failed; it is now held for a matcher regression. This checklist is for a corrected candidate and for the server changes that must follow it. It states conditions; it does not claim any of them is met unless it cites evidence.
+Status refreshed: 2026-11-14. The latest shipped build remains `0.1.0 (70)` from `afa4067`. Build 73 was never uploaded and remains held for its matcher regression. Corrected build 74 was signed and verified from `d0594cd` with upload disabled. This checklist distinguishes code/build verification from Apple processing and tester delivery.
 
 Context: `main` contains the phone UI refresh (#78), native contract v10 (#75, #84), the CarPlay quality pass (#77), `/v2/routes` clients (#84) the community reports and traffic client (#85) and on-device offline maps (#83). The deployed production service (`https://navoss-api.yassin.app`) still runs the older API image (Calgary and Kelowna; no `/v2/routes`, community, traffic or offline manifest) and cannot be redeployed yet. The next build must work against it.
 
-## Current release hold
+## Corrected candidate and prior binary hold
 
 **Do not retry build 73 merely because its Apple agreement blocker is cleared.** Exact-core scratch probes reproduced a regression against build 70: after a five-minute GPS gap on a looping/out-and-back route, genuine fixes at 300 m can advance build 73's matcher to 3,680 m and arrival, while build 70 remains at 300 m without arrival. An uncapped reported speed can also open an unjustified far-ahead match. These probes are not physical-device evidence.
 
-The minimal matcher fix is [PR #100](https://github.com/yassinsolim/NavOSS/pull/100). It must pass its independent review and a freshly built eight-phase navigation harness before a corrected candidate is uploaded. Progress persistence and restore changes are a separate follow-up; the unchanged restore-loop weakness is documented rather than bundled into this release gate.
+The minimal matcher fix [#100](https://github.com/yassinsolim/NavOSS/pull/100) passed independent review on `ec9b1f8` and a freshly rebuilt eight-phase harness, and merged as `d0594cd`. The review independently confirmed safe loop-gap behaviour, rejection of impossible jumps and correct divided-road handling, while ordinary/tunnel/arrival cases still worked. Source and results are retained in local ignored artifacts; none are physical-device proof.
 
-The earlier go below predates these reproduced regressions and is historical evidence, not permission to upload build 73. An Apple agreement still needs the Account Holder's acceptance. No agent may accept those terms on the owner's behalf.
+The exact `d0594cd` tree is frozen on `release/matcher-candidate-20261114`. Hosted run `43601926831` selected Xcode 26.6, allocated build 74, built and verified its signed IPA, and skipped upload. This is a completed signing preflight, not TestFlight availability. A pending Apple agreement still needs the Account Holder's acceptance; no agent may accept it for the owner. After confirmation, a new build/upload from that frozen branch receives the next actual EAS number.
+
+Progress persistence and restore (#102), and additional traffic safeguards (#103/#104), remain separate unmerged follow-ups. They do not alter this candidate. The earlier go below is historical evidence; neither it nor Apple's agreement acceptance authorizes retrying the held build 73.
 
 ## 0. Validation evidence (2026-11-13, `release/validation-0.2`, code `6180ffc`)
 
