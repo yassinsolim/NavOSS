@@ -116,7 +116,9 @@ export function MapPreferencesSheet({
             options={STYLE_OPTIONS}
             value={preferences.stylePreset}
           />
-          <Text style={styles.hint}>Auto follows the system light or dark appearance.</Text>
+          {preferences.stylePreset === 'automatic' && (
+            <Text style={styles.hint}>Follows the system light or dark appearance.</Text>
+          )}
         </View>
 
         <View key={`section-2-${String(fontScale)}`} style={styles.section}>
