@@ -2,7 +2,7 @@
 
 Status refreshed: 2026-11-14. The latest shipped build remains `0.1.0 (70)` from `afa4067`. Build 73 was never uploaded and remains held for its matcher regression. Corrected build 74 was signed and verified from `d0594cd` with upload disabled. This checklist distinguishes code/build verification from Apple processing and tester delivery.
 
-Context: `main` contains the phone UI refresh (#78), native contract v10 (#75, #84), the CarPlay quality pass (#77), `/v2/routes` clients (#84) the community reports and traffic client (#85) and on-device offline maps (#83). The deployed production service (`https://navoss-api.yassin.app`) still runs the older API image (Calgary and Kelowna; no `/v2/routes`, community, traffic or offline manifest) and cannot be redeployed yet. The next build must work against it.
+Context: `main` contains the phone UI refresh (#78), native contract v11 (#102; v10 introduced `/v2/routes` in #75/#84), the CarPlay quality pass (#77), `/v2/routes` clients (#84), the community reports and traffic client (#85) and on-device offline maps (#83). The frozen build-74 candidate remains on native contract v10. The deployed production service (`https://navoss-api.yassin.app`) still runs the older API image (Calgary and Kelowna; no `/v2/routes`, community, traffic or offline manifest) and cannot be redeployed yet. The next build must work against it.
 
 ## Corrected candidate and prior binary hold
 
@@ -12,7 +12,13 @@ The minimal matcher fix [#100](https://github.com/yassinsolim/NavOSS/pull/100) p
 
 The exact `d0594cd` tree is frozen on `release/matcher-candidate-20261114`. Hosted run `43601926831` selected Xcode 26.6, allocated build 74, built and verified its signed IPA, and skipped upload. This is a completed signing preflight, not TestFlight availability. A pending Apple agreement still needs the Account Holder's acceptance; no agent may accept it for the owner. After confirmation, a new build/upload from that frozen branch receives the next actual EAS number.
 
-Progress persistence and restore (#102), and additional traffic safeguards (#103/#104), remain separate unmerged follow-ups. They do not alter this candidate. The earlier go below is historical evidence; neither it nor Apple's agreement acceptance authorizes retrying the held build 73.
+Progress persistence and restore (#102) merged on `main` as `b934040`, but remain unshipped and outside this frozen candidate. Additional traffic safeguards (#103/#104) remain separate unmerged follow-ups. The earlier go below is historical evidence; neither it nor Apple's agreement acceptance authorizes retrying the held build 73.
+
+### Post-candidate verification (2026-11-14)
+
+- **Production compatibility, actual shipping JS consumers:** a strict write-allow-list allowed only configuration/cameras reads and search/route computation. `/v2/config`, `/v1/search`, `/v1/routes` and `/v1/cameras` each returned HTTP 200; the client accepted three routes and 57 cameras. The server declared `/v1/routes`, community reports and live traffic off, and routing traffic unavailable. No `/v2/routes` or community write was sent. Evidence: local ignored `artifacts/release-validation/shipping-old-server-compat-20261114.json`. This was an API-consumer smoke, not a new simulator or head-unit run.
+- **Restore #102, separate from the candidate:** independent probes compiled against exact head `07a7cd2` passed all 30 original checks and five boundary cases. Existing arrival deferrals preserve their original corroboration with normal, future and missing capture times; stationary biased fixes do not arrive, while genuinely driving in does. CI run `43608571630` passed JavaScript/TypeScript, native iOS core and CarPlay generated sources before merge `b934040`. Independent sources/results are in local ignored `artifacts/matcher-restore-review/07a7cd2-independent/`; owner-run service logs are in `artifacts/matcher-restore-review/service-e2e/`.
+- Neither check changes the frozen candidate, allocates another build number, uploads a binary or proves real-vehicle CarPlay or App Attest.
 
 ## 0. Validation evidence (2026-11-13, `release/validation-0.2`, code `6180ffc`)
 
