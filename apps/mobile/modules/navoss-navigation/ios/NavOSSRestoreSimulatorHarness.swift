@@ -189,8 +189,10 @@ import Foundation
     }
 
     private static func probe() {
-      probeUnknownCaptureTimeNeedsMovement()
+      // Each probe service numbers its generations from zero, and the shared CarPlay store
+      // ignores a lower generation than it has seen: the probe that checks CarPlay runs first.
       probeRestorePublication()
+      probeUnknownCaptureTimeNeedsMovement()
       probeCheckpointRaces()
       log("probe done")
     }
