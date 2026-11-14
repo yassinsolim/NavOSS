@@ -398,20 +398,23 @@ across that contributor's batches.
   only for the part of the edge no earlier piece of that contributor drove; the first report of a
   metre wins. Standing still is counted per place (stops within 25 m are one place; an honest
   contributor's stops in different batches are at least the two 100 m trims apart) and per
-  claimed time: each stop is placed in time with its batch's `capturedAt` and offsets, a stop
-  wholly inside time already counted at that place adds nothing, and an overlap of a minute or
-  more adds only the time outside it. An overlap shorter than a minute is what two honest
-  consecutive batches of one long stop can show, because `capturedAt` is rounded down to the
-  minute, so such a stop counts in full. Before this, every upload's distance and time were
+  claimed time: each stop is placed in time with its batch's `capturedAt` and offsets, and the
+  standing time a place counts is the union of its claimed windows. A repeat adds nothing, and
+  any overlap adds only the time outside what was already counted. Two honest consecutive batches
+  of one long stop can appear to overlap by up to a minute, because `capturedAt` is rounded down
+  to the minute; that overlap is lost, so honest standing can be undercounted by up to a minute
+  per batch boundary rather than time being manufactured (an earlier rule counted such a window
+  in full, and four valid re-cuts of one 40 s stop then counted 160 s; the union counts 80 s,
+  regression-tested over HTTP). Before this, every upload's distance and time were
   summed: on a 1.5 km edge, 100 m in 50 s then 200 m in 10 s is 18 km/h (published 20), and
   replaying the slow piece nine times made it 8.6 km/h, so three such installations moved the
   release to 10 (regression-tested through the released median and the credit count).
 - **Where time idempotence stops.** Distance is exactly idempotent. Standing time is not, because
-  the upload carries only a minute-rounded start and the server cannot tell a re-batched copy of
-  a stop from the next minute of the same stop: a client that re-cuts the same trace into
-  batches with different starts can add up to just under a minute of standing per stop each time
-  (an exact repeat adds nothing), and a client that fabricates `capturedAt` can claim any
-  standing it likes. Closing this would need finer timestamps or a batch identifier, which the
+  the upload carries only a minute-rounded start and the server cannot tell a re-cut copy of a
+  stop from the same stop: each valid re-cut of the same trace can shift its claimed window by
+  up to just under a minute and so add up to that much standing per stop (only the part outside
+  the union already counted; an exact repeat adds nothing), and a client that fabricates
+  `capturedAt` can claim any standing it likes. Closing this would need finer timestamps or a batch identifier, which the
   upload deliberately does not carry. Both cases are fabricated traffic, bounded only by the
   admission controls, the rate limits and the median.
 - **Floor:** 300 m of the edge, or half of it when that is less. Then the pieces become one
@@ -449,18 +452,25 @@ is now **held**, as time only, and counted once the trip is seen going on:
 - It counts only when that contributor's own movement brackets it: movement on the same edge
   that ended before it, and movement that began after it and reaches at least **125 m** beyond it
   (the 100 m batch trim plus the 25 m placement uncertainty), either along the same edge or onward
-  across its end node, through edges of one batch that each start where the previous ends. Both
+  across its end node, through edges of one batch that each begin at the node the previous one
+  ends at. Both
   are judged on claimed time, allowing for the minute rounding. So a dwell is counted only once
   the contributor has demonstrably driven on at least as far as the trim protects. Movement that
   had already passed it before it began contradicts it, and it is dropped.
-- Going on across the end node is recognised only for an edge whose whole map geometry starts at
-  exactly the vertex (to six decimals) where the held edge's geometry ends; both geometries are
-  graph data, never an upload. The contributor's state on the held edge is found with the
-  current request's credential, exactly as for any edge, and nothing linking the two edges is
-  kept. Coordinate equality is not graph node identity: two nodes at one coordinate (a
-  grade-separated crossing modelled with coincident nodes) would read as connected. Proving node
-  identity needs Valhalla's node id for each edge end (`edge.end_node`/begin node in
-  `trace_attributes`), which the matcher does not request today.
+- Going on across the end node is recognised only by graph node identity, never by coordinates:
+  two nodes at one position (a grade-separated crossing modelled with coincident nodes) are not
+  connected. The matcher requests each matched edge's GraphId (`edge.id` in `trace_attributes`;
+  Valhalla 3.8.2's `edge.end_node` there is the node's elapsed time and type, not its id) and,
+  from the verbose `/locate` answer it already requests for the access check (with
+  `ignore_oneways`, so that a one-way edge's opposing edge is listed), reads the edge's end node
+  and, as Valhalla defines it, its begin node: the end node of its one opposing edge (the same way,
+  the other direction, the same shape, the complementary share along). An edge continues a held
+  dwell only when it begins at exactly the node the held edge ends at; an edge whose ids are not
+  confirmed continues nothing (its standing is then not counted), and is still published on its
+  own merits. Checked on the verified serving graph `2c24dd40…`: the Deerfoot edge after the stop
+  begins at the node the stop's edge ends at. The contributor's state on the held edge is found
+  with the current request's credential, exactly as for any edge, and nothing linking the two
+  edges is kept.
 - A dwell that is never followed by movement, because the trip ended or sharing was cancelled at
   the stop, is never counted. It expires with the contributor's partial coverage, within the same
   15-minute window, and nothing about it leaves memory. Holding it releases no part of the
@@ -593,7 +603,10 @@ A served speed is therefore at most 15 minutes old as a release and rests on dri
 minutes old. A jam that has cleared can stay visible, and lengthen route ETAs, for up to 30
 minutes after the driving that showed it. Flow features carry their `observedAt` boundary, and an
 adjusted v2 route carries `traffic.snapshotAt` and `traffic.oldestObservedAt` (see
-[Route traffic](#route-traffic)); the phone and CarPlay credit show "as of" the oldest.
+[Route traffic](#route-traffic)); the phone and CarPlay credit and the phone's traffic-layer
+caption say "updated" at the oldest boundary. A boundary is when the server published, not when
+anyone drove: the driving behind it can be up to the 15-minute cohort window older, so no surface
+presents it as an observation time.
 
 - **Collect mode.** Cohorts are formed, counted for the operator, and thrown away at the
   boundary. Nothing is written to the database and nothing is served.
@@ -688,7 +701,9 @@ twelve), looks up published speeds for those edges, and:
   `congestion` (one of `unknown`, `free`, `slow`, `heavy`, `stopped` per geometry segment), and
   coarse freshness: `traffic.snapshotAt`, the epoch boundary whose snapshot supplied the speeds,
   and `traffic.oldestObservedAt`, the earliest release boundary of any speed applied to the route
-  (older than `snapshotAt` when the route mixes releases). Both are on the five-minute grid; the
+  (older than `snapshotAt` when the route mixes releases). Despite its name, `oldestObservedAt`
+  is a publication boundary, not a driving time: the driving behind it began up to the
+  15-minute cohort window earlier. The name is kept for contract compatibility. Both are on the five-minute grid; the
   response's `generatedAt` is the request time and is not traffic freshness. Both are optional in
   the v2 contract, so clients tolerate a server without them, and never on `/v1/routes`;
 - otherwise returns the route untouched, which means **traffic is unavailable for that route**.
@@ -722,7 +737,13 @@ duration. When at least one route was adjusted the result carries `trafficSource
 In `/v2/routes`, when `trafficSource` is set it becomes `source.trafficSource` with
 `source.traffic: "live"`; routes without enough published flow carry no `traffic` or
 `congestion`. Clients must present routes in the returned order and must not re-sort by
-duration, or the ranking bound is lost.
+duration, or the ranking bound is lost. The phone (`fetchRoutes`) and the native client
+(`NavOSSNavigationAPIClient`, used by CarPlay) keep the `/v2/routes` order as sent and select its
+first route; only a `/v1/routes` answer, from the deployed server that has no community traffic,
+is re-ordered with the shared `compareRouteAlternatives` rule. "Fastest" names on the phone and
+in CarPlay follow duration (`label`, `navOSSCarPlayFastestRouteIndex`), never position. Tested on
+an API response in which traffic made the recommended route slower than an unobserved minor-road
+alternative.
 
 ### Config
 
@@ -777,9 +798,8 @@ Unproven, and to be established before `live`:
 - **Load, and the production path.** Local latencies are single-client under CPU emulation. Load
   at the expected contributor count, and behaviour behind Cloudflare and Caddy, are untested.
 - **Route ETA in a client.** `/v2/routes` returns adjusted routes with coarse freshness, and the
-  phone route preview and CarPlay credit say "as of" the oldest release used. That is unit-tested
-  only: no client has presented community-adjusted routes from a live server or on a rendered
-  surface.
+  phone route preview, the traffic-layer caption and the CarPlay credit say "updated" at the
+  oldest release boundary used. CarPlay is unit-tested only; no head unit has shown it.
 - **The admission controls in practice.** How often carrier NAT puts two genuine newcomers in one
   /24 within one cohort, and how much coverage the 24-hour wait costs, is unknown.
 
@@ -997,8 +1017,8 @@ Everything above, and:
       run at the expected contributor count (`maxConcurrentMatches` stays 1). Single-client
       latencies are measured locally; load is not.
 - [ ] `/v2/routes` presents community-adjusted routes only after its own review: returned order
-      preserved, `fastest` label not used to select, `traffic.oldestObservedAt` shown wherever
-      community traffic is credited (implemented in the phone and CarPlay, unit-tested only).
+      preserved, `fastest` label not used to select, `traffic.oldestObservedAt` shown as an
+      update time wherever community traffic is credited (implemented in the phone and CarPlay).
 - [ ] The residual risks below are accepted in writing, or admission is strengthened first.
 
 ### Accepted residual risks
@@ -1027,8 +1047,8 @@ Enabling `live` means accepting these plainly:
 | What                                                                                                                                                                                                                                                          | Where                                    | How long                                                                                                                                                                                     |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Uploaded positions, offsets, `capturedAt`                                                                                                                                                                                                                     | Request memory                           | Until the request finishes (not zeroed)                                                                                                                                                      |
-| Pending sample: cohort tag, arrival epoch, driving start, cohort salt, and its evidence (as for partial coverage, below); newcomers also a cohort-salted network marker                                                                                       | API process memory                       | Until released, or dropped at the first boundary more than 15 min after its driving began or its arrival epoch: at most 20 min                                                               |
-| Partial coverage: cohort tag, driven intervals along the edge (metres), counted distance and time, each batch's driven span (metres, claimed times), stops and held dwells (distance along the edge, claimed times), earliest arrival epoch and driving start | API process memory                       | Until it completes a sample, or dropped at the first boundary more than 15 min after its earliest piece: at most 20 min                                                                      |
+| Pending sample: cohort tag, arrival epoch, driving start, cohort salt, and its evidence (as for partial coverage, below); newcomers also a cohort-salted network marker                                                                                       | API process memory                       | Until released, or dropped at the first boundary more than 15 min after the oldest evidence it counted (including evidence counted after it completed) or its arrival epoch: at most 20 min  |
+| Partial coverage: cohort tag, driven intervals along the edge (metres), counted distance and time, each batch's driven span (metres, claimed times), stops and held dwells (distance along the edge, claimed times), earliest arrival epoch and driving start | API process memory                       | Until it completes a sample (then kept with it, above), or dropped at the first boundary more than 15 min after its oldest counted evidence: at most 20 min                                  |
 | Publication record: the boundary the stored rows are, and their count                                                                                                                                                                                         | `traffic_publication`                    | Rewritten at every boundary; erased on every API start                                                                                                                                       |
 | Release: edge, speed, boundaries, edge geometry                                                                                                                                                                                                               | `traffic_releases`                       | Never served after the boundary 15 min after release. Deleted by the first successful publication at or after that boundary; erased on every API start, and retried until erased while `off` |
 | Credential and seed                                                                                                                                                                                                                                           | Phone memory; never stored by the server | Credential valid 2 h; unusable after an API restart                                                                                                                                          |
