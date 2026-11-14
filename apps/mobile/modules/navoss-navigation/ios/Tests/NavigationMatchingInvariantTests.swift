@@ -256,6 +256,14 @@ final class NavigationMatchingInvariantTests: XCTestCase {
     XCTAssertTrue(core.currentSnapshot().isOffRoute)
     let base = try XCTUnwrap(core.rejoinBaseAlongMeters(near: Trace.coordinate(60, 3_000)))
     XCTAssertEqual(base, 3_000, accuracy: 1)
+    // Slightly behind the confirmed position the outbound segment still counts, from the
+    // confirmed position on: the vehicle has not gone to the far end and come back.
+    for y in [2_990.0, 2_900, 2_500] {
+      XCTAssertEqual(
+        try XCTUnwrap(core.rejoinBaseAlongMeters(near: Trace.coordinate(60, y))), 3_000,
+        accuracy: 1, "y \(y)"
+      )
+    }
     let rejoin = try XCTUnwrap(
       navigationKeepRouteRejoinAlongMeters(
         fixAlongMeters: base, routeLengthMeters: try XCTUnwrap(core.routeLengthMeters))

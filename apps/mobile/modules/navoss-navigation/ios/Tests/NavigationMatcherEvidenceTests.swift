@@ -472,6 +472,24 @@ final class NavigationMatcherEvidenceTests: XCTestCase {
     XCTAssertEqual(along(next, core), 10, accuracy: 1)
   }
 
+  /// Reported speed never explains more than a vehicle can cover: two fixes 12 s apart, both
+  /// reporting the speed ceiling, 800 m of route apart. That is a jump, held and then deferred,
+  /// not a continuation that the next fix at the destination can end the trip on.
+  func testReportedSpeedDoesNotExplainMoreThanIsPossible() throws {
+    let core = NavigationCore()
+    let corners: [(Double, Double)] = [(0, 0), (0, 200), (400, 200), (400, 0)]
+    try core.setRoute(corners.map { Trace.coordinate($0.0, $0.1) })
+    try core.updateLocation(Trace.sample(x: 0, y: 0, speed: 45, time: 0))
+    let first = try core.updateLocation(Trace.sample(x: 400, y: 0, speed: 45, time: 12))
+    XCTAssertEqual(first.routeProgress, 0)
+    for second in 13...16 {
+      let snapshot = try core.updateLocation(
+        Trace.sample(x: 400, y: 0, speed: 0, time: Double(second))
+      )
+      XCTAssertEqual(snapshot.phase, .tracking, "fix at \(second)")
+    }
+  }
+
   /// Speeds reported on both sides of a gap do explain the distance between them.
   func testReportedSpeedOnBothSidesOfAGapExplainsTheDistance() throws {
     let core = NavigationCore()

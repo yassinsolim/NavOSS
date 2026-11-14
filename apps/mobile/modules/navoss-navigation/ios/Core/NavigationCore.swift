@@ -58,8 +58,8 @@ private let implausibleJumpMarginMeters = 150.0
 //   direct      no further along the route from the anchor than the fix is from the last
 //               accepted fix on the ground, within a detour factor (`directAdvanceMeters`): the
 //               same pass of the same road, reached by moving there.
-//   explained   no further ahead than reported speed times elapsed time allows
-//               (`explainedAdvanceMeters`). The speed is the slower of the anchor's and the
+//   explained   no further ahead than reported speed times elapsed time allows, and never
+//               further than possible (`explainedAdvanceMeters`). The speed is the slower of the anchor's and the
 //               fix's; both must be reported and at most the plausible ceiling, and the gap at
 //               most ten minutes. A reported standstill explains only GPS noise.
 //   possible    no further ahead than the speed ceiling times elapsed time
@@ -458,6 +458,13 @@ final class NavigationCore {
       return nil
     }
     let fixAlongMeters = fixProgress * route.totalDistanceMeters
+    // The base moves on from the confirmed position no further than the vehicle itself is
+    // from it (the same notion of direct as in matching): a vehicle beside the place it left
+    // the route has not driven to a later leg that happens to pass there.
+    let confirmed = route.point(alongMeters: fixAlongMeters)
+    let reachMeters = directRouteDetourFactor
+      * navigationDistanceMeters(from: confirmed.coordinate, to: coordinate)
+      + rejoinBaseDistanceBandMeters
     var candidates: [(segment: Int, projection: RouteProjection)] = []
     for index in route.segmentIndices(
       near: coordinate,
@@ -465,7 +472,28 @@ final class NavigationCore {
     ) {
       let projection = route.project(coordinate, ontoSegment: index)
       if projection.alongMeters >= fixAlongMeters {
-        candidates.append((index, projection))
+        if projection.alongMeters - fixAlongMeters <= reachMeters {
+          candidates.append((index, projection))
+        }
+      } else if route.segments[index].cumulativeDistanceMeters
+        + route.segments[index].lengthMeters >= fixAlongMeters
+      {
+        // The segment the vehicle was confirmed on, with the vehicle a little behind that
+        // point: what is left of the segment still counts, from the confirmed point on.
+        // Dropping it would leave only later legs to choose from.
+        candidates.append(
+          (
+            index,
+            RouteProjection(
+              alongMeters: confirmed.alongMeters,
+              coordinate: confirmed.coordinate,
+              courseDegrees: confirmed.courseDegrees,
+              distanceMeters: navigationDistanceMeters(from: coordinate, to: confirmed.coordinate),
+              geometrySegmentIndex: confirmed.geometrySegmentIndex,
+              progress: confirmed.progress
+            )
+          )
+        )
       }
     }
     guard let nearestMeters = candidates.map(\.projection.distanceMeters).min(),
@@ -593,12 +621,16 @@ final class NavigationCore {
     let evidencedTravelMeters = elapsedSeconds.flatMap { elapsed in
       sampleSpeed.flatMap { speed in anchorSpeed.map { min(speed, $0) * elapsed } }
     }
-    let explainedAdvanceMeters = 1.5 * (evidencedTravelMeters ?? 0) + toleranceMeters
     // What the vehicle can have covered at all: the speed ceiling over the time since the
     // anchor. A repeated timestamp allows nothing; untimed replay input, the eligible window.
     let possibleAdvanceMeters = sample.timestamp == nil
       ? matchWindowMinimumForwardMeters + toleranceMeters
       : (sinceAnchorSeconds ?? 0) * maximumPlausibleSpeedMetersPerSecond + toleranceMeters
+    // Reported speeds explain their travel and half as much again, never more than possible.
+    let explainedAdvanceMeters = min(
+      possibleAdvanceMeters,
+      1.5 * (evidencedTravelMeters ?? 0) + toleranceMeters
+    )
     let limits = MatchLimits(
       // Where both speeds are reported they are the evidence, and a fix beyond what they
       // explain is held like any other jump. Where they are not, the multipath margin stands
