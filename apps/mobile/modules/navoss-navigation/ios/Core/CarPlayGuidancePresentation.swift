@@ -659,11 +659,22 @@ public func navOSSCarPlayManeuverArrow(
 // MARK: - Congestion
 
 /// The short traffic credit CarPlay shows for a route, or `nil` when the route has no live
-/// traffic. Community traffic is credited only on a route it actually observed.
-public func navOSSCarPlayTrafficAttribution(_ trip: NavOSSCarPlayTrip) -> String? {
+/// traffic. Community traffic is credited only on a route it actually observed, with how fresh
+/// when it was updated (its oldest publication boundary, not a driving time) when the server said.
+public func navOSSCarPlayTrafficAttribution(
+  _ trip: NavOSSCarPlayTrip,
+  locale: Locale = .current,
+  timeZone: TimeZone = .current
+) -> String? {
   if trip.source == "mapbox-traffic" { return "Traffic: Mapbox" }
   if trip.trafficSource == "navoss-community", trip.traffic != nil || trip.congestion != nil {
-    return "Traffic: NavOSS drivers"
+    guard let observedAt = trip.traffic?.oldestObservedAt else { return "Traffic: NavOSS drivers" }
+    let formatter = DateFormatter()
+    formatter.locale = locale
+    formatter.timeZone = timeZone
+    formatter.dateStyle = .none
+    formatter.timeStyle = .short
+    return "Traffic: NavOSS drivers · updated \(formatter.string(from: observedAt))"
   }
   return nil
 }

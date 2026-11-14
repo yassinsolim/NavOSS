@@ -249,6 +249,9 @@ export function useMapController() {
   }>();
   // The visible area on the 0.05° grid; changes only when the view crosses a grid line.
   const [viewBox, setViewBox] = useState<GeographicBox>();
+  // The visible area itself, as of the last time the camera settled: what the traffic caption
+  // describes. Fetches use the snapped `viewBox`, which reaches up to a grid cell beyond it.
+  const [visibleBox, setVisibleBox] = useState<GeographicBox>();
   const [notice, setNotice] = useState<MapNotice>();
   const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
   const [googlePlaceRatingAvailable] = useState(() => isGooglePlaceRatingAvailable());
@@ -439,9 +442,21 @@ export function useMapController() {
     [idleCameraShouldFollow, userCoordinate],
   );
 
-  /** Runs when the camera settles. State changes only when the view crosses a grid line. */
+  /**
+   * Runs when the camera settles. The fetch box changes only when the view crosses a grid line;
+   * the visible box, once per settle.
+   */
   const handleRegionDidChange = useStableCallback(
     (bounds: [west: number, south: number, east: number, north: number]) => {
+      const [west, south, east, north] = bounds;
+      setVisibleBox((current) =>
+        current?.west === west &&
+        current.south === south &&
+        current.east === east &&
+        current.north === north
+          ? current
+          : { east, north, south, west },
+      );
       const next = snapViewBox(bounds);
       setViewBox((current) =>
         current?.west === next?.west &&
@@ -1423,6 +1438,7 @@ export function useMapController() {
         failed: overlays.trafficFlowFailed,
         response: overlays.trafficFlow,
         tooWide: viewBox !== undefined && flowQuery === undefined,
+        view: visibleBox,
       })
     : undefined;
   // Traffic is drawn beneath the basemap's labels when no route is on the map.

@@ -149,8 +149,9 @@ export function useRoutePlanner({
         },
       );
       if (superseded()) return;
-      const fastestRoute = response.routes.at(0);
-      if (fastestRoute === undefined) {
+      // The server's recommendation comes first; it need not be the fastest (`label`).
+      const recommended = response.routes.at(0);
+      if (recommended === undefined) {
         setRouteState({ ...plan, message: 'No driving route was found.', type: 'error' });
         return;
       }
@@ -160,11 +161,11 @@ export function useRoutePlanner({
       setRouteState({
         ...plan,
         routes: response.routes,
-        selectedRouteId: fastestRoute.id,
+        selectedRouteId: recommended.id,
         type: 'preview',
       });
       requestAnimationFrame(() => {
-        onRoutePlanned(fastestRoute, previewOrigin !== undefined);
+        onRoutePlanned(recommended, previewOrigin !== undefined);
       });
     } catch (error: unknown) {
       if (superseded()) return;

@@ -330,6 +330,8 @@ export interface NativeCarPlayTrip {
   steps: NativeCarPlayRouteStep[];
   traffic?: {
     delaySeconds: number;
+    /** Community traffic only: oldest publication boundary of the speeds used (ISO 8601). */
+    oldestObservedAt?: string;
     typicalDurationSeconds: number;
   };
   /** `navoss-community` when `traffic`/`congestion` come from opted-in NavOSS drivers. */

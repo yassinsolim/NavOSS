@@ -312,12 +312,16 @@ private struct CarPlayTrafficRecord: Record {
   var delaySeconds: Double = 0
 
   @Field
+  var oldestObservedAt: String?
+
+  @Field
   var typicalDurationSeconds: Double = 0
 
   var traffic: NavOSSCarPlayTraffic {
     NavOSSCarPlayTraffic(
       delaySeconds: delaySeconds,
-      typicalDurationSeconds: typicalDurationSeconds
+      typicalDurationSeconds: typicalDurationSeconds,
+      oldestObservedAt: navOSSTrafficBoundary(oldestObservedAt)
     )
   }
 }
@@ -1019,10 +1023,14 @@ public final class NavOSSNavigationModule: Module {
       payload["speedLimitsKph"] = speedLimitsKph
     }
     if let traffic = trip.traffic {
-      payload["traffic"] = [
+      var trafficPayload: [String: Any] = [
         "delaySeconds": traffic.delaySeconds,
         "typicalDurationSeconds": traffic.typicalDurationSeconds,
       ]
+      if let observedAt = traffic.oldestObservedAt {
+        trafficPayload["oldestObservedAt"] = ISO8601DateFormatter().string(from: observedAt)
+      }
+      payload["traffic"] = trafficPayload
     }
     if let congestion = trip.congestion {
       payload["congestion"] = congestion.map(\.rawValue)

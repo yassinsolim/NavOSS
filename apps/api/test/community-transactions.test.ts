@@ -1,0 +1,143 @@
+import { createHash } from 'node:crypto';
+
+import type { Pool } from 'pg';
+import { describe, expect, it } from 'vitest';
+
+import type { AppAttestVerifier } from '../src/app-attest.js';
+import { BOUNDED_POOL_LIMITS } from '../src/bounded-pool.js';
+import { CommunityReportError, createCommunityReportService } from '../src/community-reports.js';
+import { MIGRATIONS } from '../src/migrations.js';
+import { buildApp } from '../src/app.js';
+import { CALGARY_SEARCH_FIXTURES } from '../src/fixtures.js';
+import { createFixtureSearchProvider } from '../src/search-provider.js';
+import { createTrafficService } from '../src/traffic/service.js';
+import { assertionFor, FIXTURE_SETTINGS, stubbedMatcher } from './traffic-fixture.js';
+
+/**
+ * A community database whose schema is current and whose installation lookup fails the way a
+ * lock wait cancelled by `lock_timeout` does; ROLLBACK then succeeds or cannot be confirmed.
+ */
+function lockedDatabase(rollback: 'fails' | 'succeeds') {
+  const released: unknown[] = [];
+  const client = {
+    query: (sql: string) => {
+      if (sql === 'BEGIN') return Promise.resolve({ rows: [] });
+      if (sql === 'ROLLBACK') {
+        return rollback === 'fails'
+          ? Promise.reject(new Error('Query read timeout'))
+          : Promise.resolve({ rows: [] });
+      }
+      return Promise.reject(
+        Object.assign(new Error('canceling statement due to lock timeout'), { code: '55P03' }),
+      );
+    },
+    release: (error?: unknown) => {
+      released.push(error);
+    },
+  };
+  const pool = {
+    connect: () => Promise.resolve(client),
+    query: (sql: string) => {
+      if (sql.includes('to_regclass')) return Promise.resolve({ rows: [{ present: true }] });
+      if (sql.includes('SELECT id, checksum')) {
+        return Promise.resolve({
+          rows: MIGRATIONS.map((migration) => ({
+            checksum: createHash('sha256').update(migration.sql).digest('hex'),
+            id: migration.id,
+          })),
+        });
+      }
+      // The one-use challenge is consumed.
+      return Promise.resolve({ rowCount: 1, rows: [] });
+    },
+  } as unknown as Pool;
+  const service = createCommunityReportService({
+    attestationMode: 'enforce',
+    installationSecret: Buffer.alloc(32, 7),
+    isInCoverage: () => true,
+    pool,
+    publication: 'shadow',
+    verifier: { rpIdHash: Buffer.alloc(32) } as unknown as AppAttestVerifier,
+  });
+  const assert = () =>
+    service.assertTrafficContributor({
+      assertion: Buffer.from('assertion').toString('base64'),
+      challenge: Buffer.alloc(32, 1).toString('base64url'),
+      keyId: Buffer.from('key').toString('base64'),
+    });
+  return { assert, released };
+}
+
+describe('community report transactions', () => {
+  it('reports a lock wait cancelled by the server as busy and reuses the rolled-back connection', async () => {
+    const { assert, released } = lockedDatabase('succeeds');
+    await expect(assert()).rejects.toMatchObject({ reason: 'busy' });
+    expect(released).toEqual([undefined]);
+  });
+
+  it('destroys a connection whose rollback cannot be confirmed', async () => {
+    const { assert, released } = lockedDatabase('fails');
+    const failure = await assert().catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(CommunityReportError);
+    expect(failure).toMatchObject({ reason: 'unavailable' });
+    expect(released).toHaveLength(1);
+    expect(released[0]).toBeInstanceOf(Error);
+  });
+
+  it('answers a challenge that cannot reach the database as unavailable, over HTTP as 503', async () => {
+    // Every pooled connection is taken: the challenge's own query times out waiting for one.
+    const exhausted = {
+      connect: () => Promise.reject(new Error('timeout exceeded when trying to connect')),
+      query: (sql: string) => {
+        if (sql.includes('to_regclass')) return Promise.resolve({ rows: [{ present: true }] });
+        if (sql.includes('SELECT id, checksum')) {
+          return Promise.resolve({
+            rows: MIGRATIONS.map((migration) => ({
+              checksum: createHash('sha256').update(migration.sql).digest('hex'),
+              id: migration.id,
+            })),
+          });
+        }
+        return Promise.reject(new Error('timeout exceeded when trying to connect'));
+      },
+    } as unknown as Pool;
+    const community = createCommunityReportService({
+      attestationMode: 'enforce',
+      installationSecret: Buffer.alloc(32, 7),
+      isInCoverage: () => true,
+      pool: exhausted,
+      publication: 'shadow',
+      verifier: { rpIdHash: Buffer.alloc(32) } as unknown as AppAttestVerifier,
+    });
+    const assertion = assertionFor('phone-1');
+    await expect(community.assertTrafficContributor(assertion)).rejects.toMatchObject({
+      reason: 'unavailable',
+    });
+    const app = await buildApp({
+      communityReports: null,
+      searchProvider: createFixtureSearchProvider(CALGARY_SEARCH_FIXTURES),
+      trafficService: createTrafficService({
+        attestation: community,
+        mapMatcher: stubbedMatcher().matcher,
+        settings: FIXTURE_SETTINGS,
+      }),
+    });
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        payload: { assertion },
+        url: '/v2/traffic/credentials',
+      });
+      expect(response.statusCode).toBe(503);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('bounds statements, lock waits and idle transactions on the server', () => {
+    expect(BOUNDED_POOL_LIMITS.lock_timeout).toBeLessThan(BOUNDED_POOL_LIMITS.statement_timeout);
+    expect(BOUNDED_POOL_LIMITS.statement_timeout).toBeLessThan(BOUNDED_POOL_LIMITS.query_timeout);
+    expect(BOUNDED_POOL_LIMITS.idle_in_transaction_session_timeout).toBeGreaterThan(0);
+    expect(BOUNDED_POOL_LIMITS.connectionTimeoutMillis).toBeGreaterThan(0);
+  });
+});

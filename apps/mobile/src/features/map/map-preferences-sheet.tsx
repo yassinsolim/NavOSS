@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -84,6 +84,10 @@ export function MapPreferencesSheet({
 }) {
   const styles = useStyles();
   const insets = useSafeAreaInsets();
+  // Re-measured when Dynamic Type changes while the sheet is open (see AppTabBar): these sections
+  // hold no state of their own, so remounting them loses nothing. CommunitySettings keeps its
+  // own state (an open consent sheet, a reset in progress) and is never remounted.
+  const { fontScale } = useWindowDimensions();
 
   return (
     <ModalSheet
@@ -93,11 +97,16 @@ export function MapPreferencesSheet({
       onClosed={onClosed}
       visible={visible}
     >
-      <SheetHeader closeLabel="Close map appearance" onClose={onClose} title="Map appearance" />
+      <SheetHeader
+        closeLabel="Close map appearance"
+        key={String(fontScale)}
+        onClose={onClose}
+        title="Map appearance"
+      />
       <BottomSheetScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.xxl }]}
       >
-        <View style={styles.section}>
+        <View key={`section-1-${String(fontScale)}`} style={styles.section}>
           <SectionTitle>Map style</SectionTitle>
           <SegmentedControl
             accessibilityLabel="Map style"
@@ -107,10 +116,12 @@ export function MapPreferencesSheet({
             options={STYLE_OPTIONS}
             value={preferences.stylePreset}
           />
-          <Text style={styles.hint}>Auto follows the system light or dark appearance.</Text>
+          {preferences.stylePreset === 'automatic' && (
+            <Text style={styles.hint}>Follows the system light or dark appearance.</Text>
+          )}
         </View>
 
-        <View style={styles.section}>
+        <View key={`section-2-${String(fontScale)}`} style={styles.section}>
           <SectionTitle>Navigation view</SectionTitle>
           <SegmentedControl
             accessibilityLabel="Navigation orientation"
@@ -130,7 +141,7 @@ export function MapPreferencesSheet({
           />
         </View>
 
-        <View style={styles.section}>
+        <View key={`section-3-${String(fontScale)}`} style={styles.section}>
           <SectionTitle>Map content</SectionTitle>
           <View style={styles.card}>
             <SwitchRow
@@ -185,7 +196,7 @@ export function MapPreferencesSheet({
           showTraffic={preferences.showTraffic}
         />
 
-        <View style={styles.section}>
+        <View key={`section-4-${String(fontScale)}`} style={styles.section}>
           <SectionTitle>Route colour</SectionTitle>
           <View
             accessibilityLabel="Route color"
@@ -216,7 +227,7 @@ export function MapPreferencesSheet({
             })}
           </View>
         </View>
-        <View style={styles.section}>
+        <View key={`section-5-${String(fontScale)}`} style={styles.section}>
           <SectionTitle>Guidance</SectionTitle>
           <View style={styles.linkCard}>
             <ListRow
@@ -229,7 +240,7 @@ export function MapPreferencesSheet({
             />
           </View>
         </View>
-        <View style={styles.section}>
+        <View key={`section-6-${String(fontScale)}`} style={styles.section}>
           <SectionTitle>Offline</SectionTitle>
           <View style={styles.linkCard}>
             <ListRow

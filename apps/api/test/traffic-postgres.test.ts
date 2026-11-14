@@ -12,6 +12,7 @@ import { Client, Pool } from 'pg';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { createAppAttestVerifier } from '../src/app-attest.js';
+import { BOUNDED_POOL_LIMITS } from '../src/bounded-pool.js';
 import { buildApp } from '../src/app.js';
 import { createCommunityReportService, type AttestationMode } from '../src/community-reports.js';
 import { CALGARY_SEARCH_FIXTURES } from '../src/fixtures.js';
@@ -138,6 +139,16 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
     return busy.rows[0]?.count ?? 0;
   };
 
+  /** This API's sessions waiting for a lock. */
+  const lockWaiters = async (): Promise<number> => {
+    const waiting = await admin.query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM pg_stat_activity
+       WHERE application_name = ANY($1::text[]) AND wait_event_type = 'Lock'`,
+      [[APPLICATION, TRAFFIC_APPLICATION]],
+    );
+    return waiting.rows[0]?.count ?? 0;
+  };
+
   const emptyDatabasePool = (): Pool => {
     const url = new URL(DATABASE_URL);
     url.pathname = `/${EMPTY_DATABASE}`;
@@ -169,7 +180,16 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
             clock,
             installationSecret: Buffer.alloc(32, 7),
             isInCoverage: isSupportedSearchCoordinate,
-            pool: schemaPool(),
+            // The production community pool's bounds (`createBoundedPool`), on the test schema.
+            pool: quiet(
+              new Pool({
+                ...BOUNDED_POOL_LIMITS,
+                application_name: APPLICATION,
+                connectionString: DATABASE_URL,
+                max: 5,
+                options: `-c search_path=${SCHEMA},public`,
+              }),
+            ),
             publication: 'shadow',
             verifier: createAppAttestVerifier({
               bundleId: BUNDLE_ID,
@@ -226,6 +246,17 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
     });
   }
 
+  /** The publication record: which boundary the stored rows are, and how many there are. */
+  async function publicationRecord() {
+    const record = await admin.query<{ epoch_at: Date; release_rows: number }>(
+      `SELECT epoch_at, release_rows FROM ${SCHEMA}.traffic_publication`,
+    );
+    return record.rows.map((row) => ({
+      epochAt: row.epoch_at.toISOString(),
+      releaseRows: row.release_rows,
+    }));
+  }
+
   async function advanceEpoch(service: { runEpoch(): Promise<void> }): Promise<void> {
     nowMs = (Math.floor(nowMs / EPOCH_MS) + 1) * EPOCH_MS + 5_000;
     await service.runEpoch();
@@ -237,11 +268,16 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
     return TrafficFlowResponseSchema.parse(response.json()).features;
   }
 
-  /** Every row of every table in the test schema, with its transaction id and physical address. */
+  /**
+   * Every row of every table in the test schema, with its transaction id and physical address,
+   * except `traffic_publication`: every boundary rewrites its one row (an epoch boundary and a
+   * row count), uploads or not. `publicationRecord` reads it.
+   */
   async function dumpDatabase(): Promise<string> {
     const tables = await admin.query<{ table_name: string }>(
       `SELECT table_name FROM information_schema.tables
-       WHERE table_schema = $1 AND table_type = 'BASE TABLE' AND table_name <> 'spatial_ref_sys'
+       WHERE table_schema = $1 AND table_type = 'BASE TABLE'
+         AND table_name NOT IN ('spatial_ref_sys', 'traffic_publication')
        ORDER BY table_name`,
       [SCHEMA],
     );
@@ -291,7 +327,8 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
   beforeEach(async () => {
     nowMs = NOW.getTime();
     await admin.query(
-      `TRUNCATE ${SCHEMA}.traffic_releases, ${SCHEMA}.community_report_votes,
+      `TRUNCATE ${SCHEMA}.traffic_releases, ${SCHEMA}.traffic_publication,
+                ${SCHEMA}.community_report_votes,
                 ${SCHEMA}.community_reports, ${SCHEMA}.community_installations,
                 ${SCHEMA}.community_challenges`,
     );
@@ -322,14 +359,19 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
        WHERE n.nspname = $1 AND c.relkind = 'r' AND c.relname LIKE 'traffic%' ORDER BY 1`,
       [SCHEMA],
     );
-    // One unlogged table: no separate migration ledger, no segment or bucket tables.
-    expect(tables.rows).toEqual([{ relname: 'traffic_releases', relpersistence: 'u' }]);
+    // Two unlogged tables, the releases and the record of which epoch they are: no separate
+    // migration ledger, no segment or bucket tables.
+    expect(tables.rows).toEqual([
+      { relname: 'traffic_publication', relpersistence: 'u' },
+      { relname: 'traffic_releases', relpersistence: 'u' },
+    ]);
     const applied = await admin.query<{ id: string }>(
       `SELECT id FROM ${SCHEMA}.navoss_schema_migrations ORDER BY id`,
     );
     expect(applied.rows.map(({ id }) => id)).toEqual([
       '0001_community_reports',
       '0002_community_traffic',
+      '0003_traffic_publication_marker',
     ]);
     const columns = await admin.query<{ column_name: string }>(
       `SELECT column_name FROM information_schema.columns
@@ -460,8 +502,12 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
     await post(app, await credentialFor(service, 'phone-2'), JAMMED_GAPS, '2001:db8:12:3400::1');
     expect(await dumpDatabase()).toBe(before);
     await advanceEpoch(service);
-    // Two contributors: the database is byte for byte what it was before any upload.
+    // Two contributors: the database is byte for byte what it was before any upload, and the
+    // publication record holds only the boundary and an empty snapshot's row count.
     expect(await dumpDatabase()).toBe(before);
+    expect(await publicationRecord()).toEqual([
+      { epochAt: '2026-11-12T18:05:00.000Z', releaseRows: 0 },
+    ]);
     expect(await flowFeatures(app)).toEqual([]);
 
     await post(app, await credentialFor(service, 'phone-3'), JAMMED_GAPS);
@@ -752,6 +798,64 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
     },
   );
 
+  it('never answers with another body under an epoch published before an API restart', async () => {
+    const first = await createApp();
+    for (const device of ['phone-1', 'phone-2', 'phone-3']) {
+      await post(first.app, await credentialFor(first.service, device));
+    }
+    await advanceEpoch(first.service);
+    const published = await flowFeatures(first.app);
+    expect(published.length).toBeGreaterThan(10);
+    await first.app.close();
+    apps.length = 0;
+
+    // A restart one minute into the same epoch: the old rows are erased on start, and the new
+    // process has published nothing for this epoch, so it does not serve an empty body under
+    // the label the old process served the releases with.
+    nowMs = Date.parse('2026-11-12T18:06:00Z');
+    const restarted = await createApp();
+    expect((await restarted.app.inject(FLOW_URL)).statusCode).toBe(503);
+    expect(await publicationRecord()).toEqual([]);
+    // The next boundary is published normally: a legitimately empty snapshot, newly labelled.
+    await advanceEpoch(restarted.service);
+    const response = await restarted.app.inject(FLOW_URL);
+    expect(response.statusCode).toBe(200);
+    expect(TrafficFlowResponseSchema.parse(response.json())).toMatchObject({
+      features: [],
+      generatedAt: '2026-11-12T18:10:00.000Z',
+    });
+    expect(await publicationRecord()).toEqual([
+      { epochAt: '2026-11-12T18:10:00.000Z', releaseRows: 0 },
+    ]);
+  });
+
+  it('detects lost unlogged tables instead of reading them as an empty snapshot', async () => {
+    const { app, service } = await createApp();
+    const upload = async () => {
+      for (const device of ['phone-1', 'phone-2', 'phone-3']) {
+        await post(app, await credentialFor(service, device));
+      }
+      await advanceEpoch(service);
+      expect((await flowFeatures(app)).length).toBeGreaterThan(10);
+    };
+    const route = { ...DRIVE.route, label: 'fastest' as const };
+    await upload();
+    // What crash recovery does to unlogged tables: both are reset to empty.
+    await admin.query(`TRUNCATE ${SCHEMA}.traffic_releases, ${SCHEMA}.traffic_publication`);
+    expect((await app.inject(FLOW_URL)).statusCode).toBe(503);
+    expect((await service.enrichRoutes([route])).routes).toEqual([route]);
+
+    // The release table alone emptied: the record's row count no longer matches.
+    await upload();
+    await admin.query(`TRUNCATE ${SCHEMA}.traffic_releases`);
+    expect((await app.inject(FLOW_URL)).statusCode).toBe(503);
+    expect((await service.enrichRoutes([route])).routes).toEqual([route]);
+
+    // The next boundary publishes again, and readers get it.
+    await advanceEpoch(service);
+    expect(await flowFeatures(app)).toEqual([]);
+  });
+
   describe('with real App Attest installations', () => {
     async function challenge(app: FastifyInstance): Promise<string> {
       const response = await app.inject({ method: 'POST', url: '/v2/community/challenges' });
@@ -839,6 +943,104 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
       expect(response.statusCode).toBe(200);
       return TrafficCredentialResponseSchema.parse(response.json()).credential;
     }
+
+    it('bounds credential requests blocked on an installation lock and keeps counters monotonic', async () => {
+      const { app } = await createApp({ attestation: 'real' });
+      const device = await register(app);
+      const signCount = async () =>
+        Number(
+          (
+            await admin.query<{ count: string }>(
+              `SELECT sign_count::text AS count FROM ${SCHEMA}.community_installations`,
+            )
+          ).rows[0]?.count,
+        );
+      const before = await signCount();
+      // Seven fresh assertions, more than the pool's five connections.
+      const prepared: { assertion: string; challenge: string; keyId: string }[] = [];
+      for (let index = 0; index < 7; index += 1) {
+        const value = await challenge(app);
+        prepared.push({
+          assertion: device.assert(
+            communityAssertionClientData(value, { kind: 'traffic-credential' }),
+          ),
+          challenge: value,
+          keyId: device.keyId,
+        });
+      }
+      const ask = (assertion: (typeof prepared)[number]) =>
+        app.inject({ method: 'POST', payload: { assertion }, url: '/v2/traffic/credentials' });
+
+      // Another session holds the installation row, as a concurrent write would.
+      const blocker = new Client({
+        application_name: `${SCHEMA}_blocker`,
+        connectionString: DATABASE_URL,
+      });
+      await blocker.connect();
+      try {
+        await blocker.query('BEGIN');
+        await blocker.query(`SELECT 1 FROM ${SCHEMA}.community_installations FOR UPDATE`);
+        const started = Date.now();
+        const responses = await Promise.all(prepared.map(ask));
+        // Each wait is bounded on its own; there is no single request deadline. A request takes a
+        // pooled connection twice (to burn its challenge, then for its transaction), each wait
+        // ended by `connectionTimeoutMillis`. Its FOR UPDATE can wait on the tuple lock and then
+        // on the holder's transaction; `lock_timeout` applies to each acquisition, so only
+        // `statement_timeout` limits the statement. All seven therefore fail, retryably, within
+        // two pool waits plus one statement, plus a few seconds of handshake and queries.
+        expect(Date.now() - started).toBeLessThan(
+          2 * BOUNDED_POOL_LIMITS.connectionTimeoutMillis +
+            BOUNDED_POOL_LIMITS.statement_timeout +
+            3_000,
+        );
+        expect(responses.map(({ statusCode }) => statusCode)).toEqual(Array(7).fill(503));
+        // Nothing of this test's own is still running, waiting or inside a transaction.
+        expect(await busySessions()).toBe(0);
+        // Shutdown is bounded while a request is blocked on the lock: a fresh assertion, whose
+        // challenge is still valid, so that it reaches the installation row and waits there.
+        const fresh = await challenge(app);
+        const blocked = ask({
+          assertion: device.assert(
+            communityAssertionClientData(fresh, { kind: 'traffic-credential' }),
+          ),
+          challenge: fresh,
+          keyId: device.keyId,
+        });
+        const waitingSince = Date.now();
+        while ((await lockWaiters()) === 0) {
+          if (Date.now() - waitingSince > 4_000) throw new Error('no request waited on the lock');
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        const closing = Date.now();
+        await app.close();
+        expect(Date.now() - closing).toBeLessThan(8_000);
+        expect((await blocked).statusCode).toBe(503);
+      } finally {
+        await blocker.query('ROLLBACK').catch(() => undefined);
+        await blocker.end().catch(() => undefined);
+      }
+      apps.length = 0;
+
+      // Every failed attempt rolled back: the counter did not move, and no challenge came back.
+      expect(await signCount()).toBe(before);
+      const reopened = await createApp({ attestation: 'real' });
+      for (const assertion of prepared) {
+        expect(
+          (
+            await reopened.app.inject({
+              method: 'POST',
+              payload: { assertion },
+              url: '/v2/traffic/credentials',
+            })
+          ).statusCode,
+        ).toBe(401);
+      }
+      // A fresh assertion is accepted and advances the counter; reports' writes still work.
+      expect((await credential(reopened.app, device)).length).toBeGreaterThan(0);
+      expect(await signCount()).toBeGreaterThan(before);
+      await register(reopened.app);
+      expect(await busySessions()).toBe(0);
+    }, 30_000);
 
     it('counts an attested device once per segment and publishes for three devices', async () => {
       const { app, service } = await createApp({ attestation: 'real' });

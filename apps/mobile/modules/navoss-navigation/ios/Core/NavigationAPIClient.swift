@@ -339,19 +339,19 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
       _ response: NavigationRouteResponseWire,
       _ version: NavigationRoutesAPIVersion
     ) throws -> [NavOSSCarPlayTrip] {
-      // Present the same order the API and phone client promise: mirrors the shared
-      // `compareRouteAlternatives` bucket-then-distance ordering so CarPlay does not depend on a
-      // coordinated server deploy. Fastest-name logic (`navOSSCarPlayFastestRouteIndex`) and
-      // route choice details already track raw duration independently of array position.
-      navOSSCarPlayTripsOrderedForDisplay(
-        try navigationTrips(
-          from: response,
-          version: version,
-          destination: destination,
-          preferences: preferences,
-          waypoints: stops
-        )
+      let decoded = try navigationTrips(
+        from: response,
+        version: version,
+        destination: destination,
+        preferences: preferences,
+        waypoints: stops
       )
+      // A /v2/routes order is the server's recommendation, kept as sent: community traffic may
+      // reorder routes only within the server's bounds (never onto more minor roads), and
+      // re-sorting by duration here would undo them. Only the deployed /v1-only server, which has
+      // no community traffic, is re-ordered with the shared `compareRouteAlternatives` rule.
+      // "Fastest" naming (`navOSSCarPlayFastestRouteIndex`) follows duration, not position.
+      return version == .v1 ? navOSSCarPlayTripsOrderedForDisplay(decoded) : decoded
     }
 
     let config = await serverConfig()

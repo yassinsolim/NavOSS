@@ -898,7 +898,8 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   private func configureRouteAttribution(trip: NavOSSCarPlayTrip?) {
     mapTemplate?.trailingNavigationBarButtons =
-      trip.flatMap(navOSSCarPlayTrafficAttribution).map { [CPBarButton(title: $0) { _ in }] } ?? []
+      trip.flatMap { navOSSCarPlayTrafficAttribution($0) }.map { [CPBarButton(title: $0) { _ in }] }
+      ?? []
   }
 
   private func resetManeuvers() {

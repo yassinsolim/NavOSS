@@ -12,25 +12,47 @@ const BACKWARD_JUMP_METERS = 5;
 // short edge does not decide its speed, while a jam still shows on the edges where it was.
 const SPEED_WINDOW_METERS = 150;
 
+/** Movement along an edge between two fixes, in metres from the edge's start. */
+export interface EdgeMove {
+  from: number;
+  /** Batch offset (seconds since its first point) when the vehicle was at `from`. */
+  startSeconds: number;
+  /** Moving time attributed to the step, from the average moving speed around it. */
+  seconds: number;
+  to: number;
+  /** Batch offset when the vehicle was at `to`. */
+  endSeconds: number;
+}
+
+/** Standing still at one place on an edge, during a span of batch offsets. */
+export interface EdgeStop {
+  at: number;
+  endSeconds: number;
+  startSeconds: number;
+}
+
 /**
- * What one batch drove on one road edge. It carries no position from the upload and no time: the
- * line is the edge's whole map geometry, and positions are distances along the edge. The service
- * stamps the arrival epoch itself.
+ * What one batch drove on one road edge. It carries no position from the upload: the line is the
+ * edge's whole map geometry, positions are distances along the edge and times are offsets within
+ * the batch. The cohorts place the offsets in time with the batch's own minute-rounded start.
  */
 export interface SegmentObservation {
   freeFlowKph: number;
-  /** Parts of the edge the batch drove, as `[from, to]` metres from the edge's start. */
-  intervals: [number, number][];
   /** Full length of the edge. */
   lengthMeters: number;
   /** The whole edge's map geometry. */
   line: Position[];
-  /** Distance moved on the edge in this batch. */
-  meters: number;
+  /** Each step the batch moved along the edge, in order. */
+  moves: EdgeMove[];
+  /**
+   * GraphIds of the nodes the edge begins and ends at, when the graph confirmed both (see
+   * `MatchedEdge.nodes`): what tells that one edge leads onto another.
+   */
+  nodes?: { begin: number; end: number };
   roadClass: string;
-  /** Time spent on the edge in this batch, including time standing still in a queue. */
-  seconds: number;
   segmentKey: string;
+  /** Each span of standing still on the edge, in order: time in a queue is the signal. */
+  stops: EdgeStop[];
 }
 
 interface MatchedFix {
@@ -40,8 +62,8 @@ interface MatchedFix {
 }
 
 /**
- * Turns one map-matched batch into what it drove on each eligible road edge: the intervals of the
- * edge covered, the distance moved and the time spent there. An edge is usually longer than a
+ * Turns one map-matched batch into what it drove on each eligible road edge: each step moved along
+ * the edge and each stop on it, with when (as batch offsets) it happened. An edge is usually longer than a
  * batch drives of it, so these are pieces; the cohorts join one contributor's pieces of an edge
  * across batches until enough of it is covered to credit one sample (see `TrafficCohorts.add`).
  *
@@ -98,14 +120,11 @@ export function deriveObservations(
     run.push({ edgeIndex: match.edgeIndex, meters, seconds: point.offsetSeconds });
   });
 
-  const pieces = new Map<
-    number,
-    { intervals: [number, number][]; meters: number; seconds: number }
-  >();
+  const pieces = new Map<number, { moves: EdgeMove[]; stops: EdgeStop[] }>();
   const piece = (edgeIndex: number) => {
     const existing = pieces.get(edgeIndex);
     if (existing !== undefined) return existing;
-    const created = { intervals: [] as [number, number][], meters: 0, seconds: 0 };
+    const created = { moves: [] as EdgeMove[], stops: [] as EdgeStop[] };
     pieces.set(edgeIndex, created);
     return created;
   };
@@ -150,10 +169,17 @@ export function deriveObservations(
       // vehicle stood on, and the next step measures distance from where this fix was matched.
       if (moved < STATIONARY_METERS) {
         const start = edgeStartMeters[from.edgeIndex] ?? 0;
-        const at = from.meters - start;
-        const standing = piece(from.edgeIndex);
-        standing.intervals.push([at, at]);
-        standing.seconds += seconds;
+        const standing = piece(from.edgeIndex).stops;
+        const last = standing.at(-1);
+        // Consecutive stationary steps are one stop, wherever jitter placed the later fixes.
+        if (last?.endSeconds === from.seconds) last.endSeconds = to.seconds;
+        else {
+          standing.push({
+            at: from.meters - start,
+            endSeconds: to.seconds,
+            startSeconds: from.seconds,
+          });
+        }
         continue;
       }
       for (let edgeIndex = from.edgeIndex; edgeIndex <= to.edgeIndex; edgeIndex += 1) {
@@ -163,37 +189,43 @@ export function deriveObservations(
         const enter = Math.max(from.meters, start);
         const leave = Math.min(to.meters, start + full);
         if (leave <= enter) continue;
-        const driven = piece(edgeIndex);
-        driven.intervals.push([enter - start, leave - start]);
-        driven.meters += leave - enter;
-        driven.seconds += (seconds * (leave - enter)) / moved;
+        const elapsed = to.seconds - from.seconds;
+        piece(edgeIndex).moves.push({
+          endSeconds: from.seconds + (elapsed * (leave - from.meters)) / moved,
+          from: enter - start,
+          seconds: (seconds * (leave - enter)) / moved,
+          startSeconds: from.seconds + (elapsed * (enter - from.meters)) / moved,
+          to: leave - start,
+        });
       }
     }
   }
 
   const observations = new Map<string, SegmentObservation>();
-  for (const [edgeIndex, driven] of pieces) {
+  for (const [edgeIndex, driven] of [...pieces].sort(([left], [right]) => left - right)) {
     const edge = matched.edges[edgeIndex];
     const full = fullMeters[edgeIndex] ?? Number.NaN;
-    if (edge === undefined || !Number.isFinite(full) || driven.seconds <= 0) continue;
+    const seconds =
+      driven.moves.reduce((sum, move) => sum + move.seconds, 0) +
+      driven.stops.reduce((sum, stop) => sum + stop.endSeconds - stop.startSeconds, 0);
+    if (edge === undefined || !Number.isFinite(full) || seconds <= 0) continue;
     const whole = wholeEdgeOf(edge);
     if (whole === undefined || !isPublishableEdge({ ...edge, lengthMeters: full })) continue;
     const merged = observations.get(whole.segmentKey);
     if (merged !== undefined) {
-      merged.intervals.push(...driven.intervals);
-      merged.meters += driven.meters;
-      merged.seconds += driven.seconds;
+      merged.moves.push(...driven.moves);
+      merged.stops.push(...driven.stops);
       continue;
     }
     observations.set(whole.segmentKey, {
       freeFlowKph: Math.min(200, Math.max(1, Math.round(edge.speedKph))),
-      intervals: driven.intervals,
       lengthMeters: full,
       line: whole.line,
-      meters: driven.meters,
+      moves: driven.moves,
+      ...(edge.nodes === undefined ? {} : { nodes: edge.nodes }),
       roadClass: edge.roadClass,
-      seconds: driven.seconds,
       segmentKey: whole.segmentKey,
+      stops: driven.stops,
     });
   }
   return [...observations.values()].sort((left, right) =>

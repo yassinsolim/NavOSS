@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Alert, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -97,7 +97,9 @@ export function TrafficSharingSheet({
 }) {
   const styles = useStyles();
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
+  // Re-measured when Dynamic Type changes while the sheet is open (see AppTabBar): the
+  // explanation holds no state of its own.
+  const { fontScale, height: windowHeight } = useWindowDimensions();
   return (
     <ModalSheet
       accessibilityLabel="Share traffic speeds"
@@ -110,6 +112,7 @@ export function TrafficSharingSheet({
       visible={visible}
     >
       <SheetHeader
+        key={String(fontScale)}
         closeLabel="Close traffic sharing"
         eyebrow="Community traffic"
         onClose={onClose}
@@ -118,53 +121,55 @@ export function TrafficSharingSheet({
       <BottomSheetScrollView
         contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + space.lg }]}
       >
-        <Point title="Off by default">
-          Nothing is sent unless you turn this on. You can see traffic from other drivers without
-          sharing your own.
-        </Point>
-        <Point title="What is sent">
-          Only during turn-by-turn navigation, about once a minute: a short batch of the positions
-          you drove, each with the seconds since the batch began, the time it began rounded down to
-          the minute, and a short-lived upload credential. No account, name, destination, planned
-          route or trip identifier.
-        </Point>
-        <Point title="What is left out">
-          The first 400 m and the last 400 m of every trip, anything within 400 m of your
-          destination or a stop, and the most recent 400 m, so a trip you end early never sends its
-          final stretch. Nothing is sent while you browse, search, preview a route or drive without
-          navigation.
-        </Point>
-        <Point title="What other drivers see">
-          A road is coloured only after at least three installations have driven it recently, for at
-          most 15 minutes, with its speed rounded to 5 km/h. Never a vehicle, a trip, a count of
-          contributors or who contributed.
-        </Point>
-        <Point title="New on this iPhone">
-          A newly registered iPhone starts sharing the day after it registers.
-        </Point>
-        <Point title="How to turn it off">
-          Turn off Share traffic speeds in Map appearance › Community. Uploads stop immediately and
-          anything not yet sent is discarded. Ending navigation does the same.
-        </Point>
-        <Text style={styles.footnote}>
-          This is data minimisation with a threshold, not anonymity. The privacy policy lists what
-          NavOSS cannot rule out.
-        </Text>
-        {status.enabled ? (
-          <Button
-            label={enabled ? 'Turn off traffic sharing' : 'Share traffic speeds'}
-            onPress={() => {
-              onSetEnabled(!enabled);
-              onClose();
-            }}
-            size="driving"
-            variant={enabled ? 'secondary' : 'primary'}
-          />
-        ) : (
-          <Text accessibilityRole="text" style={styles.unavailable}>
-            {status.detail}
+        <Fragment key={String(fontScale)}>
+          <Point title="Off by default">
+            Nothing is sent unless you turn this on. You can see traffic from other drivers without
+            sharing your own.
+          </Point>
+          <Point title="What is sent">
+            Only during turn-by-turn navigation, about once a minute: a short batch of the positions
+            you drove, each with the seconds since the batch began, the time it began rounded down
+            to the minute, and a short-lived upload credential. No account, name, destination,
+            planned route or trip identifier.
+          </Point>
+          <Point title="What is left out">
+            The first 400 m and the last 400 m of every trip, anything within 400 m of your
+            destination or a stop, and the most recent 400 m, so a trip you end early never sends
+            its final stretch. Nothing is sent while you browse, search, preview a route or drive
+            without navigation.
+          </Point>
+          <Point title="What other drivers see">
+            A road is coloured only after at least three installations have driven it recently, for
+            at most 15 minutes, with its speed rounded to 5 km/h. Never a vehicle, a trip, a count
+            of contributors or who contributed.
+          </Point>
+          <Point title="New on this iPhone">
+            A newly registered iPhone starts sharing the day after it registers.
+          </Point>
+          <Point title="How to turn it off">
+            Turn off Share traffic speeds in Map appearance › Community. Uploads stop immediately
+            and anything not yet sent is discarded. Ending navigation does the same.
+          </Point>
+          <Text style={styles.footnote}>
+            This is data minimisation with a threshold, not anonymity. The privacy policy lists what
+            NavOSS cannot rule out.
           </Text>
-        )}
+          {status.enabled ? (
+            <Button
+              label={enabled ? 'Turn off traffic sharing' : 'Share traffic speeds'}
+              onPress={() => {
+                onSetEnabled(!enabled);
+                onClose();
+              }}
+              size="driving"
+              variant={enabled ? 'secondary' : 'primary'}
+            />
+          ) : (
+            <Text accessibilityRole="text" style={styles.unavailable}>
+              {status.detail}
+            </Text>
+          )}
+        </Fragment>
       </BottomSheetScrollView>
     </ModalSheet>
   );

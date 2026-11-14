@@ -5,7 +5,8 @@ import type {
   SearchResult,
 } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Fragment, useRef } from 'react';
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
 import { routePreviewSheetDetents, type ScreenMetrics } from '@/features/map/overlay-layout';
@@ -14,6 +15,7 @@ import {
   formatDistance,
   formatDuration,
   formatTrafficDelay,
+  routeChoiceAccessibilityLabel,
   routeTrafficLabel,
   routeViaLabel,
 } from '@/features/navigation/route-progress';
@@ -25,7 +27,7 @@ import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Chip } from '@/ui/chip';
 import { ListRow } from '@/ui/list-row';
-import { PressableScale } from '@/ui/pressable-scale';
+import { PressableScale, type PressableScaleProps } from '@/ui/pressable-scale';
 import { type SegmentOption, SegmentedControl } from '@/ui/segmented-control';
 import { BottomSheet, BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
 import { SectionTitle, SheetHeader } from '@/ui/sheet/sheet-header';
@@ -95,10 +97,12 @@ export function RoutePlanningSheet({
 }
 
 function RouteChoiceCard({
+  onLayout,
   onSelect,
   route,
   selected,
 }: {
+  onLayout?: PressableScaleProps['onLayout'];
   onSelect: () => void;
   route: RouteAlternativeV2;
   selected: boolean;
@@ -111,9 +115,10 @@ function RouteChoiceCard({
 
   return (
     <PressableScale
-      accessibilityLabel={`Select ${route.label} ${formatDuration(route.durationSeconds)} route, ${formatDistance(route.distanceMeters)}, ${viaLabel}${trafficDelay === undefined ? '' : `, ${trafficDelay}`}`}
+      accessibilityLabel={routeChoiceAccessibilityLabel(route)}
       accessibilityRole="button"
       accessibilityState={{ selected }}
+      onLayout={onLayout}
       onPress={onSelect}
       pressedScale={0.98}
       style={[styles.routeChoice, selected && styles.routeChoiceSelected]}
@@ -208,6 +213,14 @@ export function RoutePreviewSheet({
   waypoints,
 }: RoutePreviewSheetProps) {
   const styles = useStyles();
+  // Re-measured when Dynamic Type changes while the sheet is open (see AppTabBar). Everything the
+  // driver chose here (route, avoidances, marker, stops) is held by the controller, so remounting
+  // the sheet's contents loses nothing.
+  const { fontScale } = useWindowDimensions();
+  const remeasure = String(fontScale);
+  // The selected card is scrolled into view where it is laid out: when the sheet opens, and when
+  // it is re-measured after a text-size change, never when the driver selects another card.
+  const routeChoices = useRef<ScrollView>(null);
   const demoOrigin = previewOriginLabel !== undefined;
   const detents = routePreviewSheetDetents(metrics, { demoOrigin });
   const trafficStatus = routeTrafficLabel(
@@ -224,12 +237,13 @@ export function RoutePreviewSheet({
       position={position}
     >
       <SheetHeader
+        key={`header-${remeasure}`}
         closeLabel="Cancel route"
         eyebrow="Route preview"
         onClose={onCancel}
         title={destination.name}
       />
-      <View style={styles.summary}>
+      <View key={`summary-${remeasure}`} style={styles.summary}>
         <View style={styles.summaryCopy}>
           <Text
             maxFontSizeMultiplier={1.3}
@@ -271,97 +285,112 @@ export function RoutePreviewSheet({
           { paddingBottom: metrics.bottomInset + space.xl },
         ]}
       >
-        {demoOrigin && (
-          <View
-            accessibilityLabel={`Preview starts at ${previewOriginLabel}`}
-            accessible
-            style={styles.inset}
-          >
-            <Banner
-              message={`Preview starts at ${previewOriginLabel}. Live guidance always uses your real location.`}
-            />
-          </View>
-        )}
-        <ScrollView
-          contentContainerStyle={styles.routeChoices}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-        >
-          {routes.map((route) => (
-            <RouteChoiceCard
-              key={route.id}
-              onSelect={() => {
-                onSelectRoute(route);
-              }}
-              route={route}
-              selected={route.id === selectedRoute.id}
-            />
-          ))}
-        </ScrollView>
-
-        <View style={styles.sourceRow}>
-          <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={styles.sourceText}>
-            {routeSource?.attribution ?? 'Routing source unavailable'}
-          </Text>
-          <Text maxFontSizeMultiplier={1.3} style={styles.trafficText}>
-            {trafficStatus}
-          </Text>
-        </View>
-
-        <View style={styles.inset}>
-          <View style={styles.card}>
-            <ListRow
-              accessibilityLabel="Edit route stops"
-              icon={{
-                android: 'alt_route',
-                ios: 'point.bottomleft.forward.to.point.topright.scurvepath',
-              }}
-              onPress={onEditStops}
-              title={
-                waypoints.length === 0
-                  ? 'Add or edit stops'
-                  : `${String(waypoints.length)} ${waypoints.length === 1 ? 'stop' : 'stops'} · Edit order`
-              }
-              trailing="chevron"
-            />
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.inset}>
-            <SectionTitle>Avoid</SectionTitle>
-          </View>
+        <Fragment key={remeasure}>
+          {demoOrigin && (
+            <View
+              accessibilityLabel={`Preview starts at ${previewOriginLabel}`}
+              accessible
+              style={styles.inset}
+            >
+              <Banner
+                message={`Preview starts at ${previewOriginLabel}. Live guidance always uses your real location.`}
+              />
+            </View>
+          )}
           <ScrollView
-            contentContainerStyle={styles.avoidances}
+            contentContainerStyle={styles.routeChoices}
             horizontal
+            ref={routeChoices}
             showsHorizontalScrollIndicator={false}
           >
-            {AVOIDANCES.map(([preference, label, icon]) => (
-              <Chip
-                accessibilityLabel={`Avoid ${label.toLowerCase()}`}
-                accessibilityRole="switch"
-                accessibilityState={{ checked: routePreferences[preference] }}
-                icon={icon}
-                key={preference}
-                label={label}
-                onPress={() => {
-                  onToggleRoutePreference(preference);
+            {routes.map((route) => (
+              <RouteChoiceCard
+                key={route.id}
+                onLayout={
+                  route.id === selectedRoute.id
+                    ? (event) => {
+                        routeChoices.current?.scrollTo({
+                          animated: false,
+                          x: Math.max(0, event.nativeEvent.layout.x - space.lg),
+                        });
+                      }
+                    : undefined
+                }
+                onSelect={() => {
+                  onSelectRoute(route);
                 }}
-                selected={routePreferences[preference]}
+                route={route}
+                selected={route.id === selectedRoute.id}
               />
             ))}
           </ScrollView>
-        </View>
 
-        <View style={[styles.section, styles.inset]}>
-          <SectionTitle>Navigation marker</SectionTitle>
-          <SegmentedControl
-            accessibilityLabel="Navigation marker"
-            onChange={onVehicleStyleChange}
-            options={VEHICLE_OPTIONS}
-            value={vehicleStyle}
-          />
-        </View>
+          {/* Each on its own full-width line, so neither the routing credit nor the traffic line
+            is squeezed or cut off by the other, at any text size. */}
+          <View style={styles.sourceRow}>
+            <Text maxFontSizeMultiplier={1.3} style={styles.trafficText}>
+              {trafficStatus}
+            </Text>
+            <Text maxFontSizeMultiplier={1.3} style={styles.sourceText}>
+              {routeSource?.attribution ?? 'Routing source unavailable'}
+            </Text>
+          </View>
+
+          <View style={styles.inset}>
+            <View style={styles.card}>
+              <ListRow
+                accessibilityLabel="Edit route stops"
+                icon={{
+                  android: 'alt_route',
+                  ios: 'point.bottomleft.forward.to.point.topright.scurvepath',
+                }}
+                onPress={onEditStops}
+                title={
+                  waypoints.length === 0
+                    ? 'Add or edit stops'
+                    : `${String(waypoints.length)} ${waypoints.length === 1 ? 'stop' : 'stops'} · Edit order`
+                }
+                trailing="chevron"
+              />
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.inset}>
+              <SectionTitle>Avoid</SectionTitle>
+            </View>
+            <ScrollView
+              contentContainerStyle={styles.avoidances}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+            >
+              {AVOIDANCES.map(([preference, label, icon]) => (
+                <Chip
+                  accessibilityLabel={`Avoid ${label.toLowerCase()}`}
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: routePreferences[preference] }}
+                  icon={icon}
+                  key={preference}
+                  label={label}
+                  onPress={() => {
+                    onToggleRoutePreference(preference);
+                  }}
+                  selected={routePreferences[preference]}
+                />
+              ))}
+            </ScrollView>
+          </View>
+
+          <View style={[styles.section, styles.inset]}>
+            <SectionTitle>Navigation marker</SectionTitle>
+            <SegmentedControl
+              accessibilityLabel="Navigation marker"
+              onChange={onVehicleStyleChange}
+              options={VEHICLE_OPTIONS}
+              value={vehicleStyle}
+            />
+          </View>
+        </Fragment>
       </BottomSheetScrollView>
     </BottomSheet>
   );
@@ -406,14 +435,8 @@ const useStyles = createThemedStyles(({ colors }) =>
     routeChoiceVia: { ...typography.footnote, color: colors.textSecondary },
     routeChoices: { gap: space.sm, paddingHorizontal: space.lg },
     section: { gap: space.sm },
-    sourceRow: {
-      alignItems: 'center',
-      flexDirection: 'row',
-      gap: space.md,
-      justifyContent: 'space-between',
-      paddingHorizontal: space.lg,
-    },
-    sourceText: { ...typography.caption, color: colors.textTertiary, flex: 1 },
+    sourceRow: { gap: space.xs, paddingHorizontal: space.lg },
+    sourceText: { ...typography.caption, color: colors.textTertiary },
     startButton: { minWidth: 148 },
     summary: {
       alignItems: 'center',

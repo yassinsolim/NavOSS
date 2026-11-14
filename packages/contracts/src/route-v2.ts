@@ -7,7 +7,11 @@ import {
   RouteResponseSchema,
   RouteStepSchema,
 } from './route.js';
-import { CommunityTrafficSourceSchema, RouteTrafficAnnotationSchema } from './traffic.js';
+import {
+  CommunityTrafficSourceSchema,
+  RouteTrafficAnnotationSchema,
+  RouteTrafficFreshnessSchema,
+} from './traffic.js';
 
 export const RouteWaypointV2Schema = CoordinateSchema.extend({
   type: z.enum(['break', 'through']).default('break'),
@@ -115,6 +119,8 @@ export const RouteAlternativeV2Schema = RouteAlternativeSchema.safeExtend({
     .unwrap()
     .extend({
       observedFraction: RouteTrafficAnnotationSchema.shape.observedFraction.optional(),
+      oldestObservedAt: RouteTrafficFreshnessSchema.shape.oldestObservedAt.optional(),
+      snapshotAt: RouteTrafficFreshnessSchema.shape.snapshotAt.optional(),
     })
     .optional(),
   speedLimits: z
@@ -211,6 +217,22 @@ export const RouteResponseV2Schema = z
           code: 'custom',
           message: 'community traffic detail requires congestion and observed fraction',
           path: ['routes', index, 'traffic'],
+        });
+      }
+      const snapshotAt = route.traffic?.snapshotAt;
+      const oldestObservedAt = route.traffic?.oldestObservedAt;
+      if (
+        (snapshotAt !== undefined || oldestObservedAt !== undefined) &&
+        (route.traffic?.observedFraction === undefined ||
+          snapshotAt === undefined ||
+          oldestObservedAt === undefined ||
+          Date.parse(oldestObservedAt) > Date.parse(snapshotAt))
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message:
+            'community traffic freshness needs both boundaries, the oldest no later than the snapshot',
+          path: ['routes', index, 'traffic', 'snapshotAt'],
         });
       }
       if (route.traffic === undefined && route.congestion !== undefined) {

@@ -65,6 +65,33 @@ describe('community traffic on the v2 route contract only', () => {
     expect(RouteResponseSchema.safeParse(result).success).toBe(false);
   });
 
+  it('carries coarse traffic freshness on community routes only, both boundaries together', () => {
+    const live = { ...source, traffic: 'live', trafficSource };
+    const withFreshness = (traffic: Record<string, unknown>) => ({
+      ...response,
+      routes: [{ ...annotated, traffic: { ...annotated.traffic, ...traffic } }],
+      source: live,
+    });
+    const fresh = {
+      oldestObservedAt: '2026-11-13T00:00:00Z',
+      snapshotAt: '2026-11-13T00:05:00Z',
+    };
+    expect(RouteResponseV2Schema.parse(withFreshness(fresh)).routes[0]?.traffic).toMatchObject(
+      fresh,
+    );
+    // Optional: a server without the fields is still a valid answer.
+    expect(RouteResponseV2Schema.safeParse(withFreshness({})).success).toBe(true);
+    for (const broken of [
+      { snapshotAt: fresh.snapshotAt },
+      { oldestObservedAt: fresh.oldestObservedAt },
+      { oldestObservedAt: fresh.snapshotAt, snapshotAt: fresh.oldestObservedAt },
+    ]) {
+      expect(RouteResponseV2Schema.safeParse(withFreshness(broken)).success).toBe(false);
+    }
+    // Not on the frozen v1 shape.
+    expect(RouteResponseSchema.safeParse(withFreshness(fresh)).success).toBe(false);
+  });
+
   it('requires a community source for live Valhalla traffic and its route-only fields', () => {
     expect(
       RouteResponseV2Schema.safeParse({

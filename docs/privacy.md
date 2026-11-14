@@ -2,7 +2,7 @@
 
 Status: **ready for internal TestFlight**. A direct privacy/support email must be activated before external beta testing.
 
-Effective date: November 12, 2026
+Effective date: November 14, 2026
 
 NavOSS is an account-free navigation application beginning with a Calgary technical beta. This policy explains how NavOSS uses data when you view the map, inspect or search for a place, request a route, navigate, share a place or ETA, open an external link, or ask for support.
 
@@ -66,19 +66,16 @@ The server refuses a batch whose first position is more than 10 minutes old when
 **What is left out.** The app is required not to record the first 400 metres or the last 400
 metres of a trip, or anything within 400 metres of your destination or a stop on the way, and to
 hold back the most recent 400 metres so that a trip you end early never sends its final stretch.
-The server cannot check this, because it is never told where a trip starts or ends. What the
-server itself does is discard the first and last 100 metres of every batch it receives and use
-only motorways, trunk roads, primary roads and secondary roads. Of those, it uses only stretches
+The server cannot check this, because it is never told where a trip starts or ends. What the server itself does is discard the first and last 100 metres of every batch it receives and use only motorways, trunk roads, primary roads and secondary roads. Time you spent standing still within those 100 metres can still count, as time only, toward your speed on a stretch you were already driving, and only once a later batch shows you driving on, along that stretch or onto the road it leads to, at least 125 metres past where you stood; standing still where a trip ends or starts never counts. Of those, it uses only stretches
 at least 20 metres long that the routing software's map marks as open to cars and as neither
 private or destination-only access nor a dead end or the road into or out of an area with no
-other exit. That map check reaches only as far as the routing software looks: a large area with
-a single exit, such as a valley with its own road network, can still be used. Positions on other
+other exit. That map check reaches only as far as the routing software looks, so before publishing anything the server also requires a map of dead-end areas built from the same map data as the routing software, and uses only stretches that this map places on the main road network: a large area with a single exit, such as a valley with its own road network, is left out, and so is any stretch the map cannot place. Positions on other
 roads (tertiary and residential streets, service roads, driveways, tracks, and parking areas)
 may still be uploaded and matched to the map in memory, but nothing is kept from them.
 
 **What the server does.** The server matches a batch to roads in memory and works out, for each
 qualifying stretch between two junctions, which part of it the batch drove (as distances along
-the stretch), how far you moved there and how long you spent there, including time stopped. A
+the stretch), how far you moved there and how long you spent there, including time stopped. Each part of a stretch counts once, and standing still at one place counts once for each period of time the batches claim: sending the same batch again does not change your speed. A batch states only the minute in which its driving began, so the server cannot tell the same stop cut into batches differently from more of that stop: each such re-cut batch can add up to just under a minute of standing at that place, and an honest stop that spans two batches can lose up to a minute. A batch in which you did not move is not sent to the routing software. A
 stretch is often longer than one batch covers, so the parts you drive of one stretch in
 successive batches are joined; once they cover 300 metres of it, or half of it if it is shorter,
 they become your one speed for that stretch (distance over time). The speed is measured on the
@@ -98,16 +95,9 @@ publication on until it has.
 
 **What is kept, and for how long.**
 
-- _Before publication, in memory only._ For each stretch of road, the server's memory holds one
-  speed per contributor (or, until enough of the stretch is covered, which parts of it the
-  contributor has driven, how far and for how long), the five-minute period in which it arrived,
-  when the batch's driving began, and a scrambled marker that tells contributors apart. The marker is derived from your
+- _Before publication, in memory only._ For each stretch of road, the server's memory holds, for each contributor, what it has driven of that stretch: which parts, how far and for how long, and where along it and when, by the batch's own clock, the contributor stood still. Once enough of the stretch is covered, this becomes the contributor's one speed, and these details are still kept with it until the stretch is published or they are dropped, because standing still reported later can still count. It also holds the five-minute period in which the speed was completed, when the oldest driving counted for it began, and a scrambled marker that tells contributors apart. The marker is derived from your
   App Attest installation and that one stretch of road using a secret that exists only in the
-  running server's memory. Markers for two different roads are unrelated, so they cannot be
-  matched to each other by comparing them; your marker for one stretch stays the same across
-  five-minute periods and credentials until the server restarts. For an installation registered
-  in the last seven days, the memory also holds a scrambled marker of the network the batch came
-  from, so that several new keys on one network count once. This is dropped after at most 20
+  running server's memory. It is scrambled again for each group of contributors on that stretch: once the stretch is published, new contributions on it get unrelated markers. Markers for two different roads, or for two published groups on one road, are unrelated, so they cannot be matched to each other by comparing them. Until the stretch is next published, your marker for it stays the same across five-minute periods and credentials (if it is never published, until the server restarts or nothing about the stretch is left in memory). For an installation registered in the last seven days, the memory also holds a marker of the network the batch came from, scrambled the same way, so that several new keys on one network count once. This is dropped after at most 20
   minutes and is lost whenever the server restarts. It is never written to the database.
 - _After publication, in the database._ Once at least three installations have driven the same
   stretch, the server stores one typical speed for it, rounded to 5 km/h, the public
@@ -148,8 +138,7 @@ most roads will show no traffic at all.
   group who drive there may be guessable.
 - If two of the three contributors on a stretch cooperate, they can infer that a third person
   drove it in that window, roughly how fast, and at a junction which way they went.
-- Someone with access to the running server's memory, together with its database, could work out
-  which installation contributed to a stretch that is still waiting for publication.
+- Someone with access to the running server's memory, together with its database, could work out which installation contributed to a stretch that is still waiting for publication; from the memory alone they could work out the network of a recently registered key by trying every network.
 - Cloudflare and the NavOSS server necessarily see each upload and its network address while it
   is being delivered, as they do for every request.
 - A home on a secondary or larger through road is on a road the server uses. Only the trimming
@@ -293,7 +282,7 @@ Map and route data is derived from OpenStreetMap contributors. Search combines O
 | Search text, tapped-place name, and search origin  | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup                                                                                                                                                                                                                           |
 | Route and reroute coordinates                      | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup                                                                                                                                                                                                                           |
 | Traffic-sharing batches (only when switched on)    | Positions and timing processed in memory and discarded; not written by the NavOSS API to its database, log, or a backup                                                                                                                                                                                                                 |
-| Unpublished traffic speeds                         | API memory only: one speed per contributor and road stretch with a per-road scrambled marker (and, for keys registered in the last seven days, a scrambled network marker); dropped within 20 minutes; never in the database                                                                                                            |
+| Unpublished traffic speeds                         | API memory only: one speed per contributor and road stretch, with the parts driven, distances, times and stopping places behind it, and a scrambled marker per road and per group of contributors (and, for keys registered in the last seven days, a scrambled network marker); dropped within 20 minutes; never in the database       |
 | Published traffic speeds                           | Per road stretch: speed rounded to 5 km/h, public road shape, five-minute publication time; never shown after 15 minutes; deleted by the next successful database update after that, erased on every server start, excluded from backups                                                                                                |
 | App Attest key for traffic sharing                 | Keyed hash of the key identifier, encrypted public key, counter, registration and last-use times; removed by a periodic best-effort cleanup after 90 days without use                                                                                                                                                                   |
 | Active route, trip progress and camera eligibility | On the phone only. Active route and the last confirmed position along it (distances along the route, that fix's capture time and reported speed; together with the route, a position) kept to resume after a relaunch; erased when navigation ends, on arrival, or at the first launch 12 hours or more later; no trip-history database |

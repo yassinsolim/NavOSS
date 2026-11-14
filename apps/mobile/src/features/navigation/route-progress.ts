@@ -291,9 +291,57 @@ export function routeViaLabel(route: RouteAlternativeV2): string {
 }
 
 /**
+ * When community traffic was last updated, from the publication boundaries the server stated:
+ * "updated" the oldest of them. A boundary is when the server published speeds, not when anyone
+ * drove: the driving behind it can be up to the cohort window (15 minutes) older, so this never
+ * reads as an observation time. Undefined when no time was stated or none could be read.
+ */
+export function communityTrafficUpdated(
+  boundaries: readonly (string | undefined)[],
+): string | undefined {
+  const times = boundaries
+    .map((boundary) => Date.parse(boundary ?? ''))
+    .filter((time) => Number.isFinite(time));
+  if (times.length === 0) return undefined;
+  return `updated ${new Date(Math.min(...times)).toLocaleTimeString('en-CA', {
+    hour: 'numeric',
+    minute: '2-digit',
+  })}`;
+}
+
+/**
+ * How fresh a route's community traffic is: "updated" at the oldest publication boundary of the
+ * speeds the server applied to it (`traffic.oldestObservedAt`), never the time of the route
+ * request. Undefined when the server did not say (an older server), or said something unreadable.
+ */
+export function communityTrafficFreshness(
+  traffic: RouteAlternativeV2['traffic'] | undefined,
+): string | undefined {
+  return communityTrafficUpdated([traffic?.oldestObservedAt]);
+}
+
+/**
+ * What VoiceOver reads for a route choice: what the route is (the fastest by duration, as the
+ * server labelled it, or simply a route), its time, length and roads, and its traffic delay and
+ * freshness whenever it has community traffic, a free-flowing one included. Whether it is the
+ * chosen route is the card's selected state, not part of its name.
+ */
+export function routeChoiceAccessibilityLabel(route: RouteAlternativeV2): string {
+  const delay = formatTrafficDelay(route.traffic?.delaySeconds ?? 0);
+  const freshness = communityTrafficFreshness(route.traffic);
+  return [
+    `${route.label === 'fastest' ? 'Fastest route' : 'Route'}, ${formatDuration(route.durationSeconds)}`,
+    formatDistance(route.distanceMeters),
+    routeViaLabel(route),
+    ...(delay === undefined ? [] : [delay]),
+    ...(freshness === undefined ? [] : [`traffic ${freshness}`]),
+  ].join(', ');
+}
+
+/**
  * What the route says about traffic, stated as it is. Provider traffic reads "Live traffic" (or
- * its delay); community traffic is credited to its source, and only on a route it observed.
- * Everything else reads "No live traffic".
+ * its delay); community traffic is credited to its source, and only on a route it observed, with
+ * how fresh it is when the server says. Everything else reads "No live traffic".
  */
 export function routeTrafficLabel(
   source: RouteResponseV2['source'] | undefined,
@@ -301,9 +349,13 @@ export function routeTrafficLabel(
 ): string {
   if (source?.traffic !== 'live') return 'No live traffic';
   if (source.trafficSource !== undefined) {
-    return route?.traffic !== undefined || route?.congestion !== undefined
+    if (route?.traffic === undefined && route?.congestion === undefined) {
+      return 'No live traffic on this route';
+    }
+    const freshness = communityTrafficFreshness(route.traffic);
+    return freshness === undefined
       ? source.trafficSource.attribution
-      : 'No live traffic on this route';
+      : `${source.trafficSource.attribution} · ${freshness}`;
   }
   return formatTrafficDelay(route?.traffic?.delaySeconds ?? 0) ?? 'Live traffic';
 }

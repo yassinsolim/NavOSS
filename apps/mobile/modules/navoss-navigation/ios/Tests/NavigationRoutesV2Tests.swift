@@ -90,6 +90,27 @@ final class NavigationRoutesV2Tests: XCTestCase {
     )
   }
 
+  func testV2RecommendationOrderIsKeptAndFastestFollowsDuration() async throws {
+    RoutesURLProtocol.handler = { request in
+      switch request.url!.path {
+      case "/v2/config": return Self.response(request, Self.v2Config)
+      case "/v2/routes":
+        return Self.response(request, try Self.fixture("community-protected-order.v2"))
+      default: return Self.response(request, Data("{}".utf8), status: 404)
+      }
+    }
+    let trips = try await makeClient().routes(
+      origin: Self.calgaryOrigin, destination: Self.calgaryDestination,
+      preferences: NavOSSRoutePreferences(), alternatives: 1
+    )
+    // The server kept the recommended route ahead of a faster, unobserved minor-road route.
+    XCTAssertEqual(trips.map(\.id), ["recommended", "unobserved-minor"])
+    // CarPlay names the faster one "Fastest route", by duration, not the first one.
+    XCTAssertEqual(navOSSCarPlayFastestRouteIndex(trips), 1)
+    XCTAssertNotNil(navOSSCarPlayTrafficAttribution(trips[0]))
+    XCTAssertNil(navOSSCarPlayTrafficAttribution(trips[1]))
+  }
+
   func testVancouverInterchangeDecodesFromTheRealResponse() throws {
     let trip = try XCTUnwrap(try Self.trips("vancouver-bc91-highway99.v2", version: .v2).first)
     XCTAssertTrue(trip.isValid)
@@ -351,6 +372,53 @@ final class NavigationRoutesV2Tests: XCTestCase {
     XCTAssertNil(trips[1].trafficSource, "an unobserved alternative claims no traffic")
     XCTAssertEqual(navOSSCarPlayTrafficAttribution(trips[0]), "Traffic: NavOSS drivers")
     XCTAssertNil(navOSSCarPlayTrafficAttribution(trips[1]))
+  }
+
+  func testCommunityTrafficFreshnessIsTheOldestReleaseBoundaryAndIsOptional() throws {
+    func trip(_ traffic: String) throws -> NavOSSCarPlayTrip {
+      let json = """
+        {
+          "degraded": false,
+          "generatedAt": "2026-11-12T18:07:31.250Z",
+          "routes": [{
+            "congestion": ["unknown", "slow"],
+            "distanceMeters": 200, "durationSeconds": 40,
+            "geometry": [[-114.08, 51.04], [-114.079, 51.04], [-114.078, 51.04]],
+            "id": "r", "label": "fastest",
+            "steps": [{"distanceMeters": 200, "durationSeconds": 40,
+              "geometry": [[-114.08, 51.04], [-114.078, 51.04]],
+              "instruction": "Head east", "maneuverType": "depart", "roadName": ""}],
+            "traffic": \(traffic)
+          }],
+          "source": {"attribution": "Routing by Valhalla using OpenStreetMap data",
+            "id": "valhalla-self-hosted", "mode": "production", "traffic": "live",
+            "trafficSource": {"id": "navoss-community",
+              "attribution": "Traffic from opted-in NavOSS drivers"}}
+        }
+        """
+      return try XCTUnwrap(Self.trips(data: Data(json.utf8), version: .v2).first)
+    }
+    let fresh = try trip(
+      """
+      {"delaySeconds": 10, "typicalDurationSeconds": 30, "observedFraction": 0.5,
+        "oldestObservedAt": "2026-11-12T18:00:00.000Z", "snapshotAt": "2026-11-12T18:05:00Z"}
+      """)
+    XCTAssertEqual(fresh.traffic?.oldestObservedAt, navOSSTrafficBoundary("2026-11-12T18:00:00Z"))
+    let utc = try XCTUnwrap(TimeZone(identifier: "UTC"))
+    let attribution = try XCTUnwrap(
+      navOSSCarPlayTrafficAttribution(fresh, locale: Locale(identifier: "en_CA"), timeZone: utc))
+    XCTAssertTrue(attribution.hasPrefix("Traffic: NavOSS drivers · updated 6:00"), attribution)
+    XCTAssertFalse(attribution.contains("6:05") || attribution.contains("6:07"), attribution)
+    // An older server, or an unreadable boundary: the route keeps its traffic, without a time.
+    for traffic in [
+      #"{"delaySeconds": 10, "typicalDurationSeconds": 30}"#,
+      #"{"delaySeconds": 10, "typicalDurationSeconds": 30, "oldestObservedAt": 7}"#,
+    ] {
+      let older = try trip(traffic)
+      XCTAssertEqual(older.traffic?.delaySeconds, 10)
+      XCTAssertNil(older.traffic?.oldestObservedAt)
+      XCTAssertEqual(navOSSCarPlayTrafficAttribution(older), "Traffic: NavOSS drivers")
+    }
   }
 
   // MARK: Spoken signposts

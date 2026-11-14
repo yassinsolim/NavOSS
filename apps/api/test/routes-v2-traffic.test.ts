@@ -72,14 +72,17 @@ async function setup(mode: TrafficMode) {
     ),
   );
   const store = createInMemoryTrafficReleaseStore();
+  // The process starts one epoch earlier, so the epoch of `now` is the first it publishes.
+  let clockMs = epoch - 300_000;
+  const clock = () => new Date(clockMs);
   const service = createTrafficService({
-    clock: () => now,
+    clock,
     settings: { ...DEFAULT_TRAFFIC_SETTINGS, mode },
     store,
     mapMatcher: { matchTrace: () => Promise.resolve(undefined), walkRoute },
   });
   const app = await buildApp({
-    clock: () => now,
+    clock,
     communityReports: null,
     trafficService: service,
     searchProvider: createFixtureSearchProvider(),
@@ -90,18 +93,20 @@ async function setup(mode: TrafficMode) {
     },
   });
   apps.push(app);
-  // Explicit controlled release fixture, not a claim about observed/public traffic.
-  await store.publishEpoch(epoch, [
+  // Explicit controlled release fixture, not a claim about observed/public traffic: released at
+  // the previous boundary, still visible in the snapshot the service publishes at `epoch`.
+  await store.publishEpoch(epoch - 300_000, [
     {
-      expiresAtMs: epoch + 900_000,
+      expiresAtMs: epoch + 600_000,
       freeFlowKph: 50,
       line: edge.line,
-      releasedAtMs: epoch,
+      releasedAtMs: epoch - 300_000,
       roadClass: edge.roadClass,
       segmentKey: 'w1f-000000000000',
       speedKph: 20,
     },
   ]);
+  clockMs = now.getTime();
   return { app, base, service, walkRoute };
 }
 
@@ -154,6 +159,11 @@ describe('v2 community traffic routing integration', () => {
     expect(annotated?.congestion).toHaveLength(fixtureValue(annotated).geometry.length - 1);
     expect(annotated?.traffic?.observedFraction).toBe(1);
     expect(annotated?.traffic?.delaySeconds).toBeGreaterThan(0);
+    // Freshness: the snapshot the speeds came from, and the older boundary that released them.
+    // Neither is the request time.
+    expect(annotated?.traffic?.snapshotAt).toBe(new Date(epoch).toISOString());
+    expect(annotated?.traffic?.oldestObservedAt).toBe(new Date(epoch - 300_000).toISOString());
+    expect(result.generatedAt).not.toBe(annotated?.traffic?.snapshotAt);
     expect(unavailable?.traffic).toBeUndefined();
     expect(unavailable?.congestion).toBeUndefined();
   });
@@ -267,6 +277,9 @@ describe('v2 community traffic routing integration', () => {
       expect(new Set(first?.congestion)).toEqual(new Set(['unknown', 'free', 'slow', 'heavy']));
       expect(first?.traffic?.observedFraction).toBeGreaterThanOrEqual(0.35);
       expect(first?.traffic?.delaySeconds).toBeGreaterThan(20);
+      // Every speed was released at the 18:05 boundary the route read.
+      expect(first?.traffic?.snapshotAt).toBe('2026-11-12T18:05:00.000Z');
+      expect(first?.traffic?.oldestObservedAt).toBe('2026-11-12T18:05:00.000Z');
       expect(second?.congestion).toBeUndefined();
       expect(second?.traffic).toBeUndefined();
     });

@@ -1,7 +1,7 @@
 import type { SearchResult } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Fragment, useEffect, useState } from 'react';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
 import { GooglePlaceRating } from '@/features/map/google-place-rating';
@@ -112,6 +112,10 @@ export function PlaceSheet({
   const { colors } = useTheme();
   const styles = useStyles();
   const detents = placeSheetDetents(metrics);
+  // Re-measured when Dynamic Type changes while the sheet is open (see AppTabBar). The keyed
+  // parts hold no state; the clock for opening hours lives here, above them.
+  const { fontScale } = useWindowDimensions();
+  const remeasure = String(fontScale);
   const details = place.details;
   const category = categoryLabel(place, undefined) || searchResultContext(place);
   const [now, setNow] = useState(() => new Date());
@@ -139,13 +143,14 @@ export function PlaceSheet({
       position={position}
     >
       <SheetHeader
+        key={`header-${remeasure}`}
         closeLabel="Close place details"
         onClose={onClose}
         subtitle={category}
         title={place.name}
         titleLines={3}
       />
-      <View style={styles.actions}>
+      <View key={`actions-${remeasure}`} style={styles.actions}>
         <Button
           icon={{ android: 'directions', ios: 'arrow.triangle.turn.up.right.diamond.fill' }}
           label="Directions"
@@ -192,95 +197,97 @@ export function PlaceSheet({
             { paddingBottom: Math.max(metrics.bottomInset + space.md, space.xxl) },
           ]}
         >
-          {loading && <StateView title="Loading place details" visual="loading" />}
-          {details?.address !== undefined && (
-            <ListRow
-              icon={{ android: 'location_on', ios: 'mappin.and.ellipse' }}
-              iconTint={colors.textSecondary}
-              title={details.address}
-              titleLines={3}
-            />
-          )}
-          {openingHours !== undefined && (
-            <ListRow
-              icon={{ android: 'schedule', ios: 'clock' }}
-              iconTint={
-                openStatus === undefined
-                  ? colors.textSecondary
-                  : openStatusColor(openStatus, colors)
-              }
-              subtitle={openStatus === undefined ? undefined : openingHours}
-              subtitleLines={4}
-              title={openStatus === undefined ? openingHours : placeOpenStatusLabel(openStatus)}
-              titleLines={4}
-            />
-          )}
-          {details?.phone !== undefined && onCall !== undefined && (
-            <ListRow
-              accessibilityLabel={details.phone}
-              accessibilityRole="link"
-              icon={{ android: 'call', ios: 'phone.fill' }}
-              iconTint={colors.textSecondary}
-              onPress={onCall}
-              title={details.phone}
-              trailing="external"
-            />
-          )}
-          {details?.website !== undefined && onWebsite !== undefined && (
-            <ListRow
-              accessibilityLabel={websiteLabel ?? 'Website from OpenStreetMap'}
-              accessibilityRole="link"
-              icon={{ android: 'language', ios: 'safari' }}
-              iconTint={colors.textSecondary}
-              onPress={onWebsite}
-              title={websiteLabel ?? 'Website from OpenStreetMap'}
-              trailing="external"
-            />
-          )}
-          {details?.wheelchair !== undefined && (
-            <ListRow
-              icon={{ android: 'accessible', ios: 'figure.roll' }}
-              iconTint={colors.textSecondary}
-              title={wheelchairLabel(details.wheelchair)}
-              titleLines={2}
-            />
-          )}
-          {!loading && details === undefined && (
-            <ListRow
-              icon={{ android: 'location_on', ios: 'mappin.and.ellipse' }}
-              iconTint={colors.textSecondary}
-              subtitle="No additional place details are available right now."
-              title={`${place.center.latitude.toFixed(5)}, ${place.center.longitude.toFixed(5)}`}
-            />
-          )}
-          {place.category === 'poi' && (
-            <View style={styles.ratingSection}>
-              <Text accessibilityRole="header" style={styles.ratingTitle}>
-                Photos & reviews
-              </Text>
-              {ratingAvailable ? (
-                <GooglePlaceRating
-                  latitude={place.center.latitude}
-                  longitude={place.center.longitude}
-                  name={place.name}
-                  style={styles.ratingView}
-                />
-              ) : (
-                <Text style={styles.ratingUnavailable}>
-                  Google photos, ratings, and reviews are unavailable in this build
-                </Text>
-              )}
+          <Fragment key={remeasure}>
+            {loading && <StateView title="Loading place details" visual="loading" />}
+            {details?.address !== undefined && (
               <ListRow
-                accessibilityHint="Opens Google Maps; the place query is shared only after you choose this action"
-                accessibilityLabel="More reviews on Google Maps"
+                icon={{ android: 'location_on', ios: 'mappin.and.ellipse' }}
+                iconTint={colors.textSecondary}
+                title={details.address}
+                titleLines={3}
+              />
+            )}
+            {openingHours !== undefined && (
+              <ListRow
+                icon={{ android: 'schedule', ios: 'clock' }}
+                iconTint={
+                  openStatus === undefined
+                    ? colors.textSecondary
+                    : openStatusColor(openStatus, colors)
+                }
+                subtitle={openStatus === undefined ? undefined : openingHours}
+                subtitleLines={4}
+                title={openStatus === undefined ? openingHours : placeOpenStatusLabel(openStatus)}
+                titleLines={4}
+              />
+            )}
+            {details?.phone !== undefined && onCall !== undefined && (
+              <ListRow
+                accessibilityLabel={details.phone}
                 accessibilityRole="link"
-                onPress={onReadReviews}
-                title="More reviews on Google Maps"
+                icon={{ android: 'call', ios: 'phone.fill' }}
+                iconTint={colors.textSecondary}
+                onPress={onCall}
+                title={details.phone}
                 trailing="external"
               />
-            </View>
-          )}
-          <Text style={styles.source}>Place data from OpenStreetMap contributors</Text>
+            )}
+            {details?.website !== undefined && onWebsite !== undefined && (
+              <ListRow
+                accessibilityLabel={websiteLabel ?? 'Website from OpenStreetMap'}
+                accessibilityRole="link"
+                icon={{ android: 'language', ios: 'safari' }}
+                iconTint={colors.textSecondary}
+                onPress={onWebsite}
+                title={websiteLabel ?? 'Website from OpenStreetMap'}
+                trailing="external"
+              />
+            )}
+            {details?.wheelchair !== undefined && (
+              <ListRow
+                icon={{ android: 'accessible', ios: 'figure.roll' }}
+                iconTint={colors.textSecondary}
+                title={wheelchairLabel(details.wheelchair)}
+                titleLines={2}
+              />
+            )}
+            {!loading && details === undefined && (
+              <ListRow
+                icon={{ android: 'location_on', ios: 'mappin.and.ellipse' }}
+                iconTint={colors.textSecondary}
+                subtitle="No additional place details are available right now."
+                title={`${place.center.latitude.toFixed(5)}, ${place.center.longitude.toFixed(5)}`}
+              />
+            )}
+            {place.category === 'poi' && (
+              <View style={styles.ratingSection}>
+                <Text accessibilityRole="header" style={styles.ratingTitle}>
+                  Photos & reviews
+                </Text>
+                {ratingAvailable ? (
+                  <GooglePlaceRating
+                    latitude={place.center.latitude}
+                    longitude={place.center.longitude}
+                    name={place.name}
+                    style={styles.ratingView}
+                  />
+                ) : (
+                  <Text style={styles.ratingUnavailable}>
+                    Google photos, ratings, and reviews are unavailable in this build
+                  </Text>
+                )}
+                <ListRow
+                  accessibilityHint="Opens Google Maps; the place query is shared only after you choose this action"
+                  accessibilityLabel="More reviews on Google Maps"
+                  accessibilityRole="link"
+                  onPress={onReadReviews}
+                  title="More reviews on Google Maps"
+                  trailing="external"
+                />
+              </View>
+            )}
+            <Text style={styles.source}>Place data from OpenStreetMap contributors</Text>
+          </Fragment>
         </BottomSheetScrollView>
       </BottomSheetReveal>
     </BottomSheet>

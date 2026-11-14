@@ -23,6 +23,8 @@ import NavOSSNavigation, {
 
 interface NativeTrafficInput {
   delaySeconds: number;
+  /** Community traffic only: the oldest publication boundary of the speeds used (ISO 8601). */
+  oldestObservedAt?: string;
   typicalDurationSeconds: number;
 }
 
@@ -301,6 +303,9 @@ export function setNavigationRoute(
       : {
           traffic: {
             delaySeconds: traffic.delaySeconds,
+            ...(traffic.oldestObservedAt === undefined
+              ? {}
+              : { oldestObservedAt: traffic.oldestObservedAt }),
             typicalDurationSeconds: traffic.typicalDurationSeconds,
           },
         }),
