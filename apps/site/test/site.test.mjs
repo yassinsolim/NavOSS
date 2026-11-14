@@ -163,7 +163,7 @@ test('legal and support pages keep their published commitments', () => {
   assert.match(privacy, /Community traffic sharing \(opt-in\)/);
   assert.match(privacy, /Community road reports/);
   assert.match(privacy, /not switched on in the deployed service/);
-  assert.match(privacy, /Effective November 12, 2026/);
+  assert.match(privacy, /Effective November 14, 2026/);
   assert.match(
     dataSources,
     /Builds without the restricted Google key make no Google place-details request/,
