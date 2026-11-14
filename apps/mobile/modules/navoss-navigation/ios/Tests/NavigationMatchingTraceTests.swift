@@ -194,8 +194,8 @@ final class NavigationMatchingTraceTests: XCTestCase {
   }
 
   /// A single multipath fix lands on the route 400 m ahead of where a 15 m/s vehicle could be.
-  /// It is held; the next real fix continues normally, and a jump that two fixes agree on is
-  /// accepted.
+  /// It is not progress; the next real fix continues normally, and a jump that two fixes agree
+  /// on, after a gap long enough to have covered it, is accepted.
   func testImplausibleSingleFixJumpIsHeldButAConfirmedOneIsAccepted() throws {
     let core = NavigationCore()
     try core.setRoute(Trace.route([(0, 0), (5_000, 0)]))
@@ -215,9 +215,10 @@ final class NavigationMatchingTraceTests: XCTestCase {
     )
     XCTAssertEqual(along(next, core), 180, accuracy: 1)
 
-    _ = try core.updateLocation(Trace.sample(x: 700, y: 0, courseDegrees: 90, speed: 15, time: 13))
+    // 13 s after the last fix: 520 m on is possible, though not explained by 15 m/s.
+    _ = try core.updateLocation(Trace.sample(x: 700, y: 0, courseDegrees: 90, speed: 15, time: 25))
     let confirmed = try core.updateLocation(
-      Trace.sample(x: 715, y: 0, courseDegrees: 90, speed: 15, time: 14)
+      Trace.sample(x: 715, y: 0, courseDegrees: 90, speed: 15, time: 26)
     )
     XCTAssertEqual(along(confirmed, core), 715, accuracy: 1)
   }
