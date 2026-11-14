@@ -808,6 +808,29 @@ describe('publication cohorts', () => {
         expect(speeds([approach, shortResume, late, onward])).toEqual([10]);
       });
 
+      it('expires a sample from the start of standing time it counted, when that came first', () => {
+        // Moving 0–200 m in the first 10 s of a batch claimed at `claimed`; standing at 300 m
+        // from 10 s before that (a stationary batch claimed a minute earlier, 50–170 s into it);
+        // then 400–600 m two minutes later. The approach ended within a minute of the stop, so
+        // the stop is counted, and it is the oldest evidence the sample counted.
+        const trip = (claimed: number, standing = true): Batch[] => [
+          { claimedMs: claimed, dwells: [], observations: [piece([[0, 200]], 10)] },
+          ...(standing
+            ? [{ claimedMs: claimed - minute, dwells: [dwell(300, 50, 170)], observations: [] }]
+            : []),
+          { claimedMs: claimed + 2 * minute, dwells: [], observations: [piece([[400, 600]], 60)] },
+        ];
+        const speeds = (batches: Batch[]) => run(batches).releases.map(({ speedKph }) => speedKph);
+        // The window at the next boundary begins 5 s before `edge`.
+        const edge = NEXT_TICK - SETTINGS.cohortSeconds * 1_000 + 5_000;
+        // Without the stop: 400 m in 70 s, 20.6 km/h, inside the window.
+        expect(speeds(trip(edge, false))).toEqual([20]);
+        // With it, a minute later: 400 m in 70 s moving and 120 s standing, 7.6 km/h.
+        expect(speeds(trip(edge + minute))).toEqual([10]);
+        // The standing began 10 s before `edge`, 5 s before the window: nothing is released.
+        expect(speeds(trip(edge))).toEqual([]);
+      });
+
       it('needs the trip to go on at least the server trim, plus placement slack, past a dwell', () => {
         // Movement resuming 110 m past the stop is not enough; 130 m is.
         const short: Batch = {

@@ -274,37 +274,23 @@ function projectOnto(
 
 /**
  * Counts standing still at `at` during the claimed window `[startMs, endMs]`, returning the
- * seconds not already counted at that place and when the counted time begins. A window wholly
- * inside what was counted there is a repeat and adds nothing. An overlap shorter than the
- * `capturedAt` rounding is what two honest consecutive batches of one long stop can show, so the
- * window counts in full; a longer overlap cannot be honest, and only the time outside what was
- * counted is added.
+ * seconds not already counted at that place. A window wholly inside what was counted there is a
+ * repeat and adds nothing. An overlap shorter than the `capturedAt` rounding is what two honest
+ * consecutive batches of one long stop can show, so the window counts in full; a longer overlap
+ * cannot be honest, and only the time outside what was counted is added.
  */
-function countStop(
-  partial: PartialCoverage,
-  at: number,
-  startMs: number,
-  endMs: number,
-): { fromMs: number; seconds: number } {
-  if (endMs <= startMs) return { fromMs: startMs, seconds: 0 };
+function countStop(partial: PartialCoverage, at: number, startMs: number, endMs: number): number {
+  if (endMs <= startMs) return 0;
   let place = partial.stops.find((stop) => Math.abs(stop.at - at) <= SAME_STOP_METERS);
   if (place === undefined) {
     place = { at, windows: [] };
     partial.stops.push(place);
   }
   const overlap = overlapLength(place.windows, startMs, endMs);
-  // The first instant of the window not already counted there.
-  let fromMs = startMs;
-  for (const [start, end] of place.windows) {
-    if (start > fromMs) break;
-    fromMs = Math.max(fromMs, end);
-  }
   place.windows = unite([...place.windows, [startMs, endMs]]);
   const length = endMs - startMs;
-  if (overlap >= length) return { fromMs: startMs, seconds: 0 };
-  return overlap < CAPTURED_AT_ROUNDING_MS
-    ? { fromMs: startMs, seconds: length / 1_000 }
-    : { fromMs, seconds: (length - overlap) / 1_000 };
+  if (overlap >= length) return 0;
+  return (overlap < CAPTURED_AT_ROUNDING_MS ? length : length - overlap) / 1_000;
 }
 
 /**
@@ -346,10 +332,12 @@ function confirmHeldDwells(
           next.startMs >= dwell.endMs - CAPTURED_AT_ROUNDING_MS,
       );
     if (!approached || !continued) return true;
-    const counted = countStop(partial, dwell.at, dwell.startMs, dwell.endMs);
-    if (counted.seconds > 0) {
-      partial.seconds += counted.seconds;
-      partial.drivenAtMs = Math.min(partial.drivenAtMs, counted.fromMs);
+    const seconds = countStop(partial, dwell.at, dwell.startMs, dwell.endMs);
+    if (seconds > 0) {
+      partial.seconds += seconds;
+      // Time already counted at this place is no older than the evidence that counted it, so
+      // whatever part of the dwell was new, its start bounds the driving time.
+      partial.drivenAtMs = Math.min(partial.drivenAtMs, dwell.startMs);
     }
     return false;
   });
@@ -454,7 +442,7 @@ export function createTrafficCohorts(
           evidence.intervals = unite([...evidence.intervals, [move.from, move.to]]);
         }
         for (const stop of observation.stops) {
-          const { seconds } = countStop(
+          const seconds = countStop(
             evidence,
             stop.at,
             claimed(stop.startSeconds),
