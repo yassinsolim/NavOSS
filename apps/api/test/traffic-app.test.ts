@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
@@ -15,7 +15,7 @@ import {
   type TrafficProbeBatchRequest,
 } from '@navoss/contracts';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
-import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Pool } from 'pg';
 
@@ -29,12 +29,6 @@ import {
   type TrafficAttestation,
   type TrafficService,
 } from '../src/traffic/service.js';
-import {
-  DEAD_END_MASK_FORMAT,
-  DEAD_END_MASK_FORMAT_VERSION,
-  deadEndMaskPayloadDigest,
-  encodeDeltas,
-} from '../src/traffic/dead-end-mask.js';
 import { createValhallaMapMatcher } from '../src/traffic/map-matcher.js';
 import { DEFAULT_TRAFFIC_SETTINGS, type TrafficSettings } from '../src/traffic/settings.js';
 import {
@@ -1349,96 +1343,26 @@ describe('standing still across batch boundaries, through HTTP on a recorded rea
   });
 
   describe('the configured service and the dead-end mask', () => {
-    const GRAPH = 'e'.repeat(64);
-    const directory = mkdtempSync(join(tmpdir(), 'navoss-traffic-service-mask-'));
-    afterAll(() => {
-      rmSync(directory, { force: true, recursive: true });
-    });
-    /** A mask for `GRAPH` listing `eligible` way ids, everything else unknown. */
-    const writeMask = (name: string, eligible: number[], overrides: object = {}): string => {
-      const ways = {
-        eligible: encodeDeltas(eligible),
-        excluded: encodeDeltas([]),
-        unknown: encodeDeltas([]),
-        mixed: [],
-      };
-      const file = join(directory, name);
-      writeFileSync(
-        file,
-        JSON.stringify({
-          format: DEAD_END_MASK_FORMAT,
-          formatVersion: DEAD_END_MASK_FORMAT_VERSION,
-          graph: { dataDate: '2026-11-11', graphId: GRAPH, routingEngineVersion: '3.8.2' },
-          inputs: {
-            extractPolicyVersion: 1,
-            osmTimestamp: '2026-11-11T21:22:47Z',
-            pbf: 'alberta-british-columbia-261111.osm.pbf',
-            pbfSha256: 'b'.repeat(64),
-          },
-          payloadSha256: deadEndMaskPayloadDigest(ways),
-          rules: {
-            core: 'test',
-            publishableClasses: ['motorway'],
-            terminalClasses: ['motorway'],
-            terminalMeters: 400,
-          },
-          summary: {},
-          ways,
-          ...overrides,
-        }),
-      );
-      return file;
-    };
-    const DEERFOOT_WAY = 551_687_611;
     const environment = (mode: 'collect' | 'live', extra: Record<string, string> = {}) => ({
       COMMUNITY_TRAFFIC_MODE: mode,
       VALHALLA_URL: 'http://valhalla:8002/route',
       ...extra,
     });
-    const withMask = (path: string, graphId = GRAPH) => ({
-      COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH: path,
-      COMMUNITY_TRAFFIC_GRAPH_ID: graphId,
-    });
 
-    it('refuses to start live without a mask for the configured graph; collect may run without', () => {
-      expect(() => createConfiguredTrafficService({}, environment('live'))).toThrow(
-        /live requires/,
-      );
+    // A valid serving graph, its mask and the matcher applying it are tested in
+    // dead-end-mask.test.ts; here only that the configured service goes through that check.
+    it('refuses to start live without a verified serving graph and mask; collect may run without', () => {
+      expect(() => createConfiguredTrafficService({}, environment('live'))).toThrow();
       expect(createConfiguredTrafficService({}, environment('collect')).mode).toBe('collect');
-      const valid = writeMask('valid.json', [DEERFOOT_WAY]);
       expect(() =>
-        createConfiguredTrafficService({}, environment('live', withMask(valid, 'c'.repeat(64)))),
-      ).toThrow(/not the configured graph/);
-      const stale = writeMask('stale.json', [DEERFOOT_WAY], { formatVersion: 0 });
-      expect(() =>
-        createConfiguredTrafficService({}, environment('live', withMask(stale))),
-      ).toThrow(/format version 0/);
-      expect(createConfiguredTrafficService({}, environment('live', withMask(valid))).mode).toBe(
-        'live',
-      );
-    });
-
-    it('hands the mask to the matcher it builds: a way the mask does not place is never published', async () => {
-      const trip = [approach, stopped(T0 + 70_000), resume(T0 + 170_000)];
-      const configured = (path: string) => (clock: () => Date, requests: string[]) => {
-        vi.stubGlobal('fetch', recordedValhalla(requests));
-        try {
-          return createConfiguredTrafficService(
-            { attestation: fakeAttestation(), clock },
-            environment('live', withMask(path)),
-          );
-        } finally {
-          vi.unstubAllGlobals();
-        }
-      };
-      const placed = await drive(
-        threeDrivers(trip),
-        configured(writeMask('placed.json', [DEERFOOT_WAY])),
-      );
-      expect(await placed.publishedAt(T0 + 10 * MINUTE)).toEqual([10]);
-      // The same drive against a mask that does not know the way: unknown fails closed.
-      const unplaced = await drive(threeDrivers(trip), configured(writeMask('unplaced.json', [7])));
-      expect(await unplaced.publishedAt(T0 + 10 * MINUTE)).toEqual([]);
+        createConfiguredTrafficService(
+          {},
+          environment('live', {
+            COMMUNITY_TRAFFIC_GRAPH_DIR: join(tmpdir(), 'navoss-missing-serving-graph'),
+            COMMUNITY_TRAFFIC_GRAPH_ID: 'e'.repeat(64),
+          }),
+        ),
+      ).toThrow();
     });
   });
 });

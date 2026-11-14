@@ -983,7 +983,7 @@ Everything above, and:
       graph: snap distances and the share of each road class published have been looked at.
       (Synthetic traces on real routes: done locally.)
 - [ ] The topology-derived dead-end mask, built from the same extract and bound to the graph
-      Valhalla serves, is configured (`COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH`,
+      Valhalla serves, is configured (`COMMUNITY_TRAFFIC_GRAPH_DIR`,
       `COMMUNITY_TRAFFIC_GRAPH_ID`); the API refuses `live` without it. There is no operator
       waiver. `COMMUNITY_TRAFFIC_GRAPH_ID` has been confirmed to be the SHA-256 of the graph the
       production Valhalla actually serves.

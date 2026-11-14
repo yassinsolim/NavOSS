@@ -871,6 +871,26 @@ describe('publication cohorts', () => {
       });
     });
 
+    it('expires a sample with the oldest evidence it counted, even evidence that arrived late', () => {
+      // Completed from driving at 18:11; a delayed batch from 18:09 adds its time at 18:18.
+      const minute = 60_000;
+      const t = Date.parse('2026-11-12T18:00:00Z');
+      const cohorts = createTrafficCohorts(SETTINGS);
+      for (const contributor of ['a', 'b', 'c']) {
+        cohorts.add([piece([[300, 700]], 40)], as(contributor, t + 11 * minute), t + 12 * minute);
+        cohorts.add(
+          [{ ...piece([], 0), stops: [{ at: 250, endSeconds: 120, startSeconds: 0 }] }],
+          as(contributor, t + 9 * minute),
+          t + 18 * minute,
+        );
+        // A repeat of the fresh batch counts nothing and does not move the cutoff.
+        cohorts.add([piece([[300, 700]], 40)], as(contributor, t + 11 * minute), t + 18 * minute);
+      }
+      // At 18:25 the window starts at 18:10: the 18:09 driving is too old, so nothing it touched
+      // is published.
+      expect(cohorts.closeEpoch(t + 25 * minute)).toEqual([]);
+    });
+
     it('needs only half of a short edge', () => {
       const cohorts = createTrafficCohorts(SETTINGS);
       const short = (intervals: [number, number][]) => piece(intervals, 5, { lengthMeters: 100 });
