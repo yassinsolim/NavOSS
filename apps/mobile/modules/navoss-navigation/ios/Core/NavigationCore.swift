@@ -80,24 +80,30 @@ private let implausibleJumpMarginMeters = 150.0
 //      is ordinary driving.
 //   While the fix fits where the vehicle is or has been (a continuation, or an earlier pass),
 //   its position says nothing about a later pass; the earlier one is kept. Only this applies:
-//   2. Heading switch. A later pass, or the same one further on than explained, fits, is
-//      possible, and the heading of the moving vehicle agrees with it (within 45 degrees) and
-//      opposes the pass the vehicle was on (90 degrees or more): one fix, arrival deferred
-//      (rule 6). (The far side of a self-crossing; the other carriageway after a gap long
-//      enough to have turned round.)
+//   2. Heading switch. A later pass, or the same one further on than explained, fits, and the
+//      heading of the moving vehicle agrees with it (within 45 degrees) and opposes the pass
+//      the vehicle was on (90 degrees or more): one fix, arrival deferred (rule 6). The same
+//      pass further on must be possible; a later pass must be believable, because heading
+//      says which way the vehicle points, not how far it has driven (a U-turn on the outbound
+//      carriageway points along the return one). (The far side of a self-crossing; the other
+//      carriageway after a gap long enough, at the reported speed, to have driven round.)
 //   While the fix fits nowhere the vehicle is or has been:
 //   3. Explained switch. The fix is away, and a later pass fits that reported motion explains:
 //      one fix. (Leaving a tunnel around a bend.)
 //   4. Heading switch without a continuation. The fix is not away, and such a candidate fits,
-//      is possible, and agrees with the heading of the moving vehicle: one fix, arrival
-//      deferred. (A cloverleaf or a switchback through a short gap.)
-//   5. Jump. A candidate that fits qualifies if it is direct (the displacement itself is the
-//      travel) or the fix is away. Two consecutive qualifying fixes are needed, the second
-//      within `heldJumpMaximumAgeSeconds` of the first and agreeing with it along the route.
-//      The first is HELD. Arrival is deferred (rule 6). Untimed replay input has no "later";
-//      there one qualifying fix is taken. Core Location fixes are always timestamped.
+//      is within the same bounds as in rule 2, and agrees with the heading of the moving
+//      vehicle: one fix, arrival deferred. (A cloverleaf or a switchback through a short gap.)
+//   5. Jump. A candidate that fits and is possible in the time qualifies if it is direct (the
+//      displacement itself is the travel) or the fix is away. Two consecutive qualifying fixes
+//      are needed, the second within `heldJumpMaximumAgeSeconds` of the first and agreeing with
+//      it along the route. The first is HELD. Arrival is deferred (rule 6). Untimed replay
+//      input has no "later" and no elapsed time: there one qualifying fix is taken, a jump has
+//      no time bound, and heading is bounded by the eligible window. Core Location fixes are
+//      always timestamped.
 //   Anything else is not progress. It is measured against the best candidate that is not a
-//   later pass and feeds off-route hysteresis; a reroute from the real position follows.
+//   later pass and feeds off-route hysteresis; a reroute from the real position follows. That
+//   includes a sustained, credible position further along the route than any vehicle could
+//   have driven since the last accepted fix: agreeing fixes are not proof the route was driven.
 //
 // What can never happen:
 //   6. Arrival straight after a heading switch or a jump. Arrival then needs the vehicle to be
@@ -120,10 +126,10 @@ private let implausibleJumpMarginMeters = 150.0
 //                    and than reported speed explains (one fix; without reported speeds, than
 //                    the multipath margin and the speed ceiling allow); further than that, two
 //                    fresh agreeing fixes; or a switch of pass.
-//   switch pass      heading of a moving vehicle agreeing with the later pass, which must be
-//                    possible in the time (one fix); or, when the fix fits nowhere the vehicle
-//                    has been and is away from the last accepted fix, reported motion that
-//                    covers it (one fix) or two fresh agreeing fixes.
+//   switch pass      heading of a moving vehicle agreeing with the later pass, which reported
+//                    motion must make believable (one fix); or, when the fix fits nowhere the
+//                    vehicle has been and is away from the last accepted fix, reported motion
+//                    that covers it (one fix) or two fresh agreeing fixes, possible in the time.
 //   arrive           two consecutive accepted fixes within the arrival radius with progress at
 //                    the end of the route; after a heading switch or a jump, movement along
 //                    the route first.
@@ -627,7 +633,8 @@ final class NavigationCore {
       displacementMeters: anchorRawCoordinate.map {
         navigationDistanceMeters(from: $0, to: sample.coordinate)
       } ?? 0,
-      displacementToleranceMeters: accuracyAllowanceMeters + anchorAccuracyMeters
+      displacementToleranceMeters: accuracyAllowanceMeters + anchorAccuracyMeters,
+      isTimed: sample.timestamp != nil
     )
     let match = bestProjection(
       on: route,
@@ -931,6 +938,22 @@ final class NavigationCore {
     /// Straight-line distance of the fix from the last accepted fix, and the two accuracies.
     let displacementMeters: Double
     let displacementToleranceMeters: Double
+    /// Whether the fix carries a capture time, so that `possibleAdvanceMeters` is the speed
+    /// ceiling over elapsed time rather than the eligible window that stands in for it.
+    let isTimed: Bool
+
+    /// The most route a jump may cover: what is possible in the time. Untimed replay input has
+    /// no time to bound it by.
+    var jumpAdvanceMeters: Double {
+      isTimed ? possibleAdvanceMeters : .infinity
+    }
+
+    /// The most route heading may move a fix onto a later pass over: what is believable from
+    /// reported motion. Heading says which way the vehicle points, not how far it has driven.
+    /// Untimed replay input reports no motion; there it is the eligible window.
+    var laterPassHeadingAdvanceMeters: Double {
+      isTimed ? believableAdvanceMeters : possibleAdvanceMeters
+    }
 
     var isAwayFromAnchor: Bool {
       displacementMeters > credibleBiasMeters + displacementToleranceMeters
@@ -1039,9 +1062,15 @@ final class NavigationCore {
         return
       }
       // A later pass, or this one further on than reported motion explains: the heading of a
-      // moving vehicle that agrees with it is evidence for it, if it is possible at all.
+      // moving vehicle that agrees with it is evidence for it. Further on along the same pass
+      // it needs to be possible; onto a later pass, believable from reported motion
+      // (`laterPassHeadingAdvanceMeters`): a U-turn on the outbound carriageway points along
+      // the return one long before the vehicle can have driven round to it.
+      let headingSwitchLimitMeters = isDirect
+        ? limits.possibleAdvanceMeters
+        : limits.laterPassHeadingAdvanceMeters
       if !isDirect || advanceMeters > limits.explainedAdvanceMeters,
-        advanceMeters <= limits.possibleAdvanceMeters,
+        advanceMeters <= headingSwitchLimitMeters,
         let difference = headingDifference(projection),
         difference <= headingAgreesMaximumDifferenceDegrees, score < headingSwitchScore
       {
@@ -1055,8 +1084,9 @@ final class NavigationCore {
             continuationEvidenceScore = evidenceScore
             continuationAdvanceMeters = advanceMeters
           }
-        } else if score < jumpScore {
-          // The same road further on than anything explains: the displacement is the travel.
+        } else if advanceMeters <= limits.jumpAdvanceMeters, score < jumpScore {
+          // The same road further on than anything explains: the displacement is the travel,
+          // if any vehicle could have covered it in the time.
           jump = projection
           jumpScore = score
         }
@@ -1069,7 +1099,12 @@ final class NavigationCore {
         explainedSwitch = projection
         explainedSwitchScore = score
       }
-      if limits.isAwayFromAnchor, score < jumpScore {
+      // Further than possible in the time is not a jump: the route was not driven to there,
+      // whatever the fixes agree on. The fix is then not progress, and a vehicle that stays
+      // there goes off route and is rerouted from where it is.
+      if limits.isAwayFromAnchor, advanceMeters <= limits.jumpAdvanceMeters,
+        score < jumpScore
+      {
         jump = projection
         jumpScore = score
       }

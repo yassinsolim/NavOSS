@@ -4,11 +4,14 @@ import XCTest
 @testable import NavOSSNavigationCore
 
 /// A position that moves kilometres between two fixes: a long gap in a tunnel or parkade, the
-/// app suspended and resumed, a ferry, or the simulator harness teleporting to the destination.
+/// app suspended and resumed, a ferry, or a position that is simply wrong.
 ///
 /// The first three geometries reproduce release-validation defect D17: the vehicle was on the
 /// route, yet it was matched to other road up to a kilometre to the side, declared off route,
-/// and never arrived.
+/// and never arrived. A jump the elapsed time makes possible is believed on its second fix. A
+/// jump further along the route than any vehicle could have driven in the time is not proof that
+/// the route was driven: it is not progress, and the trip recovers with one reroute from the
+/// position, keeping the stops not yet reached.
 final class NavigationPositionJumpTests: XCTestCase {
   private typealias Trace = NavigationTrace
 
@@ -174,19 +177,165 @@ final class NavigationPositionJumpTests: XCTestCase {
 
   // MARK: Far ahead along the route
 
-  /// The harness: parked at the start, then teleported to the last 180 m a second later.
-  func testTeleportToTheEndOfTheRouteIsBelievedOnTheSecondFixAndArrives() throws {
+  /// A stop halfway along `corners`, as a waypoint of the trip, and where it is.
+  private func halfwayStop(
+    _ corners: [(Double, Double)]
+  ) -> (stop: NavOSSCarPlayDestination, x: Double, y: Double) {
+    let total = length(corners)
+    let halfway = Trace.positions(along: corners, every: 4).first { $0.alongMeters >= total / 2 }!
+    let coordinate = Trace.coordinate(halfway.x, halfway.y)
+    return (
+      NavOSSCarPlayDestination(
+        id: "stop", label: "stop", latitude: coordinate.latitude,
+        longitude: coordinate.longitude, name: "Stop"
+      ),
+      halfway.x, halfway.y
+    )
+  }
+
+  /// Matches a session at the route start, waits `gapSeconds`, then drives the last
+  /// `tailMeters` of the route at 8 m/s: further along the route than the speed ceiling covers
+  /// in that time. The position is sustained and credible, but the route cannot have been
+  /// driven to it. Nothing about the selected route moves; off route on the third fix; one
+  /// reroute from the raw position that keeps the halfway stop; and guidance on the
+  /// replacement then arrives.
+  private func recoverFromAnImpossibleJump(
+    _ corners: [(Double, Double)],
+    startSpeed: Double?,
+    gapSeconds: Double,
+    tailSpeed: Double? = 8,
+    tailMeters: Double = 180,
+    file: StaticString = #filePath,
+    line: UInt = #line
+  ) throws {
+    let total = length(corners)
+    let halfway = halfwayStop(corners)
+    let selected = trip(corners, id: "selected").replacingWaypoints([halfway.stop])
+    let session = NavigationSession()
+    try session.start(selected)
+    var probe = RerouteProbe()
+    var time = 0.0
+    for _ in 0..<5 {
+      let update = try session.updateLocation(
+        Trace.sample(x: corners[0].0, y: corners[0].1, speed: startSpeed, time: time)
+      )
+      probe.observe(update, now: time)
+      time += 1
+    }
+    let lastAccepted = time - 1
+    time += gapSeconds
+    let tail = Trace.positions(along: corners, every: 4).filter {
+      $0.alongMeters >= total - tailMeters
+    }
+    let context = "gap \(gapSeconds), length \(total)"
+    // The premise: the jump is further than 45 m/s covers in the time, up to the third fix.
+    XCTAssertGreaterThan(
+      tail[0].alongMeters, (time - lastAccepted + 1.5) * 45 + 50, context, file: file,
+      line: line
+    )
+
+    func sample(_ position: Trace.Position, moving: Bool) -> NavigationLocationSample {
+      Trace.sample(
+        x: position.x, y: position.y,
+        courseDegrees: moving && tailSpeed != nil ? position.courseDegrees : nil,
+        speed: tailSpeed.map { moving ? $0 : 0 },
+        time: time
+      )
+    }
+
+    var update = session.currentUpdate()
+    var index = 0
+    while probe.requestOrigins.isEmpty, index < tail.count {
+      update = try session.updateLocation(sample(tail[index], moving: true))
+      probe.observe(update, now: time)
+      time += 0.5
+      index += 1
+      // No progress, no step change and no arrival on the selected route.
+      XCTAssertEqual(update.snapshot.phase, .tracking, context, file: file, line: line)
+      XCTAssertEqual(
+        update.snapshot.routeProgress, 0, accuracy: 1 / total, context, file: file, line: line
+      )
+      XCTAssertEqual(
+        try XCTUnwrap(update.guidance, file: file, line: line).remainingDistanceMeters, total,
+        accuracy: 1, context, file: file, line: line
+      )
+      XCTAssertEqual(update.guidance?.stepIndex, 0, context, file: file, line: line)
+    }
+    XCTAssertTrue(update.snapshot.isOffRoute, context, file: file, line: line)
+    XCTAssertEqual(
+      index, 3, "off route, and the reroute requested, on the third fix", file: file, line: line
+    )
+    XCTAssertEqual(probe.requestOrigins.count, 1, context, file: file, line: line)
+    let origin = Trace.local(try XCTUnwrap(probe.requestOrigins.first, file: file, line: line))
+    XCTAssertEqual(origin.x, tail[2].x, accuracy: 1, context, file: file, line: line)
+    XCTAssertEqual(origin.y, tail[2].y, accuracy: 1, context, file: file, line: line)
+    // The request keeps the stop the vehicle has not been seen to reach.
+    XCTAssertEqual(
+      navOSSRemainingWaypoints(in: selected, after: update.snapshot.routeProgress).map(\.id),
+      ["stop"], context, file: file, line: line
+    )
+
+    // While the request is in flight, more fixes in the same place request nothing more.
+    for _ in 0..<3 {
+      update = try session.updateLocation(sample(tail[index - 1], moving: false))
+      probe.observe(update, now: time)
+      time += 0.5
+      XCTAssertTrue(update.snapshot.isOffRoute, context, file: file, line: line)
+    }
+    XCTAssertEqual(probe.requestOrigins.count, 1, context, file: file, line: line)
+
+    // The replacement from the raw position, through the stop, is installed as the service
+    // does, and driven.
+    XCTAssertTrue(
+      navigationShouldInstallReplacement(
+        generationMatches: true, requestMatches: true, tripMatches: true,
+        phase: update.snapshot.phase, isOffRoute: update.snapshot.isOffRoute),
+      file: file, line: line
+    )
+    let end = corners[corners.count - 1]
+    let replacement = [(origin.x, origin.y), (halfway.x, halfway.y), end]
+    try session.start(trip(replacement, id: "replacement").replacingWaypoints([halfway.stop]))
+    probe.consent.reset()
+    probe.isInFlight = false
+    for position in Trace.positions(along: replacement, every: 20).dropFirst() {
+      time += 1
+      update = try session.updateLocation(
+        Trace.sample(
+          x: position.x, y: position.y, courseDegrees: position.courseDegrees, speed: 20,
+          time: time)
+      )
+      probe.observe(update, now: time)
+      XCTAssertFalse(update.snapshot.isOffRoute, context, file: file, line: line)
+      XCTAssertEqual(update.trip?.id, "replacement", file: file, line: line)
+    }
+    for _ in 0..<3 {
+      time += 1
+      update = try session.updateLocation(Trace.sample(x: end.0, y: end.1, speed: 0, time: time))
+      probe.observe(update, now: time)
+    }
+    XCTAssertEqual(update.snapshot.phase, .arrived, context, file: file, line: line)
+    XCTAssertEqual(probe.requestOrigins.count, 1, "no further reroute", file: file, line: line)
+  }
+
+  /// Parked at the start, then the last 180 m of the route a second or a minute later (the old
+  /// harness teleport), or five minutes later at speed. Not progress; one reroute from where
+  /// the position is.
+  func testATeleportFurtherThanPossibleIsRecoveredByOneRerouteFromThePosition() throws {
     for corners in [Self.terminalLoop, Self.horseshoe, Self.simple] {
-      try driveTheTailAfterAJump(corners, startSpeed: 0, gapSeconds: 1)
-      try driveTheTailAfterAJump(corners, startSpeed: 0, gapSeconds: 60)
+      try recoverFromAnImpossibleJump(corners, startSpeed: 0, gapSeconds: 1)
+      try recoverFromAnImpossibleJump(corners, startSpeed: 0, gapSeconds: 60)
+      // 13.5 km at the ceiling, short of these destinations.
+      try recoverFromAnImpossibleJump(corners, startSpeed: 25, gapSeconds: 300)
+      // Without speed or course.
+      try recoverFromAnImpossibleJump(corners, startSpeed: nil, gapSeconds: 1, tailSpeed: nil)
+      try recoverFromAnImpossibleJump(corners, startSpeed: nil, gapSeconds: 300)
     }
   }
 
-  /// A drive that went quiet at speed and came back near the destination, minutes later. The
-  /// reported speeds explain a few kilometres of it at most.
+  /// A drive that went quiet at speed and came back near the destination, long enough later
+  /// to have driven there. The reported speeds explain a few kilometres of it at most.
   func testLongGapEndingNearTheDestinationIsBelievedOnTheSecondFixAndArrives() throws {
     for corners in [Self.terminalLoop, Self.horseshoe, Self.simple] {
-      try driveTheTailAfterAJump(corners, startSpeed: 25, gapSeconds: 300)
       // Past the ten minutes over which elapsed time is trusted.
       try driveTheTailAfterAJump(corners, startSpeed: 25, gapSeconds: 900)
       try driveTheTailAfterAJump(corners, startSpeed: 0, gapSeconds: 3_600)
@@ -196,9 +345,76 @@ final class NavigationPositionJumpTests: XCTestCase {
   /// Simulator and some device fixes carry no speed or course.
   func testJumpIsBelievedWithoutSpeedOrCourse() throws {
     for corners in [Self.terminalLoop, Self.horseshoe, Self.simple] {
-      try driveTheTailAfterAJump(corners, startSpeed: nil, gapSeconds: 1, tailSpeed: nil)
-      try driveTheTailAfterAJump(corners, startSpeed: nil, gapSeconds: 300)
+      try driveTheTailAfterAJump(corners, startSpeed: nil, gapSeconds: 900, tailSpeed: nil)
+      try driveTheTailAfterAJump(corners, startSpeed: nil, gapSeconds: 900)
     }
+  }
+
+  /// Review of 3da587c: two agreeing fixes 13.5 km along the horseshoe, 2 km from the vehicle,
+  /// 10 s or 180 s after it was seen moving at 20 m/s. At 45 m/s that is 0.5 km or 8.1 km at
+  /// most. No fix is progress, the third is off route, and fixes back at the real position
+  /// are matched there.
+  func testTwoAgreeingFixesFurtherThanPossibleAreNotProgress() throws {
+    for gap in [10.0, 180] {
+      let core = NavigationCore()
+      try core.setRoute(Trace.route(Self.horseshoe))
+      let total = try XCTUnwrap(core.routeLengthMeters)
+      for second in 0...10 {
+        try core.updateLocation(
+          Trace.sample(
+            x: 0, y: Double(second) * 20, courseDegrees: 0, speed: 20, time: Double(second))
+        )
+      }
+      var snapshot = core.currentSnapshot()
+      for index in 0..<3 {
+        snapshot = try core.updateLocation(
+          Trace.sample(
+            x: 2_000, y: 500 - Double(index) * 20, courseDegrees: 180, speed: 20,
+            time: 10 + gap + Double(index))
+        )
+        XCTAssertEqual(snapshot.phase, .tracking, "gap \(gap), fix \(index)")
+        XCTAssertEqual(
+          snapshot.routeProgress * total, 200, accuracy: 1, "gap \(gap), fix \(index)"
+        )
+      }
+      XCTAssertTrue(snapshot.isOffRoute, "gap \(gap)")
+      XCTAssertNil(snapshot.matchedCoordinate, "gap \(gap)")
+      // Back where the vehicle really is, moving on: matched there, never at 13.5 km.
+      for index in 0..<3 {
+        snapshot = try core.updateLocation(
+          Trace.sample(
+            x: 0, y: 220 + Double(index) * 20, courseDegrees: 0, speed: 20,
+            time: 13 + gap + Double(index))
+        )
+        XCTAssertLessThan(snapshot.routeProgress * total, 300, "gap \(gap), back \(index)")
+      }
+      XCTAssertFalse(snapshot.isOffRoute, "gap \(gap)")
+    }
+  }
+
+  /// The same along one straight road: two agreeing fixes 5.8 km further down it, 10 s after
+  /// the vehicle was seen at 20 m/s. The displacement accounts for the advance (direct), but
+  /// no vehicle covers it in the time.
+  func testADirectJumpFurtherThanPossibleIsNotProgress() throws {
+    let core = NavigationCore()
+    try core.setRoute(Trace.route(Self.simple))
+    let total = try XCTUnwrap(core.routeLengthMeters)
+    for second in 0...10 {
+      try core.updateLocation(
+        Trace.sample(
+          x: 0, y: Double(second) * 20, courseDegrees: 0, speed: 20, time: Double(second))
+      )
+    }
+    var snapshot = core.currentSnapshot()
+    for index in 0..<3 {
+      snapshot = try core.updateLocation(
+        Trace.sample(
+          x: 0, y: 6_000 + Double(index) * 20, courseDegrees: 0, speed: 20,
+          time: 20 + Double(index))
+      )
+      XCTAssertEqual(snapshot.routeProgress * total, 200, accuracy: 1, "fix \(index)")
+    }
+    XCTAssertTrue(snapshot.isOffRoute)
   }
 
   /// Mid-route, not only at the destination: remaining distance and the step follow the jump.
@@ -213,16 +429,16 @@ final class NavigationPositionJumpTests: XCTestCase {
           x: 0, y: Double(second) * 20, courseDegrees: 0, speed: 20, time: Double(second))
       )
     }
-    // 4 s later, 11.5 km further on: on the third leg.
+    // Five minutes later (13.5 km at the speed ceiling), 11.3 km further on: on the third leg.
     let held = try session.updateLocation(
-      Trace.sample(x: 4_000, y: 9_500, courseDegrees: 0, speed: 20, time: 14)
+      Trace.sample(x: 4_000, y: 9_500, courseDegrees: 0, speed: 20, time: 310)
     )
     XCTAssertFalse(held.snapshot.isOffRoute)
     XCTAssertEqual(held.guidance?.stepIndex, 0, "a single far fix must be held")
     XCTAssertEqual(try XCTUnwrap(held.guidance).remainingDistanceMeters, total - 200, accuracy: 10)
 
     let confirmed = try session.updateLocation(
-      Trace.sample(x: 4_000, y: 9_520, courseDegrees: 0, speed: 20, time: 15)
+      Trace.sample(x: 4_000, y: 9_520, courseDegrees: 0, speed: 20, time: 311)
     )
     XCTAssertFalse(confirmed.snapshot.isOffRoute)
     XCTAssertEqual(confirmed.guidance?.stepIndex, 2)
@@ -245,12 +461,20 @@ final class NavigationPositionJumpTests: XCTestCase {
       )
     }
     let windowCost = core.lastEvaluatedSegmentCount
-    try core.updateLocation(Trace.sample(x: 4_000, y: 9_500, courseDegrees: 0, speed: 20, time: 6))
-    XCTAssertNil(core.deadReckon(at: Trace.time(9)), "a held fix is not a dead-reckoning anchor")
-    try core.updateLocation(Trace.sample(x: 4_000, y: 9_520, courseDegrees: 0, speed: 20, time: 7))
+    // Five minutes later: possible at the speed ceiling, far beyond what 20 m/s explains.
+    let gap = 300.0
+    try core.updateLocation(
+      Trace.sample(x: 4_000, y: 9_500, courseDegrees: 0, speed: 20, time: 6 + gap)
+    )
+    XCTAssertNil(
+      core.deadReckon(at: Trace.time(9 + gap)), "a held fix is not a dead-reckoning anchor"
+    )
+    try core.updateLocation(
+      Trace.sample(x: 4_000, y: 9_520, courseDegrees: 0, speed: 20, time: 7 + gap)
+    )
     XCTAssertEqual(try XCTUnwrap(core.fixAlongMeters), 13_520, accuracy: 10)
 
-    let reckoned = try XCTUnwrap(core.deadReckon(at: Trace.time(10)))
+    let reckoned = try XCTUnwrap(core.deadReckon(at: Trace.time(10 + gap)))
     XCTAssertEqual(
       reckoned.routeProgress * total, try XCTUnwrap(core.fixAlongMeters) + 60, accuracy: 1
     )
@@ -261,7 +485,7 @@ final class NavigationPositionJumpTests: XCTestCase {
       snapshot = try core.updateLocation(
         Trace.sample(
           x: 4_000, y: 9_520 + Double(second - 7) * 20, courseDegrees: 0, speed: 20,
-          time: Double(second))
+          time: Double(second) + gap)
       )
       XCTAssertFalse(snapshot.isOffRoute)
       XCTAssertLessThanOrEqual(core.lastEvaluatedSegmentCount, windowCost + 5)
@@ -273,7 +497,7 @@ final class NavigationPositionJumpTests: XCTestCase {
       snapshot = try core.updateLocation(
         Trace.sample(
           x: 4_000, y: 9_780 - Double(second - 20) * 40, courseDegrees: 180, speed: 20,
-          time: Double(second))
+          time: Double(second) + gap)
       )
     }
     XCTAssertTrue(snapshot.isOffRoute)
@@ -314,7 +538,7 @@ final class NavigationPositionJumpTests: XCTestCase {
   }
 
   /// Two far fixes that are nowhere near each other do not confirm one another; the position
-  /// is believed once two consecutive fixes agree.
+  /// is believed once two consecutive fixes agree. After a gap that makes either possible.
   func testTwoOutliersInDifferentPlacesAreNotAConfirmation() throws {
     let core = NavigationCore()
     try core.setRoute(Trace.route(Self.terminalLoop))
@@ -325,13 +549,13 @@ final class NavigationPositionJumpTests: XCTestCase {
           x: 0, y: Double(second) * 15, courseDegrees: 0, speed: 15, time: Double(second))
       )
     }
-    _ = try core.updateLocation(Trace.sample(x: 4_800, y: 11_300, speed: 15, time: 11))
-    let second = try core.updateLocation(Trace.sample(x: 2_000, y: 9_000, speed: 15, time: 12))
+    _ = try core.updateLocation(Trace.sample(x: 4_800, y: 11_300, speed: 15, time: 411))
+    let second = try core.updateLocation(Trace.sample(x: 2_000, y: 9_000, speed: 15, time: 412))
     XCTAssertFalse(second.isOffRoute)
     XCTAssertEqual(second.routeProgress * total, 150, accuracy: 1)
 
     let agreeing = try core.updateLocation(
-      Trace.sample(x: 2_015, y: 9_000, courseDegrees: 90, speed: 15, time: 13)
+      Trace.sample(x: 2_015, y: 9_000, courseDegrees: 90, speed: 15, time: 413)
     )
     XCTAssertEqual(agreeing.routeProgress * total, 11_015, accuracy: 10)
   }

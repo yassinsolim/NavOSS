@@ -164,12 +164,13 @@ final class NavigationMatcherEvidenceTests: XCTestCase {
     let core = NavigationCore()
     try core.setRoute(Trace.route(Self.dividedRoad))
     try core.updateLocation(Trace.sample(x: 0, y: 0, speed: 0, time: 0))
-    // 500 m away, so that position alone could confirm it.
-    let outlier = Trace.sample(x: 200, y: 460, speed: 0, time: 1)
+    // 500 m away, so that position alone could confirm it, and late enough to have driven
+    // there.
+    let outlier = Trace.sample(x: 200, y: 460, speed: 0, time: 200)
     XCTAssertTrue(
       navOSSShouldAcceptNavigationLocation(
         candidateTimestamp: try XCTUnwrap(outlier.timestamp),
-        latestTimestamp: try XCTUnwrap(outlier.timestamp), nowTimestamp: Trace.time(1))
+        latestTimestamp: try XCTUnwrap(outlier.timestamp), nowTimestamp: Trace.time(200))
     )
     for delivery in 0..<4 {
       let snapshot = try core.updateLocation(outlier)
@@ -177,7 +178,7 @@ final class NavigationMatcherEvidenceTests: XCTestCase {
       XCTAssertEqual(snapshot.phase, .tracking)
     }
     // A fresh fix in the same place does confirm it.
-    let fresh = try core.updateLocation(Trace.sample(x: 200, y: 460, speed: 0, time: 2))
+    let fresh = try core.updateLocation(Trace.sample(x: 200, y: 460, speed: 0, time: 201))
     XCTAssertEqual(along(fresh, core), 5_740, accuracy: 5)
   }
 
@@ -186,14 +187,14 @@ final class NavigationMatcherEvidenceTests: XCTestCase {
     let core = NavigationCore()
     try core.setRoute(Trace.route(Self.dividedRoad))
     try core.updateLocation(Trace.sample(x: 0, y: 0, speed: 0, time: 0))
-    let first = try core.updateLocation(Trace.sample(x: 200, y: 460, speed: 0, time: 1))
+    let first = try core.updateLocation(Trace.sample(x: 200, y: 460, speed: 0, time: 200))
     XCTAssertEqual(first.routeProgress, 0)
     for y in [1_500.0, 460] {
       let core = NavigationCore()
       try core.setRoute(Trace.route(Self.dividedRoad))
       try core.updateLocation(Trace.sample(x: 0, y: 0, speed: 0, time: 0))
-      try core.updateLocation(Trace.sample(x: 200, y: 460, speed: 0, time: 1))
-      let later = try core.updateLocation(Trace.sample(x: 200, y: y, speed: 0, time: 1_201))
+      try core.updateLocation(Trace.sample(x: 200, y: 460, speed: 0, time: 200))
+      let later = try core.updateLocation(Trace.sample(x: 200, y: y, speed: 0, time: 1_400))
       XCTAssertEqual(later.routeProgress, 0, "y \(y)")
       XCTAssertEqual(later.phase, .tracking)
     }
@@ -328,17 +329,19 @@ final class NavigationMatcherEvidenceTests: XCTestCase {
     }
   }
 
-  /// Further away than GPS gets wrong, two fresh fixes are believed, but standing there is not
-  /// arriving: that needs the vehicle to be seen moving along the route.
+  /// Further away than GPS gets wrong, two fresh fixes, late enough to have driven there, are
+  /// believed, but standing there is not arriving: that needs the vehicle to be seen moving
+  /// along the route.
   func testAJumpOntoTheDestinationDoesNotArriveUntilTheVehicleMoves() throws {
     let corners: [(Double, Double)] = [(0, 0), (0, 3_000), (400, 3_000), (400, 0)]
     let core = NavigationCore()
     try core.setRoute(Trace.route(corners))
     try core.updateLocation(Trace.sample(x: 0, y: 0, speed: 0, time: 0))
     var snapshot = core.currentSnapshot()
+    // 6.4 km on: possible at the speed ceiling after 143 s.
     for second in 1...10 {
       snapshot = try core.updateLocation(
-        Trace.sample(x: 400, y: 0, speed: 0, time: Double(second))
+        Trace.sample(x: 400, y: 0, speed: 0, time: 150 + Double(second))
       )
       XCTAssertEqual(snapshot.phase, .tracking, "fix \(second)")
     }
@@ -351,7 +354,7 @@ final class NavigationMatcherEvidenceTests: XCTestCase {
     try wandering.updateLocation(Trace.sample(x: 0, y: 0, speed: 0, time: 0))
     for (second, y) in [(1.0, 28.0), (2, 28), (3, 2), (4, 2), (5, 2), (6, 2)] {
       snapshot = try wandering.updateLocation(
-        Trace.sample(x: 400, y: y, speed: 0, time: second)
+        Trace.sample(x: 400, y: y, speed: 0, time: 150 + second)
       )
       XCTAssertEqual(snapshot.phase, .tracking, "fix \(second)")
     }
@@ -360,7 +363,7 @@ final class NavigationMatcherEvidenceTests: XCTestCase {
     let driven = NavigationCore()
     try driven.setRoute(Trace.route(corners))
     try driven.updateLocation(Trace.sample(x: 0, y: 0, speed: 0, time: 0))
-    var time = 1.0
+    var time = 151.0
     for y in stride(from: 100.0, through: 0, by: -10) + [0, 0] {
       snapshot = try driven.updateLocation(
         Trace.sample(x: 400, y: y, courseDegrees: 180, speed: y > 0 ? 10 : 0, time: time)
@@ -374,8 +377,8 @@ final class NavigationMatcherEvidenceTests: XCTestCase {
 
   private static let switchback: [(Double, Double)] = [(0, 0), (600, 0), (600, 60), (0, 60)]
 
-  /// Round a switchback through an eight-second gap: 60 m from the road before the bend, moving,
-  /// heading the way the road after it runs. One fix.
+  /// Round a switchback through a ten-second gap: 60 m from the road before the bend, moving,
+  /// heading the way the road after it runs, 200 m on, which 20 m/s explains. One fix.
   func testAMovingVehicleIsFollowedRoundASwitchbackThroughAShortGap() throws {
     let core = NavigationCore()
     try core.setRoute(Trace.route(Self.switchback))
@@ -386,10 +389,10 @@ final class NavigationMatcherEvidenceTests: XCTestCase {
       )
     }
     let after = try core.updateLocation(
-      Trace.sample(x: 480, y: 60, courseDegrees: 270, speed: 20, time: 13)
+      Trace.sample(x: 560, y: 60, courseDegrees: 270, speed: 20, time: 15)
     )
     XCTAssertFalse(after.isOffRoute)
-    XCTAssertEqual(along(after, core), 780, accuracy: 5)
+    XCTAssertEqual(along(after, core), 700, accuracy: 5)
   }
 
   /// A course that comes with an impossible speed is as bad a reading as the speed.
@@ -445,8 +448,10 @@ final class NavigationMatcherEvidenceTests: XCTestCase {
   }
 
   /// Without a reported speed the multipath margin stands in for one, but never for more than
-  /// a vehicle can cover in the time: 150 m on in one second is held.
-  func testWithoutSpeedAFixBeyondTheSpeedCeilingIsHeld() throws {
+  /// a vehicle can cover in the time: 150 m on in one second is not progress, nor is a second
+  /// fix agreeing with it a second later (155 m in two seconds). Once the time allows it, the
+  /// position is followed.
+  func testWithoutSpeedAFixBeyondTheSpeedCeilingIsNotProgress() throws {
     let core = NavigationCore()
     try core.setRoute(Trace.route([(0, 0), (0, 5_000)]))
     try core.updateLocation(Trace.sample(x: 0, y: 0, time: 0))
@@ -454,8 +459,12 @@ final class NavigationMatcherEvidenceTests: XCTestCase {
     XCTAssertEqual(along(near, core), 60, accuracy: 1, "60 m in a second is within the ceiling")
     let far = try core.updateLocation(Trace.sample(x: 0, y: 210, time: 2))
     XCTAssertEqual(along(far, core), 60, accuracy: 1)
-    let confirmed = try core.updateLocation(Trace.sample(x: 0, y: 215, time: 3))
-    XCTAssertEqual(along(confirmed, core), 215, accuracy: 1)
+    let agreeing = try core.updateLocation(Trace.sample(x: 0, y: 215, time: 3))
+    XCTAssertEqual(along(agreeing, core), 60, accuracy: 1)
+    XCTAssertFalse(agreeing.isOffRoute)
+    // 165 m in four seconds.
+    let later = try core.updateLocation(Trace.sample(x: 0, y: 225, time: 5))
+    XCTAssertEqual(along(later, core), 225, accuracy: 1)
   }
 
   /// The speed that explains travel is the accepted fix's, not that of a fix that was held.
