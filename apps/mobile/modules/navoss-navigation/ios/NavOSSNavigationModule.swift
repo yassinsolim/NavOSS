@@ -518,7 +518,7 @@ public final class NavOSSNavigationModule: Module {
         "speedingWarning": true,
         "communityReports": true,
         "communityTraffic": true,
-        "version": 10,
+        "version": 11,
       ]
     }
 
@@ -878,6 +878,9 @@ public final class NavOSSNavigationModule: Module {
     ]
     if let tripEndReason = state.tripEndReason {
       payload["tripEndReason"] = tripEndReason.rawValue
+    }
+    if state.isAcquiringPosition {
+      payload["isAcquiringPosition"] = true
     }
     payload.merge(NavOSSCommunityBridge.navigationAlertsPayload()) { current, _ in current }
 
