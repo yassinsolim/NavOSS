@@ -31,7 +31,8 @@ export const CREDIT_COVERAGE_SHARE = 0.5;
 /**
  * `capturedAt` is the batch's first fix rounded down to the minute, so the absolute time of any
  * offset is known only to within this much. Two honest consecutive batches can therefore appear
- * to overlap in time by up to this amount; a larger overlap is the same time reported twice.
+ * to overlap in time by up to this amount, and a batch re-cut from the same trace can claim the
+ * same standing shifted by up to this amount.
  */
 export const CAPTURED_AT_ROUNDING_MS = 60_000;
 /**
@@ -274,10 +275,11 @@ function projectOnto(
 
 /**
  * Counts standing still at `at` during the claimed window `[startMs, endMs]`, returning the
- * seconds not already counted at that place. A window wholly inside what was counted there is a
- * repeat and adds nothing. An overlap shorter than the `capturedAt` rounding is what two honest
- * consecutive batches of one long stop can show, so the window counts in full; a longer overlap
- * cannot be honest, and only the time outside what was counted is added.
+ * seconds of it not already counted at that place: the time standing there counts is the union
+ * of the claimed windows. A repeat adds nothing, and a re-cut of the same trace, whose claimed
+ * windows can shift by up to the `capturedAt` rounding, adds only the shifted part. Two honest
+ * consecutive batches of one long stop that appear to overlap because of that rounding lose the
+ * overlap: time is undercounted rather than manufactured.
  */
 function countStop(partial: PartialCoverage, at: number, startMs: number, endMs: number): number {
   if (endMs <= startMs) return 0;
@@ -288,9 +290,7 @@ function countStop(partial: PartialCoverage, at: number, startMs: number, endMs:
   }
   const overlap = overlapLength(place.windows, startMs, endMs);
   place.windows = unite([...place.windows, [startMs, endMs]]);
-  const length = endMs - startMs;
-  if (overlap >= length) return 0;
-  return (overlap < CAPTURED_AT_ROUNDING_MS ? length : length - overlap) / 1_000;
+  return (endMs - startMs - overlap) / 1_000;
 }
 
 /**

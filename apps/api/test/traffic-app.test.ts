@@ -1264,10 +1264,14 @@ describe('standing still across batch boundaries, through HTTP on a recorded rea
     (await drive(threeDrivers(trip))).publishedAt(boundaryMs);
 
   it('counts standing at batch boundaries and a stationary batch, each once', async () => {
-    // The 56 s trimmed off the two moving batches: 458 m in 102 s, 16 km/h, published as 15.
-    // Before the fix no standing counted: 458 m in 46 s, 36 km/h, published as 35.
-    expect(await published([approach, resume(T0 + 70_000)])).toEqual([15]);
-    // A 98 s stationary batch between them: 458 m in 200 s, 8.2 km/h, published as 10.
+    // The standing trimmed off the two moving batches: 28 s each, but `resume` claims a start
+    // rounded down to T0 + 60 s, so its window overlaps the approach's by 10 s and only the union,
+    // 46 s, counts: 458 m in 92 s, 17.9 km/h, published as 20. Before the fix no standing
+    // counted: 458 m in 46 s, 36 km/h, published as 35.
+    expect(await published([approach, resume(T0 + 70_000)])).toEqual([20]);
+    // A 98 s stationary batch between them, claimed from T0 + 60 s: the union of the claimed
+    // standing is 116 s (the resume's 28 s falls inside it), so 458 m in 162 s, 10.2 km/h,
+    // published as 10.
     const withStop = [approach, stopped(T0 + 70_000), resume(T0 + 170_000)];
     expect(await published(withStop)).toEqual([10]);
     // The same stationary batch uploaded again adds nothing (summing gives 5.5 km/h, 5).
@@ -1285,7 +1289,8 @@ describe('standing still across batch boundaries, through HTTP on a recorded rea
         resume(T0 + 270_000),
       ]),
     );
-    // 458 m in 298 s: 5.5 km/h, published as 5 (`stopped` against 100 km/h free flow).
+    // Claimed standing windows unite to 204 s: 458 m in 250 s, 6.6 km/h, published as 5
+    // (`stopped` against 100 km/h free flow).
     expect(await publishedAt(T0 + 10 * MINUTE)).toEqual([5]);
     // Only the moving batches reached the matcher: stationary batches are never sent.
     expect(matcherRequests.filter((path) => path === '/trace_attributes')).toHaveLength(6);
@@ -1369,7 +1374,7 @@ describe('standing still across batch boundaries, through HTTP on a recorded rea
   });
 });
 
-describe('old evidence over HTTP: nothing is released from driving older than the cohort window', () => {
+describe('evidence time over HTTP, on one synthetic edge', () => {
   // One synthetic 1.5 km northbound edge, matched directly from each fix's latitude. These are
   // valid uploads; the matcher is controlled so that what is tested is ingestion and expiry.
   const T0 = Date.parse('2026-11-14T18:00:00Z');
@@ -1565,5 +1570,36 @@ describe('old evidence over HTTP: nothing is released from driving older than th
     });
     expect(beforeCompletion.metrics()).toMatchObject({ batchesAccepted: 7, batchesDropped: 0 });
     expect(await beforeCompletion.releasedAt(T0 + 25 * MINUTE)).toEqual([35]);
+  });
+
+  it('counts standing in valid re-cuts of one trace only over the union of their claimed time', async () => {
+    // One physical trace: 0–700 m in 70 s, standing 40 s, then on to 1,400 m. After the trims,
+    // 1,200 m in 120 s moving and 40 s standing: 27 km/h, published as 25.
+    const trace = Array.from({ length: 181 }, (_, t) =>
+      fix(t <= 70 ? t * 10 : t <= 110 ? 700 : (t - 40) * 10, t),
+    );
+    /** Each driver uploads the trace cut to begin `from` seconds in; all claim 18:00. */
+    const speeds = async (cuts: number[]) => {
+      const traffic = await service();
+      for (const driver of ['a', 'b', 'c']) {
+        for (const from of cuts) {
+          const points = trace
+            .slice(from)
+            .map(([lon, lat, t]): [number, number, number] => [lon, lat, t - from]);
+          await traffic.upload(driver, points, T0, T0 + 200_000);
+        }
+      }
+      expect(traffic.metrics()).toMatchObject({
+        batchesAccepted: 3 * cuts.length,
+        samplesRecorded: 3,
+      });
+      return traffic.releasedAt(T0 + 5 * MINUTE);
+    };
+    expect(await speeds([0])).toEqual([25]);
+    expect(await speeds([0, 0, 0, 0])).toEqual([25]);
+    // Cut 20, 30 and 40 s in, the stop's claimed windows shift 20, 30 and 40 s earlier: their
+    // union is 80 s, 1,200 m in 200 s, 21.6 km/h, published as 20. Counting each window that
+    // overlaps by less than a minute in full would give 160 s: 15.4 km/h, published as 15.
+    expect(await speeds([0, 20, 30, 40])).toEqual([20]);
   });
 });
