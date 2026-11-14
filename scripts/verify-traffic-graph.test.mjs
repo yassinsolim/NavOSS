@@ -251,6 +251,30 @@ test('the operator check passes the verified stack and refuses each hostile cont
       },
       /another container also answers to valhalla on navoss_ingress/,
     ],
+    ...[
+      ['an upper-case alias', { Aliases: ['other', 'VALHALLA'] }],
+      ['a mixed-case alias', { Aliases: ['other', 'ValHalla'] }],
+      ['upper-case DNS names', { Aliases: ['other'], DNSNames: ['other', 'VALHALLA'] }],
+      ['a mixed-case DNS name', { Aliases: ['other'], DNSNames: ['vAlHaLlA'] }],
+      [
+        'upper-case alias and DNS names',
+        { Aliases: ['other', 'VALHALLA'], DNSNames: ['other', 'VALHALLA'] },
+      ],
+    ].map(([what, names]) => [
+      `another container answering to valhalla by ${what} on an API-only network (DNS is case-blind)`,
+      ({ other }) => {
+        other.NetworkSettings.Networks = { navoss_ingress: names };
+      },
+      /another container also answers to valhalla on navoss_ingress/,
+    ]),
+    ...['/VALHALLA', '/Valhalla'].map((name) => [
+      `another container named ${name} on an API-only network`,
+      ({ other }) => {
+        other.Name = name;
+        other.NetworkSettings.Networks = { navoss_ingress: { Aliases: ['other'] } };
+      },
+      /another container also answers to valhalla on navoss_ingress/,
+    ]),
     [
       'another container answering to valhalla by its DNS names on an API-only network',
       ({ other }) => {
@@ -273,6 +297,12 @@ test('the operator check passes the verified stack and refuses each hostile cont
     assert.notEqual(result.status, 0, name);
     assert.match(result.stderr, message, name);
   }
+
+  // The inspected Valhalla answering to an upper-case alias is still the one `valhalla`.
+  const upper = await run(root, graph, ({ valhalla }) => {
+    valhalla.NetworkSettings.Networks.navoss_backend.Aliases = ['navoss-valhalla-1', 'VALHALLA'];
+  });
+  assert.equal(upper.status, 0, upper.stderr);
 
   // A network the API joins that cannot be inspected fails closed.
   const hidden = await run(root, graph, () => {}, ['navoss_ingress']);

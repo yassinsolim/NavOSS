@@ -105,8 +105,9 @@ selected=$(printf '%s' "$api_json" | jq -r '
 
 # `valhalla` must resolve, from the API, to the inspected container only: that container answers
 # to `valhalla` on at least one network the API joins, and no other container answers to it on
-# any network the API joins (shared with Valhalla or not). A network or member that cannot be
-# inspected fails the check.
+# any network the API joins (shared with Valhalla or not). Docker's DNS matches names without
+# regard to ASCII case, so container names, aliases and DNS names are compared case-folded. A
+# network or member that cannot be inspected fails the check.
 valhalla_id=$(printf '%s' "$valhalla_json" | jq -er '.[0].Id') || fail 'valhalla has no container id'
 api_networks=$(printf '%s' "$api_json" | jq -er '.[0].NetworkSettings.Networks | keys[]') ||
   fail 'the API joins no network'
@@ -118,9 +119,10 @@ for network in $api_networks; do
   for member in $members; do
     member_json=$(docker inspect "$member") || fail "container $member on $network cannot be inspected"
     printf '%s' "$member_json" | jq -e --arg n "$network" '.[0]
-      | (.Name == "/valhalla")
-        or (((.NetworkSettings.Networks[$n].Aliases // []) + (.NetworkSettings.Networks[$n].DNSNames // []))
-          | index("valhalla") != null)' >/dev/null || continue
+      | [(.Name // "" | ltrimstr("/")),
+         (.NetworkSettings.Networks[$n].Aliases // [])[],
+         (.NetworkSettings.Networks[$n].DNSNames // [])[]]
+      | any(.[]; tostring | ascii_downcase == "valhalla")' >/dev/null || continue
     [ "$member" = "$valhalla_id" ] || fail "another container also answers to valhalla on $network"
     reachable=yes
   done
