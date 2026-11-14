@@ -765,14 +765,14 @@ describe('publication cohorts', () => {
 
       it('drops standing claimed after the contributor had already driven past it', () => {
         const onward: Batch = {
-          claimedMs: start + 9 * minute,
+          claimedMs: start + 12 * minute,
           dwells: [],
           observations: [piece([[700, 1_500]], 60)],
         };
         // A stationary batch at 300 m claiming a time after the contributor had moved on to
         // 600 m: movement brackets it in space, but it contradicts the trip in time.
         const late: Batch = {
-          claimedMs: start + 6 * minute,
+          claimedMs: start + 8 * minute,
           dwells: [dwell(300, 0, 280)],
           observations: [],
         };
