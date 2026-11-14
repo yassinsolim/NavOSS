@@ -1,0 +1,39 @@
+# Verified serving graph for community traffic (infra/offline/dead-end-mask.md, "Install").
+#
+#   docker compose -f compose.yaml -f compose.traffic-graph.yaml up -d
+#
+# The base stack's Valhalla (the scripted image, which may rebuild tiles and serves
+# /custom_files/valhalla_tiles.tar) is replaced by `valhalla_service` serving the verified
+# `connected.tar` of a `serving-graph.mts` directory, mounted read-only at /graph in Valhalla and
+# the API alike. Valhalla refuses to start unless the archive hashes to COMMUNITY_TRAFFIC_GRAPH_ID
+# and its configuration names only that archive; the API refuses to start in `collect` or `live`
+# unless the same directory, its provenance and the dead-end mask verify
+# (`loadConfiguredDeadEndMask`). Without this overlay the API has no graph directory, so `live`
+# cannot start. Requires Docker Compose 2.24.4 or later (`!override`, `!reset`).
+services:
+  api:
+    environment:
+      COMMUNITY_TRAFFIC_GRAPH_DIR: /graph
+      COMMUNITY_TRAFFIC_GRAPH_ID: ${COMMUNITY_TRAFFIC_GRAPH_ID:?Set COMMUNITY_TRAFFIC_GRAPH_ID from the serving graph's graph.json}
+    volumes: !override
+      - ${VALHALLA_DATA_DIR:?Set VALHALLA_DATA_DIR to the verified serving graph directory}:/graph:ro
+
+  valhalla:
+    image: ghcr.io/valhalla/valhalla-scripted:3.8.2@sha256:3d7a08f7e78b356ee873b61711b743ad81bcc114b0ca5731217da8bba6ba39d1
+    environment: !override
+      NAVOSS_GRAPH_ID: ${COMMUNITY_TRAFFIC_GRAPH_ID:?Set COMMUNITY_TRAFFIC_GRAPH_ID from the serving graph's graph.json}
+    # Exactly this entrypoint and no command: verify-traffic-graph.sh compares them in full.
+    entrypoint: !override
+      - /bin/sh
+      - /navoss/serve-verified-graph.sh
+    command: !reset []
+    networks: !override
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    volumes: !override
+      - ${VALHALLA_DATA_DIR:?Set VALHALLA_DATA_DIR to the verified serving graph directory}:/graph:ro
+      - ./valhalla-serve-verified.sh:/navoss/serve-verified-graph.sh:ro
+    healthcheck:
+      start_period: 5m

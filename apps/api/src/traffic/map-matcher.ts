@@ -1,5 +1,6 @@
 import { z } from 'zod/v4';
 
+import type { DeadEndMask } from './dead-end-mask.js';
 import { cumulativeMeters, decodePolyline6, type Position } from './geo.js';
 import type { ProbePoint } from './probe-validation.js';
 import { edgeSegmentKey, isAggregatedRoad, MIN_PUBLISHED_EDGE_METERS } from './segments.js';
@@ -159,6 +160,13 @@ export interface MapMatcher {
 }
 
 export interface ValhallaMapMatcherOptions {
+  /**
+   * Topology-derived dead-end mask bound to the graph `endpoint` serves. When set, an edge is an
+   * open through road only if the mask places its whole map geometry on the main network. Live
+   * publication requires it (`readDeadEndMaskSettings`); without it only the graph's own access
+   * and bounded no-through flags are checked.
+   */
+  deadEndMask?: DeadEndMask;
   endpoint: string;
   fetchImplementation?: typeof fetch;
 }
@@ -367,8 +375,15 @@ export function createValhallaMapMatcher(options: ValhallaMapMatcherOptions): Ma
               !candidate.edge.deadend &&
               !candidate.edge.not_thru,
           );
+      // The mask is consulted with the edge's whole map geometry only: the trace's line for an
+      // edge matched end to end, the `/locate` shape for a partly matched one. Never a position
+      // from the batch.
+      const onMainNetwork = (line: readonly Position[]) =>
+        options.deadEndMask === undefined ||
+        options.deadEndMask.status({ forward: edge.forward, wayId: edge.wayId }, line) ===
+          'eligible';
       if (!open || edge.segmentKey !== undefined) {
-        edge.openThroughRoad = open;
+        edge.openThroughRoad = open && onMainNetwork(edge.line);
         return;
       }
       // A partly matched edge is published under the key of the whole edge it lies on, so its
@@ -382,7 +397,7 @@ export function createValhallaMapMatcher(options: ValhallaMapMatcherOptions): Ma
           return candidate.edge.forward ? shape : shape.reverse();
         })
         .find((line) => line !== undefined && containsPart(line, edge));
-      edge.openThroughRoad = wholeLine !== undefined;
+      edge.openThroughRoad = wholeLine !== undefined && onMainNetwork(wholeLine);
       if (wholeLine !== undefined) {
         edge.wholeEdge = {
           line: wholeLine,

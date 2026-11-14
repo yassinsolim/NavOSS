@@ -132,6 +132,40 @@ Operational facts:
   `traffic_releases`; nothing else was stored. The table itself stays (migrations are additive).
 - Valhalla's `traffic_name` stays blank. Observed speeds are not fed into route selection.
 
+### Verified serving graph and dead-end mask (required for `live`)
+
+`live` refuses to start without a verified serving graph and the topology dead-end mask built for
+it ([`infra/offline/dead-end-mask.md`](../offline/dead-end-mask.md)). The base stack keeps the
+legacy scripted Valhalla and cannot run `live`: its API has no graph directory. The overlay
+`compose.traffic-graph.yaml` replaces Valhalla with `valhalla_service` on a read-only
+`serving-graph.mts` directory and mounts the same directory read-only at `/graph` in the API.
+
+```sh
+# VALHALLA_DATA_DIR: a serving-graph.mts directory (connected.tar, valhalla-serving.json,
+# graph.json, provenance.json) with its mask installed as dead-end-mask.json, all 0444.
+graph_id=$(jq -er .graphId "$VALHALLA_DATA_DIR/graph.json")
+sed -i "s|^COMMUNITY_TRAFFIC_GRAPH_ID=.*|COMMUNITY_TRAFFIC_GRAPH_ID=$graph_id|" .env
+set -a; . ./.env; set +a
+# Start (or recreate) in `off` or `collect` first, verify, and only then switch to `live`.
+docker compose -f compose.yaml -f compose.traffic-graph.yaml up -d --force-recreate valhalla api
+./verify-traffic-graph.sh && ./check-stack.sh
+```
+
+- Valhalla's entrypoint (exactly `/bin/sh /navoss/serve-verified-graph.sh`, the read-only
+  `valhalla-serve-verified.sh`) refuses to serve unless `graph.json` is `COMMUNITY_TRAFFIC_GRAPH_ID`,
+  `connected.tar` hashes to it, `valhalla-serving.json` names only `/graph/connected.tar` and
+  `provenance.json` binds both. No tile build, no fallback tile directory, no writable mount.
+- The API in `collect` or `live` repeats those checks on its own read-only mount and refuses to
+  start unless the mask is bound to the same graph, provenance record and extract.
+- `verify-traffic-graph.sh` (operator, existing Docker access; the API never gets the socket)
+  checks the running containers' effective mounts, image, complete entrypoint and command,
+  environment, the API's selected matcher endpoint and that only the inspected Valhalla answers
+  to `valhalla` on any network the API joins, and that
+  both started after the directory last changed. `check-stack.sh` runs it in `live`.
+- Replacing the graph means a new directory, a new mask, the new id in `.env`, recreating both
+  Valhalla and the API, and clearing traffic observations and releases of the old graph. Nothing
+  replaces a graph under a running stack.
+
 ## Regional extract preparation
 
 Nominatim requires one merged extract because Alberta and British Columbia do not share a Geofabrik

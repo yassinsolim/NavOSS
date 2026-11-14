@@ -1,5 +1,10 @@
+import { join } from 'node:path';
+
 import { SERVICE_COVERAGE_BOUNDS, type TrafficFlowBounds } from '@navoss/contracts';
 import { z } from 'zod/v4';
+
+import { DeadEndMaskError, loadDeadEndMask, type DeadEndMask } from './dead-end-mask.js';
+import { SERVING_GRAPH_FILES, verifyServingGraph } from './serving-graph.js';
 
 export type TrafficMode = 'off' | 'collect' | 'live';
 
@@ -194,4 +199,52 @@ export function readTrafficSettings(
   }
   assertTrafficPrivacyLimits(settings);
   return settings;
+}
+
+const GraphIdSchema = z.string().regex(/^[0-9a-f]{64}$/);
+
+/**
+ * Loads the dead-end mask of the graph Valhalla serves, after verifying that graph:
+ * `COMMUNITY_TRAFFIC_GRAPH_DIR` is the serving graph directory as mounted (read-only) in both
+ * Valhalla's and the API's container (`/graph` under `compose.traffic-graph.yaml`), and
+ * `COMMUNITY_TRAFFIC_GRAPH_ID` the graph id the operator enables, from that directory's
+ * `graph.json`. `verifyServingGraph` hashes the archive Valhalla's configuration names; the mask
+ * (`dead-end-mask.json` in the same directory) must be bound to the same graph, the same
+ * provenance record and the same extract.
+ *
+ * - `off`: nothing is read.
+ * - `collect`: optional (collection publishes nothing); a configured directory must verify.
+ * - `live`: both are required. A missing or mismatched archive, configuration, provenance or
+ *   mask refuses to start; there is no permissive fallback.
+ */
+export function loadConfiguredDeadEndMask(
+  mode: TrafficMode,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): DeadEndMask | undefined {
+  if (mode === 'off') return undefined;
+  const directory = environment.COMMUNITY_TRAFFIC_GRAPH_DIR?.trim() ?? '';
+  const graphId = environment.COMMUNITY_TRAFFIC_GRAPH_ID?.trim() ?? '';
+  if (mode === 'live' && (directory === '' || graphId === '')) {
+    throw new Error(
+      'COMMUNITY_TRAFFIC_MODE=live requires COMMUNITY_TRAFFIC_GRAPH_DIR and COMMUNITY_TRAFFIC_GRAPH_ID.',
+    );
+  }
+  if (directory === '') return undefined;
+  if (!GraphIdSchema.safeParse(graphId).success) {
+    throw new Error(
+      'COMMUNITY_TRAFFIC_GRAPH_DIR requires COMMUNITY_TRAFFIC_GRAPH_ID: the 64-hex SHA-256 of the graph Valhalla serves.',
+    );
+  }
+  const graph = verifyServingGraph(directory, graphId);
+  const mask = loadDeadEndMask(join(directory, SERVING_GRAPH_FILES.mask), { graphId });
+  if (
+    mask.identity.provenanceSha256 !== graph.provenanceSha256 ||
+    mask.identity.pbfSha256 !== graph.pbfSha256 ||
+    mask.identity.dataDate !== graph.dataDate
+  ) {
+    throw new DeadEndMaskError(
+      'The dead-end mask was built from another extract or graph build than the one served.',
+    );
+  }
+  return mask;
 }

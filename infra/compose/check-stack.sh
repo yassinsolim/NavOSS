@@ -30,6 +30,10 @@ curl --fail --silent --show-error \
   jq -e '.degraded == false and .source.id == "valhalla-self-hosted" and .source.mode == "production" and (.routes | length) > 0 and .routes[0].distanceMeters > 18000 and .routes[0].distanceMeters < 20500 and .routes[0].durationSeconds > 1150 and .routes[0].durationSeconds < 1300' >/dev/null
 curl --fail --silent --show-error "$base_url/v2/traffic/status" |
   jq -e --arg mode "${COMMUNITY_TRAFFIC_MODE:-off}" '(.mode == (if $mode == "collect" then "collecting" else $mode end)) and (.probes.accepting == (.mode != "off")) and (.publication.minimumContributors >= 3) and (.probes.tripEndTrimMeters >= 400) and (has("coverage") | not)' >/dev/null
+if [ "${COMMUNITY_TRAFFIC_MODE:-off}" = live ] || { [ "${COMMUNITY_TRAFFIC_MODE:-off}" != off ] && [ -n "${COMMUNITY_TRAFFIC_GRAPH_ID:-}" ]; }; then
+  # The verified serving graph, its mask and the running containers' mounts (compose.traffic-graph.yaml).
+  "$(dirname "$0")/verify-traffic-graph.sh"
+fi
 if [ "${COMMUNITY_TRAFFIC_MODE:-off}" = live ]; then
   curl --fail --silent --show-error "$base_url/v2/traffic/flow?bbox=-114.20,50.95,-113.90,51.15" |
     jq -e '.type == "FeatureCollection" and .source.id == "navoss-community" and .coverage.minimumContributors >= 3' >/dev/null
