@@ -30,6 +30,17 @@ curl --fail --silent --show-error \
   jq -e '.degraded == false and .source.id == "valhalla-self-hosted" and .source.mode == "production" and (.routes | length) > 0 and .routes[0].distanceMeters > 18000 and .routes[0].distanceMeters < 20500 and .routes[0].durationSeconds > 1150 and .routes[0].durationSeconds < 1300' >/dev/null
 curl --fail --silent --show-error "$base_url/v2/traffic/status" |
   jq -e --arg mode "${COMMUNITY_TRAFFIC_MODE:-off}" '(.mode == (if $mode == "collect" then "collecting" else $mode end)) and (.probes.accepting == (.mode != "off")) and (.publication.minimumContributors >= 3) and (.probes.tripEndTrimMeters >= 400) and (has("coverage") | not)' >/dev/null
+if [ "${COMMUNITY_TRAFFIC_MODE:-off}" = live ] || [ -n "${COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH:-}" ]; then
+  # The dead-end mask and the graph Valhalla serves must be the same build: graph.json's id, the
+  # configured id, the canonical tile archive's SHA-256 and the mask's graph id all agree.
+  graph_dir="${VALHALLA_DATA_DIR:?Set VALHALLA_DATA_DIR to the serving graph directory}"
+  graph_id=$(jq -er '.graphId | select(test("^[0-9a-f]{64}$"))' "$graph_dir/graph.json")
+  [ "$graph_id" = "${COMMUNITY_TRAFFIC_GRAPH_ID:-}" ]
+  [ "${COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH:-}" = /graph/dead-end-mask.json ]
+  [ "$(sha256sum "$graph_dir/connected.tar" | cut -d ' ' -f 1)" = "$graph_id" ]
+  jq -e --arg id "$graph_id" '.format == "navoss-traffic-dead-end-mask" and .formatVersion == 1 and .graph.graphId == $id and .rules.terminalMeters >= 400' \
+    "$graph_dir/dead-end-mask.json" >/dev/null
+fi
 if [ "${COMMUNITY_TRAFFIC_MODE:-off}" = live ]; then
   curl --fail --silent --show-error "$base_url/v2/traffic/flow?bbox=-114.20,50.95,-113.90,51.15" |
     jq -e '.type == "FeatureCollection" and .source.id == "navoss-community" and .coverage.minimumContributors >= 3' >/dev/null

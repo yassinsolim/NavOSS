@@ -115,6 +115,12 @@ Pass `--baseline-graph` pointing to a separately built **3.8.2 AB+BC graph direc
 routes in local online-like 3.8.2 versus offline 3.9.1. These are local comparisons, not production
 VM checks. The measured compatibility/delta table is in the architecture document.
 
+### Community-traffic dead-end mask
+
+`dead-end-mask.mts` builds the topology mask that `live` community traffic requires from the same
+dated input and connected graph, and `verify/dead-end-mask.mts` checks it against a local
+Valhalla serving that graph. See [dead-end-mask.md](dead-end-mask.md).
+
 ### Search
 
 ```sh

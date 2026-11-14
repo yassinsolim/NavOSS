@@ -307,6 +307,16 @@ describe('dead-end mask in the matcher', () => {
     expect(
       inside.find((edge) => edge.wayId === partial.wayId && edge.wholeEdge)?.openThroughRoad,
     ).toBe(false);
+    // Unknown continuation (a region that leaves the extract, as BC 37A does into Yukon and
+    // Hyder) is refused exactly like a proven dead end.
+    const unknown = await statuses({
+      eligible: sorted([partial.wayId, ...otherWays]),
+      unknown: [whole.wayId],
+    });
+    expect(unknown.filter((edge) => edge.wayId === whole.wayId).length).toBeGreaterThan(0);
+    for (const edge of unknown) {
+      expect(edge.openThroughRoad).toBe(edge.wayId !== whole.wayId);
+    }
     // A way the mask does not list is never published.
     const unlisted = await statuses({ eligible: sorted(otherWays) });
     expect(

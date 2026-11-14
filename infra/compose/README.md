@@ -132,6 +132,29 @@ Operational facts:
   `traffic_releases`; nothing else was stored. The table itself stays (migrations are additive).
 - Valhalla's `traffic_name` stays blank. Observed speeds are not fed into route selection.
 
+### Dead-end mask (required for `live`)
+
+`live` refuses to start without the topology dead-end mask built for the graph Valhalla serves
+([`infra/offline/dead-end-mask.md`](../offline/dead-end-mask.md)). The graph identity comes from
+the serving graph's own `graph.json`, never typed by hand:
+
+```sh
+# VALHALLA_DATA_DIR is the offline pipeline's connected graph directory (graph.json, connected.tar).
+graph_id=$(jq -er .graphId "$VALHALLA_DATA_DIR/graph.json")
+sudo install -m 0444 "artifacts/dead-end-mask/$graph_id/dead-end-mask.json" \
+  "$VALHALLA_DATA_DIR/dead-end-mask.json"
+sed -i "s|^COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH=.*|COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH=/graph/dead-end-mask.json|" .env
+sed -i "s|^COMMUNITY_TRAFFIC_GRAPH_ID=.*|COMMUNITY_TRAFFIC_GRAPH_ID=$graph_id|" .env
+set -a; . ./.env; set +a; ./check-stack.sh
+```
+
+Compose mounts `VALHALLA_DATA_DIR` read-only at `/graph` in the API container. `check-stack.sh`
+compares `graph.json`, `COMMUNITY_TRAFFIC_GRAPH_ID`, the SHA-256 of `connected.tar` and the mask's
+graph id whenever the mode is `live` or a mask path is set. A graph rebuild needs a new mask;
+the old one stops the API in `live`. The current production graph directories, built by the
+scripted image, have no `graph.json` and cannot carry a mask: enabling `live` first means serving
+the offline pipeline's graph.
+
 ## Regional extract preparation
 
 Nominatim requires one merged extract because Alberta and British Columbia do not share a Geofabrik
