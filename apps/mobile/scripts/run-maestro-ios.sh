@@ -15,6 +15,8 @@ export MAESTRO_CLI_NO_ANALYTICS=1
 export PATH="$PATH:$HOME/.maestro/bin"
 
 simulator_name="${NAVOSS_SIMULATOR_NAME:-NavOSS iPhone 15 Pro Max}"
+# Where the simulator is when the app launches. A flow that plans a trip plans it from here.
+start_location="${NAVOSS_SIMULATOR_START_LOCATION:-51.0447,-114.0719}"
 device_id="$(
   xcrun simctl list devices available |
     awk -F '[()]' -v name="$simulator_name" 'index($0, name) { print $2; exit }'
@@ -45,10 +47,10 @@ xcrun simctl terminate "$device_id" org.navoss.mobile >/dev/null 2>&1 || true
 xcrun simctl uninstall "$device_id" org.navoss.mobile >/dev/null 2>&1 || true
 xcrun simctl install "$device_id" "$staged_app"
 xcrun simctl privacy "$device_id" grant location org.navoss.mobile
-xcrun simctl location "$device_id" set 51.0447,-114.0719
+xcrun simctl location "$device_id" set "$start_location"
 xcrun simctl spawn "$device_id" defaults write org.navoss.mobile EXDevMenuIsOnboardingFinished -bool YES
 xcrun simctl launch "$device_id" org.navoss.mobile >/dev/null
-xcrun simctl location "$device_id" set 51.0447,-114.0719
+xcrun simctl location "$device_id" set "$start_location"
 xcrun simctl openurl \
   "$device_id" \
   'exp+navoss://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081'
@@ -78,7 +80,7 @@ if ! run_maestro; then
   xcrun simctl boot "$device_id"
   xcrun simctl bootstatus "$device_id" -b
   xcrun simctl privacy "$device_id" grant location org.navoss.mobile
-  xcrun simctl location "$device_id" set 51.0447,-114.0719
+  xcrun simctl location "$device_id" set "$start_location"
   xcrun simctl launch "$device_id" org.navoss.mobile >/dev/null
   xcrun simctl openurl \
     "$device_id" \

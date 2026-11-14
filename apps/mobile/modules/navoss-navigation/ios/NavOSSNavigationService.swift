@@ -982,7 +982,10 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       guard mode == .keepRoute, let routeLength = navigationSession.routeLengthMeters,
         routeLength > 0,
         let rejoinAlong = navigationKeepRouteRejoinAlongMeters(
-          fixAlongMeters: routeProgress * routeLength,
+          // Measured from where the vehicle is now, not from where it left the route: after a
+          // long gap the confirmed progress can be kilometres behind it.
+          fixAlongMeters: navigationSession.rejoinBaseAlongMeters(near: rawCoordinate)
+            ?? routeProgress * routeLength,
           routeLengthMeters: routeLength
         ),
         navOSSRemainingWaypoints(in: trip, after: rejoinAlong / routeLength).count

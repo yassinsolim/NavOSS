@@ -302,9 +302,12 @@ async function runMaestroFlow(flowPath, logPath, timeoutMs) {
     await run('killall', ['-9', 'com.apple.CoreSimulator.CoreSimulatorService'], {
       timeoutMs: 30_000,
     }).catch(() => undefined);
+    // Showing the device is a convenience: Maestro drives a headless simulator, and Xcode 27
+    // ships no Simulator.app (as in `run-maestro-ios.sh`). A missing window must not fail the
+    // retry.
     await run('open', ['-a', 'Simulator', '--args', '-CurrentDeviceUDID', simulatorId], {
       timeoutMs: 30_000,
-    });
+    }).catch(() => undefined);
     await run('xcrun', ['simctl', 'boot', simulatorId], { timeoutMs: 30_000 });
     await run('xcrun', ['simctl', 'bootstatus', simulatorId, '-b'], { timeoutMs: 120_000 });
     await run('xcrun', ['simctl', 'launch', simulatorId, 'org.navoss.mobile'], {
