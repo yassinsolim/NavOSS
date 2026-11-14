@@ -1358,16 +1358,36 @@ describe('standing still across batch boundaries, through HTTP on a recorded rea
     const approachNext: Upload = { name: 'approach', startMs: T0 };
     const stopNext = (startMs: number): Upload => ({ name: 'stationary', startMs });
     const goOn = (startMs: number): Upload => ({ name: 'resume', startMs });
-    const edgeSpeed = async (trip: Upload[]) => {
-      const { releasedAt } = await drive(threeDrivers(trip), undefined, NEXT_EDGE);
+    const edgeSpeed = async (trip: Upload[], recorded: Recording = NEXT_EDGE) => {
+      const { releasedAt } = await drive(threeDrivers(trip), undefined, recorded);
       return (await releasedAt(T0 + 10 * MINUTE)).find(({ id }) => id === EDGE)?.speedKph;
+    };
+    /** The parts of a recorded `/locate` edge these tests change. */
+    interface LocatedEdge {
+      edge: { end_node?: { value: number } };
+      edge_id?: { value: number };
+    }
+    /** The recording with each located edge changed by `change`. */
+    const relocated = (change: (edge: LocatedEdge) => void): Recording => {
+      const copy = structuredClone(NEXT_EDGE);
+      for (const { path, response } of copy.exchanges) {
+        if (path !== '/locate') continue;
+        // Recorded verbose `/locate` answers, as Valhalla 3.8.2 gave them.
+        const located = response as { edges: LocatedEdge[] | null }[];
+        for (const point of located) {
+          for (const edge of point.edges ?? []) change(edge);
+        }
+      }
+      return copy;
     };
 
     it('counts the stop on the edge it was on once the trip goes on along the next edges', async () => {
       // Moving only, 580 m in 58 s is 36 km/h (35); that is what an ended trip publishes, below.
-      // With the 28 s + 28 s standing trimmed off the two moving batches, confirmed by the
-      // movement onto the next edges: 18.3 km/h, published as 20. With a 98 s stationary batch
-      // as well: 9.8 km/h, published as 10.
+      // With the standing trimmed off the two moving batches, confirmed by the movement onto the
+      // next edges (the edge after the stop begins at the node the stop's edge ends at, by the
+      // graph's node ids): the approach's 30 s and the resume's 28 s, whose minute-rounded claim
+      // overlaps it by 8 s, unite to 50 s: 19.3 km/h, published as 20. With a 98 s stationary
+      // batch as well, 126 s: 11.3 km/h, published as 10.
       expect(await edgeSpeed([approachNext, goOn(T0 + 112_000)])).toBe(20);
       expect(await edgeSpeed([approachNext, stopNext(T0 + 112_000), goOn(T0 + 212_000)])).toBe(10);
       // Uploading the stationary batch again changes nothing.
@@ -1379,6 +1399,24 @@ describe('standing still across batch boundaries, through HTTP on a recorded rea
           goOn(T0 + 212_000),
         ]),
       ).toBe(10);
+    });
+
+    it('takes going on only onto an edge the graph says begins at the stop edge’s end node', async () => {
+      const trip = [approachNext, goOn(T0 + 112_000)];
+      // The edge after the stop is located with the same geometry, but its opposing edge ends at
+      // another node: the two nodes coincide in position without being connected.
+      const coincident = relocated((edge) => {
+        const node = edge.edge.end_node;
+        if (edge.edge_id?.value === 93_650_445_040 && node !== undefined) node.value += 1;
+      });
+      expect(await edgeSpeed(trip, coincident)).toBe(35);
+      // Without node ids the graph confirms no connection, and the standing does not count; the
+      // edges themselves are still published.
+      const unidentified = relocated((edge) => {
+        delete edge.edge_id;
+      });
+      expect(await edgeSpeed(trip, unidentified)).toBe(35);
+      expect(await edgeSpeed(trip)).toBe(20);
     });
 
     it('never counts the stop when the trip ends there', async () => {

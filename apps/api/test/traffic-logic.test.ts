@@ -847,33 +847,45 @@ describe('publication cohorts', () => {
         expect(run([approach, enough]).releases.map(({ speedKph }) => speedKph)).toEqual([5]);
       });
 
-      it('takes going on across the end node only onto an edge that starts there', () => {
-        const nearEnd: Batch = {
+      it('takes going on only onto an edge the graph says begins at the held edge’s end node', () => {
+        // The held edge runs from graph node 1 to node 2.
+        const nearEnd = (nodes?: { begin: number; end: number }): Batch => ({
           claimedMs: start,
           dwells: [dwell(1_480, 75, 135)],
-          observations: [piece([[1_000, 1_400]], 60)],
-        };
-        const next = (line: Position[]): Batch => ({
+          observations: [piece([[1_000, 1_400]], 60, nodes === undefined ? {} : { nodes })],
+        });
+        // The next edge's line begins exactly where the held edge's ends (-114.08, 51.1) in every
+        // case: only the node ids differ.
+        const next = (nodes?: { begin: number; end: number }): Batch => ({
           claimedMs: start + 3 * minute,
           dwells: [],
           observations: [
-            piece([[0, 300]], 30, { line, lengthMeters: 300, segmentKey: 'w9f-00000000000b' }, 150),
+            piece(
+              [[0, 300]],
+              30,
+              {
+                line: [
+                  [-114.08, 51.1],
+                  [-114.076, 51.1],
+                ],
+                lengthMeters: 300,
+                segmentKey: 'w9f-00000000000b',
+                ...(nodes === undefined ? {} : { nodes }),
+              },
+              150,
+            ),
           ],
         });
-        // The 1.5 km test edge's line ends at -114.08, 51.1.
-        const joined = next([
-          [-114.08, 51.1],
-          [-114.076, 51.1],
-        ]);
-        const apart = next([
-          [-114.079, 51.1],
-          [-114.075, 51.1],
-        ]);
         const speedOn = (batches: Batch[]) =>
           run(batches).releases.find(({ segmentKey }) => segmentKey === KEY)?.speedKph;
+        const held = { begin: 1, end: 2 };
         // 400 m in 60 s moving: 24 km/h (25); with 60 s standing confirmed, 12 km/h (10).
-        expect(speedOn([nearEnd, joined])).toBe(10);
-        expect(speedOn([nearEnd, apart])).toBe(25);
+        expect(speedOn([nearEnd(held), next({ begin: 2, end: 3 })])).toBe(10);
+        // A node at the same position that is not the held edge's end node: not connected.
+        expect(speedOn([nearEnd(held), next({ begin: 4, end: 3 })])).toBe(25);
+        // Either edge without confirmed node ids: no connection is taken from coordinates.
+        expect(speedOn([nearEnd(), next({ begin: 2, end: 3 })])).toBe(25);
+        expect(speedOn([nearEnd(held), next()])).toBe(25);
       });
 
       it('places standing only on an edge where the contributor already moves', () => {

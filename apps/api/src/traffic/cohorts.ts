@@ -59,6 +59,11 @@ interface PendingSegment {
    * clock, and kept while a pending sample or partial coverage still uses it.
    */
   generations: Buffer[];
+  /**
+   * GraphId of the node the edge ends at, from the first observation the graph confirmed it for.
+   * Movement on an edge that begins at this node can continue a dwell held near this edge's end.
+   */
+  endNode: number | undefined;
   lengthMeters: number;
   line: Position[];
   /**
@@ -232,12 +237,6 @@ function overlapLength(intervals: readonly [number, number][], from: number, to:
     inside += Math.max(0, Math.min(end, to) - Math.max(start, from));
   }
   return inside;
-}
-
-/** Two whole-edge geometries meet at this vertex: the same map node, to six decimals. */
-function sameVertex(left: Position | undefined, right: Position | undefined): boolean {
-  if (left === undefined || right === undefined) return false;
-  return left[0].toFixed(6) === right[0].toFixed(6) && left[1].toFixed(6) === right[1].toFixed(6);
 }
 
 function scoped(salt: Buffer, value: string): string {
@@ -470,6 +469,7 @@ export function createTrafficCohorts(
         // Road attributes are fixed by the first observation. The key commits to the geometry,
         // so a later batch, counted or not, cannot change what would be drawn.
         const segment: PendingSegment = segments.get(observation.segmentKey) ?? {
+          endNode: undefined,
           freeFlowKph: observation.freeFlowKph,
           generations: [randomBytes(32)],
           lengthMeters: observation.lengthMeters,
@@ -478,6 +478,7 @@ export function createTrafficCohorts(
           roadClass: observation.roadClass,
           samples: new Map<string, PendingSample>(),
         };
+        segment.endNode ??= observation.nodes?.end;
         segments.set(observation.segmentKey, segment);
         const found = lookup(segment, base);
         if (found.sample !== undefined) {
@@ -498,31 +499,33 @@ export function createTrafficCohorts(
         touch(observation.segmentKey, partial, found.tag, false);
       }
 
-      // Movement onto an edge that starts at another edge's end node (the same map vertex, as
-      // both whole-edge geometries give it) continues a dwell held near that edge's end. The
-      // contributor's state on the earlier edge is found with this request's credential, as for
-      // any edge; no link between the two edges is kept.
+      // Movement onto an edge that begins at another edge's end node, by the graph's own node
+      // ids, continues a dwell held near that edge's end. Coordinates are never taken for a node:
+      // two nodes can share a position without being connected, and an edge whose nodes the graph
+      // did not confirm continues nothing. The contributor's state on the earlier edge is found
+      // with this request's credential, as for any edge; no link between the two edges is kept.
       for (const observation of observations) {
-        const begin = observation.line[0];
+        const begin = observation.nodes?.begin;
         if (begin === undefined || observation.moves.length === 0) continue;
         const startMs = claimed(Math.min(...observation.moves.map((move) => move.startSeconds)));
         // How far this batch went on from `begin`: along this edge, then along the edges of the
-        // same batch that each start where the previous one ends.
+        // same batch that each begin at the node the previous one ends at.
         let reach = 0;
         let next: SegmentObservation | undefined = observation;
         const seen = new Set<string>();
         while (next !== undefined && !seen.has(next.segmentKey)) {
           seen.add(next.segmentKey);
           reach += Math.max(0, ...next.moves.map((move) => move.to));
-          const end = next.line.at(-1);
-          next = observations.find(
-            (candidate) => candidate.moves.length > 0 && sameVertex(candidate.line[0], end),
-          );
+          const end: number | undefined = next.nodes?.end;
+          next =
+            end === undefined
+              ? undefined
+              : observations.find(
+                  (candidate) => candidate.moves.length > 0 && candidate.nodes?.begin === end,
+                );
         }
         for (const [segmentKey, segment] of segments) {
-          if (segmentKey === observation.segmentKey || !sameVertex(segment.line.at(-1), begin)) {
-            continue;
-          }
+          if (segmentKey === observation.segmentKey || segment.endNode !== begin) continue;
           const found = lookup(segment, contribution.tagFor(segmentKey));
           if (found.evidence === undefined || found.evidence.held.length === 0) continue;
           touch(segmentKey, found.evidence, found.tag, found.sample !== undefined).onward.push({

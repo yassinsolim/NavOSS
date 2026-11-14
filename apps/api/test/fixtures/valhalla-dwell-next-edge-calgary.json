@@ -1,5 +1,5 @@
 {
-  "note": "Recorded from Valhalla 3.8.2 on the NavOSS Alberta + British Columbia graph (OpenStreetMap contributors, ODbL), local run, 2026-11-14. Synthetic batches along Deerfoot Trail SE, not a recorded drive: approach moves at 36 km/h along way 551687611 from 355 m to 1,155 m (22 m before the end of that 1.18 km edge) and stands there 28 s; stationary stands 98 s there (stationaryJitter the same with up to 3 m of deterministic jitter); resume stands 28 s, then moves 500 m on, across the node onto the following edges. One fix every 2 s, five decimals. exchanges are the trace_attributes and /locate requests the server made for the trimmed moving batches, with Valhalla answers; stationary batches are never sent.",
+  "note": "Recorded from Valhalla 3.8.2 serving the verified NavOSS Alberta + British Columbia serving graph 2c24dd40855744e9e6a24c7e865269428ecaa2d28e5a866366b666292ae5457c (OpenStreetMap contributors, ODbL; serving-graph.mts directory with provenance.json), local run, 2026-11-14. The /locate answers list each edge with its GraphId and end node, and the opposing edge whose end node is its begin node. Synthetic batches along Deerfoot Trail SE, not a recorded drive: approach moves at 36 km/h along way 551687611 from 355 m to 1,155 m (22 m before the end of that 1.18 km edge) and stands there 28 s; stationary stands 98 s there (stationaryJitter the same with up to 3 m of deterministic jitter); resume stands 28 s, then moves 500 m on, across the node onto the following edges. One fix every 2 s, five decimals. exchanges are the trace_attributes and /locate requests the server made for the trimmed moving batches, with Valhalla answers; stationary batches are never sent.",
   "batches": {
     "approach": [
       [-113.99988, 51.03471, 0],
@@ -224,6 +224,7 @@
             "edge.target_percent_along",
             "edge.use",
             "edge.way_id",
+            "edge.id",
             "matched.begin_route_discontinuity",
             "matched.distance_along_edge",
             "matched.distance_from_trace_point",
@@ -234,36 +235,156 @@
           ]
         },
         "shape": [
-          { "lat": 51.03527, "lon": -114.001, "time": 10 },
-          { "lat": 51.03537, "lon": -114.00123, "time": 12 },
-          { "lat": 51.03547, "lon": -114.00147, "time": 14 },
-          { "lat": 51.03556, "lon": -114.00171, "time": 16 },
-          { "lat": 51.03566, "lon": -114.00195, "time": 18 },
-          { "lat": 51.03576, "lon": -114.00219, "time": 20 },
-          { "lat": 51.03586, "lon": -114.00243, "time": 22 },
-          { "lat": 51.03597, "lon": -114.00266, "time": 24 },
-          { "lat": 51.03607, "lon": -114.0029, "time": 26 },
-          { "lat": 51.03617, "lon": -114.00313, "time": 28 },
-          { "lat": 51.03628, "lon": -114.00336, "time": 30 },
-          { "lat": 51.03639, "lon": -114.00358, "time": 32 },
-          { "lat": 51.03651, "lon": -114.0038, "time": 34 },
-          { "lat": 51.03663, "lon": -114.00402, "time": 36 },
-          { "lat": 51.03676, "lon": -114.00422, "time": 38 },
-          { "lat": 51.03689, "lon": -114.00441, "time": 40 },
-          { "lat": 51.03703, "lon": -114.00459, "time": 42 },
-          { "lat": 51.03717, "lon": -114.00477, "time": 44 },
-          { "lat": 51.03731, "lon": -114.00494, "time": 46 },
-          { "lat": 51.03746, "lon": -114.00511, "time": 48 },
-          { "lat": 51.03761, "lon": -114.00526, "time": 50 },
-          { "lat": 51.03777, "lon": -114.0054, "time": 52 },
-          { "lat": 51.03793, "lon": -114.00552, "time": 54 },
-          { "lat": 51.03809, "lon": -114.00564, "time": 56 },
-          { "lat": 51.03826, "lon": -114.00573, "time": 58 },
-          { "lat": 51.03844, "lon": -114.00582, "time": 60 },
-          { "lat": 51.03861, "lon": -114.0059, "time": 62 },
-          { "lat": 51.03878, "lon": -114.00598, "time": 64 },
-          { "lat": 51.03895, "lon": -114.00606, "time": 66 },
-          { "lat": 51.03913, "lon": -114.00614, "time": 68 }
+          {
+            "lat": 51.03527,
+            "lon": -114.001,
+            "time": 10
+          },
+          {
+            "lat": 51.03537,
+            "lon": -114.00123,
+            "time": 12
+          },
+          {
+            "lat": 51.03547,
+            "lon": -114.00147,
+            "time": 14
+          },
+          {
+            "lat": 51.03556,
+            "lon": -114.00171,
+            "time": 16
+          },
+          {
+            "lat": 51.03566,
+            "lon": -114.00195,
+            "time": 18
+          },
+          {
+            "lat": 51.03576,
+            "lon": -114.00219,
+            "time": 20
+          },
+          {
+            "lat": 51.03586,
+            "lon": -114.00243,
+            "time": 22
+          },
+          {
+            "lat": 51.03597,
+            "lon": -114.00266,
+            "time": 24
+          },
+          {
+            "lat": 51.03607,
+            "lon": -114.0029,
+            "time": 26
+          },
+          {
+            "lat": 51.03617,
+            "lon": -114.00313,
+            "time": 28
+          },
+          {
+            "lat": 51.03628,
+            "lon": -114.00336,
+            "time": 30
+          },
+          {
+            "lat": 51.03639,
+            "lon": -114.00358,
+            "time": 32
+          },
+          {
+            "lat": 51.03651,
+            "lon": -114.0038,
+            "time": 34
+          },
+          {
+            "lat": 51.03663,
+            "lon": -114.00402,
+            "time": 36
+          },
+          {
+            "lat": 51.03676,
+            "lon": -114.00422,
+            "time": 38
+          },
+          {
+            "lat": 51.03689,
+            "lon": -114.00441,
+            "time": 40
+          },
+          {
+            "lat": 51.03703,
+            "lon": -114.00459,
+            "time": 42
+          },
+          {
+            "lat": 51.03717,
+            "lon": -114.00477,
+            "time": 44
+          },
+          {
+            "lat": 51.03731,
+            "lon": -114.00494,
+            "time": 46
+          },
+          {
+            "lat": 51.03746,
+            "lon": -114.00511,
+            "time": 48
+          },
+          {
+            "lat": 51.03761,
+            "lon": -114.00526,
+            "time": 50
+          },
+          {
+            "lat": 51.03777,
+            "lon": -114.0054,
+            "time": 52
+          },
+          {
+            "lat": 51.03793,
+            "lon": -114.00552,
+            "time": 54
+          },
+          {
+            "lat": 51.03809,
+            "lon": -114.00564,
+            "time": 56
+          },
+          {
+            "lat": 51.03826,
+            "lon": -114.00573,
+            "time": 58
+          },
+          {
+            "lat": 51.03844,
+            "lon": -114.00582,
+            "time": 60
+          },
+          {
+            "lat": 51.03861,
+            "lon": -114.0059,
+            "time": 62
+          },
+          {
+            "lat": 51.03878,
+            "lon": -114.00598,
+            "time": 64
+          },
+          {
+            "lat": 51.03895,
+            "lon": -114.00606,
+            "time": 66
+          },
+          {
+            "lat": 51.03913,
+            "lon": -114.00614,
+            "time": 68
+          }
         ],
         "shape_match": "map_snap",
         "costing": "auto",
@@ -276,6 +397,7 @@
           {
             "speed_limit": 100,
             "way_id": 551687611,
+            "id": 1239836287728,
             "use": "road",
             "end_shape_index": 21,
             "begin_shape_index": 0,
@@ -476,7 +598,17 @@
       "path": "/locate",
       "request": {
         "costing": "auto",
-        "locations": [{ "lat": 51.036823495265665, "lon": -114.00431967723361 }],
+        "costing_options": {
+          "auto": {
+            "ignore_oneways": true
+          }
+        },
+        "locations": [
+          {
+            "lat": 51.036823495265665,
+            "lon": -114.00431967723361
+          }
+        ],
         "verbose": true
       },
       "response": [
@@ -484,6 +616,136 @@
           "input_lat": 51.036823,
           "input_lon": -114.004319,
           "edges": [
+            {
+              "access_restrictions": [],
+              "live_speed": {},
+              "correlated_lat": 51.036823,
+              "correlated_lon": -114.004319,
+              "side_of_street": "neither",
+              "bounding_circle": {
+                "lat": 51.036142,
+                "lon": -114.002109,
+                "radius": 600
+              },
+              "linear_reference": "K67ttiRLnUEOFAOU/LYBXl0=",
+              "percent_along": 0.36651,
+              "distance": 0,
+              "shoulder": false,
+              "heading": 139.9,
+              "outbound_reach": 50,
+              "inbound_reach": 50,
+              "edge_info": {
+                "way_id": 551687611,
+                "bike_network": {
+                  "national": false,
+                  "regional": false,
+                  "local": false,
+                  "mountain": false
+                },
+                "names": ["2", "Deerfoot Trail SE"],
+                "shape": "kvvi`BjmzlxEq`@`MkN|E}OjIkMjIsMzJqKrIaLnLmJ|JmHtJoHnJ_KjOoFlJ{JjSaFhKiEnKsM|_@yWn{@wQ~j@{HbU_GrOyEhM}C~G}CzGcFnLaGbK}DvGmUn[gPlR}HjH{IzGeJpGuJxEkHbDeJxCwTpIe_@rMqe@zQmSfH",
+                "mean_elevation": null,
+                "speed_limit": 100
+              },
+              "edge": {
+                "end_node": {
+                  "level": 0,
+                  "tile_id": 3166,
+                  "id": 15893,
+                  "value": 533280613104
+                },
+                "speeds": {
+                  "default": 85,
+                  "type": "classified",
+                  "free_flow": 0,
+                  "constrained_flow": 0,
+                  "predicted": false
+                },
+                "access_restriction": false,
+                "start_restriction": {
+                  "bicycle": false,
+                  "bus": false,
+                  "car": false,
+                  "emergency": false,
+                  "HOV": false,
+                  "pedestrian": false,
+                  "taxi": false,
+                  "truck": false,
+                  "wheelchair": false,
+                  "moped": false,
+                  "motorcycle": false
+                },
+                "end_restriction": {
+                  "bicycle": false,
+                  "bus": false,
+                  "car": false,
+                  "emergency": false,
+                  "HOV": false,
+                  "pedestrian": false,
+                  "taxi": false,
+                  "truck": false,
+                  "wheelchair": false,
+                  "moped": false,
+                  "motorcycle": false
+                },
+                "part_of_complex_restriction": false,
+                "has_sign": false,
+                "toll": false,
+                "destination_only": false,
+                "destination_only_hgv": false,
+                "tunnel": false,
+                "bridge": false,
+                "round_about": false,
+                "traffic_signal": false,
+                "forward": false,
+                "not_thru": false,
+                "stop_sign": false,
+                "yield_sign": false,
+                "cycle_lane": "none",
+                "bike_network": false,
+                "truck_route": false,
+                "lane_count": 3,
+                "country_crossing": false,
+                "sidewalk_left": false,
+                "sidewalk_right": false,
+                "sac_scale": "none",
+                "deadend": false,
+                "geo_attributes": {
+                  "length": 1178,
+                  "weighted_grade": 0,
+                  "max_up_slope": 0,
+                  "max_down_slope": 0,
+                  "curvature": 2
+                },
+                "access": {
+                  "bicycle": false,
+                  "bus": false,
+                  "car": false,
+                  "emergency": false,
+                  "HOV": false,
+                  "pedestrian": false,
+                  "taxi": false,
+                  "truck": false,
+                  "wheelchair": false,
+                  "moped": false,
+                  "motorcycle": false
+                },
+                "classification": {
+                  "classification": "motorway",
+                  "use": "road",
+                  "surface": "paved_smooth",
+                  "link": false,
+                  "internal": false
+                }
+              },
+              "edge_id": {
+                "level": 0,
+                "tile_id": 3166,
+                "id": 2789,
+                "value": 93583336176
+              },
+              "predicted_speeds": []
+            },
             {
               "access_restrictions": [
                 {
@@ -507,12 +769,16 @@
               "correlated_lat": 51.036823,
               "correlated_lon": -114.004319,
               "side_of_street": "neither",
-              "bounding_circle": { "lat": 51.036142, "lon": -114.002109, "radius": 600 },
+              "bounding_circle": {
+                "lat": 0,
+                "lon": 0,
+                "radius": 0
+              },
               "linear_reference": "K67vYSRKFEEeFPxqA0wBTqI=",
               "percent_along": 0.63348,
               "distance": 0,
               "shoulder": false,
-              "heading": 316.7,
+              "heading": 319.9,
               "outbound_reach": 50,
               "inbound_reach": 50,
               "edge_info": {
@@ -529,7 +795,12 @@
                 "speed_limit": 100
               },
               "edge": {
-                "end_node": { "level": 0, "tile_id": 3166, "id": 1281, "value": 42983252720 },
+                "end_node": {
+                  "level": 0,
+                  "tile_id": 3166,
+                  "id": 1281,
+                  "value": 42983252720
+                },
                 "speeds": {
                   "default": 85,
                   "type": "classified",
@@ -614,7 +885,12 @@
                   "internal": false
                 }
               },
-              "edge_id": { "level": 0, "tile_id": 3166, "id": 36950, "value": 1239836287728 },
+              "edge_id": {
+                "level": 0,
+                "tile_id": 3166,
+                "id": 36950,
+                "value": 1239836287728
+              },
               "predicted_speeds": []
             }
           ],
@@ -639,6 +915,7 @@
             "edge.target_percent_along",
             "edge.use",
             "edge.way_id",
+            "edge.id",
             "matched.begin_route_discontinuity",
             "matched.distance_along_edge",
             "matched.distance_from_trace_point",
@@ -649,20 +926,76 @@
           ]
         },
         "shape": [
-          { "lat": 51.0412, "lon": -114.00711, "time": 40 },
-          { "lat": 51.04137, "lon": -114.00719, "time": 42 },
-          { "lat": 51.04154, "lon": -114.00727, "time": 44 },
-          { "lat": 51.04171, "lon": -114.00735, "time": 46 },
-          { "lat": 51.04188, "lon": -114.00744, "time": 48 },
-          { "lat": 51.04205, "lon": -114.00755, "time": 50 },
-          { "lat": 51.04222, "lon": -114.00765, "time": 52 },
-          { "lat": 51.04239, "lon": -114.00775, "time": 54 },
-          { "lat": 51.04255, "lon": -114.00788, "time": 56 },
-          { "lat": 51.0427, "lon": -114.00803, "time": 58 },
-          { "lat": 51.04286, "lon": -114.00817, "time": 60 },
-          { "lat": 51.04301, "lon": -114.00831, "time": 62 },
-          { "lat": 51.04316, "lon": -114.00847, "time": 64 },
-          { "lat": 51.04331, "lon": -114.00864, "time": 66 }
+          {
+            "lat": 51.0412,
+            "lon": -114.00711,
+            "time": 40
+          },
+          {
+            "lat": 51.04137,
+            "lon": -114.00719,
+            "time": 42
+          },
+          {
+            "lat": 51.04154,
+            "lon": -114.00727,
+            "time": 44
+          },
+          {
+            "lat": 51.04171,
+            "lon": -114.00735,
+            "time": 46
+          },
+          {
+            "lat": 51.04188,
+            "lon": -114.00744,
+            "time": 48
+          },
+          {
+            "lat": 51.04205,
+            "lon": -114.00755,
+            "time": 50
+          },
+          {
+            "lat": 51.04222,
+            "lon": -114.00765,
+            "time": 52
+          },
+          {
+            "lat": 51.04239,
+            "lon": -114.00775,
+            "time": 54
+          },
+          {
+            "lat": 51.04255,
+            "lon": -114.00788,
+            "time": 56
+          },
+          {
+            "lat": 51.0427,
+            "lon": -114.00803,
+            "time": 58
+          },
+          {
+            "lat": 51.04286,
+            "lon": -114.00817,
+            "time": 60
+          },
+          {
+            "lat": 51.04301,
+            "lon": -114.00831,
+            "time": 62
+          },
+          {
+            "lat": 51.04316,
+            "lon": -114.00847,
+            "time": 64
+          },
+          {
+            "lat": 51.04331,
+            "lon": -114.00864,
+            "time": 66
+          }
         ],
         "shape_match": "map_snap",
         "costing": "auto",
@@ -675,6 +1008,7 @@
           {
             "speed_limit": 100,
             "way_id": 1270802838,
+            "id": 93549781744,
             "use": "road",
             "end_shape_index": 1,
             "begin_shape_index": 0,
@@ -687,6 +1021,7 @@
           {
             "speed_limit": 100,
             "way_id": 551687614,
+            "id": 93616890608,
             "use": "road",
             "end_shape_index": 4,
             "begin_shape_index": 1,
@@ -698,6 +1033,7 @@
           {
             "speed_limit": 100,
             "way_id": 456557873,
+            "id": 93751108336,
             "use": "road",
             "end_shape_index": 7,
             "begin_shape_index": 4,
@@ -801,10 +1137,24 @@
       "path": "/locate",
       "request": {
         "costing": "auto",
+        "costing_options": {
+          "auto": {
+            "ignore_oneways": true
+          }
+        },
         "locations": [
-          { "lat": 51.041358, "lon": -114.007183 },
-          { "lat": 51.04198174492094, "lon": -114.00750141322864 },
-          { "lat": 51.04288271306882, "lon": -114.00819279850403 }
+          {
+            "lat": 51.041358,
+            "lon": -114.007183
+          },
+          {
+            "lat": 51.04198174492094,
+            "lon": -114.00750141322864
+          },
+          {
+            "lat": 51.04288271306882,
+            "lon": -114.00819279850403
+          }
         ],
         "verbose": true
       },
@@ -836,7 +1186,11 @@
               "correlated_lat": 51.041357,
               "correlated_lon": -114.007183,
               "side_of_street": "neither",
-              "bounding_circle": { "lat": 51.040943, "lon": -114.00697, "radius": 70 },
+              "bounding_circle": {
+                "lat": 51.040943,
+                "lon": -114.00697,
+                "radius": 70
+              },
               "linear_reference": "K67ttiRLnUEeAv/JAHUBTt0=",
               "percent_along": 0.86726,
               "distance": 0,
@@ -858,7 +1212,12 @@
                 "speed_limit": 100
               },
               "edge": {
-                "end_node": { "level": 0, "tile_id": 3166, "id": 1282, "value": 43016807152 },
+                "end_node": {
+                  "level": 0,
+                  "tile_id": 3166,
+                  "id": 1282,
+                  "value": 43016807152
+                },
                 "speeds": {
                   "default": 85,
                   "type": "classified",
@@ -943,7 +1302,142 @@
                   "internal": false
                 }
               },
-              "edge_id": { "level": 0, "tile_id": 3166, "id": 2788, "value": 93549781744 },
+              "edge_id": {
+                "level": 0,
+                "tile_id": 3166,
+                "id": 2788,
+                "value": 93549781744
+              },
+              "predicted_speeds": []
+            },
+            {
+              "access_restrictions": [],
+              "live_speed": {},
+              "correlated_lat": 51.041357,
+              "correlated_lon": -114.007183,
+              "side_of_street": "neither",
+              "bounding_circle": {
+                "lat": 0,
+                "lon": 0,
+                "radius": 0
+              },
+              "linear_reference": "K67tnSRL00EOAgA0/4wBXiI=",
+              "percent_along": 0.13273,
+              "distance": 0,
+              "shoulder": false,
+              "heading": 164,
+              "outbound_reach": 50,
+              "inbound_reach": 50,
+              "edge_info": {
+                "way_id": 1270802838,
+                "bike_network": {
+                  "national": false,
+                  "regional": false,
+                  "local": false,
+                  "mountain": false
+                },
+                "names": ["2", "Deerfoot Trail SE"],
+                "shape": "wdgj`BxjlmxEaKnDkUzHgLvEiXnJ",
+                "mean_elevation": null,
+                "speed_limit": 100
+              },
+              "edge": {
+                "end_node": {
+                  "level": 0,
+                  "tile_id": 3166,
+                  "id": 1281,
+                  "value": 42983252720
+                },
+                "speeds": {
+                  "default": 85,
+                  "type": "classified",
+                  "free_flow": 0,
+                  "constrained_flow": 0,
+                  "predicted": false
+                },
+                "access_restriction": false,
+                "start_restriction": {
+                  "bicycle": false,
+                  "bus": false,
+                  "car": false,
+                  "emergency": false,
+                  "HOV": false,
+                  "pedestrian": false,
+                  "taxi": false,
+                  "truck": false,
+                  "wheelchair": false,
+                  "moped": false,
+                  "motorcycle": false
+                },
+                "end_restriction": {
+                  "bicycle": false,
+                  "bus": false,
+                  "car": false,
+                  "emergency": false,
+                  "HOV": false,
+                  "pedestrian": false,
+                  "taxi": false,
+                  "truck": false,
+                  "wheelchair": false,
+                  "moped": false,
+                  "motorcycle": false
+                },
+                "part_of_complex_restriction": false,
+                "has_sign": false,
+                "toll": false,
+                "destination_only": false,
+                "destination_only_hgv": false,
+                "tunnel": false,
+                "bridge": false,
+                "round_about": false,
+                "traffic_signal": false,
+                "forward": false,
+                "not_thru": false,
+                "stop_sign": false,
+                "yield_sign": false,
+                "cycle_lane": "none",
+                "bike_network": false,
+                "truck_route": false,
+                "lane_count": 3,
+                "country_crossing": false,
+                "sidewalk_left": false,
+                "sidewalk_right": false,
+                "sac_scale": "none",
+                "deadend": false,
+                "geo_attributes": {
+                  "length": 135,
+                  "weighted_grade": 0,
+                  "max_up_slope": 0,
+                  "max_down_slope": 0,
+                  "curvature": 0
+                },
+                "access": {
+                  "bicycle": false,
+                  "bus": false,
+                  "car": false,
+                  "emergency": false,
+                  "HOV": false,
+                  "pedestrian": false,
+                  "taxi": false,
+                  "truck": false,
+                  "wheelchair": false,
+                  "moped": false,
+                  "motorcycle": false
+                },
+                "classification": {
+                  "classification": "motorway",
+                  "use": "road",
+                  "surface": "paved_smooth",
+                  "link": false,
+                  "internal": false
+                }
+              },
+              "edge_id": {
+                "level": 0,
+                "tile_id": 3166,
+                "id": 2791,
+                "value": 93650445040
+              },
               "predicted_speeds": []
             }
           ],
@@ -959,7 +1453,11 @@
               "correlated_lat": 51.041981,
               "correlated_lon": -114.007501,
               "side_of_street": "neither",
-              "bounding_circle": { "lat": 51.04199, "lon": -114.007506, "radius": 60 },
+              "bounding_circle": {
+                "lat": 51.04199,
+                "lon": -114.007506,
+                "radius": 60
+              },
               "linear_reference": "K67tnSRL00EeAf/JAF0BToA=",
               "percent_along": 0.50149,
               "distance": 0,
@@ -981,7 +1479,12 @@
                 "speed_limit": 100
               },
               "edge": {
-                "end_node": { "level": 0, "tile_id": 3166, "id": 1283, "value": 43050361584 },
+                "end_node": {
+                  "level": 0,
+                  "tile_id": 3166,
+                  "id": 1283,
+                  "value": 43050361584
+                },
                 "speeds": {
                   "default": 85,
                   "type": "classified",
@@ -1066,7 +1569,142 @@
                   "internal": false
                 }
               },
-              "edge_id": { "level": 0, "tile_id": 3166, "id": 2790, "value": 93616890608 },
+              "edge_id": {
+                "level": 0,
+                "tile_id": 3166,
+                "id": 2790,
+                "value": 93616890608
+              },
+              "predicted_speeds": []
+            },
+            {
+              "access_restrictions": [],
+              "live_speed": {},
+              "correlated_lat": 51.041981,
+              "correlated_lon": -114.007501,
+              "side_of_street": "neither",
+              "bounding_circle": {
+                "lat": 0,
+                "lon": 0,
+                "radius": 0
+              },
+              "linear_reference": "K67thCRL/kEOAQA0/6UBXn8=",
+              "percent_along": 0.4985,
+              "distance": 0,
+              "shoulder": false,
+              "heading": 160.5,
+              "outbound_reach": 50,
+              "inbound_reach": 50,
+              "edge_info": {
+                "way_id": 551687614,
+                "bike_network": {
+                  "national": false,
+                  "regional": false,
+                  "local": false,
+                  "mountain": false
+                },
+                "names": ["2", "Deerfoot Trail SE"],
+                "shape": "wmij`BllmmxEqVzJ{WxNgHnD",
+                "mean_elevation": null,
+                "speed_limit": 100
+              },
+              "edge": {
+                "end_node": {
+                  "level": 0,
+                  "tile_id": 3166,
+                  "id": 1282,
+                  "value": 43016807152
+                },
+                "speeds": {
+                  "default": 85,
+                  "type": "classified",
+                  "free_flow": 0,
+                  "constrained_flow": 0,
+                  "predicted": false
+                },
+                "access_restriction": false,
+                "start_restriction": {
+                  "bicycle": false,
+                  "bus": false,
+                  "car": false,
+                  "emergency": false,
+                  "HOV": false,
+                  "pedestrian": false,
+                  "taxi": false,
+                  "truck": false,
+                  "wheelchair": false,
+                  "moped": false,
+                  "motorcycle": false
+                },
+                "end_restriction": {
+                  "bicycle": false,
+                  "bus": false,
+                  "car": false,
+                  "emergency": false,
+                  "HOV": false,
+                  "pedestrian": false,
+                  "taxi": false,
+                  "truck": false,
+                  "wheelchair": false,
+                  "moped": false,
+                  "motorcycle": false
+                },
+                "part_of_complex_restriction": false,
+                "has_sign": false,
+                "toll": false,
+                "destination_only": false,
+                "destination_only_hgv": false,
+                "tunnel": false,
+                "bridge": false,
+                "round_about": false,
+                "traffic_signal": false,
+                "forward": false,
+                "not_thru": false,
+                "stop_sign": false,
+                "yield_sign": false,
+                "cycle_lane": "none",
+                "bike_network": false,
+                "truck_route": false,
+                "lane_count": 4,
+                "country_crossing": false,
+                "sidewalk_left": false,
+                "sidewalk_right": false,
+                "sac_scale": "none",
+                "deadend": false,
+                "geo_attributes": {
+                  "length": 109,
+                  "weighted_grade": 0,
+                  "max_up_slope": 0,
+                  "max_down_slope": 0,
+                  "curvature": 1
+                },
+                "access": {
+                  "bicycle": false,
+                  "bus": false,
+                  "car": false,
+                  "emergency": false,
+                  "HOV": false,
+                  "pedestrian": false,
+                  "taxi": false,
+                  "truck": false,
+                  "wheelchair": false,
+                  "moped": false,
+                  "motorcycle": false
+                },
+                "classification": {
+                  "classification": "motorway",
+                  "use": "road",
+                  "surface": "paved_smooth",
+                  "link": false,
+                  "internal": false
+                }
+              },
+              "edge_id": {
+                "level": 0,
+                "tile_id": 3166,
+                "id": 2796,
+                "value": 93818217200
+              },
               "predicted_speeds": []
             }
           ],
@@ -1099,7 +1737,11 @@
               "correlated_lat": 51.042882,
               "correlated_lon": -114.008192,
               "side_of_street": "neither",
-              "bounding_circle": { "lat": 51.045349, "lon": -114.012552, "radius": 500 },
+              "bounding_circle": {
+                "lat": 51.045349,
+                "lon": -114.012552,
+                "radius": 500
+              },
               "linear_reference": "K67thCRL/kEdEPxFAkYBTQ8=",
               "percent_along": 0.0602,
               "distance": 0,
@@ -1121,7 +1763,12 @@
                 "speed_limit": 100
               },
               "edge": {
-                "end_node": { "level": 0, "tile_id": 3166, "id": 1420, "value": 47647318768 },
+                "end_node": {
+                  "level": 0,
+                  "tile_id": 3166,
+                  "id": 1420,
+                  "value": 47647318768
+                },
                 "speeds": {
                   "default": 85,
                   "type": "classified",
@@ -1206,7 +1853,142 @@
                   "internal": false
                 }
               },
-              "edge_id": { "level": 0, "tile_id": 3166, "id": 2794, "value": 93751108336 },
+              "edge_id": {
+                "level": 0,
+                "tile_id": 3166,
+                "id": 2794,
+                "value": 93751108336
+              },
+              "predicted_speeds": []
+            },
+            {
+              "access_restrictions": [],
+              "live_speed": {},
+              "correlated_lat": 51.042882,
+              "correlated_lon": -114.008192,
+              "side_of_street": "neither",
+              "bounding_circle": {
+                "lat": 0,
+                "lon": 0,
+                "radius": 0
+              },
+              "linear_reference": "K67rxyRNDUENEAO6/bwBXfA=",
+              "percent_along": 0.93979,
+              "distance": 0,
+              "shoulder": false,
+              "heading": 150,
+              "outbound_reach": 50,
+              "inbound_reach": 50,
+              "edge_info": {
+                "way_id": 456557873,
+                "bike_network": {
+                  "national": false,
+                  "regional": false,
+                  "local": false,
+                  "mountain": false
+                },
+                "names": ["2", "Deerfoot Trail SE"],
+                "shape": "mgkj`BrmnmxEqd@la@sIhJqFdHgMtQeIrMwExIkHvOgFnLoIxTsJ~WyEfNuInYmItXcKj\\eJnZ}FrReQzi@cGtRkLn`@qGpQiCxHsGnPgFdMqHjOsEfI_GhKqGlJyGvIwDnEkEbFoFzFqEhE}GvF}ErD{KlH{KrG",
+                "mean_elevation": null,
+                "speed_limit": 100
+              },
+              "edge": {
+                "end_node": {
+                  "level": 0,
+                  "tile_id": 3166,
+                  "id": 1283,
+                  "value": 43050361584
+                },
+                "speeds": {
+                  "default": 85,
+                  "type": "classified",
+                  "free_flow": 0,
+                  "constrained_flow": 0,
+                  "predicted": false
+                },
+                "access_restriction": false,
+                "start_restriction": {
+                  "bicycle": false,
+                  "bus": false,
+                  "car": false,
+                  "emergency": false,
+                  "HOV": false,
+                  "pedestrian": false,
+                  "taxi": false,
+                  "truck": false,
+                  "wheelchair": false,
+                  "moped": false,
+                  "motorcycle": false
+                },
+                "end_restriction": {
+                  "bicycle": false,
+                  "bus": false,
+                  "car": false,
+                  "emergency": false,
+                  "HOV": false,
+                  "pedestrian": false,
+                  "taxi": false,
+                  "truck": false,
+                  "wheelchair": false,
+                  "moped": false,
+                  "motorcycle": false
+                },
+                "part_of_complex_restriction": false,
+                "has_sign": false,
+                "toll": false,
+                "destination_only": false,
+                "destination_only_hgv": false,
+                "tunnel": false,
+                "bridge": false,
+                "round_about": false,
+                "traffic_signal": false,
+                "forward": false,
+                "not_thru": false,
+                "stop_sign": false,
+                "yield_sign": false,
+                "cycle_lane": "none",
+                "bike_network": false,
+                "truck_route": false,
+                "lane_count": 3,
+                "country_crossing": false,
+                "sidewalk_left": false,
+                "sidewalk_right": false,
+                "sac_scale": "none",
+                "deadend": false,
+                "geo_attributes": {
+                  "length": 947,
+                  "weighted_grade": 0,
+                  "max_up_slope": 0,
+                  "max_down_slope": 0,
+                  "curvature": 2
+                },
+                "access": {
+                  "bicycle": false,
+                  "bus": false,
+                  "car": false,
+                  "emergency": false,
+                  "HOV": false,
+                  "pedestrian": false,
+                  "taxi": false,
+                  "truck": false,
+                  "wheelchair": false,
+                  "moped": false,
+                  "motorcycle": false
+                },
+                "classification": {
+                  "classification": "motorway",
+                  "use": "road",
+                  "surface": "paved_smooth",
+                  "link": false,
+                  "internal": false
+                }
+              },
+              "edge_id": {
+                "level": 0,
+                "tile_id": 3166,
+                "id": 3125,
+                "value": 104857625328
+              },
               "predicted_speeds": []
             }
           ],

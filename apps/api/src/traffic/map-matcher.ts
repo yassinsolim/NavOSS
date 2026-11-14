@@ -29,10 +29,15 @@ const EDGE_ATTRIBUTES = [
   'edge.way_id',
 ];
 
+/** A Valhalla GraphId value: tile, level and index packed in 46 bits. */
+const GraphIdValueSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+
 const ValhallaEdgeSchema = z.object({
   begin_shape_index: z.number().int().nonnegative(),
   end_shape_index: z.number().int().nonnegative(),
   forward: z.boolean(),
+  /** The directed edge's GraphId (`edge.id`), requested only when map matching a batch. */
+  id: GraphIdValueSchema.optional(),
   length: z.number().nonnegative(),
   road_class: z.string(),
   source_percent_along: z.number().min(0).max(1).optional(),
@@ -44,9 +49,10 @@ const ValhallaEdgeSchema = z.object({
 });
 
 /**
- * The part of a verbose `/locate` answer the access check reads. `trace_attributes` in Valhalla
- * 3.8.2 does not return these flags (checked against a real instance), but `/locate` reports them
- * for the graph edges at a point.
+ * The part of a verbose `/locate` answer the access check and the node identities read.
+ * `trace_attributes` in Valhalla 3.8.2 does not return these flags or node ids (checked against a
+ * real instance: its `edge.end_node` is the elapsed time and type of the node, not its id), but
+ * `/locate` reports them for the graph edges at a point.
  */
 const ValhallaLocateSchema = z.array(
   z.object({
@@ -59,9 +65,15 @@ const ValhallaLocateSchema = z.array(
             access: z.object({ car: z.boolean() }),
             deadend: z.boolean(),
             destination_only: z.boolean(),
+            /** The GraphId of the node the directed edge ends at. */
+            end_node: z.object({ value: GraphIdValueSchema }).optional(),
             forward: z.boolean(),
             not_thru: z.boolean(),
           }),
+          /** The directed edge's GraphId. */
+          edge_id: z.object({ value: GraphIdValueSchema }).optional(),
+          /** Where along the directed edge the point lies, as a share of its length. */
+          percent_along: z.number().min(0).max(1).optional(),
           edge_info: z.object({
             /** The whole edge's shape (polyline6) in the way's direction. */
             shape: z.string().min(1).optional(),
@@ -73,6 +85,8 @@ const ValhallaLocateSchema = z.array(
       .optional(),
   }),
 );
+
+type LocatedEdge = NonNullable<z.infer<typeof ValhallaLocateSchema>[number]['edges']>[number];
 
 const ValhallaTraceSchema = z.object({
   edges: z.array(ValhallaEdgeSchema).min(1),
@@ -100,10 +114,20 @@ export interface MatchedEdge {
   forward: boolean;
   /** Share of the full edge where the match enters it; 0 unless this is the first matched edge. */
   fromFraction: number;
+  /** The directed edge's GraphId, when the trace reported it. */
+  graphId?: number;
   /** Length of the matched part of the edge, which is the whole edge except at the two ends. */
   lengthMeters: number;
   /** Road geometry of the matched part of the edge. This is map data, never uploaded positions. */
   line: Position[];
+  /**
+   * GraphIds of the nodes the directed edge begins and ends at, set by `matchTrace` for an edge
+   * it screens when the graph confirms both: the end node is the edge's own, and the begin node is
+   * the end node of its opposing edge (the same way, the other direction, the same shape), as
+   * Valhalla defines it. Unset when either is not confirmed: nothing then treats the edge as
+   * connected to another.
+   */
+  nodes?: { begin: number; end: number };
   /**
    * Set by `matchTrace` for an aggregated edge whose full length is at least
    * `MIN_PUBLISHED_EDGE_METERS`, whole or partly matched: true only when the graph confirms the
@@ -184,6 +208,7 @@ function normalizeEdges(
       endShapeIndex: edge.end_shape_index,
       forward: edge.forward,
       fromFraction,
+      ...(edge.id === undefined ? {} : { graphId: edge.id }),
       lengthMeters: edge.length * 1_000,
       line,
       roadClass: edge.road_class,
@@ -269,6 +294,38 @@ function containsPart(whole: readonly Position[], part: MatchedEdge): boolean {
   return Math.abs(wholeMeters - expectedMeters) <= Math.max(5, expectedMeters * 0.05);
 }
 
+/**
+ * The begin and end node GraphIds of `edge`, from the `/locate` candidates of its way at one
+ * point: the candidate that is the edge itself (by GraphId) gives the end node, and the one
+ * opposing edge (the other direction, the same shape, the complementary share along) gives the
+ * begin node. Undefined unless exactly one of each is found and both carry their node.
+ */
+function graphNodes(
+  edge: MatchedEdge,
+  sameWay: readonly LocatedEdge[],
+): { begin: number; end: number } | undefined {
+  if (edge.graphId === undefined) return undefined;
+  const own = sameWay.filter((candidate) => candidate.edge_id?.value === edge.graphId);
+  const self = own.length === 1 ? own[0] : undefined;
+  if (self?.edge.forward !== edge.forward) return undefined;
+  const opposing = sameWay.filter(
+    (candidate) =>
+      candidate.edge_id !== undefined &&
+      candidate.edge_id.value !== edge.graphId &&
+      candidate.edge.forward !== self.edge.forward &&
+      candidate.edge_info.shape !== undefined &&
+      candidate.edge_info.shape === self.edge_info.shape &&
+      candidate.percent_along !== undefined &&
+      self.percent_along !== undefined &&
+      Math.abs(candidate.percent_along + self.percent_along - 1) <= 0.01,
+  );
+  const other = opposing[0];
+  const end = self.edge.end_node?.value;
+  const begin = other?.edge.end_node?.value;
+  if (opposing.length !== 1 || begin === undefined || end === undefined) return undefined;
+  return { begin, end };
+}
+
 /** The point halfway along a line by distance. */
 function midpoint(line: readonly Position[]): Position {
   const distances = cumulativeMeters(line);
@@ -351,6 +408,10 @@ export function createValhallaMapMatcher(options: ValhallaMapMatcherOptions): Ma
       locateEndpoint,
       {
         costing: 'auto',
+        // Opposing edges of one-way roads are listed too, so that each edge's begin node (its
+        // opposing edge's end node) can be read. They are not open to cars in that direction, so
+        // the access check below never counts them.
+        costing_options: { auto: { ignore_oneways: true } },
         locations: candidates.map((edge) => {
           const [longitude, latitude] = midpoint(edge.line);
           return { lat: latitude, lon: longitude };
@@ -363,6 +424,8 @@ export function createValhallaMapMatcher(options: ValhallaMapMatcherOptions): Ma
       const sameWay = (located?.[index]?.edges ?? []).filter(
         (candidate) => candidate.edge_info.way_id === edge.wayId,
       );
+      const nodes = graphNodes(edge, sameWay);
+      if (nodes !== undefined) edge.nodes = nodes;
       const driven = sameWay.filter((candidate) => candidate.edge.forward === edge.forward);
       const open =
         driven.length > 0 &&
@@ -414,6 +477,7 @@ export function createValhallaMapMatcher(options: ValhallaMapMatcherOptions): Ma
           action: 'include',
           attributes: [
             ...EDGE_ATTRIBUTES,
+            'edge.id',
             'matched.begin_route_discontinuity',
             'matched.distance_along_edge',
             'matched.distance_from_trace_point',

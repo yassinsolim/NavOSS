@@ -44,6 +44,11 @@ export interface SegmentObservation {
   line: Position[];
   /** Each step the batch moved along the edge, in order. */
   moves: EdgeMove[];
+  /**
+   * GraphIds of the nodes the edge begins and ends at, when the graph confirmed both (see
+   * `MatchedEdge.nodes`): what tells that one edge leads onto another.
+   */
+  nodes?: { begin: number; end: number };
   roadClass: string;
   segmentKey: string;
   /** Each span of standing still on the edge, in order: time in a queue is the signal. */
@@ -217,6 +222,7 @@ export function deriveObservations(
       lengthMeters: full,
       line: whole.line,
       moves: driven.moves,
+      ...(edge.nodes === undefined ? {} : { nodes: edge.nodes }),
       roadClass: edge.roadClass,
       segmentKey: whole.segmentKey,
       stops: driven.stops,
