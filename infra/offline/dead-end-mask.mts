@@ -4,7 +4,7 @@
  *
  *   node --import tsx infra/offline/dead-end-mask.mts \
  *     --inputs artifacts/offline/inputs/261111 \
- *     --graph artifacts/offline/graphs/<key> \
+ *     --graph artifacts/serving-graph/<graph id> \
  *     --output artifacts/dead-end-mask [--keep-topology]
  *
  * The algorithm and the main-network rule are described in
@@ -12,6 +12,7 @@
  */
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -21,11 +22,14 @@ import { parseArgs, promisify } from 'node:util';
 import {
   DEAD_END_MASK_FORMAT,
   DEAD_END_MASK_FORMAT_VERSION,
-  deadEndMaskPayloadDigest,
+  DEAD_END_MASK_POLICY_VERSION,
+  DEAD_END_MASK_ROUTING_ENGINE_VERSION,
+  deadEndMaskContentDigest,
   encodeDeltas,
   type DeadEndMaskFile,
   type DeadEndMaskWays,
 } from '../../apps/api/src/traffic/dead-end-mask.js';
+import { verifyServingGraph } from '../../apps/api/src/traffic/serving-graph.js';
 import { SERVICE_AREA_DATA } from '../../packages/contracts/src/coverage-data.js';
 import { routingEnginePin } from './engine.mjs';
 import { sha256File } from './tools.mjs';
@@ -91,7 +95,9 @@ export const DEFAULT_TERMINAL_CLASSES: readonly RoadClassName[] = [
 
 export const TERMINAL_METERS = 400;
 export const CORE_RULE =
-  'largest-two-way-biconnected-block: the largest set of junctions (by road length) joined pairwise by two vertex-disjoint routes of two-way roads';
+  'largest-two-way-biconnected-block-v2: the largest block (by road length) of at least two distinct physical roads, whose junctions are joined pairwise by two vertex-disjoint routes of two-way roads; bridges never qualify, and no qualifying block fails the build';
+/** `POLICY_VERSION` of `dead-end-extract.py` this analysis reads. */
+export const EXTRACT_POLICY_VERSION = DEAD_END_MASK_POLICY_VERSION;
 
 export const FORWARD = 1;
 export const BACKWARD = 2;
@@ -112,6 +118,8 @@ export interface Topology {
   segVEnd: Uint32Array;
   segLength: Float64Array;
   segDir: Uint8Array;
+  /** Representative segment of the same physical stretch (itself for the representative). */
+  segPhys: Uint32Array;
   runWay: Float64Array;
   runBase: Uint32Array;
   runClass: Uint8Array;
@@ -158,7 +166,8 @@ export interface Analysis {
     unreachableNodes: number;
     trueTerminals: number;
     clippedNodes: number;
-    chokeWalkSteps: number;
+    /** Segment-tree cells touched by the choke search (at most n (3⌈log₂ s⌉ + 1), s ≥ n). */
+    chokeOperations: number;
   };
 }
 
@@ -357,6 +366,132 @@ class Heap {
 }
 
 /**
+ * For every node `v`, the outermost (closest to `root`) proper ancestor of `v` in the exit
+ * dominator tree, other than `root`, that is also an ancestor of `v` in the entry dominator tree;
+ * -1 when there is none. That node lies on every route from the root to `v` and on every route
+ * from `v` back to it.
+ *
+ * One iterative depth-first walk of the exit tree keeps its active path in a segment tree over
+ * the entry tree's preorder: entering node `c` marks the cells covering `c`'s entry subtree
+ * interval, leaving it rolls those marks back. Because every node entered later is deeper, a
+ * cell already marked keeps the shallower mark, so a cell is set at most once while active, the
+ * rollback stack never holds more than the tree's 2s cells (s = the next power of two ≥ n), and
+ * a point query for `v`'s preorder position is the shallowest marked cell on its leaf-to-root
+ * path. Each node costs at most 2⌈log₂ s⌉ cells to mark and ⌈log₂ s⌉ + 1 to query, so the walk
+ * is O(n log n) time and O(n) memory, with no recursion and no per-node allocation.
+ */
+export function outermostCommonDominators(
+  count: number,
+  root: number,
+  entry: Int32Array,
+  exit: Int32Array,
+): { choke: Int32Array; operations: number } {
+  // Entry-tree preorder: `first[v]` is v's position, `last[v]` the last position in its subtree.
+  const entryChildren = csr(count, count, (add) => {
+    for (let node = 0; node < count; node += 1) {
+      const dominator = entry[node] ?? -1;
+      if (dominator !== -1 && node !== root) add(dominator, node);
+    }
+  });
+  const first = new Int32Array(count).fill(-1);
+  const last = new Int32Array(count).fill(-1);
+  const position = new Int32Array(count);
+  const stack = new Int32Array(count);
+  let clock = 0;
+  let depth = 0;
+  first[root] = clock++;
+  position[root] = entryChildren.start[root] ?? 0;
+  stack[depth++] = root;
+  while (depth > 0) {
+    const node = stack[depth - 1] ?? 0;
+    const at = position[node] ?? 0;
+    if (at < (entryChildren.start[node + 1] ?? 0)) {
+      position[node] = at + 1;
+      const child = entryChildren.list[at] ?? 0;
+      first[child] = clock++;
+      position[child] = entryChildren.start[child] ?? 0;
+      stack[depth++] = child;
+    } else {
+      last[node] = clock - 1;
+      depth -= 1;
+    }
+  }
+
+  let size = 1;
+  while (size < clock) size *= 2;
+  const cell = new Int32Array(2 * size).fill(-1);
+  const undo = new Int32Array(2 * size);
+  let undoDepth = 0;
+  const mark = new Int32Array(count);
+  const exitDepth = new Int32Array(count);
+  const choke = new Int32Array(count).fill(-1);
+  let operations = 0;
+
+  const exitChildren = csr(count, count, (add) => {
+    for (let node = 0; node < count; node += 1) {
+      const dominator = exit[node] ?? -1;
+      if (dominator !== -1 && node !== root) add(dominator, node);
+    }
+  });
+  position[root] = exitChildren.start[root] ?? 0;
+  depth = 0;
+  stack[depth++] = root;
+  while (depth > 0) {
+    const node = stack[depth - 1] ?? 0;
+    const at = position[node] ?? 0;
+    if (at < (exitChildren.start[node + 1] ?? 0)) {
+      position[node] = at + 1;
+      const child = exitChildren.list[at] ?? 0;
+      exitDepth[child] = (exitDepth[node] ?? 0) + 1;
+      position[child] = exitChildren.start[child] ?? 0;
+      stack[depth++] = child;
+      mark[child] = undoDepth;
+      const point = first[child] ?? -1;
+      if (point === -1) continue; // not reachable from the core: no entry dominators
+      // Query the proper ancestors first (the child itself is not marked yet).
+      let best = -1;
+      for (let index = point + size; index >= 1; index >>= 1) {
+        operations += 1;
+        const marked = cell[index] ?? -1;
+        if (marked !== -1 && (best === -1 || (exitDepth[marked] ?? 0) < (exitDepth[best] ?? 0)))
+          best = marked;
+      }
+      choke[child] = best;
+      // Mark the child's entry subtree for its exit-tree descendants.
+      let left = point + size;
+      let right = (last[child] ?? point) + size + 1;
+      while (left < right) {
+        if ((left & 1) === 1) {
+          operations += 1;
+          if (cell[left] === -1) {
+            cell[left] = child;
+            undo[undoDepth++] = left;
+          }
+          left += 1;
+        }
+        if ((right & 1) === 1) {
+          right -= 1;
+          operations += 1;
+          if (cell[right] === -1) {
+            cell[right] = child;
+            undo[undoDepth++] = right;
+          }
+        }
+        left >>= 1;
+        right >>= 1;
+      }
+    } else {
+      if (node !== root) {
+        const height = mark[node] ?? 0;
+        while (undoDepth > height) cell[undo[--undoDepth] ?? 0] = -1;
+      }
+      depth -= 1;
+    }
+  }
+  return { choke, operations };
+}
+
+/**
  * Classifies every node of the road topology:
  *
  * 1. **Main network (core).** The largest biconnected block (by road length) of the undirected
@@ -379,10 +514,16 @@ class Heap {
 export function analyzeTopology(topology: Topology, options: AnalysisOptions): Analysis {
   const nodes = topology.nodeCount;
   const segments = topology.segFrom.length;
-  const { segFrom, segTo, segDir, segLength, segRun, runClass, nodeFlags, nodeLonLat } = topology;
+  const { segFrom, segTo, segDir, segLength, segRun, segPhys, runClass, nodeFlags, nodeLonLat } =
+    topology;
+  // One physical stretch is one road: copies (a way drawn A → P → A, overlapping ways) carry
+  // the stretch's merged directions and are left out of the graph, so they add no parallel road
+  // and no length.
+  const representative = (segment: number) => (segPhys[segment] ?? segment) === segment;
 
   const undirected = csr(nodes, segments * 2, (add) => {
     for (let segment = 0; segment < segments; segment += 1) {
+      if (!representative(segment)) continue;
       add(segFrom[segment] ?? 0, segment);
       add(segTo[segment] ?? 0, segment);
     }
@@ -410,7 +551,10 @@ export function analyzeTopology(topology: Topology, options: AnalysisOptions): A
     }
   }
 
-  // 1. Core: biconnected blocks of the two-way subgraph (iterative Hopcroft–Tarjan).
+  // 1. Core: biconnected blocks of the two-way subgraph (iterative Hopcroft–Tarjan). Only a
+  // block of at least two roads contains a cycle (copies of one stretch are already collapsed,
+  // so two roads between the same junctions are two distinct roads); a single-road block is a
+  // bridge and never the core.
   const isTwoWay = (segment: number) =>
     segDir[segment] === BOTH && segFrom[segment] !== segTo[segment];
   const discovery = new Int32Array(nodes).fill(-1);
@@ -421,6 +565,7 @@ export function analyzeTopology(topology: Topology, options: AnalysisOptions): A
   const edgeStack = new Int32Array(segments);
   const blockOf = new Int32Array(segments).fill(-1);
   const blockMeters: number[] = [];
+  const blockRoads: number[] = [];
   let time = 0;
   let edgeDepth = 0;
   for (let rootNode = 0; rootNode < nodes; rootNode += 1) {
@@ -456,13 +601,16 @@ export function analyzeTopology(topology: Topology, options: AnalysisOptions): A
         if ((low[node] ?? 0) >= (discovery[above] ?? 0)) {
           const block = blockMeters.length;
           let meters = 0;
+          let roads = 0;
           let popped: number;
           do {
             popped = edgeStack[--edgeDepth] ?? 0;
             blockOf[popped] = block;
             meters += segLength[popped] ?? 0;
+            roads += 1;
           } while (popped !== segment);
           blockMeters.push(meters);
+          blockRoads.push(roads);
         }
       }
     }
@@ -471,6 +619,7 @@ export function analyzeTopology(topology: Topology, options: AnalysisOptions): A
   let coreMeters = 0;
   let secondBlockMeters = 0;
   for (const [block, meters] of blockMeters.entries()) {
+    if ((blockRoads[block] ?? 0) < 2) continue;
     if (meters > coreMeters) {
       secondBlockMeters = coreMeters;
       coreMeters = meters;
@@ -494,7 +643,7 @@ export function analyzeTopology(topology: Topology, options: AnalysisOptions): A
   const arcs = (reverse: boolean) => {
     let count = 0;
     for (let segment = 0; segment < segments; segment += 1) {
-      if (segFrom[segment] === segTo[segment]) continue;
+      if (segFrom[segment] === segTo[segment] || !representative(segment)) continue;
       if (((segDir[segment] ?? 0) & FORWARD) !== 0) count += 1;
       if (((segDir[segment] ?? 0) & BACKWARD) !== 0) count += 1;
     }
@@ -503,7 +652,7 @@ export function analyzeTopology(topology: Topology, options: AnalysisOptions): A
       for (let segment = 0; segment < segments; segment += 1) {
         const from = segFrom[segment] ?? 0;
         const to = segTo[segment] ?? 0;
-        if (from === to) continue;
+        if (from === to || !representative(segment)) continue;
         const direction = segDir[segment] ?? 0;
         if ((direction & FORWARD) !== 0) reverse ? visit(to, from) : visit(from, to);
         if ((direction & BACKWARD) !== 0) reverse ? visit(from, to) : visit(to, from);
@@ -527,69 +676,22 @@ export function analyzeTopology(topology: Topology, options: AnalysisOptions): A
   const leaving = arcs(true);
   const exit = dominators(nodes + 1, root, leaving.succ, leaving.pred);
 
-  // Preorder intervals of the entry dominator tree, to test "x dominates v" in O(1).
-  const children = csr(nodes + 1, nodes, (add) => {
-    for (let node = 0; node < nodes; node += 1) {
-      const dominator = entry[node] ?? -1;
-      if (dominator !== -1) add(dominator, node);
-    }
-  });
-  const enter = new Int32Array(nodes + 1).fill(-1);
-  const leave = new Int32Array(nodes + 1).fill(-1);
-  {
-    let clock = 0;
-    let depth = 0;
-    const position = new Int32Array(nodes + 1);
-    const stack = new Int32Array(nodes + 1);
-    enter[root] = clock++;
-    position[root] = children.start[root] ?? 0;
-    stack[depth++] = root;
-    while (depth > 0) {
-      const node = stack[depth - 1] ?? 0;
-      const at = position[node] ?? 0;
-      if (at < (children.start[node + 1] ?? 0)) {
-        position[node] = at + 1;
-        const child = children.list[at] ?? 0;
-        enter[child] = clock++;
-        position[child] = children.start[child] ?? 0;
-        stack[depth++] = child;
-      } else {
-        leave[node] = clock++;
-        depth -= 1;
-      }
-    }
-  }
-
-  const choke = new Int32Array(nodes).fill(-1);
+  const { choke: chokeOf, operations: chokeOperations } = outermostCommonDominators(
+    nodes + 1,
+    root,
+    entry,
+    exit,
+  );
+  const choke = chokeOf.subarray(0, nodes);
   const unreachable = new Uint8Array(nodes);
   let pocketNodes = 0;
   let unreachableNodes = 0;
-  let chokeWalkSteps = 0;
   for (let node = 0; node < nodes; node += 1) {
     if (entry[node] === -1 || exit[node] === -1) {
       unreachable[node] = 1;
       unreachableNodes += 1;
-      continue;
-    }
-    let best = -1;
-    for (
-      let candidate = exit[node] ?? root;
-      candidate !== root;
-      candidate = exit[candidate] ?? root
-    ) {
-      chokeWalkSteps += 1;
-      if (
-        (enter[candidate] ?? -1) !== -1 &&
-        (enter[candidate] ?? 0) <= (enter[node] ?? 0) &&
-        (leave[node] ?? 0) <= (leave[candidate] ?? 0)
-      ) {
-        best = candidate;
-      }
-    }
-    if (best !== -1) {
-      choke[node] = best;
-      pocketNodes += 1;
-    }
+      choke[node] = -1;
+    } else if (choke[node] !== -1) pocketNodes += 1;
   }
 
   // 3/4. Regions: pocket branches (same outermost choke, joined without passing it) and
@@ -657,7 +759,7 @@ export function analyzeTopology(topology: Topology, options: AnalysisOptions): A
     nodeStatus,
     stats: {
       blocks: blockMeters.length,
-      chokeWalkSteps,
+      chokeOperations,
       clippedNodes,
       coreMeters,
       coreNodes,
@@ -894,6 +996,7 @@ const ARRAY_TYPES = {
   run_vertices: Uint32Array,
   run_way: BigInt64Array,
   seg_dir: Uint8Array,
+  seg_phys: Uint32Array,
   seg_from: Uint32Array,
   seg_len: Float64Array,
   seg_run: Uint32Array,
@@ -911,6 +1014,9 @@ export async function readTopology(
     nodes: number;
     policyVersion: number;
   };
+  if (header.policyVersion !== EXTRACT_POLICY_VERSION) {
+    throw new Error(`Topology policy version ${String(header.policyVersion)} is not supported`);
+  }
   const arrays: Record<string, unknown> = {};
   for (const [name, Type] of Object.entries(ARRAY_TYPES)) {
     const bytes = await readFile(join(directory, `${name}.bin`));
@@ -938,6 +1044,7 @@ export async function readTopology(
     runVertices: arrays.run_vertices as Uint32Array,
     runWay: toNumbers(arrays.run_way as BigInt64Array),
     segDir: arrays.seg_dir as Uint8Array,
+    segPhys: arrays.seg_phys as Uint32Array,
     segFrom: arrays.seg_from as Uint32Array,
     segLength: arrays.seg_len as Float64Array,
     segRun: arrays.seg_run as Uint32Array,
@@ -978,7 +1085,7 @@ export function createMask(
   const classNames = Object.fromEntries(
     Object.entries(ROAD_CLASS).map(([name, code]) => [code, name]),
   ) as Record<number, string>;
-  const mask: DeadEndMaskFile = {
+  const content: Omit<DeadEndMaskFile, 'contentSha256'> = {
     format: DEAD_END_MASK_FORMAT,
     formatVersion: DEAD_END_MASK_FORMAT_VERSION,
     graph: identity.graph,
@@ -1009,8 +1116,8 @@ export function createMask(
       ways: intervals.size + topology.droppedWay.length,
     },
     ways,
-    payloadSha256: deadEndMaskPayloadDigest(ways),
   };
+  const mask: DeadEndMaskFile = { ...content, contentSha256: deadEndMaskContentDigest(content) };
   return { analysis, intervals, mask };
 }
 
@@ -1043,7 +1150,7 @@ async function builderImage(scripts: string): Promise<string> {
 }
 
 /** Verifies the dated input the same way the offline pipeline does, and returns its identity. */
-async function verifiedInputs(inputs: string) {
+export async function verifiedInputs(inputs: string) {
   const sums = await readFile(join(inputs, 'SHA256SUMS'), 'utf8');
   const data = JSON.parse(await readFile(join(inputs, 'data.json'), 'utf8')) as {
     dataDate: string;
@@ -1065,20 +1172,23 @@ async function verifiedInputs(inputs: string) {
   return { data, name, sha256 };
 }
 
-async function verifiedGraph(graphDirectory: string) {
-  const graph = JSON.parse(await readFile(join(graphDirectory, 'graph.json'), 'utf8')) as {
-    dataDate: string;
+/**
+ * The serving graph directory (`serving-graph.mts`), verified exactly as the API verifies it at
+ * start-up, with Valhalla seeing it at `/graph`: archive hash, serving configuration and the
+ * provenance record naming the extract.
+ */
+function verifiedGraph(graphDirectory: string) {
+  const graph = JSON.parse(readFileSync(join(graphDirectory, 'graph.json'), 'utf8')) as {
     graphId: string;
-    valhallaVersion?: string;
-    routingEngineVersion?: string;
   };
-  if (!/^[0-9a-f]{64}$/.test(graph.graphId)) throw new Error('graph.json has no graph id');
-  if ((await sha256File(join(graphDirectory, 'connected.tar'))) !== graph.graphId) {
-    throw new Error('connected.tar does not match the graph id in graph.json');
-  }
-  const routingEngineVersion = graph.routingEngineVersion ?? graph.valhallaVersion;
-  if (!routingEngineVersion) throw new Error('graph.json has no routing engine version');
-  return { dataDate: graph.dataDate, graphId: graph.graphId, routingEngineVersion };
+  const served = verifyServingGraph(graphDirectory, String(graph.graphId), '/graph');
+  return {
+    dataDate: served.dataDate,
+    graphId: served.graphId,
+    pbfSha256: served.pbfSha256,
+    provenanceSha256: served.provenanceSha256,
+    routingEngineVersion: DEAD_END_MASK_ROUTING_ENGINE_VERSION,
+  };
 }
 
 export async function buildDeadEndMask(args: string[]) {
@@ -1107,9 +1217,9 @@ export async function buildDeadEndMask(args: string[]) {
   };
   let since = performance.now();
   const input = await verifiedInputs(inputs);
-  const graph = await verifiedGraph(resolve(values.graph));
-  if (graph.dataDate !== input.data.dataDate)
-    throw new Error('The graph is from another extract date');
+  const graph = verifiedGraph(resolve(values.graph));
+  if (graph.dataDate !== input.data.dataDate || graph.pbfSha256 !== input.sha256)
+    throw new Error('The serving graph was built from another extract');
   lap('verifyInputs', since);
 
   await mkdir(join(output, '.work'), { recursive: true });
@@ -1121,7 +1231,7 @@ export async function buildDeadEndMask(args: string[]) {
     const extractScript = [
       'set -euo pipefail',
       `osmium tags-filter --no-progress -o /work/roads.osm.pbf /inputs/${input.name} w/highway w/route=ferry`,
-      'osmium tags-filter --no-progress -R -o /work/barriers.osm.pbf /work/roads.osm.pbf n/barrier',
+      'osmium tags-filter --no-progress -R -o /work/barriers.osm.pbf /work/roads.osm.pbf n/barrier n/impassable=yes n/smoothness=impassable',
       'python3 /scripts/dead-end-extract.py --roads /work/roads.osm.pbf --barriers /work/barriers.osm.pbf --output /work/topology',
     ].join('\n');
     await exec(
@@ -1159,15 +1269,23 @@ export async function buildDeadEndMask(args: string[]) {
     since = performance.now();
     const topology = await readTopology(join(work, 'topology'));
     const { mask } = createMask(topology, {
-      graph,
+      graph: {
+        dataDate: graph.dataDate,
+        graphId: graph.graphId,
+        provenanceSha256: graph.provenanceSha256,
+        routingEngineVersion: DEAD_END_MASK_ROUTING_ENGINE_VERSION,
+      },
       inputs: {
-        extractPolicyVersion: topology.policyVersion,
+        extractPolicyVersion: DEAD_END_MASK_POLICY_VERSION,
         osmTimestamp: input.data.osmTimestamp,
         pbf: input.name,
         pbfSha256: input.sha256,
       },
     });
     lap('analyze', since);
+    if (mask.summary.coreNodes === 0) {
+      throw new Error('No block of the road graph qualifies as the main network; no mask written');
+    }
 
     const directory = join(output, graph.graphId);
     await mkdir(directory, { recursive: true });

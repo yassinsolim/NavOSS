@@ -2,20 +2,29 @@
  * Local verification of a built dead-end mask against the real graph it is bound to.
  *
  *   node --import tsx infra/offline/verify/dead-end-mask.mts \
- *     --mask <dir>/dead-end-mask.json --graph-id <sha256> --valhalla http://127.0.0.1:8017/ \
+ *     --graph <serving graph directory with dead-end-mask.json> --valhalla http://127.0.0.1:8017/ \
  *     [--topology <kept extractor output>] [--output report.json]
  *
- * Needs a Valhalla 3.8.2 serving that graph on loopback. Routes come from fixed public places and
+ * The graph directory is verified as the API verifies it (archive hash, serving configuration,
+ * provenance, mask binding). Needs a Valhalla 3.8.2 serving that directory's
+ * `valhalla-serving.json` (the directory mounted at /graph) on loopback. Routed and sampled edges
+ * are a sample; the `valleyRegions` analysis covers every node of each region in the topology. Routes come from fixed public places and
  * seeded random points; nothing here is a driver's position. The report holds only lengths,
  * counts, way ids and choke-junction coordinates (map data).
  */
+import { readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import {
   loadDeadEndMask,
   type DeadEndMaskStatus,
 } from '../../../apps/api/src/traffic/dead-end-mask.js';
+import {
+  SERVING_GRAPH_FILES,
+  verifyServingGraph,
+} from '../../../apps/api/src/traffic/serving-graph.js';
 import { decodePolyline6, type Position } from '../../../apps/api/src/traffic/geo.js';
 import {
   createValhallaMapMatcher,
@@ -38,18 +47,32 @@ import {
 
 const { values } = parseArgs({
   options: {
-    'graph-id': { type: 'string' },
-    mask: { type: 'string' },
+    graph: { type: 'string' },
     output: { type: 'string' },
     topology: { type: 'string' },
     valhalla: { type: 'string', default: 'http://127.0.0.1:8017/' },
   },
 });
-if (!values.mask || !values['graph-id']) throw new Error('--mask and --graph-id are required');
+if (!values.graph) throw new Error('--graph is required');
+const graphDirectory = values.graph;
+const graphId = String(
+  (
+    JSON.parse(readFileSync(join(graphDirectory, SERVING_GRAPH_FILES.graph), 'utf8')) as {
+      graphId: unknown;
+    }
+  ).graphId,
+);
 const valhalla = values.valhalla ?? 'http://127.0.0.1:8017/';
 
 let since = performance.now();
-const mask = loadDeadEndMask(values.mask, { graphId: values['graph-id'] });
+const served = verifyServingGraph(graphDirectory, graphId, '/graph');
+const mask = loadDeadEndMask(join(graphDirectory, SERVING_GRAPH_FILES.mask), { graphId });
+if (
+  mask.identity.provenanceSha256 !== served.provenanceSha256 ||
+  mask.identity.pbfSha256 !== served.pbfSha256
+) {
+  throw new Error('The mask is not bound to this serving graph');
+}
 const loadMilliseconds = performance.now() - since;
 const matcher = createValhallaMapMatcher({
   endpoint: new URL('trace_attributes', valhalla).toString(),
@@ -60,7 +83,7 @@ const maskedMatcher = createValhallaMapMatcher({
 });
 
 type Place = [latitude: number, longitude: number];
-const PLACES: Record<string, Place> = {
+const PLACES = {
   braggCreek: [50.9475, -114.565],
   calgary: [51.0447, -114.0719],
   edmonton: [53.5461, -113.4938],
@@ -74,7 +97,7 @@ const PLACES: Record<string, Place> = {
   vancouver: [49.2827, -123.1207],
   kananaskisVillage: [51.0256, -115.0315],
   highway1At40: [51.0868, -115.0612],
-};
+} satisfies Record<string, Place>;
 
 async function route(locations: Place[]): Promise<Position[] | undefined> {
   const response = await fetch(new URL('route', valhalla), {
@@ -282,6 +305,7 @@ if (values.topology) {
   const regionMeters = new Map<number, number>();
   const regionClipped = new Map<number, boolean>();
   for (let segment = 0; segment < topology.segFrom.length; segment += 1) {
+    if (topology.segPhys[segment] !== segment) continue; // a copy of one physical stretch
     const from = topology.segFrom[segment] ?? 0;
     const to = topology.segTo[segment] ?? 0;
     const choke =

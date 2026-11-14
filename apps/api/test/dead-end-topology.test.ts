@@ -12,6 +12,7 @@ import {
   FORWARD,
   NODE_BARRIER,
   NODE_CLIPPED,
+  outermostCommonDominators,
   REASON,
   ROAD_CLASS,
   UNKNOWN,
@@ -59,6 +60,7 @@ function topologyOf(
     return found;
   };
   const segments: number[][] = [];
+  const sequences: string[] = [];
   const lengths: number[] = [];
   const coords: number[] = [];
   const runCoordOffset: number[] = [];
@@ -80,14 +82,12 @@ function topologyOf(
       const node = way.nodes[at] ?? 0;
       if (at === way.nodes.length - 1 || (uses.get(node) ?? 0) > 1 || barriers.has(node)) {
         const first = way.nodes[start] ?? 0;
-        segments.push([
-          nodeOf(first, barriers.has(first)),
-          nodeOf(node, barriers.has(node)),
-          run,
-          start,
-          at,
-          way.direction ?? BOTH,
-        ]);
+        const from = nodeOf(first, barriers.has(first));
+        const to = nodeOf(node, barriers.has(node));
+        sequences.push(
+          [`n${String(from)}`, ...way.nodes.slice(start + 1, at), `n${String(to)}`].join(','),
+        );
+        segments.push([from, to, run, start, at, way.direction ?? BOTH]);
         lengths.push(meters);
         start = at;
         meters = 0;
@@ -98,6 +98,29 @@ function topologyOf(
     const [longitude, latitude] = positions[id] ?? [0, 0];
     return [Math.round(longitude * 1e7), Math.round(latitude * 1e7)];
   });
+  // Copies of one physical stretch (the same nodes, either way round) point at the first copy
+  // and all carry the union of the copies' directions, as the extractor writes them.
+  const swap = (direction: number) => ((direction & FORWARD) << 1) | ((direction & BACKWARD) >> 1);
+  const segPhys = segments.map((_, index) => index);
+  const firstOf = new Map<string, number>();
+  for (const [index, sequence] of sequences.entries()) {
+    const reverse = sequence.split(',').reverse().join(',');
+    const known = firstOf.get(sequence) ?? firstOf.get(reverse);
+    if (known === undefined) {
+      firstOf.set(sequence, index);
+      continue;
+    }
+    segPhys[index] = known;
+    const own = segments[index]?.[5] ?? 0;
+    const target = segments[known] ?? [];
+    target[5] = (target[5] ?? 0) | (sequences[known] === sequence ? own : swap(own));
+  }
+  for (const [index, known] of segPhys.entries()) {
+    if (known === index) continue;
+    const merged = segments[known]?.[5] ?? 0;
+    const target = segments[index] ?? [];
+    target[5] = sequences[known] === sequences[index] ? merged : swap(merged);
+  }
   const column = (field: number) => segments.map((segment) => segment[field] ?? 0);
   return {
     coords: Int32Array.from(coords),
@@ -113,6 +136,7 @@ function topologyOf(
     runVertices: Uint32Array.from(ways.map((way) => way.nodes.length)),
     runWay: Float64Array.from(ways.map((way) => way.id)),
     segDir: Uint8Array.from(column(5)),
+    segPhys: Uint32Array.from(segPhys),
     segFrom: Uint32Array.from(column(0)),
     segLength: Float64Array.from(lengths),
     segRun: Uint32Array.from(column(2)),
@@ -419,11 +443,16 @@ describe('dead-end mask topology', () => {
     const { mask } = createMask(
       topology,
       {
-        graph: { dataDate: '2026-11-11', graphId: 'd'.repeat(64), routingEngineVersion: '3.8.2' },
+        graph: {
+          dataDate: '2026-11-11',
+          graphId: 'd'.repeat(64),
+          provenanceSha256: 'f'.repeat(64),
+          routingEngineVersion: '3.8.2',
+        },
         inputs: {
-          extractPolicyVersion: 1,
+          extractPolicyVersion: 2,
           osmTimestamp: '2026-11-11T21:22:47Z',
-          pbf: 'fixture.osm.pbf',
+          pbf: 'alberta-british-columbia-261111.osm.pbf',
           pbfSha256: 'e'.repeat(64),
         },
       },
@@ -451,5 +480,166 @@ describe('dead-end mask topology', () => {
     expect(outside(-130.06, 56.0)).toBe(true); // Salmon River Road beyond Hyder, Alaska
     expect(outside(-109.5, 52)).toBe(true); // Saskatchewan
     expect(outside(-129.0, 60.3)).toBe(true); // Yukon
+  });
+
+  it('never takes a bridge as the main network, and fails closed without a cycle', () => {
+    // Two 300 m triangles joined by a 1 km bridge: the largest single block by length is the
+    // bridge, which has no second route.
+    const m = 1 / 111_320 / Math.cos((51 * Math.PI) / 180); // a metre of longitude at 51°N
+    const positions: Record<number, Position> = {
+      1: [-114, 51],
+      2: [-114 + 100 * m, 51],
+      3: [-114 + 50 * m, 51 + 0.00078],
+      4: [-114 + 1100 * m, 51],
+      5: [-114 + 1200 * m, 51],
+      6: [-114 + 1150 * m, 51 + 0.00078],
+    };
+    const triangles: FixtureWay[] = [
+      { id: 1, nodes: [1, 2] },
+      { id: 2, nodes: [2, 3] },
+      { id: 3, nodes: [3, 1] },
+      { id: 4, nodes: [4, 5] },
+      { id: 5, nodes: [5, 6] },
+      { id: 6, nodes: [6, 4] },
+    ];
+    const bridge: FixtureWay = { id: 7, nodes: [2, 4] };
+    const { analysis, statusOf } = analyse(topologyOf(positions, [...triangles, bridge]));
+    expect(analysis.stats.coreMeters).toBeGreaterThan(250);
+    expect(analysis.stats.coreMeters).toBeLessThan(350);
+    expect(statusOf(7)).toEqual([EXCLUDED]);
+    // One triangle is the core; the other lies behind the bridge.
+    const eligibleTriangles = [1, 2, 3, 4, 5, 6].filter((id) => statusOf(id)[0] === ELIGIBLE);
+    expect(eligibleTriangles.length).toBe(3);
+
+    // A tree of roads has no block with two routes: nothing is the core, nothing is eligible.
+    const tree = analyse(
+      topologyOf(positions, [{ id: 1, nodes: [1, 2] }, bridge, { id: 4, nodes: [4, 5] }]),
+    );
+    expect(tree.analysis.stats.coreNodes).toBe(0);
+    for (const id of [1, 7, 4]) expect(tree.statusOf(id)).toEqual([EXCLUDED]);
+  });
+
+  it('counts a retraced road once, and keeps genuinely distinct parallel roads', () => {
+    const m = 1 / 111_320 / Math.cos((51 * Math.PI) / 180);
+    // A 300 m main-network triangle; from its corner 1, one 200 m road to P = 10 (drawn as one
+    // way 1 → P → 1, out and back over the same nodes) and a 50 m spur from P to a road end.
+    // Counted twice, the road would be a 400 m two-road block, longer than the real cycle.
+    const positions: Record<number, Position> = {
+      1: [-114, 51],
+      2: [-114 + 100 * m, 51],
+      3: [-114 + 50 * m, 51 + 0.00078],
+      10: [-114 - 200 * m, 51],
+      12: [-114 - 200 * m, 51 + 0.00045],
+    };
+    const core: FixtureWay[] = [
+      { id: 1, nodes: [1, 2] },
+      { id: 2, nodes: [2, 3] },
+      { id: 3, nodes: [3, 1] },
+    ];
+    const retraced: FixtureWay = { id: 20, nodes: [1, 10, 1], road: 'primary' };
+    const spur: FixtureWay = { id: 21, nodes: [10, 12], road: 'residential' };
+    const traced = analyse(topologyOf(positions, [...core, retraced, spur]));
+    expect(traced.analysis.stats.coreMeters).toBeLessThan(350);
+    expect(traced.statusOf(20).every((status) => status === EXCLUDED)).toBe(true);
+    expect(traced.statusOf(21)).toEqual([EXCLUDED]);
+
+    // The same stretch drawn as two one-way ways, one each way, is one two-way road: still one
+    // access, but drivable both ways (not an isolated component).
+    const pair = analyse(
+      topologyOf(positions, [
+        ...core,
+        { direction: FORWARD, id: 22, nodes: [1, 10], road: 'primary' },
+        { direction: FORWARD, id: 23, nodes: [10, 1], road: 'primary' },
+        spur,
+      ]),
+    );
+    expect(pair.reasonOf(22)).toEqual([REASON.pocket]);
+    expect(pair.reasonOf(23)).toEqual([REASON.pocket]);
+
+    // Two different roads between 1 and 10 (the second through 12): a real cycle with a second
+    // route, and the longest one, so it is the network.
+    const distinct = analyse(
+      topologyOf(positions, [
+        ...core,
+        { id: 24, nodes: [1, 10], road: 'primary' },
+        { id: 25, nodes: [10, 12, 1], road: 'primary' },
+      ]),
+    );
+    expect(distinct.statusOf(24).every((status) => status === ELIGIBLE)).toBe(true);
+    expect(distinct.statusOf(25).every((status) => status === ELIGIBLE)).toBe(true);
+  });
+
+  it('finds the outermost common dominator exactly as the ancestor walk does', () => {
+    // Oracle: walk every exit-tree ancestor and keep the outermost one that dominates in the
+    // entry tree (checked by walking the entry tree, independent of preorder intervals).
+    let seed = 11;
+    const next = () => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return seed / 2_147_483_648;
+    };
+    const csrOf = (count: number, pairs: [number, number][]) => {
+      const start = new Int32Array(count + 1);
+      for (const [from] of pairs) start[from + 1] = (start[from + 1] ?? 0) + 1;
+      for (let node = 0; node < count; node += 1)
+        start[node + 1] = (start[node + 1] ?? 0) + (start[node] ?? 0);
+      const cursor = start.slice(0, count);
+      const list = new Int32Array(pairs.length);
+      for (const [from, to] of pairs) {
+        list[cursor[from] ?? 0] = to;
+        cursor[from] = (cursor[from] ?? 0) + 1;
+      }
+      return { list, start };
+    };
+    let pockets = 0;
+    for (let trial = 0; trial < 300; trial += 1) {
+      const count = 3 + Math.floor(next() * 14);
+      const arcs: [number, number][] = [];
+      for (let arc = 0; arc < count * 2; arc += 1) {
+        arcs.push([Math.floor(next() * count), Math.floor(next() * count)]);
+      }
+      const reversed = arcs.map(([from, to]) => [to, from] as [number, number]);
+      const entry = dominators(count, 0, csrOf(count, arcs), csrOf(count, reversed));
+      const exit = dominators(count, 0, csrOf(count, reversed), csrOf(count, arcs));
+      const { choke } = outermostCommonDominators(count, 0, entry, exit);
+      const entryAncestor = (candidate: number, node: number) => {
+        for (let at = entry[node] ?? -1; at !== -1 && at !== 0; at = entry[at] ?? -1) {
+          if (at === candidate) return true;
+        }
+        return false;
+      };
+      for (let node = 1; node < count; node += 1) {
+        if (entry[node] === -1 || exit[node] === -1) continue;
+        let best = -1;
+        for (let at = exit[node] ?? 0; at !== 0 && at !== -1; at = exit[at] ?? 0) {
+          if (entryAncestor(at, node)) best = at;
+        }
+        expect(choke[node], `trial ${String(trial)} node ${String(node)}`).toBe(best);
+        if (best !== -1) pockets += 1;
+      }
+    }
+    expect(pockets).toBeGreaterThan(50);
+  });
+
+  it('finds chokes in O(n log n) on long chains', () => {
+    // A two-way chain hanging off the root: the ancestor walk needed n(n+1)/2 steps.
+    const run = (count: number) => {
+      const entry = new Int32Array(count);
+      for (let node = 1; node < count; node += 1) entry[node] = node - 1;
+      entry[0] = 0;
+      const { choke, operations } = outermostCommonDominators(count, 0, entry, entry.slice());
+      expect(choke[1]).toBe(-1);
+      expect(choke[count - 1]).toBe(1);
+      return operations;
+    };
+    const sizes = [1_000, 10_000, 100_000, 1_000_000];
+    const operations = sizes.map(run);
+    for (const [index, size] of sizes.entries()) {
+      const levels = Math.ceil(Math.log2(size));
+      expect(operations[index]).toBeLessThanOrEqual(size * (3 * levels + 1));
+    }
+    // Ten times the nodes costs about ten times the work (quadratic would be a hundred).
+    for (let index = 1; index < sizes.length; index += 1) {
+      expect((operations[index] ?? 0) / (operations[index - 1] ?? 1)).toBeLessThan(13);
+    }
   });
 });
