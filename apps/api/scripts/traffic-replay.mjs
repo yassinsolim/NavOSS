@@ -3,14 +3,23 @@
 // publication epoch has closed, and that one installation counts once whatever network or
 // credential it uploads with.
 //
-// The API must run with real storage and a real Valhalla, and must accept development keys:
+// The API must run with real storage and a real Valhalla, and must accept development keys. In
+// `live` it also needs a verified serving graph directory (`serving-graph.mts`, with its
+// provenance and dead-end mask), mounted read-only at /graph in both Valhalla and the API, as
+// `infra/compose/compose.traffic-graph.yaml` does; it refuses to start without one. For example,
+// with GRAPH set to that directory and ID to its graph.json `graphId`, on a Docker network with a
+// PostGIS container `db` and Valhalla serving $GRAPH/connected.tar as `valhalla`:
 //
-//   PGHOST=127.0.0.1 PGPORT=5442 PGUSER=navoss PGPASSWORD=navoss PGDATABASE=navoss \
-//     node apps/api/dist/migrate.js
-//   PGHOST=127.0.0.1 PGPORT=5442 PGUSER=navoss PGPASSWORD=navoss PGDATABASE=navoss \
-//     COMMUNITY_TRAFFIC_MODE=live COMMUNITY_ATTESTATION_MODE=allow-development \
-//     APP_ATTEST_TEAM_ID=ABCDE12345 COMMUNITY_INSTALLATION_SECRET=$(openssl rand -hex 32) \
-//     VALHALLA_URL=http://127.0.0.1:8002/route PORT=3012 node apps/api/dist/server.js
+//   docker run --rm --network NET -e PGHOST=db ... navoss-api node dist/migrate.js
+//   docker run -d --network NET -p 127.0.0.1:3012:3000 -e PGHOST=db ... \
+//     -e COMMUNITY_TRAFFIC_MODE=live -e COMMUNITY_ATTESTATION_MODE=allow-development \
+//     -e APP_ATTEST_TEAM_ID=ABCDE12345 -e COMMUNITY_INSTALLATION_SECRET=$(openssl rand -hex 32) \
+//     -e VALHALLA_URL=http://valhalla:8002/route \
+//     -e COMMUNITY_TRAFFIC_GRAPH_DIR=/graph -e COMMUNITY_TRAFFIC_GRAPH_ID=$ID \
+//     -v "$GRAPH":/graph:ro navoss-api
+//
+// then, with the PG* variables pointing at the same database from the host:
+//
 //   PGHOST=127.0.0.1 PGPORT=5442 PGUSER=navoss PGPASSWORD=navoss PGDATABASE=navoss \
 //     APP_ATTEST_TEAM_ID=ABCDE12345 corepack pnpm --filter @navoss/api traffic:replay
 //
