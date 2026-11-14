@@ -13,6 +13,7 @@ public final class NavOSSNavigationAppDelegateSubscriber: ExpoAppDelegateSubscri
     NavOSSNavigationService.shared.resumePersistedNavigation()
     #if DEBUG && targetEnvironment(simulator)
       NavOSSCommunitySimulatorHarness.runIfRequested()
+      NavOSSRestoreSimulatorHarness.runIfRequested()
     #endif
     return true
   }

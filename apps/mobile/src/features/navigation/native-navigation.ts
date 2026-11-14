@@ -1,5 +1,4 @@
 import type {
-  Coordinate,
   RouteAlternativeV2,
   RoutePreferences,
   RouteStepV2,
@@ -40,13 +39,15 @@ interface NativeNavigationHarnessModule {
 }
 
 /** Oldest native navigation contract this JavaScript works with. */
-export const REQUIRED_NATIVE_NAVIGATION_VERSION = 10;
+export const REQUIRED_NATIVE_NAVIGATION_VERSION = 11;
 
 /**
  * Explains a JavaScript/native mismatch, or `undefined` when they match. New JavaScript on an
  * older dev client would otherwise run silently without native features it relies on, such as
  * camera alerts, which moved into native navigation in contract 9, or the `/v2/routes` lanes and
- * signposts native carries from contract 10.
+ * signposts native carries from contract 10, or the restored-trip acquisition state
+ * (`isAcquiringPosition`) native withholds guidance behind from contract 11: an older binary
+ * would show a restored trip's saved step as current.
  */
 export function nativeNavigationContractError(version: number | undefined): string | undefined {
   if (version !== undefined && version >= REQUIRED_NATIVE_NAVIGATION_VERSION) {
@@ -331,18 +332,6 @@ export function isFavoriteDestination(id: string): boolean {
 
 export function toggleFavoriteDestination(destination: SearchResult): boolean {
   return NavOSSNavigation.toggleFavoriteDestination(nativeDestination(destination));
-}
-
-export function updateNavigationLocation(
-  coordinate: Coordinate,
-  horizontalAccuracyMeters?: number,
-  courseDegrees?: number,
-): NativeNavigationSnapshot {
-  return NavOSSNavigation.updateLocation({
-    ...coordinate,
-    ...(courseDegrees === undefined ? {} : { courseDegrees }),
-    ...(horizontalAccuracyMeters === undefined ? {} : { horizontalAccuracyMeters }),
-  });
 }
 
 export function clearNavigationRoute(): NativeNavigationSnapshot {
