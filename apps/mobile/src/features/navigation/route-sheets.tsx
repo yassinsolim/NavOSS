@@ -5,7 +5,7 @@ import type {
   SearchResult,
 } from '@navoss/contracts';
 import { SymbolView } from 'expo-symbols';
-import { Fragment } from 'react';
+import { Fragment, useRef } from 'react';
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
@@ -27,7 +27,7 @@ import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Chip } from '@/ui/chip';
 import { ListRow } from '@/ui/list-row';
-import { PressableScale } from '@/ui/pressable-scale';
+import { PressableScale, type PressableScaleProps } from '@/ui/pressable-scale';
 import { type SegmentOption, SegmentedControl } from '@/ui/segmented-control';
 import { BottomSheet, BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
 import { SectionTitle, SheetHeader } from '@/ui/sheet/sheet-header';
@@ -97,10 +97,12 @@ export function RoutePlanningSheet({
 }
 
 function RouteChoiceCard({
+  onLayout,
   onSelect,
   route,
   selected,
 }: {
+  onLayout?: PressableScaleProps['onLayout'];
   onSelect: () => void;
   route: RouteAlternativeV2;
   selected: boolean;
@@ -116,6 +118,7 @@ function RouteChoiceCard({
       accessibilityLabel={routeChoiceAccessibilityLabel(route)}
       accessibilityRole="button"
       accessibilityState={{ selected }}
+      onLayout={onLayout}
       onPress={onSelect}
       pressedScale={0.98}
       style={[styles.routeChoice, selected && styles.routeChoiceSelected]}
@@ -215,6 +218,9 @@ export function RoutePreviewSheet({
   // the sheet's contents loses nothing.
   const { fontScale } = useWindowDimensions();
   const remeasure = String(fontScale);
+  // The selected card is scrolled into view where it is laid out: when the sheet opens, and when
+  // it is re-measured after a text-size change, never when the driver selects another card.
+  const routeChoices = useRef<ScrollView>(null);
   const demoOrigin = previewOriginLabel !== undefined;
   const detents = routePreviewSheetDetents(metrics, { demoOrigin });
   const trafficStatus = routeTrafficLabel(
@@ -294,11 +300,22 @@ export function RoutePreviewSheet({
           <ScrollView
             contentContainerStyle={styles.routeChoices}
             horizontal
+            ref={routeChoices}
             showsHorizontalScrollIndicator={false}
           >
             {routes.map((route) => (
               <RouteChoiceCard
                 key={route.id}
+                onLayout={
+                  route.id === selectedRoute.id
+                    ? (event) => {
+                        routeChoices.current?.scrollTo({
+                          animated: false,
+                          x: Math.max(0, event.nativeEvent.layout.x - space.lg),
+                        });
+                      }
+                    : undefined
+                }
                 onSelect={() => {
                   onSelectRoute(route);
                 }}

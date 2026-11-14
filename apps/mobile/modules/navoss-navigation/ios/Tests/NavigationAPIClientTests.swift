@@ -232,8 +232,13 @@ final class NavigationAPIClientTests: XCTestCase {
   }
 
   func testRoutesReorderShorterRouteFirstWithinSharedDisplayedMinute() async throws {
+    // The deployed server: no /v2/config or /v2/routes, and routes possibly ordered by raw
+    // duration. Only its /v1/routes answer is re-ordered; a /v2/routes order is kept.
     NavigationURLProtocol.handler = { request in
-      Self.response(
+      guard request.url!.path == "/v1/routes" else {
+        return Self.response(request: request, json: "{}", statusCode: 404)
+      }
+      return Self.response(
         request: request,
         json: """
           {
@@ -302,8 +307,13 @@ final class NavigationAPIClientTests: XCTestCase {
   }
 
   func testRoutesKeepFasterDisplayedMinuteRouteFirstWhenListedSecond() async throws {
+    // The deployed server: no /v2/config or /v2/routes, and routes possibly ordered by raw
+    // duration. Only its /v1/routes answer is re-ordered; a /v2/routes order is kept.
     NavigationURLProtocol.handler = { request in
-      Self.response(
+      guard request.url!.path == "/v1/routes" else {
+        return Self.response(request: request, json: "{}", statusCode: 404)
+      }
+      return Self.response(
         request: request,
         json: """
           {
