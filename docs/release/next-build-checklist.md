@@ -1,8 +1,16 @@
 # Next build checklist
 
-Status: written 2026-11-12. The latest shipped build is `0.1.0 (70)` from `afa4067`. No later build has been created. This checklist is for the next candidate and for the server changes that must follow it. It states conditions; it does not claim any of them is met unless it cites evidence.
+Status refreshed: 2026-11-14. The latest shipped build is `0.1.0 (70)` from `afa4067`. Build 73 was signed but its upload failed; it is now held for a matcher regression. This checklist is for a corrected candidate and for the server changes that must follow it. It states conditions; it does not claim any of them is met unless it cites evidence.
 
 Context: `main` contains the phone UI refresh (#78), native contract v10 (#75, #84), the CarPlay quality pass (#77), `/v2/routes` clients (#84) the community reports and traffic client (#85) and on-device offline maps (#83). The deployed production service (`https://navoss-api.yassin.app`) still runs the older API image (Calgary and Kelowna; no `/v2/routes`, community, traffic or offline manifest) and cannot be redeployed yet. The next build must work against it.
+
+## Current release hold
+
+**Do not retry build 73 merely because its Apple agreement blocker is cleared.** Exact-core scratch probes reproduced a regression against build 70: after a five-minute GPS gap on a looping/out-and-back route, genuine fixes at 300 m can advance build 73's matcher to 3,680 m and arrival, while build 70 remains at 300 m without arrival. An uncapped reported speed can also open an unjustified far-ahead match. These probes are not physical-device evidence.
+
+The minimal matcher fix is [PR #100](https://github.com/yassinsolim/NavOSS/pull/100). It must pass its independent review and a freshly built eight-phase navigation harness before a corrected candidate is uploaded. Progress persistence and restore changes are a separate follow-up; the unchanged restore-loop weakness is documented rather than bundled into this release gate.
+
+The earlier go below predates these reproduced regressions and is historical evidence, not permission to upload build 73. An Apple agreement still needs the Account Holder's acceptance. No agent may accept those terms on the owner's behalf.
 
 ## 0. Validation evidence (2026-11-13, `release/validation-0.2`, code `6180ffc`)
 
@@ -42,6 +50,8 @@ Release-validation pass on simulators only; no build was created or uploaded dur
 Metro's shared transform cache under `$TMPDIR` ignores a changed `EXPO_PUBLIC_API_URL`, even with `--reset-cache`, so a local Release build can embed the API origin of an earlier build. Set `TMPDIR` to a fresh directory for each local Release build or `export:embed`, and check the embedded origin. EAS builds start from a clean machine and are not affected.
 
 ## 1. Pre-upload conditions
+
+- [ ] **Matcher regression resolved on the candidate SHA.** PR #100 or its successor has passed independent review, the build-70 comparison probes and a fresh navigation-harness run. Rebuild the candidate with this fix; do not reuse the held build 73.
 
 - [ ] **Works against the old production server.** The candidate commit, not an earlier one, runs on the simulator against `https://navoss-api.yassin.app`: config accepted, search, route preview with alternatives and "No live traffic", guidance without lanes, camera alert, reroute, arrival, and no community or traffic request beyond one `/v2/config` and one `/v2/traffic/status` probe. Evidence so far: #84 (phone and CarPlay, simulator, production config) and #85 (simulator through a write-blocking proxy to the production API; unit test for a server answering 404 on `/v2/community/*` and `/v2/traffic/*`). Neither was run on a later candidate commit. The offline manifest client (#83, merged) must also degrade quietly when `/v1/offline/manifest` is 404 or 503.
 - [x] **This build ships without the App Attest entitlement.** `NAVOSS_APP_ATTEST_ENTITLEMENT_ENABLED` is `0` in every EAS profile, because the App ID has no App Attest capability and a provisioning profile without it fails signing (release workflow on `1e76abf`). Without it the app never calls App Attest: community writes show "not supported", reports stay private drafts, traffic sharing is not available. The deployed server does not advertise the features either. Confirm the signed archive's entitlements contain `carplay-maps` and **no** `appattest-environment`.
