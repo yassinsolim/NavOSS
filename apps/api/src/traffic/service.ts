@@ -314,7 +314,8 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
   /**
    * Runs `read` against the completed snapshot of the current epoch. The store's tables hold
    * exactly that snapshot from the end of its publication until the next one starts; a read that
-   * overlaps the next publication is repeated against the newer epoch rather than returned.
+   * overlaps the next publication, or that the clock carried past the next boundary before it
+   * finished, is repeated against the newer epoch rather than returned.
    */
   const readSnapshot = async <T>(
     read: (epochStartMs: number) => Promise<T>,
@@ -326,8 +327,8 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
       try {
         value = await read(current.epochMs);
       } catch (error: unknown) {
-        // A replacement publication started meanwhile: read that one instead.
-        if (publication !== current) continue;
+        // A replacement publication started or is due: read that one instead.
+        if (publication !== current || epochStart() > current.epochMs) continue;
         // The store no longer holds this epoch (a database crash emptied it, or it was erased):
         // never answer with other contents under this epoch's label.
         if (error instanceof TrafficEpochNotStoredError) {
@@ -335,7 +336,11 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
         }
         throw error;
       }
-      if (publication === current) return { epochMs: current.epochMs, value };
+      // Answered only while this epoch is still the current one: once the clock has passed the
+      // next boundary, the snapshot is already superseded, whether or not anything published it.
+      if (publication === current && epochStart() <= current.epochMs) {
+        return { epochMs: current.epochMs, value };
+      }
     }
     throw new TrafficSnapshotUnavailableError();
   };

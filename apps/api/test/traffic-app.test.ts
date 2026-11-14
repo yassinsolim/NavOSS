@@ -303,6 +303,44 @@ describe('community traffic over HTTP', () => {
     expect(bodies[0]?.body).toBe(bodies[1]?.body);
   });
 
+  it('never answers with an epoch the clock passed while the read was waiting', async () => {
+    const memory = createInMemoryTrafficReleaseStore();
+    // The first flow read waits until the test opens the gate; later reads do not.
+    const { promise: gate, resolve: openGate } = Promise.withResolvers<undefined>();
+    let held = false;
+    const store: TrafficReleaseStore = {
+      ...memory,
+      async inBounds(bounds, epochStartMs, limit) {
+        if (!held) {
+          held = true;
+          await gate;
+        }
+        return memory.inBounds(bounds, epochStartMs, limit);
+      },
+    };
+    const traffic = await createTrafficApp({}, fakeAttestation(), store);
+    for (const device of ['phone-1', 'phone-2', 'phone-3']) await traffic.upload(device);
+    traffic.setClock(Date.parse('2026-11-12T18:05:01Z'));
+    await traffic.service.runEpoch();
+
+    // The read of the 18:05 snapshot is still waiting on the store when the clock passes 18:10.
+    // Nothing else runs the epoch job or reads in between.
+    const reading = traffic.app.inject(FLOW_URL);
+    await vi.waitFor(() => {
+      expect(held).toBe(true);
+    });
+    traffic.setClock(Date.parse('2026-11-12T18:10:01Z'));
+    openGate(undefined);
+    const response = await reading;
+    expect(response.statusCode).toBe(200);
+    const body = TrafficFlowResponseSchema.parse(response.json());
+    // Not the 18:05 snapshot, already expired at 18:10: the read was repeated against 18:10.
+    expect(body.generatedAt).toBe('2026-11-12T18:10:00.000Z');
+    expect(body.validUntil).toBe('2026-11-12T18:15:00.000Z');
+    // And that is the one body the 18:10 epoch serves.
+    expect((await flow(traffic.app)).body).toBe(response.body);
+  });
+
   it('answers 503 rather than serve an epoch whose publication failed', async () => {
     const memory = createInMemoryTrafficReleaseStore();
     let failing = true;
