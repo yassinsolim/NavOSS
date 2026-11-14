@@ -41,6 +41,7 @@ import {
   ManeuverBanner,
   RerouteProposalCard,
   SafetyCameraAlertBanner,
+  TripResumingBanner,
   TripSheet,
 } from '@/features/navigation/guidance';
 import { GuidanceSettingsSheet } from '@/features/navigation/guidance-settings-sheet';
@@ -365,13 +366,11 @@ export function MapScreen() {
         />
       )}
 
-      {guidanceReady && guidance.remainingRoute !== undefined && (
+      {navigating && (guidanceReady || guidance.resumingTrip) && (
         <TripSheet
           audioMode={c.guidanceSettings.settings.audioMode}
           cameraAnnouncementCount={c.cameraAnnouncementCount}
           destinationName={routeState.destination.name}
-          distanceMeters={guidance.remainingRoute.distanceMeters}
-          durationSeconds={guidance.remainingRoute.durationSeconds}
           matchStatus={guidance.vehicleMatchStatus}
           metrics={metrics}
           onEnd={c.onEndNavigation}
@@ -380,6 +379,7 @@ export function MapScreen() {
           onSound={c.guidanceSettings.open}
           position={c.sheetPosition}
           positionEstimated={guidance.positionEstimated}
+          remaining={guidance.resumingTrip ? undefined : guidance.remainingRoute}
           rerouteCount={guidance.rerouteCount}
           route={route.selectedRoute}
           routeSource={route.source}
@@ -414,6 +414,12 @@ export function MapScreen() {
         <AppTabBar activeTab={c.activeTab} bottomInset={insets.bottom} onSelect={c.onSelectTab} />
       )}
 
+      {navigating && guidance.resumingTrip && (
+        <TripResumingBanner
+          onHeightChange={guidance.onBannerHeightChange}
+          safeAreaTop={insets.top}
+        />
+      )}
       {guidanceReady && guidance.step !== undefined && guidance.remainingStep !== undefined && (
         <ManeuverBanner
           distanceMeters={guidance.remainingStep.distanceMeters}

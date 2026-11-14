@@ -41,6 +41,7 @@ import {
   type UpcomingManeuver,
 } from '@/features/navigation/route-progress';
 import type { RouteSource } from '@/features/navigation/route-ui-state';
+import { tripNotice, tripStatusLabel } from '@/features/navigation/trip-status';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import type { VehicleMatchStatus } from '@/features/navigation/vehicle-puck';
 import {
@@ -305,6 +306,59 @@ export function ManeuverBanner({
   );
 }
 
+/**
+ * In place of the maneuver banner while a trip restored after a relaunch finds its place on the
+ * route. The step it was saved on may be behind the vehicle, so no maneuver or distance is shown
+ * until GPS confirms where it is.
+ */
+export function TripResumingBanner({
+  onHeightChange,
+  safeAreaTop,
+}: {
+  onHeightChange: (height: number) => void;
+  safeAreaTop: number;
+}) {
+  const { fontScale } = useWindowDimensions();
+  return (
+    <Animated.View
+      accessibilityLabel="Resuming trip, finding your place on the route"
+      accessibilityLiveRegion="polite"
+      accessible
+      entering={FadeInDown.duration(motion.duration.base).reduceMotion(ReduceMotion.System)}
+      exiting={FadeOutUp.duration(motion.duration.fast).reduceMotion(ReduceMotion.System)}
+      onLayout={(event) => {
+        onHeightChange(Math.ceil(event.nativeEvent.layout.height) + space.sm);
+      }}
+      style={[guidanceStyles.banner, { top: safeAreaTop + space.sm }]}
+    >
+      <View key={`font-scale-${String(fontScale)}`} style={guidanceStyles.bannerContent}>
+        <View style={guidanceStyles.bannerRow}>
+          <View style={guidanceStyles.maneuverTile}>
+            <SymbolView
+              name={{ android: 'my_location', ios: 'location.magnifyingglass' }}
+              size={42}
+              tintColor={palette.white}
+            />
+          </View>
+          <View style={guidanceStyles.bannerCopy}>
+            <Text
+              maxFontSizeMultiplier={1.3}
+              adjustsFontSizeToFit
+              numberOfLines={1}
+              style={[guidanceStyles.distance, guidanceStyles.distanceText]}
+            >
+              Resuming trip
+            </Text>
+            <Text maxFontSizeMultiplier={1.3} numberOfLines={3} style={guidanceStyles.instruction}>
+              Finding your place on the route
+            </Text>
+          </View>
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
 /** A safety camera on the route ahead. Sun on ink: distinct from the maneuver banner above it. */
 export function SafetyCameraAlertBanner({
   camera,
@@ -545,8 +599,11 @@ interface TripSheetProps {
   audioMode: NavigationAudioMode;
   cameraAnnouncementCount: number;
   destinationName: string;
-  distanceMeters: number;
-  durationSeconds: number;
+  /**
+   * Time and distance left. `undefined` while a trip restored after a relaunch finds its place
+   * on the route: there is no estimate to show or share until it has.
+   */
+  remaining: { distanceMeters: number; durationSeconds: number } | undefined;
   matchStatus: VehicleMatchStatus;
   metrics: ScreenMetrics;
   onEnd: () => void;
@@ -571,8 +628,7 @@ export function TripSheet({
   audioMode,
   cameraAnnouncementCount,
   destinationName,
-  distanceMeters,
-  durationSeconds,
+  remaining,
   matchStatus,
   metrics,
   onEnd,
@@ -594,13 +650,8 @@ export function TripSheet({
   // mid-trip ("End" drawn as "E…", the arrival time and action labels dropped). Keying the rows
   // on the font scale makes them measure again.
   const { fontScale } = useWindowDimensions();
-  const matchStatusLabel = positionEstimated
-    ? 'position estimated, waiting for GPS'
-    : matchStatus === 'matched'
-      ? 'on route'
-      : matchStatus === 'off-route'
-        ? 'off route'
-        : 'acquiring route position';
+  const resuming = remaining === undefined;
+  const matchStatusLabel = tripStatusLabel({ matchStatus, positionEstimated, resuming });
   const rerouteDetail =
     rerouteCount === 0
       ? 'original route'
@@ -614,25 +665,17 @@ export function TripSheet({
         ? 'one camera alert announced'
         : `${String(cameraAnnouncementCount)} camera alerts announced`;
   // Shown only when the driver should know something: the status line is not a debug readout.
-  const tripNotice = positionEstimated
-    ? {
-        message: 'Your position is being estimated along the route until GPS returns.',
-        title: 'Weak GPS signal',
-      }
-    : matchStatus === 'acquiring'
-      ? { message: 'Guidance starts as soon as your position is known.', title: 'Waiting for GPS' }
-      : matchStatus === 'off-route'
-        ? { message: 'NavOSS is working out how to get you back on track.', title: 'Off route' }
-        : rerouteCount > 0
-          ? {
-              message:
-                rerouteCount === 1
-                  ? 'Your route was updated once on this trip.'
-                  : `Your route was updated ${String(rerouteCount)} times on this trip.`,
-              title: 'Route updated',
-            }
-          : undefined;
-  const arrival = formatArrivalTime(durationSeconds);
+  const notice = tripNotice({ matchStatus, positionEstimated, rerouteCount, resuming });
+  const arrival =
+    remaining === undefined ? 'No ETA yet' : formatArrivalTime(remaining.durationSeconds);
+  const remainingText =
+    remaining === undefined
+      ? 'Finding your place on the route'
+      : `${formatDuration(remaining.durationSeconds)} · ${formatDistance(remaining.distanceMeters)}`;
+  const summaryLabel =
+    remaining === undefined
+      ? `Navigation status, ${matchStatusLabel}, ${rerouteDetail}, no arrival time yet`
+      : `Navigation status, ${matchStatusLabel}, ${rerouteDetail}, ${cameraDetail}, arrive ${arrival}, ${formatDuration(remaining.durationSeconds)}, ${formatDistance(remaining.distanceMeters)}`;
 
   return (
     <BottomSheet
@@ -642,11 +685,7 @@ export function TripSheet({
       position={position}
     >
       <View key={`summary-${String(fontScale)}`} style={styles.tripSummary}>
-        <View
-          accessibilityLabel={`Navigation status, ${matchStatusLabel}, ${rerouteDetail}, ${cameraDetail}, arrive ${arrival}, ${formatDuration(durationSeconds)}, ${formatDistance(distanceMeters)}`}
-          accessible
-          style={styles.tripMetrics}
-        >
+        <View accessibilityLabel={summaryLabel} accessible style={styles.tripMetrics}>
           <Text
             maxFontSizeMultiplier={1.3}
             adjustsFontSizeToFit
@@ -661,7 +700,7 @@ export function TripSheet({
             numberOfLines={1}
             style={[styles.tripRemaining, guidanceStyles.tabular]}
           >
-            {formatDuration(durationSeconds)} · {formatDistance(distanceMeters)}
+            {remainingText}
           </Text>
         </View>
         <Button
@@ -690,13 +729,15 @@ export function TripSheet({
           label="Report"
           onPress={onReport}
         />
-        <TripAction
-          accessibilityHint="Opens the system share sheet without reading your contacts"
-          accessibilityLabel="Share ETA"
-          icon={{ android: 'share', ios: 'square.and.arrow.up' }}
-          label="Share ETA"
-          onPress={onShare}
-        />
+        {remaining !== undefined && (
+          <TripAction
+            accessibilityHint="Opens the system share sheet without reading your contacts"
+            accessibilityLabel="Share ETA"
+            icon={{ android: 'share', ios: 'square.and.arrow.up' }}
+            label="Share ETA"
+            onPress={onShare}
+          />
+        )}
       </View>
 
       <BottomSheetReveal above={detents.values[0] ?? 0} style={styles.tripReveal}>
@@ -706,8 +747,8 @@ export function TripSheet({
             { paddingBottom: metrics.bottomInset + space.xl },
           ]}
         >
-          {tripNotice !== undefined && (
-            <Banner announce message={tripNotice.message} title={tripNotice.title} tone="warning" />
+          {notice !== undefined && (
+            <Banner announce message={notice.message} title={notice.title} tone="warning" />
           )}
           <Text maxFontSizeMultiplier={1.4} style={styles.tripDestination}>
             To {destinationName}

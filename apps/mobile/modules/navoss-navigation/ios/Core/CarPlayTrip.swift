@@ -391,6 +391,41 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
     let trip: NavOSSCarPlayTrip
   }
 
+  /// How far the stored trip had got, for resuming it: the matcher's last accepted fix, as
+  /// distances along the stored route (where it matched, the furthest point reached, how far
+  /// the fix may have been from the route), its capture time and reported speed, and where an
+  /// arrival still waiting for movement started waiting. No coordinate, heading or fix history.
+  /// Together with the stored route a distance along it is a position, so the record lives and
+  /// dies with the trip. Kept under its own key: it is rewritten during the trip and the trip
+  /// itself is large.
+  private struct StoredProgress: Codable {
+    /// Records without this exact format (earlier development builds wrote others) are not
+    /// read: their missing fields would have to be guessed.
+    static let currentFormat = 2
+
+    struct Deferral: Codable {
+      let alongMeters: Double
+      let uncertaintyMeters: Double
+    }
+
+    let format: Int
+    let tripId: String
+    let alongMeters: Double
+    let highWaterAlongMeters: Double
+    let uncertaintyMeters: Double
+    let capturedAt: TimeInterval?
+    let speedMetersPerSecond: Double?
+    let arrivalDeferral: Deferral?
+  }
+
+  /// Identifier of the trip this store currently holds, as far as this process has seen. A
+  /// checkpoint for any other trip (one that has since been cleared or replaced) is dropped.
+  private var storedTripId: String?
+
+  private var progressKey: String {
+    key + ".progress"
+  }
+
   private let clock: () -> Date
   private let defaults: UserDefaults
   private let expirationInterval: TimeInterval
@@ -413,7 +448,73 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
 
   public func clear() {
     lock.lock()
+    removeLocked()
+    lock.unlock()
+  }
+
+  /// The trip and its progress go together. Caller holds `lock`.
+  private func removeLocked() {
     defaults.removeObject(forKey: key)
+    defaults.removeObject(forKey: progressKey)
+    storedTripId = nil
+  }
+
+  /// How the stored trip resumes. `.withoutProgress` for a trip saved without a progress
+  /// record (by a build that did not write one); `.unusable` when a record is there but is
+  /// damaged, in another format, or another trip's.
+  func loadProgress(for trip: NavOSSCarPlayTrip) -> NavigationResumePoint {
+    lock.lock()
+    defer { lock.unlock() }
+    guard let data = defaults.data(forKey: progressKey) else {
+      return .withoutProgress
+    }
+    guard let stored = try? JSONDecoder().decode(StoredProgress.self, from: data),
+      stored.format == StoredProgress.currentFormat, stored.tripId == trip.id
+    else {
+      return .unusable
+    }
+    let progress = NavigationResumeContext(
+      alongMeters: stored.alongMeters,
+      highWaterAlongMeters: stored.highWaterAlongMeters,
+      uncertaintyMeters: stored.uncertaintyMeters,
+      timestamp: stored.capturedAt,
+      speedMetersPerSecond: stored.speedMetersPerSecond,
+      arrivalDeferral: stored.arrivalDeferral.map {
+        NavigationResumeContext.ArrivalDeferral(
+          alongMeters: $0.alongMeters, uncertaintyMeters: $0.uncertaintyMeters)
+      }
+    )
+    return progress.isUsable ? .progress(progress) : .unusable
+  }
+
+  /// Records where the stored trip has got to. Dropped unless `tripId` is the trip this store
+  /// holds now: a writer that lost a race with `clear()` or `save(_:)` cannot bring a
+  /// checkpoint back or overwrite a newer trip's. (A replacement route keeps its trip's
+  /// identifier; the navigation service orders checkpoints against those itself.)
+  func saveProgress(_ progress: NavigationResumeContext, forTripId tripId: String) {
+    guard progress.isUsable,
+      let data = try? JSONEncoder().encode(
+        StoredProgress(
+          format: StoredProgress.currentFormat,
+          tripId: tripId,
+          alongMeters: progress.alongMeters,
+          highWaterAlongMeters: progress.highWaterAlongMeters,
+          uncertaintyMeters: progress.uncertaintyMeters,
+          capturedAt: progress.timestamp,
+          speedMetersPerSecond: progress.speedMetersPerSecond,
+          arrivalDeferral: progress.arrivalDeferral.map {
+            StoredProgress.Deferral(
+              alongMeters: $0.alongMeters, uncertaintyMeters: $0.uncertaintyMeters)
+          }
+        )
+      )
+    else {
+      return
+    }
+    lock.lock()
+    if storedTripId == tripId {
+      defaults.set(data, forKey: progressKey)
+    }
     lock.unlock()
   }
 
@@ -424,9 +525,10 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
       let stored = try? JSONDecoder().decode(StoredTrip.self, from: data),
       stored.expiresAt > clock()
     else {
-      defaults.removeObject(forKey: key)
+      removeLocked()
       return nil
     }
+    storedTripId = stored.trip.id
     return stored.trip
   }
 
@@ -440,6 +542,9 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
     }
     lock.lock()
     defaults.set(data, forKey: key)
+    // A new route starts from its own beginning.
+    defaults.removeObject(forKey: progressKey)
+    storedTripId = trip.id
     lock.unlock()
   }
 }
