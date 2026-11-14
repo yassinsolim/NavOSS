@@ -1,7 +1,8 @@
 # Community traffic
 
 Decision date: 2026-11-12 (revised twice the same day after two independent privacy and security
-reviews; the [enablement checklist](#enablement-checklist) records what is still required)
+reviews, and again on 2026-11-14 after a third; the [enablement checklist](#enablement-checklist)
+records what is still required)
 
 NavOSS builds its own live traffic from the speeds of drivers who switch traffic sharing on. There
 is no paid provider and, after review, no usable official flow feed for Alberta or British Columbia
@@ -26,12 +27,14 @@ phone (sharing on, navigating, App Attest installation registered)
   ├─ POST /v2/traffic/credentials   one assertion -> opaque upload credential, valid 2 h
   └─ POST /v2/traffic/probes        one short batch: credential + positions + relative seconds
         │  network rate limit, credential check, per-installation rate limit,
-        │  plausibility, trim 100 m off both ends
+        │  plausibility, trim 100 m off both ends (standing still there is kept as time only)
         ▼
-   Valhalla trace_attributes   self-hosted, in-memory, local endpoint only
+   Valhalla trace_attributes   self-hosted, in-memory, local endpoint only; never sent a batch
+                               that did not move
         │  matched edges: OSM way id, direction, class, use, edge speed, edge geometry
    Valhalla locate              the same local Valhalla; edge midpoints (map data) only
         │  access and dead-end flags for each candidate edge
+   dead-end mask                graph-bound, topology-derived; required for live
         ▼
    one speed sample per whole, eligible road edge   the batch is dropped here; never written or logged
         ▼
@@ -90,9 +93,10 @@ in storage tying an upload to an installation.
 
 Properties, each covered by a test:
 
-- **One device, one weight.** The seed depends only on the installation, so the same phone has
-  the same tag on a given edge whatever network it uses and however many credentials it
-  requests.
+- **One installation, one weight.** The seed depends only on the installation, so the same
+  installation has the same tag on a given edge whatever network it uses and however many
+  credentials it requests. One installation is not one handset: one iPhone can hold several App
+  Attest keys, and after the admission controls below each counts separately.
 - **Unattested uploads are refused.** A batch without a valid credential gets `401`; a
   credential needs a verified assertion from a registered installation; with
   `COMMUNITY_ATTESTATION_MODE=enforce` (the default) development keys are refused even if they
@@ -108,10 +112,16 @@ Properties, each covered by a test:
   written to the database or the log. The installation tables have no traffic column, and
   `traffic_releases` has no contributor column. Both keys exist only in process memory, so a
   restart invalidates every credential and makes the old seeds unrepeatable.
-- **Tags do not join roads.** A tag is specific to one edge, so the cohorts held in memory
-  cannot be joined into a path by tag equality. A tag is not specific to a cohort: the same
-  installation has the same tag on the same edge in every cohort and under every credential
-  until the API restarts.
+- **Tags do not join roads or consumed cohorts.** The per-edge tag is re-keyed, before anything is
+  kept, under a random salt of that edge's cohort, so nothing held is equal across edges. The salt
+  is replaced when the edge's cohort is consumed by a release, never on a clock, so an
+  installation's tag is stable for the whole (up to 15-minute) life of a cohort and the one-weight
+  rule holds throughout; a later cohort of the same edge sees a different tag. An earlier salt is
+  kept, and checked, while a pending sample or partial coverage still uses it, so a cohort that
+  straddles a release cannot count the same installation twice. While an edge is never released,
+  its salt (and so the installation's tag on it) stays the same until its pending state empties or
+  the API restarts. This only prevents joining by equality: anyone holding process memory holds
+  the salts too.
 
 What it is not:
 
@@ -150,7 +160,10 @@ Both are cheap, need no new data, and only ever reduce what an installation can 
   marks the installation as a newcomer. A newcomer's sample joins an edge's cohort only if no
   other newcomer from the same network bucket is already in it. One handset's new keys all
   upload from the network the handset is on, so they count once. The network is held only as a
-  salted 16-character marker on that pending sample, in memory, and dropped with it.
+  16-character marker on that pending sample, in memory, keyed under the edge's cohort salt like
+  the tag, and dropped with it: markers of one network on two edges, or in two consumed cohorts
+  of one edge, are not equal. The network-bucket space is small, so someone holding process
+  memory (and so the salts) can still recover a newcomer's bucket by trying them all.
 
 Why these and nothing heavier: the attacker they target holds one phone. They push the cost
 from "three keys, now" to "three keys kept for a week" or "three networks at once". They do not
@@ -243,7 +256,12 @@ rules 1, 2, 3 and 5; they are obligations on the app release, not properties of 
    two consecutive points may be more than 60 m/s apart.
 4. **Server-side trim.** Drop every point within 100 m of path of either end of the batch. The
    server cannot tell which batch began or ended a trip, so it treats every batch as if it might
-   have. A batch with fewer than five points left is accepted and ignored.
+   have. A batch whose every point stays within 10 m of its first (it never moved, GPS jitter
+   included) is not map matched at all. The standing still that the trim removes, the run of
+   trimmed points within 10 m of the batch's first point and likewise of its last, or the whole of
+   a batch that never moved, is kept as a **dwell**: its time and the mean of those points, used
+   only to find the edge (see [Dwell across batch boundaries](#dwell-across-batch-boundaries)) and
+   then dropped. A batch with fewer than five points left and no dwell is accepted and ignored.
 5. **Map match** the remaining points with `trace_attributes` (`map_snap`) on the local Valhalla.
    A fix that Valhalla snapped from more than 35 m away, or for which it reports no snap
    distance, counts as unmatched. (Valhalla 3.8.2 reports `distance_from_trace_point` in metres
@@ -261,14 +279,15 @@ rules 1, 2, 3 and 5; they are obligations on the app release, not properties of 
    stood. The result, per eligible edge, is a **piece**: the intervals of the edge driven (metres
    from the edge's start), the distance moved and the time spent. A run needs at least 5 s and
    either 100 m of travel or 30 s (so a crawl counts and two stationary fixes do not), and is
-   dropped above 180 km/h. A batch boundary is not a trip end: the edges where a batch begins or
-   ends contribute pieces like any other. Trip ends are protected by the client's 400 m trims,
-   which the server cannot verify.
+   dropped above 180 km/h. A piece records each step moved (from, to, moving time, and its batch
+   offsets) and each stop (where, and its batch offsets). A batch boundary is not a trip end: the
+   edges where a batch begins or ends contribute pieces like any other. Trip ends are protected by
+   the client's 400 m trims, which the server cannot verify.
 7. **Add to cohorts.** A contributor's pieces of an edge accumulate in memory, under that
-   contributor's per-edge tag, as the **union** of driven intervals plus total distance and total
-   time (see [Coverage across batches](#coverage-across-batches)). Once the union covers
+   contributor's cohort tag, as the **union** of driven intervals, with distance and time each
+   counted once (see [Coverage across batches](#coverage-across-batches)). Once the union covers
    300 m of the edge, or half of it when that is less, it becomes the contributor's one sample
-   for the edge, at total distance over total time. The sample joins the edge's pending cohort,
+   for the edge, at counted distance over counted time. The sample joins the edge's pending cohort,
    stamped with the publication epoch in which it was **completed** (server clock) and with the
    time its earliest piece's driving began (`capturedAt`, capped at the arrival time). Nothing in the batch decides
    which epoch it counts in; its start time can only make the sample expire sooner. A
@@ -306,11 +325,17 @@ in code and cannot be configured.
 
 Not enforced:
 
-- **Long dead-end regions.** Valhalla marks `not_thru` only within a bounded search. A dead-end
-  valley with its own road network is not marked: the whole Malbun/Steg valley in
-  Liechtenstein, a secondary road with one exit, comes back as through road (checked against a
-  real instance). A topology-derived mask built from the same extract as the graph is the
-  remaining mitigation; see the [checklist](#enablement-checklist).
+- **Long dead-end regions, without the mask.** Valhalla marks `not_thru` only within a bounded
+  search. A dead-end valley with its own road network is not marked: the whole Malbun/Steg valley
+  in Liechtenstein, a secondary road with one exit, comes back as through road (checked against a
+  real instance). The topology-derived dead-end mask
+  ([`infra/offline/dead-end-mask.md`](../../infra/offline/dead-end-mask.md)), built from the same
+  extract and bound to the graph id, closes this: `live` refuses to start without a valid mask for
+  `COMMUNITY_TRAFFIC_GRAPH_ID`, and an edge the mask does not place on the main network (excluded,
+  or unknown, as BC 37A is because of extract clipping) is never published. `collect` may run
+  without it, since it publishes nothing. The mask and its wiring are implemented; their
+  independent review, and confirmation that the configured graph id is the graph the production
+  Valhalla serves, are open checklist items.
 - **Conditional access** (`access:conditional`, seasonal closures) is whatever Valhalla's build
   made of it.
 - **Population density and household catchment.** Not checked.
@@ -369,13 +394,29 @@ across that contributor's batches.
   intervals along the edge, so a replayed or overlapping batch adds nothing (tested: replaying
   every batch twice plus a half-overlapping copy credits exactly the same samples as driving
   once).
+- **Evidence counts once, distance and time alike.** A step adds distance, and its moving time,
+  only for the part of the edge no earlier piece of that contributor drove; the first report of a
+  metre wins. Standing still is counted per place (stops within 25 m are one place; an honest
+  contributor's stops in different batches are at least the two 100 m trims apart) and per
+  claimed time: each stop is placed in time with its batch's `capturedAt` and offsets, a stop
+  wholly inside time already counted at that place adds nothing, and an overlap of a minute or
+  more adds only the time outside it. An overlap shorter than a minute is what two honest
+  consecutive batches of one long stop can show, because `capturedAt` is rounded down to the
+  minute, so such a stop counts in full. Before this, every upload's distance and time were
+  summed: on a 1.5 km edge, 100 m in 50 s then 200 m in 10 s is 18 km/h (published 20), and
+  replaying the slow piece nine times made it 8.6 km/h, so three such installations moved the
+  release to 10 (regression-tested through the released median and the credit count).
+- **What is still not idempotent.** A client that re-batches the same trace can add up to just
+  under a minute of standing per short stop it replays this way, and a client that fabricates
+  `capturedAt` can claim any standing it likes; both are fabricated traffic, bounded by the
+  admission controls and the median, not by this rule.
 - **Floor:** 300 m of the edge, or half of it when that is less. Then the pieces become one
-  sample at total distance over total time, time standing still included: a stopped queue is the
-  signal. The plausibility rules above still bound each run.
+  sample at counted distance over counted time, time standing still included: a stopped queue is
+  the signal. The plausibility rules above still bound each run.
 - **One weight.** A contributor that already has a sample on the edge in the cohort adds
   nothing more; the newcomer cap is applied when the sample is completed.
-- **Same identifier, no new linkage.** Partial coverage is keyed by the same per-edge contributor
-  tag as samples, so it adds no identifier across edges or epochs. It lives only in API process
+- **Same identifier, no new linkage.** Partial coverage is keyed by the same cohort tag as
+  samples, so it adds no identifier across edges or cohorts. It lives only in API process
   memory, alongside the pending samples, is never written or logged (the operator summary counts
   it as `pendingPartial`), and expires with its cohort: it is dropped at the first boundary more
   than 15 minutes after the earliest piece's driving began or arrived. Tested: the database is
@@ -386,8 +427,48 @@ across that contributor's batches.
   1.5 km edge is drawn along all of it. Edges, not their parts, remain the published unit; three
   contributors are still needed on each.
 
-**Flagged for the next independent review:** this subsection, the change to step 6 and the use of
-`/locate` geometry for partly matched edges.
+#### Dwell across batch boundaries
+
+Standing still at a batch boundary used to vanish: the 100 m trim removed every point of a batch
+that never moved, and the stationary head or tail of a moving batch, so a five-minute stop between
+two moving batches counted nothing and a prolonged queue could miss the freshness window. A dwell
+is now **held**, as time only, and counted once the trip is seen going on:
+
+- It is placed only on an edge where the same contributor already has pending movement: the
+  nearest such edge whose map geometry is within 25 m of where it stood, at that distance along
+  the edge. It never starts coverage of its own, so a stop on a road the contributor was not
+  already driving, or a trip that begins standing still, never counts.
+- It counts only when that contributor's own movement on **the same edge** brackets it: movement
+  that ended before it, and movement that began after it and reaches at least 50 m beyond it (both
+  judged on claimed time, allowing for the minute rounding). Movement that had already passed it
+  before it began contradicts it, and it is dropped.
+- A dwell that is never followed by movement, because the trip ended or sharing was cancelled at
+  the stop, is never counted. It expires with the contributor's partial coverage, within the same
+  15-minute window, and nothing about it leaves memory. Holding it releases no part of the
+  protected tail: its position is never kept, only its distance along an edge the contributor was
+  already driving, and it changes only that contributor's time on that edge.
+- It is counted like any other stop (once per place and claimed time), so an uploaded-twice
+  stationary batch adds nothing.
+
+What does **not** count, precisely: standing at a batch boundary when the movement after it is on
+another edge (typically a queue at a signal near the end of an edge, where the next batch's trimmed
+movement starts on the next edge), or when the contributor's sample on the edge was already
+complete; standing whose bracketing movement does not fit inside one 15-minute cohort window (a
+stop-and-go on one edge lasting longer than that publishes nothing); and standing in a moving
+batch's kept part that GPS jitter makes look like movement. Standing in the middle of a moving
+batch counts as before.
+
+Tested through `POST /v2/traffic/probes` on batches recorded against Valhalla 3.8.2 on the
+Alberta/BC graph (one 1.18 km Deerfoot Trail edge, `apps/api/test/fixtures/valhalla-dwell-calgary.json`,
+three contributors): two moving batches at 36 km/h with their trimmed standing publish 15 km/h
+(35 before this change); a 98 s stationary batch between them publishes 10; the same stationary
+batch uploaded twice still 10; a further, jittery stationary batch 5; the same trip ending at the
+stop, or beginning more than 15 minutes before the boundary, publishes nothing. Stationary batches
+are never sent to the matcher.
+
+**Flagged for the next independent review:** this subsection, [Coverage across
+batches](#coverage-across-batches), the change to step 6 and the use of `/locate` geometry for
+partly matched edges.
 
 Measured on the same 40-route samples per area, with three contributors per route at 1.0, 1.1 and
 1.2 times the stated speed (local, graph dated 2026-11-11):
@@ -441,7 +522,8 @@ the 17.7 km.
 - **Estimator and threshold use the same cohort.** One contributor has one weight, so replaying
   a trace with different timestamps, or uploading every minute, adds nothing. With k = 3 the
   median follows two of three contributors.
-- **Immutable epoch snapshots.** Each epoch's publication is one promise: the cohorts are closed
+- **Immutable epoch snapshots, within one process and one database lifetime.** Each epoch's
+  publication is one promise: the cohorts are closed
   the moment it starts, and its releases are written in one transaction. Every reader of an
   epoch (flow, and route traffic) waits for that epoch's publication to finish, and starts it
   itself if the boundary has passed but the timer (one second later) has not run yet, so a
@@ -450,6 +532,18 @@ the 17.7 km.
   against that newer epoch rather than returned, so every response carries exactly the snapshot
   of the epoch it names. Route traffic reads all of a request's speeds in one such read, after
   the map matching, however long that took. No response carries a contributor or sample count.
+- **Never another body under a published epoch's label.** An API (re)start erases the releases and
+  has published nothing for the epoch it starts in, so that epoch is unavailable (flow `503`,
+  routes untouched) until the next boundary is published; an earlier process may have served
+  releases under that epoch's label. Every publication also writes, in its transaction, which
+  epoch the stored rows are and how many there are (`traffic_publication`). A read is served only
+  when that record names the epoch being read and the row count still matches, checked in the
+  same statement, so a database crash (which empties both unlogged tables), an erased release
+  table or a newer publication never reads as the previous snapshot or as a published empty one;
+  the epoch is unavailable until a new boundary is published. A legitimately empty snapshot,
+  published at a boundary, is served normally. Tested on PostGIS: a restart one minute into a
+  nonempty epoch (`503`, then an empty snapshot labelled with the next boundary), both tables
+  reset, and the release table alone emptied.
 - **A failed publication is not served.** If storing an epoch fails, readers of that epoch get
   `503` (flow) or untouched routes (route traffic), never older contents under the new label.
   Its releases are offered again at the next boundary, with their original boundary and expiry,
@@ -473,7 +567,9 @@ the 17.7 km.
 
 A served speed is therefore at most 15 minutes old as a release and rests on driving at most 30
 minutes old. A jam that has cleared can stay visible, and lengthen route ETAs, for up to 30
-minutes after the driving that showed it. Live ETA clients should show the `observedAt` boundary.
+minutes after the driving that showed it. Flow features carry their `observedAt` boundary, and an
+adjusted v2 route carries `traffic.snapshotAt` and `traffic.oldestObservedAt` (see
+[Route traffic](#route-traffic)); the phone and CarPlay credit show "as of" the oldest.
 
 - **Collect mode.** Cohorts are formed, counted for the operator, and thrown away at the
   boundary. Nothing is written to the database and nothing is served.
@@ -482,7 +578,10 @@ minutes after the driving that showed it. Live ETA clients should show the `obse
 
 `traffic_releases` (migration `0002_community_traffic` in the shared runner,
 `apps/api/src/migrations.ts`) holds published values only: segment key, road class, speed, free
-flow, the two epoch boundaries, and the edge geometry. Database constraints restrict the road
+flow, the two epoch boundaries, and the edge geometry. `traffic_publication` (migration
+`0003_traffic_publication_marker`, also `UNLOGGED`) holds one row: the boundary the stored rows are
+the snapshot of, and their count. It is rewritten at every boundary, uploads or not, and carries
+nothing derived from a batch. Database constraints restrict the road
 class to the four aggregated classes, the speed to 5 km/h steps, `released_at` to the five-minute
 grid and the lifetime to 15 minutes.
 
@@ -501,10 +600,18 @@ grid and the lifetime to 15 minutes.
   doubling to every 5 minutes) until it succeeds. Until then the old rows are past expiry and
   never served, but not yet deleted; while the API is stopped nothing deletes them.
 - Database work is bounded **by PostgreSQL**: `statement_timeout` 10 s, `lock_timeout` 5 s,
-  `idle_in_transaction_session_timeout` 15 s, set on every connection of the traffic pool,
-  plus a 5 s connection timeout and a 15 s client-side margin. A blocked epoch is cancelled on
-  the server and its transaction aborted (tested against PostGIS with the table locked). A
-  connection whose `ROLLBACK` cannot be confirmed is destroyed, never returned to the pool.
+  `idle_in_transaction_session_timeout` 15 s, set on every connection of the traffic pool **and
+  of the community pool** that issues traffic credentials (`BOUNDED_POOL_LIMITS`,
+  `apps/api/src/bounded-pool.ts`), plus a 5 s connection timeout and a 15 s client-side margin,
+  which together bound shutdown (`pool.end()` waits only for checked-out clients). A blocked epoch
+  is cancelled on the server and its transaction aborted (tested against PostGIS with the table
+  locked). A connection whose `ROLLBACK` cannot be confirmed is destroyed, never returned to the
+  pool, in both pools. A credential assertion blocked on its installation's row lock fails with a
+  retryable `503` after the lock timeout and rolls back its counter update; its challenge stays
+  consumed. Tested on PostGIS: seven concurrent assertions against a held lock all fail within
+  13 s, no session is left running or in a transaction, shutdown completes while one is blocked,
+  the counter is unchanged, the burned challenges stay refused, and a fresh assertion and a new
+  registration then succeed.
 
 Run a **single API container** (see the [checklist](#enablement-checklist)). Cohorts, keys and rate limits are per process: a second replica
 would not double-count anyone (each needs its own three contributors), but it would reject the
@@ -554,7 +661,12 @@ twelve), looks up published speeds for those edges, and:
 - if published edges cover at least `COMMUNITY_TRAFFIC_ROUTE_MIN_COVERAGE` (50%) of a route's
   length, sets `traffic.delaySeconds`, `traffic.typicalDurationSeconds` (the routing engine's
   duration), `traffic.observedFraction`, an adjusted `durationSeconds`, adjusted step durations,
-  and `congestion`: one of `unknown`, `free`, `slow`, `heavy`, `stopped` per geometry segment;
+  `congestion` (one of `unknown`, `free`, `slow`, `heavy`, `stopped` per geometry segment), and
+  coarse freshness: `traffic.snapshotAt`, the epoch boundary whose snapshot supplied the speeds,
+  and `traffic.oldestObservedAt`, the earliest release boundary of any speed applied to the route
+  (older than `snapshotAt` when the route mixes releases). Both are on the five-minute grid; the
+  response's `generatedAt` is the request time and is not traffic freshness. Both are optional in
+  the v2 contract, so clients tolerate a server without them, and never on `/v1/routes`;
 - otherwise returns the route untouched, which means **traffic is unavailable for that route**.
 
 Delay is counted only below the free-flow band. An observed speed includes signals and turns the
@@ -596,19 +708,19 @@ licensed provider only.
 
 ## What this does not protect against
 
-| Threat                                              | What the code does                                                                                                                                                                                                                                                                                | What remains                                                                                                                                                                                                                                                                                                           |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Re-identifying home or work from the ends of a trip | The server drops 100 m from both ends of every batch, never credits a partly driven edge, aggregates only motorway to secondary roads, and publishes no edge the graph marks destination-only, dead-end or no-through in either direction. The app is required to exclude 400 m at both trip ends | The 400 m rule is not verifiable by the server. A home on a secondary-or-larger through road, or in a dead-end region larger than Valhalla's no-through search, is on an eligible edge, protected by the threshold only                                                                                                |
-| A published edge implies who drove it               | Three attested installations in one cohort; edge-level threshold; tertiary and lower roads excluded; no counts published                                                                                                                                                                          | Three installations can be one household, or one person with three App Attest keys kept for a week or spread over three networks. Publication reveals that the edge was driven by at least three installations in the 15 minutes before a boundary, and a 5 km/h-coarse median                                         |
-| Differencing between responses                      | Releases happen only at epoch boundaries, each from a consumed cohort of at least k; expiry is on a fixed schedule                                                                                                                                                                                | An observer learns "at least k new contributions arrived on this edge before this boundary". That is a group fact, not an individual one, but on a quiet road the group may be guessable                                                                                                                               |
-| Collusion: k-1 of a cohort are the attacker         | Median of the cohort, 5 km/h steps                                                                                                                                                                                                                                                                | With k = 3, two attacker installations bracket the third contributor: its presence on the edge in that window and its approximate speed are inferable, and pre-seeding adjacent branches shows which branch it took. No threshold scheme prevents this; the 20 m minimum only removes the shortest junction connectors |
-| Fabricated traffic                                  | Uploads need an attested installation at least a day old; newcomers capped per network per cohort; one installation one weight; plausibility bounds; per-installation and per-network rate limits; median; route delay cap and ranking bound                                                      | Three attested keys a week old, which one ordinary iPhone can hold, or one copied bearer credential plus two keys, publish a false speed on an edge. It can lengthen an ETA by up to 100% and swap through-road alternatives; it cannot add more than 100 m of minor road to the recommended route                     |
-| Linking batches into a trip                         | No trip or sequence id; minute-coarse start; nothing raw retained; per-edge tags                                                                                                                                                                                                                  | Batches of one trip carry the same credential and come from the same address, so the API process and Cloudflare can link them while they arrive. Adjacent positions link consecutive batches anyway                                                                                                                    |
-| Database or backup disclosure                       | The database holds published releases only, in an unlogged table excluded from backups                                                                                                                                                                                                            | A leak shows which major-road edges were published in the last 15 minutes: what the flow endpoint already serves. The installation table shows when each installation last made an attested request                                                                                                                    |
-| Process memory disclosure                           | Keys and cohorts are memory-only; cohorts hold tags, speeds and (for newcomers) a salted network marker for at most 20 minutes                                                                                                                                                                    | With memory and the installation table, an installation can be matched to the edges it has pending samples on; unquantised speeds and insertion order are further correlation signals                                                                                                                                  |
-| Location leaking through logs                       | API request logging is off; handlers log nothing from the body; matcher errors are swallowed; the summary has counters only; a test ingests batches, forces failures and scans the database and API log output                                                                                    | **Not established for anything but the API process**: whether Valhalla logs request bodies, whether Caddy logs headers on proxy errors, swap, and core dumps. See below                                                                                                                                                |
-| Viewport disclosure through flow requests           | Bounds snapped to a 0.05° grid, comparable to a map-tile request                                                                                                                                                                                                                                  | The request still shows which ~4 km cell is on screen, as tile requests already do                                                                                                                                                                                                                                     |
-| Traces sent to a third party                        | The matcher endpoint must be loopback, a private or link-local address literal, or a single-label host name (a Compose service); redirects are refused                                                                                                                                            | An operator can still run a forwarding proxy at a local address. Single-label names are not resolved or pinned by the guard, and the address check does not prove same-machine processing or operator ownership                                                                                                        |
+| Threat                                              | What the code does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | What remains                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Re-identifying home or work from the ends of a trip | The server drops 100 m from both ends of every batch (standing still there counts only as time, on an edge already being driven, and only once the trip is seen going on), aggregates only motorway to secondary roads, and publishes no edge the graph marks destination-only, dead-end or no-through in either direction, nor, in `live`, one the graph-bound dead-end mask does not place on the main network. A partly driven edge is credited once 300 m (or half) of it is covered. The app is required to exclude 400 m at both trip ends | The 400 m rule is not verifiable by the server. A home on a secondary-or-larger through road is on an eligible edge, protected by the threshold only. The mask's results on the deployed graph await independent review                                                                                                                                                                |
+| A published edge implies who drove it               | Three attested installations in one cohort; edge-level threshold; tertiary and lower roads excluded; no counts published                                                                                                                                                                                                                                                                                                                                                                                                                         | Three installations can be one household, or one person with three App Attest keys kept for a week or spread over three networks. Publication reveals that the edge was driven by at least three installations in the 15 minutes before a boundary, and a 5 km/h-coarse median                                                                                                         |
+| Differencing between responses                      | Releases happen only at epoch boundaries, each from a consumed cohort of at least k; expiry is on a fixed schedule                                                                                                                                                                                                                                                                                                                                                                                                                               | An observer learns "at least k new contributions arrived on this edge before this boundary". That is a group fact, not an individual one, but on a quiet road the group may be guessable                                                                                                                                                                                               |
+| Collusion: k-1 of a cohort are the attacker         | Median of the cohort, 5 km/h steps                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | With k = 3, two attacker installations bracket the third contributor: its presence on the edge in that window and its approximate speed are inferable, and pre-seeding adjacent branches shows which branch it took. No threshold scheme prevents this; the 20 m minimum only removes the shortest junction connectors                                                                 |
+| Fabricated traffic                                  | Uploads need an attested installation at least a day old; newcomers capped per network per cohort; one installation one weight; plausibility bounds; per-installation and per-network rate limits; median; route delay cap and ranking bound                                                                                                                                                                                                                                                                                                     | Three attested keys a week old, which one ordinary iPhone can hold, or one copied bearer credential plus two keys, publish a false speed on an edge. It can lengthen an ETA by up to 100% and swap through-road alternatives; it cannot add more than 100 m of minor road to the recommended route                                                                                     |
+| Linking batches into a trip                         | No trip or sequence id; minute-coarse start; nothing raw retained; per-edge tags                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Batches of one trip carry the same credential and come from the same address, so the API process and Cloudflare can link them while they arrive. Adjacent positions link consecutive batches anyway                                                                                                                                                                                    |
+| Database or backup disclosure                       | The database holds published releases only, in an unlogged table excluded from backups                                                                                                                                                                                                                                                                                                                                                                                                                                                           | A leak shows which major-road edges were published in the last 15 minutes: what the flow endpoint already serves. The installation table shows when each installation last made an attested request                                                                                                                                                                                    |
+| Process memory disclosure                           | Keys and cohorts are memory-only; cohorts hold cohort-salted tags, speeds, counted evidence and held dwells (distances along the edge, claimed times) and, for newcomers, a cohort-salted network marker, for at most 20 minutes. Nothing held is equal across edges or consumed cohorts                                                                                                                                                                                                                                                         | With memory and the installation table, an installation can be matched to the edges it has pending samples on. The salts are in the same memory, so a newcomer's network bucket can be recovered by trying every bucket. Claimed times, unquantised speeds and insertion order are further correlation signals; batches and credentials sit unzeroed in request memory until collected |
+| Location leaking through logs                       | API request logging is off; handlers log nothing from the body; matcher errors are swallowed; the summary has counters only; a test ingests batches, forces failures and scans the database and API log output                                                                                                                                                                                                                                                                                                                                   | **Not established for anything but the API process**: whether Valhalla logs request bodies, whether Caddy logs headers on proxy errors, swap, and core dumps. See below                                                                                                                                                                                                                |
+| Viewport disclosure through flow requests           | Bounds snapped to a 0.05° grid, comparable to a map-tile request                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | The request still shows which ~4 km cell is on screen, as tile requests already do                                                                                                                                                                                                                                                                                                     |
+| Traces sent to a third party                        | The matcher endpoint must be loopback, a private or link-local address literal, or a single-label host name (a Compose service); redirects are refused                                                                                                                                                                                                                                                                                                                                                                                           | An operator can still run a forwarding proxy at a local address. Single-label names are not resolved or pinned by the guard, and the address check does not prove same-machine processing or operator ownership                                                                                                                                                                        |
 
 Established locally on the real Alberta/BC graph (see
 [Local validation](#local-validation-on-the-albertabc-graph)), and therefore no longer unknown:
@@ -633,13 +745,17 @@ Unproven, and to be established before `live`:
   How far that misplaces the end of a real queue on long rural edges has not been measured
   against real traffic.
 - **Long dead-end regions.** Measured: Valhalla's flags do not mark them (Alberta 66 and 546, BC 4
-  and 37A). The mask that would is costed but not built.
+  and 37A). The graph-bound mask that does is built and wired, and required for `live`; it awaits
+  independent review and a production graph-identity check.
 - **Raw batch lifetime in memory.** The batch lives in the request body, local arrays and the
   matcher request until garbage collection; it is not zeroed, and the matcher request has a
   four-second timeout rather than a hard bound on that lifetime.
 - **Load, and the production path.** Local latencies are single-client under CPU emulation. Load
   at the expected contributor count, and behaviour behind Cloudflare and Caddy, are untested.
-- **Route ETA in a client.** `/v2/routes` returns adjusted routes; no client presents them yet.
+- **Route ETA in a client.** `/v2/routes` returns adjusted routes with coarse freshness, and the
+  phone route preview and CarPlay credit say "as of" the oldest release used. That is unit-tested
+  only: no client has presented community-adjusted routes from a live server or on a rendered
+  surface.
 - **The admission controls in practice.** How often carrier NAT puts two genuine newcomers in one
   /24 within one cohort, and how much coverage the 24-hour wait costs, is unknown.
 
@@ -760,8 +876,10 @@ dead-end region, and add edges within 400 m along the network of a terminal. Tha
 CPU in C++ or a few minutes in Python per graph build, a mask of a few MB keyed by way and
 direction (or segment key) versioned with the graph id, and a set lookup per candidate edge at
 run time. The work is roughly one to two days for the build step, its tests and the fail-closed
-check that the mask and graph versions match. It is not built; the checklist keeps it a `live`
-precondition.
+check that the mask and graph versions match. It has since been built (about a minute and
+418 KB for the Alberta/BC graph); see
+[`infra/offline/dead-end-mask.md`](../../infra/offline/dead-end-mask.md). The checklist keeps it a
+`live` precondition, with no waiver.
 
 ### End to end on Calgary
 
@@ -832,16 +950,23 @@ Everything above, and:
 - [ ] Real GPS traces, from the app release, have been run through the pipeline on the Alberta/BC
       graph: snap distances and the share of each road class published have been looked at.
       (Synthetic traces on real routes: done locally.)
-- [ ] Either a topology-derived dead-end mask (dead-end components, or edges within 400 m of a
-      terminal along the network, built from the same extract and versioned with the graph) is in
-      place, or the operator accepts that long dead-end regions are not detected. The rules
-      themselves are measured on the Alberta/BC graph (locally, graph of 2026-11-11), and real
-      dead-end valleys were confirmed undetected.
+- [ ] The topology-derived dead-end mask, built from the same extract and bound to the graph
+      Valhalla serves, is configured (`COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH`,
+      `COMMUNITY_TRAFFIC_GRAPH_ID`); the API refuses `live` without it. There is no operator
+      waiver. `COMMUNITY_TRAFFIC_GRAPH_ID` has been confirmed to be the SHA-256 of the graph the
+      production Valhalla actually serves.
+- [ ] An independent privacy and security review has passed on the exact commit to be deployed,
+      covering at least idempotent distance and time evidence, dwell across batch boundaries,
+      cohort-salted tags and newcomer markers, the bounded community pool, epoch-label
+      immutability across restart and database loss, route freshness, and the dead-end mask and
+      its graph binding. The 2026-11-14 review's findings are repaired in code but not yet
+      re-reviewed.
 - [ ] Load: Valhalla answers routes within their budget while probes, `/locate` and route walks
       run at the expected contributor count (`maxConcurrentMatches` stays 1). Single-client
       latencies are measured locally; load is not.
 - [ ] `/v2/routes` presents community-adjusted routes only after its own review: returned order
-      preserved, `fastest` label not used to select, `observedAt` shown.
+      preserved, `fastest` label not used to select, `traffic.oldestObservedAt` shown wherever
+      community traffic is credited (implemented in the phone and CarPlay, unit-tested only).
 - [ ] The residual risks below are accepted in writing, or admission is strengthened first.
 
 ### Accepted residual risks
@@ -859,18 +984,23 @@ Enabling `live` means accepting these plainly:
   the stretch around stops. The server cannot verify it; a modified or faulty app would send
   trip ends, and the server's own 100 m batch trim and road rules are all that stand behind it.
 - **Bearer credentials.** A credential copied off a phone works from anywhere until it expires.
+- **Process memory.** Keys, salts, pending cohorts, held dwells and in-flight batches live
+  unzeroed in API process memory. Anyone who can read it (a core dump, swap, a debugger) can
+  match pending samples to installations with the installation table, and recover newcomers'
+  network buckets by trying them all.
 - **Stale values.** A served speed rests on driving up to 30 minutes old.
 
 ## Retention
 
-| What                                                                                                                      | Where                                    | How long                                                                                                                                                                                     |
-| ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Uploaded positions, offsets, `capturedAt`                                                                                 | Request memory                           | Until the request finishes (not zeroed)                                                                                                                                                      |
-| Pending sample: tag, speed, arrival epoch, driving start; newcomers also a salted network marker                          | API process memory                       | Until released, or dropped at the first boundary more than 15 min after its driving began or its arrival epoch: at most 20 min                                                               |
-| Partial coverage: tag, driven intervals along the edge (metres), distance, time, earliest arrival epoch and driving start | API process memory                       | Until it completes a sample, or dropped at the first boundary more than 15 min after its earliest piece: at most 20 min                                                                      |
-| Release: edge, speed, boundaries, edge geometry                                                                           | `traffic_releases`                       | Never served after the boundary 15 min after release. Deleted by the first successful publication at or after that boundary; erased on every API start, and retried until erased while `off` |
-| Credential and seed                                                                                                       | Phone memory; never stored by the server | Credential valid 2 h; unusable after an API restart                                                                                                                                          |
-| Network and installation rate-limit fingerprints                                                                          | API process memory                       | Salted hash and request times; removed within 11 minutes of the last request; cleared on shutdown                                                                                            |
+| What                                                                                                                                                                                                                                                          | Where                                    | How long                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Uploaded positions, offsets, `capturedAt`                                                                                                                                                                                                                     | Request memory                           | Until the request finishes (not zeroed)                                                                                                                                                      |
+| Pending sample: cohort tag, speed, arrival epoch, driving start, cohort salt; newcomers also a cohort-salted network marker                                                                                                                                   | API process memory                       | Until released, or dropped at the first boundary more than 15 min after its driving began or its arrival epoch: at most 20 min                                                               |
+| Partial coverage: cohort tag, driven intervals along the edge (metres), counted distance and time, each batch's driven span (metres, claimed times), stops and held dwells (distance along the edge, claimed times), earliest arrival epoch and driving start | API process memory                       | Until it completes a sample, or dropped at the first boundary more than 15 min after its earliest piece: at most 20 min                                                                      |
+| Publication record: the boundary the stored rows are, and their count                                                                                                                                                                                         | `traffic_publication`                    | Rewritten at every boundary; erased on every API start                                                                                                                                       |
+| Release: edge, speed, boundaries, edge geometry                                                                                                                                                                                                               | `traffic_releases`                       | Never served after the boundary 15 min after release. Deleted by the first successful publication at or after that boundary; erased on every API start, and retried until erased while `off` |
+| Credential and seed                                                                                                                                                                                                                                           | Phone memory; never stored by the server | Credential valid 2 h; unusable after an API restart                                                                                                                                          |
+| Network and installation rate-limit fingerprints                                                                                                                                                                                                              | API process memory                       | Salted hash and request times; removed within 11 minutes of the last request; cleared on shutdown                                                                                            |
 
 Logical visibility and physical deletion differ. Everything derived from a batch is out of
 memory within 20 minutes of its arrival and no longer served within 35 minutes. A published row
@@ -886,17 +1016,18 @@ updates the installation's counter and `last_active_at`, as every attested reque
 
 ## Configuration
 
-| Variable                                                                      | Default               | Notes                                                                             |
-| ----------------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------- |
-| `COMMUNITY_TRAFFIC_MODE`                                                      | `off`                 | `off`, `collect` (form cohorts, publish and store nothing), `live`                |
-| `VALHALLA_TRACE_URL`                                                          | from `VALHALLA_URL`   | `trace_attributes` endpoint; must be a local endpoint when the mode is not `off`  |
-| `COMMUNITY_TRAFFIC_MIN_CONTRIBUTORS`                                          | `3`                   | 3 to 50                                                                           |
-| `COMMUNITY_TRAFFIC_TRIP_TRIM_METERS`                                          | `400`                 | 400 to 2,000; advertised to the app                                               |
-| `COMMUNITY_TRAFFIC_ROUTE_MIN_COVERAGE`                                        | `0.5`                 | 0.1 to 1                                                                          |
-| `COMMUNITY_TRAFFIC_RATE_LIMIT_GLOBAL`                                         | `6000`                | Authenticated batches per 10 minutes                                              |
-| `COMMUNITY_TRAFFIC_BOUNDS`                                                    | Alberta + BC          | `west,south,east,north`; can only narrow the provincial coverage, never extend it |
-| `APP_ATTEST_*`, `COMMUNITY_ATTESTATION_MODE`, `COMMUNITY_INSTALLATION_SECRET` | see community reports | Required for uploads: without them no credential is issued                        |
-| `PGHOST` and the other `PG*` variables                                        | unset                 | Unset uses an in-memory release store, and no attestation, for development only   |
+| Variable                                                                      | Default               | Notes                                                                                                                              |
+| ----------------------------------------------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `COMMUNITY_TRAFFIC_MODE`                                                      | `off`                 | `off`, `collect` (form cohorts, publish and store nothing), `live`                                                                 |
+| `VALHALLA_TRACE_URL`                                                          | from `VALHALLA_URL`   | `trace_attributes` endpoint; must be a local endpoint when the mode is not `off`                                                   |
+| `COMMUNITY_TRAFFIC_MIN_CONTRIBUTORS`                                          | `3`                   | 3 to 50                                                                                                                            |
+| `COMMUNITY_TRAFFIC_TRIP_TRIM_METERS`                                          | `400`                 | 400 to 2,000; advertised to the app                                                                                                |
+| `COMMUNITY_TRAFFIC_ROUTE_MIN_COVERAGE`                                        | `0.5`                 | 0.1 to 1                                                                                                                           |
+| `COMMUNITY_TRAFFIC_RATE_LIMIT_GLOBAL`                                         | `6000`                | Authenticated batches per 10 minutes                                                                                               |
+| `COMMUNITY_TRAFFIC_BOUNDS`                                                    | Alberta + BC          | `west,south,east,north`; can only narrow the provincial coverage, never extend it                                                  |
+| `COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH`, `COMMUNITY_TRAFFIC_GRAPH_ID`          | unset                 | The dead-end mask and the SHA-256 of the graph it was built for; required for `live`, optional for `collect`, not read while `off` |
+| `APP_ATTEST_*`, `COMMUNITY_ATTESTATION_MODE`, `COMMUNITY_INSTALLATION_SECRET` | see community reports | Required for uploads: without them no credential is issued                                                                         |
+| `PGHOST` and the other `PG*` variables                                        | unset                 | Unset uses an in-memory release store, and no attestation, for development only                                                    |
 
 The privacy limits are enforced when the service is built (`assertTrafficPrivacyLimits`), not
 only when the environment is read: k below 3, a trip trim below 400 m, a batch trim below 100 m,
@@ -958,7 +1089,11 @@ out of scope for the same privacy reasons that keep retention at about half an h
 
 ## Testing
 
-- `apps/api/test/traffic-logic.test.ts`: trimming, plausibility (the last-point future check and
+- `apps/api/test/traffic-logic.test.ts`: evidence idempotence (the reviewed 1.5 km replay case
+  through the released median, a replay claiming another speed, repeated, re-batched and separate
+  stops), dwell holding and confirmation (continuation required, trip ends and trip starts never
+  counted, a contradicted dwell dropped, several stationary batches, the 15-minute window),
+  trimming, plausibility (the last-point future check and
   the first-point age), credentials, cohorts (threshold, one weight per contributor, consumed
   cohorts, per-edge threshold, immutable geometry, the driving window, the newcomer cap),
   privacy limits, observation derivation (road classes, the first-edge sliver), eligibility
@@ -973,7 +1108,10 @@ out of scope for the same privacy reasons that keep retention at about half an h
 - `apps/api/test/traffic-app.test.ts`: the HTTP surface, modes, credentials, the minimum
   installation age and the newcomer cap, rate limiting, epoch snapshots (read before the epoch
   job runs, readers waiting on a slow store, a failed publication answered with `503`, a route
-  walk that spans a boundary), the off-mode purge retry, `accepting` with a report service that
+  walk that spans a boundary, a restart inside a published epoch, a store that lost its
+  snapshot), dwell through the probe endpoint on recorded Alberta/BC batches, the configured
+  service and the dead-end mask (live refuses without a valid mask for its graph, collect runs
+  without, the built matcher applies it), the off-mode purge retry, `accepting` with a report service that
   has no verifier, the total-free status and route enrichment on the in-memory store.
 - `apps/api/test/app.test.ts`: the API keeps running against a database that refuses
   connections; `/ready` reports `database: not_ready` and the Google budget answers `503`.
@@ -982,8 +1120,12 @@ out of scope for the same privacy reasons that keep retention at about half an h
   uploaded position, address or credential in the database or API log, purge on start in every
   mode, credentials issued against real installation rows with a test App Attest authority
   (including the 24-hour age and the newcomer cap), a blocked epoch cancelled by the
-  server's lock timeout without serving its stale rows, and partial coverage kept out of the
-  database and the log.
+  server's lock timeout without serving its stale rows, partial coverage kept out of the
+  database and the log, a restart inside a published epoch and lost unlogged tables answered with
+  `503`, and credential assertions against a held installation lock on the bounded community
+  pool.
+- `apps/api/test/community-transactions.test.ts`: a lock wait cancelled by the server is a
+  retryable `busy`, and a connection whose rollback cannot be confirmed is destroyed.
   It needs PostGIS on `127.0.0.1:5442` (or `NAVOSS_TRAFFIC_TEST_DATABASE_URL`) and skips when
   that is not reachable unless `NAVOSS_REQUIRE_TEST_DATABASE=1`:
 
