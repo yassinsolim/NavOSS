@@ -151,13 +151,15 @@ docker compose -f compose.yaml -f compose.traffic-graph.yaml up -d --force-recre
 ./verify-traffic-graph.sh && ./check-stack.sh
 ```
 
-- Valhalla's entrypoint refuses to serve unless `graph.json` is `COMMUNITY_TRAFFIC_GRAPH_ID`,
+- Valhalla's entrypoint (exactly `/bin/sh /navoss/serve-verified-graph.sh`, the read-only
+  `valhalla-serve-verified.sh`) refuses to serve unless `graph.json` is `COMMUNITY_TRAFFIC_GRAPH_ID`,
   `connected.tar` hashes to it, `valhalla-serving.json` names only `/graph/connected.tar` and
   `provenance.json` binds both. No tile build, no fallback tile directory, no writable mount.
 - The API in `collect` or `live` repeats those checks on its own read-only mount and refuses to
   start unless the mask is bound to the same graph, provenance record and extract.
 - `verify-traffic-graph.sh` (operator, existing Docker access; the API never gets the socket)
-  checks the running containers' effective mounts, image, entrypoint and environment and that
+  checks the running containers' effective mounts, image, complete entrypoint and command,
+  environment, the API's selected matcher endpoint and the `valhalla` name binding, and that
   both started after the directory last changed. `check-stack.sh` runs it in `live`.
 - Replacing the graph means a new directory, a new mask, the new id in `.env`, recreating both
   Valhalla and the API, and clearing traffic observations and releases of the old graph. Nothing

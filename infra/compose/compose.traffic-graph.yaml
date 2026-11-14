@@ -22,19 +22,10 @@ services:
     image: ghcr.io/valhalla/valhalla-scripted:3.8.2@sha256:3d7a08f7e78b356ee873b61711b743ad81bcc114b0ca5731217da8bba6ba39d1
     environment: !override
       NAVOSS_GRAPH_ID: ${COMMUNITY_TRAFFIC_GRAPH_ID:?Set COMMUNITY_TRAFFIC_GRAPH_ID from the serving graph's graph.json}
+    # Exactly this entrypoint and no command: verify-traffic-graph.sh compares them in full.
     entrypoint: !override
       - /bin/sh
-      - -ec
-      - |
-        cd /graph
-        id=$$(jq -er '.graphId | select(test("^[0-9a-f]{64}$$"))' graph.json)
-        [ "$$id" = "$$NAVOSS_GRAPH_ID" ] || { echo 'graph.json is not the configured graph' >&2; exit 1; }
-        jq -e '.mjolnir.tile_extract == "/graph/connected.tar" and .mjolnir.tile_dir == "/nonexistent" and ((.mjolnir.tile_url // "") == "") and ((.mjolnir.traffic_extract // "") == "")' valhalla-serving.json >/dev/null || { echo 'valhalla-serving.json has a tile source other than /graph/connected.tar' >&2; exit 1; }
-        [ ! -e /nonexistent ]
-        config=$$(sha256sum valhalla-serving.json | cut -d ' ' -f 1)
-        jq -e --arg id "$$id" --arg config "$$config" '.graphId == $$id and .servingConfigSha256 == $$config and .routingEngineVersion == "3.8.2"' provenance.json >/dev/null || { echo 'provenance.json does not describe this graph and configuration' >&2; exit 1; }
-        [ "$$(sha256sum connected.tar | cut -d ' ' -f 1)" = "$$id" ] || { echo "connected.tar is not graph $$id" >&2; exit 1; }
-        exec valhalla_service /graph/valhalla-serving.json 2
+      - /navoss/serve-verified-graph.sh
     command: !reset []
     networks: !override
       - backend
@@ -43,5 +34,6 @@ services:
       - /tmp:size=16m,mode=1777
     volumes: !override
       - ${VALHALLA_DATA_DIR:?Set VALHALLA_DATA_DIR to the verified serving graph directory}:/graph:ro
+      - ./valhalla-serve-verified.sh:/navoss/serve-verified-graph.sh:ro
     healthcheck:
       start_period: 5m
