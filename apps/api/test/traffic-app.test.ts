@@ -27,9 +27,11 @@ import {
   createConfiguredTrafficService,
   createTrafficService,
   type TrafficAttestation,
+  type TrafficMetrics,
   type TrafficService,
 } from '../src/traffic/service.js';
-import { createValhallaMapMatcher } from '../src/traffic/map-matcher.js';
+import { createValhallaMapMatcher, type MapMatcher } from '../src/traffic/map-matcher.js';
+import { edgeSegmentKey } from '../src/traffic/segments.js';
 import { DEFAULT_TRAFFIC_SETTINGS, type TrafficSettings } from '../src/traffic/settings.js';
 import {
   createInMemoryTrafficReleaseStore,
@@ -1364,5 +1366,204 @@ describe('standing still across batch boundaries, through HTTP on a recorded rea
         ),
       ).toThrow();
     });
+  });
+});
+
+describe('old evidence over HTTP: nothing is released from driving older than the cohort window', () => {
+  // One synthetic 1.5 km northbound edge, matched directly from each fix's latitude. These are
+  // valid uploads; the matcher is controlled so that what is tested is ingestion and expiry.
+  const T0 = Date.parse('2026-11-14T18:00:00Z');
+  const MINUTE = 60_000;
+  const METERS_PER_DEGREE = 111_195;
+  const at = (meters: number): [number, number] => [-114, 51.01 + meters / METERS_PER_DEGREE];
+  const LINE = [at(0), at(1_500)];
+  const KEY = edgeSegmentKey({ forward: true, wayId: 900_000_001 }, LINE);
+  const oneEdge: MapMatcher = {
+    matchTrace: (points) =>
+      Promise.resolve({
+        edges: [
+          {
+            beginShapeIndex: 0,
+            endShapeIndex: 1,
+            forward: true,
+            fromFraction: 0,
+            lengthMeters: 1_500,
+            line: LINE,
+            openThroughRoad: true,
+            roadClass: 'primary',
+            segmentKey: KEY,
+            speedKph: 80,
+            toFraction: 1,
+            use: 'road',
+            wayId: 900_000_001,
+          },
+        ],
+        points: points.map(({ position }) => ({
+          edgeFraction: ((position[1] - 51.01) * METERS_PER_DEGREE) / 1_500,
+          edgeIndex: 0,
+          startsNewPath: false,
+        })),
+      }),
+    walkRoute: () => Promise.resolve(undefined),
+  };
+  /** Driving from `from` to `to` metres at 36 km/h, one fix a second. */
+  /** A fix at `meters` along the edge, `seconds` into its batch. */
+  const fix = (meters: number, seconds: number): [number, number, number] => [
+    ...at(meters),
+    seconds,
+  ];
+  const moving = (from: number, to: number): TrafficProbeBatchRequest['points'] =>
+    Array.from({ length: (to - from) / 10 + 1 }, (_, index) => fix(from + index * 10, index));
+  /**
+   * 0–600 m with 40 s standing at 300 m: after the 100 m trims, 400 m and 80 s (18 km/h) on
+   * metres the 600–1200 m batch never drove.
+   */
+  const earlier: TrafficProbeBatchRequest['points'] = [
+    ...moving(0, 300),
+    ...Array.from({ length: 20 }, (_, index) => fix(300, 32 + index * 2)),
+    ...Array.from({ length: 30 }, (_, index) => fix(310 + index * 10, 71 + index)),
+  ];
+
+  interface OneEdgeTraffic {
+    metrics(): TrafficMetrics;
+    /** Uploads `points` as `driver` at `arrivalMs`, claiming they began at `capturedAtMs`. */
+    upload(
+      driver: string,
+      points: TrafficProbeBatchRequest['points'],
+      capturedAtMs: number,
+      arrivalMs: number,
+    ): Promise<void>;
+    /** Closes the epoch at `boundaryMs`; the speeds the flow layer then serves for the edge. */
+    releasedAt(boundaryMs: number): Promise<number[]>;
+  }
+
+  async function service(): Promise<OneEdgeTraffic> {
+    let nowMs = T0;
+    const clock = (): Date => new Date(nowMs);
+    const traffic = createTrafficService({
+      attestation: fakeAttestation(),
+      clock,
+      mapMatcher: oneEdge,
+      settings: { ...DEFAULT_TRAFFIC_SETTINGS, mode: 'live' },
+    });
+    const app = await buildApp({
+      clock,
+      communityReports: null,
+      searchProvider: createFixtureSearchProvider(CALGARY_SEARCH_FIXTURES),
+      trafficService: traffic,
+    });
+    apps.push(app);
+    const FLOW = `/v2/traffic/flow?bbox=${String(
+      snapTrafficFlowBounds({ east: -113.99, north: 51.03, south: 51, west: -114.01 }),
+    )}`;
+    return {
+      metrics: () => traffic.metrics(),
+      async upload(driver, points, capturedAtMs, arrivalMs) {
+        nowMs = arrivalMs;
+        const response = await app.inject({
+          headers: { 'x-forwarded-for': `198.51.100.${String(driver.charCodeAt(0))}` },
+          method: 'POST',
+          payload: {
+            capturedAt: new Date(capturedAtMs).toISOString(),
+            credential: await credentialFor(traffic, driver),
+            points,
+            schemaVersion: 1,
+          },
+          url: '/v2/traffic/probes',
+        });
+        expect(response.statusCode).toBe(202);
+      },
+      async releasedAt(boundaryMs) {
+        nowMs = boundaryMs + 5_000;
+        await traffic.runEpoch();
+        const response = await app.inject(FLOW);
+        expect(response.statusCode).toBe(200);
+        return TrafficFlowResponseSchema.parse(response.json())
+          .features.filter(({ id }) => id === KEY)
+          .map(({ properties }) => properties.speedKph);
+      },
+    };
+  }
+
+  /**
+   * Drivers a and b complete samples before 18:15: by default at 18:12 from driving at 18:11
+   * (600–1200 m). `late` runs at 18:18. Driver c then completes a fresh sample from driving that
+   * began at `third`. Every boundary up to then is closed, as the running service does, and
+   * releases nothing: two contributors are not enough.
+   */
+  async function timeline(
+    third: number,
+    {
+      late,
+      opening = async (traffic) => {
+        for (const driver of ['a', 'b']) {
+          await traffic.upload(driver, moving(600, 1_200), T0 + 11 * MINUTE, T0 + 12 * MINUTE);
+        }
+      },
+    }: {
+      late?: (traffic: OneEdgeTraffic) => Promise<void>;
+      opening?: (traffic: OneEdgeTraffic) => Promise<void>;
+    } = {},
+  ): Promise<OneEdgeTraffic> {
+    const traffic = await service();
+    await opening(traffic);
+    expect(traffic.metrics().pendingSamples).toBe(2);
+    expect(await traffic.releasedAt(T0 + 15 * MINUTE)).toEqual([]);
+    await late?.(traffic);
+    if (third >= T0 + 20 * MINUTE) expect(await traffic.releasedAt(T0 + 20 * MINUTE)).toEqual([]);
+    await traffic.upload('c', moving(600, 1_200), third, third + MINUTE);
+    expect(traffic.metrics().pendingSamples).toBe(3);
+    return traffic;
+  }
+  /** a and b each send, at 18:18, a delayed batch of their driving from 18:09. */
+  const lateEarlier = async (traffic: OneEdgeTraffic) => {
+    for (const driver of ['a', 'b']) {
+      await traffic.upload(driver, earlier, T0 + 9 * MINUTE, T0 + 18 * MINUTE);
+    }
+  };
+
+  it('counts a delayed batch while its driving is inside the window', async () => {
+    const traffic = await timeline(T0 + 18 * MINUTE, { late: lateEarlier });
+    expect(traffic.metrics()).toMatchObject({ batchesAccepted: 5, batchesDropped: 0 });
+    // a and b: 800 m in 120 s, 24 km/h; c: 36 km/h. At 18:20 the 18:09 driving is 11 minutes old.
+    expect(await traffic.releasedAt(T0 + 20 * MINUTE)).toEqual([25]);
+  });
+
+  it('releases nothing at 18:25 from samples that took 18:09 driving at 18:18', async () => {
+    const control = await timeline(T0 + 20 * MINUTE);
+    expect(await control.releasedAt(T0 + 25 * MINUTE)).toEqual([35]);
+
+    const traffic = await timeline(T0 + 20 * MINUTE, { late: lateEarlier });
+    // The delayed batches were accepted and counted, not dropped.
+    expect(traffic.metrics()).toMatchObject({ batchesAccepted: 5, batchesDropped: 0 });
+    // At 18:25 the window begins at 18:10: a's and b's samples rest on driving from 18:09.
+    expect(await traffic.releasedAt(T0 + 25 * MINUTE)).toEqual([]);
+    expect(traffic.metrics().pendingSamples).toBe(1);
+  });
+
+  it('a repeat that counts nothing never makes a fresh sample expire', async () => {
+    // After completion: the completed sample's own batch again at 18:18, now claiming 18:09.
+    const afterCompletion = await timeline(T0 + 20 * MINUTE, {
+      late: async (traffic) => {
+        for (const driver of ['a', 'b']) {
+          await traffic.upload(driver, moving(600, 1_200), T0 + 9 * MINUTE, T0 + 18 * MINUTE);
+        }
+      },
+    });
+    expect(await afterCompletion.releasedAt(T0 + 25 * MINUTE)).toEqual([35]);
+
+    // Before completion: 700–900 m driven at 18:11, that piece again at 18:13 claiming 18:09,
+    // then 900–1200 m driven at 18:13 completes the sample.
+    const beforeCompletion = await timeline(T0 + 20 * MINUTE, {
+      opening: async (traffic) => {
+        for (const driver of ['a', 'b']) {
+          await traffic.upload(driver, moving(600, 1_000), T0 + 11 * MINUTE, T0 + 12 * MINUTE);
+          await traffic.upload(driver, moving(600, 1_000), T0 + 9 * MINUTE, T0 + 13 * MINUTE);
+          await traffic.upload(driver, moving(800, 1_300), T0 + 13 * MINUTE, T0 + 14 * MINUTE);
+        }
+      },
+    });
+    expect(beforeCompletion.metrics()).toMatchObject({ batchesAccepted: 7, batchesDropped: 0 });
+    expect(await beforeCompletion.releasedAt(T0 + 25 * MINUTE)).toEqual([35]);
   });
 });
