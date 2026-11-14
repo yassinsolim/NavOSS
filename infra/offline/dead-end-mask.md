@@ -279,8 +279,10 @@ The mask belongs to exactly one graph build, and the API must read the bytes Val
    the directory or the entrypoint script last changed. The API's matcher endpoint, selected as
    the traffic service selects it (`VALHALLA_TRACE_URL` when set, even empty, otherwise
    `trace_attributes` resolved against `VALHALLA_URL`), must be exactly
-   `http://valhalla:8002/trace_attributes`, and on every network the API shares with it the
-   inspected Valhalla must be the only container answering to `valhalla`. It needs `docker`,
+   `http://valhalla:8002/trace_attributes`; the inspected Valhalla must answer to `valhalla` on a
+   network the API joins, and no other container may answer to it (name, alias or DNS name) on
+   **any** network the API joins, shared with Valhalla or not. A network or member that cannot be
+   inspected fails the check. It needs `docker`,
    `jq`, `perl` and `sha256sum` or `shasum`. Only then set `live`. `check-stack.sh` runs it whenever the mode is `live`.
 5. A new graph means a new directory, a new mask, the new id, recreating both Valhalla and the
    API, and clearing traffic observations and releases of the old graph. Nothing replaces a graph
@@ -296,8 +298,9 @@ and refuses a writable Valhalla mount and a directory changed after start.
 recorded-shape container records and checks that it refuses an expected `exec` hidden in a
 comment before another configuration, an extra command, another entrypoint script, a writable
 mount, a matcher at another private Valhalla, an empty trace URL, a `VALHALLA_URL` fallback to
-another host, no shared `valhalla` alias, a second container answering to `valhalla`, and a
-container started before the directory changed.
+another host, no shared `valhalla` alias, a second container answering to `valhalla` on the
+shared network or on a network only the API joins (alias or DNS name), a network that cannot be
+inspected, and a container started before the directory changed.
 
 ## Verification on the real Alberta/BC graph
 

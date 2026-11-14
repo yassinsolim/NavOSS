@@ -159,7 +159,8 @@ docker compose -f compose.yaml -f compose.traffic-graph.yaml up -d --force-recre
   start unless the mask is bound to the same graph, provenance record and extract.
 - `verify-traffic-graph.sh` (operator, existing Docker access; the API never gets the socket)
   checks the running containers' effective mounts, image, complete entrypoint and command,
-  environment, the API's selected matcher endpoint and the `valhalla` name binding, and that
+  environment, the API's selected matcher endpoint and that only the inspected Valhalla answers
+  to `valhalla` on any network the API joins, and that
   both started after the directory last changed. `check-stack.sh` runs it in `live`.
 - Replacing the graph means a new directory, a new mask, the new id in `.env`, recreating both
   Valhalla and the API, and clearing traffic observations and releases of the old graph. Nothing

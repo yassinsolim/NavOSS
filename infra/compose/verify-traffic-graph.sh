@@ -103,20 +103,27 @@ selected=$(printf '%s' "$api_json" | jq -r '
   else "" end')
 [ "$selected" = "$trace_url" ] || fail "the API matches traces at $selected, not $trace_url"
 
-# `valhalla` must resolve, on a network the API shares, to the inspected container only.
-shared=$(jq -nr --argjson api "$api_json" --argjson valhalla "$valhalla_json" '
-  ($api[0].NetworkSettings.Networks | keys) as $mine
-  | $valhalla[0].NetworkSettings.Networks | to_entries[]
-  | select((.key as $n | $mine | index($n)) != null and ((.value.Aliases // []) | index("valhalla")) != null)
-  | .key')
-[ -n "$shared" ] || fail 'the API shares no network on which the inspected container is valhalla'
-valhalla_id=$(printf '%s' "$valhalla_json" | jq -r '.[0].Id')
-for network in $shared; do
-  for member in $(docker network inspect "$network" | jq -r '.[0].Containers // {} | keys[]'); do
-    [ "$member" = "$valhalla_id" ] && continue
-    docker inspect "$member" | jq -e --arg n "$network" '
-      .[0] | (.Name == "/valhalla") or (((.NetworkSettings.Networks[$n].Aliases // []) | index("valhalla")) != null)' \
-      >/dev/null && fail "another container also answers to valhalla on $network"
+# `valhalla` must resolve, from the API, to the inspected container only: that container answers
+# to `valhalla` on at least one network the API joins, and no other container answers to it on
+# any network the API joins (shared with Valhalla or not). A network or member that cannot be
+# inspected fails the check.
+valhalla_id=$(printf '%s' "$valhalla_json" | jq -er '.[0].Id') || fail 'valhalla has no container id'
+api_networks=$(printf '%s' "$api_json" | jq -er '.[0].NetworkSettings.Networks | keys[]') ||
+  fail 'the API joins no network'
+reachable=
+for network in $api_networks; do
+  network_json=$(docker network inspect "$network") || fail "network $network cannot be inspected"
+  members=$(printf '%s' "$network_json" | jq -er '.[0].Containers | keys[]') ||
+    fail "network $network lists no containers"
+  for member in $members; do
+    member_json=$(docker inspect "$member") || fail "container $member on $network cannot be inspected"
+    printf '%s' "$member_json" | jq -e --arg n "$network" '.[0]
+      | (.Name == "/valhalla")
+        or (((.NetworkSettings.Networks[$n].Aliases // []) + (.NetworkSettings.Networks[$n].DNSNames // []))
+          | index("valhalla") != null)' >/dev/null || continue
+    [ "$member" = "$valhalla_id" ] || fail "another container also answers to valhalla on $network"
+    reachable=yes
   done
 done
+[ -n "$reachable" ] || fail 'the API shares no network on which the inspected container is valhalla'
 echo "verify-traffic-graph: graph $graph_id verified in the running stack"
