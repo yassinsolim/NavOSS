@@ -167,13 +167,25 @@ public struct NavOSSCarPlayRouteStep: Codable, Equatable, Sendable {
   }
 }
 
+/// Parses a traffic publication boundary (ISO 8601, with or without fractional seconds).
+public func navOSSTrafficBoundary(_ value: String?) -> Date? {
+  guard let value else { return nil }
+  let fractional = ISO8601DateFormatter()
+  fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+  return fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+}
+
 public struct NavOSSCarPlayTraffic: Codable, Equatable, Sendable {
   public let delaySeconds: Double
   public let typicalDurationSeconds: Double
+  /// Community traffic only: the oldest publication boundary of the speeds applied to the route,
+  /// shown as "as of" wherever the traffic is credited. `nil` when the server did not say.
+  public let oldestObservedAt: Date?
 
-  public init(delaySeconds: Double, typicalDurationSeconds: Double) {
+  public init(delaySeconds: Double, typicalDurationSeconds: Double, oldestObservedAt: Date? = nil) {
     self.delaySeconds = delaySeconds
     self.typicalDurationSeconds = typicalDurationSeconds
+    self.oldestObservedAt = oldestObservedAt
   }
 
   var isValid: Bool {

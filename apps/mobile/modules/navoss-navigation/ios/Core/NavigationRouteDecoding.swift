@@ -164,7 +164,21 @@ struct NavigationRouteStepWire: Decodable {
 struct NavigationRouteWire: Decodable {
   struct Traffic: Decodable {
     let delaySeconds: Double
+    /// Community traffic only: the oldest publication boundary of the speeds applied. Optional,
+    /// and dropped rather than failing the route when it is missing or unreadable.
+    let oldestObservedAt: Date?
     let typicalDurationSeconds: Double
+
+    private enum CodingKeys: String, CodingKey {
+      case delaySeconds, oldestObservedAt, typicalDurationSeconds
+    }
+
+    init(from decoder: Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      delaySeconds = try container.decode(Double.self, forKey: .delaySeconds)
+      typicalDurationSeconds = try container.decode(Double.self, forKey: .typicalDurationSeconds)
+      oldestObservedAt = navOSSTrafficBoundary(lenient(String.self, container, .oldestObservedAt))
+    }
   }
 
   let congestion: [NavOSSCarPlayCongestionLevel]?
@@ -286,7 +300,8 @@ func navigationTrips(
       traffic: route.traffic.map {
         NavOSSCarPlayTraffic(
           delaySeconds: $0.delaySeconds,
-          typicalDurationSeconds: $0.typicalDurationSeconds
+          typicalDurationSeconds: $0.typicalDurationSeconds,
+          oldestObservedAt: $0.oldestObservedAt
         )
       },
       waypoints: waypoints.isEmpty ? nil : waypoints,

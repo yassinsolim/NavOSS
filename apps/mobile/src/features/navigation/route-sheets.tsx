@@ -10,6 +10,7 @@ import type { SharedValue } from 'react-native-reanimated';
 
 import { routePreviewSheetDetents, type ScreenMetrics } from '@/features/map/overlay-layout';
 import {
+  communityTrafficFreshness,
   formatArrivalTime,
   formatDistance,
   formatDuration,
@@ -106,12 +107,14 @@ function RouteChoiceCard({
   const { colors } = useTheme();
   const styles = useStyles();
   const trafficDelay = formatTrafficDelay(route.traffic?.delaySeconds ?? 0);
+  // Spoken with the delay; the sheet's traffic line shows it for the selected route.
+  const trafficFreshness = communityTrafficFreshness(route.traffic);
   const viaLabel = routeViaLabel(route);
   const detail = `${route.label === 'fastest' ? 'Fastest · ' : ''}${formatDistance(route.distanceMeters)}${trafficDelay === undefined ? '' : ` · ${trafficDelay}`}`;
 
   return (
     <PressableScale
-      accessibilityLabel={`Select ${route.label} ${formatDuration(route.durationSeconds)} route, ${formatDistance(route.distanceMeters)}, ${viaLabel}${trafficDelay === undefined ? '' : `, ${trafficDelay}`}`}
+      accessibilityLabel={`Select ${route.label} ${formatDuration(route.durationSeconds)} route, ${formatDistance(route.distanceMeters)}, ${viaLabel}${trafficDelay === undefined ? '' : `, ${trafficDelay}${trafficFreshness === undefined ? '' : ` ${trafficFreshness}`}`}`}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onSelect}

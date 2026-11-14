@@ -291,9 +291,25 @@ export function routeViaLabel(route: RouteAlternativeV2): string {
 }
 
 /**
+ * How fresh a route's community traffic is: "as of" the oldest publication boundary of the
+ * speeds the server applied to it, never the time of the route request. Undefined when the
+ * server did not say (an older server), or said something unreadable.
+ */
+export function communityTrafficFreshness(
+  traffic: RouteAlternativeV2['traffic'] | undefined,
+): string | undefined {
+  const observedMs = Date.parse(traffic?.oldestObservedAt ?? '');
+  if (!Number.isFinite(observedMs)) return undefined;
+  return `as of ${new Date(observedMs).toLocaleTimeString('en-CA', {
+    hour: 'numeric',
+    minute: '2-digit',
+  })}`;
+}
+
+/**
  * What the route says about traffic, stated as it is. Provider traffic reads "Live traffic" (or
- * its delay); community traffic is credited to its source, and only on a route it observed.
- * Everything else reads "No live traffic".
+ * its delay); community traffic is credited to its source, and only on a route it observed, with
+ * how fresh it is when the server says. Everything else reads "No live traffic".
  */
 export function routeTrafficLabel(
   source: RouteResponseV2['source'] | undefined,
@@ -301,9 +317,13 @@ export function routeTrafficLabel(
 ): string {
   if (source?.traffic !== 'live') return 'No live traffic';
   if (source.trafficSource !== undefined) {
-    return route?.traffic !== undefined || route?.congestion !== undefined
+    if (route?.traffic === undefined && route?.congestion === undefined) {
+      return 'No live traffic on this route';
+    }
+    const freshness = communityTrafficFreshness(route.traffic);
+    return freshness === undefined
       ? source.trafficSource.attribution
-      : 'No live traffic on this route';
+      : `${source.trafficSource.attribution} · ${freshness}`;
   }
   return formatTrafficDelay(route?.traffic?.delaySeconds ?? 0) ?? 'Live traffic';
 }

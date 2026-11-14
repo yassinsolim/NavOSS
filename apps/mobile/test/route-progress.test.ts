@@ -275,6 +275,24 @@ describe('route traffic label', () => {
     expect(routeTrafficLabel(community, {})).toBe('No live traffic on this route');
   });
 
+  it('says how fresh community traffic is from the oldest release it used, not the request', () => {
+    const observed = new Date(2026, 10, 13, 18, 0, 0);
+    const label = routeTrafficLabel(community, {
+      congestion: ['slow'],
+      traffic: {
+        delaySeconds: 60,
+        observedFraction: 0.4,
+        oldestObservedAt: observed.toISOString(),
+        snapshotAt: new Date(observed.getTime() + 300_000).toISOString(),
+        typicalDurationSeconds: 600,
+      },
+    });
+    expect(label).toMatch(/^Traffic from opted-in NavOSS drivers · as of 6:00/);
+    expect(label).not.toContain('6:05');
+    // An unobserved alternative claims no traffic, so no freshness either.
+    expect(routeTrafficLabel(community, {})).toBe('No live traffic on this route');
+  });
+
   it('keeps the provider traffic wording', () => {
     const mapbox = {
       attribution: 'Routing and traffic by Mapbox' as const,
