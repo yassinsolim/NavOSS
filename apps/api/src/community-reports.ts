@@ -19,7 +19,7 @@ import {
   type CommunityReportVoteValue,
   type Coordinate,
 } from '@navoss/contracts';
-import { Pool, type PoolClient } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod/v4';
 
 import {
@@ -49,6 +49,7 @@ import {
   type Evidence,
   type ReportEvidenceInput,
 } from './community-trust.js';
+import { createBoundedPool, rollbackOrDiscard } from './bounded-pool.js';
 import { pendingMigrations } from './migrations.js';
 
 const CHALLENGE_LIFETIME_MS = 5 * 60 * 1_000;
@@ -186,6 +187,8 @@ const POINT_SQL = (longitude: string, latitude: string): string =>
 /** PostgreSQL deadlock and serialization failures: safe to retry the whole transaction. */
 const RETRYABLE_SQLSTATES = new Set(['40001', '40P01']);
 const MAXIMUM_TRANSACTION_ATTEMPTS = 3;
+/** `lock_timeout` expired while waiting for a row lock. */
+const LOCK_NOT_AVAILABLE_SQLSTATE = '55P03';
 
 function base64ToBytes(value: string): Buffer {
   return Buffer.from(value, 'base64');
@@ -277,6 +280,8 @@ export function createCommunityReportService(
     } catch (error: unknown) {
       throw new CommunityReportError('unavailable', { cause: error });
     }
+    // Set when a rollback cannot be confirmed: the connection is destroyed, never reused.
+    let discard: Error | undefined;
     try {
       for (let attempt = 1; ; attempt += 1) {
         try {
@@ -285,18 +290,25 @@ export function createCommunityReportService(
           await client.query('COMMIT');
           return result;
         } catch (error: unknown) {
-          await client.query('ROLLBACK').catch(() => undefined);
+          discard = await rollbackOrDiscard(client);
           if (error instanceof CommunityReportError) throw error;
+          if (discard !== undefined)
+            throw new CommunityReportError('unavailable', { cause: error });
           const code = (error as { code?: unknown }).code;
           if (typeof code === 'string' && RETRYABLE_SQLSTATES.has(code)) {
             if (attempt < MAXIMUM_TRANSACTION_ATTEMPTS) continue;
+            throw new CommunityReportError('busy', { cause: error });
+          }
+          // A lock wait cancelled by `lock_timeout`: another request holds the row. Retrying
+          // here would only wait again; the caller may retry shortly.
+          if (code === LOCK_NOT_AVAILABLE_SQLSTATE) {
             throw new CommunityReportError('busy', { cause: error });
           }
           throw new CommunityReportError('unavailable', { cause: error });
         }
       }
     } finally {
-      client.release();
+      client.release(discard);
     }
   };
 
@@ -943,9 +955,9 @@ export function createConfiguredCommunityReportService(input: {
   const writable =
     environment.APP_ATTEST_TEAM_ID !== undefined &&
     environment.COMMUNITY_INSTALLATION_SECRET !== undefined;
-  const pool = new Pool({ max: 5 });
-  // An idle connection the server drops is reported here; unheard, it would end the process.
-  pool.on('error', () => undefined);
+  // The same server-side statement, lock and idle-transaction bounds as the traffic pool:
+  // traffic credentials are issued through this pool, under an installation row lock.
+  const pool = createBoundedPool(5);
   return createCommunityReportService({
     attestationMode: environment.COMMUNITY_ATTESTATION_MODE,
     ...(input.clock === undefined ? {} : { clock: input.clock }),

@@ -1,1 +1,330 @@
-{"capturedAt":"2026-11-12T23:56:59.486Z","endpoint":"https://valhalla1.openstreetmap.de/route","decoderVersion":"3.8.2","licenseUrl":"https://www.openstreetmap.org/copyright","rawResponseSha256":"20190dbd4e38fcad82c789f1b0081de31e1b4f4ae5f8172b97a31f094c15b83e","trimmed":"Decoded recorded response subset. Only incoming/current maneuver-node edge fields are retained; empty unreferenced node slots preserve original indices. Source route/maneuver/lane/limit values are unchanged; original wire hash retained.","request":{"locations":[{"lon":-114.0201,"lat":51.0626},{"lon":-114.0943,"lat":50.9932}],"costing":"auto","alternates":0,"format":"pbf","shape_format":"geojson","units":"kilometers","language":"en-US","annotations":["maxspeed"],"turn_lanes":true,"banner_instructions":true,"voice_instructions":true,"directions_type":"instructions","roundabout_exits":true,"pbf_field_selector":{"directions":true,"trip":true},"filters":{"action":"include","attributes":["shape_attributes.speed_limit","edge.turn_lanes","edge.begin_heading","edge.end_heading","edge.names","edge.begin_shape_index","edge.end_shape_index"]}},"response":{"directions":{"routes":[{"legs":[{"maneuver":[{"streetName":[],"type":3,"textInstruction":"Drive north.","length":0.08979853987693787,"time":32.35352325439453,"beginHeading":359,"endShapeIndex":4,"verbalPreTransitionInstruction":"Drive north. Then Turn right onto 12 Avenue NE.","verbalSuccinctTransitionInstruction":"Drive north. Then Turn right onto 12 Avenue NE."},{"streetName":[{"value":"12 Avenue NE"}],"type":10,"textInstruction":"Turn right onto 12 Avenue NE.","length":0.164000004529953,"time":30.02869415283203,"beginHeading":60,"beginShapeIndex":4,"endShapeIndex":13,"verbalPreTransitionInstruction":"Turn right onto 12 Avenue NE.","beginPathIndex":3,"turnDegree":64,"verbalSuccinctTransitionInstruction":"Turn right."},{"streetName":[{"value":"17A Street NE"}],"type":15,"textInstruction":"Turn left onto 17A Street NE.","length":0.17100000381469727,"time":36.07433319091797,"beginShapeIndex":13,"endShapeIndex":15,"verbalPreTransitionInstruction":"Turn left onto 17A Street NE.","beginPathIndex":4,"turnDegree":271,"verbalSuccinctTransitionInstruction":"Turn left."},{"streetName":[{"value":"14 Avenue NE"}],"type":10,"textInstruction":"Turn right onto 14 Avenue NE.","length":0.3009999990463257,"time":56.437889099121094,"beginHeading":90,"beginShapeIndex":15,"endShapeIndex":24,"verbalPreTransitionInstruction":"Turn right onto 14 Avenue NE.","beginPathIndex":6,"turnDegree":91,"verbalSuccinctTransitionInstruction":"Turn right."},{"streetName":[{"value":"19 Street NE"}],"type":15,"textInstruction":"Turn left onto 19 Street NE.","length":0.18000002205371857,"time":25.276275634765625,"beginHeading":22,"beginShapeIndex":24,"endShapeIndex":32,"verbalPreTransitionInstruction":"Turn left onto 19 Street NE.","beginPathIndex":14,"turnDegree":292,"verbalSuccinctTransitionInstruction":"Turn left."},{"streetName":[{"value":"1","isRouteNumber":true},{"value":"16 Avenue NE"}],"type":15,"textInstruction":"Turn left onto 1/16 Avenue NE.","length":0.953999936580658,"time":74.17832946777344,"beginHeading":273,"beginShapeIndex":32,"endShapeIndex":50,"verbalPreTransitionInstruction":"Turn left onto 1, 16 Avenue NE.","beginPathIndex":19,"turnDegree":273,"verbalSuccinctTransitionInstruction":"Turn left."},{"streetName":[],"type":19,"textInstruction":"Take the 2 South/Deerfoot Trail ramp on the left toward Fort Macleod.","length":0.12600001692771912,"time":15.295669555664062,"beginHeading":256,"beginShapeIndex":50,"endShapeIndex":58,"verbalPreTransitionInstruction":"Take the 2 South, Deerfoot Trail ramp on the left toward Fort Macleod.","sign":{"exitNumbers":[],"exitOntoStreets":[{"text":"2 South"},{"text":"Deerfoot Trail"}],"exitTowardLocations":[{"text":"Fort Macleod"}],"exitNames":[],"guideOntoStreets":[],"guideTowardLocations":[],"junctionNames":[]},"beginPathIndex":28,"turnDegree":346},{"streetName":[{"value":"2","isRouteNumber":true}],"type":23,"textInstruction":"Keep right to take 2 South/Deerfoot Trail toward Fort Macleod.","length":9.144999504089355,"time":450.49664306640625,"beginHeading":184,"beginShapeIndex":58,"endShapeIndex":265,"verbalPreTransitionInstruction":"Keep right to take 2 South, Deerfoot Trail toward Fort Macleod.","sign":{"exitNumbers":[],"exitOntoStreets":[{"text":"2 South"},{"text":"Deerfoot Trail"}],"exitTowardLocations":[{"text":"Fort Macleod"}],"exitNames":[],"guideOntoStreets":[],"guideTowardLocations":[],"junctionNames":[]},"beginPathIndex":31,"turnDegree":1},{"streetName":[],"type":20,"textInstruction":"Take exit 248 toward Glenmore Trail.","length":0.7630000114440918,"time":37.1263427734375,"beginHeading":206,"beginShapeIndex":265,"endShapeIndex":276,"verbalPreTransitionInstruction":"Take exit 248 toward Glenmore Trail.","sign":{"exitNumbers":[{"text":"248"}],"exitOntoStreets":[],"exitTowardLocations":[{"text":"Glenmore Trail"}],"exitNames":[],"guideOntoStreets":[],"guideTowardLocations":[],"junctionNames":[]},"beginPathIndex":49,"turnDegree":1},{"streetName":[{"value":"Glenmore Trail SE"}],"type":23,"textInstruction":"Keep right to take exit 248B onto Glenmore Trail SE toward Glenmore Trail West.","length":4.1660003662109375,"time":204.31988525390625,"beginHeading":203,"beginShapeIndex":276,"endShapeIndex":365,"verbalPreTransitionInstruction":"Keep right to take exit 248B onto Glenmore Trail SE toward Glenmore Trail West.","sign":{"exitNumbers":[{"text":"248B"}],"exitOntoStreets":[],"exitTowardLocations":[{"text":"Glenmore Trail West"}],"exitNames":[],"guideOntoStreets":[],"guideTowardLocations":[],"junctionNames":[]},"beginPathIndex":50,"turnDegree":11},{"streetName":[],"type":20,"textInstruction":"Take the 14 Street W South exit toward 14 Street West (Hospital).","length":0.3490000367164612,"time":31.5289306640625,"beginHeading":281,"beginShapeIndex":365,"endShapeIndex":387,"verbalPreTransitionInstruction":"Take the 14 Street W South exit toward 14 Street West (Hospital).","sign":{"exitNumbers":[],"exitOntoStreets":[{"text":"14 Street W South"}],"exitTowardLocations":[{"text":"14 Street West (Hospital)"}],"exitNames":[],"guideOntoStreets":[],"guideTowardLocations":[],"junctionNames":[]},"beginPathIndex":76,"turnDegree":17},{"streetName":[],"type":23,"textInstruction":"Keep right to take 14 Street W South.","length":0.2370000183582306,"time":23.081787109375,"beginHeading":138,"beginShapeIndex":387,"endShapeIndex":395,"verbalPreTransitionInstruction":"Keep right to take 14 Street W South.","sign":{"exitNumbers":[],"exitOntoStreets":[{"text":"14 Street W South"}],"exitTowardLocations":[],"exitNames":[],"guideOntoStreets":[],"guideTowardLocations":[],"junctionNames":[]},"beginPathIndex":82,"turnDegree":357},{"streetName":[{"value":"14 Street SW"}],"type":8,"textInstruction":"Continue toward 14 Street W South.","length":0.48099997639656067,"time":46.47052001953125,"beginHeading":172,"beginShapeIndex":395,"endShapeIndex":405,"verbalPreTransitionInstruction":"Continue toward 14 Street W South.","sign":{"exitNumbers":[],"exitOntoStreets":[],"exitTowardLocations":[],"exitNames":[],"guideOntoStreets":[],"guideTowardLocations":[{"text":"14 Street W South"}],"junctionNames":[]},"beginPathIndex":83,"turnDegree":351},{"streetName":[{"value":"75 Avenue SW"}],"type":15,"textInstruction":"Turn left onto 75 Avenue SW.","length":0.06599999964237213,"time":20.6956787109375,"beginHeading":87,"beginShapeIndex":405,"endShapeIndex":409,"verbalPreTransitionInstruction":"Turn left onto 75 Avenue SW. Then Turn left onto Kew Street SW.","beginPathIndex":91,"turnDegree":267,"verbalSuccinctTransitionInstruction":"Turn left. Then Turn left onto Kew Street SW."},{"streetName":[{"value":"Kew Street SW"}],"type":15,"textInstruction":"Turn left onto Kew Street SW.","length":0.5626205801963806,"time":105.087890625,"beginHeading":357,"beginShapeIndex":409,"endShapeIndex":423,"verbalPreTransitionInstruction":"Turn left onto Kew Street SW.","beginPathIndex":94,"turnDegree":281,"verbalSuccinctTransitionInstruction":"Turn left."},{"streetName":[],"type":4,"textInstruction":"You have arrived at your destination.","beginShapeIndex":423,"endShapeIndex":423,"verbalPreTransitionInstruction":"You have arrived at your destination.","beginPathIndex":101}],"summary":{"length":17.755420684814453,"time":1188.452392578125},"shape":"wsrk`BlwenxEcSRgNXsJj@qBJgBaHeKm]wGaUgA_Ey@iESuECwEAgg@E}DsC?wzAn@C{j@@y\\?}MHyk@Ayi@Eil@@}^?qA?eKwDuBk[TgXR{LFsJ\\w@?uC@kHACfIGnG?vW\\rgA@nnB?rz@FduAaC|bBy@tX}Bno@mBbo@}FfpBa@lU[dRKhREfIS|Y@fj@`BhQx@|W\\|Gf@|E~@hEhAhCfDnDhQp@tVtAhEA`EOpFQ`OaAvOc@rUwDnKqBdM_ChLgD|JsDdJiDlJyDrS{Kn\\mSbSwLrd@oYvTaOf[_XlnBsuA`pAcfAjm@sd@jo@ui@hs@_k@rl@}`@||@wf@lOyHlx@}[bp@wQtf@aKdjAeS|w@oQlGuBlTkFtXuGlNuE|HuCrMaGzGuDvIsFlFuDvSeTjRwRjMeOxGiKjGeLzF_L~GmNvFkNlHsQpFeO~La^pjAatDhRen@fMm]xM{ZtJsQdKiQ`MaQdQ{QrCmCj]oXzNmHbOqHzPaHhS{HlNwEhLqE~L}DnP}FdM}EjKwDzr@gWpRaKhNmHzLuIxOqKxHmFvKeJ|NwOlT_Y~G_MhIyNjOy[bMi\\nIcV`M__@~Psl@~IoYnGwPxGcQlIkT|FoMpGuLrIaOzKcP~HuKtHwI|HoIjHqGlKiJdPyKvKiGhTyJ`MaFxO}C~KuBxQkBzMo@fPI`O~@zI|@hOpBxV`EfLlC|NpErNnEtO`GldAza@tuAlj@ns@vWnsAlk@zwD|vAde@`RnXxKn]`Nnl@pU|w@`\\vdAfa@h]|M`TdItMpFlxA~s@rNrInNtJpYdUrBrBdVnUpWxVvPnQfIdK`IbKnKpNtQhWbNfS`Vxa@dJxQxLrVxTtf@jUvj@xOve@lHhUfGtTbHhYbExP~DzQjFbX`DxQzCnRzDhZvCpWzAfSbBtTp@jQb@vNn@~TFxTc@fVk@~Sw@rT_JbjBwAjXu@lQ_@`PUfRWxPZhQd@jW`AdWlAzSfCzZvBfSbDjTlCrOnBjJxCnOdDtMlFdRfCnIrFfOvEnKlDxHvHdPxHrMxG|JnLxOhOpP`JhI|M~K`ObKjChBdk@r]vh@z[|dA~p@|u@re@`b@lWbV~OpMfJhpAlz@`q@le@rVlPzT~Nzl@d\\h\\`O`QhH|TtIfWdIbcAdUzPxJzDjEtEpLdCzJx@dJt@fPrAdKhDjMdEfJvBlDbBtDnDnG|CfGnCjGdAzGdAjIl@lMO`MeA|OwD|s@@fN_ArQ{HjjBqAxl@oAnk@yAlm@e@|YG|FEbGC`GC`IAxJA~J?vJ@xM@dNB~ID|HDfIDvGHjLNhPPhNNnJRvLTpMRhKTxL`@nRZlOh@tVh@bWRxJd@|TXfME|WvEthBlGl`C|Cd~AfB|nA|@jr@HrmAKhwBw@xdAyB`nAo@rV{Fx{Bi@hR_Cl_A[v`@g@bp@K|nA@pnAIbk@UhsBsCtcC_Aja@o@r_DOj_G@noAYxtAf@z_BlAtcC|@jd@VbNtAxv@zCffBp@b[ZxLqA|NMpl@gAjOmBvM}BfIcCdGyVrh@qBzFu@lDeApHQfFFhM~@xGxBrHdFpGxDnBrD`@zDUhBg@hCwAbDcCvAqBbNyT~JePrMgP~NeM~MgH`LuDlPyDjKF~sAaRb`@eDxQkAnMy@~Z}A|]k@fY]hTBlE?hCCDuM@uDa@sMoB_VmHZ_LpBqu@vPiDh@mf@AeXBww@Ju[E_YMqUDiFQyFi@sIcA}FcA"}]}]},"info":{"errors":[]}}}
+{
+  "capturedAt": "2026-11-12T23:56:59.486Z",
+  "endpoint": "https://valhalla1.openstreetmap.de/route",
+  "decoderVersion": "3.8.2",
+  "licenseUrl": "https://www.openstreetmap.org/copyright",
+  "rawResponseSha256": "20190dbd4e38fcad82c789f1b0081de31e1b4f4ae5f8172b97a31f094c15b83e",
+  "trimmed": "Decoded recorded response subset. Only incoming/current maneuver-node edge fields are retained; empty unreferenced node slots preserve original indices. Source route/maneuver/lane/limit values are unchanged; original wire hash retained.",
+  "request": {
+    "locations": [
+      { "lon": -114.0201, "lat": 51.0626 },
+      { "lon": -114.0943, "lat": 50.9932 }
+    ],
+    "costing": "auto",
+    "alternates": 0,
+    "format": "pbf",
+    "shape_format": "geojson",
+    "units": "kilometers",
+    "language": "en-US",
+    "annotations": ["maxspeed"],
+    "turn_lanes": true,
+    "banner_instructions": true,
+    "voice_instructions": true,
+    "directions_type": "instructions",
+    "roundabout_exits": true,
+    "pbf_field_selector": { "directions": true, "trip": true },
+    "filters": {
+      "action": "include",
+      "attributes": [
+        "shape_attributes.speed_limit",
+        "edge.turn_lanes",
+        "edge.begin_heading",
+        "edge.end_heading",
+        "edge.names",
+        "edge.begin_shape_index",
+        "edge.end_shape_index"
+      ]
+    }
+  },
+  "response": {
+    "directions": {
+      "routes": [
+        {
+          "legs": [
+            {
+              "maneuver": [
+                {
+                  "streetName": [],
+                  "type": 3,
+                  "textInstruction": "Drive north.",
+                  "length": 0.08979853987693787,
+                  "time": 32.35352325439453,
+                  "beginHeading": 359,
+                  "endShapeIndex": 4,
+                  "verbalPreTransitionInstruction": "Drive north. Then Turn right onto 12 Avenue NE.",
+                  "verbalSuccinctTransitionInstruction": "Drive north. Then Turn right onto 12 Avenue NE."
+                },
+                {
+                  "streetName": [{ "value": "12 Avenue NE" }],
+                  "type": 10,
+                  "textInstruction": "Turn right onto 12 Avenue NE.",
+                  "length": 0.164000004529953,
+                  "time": 30.02869415283203,
+                  "beginHeading": 60,
+                  "beginShapeIndex": 4,
+                  "endShapeIndex": 13,
+                  "verbalPreTransitionInstruction": "Turn right onto 12 Avenue NE.",
+                  "beginPathIndex": 3,
+                  "turnDegree": 64,
+                  "verbalSuccinctTransitionInstruction": "Turn right."
+                },
+                {
+                  "streetName": [{ "value": "17A Street NE" }],
+                  "type": 15,
+                  "textInstruction": "Turn left onto 17A Street NE.",
+                  "length": 0.17100000381469727,
+                  "time": 36.07433319091797,
+                  "beginShapeIndex": 13,
+                  "endShapeIndex": 15,
+                  "verbalPreTransitionInstruction": "Turn left onto 17A Street NE.",
+                  "beginPathIndex": 4,
+                  "turnDegree": 271,
+                  "verbalSuccinctTransitionInstruction": "Turn left."
+                },
+                {
+                  "streetName": [{ "value": "14 Avenue NE" }],
+                  "type": 10,
+                  "textInstruction": "Turn right onto 14 Avenue NE.",
+                  "length": 0.3009999990463257,
+                  "time": 56.437889099121094,
+                  "beginHeading": 90,
+                  "beginShapeIndex": 15,
+                  "endShapeIndex": 24,
+                  "verbalPreTransitionInstruction": "Turn right onto 14 Avenue NE.",
+                  "beginPathIndex": 6,
+                  "turnDegree": 91,
+                  "verbalSuccinctTransitionInstruction": "Turn right."
+                },
+                {
+                  "streetName": [{ "value": "19 Street NE" }],
+                  "type": 15,
+                  "textInstruction": "Turn left onto 19 Street NE.",
+                  "length": 0.18000002205371857,
+                  "time": 25.276275634765625,
+                  "beginHeading": 22,
+                  "beginShapeIndex": 24,
+                  "endShapeIndex": 32,
+                  "verbalPreTransitionInstruction": "Turn left onto 19 Street NE.",
+                  "beginPathIndex": 14,
+                  "turnDegree": 292,
+                  "verbalSuccinctTransitionInstruction": "Turn left."
+                },
+                {
+                  "streetName": [
+                    { "value": "1", "isRouteNumber": true },
+                    { "value": "16 Avenue NE" }
+                  ],
+                  "type": 15,
+                  "textInstruction": "Turn left onto 1/16 Avenue NE.",
+                  "length": 0.953999936580658,
+                  "time": 74.17832946777344,
+                  "beginHeading": 273,
+                  "beginShapeIndex": 32,
+                  "endShapeIndex": 50,
+                  "verbalPreTransitionInstruction": "Turn left onto 1, 16 Avenue NE.",
+                  "beginPathIndex": 19,
+                  "turnDegree": 273,
+                  "verbalSuccinctTransitionInstruction": "Turn left."
+                },
+                {
+                  "streetName": [],
+                  "type": 19,
+                  "textInstruction": "Take the 2 South/Deerfoot Trail ramp on the left toward Fort Macleod.",
+                  "length": 0.12600001692771912,
+                  "time": 15.295669555664062,
+                  "beginHeading": 256,
+                  "beginShapeIndex": 50,
+                  "endShapeIndex": 58,
+                  "verbalPreTransitionInstruction": "Take the 2 South, Deerfoot Trail ramp on the left toward Fort Macleod.",
+                  "sign": {
+                    "exitNumbers": [],
+                    "exitOntoStreets": [{ "text": "2 South" }, { "text": "Deerfoot Trail" }],
+                    "exitTowardLocations": [{ "text": "Fort Macleod" }],
+                    "exitNames": [],
+                    "guideOntoStreets": [],
+                    "guideTowardLocations": [],
+                    "junctionNames": []
+                  },
+                  "beginPathIndex": 28,
+                  "turnDegree": 346
+                },
+                {
+                  "streetName": [{ "value": "2", "isRouteNumber": true }],
+                  "type": 23,
+                  "textInstruction": "Keep right to take 2 South/Deerfoot Trail toward Fort Macleod.",
+                  "length": 9.144999504089355,
+                  "time": 450.49664306640625,
+                  "beginHeading": 184,
+                  "beginShapeIndex": 58,
+                  "endShapeIndex": 265,
+                  "verbalPreTransitionInstruction": "Keep right to take 2 South, Deerfoot Trail toward Fort Macleod.",
+                  "sign": {
+                    "exitNumbers": [],
+                    "exitOntoStreets": [{ "text": "2 South" }, { "text": "Deerfoot Trail" }],
+                    "exitTowardLocations": [{ "text": "Fort Macleod" }],
+                    "exitNames": [],
+                    "guideOntoStreets": [],
+                    "guideTowardLocations": [],
+                    "junctionNames": []
+                  },
+                  "beginPathIndex": 31,
+                  "turnDegree": 1
+                },
+                {
+                  "streetName": [],
+                  "type": 20,
+                  "textInstruction": "Take exit 248 toward Glenmore Trail.",
+                  "length": 0.7630000114440918,
+                  "time": 37.1263427734375,
+                  "beginHeading": 206,
+                  "beginShapeIndex": 265,
+                  "endShapeIndex": 276,
+                  "verbalPreTransitionInstruction": "Take exit 248 toward Glenmore Trail.",
+                  "sign": {
+                    "exitNumbers": [{ "text": "248" }],
+                    "exitOntoStreets": [],
+                    "exitTowardLocations": [{ "text": "Glenmore Trail" }],
+                    "exitNames": [],
+                    "guideOntoStreets": [],
+                    "guideTowardLocations": [],
+                    "junctionNames": []
+                  },
+                  "beginPathIndex": 49,
+                  "turnDegree": 1
+                },
+                {
+                  "streetName": [{ "value": "Glenmore Trail SE" }],
+                  "type": 23,
+                  "textInstruction": "Keep right to take exit 248B onto Glenmore Trail SE toward Glenmore Trail West.",
+                  "length": 4.1660003662109375,
+                  "time": 204.31988525390625,
+                  "beginHeading": 203,
+                  "beginShapeIndex": 276,
+                  "endShapeIndex": 365,
+                  "verbalPreTransitionInstruction": "Keep right to take exit 248B onto Glenmore Trail SE toward Glenmore Trail West.",
+                  "sign": {
+                    "exitNumbers": [{ "text": "248B" }],
+                    "exitOntoStreets": [],
+                    "exitTowardLocations": [{ "text": "Glenmore Trail West" }],
+                    "exitNames": [],
+                    "guideOntoStreets": [],
+                    "guideTowardLocations": [],
+                    "junctionNames": []
+                  },
+                  "beginPathIndex": 50,
+                  "turnDegree": 11
+                },
+                {
+                  "streetName": [],
+                  "type": 20,
+                  "textInstruction": "Take the 14 Street W South exit toward 14 Street West (Hospital).",
+                  "length": 0.3490000367164612,
+                  "time": 31.5289306640625,
+                  "beginHeading": 281,
+                  "beginShapeIndex": 365,
+                  "endShapeIndex": 387,
+                  "verbalPreTransitionInstruction": "Take the 14 Street W South exit toward 14 Street West (Hospital).",
+                  "sign": {
+                    "exitNumbers": [],
+                    "exitOntoStreets": [{ "text": "14 Street W South" }],
+                    "exitTowardLocations": [{ "text": "14 Street West (Hospital)" }],
+                    "exitNames": [],
+                    "guideOntoStreets": [],
+                    "guideTowardLocations": [],
+                    "junctionNames": []
+                  },
+                  "beginPathIndex": 76,
+                  "turnDegree": 17
+                },
+                {
+                  "streetName": [],
+                  "type": 23,
+                  "textInstruction": "Keep right to take 14 Street W South.",
+                  "length": 0.2370000183582306,
+                  "time": 23.081787109375,
+                  "beginHeading": 138,
+                  "beginShapeIndex": 387,
+                  "endShapeIndex": 395,
+                  "verbalPreTransitionInstruction": "Keep right to take 14 Street W South.",
+                  "sign": {
+                    "exitNumbers": [],
+                    "exitOntoStreets": [{ "text": "14 Street W South" }],
+                    "exitTowardLocations": [],
+                    "exitNames": [],
+                    "guideOntoStreets": [],
+                    "guideTowardLocations": [],
+                    "junctionNames": []
+                  },
+                  "beginPathIndex": 82,
+                  "turnDegree": 357
+                },
+                {
+                  "streetName": [{ "value": "14 Street SW" }],
+                  "type": 8,
+                  "textInstruction": "Continue toward 14 Street W South.",
+                  "length": 0.48099997639656067,
+                  "time": 46.47052001953125,
+                  "beginHeading": 172,
+                  "beginShapeIndex": 395,
+                  "endShapeIndex": 405,
+                  "verbalPreTransitionInstruction": "Continue toward 14 Street W South.",
+                  "sign": {
+                    "exitNumbers": [],
+                    "exitOntoStreets": [],
+                    "exitTowardLocations": [],
+                    "exitNames": [],
+                    "guideOntoStreets": [],
+                    "guideTowardLocations": [{ "text": "14 Street W South" }],
+                    "junctionNames": []
+                  },
+                  "beginPathIndex": 83,
+                  "turnDegree": 351
+                },
+                {
+                  "streetName": [{ "value": "75 Avenue SW" }],
+                  "type": 15,
+                  "textInstruction": "Turn left onto 75 Avenue SW.",
+                  "length": 0.06599999964237213,
+                  "time": 20.6956787109375,
+                  "beginHeading": 87,
+                  "beginShapeIndex": 405,
+                  "endShapeIndex": 409,
+                  "verbalPreTransitionInstruction": "Turn left onto 75 Avenue SW. Then Turn left onto Kew Street SW.",
+                  "beginPathIndex": 91,
+                  "turnDegree": 267,
+                  "verbalSuccinctTransitionInstruction": "Turn left. Then Turn left onto Kew Street SW."
+                },
+                {
+                  "streetName": [{ "value": "Kew Street SW" }],
+                  "type": 15,
+                  "textInstruction": "Turn left onto Kew Street SW.",
+                  "length": 0.5626205801963806,
+                  "time": 105.087890625,
+                  "beginHeading": 357,
+                  "beginShapeIndex": 409,
+                  "endShapeIndex": 423,
+                  "verbalPreTransitionInstruction": "Turn left onto Kew Street SW.",
+                  "beginPathIndex": 94,
+                  "turnDegree": 281,
+                  "verbalSuccinctTransitionInstruction": "Turn left."
+                },
+                {
+                  "streetName": [],
+                  "type": 4,
+                  "textInstruction": "You have arrived at your destination.",
+                  "beginShapeIndex": 423,
+                  "endShapeIndex": 423,
+                  "verbalPreTransitionInstruction": "You have arrived at your destination.",
+                  "beginPathIndex": 101
+                }
+              ],
+              "summary": { "length": 17.755420684814453, "time": 1188.452392578125 },
+              "shape": "wsrk`BlwenxEcSRgNXsJj@qBJgBaHeKm]wGaUgA_Ey@iESuECwEAgg@E}DsC?wzAn@C{j@@y\\?}MHyk@Ayi@Eil@@}^?qA?eKwDuBk[TgXR{LFsJ\\w@?uC@kHACfIGnG?vW\\rgA@nnB?rz@FduAaC|bBy@tX}Bno@mBbo@}FfpBa@lU[dRKhREfIS|Y@fj@`BhQx@|W\\|Gf@|E~@hEhAhCfDnDhQp@tVtAhEA`EOpFQ`OaAvOc@rUwDnKqBdM_ChLgD|JsDdJiDlJyDrS{Kn\\mSbSwLrd@oYvTaOf[_XlnBsuA`pAcfAjm@sd@jo@ui@hs@_k@rl@}`@||@wf@lOyHlx@}[bp@wQtf@aKdjAeS|w@oQlGuBlTkFtXuGlNuE|HuCrMaGzGuDvIsFlFuDvSeTjRwRjMeOxGiKjGeLzF_L~GmNvFkNlHsQpFeO~La^pjAatDhRen@fMm]xM{ZtJsQdKiQ`MaQdQ{QrCmCj]oXzNmHbOqHzPaHhS{HlNwEhLqE~L}DnP}FdM}EjKwDzr@gWpRaKhNmHzLuIxOqKxHmFvKeJ|NwOlT_Y~G_MhIyNjOy[bMi\\nIcV`M__@~Psl@~IoYnGwPxGcQlIkT|FoMpGuLrIaOzKcP~HuKtHwI|HoIjHqGlKiJdPyKvKiGhTyJ`MaFxO}C~KuBxQkBzMo@fPI`O~@zI|@hOpBxV`EfLlC|NpErNnEtO`GldAza@tuAlj@ns@vWnsAlk@zwD|vAde@`RnXxKn]`Nnl@pU|w@`\\vdAfa@h]|M`TdItMpFlxA~s@rNrInNtJpYdUrBrBdVnUpWxVvPnQfIdK`IbKnKpNtQhWbNfS`Vxa@dJxQxLrVxTtf@jUvj@xOve@lHhUfGtTbHhYbExP~DzQjFbX`DxQzCnRzDhZvCpWzAfSbBtTp@jQb@vNn@~TFxTc@fVk@~Sw@rT_JbjBwAjXu@lQ_@`PUfRWxPZhQd@jW`AdWlAzSfCzZvBfSbDjTlCrOnBjJxCnOdDtMlFdRfCnIrFfOvEnKlDxHvHdPxHrMxG|JnLxOhOpP`JhI|M~K`ObKjChBdk@r]vh@z[|dA~p@|u@re@`b@lWbV~OpMfJhpAlz@`q@le@rVlPzT~Nzl@d\\h\\`O`QhH|TtIfWdIbcAdUzPxJzDjEtEpLdCzJx@dJt@fPrAdKhDjMdEfJvBlDbBtDnDnG|CfGnCjGdAzGdAjIl@lMO`MeA|OwD|s@@fN_ArQ{HjjBqAxl@oAnk@yAlm@e@|YG|FEbGC`GC`IAxJA~J?vJ@xM@dNB~ID|HDfIDvGHjLNhPPhNNnJRvLTpMRhKTxL`@nRZlOh@tVh@bWRxJd@|TXfME|WvEthBlGl`C|Cd~AfB|nA|@jr@HrmAKhwBw@xdAyB`nAo@rV{Fx{Bi@hR_Cl_A[v`@g@bp@K|nA@pnAIbk@UhsBsCtcC_Aja@o@r_DOj_G@noAYxtAf@z_BlAtcC|@jd@VbNtAxv@zCffBp@b[ZxLqA|NMpl@gAjOmBvM}BfIcCdGyVrh@qBzFu@lDeApHQfFFhM~@xGxBrHdFpGxDnBrD`@zDUhBg@hCwAbDcCvAqBbNyT~JePrMgP~NeM~MgH`LuDlPyDjKF~sAaRb`@eDxQkAnMy@~Z}A|]k@fY]hTBlE?hCCDuM@uDa@sMoB_VmHZ_LpBqu@vPiDh@mf@AeXBww@Ju[E_YMqUDiFQyFi@sIcA}FcA"
+            }
+          ]
+        }
+      ]
+    },
+    "info": { "errors": [] }
+  }
+}

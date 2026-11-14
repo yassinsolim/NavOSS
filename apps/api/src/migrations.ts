@@ -108,6 +108,21 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX traffic_releases_expires_at_idx ON traffic_releases (expires_at);
     `,
   },
+  {
+    id: '0003_traffic_publication_marker',
+    sql: `
+      -- Which epoch the rows of traffic_releases are the snapshot of, and how many rows that
+      -- snapshot has. Written in the same transaction as the releases. A read serves an epoch
+      -- only when this row names it and the row count still matches, so an empty table after a
+      -- database crash (both tables are UNLOGGED and are emptied together) or a lost release
+      -- table is never read as a published, empty snapshot. Holds a boundary and a count only.
+      CREATE UNLOGGED TABLE traffic_publication (
+        singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+        epoch_at timestamptz NOT NULL CHECK (extract(epoch FROM epoch_at)::bigint % 300 = 0),
+        release_rows integer NOT NULL CHECK (release_rows >= 0)
+      );
+    `,
+  },
 ];
 
 const MIGRATIONS_TABLE = 'navoss_schema_migrations';

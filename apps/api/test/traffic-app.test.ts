@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Writable } from 'node:stream';
 
 import {
@@ -5,12 +8,14 @@ import {
   LegacyAppConfigResponseSchema,
   ProblemDetailsSchema,
   RouteTrafficAnnotationSchema,
+  snapTrafficFlowBounds,
   TrafficCredentialResponseSchema,
   TrafficFlowResponseSchema,
   TrafficStatusResponseSchema,
+  type TrafficProbeBatchRequest,
 } from '@navoss/contracts';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Pool } from 'pg';
 
@@ -24,7 +29,14 @@ import {
   type TrafficAttestation,
   type TrafficService,
 } from '../src/traffic/service.js';
-import type { TrafficSettings } from '../src/traffic/settings.js';
+import {
+  DEAD_END_MASK_FORMAT,
+  DEAD_END_MASK_FORMAT_VERSION,
+  deadEndMaskPayloadDigest,
+  encodeDeltas,
+} from '../src/traffic/dead-end-mask.js';
+import { createValhallaMapMatcher } from '../src/traffic/map-matcher.js';
+import { DEFAULT_TRAFFIC_SETTINGS, type TrafficSettings } from '../src/traffic/settings.js';
 import {
   createInMemoryTrafficReleaseStore,
   type TrafficReleaseStore,
@@ -39,6 +51,7 @@ import {
   isFixtureTrafficCoordinate,
   JAMMED_GAPS,
   NOW,
+  requestUrl,
   stubbedMatcher,
   type StubbedMatcher,
 } from './traffic-fixture.js';
@@ -66,8 +79,9 @@ async function createTrafficApp(
   settings: Partial<TrafficSettings> = {},
   attestation: TrafficAttestation | null = fakeAttestation(),
   store?: TrafficReleaseStore,
+  startMs = NOW.getTime(),
 ): Promise<TrafficApp> {
-  let nowMs = NOW.getTime();
+  let nowMs = startMs;
   const clock = (): Date => new Date(nowMs);
   const stub = stubbedMatcher();
   const service = createTrafficService({
@@ -130,10 +144,8 @@ describe('community traffic over HTTP', () => {
     }
     // The third contributor arrives, and still nothing changes until the epoch closes.
     expect((await traffic.upload('phone-3')).statusCode).toBe(202);
-    const during = await flow(traffic.app);
-    expect(during.flow.features).toEqual([]);
-    expect(during.flow.generatedAt).toBe('2026-11-12T18:00:00.000Z');
-    expect(during.flow.validUntil).toBe('2026-11-12T18:05:00.000Z');
+    // Nothing was published in the epoch the process started in: unavailable, not empty.
+    expect((await traffic.app.inject(FLOW_URL)).statusCode).toBe(503);
 
     await traffic.advanceEpoch();
     const after = await flow(traffic.app);
@@ -155,6 +167,42 @@ describe('community traffic over HTTP', () => {
         speedKph: 40,
       });
     }
+  });
+
+  it('never answers with another body under an epoch that was already published', async () => {
+    const store = createInMemoryTrafficReleaseStore();
+    const first = await createTrafficApp({}, fakeAttestation(), store);
+    for (const device of ['phone-1', 'phone-2', 'phone-3']) await first.upload(device);
+    await first.advanceEpoch();
+    const published = await flow(first.app);
+    expect(published.flow.features.length).toBeGreaterThan(10);
+    const epochMs = Date.parse(published.flow.generatedAt);
+
+    // The API restarts within that epoch, against the same storage: it erases the releases on
+    // start and has nothing published for this epoch, so it answers 503, never an empty body
+    // labelled with the epoch the old process published.
+    const restarted = await createTrafficApp({}, fakeAttestation(), store, epochMs + 60_000);
+    const during = await restarted.app.inject(FLOW_URL);
+    expect(during.statusCode).toBe(503);
+    // At the next boundary it publishes that epoch: legitimately empty, under a new label.
+    await restarted.advanceEpoch();
+    const next = await flow(restarted.app);
+    expect(next.flow.generatedAt).toBe(new Date(epochMs + EPOCH_MS).toISOString());
+    expect(next.flow.features).toEqual([]);
+    expect((await flow(restarted.app)).body).toBe(next.body);
+  });
+
+  it('answers 503 when storage loses the published snapshot within its epoch', async () => {
+    const store = createInMemoryTrafficReleaseStore();
+    const traffic = await createTrafficApp({}, fakeAttestation(), store);
+    for (const device of ['phone-1', 'phone-2', 'phone-3']) await traffic.upload(device);
+    await traffic.advanceEpoch();
+    expect((await flow(traffic.app)).flow.features.length).toBeGreaterThan(10);
+    // What a database crash does to the unlogged tables.
+    await store.purge();
+    expect((await traffic.app.inject(FLOW_URL)).statusCode).toBe(503);
+    const route = { ...DRIVE.route, label: 'fastest' as const };
+    expect((await traffic.service.enrichRoutes([route])).routes).toEqual([route]);
   });
 
   it('counts one installation once, whatever network or credential it uploads with', async () => {
@@ -1083,5 +1131,269 @@ describe('route traffic enrichment', () => {
     const result = await live.service.enrichRoutes([route]);
     expect(result.routes).toEqual([route]);
     expect(result.trafficSource).toBeUndefined();
+  });
+});
+
+describe('standing still across batch boundaries, through HTTP on a recorded real edge', () => {
+  /**
+   * Batches along one 1.18 km Deerfoot Trail edge, with the Valhalla 3.8.2 answers the server
+   * received for them on the Alberta/BC graph (see the fixture's note).
+   */
+  const DWELL = JSON.parse(
+    readFileSync(new URL('./fixtures/valhalla-dwell-calgary.json', import.meta.url), 'utf8'),
+  ) as {
+    batches: Record<
+      'approach' | 'resume' | 'stationary' | 'stationaryJitter',
+      TrafficProbeBatchRequest['points']
+    >;
+    exchanges: { path: string; request: unknown; response: unknown }[];
+  };
+  const MINUTE = 60_000;
+  // A boundary; every trip below begins exactly then, so it is inside its 15-minute window.
+  const T0 = Date.parse('2026-11-14T18:00:00Z');
+  const longitudes = Object.values(DWELL.batches).flatMap((points) => points.map(([lon]) => lon));
+  const latitudes = Object.values(DWELL.batches).flatMap((points) => points.map(([, lat]) => lat));
+  const FLOW = `/v2/traffic/flow?bbox=${String(
+    snapTrafficFlowBounds({
+      east: Math.max(...longitudes),
+      north: Math.max(...latitudes),
+      south: Math.min(...latitudes),
+      west: Math.min(...longitudes),
+    }),
+  )}`;
+
+  /** A batch whose first fix is at `startMs`: `capturedAt` is that rounded down to the minute. */
+  interface Upload {
+    name: keyof typeof DWELL.batches;
+    startMs: number;
+  }
+
+  /** Answers the matcher's requests from the recording; refuses any it was not recorded with. */
+  function recordedValhalla(requests: string[]): typeof fetch {
+    return (input, init) => {
+      const path = new URL(requestUrl(input)).pathname;
+      const request = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as unknown;
+      requests.push(path);
+      const exchange = DWELL.exchanges.find(
+        (candidate) =>
+          candidate.path === path && JSON.stringify(candidate.request) === JSON.stringify(request),
+      );
+      if (exchange === undefined) throw new Error('unrecorded matcher request');
+      return Promise.resolve(Response.json(exchange.response));
+    };
+  }
+
+  async function drive(
+    trips: Upload[][],
+    build?: (clock: () => Date, requests: string[]) => TrafficService,
+  ) {
+    let nowMs = T0;
+    const clock = (): Date => new Date(nowMs);
+    const matcherRequests: string[] = [];
+    const service =
+      build?.(clock, matcherRequests) ??
+      createTrafficService({
+        attestation: fakeAttestation(),
+        clock,
+        mapMatcher: createValhallaMapMatcher({
+          endpoint: 'http://valhalla.test/trace_attributes',
+          fetchImplementation: recordedValhalla(matcherRequests),
+        }),
+        settings: { ...DEFAULT_TRAFFIC_SETTINGS, mode: 'live' },
+      });
+    const app = await buildApp({
+      clock,
+      communityReports: null,
+      searchProvider: createFixtureSearchProvider(CALGARY_SEARCH_FIXTURES),
+      trafficService: service,
+    });
+    apps.push(app);
+    const uploads = trips
+      .flatMap((trip, index) =>
+        trip.map((upload) => ({ ...upload, device: `driver-${String(index)}` })),
+      )
+      .sort((left, right) => left.startMs - right.startMs);
+    for (const { device, name, startMs } of uploads) {
+      const points = DWELL.batches[name];
+      // Each batch arrives five seconds after its last fix.
+      nowMs = startMs + (points.at(-1)?.[2] ?? 0) * 1_000 + 5_000;
+      const response = await app.inject({
+        headers: { 'x-forwarded-for': `198.51.${String(100 + Number(device.slice(-1)))}.1` },
+        method: 'POST',
+        payload: {
+          capturedAt: new Date(Math.floor(startMs / MINUTE) * MINUTE).toISOString(),
+          credential: await credentialFor(service, device),
+          points,
+          schemaVersion: 1,
+        },
+        url: '/v2/traffic/probes',
+      });
+      expect(response.statusCode).toBe(202);
+    }
+    return {
+      matcherRequests,
+      service,
+      /** Closes the epoch at `boundaryMs` and reads the flow layer then. */
+      publishedAt: async (boundaryMs: number) => {
+        nowMs = boundaryMs + 5_000;
+        await service.runEpoch();
+        const response = await app.inject(FLOW);
+        expect(response.statusCode).toBe(200);
+        return TrafficFlowResponseSchema.parse(response.json()).features.map(
+          ({ properties }) => properties.speedKph,
+        );
+      },
+    };
+  }
+
+  // Driving 0–400 m and on from 400 m to 900 m at 36 km/h, standing at 400 m in between. The
+  // trim leaves about 180 m and 280 m driven, 46 s in all, and 28 s standing at each batch end.
+  const approach: Upload = { name: 'approach', startMs: T0 };
+  const stopped = (startMs: number, jitter = false): Upload => ({
+    name: jitter ? 'stationaryJitter' : 'stationary',
+    startMs,
+  });
+  const resume = (startMs: number): Upload => ({ name: 'resume', startMs });
+  const threeDrivers = (trip: Upload[]) => [trip, trip, trip];
+  const published = async (trip: Upload[], boundaryMs = T0 + 10 * MINUTE) =>
+    (await drive(threeDrivers(trip))).publishedAt(boundaryMs);
+
+  it('counts standing at batch boundaries and a stationary batch, each once', async () => {
+    // The 56 s trimmed off the two moving batches: 458 m in 102 s, 16 km/h, published as 15.
+    // Before the fix no standing counted: 458 m in 46 s, 36 km/h, published as 35.
+    expect(await published([approach, resume(T0 + 70_000)])).toEqual([15]);
+    // A 98 s stationary batch between them: 458 m in 200 s, 8.2 km/h, published as 10.
+    const withStop = [approach, stopped(T0 + 70_000), resume(T0 + 170_000)];
+    expect(await published(withStop)).toEqual([10]);
+    // The same stationary batch uploaded again adds nothing (summing gives 5.5 km/h, 5).
+    expect(
+      await published([approach, stopped(T0 + 70_000), stopped(T0 + 70_000), resume(T0 + 170_000)]),
+    ).toEqual([10]);
+  });
+
+  it('counts a longer stop over two batches, one with GPS jitter, without matching them', async () => {
+    const { matcherRequests, publishedAt } = await drive(
+      threeDrivers([
+        approach,
+        stopped(T0 + 70_000),
+        stopped(T0 + 170_000, true),
+        resume(T0 + 270_000),
+      ]),
+    );
+    // 458 m in 298 s: 5.5 km/h, published as 5 (`stopped` against 100 km/h free flow).
+    expect(await publishedAt(T0 + 10 * MINUTE)).toEqual([5]);
+    // Only the moving batches reached the matcher: stationary batches are never sent.
+    expect(matcherRequests.filter((path) => path === '/trace_attributes')).toHaveLength(6);
+  });
+
+  it('never counts the stop when the trip ends there or sharing is cancelled', async () => {
+    const { publishedAt, service } = await drive(
+      threeDrivers([approach, stopped(T0 + 70_000), stopped(T0 + 170_000, true)]),
+    );
+    expect(await publishedAt(T0 + 10 * MINUTE)).toEqual([]);
+    // Partial coverage, with the held dwell, is all there is; it expires with its window.
+    expect(service.metrics()).toMatchObject({ pendingPartial: 3, pendingSamples: 0 });
+    expect(await publishedAt(T0 + 20 * MINUTE)).toEqual([]);
+    expect(service.metrics()).toMatchObject({ pendingPartial: 0, pendingSamples: 0 });
+  });
+
+  it('releases nothing once the stop-and-go began more than 15 minutes before the boundary', async () => {
+    expect(
+      await published([approach, stopped(T0 + 70_000), resume(T0 + 170_000)], T0 + 20 * MINUTE),
+    ).toEqual([]);
+  });
+
+  describe('the configured service and the dead-end mask', () => {
+    const GRAPH = 'e'.repeat(64);
+    const directory = mkdtempSync(join(tmpdir(), 'navoss-traffic-service-mask-'));
+    afterAll(() => {
+      rmSync(directory, { force: true, recursive: true });
+    });
+    /** A mask for `GRAPH` listing `eligible` way ids, everything else unknown. */
+    const writeMask = (name: string, eligible: number[], overrides: object = {}): string => {
+      const ways = {
+        eligible: encodeDeltas(eligible),
+        excluded: encodeDeltas([]),
+        unknown: encodeDeltas([]),
+        mixed: [],
+      };
+      const file = join(directory, name);
+      writeFileSync(
+        file,
+        JSON.stringify({
+          format: DEAD_END_MASK_FORMAT,
+          formatVersion: DEAD_END_MASK_FORMAT_VERSION,
+          graph: { dataDate: '2026-11-11', graphId: GRAPH, routingEngineVersion: '3.8.2' },
+          inputs: {
+            extractPolicyVersion: 1,
+            osmTimestamp: '2026-11-11T21:22:47Z',
+            pbf: 'alberta-british-columbia-261111.osm.pbf',
+            pbfSha256: 'b'.repeat(64),
+          },
+          payloadSha256: deadEndMaskPayloadDigest(ways),
+          rules: {
+            core: 'test',
+            publishableClasses: ['motorway'],
+            terminalClasses: ['motorway'],
+            terminalMeters: 400,
+          },
+          summary: {},
+          ways,
+          ...overrides,
+        }),
+      );
+      return file;
+    };
+    const DEERFOOT_WAY = 551_687_611;
+    const environment = (mode: 'collect' | 'live', extra: Record<string, string> = {}) => ({
+      COMMUNITY_TRAFFIC_MODE: mode,
+      VALHALLA_URL: 'http://valhalla:8002/route',
+      ...extra,
+    });
+    const withMask = (path: string, graphId = GRAPH) => ({
+      COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH: path,
+      COMMUNITY_TRAFFIC_GRAPH_ID: graphId,
+    });
+
+    it('refuses to start live without a mask for the configured graph; collect may run without', () => {
+      expect(() => createConfiguredTrafficService({}, environment('live'))).toThrow(
+        /live requires/,
+      );
+      expect(createConfiguredTrafficService({}, environment('collect')).mode).toBe('collect');
+      const valid = writeMask('valid.json', [DEERFOOT_WAY]);
+      expect(() =>
+        createConfiguredTrafficService({}, environment('live', withMask(valid, 'c'.repeat(64)))),
+      ).toThrow(/not the configured graph/);
+      const stale = writeMask('stale.json', [DEERFOOT_WAY], { formatVersion: 0 });
+      expect(() =>
+        createConfiguredTrafficService({}, environment('live', withMask(stale))),
+      ).toThrow(/format version 0/);
+      expect(createConfiguredTrafficService({}, environment('live', withMask(valid))).mode).toBe(
+        'live',
+      );
+    });
+
+    it('hands the mask to the matcher it builds: a way the mask does not place is never published', async () => {
+      const trip = [approach, stopped(T0 + 70_000), resume(T0 + 170_000)];
+      const configured = (path: string) => (clock: () => Date, requests: string[]) => {
+        vi.stubGlobal('fetch', recordedValhalla(requests));
+        try {
+          return createConfiguredTrafficService(
+            { attestation: fakeAttestation(), clock },
+            environment('live', withMask(path)),
+          );
+        } finally {
+          vi.unstubAllGlobals();
+        }
+      };
+      const placed = await drive(
+        threeDrivers(trip),
+        configured(writeMask('placed.json', [DEERFOOT_WAY])),
+      );
+      expect(await placed.publishedAt(T0 + 10 * MINUTE)).toEqual([10]);
+      // The same drive against a mask that does not know the way: unknown fails closed.
+      const unplaced = await drive(threeDrivers(trip), configured(writeMask('unplaced.json', [7])));
+      expect(await unplaced.publishedAt(T0 + 10 * MINUTE)).toEqual([]);
+    });
   });
 });

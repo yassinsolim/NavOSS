@@ -279,6 +279,21 @@ export const TrafficStatusResponseSchema = z
 export type TrafficStatusResponse = z.infer<typeof TrafficStatusResponseSchema>;
 
 /**
+ * How fresh the community traffic applied to one v2 route is, as publication-epoch boundaries
+ * (five-minute grid), never a request time. `snapshotAt` is the epoch whose published snapshot
+ * supplied the speeds; `oldestObservedAt` is the earliest boundary at which any speed used on
+ * the route was released, which is older than `snapshotAt` when the route mixes releases. The
+ * driving behind a speed released at a boundary began at most 15 minutes before it.
+ */
+export const RouteTrafficFreshnessSchema = z
+  .object({
+    oldestObservedAt: IsoDateTimeSchema,
+    snapshotAt: IsoDateTimeSchema,
+  })
+  .strict();
+export type RouteTrafficFreshness = z.infer<typeof RouteTrafficFreshnessSchema>;
+
+/**
  * Community-traffic annotation for one computed route. It is a fragment for the v2 route
  * response: the legacy `/v1/routes` shape is frozen and never carries it.
  */

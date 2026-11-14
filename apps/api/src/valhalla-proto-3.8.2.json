@@ -1,1 +1,329 @@
-{"version":"3.8.2","sourceUrl":"https://raw.githubusercontent.com/valhalla/valhalla/3.8.2/proto/descriptors/","sourceSha256":{"api.proto":"f1156ccbf937610838aa396678663dcd17555a6ea819ef3e8fde4c076bb50326","common.proto":"66219d419906dc417c1e589b9bfe01d8122756c6856a46d43a09a40e69e4d8e3","directions.proto":"94fe1152f4424c37242607a034468701b8b8c4820db2cd0928dd55f62bc3adcd","trip.proto":"6bf575fcffb10d874273205b0bfcf82f43c4094062fea387de2e526d4c78e93e","sign.proto":"3ff7823334953d7d9386d6d60b8cc4ca02be0cbf94298ffef415901f28a66fdc","options.proto":"390ff26eab10b054a949b06b321c84d3a574cc9dc00e164be9d4debcf1a062b8","info.proto":"2eedcb5d59cccf433cebcf44aef358b5c2764467a8ee484d2f7daa9724442780","status.proto":"f651baaeef7b0e032febc3e7d9c07c8d41c763880a07d02e02afdf1d0e9f1f31","matrix.proto":"2c97b69aed594beb82b717902603b6d7437a1fb3390671e4abda861c5ad12a69","isochrone.proto":"ddbe7070ead996a8b6f78d3fc213884a4852904da5ab55044c23fcedd359f1c2","expansion.proto":"97e8cce381f85018d2ffa633f164daa5d6baa65f96bf95ece7aca394846e4c7c","incidents.proto":"5499efae398aed2257b3e646ae8c0f9f13b93db8c92e4dd235780c39cbe8628e"},"license":"MIT","licenseNotice":"Copyright (c) 2018 Valhalla contributors; Copyright (c) 2015-2017 Mapillary AB, Mapzen. Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the Software), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.","schema":{"options":{"optimize_for":"LITE_RUNTIME"},"nested":{"valhalla":{"nested":{"Api":{"fields":{"options":{"type":"Options","id":1},"trip":{"type":"Trip","id":2},"directions":{"type":"Directions","id":3},"info":{"type":"Info","id":20}}},"LatLng":{"oneofs":{"hasLat":{"oneof":["lat"]},"hasLng":{"oneof":["lng"]}},"fields":{"lat":{"type":"double","id":1},"lng":{"type":"double","id":2}}},"Location":{"oneofs":{"hasHeading":{"oneof":["heading"]},"hasHeadingTolerance":{"oneof":["headingTolerance"]},"hasRadius":{"oneof":["radius"]}},"fields":{"ll":{"type":"LatLng","id":1},"type":{"type":"Type","id":2},"heading":{"type":"uint32","id":3},"headingTolerance":{"type":"uint32","id":14},"radius":{"type":"uint32","id":18}},"nested":{"Type":{"values":{"kBreak":0,"kThrough":1,"kVia":2,"kBreakThrough":3}}}},"StreetName":{"fields":{"value":{"type":"string","id":1},"isRouteNumber":{"type":"bool","id":2}}},"TurnLane":{"fields":{"directionsMask":{"type":"uint32","id":1},"state":{"type":"State","id":2},"activeDirection":{"type":"uint32","id":3}},"nested":{"State":{"values":{"kInvalid":0,"kValid":1,"kActive":2}}}},"Summary":{"fields":{"length":{"type":"float","id":1},"time":{"type":"double","id":2}}},"DirectionsLeg":{"fields":{"summary":{"type":"Summary","id":5},"maneuver":{"rule":"repeated","type":"Maneuver","id":6},"shape":{"type":"string","id":7}},"nested":{"Maneuver":{"fields":{"type":{"type":"Type","id":1},"textInstruction":{"type":"string","id":2},"streetName":{"rule":"repeated","type":"StreetName","id":3},"length":{"type":"float","id":4},"time":{"type":"double","id":5},"beginHeading":{"type":"uint32","id":7},"beginShapeIndex":{"type":"uint32","id":8},"endShapeIndex":{"type":"uint32","id":9},"verbalPreTransitionInstruction":{"type":"string","id":13},"verbalSuccinctTransitionInstruction":{"type":"string","id":37},"sign":{"type":"TripSign","id":16},"roundaboutExitCount":{"type":"uint32","id":17},"beginPathIndex":{"type":"uint32","id":29},"turnDegree":{"type":"uint32","id":33}},"nested":{"Type":{"values":{"kNone":0,"kStart":1,"kStartRight":2,"kStartLeft":3,"kDestination":4,"kDestinationRight":5,"kDestinationLeft":6,"kBecomes":7,"kContinue":8,"kSlightRight":9,"kRight":10,"kSharpRight":11,"kUturnRight":12,"kUturnLeft":13,"kSharpLeft":14,"kLeft":15,"kSlightLeft":16,"kRampStraight":17,"kRampRight":18,"kRampLeft":19,"kExitRight":20,"kExitLeft":21,"kStayStraight":22,"kStayRight":23,"kStayLeft":24,"kMerge":25,"kRoundaboutEnter":26,"kRoundaboutExit":27,"kFerryEnter":28,"kFerryExit":29,"kTransit":30,"kTransitTransfer":31,"kTransitRemainOn":32,"kTransitConnectionStart":33,"kTransitConnectionTransfer":34,"kTransitConnectionDestination":35,"kPostTransitConnectionDestination":36,"kMergeRight":37,"kMergeLeft":38,"kElevatorEnter":39,"kStepsEnter":40,"kEscalatorEnter":41,"kBuildingEnter":42,"kBuildingExit":43,"kLevelChange":44,"kParkVehicle":45}}}}}},"DirectionsRoute":{"fields":{"legs":{"rule":"repeated","type":"DirectionsLeg","id":1}}},"Directions":{"fields":{"routes":{"rule":"repeated","type":"DirectionsRoute","id":1}}},"TripLeg":{"fields":{"node":{"rule":"repeated","type":"Node","id":6},"shapeAttributes":{"type":"ShapeAttributes","id":10}},"nested":{"Edge":{"oneofs":{},"fields":{"name":{"rule":"repeated","type":"StreetName","id":1},"beginHeading":{"type":"uint32","id":5},"endHeading":{"type":"uint32","id":6},"beginShapeIndex":{"type":"uint32","id":7},"endShapeIndex":{"type":"uint32","id":8},"turnLanes":{"rule":"repeated","type":"TurnLane","id":42}},"nested":{}},"Node":{"fields":{"edge":{"type":"Edge","id":1}},"nested":{}},"ShapeAttributes":{"fields":{"speedLimit":{"rule":"repeated","type":"uint32","id":5,"options":{"packed":true}}}}}},"TripRoute":{"fields":{"legs":{"rule":"repeated","type":"TripLeg","id":1}},"nested":{}},"Trip":{"fields":{"routes":{"rule":"repeated","type":"TripRoute","id":1}}},"TripSignElement":{"fields":{"text":{"type":"string","id":1}}},"TripSign":{"fields":{"exitNumbers":{"rule":"repeated","type":"TripSignElement","id":1},"exitOntoStreets":{"rule":"repeated","type":"TripSignElement","id":2},"exitTowardLocations":{"rule":"repeated","type":"TripSignElement","id":3},"exitNames":{"rule":"repeated","type":"TripSignElement","id":4},"guideOntoStreets":{"rule":"repeated","type":"TripSignElement","id":5},"guideTowardLocations":{"rule":"repeated","type":"TripSignElement","id":6},"junctionNames":{"rule":"repeated","type":"TripSignElement","id":7}}},"FilterAction":{"values":{"no_action":0,"exclude":1,"include":2}},"DirectionsType":{"values":{"instructions":0,"none":1,"maneuvers":2}},"ShapeFormat":{"values":{"polyline6":0,"polyline5":1,"geojson":2,"no_shape":3}},"PbfFieldSelector":{"fields":{"options":{"type":"bool","id":1},"trip":{"type":"bool","id":2},"directions":{"type":"bool","id":3}}},"Costing":{"oneofs":{"hasOptions":{"oneof":["options"]},"hasName":{"oneof":["name"]}},"fields":{"type":{"type":"Type","id":2},"name":{"type":"string","id":3},"options":{"type":"Options","id":1}},"nested":{"Type":{"values":{"none_":0,"bicycle":1,"bus":2,"motor_scooter":3,"multimodal":4,"pedestrian":5,"transit":6,"truck":7,"motorcycle":8,"taxi":9,"auto_":10,"bikeshare":11,"auto_pedestrian":12}},"Options":{"oneofs":{"hasUseFerry":{"oneof":["useFerry"]},"hasUseHighways":{"oneof":["useHighways"]},"hasUseTolls":{"oneof":["useTolls"]}},"fields":{"excludeUnpaved":{"type":"bool","id":72},"useFerry":{"type":"float","id":12},"useHighways":{"type":"float","id":13},"useTolls":{"type":"float","id":14}}}}},"Options":{"oneofs":{"hasLanguage":{"oneof":["language"]},"hasDateTime":{"oneof":["dateTime"]},"hasShapeFormat":{"oneof":["shapeFormat"]},"hasAlternates":{"oneof":["alternates"]},"hasRoundaboutExits":{"oneof":["roundaboutExits"]}},"fields":{"units":{"type":"Units","id":1},"language":{"type":"string","id":2},"directionsType":{"type":"DirectionsType","id":3},"format":{"type":"Format","id":4},"action":{"type":"Action","id":8},"costingType":{"type":"Costing.Type","id":12},"costings":{"keyType":"int32","type":"Costing","id":13},"locations":{"rule":"repeated","type":"Location","id":14},"dateTimeType":{"type":"DateTimeType","id":18},"dateTime":{"type":"string","id":19},"filterAction":{"type":"FilterAction","id":33},"filterAttributes":{"rule":"repeated","type":"string","id":34},"shapeFormat":{"type":"ShapeFormat","id":38},"alternates":{"type":"uint32","id":39},"roundaboutExits":{"type":"bool","id":44},"pbfFieldSelector":{"type":"PbfFieldSelector","id":52},"voiceInstructions":{"type":"bool","id":57},"turnLanes":{"type":"bool","id":60}},"nested":{"Units":{"values":{"kilometers":0,"miles":1}},"Format":{"values":{"json":0,"gpx":1,"osrm":2,"pbf":3,"geotiff":4,"mvt":5}},"Action":{"values":{"no_action":0,"route":1,"locate":2,"sources_to_targets":3,"optimized_route":4,"isochrone":5,"trace_route":6,"trace_attributes":7,"height":8,"transit_available":9,"expansion":10,"centroid":11,"status":12,"tile":13}},"DateTimeType":{"values":{"no_time":0,"current":1,"depart_at":2,"arrive_by":3,"invariant":4}}}},"CodedDescription":{"fields":{"code":{"type":"uint64","id":2}}},"Info":{"fields":{"errors":{"rule":"repeated","type":"CodedDescription","id":2}}}}}}}}
+{
+  "version": "3.8.2",
+  "sourceUrl": "https://raw.githubusercontent.com/valhalla/valhalla/3.8.2/proto/descriptors/",
+  "sourceSha256": {
+    "api.proto": "f1156ccbf937610838aa396678663dcd17555a6ea819ef3e8fde4c076bb50326",
+    "common.proto": "66219d419906dc417c1e589b9bfe01d8122756c6856a46d43a09a40e69e4d8e3",
+    "directions.proto": "94fe1152f4424c37242607a034468701b8b8c4820db2cd0928dd55f62bc3adcd",
+    "trip.proto": "6bf575fcffb10d874273205b0bfcf82f43c4094062fea387de2e526d4c78e93e",
+    "sign.proto": "3ff7823334953d7d9386d6d60b8cc4ca02be0cbf94298ffef415901f28a66fdc",
+    "options.proto": "390ff26eab10b054a949b06b321c84d3a574cc9dc00e164be9d4debcf1a062b8",
+    "info.proto": "2eedcb5d59cccf433cebcf44aef358b5c2764467a8ee484d2f7daa9724442780",
+    "status.proto": "f651baaeef7b0e032febc3e7d9c07c8d41c763880a07d02e02afdf1d0e9f1f31",
+    "matrix.proto": "2c97b69aed594beb82b717902603b6d7437a1fb3390671e4abda861c5ad12a69",
+    "isochrone.proto": "ddbe7070ead996a8b6f78d3fc213884a4852904da5ab55044c23fcedd359f1c2",
+    "expansion.proto": "97e8cce381f85018d2ffa633f164daa5d6baa65f96bf95ece7aca394846e4c7c",
+    "incidents.proto": "5499efae398aed2257b3e646ae8c0f9f13b93db8c92e4dd235780c39cbe8628e"
+  },
+  "license": "MIT",
+  "licenseNotice": "Copyright (c) 2018 Valhalla contributors; Copyright (c) 2015-2017 Mapillary AB, Mapzen. Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the Software), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
+  "schema": {
+    "options": { "optimize_for": "LITE_RUNTIME" },
+    "nested": {
+      "valhalla": {
+        "nested": {
+          "Api": {
+            "fields": {
+              "options": { "type": "Options", "id": 1 },
+              "trip": { "type": "Trip", "id": 2 },
+              "directions": { "type": "Directions", "id": 3 },
+              "info": { "type": "Info", "id": 20 }
+            }
+          },
+          "LatLng": {
+            "oneofs": { "hasLat": { "oneof": ["lat"] }, "hasLng": { "oneof": ["lng"] } },
+            "fields": { "lat": { "type": "double", "id": 1 }, "lng": { "type": "double", "id": 2 } }
+          },
+          "Location": {
+            "oneofs": {
+              "hasHeading": { "oneof": ["heading"] },
+              "hasHeadingTolerance": { "oneof": ["headingTolerance"] },
+              "hasRadius": { "oneof": ["radius"] }
+            },
+            "fields": {
+              "ll": { "type": "LatLng", "id": 1 },
+              "type": { "type": "Type", "id": 2 },
+              "heading": { "type": "uint32", "id": 3 },
+              "headingTolerance": { "type": "uint32", "id": 14 },
+              "radius": { "type": "uint32", "id": 18 }
+            },
+            "nested": {
+              "Type": { "values": { "kBreak": 0, "kThrough": 1, "kVia": 2, "kBreakThrough": 3 } }
+            }
+          },
+          "StreetName": {
+            "fields": {
+              "value": { "type": "string", "id": 1 },
+              "isRouteNumber": { "type": "bool", "id": 2 }
+            }
+          },
+          "TurnLane": {
+            "fields": {
+              "directionsMask": { "type": "uint32", "id": 1 },
+              "state": { "type": "State", "id": 2 },
+              "activeDirection": { "type": "uint32", "id": 3 }
+            },
+            "nested": { "State": { "values": { "kInvalid": 0, "kValid": 1, "kActive": 2 } } }
+          },
+          "Summary": {
+            "fields": {
+              "length": { "type": "float", "id": 1 },
+              "time": { "type": "double", "id": 2 }
+            }
+          },
+          "DirectionsLeg": {
+            "fields": {
+              "summary": { "type": "Summary", "id": 5 },
+              "maneuver": { "rule": "repeated", "type": "Maneuver", "id": 6 },
+              "shape": { "type": "string", "id": 7 }
+            },
+            "nested": {
+              "Maneuver": {
+                "fields": {
+                  "type": { "type": "Type", "id": 1 },
+                  "textInstruction": { "type": "string", "id": 2 },
+                  "streetName": { "rule": "repeated", "type": "StreetName", "id": 3 },
+                  "length": { "type": "float", "id": 4 },
+                  "time": { "type": "double", "id": 5 },
+                  "beginHeading": { "type": "uint32", "id": 7 },
+                  "beginShapeIndex": { "type": "uint32", "id": 8 },
+                  "endShapeIndex": { "type": "uint32", "id": 9 },
+                  "verbalPreTransitionInstruction": { "type": "string", "id": 13 },
+                  "verbalSuccinctTransitionInstruction": { "type": "string", "id": 37 },
+                  "sign": { "type": "TripSign", "id": 16 },
+                  "roundaboutExitCount": { "type": "uint32", "id": 17 },
+                  "beginPathIndex": { "type": "uint32", "id": 29 },
+                  "turnDegree": { "type": "uint32", "id": 33 }
+                },
+                "nested": {
+                  "Type": {
+                    "values": {
+                      "kNone": 0,
+                      "kStart": 1,
+                      "kStartRight": 2,
+                      "kStartLeft": 3,
+                      "kDestination": 4,
+                      "kDestinationRight": 5,
+                      "kDestinationLeft": 6,
+                      "kBecomes": 7,
+                      "kContinue": 8,
+                      "kSlightRight": 9,
+                      "kRight": 10,
+                      "kSharpRight": 11,
+                      "kUturnRight": 12,
+                      "kUturnLeft": 13,
+                      "kSharpLeft": 14,
+                      "kLeft": 15,
+                      "kSlightLeft": 16,
+                      "kRampStraight": 17,
+                      "kRampRight": 18,
+                      "kRampLeft": 19,
+                      "kExitRight": 20,
+                      "kExitLeft": 21,
+                      "kStayStraight": 22,
+                      "kStayRight": 23,
+                      "kStayLeft": 24,
+                      "kMerge": 25,
+                      "kRoundaboutEnter": 26,
+                      "kRoundaboutExit": 27,
+                      "kFerryEnter": 28,
+                      "kFerryExit": 29,
+                      "kTransit": 30,
+                      "kTransitTransfer": 31,
+                      "kTransitRemainOn": 32,
+                      "kTransitConnectionStart": 33,
+                      "kTransitConnectionTransfer": 34,
+                      "kTransitConnectionDestination": 35,
+                      "kPostTransitConnectionDestination": 36,
+                      "kMergeRight": 37,
+                      "kMergeLeft": 38,
+                      "kElevatorEnter": 39,
+                      "kStepsEnter": 40,
+                      "kEscalatorEnter": 41,
+                      "kBuildingEnter": 42,
+                      "kBuildingExit": 43,
+                      "kLevelChange": 44,
+                      "kParkVehicle": 45
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "DirectionsRoute": {
+            "fields": { "legs": { "rule": "repeated", "type": "DirectionsLeg", "id": 1 } }
+          },
+          "Directions": {
+            "fields": { "routes": { "rule": "repeated", "type": "DirectionsRoute", "id": 1 } }
+          },
+          "TripLeg": {
+            "fields": {
+              "node": { "rule": "repeated", "type": "Node", "id": 6 },
+              "shapeAttributes": { "type": "ShapeAttributes", "id": 10 }
+            },
+            "nested": {
+              "Edge": {
+                "oneofs": {},
+                "fields": {
+                  "name": { "rule": "repeated", "type": "StreetName", "id": 1 },
+                  "beginHeading": { "type": "uint32", "id": 5 },
+                  "endHeading": { "type": "uint32", "id": 6 },
+                  "beginShapeIndex": { "type": "uint32", "id": 7 },
+                  "endShapeIndex": { "type": "uint32", "id": 8 },
+                  "turnLanes": { "rule": "repeated", "type": "TurnLane", "id": 42 }
+                },
+                "nested": {}
+              },
+              "Node": { "fields": { "edge": { "type": "Edge", "id": 1 } }, "nested": {} },
+              "ShapeAttributes": {
+                "fields": {
+                  "speedLimit": {
+                    "rule": "repeated",
+                    "type": "uint32",
+                    "id": 5,
+                    "options": { "packed": true }
+                  }
+                }
+              }
+            }
+          },
+          "TripRoute": {
+            "fields": { "legs": { "rule": "repeated", "type": "TripLeg", "id": 1 } },
+            "nested": {}
+          },
+          "Trip": { "fields": { "routes": { "rule": "repeated", "type": "TripRoute", "id": 1 } } },
+          "TripSignElement": { "fields": { "text": { "type": "string", "id": 1 } } },
+          "TripSign": {
+            "fields": {
+              "exitNumbers": { "rule": "repeated", "type": "TripSignElement", "id": 1 },
+              "exitOntoStreets": { "rule": "repeated", "type": "TripSignElement", "id": 2 },
+              "exitTowardLocations": { "rule": "repeated", "type": "TripSignElement", "id": 3 },
+              "exitNames": { "rule": "repeated", "type": "TripSignElement", "id": 4 },
+              "guideOntoStreets": { "rule": "repeated", "type": "TripSignElement", "id": 5 },
+              "guideTowardLocations": { "rule": "repeated", "type": "TripSignElement", "id": 6 },
+              "junctionNames": { "rule": "repeated", "type": "TripSignElement", "id": 7 }
+            }
+          },
+          "FilterAction": { "values": { "no_action": 0, "exclude": 1, "include": 2 } },
+          "DirectionsType": { "values": { "instructions": 0, "none": 1, "maneuvers": 2 } },
+          "ShapeFormat": {
+            "values": { "polyline6": 0, "polyline5": 1, "geojson": 2, "no_shape": 3 }
+          },
+          "PbfFieldSelector": {
+            "fields": {
+              "options": { "type": "bool", "id": 1 },
+              "trip": { "type": "bool", "id": 2 },
+              "directions": { "type": "bool", "id": 3 }
+            }
+          },
+          "Costing": {
+            "oneofs": { "hasOptions": { "oneof": ["options"] }, "hasName": { "oneof": ["name"] } },
+            "fields": {
+              "type": { "type": "Type", "id": 2 },
+              "name": { "type": "string", "id": 3 },
+              "options": { "type": "Options", "id": 1 }
+            },
+            "nested": {
+              "Type": {
+                "values": {
+                  "none_": 0,
+                  "bicycle": 1,
+                  "bus": 2,
+                  "motor_scooter": 3,
+                  "multimodal": 4,
+                  "pedestrian": 5,
+                  "transit": 6,
+                  "truck": 7,
+                  "motorcycle": 8,
+                  "taxi": 9,
+                  "auto_": 10,
+                  "bikeshare": 11,
+                  "auto_pedestrian": 12
+                }
+              },
+              "Options": {
+                "oneofs": {
+                  "hasUseFerry": { "oneof": ["useFerry"] },
+                  "hasUseHighways": { "oneof": ["useHighways"] },
+                  "hasUseTolls": { "oneof": ["useTolls"] }
+                },
+                "fields": {
+                  "excludeUnpaved": { "type": "bool", "id": 72 },
+                  "useFerry": { "type": "float", "id": 12 },
+                  "useHighways": { "type": "float", "id": 13 },
+                  "useTolls": { "type": "float", "id": 14 }
+                }
+              }
+            }
+          },
+          "Options": {
+            "oneofs": {
+              "hasLanguage": { "oneof": ["language"] },
+              "hasDateTime": { "oneof": ["dateTime"] },
+              "hasShapeFormat": { "oneof": ["shapeFormat"] },
+              "hasAlternates": { "oneof": ["alternates"] },
+              "hasRoundaboutExits": { "oneof": ["roundaboutExits"] }
+            },
+            "fields": {
+              "units": { "type": "Units", "id": 1 },
+              "language": { "type": "string", "id": 2 },
+              "directionsType": { "type": "DirectionsType", "id": 3 },
+              "format": { "type": "Format", "id": 4 },
+              "action": { "type": "Action", "id": 8 },
+              "costingType": { "type": "Costing.Type", "id": 12 },
+              "costings": { "keyType": "int32", "type": "Costing", "id": 13 },
+              "locations": { "rule": "repeated", "type": "Location", "id": 14 },
+              "dateTimeType": { "type": "DateTimeType", "id": 18 },
+              "dateTime": { "type": "string", "id": 19 },
+              "filterAction": { "type": "FilterAction", "id": 33 },
+              "filterAttributes": { "rule": "repeated", "type": "string", "id": 34 },
+              "shapeFormat": { "type": "ShapeFormat", "id": 38 },
+              "alternates": { "type": "uint32", "id": 39 },
+              "roundaboutExits": { "type": "bool", "id": 44 },
+              "pbfFieldSelector": { "type": "PbfFieldSelector", "id": 52 },
+              "voiceInstructions": { "type": "bool", "id": 57 },
+              "turnLanes": { "type": "bool", "id": 60 }
+            },
+            "nested": {
+              "Units": { "values": { "kilometers": 0, "miles": 1 } },
+              "Format": {
+                "values": { "json": 0, "gpx": 1, "osrm": 2, "pbf": 3, "geotiff": 4, "mvt": 5 }
+              },
+              "Action": {
+                "values": {
+                  "no_action": 0,
+                  "route": 1,
+                  "locate": 2,
+                  "sources_to_targets": 3,
+                  "optimized_route": 4,
+                  "isochrone": 5,
+                  "trace_route": 6,
+                  "trace_attributes": 7,
+                  "height": 8,
+                  "transit_available": 9,
+                  "expansion": 10,
+                  "centroid": 11,
+                  "status": 12,
+                  "tile": 13
+                }
+              },
+              "DateTimeType": {
+                "values": {
+                  "no_time": 0,
+                  "current": 1,
+                  "depart_at": 2,
+                  "arrive_by": 3,
+                  "invariant": 4
+                }
+              }
+            }
+          },
+          "CodedDescription": { "fields": { "code": { "type": "uint64", "id": 2 } } },
+          "Info": {
+            "fields": { "errors": { "rule": "repeated", "type": "CodedDescription", "id": 2 } }
+          }
+        }
+      }
+    }
+  }
+}

@@ -19,12 +19,18 @@ import {
   type ContributionRateLimiter,
 } from '../contribution-rate-limiter.js';
 import { applyFastestLabel } from '../route-provider.js';
-import { createTrafficCohorts, type TrafficRelease } from './cohorts.js';
+import { createTrafficCohorts, type CohortContribution, type TrafficRelease } from './cohorts.js';
 import { createTrafficCredentials, type TrafficCredentials } from './credentials.js';
 import type { Position } from './geo.js';
 import { createValhallaMapMatcher, type MapMatcher, type MatchedEdge } from './map-matcher.js';
-import { deriveObservations } from './observations.js';
-import { findProbeRejection, trimBatchEnds, type ProbeRejection } from './probe-validation.js';
+import { deriveObservations, type SegmentObservation } from './observations.js';
+import {
+  findBoundaryDwells,
+  findProbeRejection,
+  isStationaryBatch,
+  trimBatchEnds,
+  type ProbeRejection,
+} from './probe-validation.js';
 import {
   annotateRouteTraffic,
   minorRoadMeters,
@@ -34,6 +40,7 @@ import {
 import { classifyCongestion } from './segments.js';
 import {
   assertTrafficPrivacyLimits,
+  loadConfiguredDeadEndMask,
   readTrafficSettings,
   type TrafficMode,
   type TrafficSettings,
@@ -41,6 +48,7 @@ import {
 import {
   createInMemoryTrafficReleaseStore,
   createPostgresTrafficReleaseStore,
+  TrafficEpochNotStoredError,
   type TrafficReleaseStore,
 } from './store.js';
 
@@ -140,7 +148,15 @@ export interface EnrichableRoute extends TrafficRouteInput {
 
 export type TrafficEnrichedRoute<Route extends EnrichableRoute> = Route & {
   congestion?: RouteCongestionLevel[];
-  traffic?: { delaySeconds: number; observedFraction: number; typicalDurationSeconds: number };
+  traffic?: {
+    delaySeconds: number;
+    observedFraction: number;
+    /** Earliest release boundary of any speed applied to this route. */
+    oldestObservedAt: string;
+    /** Epoch boundary of the published snapshot the speeds were read from. */
+    snapshotAt: string;
+    typicalDurationSeconds: number;
+  };
 };
 
 export type TrafficMaintenanceFailure = 'epoch' | 'purge';
@@ -239,7 +255,8 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
   };
   const epochMs = settings.epochSeconds * 1_000;
   const epochStart = (): number => Math.floor(clock().getTime() / epochMs) * epochMs;
-  // Salts the network marker of newcomer samples; process memory only, like the credential keys.
+  // Keys the network marker of newcomer samples; process memory only, like the credential keys.
+  // The cohorts re-key it under each edge's cohort salt, so nothing held is equal across edges.
   const networkKey = randomBytes(32);
   const accepting = (): boolean =>
     settings.mode !== 'off' &&
@@ -305,7 +322,19 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
     for (let attempt = 0; attempt < SNAPSHOT_READ_ATTEMPTS; attempt += 1) {
       const current = publish();
       if (!(await current.done)) throw new TrafficSnapshotUnavailableError();
-      const value = await read(current.epochMs);
+      let value: T;
+      try {
+        value = await read(current.epochMs);
+      } catch (error: unknown) {
+        // A replacement publication started meanwhile: read that one instead.
+        if (publication !== current) continue;
+        // The store no longer holds this epoch (a database crash emptied it, or it was erased):
+        // never answer with other contents under this epoch's label.
+        if (error instanceof TrafficEpochNotStoredError) {
+          throw new TrafficSnapshotUnavailableError();
+        }
+        throw error;
+      }
       if (publication === current) return { epochMs: current.epochMs, value };
     }
     throw new TrafficSnapshotUnavailableError();
@@ -392,6 +421,17 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
         const speeds = new Map(
           published.value.map((release) => [release.segmentKey, release.speedKph]),
         );
+        const releasedAtMs = new Map(
+          published.value.map((release) => [release.segmentKey, release.releasedAtMs]),
+        );
+        // Freshness is the coarse boundaries of the releases a route actually used, never the
+        // request time: a route mixing releases shows its oldest.
+        const oldestUsedMs = (edges: readonly MatchedEdge[]): number =>
+          Math.min(
+            ...edges.flatMap((edge) =>
+              edge.segmentKey === undefined ? [] : (releasedAtMs.get(edge.segmentKey) ?? []),
+            ),
+          );
         const annotations = routes.map((route, index) => {
           const edges = walks[index];
           return edges === undefined
@@ -422,6 +462,8 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
                     traffic: {
                       delaySeconds: annotation.delaySeconds,
                       observedFraction: annotation.observedFraction,
+                      oldestObservedAt: new Date(oldestUsedMs(edges ?? [])).toISOString(),
+                      snapshotAt: new Date(published.epochMs).toISOString(),
                       typicalDurationSeconds: annotation.typicalDurationSeconds,
                     },
                   },
@@ -498,9 +540,34 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
       }
       // From here the batch exists only in these local variables. It is never logged, queued or
       // stored, and an error below carries no part of it.
-      const points = trimBatchEnds(batch.points, settings.batchTrimMeters);
+      // A batch that never moved is only a dwell: nothing in it is driving to map match.
+      const points = isStationaryBatch(batch.points)
+        ? []
+        : trimBatchEnds(batch.points, settings.batchTrimMeters);
+      // Standing still the trim removed. It is held, as time only, on an edge the contributor is
+      // already driving, and counts once its own movement continues past it on that edge.
+      const dwells = findBoundaryDwells(batch.points, settings.batchTrimMeters);
+      // The arrival epoch comes from the server clock. Nothing the batch says about time decides
+      // where its samples count; its start time can only make them expire sooner.
+      const contribution: CohortContribution = {
+        drivenAtMs: Date.parse(batch.capturedAt),
+        newcomerNetwork: contributor.newInstallation
+          ? createHmac('sha256', networkKey)
+              .update(origin.network ?? 'unknown')
+              .digest('base64url')
+          : undefined,
+        tagFor: (segmentKey) => credentials.tagFor(contributor.seed, segmentKey),
+      };
+      const record = (observations: readonly SegmentObservation[]): void => {
+        const recorded = cohorts.add(observations, contribution, clock().getTime(), dwells);
+        counters.samplesRecorded += recorded.credited;
+        counters.samplesIgnored += recorded.ignored;
+      };
       if (points.length < MIN_MATCHED_POINTS) {
-        counters.batchesDropped += 1;
+        if (dwells.length > 0) {
+          record([]);
+          counters.batchesAccepted += 1;
+        } else counters.batchesDropped += 1;
         return { status: 'accepted' };
       }
       // Map matching shares Valhalla with routing; shed probe load before it can slow a route.
@@ -513,28 +580,11 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
         const matched = await mapMatcher.matchTrace(points);
         const observations =
           matched === undefined ? [] : deriveObservations(matched, points, settings);
-        if (observations.length === 0) {
+        if (observations.length === 0 && dwells.length === 0) {
           counters.batchesDropped += 1;
           return { status: 'accepted' };
         }
-        // The arrival epoch comes from the server clock. Nothing the batch says about time
-        // decides where its samples count; its start time can only make them expire sooner.
-        const recorded = cohorts.add(
-          observations,
-          {
-            drivenAtMs: Date.parse(batch.capturedAt),
-            newcomerNetwork: contributor.newInstallation
-              ? createHmac('sha256', networkKey)
-                  .update(origin.network ?? 'unknown')
-                  .digest('base64url')
-                  .slice(0, 16)
-              : undefined,
-            tagFor: (segmentKey) => credentials.tagFor(contributor.seed, segmentKey),
-          },
-          clock().getTime(),
-        );
-        counters.samplesRecorded += recorded.credited;
-        counters.samplesIgnored += recorded.ignored;
+        record(observations);
         counters.batchesAccepted += 1;
         return { status: 'accepted' };
       } catch {
@@ -603,8 +653,10 @@ export function createTrafficService(options: TrafficServiceOptions): TrafficSer
       }
       await purged;
       await store.ready();
-      // The store is empty, which is exactly the snapshot of the epoch the process starts in.
-      publication = { done: Promise.resolve(true), epochMs: epochStart() };
+      // Nothing is published for the epoch the process starts in. An earlier process may have
+      // served releases under this epoch's label; serving an empty body under the same label
+      // would contradict it. The epoch is unavailable until the next boundary is published.
+      publication = { done: Promise.resolve(false), epochMs: epochStart() };
       scheduleEpoch();
     },
 
@@ -696,7 +748,9 @@ export function isLocalMatcherEndpoint(endpoint: string): boolean {
 /**
  * Builds the service from the environment. Community traffic stays off unless
  * `COMMUNITY_TRAFFIC_MODE` is `collect` or `live`, and then it refuses to start unless the trace
- * endpoint is a local matcher: driving traces are never sent to a server someone else runs.
+ * endpoint is a local matcher: driving traces are never sent to a server someone else runs. `live`
+ * also refuses to start without a valid dead-end mask for the configured graph
+ * (`loadConfiguredDeadEndMask`).
  */
 export function createConfiguredTrafficService(
   options: Pick<TrafficServiceOptions, 'attestation' | 'clock' | 'onMaintenanceFailure'> = {},
@@ -718,9 +772,15 @@ export function createConfiguredTrafficService(
       'COMMUNITY_TRAFFIC_MODE requires VALHALLA_TRACE_URL (or VALHALLA_URL) to be a self-hosted Valhalla on loopback, a private address, or a single-label service name.',
     );
   }
+  // Live publication requires the topology dead-end mask bound to this graph, and refuses to
+  // start without it or with one built for another graph; collection may run without it.
+  const deadEndMask = loadConfiguredDeadEndMask(settings.mode, environment);
   return createTrafficService({
     ...options,
-    mapMatcher: createValhallaMapMatcher({ endpoint: traceUrl }),
+    mapMatcher: createValhallaMapMatcher({
+      ...(deadEndMask === undefined ? {} : { deadEndMask }),
+      endpoint: traceUrl,
+    }),
     settings,
     store,
   });

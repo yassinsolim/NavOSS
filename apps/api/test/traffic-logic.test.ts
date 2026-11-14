@@ -123,7 +123,11 @@ function driveAcross(
 
 /** The speed an observation describes: distance moved over time spent. */
 function speedOf(observation: SegmentObservation): number {
-  return (observation.meters / observation.seconds) * 3.6;
+  const meters = observation.moves.reduce((sum, move) => sum + move.to - move.from, 0);
+  const seconds =
+    observation.moves.reduce((sum, move) => sum + move.seconds, 0) +
+    observation.stops.reduce((sum, stop) => sum + stop.endSeconds - stop.startSeconds, 0);
+  return (meters / seconds) * 3.6;
 }
 
 function observe(edges: MatchedEdge[], speedKph: number): SegmentObservation[] {
@@ -294,16 +298,23 @@ describe('publication cohorts', () => {
   /** A whole 700 m edge driven end to end at `speedKph`. */
   const sample = (speedKph: number, key = 'w1f-000000000000'): SegmentObservation => ({
     freeFlowKph: 80,
-    intervals: [[0, 700]],
     lengthMeters: 700,
     line: [
       [-114.06, 51.05],
       [-114.05, 51.05],
     ],
-    meters: 700,
+    moves: [
+      {
+        endSeconds: 700 / (speedKph / 3.6),
+        from: 0,
+        seconds: 700 / (speedKph / 3.6),
+        startSeconds: 0,
+        to: 700,
+      },
+    ],
     roadClass: 'motorway',
-    seconds: 700 / (speedKph / 3.6),
     segmentKey: key,
+    stops: [],
   });
   const as = (contributor: string, drivenAtMs = NOW_MS, newcomerNetwork?: string) => ({
     drivenAtMs,
@@ -481,24 +492,40 @@ describe('publication cohorts', () => {
 
   describe('coverage of one edge across batches', () => {
     const KEY = 'w9f-0123456789ab';
-    /** What one batch drove of a 1.5 km motorway edge. */
+    /**
+     * What one batch drove of a 1.5 km motorway edge: `intervals` at one steady speed taking
+     * `seconds` in all, starting `atSeconds` into the batch.
+     */
     const piece = (
       intervals: [number, number][],
       seconds: number,
       overrides: Partial<SegmentObservation> = {},
-    ): SegmentObservation => ({
-      freeFlowKph: 100,
-      intervals,
-      lengthMeters: 1_500,
-      line: [
-        [-114.1, 51.1],
-        [-114.08, 51.1],
-      ],
-      meters: intervals.reduce((sum, [from, to]) => sum + to - from, 0),
-      roadClass: 'motorway',
-      seconds,
-      segmentKey: KEY,
-      ...overrides,
+      atSeconds = 0,
+    ): SegmentObservation => {
+      const meters = intervals.reduce((sum, [from, to]) => sum + to - from, 0);
+      let clock = atSeconds;
+      return {
+        freeFlowKph: 100,
+        lengthMeters: 1_500,
+        line: [
+          [-114.1, 51.1],
+          [-114.08, 51.1],
+        ],
+        moves: intervals.map(([from, to]) => {
+          const share = (seconds * (to - from)) / meters;
+          clock += share;
+          return { endSeconds: clock, from, seconds: share, startSeconds: clock - share, to };
+        }),
+        roadClass: 'motorway',
+        segmentKey: KEY,
+        stops: [],
+        ...overrides,
+      };
+    };
+    /** Standing at `at` metres from `fromSeconds` to `toSeconds` of the batch. */
+    const standing = (at: number, fromSeconds: number, toSeconds: number): SegmentObservation => ({
+      ...piece([], 0),
+      stops: [{ at, endSeconds: toSeconds, startSeconds: fromSeconds }],
     });
 
     it('credits a contributor once its batches together cover 300 m, at their overall speed', () => {
@@ -537,15 +564,243 @@ describe('publication cohorts', () => {
         cohorts.add([piece([[0, 200]], 60)], as(contributor), NOW_MS);
         // Two minutes stopped at 200 m, then 120 m more.
         cohorts.add(
-          [piece([[200, 200]], 120, { meters: 0 }), piece([[200, 320]], 36)],
-          as(contributor),
-          NOW_MS,
+          [
+            {
+              ...piece([[200, 320]], 36, {}, 120),
+              stops: [{ at: 200, endSeconds: 120, startSeconds: 0 }],
+            },
+          ],
+          as(contributor, NOW_MS + 60_000),
+          NOW_MS + 60_000,
         );
       }
       // 320 m in 216 s is 5.3 km/h.
       const [release] = cohorts.closeEpoch(NEXT_TICK);
       expect(release?.speedKph).toBe(5);
       expect(classifyCongestion(release?.speedKph ?? 0, 100, SETTINGS)).toBe('stopped');
+    });
+
+    it('keeps a contributor’s speed when a slow piece is replayed (the reviewed 1.5 km case)', () => {
+      // 100 m in 50 s, then 200 m in 10 s: 300 m in 60 s is 18 km/h, published as 20.
+      const run = (replays: number) => {
+        const cohorts = createTrafficCohorts(SETTINGS);
+        const credits: number[] = [];
+        for (const contributor of ['a', 'b', 'c']) {
+          cohorts.add([piece([[0, 100]], 50)], as(contributor), NOW_MS);
+          for (let replay = 0; replay < replays; replay += 1) {
+            credits.push(cohorts.add([piece([[0, 100]], 50)], as(contributor), NOW_MS).credited);
+          }
+          credits.push(
+            cohorts.add([piece([[100, 300]], 10, {}, 60)], as(contributor), NOW_MS).credited,
+          );
+        }
+        return { credits, releases: cohorts.closeEpoch(NEXT_TICK) };
+      };
+      const honest = run(0);
+      const replayed = run(9);
+
+      expect(honest.credits).toEqual([1, 1, 1]);
+      // Replays credit nothing and the sample still completes with the piece that covers 300 m.
+      expect(replayed.credits.filter((credit) => credit === 1)).toHaveLength(3);
+      expect(replayed.credits.at(9)).toBe(1);
+      expect(honest.releases.map(({ speedKph }) => speedKph)).toEqual([20]);
+      // Summing every upload would have made it 1,200 m in 510 s: 8.5 km/h, published as 10.
+      expect(replayed.releases.map(({ speedKph }) => speedKph)).toEqual([20]);
+    });
+
+    it('counts each metre’s moving time once when a replay claims another speed for it', () => {
+      const cohorts = createTrafficCohorts(SETTINGS);
+      cohorts.add([piece([[0, 200]], 20)], as('a'), NOW_MS);
+      // The same 200 m again, now claiming a crawl, then a part-overlapping piece.
+      cohorts.add([piece([[0, 200]], 200)], as('a'), NOW_MS);
+      expect(cohorts.add([piece([[100, 300]], 100)], as('a'), NOW_MS).credited).toBe(1);
+      for (const contributor of ['b', 'c']) {
+        cohorts.add([piece([[0, 300]], 30)], as(contributor), NOW_MS);
+      }
+      // a: 300 m in 20 s + half of 100 s = 70 s, 15.4 km/h; b and c 36 km/h. Median 36: 35.
+      // Summing would give a 600 m in 320 s, and the same median; check a's own sample instead.
+      const solo = createTrafficCohorts({ ...SETTINGS, minimumContributors: 3 });
+      for (const contributor of ['a', 'b', 'c']) {
+        solo.add([piece([[0, 200]], 20)], as(contributor), NOW_MS);
+        solo.add([piece([[0, 200]], 200)], as(contributor), NOW_MS);
+        solo.add([piece([[100, 300]], 100)], as(contributor), NOW_MS);
+      }
+      expect(solo.closeEpoch(NEXT_TICK).map(({ speedKph }) => speedKph)).toEqual([15]);
+      expect(cohorts.closeEpoch(NEXT_TICK).map(({ speedKph }) => speedKph)).toEqual([35]);
+    });
+
+    it('counts a stop once however it is repeated, and separate stops each', () => {
+      const minute = 60_000;
+      const start = NOW_MS - 10 * minute;
+      interface Upload {
+        claimedMs: number;
+        observation: SegmentObservation;
+      }
+      const speedWith = (uploads: Upload[]): number | undefined => {
+        const cohorts = createTrafficCohorts(SETTINGS);
+        for (const contributor of ['a', 'b', 'c']) {
+          for (const { claimedMs, observation } of uploads) {
+            cohorts.add([observation], as(contributor, claimedMs), NOW_MS);
+          }
+        }
+        return cohorts.closeEpoch(NEXT_TICK)[0]?.speedKph;
+      };
+      const before: Upload = { claimedMs: start, observation: piece([[0, 150]], 10) };
+      const stop: Upload = { claimedMs: start + minute, observation: standing(150, 0, 100) };
+      const after: Upload = { claimedMs: start + 3 * minute, observation: piece([[150, 300]], 10) };
+
+      // 300 m in 20 s moving and 100 s standing: 9 km/h, published as 10.
+      expect(speedWith([before, stop, after])).toBe(10);
+      // The stop uploaded four more times: summing would make it 300 m in 520 s, 2 km/h.
+      expect(speedWith([before, stop, stop, stop, stop, stop, after])).toBe(10);
+      // Re-batched 20 s later: only those 20 s are new (300 m in 140 s, 7.7 km/h), where
+      // summing would give 300 m in 220 s, 4.9 km/h, published as 5.
+      const rebatched: Upload = {
+        claimedMs: start + minute + 20_000,
+        observation: standing(153, 0, 100),
+      };
+      expect(speedWith([before, stop, rebatched, after])).toBe(10);
+      // A second, genuine stop elsewhere on the edge, in another batch, counts in full:
+      // 300 m in 220 s is 4.9 km/h, published as 5.
+      const second: Upload = { claimedMs: start + 2 * minute, observation: standing(260, 0, 100) };
+      expect(speedWith([before, stop, second, after])).toBe(5);
+    });
+
+    describe('dwell trimmed off batch ends', () => {
+      const minute = 60_000;
+      /** Where the vehicle stood, `meters` along the 1.5 km edge (its line is 0.02° long). */
+      const at = (meters: number): Position => [-114.1 + (0.02 * meters) / 1_500, 51.1];
+      const dwell = (meters: number, startSeconds: number, endSeconds: number) => ({
+        endSeconds,
+        position: at(meters),
+        startSeconds,
+      });
+      interface Batch {
+        claimedMs: number;
+        dwells: ReturnType<typeof dwell>[];
+        observations: SegmentObservation[];
+      }
+      const run = (batches: Batch[], tick = NEXT_TICK) => {
+        const cohorts = createTrafficCohorts(SETTINGS);
+        for (const contributor of ['a', 'b', 'c']) {
+          for (const { claimedMs, dwells, observations } of batches) {
+            cohorts.add(observations, as(contributor, claimedMs), NOW_MS, dwells);
+          }
+        }
+        return { cohorts, releases: cohorts.closeEpoch(tick) };
+      };
+      const start = NOW_MS - 9 * minute;
+      // Moving 0–200 m in the first minute, then standing at 300 m until the trim cut it off.
+      const approach: Batch = {
+        claimedMs: start,
+        dwells: [dwell(300, 75, 135)],
+        observations: [piece([[0, 200]], 60)],
+      };
+      // Standing at 300 m for two minutes, then moving 400–600 m.
+      const resume: Batch = {
+        claimedMs: start + 3 * minute,
+        dwells: [dwell(300, 0, 120)],
+        observations: [piece([[400, 600]], 60, {}, 150)],
+      };
+
+      it('counts standing at a batch boundary once the trip is seen going on', () => {
+        // 400 m in 120 s moving and 180 s standing: 4.8 km/h, published as 5. Without the
+        // dwell it would be 400 m in 120 s, 12 km/h, published as 10.
+        expect(run([approach, resume]).releases.map(({ speedKph }) => speedKph)).toEqual([5]);
+      });
+
+      it('counts a long stop over several stationary batches, once each, inside the window', () => {
+        const stationary = (claimedMs: number): Batch => ({
+          claimedMs,
+          dwells: [dwell(301, 0, 120)],
+          observations: [],
+        });
+        const going: Batch = {
+          claimedMs: start + 6 * minute,
+          dwells: [dwell(300, 0, 120)],
+          observations: [piece([[400, 1_400]], 60, {}, 150)],
+        };
+        const speeds = (batches: Batch[], tick?: number) =>
+          run(batches, tick).releases.map(({ speedKph }) => speedKph);
+        const s1 = stationary(start + 2 * minute);
+        const s2 = stationary(start + 4 * minute);
+        // Standing only at the two moving batches' ends (60 + 120 s): 1,200 m in 300 s, 14.4 km/h.
+        // Counting no standing at all would publish 35 (1,200 m in 120 s).
+        expect(speeds([approach, going])).toEqual([15]);
+        // With 60 + 120 + 120 + 120 s standing: 1,200 m in 540 s, 8 km/h, published as 10.
+        expect(speeds([approach, s1, s2, going])).toEqual([10]);
+        // Each stationary batch uploaded again changes nothing; summing would give 6.5 km/h, 5.
+        expect(speeds([approach, s1, s2, s2, s1, going])).toEqual([10]);
+        // Driving that began more than 15 minutes before the boundary is never released.
+        expect(speeds([approach, s1, s2, going], start + 15 * minute + EPOCH_MS)).toEqual([]);
+      });
+
+      it('never counts standing that no movement follows, as when a trip ends at the stop', () => {
+        const { cohorts, releases } = run([
+          approach,
+          { claimedMs: start + 2 * minute, dwells: [dwell(300, 0, 280)], observations: [] },
+        ]);
+        expect(releases).toEqual([]);
+        // Coverage alone completes later at 12 km/h: the stop before the end still never counts.
+        for (const contributor of ['a', 'b', 'c']) {
+          cohorts.add(
+            [piece([[200, 400]], 60, {}, 60)],
+            as(contributor, start + 8 * minute),
+            NOW_MS,
+          );
+        }
+        expect(cohorts.closeEpoch(NEXT_TICK).map(({ speedKph }) => speedKph)).toEqual([10]);
+      });
+
+      it('never counts standing before the contributor’s first movement on the edge', () => {
+        // A trip that starts standing at 50 m: nothing on this edge came before it.
+        const startsHere: Batch = {
+          claimedMs: start,
+          dwells: [dwell(50, 0, 240)],
+          observations: [piece([[150, 450]], 90, {}, 260)],
+        };
+        // 300 m in 90 s is 12 km/h, published as 10.
+        expect(run([startsHere]).releases.map(({ speedKph }) => speedKph)).toEqual([10]);
+      });
+
+      it('drops standing claimed after the contributor had already driven past it', () => {
+        const onward: Batch = {
+          claimedMs: start + 9 * minute,
+          dwells: [],
+          observations: [piece([[700, 1_500]], 60)],
+        };
+        // A stationary batch at 300 m claiming a time after the contributor had moved on to
+        // 600 m: movement brackets it in space, but it contradicts the trip in time.
+        const late: Batch = {
+          claimedMs: start + 6 * minute,
+          dwells: [dwell(300, 0, 280)],
+          observations: [],
+        };
+        const speeds = (batches: Batch[]) => run(batches).releases.map(({ speedKph }) => speedKph);
+        // Short enough that coverage completes only with the onward batch.
+        const shortResume: Batch = { ...resume, observations: [piece([[400, 450]], 60, {}, 150)] };
+        // 1,050 m in 180 s moving and 180 s standing: 10.5 km/h, published as 10. Counting the
+        // late stop as well would give 5.9 km/h, published as 5.
+        expect(speeds([approach, shortResume, onward])).toEqual([10]);
+        expect(speeds([approach, shortResume, late, onward])).toEqual([10]);
+      });
+
+      it('places standing only on an edge where the contributor already moves', () => {
+        // Same contributor, another edge: a dwell beside the first edge is not put there.
+        const other = { segmentKey: 'w10f-0123456789ab' };
+        const cohorts = createTrafficCohorts(SETTINGS);
+        const perEdge = (claimedMs: number) => ({
+          drivenAtMs: claimedMs,
+          tagFor: (segmentKey: string) => `a:${segmentKey}`,
+        });
+        cohorts.add([piece([[0, 200]], 60, other)], perEdge(start), NOW_MS, [dwell(300, 75, 135)]);
+        cohorts.add([piece([[400, 600]], 60, {}, 150)], perEdge(start + 3 * minute), NOW_MS, [
+          dwell(300, 0, 120),
+        ]);
+        // The dwell sits on the other edge's line (the test lines coincide); it was placed there,
+        // not on the edge only driven afterwards, so nothing completes on either edge.
+        expect(cohorts.pending()).toEqual({ partial: 2, samples: 0, segments: 2 });
+      });
     });
 
     it('needs only half of a short edge', () => {
@@ -694,20 +949,20 @@ describe('observations from a map-matched drive', () => {
       expect(speedOf(observation)).toBeGreaterThanOrEqual(34);
       expect(speedOf(observation)).toBeLessThanOrEqual(46);
       // Positions are distances along the edge, never coordinates of the upload.
-      for (const [from, to] of observation.intervals) {
+      for (const { from, to } of observation.moves) {
         expect(from).toBeGreaterThanOrEqual(0);
         expect(to).toBeLessThanOrEqual(observation.lengthMeters + 1e-6);
       }
-      // No time of day and no position of the upload: only these fields exist.
+      // No time of day and no position of the upload: only these fields exist, and times are
+      // offsets within the batch.
       expect(Object.keys(observation).sort()).toEqual([
         'freeFlowKph',
-        'intervals',
         'lengthMeters',
         'line',
-        'meters',
+        'moves',
         'roadClass',
-        'seconds',
         'segmentKey',
+        'stops',
       ]);
     }
   });

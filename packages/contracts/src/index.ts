@@ -241,6 +241,7 @@ export {
   parseTrafficFlowBounds,
   RouteCongestionLevelSchema,
   RouteTrafficAnnotationSchema,
+  RouteTrafficFreshnessSchema,
   snapTrafficFlowBounds,
   TRAFFIC_FLOW_GRID_DEGREES,
   TRAFFIC_FLOW_MAX_SPAN_DEGREES,
@@ -260,6 +261,7 @@ export {
 export type {
   RouteCongestionLevel,
   RouteTrafficAnnotation,
+  RouteTrafficFreshness,
   TrafficCongestionLevel,
   TrafficCredentialRequest,
   TrafficCredentialResponse,
