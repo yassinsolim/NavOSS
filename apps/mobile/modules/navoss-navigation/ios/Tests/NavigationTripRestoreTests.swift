@@ -424,6 +424,7 @@ final class NavigationTripRestoreTests: XCTestCase {
       second += 1
     }
     XCTAssertEqual(uninterrupted.resumeContext?.isArrivalDeferred, true)
+    let saved = try XCTUnwrap(uninterrupted.resumeContext)
     let restored = try Self.relaunch(uninterrupted, trip, store: store)
 
     var continuing = uninterrupted.currentUpdate()
@@ -437,6 +438,36 @@ final class NavigationTripRestoreTests: XCTestCase {
     }
     XCTAssertEqual(continuing.snapshot.phase, .arrived)
     XCTAssertEqual(resumed.snapshot.phase, .arrived)
+
+    // Review finding: with the same checkpoint's capture time unusable (in the future after
+    // the clock was set back, or missing), the first fix moved the deferral's origin on 50 m,
+    // leaving less road than clearing it needs, and the trip never arrived. The saved origin is
+    // kept, and the last 60 m still arrive.
+    let origin = try XCTUnwrap(saved.arrivalDeferral).alongMeters
+    for (label, savedTime) in [("future", Trace.time(5_000)), ("missing", nil)]
+      as [(String, TimeInterval?)]
+    {
+      let unusable = NavigationResumeContext(
+        alongMeters: saved.alongMeters, highWaterAlongMeters: saved.highWaterAlongMeters,
+        uncertaintyMeters: saved.uncertaintyMeters, timestamp: savedTime,
+        speedMetersPerSecond: saved.speedMetersPerSecond, arrivalDeferral: saved.arrivalDeferral)
+      let clockMoved = NavigationSession()
+      try clockMoved.start(trip, resume: .progress(unusable))
+      var update = clockMoved.currentUpdate()
+      var time = 20.0
+      for (index, y) in [50.0, 40, 30, 20, 10, 0, 0, 0, 0, 0].enumerated() {
+        update = try clockMoved.updateLocation(
+          Trace.sample(
+            x: 400, y: y, courseDegrees: y > 0 ? 180 : nil, speed: y > 0 ? 10 : 0, time: time))
+        if index == 0 {
+          XCTAssertEqual(
+            try XCTUnwrap(clockMoved.resumeContext?.arrivalDeferral).alongMeters, origin,
+            accuracy: 0.01, label)
+        }
+        time += 1
+      }
+      XCTAssertEqual(update.snapshot.phase, .arrived, label)
+    }
   }
 
   /// A jump onto the destination is believed but does not arrive until the vehicle moves.

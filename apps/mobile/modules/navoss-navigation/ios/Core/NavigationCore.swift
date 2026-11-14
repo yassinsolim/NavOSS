@@ -797,14 +797,18 @@ final class NavigationCore {
     // speed saved with it is no evidence either: how far the vehicle has gone since is unknown,
     // and so is whether it is still moving. Its pass is still where the vehicle was: a fix that
     // fits it carries on from it, but where that fix lands is not movement, so arrival waits
-    // for the vehicle to be seen moving on from it. A fix that fits only another pass cannot be
-    // judged against it, and is not grounds to drop the trip: the trip is placed again from
-    // this fix, as one restored without progress (its pass confirmed by fixes, arrival waiting
-    // for movement). A fix that fits no pass is off the route.
+    // for the vehicle to be seen moving on from it, unless it was already waiting: a restored
+    // deferral keeps its own origin, and the movement already seen from there still counts
+    // (moving its origin on could leave less road than it needs). A fix that fits only another
+    // pass cannot be judged against it, and is not grounds to drop the trip: the trip is placed
+    // again from this fix, as one restored without progress (its pass confirmed by fixes,
+    // arrival waiting for movement from there). A fix that fits no pass is off the route.
     if isAnchorRestored, let timestamp = sample.timestamp,
       anchorTimestamp.map({ timestamp <= $0 }) ?? true
     {
-      defersArrivalOnNextAcceptedFix = true
+      if arrivalDeferral == nil {
+        defersArrivalOnNextAcceptedFix = true
+      }
       if !fitsRestoredPass(sample, on: route, accuracyMeters: accuracyAllowanceMeters),
         fitsAnyPass(sample, on: route, accuracyMeters: accuracyAllowanceMeters)
       {
