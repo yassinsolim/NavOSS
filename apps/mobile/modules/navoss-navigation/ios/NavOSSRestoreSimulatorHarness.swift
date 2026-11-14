@@ -189,9 +189,46 @@ import Foundation
     }
 
     private static func probe() {
+      probeUnknownCaptureTimeNeedsMovement()
       probeRestorePublication()
       probeCheckpointRaces()
       log("probe done")
+    }
+
+    /// Saved 100 m before the destination, standing still, with a capture time in the future
+    /// (the clock was set back) and then missing: stationary fixes biased onto the destination
+    /// neither arrive nor drop the trip, through the service, its publication and its store.
+    private static func probeUnknownCaptureTimeNeedsMovement() {
+      for (label, offset) in [("future", 3_600.0 as Double?), ("missing", nil)] {
+        let suite = "NavOSSRestoreE2E.unknown-time.\(label)"
+        let (service, store, defaults, _) = service(suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let trip = syntheticTrip(id: "restore-unknown-time")
+        let now = Date()
+        store.save(trip)
+        store.saveProgress(
+          NavigationResumeContext(
+            alongMeters: 2_500, highWaterAlongMeters: 2_500, uncertaintyMeters: 5,
+            timestamp: offset.map { now.addingTimeInterval($0).timeIntervalSinceReferenceDate },
+            speedMetersPerSecond: 0, arrivalDeferral: nil),
+          forTripId: trip.id)
+        service.resumePersistedNavigation()
+        var phases: [String] = []
+        for second in 0..<6 {
+          _ = try? service.ingest(
+            fix(900, 1_700, course: nil, speed: 0, at: now.addingTimeInterval(Double(second))))
+          phases.append("\(service.currentState().navigation.phase)")
+        }
+        var deferred = false
+        if case .progress(let progress) = store.loadProgress(for: trip) {
+          deferred = progress.isArrivalDeferred
+        }
+        check(
+          "unknown-time-\(label)-no-arrival",
+          !phases.contains("arrived") && store.load() != nil && deferred,
+          "phases=\(phases) \(storeSummary(defaults))")
+        service.clearNavigation()
+      }
     }
 
     /// Saved at 400 m on the first leg; the vehicle is on the last leg when the app comes back.

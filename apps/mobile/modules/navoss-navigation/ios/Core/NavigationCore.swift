@@ -793,20 +793,26 @@ final class NavigationCore {
 
     let accuracyAllowanceMeters = sample.horizontalAccuracyMeters ?? 0
     // A restored anchor whose capture time is unusable (missing, or not before this fix: the
-    // clock was set back while the app was not running) bounds and explains nothing. Its pass
-    // is still where the vehicle was: a fix that fits it carries on from it. A fix that fits
-    // only another pass cannot be judged against it, and is not grounds to drop the trip: the
-    // trip is placed again from this fix, as one restored without progress (its pass confirmed
-    // by fixes, arrival waiting for movement). A fix that fits no pass is off the route.
+    // clock was set back while the app was not running) bounds and explains nothing, so the
+    // speed saved with it is no evidence either: how far the vehicle has gone since is unknown,
+    // and so is whether it is still moving. Its pass is still where the vehicle was: a fix that
+    // fits it carries on from it, but where that fix lands is not movement, so arrival waits
+    // for the vehicle to be seen moving on from it. A fix that fits only another pass cannot be
+    // judged against it, and is not grounds to drop the trip: the trip is placed again from
+    // this fix, as one restored without progress (its pass confirmed by fixes, arrival waiting
+    // for movement). A fix that fits no pass is off the route.
     if isAnchorRestored, let timestamp = sample.timestamp,
-      anchorTimestamp.map({ timestamp <= $0 }) ?? true,
-      !fitsRestoredPass(sample, on: route, accuracyMeters: accuracyAllowanceMeters),
-      fitsAnyPass(sample, on: route, accuracyMeters: accuracyAllowanceMeters)
+      anchorTimestamp.map({ timestamp <= $0 }) ?? true
     {
-      resetTrackingState()
-      latestFixTimestamp = timestamp
-      requiresPassConfirmation = true
       defersArrivalOnNextAcceptedFix = true
+      if !fitsRestoredPass(sample, on: route, accuracyMeters: accuracyAllowanceMeters),
+        fitsAnyPass(sample, on: route, accuracyMeters: accuracyAllowanceMeters)
+      {
+        resetTrackingState()
+        latestFixTimestamp = timestamp
+        requiresPassConfirmation = true
+        defersArrivalOnNextAcceptedFix = true
+      }
     }
     let anchorAlongMeters = hasAnchor ? fixProgress * route.totalDistanceMeters : nil
     // Seconds since the anchor was captured, when both are timestamped and this fix is newer.

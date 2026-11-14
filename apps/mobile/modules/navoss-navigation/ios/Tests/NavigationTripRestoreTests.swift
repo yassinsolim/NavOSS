@@ -297,6 +297,42 @@ final class NavigationTripRestoreTests: XCTestCase {
     XCTAssertEqual(restored.resumeContext?.isArrivalDeferred, true)
   }
 
+  /// Final review finding: the same checkpoint, but with a capture time that cannot be used
+  /// (in the future after the clock was set back, or missing). Without a time the saved
+  /// standstill explains nothing, so the biased fixes were believed and arrived. The fix the
+  /// trip is reacquired from is not movement: arrival waits for the vehicle to move on from it.
+  /// Driving in does arrive.
+  func testARestoredTripWithAnUnusableCaptureTimeStillNeedsMovementToArrive() throws {
+    let trip = Self.trip(Self.straight)
+    for (label, savedTime) in [("future", Trace.time(3_600)), ("missing", nil)]
+      as [(String, TimeInterval?)]
+    {
+      let saved = NavigationResumeContext(
+        alongMeters: 900, highWaterAlongMeters: 900, uncertaintyMeters: 5, timestamp: savedTime,
+        speedMetersPerSecond: 0, arrivalDeferral: nil)
+      let parked = NavigationSession()
+      try parked.start(trip, resume: .progress(saved))
+      for second in 3...8 {
+        let update = try parked.updateLocation(
+          Trace.sample(x: 0, y: 1_000, speed: 0, time: Double(second)))
+        XCTAssertEqual(update.snapshot.phase, .tracking, "\(label) at \(second)")
+        XCTAssertNotEqual(Self.decision(update), .discard, "\(label) at \(second)")
+      }
+      XCTAssertEqual(parked.resumeContext?.isArrivalDeferred, true, label)
+
+      let driving = NavigationSession()
+      try driving.start(trip, resume: .progress(saved))
+      var update = driving.currentUpdate()
+      var time = 3.0
+      for y in stride(from: 910.0, through: 1_000, by: 10) + [1_000, 1_000] {
+        update = try driving.updateLocation(
+          Trace.sample(x: 0, y: y, courseDegrees: 0, speed: y < 1_000 ? 10 : 0, time: time))
+        time += 1
+      }
+      XCTAssertEqual(update.snapshot.phase, .arrived, label)
+    }
+  }
+
   /// Review finding: an arrival deferred between two fifteen-second checkpoints was still
   /// "not deferred" on disk, and the restored trip arrived on stationary fixes. A change of
   /// deferral is written at once.
