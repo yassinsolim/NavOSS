@@ -258,13 +258,24 @@ export function createCommunityReportService(
     return options.verifier;
   };
 
-  /** One-use: deleted outside any write transaction so a failed request still burns it. */
+  /**
+   * One-use: deleted outside any write transaction so a failed request still burns it. A database
+   * that cannot be reached in time (no pooled connection within `connectionTimeoutMillis`, a
+   * statement limit) is `unavailable`, like any other database failure on this path.
+   */
   const consumeChallenge = async (challenge: string, now: Date): Promise<void> => {
-    const result = await pool.query(
-      'DELETE FROM community_challenges WHERE challenge_hash = $1 AND expires_at > $2',
-      [sha256(Buffer.from(challenge, 'utf8')), now],
-    );
-    if (result.rowCount !== 1) throw new CommunityReportError('invalid-challenge');
+    let deleted: number | null;
+    try {
+      deleted = (
+        await pool.query(
+          'DELETE FROM community_challenges WHERE challenge_hash = $1 AND expires_at > $2',
+          [sha256(Buffer.from(challenge, 'utf8')), now],
+        )
+      ).rowCount;
+    } catch (error: unknown) {
+      throw new CommunityReportError('unavailable', { cause: error });
+    }
+    if (deleted !== 1) throw new CommunityReportError('invalid-challenge');
   };
 
   /**

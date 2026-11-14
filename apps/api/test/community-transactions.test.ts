@@ -7,6 +7,11 @@ import type { AppAttestVerifier } from '../src/app-attest.js';
 import { BOUNDED_POOL_LIMITS } from '../src/bounded-pool.js';
 import { CommunityReportError, createCommunityReportService } from '../src/community-reports.js';
 import { MIGRATIONS } from '../src/migrations.js';
+import { buildApp } from '../src/app.js';
+import { CALGARY_SEARCH_FIXTURES } from '../src/fixtures.js';
+import { createFixtureSearchProvider } from '../src/search-provider.js';
+import { createTrafficService } from '../src/traffic/service.js';
+import { assertionFor, FIXTURE_SETTINGS, stubbedMatcher } from './traffic-fixture.js';
 
 /**
  * A community database whose schema is current and whose installation lookup fails the way a
@@ -77,6 +82,56 @@ describe('community report transactions', () => {
     expect(failure).toMatchObject({ reason: 'unavailable' });
     expect(released).toHaveLength(1);
     expect(released[0]).toBeInstanceOf(Error);
+  });
+
+  it('answers a challenge that cannot reach the database as unavailable, over HTTP as 503', async () => {
+    // Every pooled connection is taken: the challenge's own query times out waiting for one.
+    const exhausted = {
+      connect: () => Promise.reject(new Error('timeout exceeded when trying to connect')),
+      query: (sql: string) => {
+        if (sql.includes('to_regclass')) return Promise.resolve({ rows: [{ present: true }] });
+        if (sql.includes('SELECT id, checksum')) {
+          return Promise.resolve({
+            rows: MIGRATIONS.map((migration) => ({
+              checksum: createHash('sha256').update(migration.sql).digest('hex'),
+              id: migration.id,
+            })),
+          });
+        }
+        return Promise.reject(new Error('timeout exceeded when trying to connect'));
+      },
+    } as unknown as Pool;
+    const community = createCommunityReportService({
+      attestationMode: 'enforce',
+      installationSecret: Buffer.alloc(32, 7),
+      isInCoverage: () => true,
+      pool: exhausted,
+      publication: 'shadow',
+      verifier: { rpIdHash: Buffer.alloc(32) } as unknown as AppAttestVerifier,
+    });
+    const assertion = assertionFor('phone-1');
+    await expect(community.assertTrafficContributor(assertion)).rejects.toMatchObject({
+      reason: 'unavailable',
+    });
+    const app = await buildApp({
+      communityReports: null,
+      searchProvider: createFixtureSearchProvider(CALGARY_SEARCH_FIXTURES),
+      trafficService: createTrafficService({
+        attestation: community,
+        mapMatcher: stubbedMatcher().matcher,
+        settings: FIXTURE_SETTINGS,
+      }),
+    });
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        payload: { assertion },
+        url: '/v2/traffic/credentials',
+      });
+      expect(response.statusCode).toBe(503);
+    } finally {
+      await app.close();
+    }
   });
 
   it('bounds statements, lock waits and idle transactions on the server', () => {
