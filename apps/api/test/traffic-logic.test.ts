@@ -463,6 +463,29 @@ describe('publication cohorts', () => {
     expect(cohorts.closeEpoch(NEXT_TICK + EPOCH_MS)).toHaveLength(1);
   });
 
+  it('keeps one weight and the newcomer cap across a release that re-keys the cohort', () => {
+    const cohorts = createTrafficCohorts(SETTINGS);
+    for (const contributor of ['a', 'b', 'c']) add(cohorts, contributor, 60);
+    // Completed after the boundary: these belong to the next cohort, keyed before the release.
+    add(cohorts, 'late', 20, NEXT_TICK + 1_000);
+    cohorts.add([sample(20)], as('new-1', NEXT_TICK + 1_000, 'network-a'), NEXT_TICK + 1_000);
+    expect(cohorts.closeEpoch(NEXT_TICK)).toHaveLength(1);
+
+    // After the release the edge's tags are re-keyed, but the pending ones are still recognised:
+    // the same installation is not counted again, nor a second newcomer from the same network.
+    expect(cohorts.add([sample(5)], as('late', NEXT_TICK + 2_000), NEXT_TICK + 2_000)).toEqual({
+      credited: 0,
+      ignored: 1,
+    });
+    expect(
+      cohorts.add([sample(5)], as('new-2', NEXT_TICK + 2_000, 'network-a'), NEXT_TICK + 2_000)
+        .credited,
+    ).toBe(0);
+    expect(cohorts.pending().samples).toBe(2);
+    add(cohorts, 'd', 20, NEXT_TICK + 3_000);
+    expect(cohorts.closeEpoch(NEXT_TICK + EPOCH_MS).map(({ speedKph }) => speedKph)).toEqual([20]);
+  });
+
   it('counts the threshold for each drawn edge, not for the way as a whole', () => {
     const cohorts = createTrafficCohorts(SETTINGS);
     // Three drivers cover edges 1 and 2 of a way; a fourth alone continues over edges 3 to 5.
