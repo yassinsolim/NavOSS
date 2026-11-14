@@ -54,11 +54,23 @@ if [ "${NAVOSS_SKIP_SIMULATOR_INSTALL:-0}" != "1" ]; then
   xcrun simctl install "$device_id" "$app_path"
 fi
 
-sh ./scripts/run-maestro-ios.sh ../../.maestro/start-airport-simulation.yaml
+# Arrival is tested on a real short trip, not by teleporting along a long one: the simulator is
+# put on the final approach of the downtown-to-airport route before the app plans anything, the
+# app plans and starts its own route from there to the airport the flow selects, and the replay
+# drives the route from that same origin in full at a plausible speed. The position never moves
+# along the route faster than a vehicle could.
+approach_origin="$(
+  NAVOSS_SIMULATION_APPROACH_METERS=300 node ./scripts/replay-route-ios.mjs --print-approach-origin
+)"
+printf 'Arrival trip starts on the final approach at %s\n' "$approach_origin"
 
-NAVOSS_SIMULATION_SPEED_MPS=8 \
+NAVOSS_SIMULATOR_START_LOCATION="$approach_origin" \
+  sh ./scripts/run-maestro-ios.sh ../../.maestro/start-airport-simulation.yaml
+
+NAVOSS_SIMULATION_ORIGIN_LATITUDE="${approach_origin%,*}" \
+  NAVOSS_SIMULATION_ORIGIN_LONGITUDE="${approach_origin#*,}" \
+  NAVOSS_SIMULATION_SPEED_MPS=8 \
   NAVOSS_SIMULATION_INTERVAL_SECONDS=0.5 \
-  NAVOSS_SIMULATION_TAIL_METERS=180 \
   node ./scripts/replay-route-ios.mjs
 
 xcrun simctl spawn "$device_id" log stream \
