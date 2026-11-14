@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
@@ -15,7 +15,7 @@ import {
   type TrafficProbeBatchRequest,
 } from '@navoss/contracts';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Pool } from 'pg';
 
@@ -30,6 +30,8 @@ import {
   type TrafficMetrics,
   type TrafficService,
 } from '../src/traffic/service.js';
+import type { DeadEndMaskWays } from '../src/traffic/dead-end-mask.js';
+import { decodePolyline6 } from '../src/traffic/geo.js';
 import { createValhallaMapMatcher, type MapMatcher } from '../src/traffic/map-matcher.js';
 import { edgeSegmentKey } from '../src/traffic/segments.js';
 import { DEFAULT_TRAFFIC_SETTINGS, type TrafficSettings } from '../src/traffic/settings.js';
@@ -51,6 +53,7 @@ import {
   stubbedMatcher,
   type StubbedMatcher,
 } from './traffic-fixture.js';
+import { mixedWay, writeServingGraph } from './serving-graph-fixture.js';
 
 const apps: FastifyInstance[] = [];
 const FLOW_URL = '/v2/traffic/flow?bbox=9.45,47.10,9.60,47.20';
@@ -1426,26 +1429,101 @@ describe('standing still across batch boundaries, through HTTP on a recorded rea
   });
 
   describe('the configured service and the dead-end mask', () => {
+    const root = mkdtempSync(join(tmpdir(), 'navoss-configured-traffic-'));
+    afterAll(() => {
+      rmSync(root, { force: true, recursive: true });
+    });
+    let graphs = 0;
+    /** A verified serving graph directory whose mask lists `ways`; returns its configuration. */
+    const servingGraph = (ways: Partial<DeadEndMaskWays>) => {
+      graphs += 1;
+      const directory = join(root, String(graphs));
+      mkdirSync(directory);
+      const graphId = writeServingGraph(
+        directory,
+        'tiles of the 2026-11-11 graph',
+        directory,
+        ways,
+      );
+      return { COMMUNITY_TRAFFIC_GRAPH_DIR: directory, COMMUNITY_TRAFFIC_GRAPH_ID: graphId };
+    };
     const environment = (mode: 'collect' | 'live', extra: Record<string, string> = {}) => ({
       COMMUNITY_TRAFFIC_MODE: mode,
       VALHALLA_URL: 'http://valhalla:8002/route',
       ...extra,
     });
+    /** Builds the service from configuration alone, its matcher answering from the recording. */
+    const configured =
+      (graph: Record<string, string>) => (clock: () => Date, requests: string[]) => {
+        vi.stubGlobal('fetch', recordedValhalla(requests));
+        try {
+          return createConfiguredTrafficService(
+            { attestation: fakeAttestation(), clock },
+            environment('live', graph),
+          );
+        } finally {
+          vi.unstubAllGlobals();
+        }
+      };
+    const DEERFOOT = 551_687_611;
+    const trip = [approach, stopped(T0 + 70_000), resume(T0 + 170_000)];
+    const publishedWith = async (ways: Partial<DeadEndMaskWays>) =>
+      (await drive(threeDrivers(trip), configured(servingGraph(ways)))).publishedAt(
+        T0 + 10 * MINUTE,
+      );
+    /** The recorded edge's whole map geometry, as `/locate` gave it, in the way's direction. */
+    const deerfootEdge = (() => {
+      for (const { path, response } of DWELL.exchanges) {
+        if (path !== '/locate') continue;
+        // Recorded verbose `/locate` answers, as Valhalla 3.8.2 gave them.
+        const located = response as { edges: { edge_info: { shape: string; way_id: number } }[] }[];
+        const shape = located[0]?.edges.find(({ edge_info }) => edge_info.way_id === DEERFOOT)
+          ?.edge_info.shape;
+        if (shape !== undefined) return decodePolyline6(shape);
+      }
+      throw new Error('the recording has no located Deerfoot edge');
+    })();
 
-    // A valid serving graph, its mask and the matcher applying it are tested in
-    // dead-end-mask.test.ts; here only that the configured service goes through that check.
-    it('refuses to start live without a verified serving graph and mask; collect may run without', () => {
+    it('publishes, from three contributors, only an edge the configured mask places on the main network', async () => {
+      // The verified mask lists the way as eligible: the drive is published.
+      expect(await publishedWith({ eligible: [DEERFOOT] })).toEqual([10]);
+      // Mixed, eligible along the whole edge: published too.
+      const along = 'e'.repeat(deerfootEdge.length - 1);
+      expect(await publishedWith({ mixed: [mixedWay(DEERFOOT, deerfootEdge, along)] })).toEqual([
+        10,
+      ]);
+      // Excluded, unknown, absent from the mask, or mixed with a boundary inside the edge: the
+      // same three contributors publish nothing.
+      expect(await publishedWith({ excluded: [DEERFOOT] })).toEqual([]);
+      expect(await publishedWith({ unknown: [DEERFOOT] })).toEqual([]);
+      expect(await publishedWith({ eligible: [5] })).toEqual([]);
+      const boundary = `${'e'.repeat(deerfootEdge.length - 2)}x`;
+      expect(await publishedWith({ mixed: [mixedWay(DEERFOOT, deerfootEdge, boundary)] })).toEqual(
+        [],
+      );
+    });
+
+    it('refuses to start live without the verified serving graph; collect may run without', () => {
       expect(() => createConfiguredTrafficService({}, environment('live'))).toThrow();
       expect(createConfiguredTrafficService({}, environment('collect')).mode).toBe('collect');
       expect(() =>
         createConfiguredTrafficService(
           {},
           environment('live', {
-            COMMUNITY_TRAFFIC_GRAPH_DIR: join(tmpdir(), 'navoss-missing-serving-graph'),
+            COMMUNITY_TRAFFIC_GRAPH_DIR: join(root, 'missing'),
             COMMUNITY_TRAFFIC_GRAPH_ID: 'e'.repeat(64),
           }),
         ),
       ).toThrow();
+      // A verified directory, but configured with another graph id.
+      const valid = servingGraph({ eligible: [DEERFOOT] });
+      expect(() =>
+        createConfiguredTrafficService(
+          {},
+          environment('live', { ...valid, COMMUNITY_TRAFFIC_GRAPH_ID: 'c'.repeat(64) }),
+        ),
+      ).toThrow(/not the configured graph/);
+      expect(createConfiguredTrafficService({}, environment('live', valid)).mode).toBe('live');
     });
   });
 });
