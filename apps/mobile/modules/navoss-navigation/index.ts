@@ -224,6 +224,12 @@ export interface NativeNavigationSnapshot {
   currentRoadName?: string;
   distanceFromRouteMeters?: number;
   horizontalAccuracyMeters?: number;
+  /**
+   * A trip restored after a relaunch whose place on the route is not confirmed yet. The
+   * snapshot then carries the trip and the raw position only: no guidance, step, progress,
+   * matched position, road or speed limit. Guidance resumes with the first snapshot without it.
+   */
+  isAcquiringPosition?: boolean;
   /** The matched position is extrapolated along the route through a short gap in fixes. */
   isDeadReckoning?: boolean;
   isOffRoute: boolean;

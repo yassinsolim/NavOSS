@@ -34,12 +34,12 @@ final class NavigationSession {
     update(for: core.currentSnapshot())
   }
 
-  /// Starts guiding `trip`. `resume` is where a restored trip had got to; without it the first
-  /// fix is placed on the route from nothing.
+  /// Starts guiding `trip`. `resume` is how a trip restored after a relaunch carries on; `nil`
+  /// starts a new trip, whose first fix is placed on the route from nothing.
   @discardableResult
   func start(
     _ trip: NavOSSCarPlayTrip,
-    resume: NavigationResumeContext? = nil
+    resume: NavigationResumePoint? = nil
   ) throws -> NavigationSessionUpdate {
     guard trip.isValid else {
       throw NavigationCoreError.invalidRoute

@@ -657,51 +657,33 @@ final class NavigationCoreTests: XCTestCase {
   }
 
   func testPersistedNavigationWaitsForValidatedLocation() {
-    XCTAssertEqual(
+    func decision(
+      distance: Double?, accuracy: Double?, offRoute: Bool = false, matched: Bool = true,
+      passConfirmed: Bool = true
+    ) -> NavOSSPersistedNavigationDecision {
       navOSSPersistedNavigationDecision(
-        distanceFromRouteMeters: nil,
-        horizontalAccuracyMeters: nil,
-        isOffRoute: false,
-        isMatched: true
-      ),
-      .wait
-    )
-    XCTAssertEqual(
-      navOSSPersistedNavigationDecision(
-        distanceFromRouteMeters: 80,
-        horizontalAccuracyMeters: 80,
-        isOffRoute: false,
-        isMatched: true
-      ),
-      .wait
-    )
-    XCTAssertEqual(
-      navOSSPersistedNavigationDecision(
-        distanceFromRouteMeters: 10,
-        horizontalAccuracyMeters: 5,
-        isOffRoute: false,
-        isMatched: true
-      ),
-      .publish
-    )
-    XCTAssertEqual(
-      navOSSPersistedNavigationDecision(
-        distanceFromRouteMeters: 80,
-        horizontalAccuracyMeters: 5,
-        isOffRoute: false,
-        isMatched: true
-      ),
-      .discard
-    )
-    XCTAssertEqual(
-      navOSSPersistedNavigationDecision(
-        distanceFromRouteMeters: 10,
-        horizontalAccuracyMeters: 5,
-        isOffRoute: true,
-        isMatched: true
-      ),
-      .discard
-    )
+        NavigationSnapshot(
+          distanceFromRouteMeters: distance,
+          horizontalAccuracyMeters: accuracy,
+          isOffRoute: offRoute,
+          matchedCoordinate: matched ? NavigationCoordinate(latitude: 51, longitude: -114) : nil,
+          matchedCourseDegrees: nil,
+          phase: .tracking,
+          rawCoordinate: NavigationCoordinate(latitude: 51, longitude: -114),
+          routeProgress: 0,
+          routeVersion: 1,
+          sequence: 1,
+          isPassConfirmed: passConfirmed
+        )
+      )
+    }
+    XCTAssertEqual(decision(distance: nil, accuracy: nil), .wait)
+    XCTAssertEqual(decision(distance: 80, accuracy: 80), .wait)
+    XCTAssertEqual(decision(distance: 10, accuracy: 5), .publish)
+    XCTAssertEqual(decision(distance: 10, accuracy: 5, matched: false), .wait)
+    XCTAssertEqual(decision(distance: 10, accuracy: 5, passConfirmed: false), .wait)
+    XCTAssertEqual(decision(distance: 80, accuracy: 5), .discard)
+    XCTAssertEqual(decision(distance: 10, accuracy: 5, offRoute: true), .discard)
   }
 
   func testNavigationSessionDerivesGuidanceFromMatchedProgress() throws {

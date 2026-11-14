@@ -143,7 +143,10 @@ import {
 } from '@/features/navigation/route-progress';
 import { selectedRouteOf, tripEndNotice } from '@/features/navigation/route-ui-state';
 import { useSafetyCameraAlert } from '@/features/navigation/use-safety-camera-alert';
-import type { VehicleMatchStatus } from '@/features/navigation/vehicle-puck';
+import {
+  isResumingTrip,
+  vehicleMatchStatus as vehicleMatchStatusOf,
+} from '@/features/navigation/trip-status';
 import { fetchAppConfig, searchPlaces } from '@/lib/api';
 import { useStableCallback } from '@/lib/use-stable-callback';
 import { createValueStore } from '@/lib/value-store';
@@ -312,20 +315,25 @@ export function useMapController() {
   // --- Which surface the handset shows ------------------------------------------------------
 
   const progressCoordinate = navigationSnapshot?.matchedCoordinate ?? userCoordinate;
+  // A trip restored after a relaunch carries no step until it has found its place on the route;
+  // the step it was saved on may be behind the vehicle, so nothing is derived from it.
+  const resumingTrip = routeState.type === 'navigating' && isResumingTrip(navigationSnapshot);
+  const guidingRoute =
+    routeState.type === 'navigating' && !resumingTrip ? routeState.route : undefined;
   const guidanceStep =
-    routeState.type === 'navigating'
-      ? getUpcomingGuidanceStep(routeState.route, navigationStepIndex)
-      : undefined;
+    guidingRoute === undefined
+      ? undefined
+      : getUpcomingGuidanceStep(guidingRoute, navigationStepIndex);
   const guidanceLanes = guidanceStep?.lanes;
   const guidanceLaneStrip = useMemo(() => laneStrip(guidanceLanes), [guidanceLanes]);
   const remainingRoute =
-    routeState.type === 'navigating'
-      ? getRemainingRouteSummary(routeState.route, navigationStepIndex, progressCoordinate)
-      : undefined;
+    guidingRoute === undefined
+      ? undefined
+      : getRemainingRouteSummary(guidingRoute, navigationStepIndex, progressCoordinate);
   const remainingStep =
-    routeState.type === 'navigating'
-      ? getRemainingStepSummary(routeState.route, navigationStepIndex, progressCoordinate)
-      : undefined;
+    guidingRoute === undefined
+      ? undefined
+      : getRemainingStepSummary(guidingRoute, navigationStepIndex, progressCoordinate);
   // The companion mirrors the car screen, so it prefers the native guidance CarPlay renders.
   const nativeGuidance =
     navigationSnapshot?.guidance?.phase === 'navigating' &&
@@ -1300,12 +1308,7 @@ export function useMapController() {
         : congestionFeatures(selectedRoute, routeState.type === 'navigating' ? routeProgress : 0),
     [routeProgress, routeState.type, selectedRoute],
   );
-  const vehicleMatchStatus: VehicleMatchStatus =
-    navigationSnapshot?.rawCoordinate === undefined
-      ? 'acquiring'
-      : navigationSnapshot.isOffRoute
-        ? 'off-route'
-        : 'matched';
+  const vehicleMatchStatus = vehicleMatchStatusOf(navigationSnapshot);
   const vehicleCoordinate = matchedCoordinate ?? userCoordinate;
   const followCenter = navigationCameraCenter(
     vehicleCoordinate,
@@ -1581,6 +1584,7 @@ export function useMapController() {
       positionEstimated: navigationSnapshot?.isDeadReckoning === true,
       remainingRoute,
       remainingStep,
+      resumingTrip,
       rerouteCount: session.rerouteCount,
       rerouteProposal,
       routeStatus: session.routeStatus,

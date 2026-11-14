@@ -112,9 +112,15 @@ private let implausibleJumpMarginMeters = 150.0
 //      the same pass is bounded by how far the fix itself has moved (direct).
 //  10. The first fix of a route choosing a later pass over an earlier one that fits, unless the
 //      heading opposes the earlier and agrees with the later; arrival is then deferred like
-//      after any heading switch. A restored trip resumes from its saved progress instead
-//      (`NavigationResumeContext`, which carries a deferred arrival with it), so its first
-//      fix is not a first fix; nothing of it is published until a fix is matched.
+//      after any heading switch. A restored trip resumes from its saved anchor instead
+//      (`NavigationResumeContext`: progress, the anchor's speed and capture time, how far its
+//      fix may have been from the route, and any deferred arrival with where it started), so
+//      its next fix asks the same evidence as on an uninterrupted trip, or more; a restored
+//      capture time that is missing or not before the fix gives no elapsed time. A restored
+//      trip without usable progress is placed as a first fix, but its pass is unconfirmed
+//      (`isPassConfirmed`) until a fix fits only one pass or the moving vehicle's heading picks
+//      it out, and it does not arrive before then. Nothing of a restored trip is guided until
+//      a fix is matched on a confirmed pass.
 //
 // Minimum evidence for each irreversible transition:
 //   pass a maneuver  a fix that fits the road past it, no further on than the fix has moved
@@ -131,7 +137,9 @@ private let implausibleJumpMarginMeters = 150.0
 //
 // Not decidable from GPS alone, and resolved conservatively: a vehicle that really drove a loop
 // through a GPS outage and stops where an earlier pass also fits stays on the earlier pass; a
-// jump that lands on the destination and stays there does not arrive.
+// jump that lands on the destination and stays there does not arrive; a trip restored without
+// usable progress, where the vehicle stands still in a place more than one pass fits, cannot
+// say which pass it is on: it stays unconfirmed, unguided and unsaved until the vehicle moves.
 //
 // Not decidable, and not prevented: fixes that move along the route, pair after pair, each
 // pair directly on from the last, are a vehicle driving it. Round a loop smaller than GPS error
@@ -274,42 +282,47 @@ enum NavOSSPersistedNavigationDecision: Equatable {
 
 /// What to do with a restored trip on a fix. Being beside the route is not enough to resume
 /// guidance: the first fix of a resumed trip can be held (a jump along the route while the app
-/// was not running), and until a fix is matched the restored step is where the vehicle was, not
-/// where it is. Nothing is published or spoken while this waits.
+/// was not running), until a fix is matched the restored step is where the vehicle was, not
+/// where it is, and a trip without usable progress may be placed on a pass the fix cannot
+/// tell from another. Nothing is guided or spoken while this waits; the service shows the trip
+/// as finding its place on the route instead.
 func navOSSPersistedNavigationDecision(
-  distanceFromRouteMeters: Double?,
-  horizontalAccuracyMeters: Double?,
-  isOffRoute: Bool,
-  isMatched: Bool
+  _ snapshot: NavigationSnapshot
 ) -> NavOSSPersistedNavigationDecision {
-  guard let distanceFromRouteMeters, let horizontalAccuracyMeters,
+  guard let distanceFromRouteMeters = snapshot.distanceFromRouteMeters,
+    let horizontalAccuracyMeters = snapshot.horizontalAccuracyMeters,
     horizontalAccuracyMeters <= 50
   else {
     return .wait
   }
-  if isOffRoute || distanceFromRouteMeters > offRouteDistanceThresholdMeters
+  if snapshot.isOffRoute || distanceFromRouteMeters > offRouteDistanceThresholdMeters
     + horizontalAccuracyMeters
   {
     return .discard
   }
-  return isMatched ? .publish : .wait
+  return snapshot.matchedCoordinate != nil && snapshot.isPassConfirmed ? .publish : .wait
 }
 
 /// Whether an update is one to checkpoint trip progress from: a real fix on the route with a
-/// matched position. Progress itself is always the confirmed progress, never a held fix's.
+/// matched position on a known pass. Progress itself is always the confirmed progress, never a
+/// held fix's.
 func navOSSIsProgressCheckpoint(_ snapshot: NavigationSnapshot) -> Bool {
   snapshot.phase == .tracking && !snapshot.isOffRoute && !snapshot.isDeadReckoning
-    && snapshot.matchedCoordinate != nil
+    && snapshot.matchedCoordinate != nil && snapshot.isPassConfirmed
 }
 
-/// Whether to write the checkpoint now. At most every `intervalSeconds`; a wall clock that has
-/// moved backward since the last write does not postpone the next one.
+/// Whether to write `progress` now. At once when an arrival starts or stops waiting for
+/// movement since the last write (`lastPersisted`), so a relaunch cannot lose it; otherwise at
+/// most every `intervalSeconds`, and a wall clock that has moved backward since the last write
+/// does not postpone the next one.
 func navOSSShouldPersistProgress(
+  _ progress: NavigationResumeContext,
+  lastPersisted: NavigationResumeContext?,
   now: Date,
   lastPersistedAt: Date?,
   intervalSeconds: TimeInterval = 15
 ) -> Bool {
-  guard let lastPersistedAt else {
+  guard progress.arrivalDeferral == lastPersisted?.arrivalDeferral, let lastPersistedAt else {
     return true
   }
   let elapsed = now.timeIntervalSince(lastPersistedAt)
@@ -421,15 +434,71 @@ struct NavigationSnapshot: Equatable, Sendable {
   /// The matched position was extrapolated along the route through a gap in fixes.
   var isDeadReckoning = false
   var speedMetersPerSecond: Double? = nil
+  /// Whether the pass of the route the vehicle is on is known. False only on a restored trip
+  /// without usable progress, while its fixes fit more than one pass (the start and end of a
+  /// loop, a parkade spiral) and nothing else tells them apart: its matched position is then a
+  /// placement, not an identification, and nothing is guided or saved from it.
+  var isPassConfirmed = true
 }
 
-/// Where a trip had got to, for resuming it: its confirmed progress, when the fix that
-/// confirmed it was captured, and whether arrival was still waiting for the vehicle to be seen
-/// moving (matching invariant 6). It holds no position.
+/// Where a trip had got to, for resuming it after a relaunch: the state of the last accepted
+/// fix that later fixes are judged against, in distances along the route, a capture time and a
+/// speed. It holds no coordinate: each point is a distance along the stored route, and each
+/// uncertainty says how far the real fix may have been from that point, so that restoring can
+/// only make the evidence a later fix needs larger, never smaller.
 struct NavigationResumeContext: Equatable, Sendable {
+  /// Where arrival was deferred (matching invariant 6), until the vehicle is seen moving on.
+  struct ArrivalDeferral: Equatable, Sendable {
+    /// Where the fix that deferred it matched.
+    let alongMeters: Double
+    /// That fix's accuracy plus its distance from the route there.
+    let uncertaintyMeters: Double
+  }
+
+  /// Confirmed progress: where the last accepted fix matched.
   let alongMeters: Double
+  /// The furthest progress accepted on this route, which regression is measured from.
+  let highWaterAlongMeters: Double
+  /// The accepted fix's accuracy plus its distance from the route at `alongMeters`.
+  let uncertaintyMeters: Double
+  /// Capture time of the accepted fix. A time that is missing, or not before the next fix
+  /// (the clock was set back), is no evidence of elapsed time.
   let timestamp: TimeInterval?
-  var isArrivalDeferred = false
+  /// Its reported speed, when there was a believable one.
+  let speedMetersPerSecond: Double?
+  let arrivalDeferral: ArrivalDeferral?
+
+  var isArrivalDeferred: Bool {
+    arrivalDeferral != nil
+  }
+
+  /// Whether every value is one a matcher could have saved. Anything else is no progress.
+  var isUsable: Bool {
+    func isDistance(_ value: Double) -> Bool { value.isFinite && value >= 0 }
+    return isDistance(alongMeters) && isDistance(uncertaintyMeters)
+      && isDistance(highWaterAlongMeters) && highWaterAlongMeters >= alongMeters
+      && (timestamp?.isFinite ?? true)
+      && (speedMetersPerSecond.map {
+        isDistance($0) && $0 <= maximumPlausibleSpeedMetersPerSecond
+      } ?? true)
+      && (arrivalDeferral.map {
+        isDistance($0.alongMeters) && isDistance($0.uncertaintyMeters)
+      } ?? true)
+  }
+}
+
+/// How a restored trip starts matching.
+enum NavigationResumePoint: Equatable, Sendable {
+  /// From where it had got to.
+  case progress(NavigationResumeContext)
+  /// The trip was saved without progress (by a build that did not record it). Its first fix is
+  /// placed like a new route's, but the pass it is placed on must be confirmed (see
+  /// `NavigationSnapshot.isPassConfirmed`) before anything is guided from it.
+  case withoutProgress
+  /// A progress record was saved for the trip but cannot be used (damaged, or written in a
+  /// form this build does not read). As `withoutProgress`, and arrival also waits for the
+  /// vehicle to be seen moving: the record may have held a deferred arrival.
+  case unusable
 }
 
 final class NavigationCore {
@@ -442,8 +511,17 @@ final class NavigationCore {
   /// Reported speed of the last accepted fix, when it is one that can be trusted.
   private var anchorSpeed: Double?
   private var anchorTimestamp: TimeInterval?
+  /// The anchor was restored, not observed in this process. Its capture time is evidence of
+  /// elapsed time only while it is before the next fix's: a clock set back since it was saved
+  /// leaves the time unknown, which limits nothing and explains nothing.
+  private var isAnchorRestored = false
   /// Where arrival was deferred (invariant 6), until the vehicle is seen moving on from there.
   private var arrivalDeferral: (alongMeters: Double, raw: NavigationCoordinate, accuracyMeters: Double)?
+  /// The next accepted fix defers arrival, as a jump would: set for a restored trip whose saved
+  /// progress could not be used.
+  private var defersArrivalOnNextAcceptedFix = false
+  /// A restored trip placed without progress has not yet shown which pass it is on.
+  private var requiresPassConfirmation = false
   private var arrivalSampleCount = 0
   private var departureSampleCount = 0
   /// Progress established by the latest real fix. Dead reckoning moves the published snapshot
@@ -498,13 +576,33 @@ final class NavigationCore {
   /// What a later `setRoute(_:resume:)` needs to carry on from here. `nil` before the first
   /// fix, once arrived, and without a route.
   var resumeContext: NavigationResumeContext? {
-    guard let route, hasAnchor, !hasArrived else {
+    guard let route, hasAnchor, !hasArrived, let anchorRawCoordinate else {
       return nil
     }
+    // A raw position becomes a distance along the route and how far the fix may have been from
+    // that point, so nothing more than the route itself places it.
+    func uncertainty(alongMeters: Double, raw: NavigationCoordinate, accuracyMeters: Double)
+      -> Double
+    {
+      accuracyMeters
+        + navigationDistanceMeters(
+          from: route.point(alongMeters: alongMeters).coordinate, to: raw)
+    }
+    let alongMeters = fixProgress * route.totalDistanceMeters
     return NavigationResumeContext(
-      alongMeters: fixProgress * route.totalDistanceMeters,
+      alongMeters: alongMeters,
+      highWaterAlongMeters: max(alongMeters, progressHighWaterMark * route.totalDistanceMeters),
+      uncertaintyMeters: uncertainty(
+        alongMeters: alongMeters, raw: anchorRawCoordinate, accuracyMeters: anchorAccuracyMeters),
       timestamp: anchorTimestamp,
-      isArrivalDeferred: arrivalDeferral != nil
+      speedMetersPerSecond: anchorSpeed,
+      arrivalDeferral: arrivalDeferral.map {
+        NavigationResumeContext.ArrivalDeferral(
+          alongMeters: $0.alongMeters,
+          uncertaintyMeters: uncertainty(
+            alongMeters: $0.alongMeters, raw: $0.raw, accuracyMeters: $0.accuracyMeters)
+        )
+      }
     )
   }
 
@@ -570,31 +668,42 @@ final class NavigationCore {
   }
 
   /// Starts matching against a route. `resume` continues a trip that was already under way
-  /// (restored after a relaunch): the saved progress becomes the anchor, so the next fix is
-  /// judged from where the vehicle was instead of being placed anywhere on the route that fits.
+  /// (restored after a relaunch): the saved anchor is restored, so the next fix is judged from
+  /// where the vehicle was, on the same evidence an uninterrupted trip would ask of it.
   @discardableResult
   func setRoute(
     _ coordinates: [NavigationCoordinate],
-    resume: NavigationResumeContext? = nil
+    resume: NavigationResumePoint? = nil
   ) throws -> NavigationSnapshot {
     let route = try RoutePolyline(coordinates: coordinates)
     self.route = route
     resetTrackingState()
-    // The start of the route is as much a place the trip had got to as any other.
-    if let resume, resume.alongMeters.isFinite, resume.alongMeters >= 0 {
-      let point = route.point(alongMeters: resume.alongMeters)
+    switch resume {
+    case nil:
+      break
+    case .progress(let saved) where saved.isUsable:
+      // The start of the route is as much a place the trip had got to as any other.
+      let point = route.point(alongMeters: saved.alongMeters)
       hasAnchor = true
+      isAnchorRestored = true
       fixProgress = point.progress
-      progressHighWaterMark = point.progress
+      progressHighWaterMark = max(
+        point.progress, route.point(alongMeters: saved.highWaterAlongMeters).progress)
+      // The point on the route stands in for the raw fix; its uncertainty covers the distance
+      // between them, so every displacement measured from it allows for that.
       anchorRawCoordinate = point.coordinate
-      // A point on the route, not a raw fix: the vehicle was within the on-route band of it.
-      anchorAccuracyMeters = offRouteDistanceThresholdMeters
-      anchorTimestamp = resume.timestamp
-      // An arrival that was waiting for movement still is. The vehicle has to be seen moving
-      // on from where the trip was saved.
-      if resume.isArrivalDeferred {
-        arrivalDeferral = (point.alongMeters, point.coordinate, offRouteDistanceThresholdMeters)
+      anchorAccuracyMeters = saved.uncertaintyMeters
+      anchorTimestamp = saved.timestamp
+      anchorSpeed = saved.speedMetersPerSecond
+      // An arrival that was waiting for movement still is, from where it started waiting.
+      arrivalDeferral = saved.arrivalDeferral.map {
+        ($0.alongMeters, route.point(alongMeters: $0.alongMeters).coordinate, $0.uncertaintyMeters)
       }
+    case .withoutProgress:
+      requiresPassConfirmation = true
+    case .progress, .unusable:
+      requiresPassConfirmation = true
+      defersArrivalOnNextAcceptedFix = true
     }
     routeVersion += 1
     sequence += 1
@@ -608,7 +717,8 @@ final class NavigationCore {
       rawCoordinate: nil,
       routeProgress: fixProgress,
       routeVersion: routeVersion,
-      sequence: sequence
+      sequence: sequence,
+      isPassConfirmed: !requiresPassConfirmation
     )
     return snapshot
   }
@@ -698,9 +808,16 @@ final class NavigationCore {
     }
     // What the vehicle can have covered at all: the speed ceiling over the time since the
     // anchor. A repeated timestamp allows nothing; untimed replay input, the eligible window.
+    // A restored anchor whose capture time is missing or not before this fix (the clock was
+    // set back while the app was not running) gives no elapsed time at all: anything is
+    // possible and nothing is explained, so a new pass needs heading or two agreeing fixes.
+    let isElapsedTimeUnknown = isAnchorRestored && sample.timestamp != nil
+      && sinceAnchorSeconds == nil
     let possibleAdvanceMeters = sample.timestamp == nil
       ? matchWindowMinimumForwardMeters + toleranceMeters
-      : (sinceAnchorSeconds ?? 0) * maximumPlausibleSpeedMetersPerSecond + toleranceMeters
+      : isElapsedTimeUnknown
+        ? route.totalDistanceMeters + toleranceMeters
+        : (sinceAnchorSeconds ?? 0) * maximumPlausibleSpeedMetersPerSecond + toleranceMeters
     // Reported speeds explain their travel and half as much again, never more than possible.
     let explainedAdvanceMeters = min(
       possibleAdvanceMeters,
@@ -830,11 +947,21 @@ final class NavigationCore {
       }
     }
 
+    let isAcceptableFix = !isOffRoute && !isDepartureSample && !isHeldJump
+    // A restored trip placed without progress learns its pass from a fix that only one pass
+    // fits, or that the heading of the moving vehicle picks out. Until then it does not arrive.
+    if requiresPassConfirmation, isAcceptableFix,
+      isPassIdentified(projection, by: sample, on: route)
+    {
+      requiresPassConfirmation = false
+    }
     // Invariant 6: after a heading switch or a jump, arrival waits for the vehicle to be seen
     // moving on along the route. Fixes repeated in one place never satisfy this.
-    let isAcceptableFix = !isOffRoute && !isDepartureSample && !isHeldJump
-    if isAcceptableFix, match.kind == .jump || match.kind == .headingSwitch {
+    if isAcceptableFix,
+      match.kind == .jump || match.kind == .headingSwitch || defersArrivalOnNextAcceptedFix
+    {
       arrivalDeferral = (projection.alongMeters, sample.coordinate, accuracyAllowanceMeters)
+      defersArrivalOnNextAcceptedFix = false
     } else if isAcceptableFix, let deferral = arrivalDeferral,
       projection.alongMeters >= deferral.alongMeters + arrivalCorroborationAlongMeters,
       navigationDistanceMeters(from: deferral.raw, to: sample.coordinate)
@@ -843,6 +970,7 @@ final class NavigationCore {
       arrivalDeferral = nil
     }
     let isArrivalSample = !isOffRoute && !isHeldJump && arrivalDeferral == nil &&
+      !requiresPassConfirmation &&
       projection.progress >= arrivalProgressThreshold &&
       sample.horizontalAccuracyMeters != nil &&
       route.distanceToDestination(from: sample.coordinate) + accuracyAllowanceMeters <=
@@ -893,6 +1021,7 @@ final class NavigationCore {
       anchorAccuracyMeters = accuracyAllowanceMeters
       anchorTimestamp = sample.timestamp
       anchorSpeed = sampleSpeed
+      isAnchorRestored = false
     }
     // A dead-reckoned snapshot is a guess; the held position falls back to the last real match.
     // A rejected projection is published only as that first placement, never later (after the
@@ -930,7 +1059,8 @@ final class NavigationCore {
       geometrySegmentIndex: shouldAcceptProjection
         ? projection.geometrySegmentIndex
         : isOffRoute ? nil : provisionalGeometrySegmentIndex,
-      speedMetersPerSecond: sample.speedMetersPerSecond
+      speedMetersPerSecond: sample.speedMetersPerSecond,
+      isPassConfirmed: !requiresPassConfirmation
     )
     fixProgress = routeProgress
     lastRealSnapshot = snapshot
@@ -1002,7 +1132,10 @@ final class NavigationCore {
     anchorAccuracyMeters = 0
     anchorSpeed = nil
     anchorTimestamp = nil
+    isAnchorRestored = false
     arrivalDeferral = nil
+    defersArrivalOnNextAcceptedFix = false
+    requiresPassConfirmation = false
     lastRealSnapshot = nil
     arrivalSampleCount = 0
     departureSampleCount = 0
@@ -1014,6 +1147,62 @@ final class NavigationCore {
     isOffRoute = false
     progressHighWaterMark = 0
     recoverySampleCount = 0
+  }
+
+  /// Whether a fix shows which pass of the route `projection` is on: no other pass fits it, or
+  /// the moving vehicle's heading agrees with this pass and opposes every other that fits.
+  private func isPassIdentified(
+    _ projection: RouteProjection,
+    by sample: NavigationLocationSample,
+    on route: RoutePolyline
+  ) -> Bool {
+    let fittingLimitMeters = offRouteDistanceThresholdMeters
+      + (sample.horizontalAccuracyMeters ?? 0)
+    let otherPasses = route.segmentIndices(
+      near: sample.coordinate,
+      radiusMeters: min(globalSearchMaximumRadiusMeters, fittingLimitMeters)
+    )
+    .map { route.project(sample.coordinate, ontoSegment: $0) }
+    .filter {
+      $0.distanceMeters <= fittingLimitMeters
+        && !Self.isSamePass($0, as: projection, fittingLimitMeters: fittingLimitMeters)
+    }
+    guard !otherPasses.isEmpty else {
+      return true
+    }
+    guard let heading = Self.headingEvidenceDegrees(sample),
+      navigationCourseDifferenceDegrees(heading, projection.courseDegrees)
+        <= headingAgreesMaximumDifferenceDegrees
+    else {
+      return false
+    }
+    return otherPasses.allSatisfy {
+      navigationCourseDifferenceDegrees(heading, $0.courseDegrees)
+        >= headingOpposesMinimumDifferenceDegrees
+    }
+  }
+
+  /// The course of a fix, where it is evidence: from a vehicle moving at a believable speed.
+  /// Replay input may carry a course and no speed; a live fix never does.
+  private static func headingEvidenceDegrees(_ sample: NavigationLocationSample) -> Double? {
+    guard let speed = sample.speedMetersPerSecond else {
+      return sample.timestamp == nil ? sample.courseDegrees : nil
+    }
+    return speed >= wrongWayMinimumSpeedMetersPerSecond
+      && speed <= maximumPlausibleSpeedMetersPerSecond ? sample.courseDegrees : nil
+  }
+
+  /// Two projections of one fix are the same pass when the route between them is about as
+  /// long as the straight line between them.
+  private static func isSamePass(
+    _ projection: RouteProjection,
+    as other: RouteProjection,
+    fittingLimitMeters: Double
+  ) -> Bool {
+    abs(projection.alongMeters - other.alongMeters)
+      <= directRouteDetourFactor
+      * navigationDistanceMeters(from: other.coordinate, to: projection.coordinate)
+      + fittingLimitMeters
   }
 
   /// How far ahead of the anchor a fix may be matched, and on what evidence. See the matching
@@ -1059,25 +1248,12 @@ final class NavigationCore {
   ) -> (projection: RouteProjection, kind: MatchKind) {
     let accuracyAllowanceMeters = sample.horizontalAccuracyMeters ?? 0
     let fittingLimitMeters = offRouteDistanceThresholdMeters + accuracyAllowanceMeters
-    // Heading is evidence only from a vehicle moving at a believable speed. Replay input may
-    // carry a course and no speed; a live fix never does.
-    let headingDegrees: Double? = {
-      guard let speed = sample.speedMetersPerSecond else {
-        return sample.timestamp == nil ? sample.courseDegrees : nil
-      }
-      return speed >= wrongWayMinimumSpeedMetersPerSecond
-        && speed <= maximumPlausibleSpeedMetersPerSecond ? sample.courseDegrees : nil
-    }()
+    let headingDegrees = Self.headingEvidenceDegrees(sample)
     func headingDifference(_ projection: RouteProjection) -> Double? {
       headingDegrees.map { navigationCourseDifferenceDegrees($0, projection.courseDegrees) }
     }
-    // Two projections of one fix are the same pass when the route between them is about as
-    // long as the straight line between them. Only the first placement asks this.
     func isSamePass(_ projection: RouteProjection, as other: RouteProjection) -> Bool {
-      abs(projection.alongMeters - other.alongMeters)
-        <= directRouteDetourFactor
-        * navigationDistanceMeters(from: other.coordinate, to: projection.coordinate)
-        + fittingLimitMeters
+      Self.isSamePass(projection, as: other, fittingLimitMeters: fittingLimitMeters)
     }
     let anchor = anchorAlongMeters.map { route.point(alongMeters: $0) }
 
