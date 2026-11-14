@@ -471,29 +471,10 @@ final class NavigationCore {
       radiusMeters: globalSearchMaximumRadiusMeters
     ) {
       let projection = route.project(coordinate, ontoSegment: index)
-      if projection.alongMeters >= fixAlongMeters {
-        if projection.alongMeters - fixAlongMeters <= reachMeters {
-          candidates.append((index, projection))
-        }
-      } else if route.segments[index].cumulativeDistanceMeters
-        + route.segments[index].lengthMeters >= fixAlongMeters
+      if projection.alongMeters >= fixAlongMeters,
+        projection.alongMeters - fixAlongMeters <= reachMeters
       {
-        // The segment the vehicle was confirmed on, with the vehicle a little behind that
-        // point: what is left of the segment still counts, from the confirmed point on.
-        // Dropping it would leave only later legs to choose from.
-        candidates.append(
-          (
-            index,
-            RouteProjection(
-              alongMeters: confirmed.alongMeters,
-              coordinate: confirmed.coordinate,
-              courseDegrees: confirmed.courseDegrees,
-              distanceMeters: navigationDistanceMeters(from: coordinate, to: confirmed.coordinate),
-              geometrySegmentIndex: confirmed.geometrySegmentIndex,
-              progress: confirmed.progress
-            )
-          )
-        )
+        candidates.append((index, projection))
       }
     }
     guard let nearestMeters = candidates.map(\.projection.distanceMeters).min(),
