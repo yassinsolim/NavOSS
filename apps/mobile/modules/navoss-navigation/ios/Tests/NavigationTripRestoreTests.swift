@@ -453,16 +453,19 @@ final class NavigationTripRestoreTests: XCTestCase {
   /// Review finding: a saved capture time later than the first fix (the clock was set back
   /// while the app was not running) allowed no travel at all, so the vehicle on the return
   /// carriageway of a divided road, heading home, was "off the route" and the trip was dropped.
-  /// A missing capture time did the same. Both are now no evidence of time: the heading of the
-  /// moving vehicle takes it to the return carriageway, as with a capture time that is merely
-  /// old, and arrival waits as after any heading switch. The same road still continues.
+  /// A missing capture time did the same. With a capture time that is merely old (580 s at the
+  /// reported 10 m/s, time enough to drive round) the heading takes the vehicle to the return
+  /// carriageway. With one that cannot be used there is no such evidence either way, so the
+  /// trip is placed again from the fresh fixes, which fit only the return carriageway: it is
+  /// kept, and arrival waits for movement in every case. The same road still continues.
   func testACaptureTimeThatCannotBeUsedIsNoElapsedTime() throws {
     let trip = Self.trip(Self.dividedRoad)
     for (label, savedTime) in [
-      ("stale", Trace.time(-300)), ("future", Trace.time(3_600)), ("missing", nil),
+      ("stale", Trace.time(-580)), ("future", Trace.time(3_600)), ("missing", nil),
     ] as [(String, TimeInterval?)] {
       let returning = NavigationSession()
-      try returning.start(trip, resume: .progress(Self.progress(500, time: savedTime)))
+      try returning.start(
+        trip, resume: .progress(Self.progress(500, time: savedTime, speed: 10)))
       var update = returning.currentUpdate()
       for second in 0...3 {
         update = try returning.updateLocation(
@@ -476,11 +479,20 @@ final class NavigationTripRestoreTests: XCTestCase {
       XCTAssertEqual(returning.resumeContext?.isArrivalDeferred, true, label)
 
       let sameRoad = NavigationSession()
-      try sameRoad.start(trip, resume: .progress(Self.progress(500, time: savedTime)))
+      try sameRoad.start(
+        trip, resume: .progress(Self.progress(500, time: savedTime, speed: 10)))
       let continuing = try sameRoad.updateLocation(
         Trace.sample(x: 0, y: 520, courseDegrees: 0, speed: 10, time: 0))
       XCTAssertEqual(Self.decision(continuing), .publish, label)
       XCTAssertEqual(along(continuing.snapshot, sameRoad), 520, accuracy: 5, label)
+
+      // Fitting no pass at all is still leaving the route.
+      let astray = NavigationSession()
+      try astray.start(
+        trip, resume: .progress(Self.progress(500, time: savedTime, speed: 10)))
+      let away = try astray.updateLocation(
+        Trace.sample(x: 100, y: 1_500, courseDegrees: 0, speed: 10, time: 0))
+      XCTAssertEqual(Self.decision(away), .discard, label)
     }
   }
 

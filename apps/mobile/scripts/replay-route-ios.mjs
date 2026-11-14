@@ -17,12 +17,17 @@ const destinationName =
 const speedMetersPerSecond = Number(process.env.NAVOSS_SIMULATION_SPEED_MPS ?? '25');
 const intervalSeconds = Number(process.env.NAVOSS_SIMULATION_INTERVAL_SECONDS ?? '1');
 const headDistanceMeters = Number(process.env.NAVOSS_SIMULATION_HEAD_METERS ?? '0');
-const tailDistanceMeters = Number(process.env.NAVOSS_SIMULATION_TAIL_METERS ?? '0');
+// `--print-approach-origin` prints, instead of replaying, the point this far before the end of
+// the route from the origin. The arrival phase puts the simulator there before it plans the
+// trip, so the trip it starts is a real short final approach that is then driven in full: the
+// position never jumps along the route faster than a vehicle could drive it.
+const approachDistanceMeters = Number(process.env.NAVOSS_SIMULATION_APPROACH_METERS ?? '0');
 const origin = {
   latitude: Number(process.env.NAVOSS_SIMULATION_ORIGIN_LATITUDE ?? '51.0447'),
   longitude: Number(process.env.NAVOSS_SIMULATION_ORIGIN_LONGITUDE ?? '-114.0719'),
 };
 const dryRun = process.argv.includes('--dry-run');
+const printApproachOrigin = process.argv.includes('--print-approach-origin');
 
 function requireFinitePositive(value, name) {
   if (!Number.isFinite(value) || value <= 0) {
@@ -55,20 +60,20 @@ function routeWaypoints(geometry) {
   });
 }
 
-function routeTailWaypoints(waypoints, maximumDistanceMeters) {
-  if (maximumDistanceMeters === 0) {
-    return waypoints;
+/** The point `approachMeters` before the end of the route, interpolated along its geometry. */
+function routeApproachPoint(waypoints, approachMeters) {
+  let remainingMeters = approachMeters;
+  for (let index = waypoints.length - 1; index > 0; index -= 1) {
+    const start = waypoints[index - 1];
+    const end = waypoints[index];
+    const lengthMeters = distanceMeters(start, end);
+    if (lengthMeters >= remainingMeters) {
+      const fraction = (lengthMeters - remainingMeters) / lengthMeters;
+      return [start[0] + (end[0] - start[0]) * fraction, start[1] + (end[1] - start[1]) * fraction];
+    }
+    remainingMeters -= lengthMeters;
   }
-
-  let accumulatedDistanceMeters = 0;
-  let startIndex = waypoints.length - 1;
-
-  while (startIndex > 0 && accumulatedDistanceMeters < maximumDistanceMeters) {
-    accumulatedDistanceMeters += distanceMeters(waypoints[startIndex - 1], waypoints[startIndex]);
-    startIndex -= 1;
-  }
-
-  return waypoints.slice(startIndex);
+  throw new Error(`The route is shorter than the ${String(approachMeters)} m approach.`);
 }
 
 function routeHeadWaypoints(waypoints, maximumDistanceMeters) {
@@ -106,9 +111,8 @@ function findSimulatorId() {
 requireFinitePositive(speedMetersPerSecond, 'NAVOSS_SIMULATION_SPEED_MPS');
 requireFinitePositive(intervalSeconds, 'NAVOSS_SIMULATION_INTERVAL_SECONDS');
 requireFiniteNonNegative(headDistanceMeters, 'NAVOSS_SIMULATION_HEAD_METERS');
-requireFiniteNonNegative(tailDistanceMeters, 'NAVOSS_SIMULATION_TAIL_METERS');
-if (headDistanceMeters > 0 && tailDistanceMeters > 0) {
-  throw new Error('Only one route replay distance limit may be set.');
+if (printApproachOrigin) {
+  requireFinitePositive(approachDistanceMeters, 'NAVOSS_SIMULATION_APPROACH_METERS');
 }
 
 const searchUrl = new URL('/v1/search', apiUrl);
@@ -150,10 +154,16 @@ if (route === undefined) {
 }
 
 const routeGeometryWaypoints = routeWaypoints(route.geometry);
-const waypoints =
-  tailDistanceMeters > 0
-    ? routeTailWaypoints(routeGeometryWaypoints, tailDistanceMeters)
-    : routeHeadWaypoints(routeGeometryWaypoints, headDistanceMeters);
+if (printApproachOrigin) {
+  const [longitude, latitude] = routeApproachPoint(routeGeometryWaypoints, approachDistanceMeters);
+  console.error(
+    `Approach origin ${String(approachDistanceMeters)} m before ${destination.name} on a ` +
+      `${String(Math.round(route.distanceMeters / 100) / 10)} km route.`,
+  );
+  console.log(`${latitude.toFixed(6)},${longitude.toFixed(6)}`);
+  process.exit(0);
+}
+const waypoints = routeHeadWaypoints(routeGeometryWaypoints, headDistanceMeters);
 if (waypoints.length < 2) {
   throw new Error('The route geometry contained fewer than two distinct waypoints.');
 }

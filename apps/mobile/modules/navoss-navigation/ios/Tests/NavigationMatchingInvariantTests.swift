@@ -72,7 +72,8 @@ final class NavigationMatchingInvariantTests: XCTestCase {
   }
 
   /// A loop that is driven still ends: continuously, and through an outage that ends away from
-  /// the start.
+  /// the start, long enough to have driven there. Reappearing there a second later is not the
+  /// loop driven: no progress, off route by the third fix, no arrival.
   func testADrivenLoopArrives() throws {
     let core = NavigationCore()
     try core.setRoute(Trace.route(Self.loop))
@@ -97,6 +98,7 @@ final class NavigationMatchingInvariantTests: XCTestCase {
         Trace.sample(x: 0, y: 100, courseDegrees: 0, speed: 20, time: clock.time(0))
       )
       // Reappears on the final leg, 1 km before the end, and drives in.
+      let isPossible = clock != .everySecond
       var index = 1
       var last = outage.currentSnapshot()
       for x in stride(from: 1_020.0, through: 20, by: -20) {
@@ -104,13 +106,16 @@ final class NavigationMatchingInvariantTests: XCTestCase {
           Trace.sample(x: x, y: 0, courseDegrees: 270, speed: 20, time: clock.time(index))
         )
         index += 1
-        if index > 2 {
+        if isPossible, index > 2 {
           XCTAssertFalse(last.isOffRoute, "\(clock)")
           XCTAssertEqual(along(last, outage), 11_980 - (x - 20), accuracy: 15, "\(clock)")
+        } else if !isPossible {
+          XCTAssertEqual(along(last, outage), 100, accuracy: 1, "\(clock)")
+          XCTAssertEqual(last.isOffRoute, index > 3, "\(clock), fix \(index - 1)")
         }
       }
       last = try outage.updateLocation(Trace.sample(x: 20, y: 0, speed: 0, time: clock.time(index)))
-      XCTAssertEqual(last.phase, .arrived, "\(clock)")
+      XCTAssertEqual(last.phase, isPossible ? .arrived : .tracking, "\(clock)")
     }
   }
 
@@ -194,6 +199,125 @@ final class NavigationMatchingInvariantTests: XCTestCase {
     XCTAssertEqual(snapshot.phase, .arrived)
   }
 
+  /// Review of 3da587c, over carriageways 12 to 200 m apart and gaps of 20 to 400 s. The
+  /// vehicle is seen 600 m out at 15 m/s, then fixes stop. Three things can follow:
+  ///   - Accurate fixes still on the outbound carriageway, heading back: it turned round and
+  ///     drives that carriageway the wrong way. However long the gap, and even where 15 m/s
+  ///     could have covered the far end and the return, the return carriageway fits these
+  ///     fixes worse than the road they are on: never matched there, progress stays, off route
+  ///     by the third fix, no arrival.
+  ///   - Fixes between the two carriageways, heading back: the position cannot tell them apart.
+  ///     The return is taken once reported speed explains reaching it, and not before.
+  ///   - It kept driving the route (slowing for the end) and reappears where it really is, on
+  ///     either carriageway or at the far end. That is followed from the first fix and arrives.
+  func testADividedOutAndBackReachesTheReturnOnlyAsFastAsReportedSpeed() throws {
+    let speed = 15.0
+    let length = 2_000.0
+    let fittingMeters = 35.0 + 5
+    var betweenSwitched = 0
+    var betweenHeld = 0
+    for separation in [12.0, 25, 35, 40, 50, 80, 200] {
+      let corners = [(0, 0), (length, 0), (length, separation), (0, separation)]
+      let total = 2 * length + separation
+      for gap in [20.0, 45, 60, 75, 90, 120, 140, 180, 240, 360, 400] {
+        let context = "separation \(separation), gap \(gap)"
+        func outbound() throws -> NavigationCore {
+          let core = NavigationCore()
+          try core.setRoute(Trace.route(corners))
+          for second in 0...40 {
+            try core.updateLocation(
+              Trace.sample(
+                x: Double(second) * speed, y: 0, courseDegrees: 90, speed: speed,
+                time: Double(second))
+            )
+          }
+          XCTAssertEqual(along(core.currentSnapshot(), core), 600, accuracy: 1, context)
+          return core
+        }
+        func explainedMeters(_ elapsed: Double) -> Double { 1.5 * speed * elapsed + 25 + 5 }
+
+        // Wrong way, on the outbound carriageway.
+        let wrongWay = try outbound()
+        var snapshot = wrongWay.currentSnapshot()
+        for index in 0..<3 {
+          snapshot = try wrongWay.updateLocation(
+            Trace.sample(
+              x: 200 - Double(index) * speed, y: 0, courseDegrees: 270, speed: speed,
+              time: 40 + gap + Double(index))
+          )
+          XCTAssertEqual(along(snapshot, wrongWay), 600, accuracy: 1, "\(context), fix \(index)")
+          XCTAssertNotEqual(snapshot.phase, .arrived, "\(context), fix \(index)")
+        }
+        XCTAssertTrue(snapshot.isOffRoute, context)
+
+        // Between the carriageways, where it fits both.
+        if separation <= 50 {
+          let between = try outbound()
+          // The return is reached from x = 200 at the latest, and from as far back along it
+          // as the fix fits at the earliest.
+          let latestReturn = total - 200 - 600
+          let earliestReturn = latestReturn
+            - (fittingMeters * fittingMeters - separation * separation / 4).squareRoot()
+          var switched = false
+          for index in 0..<3 {
+            snapshot = try between.updateLocation(
+              Trace.sample(
+                x: 200 - Double(index) * speed, y: separation / 2, courseDegrees: 270,
+                speed: speed, time: 40 + gap + Double(index))
+            )
+            let progress = along(snapshot, between)
+            XCTAssertLessThanOrEqual(
+              progress, 600 + explainedMeters(gap + Double(index)), "\(context), between \(index)"
+            )
+            XCTAssertNotEqual(snapshot.phase, .arrived, "\(context), between \(index)")
+            switched = switched || progress > length + separation
+          }
+          if explainedMeters(gap) >= latestReturn + 20 {
+            betweenSwitched += 1
+            XCTAssertTrue(switched, "\(context): reported speed explains the return")
+            XCTAssertFalse(snapshot.isOffRoute, context)
+          } else if explainedMeters(gap + 2) < earliestReturn {
+            betweenHeld += 1
+            XCTAssertFalse(switched, "\(context): reported speed does not explain the return")
+            XCTAssertTrue(snapshot.isOffRoute, context)
+          }
+        }
+
+        // Kept driving the route.
+        let genuine = try outbound()
+        let travelled = min(600 + speed * gap, total - 300)
+        let drive = Trace.positions(along: corners, every: speed).filter {
+          $0.alongMeters >= travelled
+        }
+        var time = 40 + gap
+        snapshot = genuine.currentSnapshot()
+        for (index, position) in drive.enumerated() {
+          snapshot = try genuine.updateLocation(
+            Trace.sample(
+              x: position.x, y: position.y, courseDegrees: position.courseDegrees, speed: speed,
+              time: time)
+          )
+          time += 1
+          XCTAssertFalse(snapshot.isOffRoute, "\(context), driven fix \(index)")
+          XCTAssertEqual(
+            along(snapshot, genuine), position.alongMeters, accuracy: 15,
+            "\(context), driven fix \(index)"
+          )
+        }
+        for _ in 0..<2 {
+          snapshot = try genuine.updateLocation(
+            Trace.sample(x: 0, y: separation, speed: 0, time: time)
+          )
+          time += 1
+        }
+        XCTAssertEqual(snapshot.phase, .arrived, context)
+      }
+    }
+    // Between the carriageways, both outcomes were exercised.
+    XCTAssertGreaterThanOrEqual(betweenSwitched, 5 * 4)
+    XCTAssertGreaterThanOrEqual(betweenHeld, 5 * 6)
+  }
+
   /// Invariant 1: a fix that the road within reach explains is not a jump, even where a later
   /// part of the route is nearer and agrees with the heading. Here the next leg of a hairpin
   /// starts just past what is believed without travel evidence.
@@ -210,8 +334,9 @@ final class NavigationMatchingInvariantTests: XCTestCase {
 
   // MARK: Review finding 3: a held fix is not published by recovery
 
-  /// Off route, two far fixes a kilometre apart each look like a return to the route. They do
-  /// not agree, so neither is believed; a third that agrees with the second is.
+  /// Off route, two far fixes a kilometre apart each look like a return to the route, long
+  /// enough later to have driven to either. They do not agree, so neither is believed; a third
+  /// that agrees with the second is.
   func testDisagreeingFarFixesWhileOffRouteStayOffRouteAndUnpublished() throws {
     let core = NavigationCore()
     try core.setRoute(Trace.route([(0, 0), (0, 6_000), (2_000, 6_000), (2_000, 0)]))
@@ -223,7 +348,7 @@ final class NavigationMatchingInvariantTests: XCTestCase {
     }
     let before = core.currentSnapshot()
     XCTAssertTrue(before.isOffRoute)
-    for (second, y) in [(4, 0.0), (5, 1_000)] {
+    for (second, y) in [(400, 0.0), (401, 1_000)] {
       let outlier = try core.updateLocation(
         Trace.sample(x: 2_000, y: y, speed: 15, time: Double(second))
       )
@@ -232,7 +357,7 @@ final class NavigationMatchingInvariantTests: XCTestCase {
       XCTAssertEqual(along(outlier, core), along(before, core), accuracy: 1)
     }
     let confirmed = try core.updateLocation(
-      Trace.sample(x: 2_000, y: 985, courseDegrees: 180, speed: 15, time: 6)
+      Trace.sample(x: 2_000, y: 985, courseDegrees: 180, speed: 15, time: 402)
     )
     XCTAssertFalse(confirmed.isOffRoute)
     XCTAssertEqual(along(confirmed, core), 13_015, accuracy: 10)
@@ -477,20 +602,26 @@ final class NavigationMatchingInvariantTests: XCTestCase {
   }
 
   /// Invariant 2 the other way round: a position that is sustained, away from the last
-  /// accepted fix and not explained by the road near it is believed on its second fix.
-  func testSustainedFarPositionsAreBelievedOnGeneratedRoutes() throws {
+  /// accepted fix and not explained by the road near it is believed on its second fix, when
+  /// the elapsed time makes it possible. When it does not (seconds after the vehicle was parked
+  /// kilometres back), it is not progress: off route on the third fix, from which the trip is
+  /// rerouted from the position.
+  func testSustainedFarPositionsAreBelievedOnGeneratedRoutesWhenPossible() throws {
     var random = Trace.Noise(seed: 0x5EED_0004)
-    var cases = 0
+    var believedCases = 0
+    var impossibleCases = 0
     for shape in shapes(seed: 0x5EED_0005, count: 12) {
       let positions = Trace.positions(along: shape.corners, every: 10)
       for clock in [Clock.everySecond, .longGap, .veryLongGap] {
         for _ in 0..<5 {
-          let index = Int(abs(random.next(amplitude: 1)) * Double(positions.count - 3))
+          let index = Int(abs(random.next(amplitude: 1)) * Double(positions.count - 4))
           let target = positions[index]
           let next = positions[index + 1]
+          let third = positions[index + 2]
           guard target.alongMeters > shape.parkedAlong + 700,
             hypot(target.x - shape.parked.x, target.y - shape.parked.y) > 500,
-            target.courseDegrees == next.courseDegrees
+            target.courseDegrees == next.courseDegrees,
+            next.courseDegrees == third.courseDegrees
           else { continue }
           // Somewhere the route passes only once: the expected match is unambiguous.
           let passes = positions.filter {
@@ -498,7 +629,6 @@ final class NavigationMatchingInvariantTests: XCTestCase {
               && abs($0.alongMeters - target.alongMeters) > 150
           }
           guard passes.isEmpty else { continue }
-          cases += 1
           let core = try park(shape, speed: 0, time: clock.time(0))
           let total = try XCTUnwrap(core.routeLengthMeters)
           let held = try core.updateLocation(
@@ -508,17 +638,37 @@ final class NavigationMatchingInvariantTests: XCTestCase {
           )
           let context = "\(shape.name), \(clock), target \(target.alongMeters)"
           XCTAssertEqual(held.routeProgress * total, shape.parkedAlong, accuracy: 5, context)
-          let believed = try core.updateLocation(
+          let second = try core.updateLocation(
             Trace.sample(
               x: next.x, y: next.y, courseDegrees: next.courseDegrees, speed: 10,
               time: clock.time(2))
           )
-          XCTAssertFalse(believed.isOffRoute, context)
-          XCTAssertEqual(believed.routeProgress * total, next.alongMeters, accuracy: 15, context)
+          // The speed ceiling over the time since the last accepted fix.
+          let possibleMeters = (clock.time(2)! - clock.time(0)!) * 45 + 30
+          if next.alongMeters - shape.parkedAlong <= possibleMeters {
+            believedCases += 1
+            XCTAssertFalse(second.isOffRoute, context)
+            XCTAssertEqual(second.routeProgress * total, next.alongMeters, accuracy: 15, context)
+          } else {
+            impossibleCases += 1
+            XCTAssertEqual(second.routeProgress * total, shape.parkedAlong, accuracy: 5, context)
+            let recovering = try core.updateLocation(
+              Trace.sample(
+                x: third.x, y: third.y, courseDegrees: third.courseDegrees, speed: 10,
+                time: clock.time(3))
+            )
+            XCTAssertTrue(recovering.isOffRoute, context)
+            XCTAssertEqual(recovering.phase, .tracking, context)
+            XCTAssertEqual(
+              recovering.routeProgress * total, shape.parkedAlong, accuracy: 5, context
+            )
+            XCTAssertNil(recovering.matchedCoordinate, context)
+          }
         }
       }
     }
-    XCTAssertGreaterThan(cases, 60)
+    XCTAssertGreaterThan(believedCases, 40)
+    XCTAssertGreaterThan(impossibleCases, 20)
   }
 
   /// Invariant 1 on divided roads: reversing on the carriageway being driven is off route by

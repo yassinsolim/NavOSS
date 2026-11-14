@@ -20,7 +20,7 @@ export interface NativeNavigationCapabilities {
   routeMatching: true;
   safetyCameraAnnouncements: true;
   speedingWarning: true;
-  version: 10;
+  version: 11;
 }
 
 /**

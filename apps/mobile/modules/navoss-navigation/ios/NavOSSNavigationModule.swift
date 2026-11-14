@@ -514,7 +514,7 @@ public final class NavOSSNavigationModule: Module {
         "speedingWarning": true,
         "communityReports": true,
         "communityTraffic": true,
-        "version": 10,
+        "version": 11,
       ]
     }
 
