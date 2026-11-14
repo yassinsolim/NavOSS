@@ -139,6 +139,16 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
     return busy.rows[0]?.count ?? 0;
   };
 
+  /** This API's sessions waiting for a lock. */
+  const lockWaiters = async (): Promise<number> => {
+    const waiting = await admin.query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM pg_stat_activity
+       WHERE application_name = ANY($1::text[]) AND wait_event_type = 'Lock'`,
+      [[APPLICATION, TRAFFIC_APPLICATION]],
+    );
+    return waiting.rows[0]?.count ?? 0;
+  };
+
   const emptyDatabasePool = (): Pool => {
     const url = new URL(DATABASE_URL);
     url.pathname = `/${EMPTY_DATABASE}`;
@@ -984,13 +994,25 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
         expect(responses.map(({ statusCode }) => statusCode)).toEqual(Array(7).fill(503));
         // Nothing of this test's own is still running, waiting or inside a transaction.
         expect(await busySessions()).toBe(0);
-        // Shutdown is bounded while a request is blocked on the lock.
-        const blocked = ask(prepared[0] ?? { assertion: '', challenge: '', keyId: '' });
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        // Shutdown is bounded while a request is blocked on the lock: a fresh assertion, whose
+        // challenge is still valid, so that it reaches the installation row and waits there.
+        const fresh = await challenge(app);
+        const blocked = ask({
+          assertion: device.assert(
+            communityAssertionClientData(fresh, { kind: 'traffic-credential' }),
+          ),
+          challenge: fresh,
+          keyId: device.keyId,
+        });
+        const waitingSince = Date.now();
+        while ((await lockWaiters()) === 0) {
+          if (Date.now() - waitingSince > 4_000) throw new Error('no request waited on the lock');
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
         const closing = Date.now();
         await app.close();
         expect(Date.now() - closing).toBeLessThan(8_000);
-        await blocked;
+        expect((await blocked).statusCode).toBe(503);
       } finally {
         await blocker.query('ROLLBACK').catch(() => undefined);
         await blocker.end().catch(() => undefined);
