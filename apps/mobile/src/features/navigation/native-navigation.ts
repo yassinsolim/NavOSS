@@ -1,5 +1,4 @@
 import type {
-  Coordinate,
   RouteAlternativeV2,
   RoutePreferences,
   RouteStepV2,
@@ -331,18 +330,6 @@ export function isFavoriteDestination(id: string): boolean {
 
 export function toggleFavoriteDestination(destination: SearchResult): boolean {
   return NavOSSNavigation.toggleFavoriteDestination(nativeDestination(destination));
-}
-
-export function updateNavigationLocation(
-  coordinate: Coordinate,
-  horizontalAccuracyMeters?: number,
-  courseDegrees?: number,
-): NativeNavigationSnapshot {
-  return NavOSSNavigation.updateLocation({
-    ...coordinate,
-    ...(courseDegrees === undefined ? {} : { courseDegrees }),
-    ...(horizontalAccuracyMeters === undefined ? {} : { horizontalAccuracyMeters }),
-  });
 }
 
 export function clearNavigationRoute(): NativeNavigationSnapshot {

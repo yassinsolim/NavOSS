@@ -86,6 +86,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private var rerouteConsent = NavigationRerouteConsent()
   private var rerouteCount = 0
   private var rerouteRequestId: UUID?
+  /// Requests that have failed in a row since the vehicle left the route. Spaces out retries.
+  private var rerouteFailureCount = 0
   private var rerouteRetryAfter: Date?
   private var rerouteTask: Task<Void, Never>?
   private var routeStatus = NavOSSNavigationRouteStatus.tracking
@@ -97,6 +99,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private let speechPlanner = NavigationSpeechPlanner()
   private let speechSynthesizer = AVSpeechSynthesizer()
   private var stateVersion: UInt64 = 0
+  private var lastProgressPersistedAt: Date?
   private var validatesPersistedNavigation = false
   private var tripEndReason: NavOSSTripEndReason?
 
@@ -253,6 +256,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     rerouteTask = nil
     rerouteRequestId = nil
     rerouteRetryAfter = nil
+    rerouteFailureCount = 0
     rerouteCount = 0
     rerouteConsent.reset()
     routeStatus = .tracking
@@ -419,6 +423,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   }
 
   func ingest(_ sample: NavigationLocationSample) throws -> NavigationSnapshot {
+    let sample = try navOSSLiveNavigationFix(sample)
     let versionedUpdate: VersionedNavigationUpdate
     lock.lock()
     do {
@@ -435,11 +440,36 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     case .publish:
       publish(versionedUpdate)
       evaluateReroute(for: versionedUpdate)
+      persistProgressIfDue(versionedUpdate)
     case .wait:
       break
     }
     return versionedUpdate.update.snapshot
   }
+
+  /// Records how far the trip has got, so that a relaunch resumes it there. Written from a
+  /// real fix matched on the route, at most every fifteen seconds, and while holding `lock`:
+  /// a clear, a restart or a reroute takes the same lock before it touches the store, so a
+  /// checkpoint can never be written after them for the trip they replaced.
+  private func persistProgressIfDue(_ versionedUpdate: VersionedNavigationUpdate) {
+    guard let trip = versionedUpdate.update.trip,
+      navOSSIsProgressCheckpoint(versionedUpdate.update.snapshot)
+    else {
+      return
+    }
+    let now = Date()
+    lock.lock()
+    defer { lock.unlock() }
+    guard isCurrentLocked(versionedUpdate),
+      navOSSShouldPersistProgress(now: now, lastPersistedAt: lastProgressPersistedAt),
+      let progress = navigationSession.resumeContext
+    else {
+      return
+    }
+    lastProgressPersistedAt = now
+    activeTripStore.saveProgress(progress, forTripId: trip.id)
+  }
+
 
   public func resumePersistedNavigation() {
     guard let trip = activeTripStore.load() else {
@@ -450,7 +480,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
         trip,
         persist: false,
         publishInitialUpdate: false,
-        validatesPersistedNavigation: true
+        validatesPersistedNavigation: true,
+        resume: activeTripStore.loadProgress(for: trip)
       )
     } catch {
       activeTripStore.clear()
@@ -566,6 +597,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     case .publish:
       publish(versionedUpdate)
       evaluateReroute(for: versionedUpdate)
+      persistProgressIfDue(versionedUpdate)
       // Only real fixes during turn-by-turn guidance can become traffic probes, and only when
       // the driver turned "Share traffic speeds" on; the community service enforces both.
       if versionedUpdate.update.trip != nil, versionedUpdate.update.snapshot.phase == .tracking {
@@ -757,6 +789,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       rerouteTask = nil
       rerouteRequestId = nil
       rerouteRetryAfter = nil
+      rerouteFailureCount = 0
       routeStatus = .tracking
     }
     if update.snapshot.phase == .arrived {
@@ -781,7 +814,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     let decision = navOSSPersistedNavigationDecision(
       distanceFromRouteMeters: snapshot.distanceFromRouteMeters,
       horizontalAccuracyMeters: snapshot.horizontalAccuracyMeters,
-      isOffRoute: snapshot.isOffRoute
+      isOffRoute: snapshot.isOffRoute,
+      isMatched: snapshot.matchedCoordinate != nil
     )
     if decision != .wait {
       validatesPersistedNavigation = false
@@ -1080,6 +1114,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     rerouteRequestId = nil
     rerouteTask = nil
     rerouteRetryAfter = nil
+    rerouteFailureCount = 0
     let decision = rerouteConsent.received(
       replacement,
       mode: navigationPreferences.rerouteMode,
@@ -1135,11 +1170,13 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       update = try navigationSession.start(trip)
       navigationGeneration &+= 1
       activeTripStore.save(trip)
+      lastProgressPersistedAt = nil
       rerouteCount += 1
       rerouteConsent.reset()
       routeStatus = .tracking
       rerouteRequestId = nil
       rerouteRetryAfter = nil
+      rerouteFailureCount = 0
       rerouteTask?.cancel()
       rerouteTask = nil
       safetyCameraMonitor.replaceRoute(geometry: Self.coordinates(trip))
@@ -1178,7 +1215,10 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       return
     }
     routeStatus = .rerouteFailed
-    rerouteRetryAfter = Date().addingTimeInterval(10)
+    rerouteFailureCount += 1
+    rerouteRetryAfter = Date().addingTimeInterval(
+      navigationRerouteRetryDelaySeconds(consecutiveFailures: rerouteFailureCount)
+    )
     rerouteRequestId = nil
     rerouteTask = nil
     stateVersion &+= 1
@@ -1498,17 +1538,20 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     _ trip: NavOSSCarPlayTrip,
     persist: Bool,
     publishInitialUpdate: Bool = true,
-    validatesPersistedNavigation: Bool = false
+    validatesPersistedNavigation: Bool = false,
+    resume: NavigationResumeContext? = nil
   ) throws {
     let update: NavigationSessionUpdate
     lock.lock()
     do {
-      update = try navigationSession.start(trip)
+      update = try navigationSession.start(trip, resume: resume)
+      lastProgressPersistedAt = nil
       navigationGeneration &+= 1
       rerouteTask?.cancel()
       rerouteTask = nil
       rerouteRequestId = nil
       rerouteRetryAfter = nil
+      rerouteFailureCount = 0
       rerouteCount = 0
       rerouteConsent.reset()
       routeStatus = .tracking

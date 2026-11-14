@@ -95,7 +95,8 @@ private let implausibleJumpMarginMeters = 150.0
 //      travel) or the fix is away. Two consecutive qualifying fixes are needed, the second
 //      within `heldJumpMaximumAgeSeconds` of the first and agreeing with it along the route.
 //      The first is HELD. Arrival is deferred (rule 6). Untimed replay input has no "later";
-//      there one qualifying fix is taken. Core Location fixes are always timestamped.
+//      there one qualifying fix is taken. Live fixes are always timestamped; the service
+//      refuses others.
 //   Anything else is not progress. It is measured against the best candidate that is not a
 //   later pass and feeds off-route hysteresis; a reroute from the real position follows.
 //
@@ -109,11 +110,11 @@ private let implausibleJumpMarginMeters = 150.0
 //   9. Progress onto a later pass from a fix within `credibleBiasMeters` of the last accepted
 //      fix, unless the vehicle is moving and its heading agrees with that pass. Progress along
 //      the same pass is bounded by how far the fix itself has moved (direct).
-//
-// Not covered by these rules, and unchanged: the first fix of a route has no anchor and is
-// placed where it scores best. That includes the first fix of a trip restored after a relaunch,
-// which can still be placed on the wrong pass of a route that returns to its own neighbourhood.
-// Untimed fixes can still reach the matcher through the JS bridge.
+//  10. The first fix of a route choosing a later pass over an earlier one that fits, unless the
+//      heading opposes the earlier and agrees with the later; arrival is then deferred like
+//      after any heading switch. A restored trip resumes from its saved progress instead
+//      (`NavigationResumeContext`, which carries a deferred arrival with it), so its first
+//      fix is not a first fix; nothing of it is published until a fix is matched.
 //
 // Minimum evidence for each irreversible transition:
 //   pass a maneuver  a fix that fits the road past it, no further on than the fix has moved
@@ -271,10 +272,15 @@ enum NavOSSPersistedNavigationDecision: Equatable {
   case wait
 }
 
+/// What to do with a restored trip on a fix. Being beside the route is not enough to resume
+/// guidance: the first fix of a resumed trip can be held (a jump along the route while the app
+/// was not running), and until a fix is matched the restored step is where the vehicle was, not
+/// where it is. Nothing is published or spoken while this waits.
 func navOSSPersistedNavigationDecision(
   distanceFromRouteMeters: Double?,
   horizontalAccuracyMeters: Double?,
-  isOffRoute: Bool
+  isOffRoute: Bool,
+  isMatched: Bool
 ) -> NavOSSPersistedNavigationDecision {
   guard let distanceFromRouteMeters, let horizontalAccuracyMeters,
     horizontalAccuracyMeters <= 50
@@ -286,12 +292,55 @@ func navOSSPersistedNavigationDecision(
   {
     return .discard
   }
-  return .publish
+  return isMatched ? .publish : .wait
+}
+
+/// Whether an update is one to checkpoint trip progress from: a real fix on the route with a
+/// matched position. Progress itself is always the confirmed progress, never a held fix's.
+func navOSSIsProgressCheckpoint(_ snapshot: NavigationSnapshot) -> Bool {
+  snapshot.phase == .tracking && !snapshot.isOffRoute && !snapshot.isDeadReckoning
+    && snapshot.matchedCoordinate != nil
+}
+
+/// Whether to write the checkpoint now. At most every `intervalSeconds`; a wall clock that has
+/// moved backward since the last write does not postpone the next one.
+func navOSSShouldPersistProgress(
+  now: Date,
+  lastPersistedAt: Date?,
+  intervalSeconds: TimeInterval = 15
+) -> Bool {
+  guard let lastPersistedAt else {
+    return true
+  }
+  let elapsed = now.timeIntervalSince(lastPersistedAt)
+  return elapsed >= intervalSeconds || elapsed < 0
+}
+
+/// How long to wait before asking for a replacement route again after `consecutiveFailures`
+/// requests in a row have failed: 10 s, doubling to two minutes. A vehicle that stays off route
+/// where no route can be had (offline, a parked car whose fixes fit only a later pass) asks
+/// less and less often instead of every ten seconds for as long as it stands there.
+func navigationRerouteRetryDelaySeconds(consecutiveFailures: Int) -> TimeInterval {
+  min(120, 10 * pow(2, Double(max(0, min(consecutiveFailures, 8) - 1))))
 }
 
 enum NavigationCoreError: Error, Equatable {
   case invalidCoordinate
   case invalidRoute
+  /// A live fix without a capture time. Only replay input may be untimed.
+  case untimedLiveFix
+}
+
+/// The fix as live ingestion may pass it on. Untimed input is for replays: the matcher takes a
+/// qualifying jump from it on one fix, because it has no way to ask for a later one (matching
+/// invariant 4). Everything that feeds the matcher from a device goes through here.
+func navOSSLiveNavigationFix(
+  _ sample: NavigationLocationSample
+) throws -> NavigationLocationSample {
+  guard sample.timestamp != nil else {
+    throw NavigationCoreError.untimedLiveFix
+  }
+  return sample
 }
 
 struct NavigationCoordinate: Equatable, Sendable {
@@ -374,9 +423,18 @@ struct NavigationSnapshot: Equatable, Sendable {
   var speedMetersPerSecond: Double? = nil
 }
 
+/// Where a trip had got to, for resuming it: its confirmed progress, when the fix that
+/// confirmed it was captured, and whether arrival was still waiting for the vehicle to be seen
+/// moving (matching invariant 6). It holds no position.
+struct NavigationResumeContext: Equatable, Sendable {
+  let alongMeters: Double
+  let timestamp: TimeInterval?
+  var isArrivalDeferred = false
+}
+
 final class NavigationCore {
   // The anchor: the last accepted match. Everything a new fix is judged against.
-  /// Whether there is one. False until the first fix of a route.
+  /// Whether there is one. False until the first fix of a route, unless the route was resumed.
   private var hasAnchor = false
   /// Raw position and accuracy of the last accepted fix: where the vehicle was last known to be.
   private var anchorRawCoordinate: NavigationCoordinate?
@@ -437,6 +495,19 @@ final class NavigationCore {
     route.map { fixProgress * $0.totalDistanceMeters }
   }
 
+  /// What a later `setRoute(_:resume:)` needs to carry on from here. `nil` before the first
+  /// fix, once arrived, and without a route.
+  var resumeContext: NavigationResumeContext? {
+    guard let route, hasAnchor, !hasArrived else {
+      return nil
+    }
+    return NavigationResumeContext(
+      alongMeters: fixProgress * route.totalDistanceMeters,
+      timestamp: anchorTimestamp,
+      isArrivalDeferred: arrivalDeferral != nil
+    )
+  }
+
   func currentSnapshot() -> NavigationSnapshot {
     snapshot
   }
@@ -489,10 +560,33 @@ final class NavigationCore {
     return candidates[index].projection.alongMeters
   }
 
+  /// Starts matching against a route. `resume` continues a trip that was already under way
+  /// (restored after a relaunch): the saved progress becomes the anchor, so the next fix is
+  /// judged from where the vehicle was instead of being placed anywhere on the route that fits.
   @discardableResult
-  func setRoute(_ coordinates: [NavigationCoordinate]) throws -> NavigationSnapshot {
-    route = try RoutePolyline(coordinates: coordinates)
+  func setRoute(
+    _ coordinates: [NavigationCoordinate],
+    resume: NavigationResumeContext? = nil
+  ) throws -> NavigationSnapshot {
+    let route = try RoutePolyline(coordinates: coordinates)
+    self.route = route
     resetTrackingState()
+    // The start of the route is as much a place the trip had got to as any other.
+    if let resume, resume.alongMeters.isFinite, resume.alongMeters >= 0 {
+      let point = route.point(alongMeters: resume.alongMeters)
+      hasAnchor = true
+      fixProgress = point.progress
+      progressHighWaterMark = point.progress
+      anchorRawCoordinate = point.coordinate
+      // A point on the route, not a raw fix: the vehicle was within the on-route band of it.
+      anchorAccuracyMeters = offRouteDistanceThresholdMeters
+      anchorTimestamp = resume.timestamp
+      // An arrival that was waiting for movement still is. The vehicle has to be seen moving
+      // on from where the trip was saved.
+      if resume.isArrivalDeferred {
+        arrivalDeferral = (point.alongMeters, point.coordinate, offRouteDistanceThresholdMeters)
+      }
+    }
     routeVersion += 1
     sequence += 1
     snapshot = NavigationSnapshot(
@@ -503,7 +597,7 @@ final class NavigationCore {
       matchedCourseDegrees: nil,
       phase: .tracking,
       rawCoordinate: nil,
-      routeProgress: 0,
+      routeProgress: fixProgress,
       routeVersion: routeVersion,
       sequence: sequence
     )
@@ -789,7 +883,7 @@ final class NavigationCore {
     }
     // A dead-reckoned snapshot is a guess; the held position falls back to the last real match.
     // A rejected projection is published only as that first placement, never later (after the
-    // off-route state there is simply no matched position).
+    // off-route state, or on a resumed trip, there is simply no matched position).
     let previous = lastRealSnapshot
     let previousMatchedCoordinate = previous?.matchedCoordinate
     let provisionalMatchedCoordinate = isFirstPlacement
@@ -964,6 +1058,14 @@ final class NavigationCore {
     func headingDifference(_ projection: RouteProjection) -> Double? {
       headingDegrees.map { navigationCourseDifferenceDegrees($0, projection.courseDegrees) }
     }
+    // Two projections of one fix are the same pass when the route between them is about as
+    // long as the straight line between them. Only the first placement asks this.
+    func isSamePass(_ projection: RouteProjection, as other: RouteProjection) -> Bool {
+      abs(projection.alongMeters - other.alongMeters)
+        <= directRouteDetourFactor
+        * navigationDistanceMeters(from: other.coordinate, to: projection.coordinate)
+        + fittingLimitMeters
+    }
     let anchor = anchorAlongMeters.map { route.point(alongMeters: $0) }
 
     // `best` is the lowest score overall and drives the search, as it always has. The others
@@ -983,6 +1085,8 @@ final class NavigationCore {
     var unqualifiedScore = Double.infinity
     var earlierPass: RouteProjection?
     var earlierPassScore = Double.infinity
+    // Only for the first placement, which has no anchor to classify against.
+    var fitting: [(projection: RouteProjection, score: Double)] = []
     var evaluated = 0
 
     func consider(_ index: Int) {
@@ -1002,6 +1106,9 @@ final class NavigationCore {
       }
       let fits = projection.distanceMeters <= fittingLimitMeters
       guard let anchor else {
+        if fits {
+          fitting.append((projection, score))
+        }
         return
       }
       let advanceMeters = projection.alongMeters - anchor.alongMeters
@@ -1119,6 +1226,7 @@ final class NavigationCore {
         }
         best = nil
         bestScore = .infinity
+        fitting.removeAll(keepingCapacity: true)
         radius = min(globalSearchMaximumRadiusMeters, radius * 4)
       }
       // Only the first fix of a route far from all of it reaches a full scan; every later fix
@@ -1132,8 +1240,27 @@ final class NavigationCore {
     lastEvaluatedSegmentCount = evaluated
 
     guard let anchor else {
-      // The first fix of a route is placed where it scores best, as it always was.
-      return (best!, .continuation)
+      // Invariant 10: the first placement takes the earliest pass that fits, unless the
+      // vehicle's heading opposes it and agrees with a later one; arrival is then deferred.
+      guard let earliest = fitting.min(by: { $0.projection.alongMeters < $1.projection.alongMeters })
+      else {
+        return (best!, .continuation)
+      }
+      let earliestPass = fitting
+        .filter { isSamePass($0.projection, as: earliest.projection) }
+        .min { $0.score < $1.score }!.projection
+      let agreeing = fitting
+        .filter { candidate in
+          (headingDifference(candidate.projection) ?? .infinity)
+            <= headingAgreesMaximumDifferenceDegrees
+        }
+        .min { $0.score < $1.score }
+      if let agreeing, let difference = headingDifference(earliestPass),
+        difference >= headingOpposesMinimumDifferenceDegrees
+      {
+        return (agreeing.projection, .headingSwitch)
+      }
+      return (earliestPass, .continuation)
     }
 
     // Where an earlier pass fits the fix too, a continuation is only what reported motion

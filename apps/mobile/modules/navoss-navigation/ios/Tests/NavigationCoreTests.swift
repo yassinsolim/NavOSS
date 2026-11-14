@@ -661,7 +661,8 @@ final class NavigationCoreTests: XCTestCase {
       navOSSPersistedNavigationDecision(
         distanceFromRouteMeters: nil,
         horizontalAccuracyMeters: nil,
-        isOffRoute: false
+        isOffRoute: false,
+        isMatched: true
       ),
       .wait
     )
@@ -669,7 +670,8 @@ final class NavigationCoreTests: XCTestCase {
       navOSSPersistedNavigationDecision(
         distanceFromRouteMeters: 80,
         horizontalAccuracyMeters: 80,
-        isOffRoute: false
+        isOffRoute: false,
+        isMatched: true
       ),
       .wait
     )
@@ -677,7 +679,8 @@ final class NavigationCoreTests: XCTestCase {
       navOSSPersistedNavigationDecision(
         distanceFromRouteMeters: 10,
         horizontalAccuracyMeters: 5,
-        isOffRoute: false
+        isOffRoute: false,
+        isMatched: true
       ),
       .publish
     )
@@ -685,7 +688,8 @@ final class NavigationCoreTests: XCTestCase {
       navOSSPersistedNavigationDecision(
         distanceFromRouteMeters: 80,
         horizontalAccuracyMeters: 5,
-        isOffRoute: false
+        isOffRoute: false,
+        isMatched: true
       ),
       .discard
     )
@@ -693,7 +697,8 @@ final class NavigationCoreTests: XCTestCase {
       navOSSPersistedNavigationDecision(
         distanceFromRouteMeters: 10,
         horizontalAccuracyMeters: 5,
-        isOffRoute: true
+        isOffRoute: true,
+        isMatched: true
       ),
       .discard
     )

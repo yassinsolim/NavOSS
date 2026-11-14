@@ -74,8 +74,9 @@
           After you start turn-by-turn navigation, location updates continue while the phone is
           locked, another app is visible, or CarPlay is connected. iOS displays its background
           location indicator. NavOSS does not request Always location. Updates stop on End or
-          confirmed arrival. The current active route is stored transiently on the phone for
-          operating-system recovery, then erased when navigation ends or arrival is confirmed;
+          confirmed arrival. The current active route, and how far along it you have got, are stored
+          transiently on the phone so that a relaunch can resume the trip, then erased when
+          navigation ends or arrival is confirmed, or at the first launch 12 hours or more later;
           NavOSS does not maintain a trip-history database. If you switch on traffic sharing,
           positions along through roads are also sent during navigation as described under
           <a href="#community-traffic-sharing-opt-in">Community traffic sharing</a>; it is off

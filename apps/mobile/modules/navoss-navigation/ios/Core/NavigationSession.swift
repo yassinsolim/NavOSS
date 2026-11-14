@@ -20,6 +20,11 @@ final class NavigationSession {
     self.core = core
   }
 
+  /// What resuming the active trip later needs. See `NavigationCore.resumeContext`.
+  var resumeContext: NavigationResumeContext? {
+    trip == nil ? nil : core.resumeContext
+  }
+
   /// Length of the active route geometry in metres.
   var routeLengthMeters: Double? {
     core.routeLengthMeters
@@ -29,15 +34,21 @@ final class NavigationSession {
     update(for: core.currentSnapshot())
   }
 
+  /// Starts guiding `trip`. `resume` is where a restored trip had got to; without it the first
+  /// fix is placed on the route from nothing.
   @discardableResult
-  func start(_ trip: NavOSSCarPlayTrip) throws -> NavigationSessionUpdate {
+  func start(
+    _ trip: NavOSSCarPlayTrip,
+    resume: NavigationResumeContext? = nil
+  ) throws -> NavigationSessionUpdate {
     guard trip.isValid else {
       throw NavigationCoreError.invalidRoute
     }
     let snapshot = try core.setRoute(
       trip.geometry.map {
         NavigationCoordinate(latitude: $0.latitude, longitude: $0.longitude)
-      }
+      },
+      resume: resume
     )
     self.trip = trip
     stepGeometry = NavigationStepGeometry(trip: trip)
