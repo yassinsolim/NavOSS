@@ -109,7 +109,7 @@ function containers(graph) {
   return { api, other, valhalla };
 }
 
-async function run(root, graph, change = () => {}) {
+async function run(root, graph, change = () => {}, omitted = []) {
   const records = containers(graph);
   change(records);
   const fake = join(root, `docker-${String(Math.random()).slice(2)}`);
@@ -117,22 +117,27 @@ async function run(root, graph, change = () => {}) {
   for (const record of Object.values(records)) {
     await writeFile(join(fake, `inspect-${record.Id}.json`), JSON.stringify([record]));
   }
-  const members = Object.fromEntries(
-    Object.values(records)
-      .filter((record) => record.NetworkSettings.Networks.navoss_backend !== undefined)
-      .map((record) => [record.Id, {}]),
-  );
-  await writeFile(
-    join(fake, 'network-navoss_backend.json'),
-    JSON.stringify([{ Containers: members }]),
-  );
+  // One `network inspect` record per network any container joins, listing its members.
+  const networks = new Map();
+  for (const record of Object.values(records)) {
+    for (const network of Object.keys(record.NetworkSettings.Networks)) {
+      networks.set(network, { ...networks.get(network), [record.Id]: {} });
+    }
+  }
+  for (const [network, members] of networks) {
+    if (omitted.includes(network)) continue;
+    await writeFile(
+      join(fake, `network-${network}.json`),
+      JSON.stringify([{ Containers: members }]),
+    );
+  }
   await writeFile(
     join(fake, 'docker'),
     `#!/bin/sh
 case "$1" in
   compose) for argument do last=$argument; done; echo "$last-id" ;;
   inspect) cat "${fake}/inspect-$2.json" ;;
-  network) cat "${fake}/network-$3.json" ;;
+  network) cat "${fake}/network-$3.json" 2>/dev/null || exit 1 ;;
   *) exit 64 ;;
 esac
 `,
@@ -237,7 +242,23 @@ test('the operator check passes the verified stack and refuses each hostile cont
       ({ other }) => {
         other.NetworkSettings.Networks.navoss_backend.Aliases.push('valhalla');
       },
-      /another container also answers to valhalla/,
+      /another container also answers to valhalla on navoss_backend/,
+    ],
+    [
+      'another container answering to valhalla on a network only the API joins',
+      ({ other }) => {
+        other.NetworkSettings.Networks = { navoss_ingress: { Aliases: ['other', 'valhalla'] } };
+      },
+      /another container also answers to valhalla on navoss_ingress/,
+    ],
+    [
+      'another container answering to valhalla by its DNS names on an API-only network',
+      ({ other }) => {
+        other.NetworkSettings.Networks = {
+          navoss_ingress: { Aliases: ['other'], DNSNames: ['other', 'valhalla'] },
+        };
+      },
+      /another container also answers to valhalla on navoss_ingress/,
     ],
     [
       'a container started before the graph directory changed',
@@ -252,4 +273,9 @@ test('the operator check passes the verified stack and refuses each hostile cont
     assert.notEqual(result.status, 0, name);
     assert.match(result.stderr, message, name);
   }
+
+  // A network the API joins that cannot be inspected fails closed.
+  const hidden = await run(root, graph, () => {}, ['navoss_ingress']);
+  assert.notEqual(hidden.status, 0);
+  assert.match(hidden.stderr, /network navoss_ingress cannot be inspected/);
 });
