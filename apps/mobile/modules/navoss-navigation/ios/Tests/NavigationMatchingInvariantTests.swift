@@ -256,6 +256,14 @@ final class NavigationMatchingInvariantTests: XCTestCase {
     XCTAssertTrue(core.currentSnapshot().isOffRoute)
     let base = try XCTUnwrap(core.rejoinBaseAlongMeters(near: Trace.coordinate(60, 3_000)))
     XCTAssertEqual(base, 3_000, accuracy: 1)
+    // Slightly behind the confirmed position the outbound segment still counts, from the
+    // confirmed position on: the vehicle has not gone to the far end and come back.
+    for y in [2_990.0, 2_900, 2_500] {
+      XCTAssertEqual(
+        try XCTUnwrap(core.rejoinBaseAlongMeters(near: Trace.coordinate(60, y))), 3_000,
+        accuracy: 1, "y \(y)"
+      )
+    }
     let rejoin = try XCTUnwrap(
       navigationKeepRouteRejoinAlongMeters(
         fixAlongMeters: base, routeLengthMeters: try XCTUnwrap(core.routeLengthMeters))
@@ -263,6 +271,18 @@ final class NavigationMatchingInvariantTests: XCTestCase {
     let point = Trace.local(try XCTUnwrap(core.routePoint(alongMeters: rejoin)))
     XCTAssertEqual(point.x, 0, accuracy: 1)
     XCTAssertEqual(point.y, 3_800, accuracy: 1)
+  }
+
+  /// The vehicle is far along a long out-and-back from where it was last confirmed, beside both
+  /// carriageways, with the turnaround out of the grid's range. Both legs are within reach of
+  /// its displacement; the base stays on the one that comes first along the route.
+  func testKeepRouteRejoinBaseStaysOnTheFirstLegWhenBothAreWithinReach() throws {
+    let core = NavigationCore()
+    let corners: [(Double, Double)] = [(0, 0), (0, 20_000), (40, 20_000), (40, 0)]
+    try core.setRoute(corners.map { Trace.coordinate($0.0, $0.1) })
+    try core.updateLocation(Trace.sample(x: 0, y: 0, courseDegrees: 0, speed: 20, time: 0))
+    let base = try XCTUnwrap(core.rejoinBaseAlongMeters(near: Trace.coordinate(60, 18_000)))
+    XCTAssertEqual(base, 18_000, accuracy: 20)
   }
 
   // MARK: Properties over generated routes
