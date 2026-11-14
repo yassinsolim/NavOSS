@@ -199,26 +199,27 @@ final class NavigationMatchingInvariantTests: XCTestCase {
     XCTAssertEqual(snapshot.phase, .arrived)
   }
 
-  /// Review of 3da587c, over carriageways 12 to 200 m apart and gaps of 20 to 360 s. The
-  /// vehicle is seen 600 m out at 15 m/s, then fixes stop. Two things can have happened:
-  ///   - It turned round on the outbound pavement and drives back along it (the wrong way). The
-  ///     return carriageway beside it is a later pass that reported speed explains reaching
-  ///     only after about 140 s. Until then the fixes are never matched there: progress stays,
-  ///     wrong way is off route by the third fix, no arrival. Where the carriageways are too far
-  ///     apart for the fix to fit the return, the same at every gap. Where reported speed does
-  ///     explain the return and it is within GPS error of the fix, the two cannot be told apart;
-  ///     progress is still never beyond what reported speed explains.
+  /// Review of 3da587c, over carriageways 12 to 200 m apart and gaps of 20 to 400 s. The
+  /// vehicle is seen 600 m out at 15 m/s, then fixes stop. Three things can follow:
+  ///   - Accurate fixes still on the outbound carriageway, heading back: it turned round and
+  ///     drives that carriageway the wrong way. However long the gap, and even where 15 m/s
+  ///     could have covered the far end and the return, the return carriageway fits these
+  ///     fixes worse than the road they are on: never matched there, progress stays, off route
+  ///     by the third fix, no arrival.
+  ///   - Fixes between the two carriageways, heading back: the position cannot tell them apart.
+  ///     The return is taken once reported speed explains reaching it, and not before.
   ///   - It kept driving the route (slowing for the end) and reappears where it really is, on
   ///     either carriageway or at the far end. That is followed from the first fix and arrives.
   func testADividedOutAndBackReachesTheReturnOnlyAsFastAsReportedSpeed() throws {
     let speed = 15.0
     let length = 2_000.0
     let fittingMeters = 35.0 + 5
-    var wrongWayHeld = 0
-    for separation in [12.0, 25, 40, 60, 100, 200] {
+    var betweenSwitched = 0
+    var betweenHeld = 0
+    for separation in [12.0, 25, 35, 40, 50, 80, 200] {
       let corners = [(0, 0), (length, 0), (length, separation), (0, separation)]
       let total = 2 * length + separation
-      for gap in [20.0, 45, 75, 100, 120, 140, 180, 240, 360] {
+      for gap in [20.0, 45, 60, 75, 90, 120, 140, 180, 240, 360, 400] {
         let context = "separation \(separation), gap \(gap)"
         func outbound() throws -> NavigationCore {
           let core = NavigationCore()
@@ -233,37 +234,53 @@ final class NavigationMatchingInvariantTests: XCTestCase {
           XCTAssertEqual(along(core.currentSnapshot(), core), 600, accuracy: 1, context)
           return core
         }
+        func explainedMeters(_ elapsed: Double) -> Double { 1.5 * speed * elapsed + 25 + 5 }
 
-        // Wrong way, on the outbound pavement.
+        // Wrong way, on the outbound carriageway.
         let wrongWay = try outbound()
         var snapshot = wrongWay.currentSnapshot()
-        var everExplained = false
         for index in 0..<3 {
-          let x = 200 - Double(index) * speed
-          let elapsed = gap + Double(index)
           snapshot = try wrongWay.updateLocation(
-            Trace.sample(x: x, y: 0, courseDegrees: 270, speed: speed, time: 40 + elapsed)
+            Trace.sample(
+              x: 200 - Double(index) * speed, y: 0, courseDegrees: 270, speed: speed,
+              time: 40 + gap + Double(index))
           )
-          let progress = along(snapshot, wrongWay)
-          let explainedMeters = 1.5 * speed * elapsed + 25 + 5
-          // The first place on the return carriageway that the fix fits (GPS error reaches
-          // that far back along it).
-          let fitsBackMeters = (fittingMeters * fittingMeters - separation * separation)
-            .squareRoot()
-          let returnAdvance = total - x - 600 - (separation <= fittingMeters ? fitsBackMeters : 0)
-          let isReturnExplained = separation <= fittingMeters && returnAdvance <= explainedMeters
-          everExplained = everExplained || isReturnExplained
+          XCTAssertEqual(along(snapshot, wrongWay), 600, accuracy: 1, "\(context), fix \(index)")
           XCTAssertNotEqual(snapshot.phase, .arrived, "\(context), fix \(index)")
-          XCTAssertLessThanOrEqual(progress, 600 + explainedMeters, "\(context), fix \(index)")
-          if !everExplained {
-            XCTAssertEqual(progress, 600, accuracy: 1, "\(context), fix \(index)")
-          }
         }
-        if !everExplained {
-          wrongWayHeld += 1
-          XCTAssertTrue(snapshot.isOffRoute, context)
-        } else {
-          XCTAssertGreaterThanOrEqual(gap, 140, "the review's 75 s case must be held: \(context)")
+        XCTAssertTrue(snapshot.isOffRoute, context)
+
+        // Between the carriageways, where it fits both.
+        if separation <= 50 {
+          let between = try outbound()
+          // The return is reached from x = 200 at the latest, and from as far back along it
+          // as the fix fits at the earliest.
+          let latestReturn = total - 200 - 600
+          let earliestReturn = latestReturn
+            - (fittingMeters * fittingMeters - separation * separation / 4).squareRoot()
+          var switched = false
+          for index in 0..<3 {
+            snapshot = try between.updateLocation(
+              Trace.sample(
+                x: 200 - Double(index) * speed, y: separation / 2, courseDegrees: 270,
+                speed: speed, time: 40 + gap + Double(index))
+            )
+            let progress = along(snapshot, between)
+            XCTAssertLessThanOrEqual(
+              progress, 600 + explainedMeters(gap + Double(index)), "\(context), between \(index)"
+            )
+            XCTAssertNotEqual(snapshot.phase, .arrived, "\(context), between \(index)")
+            switched = switched || progress > length + separation
+          }
+          if explainedMeters(gap) >= latestReturn + 20 {
+            betweenSwitched += 1
+            XCTAssertTrue(switched, "\(context): reported speed explains the return")
+            XCTAssertFalse(snapshot.isOffRoute, context)
+          } else if explainedMeters(gap + 2) < earliestReturn {
+            betweenHeld += 1
+            XCTAssertFalse(switched, "\(context): reported speed does not explain the return")
+            XCTAssertTrue(snapshot.isOffRoute, context)
+          }
         }
 
         // Kept driving the route.
@@ -296,8 +313,9 @@ final class NavigationMatchingInvariantTests: XCTestCase {
         XCTAssertEqual(snapshot.phase, .arrived, context)
       }
     }
-    // Every gap at 60 m and wider, and every gap up to 120 s on narrower roads.
-    XCTAssertGreaterThanOrEqual(wrongWayHeld, 3 * 9 + 3 * 5)
+    // Between the carriageways, both outcomes were exercised.
+    XCTAssertGreaterThanOrEqual(betweenSwitched, 5 * 4)
+    XCTAssertGreaterThanOrEqual(betweenHeld, 5 * 6)
   }
 
   /// Invariant 1: a fix that the road within reach explains is not a jump, even where a later

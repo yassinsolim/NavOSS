@@ -80,13 +80,16 @@ private let implausibleJumpMarginMeters = 150.0
 //      is ordinary driving.
 //   While the fix fits where the vehicle is or has been (a continuation, or an earlier pass),
 //   its position says nothing about a later pass; the earlier one is kept. Only this applies:
-//   2. Heading switch. A later pass, or the same one further on than explained, fits, and the
-//      heading of the moving vehicle agrees with it (within 45 degrees) and opposes the pass
-//      the vehicle was on (90 degrees or more): one fix, arrival deferred (rule 6). The same
-//      pass further on must be possible; a later pass must be believable, because heading
-//      says which way the vehicle points, not how far it has driven (a U-turn on the outbound
-//      carriageway points along the return one). (The far side of a self-crossing; the other
-//      carriageway after a gap long enough, at the reported speed, to have driven round.)
+//   2. Heading switch. A later pass, or the same one further on than explained, fits no worse
+//      than where the vehicle is or has been (within the fix's accuracy), and the heading of
+//      the moving vehicle agrees with it (within 45 degrees) and opposes the pass the vehicle
+//      was on (90 degrees or more): one fix, arrival deferred (rule 6). The same pass further
+//      on must be possible; a later pass must be believable, because heading says which way
+//      the vehicle points, not how far it has driven. An accurate fix on the carriageway the
+//      vehicle was on, pointing back along it, is wrong-way travel there however long the gap:
+//      that it could have driven round to the return carriageway is not evidence that it did.
+//      (The far side of a self-crossing; a fix on, or between, the other carriageway after a
+//      gap long enough, at the reported speed, to have driven round.)
 //   While the fix fits nowhere the vehicle is or has been:
 //   3. Explained switch. The fix is away, and a later pass fits that reported motion explains:
 //      one fix. (Leaving a tunnel around a bend.)
@@ -1189,10 +1192,18 @@ final class NavigationCore {
     let isContinuing = continuation != nil
       && (earlierPass == nil || continuationAdvanceMeters <= limits.explainedAdvanceMeters)
     // Where the vehicle is, or has been, on the route also fits this fix: its position cannot
-    // say that it is anywhere further on. Only the heading of a moving vehicle can.
+    // say that it is anywhere further on. Only the heading of a moving vehicle can, and only
+    // where the later pass fits the fix about as well: a fix on the road the vehicle was on,
+    // pointing back along it, is a vehicle driving that road the wrong way, however long the
+    // gap. Time that would have allowed driving round to a parallel pass is not evidence that
+    // the vehicle did, when the fix is further from that pass than its accuracy.
     if let here = continuation ?? earlierPass {
+      let hereDistanceMeters = min(
+        continuation?.distanceMeters ?? .infinity, earlierPass?.distanceMeters ?? .infinity
+      )
       if let headingSwitch, let difference = headingDifference(here),
-        difference >= headingOpposesMinimumDifferenceDegrees
+        difference >= headingOpposesMinimumDifferenceDegrees,
+        headingSwitch.distanceMeters <= hereDistanceMeters + accuracyAllowanceMeters
       {
         return (headingSwitch, .headingSwitch)
       }
