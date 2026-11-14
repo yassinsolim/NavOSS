@@ -273,6 +273,18 @@ final class NavigationMatchingInvariantTests: XCTestCase {
     XCTAssertEqual(point.y, 3_800, accuracy: 1)
   }
 
+  /// The vehicle is far along a long out-and-back from where it was last confirmed, beside both
+  /// carriageways, with the turnaround out of the grid's range. Both legs are within reach of
+  /// its displacement; the base stays on the one that comes first along the route.
+  func testKeepRouteRejoinBaseStaysOnTheFirstLegWhenBothAreWithinReach() throws {
+    let core = NavigationCore()
+    let corners: [(Double, Double)] = [(0, 0), (0, 20_000), (40, 20_000), (40, 0)]
+    try core.setRoute(corners.map { Trace.coordinate($0.0, $0.1) })
+    try core.updateLocation(Trace.sample(x: 0, y: 0, courseDegrees: 0, speed: 20, time: 0))
+    let base = try XCTUnwrap(core.rejoinBaseAlongMeters(near: Trace.coordinate(60, 18_000)))
+    XCTAssertEqual(base, 18_000, accuracy: 20)
+  }
+
   // MARK: Properties over generated routes
 
   private struct Shape {
