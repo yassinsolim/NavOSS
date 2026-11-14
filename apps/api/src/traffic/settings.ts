@@ -1,6 +1,8 @@
 import { SERVICE_COVERAGE_BOUNDS, type TrafficFlowBounds } from '@navoss/contracts';
 import { z } from 'zod/v4';
 
+import { loadDeadEndMask, type DeadEndMask } from './dead-end-mask.js';
+
 export type TrafficMode = 'off' | 'collect' | 'live';
 
 export interface TrafficSettings {
@@ -194,4 +196,37 @@ export function readTrafficSettings(
   }
   assertTrafficPrivacyLimits(settings);
   return settings;
+}
+
+const GraphIdSchema = z.string().regex(/^[0-9a-f]{64}$/);
+
+/**
+ * Loads the dead-end mask the environment names, bound to the graph the stack serves:
+ * `COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH` (the mask file) and `COMMUNITY_TRAFFIC_GRAPH_ID` (the
+ * SHA-256 of the graph tar Valhalla serves, `graphId` in the graph's `graph.json`).
+ *
+ * - `off`: not read.
+ * - `collect`: optional; when a path is set the graph id is required and the mask must load.
+ * - `live`: both are required. A missing, malformed, other-version or other-graph mask refuses
+ *   to start; there is no permissive fallback.
+ */
+export function loadConfiguredDeadEndMask(
+  mode: TrafficMode,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): DeadEndMask | undefined {
+  if (mode === 'off') return undefined;
+  const path = environment.COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH?.trim() ?? '';
+  const graphId = environment.COMMUNITY_TRAFFIC_GRAPH_ID?.trim() ?? '';
+  if (mode === 'live' && (path === '' || graphId === '')) {
+    throw new Error(
+      'COMMUNITY_TRAFFIC_MODE=live requires COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH and COMMUNITY_TRAFFIC_GRAPH_ID.',
+    );
+  }
+  if (path === '') return undefined;
+  if (!GraphIdSchema.safeParse(graphId).success) {
+    throw new Error(
+      'COMMUNITY_TRAFFIC_DEAD_END_MASK_PATH requires COMMUNITY_TRAFFIC_GRAPH_ID: the 64-hex SHA-256 of the graph Valhalla serves.',
+    );
+  }
+  return loadDeadEndMask(path, { graphId });
 }
