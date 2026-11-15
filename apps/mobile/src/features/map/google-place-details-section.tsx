@@ -26,6 +26,8 @@ import { StateView } from '@/ui/state-view';
 interface NativeGooglePlaceDetailsProps {
   latitude: number;
   longitude: number;
+  /** Set once a NavOSS grant is held; Google's component loads only then. */
+  loadDetails: boolean;
   name: string;
   onStateChange: (event: NativeSyntheticEvent<{ state: string }>) => void;
   style?: StyleProp<ViewStyle>;
@@ -43,13 +45,16 @@ interface GooglePlaceDetailsSectionProps {
   longitude: number;
   name: string;
   onReadReviews: () => void;
+  /** What Google resolves to a place ID: the name and, when known, the street address. */
+  searchText: string;
 }
 
 /**
- * Google's own place details, kept apart from the OpenStreetMap details above it. Each open first
- * takes an anonymous grant from the NavOSS server's monthly counter, then Google's component
- * fetches and renders the place live. When Google has no matching place the section disappears
- * and says nothing about Google.
+ * Google's own place details, kept apart from the OpenStreetMap details above it. Google first
+ * resolves the selected name near its coordinate to a place ID (free, no grant). Only a place
+ * Google lists takes an anonymous grant from the NavOSS server's monthly counter, and only then
+ * does Google's component fetch and render the place live. When Google has no matching place the
+ * section disappears and says nothing about Google.
  */
 export function GooglePlaceDetailsSection({
   available,
@@ -57,6 +62,7 @@ export function GooglePlaceDetailsSection({
   longitude,
   name,
   onReadReviews,
+  searchText,
 }: GooglePlaceDetailsSectionProps) {
   const styles = useStyles();
   const { height: windowHeight } = useWindowDimensions();
@@ -65,22 +71,24 @@ export function GooglePlaceDetailsSection({
     key: string;
     request: Promise<GooglePlaceQueryGrantResponse>;
   } | null>(null);
-  const [state, setState] = useState<GooglePlaceDetailsState>('checking');
+  const [state, setState] = useState<GooglePlaceDetailsState>('resolving');
   const [granted, setGranted] = useState(false);
+  // Stays true once Google has listed the place, so moving on to `checking` does not cancel the
+  // grant request below.
+  const [listed, setListed] = useState(false);
 
   useEffect(() => {
-    if (!available) return undefined;
+    if (!available || !listed) return undefined;
     let active = true;
     if (requestRef.current?.key !== grantKey) {
       requestRef.current = { key: grantKey, request: reserveGooglePlaceQuery() };
     }
-    setGranted(false);
     setState('checking');
     void requestRef.current.request
       .then((response) => {
         if (!active) return;
         setGranted(response.granted);
-        setState(response.granted ? 'loading' : 'unavailable');
+        if (!response.granted) setState('unavailable');
       })
       .catch((error: unknown) => {
         if (active) setState(googleGrantFailureState(error));
@@ -88,7 +96,7 @@ export function GooglePlaceDetailsSection({
     return () => {
       active = false;
     };
-  }, [available, grantKey]);
+  }, [available, grantKey, listed]);
 
   const reviewsLink = (
     <ListRow
@@ -120,58 +128,63 @@ export function GooglePlaceDetailsSection({
 
   const message = googlePlaceDetailsMessage(state);
   const matched = state === 'matched';
-  const showsGoogle = granted && (state === 'loading' || matched);
+  const native = (
+    // Mounted while Google resolves and loads; collapsed and hidden until the place matches.
+    <View
+      key="google"
+      style={
+        matched ? [styles.card, { height: googlePlaceDetailsHeight(windowHeight) }] : styles.probe
+      }
+    >
+      <NativeGooglePlaceDetailsView
+        latitude={latitude}
+        loadDetails={granted}
+        longitude={longitude}
+        name={searchText}
+        onStateChange={(event) => {
+          const next = nativeGooglePlaceState(event.nativeEvent.state);
+          if (next === 'resolved') setListed(true);
+          setState(next);
+        }}
+        style={StyleSheet.absoluteFill}
+      />
+    </View>
+  );
 
+  // Until Google lists the place, say nothing about Google. The native view keeps one position
+  // in this tree in every state: remounting it would resolve the place again.
+  const resolving = state === 'resolving';
+  const busy = state === 'resolved' || state === 'checking' || state === 'loading';
   return (
-    <View style={styles.section}>
-      <Text accessibilityRole="header" maxFontSizeMultiplier={1.5} style={styles.title}>
-        Google reviews and details
-      </Text>
+    <View style={resolving ? undefined : styles.section}>
+      {!resolving && (
+        <Text accessibilityRole="header" maxFontSizeMultiplier={1.5} style={styles.title}>
+          Google reviews and details
+        </Text>
+      )}
       {message !== undefined && (
         <StateView
           message={message.message}
           title={message.title}
           visual={
-            state === 'checking' || state === 'loading'
+            busy
               ? 'loading'
               : { android: 'cloud_off', ios: state === 'offline' ? 'wifi.slash' : 'clock' }
           }
         />
       )}
-      {showsGoogle && (
-        // Google's component loads while collapsed and is shown only once the place matches.
-        <View
-          style={
-            matched
-              ? [styles.card, { height: googlePlaceDetailsHeight(windowHeight) }]
-              : styles.probe
-          }
-        >
-          <NativeGooglePlaceDetailsView
-            latitude={latitude}
-            longitude={longitude}
-            name={name}
-            onStateChange={(event) => {
-              setState(nativeGooglePlaceState(event.nativeEvent.state));
-            }}
-            style={StyleSheet.absoluteFill}
-          />
-        </View>
-      )}
-      {state !== 'checking' && state !== 'loading' && reviewsLink}
+      {native}
+      {/* Google's component has its own "Open in Maps"; the link is the fallback when it is absent. */}
+      {!resolving && !busy && !matched && reviewsLink}
     </View>
   );
 }
 
 const useStyles = createThemedStyles(({ colors }) =>
   StyleSheet.create({
-    card: {
-      borderColor: colors.border,
-      borderCurve: 'continuous',
-      borderRadius: radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      overflow: 'hidden',
-    },
+    // Google's component draws its own outlined card with its attribution header; a second
+    // NavOSS border showed as a double line under it on the simulator.
+    card: { overflow: 'hidden' },
     note: { ...typography.footnote, color: colors.textSecondary },
     // One point tall and clipped: Google's view is in the window so it can load, but nothing
     // shows until the place matches.

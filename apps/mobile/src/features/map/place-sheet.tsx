@@ -4,7 +4,10 @@ import { Fragment, useEffect, useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
-import { googlePlaceDetailsEligible } from '@/features/map/google-place-details';
+import {
+  googlePlaceDetailsEligible,
+  googlePlaceSearchText,
+} from '@/features/map/google-place-details';
 import { GooglePlaceDetailsSection } from '@/features/map/google-place-details-section';
 import {
   placeOpenStatus,
@@ -273,6 +276,7 @@ export function PlaceSheet({
               latitude={place.center.latitude}
               longitude={place.center.longitude}
               name={place.name}
+              searchText={googlePlaceSearchText(place)}
               onReadReviews={onReadReviews}
             />
           )}

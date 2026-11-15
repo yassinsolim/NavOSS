@@ -396,6 +396,9 @@ public final class NavOSSNavigationModule: Module {
       Prop("name") { (view, value: String) in
         view.setName(value)
       }
+      Prop("loadDetails") { (view, value: Bool) in
+        view.setLoadDetails(value)
+      }
       OnViewDidUpdateProps { view in
         view.updateContent()
       }

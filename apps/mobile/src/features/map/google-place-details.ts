@@ -3,14 +3,26 @@ import type { SearchResult } from '@navoss/contracts';
 import { NavOssApiError } from '../../lib/api';
 
 /**
- * What the Google section of a place sheet shows. `checking` is the anonymous grant request,
- * `loading` is Google's component fetching; the rest come from the native view (see
- * `NavOSSGooglePlaceRatingView.swift`) or from a refused or failed grant.
+ * What the Google section of a place sheet shows. The native view (see
+ * `NavOSSGooglePlaceRatingView.swift`) first asks Google for the place ID of the selected name
+ * near its coordinate (`resolving`, then `resolved` or `noMatch`); only a resolved place takes an
+ * anonymous NavOSS grant (`checking`), and only a granted one loads Google's component
+ * (`loading`, then `matched` or `noMatch`). A refused or failed grant is `unavailable` or
+ * `offline`.
  */
 export type GooglePlaceDetailsState =
-  'checking' | 'loading' | 'matched' | 'noMatch' | 'offline' | 'unavailable';
+  | 'resolving'
+  | 'resolved'
+  | 'checking'
+  | 'loading'
+  | 'matched'
+  | 'noMatch'
+  | 'offline'
+  | 'unavailable';
 
 export const NATIVE_GOOGLE_PLACE_STATES: readonly GooglePlaceDetailsState[] = [
+  'resolving',
+  'resolved',
   'loading',
   'matched',
   'noMatch',
@@ -38,6 +50,22 @@ export function googlePlaceDetailsEligible(place: SearchResult): boolean {
 }
 
 /**
+ * The text Google resolves to a place ID: the place's public name, plus its public address when
+ * NavOSS has one, so a short or generic name ("Central Library") finds that building rather than
+ * another place in the search box. The address repeats nothing of the name and is cut to keep the
+ * query short.
+ */
+export function googlePlaceSearchText(place: SearchResult): string {
+  const name = place.name.trim();
+  const address = (place.details?.address ?? place.label).trim();
+  const withoutName = address.toLocaleLowerCase('en-CA').startsWith(name.toLocaleLowerCase('en-CA'))
+    ? address.slice(name.length).replace(/^[\s,]+/u, '')
+    : address;
+  const street = withoutName.split(',').slice(0, 2).join(',').trim();
+  return street.length === 0 || street === name ? name : `${name}, ${street}`;
+}
+
+/**
  * A failed grant request. When the server answered (an HTTP error or an unreadable body) Google
  * details are unavailable; anything else is a request that never got an answer, which is offline.
  * Expo's `fetch` rejects with `FetchError` ("fetch failed: …"), React Native's with `TypeError`.
@@ -52,11 +80,15 @@ export function nativeGooglePlaceState(value: unknown): GooglePlaceDetailsState 
   return NATIVE_GOOGLE_PLACE_STATES.find((state) => state === value) ?? 'noMatch';
 }
 
-/** Copy for the states that show NavOSS text; `matched` and `noMatch` show none. */
+/**
+ * Copy for the states that show NavOSS text. `resolving` and `noMatch` show nothing (the place may
+ * not be on Google); `matched` shows Google's own component.
+ */
 export function googlePlaceDetailsMessage(
   state: GooglePlaceDetailsState,
 ): { message?: string; title: string } | undefined {
   switch (state) {
+    case 'resolved':
     case 'checking':
     case 'loading':
       return { title: 'Loading Google details' };
@@ -67,6 +99,7 @@ export function googlePlaceDetailsMessage(
       };
     case 'unavailable':
       return { title: 'Google details are temporarily unavailable' };
+    case 'resolving':
     case 'matched':
     case 'noMatch':
       return undefined;
