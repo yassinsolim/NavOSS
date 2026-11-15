@@ -13,9 +13,9 @@ This VM hosts the live Alberta and British Columbia NavOSS production API, versi
 | Machine          | `q35`                                                               |
 | Firmware         | OVMF (UEFI) with EFI disk; Secure Boot/pre-enrolled keys disabled   |
 | QEMU Guest Agent | Enabled                                                             |
-| CPU              | 1 socket, 4 cores, CPU type `host`                                  |
+| CPU              | 1 socket, 6 cores, CPU type `host` (from 4 on 2026-11-15)           |
 | NUMA             | Disabled                                                            |
-| Memory           | 16,384 MiB fixed (confirmed 2026-11-15)                             |
+| Memory           | 24 GiB fixed (from 16 GiB on 2026-11-15, for the Canada release)    |
 | Ballooning       | Disabled                                                            |
 | SCSI controller  | VirtIO SCSI single                                                  |
 | Network          | VirtIO NIC at `192.168.1.74`; guest UFW enabled                     |
@@ -32,7 +32,7 @@ Use SSD/NVMe-backed thin storage where available. Enable `Discard`, `SSD emulati
 | ---------------- | ------: | ------ | ------------------------------------------------------------------------------------------------------ |
 | `scsi0`          |   60 GB | Yes    | Ubuntu, packages, logs, swap, containerd store                                                         |
 | `scsi1`          |  40 GiB | Yes    | `/srv/navoss/state`: PostgreSQL, secrets/config references, application backups                        |
-| `scsi2`          | 160 GiB | No     | `/srv/navoss/artifacts`: Docker data, Valhalla graphs, Nominatim indexes, downloads, staging artifacts |
+| `scsi2`          |  255 GB | No     | `/srv/navoss/artifacts`: Docker data, Valhalla graphs, Nominatim indexes, downloads, staging artifacts |
 | Cloud-Init drive | Default | N/A    | Initial user, SSH key, network configuration                                                           |
 
 `scsi2` contains reproducible artifacts and is excluded from Proxmox backup to keep backup size bounded. Keep the active and previous validated graph/index versions for atomic rollback. Never place the PostgreSQL data directory on `scsi2`.
@@ -40,6 +40,12 @@ Use SSD/NVMe-backed thin storage where available. Enable `Discard`, `SSD emulati
 On 2026-11-15, `scsi0` was expanded from 40 GB to 60 GB; the root filesystem was 56 GB and 53% used. Docker's data root is `/srv/navoss/artifacts/docker`, but `/var/lib/containerd` (21 GB at the time) is on the root disk.
 
 Memory was restored from 8,192 MiB to 16,384 MiB on the same date. One reboot caused 57 seconds of API downtime; the stack recovered on its own.
+
+Later on 2026-11-15 the lead resized VM 100 for Canada-wide coverage: 6 cores, 24 GiB RAM, `scsi2`
+grown online to 255 GB (230 GB free afterwards), one reboot. pve01 then had no further RAM to give
+while keeping its 8 GB unallocated reserve, and its NVMe pool must stay under 80 %. The Canada
+build fits these limits only one heavy step at a time
+([`north-america.md`](../architecture/north-america.md#sizing-on-vm-100-6-vcpu-24-gib-255-gb-artifact-disk)).
 
 Format `scsi1` and `scsi2` as ext4 and mount them by filesystem UUID with `defaults,noatime`.
 
@@ -87,8 +93,9 @@ These are hard starting limits, not targets to consume:
 
 | Service                               |                               Initial memory budget |
 | ------------------------------------- | --------------------------------------------------: |
-| Nominatim/PostgreSQL                  |                               6 GiB container limit |
-| Valhalla                              |                               2 GiB container limit |
+| Nominatim/PostgreSQL                  |    6 GiB container limit (8 GiB for the Canada index) |
+| Valhalla                              |    2 GiB container limit (4 GiB for the Canada graph) |
+| Staged build (one at a time)          | Valhalla 8 GiB or Nominatim import 10 GiB, never both |
 | Reports PostgreSQL/PostGIS            |               768 MiB limit; 256 MiB shared buffers |
 | Calgary search indexer                |                             512 MiB container limit |
 | NavOSS API                            |                             768 MiB container limit |

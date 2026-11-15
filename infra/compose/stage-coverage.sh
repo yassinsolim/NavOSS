@@ -4,7 +4,7 @@
 #
 #   ./stage-coverage.sh inputs    canada        # download, verify, filter (≈30 min, 13 GB)
 #   ./stage-coverage.sh valhalla  canada        # graph, two passes (≈2–4 h, ≈20 GB peak, 8 GiB)
-#   ./stage-coverage.sh nominatim canada        # search import (≈10–20 h, ≈60 GB peak, 10 GiB)
+#   ./stage-coverage.sh nominatim canada        # search import (≈12–24 h, ≤110 GB peak, 10 GiB)
 #   ./stage-coverage.sh serve     canada        # staged Valhalla + Nominatim + API on 127.0.0.1:18300
 #   ./stage-coverage.sh verify    canada        # check-coverage.sh against the staged API
 #   ./stage-coverage.sh stop      canada        # stop staging containers; artifacts stay

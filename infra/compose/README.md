@@ -317,7 +317,7 @@ not, then rerun it.
 | 0 | Update the checkout and API image | 5 min | 1 GB | — |
 | 1 | `inputs`: verify the extract, write the routing input | 15–30 min | +6.5 GB | < 1 GiB |
 | 2 | `valhalla`: two graph passes and the admin repair | 1–4 h | +8–20 GB peak, ≈ 8–12 GB kept | ≤ 8 GiB |
-| 3 | `nominatim`: search import | 10–20 h | +70–110 GB peak, ≈ 20–30 GB kept | ≤ 10 GiB |
+| 3 | `nominatim`: search import | 12–24 h | +70–110 GB peak, ≈ 20–30 GB kept | ≤ 10 GiB |
 | 4 | `serve` + `verify`, route matrix over SSH | 30 min | — | ≈ 7 GiB while staged |
 | 5 | Stop staging | 1 min | — | frees it |
 | 6 | Cutover | 5–10 min, ≈ 1 min API restart | — | live limits below |
