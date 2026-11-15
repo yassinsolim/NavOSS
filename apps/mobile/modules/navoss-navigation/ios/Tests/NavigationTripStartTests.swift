@@ -77,12 +77,13 @@ final class NavigationTripStartTests: XCTestCase {
       _ coordinate: NavigationCoordinate,
       speed: Double? = nil,
       course: Double? = nil,
+      accuracy: Double = 5,
       after seconds: TimeInterval
     ) throws {
       time += seconds
       let update = try session.updateLocation(
         NavigationLocationSample(
-          coordinate: coordinate, courseDegrees: course, horizontalAccuracyMeters: 5,
+          coordinate: coordinate, courseDegrees: course, horizontalAccuracyMeters: accuracy,
           speedMetersPerSecond: speed, timestamp: time))
       latest = update
       let isOffRoute = update.snapshot.phase == .tracking && update.snapshot.isOffRoute
@@ -297,23 +298,7 @@ final class NavigationTripStartTests: XCTestCase {
   /// vehicle is on another road (a parallel street, the far side of a barrier) and is rerouted
   /// once it has gone well past the distance that reaching the route would take.
   func testStartingBesideTheRouteAndDrivingAlongsideItIsRerouted() throws {
-    let corners = [(0.0, 0.0), (3_000.0, 0.0)]
-    let geometry = NavigationTrace.route(corners).map {
-      NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
-    }
-    let end = NavigationTrace.coordinate(3_000, 0)
-    let selected = NavOSSCarPlayTrip(
-      destination: NavOSSCarPlayDestination(
-        id: "d", label: "d", latitude: end.latitude, longitude: end.longitude, name: "d"),
-      distanceMeters: 3_000, durationSeconds: 200, geometry: geometry, id: "east",
-      steps: [
-        NavOSSCarPlayRouteStep(
-          distanceMeters: 3_000, durationSeconds: 200, geometry: geometry,
-          instruction: "Head east", maneuverType: "depart", roadName: ""),
-        NavOSSCarPlayRouteStep(
-          distanceMeters: 0, durationSeconds: 0, geometry: [geometry.last!, geometry.last!],
-          instruction: "Arrive", maneuverType: "arrive", roadName: ""),
-      ])
+    let selected = Self.syntheticTrip(NavigationTrace.route([(0.0, 0.0), (3_000.0, 0.0)]))
     let replacement = try Self.trips("square-one-scarborough-reroute.v2")
     let trip = try TripHarness(selected: selected, preview: [selected], reroute: replacement)
     let start = NavigationTrace.coordinate(0, -100)
@@ -325,7 +310,155 @@ final class NavigationTripStartTests: XCTestCase {
       try trip.fix(NavigationTrace.coordinate(x, -100), speed: 12, course: 90, after: 1)
     }
     XCTAssertEqual(trip.requests, 1)
-    XCTAssertLessThanOrEqual(x, 450)
+    // The start's 100 m from the route plus the 500 m travel budget, plus three fixes.
+    XCTAssertLessThanOrEqual(x, 650)
+  }
+
+  /// Review of #133: a service-road loop of 100 m radius inside a concentric loop of the chosen
+  /// route 45 m further out. Every fix is outside the on-route band, the vehicle never gets
+  /// further from the route than about 100 m and never more than 200 m from where it started,
+  /// whichever way it drives. It has really driven, though, and never joined: it is rerouted.
+  func testCirclingAServiceRoadLoopInsideTheRouteIsRerouted() throws {
+    func circle(_ radius: Double, clockwise: Bool, laps: Double = 1) -> [(Double, Double)] {
+      let count = Int(72 * laps)
+      return (0...count).map { index in
+        let angle = Double(index) / 72 * 2 * .pi * (clockwise ? -1 : 1)
+        return (radius * cos(angle), radius * sin(angle))
+      }
+    }
+    // The route goes once round the outer loop, then leaves east.
+    let selected = Self.syntheticTrip(
+      NavigationTrace.route(circle(145, clockwise: false) + [(2_000, 0)], spacing: 10))
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    let trip = try TripHarness(selected: selected, preview: [selected], reroute: replacement)
+    try trip.standStill(at: NavigationTrace.coordinate(100, 0), seconds: 10)
+    XCTAssertEqual(trip.requests, 0)
+    // Round the inner loop the other way at 8 m/s, a fix a second: up to three laps (1.9 km).
+    var driven = 0.0
+    for position in NavigationTrace.positions(along: circle(100, clockwise: true, laps: 3), every: 8)
+    where trip.requests == 0 {
+      try trip.fix(
+        NavigationTrace.coordinate(position.x, position.y), speed: 8,
+        course: position.courseDegrees, after: 1)
+      driven = position.alongMeters
+    }
+    XCTAssertEqual(trip.requests, 1)
+    // The start's 45 m from the route plus the 500 m travel budget, plus three fixes.
+    XCTAssertLessThanOrEqual(driven, 650)
+  }
+
+  /// Ten minutes parked off the road with the fix wandering never adds up to travel: half a
+  /// metre (the simulator), and within 15 m in every direction (a poor sky view).
+  func testTenMinutesParkedOffTheRoadWithJitterIsNeverRerouted() throws {
+    for (jitter, accuracy) in [(0.5, 5.0), (15.0, 10.0), (15.0, 5.0)] {
+      let (trip, express) = try harness(selecting: "Highway 401 Express")
+      var generator = SplitMix64(seed: 7)
+      for _ in 0..<600 {
+        let angle = Double(generator.next() % 3_600) / 3_600 * 2 * .pi
+        let radius = jitter * Double(generator.next() % 1_000) / 1_000
+        try trip.fix(
+          Self.offset(Self.parked, east: radius * cos(angle), north: radius * sin(angle)),
+          accuracy: accuracy, after: 1)
+      }
+      XCTAssertEqual(trip.requests, 0, "jitter \(jitter) m, accuracy \(accuracy) m")
+      XCTAssertEqual(trip.offRouteFixes, 0, "jitter \(jitter) m, accuracy \(accuracy) m")
+      XCTAssertEqual(trip.activeRouteId, express.id)
+    }
+  }
+
+  /// Before the first match a fix worse than `navigationPoorAccuracyMeters` counts neither way,
+  /// as its own accuracy keeps it from departing after a match. In particular its accuracy never
+  /// becomes part of a margin: a start on a 400 m fix does not let the vehicle drive 450 m
+  /// further away before it is rerouted.
+  func testPreMatchFixesTooPoorToPlaceCountNeitherWay() throws {
+    let selected = Self.syntheticTrip(NavigationTrace.route([(0.0, 0.0), (3_000.0, 0.0)]))
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    let trip = try TripHarness(selected: selected, preview: [selected], reroute: replacement)
+    for index in 0..<10 {
+      try trip.fix(
+        NavigationTrace.coordinate(0, index.isMultiple(of: 2) ? -100 : -100.5), accuracy: 400,
+        after: 2)
+    }
+    var y = -100.0
+    for _ in 0..<30 {
+      y -= 10
+      try trip.fix(NavigationTrace.coordinate(0, y), speed: 10, course: 180, accuracy: 400, after: 1)
+    }
+    XCTAssertEqual(trip.requests, 0, "300 m away on fixes that cannot place the vehicle")
+    var usableFixes = 0
+    while trip.requests == 0, usableFixes < 40 {
+      y -= 10
+      usableFixes += 1
+      try trip.fix(NavigationTrace.coordinate(0, y), speed: 10, course: 180, after: 1)
+    }
+    XCTAssertEqual(trip.requests, 1)
+    // Closest approach is the first usable fix: 50 m + both accuracies further, then 3 fixes.
+    XCTAssertLessThanOrEqual(usableFixes, 10)
+  }
+
+  /// Far from a long route (30,000 points, 300 km), a pre-match fix is not a scan of every
+  /// segment: parked, one scan in ten minutes; driving, one per 100 m moved.
+  func testPreMatchDistanceFarFromALongRouteScansRarely() throws {
+    let core = NavigationCore()
+    try core.setRoute(NavigationTrace.route([(0.0, 0.0), (300_000.0, 0.0)], spacing: 10))
+    let scanStart = Date()
+    var generator = SplitMix64(seed: 11)
+    var time = Self.startTime
+    for _ in 0..<600 {
+      time += 1
+      let jitter = Double(generator.next() % 1_000) / 100
+      _ = try core.updateLocation(
+        NavigationLocationSample(
+          coordinate: NavigationTrace.coordinate(150_000 + jitter, 2_000 + jitter),
+          horizontalAccuracyMeters: 5, timestamp: time))
+    }
+    XCTAssertEqual(core.preMatchFullScanCount, 1)
+    for step in 1...100 {
+      time += 1
+      _ = try core.updateLocation(
+        NavigationLocationSample(
+          coordinate: NavigationTrace.coordinate(150_000, 2_000 + Double(step) * 10),
+          courseDegrees: 0, horizontalAccuracyMeters: 5, speedMetersPerSecond: 10, timestamp: time))
+    }
+    XCTAssertLessThanOrEqual(core.preMatchFullScanCount, 1 + 11, "1 km driven")
+    let elapsed = Date().timeIntervalSince(scanStart)
+    // Recorded for the review: 700 fixes including at most 12 full scans of 30,000 segments.
+    print("700 pre-match fixes, \(core.preMatchFullScanCount) full scans: \(elapsed) s")
+  }
+
+  private static func syntheticTrip(_ points: [NavigationCoordinate]) -> NavOSSCarPlayTrip {
+    let geometry = points.map {
+      NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+    }
+    let end = points.last!
+    let length = zip(points, points.dropFirst()).reduce(0) {
+      $0 + navigationDistanceMeters(from: $1.0, to: $1.1)
+    }
+    return NavOSSCarPlayTrip(
+      destination: NavOSSCarPlayDestination(
+        id: "d", label: "d", latitude: end.latitude, longitude: end.longitude, name: "d"),
+      distanceMeters: length, durationSeconds: length / 15, geometry: geometry, id: "synthetic",
+      steps: [
+        NavOSSCarPlayRouteStep(
+          distanceMeters: length, durationSeconds: length / 15, geometry: geometry,
+          instruction: "Head east", maneuverType: "depart", roadName: ""),
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 0, durationSeconds: 0, geometry: [geometry.last!, geometry.last!],
+          instruction: "Arrive", maneuverType: "arrive", roadName: ""),
+      ])
+  }
+}
+
+/// Deterministic pseudo-random numbers for repeatable jitter.
+struct SplitMix64 {
+  private var state: UInt64
+  init(seed: UInt64) { state = seed }
+  mutating func next() -> UInt64 {
+    state &+= 0x9E37_79B9_7F4A_7C15
+    var value = state
+    value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
+    value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
+    return value ^ (value >> 31)
   }
 }
 

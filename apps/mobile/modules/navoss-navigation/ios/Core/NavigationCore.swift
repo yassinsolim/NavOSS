@@ -16,6 +16,9 @@ private let offRouteConfirmationSampleCount = 3
 private let offRouteDistanceThresholdMeters = 35.0
 private let onRouteRecoveryDistanceThresholdMeters = 20.0
 private let onRouteRecoverySampleCount = 2
+/// A fix less accurate than this cannot say where the vehicle is relative to the route: a
+/// restored trip waits for a better one, and before the first match it counts neither way.
+let navigationPoorAccuracyMeters = 50.0
 
 // Before the first on-route match. A trip is often started away from the road (a parking lot,
 // a driveway, inside a mall), and the route starts where the router joined the nearest road,
@@ -23,15 +26,26 @@ private let onRouteRecoverySampleCount = 2
 // leaving the route: the vehicle has not been on it yet. Until a fix is matched, a fix away
 // from the road counts towards going off route only when the vehicle shows it is not heading
 // for the route: it is further from every part of the route than the closest it has come
-// (`preMatchDepartureMarginMeters`), or has moved further from where it was first seen than
-// reaching the route from there would take (`preMatchWanderMeters`). Either then needs the
-// usual `offRouteConfirmationSampleCount` consecutive fixes.
+// (`preMatchDepartureMarginMeters`), or it has driven further than finding its way to the
+// route can take (`preMatchTravelBudgetMeters`). Either then needs the usual
+// `offRouteConfirmationSampleCount` consecutive fixes. A fix too poor to say where the vehicle
+// is (`navigationPoorAccuracyMeters`) counts neither way.
 /// How much further from the route than its closest approach the vehicle must be, plus both
 /// fixes' accuracy. Above parked GPS noise (see `cumulativeBackwardToleranceMeters`).
 private let preMatchDepartureMarginMeters = 50.0
-/// How much further from its first fix than that fix was from the route the vehicle may move,
-/// plus both fixes' accuracy: room to find the way out of a parking lot.
-private let preMatchWanderMeters = 250.0
+/// Travel allowed before the first match beyond the first fix's distance from the route: the
+/// aisles of a large parking lot to its exit. Square One's lot, among the largest, is about
+/// 600 m by 400 m; a car parked deep inside it drives about its distance to the road plus a
+/// few hundred metres of aisles.
+private let preMatchTravelBudgetMeters = 500.0
+/// Travel is counted between fixes further apart than this, or than both accuracies: two fixes
+/// of a parked vehicle that wander within 15 m of where it stands are at most 30 m apart.
+private let preMatchTravelStepMeters = 30.0
+/// A fix reporting a speed below this is a stationary vehicle, however far it wandered.
+private let preMatchStationarySpeedMetersPerSecond = 1.0
+/// Beyond 1 km from all of the route, the exact distance is rescanned only after the vehicle
+/// has moved this far; in between a lower bound stands in (see `preMatchDistance`).
+private let preMatchRescanMeters = 100.0
 
 // Matching window. Each fix is matched against the road near the previous match instead of the
 // whole route; the grid is consulted only when that window has nothing close to the fix.
@@ -315,7 +329,7 @@ func navOSSPersistedNavigationDecision(
 ) -> NavOSSPersistedNavigationDecision {
   guard let distanceFromRouteMeters = snapshot.distanceFromRouteMeters,
     let horizontalAccuracyMeters = snapshot.horizontalAccuracyMeters,
-    horizontalAccuracyMeters <= 50
+    horizontalAccuracyMeters <= navigationPoorAccuracyMeters
   else {
     return .wait
   }
@@ -533,10 +547,16 @@ final class NavigationCore {
   /// Until then the vehicle may still be making its way to the road; see
   /// `preMatchDepartureMarginMeters`.
   private(set) var hasMatchedRoute = false
-  /// Before the first match: the first fix of the route, its accuracy and distance from the
-  /// route, and the closest the vehicle has come to the route since, with that fix's accuracy.
-  private var preMatchStart: (raw: NavigationCoordinate, accuracyMeters: Double, distanceMeters: Double)?
+  /// Before the first match: the first fix's distance from the route, the closest the vehicle
+  /// has come to the route (measured exactly) with that fix's accuracy, the credible travel
+  /// since the first fix and the fix it was last counted from, and the last full scan of the
+  /// route's distance (only made beyond 1 km of all of it).
+  private var preMatchStartDistanceMeters: Double?
   private var preMatchClosest: (distanceMeters: Double, accuracyMeters: Double)?
+  private var preMatchTravel: (from: NavigationCoordinate, accuracyMeters: Double, meters: Double)?
+  private var preMatchScan: (coordinate: NavigationCoordinate, distanceMeters: Double)?
+  /// Full scans of the route made for pre-match fixes. Exposed so tests can bound the cost.
+  private(set) var preMatchFullScanCount = 0
   /// Raw position and accuracy of the last accepted fix: where the vehicle was last known to be.
   private var anchorRawCoordinate: NavigationCoordinate?
   private var anchorAccuracyMeters = 0.0
@@ -1081,9 +1101,15 @@ final class NavigationCore {
     // rather than a value that drifts down with each tolerated backward step.
     if shouldAcceptProjection {
       progressHighWaterMark = max(progressHighWaterMark, projection.progress)
+    }
+    // A fix too poor to place the vehicle (`navigationPoorAccuracyMeters`) fits the route from
+    // far away; it is not the first match.
+    if shouldAcceptProjection, accuracyAllowanceMeters <= navigationPoorAccuracyMeters {
       hasMatchedRoute = true
-      preMatchStart = nil
+      preMatchStartDistanceMeters = nil
       preMatchClosest = nil
+      preMatchTravel = nil
+      preMatchScan = nil
     }
     // The anchor moves only with an accepted fix, and takes that fix's own time and speed. The
     // first fix of a route is a placement: it becomes the anchor even when it is off the route.
@@ -1220,32 +1246,69 @@ final class NavigationCore {
     progressHighWaterMark = 0
     recoverySampleCount = 0
     hasMatchedRoute = false
-    preMatchStart = nil
+    preMatchStartDistanceMeters = nil
     preMatchClosest = nil
+    preMatchTravel = nil
+    preMatchScan = nil
   }
 
   /// Records a fix taken before the first match and says whether the vehicle is leaving rather
-  /// than making for the route: further from all of it than the closest it has come, or further
-  /// from where it was first seen than reaching the route from there would take, each beyond
-  /// its margin and both fixes' accuracy. See `preMatchDepartureMarginMeters`.
+  /// than making for the route: further from all of it than the closest it has come, beyond
+  /// the margin and both fixes' accuracy, or more credible travel than the budget. See
+  /// `preMatchDepartureMarginMeters`.
   private func recordPreMatchFix(
     _ sample: NavigationLocationSample,
     on route: RoutePolyline,
     accuracyMeters: Double
   ) -> Bool {
-    let distanceMeters = route.nearestDistanceMeters(to: sample.coordinate)
-    let start = preMatchStart
-      ?? (raw: sample.coordinate, accuracyMeters: accuracyMeters, distanceMeters: distanceMeters)
-    preMatchStart = start
-    let here = (distanceMeters: distanceMeters, accuracyMeters: accuracyMeters)
-    let closest = preMatchClosest.map { $0.distanceMeters <= distanceMeters ? $0 : here } ?? here
-    preMatchClosest = closest
-    let isMovingAway = distanceMeters
-      > closest.distanceMeters + preMatchDepartureMarginMeters + accuracyMeters
-      + closest.accuracyMeters
-    let hasWandered = navigationDistanceMeters(from: start.raw, to: sample.coordinate)
-      > start.distanceMeters + preMatchWanderMeters + accuracyMeters + start.accuracyMeters
-    return isMovingAway || hasWandered
+    guard accuracyMeters <= navigationPoorAccuracyMeters else {
+      return false
+    }
+    let distance = preMatchDistance(to: sample.coordinate, on: route)
+    let startDistanceMeters = preMatchStartDistanceMeters ?? distance.meters
+    preMatchStartDistanceMeters = startDistanceMeters
+    // Only an exact distance can be the closest approach; a lower bound could understate it.
+    if distance.isExact, preMatchClosest.map({ distance.meters < $0.distanceMeters }) ?? true {
+      preMatchClosest = (distance.meters, accuracyMeters)
+    }
+    var travel = preMatchTravel ?? (sample.coordinate, accuracyMeters, 0)
+    let step = navigationDistanceMeters(from: travel.from, to: sample.coordinate)
+    let isStationary = sample.speedMetersPerSecond.map {
+      $0 < preMatchStationarySpeedMetersPerSecond
+    } ?? false
+    if !isStationary, step > max(preMatchTravelStepMeters, travel.accuracyMeters + accuracyMeters) {
+      travel = (sample.coordinate, accuracyMeters, travel.meters + step)
+    }
+    preMatchTravel = travel
+    let isMovingAway = preMatchClosest.map {
+      distance.meters
+        > $0.distanceMeters + preMatchDepartureMarginMeters + accuracyMeters + $0.accuracyMeters
+    } ?? false
+    return isMovingAway || travel.meters > startDistanceMeters + preMatchTravelBudgetMeters
+  }
+
+  /// Distance from `coordinate` to all of the route. Within 1 km the grid answers exactly.
+  /// Further away a full scan does, but only once the vehicle has moved
+  /// `preMatchRescanMeters` since the last one; in between, the last scan less that movement
+  /// is a lower bound, which can only understate how far the vehicle has gone from the route.
+  private func preMatchDistance(
+    to coordinate: NavigationCoordinate,
+    on route: RoutePolyline
+  ) -> (meters: Double, isExact: Bool) {
+    if let nearby = route.nearbyDistanceMeters(to: coordinate) {
+      preMatchScan = nil
+      return (nearby, true)
+    }
+    if let scan = preMatchScan {
+      let moved = navigationDistanceMeters(from: scan.coordinate, to: coordinate)
+      if moved < preMatchRescanMeters {
+        return (max(1_000, scan.distanceMeters - moved), moved == 0)
+      }
+    }
+    let scanned = route.scannedDistanceMeters(to: coordinate)
+    preMatchFullScanCount += 1
+    preMatchScan = (coordinate, scanned)
+    return (scanned, true)
   }
 
   /// Whether a fix shows which pass of the route `projection` is on: no other pass fits it, or
