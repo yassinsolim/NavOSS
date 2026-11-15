@@ -638,6 +638,28 @@ final class CommunityTrafficServiceRulesTests: XCTestCase {
 final class CommunityTrafficEmbargoTests: XCTestCase {
   private let start = Date()
 
+  func testA403ThatArrivesAfterTheTripEndedStillHoldsBackTheNextTrip() async {
+    let clock = Clock(start)
+    let embargo = NavOSSTrafficEmbargoStore()
+    let transport = SlowCredentialTransport()
+    let session = NavOSSTrafficSharingSession(
+      transport: transport, now: { clock.value }, embargo: embargo)
+    await session.setEnabled(true)
+    let starting = Task { await session.startTrip(protectedPoints: [origin]) }
+    let asked = await eventually { transport.gate.waiting == 1 }
+    XCTAssertTrue(asked, "the credential request is waiting for its answer")
+    await session.endTrip()
+    transport.gate.release()  // the answer: 403, retry-after one hour
+    await starting.value
+    XCTAssertEqual(embargo.load(), start.addingTimeInterval(3_600))
+    clock.value = start.addingTimeInterval(600)
+    await session.startTrip(protectedPoints: [origin])
+    let requests = await transport.credentialRequests
+    XCTAssertEqual(requests, 1, "the next trip does not ask before retry-after")
+    let state = await session.state
+    XCTAssertEqual(state, .startsLater(until: start.addingTimeInterval(3_600)))
+  }
+
   func testAnInstallationTooNewDeadlineSurvivesARelaunch() async {
     let clock = Clock(start)
     let embargo = NavOSSTrafficEmbargoStore(
@@ -741,5 +763,27 @@ final class CommunityTrafficClientCancellationTests: XCTestCase {
     gate.setNavigating(false)
     let outcome = await upload.value
     XCTAssertEqual(outcome, .dropped, "the response is never delivered: the request was cancelled")
+  }
+}
+
+/// The first credential request waits for `gate`, then answers 403 with a one-hour retry-after.
+actor SlowCredentialTransport: NavOSSTrafficTransport {
+  nonisolated let gate = StallGate()
+  private(set) var credentialRequests = 0
+
+  func trafficStatus() async throws -> NavOSSTrafficStatus {
+    NavOSSTrafficStatus(mode: .live, accepting: true, rules: NavOSSTrafficProbeRules())
+  }
+
+  func trafficCredential() async throws -> NavOSSTrafficCredential {
+    credentialRequests += 1
+    await gate.wait()
+    throw NavOSSCommunityFailure.installationTooNew(retryAfterSeconds: 3_600)
+  }
+
+  func uploadProbes(
+    _ batch: NavOSSTrafficProbeBatch, credential: String, permit: NavOSSTrafficUploadPermit
+  ) async -> NavOSSTrafficUploadOutcome {
+    .dropped
   }
 }

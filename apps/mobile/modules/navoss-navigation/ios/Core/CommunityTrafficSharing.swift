@@ -518,11 +518,16 @@ public actor NavOSSTrafficSharingSession {
       credential = issued
       return true
     } catch let failure as NavOSSCommunityFailure {
-      guard generation == current else { return false }
-      switch failure {
-      case let .installationTooNew(retryAfter):
+      if case let .installationTooNew(retryAfter) = failure {
+        // The deadline is about the installation, not this trip: kept even when the trip that
+        // asked has ended or sharing was turned off meanwhile.
         let until = now().addingTimeInterval(TimeInterval(retryAfter ?? 24 * 60 * 60))
         embargo.save(until)
+      }
+      guard generation == current else { return false }
+      switch failure {
+      case .installationTooNew:
+        guard let until = embargo.load() else { return false }
         restriction = .startsLater(until)
         discardCollection()
         set(.startsLater(until: until))
