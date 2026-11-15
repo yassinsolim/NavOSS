@@ -47,7 +47,7 @@ final class NavigationTripStartTests: XCTestCase {
   /// from the recorded production responses (the preview's three routes, or the reroute's
   /// one), and the replacement is chosen with the service's rule.
   private final class TripHarness {
-    let session = NavigationSession()
+    private(set) var session = NavigationSession()
     var consent = NavigationRerouteConsent()
     let mode: NavOSSRerouteMode
     let preview: [NavOSSCarPlayTrip]
@@ -61,20 +61,69 @@ final class NavigationTripStartTests: XCTestCase {
     private(set) var history: [(update: NavigationSessionUpdate, prompt: String?)] = []
     let planner = NavigationSpeechPlanner()
     var time = NavigationTripStartTests.startTime
+    /// With `persisting`, the trip is kept where the service keeps it (`NavOSSActiveTripStore`),
+    /// with what the service checkpoints, so that `relaunch` can restore it.
+    let store: NavOSSActiveTripStore?
+    private let defaults: UserDefaults?
+    private let suiteName = "org.navoss.tests.trip-start.\(UUID().uuidString)"
+    private var lastCheckpoint: NavigationResumeContext?
+    private var lastCheckpointAt: Date?
+    /// A restored trip whose first fixes are judged by `navOSSPersistedNavigationDecision`.
+    private var validatesRestoredTrip = false
+    /// The restored trip was ended for being off its route ("Trip ended").
+    private(set) var endedOffRoute = false
+    /// `history` index of the first update after the last relaunch.
+    private(set) var relaunchedAt = 0
 
     init(
       selected: NavOSSCarPlayTrip,
       preview: [NavOSSCarPlayTrip],
       reroute: [NavOSSCarPlayTrip],
-      mode: NavOSSRerouteMode = .adaptive
+      mode: NavOSSRerouteMode = .adaptive,
+      persisting: Bool = false
     ) throws {
       self.mode = mode
       self.preview = preview
       self.reroute = reroute
+      defaults = persisting ? UserDefaults(suiteName: suiteName) : nil
+      store = defaults.map { NavOSSActiveTripStore(defaults: $0) }
       try session.start(selected)
+      store?.save(selected)
+    }
+
+    deinit {
+      defaults?.removePersistentDomain(forName: suiteName)
     }
 
     var activeRouteId: String? { session.trip?.id }
+
+    /// The app is killed (the service and its session are gone, the store stays) and launched
+    /// again `seconds` later: the stored trip is resumed as `resumePersistedNavigation` does.
+    func relaunch(after seconds: TimeInterval) throws {
+      time += seconds
+      session = NavigationSession()
+      consent = NavigationRerouteConsent()
+      lastCheckpoint = nil
+      lastCheckpointAt = nil
+      relaunchedAt = history.count
+      guard let store, let trip = store.load() else { return }
+      let resume = store.loadProgress(for: trip)
+      try session.start(trip, resume: resume)
+      validatesRestoredTrip = true
+    }
+
+    /// What the service writes after a published update (`persistProgressIfDue`).
+    private func checkpoint(_ update: NavigationSessionUpdate) {
+      let now = Date(timeIntervalSinceReferenceDate: time)
+      guard let store, let trip = update.trip, navOSSIsProgressCheckpoint(update.snapshot),
+        let progress = session.resumeContext,
+        navOSSShouldPersistProgress(
+          progress, lastPersisted: lastCheckpoint, now: now, lastPersistedAt: lastCheckpointAt)
+      else { return }
+      lastCheckpoint = progress
+      lastCheckpointAt = now
+      store.saveProgress(progress, forTripId: trip.id)
+    }
 
     func fix(
       _ coordinate: NavigationCoordinate,
@@ -84,12 +133,31 @@ final class NavigationTripStartTests: XCTestCase {
       after seconds: TimeInterval
     ) throws {
       time += seconds
+      guard session.trip != nil else { return }
       let update = try session.updateLocation(
         NavigationLocationSample(
           coordinate: coordinate, courseDegrees: course, horizontalAccuracyMeters: accuracy,
           speedMetersPerSecond: speed, timestamp: time))
       latest = update
+      // A restored trip waiting for its first fixes to be judged publishes nothing but the trip
+      // and the raw position, and is not rerouted; one judged off its route is ended.
+      if validatesRestoredTrip {
+        switch navOSSPersistedNavigationDecision(update.snapshot) {
+        case .discard:
+          session.clear()
+          store?.clear()
+          validatesRestoredTrip = false
+          endedOffRoute = true
+          return
+        case .wait:
+          history.append((update, nil))
+          return
+        case .publish:
+          validatesRestoredTrip = false
+        }
+      }
       history.append((update, planner.prompt(for: update, now: time)?.text))
+      checkpoint(update)
       let isOffRoute = update.snapshot.phase == .tracking && update.snapshot.isOffRoute
       if isOffRoute { offRouteFixes += 1 }
       switch consent.evaluate(
@@ -123,6 +191,9 @@ final class NavigationTripStartTests: XCTestCase {
 
     private func install(_ trip: NavOSSCarPlayTrip) throws {
       try session.start(trip)
+      store?.save(trip)
+      lastCheckpoint = nil
+      lastCheckpointAt = nil
       consent.reset()
       installed.append(trip.id)
     }
@@ -173,13 +244,17 @@ final class NavigationTripStartTests: XCTestCase {
     return result
   }
 
-  private func harness(selecting road: String, mode: NavOSSRerouteMode = .adaptive) throws
-    -> (TripHarness, NavOSSCarPlayTrip)
-  {
+  private func harness(
+    selecting road: String, mode: NavOSSRerouteMode = .adaptive, persisting: Bool = false
+  ) throws -> (TripHarness, NavOSSCarPlayTrip) {
     let preview = try Self.trips("square-one-scarborough.v2")
     let reroute = try Self.trips("square-one-scarborough-reroute.v2")
     let selected = try Self.route(preview, via: road)
-    return (try TripHarness(selected: selected, preview: preview, reroute: reroute, mode: mode), selected)
+    return (
+      try TripHarness(
+        selected: selected, preview: preview, reroute: reroute, mode: mode, persisting: persisting),
+      selected
+    )
   }
 
   // MARK: The recorded data
@@ -632,6 +707,136 @@ final class NavigationTripStartTests: XCTestCase {
     let elapsed = Date().timeIntervalSince(scanStart)
     // Recorded for the review: 700 fixes including at most 12 full scans of 30,000 segments.
     print("700 pre-match fixes, \(core.preMatchFullScanCount) full scans: \(elapsed) s")
+  }
+
+  // MARK: Restored after the app was closed
+
+  /// Release validation of main at 82 (`r2-parked2`): the driver chose the third route (QEW and
+  /// Gardiner) and tapped Start parked in the mall, 100 m from the road; the app was closed and
+  /// opened again where the car still stood. The trip was ended ("Trip ended · … no longer on its
+  /// route"). A trip saved before its first match is restored as it was started: the chosen
+  /// route, acquiring, silent, with no route request, in every reroute mode.
+  func testARestoredTripStartedParkedOffTheRoadKeepsTheChosenRouteAndIsAcquiring() throws {
+    for mode in NavOSSRerouteMode.allCases {
+      let (trip, gardiner) = try harness(
+        selecting: "Gardiner Expressway", mode: mode, persisting: true)
+      XCTAssertNotEqual(try Self.trips("square-one-scarborough.v2").first?.id, gardiner.id)
+      try trip.standStill(at: Self.parked, seconds: 30)
+      try trip.relaunch(after: 30)
+      try trip.standStill(at: Self.parked, seconds: 120)
+      XCTAssertFalse(trip.endedOffRoute, "\(mode): the driver never left a route")
+      XCTAssertEqual(trip.activeRouteId, gardiner.id, "\(mode)")
+      XCTAssertEqual(trip.store?.load()?.id, gardiner.id, "\(mode): still the stored trip")
+      XCTAssertEqual(trip.requests, 0, "\(mode): no replacement is asked for")
+      XCTAssertEqual(trip.proposals, 0, "\(mode)")
+      XCTAssertFalse(trip.session.hasMatchedRoute, "\(mode)")
+      assertAcquiring(trip.history[trip.relaunchedAt...], "\(mode): restored, parked")
+    }
+  }
+
+  /// The restored trip then joins its route as a fresh start does: guidance starts at the first
+  /// match, on the chosen route, and nothing is asked of the server.
+  func testARestoredTripStartedParkedOffTheRoadJoinsTheRouteAndIsGuided() throws {
+    let (trip, gardiner) = try harness(selecting: "Gardiner Expressway", persisting: true)
+    try trip.standStill(at: Self.parked, seconds: 30)
+    try trip.relaunch(after: 30)
+    try trip.standStill(at: Self.parked, seconds: 10)
+    let parked = trip.history.count
+    try trip.drive([Self.parked] + Self.points(gardiner, upToMeters: 3_000), speed: 12)
+    XCTAssertFalse(trip.endedOffRoute)
+    XCTAssertEqual(trip.requests, 0)
+    XCTAssertEqual(trip.activeRouteId, gardiner.id)
+    XCTAssertTrue(trip.session.hasMatchedRoute)
+    let firstMatch = try XCTUnwrap(
+      trip.history.indices.first { trip.history[$0].update.snapshot.matchedCoordinate != nil })
+    assertAcquiring(trip.history[parked..<firstMatch], "restored, driving to the road")
+    XCTAssertTrue(
+      trip.history[firstMatch...].contains { $0.prompt != nil }, "guidance is spoken once matched")
+    XCTAssertNotNil(trip.latest?.snapshot.matchedCoordinate)
+    XCTAssertFalse(try XCTUnwrap(trip.latest).snapshot.isOffRoute)
+  }
+
+  /// Restored, then driven away from the route: rerouted under the rules of a fresh start,
+  /// within a short distance of moving away, to the alternative closest to the chosen route.
+  func testARestoredTripStartedParkedOffTheRoadThenDrivenAwayIsRerouted() throws {
+    let (trip, gardiner) = try harness(selecting: "Gardiner Expressway", persisting: true)
+    try trip.standStill(at: Self.parked, seconds: 30)
+    try trip.relaunch(after: 30)
+    try trip.standStill(at: Self.parked, seconds: 10)
+    XCTAssertEqual(trip.requests, 0)
+    var position = Self.parked
+    var driven = 0.0
+    while trip.requests == 0, driven < 400 {
+      let next = Self.offset(position, east: 0, north: -10)
+      try trip.fix(next, speed: 10, course: 180, after: 1)
+      position = next
+      driven += 10
+    }
+    XCTAssertFalse(trip.endedOffRoute)
+    XCTAssertEqual(trip.requests, 1)
+    XCTAssertLessThanOrEqual(driven, 120, "rerouted soon after moving away")
+    XCTAssertEqual(trip.installed, [gardiner.id])
+  }
+
+  /// The car was moved while the app was closed. A few metres across the lot changes nothing.
+  /// Kilometres away from the route, the restored trip is judged against how close the car had
+  /// come before the app closed, as if it had been running: the car has gone away from the
+  /// route, so it is rerouted from where it now is (once: the replacement starts there), not
+  /// left acquiring a route it is no longer near, and not ended.
+  func testARestoredTripMovedWhileTheAppWasClosedIsJudgedFromBeforeIt() throws {
+    let (nearby, gardiner) = try harness(selecting: "Gardiner Expressway", persisting: true)
+    try nearby.standStill(at: Self.parked, seconds: 30)
+    try nearby.relaunch(after: 60)
+    try nearby.standStill(at: Self.offset(Self.parked, east: 30, north: 0), seconds: 60)
+    XCTAssertFalse(nearby.endedOffRoute)
+    XCTAssertEqual(nearby.requests, 0)
+    XCTAssertEqual(nearby.activeRouteId, gardiner.id)
+
+    let (far, _) = try harness(selecting: "Gardiner Expressway", persisting: true)
+    try far.standStill(at: Self.parked, seconds: 30)
+    try far.relaunch(after: 600)
+    let moved = Self.offset(Self.parked, east: 0, north: -3_000)
+    try far.standStill(at: moved, seconds: 8)
+    XCTAssertFalse(far.endedOffRoute)
+    XCTAssertEqual(far.requests, 1, "three fixes 3 km from a route the car had come within 100 m of")
+    try far.standStill(at: moved, seconds: 120)
+    XCTAssertEqual(far.requests, 1, "the replacement starts where the car stands")
+  }
+
+  /// A trip that had matched its route before the app was closed, restored somewhere off it
+  /// (here back in the mall), is still ended as before.
+  func testAMatchedTripRestoredOffItsRouteIsStillEnded() throws {
+    let (trip, _) = try harness(selecting: "Gardiner Expressway", persisting: true)
+    let gardiner = try XCTUnwrap(trip.session.trip)
+    try trip.standStill(at: Self.parked, seconds: 10)
+    try trip.drive([Self.parked] + Self.points(gardiner, upToMeters: 3_000), speed: 12)
+    XCTAssertTrue(trip.session.hasMatchedRoute)
+    try trip.relaunch(after: 60)
+    try trip.standStill(at: Self.parked, seconds: 10)
+    XCTAssertTrue(trip.endedOffRoute)
+    XCTAssertNil(trip.activeRouteId)
+    XCTAssertNil(trip.store?.load())
+    XCTAssertEqual(trip.requests, 0)
+  }
+
+  /// A trip that had matched its route, restored on it further along, resumes as before.
+  func testAMatchedTripRestoredOnItsRouteResumes() throws {
+    let (trip, gardiner) = try harness(selecting: "Gardiner Expressway", persisting: true)
+    try trip.standStill(at: Self.parked, seconds: 10)
+    let first = Self.points(gardiner, upToMeters: 3_000)
+    try trip.drive([Self.parked] + first, speed: 12)
+    try trip.relaunch(after: 20)
+    let rest = Array(Self.points(gardiner, upToMeters: 6_000).dropFirst(first.count - 1))
+    try trip.drive(rest, speed: 12)
+    XCTAssertFalse(trip.endedOffRoute)
+    XCTAssertEqual(trip.requests, 0)
+    XCTAssertEqual(trip.activeRouteId, gardiner.id)
+    XCTAssertTrue(trip.session.hasMatchedRoute)
+    XCTAssertTrue(trip.history[trip.relaunchedAt...].contains { $0.prompt != nil })
+    let snapshot = try XCTUnwrap(trip.latest?.snapshot)
+    XCTAssertNotNil(snapshot.matchedCoordinate)
+    XCTAssertEqual(
+      snapshot.routeProgress * (trip.session.routeLengthMeters ?? 0), 6_000, accuracy: 200)
   }
 
   private static func syntheticTrip(_ points: [NavigationCoordinate]) -> NavOSSCarPlayTrip {
