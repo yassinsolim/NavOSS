@@ -491,6 +491,7 @@ export function MapScreen() {
         metrics={metrics}
         onClose={c.roadEventsSheet.close}
         onClosed={c.roadEventsSheet.onClosed}
+        onOpenLink={c.onOpenExternalUrl}
         onSelect={c.roadEventsSheet.onSelect}
         refreshDelayed={overlays.roadEventRefreshDelayed}
         snapshot={overlays.roadEventSnapshot}

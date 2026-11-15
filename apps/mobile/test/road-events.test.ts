@@ -240,6 +240,21 @@ describe('road-event wording', () => {
     );
   });
 
+  it("carries each source's required attribution and licence link", () => {
+    const lines = roadEventSourceLines(alberta, CAPTURED);
+    const edmonton = lines.find((line) => line.sourceId === 'edmonton-traffic-disruptions');
+    expect(edmonton).toMatchObject({
+      attribution:
+        'Contains information licensed under the Open Government Licence \u2013 City of Edmonton.',
+      licenseUrl: 'https://data.edmonton.ca/stories/s/Open-Government-Licence-Edmonton/msh8-if28',
+    });
+    for (const line of lines) {
+      const source = alberta.sources.find((candidate) => candidate.sourceId === line.sourceId);
+      expect(line.attribution).toBe(source?.attribution);
+      expect(line.licenseUrl).toBe(source?.licenseUrl);
+    }
+  });
+
   it('says when a feed is not refreshing or unavailable rather than showing it as current', () => {
     const stale: ProvincialRoadEventResponse = {
       ...ontario,

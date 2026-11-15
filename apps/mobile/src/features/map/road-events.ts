@@ -1,5 +1,6 @@
 import type {
   KelownaRoadEvent,
+  KelownaRoadEventResponse,
   OfficialRoadEventResponse,
   ProvincialRoadEvent,
   ProvincialRoadEventRegion,
@@ -296,6 +297,9 @@ export function roadEventCredit(
 }
 
 export interface RoadEventSourceLine {
+  /** The acknowledgement the source's licence requires. */
+  attribution: string;
+  licenseUrl: string;
   sourceId: string;
   text: string;
   tone: 'neutral' | 'warning';
@@ -310,9 +314,11 @@ export function roadEventSourceLines(
   now: number,
 ): RoadEventSourceLine[] {
   return snapshot.sources.map((source) => {
+    const credit = { attribution: source.attribution, licenseUrl: source.licenseUrl };
     const label = `${source.name} · ${source.confidence === 'official' ? 'Official' : 'Unverified'}`;
     if (source.status === 'not-configured') {
       return {
+        ...credit,
         sourceId: source.sourceId,
         text: `${source.name} · Not connected on this server`,
         tone: 'neutral',
@@ -320,6 +326,7 @@ export function roadEventSourceLines(
     }
     if (!isSourceServed(source, now)) {
       return {
+        ...credit,
         sourceId: source.sourceId,
         text: `${source.name} · Unavailable right now`,
         tone: 'warning',
@@ -331,17 +338,43 @@ export function roadEventSourceLines(
         : ` · Updated ${relativeAge(Date.parse(source.updatedAt), now)}`;
     if (source.status === 'stale') {
       return {
+        ...credit,
         sourceId: source.sourceId,
         text: `${label}${updated} · Not refreshing, showing the last copy`,
         tone: 'warning',
       };
     }
     return {
+      ...credit,
       sourceId: source.sourceId,
       text: `${label}${updated}${source.incomplete ? ' · Some entries could not be read' : ''}`,
       tone: source.incomplete ? 'warning' : 'neutral',
     };
   });
+}
+
+/** Credits for the older single-source shapes (Calgary `/v1/events`, Kelowna). */
+export function legacyRoadEventSourceLines(
+  snapshot: RoadEventResponse | KelownaRoadEventResponse,
+): RoadEventSourceLine[] {
+  if ('sources' in snapshot) {
+    return snapshot.sources.map((source) => ({
+      attribution: source.attribution,
+      licenseUrl: source.licenseUrl,
+      sourceId: source.sourceId,
+      text: `City of Calgary ${source.confidence === 'official' ? 'construction · Official' : 'incidents · Unverified'}${snapshot.stale ? ' · Stale snapshot' : ''}`,
+      tone: snapshot.stale ? 'warning' : 'neutral',
+    }));
+  }
+  return [
+    {
+      attribution: snapshot.source.attribution,
+      licenseUrl: snapshot.source.licenseUrl,
+      sourceId: snapshot.source.sourceId,
+      text: `DriveBC · Official${snapshot.stale ? ' · Stale snapshot' : ''}`,
+      tone: snapshot.stale ? 'warning' : 'neutral',
+    },
+  ];
 }
 
 /** Source and freshness pill on the map. Undefined when the overlay is off or not published. */

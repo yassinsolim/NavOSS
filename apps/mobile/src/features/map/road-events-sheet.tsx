@@ -1,9 +1,10 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fullSheetHeight, type ScreenMetrics } from '@/features/map/overlay-layout';
 import {
   isProvincialSnapshot,
+  legacyRoadEventSourceLines,
   type MapRoadEvent,
   roadEventAgeLabel,
   roadEventAvailability,
@@ -11,7 +12,6 @@ import {
   roadEventSourceLines,
   roadEventSourceName,
   type RoadEventSnapshot,
-  roadEventStatusLabel,
   roadEventTypeLabel,
 } from '@/features/map/road-events';
 import { createThemedStyles, radius, space, typography, useTheme } from '@/theme';
@@ -47,6 +47,7 @@ export function RoadEventsSheet({
   metrics,
   onClose,
   onClosed,
+  onOpenLink,
   onSelect,
   refreshDelayed,
   snapshot,
@@ -56,6 +57,7 @@ export function RoadEventsSheet({
   metrics: ScreenMetrics;
   onClose: () => void;
   onClosed: () => void;
+  onOpenLink: (url: string) => void;
   onSelect: (event: MapRoadEvent) => void;
   refreshDelayed: boolean;
   snapshot: RoadEventSnapshot | undefined;
@@ -72,19 +74,7 @@ export function RoadEventsSheet({
     ? roadEventSourceLines(snapshot, now)
     : snapshot === undefined
       ? []
-      : [
-          {
-            sourceId: 'legacy',
-            text:
-              roadEventStatusLabel({
-                hasFeed: true,
-                now,
-                refreshDelayed: false,
-                snapshot,
-              })?.replace(/^Road events · /u, '') ?? '',
-            tone: snapshot.stale ? ('warning' as const) : ('neutral' as const),
-          },
-        ];
+      : legacyRoadEventSourceLines(snapshot);
 
   return (
     <ModalSheet
@@ -127,13 +117,30 @@ export function RoadEventsSheet({
               <SectionTitle>Sources</SectionTitle>
               <View style={styles.card}>
                 {sourceLines.map((line) => (
-                  <Text
-                    key={line.sourceId}
-                    maxFontSizeMultiplier={1.5}
-                    style={[styles.sourceLine, line.tone === 'warning' && styles.sourceWarning]}
-                  >
-                    {line.text}
-                  </Text>
+                  <View key={line.sourceId} style={styles.sourceRow}>
+                    <Text
+                      maxFontSizeMultiplier={1.5}
+                      style={[styles.sourceLine, line.tone === 'warning' && styles.sourceWarning]}
+                    >
+                      {line.text}
+                    </Text>
+                    <Text maxFontSizeMultiplier={1.5} style={styles.attribution}>
+                      {line.attribution}
+                    </Text>
+                    <Pressable
+                      accessibilityLabel={`Licence for ${line.text.split(' · ')[0] ?? 'this source'}`}
+                      accessibilityRole="link"
+                      hitSlop={12}
+                      onPress={() => {
+                        onOpenLink(line.licenseUrl);
+                      }}
+                      style={styles.licenceLink}
+                    >
+                      <Text maxFontSizeMultiplier={1.5} style={styles.licenceText}>
+                        Licence
+                      </Text>
+                    </Pressable>
+                  </View>
                 ))}
               </View>
             </View>
@@ -210,7 +217,11 @@ const useStyles = createThemedStyles(({ colors }) =>
     divider: { backgroundColor: colors.border, height: StyleSheet.hairlineWidth },
     hint: { ...typography.footnote, color: colors.textTertiary },
     section: { gap: space.sm },
-    sourceLine: { ...typography.footnote, color: colors.textSecondary, paddingVertical: space.sm },
+    attribution: { ...typography.footnote, color: colors.textTertiary },
+    licenceLink: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
+    licenceText: { ...typography.footnote, color: colors.primaryText },
+    sourceLine: { ...typography.footnote, color: colors.textSecondary },
+    sourceRow: { gap: 2, paddingTop: space.sm },
     sourceWarning: { color: colors.warningText },
   }),
 );
