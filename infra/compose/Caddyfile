@@ -1,6 +1,21 @@
 {
   admin off
   auto_https off
+
+  # Proxy errors must not record who asked or what they asked for: no client address, no
+  # request headers (Cf-Connecting-Ip carries the driver address), no query string.
+  log default {
+    format filter {
+      wrap json
+      fields {
+        request>remote_ip delete
+        request>remote_port delete
+        request>client_ip delete
+        request>headers delete
+        request>uri delete
+      }
+    }
+  }
 }
 
 :8080 {
