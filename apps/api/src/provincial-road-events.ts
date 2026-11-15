@@ -34,8 +34,8 @@ export type ProvincialRoadEventFeeds = Readonly<
 
 /**
  * Newest-first ordering key: the source's update, report or start instant, else its report or
- * start date (start of that day). A time after `ceiling` (a source clock running ahead) counts as
- * `ceiling`, so it cannot pin an event above genuinely newer ones. The phone uses the same key.
+ * start date (start of that day). A time after `ceiling` (the source's check time; a source clock
+ * running ahead) counts as `ceiling`, so it cannot pin an event above genuinely newer ones. The phone uses the same key.
  */
 export function roadEventRecency(event: ProvincialRoadEvent, ceiling: number): number {
   const instant = event.updatedAt ?? event.reportedAt ?? event.startsAt;
@@ -60,8 +60,15 @@ export function createProvincialRoadEventService(
       }
       const now = clock();
       const events = snapshots
-        .flatMap((snapshot) => snapshot.events)
-        .map((event) => ({ event, recency: roadEventRecency(event, now) }))
+        .flatMap(({ events: sourceEvents, source }) => {
+          // Cap at the snapshot's own check time, as the phone does: a retained stale copy
+          // must not gain recency with every later response.
+          const ceiling = source.checkedAt === undefined ? now : Date.parse(source.checkedAt);
+          return sourceEvents.map((event) => ({
+            event,
+            recency: roadEventRecency(event, ceiling),
+          }));
+        })
         .sort((left, right) =>
           left.recency === right.recency
             ? left.event.id.localeCompare(right.event.id, 'en-CA')

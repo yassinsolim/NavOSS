@@ -557,6 +557,58 @@ describe('provincial road-event service', () => {
     ]);
   });
 
+  it("caps a future timestamp at its own source's check time, not the response time", async () => {
+    let now = Date.parse('2026-11-15T10:00:00Z');
+    let torontoUp = true;
+    const base = normalizeTorontoRestriction(
+      toronto.payload.Closure.find((row) => row.currImpact === 'High'),
+    );
+    if (base === undefined) throw new Error('fixture has an affecting row');
+    const torontoFeed = createRoadEventFeed(
+      { ...descriptor, sourceId: 'toronto-road-restrictions' },
+      () =>
+        torontoUp
+          ? Promise.resolve({
+              droppedRows: 0,
+              events: [{ ...base, id: 'toronto-skewed', updatedAt: '2026-11-16T10:00:00.000Z' }],
+              totalRows: 1,
+            })
+          : Promise.reject(new Error('offline')),
+      { clock: () => now },
+    );
+    const ontario511Event = normalize511Event(ontario511.rows[0], 'ontario');
+    if (ontario511Event === undefined) throw new Error('documented sample');
+    const feed511 = createRoadEventFeed(
+      { ...descriptor, sourceId: 'ontario-511-events' },
+      () =>
+        Promise.resolve({
+          droppedRows: 0,
+          events: [
+            {
+              ...ontario511Event,
+              endsAt: undefined,
+              id: 'ontario-511-real',
+              startsAt: '2026-11-15T09:00:00.000Z',
+              updatedAt: '2026-11-15T10:04:00.000Z',
+            },
+          ],
+          totalRows: 1,
+        }),
+      { clock: () => now },
+    );
+    const service = createProvincialRoadEventService(
+      { alberta: [], 'british-columbia': [], ontario: [torontoFeed, feed511] },
+      () => now,
+    );
+    await torontoFeed.getSnapshot();
+    torontoUp = false;
+    now = Date.parse('2026-11-15T10:05:00Z');
+    expect((await service.getRoadEvents('ontario')).events.map((event) => event.id)).toEqual([
+      'ontario-511-real',
+      'toronto-skewed',
+    ]);
+  });
+
   it('fails closed when no source of the region has data', async () => {
     const dead = createRoadEventFeed({ ...descriptor, sourceId: 'toronto-road-restrictions' }, () =>
       Promise.reject(new Error('dead')),
