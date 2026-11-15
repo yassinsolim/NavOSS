@@ -411,6 +411,9 @@ public actor NavOSSCommunityClient {
     else {
       return .dropped
     }
+    // Cancelled (sharing turned off or navigation ended): never start sending. Once started,
+    // `URLSession` cancels the request with the task.
+    guard !Task.isCancelled else { return .dropped }
     // A batch that did not arrive is dropped like any other: never retried or kept.
     guard let (_, response) = try? await session.data(for: request),
       let status = (response as? HTTPURLResponse)?.statusCode

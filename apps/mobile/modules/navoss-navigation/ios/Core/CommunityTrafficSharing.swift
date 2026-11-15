@@ -59,7 +59,7 @@ public actor NavOSSTrafficSharingSession {
   public private(set) var state: NavOSSTrafficSharingState = .off
   private let transport: NavOSSTrafficTransport
   private var trip: UInt64 = 0
-  private var uploading = false
+  private var uploadTask: Task<Void, Never>?
   /// How many uploads ended in each outcome this process: counts only, never content.
   public private(set) var outcomeCounts: [String: Int] = [:]
 
@@ -133,9 +133,12 @@ public actor NavOSSTrafficSharingSession {
   }
 
   /// Arrival, cancellation, or the switch turned off. Held-back fixes and the open batch are
-  /// discarded and the credential forgotten.
+  /// discarded, the upload in flight is cancelled (its batch is never sent) and the credential
+  /// forgotten.
   public func endTrip() {
     trip &+= 1
+    uploadTask?.cancel()
+    uploadTask = nil
     collector?.finish()
     collector = nil
     credential = nil
@@ -164,9 +167,8 @@ public actor NavOSSTrafficSharingSession {
 
   /// Waits for queued uploads (tests and the simulator harness).
   public func drain() async {
-    while uploading || !queue.isEmpty {
-      await Task.yield()
-      if !uploading, !queue.isEmpty { await upload(trip: trip) }
+    while let uploadTask {
+      await uploadTask.value
     }
   }
 
@@ -180,17 +182,18 @@ public actor NavOSSTrafficSharingSession {
     }
     guard state == .sharing else { return }
     queue.append(contentsOf: batches)
-    if !uploading {
+    if uploadTask == nil {
       let current = trip
-      Task { await self.upload(trip: current) }
+      uploadTask = Task { await self.upload(trip: current) }
     }
   }
 
   private func upload(trip current: UInt64) async {
-    guard !uploading else { return }
-    uploading = true
-    defer { uploading = false }
-    while trip == current, !queue.isEmpty {
+    defer {
+      // A newer trip already dropped this task (and may have started another).
+      if trip == current { uploadTask = nil }
+    }
+    while trip == current, !Task.isCancelled, !queue.isEmpty {
       let batch = queue.removeFirst()
       // Never send a batch the server would refuse as stale.
       guard now().timeIntervalSince(batch.capturedAt) < 590 else {
@@ -202,7 +205,7 @@ public actor NavOSSTrafficSharingSession {
       {
         guard await refreshCredential(trip: current) else { return }
       }
-      guard trip == current, let credential else { return }
+      guard trip == current, !Task.isCancelled, let credential else { return }
       let outcome = await transport.uploadProbes(batch, credential: credential.value)
       record(outcome)
       guard trip == current else { return }
