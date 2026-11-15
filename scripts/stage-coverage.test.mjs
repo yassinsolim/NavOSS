@@ -135,6 +135,7 @@ case "$command" in
       *)
         mkdir -p "$state/files/\${2%%:*}"
         cp "$1" "$state/files/\${2%%:*}/\${2##*/}"
+        chmod 0666 "$state/files/\${2%%:*}/\${2##*/}"
         ;;
     esac
     ;;
@@ -298,6 +299,10 @@ test('a mixed-user root import stays resumable', options, async (context) => {
   assert.equal((await stat(join(nominatim, 'postgres'))).uid, 0);
   assert.equal((await stat(join(nominatim, 'staging-password.env'))).uid, 0);
   assert.equal((await stat(join(nominatim, 'staging-password.env'))).mode & 0o777, 0o600);
+  assert.equal(
+    (await stat(join(fixture.state, 'files', 'navoss-nominatim-stage', 'init.sh'))).mode & 0o777,
+    0o666,
+  );
   const status = stageAs(fixture, ['status', 'new-brunswick'], false);
   assert.equal(status.status, 0, status.stderr);
   assert.match(status.stdout, /\.navoss-import-complete/u);
