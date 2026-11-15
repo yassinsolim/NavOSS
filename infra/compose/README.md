@@ -307,10 +307,14 @@ verifies them through a staged API, then switches by changing `.env`. Nothing li
 step 6, and the Alberta+BC artifacts stay until Canada has been proven.
 
 Sized for VM 100 at 6 cores, 24 GiB RAM and a 260 GB artifact disk. Run each step in `tmux` as
-`navoss` from `infra/compose`; every step is resumable by running the same command again. Never run
-two heavy steps at once (`stage-coverage.sh` refuses). During steps 2 and 3 keep at least 4 GiB
-available (`free -h`) and no sustained swap; stop the step (`./stage-coverage.sh stop canada`) if
-not, then rerun it.
+`navoss` from `infra/compose`; every step is resumable by running the same command again. One step
+runs at a time: `inputs`, `valhalla`, `nominatim`, `serve` and `stop` hold
+`/srv/navoss/artifacts/.stage.lock` (`flock`) for their whole run, so a second invocation is refused
+even between Valhalla passes when no container is up, and a heavy step is also refused while the
+staged services from `serve` are running. During steps 2 and 3 keep at least 4 GiB available
+(`free -h`) and no sustained swap; if not, `./stage-coverage.sh stop canada` (from another tmux
+window) ends the running step itself, not only its containers, then removes the staging containers;
+rerun the step to resume.
 
 | Step | Command                                               | Expected time                 | Artifact disk                    | Memory               |
 | ---- | ----------------------------------------------------- | ----------------------------- | -------------------------------- | -------------------- |

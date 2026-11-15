@@ -7,12 +7,14 @@
 #   ./stage-coverage.sh nominatim canada        # search import (≈12–24 h, ≤110 GB peak, 10 GiB)
 #   ./stage-coverage.sh serve     canada        # staged Valhalla + Nominatim + API on 127.0.0.1:18300
 #   ./stage-coverage.sh verify    canada        # check-coverage.sh against the staged API
-#   ./stage-coverage.sh stop      canada        # stop staging containers; artifacts stay
+#   ./stage-coverage.sh stop      canada        # end the running step, remove staging containers
 #   ./stage-coverage.sh status    canada
 #
 # `canada` may be replaced by Geofabrik province names for a regional release, for example
 # `alberta british-columbia ontario` (staged search). Run under tmux: every step is resumable and
-# re-running a finished step only re-verifies it. See docs/architecture/north-america.md.
+# re-running a finished step only re-verifies it. One step runs at a time on the host: `inputs`,
+# `valhalla`, `nominatim`, `serve` and `stop` hold <artifact root>/.stage.lock for their whole run,
+# and a second one is refused. See docs/architecture/north-america.md.
 set -eu
 
 script_dir=$(cd "$(dirname "$0")" && pwd)
@@ -31,6 +33,27 @@ fi
 step=$1
 shift
 label=$(printf '%s' "$*" | tr ' ' '-')
+
+lock_file=${root}/.stage.lock
+holder_file=${root}/.stage.holder
+case "${step}" in
+  inputs | valhalla | nominatim | serve | stop)
+    # A step is its own process group, so `stop` can end it with every child (osmium, docker
+    # clients, waits). Interactive shells already start one per command; anything else re-executes.
+    if [ "$(sed 's/.*) //' /proc/$$/stat | cut -d ' ' -f 3)" != "$$" ]; then
+      exec setsid /bin/sh "$0" "${step}" "$@"
+    fi
+    exec 9>>"${lock_file}"
+    if [ "${step}" != stop ] && ! flock -n 9; then
+      echo "Another staging step is running: $(cut -d ' ' -f 2- "${holder_file}" 2>/dev/null)." >&2
+      echo "Wait for it, or end it with '$0 stop ${label}'." >&2
+      exit 1
+    fi
+    ;;
+esac
+hold_stage_lock() {
+  printf '%s %s %s\n' "$$" "${step}" "${label}" >"${holder_file}"
+}
 
 # Registry ids and ISO codes of the provinces a release holds.
 case "${label}" in
@@ -88,9 +111,11 @@ wait_for() {
 }
 
 refuse_parallel_heavy_step() {
-  for other in navoss-valhalla-stage navoss-nominatim-stage; do
+  # Under the lock: a container left by `serve`, or by a step this one does not resume, still
+  # holds its memory.
+  for other in navoss-valhalla-stage navoss-nominatim-stage navoss-api-stage; do
     if [ "${other}" != "$1" ] && docker ps --format '{{.Names}}' | grep -qx "${other}"; then
-      echo "${other} is running. Run one heavy step at a time ('$0 stop ...')." >&2
+      echo "${other} is running. Run one heavy step at a time ('$0 stop ${label}')." >&2
       exit 1
     fi
   done
@@ -112,6 +137,8 @@ valhalla_run() {
 
 case "${step}" in
   inputs)
+    hold_stage_lock
+    refuse_parallel_heavy_step none
     v=$("${script_dir}/prepare-regional-pbf.sh" "$@")
     "${script_dir}/filter-routing-pbf.sh" "${imports}/${label}-${v}.osm.pbf"
     printf '%s\n' "${v}" >"${version_file}"
@@ -119,6 +146,7 @@ case "${step}" in
     ;;
 
   valhalla)
+    hold_stage_lock
     refuse_parallel_heavy_step navoss-valhalla-stage
     v=$(version)
     stage=${root}/valhalla-${label}-${v}
@@ -164,6 +192,7 @@ case "${step}" in
     ;;
 
   nominatim)
+    hold_stage_lock
     refuse_parallel_heavy_step navoss-nominatim-stage
     v=$(version)
     stage=${root}/nominatim/${label}-${v}
@@ -219,6 +248,7 @@ case "${step}" in
     ;;
 
   serve)
+    hold_stage_lock
     v=$(version)
     valhalla_stage=${root}/valhalla-${label}-${v}
     nominatim_stage=${root}/nominatim/${label}-${v}
@@ -262,14 +292,26 @@ case "${step}" in
     ;;
 
   stop)
-    docker rm -f navoss-api-stage navoss-valhalla-stage >/dev/null 2>&1 || true
-    docker stop navoss-nominatim-stage >/dev/null 2>&1 || true
-    echo 'Staging containers stopped; staged artifacts are kept.'
+    # End the step holding the lock (its whole process group), then take the lock so no step starts
+    # while its containers are removed.
+    if ! flock -n 9; then
+      read -r holder holder_step holder_label <"${holder_file}"
+      kill -TERM "-${holder}" 2>/dev/null || kill -TERM "${holder}" 2>/dev/null || true
+      flock -w "${STAGE_STOP_TIMEOUT:-120}" 9 ||
+        { echo "${holder_step} ${holder_label} (pid ${holder}) did not end; nothing removed." >&2; exit 1; }
+      echo "Stopped ${holder_step} ${holder_label}."
+    fi
+    hold_stage_lock
+    docker rm -f navoss-api-stage navoss-valhalla-stage navoss-nominatim-stage >/dev/null 2>&1 || true
+    echo 'Staging containers removed; staged artifacts are kept.'
     ;;
 
   status)
     v=$(cat "${version_file}" 2>/dev/null || echo none)
     echo "release ${label} ${v}"
+    if [ -e "${lock_file}" ] && ! flock -n "${lock_file}" true; then
+      echo "  step running: $(cut -d ' ' -f 2- "${holder_file}" 2>/dev/null)"
+    fi
     for marker in "${root}/valhalla-${label}-${v}/.pass1-complete" \
       "${root}/valhalla-${label}-${v}/.navoss-stage-complete" \
       "${root}/nominatim/${label}-${v}/.navoss-import-started" \
