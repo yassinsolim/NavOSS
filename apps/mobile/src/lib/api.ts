@@ -220,8 +220,10 @@ export interface FetchAppConfigUntilKnownOptions extends FetchAppConfigOptions {
 const CONFIG_RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 30_000, 60_000] as const;
 
 function waitFor(milliseconds: number, signal?: AbortSignal): Promise<void> {
-  const { promise, resolve, reject } = Promise.withResolvers<void>();
-  const timer = setTimeout(resolve, milliseconds);
+  const { promise, resolve, reject } = Promise.withResolvers<undefined>();
+  const timer = setTimeout(() => {
+    resolve(undefined);
+  }, milliseconds);
   signal?.addEventListener(
     'abort',
     () => {
