@@ -6,7 +6,7 @@
 
 - CSP from `site.json`: `script-src 'none'`, `style-src 'self'`, `img-src 'self' data:`, `font-src 'self'`, `frame-ancestors 'none'`. No inline scripts or style attributes, no third-party request of any kind (analytics, fonts, maps, embeds).
 - Every internal link resolves; every page shares one header and footer; the privacy "On this page" list must match the page's `<h2 id>` sections one for one.
-- The homepage's "In the app today" section may describe report sharing only with the build 80-and-later qualification and opt-in/unconfirmed status. It must not claim live traffic or offline maps are available. Those remain in the labelled "In development" section; traffic collection for evaluation is not display. Evidence: #119.
+- The homepage's "In the app today" section may describe report sharing only with the build 80-and-later qualification and opt-in/unconfirmed status. It may describe offline downloads for Alberta and the Calgary area in build 80, but must say BC has no offline region. It must not claim live traffic is available: traffic collection for evaluation is not display. Province-wide road events are on the service, but the new phone list is not in builds 75 or 80. Evidence: #119, #120, #122 (2026-11-15).
 - The hero must keep stating what the product is and the technical-beta status; illustrations are invented streets and say so.
 
 ## Design

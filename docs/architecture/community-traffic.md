@@ -1030,8 +1030,8 @@ Collection receives exactly the inputs `live` does, so this group is about the i
 - [x] Caddy logs no request headers or client addresses on proxy errors. **Host, 2026-11-15:** it did: with the upstream down, the default error log recorded `Cf-Connecting-Ip`, the peer address and the full URI (a `flow` request's bounding box). The Caddyfile now filters `http.log.error` so only protocol, method, host, status and the dial error remain; re-tested with the same request and deployed.
 - [x] Swap is off or encrypted, and core dumps are disabled, for the API and Valhalla
       containers. **Host, 2026-11-15:** the 4 GiB swapfile is off and removed from `fstab`; Compose sets `ulimits.core: 0` for `api` and `valhalla` (`ulimit -c` reads 0 in both).
-- [ ] The database's availability is monitored: `/ready` reports `database: not_ready` when it
-      is unreachable, and deletion of expired releases waits for the next successful boundary.
+- [x] The database's availability is monitored: `/ready` reports `database: not_ready` when it
+      is unreachable, and deletion of expired releases waits for the next successful boundary. **2026-11-15:** the homelab's Uptime Kuma monitors `https://navoss-api.yassin.app/ready` every 60 seconds with alerts; the monitor was added 2026-11-14 and `/ready` reports the database.
 - [x] The privacy policy in force matches [`docs/privacy.md`](../privacy.md) at this revision. **2026-11-15:** the site deploys from `main`; `https://navoss.yassin.app/privacy` shows the 15 November text. Re-check after every policy change.
 
 ### Before `live`
