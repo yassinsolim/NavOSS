@@ -1,4 +1,3 @@
-import type { GooglePlaceQueryGrantResponse } from '@navoss/contracts';
 import { requireNativeView } from 'expo';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -12,7 +11,10 @@ import {
 } from 'react-native';
 
 import {
-  googleGrantFailureState,
+  type GoogleLoad,
+  GoogleLoadSequencer,
+  type GooglePhase,
+  settlesGoogleLoad,
   googlePlaceDetailsHeight,
   googlePlaceDetailsMessage,
   type GooglePlaceDetailsState,
@@ -23,8 +25,6 @@ import { createThemedStyles, space, typography, useTheme } from '@/theme';
 import { ListRow } from '@/ui/list-row';
 import { StateView } from '@/ui/state-view';
 
-type GooglePhase = 'idle' | 'nearest' | 'search' | 'picked';
-
 interface NativeGooglePlaceDetailsProps {
   latitude: number;
   longitude: number;
@@ -32,6 +32,8 @@ interface NativeGooglePlaceDetailsProps {
   onStateChange: (event: NativeSyntheticEvent<{ state: string }>) => void;
   /** Moved forward only once a NavOSS grant is held for the next Google component load. */
   phase: GooglePhase;
+  /** New for every granted load, so retrying the same phase loads one new component. */
+  request: number;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -68,12 +70,17 @@ export function GooglePlaceDetailsSection({
   const { colors } = useTheme();
   const { height: windowHeight } = useWindowDimensions();
   const grantKey = `${name}:${latitude}:${longitude}`;
-  const firstGrantRef = useRef<{
-    key: string;
-    request: Promise<GooglePlaceQueryGrantResponse>;
-  } | null>(null);
+  const sequencerRef = useRef<{ key: string; sequencer: GoogleLoadSequencer } | null>(null);
+  if (sequencerRef.current?.key !== grantKey) {
+    sequencerRef.current = {
+      key: grantKey,
+      sequencer: new GoogleLoadSequencer(() => reserveGooglePlaceQuery()),
+    };
+  }
+  const sequencer = sequencerRef.current.sequencer;
   const [state, setState] = useState<GooglePlaceDetailsState>('checking');
-  const [phase, setPhase] = useState<GooglePhase>('idle');
+  const [load, setLoad] = useState<GoogleLoad>({ phase: 'idle', request: 0 });
+  const phase = load.phase;
   const activeRef = useRef(true);
 
   useEffect(() => {
@@ -83,33 +90,21 @@ export function GooglePlaceDetailsSection({
     };
   }, []);
 
-  const loadAfterGrant = (
-    next: GooglePhase,
-    request: Promise<GooglePlaceQueryGrantResponse> = reserveGooglePlaceQuery(),
-  ) => {
+  const loadAfterGrant = (next: GooglePhase) => {
+    // A second tap while a grant or load is in progress spends nothing and changes nothing.
+    if (sequencer.inProgress) return;
     setState('checking');
-    void request
-      .then((response) => {
-        if (!activeRef.current) return;
-        if (response.granted) {
-          setPhase(next);
-        } else {
-          setState('unavailable');
-        }
-      })
-      .catch((error: unknown) => {
-        if (activeRef.current) setState(googleGrantFailureState(error));
-      });
+    void sequencer.begin(next).then((outcome) => {
+      if (!activeRef.current || outcome.kind === 'busy') return;
+      if (outcome.kind === 'load') setLoad(outcome.load);
+      else setState(outcome.kind === 'refused' ? 'unavailable' : outcome.state);
+    });
   };
 
   useEffect(() => {
     if (!available) return;
-    if (firstGrantRef.current?.key !== grantKey) {
-      firstGrantRef.current = { key: grantKey, request: reserveGooglePlaceQuery() };
-    }
-    setPhase('idle');
-    loadAfterGrant('nearest', firstGrantRef.current.request);
-    // Runs once per place; loadAfterGrant only reads refs and setters.
+    loadAfterGrant('nearest');
+    // Once per place; a repeated run (React StrictMode) is `busy` and spends no grant.
   }, [available, grantKey]);
 
   const reviewsLink = (
@@ -200,9 +195,11 @@ export function GooglePlaceDetailsSection({
           onStateChange={(event) => {
             const next = nativeGooglePlaceState(event.nativeEvent.state);
             setState(next);
+            if (settlesGoogleLoad(next)) sequencer.settle();
             if (next === 'picked') loadAfterGrant('picked');
           }}
           phase={phase}
+          request={load.request}
           style={StyleSheet.absoluteFill}
         />
       </View>

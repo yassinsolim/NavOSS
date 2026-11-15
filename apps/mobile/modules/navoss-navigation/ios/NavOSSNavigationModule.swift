@@ -399,6 +399,9 @@ public final class NavOSSNavigationModule: Module {
       Prop("phase") { (view, value: String) in
         view.setPhase(value)
       }
+      Prop("request") { (view, value: Int) in
+        view.setRequest(value)
+      }
       OnViewDidUpdateProps { view in
         view.updateContent()
       }

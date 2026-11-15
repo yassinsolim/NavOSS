@@ -1,4 +1,4 @@
-import type { SearchResult } from '@navoss/contracts';
+import type { GooglePlaceQueryGrantResponse, SearchResult } from '@navoss/contracts';
 
 import { NavOssApiError } from '../../lib/api';
 
@@ -90,6 +90,66 @@ export function googlePlaceDetailsMessage(
     case 'searchReady':
       return undefined;
   }
+}
+
+/** Which Google component the native view hosts. */
+export type GooglePhase = 'idle' | 'nearest' | 'search' | 'picked';
+
+/** One granted Google component load. `request` is new for every load, so a retry of the same
+ * phase changes the native view's key and loads exactly one new component. */
+export interface GoogleLoad {
+  phase: GooglePhase;
+  request: number;
+}
+
+export type GoogleLoadOutcome =
+  | { kind: 'load'; load: GoogleLoad }
+  | { kind: 'busy' }
+  | { kind: 'refused' }
+  | { kind: 'failed'; state: 'offline' | 'unavailable' };
+
+/**
+ * Takes one NavOSS grant per Google component load. While a grant request or a granted load is in
+ * progress, another request is `busy` and spends nothing; the native view's terminal state
+ * (`settle`) frees it.
+ */
+export class GoogleLoadSequencer {
+  private busy = false;
+  private lastRequest = 0;
+
+  public constructor(private readonly reserve: () => Promise<GooglePlaceQueryGrantResponse>) {}
+
+  public async begin(phase: GooglePhase): Promise<GoogleLoadOutcome> {
+    if (this.busy) return { kind: 'busy' };
+    this.busy = true;
+    try {
+      const response = await this.reserve();
+      if (!response.granted) {
+        this.busy = false;
+        return { kind: 'refused' };
+      }
+      this.lastRequest += 1;
+      return { kind: 'load', load: { phase, request: this.lastRequest } };
+    } catch (error: unknown) {
+      this.busy = false;
+      return { kind: 'failed', state: googleGrantFailureState(error) };
+    }
+  }
+
+  /** True while a grant request or a granted load is in progress. */
+  public get inProgress(): boolean {
+    return this.busy;
+  }
+
+  /** The native view reached a terminal state for the current load. */
+  public settle(): void {
+    this.busy = false;
+  }
+}
+
+/** Native states that end a component load (the driver can act again). */
+export function settlesGoogleLoad(state: GooglePlaceDetailsState): boolean {
+  return state !== 'checking' && state !== 'loading';
 }
 
 /**

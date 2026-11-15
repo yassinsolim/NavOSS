@@ -27,6 +27,7 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
   private var longitude: Double = 0
   private var name = ""
   private var phase = "idle"
+  private var request = 0
 
   #if NAVOSS_GOOGLE_PLACES
   private var hostingController: UIHostingController<AnyView>?
@@ -55,6 +56,11 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
     phase = value
   }
 
+  /// New for every granted load, so a retry of the same phase loads exactly one new component.
+  func setRequest(_ value: Int) {
+    request = value
+  }
+
   func updateContent() {
     #if NAVOSS_GOOGLE_PLACES
     guard NavOSSGooglePlacesConfiguration.isAvailable, CLLocationCoordinate2DIsValid(coordinate)
@@ -67,7 +73,7 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
     if renderedKey?.hasPrefix(place) == false {
       pickedPlaceID = nil
     }
-    let key = "\(place)\u{0}\(phase)"
+    let key = "\(place)\u{0}\(phase)\u{0}\(request)"
     guard renderedKey != key else { return }
     detachHostingController()
     renderedKey = key
