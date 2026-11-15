@@ -152,10 +152,13 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
       switch error {
       case .network:
         return "offline"
+      // A rejected key surfaces as `.server("Authentication failed…")` (seen with a placeholder
+      // key on the simulator), so server and internal failures are "temporarily unavailable".
       case .keyInvalid, .keyExpired, .usageLimitExceeded, .rateLimitExceeded,
-        .deviceRateLimitExceeded, .accessNotConfigured, .incorrectBundleIdentifier:
+        .deviceRateLimitExceeded, .accessNotConfigured, .incorrectBundleIdentifier, .server,
+        .internal:
         return "unavailable"
-      case .server, .internal, .location, .invalidRequest:
+      case .location, .invalidRequest:
         return "noMatch"
       @unknown default:
         return "noMatch"

@@ -1,5 +1,7 @@
 import type { SearchResult } from '@navoss/contracts';
 
+import { NavOssApiError } from '../../lib/api';
+
 /**
  * What the Google section of a place sheet shows. `checking` is the anonymous grant request,
  * `loading` is Google's component fetching; the rest come from the native view (see
@@ -31,10 +33,15 @@ export function googlePlaceDetailsEligible(place: SearchResult): boolean {
   return !/^\d+[a-z]?(?:\s*[-–]\s*\d+[a-z]?)?\s+\S/iu.test(name);
 }
 
-/** A failed grant request: no answer at all is offline, anything else is unavailable. */
+/**
+ * A failed grant request. When the server answered (an HTTP error or an unreadable body) Google
+ * details are unavailable; anything else is a request that never got an answer, which is offline.
+ * Expo's `fetch` rejects with `FetchError` ("fetch failed: …"), React Native's with `TypeError`.
+ */
 export function googleGrantFailureState(error: unknown): 'offline' | 'unavailable' {
-  // `fetch` rejects with a TypeError when there is no network path to the server.
-  return error instanceof TypeError ? 'offline' : 'unavailable';
+  if (error instanceof NavOssApiError || error instanceof SyntaxError) return 'unavailable';
+  if (error instanceof Error && error.name === 'ZodError') return 'unavailable';
+  return 'offline';
 }
 
 export function nativeGooglePlaceState(value: unknown): GooglePlaceDetailsState {

@@ -1,4 +1,4 @@
-import type { SearchResult } from '@navoss/contracts';
+import { GooglePlaceQueryGrantResponseSchema, type SearchResult } from '@navoss/contracts';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -67,12 +67,20 @@ describe('Google place details eligibility', () => {
 });
 
 describe('Google place details states', () => {
-  it('treats no answer from the grant server as offline and a refusal or error as unavailable', () => {
+  it('treats no answer from the grant server as offline and any answer that fails as unavailable', () => {
     expect(googleGrantFailureState(new TypeError('Network request failed'))).toBe('offline');
+    // Expo's fetch: the message recorded on the simulator when the connection was dropped.
+    class FetchError extends Error {}
+    expect(
+      googleGrantFailureState(new FetchError('fetch failed: The network connection was lost.')),
+    ).toBe('offline');
     expect(googleGrantFailureState(new NavOssApiError('Place details unavailable', 503))).toBe(
       'unavailable',
     );
-    expect(googleGrantFailureState(new Error('schema'))).toBe('unavailable');
+    expect(googleGrantFailureState(new SyntaxError('Unexpected token <'))).toBe('unavailable');
+    expect(googleGrantFailureState(GooglePlaceQueryGrantResponseSchema.safeParse({}).error)).toBe(
+      'unavailable',
+    );
   });
 
   it('accepts only known native states and hides Google on anything else', () => {

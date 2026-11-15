@@ -97,6 +97,7 @@ export function GooglePlaceDetailsSection({
       accessibilityRole="link"
       onPress={onReadReviews}
       title="More reviews on Google Maps"
+      titleLines={2}
       trailing="external"
     />
   );
@@ -104,10 +105,10 @@ export function GooglePlaceDetailsSection({
   if (!available) {
     return (
       <View style={styles.section}>
-        <Text accessibilityRole="header" style={styles.title}>
+        <Text accessibilityRole="header" maxFontSizeMultiplier={1.5} style={styles.title}>
           Google reviews and details
         </Text>
-        <Text style={styles.note}>
+        <Text maxFontSizeMultiplier={1.5} style={styles.note}>
           Google photos, ratings, and reviews are unavailable in this build
         </Text>
         {reviewsLink}
@@ -123,7 +124,7 @@ export function GooglePlaceDetailsSection({
 
   return (
     <View style={styles.section}>
-      <Text accessibilityRole="header" style={styles.title}>
+      <Text accessibilityRole="header" maxFontSizeMultiplier={1.5} style={styles.title}>
         Google reviews and details
       </Text>
       {message !== undefined && (

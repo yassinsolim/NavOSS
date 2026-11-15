@@ -260,7 +260,9 @@ export function PlaceSheet({
                 title={`${place.center.latitude.toFixed(5)}, ${place.center.longitude.toFixed(5)}`}
               />
             )}
-            <Text style={styles.source}>Place data from OpenStreetMap contributors</Text>
+            <Text maxFontSizeMultiplier={1.5} style={styles.source}>
+              Place data from OpenStreetMap contributors
+            </Text>
           </Fragment>
           {/* Outside the text-size key: a remount would spend another Google query. Google's
               view follows Dynamic Type itself. */}
