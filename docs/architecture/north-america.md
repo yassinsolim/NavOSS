@@ -101,10 +101,16 @@ Manitoba, or Nunavut (no road to any neighbour), the API refuses before calling 
 `400`, title "No route between these provinces", detail "NavOSS can't plan a drive between
 British Columbia and Ontario: no road it covers connects them." The app already shows the
 server's detail as the route error; it names both places, blames nothing and does not suggest a
-detour NavOSS cannot plan. With all of Canada declared, only Nunavut is unreachable. Routes inside
-one province that no road joins (Haida Gwaii without the ferry, Nunavut communities) still reach
-Valhalla and currently surface as "A route could not be calculated", which is misleading; a
-distinct no-path answer from the route provider is the next fix.
+detour NavOSS cannot plan. With all of Canada declared, only Nunavut is unreachable.
+
+Inside the declared provinces Valhalla itself can find no road (or ferry) route: Haida Gwaii with
+ferries avoided, Toronto's Centre Island, between Nunavut communities. Valhalla answers `400` with
+error 442 (protobuf and JSON alike, recorded in `toronto-island-no-path.json`); the API turns that
+into `422`, title "No road route", detail "No road connects these places. Some are reached only by
+air, by water or by a winter road." Other Valhalla failures stay `503` "Routing unavailable". `422`
+is deliberate: builds 75 and 80 show the detail as the route error, while a `400` would make the
+phone retry once without its optional fields and a `404` would send it to `/v1/routes`. CarPlay in
+those builds shows its generic unavailable message for any status other than `400` and `404`.
 
 ### Time zones
 
@@ -160,7 +166,7 @@ validated hybrid (global urban rows, urban trunk 50 km/h). Ontario's source urba
 over, not an Ontario calibration: Ontario, Quebec and the rest need same-time spot checks before
 anyone claims ETA quality there.
 
-### Sizing on VM 100 (6 vCPU, 24 GiB, 255 GB artifact disk)
+### Sizing on VM 100 (6 vCPU, 24 GiB, 260 GB artifact disk)
 
 | Quantity                         | Value                                                                                                                                                    | Basis                                                                                                                                                                                                                                     |
 | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -172,7 +178,7 @@ anyone claims ETA quality there.
 | Canada Nominatim                 | final 25–50 GiB frozen; import peak 70–110 GB; 10 GiB container (2 GB shared buffers, 3 GB osm2pgsql cache, 1 GB maintenance memory, 4 threads); 12–24 h | estimate: 4× the Alberta+BC database, up to the Toronto sample's density; Nominatim's documentation (64 GB+ RAM recommended only for planet-scale imports; dynamic update tables are about half the database and are dropped by `FREEZE`) |
 | Flatnode                         | no                                                                                                                                                       | Nominatim recommends it for Europe/North America/planet; the file needs ≥ 75 GB whatever the extract (node ids span the planet)                                                                                                           |
 | Live after cutover               | limits Nominatim 8 GiB, Valhalla 4 GiB, API 0.75, reports 0.75, indexer 0.5, Caddy 0.2: 14.2 GiB of 24                                                   | plan                                                                                                                                                                                                                                      |
-| Disk at peak                     | ≈ 29 GB live + 13 GB inputs + 20 GB graph + 110 GB import = 172 GB of 255 GB                                                                             | estimate (worst case)                                                                                                                                                                                                                     |
+| Disk at peak                     | ≈ 29 GB live + 13 GB inputs + 20 GB graph + 110 GB import = 172 GB of 260 GB                                                                             | estimate (worst case)                                                                                                                                                                                                                     |
 
 Canada fits 24 GiB only with the steps run one at a time, which `stage-coverage.sh` enforces: the
 import's 10 GiB plus the live stack (≈ 2.5 GiB in use) leaves more than the 4 GiB floor. If the
@@ -214,8 +220,9 @@ measurements; anchors outside Toronto and Montreal have not been routed yet.
   source.
 - Official safety-camera data is a Calgary overlay and must remain labelled as such outside the
   routing/search coverage decision.
-- The production VM has 6 vCPU, 24 GiB RAM and a 255 GB artifact disk since 2026-11-15 (sized for
-  a staged Canada release, see above). It is not sized for a North America geocoder import.
+- VM 100 has 6 cores, 24 GiB RAM, a 60 GB system disk and a 260 GB artifact disk since 2026-11-15,
+  and pve01 cannot give it more today (sized for a staged Canada release, see above). It is not
+  sized for a North America geocoder import.
 
 As of 2026-07-24, Geofabrik's North America PBF is 17.9 GB: Canada is 6.0 GB, the United States is
 11.2 GB, and Mexico is 607 MB. The compressed source is only the beginning of the storage budget.

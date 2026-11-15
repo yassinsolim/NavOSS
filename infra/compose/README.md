@@ -306,7 +306,7 @@ This builds the whole-country Valhalla graph and Nominatim index beside the live
 verifies them through a staged API, then switches by changing `.env`. Nothing live is touched until
 step 6, and the Alberta+BC artifacts stay until Canada has been proven.
 
-Sized for VM 100 at 6 vCPU, 24 GiB RAM and a 255 GB artifact disk. Run each step in `tmux` as
+Sized for VM 100 at 6 cores, 24 GiB RAM and a 260 GB artifact disk. Run each step in `tmux` as
 `navoss` from `infra/compose`; every step is resumable by running the same command again. Never run
 two heavy steps at once (`stage-coverage.sh` refuses). During steps 2 and 3 keep at least 4 GiB
 available (`free -h`) and no sustained swap; stop the step (`./stage-coverage.sh stop canada`) if

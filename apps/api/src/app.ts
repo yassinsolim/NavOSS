@@ -93,6 +93,7 @@ import { createProblem } from './problem.js';
 import { registerOfflineBundleManifest } from './offline-bundle-manifest.js';
 import {
   createConfiguredRouteProvider,
+  RouteNotFoundError,
   RouteProviderError,
   type RouteProvider,
 } from './route-provider.js';
@@ -869,6 +870,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           response: {
             200: version === 'v2' ? RouteResponseV2Schema : RouteResponseSchema,
             400: ProblemDetailsSchema,
+            422: ProblemDetailsSchema,
             503: ProblemDetailsSchema,
           },
           tags: ['routes'],
@@ -934,6 +936,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             },
           };
         } catch (error: unknown) {
+          // 422, not 400 or 404: shipped phones retry a 400 without its optional fields and fall
+          // back to /v1/routes on a 404; every build shows this detail as the route error.
+          if (error instanceof RouteNotFoundError) {
+            reply.status(422).type('application/problem+json');
+            return createProblem(
+              request,
+              422,
+              'invalid_request',
+              'No road route',
+              'No road connects these places. Some are reached only by air, by water or by a winter road.',
+            );
+          }
           if (error instanceof RouteProviderError) {
             reply.status(503).type('application/problem+json');
             return createProblem(

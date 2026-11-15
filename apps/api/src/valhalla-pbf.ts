@@ -79,9 +79,27 @@ const NativeSpeedLimitsSchema = z.object({ speedLimit: z.array(UIntSchema.max(25
 const NativeLanesSchema = z.array(NativeLaneSchema).min(1);
 const NativeStreetNamesSchema = z.array(StreetNameSchema);
 const PositiveUIntSchema = UIntSchema.positive();
+// Error codes are uint64 on the wire; protobufjs decodes them as Long objects.
+const ErrorCodeSchema = z.union([
+  z.number().int(),
+  z.object({ high: z.literal(0), low: z.number().int() }).transform(({ low }) => low),
+]);
 const ErrorStatusSchema = z.object({
-  info: z.object({ errors: z.array(z.unknown()).default([]) }).optional(),
+  info: z
+    .object({
+      errors: z
+        .array(
+          z
+            .unknown()
+            .transform((error) => z.object({ code: ErrorCodeSchema }).safeParse(error).data?.code),
+        )
+        .default([]),
+    })
+    .optional(),
 });
+
+/** Valhalla's "No path could be found for input": the places share no road (or ferry) route. */
+export const VALHALLA_NO_PATH = 442;
 
 // Valhalla 3.8.2 TurnLane::directions_mask; wire bits and lane order are preserved.
 const LANE_DIRECTIONS: readonly (readonly [number, RouteLaneIndication])[] = [
@@ -139,9 +157,12 @@ export class ValhallaDecodeError extends Error {
   }
 }
 export class ValhallaRoutingError extends Error {
-  public constructor() {
+  /** Valhalla error codes reported, e.g. 442 for no path. */
+  public readonly codes: readonly number[];
+  public constructor(codes: readonly number[] = []) {
     super('Valhalla reported a routing error.');
     this.name = 'ValhallaRoutingError';
+    this.codes = codes;
   }
 }
 
@@ -287,7 +308,9 @@ function speedLimitsFor(value: unknown): RouteSpeedLimit[] | undefined {
 export function normalizeValhallaPbfResponse(payload: unknown): RouteAlternativeV2[] {
   const status = ErrorStatusSchema.safeParse(payload);
   if (status.success && (status.data.info?.errors.length ?? 0) > 0)
-    throw new ValhallaRoutingError();
+    throw new ValhallaRoutingError(
+      (status.data.info?.errors ?? []).filter((code) => code !== undefined),
+    );
   const parsed = ResponseSchema.safeParse(payload);
   if (!parsed.success) throw new ValhallaDecodeError();
   const trip = TripSchema.safeParse(parsed.data.trip);

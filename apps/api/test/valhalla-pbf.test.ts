@@ -14,7 +14,14 @@ import {
   parseValhallaPbf,
   ValhallaDecodeError,
 } from '../src/valhalla-pbf.js';
-import { createValhallaRouteProvider, RouteProviderError } from '../src/route-provider.js';
+import { createServiceCoverage, ProblemDetailsSchema } from '@navoss/contracts';
+import { buildApp } from '../src/app.js';
+import {
+  createValhallaRouteProvider,
+  RouteNotFoundError,
+  RouteProviderError,
+} from '../src/route-provider.js';
+import noPath from './fixtures/valhalla/toronto-island-no-path.json' with { type: 'json' };
 import calgary from './fixtures/valhalla/calgary-deerfoot-glenmore.json' with { type: 'json' };
 import stoney from './fixtures/valhalla/calgary-stoney-airport.json' with { type: 'json' };
 import vancouver from './fixtures/valhalla/vancouver-highway-interchange.json' with { type: 'json' };
@@ -458,5 +465,86 @@ describe('lossless Valhalla provider failure policy', () => {
       useTolls: 0,
     });
     expect(sent).not.toHaveProperty('options.dateTime');
+  });
+});
+
+describe('no road route', () => {
+  const recorded = (status: number, body: BodyInit) =>
+    vi.fn<typeof fetch>(() => Promise.resolve(new Response(body, { status })));
+  const islandTrip = noPath.request;
+
+  it('reads the recorded protobuf 442 as no road route, not an outage', async () => {
+    expect(noPath.pbf.decoded).toEqual({ info: { errors: [{ code: 442 }] } });
+    const provider = createValhallaRouteProvider({
+      endpoint: 'http://valhalla.test/route',
+      fetchImplementation: recorded(400, Buffer.from(noPath.pbf.bodyBase64, 'base64')),
+    });
+    await expect(provider.getEnrichedRoutes?.(islandTrip)).rejects.toBeInstanceOf(
+      RouteNotFoundError,
+    );
+  });
+
+  it('reads the recorded JSON 442 on the legacy path the same way', async () => {
+    expect(noPath.json.body.error_code).toBe(442);
+    const provider = createValhallaRouteProvider({
+      endpoint: 'http://valhalla.test/route',
+      fetchImplementation: recorded(400, JSON.stringify(noPath.json.body)),
+    });
+    await expect(provider.getRoutes(islandTrip)).rejects.toBeInstanceOf(RouteNotFoundError);
+  });
+
+  it('keeps other upstream failures as outages', async () => {
+    const otherError = JSON.stringify({ ...noPath.json.body, error_code: 154 });
+    const provider = createValhallaRouteProvider({
+      endpoint: 'http://valhalla.test/route',
+      fetchImplementation: recorded(400, otherError),
+    });
+    const failure = await provider.getRoutes(islandTrip).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(RouteProviderError);
+    expect(failure).not.toBeInstanceOf(RouteNotFoundError);
+    const unavailable = createValhallaRouteProvider({
+      endpoint: 'http://valhalla.test/route',
+      fetchImplementation: recorded(503, 'busy'),
+    });
+    const outage = await unavailable
+      .getEnrichedRoutes?.(islandTrip)
+      .catch((error: unknown) => error);
+    expect(outage).not.toBeInstanceOf(RouteNotFoundError);
+  });
+
+  it('tells the driver there is no road route, in a problem shipped builds parse', async () => {
+    const app = await buildApp({
+      coverage: createServiceCoverage(['ontario']),
+      coverageReadiness: null,
+      routeProvider: createValhallaRouteProvider({
+        endpoint: 'http://valhalla.test/route',
+        fetchImplementation: vi.fn<typeof fetch>((_input, init) =>
+          Promise.resolve(
+            init?.body instanceof Uint8Array
+              ? new Response(Buffer.from(noPath.pbf.bodyBase64, 'base64'), { status: 400 })
+              : new Response(JSON.stringify(noPath.json.body), { status: 400 }),
+          ),
+        ),
+      }),
+      searchProvider: { search: () => Promise.reject(new Error('unused')) },
+    });
+    try {
+      for (const version of ['v1', 'v2']) {
+        const response = await app.inject({
+          method: 'POST',
+          payload: islandTrip,
+          url: `/${version}/routes`,
+        });
+        expect(response.statusCode, version).toBe(422);
+        expect(ProblemDetailsSchema.parse(response.json())).toMatchObject({
+          code: 'invalid_request',
+          detail:
+            'No road connects these places. Some are reached only by air, by water or by a winter road.',
+          title: 'No road route',
+        });
+      }
+    } finally {
+      await app.close();
+    }
   });
 });

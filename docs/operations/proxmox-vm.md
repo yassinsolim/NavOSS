@@ -22,7 +22,7 @@ This VM hosts the live Alberta and British Columbia NavOSS production API, versi
 | Start at boot    | Guest services enabled; Proxmox VM onboot pending until soak passes |
 | ACPI             | Enabled                                                             |
 
-Do not overcommit these four vCPUs or 16 GiB against host capacity. The host must retain its own existing safety margin after this VM is running under peak load.
+Do not overcommit these six cores or 24 GiB against host capacity. The host must retain its own existing safety margin after this VM is running under peak load.
 
 ## Disks
 
@@ -32,7 +32,7 @@ Use SSD/NVMe-backed thin storage where available. Enable `Discard`, `SSD emulati
 | ---------------- | ------: | ------ | ------------------------------------------------------------------------------------------------------ |
 | `scsi0`          |   60 GB | Yes    | Ubuntu, packages, logs, swap, containerd store                                                         |
 | `scsi1`          |  40 GiB | Yes    | `/srv/navoss/state`: PostgreSQL, secrets/config references, application backups                        |
-| `scsi2`          |  255 GB | No     | `/srv/navoss/artifacts`: Docker data, Valhalla graphs, Nominatim indexes, downloads, staging artifacts |
+| `scsi2`          |  260 GB | No     | `/srv/navoss/artifacts`: Docker data, Valhalla graphs, Nominatim indexes, downloads, staging artifacts |
 | Cloud-Init drive | Default | N/A    | Initial user, SSH key, network configuration                                                           |
 
 `scsi2` contains reproducible artifacts and is excluded from Proxmox backup to keep backup size bounded. Keep the active and previous validated graph/index versions for atomic rollback. Never place the PostgreSQL data directory on `scsi2`.
@@ -42,10 +42,10 @@ On 2026-11-15, `scsi0` was expanded from 40 GB to 60 GB; the root filesystem was
 Memory was restored from 8,192 MiB to 16,384 MiB on the same date. One reboot caused 57 seconds of API downtime; the stack recovered on its own.
 
 Later on 2026-11-15 the lead resized VM 100 for Canada-wide coverage: 6 cores, 24 GiB RAM, `scsi2`
-grown online to 255 GB (230 GB free afterwards), one reboot. pve01 then had no further RAM to give
-while keeping its 8 GB unallocated reserve, and its NVMe pool must stay under 80 %. The Canada
+grown online to 260 GB, one reboot. The system disk stays 60 GB. pve01 cannot give VM 100 more
+today: it keeps 8 GB of RAM unallocated and its NVMe pool must stay under 80 %. The Canada
 build fits these limits only one heavy step at a time
-([`north-america.md`](../architecture/north-america.md#sizing-on-vm-100-6-vcpu-24-gib-255-gb-artifact-disk)).
+([`north-america.md`](../architecture/north-america.md#sizing-on-vm-100-6-vcpu-24-gib-260-gb-artifact-disk)).
 
 Format `scsi1` and `scsi2` as ext4 and mount them by filesystem UUID with `defaults,noatime`.
 
