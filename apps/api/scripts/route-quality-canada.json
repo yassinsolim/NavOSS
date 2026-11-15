@@ -380,181 +380,99 @@
       "minimumLaneManeuvers": 1,
       "originAnchorId": "calgary-interchange-north",
       "destinationAnchorId": "calgary-glenmore-west",
-      "distanceRangeKm": [
-        8,
-        30
-      ],
+      "distanceRangeKm": [8, 30],
       "maximumEndpointOffsetMeters": 150,
-      "tags": [
-        "alberta",
-        "calgary",
-        "interchange"
-      ],
+      "tags": ["alberta", "calgary", "interchange"],
       "lengthBand": "short"
     },
     {
       "id": "edmonton",
       "originAnchorId": "edmonton-downtown",
       "destinationAnchorId": "edmonton-university-area",
-      "distanceRangeKm": [
-        2,
-        12
-      ],
+      "distanceRangeKm": [2, 12],
       "maximumEndpointOffsetMeters": 150,
-      "tags": [
-        "alberta",
-        "edmonton",
-        "urban",
-        "river-crossing"
-      ],
+      "tags": ["alberta", "edmonton", "urban", "river-crossing"],
       "lengthBand": "short"
     },
     {
       "id": "red-deer",
       "originAnchorId": "red-deer-downtown",
       "destinationAnchorId": "red-deer-south",
-      "distanceRangeKm": [
-        1,
-        10
-      ],
+      "distanceRangeKm": [1, 10],
       "maximumEndpointOffsetMeters": 150,
-      "tags": [
-        "alberta",
-        "red-deer",
-        "urban"
-      ],
+      "tags": ["alberta", "red-deer", "urban"],
       "lengthBand": "short"
     },
     {
       "id": "lethbridge",
       "originAnchorId": "lethbridge-downtown",
       "destinationAnchorId": "lethbridge-west",
-      "distanceRangeKm": [
-        2,
-        12
-      ],
+      "distanceRangeKm": [2, 12],
       "maximumEndpointOffsetMeters": 150,
-      "tags": [
-        "alberta",
-        "lethbridge",
-        "urban",
-        "river-crossing"
-      ],
+      "tags": ["alberta", "lethbridge", "urban", "river-crossing"],
       "lengthBand": "short"
     },
     {
       "id": "banff",
       "originAnchorId": "banff-downtown",
       "destinationAnchorId": "banff-south",
-      "distanceRangeKm": [
-        1,
-        10
-      ],
+      "distanceRangeKm": [1, 10],
       "maximumEndpointOffsetMeters": 150,
-      "tags": [
-        "alberta",
-        "banff",
-        "mountain-town"
-      ],
+      "tags": ["alberta", "banff", "mountain-town"],
       "lengthBand": "short"
     },
     {
       "id": "vancouver",
       "originAnchorId": "vancouver-downtown",
       "destinationAnchorId": "richmond-yvr-area",
-      "distanceRangeKm": [
-        10,
-        25
-      ],
+      "distanceRangeKm": [10, 25],
       "maximumEndpointOffsetMeters": 300,
-      "tags": [
-        "british-columbia",
-        "vancouver",
-        "urban",
-        "airport"
-      ],
+      "tags": ["british-columbia", "vancouver", "urban", "airport"],
       "lengthBand": "short"
     },
     {
       "id": "victoria",
       "originAnchorId": "victoria-downtown",
       "destinationAnchorId": "victoria-university-area",
-      "distanceRangeKm": [
-        3,
-        15
-      ],
+      "distanceRangeKm": [3, 15],
       "maximumEndpointOffsetMeters": 150,
-      "tags": [
-        "british-columbia",
-        "victoria",
-        "island",
-        "urban"
-      ],
+      "tags": ["british-columbia", "victoria", "island", "urban"],
       "lengthBand": "short"
     },
     {
       "id": "kelowna",
       "originAnchorId": "kelowna-downtown",
       "destinationAnchorId": "kelowna-airport",
-      "distanceRangeKm": [
-        10,
-        22
-      ],
+      "distanceRangeKm": [10, 22],
       "maximumEndpointOffsetMeters": 300,
-      "tags": [
-        "british-columbia",
-        "kelowna",
-        "airport"
-      ],
+      "tags": ["british-columbia", "kelowna", "airport"],
       "lengthBand": "short"
     },
     {
       "id": "kamloops",
       "originAnchorId": "kamloops-downtown",
       "destinationAnchorId": "kamloops-west",
-      "distanceRangeKm": [
-        1.5,
-        12
-      ],
+      "distanceRangeKm": [1.5, 12],
       "maximumEndpointOffsetMeters": 150,
-      "tags": [
-        "british-columbia",
-        "kamloops",
-        "urban"
-      ],
+      "tags": ["british-columbia", "kamloops", "urban"],
       "lengthBand": "short"
     },
     {
       "id": "prince-george",
       "originAnchorId": "prince-george-downtown",
       "destinationAnchorId": "prince-george-west",
-      "distanceRangeKm": [
-        2,
-        15
-      ],
+      "distanceRangeKm": [2, 15],
       "maximumEndpointOffsetMeters": 150,
-      "tags": [
-        "british-columbia",
-        "prince-george",
-        "northern-urban"
-      ],
+      "tags": ["british-columbia", "prince-george", "northern-urban"],
       "lengthBand": "short"
     },
     {
       "id": "calgary-vancouver",
       "originAnchorId": "calgary-downtown",
       "destinationAnchorId": "vancouver-downtown",
-      "distanceRangeKm": [
-        900,
-        1150
-      ],
+      "distanceRangeKm": [900, 1150],
       "maximumEndpointOffsetMeters": 150,
-      "tags": [
-        "alberta",
-        "british-columbia",
-        "inter-provincial",
-        "mountain-highway"
-      ],
+      "tags": ["alberta", "british-columbia", "inter-provincial", "mountain-highway"],
       "maximumDurationMinutes": 1000,
       "maximumSegmentMeters": 3000,
       "lengthBand": "long"
@@ -563,17 +481,9 @@
       "id": "toronto-401-interchanges",
       "originAnchorId": "mississauga-city-centre",
       "destinationAnchorId": "scarborough-town-centre",
-      "distanceRangeKm": [
-        35,
-        60
-      ],
+      "distanceRangeKm": [35, 60],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "ontario",
-        "toronto",
-        "400-series",
-        "interchange"
-      ],
+      "tags": ["ontario", "toronto", "400-series", "interchange"],
       "lengthBand": "medium",
       "minimumLaneManeuvers": 2,
       "maximumDurationMinutes": 90
@@ -582,17 +492,9 @@
       "id": "toronto-hamilton",
       "originAnchorId": "toronto-downtown",
       "destinationAnchorId": "hamilton-downtown",
-      "distanceRangeKm": [
-        55,
-        90
-      ],
+      "distanceRangeKm": [55, 90],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "ontario",
-        "toronto",
-        "hamilton",
-        "400-series"
-      ],
+      "tags": ["ontario", "toronto", "hamilton", "400-series"],
       "lengthBand": "medium",
       "minimumLaneManeuvers": 1,
       "maximumDurationMinutes": 120
@@ -601,17 +503,9 @@
       "id": "toronto-ottawa",
       "originAnchorId": "toronto-downtown",
       "destinationAnchorId": "ottawa-downtown",
-      "distanceRangeKm": [
-        400,
-        520
-      ],
+      "distanceRangeKm": [400, 520],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "ontario",
-        "toronto",
-        "ottawa",
-        "400-series"
-      ],
+      "tags": ["ontario", "toronto", "ottawa", "400-series"],
       "lengthBand": "long",
       "maximumDurationMinutes": 520,
       "maximumSegmentMeters": 5000
@@ -620,17 +514,9 @@
       "id": "toronto-london",
       "originAnchorId": "toronto-downtown",
       "destinationAnchorId": "london-downtown",
-      "distanceRangeKm": [
-        170,
-        230
-      ],
+      "distanceRangeKm": [170, 230],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "ontario",
-        "toronto",
-        "london",
-        "400-series"
-      ],
+      "tags": ["ontario", "toronto", "london", "400-series"],
       "lengthBand": "long",
       "maximumDurationMinutes": 230,
       "maximumSegmentMeters": 5000
@@ -639,17 +525,9 @@
       "id": "london-windsor",
       "originAnchorId": "london-downtown",
       "destinationAnchorId": "windsor-downtown",
-      "distanceRangeKm": [
-        170,
-        215
-      ],
+      "distanceRangeKm": [170, 215],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "ontario",
-        "london",
-        "windsor",
-        "400-series"
-      ],
+      "tags": ["ontario", "london", "windsor", "400-series"],
       "lengthBand": "long",
       "maximumDurationMinutes": 215,
       "maximumSegmentMeters": 5000
@@ -658,17 +536,9 @@
       "id": "toronto-sudbury",
       "originAnchorId": "toronto-downtown",
       "destinationAnchorId": "sudbury-downtown",
-      "distanceRangeKm": [
-        360,
-        450
-      ],
+      "distanceRangeKm": [360, 450],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "ontario",
-        "toronto",
-        "sudbury",
-        "400-series"
-      ],
+      "tags": ["ontario", "toronto", "sudbury", "400-series"],
       "lengthBand": "long",
       "maximumDurationMinutes": 450,
       "maximumSegmentMeters": 5000
@@ -677,17 +547,9 @@
       "id": "sudbury-thunder-bay",
       "originAnchorId": "sudbury-downtown",
       "destinationAnchorId": "thunder-bay-downtown",
-      "distanceRangeKm": [
-        950,
-        1200
-      ],
+      "distanceRangeKm": [950, 1200],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "ontario",
-        "sudbury",
-        "thunder-bay",
-        "northern-highway"
-      ],
+      "tags": ["ontario", "sudbury", "thunder-bay", "northern-highway"],
       "lengthBand": "long",
       "maximumDurationMinutes": 1200,
       "maximumSegmentMeters": 5000
@@ -696,18 +558,9 @@
       "id": "montreal-autoroute-interchanges",
       "originAnchorId": "montreal-dorval",
       "destinationAnchorId": "laval-centre",
-      "distanceRangeKm": [
-        12,
-        35
-      ],
+      "distanceRangeKm": [12, 35],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "quebec",
-        "montreal",
-        "autoroute",
-        "interchange",
-        "french-names"
-      ],
+      "tags": ["quebec", "montreal", "autoroute", "interchange", "french-names"],
       "lengthBand": "short",
       "minimumLaneManeuvers": 1,
       "maximumDurationMinutes": 60
@@ -716,18 +569,9 @@
       "id": "montreal-quebec-city",
       "originAnchorId": "montreal-downtown",
       "destinationAnchorId": "quebec-city-downtown",
-      "distanceRangeKm": [
-        230,
-        290
-      ],
+      "distanceRangeKm": [230, 290],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "quebec",
-        "montreal",
-        "quebec-city",
-        "autoroute",
-        "french-names"
-      ],
+      "tags": ["quebec", "montreal", "quebec-city", "autoroute", "french-names"],
       "lengthBand": "long",
       "maximumDurationMinutes": 290,
       "maximumSegmentMeters": 5000
@@ -736,18 +580,9 @@
       "id": "montreal-gatineau",
       "originAnchorId": "montreal-downtown",
       "destinationAnchorId": "gatineau-downtown",
-      "distanceRangeKm": [
-        190,
-        240
-      ],
+      "distanceRangeKm": [190, 240],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "quebec",
-        "montreal",
-        "gatineau",
-        "autoroute",
-        "french-names"
-      ],
+      "tags": ["quebec", "montreal", "gatineau", "autoroute", "french-names"],
       "lengthBand": "long",
       "maximumDurationMinutes": 240,
       "maximumSegmentMeters": 5000
@@ -756,18 +591,9 @@
       "id": "montreal-sherbrooke",
       "originAnchorId": "montreal-downtown",
       "destinationAnchorId": "sherbrooke-downtown",
-      "distanceRangeKm": [
-        140,
-        180
-      ],
+      "distanceRangeKm": [140, 180],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "quebec",
-        "montreal",
-        "sherbrooke",
-        "autoroute",
-        "french-names"
-      ],
+      "tags": ["quebec", "montreal", "sherbrooke", "autoroute", "french-names"],
       "lengthBand": "long",
       "maximumDurationMinutes": 180,
       "maximumSegmentMeters": 5000
@@ -776,35 +602,18 @@
       "id": "ottawa-gatineau",
       "originAnchorId": "ottawa-downtown",
       "destinationAnchorId": "gatineau-downtown",
-      "distanceRangeKm": [
-        2,
-        10
-      ],
+      "distanceRangeKm": [2, 10],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "ontario",
-        "quebec",
-        "ottawa",
-        "gatineau",
-        "inter-provincial",
-        "river-crossing"
-      ],
+      "tags": ["ontario", "quebec", "ottawa", "gatineau", "inter-provincial", "river-crossing"],
       "lengthBand": "short"
     },
     {
       "id": "regina-saskatoon",
       "originAnchorId": "regina-downtown",
       "destinationAnchorId": "saskatoon-downtown",
-      "distanceRangeKm": [
-        230,
-        275
-      ],
+      "distanceRangeKm": [230, 275],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "saskatchewan",
-        "regina",
-        "saskatoon"
-      ],
+      "tags": ["saskatchewan", "regina", "saskatoon"],
       "lengthBand": "long",
       "maximumDurationMinutes": 275,
       "maximumSegmentMeters": 5000
@@ -813,18 +622,9 @@
       "id": "regina-winnipeg",
       "originAnchorId": "regina-downtown",
       "destinationAnchorId": "winnipeg-downtown",
-      "distanceRangeKm": [
-        550,
-        620
-      ],
+      "distanceRangeKm": [550, 620],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "saskatchewan",
-        "manitoba",
-        "regina",
-        "winnipeg",
-        "inter-provincial"
-      ],
+      "tags": ["saskatchewan", "manitoba", "regina", "winnipeg", "inter-provincial"],
       "lengthBand": "long",
       "maximumDurationMinutes": 620,
       "maximumSegmentMeters": 5000
@@ -833,18 +633,9 @@
       "id": "halifax-moncton",
       "originAnchorId": "halifax-downtown",
       "destinationAnchorId": "moncton-downtown",
-      "distanceRangeKm": [
-        240,
-        300
-      ],
+      "distanceRangeKm": [240, 300],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "nova-scotia",
-        "new-brunswick",
-        "halifax",
-        "moncton",
-        "inter-provincial"
-      ],
+      "tags": ["nova-scotia", "new-brunswick", "halifax", "moncton", "inter-provincial"],
       "lengthBand": "long",
       "maximumDurationMinutes": 300,
       "maximumSegmentMeters": 5000
@@ -853,16 +644,9 @@
       "id": "moncton-saint-john",
       "originAnchorId": "moncton-downtown",
       "destinationAnchorId": "saint-john-downtown",
-      "distanceRangeKm": [
-        140,
-        180
-      ],
+      "distanceRangeKm": [140, 180],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "new-brunswick",
-        "moncton",
-        "saint-john"
-      ],
+      "tags": ["new-brunswick", "moncton", "saint-john"],
       "lengthBand": "long",
       "maximumDurationMinutes": 180,
       "maximumSegmentMeters": 5000
@@ -871,10 +655,7 @@
       "id": "moncton-charlottetown",
       "originAnchorId": "moncton-downtown",
       "destinationAnchorId": "charlottetown-downtown",
-      "distanceRangeKm": [
-        150,
-        200
-      ],
+      "distanceRangeKm": [150, 200],
       "maximumEndpointOffsetMeters": 250,
       "tags": [
         "new-brunswick",
@@ -891,10 +672,7 @@
       "id": "halifax-st-johns-ferry",
       "originAnchorId": "halifax-downtown",
       "destinationAnchorId": "st-johns-downtown",
-      "distanceRangeKm": [
-        1000,
-        1650
-      ],
+      "distanceRangeKm": [1000, 1650],
       "maximumEndpointOffsetMeters": 250,
       "tags": [
         "nova-scotia",
@@ -912,10 +690,7 @@
       "id": "edmonton-yellowknife",
       "originAnchorId": "edmonton-downtown",
       "destinationAnchorId": "yellowknife-downtown",
-      "distanceRangeKm": [
-        1400,
-        1650
-      ],
+      "distanceRangeKm": [1400, 1650],
       "maximumEndpointOffsetMeters": 250,
       "tags": [
         "alberta",
@@ -932,10 +707,7 @@
       "id": "whitehorse-edmonton",
       "originAnchorId": "whitehorse-downtown",
       "destinationAnchorId": "edmonton-downtown",
-      "distanceRangeKm": [
-        1900,
-        2300
-      ],
+      "distanceRangeKm": [1900, 2300],
       "maximumEndpointOffsetMeters": 250,
       "tags": [
         "yukon",
@@ -953,19 +725,9 @@
       "id": "calgary-winnipeg",
       "originAnchorId": "calgary-downtown",
       "destinationAnchorId": "winnipeg-downtown",
-      "distanceRangeKm": [
-        1250,
-        1450
-      ],
+      "distanceRangeKm": [1250, 1450],
       "maximumEndpointOffsetMeters": 250,
-      "tags": [
-        "alberta",
-        "saskatchewan",
-        "manitoba",
-        "calgary",
-        "winnipeg",
-        "inter-provincial"
-      ],
+      "tags": ["alberta", "saskatchewan", "manitoba", "calgary", "winnipeg", "inter-provincial"],
       "lengthBand": "long",
       "maximumDurationMinutes": 1450,
       "maximumSegmentMeters": 5000
@@ -974,10 +736,7 @@
       "id": "toronto-montreal",
       "originAnchorId": "toronto-downtown",
       "destinationAnchorId": "montreal-downtown",
-      "distanceRangeKm": [
-        510,
-        600
-      ],
+      "distanceRangeKm": [510, 600],
       "maximumEndpointOffsetMeters": 250,
       "tags": [
         "ontario",
@@ -996,10 +755,7 @@
       "id": "vancouver-toronto-stress",
       "originAnchorId": "vancouver-downtown",
       "destinationAnchorId": "toronto-downtown",
-      "distanceRangeKm": [
-        4200,
-        4700
-      ],
+      "distanceRangeKm": [4200, 4700],
       "maximumEndpointOffsetMeters": 250,
       "tags": [
         "british-columbia",

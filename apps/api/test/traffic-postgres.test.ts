@@ -17,9 +17,7 @@ import { buildApp } from '../src/app.js';
 import { createCommunityReportService, type AttestationMode } from '../src/community-reports.js';
 import { CALGARY_SEARCH_FIXTURES } from '../src/fixtures.js';
 import { runMigrations } from '../src/migrations.js';
-import {
-  createFixtureSearchProvider,
-} from '../src/search-provider.js';
+import { createFixtureSearchProvider } from '../src/search-provider.js';
 import { DEFAULT_SERVICE_COVERAGE } from '../src/service-coverage.js';
 import { decodePolyline6 } from '../src/traffic/geo.js';
 import {

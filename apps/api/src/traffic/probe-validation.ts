@@ -1,7 +1,4 @@
-import {
-  type Coordinate,
-  type TrafficProbeBatchRequest,
-} from '@navoss/contracts';
+import { type Coordinate, type TrafficProbeBatchRequest } from '@navoss/contracts';
 
 import { cumulativeMeters, haversineMeters, type Position } from './geo.js';
 import { COMMUNITY_TRAFFIC_COVERAGE, type TrafficSettings } from './settings.js';

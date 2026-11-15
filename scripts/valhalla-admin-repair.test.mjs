@@ -106,12 +106,7 @@ test('links Ontario to Canada for the merged graph', async (context) => {
 
 for (const [name, options, provinces, expectedError] of [
   ['missing province', { provinceRows: 'AB=2' }, undefined, /Expected a BC admin polygon/],
-  [
-    'missing Ontario',
-    { provinceRows: 'AB=2 BC=2' },
-    'AB BC ON',
-    /Expected a ON admin polygon/,
-  ],
+  ['missing Ontario', { provinceRows: 'AB=2 BC=2' }, 'AB BC ON', /Expected a ON admin polygon/],
   ['duplicate Canada parents', { preflight: '4|2|0' }, undefined, /at most one Canada parent/],
   ['invalid province geometry', { preflight: '4|0|1' }, undefined, /1 invalid admin polygons/],
   ['an unlinked province', { postflight: '1|3|0|0' }, undefined, /failed validation/],

@@ -20,14 +20,29 @@ const coordinateOf = (id: string) =>
   fixtureValue(borderPoints.cases.find((entry) => entry.id === id)).coordinate;
 
 describe('province registry', () => {
-  it.each(borderPoints.cases)('$id lies in the sourced boundary of $provinceId', ({ coordinate, provinceId }) => {
-    expect(provinceForCoordinate(coordinate)?.area.id ?? null).toBe(provinceId);
-  });
+  it.each(borderPoints.cases)(
+    '$id lies in the sourced boundary of $provinceId',
+    ({ coordinate, provinceId }) => {
+      expect(provinceForCoordinate(coordinate)?.area.id ?? null).toBe(provinceId);
+    },
+  );
 
   it('registers all ten provinces and three territories once, from one source', () => {
-    expect(PROVINCE_REGISTRY.map(({ area }) => area.provinceCode).sort()).toEqual(
-      ['AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'NT', 'NU', 'ON', 'PE', 'QC', 'SK', 'YT'],
-    );
+    expect(PROVINCE_REGISTRY.map(({ area }) => area.provinceCode).sort()).toEqual([
+      'AB',
+      'BC',
+      'MB',
+      'NB',
+      'NL',
+      'NS',
+      'NT',
+      'NU',
+      'ON',
+      'PE',
+      'QC',
+      'SK',
+      'YT',
+    ]);
     expect(new Set(REGISTERED_SERVICE_AREAS.map(({ id }) => id)).size).toBe(13);
   });
 
@@ -90,7 +105,13 @@ describe('declared service coverage', () => {
     const coverage = createServiceCoverage(['ontario', 'alberta', 'british-columbia']);
     expect(coverage.id).toBe('alberta-british-columbia-ontario');
     expect(coverage.displayName).toBe('Alberta, British Columbia and Ontario');
-    for (const id of ['toronto', 'pelee-island', 'manitoulin-island', 'windsor', 'ottawa-parliament']) {
+    for (const id of [
+      'toronto',
+      'pelee-island',
+      'manitoulin-island',
+      'windsor',
+      'ottawa-parliament',
+    ]) {
       expect(DEFAULT.contains(coordinateOf(id)), id).toBe(false);
       expect(coverage.contains(coordinateOf(id)), id).toBe(true);
     }
@@ -130,16 +151,24 @@ describe('declared service coverage', () => {
     const gap = withOntario.disconnectedAreas([coordinateOf('vancouver'), coordinateOf('toronto')]);
     expect([gap?.from.id, gap?.to.id]).toEqual(['british-columbia', 'ontario']);
     const prairies = createServiceCoverage([...western, 'saskatchewan', 'manitoba', 'ontario']);
-    expect(prairies.disconnectedAreas([coordinateOf('calgary'), coordinateOf('toronto')])).toBeUndefined();
+    expect(
+      prairies.disconnectedAreas([coordinateOf('calgary'), coordinateOf('toronto')]),
+    ).toBeUndefined();
     const canada = createServiceCoverage(REGISTERED_SERVICE_AREAS.map(({ id }) => id));
-    expect(canada.disconnectedAreas([coordinateOf('vancouver'), coordinateOf('st-johns')])).toBeUndefined();
-    expect(canada.disconnectedAreas([coordinateOf('whitehorse'), coordinateOf('inuvik')])).toBeUndefined();
-    expect(canada.disconnectedAreas([coordinateOf('yellowknife'), coordinateOf('iqaluit')])?.to.id).toBe(
-      'nunavut',
-    );
+    expect(
+      canada.disconnectedAreas([coordinateOf('vancouver'), coordinateOf('st-johns')]),
+    ).toBeUndefined();
+    expect(
+      canada.disconnectedAreas([coordinateOf('whitehorse'), coordinateOf('inuvik')]),
+    ).toBeUndefined();
+    expect(
+      canada.disconnectedAreas([coordinateOf('yellowknife'), coordinateOf('iqaluit')])?.to.id,
+    ).toBe('nunavut');
     // Newfoundland is reached through Nova Scotia (ferry) or Quebec (Labrador); not from New Brunswick alone.
     const atlantic = createServiceCoverage(['new-brunswick', 'newfoundland-and-labrador']);
-    expect(atlantic.disconnectedAreas([coordinateOf('moncton'), coordinateOf('st-johns')])).toBeDefined();
+    expect(
+      atlantic.disconnectedAreas([coordinateOf('moncton'), coordinateOf('st-johns')]),
+    ).toBeDefined();
   });
 });
 

@@ -195,7 +195,9 @@ describe('declared coverage in the configuration', () => {
       'Driving route origins, waypoints and destinations must be within Alberta and British Columbia.',
     );
     const nearby = { category: 'cafe', q: 'cafe', ...TORONTO };
-    expect((await western.inject({ method: 'POST', payload: nearby, url: '/v1/search' })).statusCode).toBe(400);
+    expect(
+      (await western.inject({ method: 'POST', payload: nearby, url: '/v1/search' })).statusCode,
+    ).toBe(400);
 
     for (const version of ['v1', 'v2']) {
       const response = await withOntario.inject({
@@ -268,14 +270,19 @@ describe('per-province readiness', () => {
         );
       }
       const lat = new URL(url).searchParams.get('lat');
-      const answer = structuredClone(lat === '43.6525' ? reverse.torontoCityHall : reverse.calgaryOutsideIndex);
+      const answer = structuredClone(
+        lat === '43.6525' ? reverse.torontoCityHall : reverse.calgaryOutsideIndex,
+      );
       if (options.iso !== undefined) {
         (answer.address as Record<string, string>)['ISO3166-2-lvl4'] = options.iso;
       }
       return Promise.resolve(new Response(JSON.stringify(answer), { status: 200 }));
     });
   }
-  const endpoints = { locateUrl: 'http://valhalla:8002/locate', nominatimUrl: 'http://nominatim:8080/' };
+  const endpoints = {
+    locateUrl: 'http://valhalla:8002/locate',
+    nominatimUrl: 'http://nominatim:8080/',
+  };
 
   it('names the declared provinces whose recorded data does not answer', async () => {
     const fetchImplementation = recordedFetch();

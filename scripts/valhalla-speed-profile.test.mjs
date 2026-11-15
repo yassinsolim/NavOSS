@@ -131,7 +131,10 @@ test('applies the same hybrid to Ontario only when asked', async (context) => {
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(ontario.rural, fixture.profiles[3].rural);
   assert.deepEqual(ontario.suburban, fixture.profiles[3].suburban);
-  assert.deepEqual(ontario.urban, { ...fixture.globalUrban, way: [85, 50, 27, 25, 23, 17, 15, 10] });
+  assert.deepEqual(ontario.urban, {
+    ...fixture.globalUrban,
+    way: [85, 50, 27, 25, 23, 17, 15, 10],
+  });
   assert.deepEqual(
     generated.find((profile) => profile['iso3166-2'] === 'BC'),
     fixture.profiles[2],

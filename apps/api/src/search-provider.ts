@@ -306,22 +306,10 @@ function nominatimViewbox(
       coverage.bounds.southWest.latitude,
     ].join(',');
   }
-  const west = Math.max(
-    coverage.bounds.southWest.longitude,
-    query.longitude - radius.longitude,
-  );
-  const north = Math.min(
-    coverage.bounds.northEast.latitude,
-    query.latitude + radius.latitude,
-  );
-  const east = Math.min(
-    coverage.bounds.northEast.longitude,
-    query.longitude + radius.longitude,
-  );
-  const south = Math.max(
-    coverage.bounds.southWest.latitude,
-    query.latitude - radius.latitude,
-  );
+  const west = Math.max(coverage.bounds.southWest.longitude, query.longitude - radius.longitude);
+  const north = Math.min(coverage.bounds.northEast.latitude, query.latitude + radius.latitude);
+  const east = Math.min(coverage.bounds.northEast.longitude, query.longitude + radius.longitude);
+  const south = Math.max(coverage.bounds.southWest.latitude, query.latitude - radius.latitude);
   return [west, north, east, south].map((value) => String(Number(value.toFixed(3)))).join(',');
 }
 
@@ -754,9 +742,9 @@ export function createNominatimSearchProvider(
             : NOMINATIM_CATEGORY_VIEWBOX_RADII
           : [undefined];
       const urls = [
-        ...new Set(categoryRadii.map((radius) =>
-          buildNominatimSearchUrl(query, endpoint, radius, coverage),
-        )),
+        ...new Set(
+          categoryRadii.map((radius) => buildNominatimSearchUrl(query, endpoint, radius, coverage)),
+        ),
       ];
       // Local and provincial pools start together and share one timeout budget.
       const signal = AbortSignal.timeout(NOMINATIM_TIMEOUT_MS);

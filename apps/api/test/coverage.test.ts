@@ -5,10 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import borderPoints from '../../../packages/contracts/test/fixtures/coverage-border-points.json' with { type: 'json' };
 import { buildApp } from '../src/app.js';
 import { RouteProviderError } from '../src/route-provider.js';
-import {
-  createFixtureSearchProvider,
-  isCalgarySearchCoordinate,
-} from '../src/search-provider.js';
+import { createFixtureSearchProvider, isCalgarySearchCoordinate } from '../src/search-provider.js';
 import { DEFAULT_SERVICE_COVERAGE } from '../src/service-coverage.js';
 
 // The deployed default declaration: Alberta and British Columbia.

@@ -112,19 +112,19 @@ Valhalla's `timezones.sqlite` already holds every Canadian zone; `stage-coverage
 them before building. The app needs a zone only for "Open / Closing soon" place hours; the registry
 declares one only where it is certain and otherwise the hours stay raw:
 
-| Province or territory | Declared zone | Not declared (hours stay raw) |
-| --- | --- | --- |
-| Alberta, Northwest Territories | America/Edmonton | — |
-| British Columbia | none (Kelowna overlay: America/Vancouver) | five zones in use |
-| Saskatchewan | America/Regina, 109.5° W to 102.5° W | Lloydminster, Creighton and other border towns |
-| Manitoba | America/Winnipeg | — |
-| Ontario | America/Toronto, south of 50° N and east of 90° W | Kenora and the northwest; far-north First Nations on Central time |
-| Quebec | America/Toronto west of 63° W | Lower North Shore, Magdalen Islands (Atlantic) |
-| New Brunswick | America/Moncton | — |
-| Nova Scotia, Prince Edward Island | America/Halifax | — |
-| Newfoundland and Labrador | America/St_Johns (UTC−3:30) on the island and Labrador Straits | rest of Labrador (Atlantic) |
-| Yukon | America/Whitehorse (UTC−7 all year) | — |
-| Nunavut | none | four zones |
+| Province or territory             | Declared zone                                                  | Not declared (hours stay raw)                                     |
+| --------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Alberta, Northwest Territories    | America/Edmonton                                               | —                                                                 |
+| British Columbia                  | none (Kelowna overlay: America/Vancouver)                      | five zones in use                                                 |
+| Saskatchewan                      | America/Regina, 109.5° W to 102.5° W                           | Lloydminster, Creighton and other border towns                    |
+| Manitoba                          | America/Winnipeg                                               | —                                                                 |
+| Ontario                           | America/Toronto, south of 50° N and east of 90° W              | Kenora and the northwest; far-north First Nations on Central time |
+| Quebec                            | America/Toronto west of 63° W                                  | Lower North Shore, Magdalen Islands (Atlantic)                    |
+| New Brunswick                     | America/Moncton                                                | —                                                                 |
+| Nova Scotia, Prince Edward Island | America/Halifax                                                | —                                                                 |
+| Newfoundland and Labrador         | America/St_Johns (UTC−3:30) on the island and Labrador Straits | rest of Labrador (Atlantic)                                       |
+| Yukon                             | America/Whitehorse (UTC−7 all year)                            | —                                                                 |
+| Nunavut                           | none                                                           | four zones                                                        |
 
 ### Quebec: French names, signs and speech
 
@@ -162,17 +162,17 @@ anyone claims ETA quality there.
 
 ### Sizing on VM 100 (6 vCPU, 24 GiB, 255 GB artifact disk)
 
-| Quantity | Value | Basis |
-| --- | --- | --- |
-| Canada extract | 6.50 GB; Ontario 1.02 GB, Quebec 1.17 GB | measured (Geofabrik 261114) |
-| Alberta+BC extract | 1.60 GB (352 MB + 1,250 MB) | measured; Canada is 4.06× |
-| Alberta+BC Nominatim | 6.0 GiB; Valhalla 2.8 GiB, 3,344 tiles; serving tar 589 MB | measured on the VM (2026-07-31, 2026-11-11) |
-| Toronto–Hamilton sample (128 MB) | Nominatim 1.57 GB database + 2.0 GB WAL, 14 min on 4 Mac cores; Valhalla tar 214 MB, ≈ 30 s per pass | measured locally 2026-11-15 |
-| Canada Valhalla | tar 2.5–4 GB; stage peak 8–20 GB; build ≤ 8 GiB on 4 threads, 1–4 h; serving limit 4 GiB | estimate (scaled; dense cities make the sample ratio higher) |
-| Canada Nominatim | final 25–50 GiB frozen; import peak 70–110 GB; 10 GiB container (2 GB shared buffers, 3 GB osm2pgsql cache, 1 GB maintenance memory, 4 threads); 12–24 h | estimate: 4× the Alberta+BC database, up to the Toronto sample's density; Nominatim's documentation (64 GB+ RAM recommended only for planet-scale imports; dynamic update tables are about half the database and are dropped by `FREEZE`) |
-| Flatnode | no | Nominatim recommends it for Europe/North America/planet; the file needs ≥ 75 GB whatever the extract (node ids span the planet) |
-| Live after cutover | limits Nominatim 8 GiB, Valhalla 4 GiB, API 0.75, reports 0.75, indexer 0.5, Caddy 0.2: 14.2 GiB of 24 | plan |
-| Disk at peak | ≈ 29 GB live + 13 GB inputs + 20 GB graph + 110 GB import = 172 GB of 255 GB | estimate (worst case) |
+| Quantity                         | Value                                                                                                                                                    | Basis                                                                                                                                                                                                                                     |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Canada extract                   | 6.50 GB; Ontario 1.02 GB, Quebec 1.17 GB                                                                                                                 | measured (Geofabrik 261114)                                                                                                                                                                                                               |
+| Alberta+BC extract               | 1.60 GB (352 MB + 1,250 MB)                                                                                                                              | measured; Canada is 4.06×                                                                                                                                                                                                                 |
+| Alberta+BC Nominatim             | 6.0 GiB; Valhalla 2.8 GiB, 3,344 tiles; serving tar 589 MB                                                                                               | measured on the VM (2026-07-31, 2026-11-11)                                                                                                                                                                                               |
+| Toronto–Hamilton sample (128 MB) | Nominatim 1.57 GB database + 2.0 GB WAL, 14 min on 4 Mac cores; Valhalla tar 214 MB, ≈ 30 s per pass                                                     | measured locally 2026-11-15                                                                                                                                                                                                               |
+| Canada Valhalla                  | tar 2.5–4 GB; stage peak 8–20 GB; build ≤ 8 GiB on 4 threads, 1–4 h; serving limit 4 GiB                                                                 | estimate (scaled; dense cities make the sample ratio higher)                                                                                                                                                                              |
+| Canada Nominatim                 | final 25–50 GiB frozen; import peak 70–110 GB; 10 GiB container (2 GB shared buffers, 3 GB osm2pgsql cache, 1 GB maintenance memory, 4 threads); 12–24 h | estimate: 4× the Alberta+BC database, up to the Toronto sample's density; Nominatim's documentation (64 GB+ RAM recommended only for planet-scale imports; dynamic update tables are about half the database and are dropped by `FREEZE`) |
+| Flatnode                         | no                                                                                                                                                       | Nominatim recommends it for Europe/North America/planet; the file needs ≥ 75 GB whatever the extract (node ids span the planet)                                                                                                           |
+| Live after cutover               | limits Nominatim 8 GiB, Valhalla 4 GiB, API 0.75, reports 0.75, indexer 0.5, Caddy 0.2: 14.2 GiB of 24                                                   | plan                                                                                                                                                                                                                                      |
+| Disk at peak                     | ≈ 29 GB live + 13 GB inputs + 20 GB graph + 110 GB import = 172 GB of 255 GB                                                                             | estimate (worst case)                                                                                                                                                                                                                     |
 
 Canada fits 24 GiB only with the steps run one at a time, which `stage-coverage.sh` enforces: the
 import's 10 GiB plus the live stack (≈ 2.5 GiB in use) leaves more than the 4 GiB floor. If the

@@ -91,16 +91,16 @@ fallback                -> HTTP 404
 
 These are hard starting limits, not targets to consume:
 
-| Service                               |                               Initial memory budget |
-| ------------------------------------- | --------------------------------------------------: |
+| Service                               |                                 Initial memory budget |
+| ------------------------------------- | ----------------------------------------------------: |
 | Nominatim/PostgreSQL                  |    6 GiB container limit (8 GiB for the Canada index) |
 | Valhalla                              |    2 GiB container limit (4 GiB for the Canada graph) |
 | Staged build (one at a time)          | Valhalla 8 GiB or Nominatim import 10 GiB, never both |
-| Reports PostgreSQL/PostGIS            |               768 MiB limit; 256 MiB shared buffers |
-| Calgary search indexer                |                             512 MiB container limit |
-| NavOSS API                            |                             768 MiB container limit |
-| Caddy                                 |                             192 MiB container limit |
-| OS, cloudflared, cache, safety margin | Remaining memory; 14 GiB available after deployment |
+| Reports PostgreSQL/PostGIS            |                 768 MiB limit; 256 MiB shared buffers |
+| Calgary search indexer                |                               512 MiB container limit |
+| NavOSS API                            |                               768 MiB container limit |
+| Caddy                                 |                               192 MiB container limit |
+| OS, cloudflared, cache, safety margin |   Remaining memory; 14 GiB available after deployment |
 
 Build or import only one heavy artifact at a time. Prefer staging validated Valhalla graphs and Nominatim indexes away from tester traffic. If an on-VM build is unavoidable, stop the corresponding serving container, apply explicit CPU/memory limits, and never build during a tester session.
 

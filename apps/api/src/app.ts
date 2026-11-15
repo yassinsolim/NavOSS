@@ -49,10 +49,7 @@ import {
   type CommunityReportService,
 } from './community-reports.js';
 import { registerCommunityRoutes } from './community-routes.js';
-import {
-  createConfiguredCoverageReadiness,
-  type CoverageReadiness,
-} from './coverage-readiness.js';
+import { createConfiguredCoverageReadiness, type CoverageReadiness } from './coverage-readiness.js';
 import {
   ContributionProviderError,
   createConfiguredContributionProvider,

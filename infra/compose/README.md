@@ -312,15 +312,15 @@ two heavy steps at once (`stage-coverage.sh` refuses). During steps 2 and 3 keep
 available (`free -h`) and no sustained swap; stop the step (`./stage-coverage.sh stop canada`) if
 not, then rerun it.
 
-| Step | Command | Expected time | Artifact disk | Memory |
-| --- | --- | --- | --- | --- |
-| 0 | Update the checkout and API image | 5 min | 1 GB | — |
-| 1 | `inputs`: verify the extract, write the routing input | 15–30 min | +6.5 GB | < 1 GiB |
-| 2 | `valhalla`: two graph passes and the admin repair | 1–4 h | +8–20 GB peak, ≈ 8–12 GB kept | ≤ 8 GiB |
-| 3 | `nominatim`: search import | 12–24 h | +70–110 GB peak, ≈ 20–30 GB kept | ≤ 10 GiB |
-| 4 | `serve` + `verify`, route matrix over SSH | 30 min | — | ≈ 7 GiB while staged |
-| 5 | Stop staging | 1 min | — | frees it |
-| 6 | Cutover | 5–10 min, ≈ 1 min API restart | — | live limits below |
+| Step | Command                                               | Expected time                 | Artifact disk                    | Memory               |
+| ---- | ----------------------------------------------------- | ----------------------------- | -------------------------------- | -------------------- |
+| 0    | Update the checkout and API image                     | 5 min                         | 1 GB                             | —                    |
+| 1    | `inputs`: verify the extract, write the routing input | 15–30 min                     | +6.5 GB                          | < 1 GiB              |
+| 2    | `valhalla`: two graph passes and the admin repair     | 1–4 h                         | +8–20 GB peak, ≈ 8–12 GB kept    | ≤ 8 GiB              |
+| 3    | `nominatim`: search import                            | 12–24 h                       | +70–110 GB peak, ≈ 20–30 GB kept | ≤ 10 GiB             |
+| 4    | `serve` + `verify`, route matrix over SSH             | 30 min                        | —                                | ≈ 7 GiB while staged |
+| 5    | Stop staging                                          | 1 min                         | —                                | frees it             |
+| 6    | Cutover                                               | 5–10 min, ≈ 1 min API restart | —                                | live limits below    |
 
 The time, disk and memory figures for Canada are estimates scaled from the measured Alberta+BC
 artifacts; the architecture document says how. Record the real values in

@@ -250,7 +250,8 @@ export function createServiceCoverage(ids: readonly string[]): ServiceCoverage {
         const area = areaForCoordinate(coordinate);
         if (area === undefined) continue;
         if (first === undefined) first = area;
-        else if (component.get(area.id) !== component.get(first.id)) return { from: first, to: area };
+        else if (component.get(area.id) !== component.get(first.id))
+          return { from: first, to: area };
       }
       return undefined;
     },

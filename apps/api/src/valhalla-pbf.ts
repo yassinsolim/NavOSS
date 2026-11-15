@@ -230,7 +230,10 @@ const FRENCH_CARDINALS: Readonly<Record<string, string>> = {
 function withoutTranslatedDuplicates(texts: string[]): string[] {
   const signed = new Set(texts);
   return texts.filter((text) => {
-    const english = text.replace(/\b(Est|Nord|Ouest|Sud)\b/gu, (word) => FRENCH_CARDINALS[word] ?? word);
+    const english = text.replace(
+      /\b(Est|Nord|Ouest|Sud)\b/gu,
+      (word) => FRENCH_CARDINALS[word] ?? word,
+    );
     return english === text || !signed.has(english);
   });
 }

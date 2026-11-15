@@ -94,7 +94,9 @@ describe('real Valhalla lossless response fixtures', () => {
   it('keeps lanes, exit numbers and signposts on recorded Ontario 400-series interchanges', () => {
     const route = fixtureValue(parseValhallaPbf(bytes(toronto.response))[0]);
     const steps = route.steps;
-    const express = fixtureValue(steps.find((step) => step.signpostBranch?.includes('401 East Express')));
+    const express = fixtureValue(
+      steps.find((step) => step.signpostBranch?.includes('401 East Express')),
+    );
     // The sign reads "401 EAST / EST EXPRESS"; drivers see and hear the English direction once.
     expect(express.signpostBranch).toEqual(['401 East Express']);
     expect(express.signpost).toBe('401 East Express');
@@ -102,7 +104,11 @@ describe('real Valhalla lossless response fixtures', () => {
     const collector = fixtureValue(
       steps.find((step) => step.signpostToward?.includes('Islington Avenue')),
     );
-    expect(collector.signpostToward).toEqual(['Islington Avenue', 'Weston Road', 'Black Creek Drive']);
+    expect(collector.signpostToward).toEqual([
+      'Islington Avenue',
+      'Weston Road',
+      'Black Creek Drive',
+    ]);
     expect(collector.currentRoadName).toContain('Highway 401 Collector');
     const exit = fixtureValue(steps.find((step) => step.exitNumber === '380'));
     expect(exit.instruction).toBe('Take exit 380 onto Brimley Road South.');
@@ -121,7 +127,9 @@ describe('real Valhalla lossless response fixtures', () => {
     // A French-only sign has no English twin to collapse into; drivers see what is posted.
     expect(exit70.signpostBranch).toEqual(['15 Nord']);
     expect(exit70.signpostToward).toEqual(['Laval']);
-    expect(route.steps.filter((step) => (step.lanes?.length ?? 0) > 0).length).toBeGreaterThanOrEqual(3);
+    expect(
+      route.steps.filter((step) => (step.lanes?.length ?? 0) > 0).length,
+    ).toBeGreaterThanOrEqual(3);
     expect(route.steps.map((step) => step.instruction)).toContain(
       'Bear right onto Boulevard de la Concorde Ouest.',
     );

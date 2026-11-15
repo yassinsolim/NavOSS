@@ -40,7 +40,8 @@ describe('public Alberta and BC route-quality matrix', () => {
       provinceForCoordinate(fixtureValue(anchors[corridor.originAnchorId]).coordinate)?.area.id,
     ).toBe('alberta');
     expect(
-      provinceForCoordinate(fixtureValue(anchors[corridor.destinationAnchorId]).coordinate)?.area.id,
+      provinceForCoordinate(fixtureValue(anchors[corridor.destinationAnchorId]).coordinate)?.area
+        .id,
     ).toBe('british-columbia');
   });
   it('uses valid, in-coverage public anchors and no missing corridor references', () => {
@@ -87,11 +88,31 @@ describe('public Canada route-quality matrix', () => {
   it('covers every requested city, region and inter-provincial stress case', () => {
     const tags = new Set(canadaMatrix.corridors.flatMap((corridor) => corridor.tags));
     for (const tag of [
-      'toronto', 'ottawa', 'hamilton', 'london', 'windsor', 'sudbury', 'thunder-bay',
-      'montreal', 'quebec-city', 'gatineau', 'sherbrooke',
-      'regina', 'saskatoon', 'winnipeg',
-      'halifax', 'moncton', 'saint-john', 'charlottetown', 'st-johns',
-      'whitehorse', 'yellowknife', 'ferry', 'stress', '400-series', 'autoroute',
+      'toronto',
+      'ottawa',
+      'hamilton',
+      'london',
+      'windsor',
+      'sudbury',
+      'thunder-bay',
+      'montreal',
+      'quebec-city',
+      'gatineau',
+      'sherbrooke',
+      'regina',
+      'saskatoon',
+      'winnipeg',
+      'halifax',
+      'moncton',
+      'saint-john',
+      'charlottetown',
+      'st-johns',
+      'whitehorse',
+      'yellowknife',
+      'ferry',
+      'stress',
+      '400-series',
+      'autoroute',
     ])
       expect(tags.has(tag), tag).toBe(true);
     const ids = new Set(canadaMatrix.corridors.map(({ id }) => id));
@@ -115,7 +136,9 @@ describe('public Canada route-quality matrix', () => {
       const [minimumKm, maximumKm] = corridor.distanceRangeKm;
       expect(minimumKm).toBeLessThan(fixtureValue(maximumKm));
     }
-    const ferry = fixtureValue(canadaMatrix.corridors.find(({ id }) => id === 'halifax-st-johns-ferry'));
+    const ferry = fixtureValue(
+      canadaMatrix.corridors.find(({ id }) => id === 'halifax-st-johns-ferry'),
+    );
     expect(ferry.maximumSegmentMeters).toBeGreaterThanOrEqual(100_000);
     const stress = fixtureValue(
       canadaMatrix.corridors.find(({ id }) => id === 'vancouver-toronto-stress'),

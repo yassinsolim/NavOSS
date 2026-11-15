@@ -380,11 +380,17 @@ describe('place opening-hours status', () => {
     expect(placeOpenStatus(place('Mo-Su 09:00-17:00', torontoCenter), evening)).toBe('closed');
     // Kenora, west of 90° W: Central by law, but local practice varies nearby; no guess.
     expect(
-      placeOpenStatus(place('Mo-Su 09:00-17:00', { latitude: 49.7671, longitude: -94.4894 }), evening),
+      placeOpenStatus(
+        place('Mo-Su 09:00-17:00', { latitude: 49.7671, longitude: -94.4894 }),
+        evening,
+      ),
     ).toBeUndefined();
     // Detroit is not in any registered province.
     expect(
-      placeOpenStatus(place('Mo-Su 09:00-17:00', { latitude: 42.3314, longitude: -83.0458 }), evening),
+      placeOpenStatus(
+        place('Mo-Su 09:00-17:00', { latitude: 42.3314, longitude: -83.0458 }),
+        evening,
+      ),
     ).toBeUndefined();
   });
 
