@@ -359,7 +359,7 @@ final class CommunityClientTests: XCTestCase {
       return handler!(sent)
     }
     do {
-      _ = try await makeClient().trafficCredential()
+      _ = try await makeClient().trafficCredential(permit: openTrafficPermit())
       XCTFail("expected too new")
     } catch {
       XCTAssertEqual(error as? NavOSSCommunityFailure, .installationTooNew(retryAfterSeconds: 3600))

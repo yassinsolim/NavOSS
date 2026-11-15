@@ -56,6 +56,14 @@ final class Locked<Value>: @unchecked Sendable {
   }
 }
 
+/// A permit from a gate that is open (sharing on, navigating).
+func openTrafficPermit() -> NavOSSTrafficUploadPermit {
+  let gate = NavOSSTrafficUploadGate()
+  gate.setSwitch(true)
+  gate.setNavigating(true)
+  return gate.open()!
+}
+
 /// Whether a request could still be created under `permit` right now.
 func admits(_ permit: NavOSSTrafficUploadPermit?) -> Bool {
   guard let permit else { return false }
@@ -87,14 +95,20 @@ actor RuleTransport: NavOSSTrafficTransport {
   nonisolated let gate: StallGate?
   /// Holds an upload before its request is created (queued, not started).
   nonisolated let beforeRequest: StallGate?
+  /// Holds the status answer (anonymous) until released.
+  nonisolated let statusGate: StallGate?
+
   /// The permit of the latest upload handed over, and whether its request was cancelled, for
   /// checks made right after a synchronous call returns.
   nonisolated let heldPermit = Locked<NavOSSTrafficUploadPermit?>(nil)
   nonisolated let requestCancelled = Locked<Flag?>(nil)
   let clock: Clock
 
-  init(clock: Clock, stall: Bool = false, holdBeforeRequest: Bool = false) {
+  init(
+    clock: Clock, stall: Bool = false, holdBeforeRequest: Bool = false, holdStatus: Bool = false
+  ) {
     self.clock = clock
+    statusGate = holdStatus ? StallGate() : nil
     gate = stall ? StallGate() : nil
     beforeRequest = holdBeforeRequest ? StallGate() : nil
   }
@@ -111,10 +125,17 @@ actor RuleTransport: NavOSSTrafficTransport {
 
   func trafficStatus() async throws -> NavOSSTrafficStatus {
     statusRequests += 1
+    if let statusGate { await statusGate.wait() }
     return NavOSSTrafficStatus(mode: .live, accepting: accepting, rules: NavOSSTrafficProbeRules())
   }
 
-  func trafficCredential() async throws -> NavOSSTrafficCredential {
+  func trafficCredential(
+    permit: NavOSSTrafficUploadPermit
+  ) async throws -> NavOSSTrafficCredential {
+    // Like `NavOSSCommunityClient`: the identity-bearing request exists only under the permit.
+    let id = UUID()
+    guard permit.start(id, { {} }) else { throw NavOSSCommunityFailure.network }
+    defer { permit.finish(id) }
     credentialRequests += 1
     let result: Result<NavOSSTrafficCredential, NavOSSCommunityFailure> =
       credentialResults.isEmpty
@@ -637,6 +658,39 @@ final class CommunityTrafficServiceRulesTests: XCTestCase {
     service.navigationDidEnd()
   }
 
+  // MARK: Credential requests are gated too; Reset cannot be undone by a late 403
+
+  func testEndingNavigationWhileTheStatusIsPendingSendsNoCredentialRequest() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock, holdStatus: true)
+    let (service, _) = makeService(transport, clock: clock)
+    service.navigationDidStart(trip())
+    let asking = await eventually { transport.statusGate?.waiting == 1 }
+    XCTAssertTrue(asking, "the status request is pending")
+    service.navigationDidEnd()
+    transport.statusGate?.release()
+    await service.traffic?.settled()
+    await settle()
+    let credentials = await transport.credentialRequests
+    XCTAssertEqual(credentials, 0, "no identity-bearing request after navigation ended")
+  }
+
+  func testSwitchingOffWhileTheStatusIsPendingSendsNoCredentialRequest() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock, holdStatus: true)
+    let (service, preferences) = makeService(transport, clock: clock)
+    service.navigationDidStart(trip())
+    let asking = await eventually { transport.statusGate?.waiting == 1 }
+    XCTAssertTrue(asking, "the status request is pending")
+    preferences.setSharesTrafficSpeeds(false)
+    transport.statusGate?.release()
+    await service.traffic?.settled()
+    await settle()
+    let credentials = await transport.credentialRequests
+    XCTAssertEqual(credentials, 0, "no identity-bearing request after sharing was turned off")
+    service.navigationDidEnd()
+  }
+
   // MARK: A 503 on the credential request pauses; it does not withdraw consent
 
   func testACredentialOutagePausesSharingAndKeepsTheDriversChoice() async {
@@ -780,6 +834,71 @@ final class CommunityTrafficClientCancellationTests: XCTestCase {
     XCTAssertFalse(CommunityStubProtocol.sent.contains { $0.path == "/v2/traffic/probes" })
   }
 
+  func testACredentialIsNeverRequestedWithIdentityUnderAClosedGate() async throws {
+    CommunityStubProtocol.sent = []
+    CommunityStubProtocol.started = []
+    CommunityStubProtocol.handler = { sent in
+      switch sent.path {
+      case "/v2/community/challenges": return (200, ["challenge": "Y2hhbGxlbmdlLWNoYWxsZW5nZS0xMjM0"], [:])
+      case "/v2/community/installations": return (201, ["status": "registered"], [:])
+      default: return (200, ["credential": "c", "expiresAt": "2099-01-01T00:00:00.000Z"], [:])
+      }
+    }
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [CommunityStubProtocol.self]
+    let store = NavOSSCommunityMemorySecretStore()
+    let client = NavOSSCommunityClient(
+      baseURL: URL(string: "http://127.0.0.1:3001")!,
+      provider: NavOSSDevelopmentAttestationProvider(
+        teamId: "ABCDE12345", bundleId: "org.navoss.mobile", store: store),
+      store: store,
+      session: URLSession(configuration: configuration), discovery: NavOSSRoutesEndpointDiscovery())
+    let (gate, permit) = try openGate()
+    gate.setNavigating(false)
+    do {
+      _ = try await client.trafficCredential(permit: permit)
+      XCTFail("no credential after the gate closed")
+    } catch {}
+    try? await Task.sleep(nanoseconds: 100_000_000)
+    let identityBearing = CommunityStubProtocol.started.filter {
+      $0 == "/v2/community/installations" || $0 == "/v2/traffic/credentials"
+    }
+    XCTAssertEqual(identityBearing, [], "neither registration nor the asserted request was sent")
+  }
+
+  func testARegisteredInstallationSendsNoAssertedRequestUnderAClosedGate() async throws {
+    CommunityStubProtocol.sent = []
+    CommunityStubProtocol.handler = { sent in
+      switch sent.path {
+      case "/v2/community/challenges": return (200, ["challenge": "Y2hhbGxlbmdlLWNoYWxsZW5nZS0xMjM0"], [:])
+      case "/v2/community/installations": return (201, ["status": "registered"], [:])
+      default: return (200, ["credential": "c", "expiresAt": "2099-01-01T00:00:00.000Z"], [:])
+      }
+    }
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [CommunityStubProtocol.self]
+    let store = NavOSSCommunityMemorySecretStore()
+    let client = NavOSSCommunityClient(
+      baseURL: URL(string: "http://127.0.0.1:3001")!,
+      provider: NavOSSDevelopmentAttestationProvider(
+        teamId: "ABCDE12345", bundleId: "org.navoss.mobile", store: store),
+      store: store,
+      session: URLSession(configuration: configuration), discovery: NavOSSRoutesEndpointDiscovery())
+    // Registered and issued once while sharing.
+    _ = try await client.trafficCredential(permit: openTrafficPermit())
+    let (gate, permit) = try openGate()
+    gate.setSwitch(false)
+    CommunityStubProtocol.started = []
+    do {
+      _ = try await client.trafficCredential(permit: permit)
+      XCTFail("no credential after the gate closed")
+    } catch {}
+    try? await Task.sleep(nanoseconds: 100_000_000)
+    XCTAssertFalse(
+      CommunityStubProtocol.started.contains("/v2/traffic/credentials"),
+      "the asserted request carrying the key identifier was not sent")
+  }
+
   func testClosingTheGateCancelsARequestInFlight() async throws {
     CommunityStubProtocol.sent = []
     CommunityStubProtocol.handler = { _ in (202, ["status": "accepted"], [:]) }
@@ -806,7 +925,12 @@ actor SlowCredentialTransport: NavOSSTrafficTransport {
     NavOSSTrafficStatus(mode: .live, accepting: true, rules: NavOSSTrafficProbeRules())
   }
 
-  func trafficCredential() async throws -> NavOSSTrafficCredential {
+  func trafficCredential(
+    permit: NavOSSTrafficUploadPermit
+  ) async throws -> NavOSSTrafficCredential {
+    let id = UUID()
+    guard permit.start(id, { {} }) else { throw NavOSSCommunityFailure.network }
+    defer { permit.finish(id) }
     credentialRequests += 1
     await gate.wait()
     throw NavOSSCommunityFailure.installationTooNew(retryAfterSeconds: 3_600)

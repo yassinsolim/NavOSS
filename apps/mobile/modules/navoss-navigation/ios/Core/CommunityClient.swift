@@ -391,12 +391,16 @@ public actor NavOSSCommunityClient {
     forget(keyId: keyId)
   }
 
-  public func trafficCredential() async throws -> NavOSSTrafficCredential {
+  /// An upload credential. The registration and the asserted request, which carry this
+  /// installation's key identifier, are created only under `permit`.
+  public func trafficCredential(
+    permit: NavOSSTrafficUploadPermit
+  ) async throws -> NavOSSTrafficCredential {
     struct Response: Decodable {
       let credential: String
       let expiresAt: Date
     }
-    let response: Response = try await asserted(.trafficCredential) { assertion in
+    let response: Response = try await asserted(.trafficCredential, permit: permit) { assertion in
       try self.request("POST", "/v2/traffic/credentials", body: AssertedBody(assertion: assertion))
     }
     return NavOSSTrafficCredential(expiresAt: response.expiresAt, value: response.credential)
@@ -413,26 +417,34 @@ public actor NavOSSCommunityClient {
     else {
       return .dropped
     }
-    let session = session
-    let id = UUID()
     // A batch that did not arrive is dropped like any other: never retried or kept.
-    let status: Int? = await withCheckedContinuation { continuation in
-      let started = permit.start(id) {
-        let task = session.dataTask(with: request) { _, response, _ in
-          permit.finish(id)
-          continuation.resume(returning: (response as? HTTPURLResponse)?.statusCode)
-        }
-        task.resume()
-        return { task.cancel() }
-      }
-      if !started { continuation.resume(returning: nil) }
-    }
+    let status = (await gatedData(request, permit: permit)?.1 as? HTTPURLResponse)?.statusCode
     switch status {
     case .some(200..<300): return .accepted
     case 401: return .unauthorized
     case 429: return .rateLimited
     case 503: return .unavailable
     default: return .dropped
+    }
+  }
+
+  /// Creates and starts `request` under `permit`'s gate lock, or not at all once the gate has
+  /// closed; closing it later cancels the request. Nil when refused, cancelled or failed.
+  private func gatedData(
+    _ request: URLRequest, permit: NavOSSTrafficUploadPermit
+  ) async -> (Data, URLResponse)? {
+    let session = session
+    let id = UUID()
+    return await withCheckedContinuation { continuation in
+      let started = permit.start(id) {
+        let task = session.dataTask(with: request) { data, response, _ in
+          permit.finish(id)
+          continuation.resume(returning: data.flatMap { data in response.map { (data, $0) } })
+        }
+        task.resume()
+        return { task.cancel() }
+      }
+      if !started { continuation.resume(returning: nil) }
     }
   }
 
@@ -459,16 +471,16 @@ public actor NavOSSCommunityClient {
   }
 
   /// Registers once; concurrent writers share one registration.
-  private func ensureRegistered() async throws -> String {
+  private func ensureRegistered(permit: NavOSSTrafficUploadPermit? = nil) async throws -> String {
     if let keyId = storedKeyId { return keyId }
     if let registration { return try await registration.value }
-    let task = Task { try await self.register() }
+    let task = Task { try await self.register(permit: permit) }
     registration = task
     defer { registration = nil }
     return try await task.value
   }
 
-  private func register() async throws -> String {
+  private func register(permit: NavOSSTrafficUploadPermit?) async throws -> String {
     struct Body: Encodable {
       let attestationObject: String?
       let challenge: String
@@ -517,7 +529,8 @@ public actor NavOSSCommunityClient {
           attestationObject: nil, challenge: challenge, keyId: keyId, kind: "development",
           publicKey: publicKey.base64EncodedString())
       }
-      let _: Ignored = try await send(request("POST", "/v2/community/installations", body: body))
+      let _: Ignored = try await send(
+        request("POST", "/v2/community/installations", body: body), permit: permit)
       guard store.set(Data(keyId.utf8), for: Self.keyIdAccount) else {
         throw NavOSSCommunityFailure.rejected
       }
@@ -541,6 +554,7 @@ public actor NavOSSCommunityClient {
   private func asserted<Response: Decodable>(
     _ operation: NavOSSCommunityOperation,
     reRegister: Bool = true,
+    permit: NavOSSTrafficUploadPermit? = nil,
     makeRequest: (AssertionBody) throws -> URLRequest
   ) async throws -> Response {
     await acquireWrite()
@@ -550,7 +564,7 @@ public actor NavOSSCommunityClient {
       attempt += 1
       var keyId: String?
       do {
-        let registeredKeyId = try await ensureRegistered()
+        let registeredKeyId = try await ensureRegistered(permit: permit)
         keyId = registeredKeyId
         let challenge = try await challenge()
         let assertion = try await mapped {
@@ -564,7 +578,8 @@ public actor NavOSSCommunityClient {
             AssertionBody(
               assertion: assertion.base64EncodedString(), challenge: challenge,
               keyId: registeredKeyId)
-          )
+          ),
+          permit: permit
         )
       } catch let failure as RetryableFailure {
         if let keyId, failure != .usedChallenge {
@@ -663,8 +678,11 @@ public actor NavOSSCommunityClient {
     return request
   }
 
-  private func send<Response: Decodable>(_ request: URLRequest) async throws -> Response {
-    let data = try await sendData(request)
+  /// With `permit`, the request is created only under it (see `gatedData`).
+  private func send<Response: Decodable>(
+    _ request: URLRequest, permit: NavOSSTrafficUploadPermit? = nil
+  ) async throws -> Response {
+    let data = try await sendData(request, permit: permit)
     do {
       return try decoder.decode(Response.self, from: data)
     } catch {
@@ -672,13 +690,23 @@ public actor NavOSSCommunityClient {
     }
   }
 
-  private func sendData(_ request: URLRequest) async throws -> Data {
+  private func sendData(
+    _ request: URLRequest, permit: NavOSSTrafficUploadPermit? = nil
+  ) async throws -> Data {
     let data: Data
     let urlResponse: URLResponse
-    do {
-      (data, urlResponse) = try await session.data(for: request)
-    } catch {
-      throw NavOSSCommunityFailure.network
+    if let permit {
+      // Refused (sharing off or navigation ended) or cancelled: as if it never left.
+      guard let answer = await gatedData(request, permit: permit) else {
+        throw NavOSSCommunityFailure.network
+      }
+      (data, urlResponse) = answer
+    } else {
+      do {
+        (data, urlResponse) = try await session.data(for: request)
+      } catch {
+        throw NavOSSCommunityFailure.network
+      }
     }
     guard let response = urlResponse as? HTTPURLResponse else {
       throw NavOSSCommunityFailure.invalidResponse

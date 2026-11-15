@@ -3,7 +3,10 @@ import Foundation
 /// What the uploader needs from the network; `NavOSSCommunityClient` in the app, a fake in tests.
 public protocol NavOSSTrafficTransport: Sendable {
   func trafficStatus() async throws -> NavOSSTrafficStatus
-  func trafficCredential() async throws -> NavOSSTrafficCredential
+  /// Asks for an upload credential. Every request that carries this installation's identity
+  /// (registration, the asserted credential request) must be created only through `permit`;
+  /// anonymous reads (challenges) need not be.
+  func trafficCredential(permit: NavOSSTrafficUploadPermit) async throws -> NavOSSTrafficCredential
   /// Sends `batch` once. The request must be created and started only through `permit`, which
   /// refuses once sharing was turned off or navigation ended and cancels it if that happens later.
   func uploadProbes(
@@ -69,6 +72,10 @@ public final class NavOSSTrafficUploadGate: @unchecked Sendable {
     }
   }
 
+  fileprivate func admits(token: UInt64) -> Bool {
+    lock.withLock { opened == token && switchOn && navigating }
+  }
+
   fileprivate func finish(_ id: UUID) {
     _ = lock.withLock { inFlight.removeValue(forKey: id) }
   }
@@ -94,6 +101,11 @@ public struct NavOSSTrafficUploadPermit: Sendable {
 
   public func finish(_ id: UUID) {
     gate.finish(id)
+  }
+
+  /// Whether a request could still be started under this permit.
+  public var isValid: Bool {
+    gate.admits(token: token)
   }
 }
 
@@ -429,10 +441,11 @@ public actor NavOSSTrafficSharingSession {
     }
     // Collect from the first fix so the trip's start is trimmed even while the credential is
     // requested; anything completed before a credential exists is dropped.
-    collector = NavOSSTrafficProbeCollector(rules: status.rules, protectedPoints: protectedPoints)
     // Nil when the app has already turned sharing off or ended navigation (that change is on its
-    // way here): nothing can be uploaded under it.
-    permit = gate.open()
+    // way here): no credential is asked for and nothing is collected or uploaded.
+    guard let opened = gate.open() else { return }
+    permit = opened
+    collector = NavOSSTrafficProbeCollector(rules: status.rules, protectedPoints: protectedPoints)
     guard await refreshCredential(generation: current), generation == current else { return }
     if let pausedUntil, now() < pausedUntil {
       set(.paused(until: pausedUntil))
@@ -524,8 +537,10 @@ public actor NavOSSTrafficSharingSession {
 
   /// Requests a credential; on failure sets the trip's state and returns false.
   private func refreshCredential(generation current: UInt64) async -> Bool {
+    // Identity-bearing: only under a permit that is still open.
+    guard let permit, permit.isValid else { return false }
     do {
-      let issued = try await transport.trafficCredential()
+      let issued = try await transport.trafficCredential(permit: permit)
       guard generation == current else { return false }
       credential = issued
       return true
@@ -536,7 +551,9 @@ public actor NavOSSTrafficSharingSession {
         let until = now().addingTimeInterval(TimeInterval(retryAfter ?? 24 * 60 * 60))
         embargo.save(until)
       }
-      guard generation == current else { return false }
+      // Refused or cancelled by the gate: sharing was turned off or navigation ended, and that
+      // change is on its way here.
+      guard generation == current, permit.isValid else { return false }
       switch failure {
       case .installationTooNew:
         guard let until = embargo.load() else { return false }

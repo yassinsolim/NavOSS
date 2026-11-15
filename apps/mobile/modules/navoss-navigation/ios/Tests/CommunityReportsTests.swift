@@ -268,7 +268,10 @@ private actor FakeTrafficTransport: NavOSSTrafficTransport {
     NavOSSTrafficStatus(mode: .live, accepting: statusAccepting, rules: NavOSSTrafficProbeRules())
   }
 
-  func trafficCredential() async throws -> NavOSSTrafficCredential {
+  func trafficCredential(
+    permit: NavOSSTrafficUploadPermit
+  ) async throws -> NavOSSTrafficCredential {
+    guard permit.start(UUID(), { {} }) else { throw NavOSSCommunityFailure.network }
     credentialRequests += 1
     let result = credentialResults.isEmpty
       ? .success(NavOSSTrafficCredential(expiresAt: clock.addingTimeInterval(7_200), value: "c\(credentialRequests)"))
