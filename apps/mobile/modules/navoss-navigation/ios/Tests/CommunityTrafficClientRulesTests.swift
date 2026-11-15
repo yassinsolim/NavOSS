@@ -46,6 +46,31 @@ final class StallGate: @unchecked Sendable {
   }
 }
 
+final class Locked<Value>: @unchecked Sendable {
+  private let lock = NSLock()
+  private var stored: Value
+  init(_ value: Value) { stored = value }
+  var value: Value {
+    get { lock.withLock { stored } }
+    set { lock.withLock { stored = newValue } }
+  }
+}
+
+/// Whether a request could still be created under `permit` right now.
+func admits(_ permit: NavOSSTrafficUploadPermit?) -> Bool {
+  guard let permit else { return false }
+  let id = UUID()
+  defer { permit.finish(id) }
+  return permit.start(id) { {} }
+}
+
+final class Flag: @unchecked Sendable {
+  private let lock = NSLock()
+  private var raised = false
+  var isRaised: Bool { lock.withLock { raised } }
+  func raise() { lock.withLock { raised = true } }
+}
+
 actor RuleTransport: NavOSSTrafficTransport {
   var accepting = true
   var credentialResults: [Result<NavOSSTrafficCredential, NavOSSCommunityFailure>] = []
@@ -54,14 +79,24 @@ actor RuleTransport: NavOSSTrafficTransport {
   private(set) var credentialRequests = 0
   /// Bodies that reached the server.
   private(set) var transmitted: [Data] = []
-  /// Uploads attempted, including those that never finished sending.
+  /// Uploads the uploader asked for, whether or not a request was created.
   private(set) var uploadAttempts = 0
+  /// Requests created (started on the network), whatever became of them.
+  private(set) var requestsCreated = 0
+  /// Holds a created request on the wire until released (a stalled network).
   nonisolated let gate: StallGate?
+  /// Holds an upload before its request is created (queued, not started).
+  nonisolated let beforeRequest: StallGate?
+  /// The permit of the latest upload handed over, and whether its request was cancelled, for
+  /// checks made right after a synchronous call returns.
+  nonisolated let heldPermit = Locked<NavOSSTrafficUploadPermit?>(nil)
+  nonisolated let requestCancelled = Locked<Flag?>(nil)
   let clock: Clock
 
-  init(clock: Clock, stall: Bool = false) {
+  init(clock: Clock, stall: Bool = false, holdBeforeRequest: Bool = false) {
     self.clock = clock
     gate = stall ? StallGate() : nil
+    beforeRequest = holdBeforeRequest ? StallGate() : nil
   }
 
   func configure(
@@ -90,13 +125,23 @@ actor RuleTransport: NavOSSTrafficTransport {
     return try result.get()
   }
 
-  func uploadProbes(_ batch: NavOSSTrafficProbeBatch, credential: String) async
-    -> NavOSSTrafficUploadOutcome
-  {
+  func uploadProbes(
+    _ batch: NavOSSTrafficProbeBatch, credential: String, permit: NavOSSTrafficUploadPermit
+  ) async -> NavOSSTrafficUploadOutcome {
     uploadAttempts += 1
     let body = try? batch.requestBody(credential: credential)
+    heldPermit.value = permit
+    if let beforeRequest { await beforeRequest.wait() }
+    // Like `NavOSSCommunityClient`: the request exists only if the permit still admits it, and
+    // a cancelled request never finishes sending.
+    let cancelled = Flag()
+    let id = UUID()
+    guard permit.start(id, { { cancelled.raise() } }) else { return .dropped }
+    requestCancelled.value = cancelled
+    requestsCreated += 1
     if let gate { await gate.wait() }
-    guard !Task.isCancelled, let body else { return .dropped }
+    permit.finish(id)
+    guard !cancelled.isRaised, let body else { return .dropped }
     transmitted.append(body)
     return uploadResults.isEmpty ? .accepted : uploadResults.removeFirst()
   }
@@ -253,6 +298,11 @@ final class CommunityTrafficTripRestrictionTests: XCTestCase {
 /// The service as the phone and CarPlay drive it: preference changes, reset, navigation hooks.
 final class CommunityTrafficServiceRulesTests: XCTestCase {
   private let start = Date()
+  private var centers: [ObjectIdentifier: NotificationCenter] = [:]
+
+  private func notificationCenter(of store: NavOSSCommunityPreferencesStore) -> NotificationCenter {
+    centers[ObjectIdentifier(store)]!
+  }
 
   private func trip(waypoints: [NavOSSCarPlayCoordinate] = []) -> NavOSSCarPlayTrip {
     let geometry = stride(from: 0.0, through: 12_000, by: 250).map { east($0) }
@@ -281,12 +331,14 @@ final class CommunityTrafficServiceRulesTests: XCTestCase {
   }
 
   private func makeService(
-    _ transport: RuleTransport, clock: Clock, sharing: Bool = true
+    _ transport: RuleTransport, clock: Clock, sharing: Bool = true,
+    embargo: NavOSSTrafficEmbargoStore = NavOSSTrafficEmbargoStore()
   ) -> (NavOSSCommunityService, NavOSSCommunityPreferencesStore) {
     let defaults = UserDefaults(suiteName: "traffic-rules-\(UUID().uuidString)")!
     // Preferences and the service share one center, as they share `.default` in the app.
     let center = NotificationCenter()
     let preferences = NavOSSCommunityPreferencesStore(defaults: defaults, notificationCenter: center)
+    centers[ObjectIdentifier(preferences)] = center
     if sharing { preferences.setSharesTrafficSpeeds(true) }
     // The client is only for reports; the uploader talks to `transport`. With no stored key,
     // reset has nothing to delete on the server.
@@ -302,7 +354,7 @@ final class CommunityTrafficServiceRulesTests: XCTestCase {
       client: client, preferencesStore: preferences,
       alertStore: NavOSSCarPlayMapAlertStore(notificationCenter: NotificationCenter()),
       notificationCenter: center, trafficTransport: transport,
-      trafficEmbargo: NavOSSTrafficEmbargoStore(), now: { clock.value })
+      trafficEmbargo: embargo, now: { clock.value })
     return (service, preferences)
   }
 
@@ -351,7 +403,8 @@ final class CommunityTrafficServiceRulesTests: XCTestCase {
   func testResetCommunityIdentityTurnsSharingOffAndStopsTheTrip() async throws {
     let clock = Clock(start)
     let transport = RuleTransport(clock: clock)
-    let (service, preferences) = makeService(transport, clock: clock)
+    let embargo = NavOSSTrafficEmbargoStore()
+    let (service, preferences) = makeService(transport, clock: clock, embargo: embargo)
     preferences.setSharesRoadReports(true)
     service.navigationDidStart(trip())
     let sharing = await eventually { service.trafficSharingState() == .sharing }
@@ -430,6 +483,156 @@ final class CommunityTrafficServiceRulesTests: XCTestCase {
     XCTAssertTrue(sharing, "a trip started on this launch shares as before")
     service.navigationDidEnd()
   }
+
+  // MARK: Off and end are immediate (through the synchronous calls the phone and CarPlay make)
+
+  /// Feeds the uploader until one batch is handed to the transport, which holds it before
+  /// creating the request (queued, not started).
+  private func queueOneUpload(
+    _ service: NavOSSCommunityService, _ transport: RuleTransport, clock: Clock
+  ) async -> Bool {
+    for fix in drive(from: start) {
+      clock.value = fix.timestamp
+      await service.traffic?.ingest(fix)
+      let held = await eventually(timeout: 0.02) {
+        (transport.beforeRequest ?? transport.gate)?.waiting == 1
+      }
+      if held { return true }
+    }
+    return false
+  }
+
+  /// Keeps the uploader's ordered work waiting until released.
+  private func holdUploaderBack(_ service: NavOSSCommunityService) -> StallGate {
+    let lag = StallGate()
+    service.traffic?.ordered.run { await lag.wait() }
+    return lag
+  }
+
+  private func sharingService(
+    _ transport: RuleTransport, clock: Clock
+  ) async -> (NavOSSCommunityService, NavOSSCommunityPreferencesStore) {
+    let (service, preferences) = makeService(transport, clock: clock)
+    service.navigationDidStart(trip())
+    _ = await eventually { service.trafficSharingState() == .sharing }
+    return (service, preferences)
+  }
+
+  func testOnceTheSwitchIsOffAQueuedUploadIsNeverStarted() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock, holdBeforeRequest: true)
+    let (service, preferences) = await sharingService(transport, clock: clock)
+    let queued = await queueOneUpload(service, transport, clock: clock)
+    XCTAssertTrue(queued)
+    // The uploader has not caught up yet: only the synchronous part of the call can act.
+    let lag = holdUploaderBack(service)
+    preferences.setSharesTrafficSpeeds(false)
+    // The setter has returned: from this instant no request may be created.
+    XCTAssertFalse(admits(transport.heldPermit.value), "the gate is closed when the setter returns")
+    lag.release()
+    transport.beforeRequest?.release()
+    await service.traffic?.settled()
+    await settle()
+    let created = await transport.requestsCreated
+    XCTAssertEqual(created, 0, "no request is created after the switch is off")
+    service.navigationDidEnd()
+  }
+
+  func testOnceNavigationEndsAQueuedUploadIsNeverStarted() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock, holdBeforeRequest: true)
+    let (service, _) = await sharingService(transport, clock: clock)
+    let queued = await queueOneUpload(service, transport, clock: clock)
+    XCTAssertTrue(queued)
+    // The uploader has not caught up yet: only the synchronous part of the call can act.
+    let lag = holdUploaderBack(service)
+    service.navigationDidEnd()
+    XCTAssertFalse(admits(transport.heldPermit.value), "the gate is closed when the end returns")
+    lag.release()
+    transport.beforeRequest?.release()
+    await service.traffic?.settled()
+    await settle()
+    let created = await transport.requestsCreated
+    XCTAssertEqual(created, 0, "no request is created after navigation ended")
+  }
+
+  func testOffThenOnStillDiscardsTheOldBatchAndCredential() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock, holdBeforeRequest: true)
+    let (service, preferences) = await sharingService(transport, clock: clock)
+    let queued = await queueOneUpload(service, transport, clock: clock)
+    XCTAssertTrue(queued)
+    // The uploader has not caught up yet: only the synchronous part of the call can act.
+    let lag = holdUploaderBack(service)
+    preferences.setSharesTrafficSpeeds(false)
+    preferences.setSharesTrafficSpeeds(true)
+    XCTAssertFalse(admits(transport.heldPermit.value), "the old batch's permit died with the off")
+    lag.release()
+    transport.beforeRequest?.release()
+    await service.traffic?.settled()
+    let sharing = await eventually { service.trafficSharingState() == .sharing }
+    XCTAssertTrue(sharing, "on again")
+    let created = await transport.requestsCreated
+    let credentials = await transport.credentialRequests
+    XCTAssertEqual(created, 0, "the batch from before the off is never sent")
+    XCTAssertEqual(credentials, 2, "the old credential is dropped; a new one is requested")
+    service.navigationDidEnd()
+  }
+
+  func testAnOffDeliveredAfterTheOnThatFollowedItStillDiscardsTheOldBatch() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock, holdBeforeRequest: true)
+    let (service, preferences) = await sharingService(transport, clock: clock)
+    let queued = await queueOneUpload(service, transport, clock: clock)
+    XCTAssertTrue(queued)
+    // The uploader has not caught up yet: only the synchronous part of the call can act.
+    let lag = holdUploaderBack(service)
+    // Two threads wrote off then on; the notifications arrive on, then off.
+    let written = preferences.trafficSharing().sequence
+    let center = notificationCenter(of: preferences)
+    center.post(
+      name: .navOSSCommunityPreferencesDidChange, object: preferences,
+      userInfo: [
+        NavOSSCommunityPreferencesStore.trafficValueKey: true,
+        NavOSSCommunityPreferencesStore.trafficSequenceKey: written + 2,
+      ])
+    center.post(
+      name: .navOSSCommunityPreferencesDidChange, object: preferences,
+      userInfo: [
+        NavOSSCommunityPreferencesStore.trafficValueKey: false,
+        NavOSSCommunityPreferencesStore.trafficSequenceKey: written + 1,
+      ])
+    XCTAssertFalse(admits(transport.heldPermit.value), "the old batch's permit died with the off")
+    lag.release()
+    transport.beforeRequest?.release()
+    await service.traffic?.settled()
+    let sharing = await eventually { service.trafficSharingState() == .sharing }
+    XCTAssertTrue(sharing, "the latest write (on) wins")
+    let created = await transport.requestsCreated
+    let credentials = await transport.credentialRequests
+    XCTAssertEqual(created, 0, "the batch from before the off is never sent")
+    XCTAssertEqual(credentials, 2)
+    service.navigationDidEnd()
+  }
+
+  func testTurningSharingOffCancelsARequestAlreadyOnTheWire() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock, stall: true)
+    let (service, preferences) = await sharingService(transport, clock: clock)
+    let queued = await queueOneUpload(service, transport, clock: clock)
+    XCTAssertTrue(queued)
+    // The uploader has not caught up yet: only the synchronous part of the call can act.
+    let lag = holdUploaderBack(service)
+    preferences.setSharesTrafficSpeeds(false)
+    XCTAssertEqual(
+      transport.requestCancelled.value?.isRaised, true, "cancelled before the setter returned")
+    lag.release()
+    transport.gate?.release()
+    await settle()
+    let transmitted = await transport.transmitted
+    XCTAssertEqual(transmitted, [], "the request in flight was cancelled when the setter returned")
+    service.navigationDidEnd()
+  }
 }
 
 final class CommunityTrafficEmbargoTests: XCTestCase {
@@ -475,30 +678,68 @@ final class CommunityTrafficEmbargoTests: XCTestCase {
 }
 
 final class CommunityTrafficClientCancellationTests: XCTestCase {
-  func testACancelledUploadNeverReachesTheServer() async throws {
-    CommunityStubProtocol.sent = []
-    CommunityStubProtocol.handler = { _ in (202, ["status": "accepted"], [:]) }
+  private func client() -> NavOSSCommunityClient {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [CommunityStubProtocol.self]
-    let client = NavOSSCommunityClient(
+    return NavOSSCommunityClient(
       baseURL: URL(string: "http://127.0.0.1:3001")!,
       provider: NavOSSUnavailableAttestationProvider(),
       store: NavOSSCommunityMemorySecretStore(),
       session: URLSession(configuration: configuration), discovery: NavOSSRoutesEndpointDiscovery())
+  }
+
+  private func batch() throws -> NavOSSTrafficProbeBatch {
     var collector = NavOSSTrafficProbeCollector(
       rules: NavOSSTrafficProbeRules(), protectedPoints: [origin])
     var batches: [NavOSSTrafficProbeBatch] = []
     for fix in drive(from: Date()) where batches.isEmpty {
       batches += collector.ingest(fix)
     }
-    let batch = try XCTUnwrap(batches.first, "a batch to send")
-    let task = Task { () -> NavOSSTrafficUploadOutcome in
-      withUnsafeCurrentTask { $0?.cancel() }
-      return await client.uploadProbes(batch, credential: "credential")
-    }
-    let outcome = await task.value
+    return try XCTUnwrap(batches.first, "a batch to send")
+  }
+
+  private func openGate() throws -> (NavOSSTrafficUploadGate, NavOSSTrafficUploadPermit) {
+    let gate = NavOSSTrafficUploadGate()
+    gate.setSwitch(true)
+    gate.setNavigating(true)
+    return (gate, try XCTUnwrap(gate.open()))
+  }
+
+  override func tearDown() {
+    CommunityStubProtocol.delay = nil
+    super.tearDown()
+  }
+
+  func testNoRequestIsCreatedWithAPermitFromAClosedGate() async throws {
+    CommunityStubProtocol.sent = []
+    CommunityStubProtocol.handler = { _ in (202, ["status": "accepted"], [:]) }
+    let client = client()
+    let (gate, permit) = try openGate()
+    gate.setSwitch(false)
+    let outcome = await client.uploadProbes(try batch(), credential: "credential", permit: permit)
     XCTAssertEqual(outcome, .dropped)
     try? await Task.sleep(nanoseconds: 100_000_000)
     XCTAssertFalse(CommunityStubProtocol.sent.contains { $0.path == "/v2/traffic/probes" })
+    // Reopening does not revive an old permit.
+    gate.setSwitch(true)
+    let again = await client.uploadProbes(try batch(), credential: "credential", permit: permit)
+    XCTAssertEqual(again, .dropped)
+    XCTAssertFalse(CommunityStubProtocol.sent.contains { $0.path == "/v2/traffic/probes" })
+  }
+
+  func testClosingTheGateCancelsARequestInFlight() async throws {
+    CommunityStubProtocol.sent = []
+    CommunityStubProtocol.handler = { _ in (202, ["status": "accepted"], [:]) }
+    CommunityStubProtocol.delay = { _ in 1 }
+    CommunityStubProtocol.started = []
+    let client = client()
+    let (gate, permit) = try openGate()
+    let batch = try batch()
+    let upload = Task { await client.uploadProbes(batch, credential: "credential", permit: permit) }
+    let started = await eventually { CommunityStubProtocol.started.contains("/v2/traffic/probes") }
+    XCTAssertTrue(started)
+    gate.setNavigating(false)
+    let outcome = await upload.value
+    XCTAssertEqual(outcome, .dropped, "the response is never delivered: the request was cancelled")
   }
 }

@@ -4,11 +4,122 @@ import Foundation
 public protocol NavOSSTrafficTransport: Sendable {
   func trafficStatus() async throws -> NavOSSTrafficStatus
   func trafficCredential() async throws -> NavOSSTrafficCredential
-  func uploadProbes(_ batch: NavOSSTrafficProbeBatch, credential: String) async
-    -> NavOSSTrafficUploadOutcome
+  /// Sends `batch` once. The request must be created and started only through `permit`, which
+  /// refuses once sharing was turned off or navigation ended and cancels it if that happens later.
+  func uploadProbes(
+    _ batch: NavOSSTrafficProbeBatch, credential: String, permit: NavOSSTrafficUploadPermit
+  ) async -> NavOSSTrafficUploadOutcome
 }
 
 extension NavOSSCommunityClient: NavOSSTrafficTransport {}
+
+/// The synchronous switch in front of every probe upload. The phone and CarPlay close it, under
+/// its lock, before turning sharing off or ending navigation returns; a request is created only
+/// while holding that same lock with a permit for the current opening, so no request is created
+/// after the gate closed, and requests already started are cancelled by the close.
+public final class NavOSSTrafficUploadGate: @unchecked Sendable {
+  private let lock = NSLock()
+  private var generation: UInt64 = 0
+  private var inFlight: [UUID: @Sendable () -> Void] = [:]
+  private var navigating = false
+  private var opened: UInt64?
+  private var switchOn = false
+
+  public init() {}
+
+  /// The driver's switch, as it changes. Off closes the gate.
+  public func setSwitch(_ on: Bool) {
+    let cancels: [@Sendable () -> Void] = lock.withLock {
+      switchOn = on
+      return on ? [] : closeLocked()
+    }
+    cancels.forEach { $0() }
+  }
+
+  /// Turn-by-turn navigation, as it starts and ends. Ending closes the gate.
+  public func setNavigating(_ on: Bool) {
+    let cancels: [@Sendable () -> Void] = lock.withLock {
+      navigating = on
+      return on ? [] : closeLocked()
+    }
+    cancels.forEach { $0() }
+  }
+
+  /// Invalidates every permit and cancels requests in flight.
+  public func close() {
+    let cancels = lock.withLock { closeLocked() }
+    cancels.forEach { $0() }
+  }
+
+  /// A permit for a new collection, or nil while the switch is off or navigation is not active.
+  func open() -> NavOSSTrafficUploadPermit? {
+    lock.withLock {
+      guard switchOn, navigating else { return nil }
+      generation &+= 1
+      opened = generation
+      return NavOSSTrafficUploadPermit(gate: self, token: generation)
+    }
+  }
+
+  fileprivate func start(_ id: UUID, token: UInt64, _ create: () -> @Sendable () -> Void) -> Bool {
+    lock.withLock {
+      guard opened == token, switchOn, navigating else { return false }
+      inFlight[id] = create()
+      return true
+    }
+  }
+
+  fileprivate func finish(_ id: UUID) {
+    _ = lock.withLock { inFlight.removeValue(forKey: id) }
+  }
+
+  private func closeLocked() -> [@Sendable () -> Void] {
+    generation &+= 1
+    opened = nil
+    defer { inFlight = [:] }
+    return Array(inFlight.values)
+  }
+}
+
+/// Leave to send one batch, valid until the gate it came from closes.
+public struct NavOSSTrafficUploadPermit: Sendable {
+  fileprivate let gate: NavOSSTrafficUploadGate
+  fileprivate let token: UInt64
+
+  /// Creates and starts the request under the gate's lock if the permit is still valid.
+  /// `create` starts it and returns how to cancel it. Call `finish(id)` when it completes.
+  public func start(_ id: UUID, _ create: () -> @Sendable () -> Void) -> Bool {
+    gate.start(id, token: token, create)
+  }
+
+  public func finish(_ id: UUID) {
+    gate.finish(id)
+  }
+}
+
+/// Starts work in the order it was asked for (each waits for the one before).
+final class NavOSSOrderedWork: @unchecked Sendable {
+  private let lock = NSLock()
+  private var last: Task<Void, Never>?
+
+  func run(_ work: @escaping @Sendable () async -> Void) {
+    lock.withLock {
+      let previous = last
+      last = Task {
+        await previous?.value
+        await work()
+      }
+    }
+  }
+
+  /// Waits for everything asked for so far (tests).
+  func settled() async {
+    while let task = lock.withLock({ last }) {
+      await task.value
+      if lock.withLock({ last }) == task { return }
+    }
+  }
+}
 
 /// What "Share traffic speeds" is doing, for the phone and CarPlay to show calmly.
 public enum NavOSSTrafficSharingState: Equatable, Sendable {
@@ -74,8 +185,12 @@ public final class NavOSSTrafficEmbargoStore: @unchecked Sendable {
 /// A trip is one navigation start (`startTrip`) to its end (`endTrip`). The sharing switch
 /// (`setEnabled`) starts and stops collection inside it, but never lifts what the server imposed:
 /// a `429`, a refused credential or a `403` holds until the next navigation start, a `503` pause
-/// until its five minutes are over, and a `403` deadline survives a relaunch. Turning sharing off
-/// or ending the trip cancels the upload in flight, so its batch and credential go with it.
+/// until its five minutes are over, and a `403` deadline survives a relaunch.
+///
+/// The app drives it through the synchronous `switchDidChange`, `navigationDidStart` and
+/// `navigationDidEnd`: they close `gate` before returning, so once sharing is off or navigation
+/// has ended no upload request is created, and one already started is cancelled; the actor then
+/// discards the batches and the credential in the order the calls were made.
 public actor NavOSSTrafficSharingSession {
   public static let credentialRefreshMarginSeconds: TimeInterval = 300
   public static let unavailablePauseSeconds: TimeInterval = 300
@@ -119,6 +234,11 @@ public actor NavOSSTrafficSharingSession {
   public private(set) var state: NavOSSTrafficSharingState = .off
   private let transport: NavOSSTrafficTransport
   private var uploadTask: Task<Void, Never>?
+  private var permit: NavOSSTrafficUploadPermit?
+  /// Closed synchronously by the app before off or end returns.
+  public nonisolated let gate = NavOSSTrafficUploadGate()
+  /// Work from the synchronous entry points, in call order (internal: tests make it lag).
+  nonisolated let ordered = NavOSSOrderedWork()
   /// How many uploads ended in each outcome this process: counts only, never content.
   public private(set) var outcomeCounts: [String: Int] = [:]
 
@@ -134,10 +254,52 @@ public actor NavOSSTrafficSharingSession {
     self.onStateChange = onStateChange
   }
 
+  // MARK: Synchronous entry points (the app)
+
+  /// The driver's switch changed. Closes the gate before returning; with `restart` the current
+  /// collection is discarded even though the switch ends up on (an off came in between).
+  public nonisolated func switchDidChange(_ enabled: Bool, restart: Bool = false) {
+    if restart || !enabled { gate.close() }
+    gate.setSwitch(enabled)
+    ordered.run {
+      if restart { await self.applyEnabled(false) }
+      await self.applyEnabled(enabled)
+    }
+  }
+
+  public nonisolated func navigationDidStart(
+    protectedPoints: [NavOSSCarPlayCoordinate], restored: Bool
+  ) {
+    gate.setNavigating(true)
+    ordered.run { await self.applyStart(protectedPoints: protectedPoints, restored: restored) }
+  }
+
+  /// Closes the gate before returning, then discards the trip.
+  public nonisolated func navigationDidEnd() {
+    gate.setNavigating(false)
+    ordered.run { await self.applyEnd() }
+  }
+
+  public nonisolated func routeDidAddStops(_ coordinates: [NavOSSCarPlayCoordinate]) {
+    ordered.run { await self.protect(coordinates) }
+  }
+
+  /// Waits until every synchronous call so far has reached the actor (tests).
+  public func settled() async {
+    await ordered.settled()
+  }
+
+  // MARK: Awaited entry points (tests and sequential callers)
+
   /// The driver's switch. Off discards everything in memory, including the credential, and
   /// cancels the upload in flight; on during guidance starts collecting for the rest of the trip
   /// unless the trip is restricted.
   public func setEnabled(_ enabled: Bool) async {
+    gate.setSwitch(enabled)
+    await applyEnabled(enabled)
+  }
+
+  private func applyEnabled(_ enabled: Bool) async {
     guard enabled != self.enabled else { return }
     self.enabled = enabled
     if !enabled {
@@ -155,6 +317,11 @@ public actor NavOSSTrafficSharingSession {
   /// route may have replaced the one navigation started with, and the visited stops and
   /// restrictions of the original trip are not known.
   public func startTrip(protectedPoints: [NavOSSCarPlayCoordinate], restored: Bool = false) async {
+    gate.setNavigating(true)
+    await applyStart(protectedPoints: protectedPoints, restored: restored)
+  }
+
+  private func applyStart(protectedPoints: [NavOSSCarPlayCoordinate], restored: Bool) async {
     discardCollection()
     navigating = true
     self.protectedPoints = protectedPoints
@@ -175,6 +342,11 @@ public actor NavOSSTrafficSharingSession {
   /// Arrival or cancellation. Held-back fixes and the open batch are discarded, the upload in
   /// flight is cancelled and the credential forgotten.
   public func endTrip() {
+    gate.setNavigating(false)
+    applyEnd()
+  }
+
+  private func applyEnd() {
     discardCollection()
     navigating = false
     protectedPoints = []
@@ -248,6 +420,9 @@ public actor NavOSSTrafficSharingSession {
     // Collect from the first fix so the trip's start is trimmed even while the credential is
     // requested; anything completed before a credential exists is dropped.
     collector = NavOSSTrafficProbeCollector(rules: status.rules, protectedPoints: protectedPoints)
+    // Nil when the app has already turned sharing off or ended navigation (that change is on its
+    // way here): nothing can be uploaded under it.
+    permit = gate.open()
     guard await refreshCredential(generation: current), generation == current else { return }
     if let pausedUntil, now() < pausedUntil {
       set(.paused(until: pausedUntil))
@@ -261,6 +436,8 @@ public actor NavOSSTrafficSharingSession {
   /// that its batch is never sent.
   private func discardCollection() {
     generation &+= 1
+    permit = nil
+    gate.close()
     uploadTask?.cancel()
     uploadTask = nil
     collector?.finish()
@@ -303,8 +480,9 @@ public actor NavOSSTrafficSharingSession {
       {
         guard await refreshCredential(generation: current) else { return }
       }
-      guard generation == current, !Task.isCancelled, let credential else { return }
-      let outcome = await transport.uploadProbes(batch, credential: credential.value)
+      guard generation == current, !Task.isCancelled, let credential, let permit else { return }
+      let outcome = await transport.uploadProbes(
+        batch, credential: credential.value, permit: permit)
       record(outcome)
       guard generation == current else { return }
       switch outcome {

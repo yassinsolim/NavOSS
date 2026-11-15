@@ -21,6 +21,8 @@ final class CommunityStubProtocol: URLProtocol {
   /// Network delay per request; the handler (the "server") sees requests in delivery order.
   nonisolated(unsafe) static var delay: ((Sent) -> Double)?
   nonisolated(unsafe) static var sent: [Sent] = []
+  /// Paths of requests as they start loading (before any delay), for cancellation tests.
+  nonisolated(unsafe) static var started: [String] = []
 
   override class func canInit(with request: URLRequest) -> Bool { true }
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -45,6 +47,7 @@ final class CommunityStubProtocol: URLProtocol {
       path: request.url?.path ?? "",
       query: request.url?.query
     )
+    Self.serverLock.withLock { Self.started.append(sent.path) }
     let deliver = { [self] in
       Self.deliver(sent, to: self)
     }
@@ -371,12 +374,17 @@ final class CommunityClientTests: XCTestCase {
       schemaVersion: 1
     )
     let client = makeClient()
+    let gate = NavOSSTrafficUploadGate()
+    gate.setSwitch(true)
+    gate.setNavigating(true)
+    guard let permit = gate.open() else { return XCTFail("an open gate") }
     for (status, expected) in [
       (202, NavOSSTrafficUploadOutcome.accepted), (400, .dropped), (401, .unauthorized),
       (429, .rateLimited), (503, .unavailable),
     ] {
       CommunityStubProtocol.handler = { _ in (status, ["status": "accepted"], [:]) }
-      let outcome = await client.uploadProbes(batch, credential: String(repeating: "a", count: 40))
+      let outcome = await client.uploadProbes(
+        batch, credential: String(repeating: "a", count: 40), permit: permit)
       XCTAssertEqual(outcome, expected, "status \(status)")
     }
   }

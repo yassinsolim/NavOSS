@@ -403,25 +403,32 @@ public actor NavOSSCommunityClient {
   }
 
   /// Sends one batch once. 202 accepted; 400 drop; 401 new credential; 429 stop; 503 pause.
-  public func uploadProbes(_ batch: NavOSSTrafficProbeBatch, credential: String) async
-    -> NavOSSTrafficUploadOutcome
-  {
+  /// The request is created and started only under `permit` (never once sharing was turned off
+  /// or navigation ended), and closing the gate cancels it.
+  public func uploadProbes(
+    _ batch: NavOSSTrafficProbeBatch, credential: String, permit: NavOSSTrafficUploadPermit
+  ) async -> NavOSSTrafficUploadOutcome {
     guard let body = try? batch.requestBody(credential: credential),
       let request = try? rawRequest("POST", "/v2/traffic/probes", body: body)
     else {
       return .dropped
     }
-    // Cancelled (sharing turned off or navigation ended): never start sending. Once started,
-    // `URLSession` cancels the request with the task.
-    guard !Task.isCancelled else { return .dropped }
+    let session = session
+    let id = UUID()
     // A batch that did not arrive is dropped like any other: never retried or kept.
-    guard let (_, response) = try? await session.data(for: request),
-      let status = (response as? HTTPURLResponse)?.statusCode
-    else {
-      return .dropped
+    let status: Int? = await withCheckedContinuation { continuation in
+      let started = permit.start(id) {
+        let task = session.dataTask(with: request) { _, response, _ in
+          permit.finish(id)
+          continuation.resume(returning: (response as? HTTPURLResponse)?.statusCode)
+        }
+        task.resume()
+        return { task.cancel() }
+      }
+      if !started { continuation.resume(returning: nil) }
     }
     switch status {
-    case 200..<300: return .accepted
+    case .some(200..<300): return .accepted
     case 401: return .unauthorized
     case 429: return .rateLimited
     case 503: return .unavailable

@@ -276,9 +276,10 @@ private actor FakeTrafficTransport: NavOSSTrafficTransport {
     return try result.get()
   }
 
-  func uploadProbes(_ batch: NavOSSTrafficProbeBatch, credential: String) async
-    -> NavOSSTrafficUploadOutcome
-  {
+  func uploadProbes(
+    _ batch: NavOSSTrafficProbeBatch, credential: String, permit: NavOSSTrafficUploadPermit
+  ) async -> NavOSSTrafficUploadOutcome {
+    guard permit.start(UUID(), { {} }) else { return .dropped }
     uploads.append(credential)
     return uploadResults.isEmpty ? .accepted : uploadResults.removeFirst()
   }

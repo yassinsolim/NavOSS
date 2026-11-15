@@ -53,10 +53,10 @@ public final class NavOSSCommunityService: @unchecked Sendable {
   private var routeGeometry: [NavOSSCarPlayCoordinate] = []
   private var routeLengthMeters = 0.0
   private var routeProgress = 0.0
-  /// The latest switch change on its way to the uploader; each waits for the one before.
-  private var sharingSwitchTask: Task<Void, Never>?
+  /// The last traffic-switch write applied (see `NavOSSCommunityPreferencesStore.trafficSharing`).
+  private var trafficSwitchSequence: UInt64 = 0
   private var lastTrafficTick: Date?
-  private let traffic: NavOSSTrafficSharingSession?
+  let traffic: NavOSSTrafficSharingSession?
   private var trafficState: NavOSSTrafficSharingState = .off
   private let alertStore: NavOSSCarPlayMapAlertStore
   /// Saved Home and Work, which a public report must not reveal without confirmation.
@@ -97,10 +97,12 @@ public final class NavOSSCommunityService: @unchecked Sendable {
       forName: .navOSSCommunityPreferencesDidChange,
       object: preferencesStore,
       queue: nil
-    ) { [weak self] _ in
-      self?.preferencesDidChange()
+    ) { [weak self] notification in
+      self?.preferencesDidChange(notification)
     }
-    preferencesDidChange()
+    let (sharing, sequence) = preferencesStore.trafficSharing()
+    trafficSwitchSequence = sequence
+    traffic?.switchDidChange(sharing)
   }
 
   deinit {
@@ -337,7 +339,7 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     guard let client else { return }
     preferencesStore.setSharesTrafficSpeeds(false)
     preferencesStore.setSharesRoadReports(false)
-    await traffic?.setEnabled(false)
+    await traffic?.settled()
     try await client.deleteInstallation()
     lock.withLock {
       ownReportIds.removeAll()
@@ -363,7 +365,7 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     }
     // Independent: a slow credential request must not delay the reports on the route ahead.
     let points = lock.withLock { protectedPoints }
-    Task { [traffic] in await traffic?.startTrip(protectedPoints: points, restored: restored) }
+    traffic?.navigationDidStart(protectedPoints: points, restored: restored)
     Task { await refreshCorridor() }
   }
 
@@ -378,10 +380,8 @@ public final class NavOSSCommunityService: @unchecked Sendable {
       protectedPoints += added
       return added
     }
-    Task {
-      await traffic?.protect(points)
-      await refreshCorridor()
-    }
+    traffic?.routeDidAddStops(points)
+    Task { await refreshCorridor() }
   }
 
   /// Arrival or the end of guidance: trip-scoped traffic state is discarded.
@@ -395,7 +395,8 @@ public final class NavOSSCommunityService: @unchecked Sendable {
       return wasActive
     }
     guard wasActive else { return }
-    Task { await traffic?.endTrip() }
+    // Synchronous: once this returns no probe upload is created, and one in flight is cancelled.
+    traffic?.navigationDidEnd()
     notifyStateChange()
   }
 
@@ -466,16 +467,23 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     _ = try? await fetchReports(in: bounds)
   }
 
-  /// Any community preference changed. Only the sharing switch reaches the uploader, in the
-  /// order the changes happened (an off between two ons still discards everything). Nothing here
-  /// restarts a trip: the uploader keeps the trip's restrictions across toggles.
-  private func preferencesDidChange() {
-    lock.withLock {
-      let enabled = preferencesStore.load().sharesTrafficSpeeds
-      let previous = sharingSwitchTask
-      sharingSwitchTask = Task { [traffic] in
-        await previous?.value
-        await traffic?.setEnabled(enabled)
+  /// Any community preference changed. Only a traffic-switch write reaches the uploader, with
+  /// the value it wrote, synchronously (turning sharing off has closed the upload gate when the
+  /// setter returns). Writes from different threads may be delivered out of order: a write older
+  /// than one already applied is ignored, and an on that follows a missed write discards the
+  /// current collection first, so an off between two ons always takes the old batch and
+  /// credential with it. Nothing here restarts a trip: the uploader keeps the trip's
+  /// restrictions across toggles.
+  private func preferencesDidChange(_ notification: Notification) {
+    if let info = notification.userInfo,
+      let enabled = info[NavOSSCommunityPreferencesStore.trafficValueKey] as? Bool,
+      let sequence = info[NavOSSCommunityPreferencesStore.trafficSequenceKey] as? UInt64
+    {
+      lock.withLock {
+        guard sequence > trafficSwitchSequence else { return }
+        let restart = enabled && sequence != trafficSwitchSequence &+ 1
+        trafficSwitchSequence = sequence
+        traffic?.switchDidChange(enabled, restart: restart)
       }
     }
     notifyStateChange()
@@ -483,9 +491,10 @@ public final class NavOSSCommunityService: @unchecked Sendable {
 
   private func trafficStateDidChange(_ state: NavOSSTrafficSharingState) {
     lock.withLock { trafficState = state }
-    // The server does not take traffic speeds, or this device cannot take part: the switch is
-    // turned off rather than shown off while kept on, so sharing needs a new opt-in once it is
-    // available.
+    // The server says it does not take traffic speeds (status not accepting, or no traffic
+    // endpoint, or the credential endpoint is not issuing), or this device cannot attest: the
+    // switch is turned off rather than shown off while kept on, so sharing needs a new opt-in
+    // once it is available.
     if state == .unavailable(reason: .notAccepting) || state == .unavailable(reason: .unsupported),
       preferencesStore.load().sharesTrafficSpeeds
     {
