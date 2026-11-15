@@ -38,6 +38,8 @@ interface SearchResultMetadata {
   osmType?: string;
   providerConfidence: number;
   rawCategory?: string;
+  /** Set on an unnamed result presented as its civic address: true for the address point. */
+  addressPoint?: boolean;
 }
 
 const metadataByResult = new WeakMap<SearchResult, SearchResultMetadata>();
@@ -479,14 +481,15 @@ function normalizePhotonResults(
 
 function nominatimCategory(
   result: z.infer<typeof NominatimResultSchema>,
+  addressOnly: boolean,
 ): SearchResult['category'] {
-  if (
-    ['house', 'building'].includes(result.addresstype ?? '') ||
-    /^\s*\d/.test(result.name ?? result.display_name)
-  ) {
+  if (addressOnly || ['house', 'building'].includes(result.addresstype ?? '')) {
     return 'address';
   }
-  if (['road', 'street', 'footway', 'path'].includes(result.addresstype ?? '')) {
+  if (
+    ['road', 'street', 'footway', 'path'].includes(result.addresstype ?? '') ||
+    ((result.category ?? result.class) === 'highway' && result.osm_type === 'way')
+  ) {
     return 'street';
   }
   if (
@@ -502,6 +505,30 @@ function nominatimCategory(
     return 'poi';
   }
   return 'landmark';
+}
+
+/** "100 Queen Street West" from Nominatim's structured address, when it has both parts. */
+function nominatimCivicAddress(result: z.infer<typeof NominatimResultSchema>): string | undefined {
+  const houseNumber = nonEmptyText(result.address?.house_number);
+  const road = nonEmptyText(
+    result.address?.road ??
+      result.address?.pedestrian ??
+      result.address?.footway ??
+      result.address?.path,
+  );
+  if (houseNumber === undefined || road === undefined) return undefined;
+  return normalizeSearchText(road).startsWith(`${normalizeSearchText(houseNumber)} `)
+    ? road
+    : `${houseNumber} ${road}`;
+}
+
+/** An unnamed result's breadcrumb starts with its house number: "100, Queen Street West, …". */
+function breadcrumbName(displayName: string): string | undefined {
+  const [first, second] = displayName.split(',').map((part) => part.trim());
+  if (first === undefined || first === '') return undefined;
+  return /^\d+[\p{L}\d/-]*$/u.test(first) && second !== undefined && second !== ''
+    ? `${first} ${second}`
+    : first;
 }
 
 function nonEmptyText(value: string | undefined): string | undefined {
@@ -524,8 +551,19 @@ function normalizeNominatimResults(
     )
     .map((result) => {
       const sourceName = nonEmptyText(result.name);
-      const displayName = nonEmptyText(result.display_name.split(',')[0]);
-      const name = sourceName ?? displayName ?? 'Unnamed place';
+      // Nominatim names an unnamed object (an address point, or a bench or payphone that only
+      // carries the civic address) "", and its breadcrumb starts with the bare house number.
+      const civicAddress = nominatimCivicAddress(result);
+      const addressOnly =
+        sourceName === undefined &&
+        (civicAddress !== undefined || /^\s*\d/u.test(result.display_name));
+      const name =
+        sourceName ?? civicAddress ?? breadcrumbName(result.display_name) ?? 'Unnamed place';
+      // For a text search such an object is the address it was found by; for a category search
+      // its tag is what was asked for.
+      const presentedAsAddress = addressOnly && query.category === undefined;
+      const rawCategory = presentedAsAddress ? undefined : result.type;
+      const category = nominatimCategory(result, presentedAsAddress);
       const normalizedName = normalizeSearchText(name);
       const normalizedLabel = normalizeSearchText(result.display_name);
       const words = normalizedQuery.split(' ').filter(Boolean);
@@ -549,17 +587,17 @@ function normalizeNominatimResults(
         result.extratags?.website ?? result.extratags?.['contact:website'],
       );
       const wheelchair = nonEmptyText(result.extratags?.wheelchair);
-      const placeDescription = nominatimPlaceDescription(result);
+      const placeDescription = presentedAsAddress ? undefined : nominatimPlaceDescription(result);
 
       const normalized: SearchResult = {
-        category: nominatimCategory(result),
+        category,
         center: { latitude: result.lat, longitude: result.lon },
         confidence,
         ...(query.includeDetails
           ? {
               details: {
                 address: result.display_name,
-                ...(result.type === undefined ? {} : { category: result.type }),
+                ...(rawCategory === undefined ? {} : { category: rawCategory }),
                 ...(openingHours ? { openingHours } : {}),
                 ...(phone ? { phone } : {}),
                 ...(website ? { website } : {}),
@@ -571,6 +609,8 @@ function normalizeNominatimResults(
         label: result.display_name,
         name,
       };
+      const location = searchLocation(name, result.display_name, result.address);
+      const province = nonEmptyText(result.address?.state);
       metadataByResult.set(normalized, {
         isEntrance:
           (result.extratags?.entrance === 'main' ||
@@ -579,10 +619,20 @@ function normalizeNominatimResults(
           !['no', 'private'].includes(
             result.extratags?.motor_vehicle ?? result.extratags?.vehicle ?? '',
           ),
-        location: searchLocation(name, result.display_name, result.address),
+        location:
+          // Same-named streets and addresses recur across Canada; the province tells them apart.
+          (category === 'address' || category === 'street') &&
+          province !== undefined &&
+          location.subtitle !== '' &&
+          !normalizeSearchText(location.subtitle).endsWith(normalizeSearchText(province))
+            ? { ...location, subtitle: `${location.subtitle}, ${province}` }
+            : location,
         osmType: result.osm_type,
         providerConfidence: confidence,
-        ...(result.type === undefined ? {} : { rawCategory: result.type }),
+        ...(presentedAsAddress
+          ? { addressPoint: ['house', 'building'].includes(result.type ?? '') }
+          : {}),
+        ...(rawCategory === undefined ? {} : { rawCategory }),
       });
       if (
         query.includeDetails &&
@@ -887,6 +937,7 @@ function representativeQuality(result: SearchResult): number {
   return (
     (metadata.isEntrance === true ? 10_000 : 0) +
     (completeStation ? 3_000 : kind === undefined ? 0 : 2_000) +
+    (metadata.addressPoint === true ? 50 : 0) +
     (metadata.location.houseNumber === undefined ? 0 : 200) +
     (metadata.location.street === undefined ? 0 : 100) +
     geometry * 10 +
@@ -910,6 +961,16 @@ function samePlace(left: SearchResult, right: SearchResult): boolean {
     leftLocation.street !== undefined &&
     rightLocation.street !== undefined &&
     normalizeSearchText(leftLocation.street) === normalizeSearchText(rightLocation.street);
+  // One civic address in one municipality, however many unnamed objects carry it.
+  if (
+    sameAddress &&
+    leftMetadata.addressPoint !== undefined &&
+    rightMetadata.addressPoint !== undefined &&
+    leftLocation.city !== undefined &&
+    rightLocation.city !== undefined &&
+    normalizeSearchText(leftLocation.city) === normalizeSearchText(rightLocation.city)
+  )
+    return coordinateDistanceMeters(left.center, right.center) <= ADDRESSED_PLACE_RADIUS_METERS;
   const leftName = canonicalSearchName(left.name);
   const rightName = canonicalSearchName(right.name);
   const cityVariant =
