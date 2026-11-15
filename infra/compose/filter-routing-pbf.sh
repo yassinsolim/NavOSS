@@ -6,7 +6,8 @@
 # Valhalla 3.8.2 reads neither `ice_road`, `winter_road` nor `seasonal`, so a winter road over a
 # frozen lake would be routed in July. NavOSS has no source for when each one opens, so it never
 # routes over them: those ways are removed before the graph is built. Search keeps the unfiltered
-# extract. Idempotent; writes <input>.routing.osm.pbf and its removal report once.
+# extract. Idempotent; writes <input>.routing.osm.pbf and its removal report once. Output of an
+# earlier policy (a report without the current policy mark) is regenerated.
 set -eu
 
 if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
@@ -19,23 +20,27 @@ report=${input%.osm.pbf}.routing.removed.txt
 # Tag values seen on Canadian ways (Geofabrik taginfo, 2026-11-15): ice_road=yes|y,
 # winter_road=yes, seasonal=winter|yes|closed winter|No winter maintenance.
 expressions='w/ice_road=yes,y w/winter_road=yes w/seasonal=winter,yes'
+# Bumped whenever the filter changes what it removes. Policy 1 let relation members back in.
+policy='[routing filter 2]'
 
-if [ -f "${output}" ] && [ -f "${report}" ]; then
+if [ -f "${output}" ] && [ -f "${report}" ] && grep -qF "${policy}" "${report}"; then
   osmium fileinfo "${output}" >/dev/null
   cat "${report}"
   exit 0
 fi
 
-removed=${output}.removed.partial.osm.pbf
-# shellcheck disable=SC2086 # one osmium expression per word
-osmium tags-filter --overwrite --omit-referenced --output "${removed}" "${input}" ${expressions}
-count=$(osmium fileinfo --extended --get data.count.ways "${removed}")
-rm -f "${removed}"
 partial=${output%.osm.pbf}.partial.osm.pbf
-# shellcheck disable=SC2086
-osmium tags-filter --overwrite --invert-match --output "${partial}" "${input}" ${expressions}
+# `--omit-referenced`: without it the inverse filter restores every way a kept relation lists, so an
+# ice road in a route relation (Dempster way 260830417 in relation 5384727) would be routed again.
+# Kept relations then lack the removed members, which Valhalla ignores.
+# shellcheck disable=SC2086 # one osmium expression per word
+osmium tags-filter --overwrite --invert-match --omit-referenced --output "${partial}" "${input}" \
+  ${expressions}
 osmium fileinfo --extended "${partial}" >/dev/null
+# What was actually removed: every way of the extract that the routing input no longer holds.
+before=$(osmium fileinfo --extended --get data.count.ways "${input}")
+after=$(osmium fileinfo --extended --get data.count.ways "${partial}")
 mv "${partial}" "${output}"
-printf 'Removed %s seasonal or ice-road ways (%s) from %s\n' "${count}" "${expressions}" \
-  "$(basename "${input}")" >"${report}"
+printf 'Removed %s seasonal or ice-road ways (%s) from %s %s\n' "$((before - after))" \
+  "${expressions}" "$(basename "${input}")" "${policy}" >"${report}"
 cat "${report}"

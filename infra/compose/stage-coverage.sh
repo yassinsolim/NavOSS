@@ -122,6 +122,14 @@ case "${step}" in
     refuse_parallel_heavy_step navoss-valhalla-stage
     v=$(version)
     stage=${root}/valhalla-${label}-${v}
+    routing=${imports}/${label}-${v}.routing.osm.pbf
+    staged_pbf=${stage}/${label}-${v}.osm.pbf
+    if [ -f "${staged_pbf}" ] && ! [ "${staged_pbf}" -ef "${routing}" ] &&
+      ! cmp -s "${staged_pbf}" "${routing}"; then
+      # The routing input was regenerated (a filter policy change): both passes run again from it.
+      echo "The routing input changed since ${stage} was built; rebuilding it."
+      rm -f "${staged_pbf}" "${stage}/.pass1-complete" "${stage}/.navoss-stage-complete"
+    fi
     if [ -f "${stage}/.navoss-stage-complete" ]; then
       (cd "${stage}" && sha256sum --check --quiet .navoss-stage-complete)
       echo "Valhalla stage ${stage} is complete and verified."
@@ -130,9 +138,7 @@ case "${step}" in
     live=$(sed -n 's/^VALHALLA_DATA_DIR=//p' "${script_dir}/.env" 2>/dev/null | tail -n 1)
     [ "${stage}" != "${live}" ] || { echo 'Refusing to build into the live VALHALLA_DATA_DIR.' >&2; exit 1; }
     install -d -m 0750 "${stage}"
-    routing=${imports}/${label}-${v}.routing.osm.pbf
-    [ -f "${stage}/${label}-${v}.osm.pbf" ] || ln "${routing}" "${stage}/${label}-${v}.osm.pbf" 2>/dev/null ||
-      cp "${routing}" "${stage}/${label}-${v}.osm.pbf"
+    [ -f "${staged_pbf}" ] || ln "${routing}" "${staged_pbf}" 2>/dev/null || cp "${routing}" "${staged_pbf}"
     if [ ! -f "${stage}/timezones.sqlite" ]; then
       cp "${live}/timezones.sqlite" "${stage}/timezones.sqlite"
     fi
