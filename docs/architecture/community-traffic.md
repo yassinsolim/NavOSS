@@ -241,6 +241,27 @@ rules 1, 2, 3 and 5; they are obligations on the app release, not properties of 
    complete; a `503` means the snapshot could not be published and the layer should keep its
    last response until it expires.
 
+How the iOS app applies them (`NavOSSTrafficSharingSession`, `NavOSSCommunityService`,
+`startTrafficFlowRefresh`):
+
+- **Consent (1).** The stored switch is the switch the driver sees. It is turned off, natively,
+  by **Reset community identity** (with **Share road reports**), and whenever the app learns that
+  sharing cannot happen: the status says not accepting or the server has no traffic endpoint, the
+  credential endpoint answers `503`, the device cannot attest, or the server config declares no
+  live traffic while the switch is idle. Sharing then needs a new opt-in once it is available.
+- **Stopping (1).** Turning the switch off or ending the trip cancels the upload in flight; a
+  cancelled upload is never started, and one already started is cancelled with its request.
+- **Trip (6, 7).** A trip is one navigation start. Changing any community preference never
+  restarts it. A `429`, a refused credential or missing attestation holds until the next
+  navigation start; a `503` pause holds for its five minutes across toggles and trips; a `403`
+  deadline is persisted (the one thing the uploader stores, a time) and, if active when a trip
+  starts, holds for that whole trip.
+- **Restored trips (2).** A trip resumed after a relaunch shares nothing: a reroute replaces the
+  saved route with one that lists only the remaining stops, so the zones of stops already visited
+  (and the trip's restrictions) cannot be rebuilt, and visited stops are deliberately not stored.
+- **Flow layer (9).** Snapshots are cached by `bbox` until `validUntil` independently of the
+  layer's visibility; showing the layer again reuses a valid snapshot and waits for its boundary.
+
 ## What the server does with a batch
 
 1. **Network rate limit.** 1,200 batches per ten minutes per network bucket (IPv4 /24, IPv6 /48,

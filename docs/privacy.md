@@ -2,7 +2,7 @@
 
 Status: **ready for internal TestFlight**. A direct privacy/support email must be activated before external beta testing.
 
-Effective date: November 14, 2026
+Effective date: November 15, 2026
 
 NavOSS is an account-free navigation application beginning with a Calgary technical beta. This policy explains how NavOSS uses data when you view the map, inspect or search for a place, request a route, navigate, share a place or ETA, open an external link, or ask for support.
 
@@ -146,8 +146,14 @@ most roads will show no traffic at all.
   the app performs and the three-contributor rule protect it.
 
 **How to turn it off.** Turn off **Share traffic speeds** in the app's Map appearance screen, under Community.
-Uploads are required to stop immediately and anything not yet sent to be discarded. Ending
-navigation or removing the app has the same effect. What was contributed stops being shown
+Uploads are required to stop immediately and anything not yet sent to be discarded, including an
+upload still in progress. Ending navigation or removing the app has the same effect. The app also
+turns the switch off itself when NavOSS reports that traffic sharing is not available or this
+iPhone cannot take part, and when you reset your community identity, so it never comes back on
+without a new opt-in. A trip resumed after the app was closed during navigation shares nothing.
+If the server says the installation is too new, the phone stores only the time after which it may
+ask for a credential again, so that closing and reopening the app does not ask sooner; it is not
+a position or an identifier. What was contributed stops being shown
 within 35 minutes and is deleted as described above. Nothing about traffic is stored with an
 account, an installation, or a trip identifier, so there is no per-person traffic record to look
 up or delete. You can see traffic from other drivers without sharing your own.
@@ -236,8 +242,9 @@ stays in the iPhone's Secure Enclave. The server stores the key as described und
 [Traffic sharing](#traffic-sharing-optional-off-by-default), plus, for 24 hours, the position of
 the installation's latest report or answer rounded to about 1 km, to reject impossible travel.
 You can withdraw a report you made in the same app session. **Reset community identity**
-deletes the installation from the server with all its reports and answers, and forgets the key on
-the phone; a later report registers a new key that is not linked to the old one. Development
+turns off **Share road reports** and **Share traffic speeds**, deletes the installation from the
+server with all its reports and answers, and forgets the key on the phone; sharing again needs a
+new opt-in, and a later report registers a new key that is not linked to the old one. Development
 builds running in the iOS Simulator can use a software key that only a test server accepts;
 release builds cannot.
 
@@ -313,7 +320,7 @@ Cloudflare and OpenFreeMap apply their own retention policies to data they proce
 
 You can deny or revoke location in iOS Settings. Search and map browsing remain available, but current-position routing and active navigation will be limited. You can stop an active trip using End navigation, which stops background location and erases the transient active route.
 
-You can erase all locally stored recent and saved destinations at any time using **Clear saved and recent destinations** in the app's About and Privacy screen. Pending contribution retries can be deleted individually on the Contribute screen. Accepted beta feedback cannot be linked back to an account because NavOSS has no account or contributor identifier; contact support with the random submission ID if deletion before automatic expiry is required. Road-report private drafts expire after two hours. **Reset community identity** deletes this installation's shared road reports and answers from the server, as described under [Community road reports](#community-road-reports). Removing the app removes all remaining local records.
+You can erase all locally stored recent and saved destinations at any time using **Clear saved and recent destinations** in the app's About and Privacy screen. Pending contribution retries can be deleted individually on the Contribute screen. Accepted beta feedback cannot be linked back to an account because NavOSS has no account or contributor identifier; contact support with the random submission ID if deletion before automatic expiry is required. Road-report private drafts expire after two hours. **Reset community identity** turns off both sharing switches and deletes this installation's shared road reports and answers from the server, as described under [Community road reports](#community-road-reports). Removing the app removes all remaining local records.
 
 You can use NavOSS without granting Contacts access because the app never asks for it. Sharing and the external reviews link are optional, user-initiated actions. Dismissing the system share sheet sends nothing to a recipient. In a Google-enabled build, opening a POI sheet can send its public coordinate for Google-rendered photos, ratings, and reviews; choosing no external reviews link sends no Google Maps search.
 
