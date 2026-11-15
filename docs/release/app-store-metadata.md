@@ -86,7 +86,7 @@ Please test NavOSS 0.1.0 (81) while parked or with a passenger operating the con
 3. Open a named place and look for the Google place panel. If the nearest listing is not the right place, try "Find this place on Google" and select the correct listing.
 4. If you encounter a road condition, turn on Share road reports and submit the matching report when safe. Reports from verified installations are unconfirmed until corroborated. Sharing is off by default.
 5. Connect CarPlay and try search, route preview and guidance. Report any display, voice or reconnection problems.
-6. Open the road-events list for Alberta, British Columbia and Ontario. 511 Alberta and Ontario 511 need keys and are not connected.
+6. Open the road-events list for Alberta, British Columbia and Ontario. 511 Alberta and Ontario 511 were connected in production on 2026-11-15.
 
 There is no live traffic. All Alberta and the Calgary area are available for offline download; British Columbia has no offline region. A download on a physical iPhone still needs verification. Optional traffic sharing is collected for evaluation only; nothing is displayed or used in routes. Do not rely on this beta as your only source for navigation or safety.
 

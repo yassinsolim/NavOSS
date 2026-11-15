@@ -28,7 +28,7 @@ A report control says before the driver commits whether it is shared: "Report (p
 
 ## rule/official-not-crowd
 
-Official data (City of Calgary cameras, DriveBC and City of Toronto events) is labelled as official; 511 Alberta and Ontario 511 need keys and are not configured. Community reports are "unconfirmed" until confirmed and never officially sourced; incident markers from Calgary are labelled unverified. Never add police, speed-trap or checkpoint wording (`docs/data-sources.md`).
+Official data (City of Calgary cameras, DriveBC, City of Toronto, 511 Alberta and Ontario 511 events) is labelled as official; 511 Alberta and Ontario 511 were connected in production on 2026-11-15. Community reports are "unconfirmed" until confirmed and never officially sourced; incident markers from Calgary are labelled unverified. Never add police, speed-trap or checkpoint wording (`docs/data-sources.md`).
 
 ## rule/driving-safe-wording
 
