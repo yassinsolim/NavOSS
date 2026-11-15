@@ -116,23 +116,27 @@
           Google place details exist only in builds made with the
           <code>production-carplay-google</code> profile. The default <code>production</code> and
           <code>production-carplay</code> builds contain no Google code and make no Google request.
-          In a Google build, opening the sheet for a named place, business, or landmark (not a
-          street address, street, neighbourhood, or dropped pin) also asks Google Places, directly
-          from the phone, for the place at the selected coordinate. That request carries the
-          coordinate, the app's restricted Google API key and bundle identifier, and the device and
-          network information Google's SDK sends with its requests (described below); the place name
-          is not sent to Google. Google's Places UI Kit chooses the place and renders, live on each
-          open, what Google has for it: photos, address, star rating and rating count, place type,
-          price level, accessible-entrance information, open-now status and opening hours, a
-          summary, website, phone number, highlights, reviews, plus code, and a feature list, with
-          Google's attribution, inside its own component that is visually separated from the
-          OpenStreetMap details. On the phone, NavOSS reads only the returned display name and
-          coordinate, to hide Google's component when Google found a different place; it does not
-          read any other Google value, combine Google content with OpenStreetMap data, store or
-          cache it, or send it to the NavOSS server. NavOSS keeps nothing from Google after the
-          sheet closes; the SDK's own handling is under Google's policy. A build without Google
-          makes no Google request and shows that Google photos, ratings, and reviews are
-          unavailable.
+          In a Google build, opening the sheet for a named place, business or landmark (not a street
+          address, street, neighbourhood or dropped pin) sends that place's public name, its public
+          street address when NavOSS has one, and a box of about 200 meters around its coordinate
+          directly from the phone to Google Places, which answers with at most one place ID; no
+          name, rating or other Google content comes back in that step. If Google lists no such
+          place, nothing more is sent and no Google section appears. Otherwise NavOSS asks its own
+          server for an anonymous query grant (below) and then loads Google's Places UI Kit
+          component for that place ID. These requests carry the app's restricted Google API key and
+          bundle identifier and the device and network information Google's SDK sends with its
+          requests (described below). Google's component renders, live on each open, what Google has
+          for the place: photos, address, star rating and rating count, place type, price level,
+          accessible-entrance information, open-now status and opening hours, a summary, website,
+          phone number, highlights, reviews, plus code and a feature list, with Google's
+          attribution, inside its own component that is visually separated from the OpenStreetMap
+          details. On the phone, NavOSS uses only the place ID, to load the component, and the
+          place's coordinate, to hide the component when Google's place is more than 200 meters from
+          the selection; it does not read any other Google value, combine Google content with
+          OpenStreetMap data, store or cache the place ID or any Google content, or send them to the
+          NavOSS server. NavOSS keeps nothing from Google after the sheet closes; the SDK's own
+          handling is under Google's policy. A build without Google makes no Google request and
+          shows that Google photos, ratings, and reviews are unavailable.
         </p>
         <p>
           Before a Google build opens Google's component, it asks the NavOSS API to reserve one
@@ -649,9 +653,10 @@
         </p>
         <p>
           Sharing and the external reviews link are optional. Dismissing the system share sheet
-          sends nothing to a recipient. In a Google build, opening a place sheet can send its
-          coordinate for Google-rendered place details and reviews; not choosing the external link
-          sends no Google Maps review search. NavOSS does not ask for Contacts access.
+          sends nothing to a recipient. In a Google build, opening a named place's sheet can send
+          its name, street address when known, and nearby area to Google for Google-rendered place
+          details and reviews; not choosing the external link sends no Google Maps review search.
+          NavOSS does not ask for Contacts access.
         </p>
         <p>
           Because NavOSS has no account and does not retain server-side search, route, or trip

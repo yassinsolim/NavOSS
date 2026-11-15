@@ -182,10 +182,12 @@
           testing, not a source database.
         </p>
         <p>
-          An optional Google Places UI Kit component can receive the selected public POI name and
-          coordinate and render Google's photos, rating and rating count, review text, and required
-          attribution in its own visually separated native view. NavOSS checks the returned name and
-          coordinate to prevent a mismatch, but does not add those values to its OpenStreetMap
+          In builds made with the Google profile, opening a named place sends its public name,
+          street address when known, and the area around it to Google Places, which returns only a
+          place ID; Google's Places UI Kit component then renders that place's photos, rating and
+          rating count, reviews, and other details with required attribution in its own visually
+          separated native view. NavOSS uses the place ID and Google's location for the place only
+          on the phone, to show the right place, and does not add Google values to its OpenStreetMap
           result, read them into shared contracts, or retain them. GooglePlacesSwift 10.15.0's
           underlying SDK privacy manifest declares location, Device ID, Other Data, performance,
           product interaction, and search history collection for analytics and/or app functionality,

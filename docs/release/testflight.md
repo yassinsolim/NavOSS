@@ -123,6 +123,12 @@ the restricted value is stored only as the sensitive EAS production variable
 `GOOGLE_PLACES_IOS_API_KEY` (re-created as sensitive on 2026-11-15; it was secret before). Google quotas are 250 standard queries/day, 30/minute, and
 10/minute/user; unused Advanced and Session paths are limited to 1/day and 1/minute. This bounds a
 31-day month to 7,750 standard queries before the independent NavOSS 8,000/month counter.
+Places API (New) (`places.googleapis.com`) is also enabled on the project and is the key's second
+API target, for the place-ID lookup only: Text Search is capped at 300 requests/day and 20/minute for
+the whole project, and every other Places (New) method (place details, nearby, autocomplete,
+photos, media, review posts) is capped at 0 (2026-11-15). The lookup requests the place ID only
+(Text Search Essentials IDs Only) and takes no NavOSS grant; a quota error from it ends in "no
+Google section" or "temporarily unavailable" without a retry.
 
 An 80% standard daily-quota alert sends to the `NavOSS Google Cloud alerts` email channel. A CAD $1
 monthly budget scoped only to the NavOSS project and Places UI Kit alerts billing admins, project
