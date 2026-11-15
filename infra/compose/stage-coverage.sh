@@ -2,6 +2,7 @@
 # Builds and verifies a new coverage release beside the live stack, one heavy step at a time.
 # Nothing here touches the live containers, their artifact directories or `.env`.
 #
+#   export GEOFABRIK_VERSION=261114             # one release for every step (required)
 #   ./stage-coverage.sh inputs    canada        # download, verify, filter (≈30 min, 13 GB)
 #   ./stage-coverage.sh valhalla  canada        # graph, two passes (≈2–4 h, ≈20 GB peak, 8 GiB)
 #   ./stage-coverage.sh nominatim canada        # search import (≈12–24 h, ≤110 GB peak, 10 GiB)
@@ -27,7 +28,7 @@ speeds_url=https://raw.githubusercontent.com/OpenStreetMapSpeeds/schema/c9c6872d
 network=navoss-stage
 
 if [ "$#" -lt 2 ]; then
-  sed -n '2,17p' "$0" >&2
+  sed -n '2,18p' "$0" >&2
   exit 64
 fi
 step=$1
@@ -81,10 +82,36 @@ for code in ${codes}; do
 done
 hybrid=${hybrid:-AB}
 
+# One Geofabrik release for every step: GEOFABRIK_VERSION must be exported and, after `inputs`,
+# match what `inputs` recorded, so no later step can resolve a newer daily release.
 version_file=${imports}/${label}.stage-version
+pinned_version() {
+  if ! printf '%s\n' "${GEOFABRIK_VERSION:-}" | grep -Eqx '[0-9]{6}'; then
+    echo "Export the release every step uses first, e.g. 'export GEOFABRIK_VERSION=261114'." >&2
+    exit 64
+  fi
+  printf '%s\n' "${GEOFABRIK_VERSION}"
+}
 version() {
-  [ -s "${version_file}" ] || { echo "Run '$0 inputs $*' first." >&2; exit 1; }
-  cat "${version_file}"
+  pinned=$(pinned_version)
+  [ -s "${version_file}" ] || { echo "Run '$0 inputs ${label}' first." >&2; exit 1; }
+  recorded=$(cat "${version_file}")
+  if [ "${recorded}" != "${pinned}" ]; then
+    echo "GEOFABRIK_VERSION=${pinned}, but '${label}' was prepared from ${recorded}; refusing to mix releases." >&2
+    exit 1
+  fi
+  printf '%s\n' "${recorded}"
+}
+
+require_free_space() {
+  # require_free_space GB: refuses to start a step without its peak disk use plus a margin free on
+  # the artifact disk (STAGE_MIN_FREE_GB overrides it, e.g. for a small sample).
+  need=${STAGE_MIN_FREE_GB:-$1}
+  free_gb=$(df -Pk "${root}" | awk 'NR == 2 { print int($4 * 1024 / 1000000000) }')
+  if [ "${free_gb}" -lt "${need}" ]; then
+    echo "${step} needs ${need} GB free on ${root}; ${free_gb} GB is. Nothing was started." >&2
+    exit 1
+  fi
 }
 
 wait_for() {
@@ -189,7 +216,7 @@ discard_cluster() {
   fi
   refuse_live_nominatim "$1" "${live}"
   docker run --rm --network none --user 0 --cap-drop ALL --cap-add DAC_OVERRIDE \
-    --security-opt no-new-privileges:true --memory 256m --entrypoint rm \
+    --security-opt no-new-privileges:true --memory 256m --memory-swap 256m --entrypoint rm \
     -v "$1:/stage" "${nominatim_image}" -rf /stage/postgres
   [ ! -e "$1/postgres" ] || { echo "${1}/postgres is still there." >&2; exit 1; }
 }
@@ -199,7 +226,8 @@ valhalla_run() {
   docker rm -f navoss-valhalla-stage >/dev/null 2>&1 || true
   docker run -d --name navoss-valhalla-stage \
     --cpus "${VALHALLA_BUILD_CPUS:-4}" --cpuset-cpus "${VALHALLA_BUILD_CPUSET:-0-3}" \
-    --memory "${VALHALLA_BUILD_MEMORY:-8g}" -p 127.0.0.1:18002:8002 \
+    --memory "${VALHALLA_BUILD_MEMORY:-8g}" --memory-swap "${VALHALLA_BUILD_MEMORY:-8g}" \
+    -p 127.0.0.1:18002:8002 \
     -e build_admins="$2" -e build_elevation=False -e build_tar=True \
     -e build_time_zones=False -e force_rebuild="$3" -e server_threads=2 \
     -e tile_urls= -e traffic_name= -e use_default_speeds_config=True \
@@ -212,7 +240,14 @@ case "${step}" in
   inputs)
     hold_stage_lock
     refuse_parallel_heavy_step none
+    pinned=$(pinned_version)
+    if [ -s "${version_file}" ] && [ "$(cat "${version_file}")" != "${pinned}" ]; then
+      echo "'${label}' is staged from $(cat "${version_file}"); remove ${version_file} to start ${pinned}." >&2
+      exit 1
+    fi
+    require_free_space 20
     v=$("${script_dir}/prepare-regional-pbf.sh" "$@")
+    [ "${v}" = "${pinned}" ] || { echo "Prepared ${v}, not ${pinned}." >&2; exit 1; }
     "${script_dir}/filter-routing-pbf.sh" "${imports}/${label}-${v}.osm.pbf"
     printf '%s\n' "${v}" >"${version_file}"
     df -h "${root}" | sed -n 2p
@@ -236,6 +271,7 @@ case "${step}" in
       echo "Valhalla stage ${stage} is complete and verified."
       exit 0
     fi
+    require_free_space 30
     live=$(sed -n 's/^VALHALLA_DATA_DIR=//p' "${script_dir}/.env" 2>/dev/null | tail -n 1)
     [ "${stage}" != "${live}" ] || { echo 'Refusing to build into the live VALHALLA_DATA_DIR.' >&2; exit 1; }
     install -d -m 0750 "${stage}"
@@ -243,7 +279,7 @@ case "${step}" in
     if [ ! -f "${stage}/timezones.sqlite" ]; then
       cp "${live}/timezones.sqlite" "${stage}/timezones.sqlite"
     fi
-    tz=$(docker run --rm --network none --entrypoint spatialite -v "${stage}:/d:ro" "${valhalla_image}" \
+    tz=$(docker run --rm --network none --memory 1g --memory-swap 1g --entrypoint spatialite -v "${stage}:/d:ro" "${valhalla_image}" \
       -batch -noheader -list /d/timezones.sqlite \
       "SELECT COUNT(DISTINCT TZID) FROM tz_world WHERE TZID IN ('America/St_Johns','America/Halifax','America/Moncton','America/Toronto','America/Winnipeg','America/Regina','America/Edmonton','America/Vancouver','America/Whitehorse');")
     [ "${tz}" = 9 ] || { echo "timezones.sqlite lacks Canadian zones (${tz}/9)." >&2; exit 1; }
@@ -283,6 +319,7 @@ case "${step}" in
       discard_cluster "${stage}"
     fi
     install -d -m 0700 "${stage}/postgres"
+    require_free_space 130
     nominatim_container "${stage}" --cpus "${NOMINATIM_IMPORT_CPUS:-4}" \
       --memory "${NOMINATIM_IMPORT_MEMORY:-10g}" --memory-swap "${NOMINATIM_IMPORT_MEMORY:-10g}" \
       -e OSM2PGSQL_CACHE="${NOMINATIM_OSM2PGSQL_CACHE:-3000}" \
@@ -304,11 +341,12 @@ case "${step}" in
     nominatim_stage=${root}/nominatim/${label}-${v}
     [ -f "${valhalla_stage}/.navoss-stage-complete" ] && [ -f "${nominatim_stage}/.navoss-import-complete" ] ||
       { echo 'Finish the valhalla and nominatim steps first.' >&2; exit 1; }
+    require_free_space 2
     docker network inspect "${network}" >/dev/null 2>&1 || docker network create "${network}" >/dev/null
     # Serving only: tiles exist, so the image builds nothing.
     docker rm -f navoss-valhalla-stage >/dev/null 2>&1 || true
     docker run -d --name navoss-valhalla-stage --network "${network}" --cpus 2 \
-      --memory "${VALHALLA_SERVE_MEMORY:-4g}" \
+      --memory "${VALHALLA_SERVE_MEMORY:-4g}" --memory-swap "${VALHALLA_SERVE_MEMORY:-4g}" \
       -e build_admins=False -e build_elevation=False -e build_tar=True -e build_time_zones=False \
       -e force_rebuild=False -e server_threads=2 -e tile_urls= -e traffic_name= \
       -e use_default_speeds_config=True -e use_tiles_ignore_pbf=True \
@@ -320,7 +358,8 @@ case "${step}" in
       --memory "${NOMINATIM_SERVE_MEMORY:-6g}" --memory-swap "${NOMINATIM_SERVE_MEMORY:-6g}" -e THREADS=2
     docker start navoss-nominatim-stage >/dev/null
     docker rm -f navoss-api-stage >/dev/null 2>&1 || true
-    docker run -d --name navoss-api-stage --network "${network}" --memory 768m --cpus 0.75 \
+    docker run -d --name navoss-api-stage --network "${network}" --memory 768m --memory-swap 768m \
+      --cpus 0.75 \
       -p 127.0.0.1:18300:3000 \
       --read-only --tmpfs /tmp:size=32m --cap-drop ALL --security-opt no-new-privileges:true \
       -e HOST=0.0.0.0 -e PORT=3000 -e NODE_ENV=production \

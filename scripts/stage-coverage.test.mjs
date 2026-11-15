@@ -408,32 +408,94 @@ test(
   },
 );
 
-test('serve starts Nominatim over the chosen stage, not the last import', options, async (context) => {
-  const fixture = await createFixture(context, ['canada', 'nova-scotia']);
-  for (const label of ['canada', 'nova-scotia']) {
-    const imported = stage(fixture, ['nominatim', label]);
-    assert.equal(imported.status, 0, imported.stderr);
+test(
+  'serve starts Nominatim over the chosen stage, not the last import',
+  options,
+  async (context) => {
+    const fixture = await createFixture(context, ['canada', 'nova-scotia']);
+    for (const label of ['canada', 'nova-scotia']) {
+      const imported = stage(fixture, ['nominatim', label]);
+      assert.equal(imported.status, 0, imported.stderr);
+    }
+    const graph = join(fixture.root, `valhalla-canada-${VERSION}`);
+    await mkdir(graph, { recursive: true });
+    await writeFile(join(graph, '.navoss-stage-complete'), '');
+
+    const served = stage(fixture, ['serve', 'canada']);
+
+    assert.equal(served.status, 0, served.stderr);
+    const created = (
+      await readFile(join(fixture.state, 'created', 'navoss-nominatim-stage'), 'utf8')
+    ).split('\n');
+    const canada = join(fixture.root, 'nominatim', `canada-${VERSION}`);
+    assert.ok(
+      created.includes(`${canada}/postgres:/var/lib/postgresql/16/main`),
+      created.join(' '),
+    );
+    assert.ok(
+      created.includes(
+        `${join(fixture.root, 'imports', `canada-${VERSION}.osm.pbf`)}:/regional-data/regional.osm.pbf:ro`,
+      ),
+    );
+    assert.ok(created.includes(`${canada}/staging-password.env`));
+    assert.ok(created.includes('navoss-stage'), 'joins the staging network');
+    assert.equal(await exists(join(fixture.state, 'running', 'navoss-nominatim-stage')), true);
+    const copied = join(fixture.state, 'files', 'navoss-nominatim-stage', 'start.sh');
+    assert.equal((await readFile(copied, 'utf8')).split('\n')[0], '#!/bin/bash -e');
+  },
+);
+
+const startedAnything = (list) => list.some((call) => /^(create|run|start) /u.test(call));
+
+test('every step runs from the one exported release', options, async (context) => {
+  const fixture = await createFixture(context);
+  for (const step of ['inputs', 'nominatim', 'serve']) {
+    const unpinned = stage(fixture, [step, 'new-brunswick'], { GEOFABRIK_VERSION: '' });
+    assert.equal(unpinned.status, 64, step);
+    assert.match(unpinned.stderr, /export GEOFABRIK_VERSION=/u, step);
   }
-  const graph = join(fixture.root, `valhalla-canada-${VERSION}`);
-  await mkdir(graph, { recursive: true });
-  await writeFile(join(graph, '.navoss-stage-complete'), '');
-
-  const served = stage(fixture, ['serve', 'canada']);
-
-  assert.equal(served.status, 0, served.stderr);
-  const created = (
-    await readFile(join(fixture.state, 'created', 'navoss-nominatim-stage'), 'utf8')
-  ).split('\n');
-  const canada = join(fixture.root, 'nominatim', `canada-${VERSION}`);
-  assert.ok(created.includes(`${canada}/postgres:/var/lib/postgresql/16/main`), created.join(' '));
-  assert.ok(
-    created.includes(
-      `${join(fixture.root, 'imports', `canada-${VERSION}.osm.pbf`)}:/regional-data/regional.osm.pbf:ro`,
-    ),
+  const newer = stage(fixture, ['nominatim', 'new-brunswick'], { GEOFABRIK_VERSION: '261201' });
+  assert.equal(newer.status, 1);
+  assert.match(
+    newer.stderr,
+    /GEOFABRIK_VERSION=261201, but 'new-brunswick' was prepared from 261114/u,
   );
-  assert.ok(created.includes(`${canada}/staging-password.env`));
-  assert.ok(created.includes('navoss-stage'), 'joins the staging network');
-  assert.equal(await exists(join(fixture.state, 'running', 'navoss-nominatim-stage')), true);
-  const copied = join(fixture.state, 'files', 'navoss-nominatim-stage', 'start.sh');
-  assert.equal((await readFile(copied, 'utf8')).split('\n')[0], '#!/bin/bash -e');
+  const restaged = stage(fixture, ['inputs', 'new-brunswick'], { GEOFABRIK_VERSION: '261201' });
+  assert.equal(restaged.status, 1);
+  assert.match(restaged.stderr, /staged from 261114; remove .* to start 261201/u);
+  assert.equal(startedAnything(await calls(fixture)), false);
+});
+
+test('a step refuses to start without its disk space', options, async (context) => {
+  const fixture = await createFixture(context);
+
+  const refused = stage(fixture, ['nominatim', 'new-brunswick'], { STAGE_MIN_FREE_GB: '999999' });
+
+  assert.equal(refused.status, 1);
+  assert.match(
+    refused.stderr,
+    /nominatim needs 999999 GB free on .*; \d+ GB is\. Nothing was started\./u,
+  );
+  assert.equal(startedAnything(await calls(fixture)), false);
+});
+
+test('every staging container has a memory cap', options, async (context) => {
+  const fixture = await createFixture(context);
+  const stageDirectory = await interruptedImport(fixture);
+  assert.equal(stage(fixture, ['nominatim', 'new-brunswick']).status, 0);
+  await mkdir(join(fixture.root, `valhalla-new-brunswick-${VERSION}`), { recursive: true });
+  await writeFile(
+    join(fixture.root, `valhalla-new-brunswick-${VERSION}`, '.navoss-stage-complete'),
+    '',
+  );
+  assert.equal(stage(fixture, ['serve', 'new-brunswick']).status, 0);
+
+  const started = (await calls(fixture)).filter((call) => /^(create|run) /u.test(call));
+  assert.equal(started.length, 5, started.join('\n')); // cleanup, import, then the three served
+  for (const call of started) {
+    const memory = /--memory (\S+) --memory-swap (\S+)/u.exec(call);
+    assert.ok(memory, call);
+    assert.equal(memory[1], memory[2], call);
+  }
+  assert.ok(stageDirectory);
 });

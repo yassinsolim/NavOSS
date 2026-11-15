@@ -344,32 +344,55 @@ staged services from `serve` are running. During steps 2 and 3 keep at least 4 G
 window) ends the running step itself, not only its containers, then removes the staging containers;
 rerun the step to resume.
 
-| Step | Command                                               | Expected time                 | Artifact disk                    | Memory               |
-| ---- | ----------------------------------------------------- | ----------------------------- | -------------------------------- | -------------------- |
-| 0    | Update the checkout and API image                     | 5 min                         | 1 GB                             | —                    |
-| 1    | `inputs`: verify the extract, write the routing input | 15–30 min                     | +6.5 GB                          | < 1 GiB              |
-| 2    | `valhalla`: two graph passes and the admin repair     | 1–4 h                         | +8–20 GB peak, ≈ 8–12 GB kept    | ≤ 8 GiB              |
-| 3    | `nominatim`: search import                            | 12–24 h                       | +70–110 GB peak, ≈ 20–30 GB kept | ≤ 10 GiB             |
-| 4    | `serve` + `verify`, route matrix over SSH             | 30 min                        | —                                | ≈ 7 GiB while staged |
-| 5    | Stop staging                                          | 1 min                         | —                                | frees it             |
-| 6    | Cutover                                               | 5–10 min, ≈ 1 min API restart | —                                | live limits below    |
+Every step needs `GEOFABRIK_VERSION` exported, and every step after `inputs` refuses unless it
+equals the release `inputs` recorded, so no step can resolve a newer daily release (the fallback
+below included). Each step also refuses to start unless its free-space floor is free on the artifact
+disk (`STAGE_MIN_FREE_GB` overrides the floor for small samples only). Memory is the configured
+container limit, which is what the kernel enforces; there is no swap.
 
-The time, disk and memory figures for Canada are estimates scaled from the measured Alberta+BC
-artifacts; the architecture document says how. Record the real values in
-`docs/release/testflight.md` as each step finishes.
+| Step | Command                                               | Expected time                 | Disk floor (refuses below) | Artifact disk                    | Memory (container limits)                             |
+| ---- | ----------------------------------------------------- | ----------------------------- | -------------------------- | -------------------------------- | ----------------------------------------------------- |
+| 0    | Update the checkout and API image                     | 5 min                         | —                          | 1 GB                             | image build only                                      |
+| 1    | `inputs`: verify the extract, write the routing input | 15–30 min                     | 20 GB                      | +6.5 GB                          | no container; osmium < 1 GiB                          |
+| 2    | `valhalla`: two graph passes and the admin repair     | 1–4 h                         | 30 GB                      | +8–20 GB peak, ≈ 8–12 GB kept    | build 8 GiB; spatialite helpers 1 GiB, never together |
+| 3    | `nominatim`: search import                            | 12–24 h                       | 130 GB                     | +70–110 GB peak, ≈ 20–30 GB kept | import 10 GiB; cleanup container 256 MiB before it    |
+| 4    | `serve` + `verify`, route matrix over SSH             | 30 min                        | 2 GB                       | —                                | Valhalla 4 + Nominatim 6 + API 0.75 = 10.75 GiB       |
+| 5    | `stop`                                                | 1 min                         | —                          | —                                | frees step 4                                          |
+| 6    | Cutover                                               | 5–10 min, ≈ 1 min API restart | —                          | —                                | live limits 10.19 → 14.19 GiB                         |
+
+Worst case against the 24 GiB host, by limits. The live stack's limits are 10.19 GiB (API 0.75,
+search indexer 0.5, Caddy 0.19, Valhalla 2, Nominatim 6, reports database 0.75). The lock allows
+only one row at a time:
+
+| Phase              | Live limits | Staging limits | Total   | Left of 24 GiB |
+| ------------------ | ----------- | -------------- | ------- | -------------- |
+| `inputs`           | 10.19       | 0 (host < 1)   | < 11.19 | > 12.8         |
+| `valhalla` build   | 10.19       | 8              | 18.19   | 5.81           |
+| `nominatim` import | 10.19       | 10             | 20.19   | 3.81           |
+| `serve` (staged)   | 10.19       | 10.75          | 20.94   | 3.06           |
+| After the cutover  | 14.19       | 0              | 14.19   | 9.81           |
+
+Limits are ceilings, not use: the kernel kills a container at its limit instead of the host
+swapping. Steps 3 and 4 leave less than the 4 GiB floor only if every container reaches its limit
+at once; watch `free -h` as below.
+
+The time and disk figures for Canada are estimates scaled from the measured Alberta+BC artifacts;
+the architecture document says how. Record the real values in `docs/release/testflight.md` as each
+step finishes.
 
 ```sh
 cd /home/navoss/NavOSS/infra/compose
 # 0. Code: this branch's API and scripts. The live API keeps running its current image.
 git fetch origin && git checkout <merged main> && sudo docker compose build api
 sudo apt-get install -y osmium-tool jq   # once
+export GEOFABRIK_VERSION=261114        # the one release every step below uses
 ./stage-coverage.sh status canada
 
 # 1. Inputs. Uses the extract already at imports/canada-261114.osm.pbf (MD5 checked on download);
 #    writes canada-261114.osm.pbf.md5, SHA256SUMS-canada-261114 and canada-261114.routing.osm.pbf
-#    (seasonal and ice roads removed; the report says how many).
-GEOFABRIK_VERSION=261114 GEOFABRIK_MD5=0bba746e7473aac6a7a6796d153ea12d \
-  ./stage-coverage.sh inputs canada
+#    (seasonal and ice roads removed, relation members included; the report counts what was
+#    removed). A routing input from the earlier filter is regenerated.
+GEOFABRIK_MD5=0bba746e7473aac6a7a6796d153ea12d ./stage-coverage.sh inputs canada
 
 # 2. Routing graph: /srv/navoss/artifacts/valhalla-canada-261114 (pass 1 builds admins, the
 #    repair links all 13 provinces to Canada, pass 2 rebuilds with the hybrid speeds for AB and ON).
@@ -404,7 +427,7 @@ compare the Alberta+BC 22 with the live artifact, and check one Montreal route s
 names as expected (architecture document, "Quebec").
 
 ```sh
-# 5. Stop staging (frees ≈ 7 GiB); the staged artifacts stay.
+# 5. Stop staging (frees up to 10.75 GiB); the staged artifacts stay.
 ./stage-coverage.sh stop canada
 
 # 6. Cutover: four artifact values, the declaration and two memory limits.
@@ -446,7 +469,8 @@ deliberately, never as part of a deployment.
 **Staged search (fallback).** If step 3 cannot finish within these limits (memory pressure,
 swap growth, or the disk peak), keep the Canada graph and import search for fewer provinces, for
 example `./stage-coverage.sh inputs alberta british-columbia ontario quebec` then `nominatim` with
-the same arguments, and declare only those provinces (`NAVOSS_SERVICE_AREAS`,
+the same arguments, in the same shell (the exported `GEOFABRIK_VERSION=261114` pins these inputs to
+the graph's release; a mismatch is refused), and declare only those provinces (`NAVOSS_SERVICE_AREAS`,
 `NOMINATIM_DATASET_VERSION=alberta-british-columbia-ontario-quebec-geofabrik-2026-11-14`). The API
 refuses to declare a province its search index lacks, so the app never offers search or routes
 where search would fail. `serve` and `verify` expect a graph under the same label; link the Canada

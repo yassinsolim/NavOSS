@@ -53,6 +53,8 @@ cp -p "${admin_db}" "${working_dir}/admins.sqlite"
 run_spatialite() {
   "${container_runtime}" run --rm \
     --network none \
+    --memory 1g \
+    --memory-swap 1g \
     --read-only \
     --tmpfs /tmp:size=16m,mode=1777 \
     --cap-drop ALL \
