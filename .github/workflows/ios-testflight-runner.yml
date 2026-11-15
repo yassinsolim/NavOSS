@@ -23,6 +23,16 @@ on:
         required: false
         default: true
         type: boolean
+      profile:
+        description: >-
+          EAS build profile. production-carplay-google adds Google place details; its key comes from
+          the EAS production environment, like the other profile variables.
+        required: false
+        default: production-carplay
+        type: choice
+        options:
+          - production-carplay
+          - production-carplay-google
 
 concurrency:
   group: ios-testflight-production
@@ -39,6 +49,7 @@ jobs:
     environment: app-store-production
     env:
       RELEASE_TAG: ${{ inputs.release_tag }}
+      EAS_PROFILE: ${{ inputs.profile || 'production-carplay' }}
       # Required by the CarPlay config plugin; the production origin is public, not a secret.
       EXPO_PUBLIC_API_URL: https://navoss-api.yassin.app
     steps:
@@ -87,7 +98,7 @@ jobs:
           unset CC CXX || true
           npx --yes eas-cli@24.3.0 build \
             --platform ios \
-            --profile production-carplay \
+            --profile "$EAS_PROFILE" \
             --local \
             --non-interactive \
             --output "$RUNNER_TEMP/navoss.ipa"
@@ -137,6 +148,28 @@ jobs:
           fi
           echo "Verified $(basename "$app")"
 
+      # The Google profile must really carry Google place details; the key itself is not printed.
+      - name: Verify Google Places build
+        if: inputs.profile == 'production-carplay-google'
+        run: |
+          set -euo pipefail
+          app="$(find "$RUNNER_TEMP/ipa-audit/Payload" -maxdepth 1 -name '*.app' | head -1)"
+          if [ "$(/usr/libexec/PlistBuddy -c 'Print :NavOSSGooglePlacesEnabled' "$app/Info.plist")" != true ]; then
+            echo 'Google profile built without NavOSSGooglePlacesEnabled' >&2
+            exit 1
+          fi
+          # Test the key's length only; its value is never printed.
+          key_length="$({ /usr/libexec/PlistBuddy -c 'Print :NavOSSGooglePlacesAPIKey' "$app/Info.plist" 2>/dev/null || true; } | tr -d '[:space:]' | wc -c | tr -d ' ')"
+          if [ "${key_length:-0}" -eq 0 ]; then
+            echo 'Google profile built without a NavOSSGooglePlacesAPIKey' >&2
+            exit 1
+          fi
+          if [ ! -d "$app/GooglePlacesSwiftResources.bundle" ]; then
+            echo 'GooglePlacesSwift resources are missing' >&2
+            exit 1
+          fi
+          echo 'Google Places is linked'
+
       # EAS runs the upload on its own infrastructure, so the CLI only waits on a queue we do not
       # control. Run 35779380209 built and audited the IPA, then burned the remaining 70 minutes
       # waiting and was killed by `timeout-minutes`, marking a submission that was already queued
@@ -150,7 +183,7 @@ jobs:
           set -euo pipefail
           npx --yes eas-cli@24.3.0 submit \
             --platform ios \
-            --profile production-carplay \
+            --profile "$EAS_PROFILE" \
             --path "$RUNNER_TEMP/navoss.ipa" \
             --non-interactive \
             --no-wait

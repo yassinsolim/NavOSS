@@ -95,13 +95,17 @@ export function AboutSheet({
           </Text>
           {googlePlacesLicenseInfo !== undefined && (
             <Text style={styles.body}>
-              When a point-of-interest sheet opens, its coordinate is sent directly to Google Places
-              so Google's own component can render available photos, rating and rating count,
-              reviews, and attribution. NavOSS does not retain that Google content.
-              GooglePlacesSwift 10.15.0's embedded privacy manifest also declares Google collection
-              of precise and coarse location, device ID, other data, performance data, product
-              interaction, and search history for analytics and/or app functionality, but not
-              tracking. More reviews open in Google Maps only after you choose the external link.
+              This build includes Google place details. When you open a named place, its location
+              (not its name) is sent directly to Google, whose own component shows Google's listing
+              nearest that spot, such as photos, rating, reviews, hours, and contact details, with
+              Google's attribution. The place name is sent to Google only when you choose Find this
+              place on Google. Each Google load first uses one anonymous query from the NavOSS
+              server's monthly allowance. NavOSS reads only the listing's location, on this iPhone,
+              and does not keep Google content or send it to its server. GooglePlacesSwift 10.15.0's
+              embedded privacy manifest also declares Google collection of precise and coarse
+              location, device ID, other data, performance data, product interaction, and search
+              history for analytics and/or app functionality, but not tracking. More reviews open in
+              Google Maps only after you choose the external link.
             </Text>
           )}
           <View style={styles.links}>

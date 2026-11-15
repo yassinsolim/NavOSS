@@ -35,13 +35,21 @@ function configuredApiUrl() {
   return url.toString();
 }
 
+/**
+ * The Google Places switch and key for the Info.plist. The key is a secret EAS variable: it is
+ * present inside the EAS build job (`EAS_BUILD=true`, local builds included) but not when the EAS
+ * CLI evaluates this config on the machine that starts the build. Only the build job fails closed
+ * on a missing key; config evaluation elsewhere gets a keyless, Google-disabled Info.plist.
+ */
 function googlePlacesBuildConfiguration(environment = process.env) {
   const enabled = environment.NAVOSS_GOOGLE_PLACES_ENABLED === '1';
+  if (!enabled) return { enabled: false };
   const apiKey = environment.GOOGLE_PLACES_IOS_API_KEY?.trim();
-  if (enabled && (apiKey === undefined || apiKey.length === 0)) {
+  if (apiKey !== undefined && apiKey.length > 0) return { apiKey, enabled: true };
+  if (environment.EAS_BUILD === 'true' || environment.EAS_BUILD === '1') {
     throw new Error('GOOGLE_PLACES_IOS_API_KEY is required when NAVOSS_GOOGLE_PLACES_ENABLED=1.');
   }
-  return { enabled, ...(enabled ? { apiKey } : {}) };
+  return { enabled: false };
 }
 
 function withNavOSSCarPlay(config) {

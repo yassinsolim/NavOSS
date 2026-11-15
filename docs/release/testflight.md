@@ -83,18 +83,29 @@ EXPO_PUBLIC_API_URL=https://navoss-api.yassin.app \
 
 The validator rejects missing, non-HTTPS, loopback, `.local`, and private-network origins.
 
-Google Places photos, ratings, and reviews are a separate opt-in build path. Before enabling them, create a
+Google place details and reviews are a separate build path, approved by the owner on 2026-11-15 for the
+`production-carplay-google` profile only. Before building it, create a
 billing-enabled Google Cloud project, enable Places UI Kit, restrict the iOS key to
-`org.navoss.mobile` and the required API, store it as the EAS secret
-`GOOGLE_PLACES_IOS_API_KEY`, set `NAVOSS_GOOGLE_PLACES_ENABLED=1`, and reconcile App Privacy and
+`org.navoss.mobile` and the required API, store it as the EAS production variable
+`GOOGLE_PLACES_IOS_API_KEY` with visibility **sensitive**, set `NAVOSS_GOOGLE_PLACES_ENABLED=1`, and reconcile App Privacy and
 the hosted policy. GooglePlacesSwift 10.15.0's underlying SDK privacy manifest declares precise and
 coarse location, linked Device ID, linked Other Data, unlinked performance data, unlinked product
 interaction, and unlinked search history for analytics and/or app functionality, with no tracking.
 An enabled artifact must use matching App Store Connect answers and review notes. The release
 validator and config plugin fail closed when the flag has no key. Checked-in production profiles
 explicitly set `NAVOSS_GOOGLE_PLACES_ENABLED=0`; disabled builds do not link GooglePlacesSwift or
-make place-details requests. Enabled builds use the standard Places UI Kit query rather than its
-higher-priced advanced component. Every enabled query must first receive an anonymous grant from
+make place-details requests. Enabled builds use the Essentials `PlaceDetailsView` (billed per load,
+with every content element it offers) and `PlaceSearchView` rather than the Pro `AdvancedPlaceDetailsView`. The hosted
+workflow `ios-testflight-runner.yml` builds it with `profile: production-carplay-google`; `eas build --local`
+loads the profile's `production` variables into the local build job (`EAS_BUILD=true`). Local
+builds load only "Plain text" and "Sensitive" variables, never "Secret" ones (stated in the EAS log
+of the hosted run on `35bbd57`, which failed in `eas-build-pre-install` with the key missing), so the
+key must be **sensitive**: readable with an EAS token, masked in EAS logs. A secret key cannot reach
+a `--local` build. Inside the job the config plugin and the `eas-build-pre-install` release validator
+refuse the flag without a key; when the EAS CLI evaluates the config before the job, the plugin
+returns a keyless, Google-disabled config instead of failing (hosted run `43677906278` died there
+before that change). The run then checks the IPA for `NavOSSGooglePlacesEnabled`, a non-empty
+`NavOSSGooglePlacesAPIKey` (length only, never printed) and `GooglePlacesSwiftResources.bundle`. Every enabled query must first receive an anonymous grant from
 the durable NavOSS counter, which hard-stops at 8,000 grants per UTC month and fails closed. Keep
 Google-side quota limits and billing alerts as an independent second layer before release.
 
@@ -108,10 +119,16 @@ cities, 301 Toronto cameras, and out-of-coverage rejection with zero failures.
 The dedicated `navoss-mobile-6792619727` project is linked to billing and has only Places UI Kit
 enabled for this feature. Exactly one active API key remains: `NavOSS iOS Places UI Kit`, restricted
 to iOS bundle `org.navoss.mobile` and one API. All onboarding-generated 35-API keys are deleted, and
-the restricted value is stored only as the secret EAS production variable
-`GOOGLE_PLACES_IOS_API_KEY`. Google quotas are 250 standard queries/day, 30/minute, and
+the restricted value is stored only as the sensitive EAS production variable
+`GOOGLE_PLACES_IOS_API_KEY` (re-created as sensitive on 2026-11-15; it was secret before). Google quotas are 250 standard queries/day, 30/minute, and
 10/minute/user; unused Advanced and Session paths are limited to 1/day and 1/minute. This bounds a
 31-day month to 7,750 standard queries before the independent NavOSS 8,000/month counter.
+The app uses only Places UI Kit components (Place Details and, after the driver asks, Place
+Search). Places API (New) web-service methods such as Text Search are Core Services that Google's
+terms (3.2.3(e)) do not allow with a non-Google map; `places.googleapis.com` was removed from the
+key and disabled on the project on 2026-11-15. Place Search is billed each time its request is set,
+like any UI Kit load, and every load (automatic panel, search list, picked listing) takes a NavOSS
+grant.
 
 An 80% standard daily-quota alert sends to the `NavOSS Google Cloud alerts` email channel. A CAD $1
 monthly budget scoped only to the NavOSS project and Places UI Kit alerts billing admins, project
@@ -579,7 +596,7 @@ was deleted. Existing signed builds remain compatible through the unchanged stri
 `/v1/config`; the new regional client uses `/v2/config`. A replacement signed build is required
 before TestFlight users can access the Kelowna UI and unrestricted map changes.
 
-The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a keyless CarPlay tester build so the approved scene and entitlement are present. After the restricted EAS Google key and matching App Privacy answers are ready, use `production-carplay-google` for the rating-enabled candidate:
+The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a keyless CarPlay tester build so the approved scene and entitlement are present. After the restricted EAS Google key and matching App Privacy answers are ready, use `production-carplay-google` for the Google place-details candidate:
 
 ```sh
 eas build --platform ios --profile production-carplay
