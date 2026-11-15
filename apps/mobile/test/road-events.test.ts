@@ -424,6 +424,27 @@ describe('road-event wording', () => {
     );
   });
 
+  it('names the year of a start or planned end outside the current year', () => {
+    const official = ontario.events[0];
+    if (official === undefined) throw new Error('fixture has events');
+    const now = Date.parse('2026-11-15T21:00:00.000Z');
+    // 511 Alberta's Anthony Henday bridge work, as served on 2026-11-15.
+    const longWork = {
+      ...official,
+      endsAt: '2028-07-16T01:00:00.000Z',
+      startsAt: '2026-06-30T20:00:00.000Z',
+    };
+    const message = roadEventMessage(longWork, ontario, now);
+    expect(message).toMatch(/^Starts: Jun 30(,| at) \d/mu);
+    expect(message).toMatch(/^Planned end: Jul 1[56], 2028/mu);
+    const lastYear = { ...longWork, endsAt: undefined, startsAt: '2025-12-31T18:00:00.000Z' };
+    expect(roadEventMessage(lastYear, ontario, now)).toMatch(/^Starts: Dec 31, 2025/mu);
+    const { endsAt: _instant, ...dated } = longWork;
+    expect(
+      roadEventMessage({ ...dated, endsOn: '2028-07-15', startsOn: '2026-06-30' }, ontario, now),
+    ).toMatch(/^Planned end: Jul 15, 2028$/mu);
+  });
+
   it('draws every type on one of the three symbol layers and credits drawn sources', () => {
     expect(roadEventLayer({ ...calgaryIncident })).toBe('incident');
     const collision = {
