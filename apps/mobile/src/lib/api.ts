@@ -209,6 +209,51 @@ export async function fetchAppConfig(options: FetchAppConfigOptions = {}): Promi
   );
 }
 
+export interface FetchAppConfigUntilKnownOptions extends FetchAppConfigOptions {
+  /** Pauses between attempts; the last repeats until the config is known. */
+  retryDelaysMs?: readonly number[];
+  /** Told about each failed attempt, e.g. to show the service as unavailable meanwhile. */
+  onFailure?: (error: unknown) => void;
+  wait?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
+}
+
+const CONFIG_RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 30_000, 60_000] as const;
+
+function waitFor(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  const { promise, resolve, reject } = Promise.withResolvers<void>();
+  const timer = setTimeout(resolve, milliseconds);
+  signal?.addEventListener(
+    'abort',
+    () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    },
+    { once: true },
+  );
+  return promise;
+}
+
+/**
+ * `fetchAppConfig`, tried again with backoff until the server answers or `signal` aborts. A server
+ * that has just restarted answers 503 for a moment; without this, coverage stayed unknown until the
+ * app was relaunched.
+ */
+export async function fetchAppConfigUntilKnown(
+  options: FetchAppConfigUntilKnownOptions = {},
+): Promise<ServerConfig> {
+  const delays = options.retryDelaysMs ?? CONFIG_RETRY_DELAYS_MS;
+  const wait = options.wait ?? waitFor;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await fetchAppConfig(options);
+    } catch (error: unknown) {
+      if (options.signal?.aborted === true) throw error;
+      options.onFailure?.(error);
+      await wait(delays[Math.min(attempt, delays.length - 1)] ?? 60_000, options.signal);
+    }
+  }
+}
+
 export async function reserveGooglePlaceQuery(
   options: ReserveGooglePlaceQueryOptions = {},
 ): Promise<GooglePlaceQueryGrantResponse> {
