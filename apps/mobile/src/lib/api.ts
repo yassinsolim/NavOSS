@@ -40,12 +40,35 @@ import { presentedInstruction } from '../features/navigation/instruction-text';
 
 export class NavOssApiError extends Error {
   public readonly status: number;
+  /** The problem's own title when the server explained the failure (`ProblemDetails`). */
+  public readonly title: string | undefined;
 
-  public constructor(message: string, status: number) {
+  public constructor(message: string, status: number, title?: string) {
     super(message);
     this.name = 'NavOssApiError';
     this.status = status;
+    this.title = title;
   }
+}
+
+/**
+ * The API's answer to a body that does not match its contract (`app.ts` error handler), which is
+ * how an API older than origin heading and accuracy rejected them. A 400 with any other title is
+ * the server refusing the route itself ("No route between these provinces"): sending it again
+ * without the optional fields gets the same answer.
+ */
+const CONTRACT_REJECTION_TITLE = 'Invalid request';
+
+/**
+ * The server's title when it refused to plan a route for a reason sending it again cannot change
+ * (422 "No road route", 400 "No route between these provinces"); `undefined` for an outage, a
+ * connection failure or a request the API could not read.
+ */
+export function routeRefusalTitle(error: unknown): string | undefined {
+  if (!(error instanceof NavOssApiError) || error.title === undefined) return undefined;
+  if (error.status === 422) return error.title;
+  if (error.status === 400 && error.title !== CONTRACT_REJECTION_TITLE) return error.title;
+  return undefined;
 }
 
 export interface SearchPlacesOptions {
@@ -187,6 +210,7 @@ async function parseResponse(response: Response): Promise<unknown> {
         ? problem.data.detail
         : `NavOSS API request failed with ${String(response.status)}.`,
       response.status,
+      problem.success ? problem.data.title : undefined,
     );
   }
 
@@ -324,14 +348,6 @@ export function routeResponseFromV1(response: RouteResponse): RouteResponseV2 {
     })),
   };
 }
-
-/**
- * The API's answer to a body that does not match its contract (`app.ts` error handler), which is
- * how an API older than origin heading and accuracy rejected them. A 400 with any other title is
- * the server refusing the route itself ("No route between these provinces"): sending it again
- * without the optional fields gets the same answer.
- */
-const CONTRACT_REJECTION_TITLE = 'Invalid request';
 
 async function isContractRejection(response: Response): Promise<boolean> {
   const problem = ProblemDetailsSchema.safeParse(await response.json().catch(() => undefined));

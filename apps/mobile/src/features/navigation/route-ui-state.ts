@@ -15,6 +15,7 @@ import {
 } from './native-navigation';
 import type { PhoneRouteStatus } from './phone-surface';
 import { OFFLINE_ROUTE_SOURCE, type OfflineRouteSource } from '../offline/offline-copy';
+import { NavOssApiError, routeRefusalTitle } from '../../lib/api';
 
 /** Who routed a trip: the NavOSS service's provider, or the on-device offline engine. */
 export type RouteSource = RouteResponseV2['source'] | OfflineRouteSource;
@@ -30,13 +31,12 @@ export type RouteUiState =
       type: 'loading';
       waypoints: SearchResult[];
     }
-  | {
+  | ({
       destination: SearchResult;
-      message: string;
       previewOrigin?: Coordinate;
       type: 'error';
       waypoints: SearchResult[];
-    }
+    } & RouteError)
   | {
       destination: SearchResult;
       previewOrigin?: Coordinate;
@@ -76,6 +76,24 @@ export type RouteStatusParity = AssertTrue<
 >;
 
 export const IDLE_ROUTE: RouteUiState = { type: 'idle' };
+
+/**
+ * Why a route could not be planned. `refusalTitle` is the server's title when it refused the
+ * route itself: asking again cannot help, so the phone offers another destination instead of a
+ * retry. Without it the failure is an outage or a lost connection, and a retry may work.
+ */
+export interface RouteError {
+  message: string;
+  refusalTitle?: string;
+}
+
+export function routeErrorFrom(error: unknown): RouteError {
+  if (!(error instanceof NavOssApiError)) {
+    return { message: 'A route could not be calculated. Check the connection and try again.' };
+  }
+  const refusalTitle = routeRefusalTitle(error);
+  return { message: error.message, ...(refusalTitle === undefined ? {} : { refusalTitle }) };
+}
 
 /** The route the map highlights and the panels describe, for any state that has one. */
 export function selectedRouteOf(state: RouteUiState): RouteAlternativeV2 | undefined {

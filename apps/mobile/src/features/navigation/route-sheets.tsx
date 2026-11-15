@@ -19,7 +19,7 @@ import {
   routeTrafficLabel,
   routeViaLabel,
 } from '@/features/navigation/route-progress';
-import type { RouteSource } from '@/features/navigation/route-ui-state';
+import type { RouteError, RouteSource } from '@/features/navigation/route-ui-state';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
 import { createThemedStyles, radius, space, typography, useTheme } from '@/theme';
@@ -36,7 +36,8 @@ import { StateView } from '@/ui/state-view';
 interface RoutePlanningSheetProps {
   bottomInset: number;
   destination: SearchResult;
-  errorMessage?: string;
+  /** Why the route could not be planned; undefined while it is being calculated. */
+  failure?: RouteError;
   onCancel: () => void;
   onPreviewSupportedRoute: () => void;
   onRetry: () => void;
@@ -47,14 +48,15 @@ interface RoutePlanningSheetProps {
 export function RoutePlanningSheet({
   bottomInset,
   destination,
-  errorMessage,
+  failure,
   onCancel,
   onPreviewSupportedRoute,
   onRetry,
   position,
 }: RoutePlanningSheetProps) {
   const styles = useStyles();
-  const failed = errorMessage !== undefined;
+  const failed = failure !== undefined;
+  const refused = failure?.refusalTitle !== undefined;
 
   return (
     <BottomSheet accessibilityLabel="Route planning" detents={['content']} position={position}>
@@ -67,22 +69,38 @@ export function RoutePlanningSheet({
         />
         {failed ? (
           <View style={styles.planningBody}>
-            <Banner announce message={errorMessage} tone="danger" />
-            <View style={styles.planningActions}>
-              <Button
-                accessibilityLabel="Retry route"
-                icon={{ android: 'refresh', ios: 'arrow.clockwise' }}
-                label="Retry"
-                onPress={onRetry}
-              />
-              <Button
-                accessibilityHint="Plans this trip from Calgary Tower so you can see the route. It cannot be started."
-                icon={{ android: 'map', ios: 'map.fill' }}
-                label="Preview a supported route"
-                onPress={onPreviewSupportedRoute}
-                variant="tonal"
-              />
-            </View>
+            <Banner
+              announce
+              message={failure.message}
+              title={failure.refusalTitle}
+              tone={refused ? 'warning' : 'danger'}
+            />
+            {refused ? (
+              <View style={styles.planningActions}>
+                <Button
+                  accessibilityHint="Closes this route so you can search for another place"
+                  icon={{ android: 'search', ios: 'magnifyingglass' }}
+                  label="Choose another destination"
+                  onPress={onCancel}
+                />
+              </View>
+            ) : (
+              <View style={styles.planningActions}>
+                <Button
+                  accessibilityLabel="Retry route"
+                  icon={{ android: 'refresh', ios: 'arrow.clockwise' }}
+                  label="Retry"
+                  onPress={onRetry}
+                />
+                <Button
+                  accessibilityHint="Plans this trip from Calgary Tower so you can see the route. It cannot be started."
+                  icon={{ android: 'map', ios: 'map.fill' }}
+                  label="Preview a supported route"
+                  onPress={onPreviewSupportedRoute}
+                  variant="tonal"
+                />
+              </View>
+            )}
           </View>
         ) : (
           <StateView
