@@ -9,8 +9,8 @@ import {
 } from './common.js';
 import {
   COVERAGE_BOUNDARY_SOURCE_DATA,
+  loadServiceAreaData,
   PROVINCE_PROFILES,
-  SERVICE_AREA_DATA,
 } from './coverage-data.js';
 
 const BoundaryPositionSchema = z.tuple([LongitudeSchema, LatitudeSchema]);
@@ -77,15 +77,28 @@ export interface ProvinceRegistration extends ProvinceProfile {
 
 const PROFILES: Readonly<Record<string, ProvinceProfile>> = PROVINCE_PROFILES;
 
-/** Every province NavOSS has a sourced boundary for. Registration alone serves nothing. */
-export const PROVINCE_REGISTRY: readonly ProvinceRegistration[] = SERVICE_AREA_DATA.map((area) => {
-  const profile = PROFILES[area.id];
-  if (profile === undefined) throw new Error(`Province ${area.id} has no registry profile.`);
-  return { ...profile, area };
-});
-export const REGISTERED_SERVICE_AREAS: readonly ServiceArea[] = PROVINCE_REGISTRY.map(
-  ({ area }) => area,
-);
+let registry: readonly ProvinceRegistration[] | undefined;
+let registeredAreas: readonly ServiceArea[] | undefined;
+
+/**
+ * Every province NavOSS has a sourced boundary for. Registration alone serves nothing. Built on the
+ * first call, not when the module loads: the boundaries are 1.1 MB of source the app must not
+ * evaluate at start.
+ */
+export function provinceRegistry(): readonly ProvinceRegistration[] {
+  registry ??= loadServiceAreaData().map((area) => {
+    const profile = PROFILES[area.id];
+    if (profile === undefined) throw new Error(`Province ${area.id} has no registry profile.`);
+    return { ...profile, area };
+  });
+  return registry;
+}
+
+/** The registered provinces' service areas, in registration order (see `provinceRegistry`). */
+export function registeredServiceAreas(): readonly ServiceArea[] {
+  registeredAreas ??= provinceRegistry().map(({ area }) => area);
+  return registeredAreas;
+}
 export const COVERAGE_BOUNDARY_SOURCE = COVERAGE_BOUNDARY_SOURCE_DATA;
 /** What a server declares when it is not told otherwise: the deployed Alberta+BC data. */
 export const DEFAULT_SERVICE_AREA_IDS: readonly string[] = ['alberta', 'british-columbia'];
@@ -158,7 +171,7 @@ function isCoordinateInArea(coordinate: Coordinate, area: ServiceArea): boolean 
 
 /** The registered province containing a coordinate, whether or not this server serves it. */
 export function provinceForCoordinate(coordinate: Coordinate): ProvinceRegistration | undefined {
-  return PROVINCE_REGISTRY.find(({ area }) => isCoordinateInArea(coordinate, area));
+  return provinceRegistry().find(({ area }) => isCoordinateInArea(coordinate, area));
 }
 
 /** The IANA zone that certainly applies at a coordinate, or `undefined` where it is not certain. */
@@ -201,12 +214,12 @@ export function createServiceCoverage(ids: readonly string[]): ServiceCoverage {
   const requested = new Set<string>();
   for (const id of ids) {
     if (requested.has(id)) throw new Error(`Service area ${id} is declared twice.`);
-    if (!PROVINCE_REGISTRY.some(({ area }) => area.id === id)) {
+    if (!provinceRegistry().some(({ area }) => area.id === id)) {
       throw new Error(`Service area ${id} is not in the province registry.`);
     }
     requested.add(id);
   }
-  const registrations = PROVINCE_REGISTRY.filter(({ area }) => requested.has(area.id));
+  const registrations = provinceRegistry().filter(({ area }) => requested.has(area.id));
   const areas = registrations.map(({ area }) => area);
   // Declared provinces joined only through declared neighbours share a component.
   const component = new Map<string, number>();
@@ -217,13 +230,13 @@ export function createServiceCoverage(ids: readonly string[]): ServiceCoverage {
     for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
       if (component.has(id)) continue;
       component.set(id, label);
-      const neighbours = PROVINCE_REGISTRY.find((entry) => entry.area.id === id)?.connectsTo ?? [];
+      const neighbours = provinceRegistry().find((entry) => entry.area.id === id)?.connectsTo ?? [];
       pending.push(...neighbours.filter((next) => requested.has(next)));
     }
   }
   const areaForCoordinate = (coordinate: Coordinate) =>
     areas.find((area) => isCoordinateInArea(coordinate, area));
-  const everyRegisteredArea = areas.length === PROVINCE_REGISTRY.length;
+  const everyRegisteredArea = areas.length === provinceRegistry().length;
   return {
     areaForCoordinate,
     areas,

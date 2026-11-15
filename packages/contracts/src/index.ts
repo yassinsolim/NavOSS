@@ -36,10 +36,10 @@ export {
   listDisplayNames,
   LOCAL_OVERLAY_AREAS,
   parseServiceAreaIds,
-  PROVINCE_REGISTRY,
+  provinceRegistry,
   provinceForCoordinate,
   provinceTimeZone,
-  REGISTERED_SERVICE_AREAS,
+  registeredServiceAreas,
   ServiceAreaSchema,
 } from './coverage.js';
 export type {

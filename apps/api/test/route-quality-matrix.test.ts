@@ -2,9 +2,9 @@ import { fixtureValue } from '../../../packages/contracts/test/fixture-value.js'
 import {
   CoordinateSchema,
   createServiceCoverage,
-  PROVINCE_REGISTRY,
+  provinceRegistry,
   provinceForCoordinate,
-  REGISTERED_SERVICE_AREAS,
+  registeredServiceAreas,
 } from '@navoss/contracts';
 import { describe, expect, it } from 'vitest';
 import matrix from '../scripts/route-quality-alberta-bc.json' with { type: 'json' };
@@ -69,7 +69,7 @@ describe('public Alberta and BC route-quality matrix', () => {
 });
 
 describe('public Canada route-quality matrix', () => {
-  const canada = createServiceCoverage(REGISTERED_SERVICE_AREAS.map(({ id }) => id));
+  const canada = createServiceCoverage(registeredServiceAreas().map(({ id }) => id));
   const anchors: Record<string, { coordinate: { latitude: number; longitude: number } }> =
     canadaMatrix.anchors;
   const provinceOf = (anchorId: string) =>
@@ -119,7 +119,7 @@ describe('public Canada route-quality matrix', () => {
     for (const id of ['calgary-winnipeg', 'toronto-montreal', 'vancouver-toronto-stress'])
       expect(ids.has(id), id).toBe(true);
     const provinces = new Set(Object.keys(anchors).map((id) => provinceOf(id)));
-    for (const { area } of PROVINCE_REGISTRY.filter(({ connectsTo }) => connectsTo.length > 0))
+    for (const { area } of provinceRegistry().filter(({ connectsTo }) => connectsTo.length > 0))
       expect(provinces.has(area.id), area.id).toBe(true);
   });
 
@@ -148,7 +148,7 @@ describe('public Canada route-quality matrix', () => {
 
   it('has a corridor inside every province with roads, for a declaration of that province alone', () => {
     // check-coverage.sh routes this corridor; only Nunavut, with no road between communities, has none.
-    for (const { area, connectsTo } of PROVINCE_REGISTRY) {
+    for (const { area, connectsTo } of provinceRegistry()) {
       const inside = canadaMatrix.corridors.filter(
         (corridor) =>
           provinceOf(corridor.originAnchorId) === area.id &&

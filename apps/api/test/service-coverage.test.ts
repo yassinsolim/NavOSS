@@ -4,7 +4,7 @@ import {
   LegacyAppConfigResponseSchema,
   ProblemDetailsSchema,
   ReadinessResponseSchema,
-  REGISTERED_SERVICE_AREAS,
+  registeredServiceAreas,
 } from '@navoss/contracts';
 import type { RouteAlternative } from '@navoss/contracts';
 import type { FastifyInstance } from 'fastify';
@@ -26,7 +26,7 @@ const MONTREAL = { latitude: 45.5019, longitude: -73.5674 };
 const ST_JOHNS = { latitude: 47.5615, longitude: -52.7126 };
 const IQALUIT = { latitude: 63.7467, longitude: -68.517 };
 const WESTERN_ONTARIO = createServiceCoverage(['alberta', 'british-columbia', 'ontario']);
-const CANADA = createServiceCoverage(REGISTERED_SERVICE_AREAS.map(({ id }) => id));
+const CANADA = createServiceCoverage(registeredServiceAreas().map(({ id }) => id));
 
 const apps: FastifyInstance[] = [];
 afterEach(async () => {
@@ -128,7 +128,7 @@ describe('NAVOSS_SERVICE_AREAS', () => {
     ).toBe('alberta-british-columbia');
     expect(
       serviceCoverageFromEnvironment({
-        NAVOSS_SERVICE_AREAS: REGISTERED_SERVICE_AREAS.map(({ id }) => id).join(','),
+        NAVOSS_SERVICE_AREAS: registeredServiceAreas().map(({ id }) => id).join(','),
         NOMINATIM_DATASET_VERSION: 'canada-geofabrik-2026-11-14',
         NOMINATIM_URL: 'http://nominatim:8080/',
       }).displayName,

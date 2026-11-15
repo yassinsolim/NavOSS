@@ -6,7 +6,7 @@ import {
 } from '@navoss/contracts';
 import { describe, expect, it, vi } from 'vitest';
 
-import { ProvincialRoadEventRegionSchema, REGISTERED_SERVICE_AREAS } from '@navoss/contracts';
+import { ProvincialRoadEventRegionSchema, registeredServiceAreas } from '@navoss/contracts';
 import { mapRegionForCoordinate } from '../src/features/map/map-region.js';
 import { createRoadEventLoader } from '../src/features/map/road-event-refresh.js';
 import {
@@ -80,12 +80,12 @@ describe('road-event feed per map region', () => {
 
   it('asks for events by registry province id and names provinces without a feed', () => {
     // Every feed region is a registered province id, so the phone's map region selects it as is.
-    const registered = new Set(REGISTERED_SERVICE_AREAS.map(({ id }) => id));
+    const registered = new Set(registeredServiceAreas().map(({ id }) => id));
     for (const region of ProvincialRoadEventRegionSchema.options) {
       expect(registered.has(region), region).toBe(true);
       expect(roadEventFeedForMapRegion(region).provincial).toBe(region);
     }
-    for (const area of REGISTERED_SERVICE_AREAS) {
+    for (const area of registeredServiceAreas()) {
       const feed = roadEventFeedForMapRegion(area.id);
       if (ProvincialRoadEventRegionSchema.safeParse(area.id).success) continue;
       expect(feed, area.id).toEqual({

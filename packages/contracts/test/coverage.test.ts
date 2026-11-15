@@ -8,10 +8,10 @@ import {
   isCoordinateInBounds,
   LOCAL_OVERLAY_AREAS,
   parseServiceAreaIds,
-  PROVINCE_REGISTRY,
+  provinceRegistry,
   provinceForCoordinate,
   provinceTimeZone,
-  REGISTERED_SERVICE_AREAS,
+  registeredServiceAreas,
   ServiceAreaSchema,
 } from '../src/index.js';
 import borderPoints from './fixtures/coverage-border-points.json' with { type: 'json' };
@@ -28,35 +28,25 @@ describe('province registry', () => {
   );
 
   it('registers all ten provinces and three territories once, from one source', () => {
-    expect(PROVINCE_REGISTRY.map(({ area }) => area.provinceCode).sort()).toEqual([
-      'AB',
-      'BC',
-      'MB',
-      'NB',
-      'NL',
-      'NS',
-      'NT',
-      'NU',
-      'ON',
-      'PE',
-      'QC',
-      'SK',
-      'YT',
-    ]);
-    expect(new Set(REGISTERED_SERVICE_AREAS.map(({ id }) => id)).size).toBe(13);
+    expect(
+      provinceRegistry()
+        .map(({ area }) => area.provinceCode)
+        .sort(),
+    ).toEqual(['AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'NT', 'NU', 'ON', 'PE', 'QC', 'SK', 'YT']);
+    expect(new Set(registeredServiceAreas().map(({ id }) => id)).size).toBe(13);
   });
 
   it('declares only symmetric, registered road connections', () => {
-    for (const { area, connectsTo } of PROVINCE_REGISTRY) {
+    for (const { area, connectsTo } of provinceRegistry()) {
       for (const neighbour of connectsTo) {
-        const other = PROVINCE_REGISTRY.find((entry) => entry.area.id === neighbour);
+        const other = provinceRegistry().find((entry) => entry.area.id === neighbour);
         expect(other?.connectsTo, `${area.id} -> ${neighbour}`).toContain(area.id);
       }
     }
   });
 
   it('places every readiness probe inside its own province', () => {
-    for (const { area, readinessProbe } of PROVINCE_REGISTRY) {
+    for (const { area, readinessProbe } of provinceRegistry()) {
       expect(provinceForCoordinate(readinessProbe)?.area.id).toBe(area.id);
     }
   });
@@ -93,7 +83,7 @@ describe('declared service coverage', () => {
     expect(parseServiceAreaIds(undefined)).toEqual(['alberta', 'british-columbia']);
     expect(DEFAULT.id).toBe('alberta-british-columbia');
     expect(DEFAULT.displayName).toBe('Alberta and British Columbia');
-    expect(DEFAULT.areas).toEqual(REGISTERED_SERVICE_AREAS.slice(0, 2));
+    expect(DEFAULT.areas).toEqual(registeredServiceAreas().slice(0, 2));
     for (const { coordinate, provinceId } of borderPoints.cases) {
       const served = provinceId === 'alberta' || provinceId === 'british-columbia';
       expect(DEFAULT.areaForCoordinate(coordinate)?.id ?? null).toBe(served ? provinceId : null);
@@ -122,7 +112,7 @@ describe('declared service coverage', () => {
   });
 
   it('calls every registered province Canada', () => {
-    const canada = createServiceCoverage(REGISTERED_SERVICE_AREAS.map(({ id }) => id));
+    const canada = createServiceCoverage(registeredServiceAreas().map(({ id }) => id));
     expect(canada.id).toBe('canada');
     expect(canada.displayName).toBe('Canada');
     expect(canada.contains(coordinateOf('iqaluit'))).toBe(true);
@@ -154,7 +144,7 @@ describe('declared service coverage', () => {
     expect(
       prairies.disconnectedAreas([coordinateOf('calgary'), coordinateOf('toronto')]),
     ).toBeUndefined();
-    const canada = createServiceCoverage(REGISTERED_SERVICE_AREAS.map(({ id }) => id));
+    const canada = createServiceCoverage(registeredServiceAreas().map(({ id }) => id));
     expect(
       canada.disconnectedAreas([coordinateOf('vancouver'), coordinateOf('st-johns')]),
     ).toBeUndefined();
@@ -174,7 +164,7 @@ describe('declared service coverage', () => {
 
 describe('sourced boundaries', () => {
   it('validates each sourced area and includes its recorded boundary vertices', () => {
-    for (const area of REGISTERED_SERVICE_AREAS) {
+    for (const area of registeredServiceAreas()) {
       expect(ServiceAreaSchema.safeParse(area).success).toBe(true);
       const [longitude, latitude] = fixtureValue(
         fixtureValue(fixtureValue(area.boundary.coordinates[0])[0])[0],
@@ -183,7 +173,7 @@ describe('sourced boundaries', () => {
     }
   });
   it('does not authorize foreign points just because they fit the BC retrieval envelope', () => {
-    const bc = fixtureValue(REGISTERED_SERVICE_AREAS.find(({ id }) => id === 'british-columbia'));
+    const bc = fixtureValue(registeredServiceAreas().find(({ id }) => id === 'british-columbia'));
     for (const id of ['point-roberts-outside', 'san-juan-island-outside', 'hyder-alaska-outside']) {
       const coordinate = coordinateOf(id);
       expect(isCoordinateInBounds(coordinate, bc.bounds)).toBe(true);
@@ -207,7 +197,7 @@ describe('sourced boundaries', () => {
   it('accepts a data-defined area id instead of a fixed two-province tuple', () => {
     expect(
       ServiceAreaSchema.safeParse({
-        ...REGISTERED_SERVICE_AREAS[0],
+        ...registeredServiceAreas()[0],
         id: 'another-province',
         displayName: 'Another province',
         provinceCode: 'XX',
@@ -215,7 +205,7 @@ describe('sourced boundaries', () => {
     ).toBe(true);
     expect(
       ServiceAreaSchema.safeParse({
-        bounds: fixtureValue(REGISTERED_SERVICE_AREAS[0]).bounds,
+        bounds: fixtureValue(registeredServiceAreas()[0]).bounds,
         id: 'alberta',
         displayName: 'Alberta',
         countryCode: 'CA',

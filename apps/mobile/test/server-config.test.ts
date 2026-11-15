@@ -1,7 +1,7 @@
 import {
   AppConfigResponseSchema,
   isCoordinateServed,
-  REGISTERED_SERVICE_AREAS,
+  registeredServiceAreas,
   serverAreaForCoordinate,
   serverConfigFromPayload,
 } from '@navoss/contracts';
@@ -99,7 +99,7 @@ describe('server config leniency', () => {
     const { coverage } = serverConfigFromPayload(payload);
     expect(coverage.areas.map((area) => area.boundary)).toEqual(
       ['alberta', 'british-columbia'].map(
-        (id) => fixtureValue(REGISTERED_SERVICE_AREAS.find((area) => area.id === id)).boundary,
+        (id) => fixtureValue(registeredServiceAreas().find((area) => area.id === id)).boundary,
       ),
     );
     // The BC rectangle reaches Seattle; the province polygon does not.

@@ -1,4 +1,4 @@
-import { ProvincialRoadEventRegionSchema, REGISTERED_SERVICE_AREAS } from '@navoss/contracts';
+import { ProvincialRoadEventRegionSchema, registeredServiceAreas } from '@navoss/contracts';
 import type {
   KelownaRoadEvent,
   KelownaRoadEventResponse,
@@ -53,7 +53,7 @@ export function roadEventFeedForMapRegion(mapRegion: MapRegion | undefined): Roa
       // Province ids are the registry's (`coverage-data.ts`); the feed regions use the same ids.
       const provincial = ProvincialRoadEventRegionSchema.safeParse(mapRegion);
       if (provincial.success) return { legacy: undefined, provincial: provincial.data };
-      const province = REGISTERED_SERVICE_AREAS.find(({ id }) => id === mapRegion);
+      const province = registeredServiceAreas().find(({ id }) => id === mapRegion);
       return province === undefined
         ? { legacy: undefined, provincial: undefined }
         : { legacy: undefined, noFeedProvince: province.displayName, provincial: undefined };

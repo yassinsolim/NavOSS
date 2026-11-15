@@ -1,4 +1,4 @@
-import { PROVINCE_REGISTRY, type ServiceArea, type ServiceCoverage } from '@navoss/contracts';
+import { provinceRegistry, type ServiceArea, type ServiceCoverage } from '@navoss/contracts';
 import { z } from 'zod/v4';
 
 const PROBE_TIMEOUT_MS = 3_000;
@@ -35,7 +35,7 @@ export function createCoverageReadiness(
 ): CoverageReadiness {
   const fetchImplementation = options.fetchImplementation ?? fetch;
   const probes = coverage.areas.map((area) => {
-    const registration = PROVINCE_REGISTRY.find((entry) => entry.area.id === area.id);
+    const registration = provinceRegistry().find((entry) => entry.area.id === area.id);
     if (registration === undefined) throw new Error(`Service area ${area.id} is not registered.`);
     return { area, probe: registration.readinessProbe };
   });
