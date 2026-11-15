@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   GoogleLoadSequencer,
+  googlePlaceIdentity,
   settlesGoogleLoad,
 } from '../src/features/map/google-place-details.js';
 
@@ -27,17 +28,15 @@ describe('Google load sequencer', () => {
   it('starts exactly one new load when the driver retries a search that found nothing', async () => {
     const { grants, sequencer } = harness();
 
-    const nearest = await sequencer.begin('nearest');
-    expect(nearest).toEqual({ kind: 'load', load: { phase: 'nearest', request: 1 } });
-    sequencer.settle();
-
-    const search = await sequencer.begin('search');
-    expect(search).toEqual({ kind: 'load', load: { phase: 'search', request: 2 } });
-    sequencer.settle(); // Google's search list came back empty.
-
-    const retry = await sequencer.begin('search');
+    const loads = [];
+    for (const phase of ['nearest', 'search', 'search'] as const) {
+      const outcome = await sequencer.begin(phase);
+      expect(outcome).toMatchObject({ kind: 'load', load: { phase } });
+      if (outcome.kind === 'load') loads.push(outcome.load.request);
+      sequencer.settle(); // The second search came back empty.
+    }
     // Same phase, new request: the native view's key changes, so one new component loads.
-    expect(retry).toEqual({ kind: 'load', load: { phase: 'search', request: 3 } });
+    expect(new Set(loads).size).toBe(3);
     expect(grants()).toBe(3);
   });
 
@@ -84,5 +83,57 @@ describe('Google load sequencer', () => {
     ] as const) {
       expect(settlesGoogleLoad(state)).toBe(true);
     }
+  });
+});
+
+describe('Google loads across place identities', () => {
+  it('gives every load a request number no other load has, across sequencers', async () => {
+    const first = harness().sequencer;
+    const second = harness().sequencer;
+    const a = await first.begin('nearest');
+    first.settle();
+    const b = await second.begin('nearest');
+    expect(a.kind === 'load' && b.kind === 'load' && a.load.request !== b.load.request).toBe(true);
+  });
+
+  it('drops an old identity’s grant that arrives after the place changed', async () => {
+    let release: (response: GooglePlaceQueryGrantResponse) => void = () => undefined;
+    const old = new GoogleLoadSequencer(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const pending = old.begin('nearest');
+    old.retire(); // The selection changed mid-load.
+    release(grant);
+    expect(await pending).toEqual({ kind: 'stale' });
+    expect(await old.begin('search')).toEqual({ kind: 'stale' });
+
+    const { grants, sequencer } = harness();
+    const fresh = await sequencer.begin('nearest');
+    expect(fresh).toMatchObject({ kind: 'load', load: { phase: 'nearest' } });
+    expect(grants()).toBe(1);
+    expect(sequencer.inProgress).toBe(true);
+    sequencer.settle();
+    expect(sequencer.inProgress).toBe(false);
+  });
+
+  it('keys the section by id, name and coordinate', () => {
+    const base = {
+      category: 'poi' as const,
+      center: { latitude: 51.0443, longitude: -114.0631 },
+      confidence: 1,
+      id: 'map-poi:1',
+      label: 'Calgary',
+      name: 'Calgary Tower',
+    };
+    const key = googlePlaceIdentity(base);
+    expect(googlePlaceIdentity({ ...base })).toBe(key);
+    expect(googlePlaceIdentity({ ...base, name: 'Sky 360' })).not.toBe(key);
+    expect(
+      googlePlaceIdentity({ ...base, center: { latitude: 51.0444, longitude: -114.0631 } }),
+    ).not.toBe(key);
+    expect(googlePlaceIdentity({ ...base, id: 'map-poi:2' })).not.toBe(key);
   });
 });

@@ -69,43 +69,34 @@ export function GooglePlaceDetailsSection({
   const styles = useStyles();
   const { colors } = useTheme();
   const { height: windowHeight } = useWindowDimensions();
-  const grantKey = `${name}:${latitude}:${longitude}`;
-  const sequencerRef = useRef<{ key: string; sequencer: GoogleLoadSequencer } | null>(null);
-  if (sequencerRef.current?.key !== grantKey) {
-    sequencerRef.current = {
-      key: grantKey,
-      sequencer: new GoogleLoadSequencer(() => reserveGooglePlaceQuery()),
-    };
-  }
-  const sequencer = sequencerRef.current.sequencer;
+  // PlaceSheet keys this section by the place's identity, so a different name or coordinate
+  // remounts it. Each mount's sequencer is retired on unmount, dropping grants still on their way.
+  const sequencerRef = useRef<GoogleLoadSequencer | null>(null);
   const [state, setState] = useState<GooglePlaceDetailsState>('checking');
   const [load, setLoad] = useState<GoogleLoad>({ phase: 'idle', request: 0 });
   const phase = load.phase;
-  const activeRef = useRef(true);
 
-  useEffect(() => {
-    activeRef.current = true;
-    return () => {
-      activeRef.current = false;
-    };
-  }, []);
-
-  const loadAfterGrant = (next: GooglePhase) => {
+  const loadAfterGrant = (next: GooglePhase, sequencer = sequencerRef.current) => {
     // A second tap while a grant or load is in progress spends nothing and changes nothing.
-    if (sequencer.inProgress) return;
+    if (sequencer === null || sequencer.inProgress) return;
     setState('checking');
     void sequencer.begin(next).then((outcome) => {
-      if (!activeRef.current || outcome.kind === 'busy') return;
+      if (outcome.kind === 'busy' || outcome.kind === 'stale') return;
       if (outcome.kind === 'load') setLoad(outcome.load);
       else setState(outcome.kind === 'refused' ? 'unavailable' : outcome.state);
     });
   };
 
   useEffect(() => {
-    if (!available) return;
-    loadAfterGrant('nearest');
-    // Once per place; a repeated run (React StrictMode) is `busy` and spends no grant.
-  }, [available, grantKey]);
+    if (!available) return undefined;
+    const sequencer = new GoogleLoadSequencer(() => reserveGooglePlaceQuery());
+    sequencerRef.current = sequencer;
+    loadAfterGrant('nearest', sequencer);
+    return () => {
+      sequencer.retire();
+      if (sequencerRef.current === sequencer) sequencerRef.current = null;
+    };
+  }, [available]);
 
   const reviewsLink = (
     <ListRow
@@ -195,7 +186,7 @@ export function GooglePlaceDetailsSection({
           onStateChange={(event) => {
             const next = nativeGooglePlaceState(event.nativeEvent.state);
             setState(next);
-            if (settlesGoogleLoad(next)) sequencer.settle();
+            if (settlesGoogleLoad(next)) sequencerRef.current?.settle();
             if (next === 'picked') loadAfterGrant('picked');
           }}
           phase={phase}

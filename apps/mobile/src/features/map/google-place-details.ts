@@ -105,8 +105,21 @@ export interface GoogleLoad {
 export type GoogleLoadOutcome =
   | { kind: 'load'; load: GoogleLoad }
   | { kind: 'busy' }
+  | { kind: 'stale' }
   | { kind: 'refused' }
   | { kind: 'failed'; state: 'offline' | 'unavailable' };
+
+// Request numbers are unique for the life of the app, so no two loads, for any place or native
+// view, ever share a native key.
+let lastGoogleRequest = 0;
+
+/**
+ * Identity of the selected place for the Google section. When it changes, the section remounts
+ * with a new sequencer and native view, so nothing authorised for one place loads for another.
+ */
+export function googlePlaceIdentity(place: SearchResult): string {
+  return `${place.id}\u0000${place.name}\u0000${String(place.center.latitude)}\u0000${String(place.center.longitude)}`;
+}
 
 /**
  * Takes one NavOSS grant per Google component load. While a grant request or a granted load is in
@@ -115,22 +128,26 @@ export type GoogleLoadOutcome =
  */
 export class GoogleLoadSequencer {
   private busy = false;
-  private lastRequest = 0;
+  private retired = false;
 
   public constructor(private readonly reserve: () => Promise<GooglePlaceQueryGrantResponse>) {}
 
   public async begin(phase: GooglePhase): Promise<GoogleLoadOutcome> {
+    if (this.retired) return { kind: 'stale' };
     if (this.busy) return { kind: 'busy' };
     this.busy = true;
     try {
       const response = await this.reserve();
+      // `retire` may have run while the grant was on its way.
+      if (this.isRetired()) return { kind: 'stale' };
       if (!response.granted) {
         this.busy = false;
         return { kind: 'refused' };
       }
-      this.lastRequest += 1;
-      return { kind: 'load', load: { phase, request: this.lastRequest } };
+      lastGoogleRequest += 1;
+      return { kind: 'load', load: { phase, request: lastGoogleRequest } };
     } catch (error: unknown) {
+      if (this.isRetired()) return { kind: 'stale' };
       this.busy = false;
       return { kind: 'failed', state: googleGrantFailureState(error) };
     }
@@ -139,6 +156,16 @@ export class GoogleLoadSequencer {
   /** True while a grant request or a granted load is in progress. */
   public get inProgress(): boolean {
     return this.busy;
+  }
+
+  private isRetired(): boolean {
+    return this.retired;
+  }
+
+  /** The place changed or the section unmounted: drop any grant still on its way. */
+  public retire(): void {
+    this.retired = true;
+    this.busy = false;
   }
 
   /** The native view reached a terminal state for the current load. */
