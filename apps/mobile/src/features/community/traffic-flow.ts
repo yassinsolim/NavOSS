@@ -66,6 +66,95 @@ export function trafficFlowRefreshDelayMs(
   return Math.max(MINIMUM_REFRESH_MS, validUntil - nowMs + 5_000);
 }
 
+/** Snapshots by `bbox`, kept while the layer is hidden so showing it again asks nothing early. */
+export type TrafficFlowCache = Map<string, TrafficFlowResponse>;
+
+/** Boxes remembered at once; panning back and forth across a few boxes reuses their snapshots. */
+const TRAFFIC_FLOW_CACHE_LIMIT = 16;
+
+/** The snapshot last received for `bbox`, while it is still valid. */
+export function cachedTrafficFlow(
+  cache: TrafficFlowCache,
+  bbox: string,
+  nowMs: number,
+): TrafficFlowResponse | undefined {
+  const response = cache.get(bbox);
+  return response !== undefined && Date.parse(response.validUntil) > nowMs ? response : undefined;
+}
+
+function rememberTrafficFlow(
+  cache: TrafficFlowCache,
+  bbox: string,
+  response: TrafficFlowResponse,
+  nowMs: number,
+): void {
+  for (const [key, value] of cache) {
+    if (!(Date.parse(value.validUntil) > nowMs)) cache.delete(key);
+  }
+  cache.delete(bbox);
+  cache.set(bbox, response);
+  while (cache.size > TRAFFIC_FLOW_CACHE_LIMIT) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+}
+
+/**
+ * Keeps the flow layer for `bbox` current until stopped, never asking before the last snapshot's
+ * `validUntil` (it cannot change before then). A snapshot still valid in `cache` is shown at once
+ * and refreshed at its boundary, so hiding and showing the layer, or panning back to a box, asks
+ * nothing new. A failed request keeps showing that box's snapshot until it expires and is retried
+ * after `TRAFFIC_FLOW_RETRY_MS`.
+ */
+export function startTrafficFlowRefresh({
+  bbox,
+  cache,
+  load,
+  now = Date.now,
+  onFailure,
+  onResponse,
+}: {
+  bbox: string;
+  cache: TrafficFlowCache;
+  load: (bbox: string, signal: AbortSignal) => Promise<TrafficFlowResponse>;
+  now?: () => number;
+  /** The request failed; `cached` is the box's snapshot while it is still valid. */
+  onFailure: (cached: TrafficFlowResponse | undefined) => void;
+  onResponse: (response: TrafficFlowResponse) => void;
+}): () => void {
+  let controller: AbortController | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const refresh = () => {
+    const requestController = new AbortController();
+    controller = requestController;
+    const { signal } = requestController;
+    void load(bbox, signal)
+      .then((response) => {
+        if (signal.aborted) return;
+        rememberTrafficFlow(cache, bbox, response, now());
+        onResponse(response);
+        timeout = setTimeout(refresh, trafficFlowRefreshDelayMs(response, now()));
+      })
+      .catch(() => {
+        if (signal.aborted) return;
+        onFailure(cachedTrafficFlow(cache, bbox, now()));
+        timeout = setTimeout(refresh, TRAFFIC_FLOW_RETRY_MS);
+      });
+  };
+  const cached = cachedTrafficFlow(cache, bbox, now());
+  if (cached === undefined) {
+    refresh();
+  } else {
+    onResponse(cached);
+    timeout = setTimeout(refresh, trafficFlowRefreshDelayMs(cached, now()));
+  }
+  return () => {
+    controller?.abort();
+    clearTimeout(timeout);
+  };
+}
+
 export interface TrafficFlowStatus {
   accessibilityLabel: string;
   text: string;
