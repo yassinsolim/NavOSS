@@ -1,9 +1,9 @@
 # App Store Connect metadata draft
 
-Status (refreshed 2026-11-12): **internal TestFlight preparation. Do not submit for Beta App Review or public App Review while any field below is marked pending or blocked.** The latest shipped build is `0.1.0 (70)`; the production service is still the older image (Calgary and Kelowna). Metadata describes only what the deployed service and a shipped build do:
+Status (refreshed 2026-11-15): **internal TestFlight; external review preparation.** Build `0.1.0 (80)` is processed and available to internal testers. The production service covers Alberta and British Columbia and returns lanes and signposts when available. The owner approved reports `attested` and traffic `collect` after this copy PR merges and the site redeploys. Do not submit for Beta App Review or public App Review while the applicable fields below remain pending or blocked.
 
-- **Lane guidance stays "not available"** in every description, What to Test and review note until the new server is deployed and returns lanes. The same holds for live traffic, shared road reports, Alberta and British Columbia coverage and offline maps.
-- Before a build that can reach a server with community reports or traffic enabled is uploaded, complete [Shared road reports and traffic sharing](#shared-road-reports-and-traffic-sharing) below. [next-build-checklist.md](next-build-checklist.md) lists the order.
+- Build 80 carries App Attest and the Google place panel; builds before 80 cannot share reports or traffic. No real iPhone registered through App Attest before the enablement decision.
+- Live traffic and offline maps remain unavailable. The notes below are for use only after the approved production switches are verified; see [next-build-checklist.md](next-build-checklist.md).
 
 Use `docs/release/app-review.md` for the guideline-by-guideline risk assessment and `docs/release/testflight.md` for the release procedure.
 
@@ -48,7 +48,7 @@ Suggested keywords, under Apple's 100-character limit:
 navigation,Calgary,maps,routing,GPS,safety cameras,directions,route planner,open source
 ```
 
-Do not add competitor names, “best,” parity claims, live traffic, lane guidance, offline routing, or exhaustive-search claims. Mention CarPlay, background navigation, and spoken guidance only for a build that includes and validates those capabilities.
+Do not add competitor names, “best,” parity claims, claims of live traffic or offline routing, or exhaustive-search claims. Mention lanes and signposts only when the server returns them, and CarPlay, background navigation, and spoken guidance only for a build that includes those capabilities.
 
 ## Public App Store description
 
@@ -62,7 +62,7 @@ This copy is a future public-listing draft, not approval to submit the current t
 >
 > NavOSS is open source and built on OpenStreetMap-derived map, search, and routing data. Attribution and data-source details are available in the app and on the NavOSS website.
 >
-> Current backend search and routing coverage includes Calgary and Kelowna, with intercity routing tested between them. This version does not include live traffic, lane guidance, or offline routing. Data and alerts may be incomplete or outdated. Always follow posted signs, road closures, and applicable laws.
+> Current backend search and routing coverage includes Alberta and British Columbia. Lane guidance and signposts appear when the service returns them. There is no live traffic or offline routing. Data and alerts may be incomplete or outdated. Always follow posted signs, road closures, and applicable laws.
 
 Do not use “beta,” “alpha,” “technical preview,” “test,” or “have a passenger report bugs” in the public description. If the shipped public product still requires foreground, screen-on use, state that limitation plainly rather than implying background turn-by-turn navigation.
 
@@ -70,27 +70,29 @@ Do not use “beta,” “alpha,” “technical preview,” “test,” or “h
 
 Beta language belongs here, not in a public App Store listing:
 
-> NavOSS is an account-free regional navigation technical beta. Its live backend provides Calgary and Kelowna place search, tested intercity routing, fastest-first route choices, avoid-highways routing, spoken turn-by-turn guidance, locked-phone background continuation, CarPlay search and navigation, static system-sheet ETA sharing, automatic rerouting, arrival detection, and official regional road context.
+> NavOSS is an account-free regional navigation technical beta. Its backend provides place search and routing in Alberta and British Columbia, spoken turn-by-turn guidance, locked-phone background continuation, CarPlay search and navigation, and official regional road context. Build 80 can share road reports if you opt in; verified reports appear unconfirmed until corroborated.
 >
-> This build has no live traffic, lane guidance, or offline routing. Keep the phone mounted and have a passenger operate controls while moving. Do not rely on this beta as the only navigation, road-closure, traffic, or safety source.
+> There is no live traffic or offline routing. Traffic speeds are collected only from drivers who opt in, for evaluation; nothing is displayed or used in routes. Keep the phone mounted and have a passenger operate controls while moving. Do not rely on this beta as the only navigation, road-closure, traffic, or safety source.
 
 ## What to Test
 
-1. Search for a Calgary landmark, business, or address and report missing or incorrect results.
-2. Tap visible named places such as a cafe, landmark, or gas station. Confirm the correct place sheet opens and report incorrect address, hours, phone, website, or accessibility data.
-3. Open a named place, business, or landmark and confirm a Google-profile build shows the matching Google place's details and reviews, with Google's attribution, in a block separate from the OpenStreetMap details, without leaving NavOSS; a place Google does not list shows only NavOSS details, and a street address or dropped pin shows no Google section. Then choose **More reviews on Google Maps** and confirm only that explicit action opens Google Maps. An unconfigured build must show that Google photos, ratings, and reviews are unavailable.
-4. Long-press a road-accessible point on the map and confirm a dropped pin opens route choices.
-5. Confirm the fastest route appears first; when ETAs match, confirm the shorter-distance route appears first.
-6. Switch among Day, Night, Contrast, and Minimal map styles; confirm each is distinct, Day highways are green, and landmarks remain visible.
-7. Compare the suggested route, distance, ETA, first maneuver, and major roads with current conditions.
-8. Toggle Avoid highways and confirm the route changes meaningfully.
-9. Start guidance with the phone mounted and a passenger operating it; check the maneuver distance and ETA tray, then use Share ETA and confirm no Contacts prompt appears.
-10. Report puck jumps, incorrect maneuvers, false reroutes, missed reroutes, or early/late arrival.
-11. On a lawful trip past an official camera, report missing, repeated, late, or wrong-direction notices.
-12. End navigation and confirm foreground location activity stops.
-13. Open About and privacy and confirm the hosted privacy and support links work.
+The following ready-to-paste build 80 block replaces the previous numbered **What to Test** list
+and the feedback paragraph immediately after it. Use it after the approved production switches
+are verified, not before:
 
-Include the public start area, destination, local time, app build, iPhone model, and unexpected road or maneuver. Do not include a home address or precise personal trip history unless essential to reproduce a safety issue.
+```text
+Please test NavOSS 0.1.0 (80) while parked or with a passenger operating the controls.
+
+1. Search for places and plan routes in Alberta and British Columbia. Report missing results or incorrect routes.
+2. When a route provides lanes or exit signs, check that the guidance matches the road signs.
+3. Open a named place and look for the Google place panel. If the nearest listing is not the right place, try "Find this place on Google" and select the correct listing.
+4. If you encounter a road condition, turn on Share road reports and submit the matching report when safe. Reports from verified installations are unconfirmed until corroborated. Sharing is off by default.
+5. Connect CarPlay and try search, route preview and guidance. Report any display, voice or reconnection problems.
+
+There is no live traffic or offline routing. Optional traffic sharing is collected for evaluation only; nothing is displayed or used in routes. Do not rely on this beta as your only source for navigation or safety.
+
+In feedback, include the build, iPhone model and a public area or road if useful. Do not include a home address or precise personal trip history.
+```
 
 ## App Review information
 
@@ -103,25 +105,33 @@ Include the public start area, destination, local time, app build, iPhone model,
 | Contact phone    | Pending; enter a phone that Apple can reach during review and do not commit it to the repository |
 | Notes            | Use the reviewed template below only after every bracketed item has been resolved                |
 
-### Notes for Review template
+### Beta App Review notes: build 80 (`production-carplay-google`)
 
-Do not paste this template into App Store Connect until the production build and reviewer-access path are complete.
+The following ready-to-paste block replaces the entire previous **Notes for Review template**:
+the account/coverage, search/preview, location, Google-disabled, cameras and readiness paragraphs,
+as well as the separate Google-profile replacement paragraph. It is for build 80 and the approved
+production modes only; paste it after the site redeploys and those modes are verified. Complete
+the review contact and other submission gates first.
 
-> NavOSS is an account-free navigation app with live backend search and routing coverage in Calgary and Kelowna. A replacement signed build is required before reviewers can use the new Kelowna regional UI. No sign-in, purchase, subscription, or demo credential is required.
->
-> To review search, tap Search, enter “Calgary Tower” or “Kelowna City Park,” and select the result. From outside coverage, use **Preview a supported route** when current-location routing reports Route unavailable. The preview shows distance, estimated time, route geometry, and route preferences but does not offer Start. **Use my location** returns to real-location routing. Physical GPS progress, rerouting, arrival, and route-ahead notices require movement along a selected supported route.
->
-> The app requests When in Use precise location for map position, route origin, route matching, rerouting, arrival detection, and direction-aware official safety-camera notices. After the user starts navigation, updates continue while the phone is locked or another app is visible, and iOS shows its background-location indicator. Updates stop on End or confirmed arrival. NavOSS never requests Always location. Search and map browsing remain available when location is denied; current-position routing and active navigation do not.
->
-> This submitted build has Google Places disabled. NavOSS has no live traffic, lane guidance, advertising, analytics SDK, tracking, account system, or in-app purchases. This dedicated build includes spoken maneuver guidance and CarPlay search, route preview, and navigation using Apple's navigation templates. Search and route payloads are processed for each response and then discarded. Routine HTTP access logging is disabled; NavOSS operational/security logs retain no more than seven days and exclude request bodies. Cloudflare and OpenFreeMap practices are linked from the privacy policy. Do not use this paragraph for a Google-profile artifact; use the Google-build note below.
->
-> Fixed camera records come from the Calgary Police Service Intersection Safety Cameras dataset published through Calgary Open Data. Notices are informational, direction-filtered, and supplementary to posted signs and laws. Map/search/routing data is OpenStreetMap-derived with visible attribution.
->
-> Production readiness during review: `https://navoss-api.yassin.app/ready`. The individual developer, Yassin Soliman, owns escalation and can disable distribution if readiness fails. Support: `https://navoss.yassin.app/support`. Privacy: `https://navoss.yassin.app/privacy`.
+```text
+NavOSS is an account-free navigation app with search and routing in Alberta and British Columbia. No sign-in, purchase, subscription or demo credential is required.
 
-For an artifact built with `production-carplay-google`, replace the "This submitted build has Google Places disabled" paragraph above with:
+To review search, tap Search, enter "Calgary Tower" or "Kelowna City Park", and select the result. From outside coverage, use "Preview a supported route" when current-location routing is unavailable. The preview shows route details without starting guidance. Physical GPS progress, rerouting and arrival require movement along a selected route.
 
-> This build includes Google place details. When a reviewer opens a named place, business, or landmark (for example, search "Calgary Tower" and select it, then drag the place sheet up), the app reserves one anonymous query from the NavOSS server's monthly counter and sends only that place's coordinate directly from the phone to Google's Places UI Kit. Google's own component shows Google's listing nearest that spot, with its name, photos, rating, reviews, hours, and contact details and Google's attribution, in a block separate from the OpenStreetMap details and labelled as Google's nearest listing; it is shown only when that listing is within 30 meters. **Find this place on Google** sends the place's name and coordinate to Google's Place Search component so the reviewer can pick the right listing. NavOSS reads only the listing's location on the device and does not store Google content or send it to its server. Street addresses and dropped pins make no Google request, and CarPlay shows no Google content. The Google Places SDK's embedded privacy manifest declares location, device ID, other data, performance data, product interaction, and search history for analytics and/or app functionality, with no tracking; the App Privacy answers include those declarations. NavOSS has no live traffic, lane guidance, advertising, tracking, account system, or in-app purchases.
+The app requests When in Use precise location for map position and active navigation. After navigation starts, location updates continue while the phone is locked or another app is visible; they stop on End or confirmed arrival. NavOSS does not request Always location. Search and map browsing remain available when location is denied.
+
+This build includes Google's Places UI Kit. Open a named place, business or landmark and expand its sheet to see Google's nearest listing, when available and within 30 metres, in a separate attributed panel. "Find this place on Google" opens Google's place search so a reviewer can select another listing. Street addresses and dropped pins do not request a Google panel. CarPlay shows no Google content. The Google SDK's privacy manifest declarations are included in App Privacy.
+
+Share road reports is off by default. When enabled, an App Attest-verified installation can submit a structured road report; other drivers see it as unconfirmed until corroborated. Reports expire, are unofficial and do not change routes. Builds before 80 cannot share. Real iPhone registration through App Attest was not verified before the enablement decision.
+
+Share traffic speeds is also off by default. With the driver's opt-in, eligible traffic batches are accepted, matched and counted in memory for evaluation. A newly registered installation must wait about one day before receiving a traffic upload credential. No community traffic is displayed or used in routes; there is no live traffic.
+
+This build includes spoken guidance and CarPlay search, route preview and navigation. Interactive CarPlay has not been verified on a physical head unit. Fixed Calgary camera notices are informational and do not replace posted signs or laws. Map, search and routing data is OpenStreetMap-derived with attribution.
+
+Production readiness: https://navoss-api.yassin.app/ready
+Support: https://navoss.yassin.app/support
+Privacy: https://navoss.yassin.app/privacy
+```
 
 The current app has no AI feature or AI provider. App Store Connect has no general “AI-authored code” disclosure field. Do not add an irrelevant AI statement to the review notes. If runtime behavior changes, reassess Guideline 5.1.2(i) before submission.
 
@@ -154,11 +164,11 @@ The app-level privacy manifest conservatively declares linked Other User Content
 
 ### Shared road reports and traffic sharing
 
-The native client for shared road reports and **Share traffic speeds** is in the app. It sends
-nothing until the server enables it (`features.communityReports` in `/v2/config`; traffic
-`probes.accepting` in `/v2/traffic/status`) and, for traffic, until the driver turns the switch
-on. Before a build that can reach a server with either enabled is submitted, update App Store
-Connect, the app privacy manifest, and the permission string together:
+Build 80 contains the native client and App Attest entitlement. Reports and traffic sharing are
+off by default and require the driver's opt-in as well as server availability
+(`features.communityReports` in `/v2/config`; `probes.accepting` in `/v2/traffic/status`).
+Builds before 80 cannot share. App Privacy answers were published on 2026-11-15; keep App Store
+Connect, the app privacy manifest, and the permission string aligned for each submitted artifact:
 
 - **Precise Location.** A report sends the reporter's precise coordinate (and heading), which the
   server stores until 24 hours after the report expires; a "Still there?" answer sends a fresh
@@ -172,21 +182,20 @@ Connect, the app privacy manifest, and the permission string together:
   identity**, replaced by reinstalling). Decide with the account holder whether Apple's Device ID
   category applies; the conservative answer is to disclose it as linked, for App Functionality
   (fraud prevention), not tracking.
-- **Permission string.** "Location is not retained after navigation ends" stops being true for a
-  driver who submits a report. Reword it (for example: "…Location is not retained after
-  navigation ends, except the place of a road report you choose to share.") in the same build.
+- **Permission string.** The current string includes "except the place of a road report you
+  choose to share." Verify the signed artifact retains that qualification.
 - **Review notes.** Replace "no live traffic" only when traffic is actually live for reviewers,
   and describe reports as structured, expiring, unofficial, and never changing a route.
 
-### App Privacy answers needed before community features are enabled
+### App Privacy answers for community features
 
-The answers for build 70 do not change until a build that contains the community client reaches a server that has the features on. The new answers are required in App Store Connect, the app privacy manifest and the permission string **before** that happens, not only before upload:
+Published App Privacy answers cover community sharing and the Google panel. Reconcile the answers, app privacy manifest and permission string against the submitted artifact and current server behaviour:
 
 | Data type / item                    | Needed answer                                                                                                                                                                                                                    |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Precise Location (reports, traffic) | Collected; App Functionality; not tracking; conservatively linked (per-installation App Attest key). No longer covered by the real-time exception.                                                                               |
 | Device ID / other identifiers       | The App Attest key identifier: decide with the account holder; conservative answer is linked, App Functionality, not tracking.                                                                                                   |
-| Permission string                   | Add "except the place of a road report you choose to share" (wording above); the current string would be untrue for a driver who sends a report.                                                                                 |
+| Permission string                   | The current string includes "except the place of a road report you choose to share"; confirm it in the signed artifact.                                                                                                          |
 | Review notes                        | Describe reports as structured, expiring, unofficial and never changing a route; remove "no live traffic" only when traffic is live for reviewers.                                                                               |
 | App Attest capability               | Capability on the App ID; EAS syncs it from the entitlement (`production` for every profile except `development`).                                                                                                               |
 | Offline maps (#83, merged)          | The app privacy manifest must declare the required-reason "Disk space" API category (#83 added `NSPrivacyAccessedAPICategoryDiskSpace` to `app.json`; confirm it in the signed archive), and the policy must describe downloads. |
@@ -195,7 +204,7 @@ The answers for build 70 do not change until a build that contains the community
 
 Current iOS purpose string:
 
-> NavOSS uses your precise location to show your position and provide active turn-by-turn navigation, including while your phone is locked or connected to CarPlay. Location is not retained after navigation ends.
+> NavOSS uses your precise location to show your position and provide active turn-by-turn navigation, including while your phone is locked or connected to CarPlay. Location is not retained after navigation ends, except the place of a road report you choose to share.
 
 Before upload, confirm the signed archive has:
 
@@ -210,7 +219,7 @@ Before upload, confirm the signed archive has:
 
 The legal owner must complete Apple's current questionnaire in App Store Connect. Use actual behavior, not a desired rating. Current factual inputs include:
 
-- no user-generated content displayed inside the app (true for build 70; **no longer true** once a build shows other drivers' community reports, so re-answer the questionnaire and reassess Guideline 1.2 before enabling reports);
+- structured user-generated road reports appear to other drivers once report publication is enabled; re-answer the questionnaire and reassess Guideline 1.2;
 - no advertising;
 - no gambling, contests, loot boxes, or purchases;
 - no alcohol, tobacco, drug, sexual, horror, violence, or medical content;

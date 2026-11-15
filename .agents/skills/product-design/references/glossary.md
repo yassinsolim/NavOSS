@@ -15,7 +15,7 @@
 | Still there? / Not there                         | The question after passing a report, and its answers.                                                                                                                 |
 | Road report                                      | One of eight fixed types: crash, road closed, slow traffic, construction, pothole, object on road, other hazard, stopped vehicle.                                     |
 | Private draft                                    | A report kept on the device (up to 25, two hours).                                                                                                                    |
-| Community traffic                                | Live traffic built from opted-in driver speeds. Off on the server by default.                                                                                         |
+| Community traffic                                | Opt-in speeds collected for evaluation in `collect` mode; not shown to drivers or used by routes. Live traffic remains off. Evidence: #119.                           |
 | Official safety camera                           | Calgary intersection safety camera record (red light and speed on green).                                                                                             |
 | Technical beta                                   | Current release status wording. Not "alpha" in new copy, not "beta" in a public App Store listing.                                                                    |
 | Companion                                        | The phone screen shown while CarPlay is connected.                                                                                                                    |
