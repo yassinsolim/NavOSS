@@ -74,7 +74,7 @@ The production API image is from `36c8a9f`, deployed on 2026-11-15 with search a
 - **Community road reports (#73):** `attested`; build 80 onward may share; verified reports are unconfirmed until corroborated.
 - **Community traffic (#76, #82, #86):** `collect`; opted-in speeds counted in memory for evaluation; nothing shown or used in routes.
 - **Offline bundles (#80, #122):** published 2026-11-15 for All Alberta and Calgary, Airdrie, Cochrane & Okotoks; no BC region.
-- **Province-wide road events (#120):** service returns Alberta, BC and Ontario events; the phone list is in distributed build 81, not builds 75 or 80. 511 Alberta and Ontario 511 are not connected.
+- **Province-wide road events (#120):** service returns Alberta, BC and Ontario events; the phone list is in distributed build 81, not builds 75 or 80. 511 Alberta and Ontario 511 were connected in production on 2026-11-15 and are included in build 81's list.
 
 Remaining checks are in [the next-build checklist](docs/release/next-build-checklist.md).
 

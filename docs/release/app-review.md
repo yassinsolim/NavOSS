@@ -7,7 +7,7 @@ Assessment date: 2026-07-28 (body). Header refreshed: 2026-11-15.
 The assessment below was written against builds 12 to 17 and is retained as a historical record, including its verdicts and risk matrix. For current build and deployment evidence use [testflight.md](testflight.md), and for remaining candidate checks use [next-build-checklist.md](next-build-checklist.md).
 
 - Build `0.1.0 (81)` was processed and distributed to internal `testers` and NavOSS Friends on 2026-11-15. External distribution is manual (#88); availability is not proof of installation or a physical-device pass.
-- Production search and routing cover Canada. Distributed build 81 includes province-wide road events for Alberta, BC and Ontario; 511 Alberta and Ontario 511 remain disconnected. Lane guidance and signposts appear when returned. Offline regions are limited to Alberta and the Calgary area.
+- Production search and routing cover Canada. Distributed build 81 includes province-wide road events for Alberta, BC and Ontario; 511 Alberta and Ontario 511 were connected in production on 2026-11-15. Lane guidance and signposts appear when returned. Offline regions are limited to Alberta and the Calgary area.
 - Reports are `attested` and opt-in traffic collection is `collect`. Reports from verified installations are unconfirmed until corroborated. Traffic is not shown or used in routes; live traffic remains unavailable. Builds before 80 cannot share. App Privacy answers were published on 2026-11-15.
 - Build 81 was checked in a Release simulator against production, not on a physical iPhone or head unit. Physical-device, on-road and real CarPlay evidence, support contact verification and other public-release gates remain open.
 

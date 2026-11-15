@@ -117,7 +117,7 @@ test('homepage states what NavOSS is and keeps unreleased features labelled', ()
   );
   assert.ok(
     items[1].includes(
-      'In build 81 Province-wide road events The service has official events for Alberta, British Columbia and Ontario. The province-wide phone list is in build 81, distributed to testers on November 15, 2026; builds 75 and 80 use Calgary and Kelowna feeds. 511 Alberta and Ontario 511 need keys and are not configured.',
+      'In build 81 Province-wide road events The service has official events for Alberta, British Columbia and Ontario. The province-wide phone list is in build 81, distributed to testers on November 15, 2026; builds 75 and 80 use Calgary and Kelowna feeds. 511 Alberta and Ontario 511 were connected in production on November 15, 2026.',
     ),
   );
 
