@@ -25,6 +25,19 @@ final class NavigationSession {
     trip == nil ? nil : core.resumeContext
   }
 
+  /// What to record with the active trip after `snapshot`, its latest update: its progress
+  /// when the update is a checkpoint (`navOSSIsProgressCheckpoint`), or, before its first
+  /// match, how the vehicle stands towards the route (`NavigationCore.preMatchReference`).
+  func record(after snapshot: NavigationSnapshot) -> NavigationTripRecord? {
+    guard trip != nil else {
+      return nil
+    }
+    if navOSSIsProgressCheckpoint(snapshot) {
+      return core.resumeContext.map { .progress($0) }
+    }
+    return core.preMatchReference.map { .beforeFirstMatch($0) }
+  }
+
   /// Length of the active route geometry in metres.
   var routeLengthMeters: Double? {
     core.routeLengthMeters

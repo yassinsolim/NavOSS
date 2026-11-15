@@ -71,10 +71,10 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private let speechPlanner = NavigationSpeechPlanner()
   private let speechSynthesizer = AVSpeechSynthesizer()
   private var stateVersion: UInt64 = 0
-  private var lastProgressPersistedAt: Date?
-  /// The checkpoint last written for the current route, to write a change of arrival deferral
-  /// at once instead of up to fifteen seconds later.
-  private var lastPersistedProgress: NavigationResumeContext?
+  private var lastRecordPersistedAt: Date?
+  /// The record last written for the current route, to write a change of arrival deferral or
+  /// the first match at once instead of up to fifteen seconds later.
+  private var lastPersistedRecord: NavigationTripRecord?
   #if DEBUG
     /// Simulator harness only: runs inside the checkpoint's critical section, just before the
     /// store write, so a test can hold it there while a clear or restart competes for the lock.
@@ -422,7 +422,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     case .publish:
       publish(versionedUpdate)
       evaluateReroute(for: versionedUpdate)
-      persistProgressIfDue(versionedUpdate)
+      persistRecordIfDue(versionedUpdate)
     case .wait:
       publishRestoredTripAcquisition(versionedUpdate)
     }
@@ -431,26 +431,26 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
 
   /// Records how far the trip has got, so that a relaunch resumes it there. Written from a
   /// real fix matched on a known pass of the route, at most every fifteen seconds, and at once
-  /// whenever an arrival starts or stops waiting for movement (a relaunch must not lose that).
+  /// for the first match and whenever an arrival starts or stops waiting for movement (a
+  /// relaunch must not lose that). Before the first match, how the vehicle stands towards the
+  /// route instead, on the same cadence (`navOSSShouldPersistRecord`).
   /// Written while holding `lock`: a clear, a restart or a reroute takes the same lock before
   /// it touches the store, so a checkpoint can never be written after them for the trip they
   /// replaced, even one that keeps the trip's identifier.
-  private func persistProgressIfDue(_ versionedUpdate: VersionedNavigationUpdate) {
-    guard let trip = versionedUpdate.update.trip,
-      navOSSIsProgressCheckpoint(versionedUpdate.update.snapshot)
-    else {
+  private func persistRecordIfDue(_ versionedUpdate: VersionedNavigationUpdate) {
+    guard let trip = versionedUpdate.update.trip else {
       return
     }
     let now = Date()
     lock.lock()
     defer { lock.unlock() }
     guard isCurrentLocked(versionedUpdate),
-      let progress = navigationSession.resumeContext,
-      navOSSShouldPersistProgress(
-        progress,
-        lastPersisted: lastPersistedProgress,
+      let record = navigationSession.record(after: versionedUpdate.update.snapshot),
+      navOSSShouldPersistRecord(
+        record,
+        lastPersisted: lastPersistedRecord,
         now: now,
-        lastPersistedAt: lastProgressPersistedAt
+        lastPersistedAt: lastRecordPersistedAt
       )
     else {
       return
@@ -458,9 +458,9 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     #if DEBUG
       checkpointWillWrite?()
     #endif
-    lastProgressPersistedAt = now
-    lastPersistedProgress = progress
-    activeTripStore.saveProgress(progress, forTripId: trip.id)
+    lastRecordPersistedAt = now
+    lastPersistedRecord = record
+    activeTripStore.save(record, forTripId: trip.id)
   }
 
   public func resumePersistedNavigation() {
@@ -587,7 +587,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     case .publish:
       publish(versionedUpdate)
       evaluateReroute(for: versionedUpdate)
-      persistProgressIfDue(versionedUpdate)
+      persistRecordIfDue(versionedUpdate)
       // Only real fixes during turn-by-turn guidance can become traffic probes, and only when
       // the driver turned "Share traffic speeds" on; the community service enforces both.
       if versionedUpdate.update.trip != nil, versionedUpdate.update.snapshot.phase == .tracking {
@@ -1180,8 +1180,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       update = try navigationSession.start(trip)
       navigationGeneration &+= 1
       activeTripStore.save(trip)
-      lastProgressPersistedAt = nil
-      lastPersistedProgress = nil
+      lastRecordPersistedAt = nil
+      lastPersistedRecord = nil
       rerouteCount += 1
       rerouteConsent.reset()
       routeStatus = .tracking
@@ -1555,7 +1555,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
 
   /// Starts guiding `trip`. With `resume` it is a trip restored after a relaunch: nothing is
   /// guided from it until a fix is matched on a known pass, and until then it is shown as
-  /// finding its place on the route.
+  /// finding its place on the route. A trip restored before its first match is published as a
+  /// new trip is (see `NavigationResumePoint.isWithheldUntilMatched`).
   private func startNavigation(
     _ trip: NavOSSCarPlayTrip,
     persist: Bool,
@@ -1565,8 +1566,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     lock.lock()
     do {
       update = try navigationSession.start(trip, resume: resume)
-      lastProgressPersistedAt = nil
-      lastPersistedProgress = nil
+      lastRecordPersistedAt = nil
+      lastPersistedRecord = nil
       navigationGeneration &+= 1
       rerouteTask?.cancel()
       rerouteTask = nil
@@ -1579,7 +1580,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       safetyCameraMonitor.startTrip(geometry: Self.coordinates(trip))
       speechPlanner.reset()
       speedingMonitor.reset()
-      validatesPersistedNavigation = resume != nil
+      validatesPersistedNavigation = resume?.isWithheldUntilMatched ?? false
       tripEndReason = nil
       stateVersion &+= 1
       if persist {
@@ -1596,10 +1597,10 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     lock.unlock()
     NavOSSCommunityService.shared.navigationDidStart(trip, restored: resume != nil)
     cancelNavigationSpeech(expectedGeneration: versionedUpdate.generation)
-    if resume == nil {
-      publish(versionedUpdate)
-    } else {
+    if resume?.isWithheldUntilMatched ?? false {
       publishRestoredTripAcquisition(versionedUpdate)
+    } else {
+      publish(versionedUpdate)
     }
     ensureLocationUpdates()
     startNavigationClock(expectedGeneration: versionedUpdate.generation)

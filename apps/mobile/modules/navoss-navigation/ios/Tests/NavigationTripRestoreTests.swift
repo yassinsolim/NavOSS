@@ -613,7 +613,10 @@ final class NavigationTripRestoreTests: XCTestCase {
     defer { defaults.removePersistentDomain(forName: suite) }
     let trip = Self.trip(Self.longLoop)
     store.save(trip)
+    // Such a build wrote the trip and nothing beside it.
+    defaults.removeObject(forKey: Self.progressKey)
     XCTAssertEqual(store.loadProgress(for: trip), .withoutProgress)
+    XCTAssertTrue(NavigationResumePoint.withoutProgress.isWithheldUntilMatched)
 
     let parked = NavigationSession()
     try parked.start(trip, resume: .withoutProgress)
@@ -724,10 +727,11 @@ final class NavigationTripRestoreTests: XCTestCase {
     XCTAssertNil(store.load())
     XCTAssertNil(defaults.object(forKey: Self.progressKey))
 
-    // Values that cannot be progress are not saved, and not read.
+    // Values that cannot be progress are not saved, and not read: the trip is still before
+    // its first match, as it was saved.
     store.save(trip)
     store.saveProgress(Self.progress(-5, time: nil), forTripId: trip.id)
-    XCTAssertEqual(store.loadProgress(for: trip), .withoutProgress)
+    XCTAssertEqual(store.loadProgress(for: trip), .beforeFirstMatch(nil))
     for damaged in [
       #"{"format":2,"alongMeters":-5,"highWaterAlongMeters":0,"uncertaintyMeters":5,"tripId":"\#(trip.id)"}"#,
       #"{"format":2,"alongMeters":100,"highWaterAlongMeters":50,"uncertaintyMeters":5,"tripId":"\#(trip.id)"}"#,
@@ -767,6 +771,94 @@ final class NavigationTripRestoreTests: XCTestCase {
     store.clear()
     build70.save(trip)
     XCTAssertNil(store.load())
+  }
+
+  /// A trip saved before its first match says so: the record is written with the route, then
+  /// holds how the vehicle stands towards the route, as distances only, until the first match
+  /// replaces it with progress. It is read only for the trip it was written for and only with
+  /// values a matcher could have saved. Such a trip is not withheld when restored.
+  func testATripSavedBeforeItsFirstMatchIsRecordedAsSuch() throws {
+    let (store, defaults, suite) = try Self.store()
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let trip = Self.trip(Self.longLoop)
+    func fields() throws -> [String] {
+      try XCTUnwrap(
+        JSONSerialization.jsonObject(with: try XCTUnwrap(defaults.data(forKey: Self.progressKey)))
+          as? [String: Any]
+      ).keys.sorted()
+    }
+
+    store.save(trip)
+    XCTAssertEqual(store.loadProgress(for: trip), .beforeFirstMatch(nil))
+    XCTAssertEqual(try fields(), ["beforeFirstMatch", "format", "tripId"])
+    XCTAssertFalse(NavigationResumePoint.beforeFirstMatch(nil).isWithheldUntilMatched)
+
+    let reference = NavigationPreMatchReference(
+      startDistanceMeters: 100, closest: .init(distanceMeters: 96, accuracyMeters: 5),
+      travelMeters: 40)
+    store.save(.beforeFirstMatch(reference), forTripId: trip.id)
+    XCTAssertEqual(store.loadProgress(for: trip), .beforeFirstMatch(reference))
+    XCTAssertEqual(
+      try fields(),
+      ["beforeFirstMatch", "closestAccuracyMeters", "closestDistanceMeters", "format",
+        "startDistanceMeters", "travelMeters", "tripId"])
+    // Further than 1 km a distance may not have been measured exactly: no closest approach.
+    let far = NavigationPreMatchReference(startDistanceMeters: 3_000, closest: nil, travelMeters: 0)
+    store.save(.beforeFirstMatch(far), forTripId: trip.id)
+    XCTAssertEqual(store.loadProgress(for: trip), .beforeFirstMatch(far))
+
+    // Not saved: values a matcher cannot have, or for another trip.
+    store.save(
+      .beforeFirstMatch(
+        NavigationPreMatchReference(startDistanceMeters: -1, closest: nil, travelMeters: 0)),
+      forTripId: trip.id)
+    store.save(.beforeFirstMatch(reference), forTripId: "other")
+    XCTAssertEqual(store.loadProgress(for: trip), .beforeFirstMatch(far))
+
+    // The first match replaces it; a new route of the trip starts before its first match.
+    let progress = Self.progress(10, time: Trace.time(1))
+    store.save(.progress(progress), forTripId: trip.id)
+    XCTAssertEqual(store.loadProgress(for: trip), .progress(progress))
+    store.save(trip)
+    XCTAssertEqual(store.loadProgress(for: trip), .beforeFirstMatch(nil))
+
+    for damaged in [
+      #"{"format":2,"beforeFirstMatch":true,"tripId":"other"}"#,
+      #"{"format":1,"beforeFirstMatch":true,"tripId":"\#(trip.id)"}"#,
+      #"{"format":2,"beforeFirstMatch":false,"tripId":"\#(trip.id)"}"#,
+      #"{"format":2,"beforeFirstMatch":true,"tripId":"\#(trip.id)","startDistanceMeters":-5,"travelMeters":0}"#,
+      #"{"format":2,"beforeFirstMatch":true,"tripId":"\#(trip.id)","startDistanceMeters":100}"#,
+      #"{"format":2,"beforeFirstMatch":true,"tripId":"\#(trip.id)","travelMeters":0}"#,
+      #"{"format":2,"beforeFirstMatch":true,"tripId":"\#(trip.id)","startDistanceMeters":100,"travelMeters":0,"closestDistanceMeters":90}"#,
+      #"{"format":2,"beforeFirstMatch":true,"tripId":"\#(trip.id)","startDistanceMeters":100,"travelMeters":0,"closestDistanceMeters":90,"closestAccuracyMeters":400}"#,
+    ] {
+      defaults.set(Data(damaged.utf8), forKey: Self.progressKey)
+      XCTAssertEqual(store.loadProgress(for: trip), .unusable, damaged)
+    }
+  }
+
+  /// Before the first match a changed record is written at most every fifteen seconds, the
+  /// first at once; the first match is written at once whenever it comes.
+  func testRecordCadenceBeforeTheFirstMatch() {
+    let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
+    let first = NavigationTripRecord.beforeFirstMatch(
+      NavigationPreMatchReference(startDistanceMeters: 100, closest: nil, travelMeters: 0))
+    let closer = NavigationTripRecord.beforeFirstMatch(
+      NavigationPreMatchReference(
+        startDistanceMeters: 100, closest: .init(distanceMeters: 90, accuracyMeters: 5),
+        travelMeters: 0))
+    func due(_ record: NavigationTripRecord, after seconds: TimeInterval) -> Bool {
+      navOSSShouldPersistRecord(
+        record, lastPersisted: first, now: start.addingTimeInterval(seconds),
+        lastPersistedAt: start)
+    }
+    XCTAssertTrue(
+      navOSSShouldPersistRecord(first, lastPersisted: nil, now: start, lastPersistedAt: nil))
+    XCTAssertFalse(due(first, after: 60), "unchanged")
+    XCTAssertFalse(due(closer, after: 14))
+    XCTAssertTrue(due(closer, after: 15))
+    XCTAssertTrue(due(closer, after: -1), "the clock was set back")
+    XCTAssertTrue(due(.progress(Self.progress(10, time: Trace.time(1))), after: 1))
   }
 
   /// A checkpoint is written for the trip the store holds now. One that arrives after the trip

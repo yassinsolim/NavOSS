@@ -66,8 +66,8 @@ final class NavigationTripStartTests: XCTestCase {
     let store: NavOSSActiveTripStore?
     private let defaults: UserDefaults?
     private let suiteName = "org.navoss.tests.trip-start.\(UUID().uuidString)"
-    private var lastCheckpoint: NavigationResumeContext?
-    private var lastCheckpointAt: Date?
+    private var lastRecord: NavigationTripRecord?
+    private var lastRecordAt: Date?
     /// A restored trip whose first fixes are judged by `navOSSPersistedNavigationDecision`.
     private var validatesRestoredTrip = false
     /// The restored trip was ended for being off its route ("Trip ended").
@@ -103,26 +103,25 @@ final class NavigationTripStartTests: XCTestCase {
       time += seconds
       session = NavigationSession()
       consent = NavigationRerouteConsent()
-      lastCheckpoint = nil
-      lastCheckpointAt = nil
+      lastRecord = nil
+      lastRecordAt = nil
       relaunchedAt = history.count
       guard let store, let trip = store.load() else { return }
       let resume = store.loadProgress(for: trip)
       try session.start(trip, resume: resume)
-      validatesRestoredTrip = true
+      validatesRestoredTrip = resume.isWithheldUntilMatched
     }
 
-    /// What the service writes after a published update (`persistProgressIfDue`).
+    /// What the service writes after a published update (`persistRecordIfDue`).
     private func checkpoint(_ update: NavigationSessionUpdate) {
       let now = Date(timeIntervalSinceReferenceDate: time)
-      guard let store, let trip = update.trip, navOSSIsProgressCheckpoint(update.snapshot),
-        let progress = session.resumeContext,
-        navOSSShouldPersistProgress(
-          progress, lastPersisted: lastCheckpoint, now: now, lastPersistedAt: lastCheckpointAt)
+      guard let store, let trip = update.trip, let record = session.record(after: update.snapshot),
+        navOSSShouldPersistRecord(
+          record, lastPersisted: lastRecord, now: now, lastPersistedAt: lastRecordAt)
       else { return }
-      lastCheckpoint = progress
-      lastCheckpointAt = now
-      store.saveProgress(progress, forTripId: trip.id)
+      lastRecord = record
+      lastRecordAt = now
+      store.save(record, forTripId: trip.id)
     }
 
     func fix(
@@ -192,8 +191,8 @@ final class NavigationTripStartTests: XCTestCase {
     private func install(_ trip: NavOSSCarPlayTrip) throws {
       try session.start(trip)
       store?.save(trip)
-      lastCheckpoint = nil
-      lastCheckpointAt = nil
+      lastRecord = nil
+      lastRecordAt = nil
       consent.reset()
       installed.append(trip.id)
     }
@@ -715,22 +714,26 @@ final class NavigationTripStartTests: XCTestCase {
   /// Gardiner) and tapped Start parked in the mall, 100 m from the road; the app was closed and
   /// opened again where the car still stood. The trip was ended ("Trip ended · … no longer on its
   /// route"). A trip saved before its first match is restored as it was started: the chosen
-  /// route, acquiring, silent, with no route request, in every reroute mode.
+  /// route, acquiring, silent, with no route request, in every reroute mode; also when the app
+  /// was closed before it had a fix.
   func testARestoredTripStartedParkedOffTheRoadKeepsTheChosenRouteAndIsAcquiring() throws {
     for mode in NavOSSRerouteMode.allCases {
-      let (trip, gardiner) = try harness(
-        selecting: "Gardiner Expressway", mode: mode, persisting: true)
-      XCTAssertNotEqual(try Self.trips("square-one-scarborough.v2").first?.id, gardiner.id)
-      try trip.standStill(at: Self.parked, seconds: 30)
-      try trip.relaunch(after: 30)
-      try trip.standStill(at: Self.parked, seconds: 120)
-      XCTAssertFalse(trip.endedOffRoute, "\(mode): the driver never left a route")
-      XCTAssertEqual(trip.activeRouteId, gardiner.id, "\(mode)")
-      XCTAssertEqual(trip.store?.load()?.id, gardiner.id, "\(mode): still the stored trip")
-      XCTAssertEqual(trip.requests, 0, "\(mode): no replacement is asked for")
-      XCTAssertEqual(trip.proposals, 0, "\(mode)")
-      XCTAssertFalse(trip.session.hasMatchedRoute, "\(mode)")
-      assertAcquiring(trip.history[trip.relaunchedAt...], "\(mode): restored, parked")
+      for parkedBeforeClosing in [30, 0] {
+        let label = "\(mode), closed after \(parkedBeforeClosing) s"
+        let (trip, gardiner) = try harness(
+          selecting: "Gardiner Expressway", mode: mode, persisting: true)
+        XCTAssertNotEqual(try Self.trips("square-one-scarborough.v2").first?.id, gardiner.id)
+        try trip.standStill(at: Self.parked, seconds: parkedBeforeClosing)
+        try trip.relaunch(after: 30)
+        try trip.standStill(at: Self.parked, seconds: 120)
+        XCTAssertFalse(trip.endedOffRoute, "\(label): the driver never left a route")
+        XCTAssertEqual(trip.activeRouteId, gardiner.id, label)
+        XCTAssertEqual(trip.store?.load()?.id, gardiner.id, "\(label): still the stored trip")
+        XCTAssertEqual(trip.requests, 0, "\(label): no replacement is asked for")
+        XCTAssertEqual(trip.proposals, 0, label)
+        XCTAssertFalse(trip.session.hasMatchedRoute, label)
+        assertAcquiring(trip.history[trip.relaunchedAt...], "\(label): restored, parked")
+      }
     }
   }
 

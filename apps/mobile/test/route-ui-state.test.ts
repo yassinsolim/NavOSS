@@ -182,7 +182,7 @@ describe('route from a native trip', () => {
 describe('trip end notice', () => {
   it('tells the driver when a restored trip was dropped, and nothing otherwise', () => {
     expect(tripEndNotice('restored-trip-off-route')).toEqual({
-      message: 'Your earlier trip was ended because you are no longer on its route.',
+      message: 'Your earlier trip was ended because you are not on its route.',
       title: 'Trip ended',
       tone: 'info',
     });

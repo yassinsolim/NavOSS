@@ -78,6 +78,9 @@
           confirmed, are stored transiently on the phone so that a relaunch can resume the trip.
           That position is kept as distances along the route, with the time and speed of the GPS fix
           that confirmed it, not as coordinates; with the route, it still identifies where you were.
+          Until you first reach the route (a trip started in a parking lot, for example), distances
+          from the route are kept instead: how far the first GPS fix was, the closest you have come,
+          and how far you have moved since.
           Both are erased when navigation ends or arrival is confirmed, or at the first launch 12
           hours or more later; NavOSS does not maintain a trip-history database. If you switch on
           traffic sharing, positions along through roads are also sent during navigation as
