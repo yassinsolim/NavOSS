@@ -232,6 +232,26 @@ describe('City of Edmonton traffic disruptions (recorded 2026-11-15)', () => {
     expect((await feedAt(Date.parse('2026-11-16T07:30:00Z')).getSnapshot()).events).toHaveLength(0);
   });
 
+  it('keeps one event per published point of a multi-point disruption', async () => {
+    // Live feed 2026-11-15: disruption 1329 is published as two rows with different points.
+    const row = { ...edmonton.rows[0], start_date: '2026-11-01T00:00:00.000' };
+    const second = {
+      ...row,
+      point: { coordinates: [-113.4901, 53.5462], type: 'Point' },
+    };
+    const { events } = await createEdmontonRoadEventFeed({
+      clock: () => CAPTURED,
+      fetchImplementation: (url) =>
+        Promise.resolve(
+          requestUrl(url).includes('/api/views/')
+            ? jsonResponse(edmonton.metadata)
+            : jsonResponse([row, second]),
+        ),
+    }).getSnapshot();
+    expect(events).toHaveLength(2);
+    expect(new Set(events.map((event) => event.id)).size).toBe(2);
+  });
+
   it('still serves rows when only the dataset metadata fails', async () => {
     const { source } = await edmontonFeed(CAPTURED, undefined).getSnapshot();
     expect(source.status).toBe('current');

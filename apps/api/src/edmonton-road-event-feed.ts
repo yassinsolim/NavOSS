@@ -110,7 +110,8 @@ export function normalizeEdmontonDisruption(input: unknown): ProvincialRoadEvent
     ...(row.finish_date == null || row.finish_date < row.start_date
       ? {}
       : { endsOn: row.finish_date }),
-    id: `edmonton-disruption:${String(row.disruption_id)}`,
+    // One disruption can be published as several rows, one per point; each point is its own marker.
+    id: `edmonton-disruption:${String(row.disruption_id)}:${longitude.toFixed(5)},${latitude.toFixed(5)}`,
     isFullClosure: fullClosure,
     regionId: 'alberta',
     ...(row.date_issued == null ? {} : { reportedOn: row.date_issued }),
