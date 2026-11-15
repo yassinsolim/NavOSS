@@ -19,8 +19,8 @@
         <h1>Privacy without an account</h1>
         <p>
           NavOSS is operated by Yassin Soliman as an individual developer in Alberta, Canada. It is
-          an account-free navigation technical beta. The service covers Alberta and British
-          Columbia; app support starts with TestFlight build 75.
+          an account-free navigation technical beta. The service covers Canada for search and
+          routing; uploaded build 81 uses it once available to testers.
         </p>
         <div class="callout">
           This policy is ready for internal TestFlight. External testing remains blocked until a
@@ -91,12 +91,12 @@
           Search text and, when available, a search origin rounded to three decimal places, or
           roughly 100-meter granularity, are sent in an encrypted request body to the NavOSS API.
           Route requests send precise origin and destination coordinates. An automatic reroute sends
-          the latest route origin and destination. Search uses self-hosted Alberta and British
-          Columbia OpenStreetMap data plus a local mirror of public Calgary business and
-          parcel-address data used only for Calgary searches. Current production uses Valhalla on
-          the operator-controlled server in Alberta. A future licensed live-traffic deployment may
-          forward route endpoints and preferences to Mapbox Directions; that mode remains disabled
-          until its commercial vehicle-use license and release gates are complete.
+          the latest route origin and destination. Search uses self-hosted Canada-wide OpenStreetMap
+          data plus a local mirror of public Calgary business and parcel-address data used only for
+          Calgary searches. Current production uses Valhalla on the operator-controlled server in
+          Alberta. A future licensed live-traffic deployment may forward route endpoints and
+          preferences to Mapbox Directions; that mode remains disabled until its commercial
+          vehicle-use license and release gates are complete.
         </p>
         <p>
           These values are processed in memory for the response and then discarded. They are not
@@ -520,10 +520,10 @@
           of Toronto and DriveBC), DriveBC ordinary traffic webcams, and fixed public Kelowna RCMP
           facilities. As of November 15, 2026, 511 Alberta and Ontario 511 are not configured and
           require developer keys. Builds 75 and 80 select Calgary or Kelowna locally and send only
-          that region identifier for road events; the province-wide phone list on main instead sends
-          a locally selected province identifier. The server polls configured feeds on its own
-          schedule. DriveBC webcams are not enforcement cameras, and RCMP facilities are not live
-          police locations.
+          that region identifier for road events; the province-wide phone list in uploaded build 81
+          instead sends a locally selected province identifier. The server polls configured feeds on
+          its own schedule. DriveBC webcams are not enforcement cameras, and RCMP facilities are not
+          live police locations.
         </p>
         <p>
           Since November 15, 2026, All Alberta and Calgary-area offline regions are available;

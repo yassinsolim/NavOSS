@@ -167,7 +167,7 @@ identifier, so there is no per-person traffic record to look up or delete.
 
 ### Search text and place details
 
-When you search, NavOSS sends the entered text and, when available, a search origin rounded to three decimal places, or roughly 100-meter granularity, to the NavOSS API in an encrypted request body. Search runs against self-hosted Alberta and British Columbia OpenStreetMap data. Calgary-origin searches can also use a local index of public City of Calgary business and parcel-address records on the same operator-controlled server; that civic index is not used for Kelowna searches. Search text and coordinates are not placed in public request URLs or written to the search index.
+When you search, NavOSS sends the entered text and, when available, a search origin rounded to three decimal places, or roughly 100-meter granularity, to the NavOSS API in an encrypted request body. Search runs against self-hosted Canada-wide OpenStreetMap data. Calgary-origin searches can also use a local index of public City of Calgary business and parcel-address records on the same operator-controlled server; that civic index is not used for Kelowna searches. Search text and coordinates are not placed in public request URLs or written to the search index.
 
 When you tap a named place rendered on the map, NavOSS sends that public place name and its map coordinate to the same API to find the nearest matching OpenStreetMap record. When OpenStreetMap has them, the response may include a public address, place category, opening-hours tag, business phone number, official website, and wheelchair-access tag. The request follows the same in-memory processing and discard rules as typed search. NavOSS does not obtain Google review content through this lookup.
 
@@ -185,8 +185,8 @@ The phone obtains normalized safety-camera records from NavOSS. The NavOSS serve
 
 When road-event markers are enabled, builds 75 and 80 request the Calgary or Kelowna region
 identifier from NavOSS; they do not send a coordinate in that request. The province-wide phone
-list on main instead works out the province (Alberta, British Columbia or Ontario) locally and
-requests only that identifier. As of 2026-11-15, the NavOSS server polls the public City of Calgary
+list in uploaded build 81 instead works out the province (Alberta, British Columbia or Ontario)
+locally and requests only that identifier. As of 2026-11-15, the NavOSS server polls the public City of Calgary
 and City of Edmonton road datasets, DriveBC Open511 and the City of Toronto road restrictions
 feed. It can also poll 511 Alberta and Ontario 511 if the operator configures developer keys;
 neither is configured. Each configured feed is polled on its own schedule (five or ten minutes)

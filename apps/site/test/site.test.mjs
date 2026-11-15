@@ -90,7 +90,7 @@ test('homepage states what NavOSS is and keeps unreleased features labelled', ()
   assert.match(hero, /iOS \+ CarPlay technical beta/);
   assert.match(
     hero,
-    /The service now covers Alberta and British Columbia\. The app reaches it from TestFlight build 75 onward; earlier builds cover Calgary and Kelowna\./,
+    /The service covers Canada for search and routing\. Builds 75 and 80 follow the server's coverage\. Uploaded build 81 uses it once available to testers; Apple processing and availability have not been checked\./,
   );
 
   const shipping = text(section(homepage, 'features'));
@@ -117,7 +117,7 @@ test('homepage states what NavOSS is and keeps unreleased features labelled', ()
   );
   assert.ok(
     items[1].includes(
-      'In development Province-wide road events Since November 15, 2026, the service has official events for Alberta, British Columbia and Ontario. The province-wide phone list is on main and will come in a later build; builds 75 and 80 use Calgary and Kelowna event feeds. 511 Alberta and Ontario 511 require keys and are not configured.',
+      'Uploaded in build 81 Province-wide road events The service has official events for Alberta, British Columbia and Ontario. The province-wide phone list is in uploaded build 81, once available to testers; builds 75 and 80 use Calgary and Kelowna feeds. 511 Alberta and Ontario 511 need keys and are not configured.',
     ),
   );
 
@@ -199,6 +199,9 @@ test('legal and support pages keep their published commitments', () => {
     /Builds without the restricted Google key make no Google place-details request/,
   );
   assert.match(dataSources, /Production routes are calculated by self-hosted Valhalla/);
+  assert.match(dataSources, /Geofabrik Canada 261114/);
+  assert.match(dataSources, /declares all thirteen provinces and territories/);
+  assert.match(support, /service covers Canada for search and routing/);
   assert.match(dataSources, /illustrations on this website are original artwork/);
   assert.match(support, /GitHub Issues/);
   assert.match(support, /not an emergency service/);

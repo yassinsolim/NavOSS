@@ -58,11 +58,26 @@ elif [ -n "$offline_manifest" ]; then
     printf 'Offline guard timer %s.timer is not active\n' "$guard" >&2
     exit 1
   fi
+  # systemd clears ExecMainExitTimestamp while a oneshot is starting. Wait for that run,
+  # bounded by the service's 180-second TimeoutStartSec, then check its actual result.
+  guard_wait=0
+  while [ "$(systemctl show -p ActiveState --value "$guard.service")" = activating ]; do
+    if [ "$guard_wait" -ge 184 ]; then
+      printf 'Offline guard did not finish within 184 seconds\n' >&2
+      exit 1
+    fi
+    sleep 2
+    guard_wait=$((guard_wait + 2))
+  done
   guard_result=$(systemctl show -p Result --value "$guard.service")
   guard_exited=$(systemctl show -p ExecMainExitTimestamp --value "$guard.service")
   if [ "$guard_result" != success ] || [ -z "$guard_exited" ] ||
     [ $(($(date +%s) - $(date -d "$guard_exited" +%s))) -gt 900 ]; then
     printf 'Offline guard last run: result %s, ended %s\n' "$guard_result" "${guard_exited:-never}" >&2
+    exit 1
+  fi
+  if [ ! -e "$offline_manifest" ]; then
+    printf 'Offline manifest was withdrawn while the guard ran\n' >&2
     exit 1
   fi
   # The host manifest is served unchanged, and each artifact it names reports its exact length.

@@ -42,17 +42,17 @@
 
         <h2>Routing</h2>
         <p>
-          Production routes are calculated by self-hosted Valhalla using the same checksum-verified
-          Alberta and British Columbia OpenStreetMap release as self-hosted Nominatim. The deployed
-          service passed a 22-directed-route Alberta and British Columbia matrix. Route responses
-          remain explicit that live traffic is unavailable.
+          Production routes are calculated by self-hosted Valhalla using the checksum-verified
+          Geofabrik Canada 261114 OpenStreetMap extract, also used by self-hosted Nominatim. The
+          deployed service passed the 22-directed-route Alberta and British Columbia matrix. Route
+          responses remain explicit that live traffic is unavailable.
         </p>
 
         <h2>Province boundaries</h2>
         <p>
-          The deployed server decides what is inside the Alberta and British Columbia service area
-          from Statistics Canada's 2021 Census province and territory digital boundary files
-          (published 2022-09-21), under the
+          The deployed server decides what is inside the Canada service area from Statistics
+          Canada's 2021 Census province and territory digital boundary files (published 2022-09-21),
+          under the
           <a href="https://open.canada.ca/en/open-government-licence-canada"
             >Open Government Licence &ndash; Canada</a
           >. The polygons are simplified to about 0.001 degrees (up to roughly 110 m) and include
@@ -60,32 +60,28 @@
           Adapted from Statistics Canada, 2021 Census &ndash; Province and territory digital
           boundary files, 2021. This does not constitute an endorsement by Statistics Canada of this
           product. Contains information licensed under the Open Government Licence &ndash; Canada.
-          The deployed v2 service declares both Alberta and British Columbia service areas. NavOSS
-          holds the boundaries of all thirteen provinces and territories (PRUID 10, 11, 12, 13, 24,
-          35, 46, 47, 48, 59, 60, 61 and 62) so a server can declare more once their routing and
-          search data are installed; none of the others is served today.
+          The deployed v2 service declares all thirteen provinces and territories (PRUID 10, 11, 12,
+          13, 24, 35, 46, 47, 48, 59, 60, 61 and 62).
         </p>
 
-        <h2>Community road reports and traffic (not switched on)</h2>
+        <h2>Community road reports and traffic</h2>
         <p>
           Community road reports and community traffic come from NavOSS drivers who choose to share
-          them; they are not official data and are labelled as such. Neither is switched on in the
-          deployed service, and no released app sends them. Traffic road shapes and identifiers come
-          from OpenStreetMap through the self-hosted Valhalla graph. When traffic is shown it is
-          attributed &ldquo;Traffic from opted-in NavOSS drivers&rdquo; and published only where at
-          least three installations drove a road. NavOSS reviewed official Alberta and British
-          Columbia feeds on November 12, 2026 and found none with free, redistributable, real-time
-          road speeds, so none is used. See the <a href="/privacy">privacy policy</a> for what is
-          collected.
+          them; they are not official data. In build 80 and later, verified reports are shown
+          unconfirmed until corroborated. Traffic is collected for evaluation only and is not shown
+          to drivers or used in routes. Traffic road shapes and identifiers come from OpenStreetMap
+          through the self-hosted Valhalla graph. Future published traffic would require at least
+          three installations on a road. NavOSS reviewed official Alberta and British Columbia feeds
+          on November 12, 2026 and found none with free, redistributable, real-time road speeds, so
+          none is used. See the <a href="/privacy">privacy policy</a> for what is collected.
         </p>
 
-        <h2>Offline map pipeline (not available to users)</h2>
+        <h2>Offline map pipeline</h2>
         <p>
-          The repository contains a build pipeline for downloadable Alberta and British Columbia
-          map, routing and search bundles. No bundle is hosted and the app cannot download one yet.
-          It uses public, dated OpenStreetMap extracts from Geofabrik, not OpenFreeMap's public
-          endpoint. If bundles ship, their attribution travels with them; the components and
-          licences are:
+          All Alberta and Calgary-area map, routing and search bundles are hosted for download.
+          British Columbia has no offline region. The pipeline uses public, dated OpenStreetMap
+          extracts from Geofabrik, not OpenFreeMap's public endpoint. Bundle attribution travels
+          with them; the components and licences are:
         </p>
         <div class="table-wrap">
           <table>

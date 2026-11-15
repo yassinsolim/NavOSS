@@ -6,8 +6,8 @@ Decision date: 2026-07-24
 
 North America coverage is possible, but it is not a bounds-only change. NavOSS must expand routing,
 search, map operations, regional quality evidence, and support capacity together. The selected source
-coverage is now Alberta and British Columbia, not the whole continent. The legacy `/v1/config`
-continues to identify Calgary for strict shipped clients; `/v2/config` declares the provincial areas.
+coverage is now Canada, not the whole continent. The legacy `/v1/config`
+continues to identify Calgary for strict shipped clients; `/v2/config` declares all 13 provinces and territories.
 
 The preferred architecture keeps the current MapLibre and native NavOSS navigation experience:
 
@@ -35,14 +35,14 @@ context remain separately labelled **local overlays**.
 `/v1/config` and `/v1/routes` remain legacy-shaped for TestFlight build 70. Optional lane, signpost,
 current-road, roundabout, bearing and posted-limit-status data is available at `/v2/routes`.
 V2 waypoints accept `type: "break" | "through"` (default `break`) so a keep-route rejoin anchor need
-not produce an intermediate arrival. Phone/native migration to the enriched endpoint is a separate
-client integration; API lane data is not a claim that the shipped app renders lane guidance.
+not produce an intermediate arrival. Build 75 onward uses v2; lanes and signposts are shown only
+when returned by the server.
 
 Validation includes sourced border fixtures and real Calgary/Metro Vancouver Valhalla responses,
 plus the exact production `valhalla-scripted:3.8.2` image with a local Calgary extract. The
 22-directed-route provincial matrix covers Edmonton, Red Deer, Lethbridge, Banff, Vancouver,
-Victoria, Kelowna, Kamloops, Prince George and Calgary–Vancouver. It is ready to run after deployment;
-it has **not** been run against the production VM and is not a province-wide quality verdict.
+Victoria, Kelowna, Kamloops, Prince George and Calgary–Vancouver. It passed 22/22 on both the
+staged and live Canada service; it is not a province-wide quality verdict.
 See [`../testing/route-quality.md`](../testing/route-quality.md) for contracts and reproduction.
 
 ## Clients follow what the server declares
@@ -79,7 +79,7 @@ Decision date: 2026-11-15 (owner: Canada-wide, VM may grow). This replaces the O
 - **Registry plus declaration.** All 13 provinces and territories are in the registry
   (`packages/contracts/src/coverage-data.ts`) from the same Statistics Canada 2021 boundary query
   as Alberta and BC (those two re-fetched byte-identical). A server serves only what
-  `NAVOSS_SERVICE_AREAS` declares (default `alberta,british-columbia`, the deployed behaviour). It
+  `NAVOSS_SERVICE_AREAS` declares (default `alberta,british-columbia`; production declares all 13). It
   fails closed: an unknown or repeated id refuses startup; with production search the
   `NOMINATIM_DATASET_VERSION` region must be `canada` or name every declared province; `/ready`
   fails when Valhalla `/locate` finds no road at a province's fixed public probe point or
@@ -117,10 +117,10 @@ British Columbia and Ontario: no road it covers connects them." It names both pl
 nothing and does not suggest a detour NavOSS cannot plan. With all of Canada declared, only Nunavut
 is unreachable. The phone in builds 75 and 80 shows that detail as the route error. CarPlay in those
 builds does not: their native client discards a `400` body, so it shows "Route unavailable" and
-"Check your connection and try again", which is wrong for this answer. From the next build the
+"Check your connection and try again", which is wrong for this answer. From build 81 the
 native client reads a `400` in the problem shape as `routeRefused` with the server's title and
-detail (after its one retry without the optional origin fields), and CarPlay shows them in a
-navigation alert like "No road route" below; a `400` without that shape stays an invalid request.
+detail without retrying the refused request, and CarPlay shows them in a navigation alert like
+"No road route" below; a `400` without that shape stays an invalid request.
 
 Inside the declared provinces Valhalla itself can find no road (or ferry) route: Haida Gwaii with
 ferries avoided, Toronto's Centre Island, between Nunavut communities. Valhalla answers `400` with
@@ -129,7 +129,7 @@ into `422`, title "No road route", detail "No road connects these places. Some a
 air, by water or by a winter road." Other Valhalla failures stay `503` "Routing unavailable". `422`
 is deliberate: builds 75 and 80 show the detail as the route error, while a `400` would make the
 phone retry once without its optional fields and a `404` would send it to `/v1/routes`. CarPlay in
-those builds shows its generic unavailable message for that status; from the next build the native
+those builds shows its generic unavailable message for that status; from build 81 the native
 client reads a `422` problem's title and detail and CarPlay shows "No road route" with the detail,
 or its first sentence where the alert is narrow. A `422` without that shape stays "unavailable", and
 it no longer triggers the offline-map fallback (the offline graph holds the same roads).
@@ -190,21 +190,19 @@ anyone claims ETA quality there.
 
 ### Sizing on VM 100 (6 vCPU, 24 GiB, 260 GB artifact disk)
 
-| Quantity                         | Value                                                                                                                                                    | Basis                                                                                                                                                                                                                                     |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Canada extract                   | 6.50 GB; Ontario 1.02 GB, Quebec 1.17 GB                                                                                                                 | measured (Geofabrik 261114)                                                                                                                                                                                                               |
-| Alberta+BC extract               | 1.60 GB (352 MB + 1,250 MB)                                                                                                                              | measured; Canada is 4.06×                                                                                                                                                                                                                 |
-| Alberta+BC Nominatim             | 6.0 GiB; Valhalla 2.8 GiB, 3,344 tiles; serving tar 589 MB                                                                                               | measured on the VM (2026-07-31, 2026-11-11)                                                                                                                                                                                               |
-| Toronto–Hamilton sample (128 MB) | Nominatim 1.57 GB database + 2.0 GB WAL, 14 min on 4 Mac cores; Valhalla tar 214 MB, ≈ 30 s per pass                                                     | measured locally 2026-11-15                                                                                                                                                                                                               |
-| Canada inputs                    | 9 min; 4,456 seasonal or ice-road ways removed; check-refs clean                                                                                         | measured on VM 100 (Geofabrik 261114)                                                                                                                                                                                                     |
-| Canada Valhalla                  | 8,767 tiles; 10 GB stage; both passes ≈ 35 min; build ≤ 8 GiB on 4 threads; serving limit 4 GiB                                                          | measured on VM 100 except container limits                                                                                                                                                                                                |
-| Canada Nominatim                 | final 25–50 GiB frozen; import peak 70–110 GB; 10 GiB container (2 GB shared buffers, 3 GB osm2pgsql cache, 1 GB maintenance memory, 4 threads); 12–24 h | estimate: 4× the Alberta+BC database, up to the Toronto sample's density; Nominatim's documentation (64 GB+ RAM recommended only for planet-scale imports; dynamic update tables are about half the database and are dropped by `FREEZE`) |
-| Flatnode                         | no                                                                                                                                                       | Nominatim recommends it for Europe/North America/planet; the file needs ≥ 75 GB whatever the extract (node ids span the planet)                                                                                                           |
-| Live after cutover               | limits Nominatim 8 GiB, Valhalla 4 GiB, API 0.75, reports 0.75, indexer 0.5, Caddy 0.2: 14.2 GiB of 24                                                   | plan                                                                                                                                                                                                                                      |
-| Disk at peak                     | ≈ 29 GB live + 13 GB inputs + 20 GB graph + 110 GB import = 172 GB of 260 GB                                                                             | estimate (worst case)                                                                                                                                                                                                                     |
+- **Canada extract:** 6.50 GB; Ontario 1.02 GB, Quebec 1.17 GB, measured for Geofabrik 261114.
+- **Alberta+BC extract:** 1.60 GB (352 MB + 1,250 MB), measured; Canada is 4.06×.
+- **Alberta+BC artifacts:** Nominatim 6.0 GiB; Valhalla 2.8 GiB, 3,344 tiles; serving tar 589 MB, measured on the VM.
+- **Toronto–Hamilton sample (128 MB):** Nominatim 1.57 GB database + 2.0 GB WAL, 14 min on 4 Mac cores; Valhalla tar 214 MB, approximately 30 seconds per pass, measured locally 2026-11-15.
+- **Canada inputs:** 9 minutes; 4,456 seasonal or ice-road ways removed; check-refs clean, measured on VM 100.
+- **Canada Valhalla:** 8,767 tiles; 3.9 GB stage after cleanup; both passes approximately 35 minutes on 4 cores, measured on VM 100.
+- **Canada Nominatim:** 147 minutes; 18 GB frozen database; 10 GiB container; `--osm2pgsql-cache 3000`, measured on VM 100.
+- **Flatnode:** no; Nominatim recommends it for Europe, North America and planet imports, but it needs at least 75 GB whatever the extract.
+- **Live after cutover:** limits Nominatim 8 GiB, Valhalla 4 GiB, API 0.75 GiB, reports 0.75 GiB, indexer 0.5 GiB and Caddy 0.2 GiB, totalling 14.2 GiB of 24.
+- **Disk at peak:** about 89 GB; 60 GB used of 255 GB after cutover, measured on VM 100.
 
-The Canada Nominatim import started 2026-11-15 12:51 UTC and had not finished at the time of writing;
-its duration remains an estimate.
+The first Nominatim attempt was OOM-killed after 10 minutes: the image ignored `OSM2PGSQL_CACHE`
+and chose 12.4 GB. #124 passes `--osm2pgsql-cache 3000` explicitly.
 
 Canada fits 24 GiB only with the steps run one at a time, which `stage-coverage.sh` enforces: the
 import's 10 GiB plus the live stack (≈ 2.5 GiB in use) leaves more than the 4 GiB floor. If the
@@ -219,10 +217,12 @@ beyond what pve01 can give VM 100 today.
 Runbook: [`infra/compose/README.md`](../../infra/compose/README.md#canada-coverage-release-geofabrik-261114).
 Artifacts are versioned by release date (`valhalla-canada-261114`, `nominatim/canada-261114`,
 `imports/canada-261114.osm.pbf`) beside the live `…alberta-british-columbia-260730…` ones. A staged
-API on 127.0.0.1:18300 runs `check-coverage.sh` and the 80-route matrix before anything live
-changes. The cutover changes the four artifact values in `.env`, declares the provinces and raises
-the two memory limits; rollback restores the saved `.env` and recreates the same four services.
-The Alberta+BC artifacts stay until Canada has run cleanly for a week.
+API on 127.0.0.1:18300 ran `stage-coverage.sh verify canada` and both matrices. The cutover at
+15:44 UTC on 2026-11-15 changed the four artifact values, declaration and memory limits. The
+image is from `4708d34`; rollback tag `navoss-api:pre-canada-registry`. Restore
+`infra/compose/.env.pre-canada-20261115T154413Z` and run
+`docker compose up -d --no-build --wait valhalla nominatim api caddy` for data rollback.
+The Alberta+BC artifacts remain available.
 
 ### Route-quality matrix
 
@@ -235,16 +235,20 @@ Whitehorse–Edmonton); one corridor inside each province otherwise crossed only
 inter-provincial routes (Halifax–Dartmouth, Charlottetown–Summerside, St. John's–Mount Pearl,
 Winnipeg–Brandon, Whitehorse–Carcross, Yellowknife–Behchokǫ̀), which `check-coverage.sh` routes
 when that province is declared alone; and Calgary–Winnipeg, Toronto–Montreal and Vancouver–Toronto (stress, 30 s
-latency allowance). Ranges come from published highway distances and are review gates, not
-measurements; anchors outside Toronto and Montreal have not been routed yet.
+latency allowance). Ranges are review gates, not measurements. Staged and live runs passed the
+Alberta+BC 22/22 and Canada 72/80 (475 ms p95 live). Eight failures were threshold artifacts:
+straight rural segments of 2.1–9.0 km and Winnipeg–Brandon durations of 141–143 minutes.
+A throttled public run at 15:53 UTC after adjusting the gap and duration checks passed 80/80
+(652 ms p95; definition SHA-256 `0e4d88ff7baa41e8bac455811e9dbdb61d0fbd2934803d1e602242b6f600dc24`).
+The gap rule retains 2 km for urban routes and scales with route length up to 10 km; Winnipeg–Brandon's
+150-minute bound is supported by [Road Trip Manitoba](https://roadtripmanitoba.com/manitoba-route-guides/winnipeg-to-brandon/).
 
-## Why the current stack is regional
+## Current stack and regional overlays
 
-- `/v2/config` publishes data-defined Alberta and British Columbia service areas with sourced
-  boundaries and retrieval bounds; `/v1/config` preserves the Calgary response for shipped clients.
-- The VM deployment record contains Alberta+BC Nominatim and Valhalla artifacts, including
-  `valhalla-alberta-british-columbia-260730-ca-parent`. Deploying this API source remains a separate
-  rollout step; agents have not inspected or changed the production VM.
+- `/v2/config` publishes all thirteen Canadian provinces and territories with sourced boundaries;
+  `/v1/config` preserves the Calgary response for shipped clients.
+- The Canada Nominatim and Valhalla artifacts are live; the prior Alberta+BC artifacts remain
+  available for rollback.
 - The Calgary business and parcel index improves local search but has no equivalent continent-wide
   source.
 - Official safety-camera data is a Calgary overlay and must remain labelled as such outside the

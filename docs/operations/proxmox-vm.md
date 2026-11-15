@@ -2,7 +2,7 @@
 
 Status: production backend deployed; restore/rollback and soak exercises remain
 
-This VM hosts the live Alberta and British Columbia NavOSS production API, versioned Alberta and British Columbia Valhalla/Nominatim data, PostgreSQL/PostGIS, the Calgary public-data search indexer, Caddy, and Cloudflare Tunnel. Geospatial imports run sequentially and must preserve at least 4 GiB of available guest memory with no sustained swap growth.
+This VM hosts the live Canada-wide NavOSS production API, versioned Canada and retained Alberta and British Columbia Valhalla/Nominatim data, PostgreSQL/PostGIS, the Calgary public-data search indexer, Caddy, and Cloudflare Tunnel. Geospatial imports run sequentially and must preserve at least 4 GiB of available guest memory with no sustained swap growth.
 
 ## Proxmox VM
 
@@ -46,6 +46,15 @@ grown online to 260 GB, one reboot. The system disk stays 60 GB. pve01 cannot gi
 today: it keeps 8 GB of RAM unallocated and its NVMe pool must stay under 80 %. The Canada
 build fits these limits only one heavy step at a time
 ([`north-america.md`](../architecture/north-america.md#sizing-on-vm-100-6-vcpu-24-gib-260-gb-artifact-disk)).
+
+The 2026-11-15 Canada build measured 9 minutes for inputs, about 35 minutes for both Valhalla
+passes on 4 cores (8,767 tiles, 3.9 GB after cleanup), and 147 minutes for Nominatim with a
+10 GiB container and `--osm2pgsql-cache 3000` (18 GB frozen database). Peak artifact disk was
+about 89 GB; after cutover 60 GB of 255 GB was used. The first import was OOM-killed after
+10 minutes because the image ignored `OSM2PGSQL_CACHE` and selected 12.4 GB; #124 fixed it.
+At 15:44 UTC the Canada cutover used API image `4708d34`. Rollback image tag:
+`navoss-api:pre-canada-registry`; restore `infra/compose/.env.pre-canada-20261115T154413Z`
+and run `docker compose up -d --no-build --wait valhalla nominatim api caddy` for data rollback.
 
 Format `scsi1` and `scsi2` as ext4 and mount them by filesystem UUID with `defaults,noatime`.
 
