@@ -13,6 +13,8 @@ services:
     logging: *navoss-logging
     restart: unless-stopped
     environment:
+      # Developer key for 511 Alberta events; blank leaves that source "not connected".
+      ALBERTA_511_API_KEY: ${ALBERTA_511_API_KEY:-}
       APP_ATTEST_BUNDLE_ID: ${APP_ATTEST_BUNDLE_ID:-org.navoss.mobile}
       APP_ATTEST_ENVIRONMENT: ${APP_ATTEST_ENVIRONMENT:-production}
       APP_ATTEST_TEAM_ID: ${APP_ATTEST_TEAM_ID:-}
@@ -34,6 +36,8 @@ services:
       NODE_ENV: production
       NOMINATIM_DATASET_VERSION: ${NOMINATIM_DATASET_VERSION:?Set NOMINATIM_DATASET_VERSION to the staged regional release}
       NOMINATIM_URL: http://nominatim:8080/
+      # Developer key for Ontario 511 events; blank leaves that source "not connected".
+      ONTARIO_511_API_KEY: ${ONTARIO_511_API_KEY:-}
       PGDATABASE: navoss
       PGHOST: reports-db
       PGPASSWORD: ${REPORTS_POSTGRES_PASSWORD}
