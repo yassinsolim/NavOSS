@@ -3,12 +3,12 @@
 # Nothing here touches the live containers, their artifact directories or `.env`.
 #
 #   export GEOFABRIK_VERSION=261114             # one release for every step (required)
-#   ./stage-coverage.sh inputs    canada        # download, verify, filter (≈30 min, 13 GB)
-#   ./stage-coverage.sh valhalla  canada        # graph, two passes (≈2–4 h, ≈20 GB peak, 8 GiB)
-#   ./stage-coverage.sh nominatim canada        # search import (≈12–24 h, ≤110 GB peak, 10 GiB)
-#   ./stage-coverage.sh serve     canada        # staged Valhalla + Nominatim + API on 127.0.0.1:18300
-#   ./stage-coverage.sh verify    canada        # check-coverage.sh against the staged API
-#   ./stage-coverage.sh stop      canada        # end the running step, remove staging containers
+#   ./stage-coverage.sh inputs    canada        # download, verify, filter (9 min on VM 100)
+#   ./stage-coverage.sh valhalla  canada        # graph, two passes (≈35 min on VM 100)
+#   sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh nominatim canada # search (12–24 h estimated)
+#   sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh serve canada
+#   sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh verify canada
+#   sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh stop canada
 #   ./stage-coverage.sh status    canada
 #
 # `canada` may be replaced by Geofabrik province names for a regional release, for example
@@ -51,6 +51,26 @@ live_nominatim=$(sed -n 's/^NOMINATIM_DATA_DIR=//p' "${env_file}" | tail -n 1)
 case "${live_valhalla}" in '' | /*) ;; *) live_valhalla=${script_dir}/${live_valhalla} ;; esac
 case "${live_nominatim}" in '' | /*) ;; *) live_nominatim=${script_dir}/${live_nominatim} ;; esac
 
+# Only hand back individual script-owned entries, never a container's tree or a symlink target.
+# A hard-linked regular file may belong to another artifact, so leave it alone too.
+handoff() {
+  [ "$(id -u)" -eq 0 ] || return 0
+  for entry do
+    [ ! -L "${entry}" ] || continue
+    if [ -f "${entry}" ] && [ "$(stat -c %h -- "${entry}")" != 1 ]; then continue; fi
+    chown -h --reference="${root}" -- "${entry}"
+  done
+}
+
+# Input helpers write their own files, including resumable partial downloads. Run them as the
+# artifact owner instead of changing ownership of pre-existing inputs or container-written data.
+input_helper() {
+  if [ "$(id -u)" -eq 0 ] && [ "$(stat -c %u -- "${root}")" -ne 0 ]; then
+    runuser -u "$(stat -c %U -- "${root}")" -- "$@"
+  else
+    "$@"
+  fi
+}
 lock_file=${root}/.stage.lock
 holder_file=${root}/.stage.holder
 case "${step}" in
@@ -61,6 +81,7 @@ case "${step}" in
       exec setsid /bin/sh "$0" "${step}" "$@"
     fi
     exec 9>>"${lock_file}"
+    handoff "${lock_file}"
     if [ "${step}" != stop ] && ! flock -n 9; then
       echo "Another staging step is running: $(cut -d ' ' -f 4- "${holder_file}" 2>/dev/null)." >&2
       echo "Wait for it, or end it with '$0 stop ${label}'." >&2
@@ -74,9 +95,12 @@ process_start() {
 }
 hold_stage_lock() {
   # The pid with its start time: `stop` signals it only if that same process still runs.
+  holder_next=$(mktemp "${holder_file}.XXXXXX")
   printf '%s %s %s %s %s\n' "$$" "$(process_start "$$")" "$(cat /proc/sys/kernel/random/boot_id)" \
-    "${step}" "${label}" >"${holder_file}.next"
-  mv -f "${holder_file}.next" "${holder_file}"
+    "${step}" "${label}" >"${holder_next}"
+  chmod 0644 "${holder_next}"
+  handoff "${holder_next}"
+  mv -f "${holder_next}" "${holder_file}"
 }
 
 # Registry ids and ISO codes of the provinces a release holds.
@@ -181,9 +205,19 @@ nominatim_container() {
   # cluster's `nominatim` and `www-data` role passwords (docs: Nominatim staging password).
   password_file=$1/staging-password.env
   if [ ! -s "${password_file}" ]; then
-    (umask 077 && printf 'NOMINATIM_PASSWORD=%s\n' \
-      "$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')" >"${password_file}.next")
-    mv -f "${password_file}.next" "${password_file}"
+    password_next=$(umask 077 && mktemp "${password_file}.XXXXXX")
+    printf 'NOMINATIM_PASSWORD=%s\n' \
+      "$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')" >"${password_next}"
+    mv -f "${password_next}" "${password_file}"
+  fi
+  if [ "$(id -u)" -eq 0 ]; then
+    if [ -L "${password_file}" ] || [ ! -f "${password_file}" ] ||
+      [ "$(stat -c %h -- "${password_file}")" != 1 ]; then
+      echo "Refusing unsafe staging password file ${password_file}." >&2
+      exit 1
+    fi
+    chown 0:0 "${password_file}"
+    chmod 0600 "${password_file}"
   fi
   container_stage=$1
   shift
@@ -206,6 +240,17 @@ nominatim_container() {
     if [ "${script}" = init.sh ]; then
       # The import's lock limit (the image sets it only for the serving configuration).
       sed -i '/cp \/etc\/postgresql\/16\/main\/conf.d\/postgres-import.conf.disabled/a sed -i "s/^#max_locks_per_transaction = 64/max_locks_per_transaction = ${POSTGRES_MAX_LOCKS_PER_TRANSACTION}/" /etc/postgresql/16/main/postgresql.conf' "${image_script}"
+      # The image ignores OSM2PGSQL_CACHE, and Nominatim then sizes the node cache from the host's
+      # memory and the extract (12.4 GB for Canada), not the container's limit: the import was
+      # OOM-killed ten minutes in. Pass the cache explicitly on every import command.
+      sed -i 's|nominatim import --osm-file \$OSMFILE --threads \$THREADS|& --osm2pgsql-cache "${OSM2PGSQL_CACHE:?}"|' "${image_script}"
+      if ! grep -q 'nominatim import' "${image_script}" ||
+        grep 'nominatim import' "${image_script}" | grep -qv -- '--osm2pgsql-cache'; then
+        rm -f "${image_script}"
+        docker rm -f navoss-nominatim-stage >/dev/null
+        echo "The image's /app/init.sh import command changed; refusing to import with an unbounded osm2pgsql cache." >&2
+        exit 1
+      fi
     fi
     if [ "$(head -n 1 "${image_script}")" != '#!/bin/bash -e' ] || grep -q 'set -[a-z]*x' "${image_script}"; then
       rm -f "${image_script}"
@@ -248,7 +293,7 @@ refuse_live() {
   live_path=$2
   shift 2
   if [ -z "${live_path}" ] || ! live_id=$(physical_id "${live_path}") || [ "${live_id}" = absent ]; then
-    echo "Cannot inspect the live ${live_name} (${live_path:-not set in ${env_file}}); refusing." >&2
+    echo "Cannot inspect the live ${live_name} (${live_path:-not set in ${env_file}}); refusing. Rerun this step with sudo." >&2
     exit 1
   fi
   for candidate do
@@ -343,10 +388,14 @@ case "${step}" in
       exit 1
     fi
     require_free_space 20
-    v=$("${script_dir}/prepare-regional-pbf.sh" "$@")
+    v=$(input_helper "${script_dir}/prepare-regional-pbf.sh" "$@")
     [ "${v}" = "${pinned}" ] || { echo "Prepared ${v}, not ${pinned}." >&2; exit 1; }
-    "${script_dir}/filter-routing-pbf.sh" "${imports}/${label}-${v}.osm.pbf"
-    printf '%s\n' "${v}" >"${version_file}"
+    input_helper "${script_dir}/filter-routing-pbf.sh" "${imports}/${label}-${v}.osm.pbf"
+    version_next=$(mktemp "${version_file}.XXXXXX")
+    printf '%s\n' "${v}" >"${version_next}"
+    chmod 0644 "${version_next}"
+    handoff "${version_next}"
+    mv -f "${version_next}" "${version_file}"
     df -h "${root}" | sed -n 2p
     ;;
 
@@ -371,9 +420,13 @@ case "${step}" in
     fi
     require_free_space 30
     install -d -m 0750 "${stage}"
-    [ -f "${staged_pbf}" ] || ln "${routing}" "${staged_pbf}" 2>/dev/null || cp "${routing}" "${staged_pbf}"
+    handoff "${stage}"
+    if [ ! -f "${staged_pbf}" ]; then
+      ln "${routing}" "${staged_pbf}" 2>/dev/null || { cp "${routing}" "${staged_pbf}"; handoff "${staged_pbf}"; }
+    fi
     if [ ! -f "${stage}/timezones.sqlite" ]; then
       cp "${live_valhalla}/timezones.sqlite" "${stage}/timezones.sqlite"
+      handoff "${stage}/timezones.sqlite"
     fi
     tz=$(docker run --rm --network none --memory 1g --memory-swap 1g --entrypoint spatialite -v "${stage}:/d:ro" "${valhalla_image}" \
       -batch -noheader -list /d/timezones.sqlite \
@@ -385,16 +438,20 @@ case "${step}" in
         admins.pre-country-parent.sqlite file_hashes.txt valhalla.json
     fi
     VALHALLA_HYBRID_PROVINCES="${hybrid}" "${script_dir}/prepare-valhalla-speeds.sh" "${stage}"
+    handoff "${stage}/default_speeds.json" "${stage}/default_speeds.provenance"
     if [ ! -f "${stage}/.pass1-complete" ]; then
       valhalla_run "${stage}" True False True
       docker rm -f navoss-valhalla-stage >/dev/null
       touch "${stage}/.pass1-complete"
+      handoff "${stage}/.pass1-complete"
     fi
     VALHALLA_ADMIN_PROVINCES="${codes}" "${script_dir}/repair-valhalla-admins.sh" "${stage}"
     valhalla_run "${stage}" False True False
     docker rm -f navoss-valhalla-stage >/dev/null
     (cd "${stage}" && sha256sum valhalla_tiles.tar admins.sqlite default_speeds.json timezones.sqlite \
-      >.navoss-stage-complete.next && mv -f .navoss-stage-complete.next .navoss-stage-complete)
+      >.navoss-stage-complete.next)
+    handoff "${stage}/.navoss-stage-complete.next"
+    mv -f "${stage}/.navoss-stage-complete.next" "${stage}/.navoss-stage-complete"
     du -sh "${stage}"
     ;;
 
@@ -405,10 +462,16 @@ case "${step}" in
     stage=${root}/nominatim/${label}-${v}
     refuse_live NOMINATIM_DATA_DIR "${live_nominatim}" "${stage}" "${stage}/postgres"
     if [ -f "${stage}/.navoss-import-complete" ]; then
+      handoff "${stage}" "${stage}/.navoss-import-complete"
       echo "Nominatim stage ${stage} is complete."
       exit 0
     fi
+    if [ ! -d "${root}/nominatim" ]; then
+      install -d -m 0750 "${root}/nominatim"
+      handoff "${root}/nominatim"
+    fi
     install -d -m 0750 "${stage}"
+    handoff "${stage}"
     if [ -f "${stage}/.navoss-import-started" ]; then
       # The image treats any existing cluster as imported; an interrupted import must start over.
       echo "Discarding the interrupted import in ${stage}/postgres."
@@ -422,6 +485,7 @@ case "${step}" in
       -e OSM2PGSQL_CACHE="${NOMINATIM_OSM2PGSQL_CACHE:-3000}" \
       -e THREADS="${NOMINATIM_IMPORT_THREADS:-4}"
     touch "${stage}/.navoss-import-started"
+    handoff "${stage}/.navoss-import-started"
     started=$(date +%s)
     docker start navoss-nominatim-stage >/dev/null
     wait_for http://127.0.0.1:18080/status navoss-nominatim-stage "${NOMINATIM_IMPORT_TIMEOUT:-129600}"
@@ -441,6 +505,7 @@ case "${step}" in
     refuse_live NOMINATIM_DATA_DIR "${live_nominatim}" "${nominatim_stage}" "${nominatim_stage}/postgres"
     [ -f "${valhalla_stage}/.navoss-stage-complete" ] && [ -f "${nominatim_stage}/.navoss-import-complete" ] ||
       { echo 'Finish the valhalla and nominatim steps first.' >&2; exit 1; }
+    handoff "${nominatim_stage}" "${nominatim_stage}/.navoss-import-complete"
     require_free_space 2
     docker network inspect "${network}" >/dev/null 2>&1 || docker network create "${network}" >/dev/null
     # Serving only: tiles exist, so the image builds nothing.
