@@ -896,20 +896,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       utterances.append(navOSSCommunityReportSpokenAlert(reportAlert.type))
     }
     let speechPrompt =
-      !announcementState.allowsManeuverGuidance
-      ? nil
-      : update.trip.flatMap { trip in
-        update.guidance.flatMap { guidance in
-          speechPlanner.prompt(
-            trip: trip,
-            guidance: guidance,
-            hasCurrentLocation: update.snapshot.rawCoordinate != nil,
-            speedMetersPerSecond: update.snapshot.speedMetersPerSecond,
-            isOffRoute: update.snapshot.isOffRoute,
-            now: now
-          )
-        }
-      }
+      announcementState.allowsManeuverGuidance ? speechPlanner.prompt(for: update, now: now) : nil
     lock.unlock()
     if let trip = update.trip {
       let speed = self.lock.withLock {

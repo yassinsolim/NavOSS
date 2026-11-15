@@ -57,6 +57,9 @@ final class NavigationTripStartTests: XCTestCase {
     private(set) var installed: [String] = []
     private(set) var offRouteFixes = 0
     private(set) var latest: NavigationSessionUpdate?
+    /// Every update, with the maneuver prompt the service would speak for it.
+    private(set) var history: [(update: NavigationSessionUpdate, prompt: String?)] = []
+    let planner = NavigationSpeechPlanner()
     var time = NavigationTripStartTests.startTime
 
     init(
@@ -86,6 +89,7 @@ final class NavigationTripStartTests: XCTestCase {
           coordinate: coordinate, courseDegrees: course, horizontalAccuracyMeters: accuracy,
           speedMetersPerSecond: speed, timestamp: time))
       latest = update
+      history.append((update, planner.prompt(for: update, now: time)?.text))
       let isOffRoute = update.snapshot.phase == .tracking && update.snapshot.isOffRoute
       if isOffRoute { offRouteFixes += 1 }
       switch consent.evaluate(
@@ -240,6 +244,101 @@ final class NavigationTripStartTests: XCTestCase {
     let snapshot = try XCTUnwrap(trip.latest?.snapshot)
     XCTAssertFalse(snapshot.isOffRoute)
     XCTAssertNotNil(snapshot.matchedCoordinate)
+  }
+
+  // MARK: What is published before the first match
+
+  /// Until a fix is matched the trip is acquiring, as the phone already shows a trip without a
+  /// matched position ("acquiring route position", "Waiting for GPS"): the raw position, no
+  /// position on the route, no progress, road or speed limit, no progress checkpoint, and
+  /// nothing spoken. CarPlay is given the raw position. The route's first maneuver may still be
+  /// shown as the step ahead. Asserted for every update while not matched.
+  private func assertAcquiring(
+    _ history: ArraySlice<(update: NavigationSessionUpdate, prompt: String?)>,
+    _ label: String,
+    file: StaticString = #filePath,
+    line: UInt = #line
+  ) {
+    XCTAssertFalse(history.isEmpty, label, file: file, line: line)
+    for (index, entry) in history.enumerated() {
+      let snapshot = entry.update.snapshot
+      let context = "\(label), update \(index)"
+      XCTAssertEqual(snapshot.phase, .tracking, context, file: file, line: line)
+      XCTAssertNil(snapshot.matchedCoordinate, context, file: file, line: line)
+      XCTAssertNil(snapshot.matchedCourseDegrees, context, file: file, line: line)
+      XCTAssertNil(snapshot.geometrySegmentIndex, context, file: file, line: line)
+      XCTAssertEqual(snapshot.routeProgress, 0, context, file: file, line: line)
+      XCTAssertEqual(entry.update.roadContext, .unknown, context, file: file, line: line)
+      XCTAssertFalse(navOSSIsProgressCheckpoint(snapshot), context, file: file, line: line)
+      XCTAssertNil(entry.prompt, context, file: file, line: line)
+      let raw = snapshot.rawCoordinate.map {
+        NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+      }
+      XCTAssertEqual(
+        navOSSCarPlayPublishedPosition(
+          matchedCoordinate: snapshot.matchedCoordinate, rawCoordinate: snapshot.rawCoordinate,
+          matchedCourseDegrees: snapshot.matchedCourseDegrees,
+          speedMetersPerSecond: snapshot.speedMetersPerSecond, fallback: nil)?.coordinate,
+        raw, context, file: file, line: line)
+    }
+  }
+
+  func testParkedOffTheRoadTheTripIsAcquiringAndSilentUntilItJoinsTheRoute() throws {
+    let (trip, express) = try harness(selecting: "Highway 401 Express")
+    try trip.standStill(at: Self.parked, seconds: 60)
+    assertAcquiring(trip.history[...], "parked 100 m from the road")
+    XCTAssertFalse(trip.session.hasMatchedRoute)
+
+    let parked = trip.history.count
+    try trip.drive([Self.parked] + Self.points(express, upToMeters: 3_000), speed: 12)
+    let firstMatch = try XCTUnwrap(
+      trip.history.indices.first { trip.history[$0].update.snapshot.matchedCoordinate != nil })
+    assertAcquiring(trip.history[parked..<firstMatch], "driving to the road")
+    XCTAssertTrue(trip.session.hasMatchedRoute)
+    XCTAssertTrue(
+      trip.history[firstMatch...].contains { $0.prompt != nil },
+      "guidance is spoken once matched")
+    XCTAssertEqual(trip.activeRouteId, express.id)
+  }
+
+  /// Review of #133: starting 100 m from the route and driving 200 m along a parallel service
+  /// road. The puck must not sit on the route, and nothing may be guided or spoken for a road
+  /// the driver is not on.
+  func testDrivingAParallelServiceRoadBeforeTheFirstMatchIsNotGuidedFromTheRoute() throws {
+    let end = NavigationTrace.coordinate(300, 1_000)
+    let first = NavigationTrace.route([(0, 0), (300, 0)])
+    let second = NavigationTrace.route([(300, 0), (300, 1_000)])
+    func carPlay(_ points: [NavigationCoordinate]) -> [NavOSSCarPlayCoordinate] {
+      points.map { NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude) }
+    }
+    let selected = NavOSSCarPlayTrip(
+      destination: NavOSSCarPlayDestination(
+        id: "d", label: "d", latitude: end.latitude, longitude: end.longitude, name: "d"),
+      distanceMeters: 1_300, durationSeconds: 100,
+      geometry: carPlay(first + second.dropFirst()), id: "turn",
+      steps: [
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 300, durationSeconds: 25, geometry: carPlay(first),
+          instruction: "Head east", maneuverType: "depart", roadName: "First Street"),
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 1_000, durationSeconds: 75, geometry: carPlay(second),
+          instruction: "Turn left onto Second Street.", maneuverType: "turn",
+          roadName: "Second Street"),
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 0, durationSeconds: 0,
+          geometry: carPlay([end, end]), instruction: "Arrive", maneuverType: "arrive",
+          roadName: ""),
+      ])
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    let trip = try TripHarness(selected: selected, preview: [selected], reroute: replacement)
+    try trip.standStill(at: NavigationTrace.coordinate(-100, -100), seconds: 6)
+    var x = -100.0
+    while x < 100 {
+      x += 10
+      try trip.fix(NavigationTrace.coordinate(x, -100), speed: 10, course: 90, after: 1)
+    }
+    XCTAssertEqual(trip.requests, 0)
+    assertAcquiring(trip.history[...], "200 m along a parallel road")
   }
 
   // MARK: A reroute that is needed still happens

@@ -73,6 +73,28 @@ final class NavigationSpeechPlanner {
     announcedLevels.removeAll()
   }
 
+  /// The maneuver prompt for a navigation update, as the service speaks it. Nothing is spoken
+  /// without a matched position: before the first match the driver is not on the route yet
+  /// (or not on it at all), and off route its maneuvers are not where the driver is heading.
+  func prompt(
+    for update: NavigationSessionUpdate,
+    now: TimeInterval = Date().timeIntervalSinceReferenceDate
+  ) -> NavigationSpeechPrompt? {
+    guard let trip = update.trip, let guidance = update.guidance,
+      update.snapshot.matchedCoordinate != nil
+    else {
+      return nil
+    }
+    return prompt(
+      trip: trip,
+      guidance: guidance,
+      hasCurrentLocation: update.snapshot.rawCoordinate != nil,
+      speedMetersPerSecond: update.snapshot.speedMetersPerSecond,
+      isOffRoute: update.snapshot.isOffRoute,
+      now: now
+    )
+  }
+
   func prompt(
     trip: NavOSSCarPlayTrip,
     guidance: NavOSSCarPlayGuidance,

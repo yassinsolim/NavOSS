@@ -1122,8 +1122,12 @@ final class NavigationCore {
       isAnchorRestored = false
     }
     // A dead-reckoned snapshot is a guess; the held position falls back to the last real match.
-    // A rejected projection is published only as that first placement, never later (after the
-    // off-route state, or on a resumed trip, there is simply no matched position).
+    // A rejected projection is never published after the off-route state, or on a resumed
+    // trip: there is simply no matched position. Nor before the first match: a fix not matched
+    // yet is the vehicle still finding its way to the route (or not on it), so the trip is
+    // acquiring, with the raw position, no place on the route and no progress (from it the
+    // route's first maneuver is the step ahead), and nothing is spoken (`NavigationSpeechPlanner`).
+    let isAcquiring = !hasMatchedRoute && !shouldAcceptProjection
     let previous = lastRealSnapshot
     let previousMatchedCoordinate = previous?.matchedCoordinate
     let provisionalMatchedCoordinate = isFirstPlacement
@@ -1145,18 +1149,18 @@ final class NavigationCore {
       isOffRoute: isOffRoute,
       matchedCoordinate: shouldAcceptProjection
         ? projection.coordinate
-        : isOffRoute ? nil : provisionalMatchedCoordinate,
+        : isOffRoute || isAcquiring ? nil : provisionalMatchedCoordinate,
       matchedCourseDegrees: shouldAcceptProjection
         ? projection.courseDegrees
-        : isOffRoute ? nil : provisionalMatchedCourseDegrees,
+        : isOffRoute || isAcquiring ? nil : provisionalMatchedCourseDegrees,
       phase: .tracking,
       rawCoordinate: sample.coordinate,
-      routeProgress: routeProgress,
+      routeProgress: isAcquiring ? 0 : routeProgress,
       routeVersion: routeVersion,
       sequence: sequence,
       geometrySegmentIndex: shouldAcceptProjection
         ? projection.geometrySegmentIndex
-        : isOffRoute ? nil : provisionalGeometrySegmentIndex,
+        : isOffRoute || isAcquiring ? nil : provisionalGeometrySegmentIndex,
       speedMetersPerSecond: sample.speedMetersPerSecond,
       isPassConfirmed: !requiresPassConfirmation
     )
