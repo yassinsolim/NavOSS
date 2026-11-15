@@ -30,6 +30,11 @@ final class NavigationSession {
     core.routeLengthMeters
   }
 
+  /// Whether a fix has been matched on the active route. See `NavigationCore.hasMatchedRoute`.
+  var hasMatchedRoute: Bool {
+    core.hasMatchedRoute
+  }
+
   func currentUpdate() -> NavigationSessionUpdate {
     update(for: core.currentSnapshot())
   }

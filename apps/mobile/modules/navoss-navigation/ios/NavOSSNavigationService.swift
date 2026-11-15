@@ -896,20 +896,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       utterances.append(navOSSCommunityReportSpokenAlert(reportAlert.type))
     }
     let speechPrompt =
-      !announcementState.allowsManeuverGuidance
-      ? nil
-      : update.trip.flatMap { trip in
-        update.guidance.flatMap { guidance in
-          speechPlanner.prompt(
-            trip: trip,
-            guidance: guidance,
-            hasCurrentLocation: update.snapshot.rawCoordinate != nil,
-            speedMetersPerSecond: update.snapshot.speedMetersPerSecond,
-            isOffRoute: update.snapshot.isOffRoute,
-            now: now
-          )
-        }
-      }
+      announcementState.allowsManeuverGuidance ? speechPlanner.prompt(for: update, now: now) : nil
     lock.unlock()
     if let trip = update.trip {
       let speed = self.lock.withLock {
@@ -1054,6 +1041,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
         name: "Selected route"
       )
     }()
+    // Before the first match the replacement follows the driver's choice as far as it can.
+    let hasMatchedRoute = navigationSession.hasMatchedRoute
     rerouteRequestId = requestId
     routeStatus = .rerouting
     stateVersion &+= 1
@@ -1067,18 +1056,21 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
           _ waypoints: [NavOSSCarPlayDestination],
           passThroughWaypointIds: Set<String>
         ) async throws -> NavOSSCarPlayTrip? {
-          try await client.routes(
+          let routes = try await client.routes(
             origin: origin,
             originHeadingDegrees: rerouteOrigin?.headingDegrees,
             originHorizontalAccuracyMeters: rerouteOrigin?.horizontalAccuracyMeters,
             destination: trip.destination,
             preferences: trip.preferences,
-            alternatives: 0,
+            alternatives: navigationRerouteAlternatives(
+              hasMatchedRoute: hasMatchedRoute, waypointCount: waypoints.count),
             waypoints: waypoints,
             passThroughWaypointIds: passThroughWaypointIds,
             // The trip was planned inside coverage; the roads between may not be.
             requireCoverage: false
-          ).first
+          )
+          return navigationReplacement(
+            from: routes, closestTo: trip, hasMatchedRoute: hasMatchedRoute)
         }
         let fetched = try await navigationFetchRecoveryRoute(
           rejoin: rejoin,

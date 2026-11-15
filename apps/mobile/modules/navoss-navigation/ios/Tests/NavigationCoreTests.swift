@@ -1774,16 +1774,24 @@ final class NavigationCoreTests: XCTestCase {
       NavigationCoordinate(latitude: 51.04, longitude: -114.06),
     ])
 
-    let snapshot = try core.updateLocation(
+    // 111 m from the road, the first fix is not a match: the trip is acquiring.
+    let unmatched = try core.updateLocation(
       NavigationCoordinate(latitude: 51.041, longitude: -114.07)
+    )
+    XCTAssertNil(unmatched.matchedCoordinate)
+    XCTAssertEqual(unmatched.distanceFromRouteMeters ?? 0, 111.2, accuracy: 0.5)
+    XCTAssertEqual(unmatched.routeProgress, 0)
+
+    let snapshot = try core.updateLocation(
+      NavigationCoordinate(latitude: 51.0402, longitude: -114.07)
     )
     let matchedCoordinate = try XCTUnwrap(snapshot.matchedCoordinate)
 
     XCTAssertEqual(snapshot.phase, .tracking)
-    XCTAssertEqual(snapshot.rawCoordinate?.latitude, 51.041)
+    XCTAssertEqual(snapshot.rawCoordinate?.latitude, 51.0402)
     XCTAssertEqual(matchedCoordinate.latitude, 51.04, accuracy: 0.000_001)
     XCTAssertEqual(matchedCoordinate.longitude, -114.07, accuracy: 0.000_001)
-    XCTAssertEqual(snapshot.distanceFromRouteMeters ?? 0, 111.2, accuracy: 0.5)
+    XCTAssertEqual(snapshot.distanceFromRouteMeters ?? 0, 22.2, accuracy: 0.5)
     XCTAssertEqual(snapshot.matchedCourseDegrees ?? 0, 90, accuracy: 0.1)
     XCTAssertEqual(snapshot.routeProgress, 0.5, accuracy: 0.001)
   }
@@ -2061,7 +2069,14 @@ final class NavigationCoreTests: XCTestCase {
       horizontalAccuracyMeters: 100
     )
 
-    var snapshot = try core.updateLocation(uncertainSample)
+    // Matched on the route first: before a first match a 100 m fix cannot place the vehicle.
+    var snapshot = try core.updateLocation(
+      NavigationLocationSample(
+        coordinate: NavigationCoordinate(latitude: 51.04, longitude: -114.075),
+        horizontalAccuracyMeters: 5
+      )
+    )
+    snapshot = try core.updateLocation(uncertainSample)
     snapshot = try core.updateLocation(uncertainSample)
     snapshot = try core.updateLocation(uncertainSample)
 
@@ -2085,6 +2100,13 @@ final class NavigationCoreTests: XCTestCase {
       horizontalAccuracyMeters: 100
     )
 
+    // Matched on the route first: before a first match, standing off the road is not leaving it.
+    _ = try core.updateLocation(
+      NavigationLocationSample(
+        coordinate: NavigationCoordinate(latitude: 51.04, longitude: -114.075),
+        horizontalAccuracyMeters: 5
+      )
+    )
     _ = try core.updateLocation(offRouteSample)
     _ = try core.updateLocation(offRouteSample)
     _ = try core.updateLocation(offRouteSample)
