@@ -166,6 +166,34 @@ nominatim_container() {
   rm -f "${image_script}"
 }
 
+refuse_live_nominatim() {
+  # refuse_live_nominatim STAGE LIVE_DATA_DIR: STAGE/postgres must not be the live cluster, by name
+  # or through a link.
+  if [ "$1/postgres" = "$2" ] ||
+    { [ -e "$1/postgres" ] && [ -e "$2" ] && [ "$(realpath "$1/postgres")" = "$(realpath "$2")" ]; }; then
+    echo 'Refusing to touch the live NOMINATIM_DATA_DIR.' >&2
+    exit 1
+  fi
+}
+
+discard_cluster() {
+  # discard_cluster STAGE: removes STAGE/postgres. The image chowns a cluster to its postgres user
+  # with mode 0700, which the operator cannot delete; a root container with no network and no other
+  # mount than STAGE does it. STAGE must be <artifact root>/nominatim/<label>-<YYMMDD>, a real
+  # directory, and not hold the live cluster.
+  case "${root}" in /*) ;; *) echo "The artifact root must be absolute: ${root}" >&2; exit 1 ;; esac
+  if ! printf '%s\n' "${1#"${root}/nominatim/"}" | grep -Eqx '[a-z][a-z-]*-[0-9]{6}' ||
+    [ "${1}" != "${root}/nominatim/${1#"${root}/nominatim/"}" ] || [ -L "$1" ] || [ -L "$1/postgres" ]; then
+    echo "Refusing to discard ${1}/postgres: not a staged Nominatim directory." >&2
+    exit 1
+  fi
+  refuse_live_nominatim "$1" "${live}"
+  docker run --rm --network none --user 0 --cap-drop ALL --cap-add DAC_OVERRIDE \
+    --security-opt no-new-privileges:true --memory 256m --entrypoint rm \
+    -v "$1:/stage" "${nominatim_image}" -rf /stage/postgres
+  [ ! -e "$1/postgres" ] || { echo "${1}/postgres is still there." >&2; exit 1; }
+}
+
 valhalla_run() {
   # valhalla_run DIR BUILD_ADMINS FORCE_REBUILD IGNORE_PBF
   docker rm -f navoss-valhalla-stage >/dev/null 2>&1 || true
@@ -246,13 +274,13 @@ case "${step}" in
       exit 0
     fi
     live=$(sed -n 's/^NOMINATIM_DATA_DIR=//p' "${script_dir}/.env" 2>/dev/null | tail -n 1)
-    [ "${stage}/postgres" != "${live}" ] || { echo 'Refusing to import into the live NOMINATIM_DATA_DIR.' >&2; exit 1; }
     install -d -m 0750 "${stage}"
+    refuse_live_nominatim "${stage}" "${live}"
     if [ -f "${stage}/.navoss-import-started" ]; then
       # The image treats any existing cluster as imported; an interrupted import must start over.
       echo "Discarding the interrupted import in ${stage}/postgres."
       docker rm -f navoss-nominatim-stage >/dev/null 2>&1 || true
-      rm -rf "${stage}/postgres"
+      discard_cluster "${stage}"
     fi
     install -d -m 0700 "${stage}/postgres"
     nominatim_container "${stage}" --cpus "${NOMINATIM_IMPORT_CPUS:-4}" \

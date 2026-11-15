@@ -377,7 +377,9 @@ GEOFABRIK_VERSION=261114 GEOFABRIK_MD5=0bba746e7473aac6a7a6796d153ea12d \
 
 # 3. Search index: /srv/navoss/artifacts/nominatim/canada-261114/postgres. Follow with
 #    `sudo docker logs --tail 20 navoss-nominatim-stage`. An interrupted import restarts from the
-#    beginning on the next run (the image cannot resume one).
+#    beginning on the next run (the image cannot resume one): the cluster, owned by the image's
+#    postgres user, is removed by a root container that mounts only that staged directory, with no
+#    network, after checking the path is nominatim/<label>-<YYMMDD> and not the live cluster.
 ./stage-coverage.sh nominatim canada
 
 # 4. Staged API on 127.0.0.1:18300 declaring Canada, then the coverage checks.

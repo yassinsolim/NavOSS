@@ -10,6 +10,7 @@ import {
   readdir,
   rm,
   stat,
+  symlink,
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -134,7 +135,11 @@ async function exists(path) {
 /** A staging root with inputs for `labels`, a copy of the compose scripts and the fakes. */
 async function createFixture(context, labels = ['new-brunswick']) {
   const directory = await mkdtemp(join(tmpdir(), 'navoss-stage-coverage-'));
-  context.after(() => rm(directory, { force: true, recursive: true }));
+  context.after(async () => {
+    // Undo the unreadable directories some tests create, then remove everything.
+    spawnSync('chmod', ['-R', 'u+rwx', directory]);
+    await rm(directory, { force: true, recursive: true });
+  });
   const compose = join(directory, 'compose');
   const bin = join(directory, 'bin');
   const root = join(directory, 'artifacts');
@@ -341,6 +346,63 @@ test(
     assert.match(refused.stderr, /start\.sh no longer starts with/u);
     assert.equal(
       (await calls(fixture)).some((call) => call.startsWith('start ')),
+      false,
+    );
+  },
+);
+
+async function interruptedImport(fixture, label = 'new-brunswick') {
+  const stageDirectory = join(fixture.root, 'nominatim', `${label}-${VERSION}`);
+  // What an interrupted import leaves: a cluster the image chowned to postgres, mode 0700, which
+  // the operator's account cannot read or delete (the test runs unprivileged, as on the VM).
+  const cluster = join(stageDirectory, 'postgres', 'base', '16384');
+  await mkdir(cluster, { recursive: true });
+  await writeFile(join(cluster, '1259'), 'heap');
+  await writeFile(join(stageDirectory, '.navoss-import-started'), '');
+  await chmod(join(stageDirectory, 'postgres', 'base'), 0o000);
+  return stageDirectory;
+}
+
+test(
+  'an interrupted import is discarded by a root container over exactly that stage',
+  options,
+  async (context) => {
+    const fixture = await createFixture(context);
+    const stageDirectory = await interruptedImport(fixture);
+
+    const resumed = stage(fixture, ['nominatim', 'new-brunswick']);
+
+    assert.equal(resumed.status, 0, resumed.stderr);
+    assert.match(resumed.stdout, /Discarding the interrupted import/u);
+    const cleanup = (await calls(fixture)).filter((call) => call.includes('--entrypoint rm'));
+    assert.equal(cleanup.length, 1);
+    assert.match(cleanup[0], /--network none/u);
+    assert.match(cleanup[0], /--user 0/u);
+    assert.match(
+      cleanup[0],
+      new RegExp(`-v ${stageDirectory}:/stage .* -rf /stage/postgres$`, 'u'),
+    );
+    assert.equal(cleanup[0].match(/ -v /gu)?.length, 1, 'one mount: the stage');
+    assert.equal(await exists(join(stageDirectory, '.navoss-import-complete')), true);
+  },
+);
+
+test(
+  'never discards the live cluster or a path outside the staging pattern',
+  options,
+  async (context) => {
+    const fixture = await createFixture(context);
+    const stageDirectory = await interruptedImport(fixture);
+    // The live directory is the staged one through a symlink.
+    await rm(fixture.live, { recursive: true });
+    await symlink(join(stageDirectory, 'postgres'), fixture.live);
+
+    const refused = stage(fixture, ['nominatim', 'new-brunswick']);
+
+    assert.equal(refused.status, 1);
+    assert.match(refused.stderr, /live NOMINATIM_DATA_DIR/u);
+    assert.equal(
+      (await calls(fixture)).some((call) => call.includes('--entrypoint rm')),
       false,
     );
   },
