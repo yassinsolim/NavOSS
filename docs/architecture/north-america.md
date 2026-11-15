@@ -113,9 +113,14 @@ The registry records which neighbours a road or scheduled vehicle ferry joins. W
 declared provinces do not connect, for example Alberta+BC and Ontario without Saskatchewan and
 Manitoba, or Nunavut (no road to any neighbour), the API refuses before calling Valhalla:
 `400`, title "No route between these provinces", detail "NavOSS can't plan a drive between
-British Columbia and Ontario: no road it covers connects them." The app already shows the
-server's detail as the route error; it names both places, blames nothing and does not suggest a
-detour NavOSS cannot plan. With all of Canada declared, only Nunavut is unreachable.
+British Columbia and Ontario: no road it covers connects them." It names both places, blames
+nothing and does not suggest a detour NavOSS cannot plan. With all of Canada declared, only Nunavut
+is unreachable. The phone in builds 75 and 80 shows that detail as the route error. CarPlay in those
+builds does not: their native client discards a `400` body, so it shows "Route unavailable" and
+"Check your connection and try again", which is wrong for this answer. From the next build the
+native client reads a `400` in the problem shape as `routeRefused` with the server's title and
+detail (after its one retry without the optional origin fields), and CarPlay shows them in a
+navigation alert like "No road route" below; a `400` without that shape stays an invalid request.
 
 Inside the declared provinces Valhalla itself can find no road (or ferry) route: Haida Gwaii with
 ferries avoided, Toronto's Centre Island, between Nunavut communities. Valhalla answers `400` with

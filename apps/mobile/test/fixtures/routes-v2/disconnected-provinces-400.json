@@ -1,0 +1,26 @@
+{
+  "recorded": "POST /v2/routes from this API (feat/ontario-coverage) declaring all 13 provinces and territories; Montreal downtown to Iqaluit (no road joins Quebec and Nunavut)",
+  "capturedAt": "2026-11-15T11:24:26.646Z",
+  "request": {
+    "alternatives": 0,
+    "origin": {
+      "latitude": 45.5019,
+      "longitude": -73.5674
+    },
+    "destination": {
+      "latitude": 63.7467,
+      "longitude": -68.517
+    },
+    "originHeadingDegrees": 90,
+    "originHorizontalAccuracyMeters": 10,
+    "preferences": {
+      "avoidFerries": false,
+      "avoidHighways": false,
+      "avoidTolls": false,
+      "avoidUnpaved": false
+    }
+  },
+  "status": 400,
+  "contentType": "application/problem+json; charset=utf-8",
+  "body": "{\"code\":\"invalid_request\",\"detail\":\"NavOSS can't plan a drive between Quebec and Nunavut: no road it covers connects them.\",\"requestId\":\"req-1\",\"status\":400,\"title\":\"No route between these provinces\"}"
+}

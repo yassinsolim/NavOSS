@@ -293,6 +293,75 @@ final class NavigationRoutesV2Tests: XCTestCase {
     } catch NavOSSNavigationAPIError.serviceUnavailable {}
   }
 
+  // MARK: No route between these provinces
+
+  /// The 400 the API returned for Montreal to Iqaluit with all of Canada declared
+  /// (`disconnected-provinces-400.json`).
+  private static func disconnectedProvinces() throws -> (status: Int, body: Data) {
+    let document = try XCTUnwrap(
+      JSONSerialization.jsonObject(
+        with: Data(contentsOf: fixtures.appendingPathComponent("disconnected-provinces-400.json")))
+        as? [String: Any])
+    return (
+      try XCTUnwrap(document["status"] as? Int),
+      Data(try XCTUnwrap(document["body"] as? String).utf8)
+    )
+  }
+
+  func testA400RefusalCarriesTheServersWordsInsteadOfServiceUnavailable() async throws {
+    let recorded = try Self.disconnectedProvinces()
+    XCTAssertEqual(recorded.status, 400)
+    let paths = PathLog()
+    RoutesURLProtocol.handler = { request in
+      paths.append(request.url!.path)
+      switch request.url!.path {
+      case "/v2/config": return Self.response(request, Self.v2Config)
+      case "/v2/routes": return Self.response(request, recorded.body, status: recorded.status)
+      default: return Self.response(request, Data("{}".utf8), status: 404)
+      }
+    }
+    do {
+      _ = try await makeClient().routes(
+        origin: NavOSSCarPlayCoordinate(latitude: 45.5019, longitude: -73.5674),
+        originHeadingDegrees: 90, originHorizontalAccuracyMeters: 10,
+        destination: NavOSSCarPlayDestination(
+          id: "iqaluit", label: "Iqaluit", latitude: 63.7467, longitude: -68.517, name: "Iqaluit"),
+        preferences: NavOSSRoutePreferences(), alternatives: 0, requireCoverage: false)
+      XCTFail("expected routeRefused")
+    } catch let error as NavOSSNavigationAPIError {
+      guard case .routeRefused(let problem) = error else {
+        return XCTFail("expected routeRefused, got \(error)")
+      }
+      XCTAssertEqual(problem.title, "No route between these provinces")
+      XCTAssertEqual(
+        problem.detailVariants,
+        ["NavOSS can't plan a drive between Quebec and Nunavut: no road it covers connects them."])
+      XCTAssertEqual(error.serverProblem, problem)
+      // Retried once without the optional origin fields (an older server's 400), never sent to v1.
+      XCTAssertEqual(paths.values.filter { $0 == "/v2/routes" }.count, 2)
+      XCTAssertFalse(paths.values.contains("/v1/routes"))
+    }
+  }
+
+  func testA400WithoutTheProblemShapeStaysInvalidRequest() async throws {
+    RoutesURLProtocol.handler = { request in
+      switch request.url!.path {
+      case "/v2/config": return Self.response(request, Self.v2Config)
+      case "/v2/routes": return Self.response(request, Data("bad".utf8), status: 400)
+      default: return Self.response(request, Data("{}".utf8), status: 404)
+      }
+    }
+    do {
+      _ = try await makeClient().routes(
+        origin: Self.calgaryOrigin, destination: Self.calgaryDestination,
+        preferences: NavOSSRoutePreferences(), alternatives: 0, requireCoverage: false)
+      XCTFail("expected invalidRequest")
+    } catch let error as NavOSSNavigationAPIError {
+      guard case .invalidRequest = error else { return XCTFail("got \(error)") }
+      XCTAssertNil(error.serverProblem)
+    }
+  }
+
   // MARK: Keep-route rejoin without the step-merging workaround
 
   func testRealThroughResponseHasNoStopAtTheRejoinPoint() throws {

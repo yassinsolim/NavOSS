@@ -2510,7 +2510,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         if case NavOSSNavigationAPIError.outsideCoverage(let coverageName) = error {
           self.showNavigationAlert(
             title: "Outside NavOSS coverage", subtitle: "Directions cover \(coverageName).")
-        } else if case NavOSSNavigationAPIError.routeNotFound(let problem) = error {
+        } else if let problem = (error as? NavOSSNavigationAPIError)?.serverProblem {
           self.showNavigationAlert(problem)
         } else {
           self.showNavigationAlert(title: failureTitle, subtitle: failureSubtitle)
@@ -2586,7 +2586,8 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     presentNavigationAlert(alert, on: mapTemplate)
   }
 
-  /// The server's own reason a route cannot be planned ("No road route"), as the phone shows it.
+  /// The server's own reason a route cannot be planned ("No road route", "No route between these
+  /// provinces"), as the phone shows it.
   private func showNavigationAlert(_ problem: NavOSSRouteProblem) {
     guard let mapTemplate else {
       return
@@ -2680,7 +2681,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
         if case NavOSSNavigationAPIError.outsideCoverage(let coverageName) = error {
           self.showNavigationAlert(
             title: "Outside NavOSS coverage", subtitle: "Directions cover \(coverageName).")
-        } else if case NavOSSNavigationAPIError.routeNotFound(let problem) = error {
+        } else if let problem = (error as? NavOSSNavigationAPIError)?.serverProblem {
           self.showNavigationAlert(problem)
         } else {
           self.showNavigationAlert(
