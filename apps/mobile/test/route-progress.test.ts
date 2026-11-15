@@ -135,8 +135,59 @@ describe('route progress', () => {
 
   it('formats ETA, distance, and arrival time for driver scanning', () => {
     expect(formatDuration(1_215)).toBe('20 min');
-    expect(formatDistance(19_660)).toBe('19.7 km');
+    expect(formatDistance(19_660)).toBe('20 km');
     expect(formatArrivalTime(1_200, new Date(2026, 6, 15, 12, 0, 0))).toContain('12:20');
+  });
+
+  describe('long trips (Toronto to Vancouver: 4,392.3 km, 46 hr 4 min)', () => {
+    const departure = new Date(2026, 10, 15, 10, 49, 0); // a Sunday morning, local time
+
+    it('shows whole kilometres with a thousands separator from 10 km, one decimal below', () => {
+      expect(formatDistance(4_392_300)).toBe('4,392 km');
+      expect(formatDistance(1_000_000)).toBe('1,000 km');
+      expect(formatDistance(10_000)).toBe('10 km');
+      expect(formatDistance(9_960)).toBe('10 km');
+      expect(formatDistance(9_440)).toBe('9.4 km');
+      expect(formatDistance(1_000)).toBe('1.0 km');
+      expect(formatDistance(640)).toBe('640 m');
+    });
+
+    it('formats in en-CA whatever the device locale: comma groups, point decimals', () => {
+      expect(formatDistance(12_345_678)).toBe('12,346 km');
+      expect(formatDistance(2_550)).toBe('2.5 km');
+    });
+
+    it('states durations beyond a day in days and hours', () => {
+      expect(formatDuration(46 * 3_600 + 4 * 60)).toBe('1 day 22 hr');
+      expect(formatDuration(24 * 3_600)).toBe('1 day');
+      expect(formatDuration(49 * 3_600 + 20 * 60)).toBe('2 days 1 hr');
+      expect(formatDuration(23 * 3_600 + 59 * 60)).toBe('23 hr 59 min');
+      expect(formatDuration(23 * 3_600 + 59 * 60 + 50)).toBe('1 day');
+    });
+
+    it('names the arrival day when it is not today', () => {
+      expect(formatArrivalTime(46 * 3_600 + 4 * 60, departure)).toMatch(/^Tue 8:53\s?a\.?m\.?$/iu);
+      expect(formatArrivalTime(13 * 3_600 + 11 * 60, departure)).toMatch(/^Mon 12:00\s?a\.?m\.?/iu);
+      expect(formatArrivalTime(13 * 3_600 + 10 * 60, departure)).toMatch(/^11:59\s?p\.?m\.?$/iu);
+      expect(formatArrivalTime(10 * 24 * 3_600, departure)).toMatch(/^Nov 25 10:49\s?a\.?m\.?$/iu);
+    });
+
+    it('reads bare highway numbers in the via summary as highways', () => {
+      const highway = (roadName: string, distanceMeters: number) => ({
+        ...route.steps[0],
+        distanceMeters,
+        roadName,
+      });
+      expect(
+        routeViaLabel({ ...route, steps: [highway('17', 900_000), highway('1', 2_400_000)] }),
+      ).toBe('via Highway 1 / Highway 17');
+      expect(
+        routeViaLabel({
+          ...route,
+          steps: [highway('Highway 401 Express', 9_000), highway('17A', 800)],
+        }),
+      ).toBe('via Highway 401 Express / Highway 17A');
+    });
   });
 
   it('shows meaningful live traffic delay without sub-minute noise', () => {
@@ -155,7 +206,7 @@ describe('route progress', () => {
     expect(message).toContain('Calgary Tower');
     expect(message).toContain('12:20');
     expect(message).toContain('20 min');
-    expect(message).toContain('19.7 km');
+    expect(message).toContain('20 km');
     expect(message).not.toMatch(/-114|51\.0|track/i);
   });
 

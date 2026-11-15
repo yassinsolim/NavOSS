@@ -1376,6 +1376,30 @@ final class NavigationCoreTests: XCTestCase {
     )
   }
 
+  func testCarPlayRouteNamesReadBareHighwayNumbersAsHighways() {
+    func step(_ roadName: String, _ distanceMeters: Double) -> NavOSSCarPlayRouteStep {
+      NavOSSCarPlayRouteStep(
+        distanceMeters: distanceMeters,
+        durationSeconds: distanceMeters / 25,
+        geometry: [
+          NavOSSCarPlayCoordinate(latitude: 51.04, longitude: -114.08),
+          NavOSSCarPlayCoordinate(latitude: 51.13, longitude: -114.01),
+        ],
+        instruction: "Continue",
+        maneuverType: "straight",
+        roadName: roadName
+      )
+    }
+    // Toronto to Vancouver: one route mostly on Highway 17, the other on Highway 1.
+    let northern = makeNavigationSessionTrip(id: "northern", steps: [step("17", 2_400_000)])
+    let southern = makeNavigationSessionTrip(id: "southern", steps: [step("1", 2_600_000)])
+
+    XCTAssertEqual(
+      navOSSCarPlayRouteChoiceDetails([northern, southern]),
+      ["via Highway 17", "via Highway 1"]
+    )
+  }
+
   func testCarPlayRouteNamesMeasureDifferenceWhenRoadsMatch() {
     let fastestRoute = makeNavigationSessionTrip(id: "fastest")
     let longerRoute = NavOSSCarPlayTrip(

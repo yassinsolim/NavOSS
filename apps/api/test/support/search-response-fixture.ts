@@ -1,8 +1,18 @@
 import { readFileSync } from 'node:fs';
-import { SearchQuerySchema, SearchResponseSchema } from '@navoss/contracts';
+import {
+  createServiceCoverage,
+  registeredServiceAreas,
+  SearchQuerySchema,
+  SearchResponseSchema,
+  type SearchResponse,
+} from '@navoss/contracts';
 import { z } from 'zod/v4';
 
-import { createProductionSearchProvider, type SearchProvider } from '../../src/search-provider.js';
+import {
+  createNominatimSearchProvider,
+  createProductionSearchProvider,
+  type SearchProvider,
+} from '../../src/search-provider.js';
 
 // These are unmodified, normalized provider results recorded through the deployed /v1/search.
 // They are not raw Nominatim HTTP payloads, nor evidence of deployed province-wide coverage.
@@ -126,4 +136,78 @@ export function nominatimShapeFromPhoton(feature: z.infer<typeof RecordedPhotonF
     osm_type: osmTypes[properties.osm_type] ?? properties.osm_type,
     type: properties.osm_value,
   };
+}
+
+// Unmodified raw Nominatim responses (public instance), keyed by the exact URL the provider builds.
+const CanadaNominatimRecordingSchema = z.object({
+  cases: z.array(
+    z.object({
+      pools: z.array(z.object({ body: z.array(z.unknown()), url: z.string() })),
+      query: SearchQuerySchema,
+    }),
+  ),
+  endpoint: z.string(),
+  recordedAt: z.string(),
+});
+
+export const CANADA_NOMINATIM_RECORDING = CanadaNominatimRecordingSchema.parse(
+  JSON.parse(
+    readFileSync(new URL('../fixtures/canada-search-nominatim.json', import.meta.url), 'utf8'),
+  ),
+);
+
+export const CANADA_COVERAGE = createServiceCoverage(registeredServiceAreas().map(({ id }) => id));
+
+export interface CanadaSearchRun {
+  requestedUrls: string[];
+  response: SearchResponse;
+}
+
+/**
+ * The production search pipeline (fixtures, Nominatim provider, merge and presentation) over the
+ * recorded raw responses. A URL the recording does not hold fails that pool, as an outage would.
+ */
+export async function searchRecordedCanada(
+  q: string,
+  origin: { latitude: number; longitude: number },
+): Promise<CanadaSearchRun> {
+  const recorded = CANADA_NOMINATIM_RECORDING.cases.find(
+    (entry) =>
+      entry.query.q === q &&
+      entry.query.latitude === origin.latitude &&
+      entry.query.longitude === origin.longitude,
+  );
+  if (recorded === undefined) throw new Error(`Missing raw Nominatim recording for ${q}.`);
+  const bodies = new Map(recorded.pools.map((pool) => [pool.url, pool.body]));
+  const requestedUrls: string[] = [];
+  const nominatim = createNominatimSearchProvider({
+    coverage: CANADA_COVERAGE,
+    endpoint: 'https://nominatim.openstreetmap.org/',
+    fetchImplementation: (input) => {
+      const url = input instanceof Request ? input.url : String(input);
+      requestedUrls.push(url);
+      const body = bodies.get(url);
+      return Promise.resolve(
+        body === undefined
+          ? new Response('[]', { status: 404 })
+          : new Response(JSON.stringify(body)),
+      );
+    },
+  });
+  const response = await createProductionSearchProvider(
+    undefined,
+    nominatim,
+    undefined,
+    CANADA_COVERAGE,
+  ).search(
+    SearchQuerySchema.parse({
+      includeDetails: true,
+      latitude: origin.latitude,
+      limit: 20,
+      longitude: origin.longitude,
+      q,
+      sort: 'relevance',
+    }),
+  );
+  return { requestedUrls, response };
 }

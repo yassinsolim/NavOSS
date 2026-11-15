@@ -15,6 +15,14 @@ func navOSSReadableRoadNames(_ text: String) -> String {
   return replacing(result, #"(?<=\S)/(?=\S)"#, " / ")
 }
 
+/// A road known only by its route number ("17") is a highway: "Highway 17". Mirrors the phone's
+/// `readableRoadName`.
+func navOSSReadableRoadName(_ roadName: String) -> String {
+  let road = roadName.trimmingCharacters(in: .whitespacesAndNewlines)
+  return road.range(of: #"^\d{1,3}[A-Z]?$"#, options: .regularExpression) == nil
+    ? road : "Highway \(road)"
+}
+
 private func navOSSSaysArrived(_ instruction: String) -> Bool {
   instruction.trimmingCharacters(in: .whitespacesAndNewlines)
     .range(of: #"^(you have|you've) arrived\b"#, options: [.regularExpression, .caseInsensitive])

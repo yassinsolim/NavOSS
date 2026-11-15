@@ -362,6 +362,20 @@ final class CarPlayGuidancePresentationTests: XCTestCase {
     XCTAssertEqual(navOSSCarPlayDistanceLabel(.nan), "")
   }
 
+  func testLongTripLabelsGroupKilometresAndCountDays() {
+    // Toronto to Vancouver: 4,392.3 km, 46 hr 4 min.
+    XCTAssertEqual(navOSSCarPlayDistanceLabel(4_392_300), "4,392 km")
+    XCTAssertEqual(navOSSCarPlayDistanceLabel(1_000_000), "1,000 km")
+    XCTAssertEqual(navOSSCarPlayDistanceLabel(9_960), "10 km")
+    XCTAssertEqual(navOSSCarPlayDistanceLabel(9_440), "9.4 km")
+    XCTAssertEqual(navOSSCarPlayDurationLabel(1_215), "20 min")
+    XCTAssertEqual(navOSSCarPlayDurationLabel(2 * 3_600 + 5 * 60), "2 hr 5 min")
+    XCTAssertEqual(navOSSCarPlayDurationLabel(3 * 3_600), "3 hr")
+    XCTAssertEqual(navOSSCarPlayDurationLabel(46 * 3_600 + 4 * 60), "1 day 22 hr")
+    XCTAssertEqual(navOSSCarPlayDurationLabel(24 * 3_600), "1 day")
+    XCTAssertEqual(navOSSCarPlayDurationLabel(49 * 3_600 + 20 * 60), "2 days 1 hr")
+  }
+
   func testCategoryResultsSortNearestFirstKeepingProviderOrderForTies() {
     func place(_ id: String, _ latitude: Double) -> NavOSSCarPlayDestination {
       NavOSSCarPlayDestination(id: id, label: "", latitude: latitude, longitude: -114, name: id)

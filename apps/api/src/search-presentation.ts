@@ -1,4 +1,4 @@
-import { normalizeSearchText } from './search-text.js';
+import { normalizeSearchText, STREET_DIRECTION_TOKENS } from './search-text.js';
 
 export interface SearchLocation {
   city?: string;
@@ -121,6 +121,12 @@ export function searchNameConfidence(
   const normalizedName = normalizeSearchText(name);
   const canonicalName = canonicalSearchName(name);
   if (wanted === normalizedName || canonicalSearchName(query) === canonicalName) return 0.98;
+  // The query named the street without its direction: "rue Sainte-Catherine" is Montréal's
+  // "Rue Sainte-Catherine Ouest" as much as Longueuil's "Rue Sainte-Catherine".
+  const direction = normalizedName.startsWith(`${wanted} `)
+    ? normalizedName.slice(wanted.length + 1)
+    : undefined;
+  if (direction !== undefined && STREET_DIRECTION_TOKENS[direction] === true) return 0.98;
   const normalizedLabel = normalizeSearchText(label);
   const labelWords = normalizedLabel.split(' ');
   // A name qualified by a locality/address ("Costco Kelowna") is an explicit place request.

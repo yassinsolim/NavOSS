@@ -338,7 +338,7 @@ private func navOSSCarPlayRoadChoiceDetails(
   let candidatesByRoute = routes.map { route in
     var candidates: [String: RoadCandidate] = [:]
     for (stepIndex, step) in route.steps.enumerated() {
-      let displayName = step.roadName.trimmingCharacters(in: .whitespacesAndNewlines)
+      let displayName = navOSSReadableRoadName(step.roadName)
       guard !displayName.isEmpty else { continue }
       let key = displayName.lowercased()
       if var candidate = candidates[key] {
@@ -387,7 +387,7 @@ private func navOSSCarPlayRoadChoiceDetails(
         let roundedMeters = max(50, Int((extraDistanceMeters / 50).rounded()) * 50)
         return "\(roundedMeters) m longer"
       }
-      return String(format: "%.1f km longer", extraDistanceMeters / 1_000)
+      return "\(navOSSCarPlayDistanceLabel(extraDistanceMeters)) longer"
     }
     let extraDurationMinutes = Int(
       ((routes[routeIndex].durationSeconds - fastestRoute.durationSeconds) / 60).rounded()
