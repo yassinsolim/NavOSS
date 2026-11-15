@@ -121,6 +121,51 @@ refuse_parallel_heavy_step() {
   done
 }
 
+nominatim_container() {
+  # nominatim_container STAGE [DOCKER CREATE OPTIONS...]: creates (not starts) the staging Nominatim
+  # over STAGE's cluster and extract. Both image scripts run under `bash -x` and print the password
+  # (start.sh in `useradd -p`, init.sh in `ALTER USER`); tracing is turned off in both, or nothing
+  # starts. The password is this stage's own, never production's: the import stores it as the
+  # cluster's `nominatim` and `www-data` role passwords (docs: Nominatim staging password).
+  password_file=$1/staging-password.env
+  if [ ! -s "${password_file}" ]; then
+    (umask 077 && printf 'NOMINATIM_PASSWORD=%s\n' \
+      "$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')" >"${password_file}.next")
+    mv "${password_file}.next" "${password_file}"
+  fi
+  container_stage=$1
+  shift
+  docker rm -f navoss-nominatim-stage >/dev/null 2>&1 || true
+  docker create --name navoss-nominatim-stage --env-file "${password_file}" --shm-size 2g \
+    -p 127.0.0.1:18080:8080 \
+    -e FREEZE=true -e GUNICORN_WORKERS=2 -e IMPORT_SECONDARY_WIKIPEDIA=false \
+    -e IMPORT_STYLE=full -e IMPORT_WIKIPEDIA=false -e PBF_PATH=/regional-data/regional.osm.pbf \
+    -e POSTGRES_AUTOVACUUM_WORK_MEM=256MB -e POSTGRES_EFFECTIVE_CACHE_SIZE=6GB \
+    -e POSTGRES_MAINTENANCE_WORK_MEM=1GB -e POSTGRES_MAX_CONNECTIONS=30 \
+    -e POSTGRES_MAX_LOCKS_PER_TRANSACTION=256 -e POSTGRES_MAX_WAL_SIZE=2GB \
+    -e POSTGRES_SHARED_BUFFERS=2GB -e POSTGRES_WORK_MEM=32MB -e UPDATE_MODE=none "$@" \
+    -v "${imports}/${label}-${v}.osm.pbf:/regional-data/regional.osm.pbf:ro" \
+    -v "${container_stage}/postgres:/var/lib/postgresql/16/main" \
+    "${nominatim_image}" >/dev/null
+  image_script=$(mktemp)
+  for script in start.sh init.sh; do
+    docker cp "navoss-nominatim-stage:/app/${script}" "${image_script}"
+    sed -i '1s|^#!/bin/bash -ex$|#!/bin/bash -e|' "${image_script}"
+    if [ "${script}" = init.sh ]; then
+      # The import's lock limit (the image sets it only for the serving configuration).
+      sed -i '/cp \/etc\/postgresql\/16\/main\/conf.d\/postgres-import.conf.disabled/a sed -i "s/^#max_locks_per_transaction = 64/max_locks_per_transaction = ${POSTGRES_MAX_LOCKS_PER_TRANSACTION}/" /etc/postgresql/16/main/postgresql.conf' "${image_script}"
+    fi
+    if [ "$(head -n 1 "${image_script}")" != '#!/bin/bash -e' ] || grep -q 'set -[a-z]*x' "${image_script}"; then
+      rm -f "${image_script}"
+      docker rm -f navoss-nominatim-stage >/dev/null
+      echo "The image's /app/${script} no longer starts with '#!/bin/bash -ex'; refusing to run it with tracing." >&2
+      exit 1
+    fi
+    docker cp "${image_script}" "navoss-nominatim-stage:/app/${script}"
+  done
+  rm -f "${image_script}"
+}
+
 valhalla_run() {
   # valhalla_run DIR BUILD_ADMINS FORCE_REBUILD IGNORE_PBF
   docker rm -f navoss-valhalla-stage >/dev/null 2>&1 || true
@@ -210,33 +255,10 @@ case "${step}" in
       rm -rf "${stage}/postgres"
     fi
     install -d -m 0700 "${stage}/postgres"
-    # The password never appears on a command line or in the import log.
-    stage_env=$(mktemp)
-    chmod 0600 "${stage_env}"
-    sed -n 's/^NOMINATIM_PASSWORD=/NOMINATIM_PASSWORD=/p' "${script_dir}/.env" | tail -n 1 >"${stage_env}"
-    docker rm -f navoss-nominatim-stage >/dev/null 2>&1 || true
-    docker create --name navoss-nominatim-stage --env-file "${stage_env}" \
-      --cpus "${NOMINATIM_IMPORT_CPUS:-4}" --memory "${NOMINATIM_IMPORT_MEMORY:-10g}" --shm-size 2g \
-      -p 127.0.0.1:18080:8080 \
-      -e FREEZE=true -e GUNICORN_WORKERS=2 -e IMPORT_SECONDARY_WIKIPEDIA=false \
-      -e IMPORT_STYLE=full -e IMPORT_WIKIPEDIA=false -e PBF_PATH=/regional-data/regional.osm.pbf \
+    nominatim_container "${stage}" --cpus "${NOMINATIM_IMPORT_CPUS:-4}" \
+      --memory "${NOMINATIM_IMPORT_MEMORY:-10g}" --memory-swap "${NOMINATIM_IMPORT_MEMORY:-10g}" \
       -e OSM2PGSQL_CACHE="${NOMINATIM_OSM2PGSQL_CACHE:-3000}" \
-      -e POSTGRES_AUTOVACUUM_WORK_MEM=256MB -e POSTGRES_EFFECTIVE_CACHE_SIZE=6GB \
-      -e POSTGRES_MAINTENANCE_WORK_MEM=1GB -e POSTGRES_MAX_CONNECTIONS=30 \
-      -e POSTGRES_MAX_LOCKS_PER_TRANSACTION=256 -e POSTGRES_MAX_WAL_SIZE=2GB \
-      -e POSTGRES_SHARED_BUFFERS=2GB -e POSTGRES_WORK_MEM=32MB \
-      -e THREADS="${NOMINATIM_IMPORT_THREADS:-4}" -e UPDATE_MODE=none \
-      -v "${imports}/${label}-${v}.osm.pbf:/regional-data/regional.osm.pbf:ro" \
-      -v "${stage}/postgres:/var/lib/postgresql/16/main" \
-      "${nominatim_image}" >/dev/null
-    rm -f "${stage_env}"
-    init_script=$(mktemp)
-    docker cp navoss-nominatim-stage:/app/init.sh "${init_script}"
-    # Disable command tracing (it prints the database password) and raise the lock limit.
-    sed -i '1s|#!/bin/bash -ex|#!/bin/bash -e|' "${init_script}"
-    sed -i '/cp \/etc\/postgresql\/16\/main\/conf.d\/postgres-import.conf.disabled/a sed -i "s/^#max_locks_per_transaction = 64/max_locks_per_transaction = ${POSTGRES_MAX_LOCKS_PER_TRANSACTION}/" /etc/postgresql/16/main/postgresql.conf' "${init_script}"
-    docker cp "${init_script}" navoss-nominatim-stage:/app/init.sh
-    rm -f "${init_script}"
+      -e THREADS="${NOMINATIM_IMPORT_THREADS:-4}"
     touch "${stage}/.navoss-import-started"
     started=$(date +%s)
     docker start navoss-nominatim-stage >/dev/null

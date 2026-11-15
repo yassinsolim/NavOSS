@@ -9,6 +9,7 @@ import {
   readFile,
   readdir,
   rm,
+  stat,
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -287,3 +288,60 @@ test('a heavy step is refused while staged services are serving', options, async
   assert.equal(refused.status, 1);
   assert.match(refused.stderr, /navoss-api-stage is running/u);
 });
+
+test(
+  'the import runs both image scripts without tracing, with a staging-only password',
+  options,
+  async (context) => {
+    const fixture = await createFixture(context);
+
+    const imported = stage(fixture, ['nominatim', 'new-brunswick']);
+
+    assert.equal(imported.status, 0, imported.stderr);
+    const copied = join(fixture.state, 'files', 'navoss-nominatim-stage');
+    for (const script of ['start.sh', 'init.sh']) {
+      const content = await readFile(join(copied, script), 'utf8');
+      assert.equal(content.split('\n')[0], '#!/bin/bash -e', script);
+    }
+    assert.match(
+      await readFile(join(copied, 'init.sh'), 'utf8'),
+      /max_locks_per_transaction = \$\{POSTGRES/u,
+    );
+    const stageDirectory = join(fixture.root, 'nominatim', `new-brunswick-${VERSION}`);
+    const passwordFile = join(stageDirectory, 'staging-password.env');
+    const password = await readFile(passwordFile, 'utf8');
+    assert.match(password, /^NOMINATIM_PASSWORD=[0-9a-f]{48}\n$/u);
+    assert.equal((await stat(passwordFile)).mode & 0o777, 0o600);
+    const created = await readFile(
+      join(fixture.state, 'created', 'navoss-nominatim-stage'),
+      'utf8',
+    );
+    assert.match(created, new RegExp(`--env-file\n${passwordFile}\n`, 'u'));
+    const everything = [...(await calls(fixture)), created, imported.stdout, imported.stderr].join(
+      '\n',
+    );
+    assert.doesNotMatch(everything, /production-secret-value/u);
+    assert.doesNotMatch(everything, new RegExp(password.split('=')[1].trim(), 'u'));
+  },
+);
+
+test(
+  'refuses to start an image whose scripts no longer match the tracing patch',
+  options,
+  async (context) => {
+    const fixture = await createFixture(context);
+    await writeFile(
+      join(fixture.directory, 'upstream', 'start.sh'),
+      '#!/bin/bash\nset -ex\nuseradd -m -p ${NOMINATIM_PASSWORD} nominatim\n',
+    );
+
+    const refused = stage(fixture, ['nominatim', 'new-brunswick']);
+
+    assert.equal(refused.status, 1);
+    assert.match(refused.stderr, /start\.sh no longer starts with/u);
+    assert.equal(
+      (await calls(fixture)).some((call) => call.startsWith('start ')),
+      false,
+    );
+  },
+);

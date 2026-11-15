@@ -244,16 +244,12 @@ The repair is idempotent, fails closed on missing or invalid province geometry, 
 that would replace the repaired database before graph enhancement. Verify the rebuilt service on
 port `18002` and run the 50-route Calgary gate before changing `VALHALLA_DATA_DIR`.
 
-After the rebuilt Valhalla process is healthy, stop it and stage Nominatim. Read
-`NOMINATIM_PASSWORD` from the mode-600 production environment without printing it:
+After the rebuilt Valhalla process is healthy, stop it and stage Nominatim with a password of its
+own (never production's; see [Nominatim staging password](#nominatim-staging-password)):
 
 ```sh
-set -a
-. ./.env
-set +a
-stage_env=$(mktemp)
-chmod 0600 "$stage_env"
-printf 'NOMINATIM_PASSWORD=%s\n' "$NOMINATIM_PASSWORD" >"$stage_env"
+stage_env="$(dirname "$nominatim_stage")/staging-password.env"
+(umask 077 && printf 'NOMINATIM_PASSWORD=%s\n' "$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')" >"$stage_env")
 sudo docker create --name navoss-nominatim-stage --env-file "$stage_env" \
   --cpus 2.5 --memory 6g --shm-size 2g -p 127.0.0.1:18080:8080 \
   -e FREEZE=true -e GUNICORN_WORKERS=2 -e IMPORT_SECONDARY_WIKIPEDIA=false \
@@ -267,19 +263,24 @@ sudo docker create --name navoss-nominatim-stage --env-file "$stage_env" \
   -v "/srv/navoss/artifacts/imports/alberta-british-columbia-${version}.osm.pbf:/regional-data/regional.osm.pbf:ro" \
   -v "$nominatim_stage:/var/lib/postgresql/16/main" \
   mediagis/nominatim:5.3
-rm -f "$stage_env"
-unset NOMINATIM_PASSWORD
+start_script=$(mktemp)
+sudo docker cp navoss-nominatim-stage:/app/start.sh "$start_script"
+sudo sed -i '1s|^#!/bin/bash -ex$|#!/bin/bash -e|' "$start_script"
+head -n 1 "$start_script"   # must print #!/bin/bash -e
+sudo docker cp "$start_script" navoss-nominatim-stage:/app/start.sh
+sudo rm -f "$start_script"
 init_script=$(mktemp)
 sudo docker cp navoss-nominatim-stage:/app/init.sh "$init_script"
-sudo sed -i '1s|#!/bin/bash -ex|#!/bin/bash -e|' "$init_script"
+sudo sed -i '1s|^#!/bin/bash -ex$|#!/bin/bash -e|' "$init_script"
 sudo sed -i '/cp \/etc\/postgresql\/16\/main\/conf.d\/postgres-import.conf.disabled/a sed -i "s/^#max_locks_per_transaction = 64/max_locks_per_transaction = ${POSTGRES_MAX_LOCKS_PER_TRANSACTION}/" /etc/postgresql/16/main/postgresql.conf' "$init_script"
 sudo docker cp "$init_script" navoss-nominatim-stage:/app/init.sh
 sudo rm -f "$init_script"
 sudo docker start navoss-nominatim-stage
 ```
 
-The one-off script patch disables upstream import-command tracing before startup; otherwise the
-image prints its internal database password while creating roles. Follow progress with
+The one-off script patches disable upstream command tracing in both image scripts before startup;
+otherwise the image prints the password in `useradd -p` (start.sh) and while creating roles
+(init.sh). Follow progress with
 `sudo docker logs --tail 100 navoss-nominatim-stage` and inspect the versioned database size without
 printing environment values.
 
@@ -298,6 +299,33 @@ sudo docker compose up -d --no-build --wait --wait-timeout 300 valhalla nominati
 
 Rollback restores the previous four `.env` values and reruns the same four-service command.
 Versioned artifacts are never deleted during deployment.
+
+### Nominatim staging password
+
+`mediagis/nominatim:5.3` uses `NOMINATIM_PASSWORD` in two places, both checked against the image:
+
+- `start.sh`, in every new container: `useradd -m -p "$NOMINATIM_PASSWORD" nominatim`. That writes
+  the raw value into the container's own `/etc/shadow` (not a crypt hash, so it cannot be used to log
+  in); it is not in the data directory and goes when the container goes.
+- `init.sh`, only while importing: `ALTER USER nominatim` (a superuser) and `ALTER USER "www-data"`
+  `WITH ENCRYPTED PASSWORD`. Those role passwords live in the cluster, so they move with the
+  artifact.
+
+After the import nothing NavOSS runs uses them. Nominatim's API (gunicorn as `nominatim`) and
+`refresh-nominatim-special-phrases.sh` (`exec --user nominatim`) connect over the Unix socket, where
+`pg_hba.conf` uses peer authentication. The role passwords only answer TCP logins: PostgreSQL listens
+on all interfaces with `host all all 0.0.0.0/0 md5`, unpublished but reachable on port 5432 from any
+container on the `backend` and `egress` networks.
+
+`stage-coverage.sh nominatim` therefore generates a password per stage
+(`<stage>/staging-password.env`, mode 600, 48 hex digits) instead of copying production's, and the
+cutover needs no password step: the production `.env` value no longer matches the staged cluster's
+roles, which nothing uses. Keep `staging-password.env` with the cluster as its TCP credential. Both
+image scripts trace every command (`bash -ex`), which prints the password; staging turns tracing off
+in both and refuses to start an image whose first line is no longer `#!/bin/bash -ex`. The live
+service starts `start.sh` as `bash -e` (`entrypoint` in `compose.yaml`), so recreating it at the
+cutover logs no password. `init.sh` still traces if Compose is ever pointed at an unimported
+directory, which this runbook never does.
 
 ## Canada coverage release (Geofabrik 261114)
 

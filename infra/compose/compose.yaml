@@ -172,6 +172,9 @@ services:
 
   nominatim:
     image: mediagis/nominatim:5.3
+    # The image's start.sh runs under `bash -ex` and traces `useradd -p <password>` in every new
+    # container; started as `bash -e` it prints no command. A cluster here is already imported.
+    entrypoint: ['/bin/bash', '-e', '/app/start.sh']
     logging: *navoss-logging
     restart: unless-stopped
     shm_size: 2g
