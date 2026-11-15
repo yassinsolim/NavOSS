@@ -215,6 +215,26 @@ function lanesFor(value: unknown): RouteLane[] | undefined {
   }
   return lanes;
 }
+const FRENCH_CARDINALS: Readonly<Record<string, string>> = {
+  Est: 'East',
+  Nord: 'North',
+  Ouest: 'West',
+  Sud: 'South',
+};
+
+/**
+ * Ontario's bilingual guide signs carry each direction twice ("401 East Express" and "401 Est
+ * Express"); keep the English one when both are on the same sign. A French-only sign (Quebec's
+ * "A-40 Ouest") is kept as signed.
+ */
+function withoutTranslatedDuplicates(texts: string[]): string[] {
+  const signed = new Set(texts);
+  return texts.filter((text) => {
+    const english = text.replace(/\b(Est|Nord|Ouest|Sud)\b/gu, (word) => FRENCH_CARDINALS[word] ?? word);
+    return english === text || !signed.has(english);
+  });
+}
+
 function signpostFor(
   value: unknown,
 ): Pick<
@@ -228,11 +248,11 @@ function signpostFor(
     sign.exitOntoStreets.length > 0 ||
     sign.exitTowardLocations.length > 0 ||
     sign.exitNames.length > 0;
-  const branch = (exit ? sign.exitOntoStreets : sign.guideOntoStreets).map(
-    (element) => element.text,
+  const branch = withoutTranslatedDuplicates(
+    (exit ? sign.exitOntoStreets : sign.guideOntoStreets).map((element) => element.text),
   );
-  const toward = (exit ? sign.exitTowardLocations : sign.guideTowardLocations).map(
-    (element) => element.text,
+  const toward = withoutTranslatedDuplicates(
+    (exit ? sign.exitTowardLocations : sign.guideTowardLocations).map((element) => element.text),
   );
   const exitNumber = sign.exitNumbers.map((element) => element.text).join(', ');
   const junctionName = (sign.junctionNames.length > 0 ? sign.junctionNames : sign.exitNames)

@@ -18,6 +18,7 @@ import { createValhallaRouteProvider, RouteProviderError } from '../src/route-pr
 import calgary from './fixtures/valhalla/calgary-deerfoot-glenmore.json' with { type: 'json' };
 import stoney from './fixtures/valhalla/calgary-stoney-airport.json' with { type: 'json' };
 import vancouver from './fixtures/valhalla/vancouver-highway-interchange.json' with { type: 'json' };
+import toronto from './fixtures/valhalla/toronto-403-401-interchanges.json' with { type: 'json' };
 import local382 from './fixtures/valhalla/calgary-deerfoot-glenmore-local382.json' with { type: 'json' };
 import directionsOnly from './fixtures/valhalla/calgary-directions-only.json' with { type: 'json' };
 import legacy from './fixtures/valhalla/calgary-legacy-osrm.json' with { type: 'json' };
@@ -88,6 +89,27 @@ describe('real Valhalla lossless response fixtures', () => {
     expect(
       route.steps.find((step) => step.signpostBranch?.includes('Deerfoot Trail'))?.signpostToward,
     ).toEqual(['Fort Macleod']);
+  });
+  it('keeps lanes, exit numbers and signposts on recorded Ontario 400-series interchanges', () => {
+    const route = fixtureValue(parseValhallaPbf(bytes(toronto.response))[0]);
+    const steps = route.steps;
+    const express = fixtureValue(steps.find((step) => step.signpostBranch?.includes('401 East Express')));
+    // The sign reads "401 EAST / EST EXPRESS"; drivers see and hear the English direction once.
+    expect(express.signpostBranch).toEqual(['401 East Express']);
+    expect(express.signpost).toBe('401 East Express');
+    expect(express.lanes?.map((lane) => lane.active)).toEqual([true, true, true, false]);
+    const collector = fixtureValue(
+      steps.find((step) => step.signpostToward?.includes('Islington Avenue')),
+    );
+    expect(collector.signpostToward).toEqual(['Islington Avenue', 'Weston Road', 'Black Creek Drive']);
+    expect(collector.currentRoadName).toContain('Highway 401 Collector');
+    const exit = fixtureValue(steps.find((step) => step.exitNumber === '380'));
+    expect(exit.instruction).toBe('Take exit 380 onto Brimley Road South.');
+    expect(exit.signpostBranch).toEqual(['Brimley Road South', 'Progress Avenue']);
+    expect(exit.lanes?.filter((lane) => lane.active)).toHaveLength(1);
+    expect(steps.filter((step) => (step.lanes?.length ?? 0) > 0).length).toBeGreaterThanOrEqual(4);
+    expect(route.distanceMeters).toBeGreaterThan(40_000);
+    expect(route.distanceMeters).toBeLessThan(50_000);
   });
   it('retains real Vancouver branch and toward text separately rather than splitting mixed OSRM destinations', () => {
     const route = fixtureValue(parseValhallaPbf(bytes(vancouver.response))[0]);
