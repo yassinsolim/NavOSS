@@ -194,6 +194,7 @@ import Foundation
       probeRestorePublication()
       probeUnknownCaptureTimeNeedsMovement()
       probeCheckpointRaces()
+      probeFirstMatchIsRecordedBeforeItIsPublished()
       log("probe done")
     }
 
@@ -314,6 +315,61 @@ import Foundation
         "spoken=[\(spoken.all.joined(separator: " | "))]")
       service.clearNavigation()
       check("cleared-store", store.load() == nil, storeSummary(defaults))
+    }
+
+    /// The first match of a trip started off the road is recorded before anything matched is
+    /// published: were the app killed at the record's write (injected here, inside the write's
+    /// critical section), no surface, speech or reader would have seen a match that the store
+    /// does not hold. A reader that asks meanwhile waits for the write.
+    private static func probeFirstMatchIsRecordedBeforeItIsPublished() {
+      let suite = "NavOSSRestoreE2E.first-match"
+      let (service, store, defaults, center) = service(suite)
+      defer { defaults.removePersistentDomain(forName: suite) }
+      let trip = syntheticTrip(id: "restore-first-match")
+      do {
+        try service.startNavigation(trip)
+      } catch {
+        check("first-match-start", false)
+        return
+      }
+      let now = Date()
+      _ = try? service.ingest(fix(-100, 0, course: nil, speed: 0, at: now))
+      let published = Recorder()
+      let token = center.addObserver(
+        forName: .navOSSNavigationSnapshotDidChange, object: service, queue: nil
+      ) { _ in
+        published.append(
+          service.currentState().navigation.matchedCoordinate == nil ? "unmatched" : "matched")
+      }
+      defer { center.removeObserver(token) }
+      let atWrite = Recorder()
+      let readerSaw = Recorder()
+      service.checkpointWillWrite = {
+        var recorded = "other"
+        switch store.loadProgress(for: trip) {
+        case .beforeFirstMatch: recorded = "beforeFirstMatch"
+        case .progress: recorded = "progress"
+        default: break
+        }
+        atWrite.append("published=\(published.all.contains("matched")) stored=\(recorded)")
+        DispatchQueue.global().async {
+          readerSaw.append(service.currentState().navigation.matchedCoordinate == nil ? "unmatched" : "matched")
+        }
+        Thread.sleep(forTimeInterval: 0.2)
+        atWrite.append("readerDone=\(!readerSaw.all.isEmpty)")
+      }
+      _ = try? service.ingest(fix(0, 30, course: 0, speed: 10, at: now.addingTimeInterval(1)))
+      service.checkpointWillWrite = nil
+      Thread.sleep(forTimeInterval: 0.3)
+      var stored = "other"
+      if case .progress = store.loadProgress(for: trip) { stored = "progress" }
+      check(
+        "first-match-recorded-before-published",
+        atWrite.all == ["published=false stored=beforeFirstMatch", "readerDone=false"]
+          && published.all.contains("matched") && readerSaw.all == ["matched"]
+          && stored == "progress",
+        "atWrite=\(atWrite.all) published=\(published.all) reader=\(readerSaw.all) stored=\(stored)")
+      service.clearNavigation()
     }
 
     /// A checkpoint held inside its critical section, at the store write, while a clear or a
