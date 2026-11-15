@@ -2,7 +2,7 @@
 
 Status: production backend deployed; restore/rollback and soak exercises remain
 
-This VM hosts the live Calgary and Kelowna NavOSS production API, versioned Alberta and British Columbia Valhalla/Nominatim data, PostgreSQL/PostGIS, the Calgary public-data search indexer, Caddy, and Cloudflare Tunnel. Geospatial imports run sequentially and must preserve at least 4 GiB of available guest memory with no sustained swap growth.
+This VM hosts the live Alberta and British Columbia NavOSS production API, versioned Alberta and British Columbia Valhalla/Nominatim data, PostgreSQL/PostGIS, the Calgary public-data search indexer, Caddy, and Cloudflare Tunnel. Geospatial imports run sequentially and must preserve at least 4 GiB of available guest memory with no sustained swap growth.
 
 ## Proxmox VM
 
@@ -15,7 +15,7 @@ This VM hosts the live Calgary and Kelowna NavOSS production API, versioned Albe
 | QEMU Guest Agent | Enabled                                                             |
 | CPU              | 1 socket, 4 cores, CPU type `host`                                  |
 | NUMA             | Disabled                                                            |
-| Memory           | 16,384 MiB fixed                                                    |
+| Memory           | 16,384 MiB fixed (confirmed 2026-11-15)                             |
 | Ballooning       | Disabled                                                            |
 | SCSI controller  | VirtIO SCSI single                                                  |
 | Network          | VirtIO NIC at `192.168.1.74`; guest UFW enabled                     |
@@ -30,12 +30,16 @@ Use SSD/NVMe-backed thin storage where available. Enable `Discard`, `SSD emulati
 
 | Device           |    Size | Backup | Guest use                                                                                              |
 | ---------------- | ------: | ------ | ------------------------------------------------------------------------------------------------------ |
-| `scsi0`          |  40 GiB | Yes    | Ubuntu, packages, logs, swap                                                                           |
+| `scsi0`          |   60 GB | Yes    | Ubuntu, packages, logs, swap, containerd store                                                         |
 | `scsi1`          |  40 GiB | Yes    | `/srv/navoss/state`: PostgreSQL, secrets/config references, application backups                        |
 | `scsi2`          | 160 GiB | No     | `/srv/navoss/artifacts`: Docker data, Valhalla graphs, Nominatim indexes, downloads, staging artifacts |
 | Cloud-Init drive | Default | N/A    | Initial user, SSH key, network configuration                                                           |
 
 `scsi2` contains reproducible artifacts and is excluded from Proxmox backup to keep backup size bounded. Keep the active and previous validated graph/index versions for atomic rollback. Never place the PostgreSQL data directory on `scsi2`.
+
+On 2026-11-15, `scsi0` was expanded from 40 GB to 60 GB; the root filesystem was 56 GB and 53% used. Docker's data root is `/srv/navoss/artifacts/docker`, but `/var/lib/containerd` (21 GB at the time) is on the root disk.
+
+Memory was restored from 8,192 MiB to 16,384 MiB on the same date. One reboot caused 57 seconds of API downtime; the stack recovered on its own.
 
 Format `scsi1` and `scsi2` as ext4 and mount them by filesystem UUID with `defaults,noatime`.
 
@@ -101,6 +105,8 @@ Build or import only one heavy artifact at a time. Prefer staging validated Valh
 - Encrypt the Proxmox backup target/transport. The local gzip dump is not independently encrypted.
 - Retain configuration in Git without secret values.
 - Keep a documented restore command and perform a clean restore before external TestFlight.
+
+The 2026-11-15 deployment was preceded by logical backup `navoss-20261115T033116Z.sql.gz` and Proxmox snapshot `pre-deploy-20261115`; the snapshot was deleted after verification. Neither is evidence of a completed PostgreSQL restore or Valhalla/Nominatim rollback demonstration; those acceptance boxes remain open.
 
 ## SSH handoff
 

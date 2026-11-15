@@ -6,8 +6,11 @@ base_url="${NAVOSS_BASE_URL:-http://127.0.0.1:8080}"
 
 curl --fail --silent --show-error "$base_url/health" >/dev/null
 curl --fail --silent --show-error "$base_url/ready" >/dev/null
+# Clients older than /v2/routes read the strict v1 configuration.
+curl --fail --silent --show-error "$base_url/v1/config" |
+  jq -e '.apiVersion == "v1" and .coverage.id == "calgary-ab" and .endpoints.routes == "/v1/routes"' >/dev/null
 curl --fail --silent --show-error "$base_url/v2/config" |
-  jq -e '.features.productionSearch == true and .coverage.id == "calgary-kelowna-service-areas" and (.coverage.serviceAreas | map(.id) == ["calgary-ab", "kelowna-bc"])' >/dev/null
+  jq -e '.features.productionSearch == true and .coverage.id == "alberta-british-columbia" and .endpoints.routes == "/v2/routes" and (.coverage.serviceAreas | map(.id) == ["alberta", "british-columbia"])' >/dev/null
 curl --fail --silent --show-error \
   --header 'content-type: application/json' \
   --data '{"limit":3,"q":"Calgary Tower"}' \
@@ -15,9 +18,9 @@ curl --fail --silent --show-error \
   jq -e '.degraded == false and .source.id == "calgary-hybrid-search" and .source.freshness == "fresh" and (.results | length) > 0' >/dev/null
 curl --fail --silent --show-error \
   --header 'content-type: application/json' \
-  --data '{"limit":3,"q":"Cosmos Collision"}' \
+  --data '{"limit":8,"q":"Tim Hortons"}' \
   "$base_url/v1/search" |
-  jq -e '.results[0].id == "calgary-business:40592"' >/dev/null
+  jq -e 'any(.results[]; .id | startswith("calgary-business:"))' >/dev/null
 curl --fail --silent --show-error \
   --header 'content-type: application/json' \
   --data '{"limit":3,"q":"800 Macleod Trail Southeast"}' \

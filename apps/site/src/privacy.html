@@ -19,8 +19,9 @@
         <h1>Privacy without an account</h1>
         <p>
           NavOSS is operated by Yassin Soliman as an individual developer in Alberta, Canada. It is
-          an account-free navigation technical beta with Calgary and Kelowna search and routing plus
-          selected official regional overlays.
+          an account-free navigation technical beta. The service covers Alberta and British
+          Columbia; app support starts with uploaded TestFlight build 75, whose tester availability
+          is not yet confirmed.
         </p>
         <div class="callout">
           This policy is ready for internal TestFlight. External testing remains blocked until a
@@ -28,10 +29,11 @@
         </div>
         <div class="callout callout--warning">
           <strong>Community features are not switched on.</strong> Community traffic sharing and
-          shared community road reports are described below because the NavOSS server and the app
-          code support them, but neither is switched on in the deployed service, and no released
-          version of the app (the latest is 0.1.0 (70)) sends traffic observations or shares road
-          reports. This policy will say so until that changes.
+          shared road reports are not switched on in the deployed service. Build 0.1.0 (75),
+          uploaded November 15, 2026, contains both clients but ships without the App Attest
+          entitlement; build 70 preceded it. Tester availability of build 75 is unconfirmed. Neither
+          build shares traffic observations or road reports; reports stay private drafts on the
+          phone.
         </div>
 
         <nav class="toc" aria-labelledby="toc-title">
@@ -184,12 +186,13 @@
 
         <h2 id="community-traffic-sharing-opt-in">Community traffic sharing (opt-in)</h2>
         <div class="callout callout--warning">
-          <strong>Not switched on.</strong> The NavOSS server supports traffic sharing, but it is
-          not switched on in the deployed service, and no released version of the app (the latest is
-          0.1.0 (70)) sends driving observations. This section describes the app version that adds
-          the <strong>Share traffic speeds</strong> switch and what the server does with what it
-          would receive. Statements about what the app does are requirements for that version; no
-          released app has been checked against them yet.
+          <strong>Not switched on.</strong> Traffic sharing is not switched on in the deployed
+          service. Build 0.1.0 (75), uploaded November 15, 2026, contains the traffic client but
+          ships without the App Attest entitlement; build 70 preceded it. Tester availability of
+          build 75 is unconfirmed. Neither build sends driving observations. This section describes
+          what the server would do and the requirements for an app with
+          <strong>Share traffic speeds</strong> enabled; no released app has been checked against
+          them yet.
         </div>
         <p>
           NavOSS can build live traffic from the driving speeds of people who choose to share them.
@@ -398,10 +401,11 @@
         <h2 id="community-road-reports">Community road reports</h2>
         <div class="callout callout--warning">
           <strong>Not switched on.</strong> Sharing road reports is not switched on in the deployed
-          NavOSS service, and no released version of the app (the latest is 0.1.0 (70)) contains the
-          sharing client: released builds keep only the private drafts described at the end of this
-          section. The paragraphs below describe the app version that adds
-          <strong>Share road reports</strong>.
+          NavOSS service. Build 0.1.0 (75), uploaded November 15, 2026, contains the community
+          client but ships without the App Attest entitlement; build 70 preceded it. Tester
+          availability of build 75 is unconfirmed. Reports stay private drafts on the phone. The
+          paragraphs below describe what would happen if <strong>Share road reports</strong> were
+          available and enabled.
         </div>
         <p>
           NavOSS can share structured road reports between drivers. The NavOSS server decides
