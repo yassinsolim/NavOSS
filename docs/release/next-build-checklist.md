@@ -82,6 +82,7 @@ Simulator pass by a dedicated agent; evidence in local ignored `artifacts/releas
 - [ ] **Build number.** `appVersionSource` is `remote`: the latest uploaded build is 81. Record the actual number and commit in [testflight.md](testflight.md) after any later build exists.
 - [ ] **Gates on the candidate commit:** `corepack pnpm check`, `lint`, `test`, `build`, `format:check`; `corepack pnpm --filter @navoss/mobile test:native:ios`; a full Xcode compile with CarPlay enabled; `corepack pnpm validate:navigation:ios`. Read each command's exit status.
 - [ ] **Claims.** Distinguish the Canada service and uploaded build 81 from build 70's v1 behavior. Live traffic remains unavailable; lanes and signs appear only when returned; offline maps cover Alberta and Calgary only. The province-wide road-events list is not in builds 75 or 80.
+- [ ] **Long-trip formatting (Canada pass F1).** On the simulator, preview Toronto to Vancouver: the card reads whole kilometres with a separator ("4,392 km"), the arrival names the day ("arrive Tue …"), the duration reads in days and hours ("1 day 22 hr"), and a route on numbered highways reads "via Highway 17 / Highway 1"; CarPlay's route choice shows the same distance and duration (native tests only so far). Earlier builds keep "4392.3 km" and minutes-only CarPlay durations.
 - [ ] CarPlay entitlement, template scene, `location` background mode and production API origin audited in the signed IPA (existing audit in [ci-cd.md](ci-cd.md)).
 
 ### App Privacy answers for a Google-profile build (`production-carplay-google`)
