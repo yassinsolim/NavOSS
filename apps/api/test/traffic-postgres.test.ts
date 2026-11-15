@@ -19,8 +19,8 @@ import { CALGARY_SEARCH_FIXTURES } from '../src/fixtures.js';
 import { runMigrations } from '../src/migrations.js';
 import {
   createFixtureSearchProvider,
-  isSupportedSearchCoordinate,
 } from '../src/search-provider.js';
+import { DEFAULT_SERVICE_COVERAGE } from '../src/service-coverage.js';
 import { decodePolyline6 } from '../src/traffic/geo.js';
 import {
   createTrafficService,
@@ -179,7 +179,7 @@ describe.skipIf(!(await databaseAvailable()))('community traffic on PostGIS', ()
             attestationMode: options.attestationMode ?? 'enforce',
             clock,
             installationSecret: Buffer.alloc(32, 7),
-            isInCoverage: isSupportedSearchCoordinate,
+            isInCoverage: DEFAULT_SERVICE_COVERAGE.contains,
             // The production community pool's bounds (`createBoundedPool`), on the test schema.
             pool: quiet(
               new Pool({

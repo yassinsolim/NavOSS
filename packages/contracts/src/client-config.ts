@@ -4,7 +4,7 @@ import type { Coordinate, GeographicBounds } from './common.js';
 import {
   isCoordinateInBoundary,
   isCoordinateInBounds,
-  SERVICE_AREAS,
+  REGISTERED_SERVICE_AREAS,
   type CoverageBoundary,
 } from './coverage.js';
 
@@ -101,7 +101,7 @@ function parseArea(value: unknown): ServerCoverageArea | undefined {
   const { boundary, bounds, displayName, id } = parsed.data;
   // Bundled provincial polygons apply only to a province the server itself declares.
   return {
-    boundary: boundary ?? SERVICE_AREAS.find((area) => area.id === id)?.boundary,
+    boundary: boundary ?? REGISTERED_SERVICE_AREAS.find((area) => area.id === id)?.boundary,
     bounds,
     displayName,
     id,

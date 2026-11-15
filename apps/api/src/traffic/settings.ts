@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { SERVICE_COVERAGE_BOUNDS, type TrafficFlowBounds } from '@navoss/contracts';
+import { createServiceCoverage, type TrafficFlowBounds } from '@navoss/contracts';
 import { z } from 'zod/v4';
 
 import { DeadEndMaskError, loadDeadEndMask, type DeadEndMask } from './dead-end-mask.js';
@@ -77,12 +77,19 @@ export const TRAFFIC_PRIVACY_LIMITS = {
   minimumTripEndTrimMeters: 400,
 } as const;
 
+/**
+ * Community traffic stays in Alberta and British Columbia whatever else the server declares: the
+ * verified serving graph and its dead-end mask are built and validated for that extract only
+ * (`serving-graph.ts`), and the privacy parameters were reviewed against it.
+ */
+export const COMMUNITY_TRAFFIC_COVERAGE = createServiceCoverage(['alberta', 'british-columbia']);
+
 /** Retrieval envelope only. Probe eligibility additionally uses the shared province polygons. */
 const DEFAULT_TRAFFIC_BOUNDS: TrafficFlowBounds = {
-  east: SERVICE_COVERAGE_BOUNDS.northEast.longitude,
-  north: SERVICE_COVERAGE_BOUNDS.northEast.latitude,
-  south: SERVICE_COVERAGE_BOUNDS.southWest.latitude,
-  west: SERVICE_COVERAGE_BOUNDS.southWest.longitude,
+  east: COMMUNITY_TRAFFIC_COVERAGE.bounds.northEast.longitude,
+  north: COMMUNITY_TRAFFIC_COVERAGE.bounds.northEast.latitude,
+  south: COMMUNITY_TRAFFIC_COVERAGE.bounds.southWest.latitude,
+  west: COMMUNITY_TRAFFIC_COVERAGE.bounds.southWest.longitude,
 };
 
 export const DEFAULT_TRAFFIC_SETTINGS: TrafficSettings = {

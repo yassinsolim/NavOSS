@@ -1,7 +1,7 @@
 import {
   AppConfigResponseSchema,
   isCoordinateServed,
-  SERVICE_AREAS,
+  REGISTERED_SERVICE_AREAS,
   serverAreaForCoordinate,
   serverConfigFromPayload,
 } from '@navoss/contracts';
@@ -74,9 +74,12 @@ describe('server config from the new server (this branch, #79)', () => {
 
   it.each(borderPoints.cases)(
     '$id follows the polygons the server sent',
-    ({ coordinate, serviceAreaId }) => {
+    ({ coordinate, provinceId }) => {
       const { coverage } = serverConfigFromPayload(newServerV2.response);
-      expect(serverAreaForCoordinate(coverage, coordinate)?.id ?? null).toBe(serviceAreaId);
+      const declared = provinceId === 'alberta' || provinceId === 'british-columbia';
+      expect(serverAreaForCoordinate(coverage, coordinate)?.id ?? null).toBe(
+        declared ? provinceId : null,
+      );
     },
   );
 
@@ -96,7 +99,7 @@ describe('server config leniency', () => {
     const { coverage } = serverConfigFromPayload(payload);
     expect(coverage.areas.map((area) => area.boundary)).toEqual(
       ['alberta', 'british-columbia'].map(
-        (id) => fixtureValue(SERVICE_AREAS.find((area) => area.id === id)).boundary,
+        (id) => fixtureValue(REGISTERED_SERVICE_AREAS.find((area) => area.id === id)).boundary,
       ),
     );
     // The BC rectangle reaches Seattle; the province polygon does not.

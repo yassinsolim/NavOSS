@@ -3,17 +3,13 @@ import type {
   LegacyAppConfigResponse,
   SearchResult,
   SearchSource,
+  ServiceCoverage,
 } from '@navoss/contracts';
 import {
   CALGARY_REGION_BOUNDS,
   COVERAGE_BOUNDARY_SOURCE,
   LOCAL_OVERLAY_AREAS,
-  SERVICE_AREAS,
-  SERVICE_COVERAGE_ID,
-  SERVICE_COVERAGE_NAME,
 } from '@navoss/contracts';
-
-const configuredServiceAreas = [...SERVICE_AREAS];
 
 export const SEARCH_SOURCE = {
   datasetVersion: 'fixture-v1',
@@ -190,6 +186,7 @@ function createConfigBase(
 }
 
 export function createAppConfig(
+  coverage: ServiceCoverage,
   generatedAt: string,
   productionSearch = false,
   liveTraffic = false,
@@ -208,11 +205,14 @@ export function createAppConfig(
     ],
     coverage: {
       boundarySource: COVERAGE_BOUNDARY_SOURCE,
-      displayName: SERVICE_COVERAGE_NAME,
-      id: SERVICE_COVERAGE_ID,
+      displayName: coverage.displayName,
+      id: coverage.id,
       modes: ['driving'],
-      overlays: LOCAL_OVERLAY_AREAS,
-      serviceAreas: configuredServiceAreas,
+      // A municipal overlay is declared only with the province it sits in.
+      overlays: LOCAL_OVERLAY_AREAS.filter(({ serviceAreaId }) =>
+        coverage.areas.some(({ id }) => id === serviceAreaId),
+      ),
+      serviceAreas: [...coverage.areas],
     },
     endpoints: { ...base.endpoints, routes: '/v2/routes' },
   };

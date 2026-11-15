@@ -8,7 +8,8 @@ import {
   GeographicBoundsSchema,
   COVERAGE_BOUNDARY_SOURCE,
   LOCAL_OVERLAY_AREAS,
-  SERVICE_AREAS,
+  createServiceCoverage,
+  DEFAULT_SERVICE_AREA_IDS,
   GooglePlaceQueryGrantResponseSchema,
   IsoDateTimeSchema,
   OfficialRoadEventResponseSchema,
@@ -894,7 +895,7 @@ describe('AppConfigResponseSchema', () => {
         modes: ['driving'],
         boundarySource: COVERAGE_BOUNDARY_SOURCE,
         overlays: LOCAL_OVERLAY_AREAS,
-        serviceAreas: SERVICE_AREAS,
+        serviceAreas: createServiceCoverage(DEFAULT_SERVICE_AREA_IDS).areas,
       },
       endpoints: {
         cameras: '/v1/cameras',

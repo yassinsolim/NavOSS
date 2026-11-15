@@ -1,5 +1,5 @@
 import { fixtureValue } from '../../../packages/contracts/test/fixture-value.js';
-import { CoordinateSchema, serviceAreaForCoordinate } from '@navoss/contracts';
+import { CoordinateSchema, provinceForCoordinate } from '@navoss/contracts';
 import { describe, expect, it } from 'vitest';
 import matrix from '../scripts/route-quality-alberta-bc.json' with { type: 'json' };
 describe('public Alberta and BC route-quality matrix', () => {
@@ -30,10 +30,10 @@ describe('public Alberta and BC route-quality matrix', () => {
       }
     > = matrix.anchors;
     expect(
-      serviceAreaForCoordinate(fixtureValue(anchors[corridor.originAnchorId]).coordinate)?.id,
+      provinceForCoordinate(fixtureValue(anchors[corridor.originAnchorId]).coordinate)?.area.id,
     ).toBe('alberta');
     expect(
-      serviceAreaForCoordinate(fixtureValue(anchors[corridor.destinationAnchorId]).coordinate)?.id,
+      provinceForCoordinate(fixtureValue(anchors[corridor.destinationAnchorId]).coordinate)?.area.id,
     ).toBe('british-columbia');
   });
   it('uses valid, in-coverage public anchors and no missing corridor references', () => {
@@ -49,7 +49,7 @@ describe('public Alberta and BC route-quality matrix', () => {
     > = matrix.anchors;
     for (const anchor of Object.values(anchors)) {
       expect(CoordinateSchema.safeParse(anchor.coordinate).success).toBe(true);
-      expect(serviceAreaForCoordinate(anchor.coordinate)).toBeDefined();
+      expect(provinceForCoordinate(anchor.coordinate)).toBeDefined();
       expect(anchor.sourceUrl.startsWith('https://www.openstreetmap.org/')).toBe(true);
     }
     for (const corridor of matrix.corridors) {

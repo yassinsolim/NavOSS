@@ -19,7 +19,6 @@ import {
   RouteRequestV2Schema,
   RouteResponseSchema,
   RouteResponseV2Schema,
-  SERVICE_COVERAGE_NAME,
   SafetyCameraResponseSchema,
   SearchQuerySchema,
   SearchResponseSchema,
@@ -27,6 +26,7 @@ import {
   TrafficCameraResponseSchema,
   type ReadinessResponse,
   type RouteAlternativeV2,
+  type ServiceCoverage,
 } from '@navoss/contracts';
 import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import {
@@ -49,6 +49,10 @@ import {
   type CommunityReportService,
 } from './community-reports.js';
 import { registerCommunityRoutes } from './community-routes.js';
+import {
+  createConfiguredCoverageReadiness,
+  type CoverageReadiness,
+} from './coverage-readiness.js';
 import {
   ContributionProviderError,
   createConfiguredContributionProvider,
@@ -97,10 +101,10 @@ import {
 } from './route-provider.js';
 import {
   createDevelopmentSearchProvider,
-  isSupportedSearchCoordinate,
   createProductionSearchProvider,
   type SearchProvider,
 } from './search-provider.js';
+import { serviceCoverageFromEnvironment } from './service-coverage.js';
 import {
   CameraProviderError,
   createCalgarySafetyCameraProvider,
@@ -136,6 +140,10 @@ export interface BuildAppOptions {
   communityReports?: CommunityReportService | null;
   contributionProvider?: ContributionProvider;
   contributionRateLimiter?: Pick<ContributionRateLimiter, 'consume'>;
+  /** Declared provinces; omitted reads `NAVOSS_SERVICE_AREAS` and fails closed. */
+  coverage?: ServiceCoverage;
+  /** `null` skips the per-province data check; omitted builds it from the environment. */
+  coverageReadiness?: CoverageReadiness | null;
   /** `null` reports no database check; omitted builds it from the environment. */
   databaseReadiness?: DatabaseReadiness | null;
   driveBcEventProvider?: DriveBcRoadEventProvider;
@@ -158,6 +166,11 @@ export interface BuildAppOptions {
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const clock = options.clock ?? (() => new Date());
+  const coverage = options.coverage ?? serviceCoverageFromEnvironment();
+  const coverageReadiness =
+    options.coverageReadiness === undefined
+      ? createConfiguredCoverageReadiness(coverage)
+      : (options.coverageReadiness ?? undefined);
   const cameraProvider = options.cameraProvider ?? createCalgarySafetyCameraProvider();
   const contributionProvider =
     options.contributionProvider ?? createConfiguredContributionProvider({ clock });
@@ -169,7 +182,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.communityReports === undefined
       ? createConfiguredCommunityReportService({
           clock,
-          isInCoverage: isSupportedSearchCoordinate,
+          isInCoverage: coverage.contains,
         })
       : (options.communityReports ?? undefined);
   const communityReportsLive =
@@ -222,8 +235,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const searchProvider =
     options.searchProvider ??
     (productionSearch
-      ? createProductionSearchProvider(fixtures)
-      : createDevelopmentSearchProvider(fixtures));
+      ? createProductionSearchProvider(fixtures, undefined, undefined, coverage)
+      : createDevelopmentSearchProvider(fixtures, undefined, coverage));
   const torontoCameraProvider =
     options.torontoCameraProvider ?? createTorontoSafetyCameraProvider();
   const app = Fastify({
@@ -405,11 +418,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             ? false
             : undefined;
       const databaseReady = await databaseReadiness?.isReady();
+      const missingAreas = await coverageReadiness?.missingAreas();
       const isReady =
         searchFixturesReady &&
         routingProviderReady !== false &&
         searchProviderReady !== false &&
-        databaseReady !== false;
+        databaseReady !== false &&
+        (missingAreas === undefined || missingAreas.length === 0);
 
       if (!isReady) {
         reply.status(503);
@@ -419,6 +434,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
       const response: ReadinessResponse = {
         checks: {
+          ...(missingAreas === undefined
+            ? {}
+            : {
+                coverage: {
+                  detail:
+                    missingAreas.length === 0
+                      ? `Routing and search data answer for ${coverage.displayName}.`
+                      : `Routing or search data do not answer for ${missingAreas.join(', ')}.`,
+                  status: missingAreas.length === 0 ? ('ready' as const) : ('not_ready' as const),
+                },
+              }),
           ...(databaseReady === undefined
             ? {}
             : {
@@ -602,7 +628,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
     },
     () =>
-      createAppConfig(clock().toISOString(), productionSearch, liveTraffic, communityReportsLive),
+      createAppConfig(
+        coverage,
+        clock().toISOString(),
+        productionSearch,
+        liveTraffic,
+        communityReportsLive,
+      ),
   );
 
   typedApp.post(
@@ -812,7 +844,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         category !== undefined &&
         latitude !== undefined &&
         longitude !== undefined &&
-        !isSupportedSearchCoordinate({ latitude, longitude })
+        !coverage.contains({ latitude, longitude })
       ) {
         reply.status(400).type('application/problem+json');
         return createProblem(
@@ -820,7 +852,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           400,
           'invalid_request',
           'Search outside coverage',
-          `Nearby categories are available only for locations in ${SERVICE_COVERAGE_NAME}.`,
+          `Nearby categories are available only for locations in ${coverage.displayName}.`,
         );
       }
       return searchProvider.search(request.body);
@@ -851,14 +883,26 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           ...(request.body.waypoints ?? []),
           request.body.destination,
         ];
-        if (routeCoordinates.some((coordinate) => !isSupportedSearchCoordinate(coordinate))) {
+        if (routeCoordinates.some((coordinate) => !coverage.contains(coordinate))) {
           reply.status(400).type('application/problem+json');
           return createProblem(
             request,
             400,
             'invalid_request',
             'Route outside coverage',
-            `Driving route origins, waypoints and destinations must be within ${SERVICE_COVERAGE_NAME}.`,
+            `Driving route origins, waypoints and destinations must be within ${coverage.displayName}.`,
+          );
+        }
+        // No declared road joins these provinces (Alberta+BC and Ontario without the Prairies, or Nunavut).
+        const disconnected = coverage.disconnectedAreas(routeCoordinates);
+        if (disconnected !== undefined) {
+          reply.status(400).type('application/problem+json');
+          return createProblem(
+            request,
+            400,
+            'invalid_request',
+            'No route between these provinces',
+            `NavOSS can't plan a drive between ${disconnected.from.displayName} and ${disconnected.to.displayName}: no road it covers connects them.`,
           );
         }
         try {

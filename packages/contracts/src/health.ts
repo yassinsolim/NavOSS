@@ -24,6 +24,8 @@ export const ReadinessResponseSchema = z
   .object({
     checks: z
       .object({
+        /** Present when routing or search data are configured: each declared province answers. */
+        coverage: ReadinessCheckSchema.optional(),
         /** Present when a database is configured. */
         database: ReadinessCheckSchema.optional(),
         routingProvider: ReadinessCheckSchema.optional(),
