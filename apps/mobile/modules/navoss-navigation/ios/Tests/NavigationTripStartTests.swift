@@ -895,14 +895,15 @@ final class NavigationTripStartTests: XCTestCase {
   /// guided or spoken from the outbound arm, and once the heading tells the arms apart the
   /// return arm is matched and guided.
   private func assertJoinsTheReturnArm(
-    _ trip: TripHarness, _ label: String, file: StaticString = #filePath, line: UInt = #line
+    _ trip: TripHarness, _ label: String, stoppedAt stop: Double = 70,
+    file: StaticString = #filePath, line: UInt = #line
   ) throws {
     let stopped = trip.history.count
     for _ in 0..<15 {
-      try trip.fix(NavigationTrace.coordinate(20, 70), speed: 0, after: 2)
+      try trip.fix(NavigationTrace.coordinate(20, stop), speed: 0, after: 2)
     }
     assertAcquiring(trip.history[stopped...], "\(label): stopped on the return arm", file: file, line: line)
-    var y = 70.0
+    var y = stop
     while along(trip) == nil, y > -200 {
       y -= 10
       try trip.fix(NavigationTrace.coordinate(20, y), speed: 10, course: 180, after: 1)
@@ -923,14 +924,18 @@ final class NavigationTripStartTests: XCTestCase {
   /// Review of this change: started parked off the road, closed before the first match; while
   /// the app was closed the car was moved onto the return arm of a hairpin. Its stopped fixes
   /// fit both arms; the outbound arm must not be taken for it.
+  /// A restored trip trusts no stretch of the route, not even its beginning: stopped on the
+  /// return arm beside the route's first 20 m is not matched there either.
   func testARestoredTripOnTheReturnArmOfAHairpinIsNotPlacedOnTheOutboundArm() throws {
     let selected = Self.legTrip(Self.hairpin)
     let replacement = try Self.trips("square-one-scarborough-reroute.v2")
-    let trip = try TripHarness(
-      selected: selected, preview: [selected], reroute: replacement, persisting: true)
-    try trip.standStill(at: NavigationTrace.coordinate(-100, 0), seconds: 20)
-    try trip.relaunch(after: 120)
-    try assertJoinsTheReturnArm(trip, "restored")
+    for stop in [70.0, 20.0] {
+      let trip = try TripHarness(
+        selected: selected, preview: [selected], reroute: replacement, persisting: true)
+      try trip.standStill(at: NavigationTrace.coordinate(-100, 0), seconds: 20)
+      try trip.relaunch(after: 120)
+      try assertJoinsTheReturnArm(trip, "restored, stopped at \(stop)", stoppedAt: stop)
+    }
   }
 
   /// The same exposure without a relaunch: the route was asked for at its start, and the
