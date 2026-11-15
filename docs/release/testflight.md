@@ -97,9 +97,12 @@ explicitly set `NAVOSS_GOOGLE_PLACES_ENABLED=0`; disabled builds do not link Goo
 make place-details requests. Enabled builds use the Essentials `PlaceDetailsView` (billed per load,
 with every content element it offers) rather than the Pro `AdvancedPlaceDetailsView`. The hosted
 workflow `ios-testflight-runner.yml` builds it with `profile: production-carplay-google`; `eas build --local`
-resolves the key from the EAS `production` environment like the profile's other variables, the config
-plugin and release validator still refuse the flag without a key, and the run checks the IPA for
-`NavOSSGooglePlacesEnabled` and `GooglePlacesSwiftResources.bundle`. Every enabled query must first receive an anonymous grant from
+resolves the key, a secret EAS `production` variable, only inside the EAS build job (`EAS_BUILD=true`).
+There the config plugin and the `eas-build-pre-install` release validator refuse the flag without a
+key; when the EAS CLI evaluates the config on the runner beforehand, the key is unreadable and the
+plugin returns a keyless, Google-disabled config instead of failing (hosted run `43677906278` died
+there). The run then checks the IPA for `NavOSSGooglePlacesEnabled`, a non-empty
+`NavOSSGooglePlacesAPIKey` (length only, never printed) and `GooglePlacesSwiftResources.bundle`. Every enabled query must first receive an anonymous grant from
 the durable NavOSS counter, which hard-stops at 8,000 grants per UTC month and fails closed. Keep
 Google-side quota limits and billing alerts as an independent second layer before release.
 

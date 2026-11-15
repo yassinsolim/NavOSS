@@ -158,6 +158,12 @@ jobs:
             echo 'Google profile built without NavOSSGooglePlacesEnabled' >&2
             exit 1
           fi
+          # Test the key's length only; its value is never printed.
+          key_length="$({ /usr/libexec/PlistBuddy -c 'Print :NavOSSGooglePlacesAPIKey' "$app/Info.plist" 2>/dev/null || true; } | tr -d '[:space:]' | wc -c | tr -d ' ')"
+          if [ "${key_length:-0}" -eq 0 ]; then
+            echo 'Google profile built without a NavOSSGooglePlacesAPIKey' >&2
+            exit 1
+          fi
           if [ ! -d "$app/GooglePlacesSwiftResources.bundle" ]; then
             echo 'GooglePlacesSwift resources are missing' >&2
             exit 1
