@@ -37,6 +37,35 @@ public enum NavOSSTrafficSharingState: Equatable, Sendable {
   }
 }
 
+/// Where the uploader keeps the one thing it persists: the time before which this installation
+/// must not ask for a credential again after a `403` with `retry-after`. A deadline, never a
+/// position or an identifier. Without `defaults` it lives in memory (tests).
+public final class NavOSSTrafficEmbargoStore: @unchecked Sendable {
+  public static let shared = NavOSSTrafficEmbargoStore(defaults: .standard)
+
+  private static let key = "org.navoss.mobile.community.traffic-credential-not-before"
+  private let defaults: UserDefaults?
+  private let lock = NSLock()
+  private var memory: Date?
+
+  public init(defaults: UserDefaults? = nil) {
+    self.defaults = defaults
+  }
+
+  public func load() -> Date? {
+    lock.withLock {
+      guard let defaults else { return memory }
+      return defaults.object(forKey: Self.key) as? Date
+    }
+  }
+
+  public func save(_ until: Date) {
+    lock.withLock {
+      if let defaults { defaults.set(until, forKey: Self.key) } else { memory = until }
+    }
+  }
+}
+
 /// Uploads community-traffic probes during one turn-by-turn trip at a time, following the
 /// server contract exactly: status first, one credential held in memory and refreshed shortly
 /// before expiry, batches sent once in order and never retried or stored; 401 → one new
@@ -44,8 +73,8 @@ public enum NavOSSTrafficSharingState: Equatable, Sendable {
 ///
 /// A trip is one navigation start (`startTrip`) to its end (`endTrip`). The sharing switch
 /// (`setEnabled`) starts and stops collection inside it, but never lifts what the server imposed:
-/// a `429` or a refused credential holds until the next navigation start, and a `503` pause
-/// until its five minutes are over. Turning sharing off
+/// a `429`, a refused credential or a `403` holds until the next navigation start, a `503` pause
+/// until its five minutes are over, and a `403` deadline survives a relaunch. Turning sharing off
 /// or ending the trip cancels the upload in flight, so its batch and credential go with it.
 public actor NavOSSTrafficSharingSession {
   public static let credentialRefreshMarginSeconds: TimeInterval = 300
@@ -73,6 +102,7 @@ public actor NavOSSTrafficSharingSession {
   private var collector: NavOSSTrafficProbeCollector?
   private var credential: NavOSSTrafficCredential?
   private var credentialRefreshes = 0
+  private let embargo: NavOSSTrafficEmbargoStore
   private var enabled = false
   /// Advanced whenever collection is discarded: work begun under an older value is abandoned.
   private var generation: UInt64 = 0
@@ -83,7 +113,6 @@ public actor NavOSSTrafficSharingSession {
   private var protectedPoints: [NavOSSCarPlayCoordinate] = []
   private var queue: [NavOSSTrafficProbeBatch] = []
   private var restriction: TripRestriction?
-  private var startsLaterUntil: Date?
   private var trafficNotOffered = false
   public private(set) var state: NavOSSTrafficSharingState = .off
   private let transport: NavOSSTrafficTransport
@@ -94,10 +123,12 @@ public actor NavOSSTrafficSharingSession {
   public init(
     transport: NavOSSTrafficTransport,
     now: @escaping @Sendable () -> Date = { Date() },
+    embargo: NavOSSTrafficEmbargoStore = NavOSSTrafficEmbargoStore(),
     onStateChange: @escaping @Sendable (NavOSSTrafficSharingState) -> Void = { _ in }
   ) {
     self.transport = transport
     self.now = now
+    self.embargo = embargo
     self.onStateChange = onStateChange
   }
 
@@ -169,7 +200,7 @@ public actor NavOSSTrafficSharingSession {
   }
 
   private func idleState() -> NavOSSTrafficSharingState {
-    if let until = startsLaterUntil, now() < until { return .startsLater(until: until) }
+    if let until = embargo.load(), now() < until { return .startsLater(until: until) }
     return .ready
   }
 
@@ -180,7 +211,9 @@ public actor NavOSSTrafficSharingSession {
       set(restriction.state)
       return
     }
-    if let until = startsLaterUntil, now() < until {
+    if let until = embargo.load(), now() < until {
+      // A 403 deadline at the start holds for the whole trip, even if it passes on the way.
+      restriction = .startsLater(until)
       set(.startsLater(until: until))
       return
     }
@@ -307,7 +340,8 @@ public actor NavOSSTrafficSharingSession {
       switch failure {
       case let .installationTooNew(retryAfter):
         let until = now().addingTimeInterval(TimeInterval(retryAfter ?? 24 * 60 * 60))
-        startsLaterUntil = until
+        embargo.save(until)
+        restriction = .startsLater(until)
         discardCollection()
         set(.startsLater(until: until))
       case .attestationUnsupported:

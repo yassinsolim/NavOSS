@@ -67,13 +67,15 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     }
   }
 
-  /// `trafficTransport` and `now` replace the uploader's client and its clock (tests).
+  /// `trafficTransport`, `trafficEmbargo` and `now` replace the uploader's client, its persisted
+  /// `403` deadline and its clock (tests).
   init(
     client: NavOSSCommunityClient? = NavOSSCommunityService.defaultClient(),
     preferencesStore: NavOSSCommunityPreferencesStore = .shared,
     alertStore: NavOSSCarPlayMapAlertStore = .shared,
     notificationCenter: NotificationCenter = .default,
     trafficTransport: NavOSSTrafficTransport? = nil,
+    trafficEmbargo: NavOSSTrafficEmbargoStore = .shared,
     now: @escaping @Sendable () -> Date = { Date() }
   ) {
     self.client = client
@@ -86,6 +88,7 @@ public final class NavOSSCommunityService: @unchecked Sendable {
       NavOSSTrafficSharingSession(
         transport: transport,
         now: now,
+        embargo: trafficEmbargo,
         onStateChange: { state in sink.service?.trafficStateDidChange(state) }
       )
     }

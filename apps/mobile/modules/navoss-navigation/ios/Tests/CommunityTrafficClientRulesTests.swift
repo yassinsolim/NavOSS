@@ -302,7 +302,7 @@ final class CommunityTrafficServiceRulesTests: XCTestCase {
       client: client, preferencesStore: preferences,
       alertStore: NavOSSCarPlayMapAlertStore(notificationCenter: NotificationCenter()),
       notificationCenter: center, trafficTransport: transport,
-      now: { clock.value })
+      trafficEmbargo: NavOSSTrafficEmbargoStore(), now: { clock.value })
     return (service, preferences)
   }
 
@@ -327,6 +327,27 @@ final class CommunityTrafficServiceRulesTests: XCTestCase {
     service.navigationDidEnd()
   }
 
+  func testAfterInstallationTooNewNothingIsCollectedForTheRestOfTheTrip() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock)
+    await transport.configure(credentials: [.failure(.installationTooNew(retryAfterSeconds: 60))])
+    let (service, preferences) = makeService(transport, clock: clock)
+    service.navigationDidStart(trip())
+    let later = await eventually {
+      service.trafficSharingState() == .startsLater(until: self.start.addingTimeInterval(60))
+    }
+    XCTAssertTrue(later)
+    // The retry-after has passed, but this is still the same trip.
+    clock.value = start.addingTimeInterval(120)
+    preferences.setAnnouncesRoadReports(false)
+    preferences.setSharesTrafficSpeeds(false)
+    preferences.setSharesTrafficSpeeds(true)
+    await settle()
+    let credentials = await transport.credentialRequests
+    XCTAssertEqual(credentials, 1, "nothing more on this trip")
+    service.navigationDidEnd()
+  }
+
   func testTurningSharingOnDuringGuidanceSharesForTheRestOfThatTrip() async {
     let clock = Clock(start)
     let transport = RuleTransport(clock: clock)
@@ -339,6 +360,48 @@ final class CommunityTrafficServiceRulesTests: XCTestCase {
     let sharing = await eventually { service.trafficSharingState() == .sharing }
     XCTAssertTrue(sharing)
     service.navigationDidEnd()
+  }
+}
+
+final class CommunityTrafficEmbargoTests: XCTestCase {
+  private let start = Date()
+
+  func testAnInstallationTooNewDeadlineSurvivesARelaunch() async {
+    let clock = Clock(start)
+    let embargo = NavOSSTrafficEmbargoStore(
+      defaults: UserDefaults(suiteName: "traffic-embargo-\(UUID().uuidString)")!)
+    let first = RuleTransport(clock: clock)
+    await first.configure(credentials: [.failure(.installationTooNew(retryAfterSeconds: 3_600))])
+    let before = NavOSSTrafficSharingSession(transport: first, now: { clock.value }, embargo: embargo)
+    await before.setEnabled(true)
+    await before.startTrip(protectedPoints: [origin])
+
+    // Relaunched half an hour later: a new process, a new uploader, a new trip.
+    clock.value = start.addingTimeInterval(1_800)
+    let second = RuleTransport(clock: clock)
+    let after = NavOSSTrafficSharingSession(transport: second, now: { clock.value }, embargo: embargo)
+    await after.setEnabled(true)
+    var state = await after.state
+    XCTAssertEqual(state, .startsLater(until: start.addingTimeInterval(3_600)))
+    await after.startTrip(protectedPoints: [origin])
+    var requests = await second.credentialRequests
+    let statuses = await second.statusRequests
+    XCTAssertEqual(requests, 0, "not asked again before retry-after, even after a relaunch")
+    XCTAssertEqual(statuses, 0)
+    state = await after.state
+    XCTAssertEqual(state, .startsLater(until: start.addingTimeInterval(3_600)))
+
+    // The deadline passes during that trip: still nothing for the rest of it.
+    clock.value = start.addingTimeInterval(3_700)
+    await after.setEnabled(false)
+    await after.setEnabled(true)
+    requests = await second.credentialRequests
+    XCTAssertEqual(requests, 0, "a 403 at the start of a trip holds for the whole trip")
+
+    await after.endTrip()
+    await after.startTrip(protectedPoints: [origin])
+    requests = await second.credentialRequests
+    XCTAssertEqual(requests, 1, "the next trip after the deadline asks again")
   }
 }
 
