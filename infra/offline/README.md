@@ -342,10 +342,23 @@ Stopping means, each step attempted even if another fails: rename the manifest t
 "Offline maps are not available yet" rather than offering downloads that would fail; disable the
 custom domain (`PUT …/r2/buckets/navoss-offline/domains/custom/navoss-offline.yassin.app
 {"enabled": false}`, which keeps the domain attached so it can be re-enabled) and read it back to
-confirm `enabled: false`, after which no request reaches R2; and do the same for the `r2.dev`
+confirm `enabled: false`, which turns off public access to the bucket through that domain; and do the same for the `r2.dev`
 URL. The run prints one line with the reason and what it did, then exits 1. Later runs keep
 hosting stopped and keep exiting 1. The guard **never re-enables** anything. A domain disabled by
 hand is treated the same way. The state file is replaced atomically, so a crash cannot truncate it.
+
+**Stop drill, 2026-11-15.** The stop was exercised once on the production VM with the guard's own
+token and a lowered limit (`--stop-class-b 100` against 155 recorded reads), with the timer paused:
+the run printed `STOPPED: Class B operations 155 above 100 [move manifest.json to
+manifest.json.stopped; disable navoss-offline.yassin.app; disable r2.dev]` and exited 1; the API
+answered 503 for `/v1/offline/manifest` within 14 seconds; the R2 API read the custom domain back
+as `enabled: false` and `r2.dev` as disabled. Files already in Cloudflare's cache kept answering
+`206` for the 45 seconds observed: a cache hit makes no R2 operation, so it costs nothing, and the
+app no longer offers the download once the manifest is withdrawn. A cache miss against the
+disabled domain was not exercised (the firewall rule leaves no way to force one from outside);
+Cloudflare documents that disabling a domain turns off public access through it and that requests
+refused at authorization are not charged. Hosting was restored with the re-enable procedure below
+and the next guard run reported `within limits`.
 
 If the guard itself cannot run (Docker down, image missing, a crash) or stops hosting, systemd
 starts `navoss-offline-withdraw.service`, which renames the manifest on the host without Docker or
