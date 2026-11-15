@@ -1,23 +1,22 @@
 import type {
-  OfficialRoadEventResponse,
   OfficialSafetyCamera,
-  RoadEventResponse,
   SafetyCamera,
   SafetyFacility,
   TrafficCamera,
   TrafficFlowResponse,
 } from '@navoss/contracts';
-import { startTransition, useEffect, useRef, useState } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
 import { startTrafficFlowRefresh, type TrafficFlowCache } from '@/features/community/traffic-flow';
 
-import {
-  type MapRoadEvent,
-  type RoadEventRegion,
-  roadEventRegionForMapRegion,
-} from '@/features/map/map-features';
 import type { MapRegion } from '@/features/map/map-region';
-import { startRoadEventRefresh } from '@/features/map/road-event-refresh';
+import { createRoadEventLoader, startRoadEventRefresh } from '@/features/map/road-event-refresh';
+import {
+  currentRoadEvents,
+  type MapRoadEvent,
+  roadEventFeedForMapRegion,
+  type RoadEventSnapshot,
+} from '@/features/map/road-events';
 import {
   fetchOfficialRoadEvents,
   fetchOfficialSafetyCameras,
@@ -33,10 +32,12 @@ const NO_EVENTS: readonly MapRoadEvent[] = [];
 export interface OverlayData {
   kelownaSafetyFacilities: readonly SafetyFacility[];
   kelownaTrafficCameras: readonly TrafficCamera[];
+  /** The map region has an official road-event feed (whether or not it has loaded). */
+  roadEventFeedAvailable: boolean;
   roadEventRefreshDelayed: boolean;
-  roadEventRegion: RoadEventRegion | undefined;
   /** Undefined until the active region's first snapshot arrives. */
-  roadEventSnapshot: OfficialRoadEventResponse | RoadEventResponse | undefined;
+  roadEventSnapshot: RoadEventSnapshot | undefined;
+  /** In effect now, newest first by the source's own time. */
   roadEvents: readonly MapRoadEvent[];
   safetyCameras: readonly SafetyCamera[];
   torontoSafetyCameras: readonly OfficialSafetyCamera[];
@@ -69,9 +70,10 @@ export function useOverlayData({
   trafficFlowQuery: string | undefined;
 }): OverlayData {
   const [safetyCameras, setSafetyCameras] = useState<readonly SafetyCamera[]>([]);
-  const [roadEventResponse, setRoadEventResponse] = useState<RoadEventResponse>();
-  const [officialRoadEventResponse, setOfficialRoadEventResponse] =
-    useState<OfficialRoadEventResponse>();
+  const [roadEventState, setRoadEventState] = useState<{
+    feedKey: string;
+    snapshot: RoadEventSnapshot;
+  }>();
   const [roadEventRefreshDelayed, setRoadEventRefreshDelayed] = useState(false);
   const [torontoSafetyCameras, setTorontoSafetyCameras] = useState<readonly OfficialSafetyCamera[]>(
     [],
@@ -83,7 +85,9 @@ export function useOverlayData({
   const [trafficFlow, setTrafficFlow] = useState<TrafficFlowResponse>();
   const [trafficFlowFailed, setTrafficFlowFailed] = useState(false);
   const trafficFlowCache = useRef<TrafficFlowCache>(new Map());
-  const roadEventRegion = roadEventRegionForMapRegion(mapRegion);
+  const { legacy: legacyRegion, provincial: provincialRegion } =
+    roadEventFeedForMapRegion(mapRegion);
+  const roadEventFeedKey = `${provincialRegion ?? ''}|${legacyRegion ?? ''}`;
 
   useEffect(() => {
     if (trafficFlowQuery === undefined) {
@@ -180,39 +184,37 @@ export function useOverlayData({
 
   useEffect(() => {
     setRoadEventRefreshDelayed(false);
-    if (!showRoadEvents || roadEventRegion === undefined) return;
-
+    if (!showRoadEvents || (provincialRegion === undefined && legacyRegion === undefined)) return;
     return startRoadEventRefresh({
-      load: (signal) =>
-        roadEventRegion === 'calgary'
-          ? fetchRoadEvents({ signal }).then((response) => {
-              startTransition(() => {
-                setRoadEventResponse(response);
-              });
-            })
-          : fetchOfficialRoadEvents({ region: roadEventRegion, signal }).then((response) => {
-              startTransition(() => {
-                setOfficialRoadEventResponse(response);
-              });
-            }),
+      load: createRoadEventLoader({
+        feed: { legacy: legacyRegion, provincial: provincialRegion },
+        fetchCalgary: (signal) => fetchRoadEvents({ signal }),
+        fetchOfficial: (region, signal) => fetchOfficialRoadEvents({ region, signal }),
+        publish: (snapshot) => {
+          startTransition(() => {
+            setRoadEventState({ feedKey: roadEventFeedKey, snapshot });
+          });
+        },
+      }),
       onDelayedChange: setRoadEventRefreshDelayed,
     });
-  }, [roadEventRegion, showRoadEvents]);
+  }, [legacyRegion, provincialRegion, roadEventFeedKey, showRoadEvents]);
 
   const roadEventSnapshot =
-    roadEventRegion === 'calgary'
-      ? roadEventResponse
-      : roadEventRegion !== undefined && officialRoadEventResponse?.regionId === roadEventRegion
-        ? officialRoadEventResponse
-        : undefined;
+    roadEventState?.feedKey === roadEventFeedKey ? roadEventState.snapshot : undefined;
+  const roadEvents = useMemo(
+    () =>
+      roadEventSnapshot === undefined ? NO_EVENTS : currentRoadEvents(roadEventSnapshot, Date.now()),
+    [roadEventSnapshot],
+  );
 
   return {
     kelownaSafetyFacilities,
     kelownaTrafficCameras,
+    roadEventFeedAvailable: provincialRegion !== undefined || legacyRegion !== undefined,
     roadEventRefreshDelayed,
-    roadEventRegion,
     roadEventSnapshot,
-    roadEvents: roadEventSnapshot?.events ?? NO_EVENTS,
+    roadEvents,
     safetyCameras,
     torontoSafetyCameras,
     trafficFlow,

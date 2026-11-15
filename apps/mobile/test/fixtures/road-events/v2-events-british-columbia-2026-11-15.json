@@ -1,0 +1,90 @@
+{
+ "retrievedOn": "2026-11-15",
+ "source": "Local API (this branch) /v2/events?region=british-columbia against the live public feeds; events trimmed to three per source, source descriptors unchanged.",
+ "response": {
+  "degraded": false,
+  "events": [
+   {
+    "confidence": "official",
+    "coordinate": {
+     "latitude": 49.22273,
+     "longitude": -122.81469
+    },
+    "description": "Vehicle stall at Highway 1, In Coquitlam. Last update: November 15th, 2026 at 2:35am PCT. Next update: November 15th, 2026 at 3:30am PCT. Right Surrey/152nd St lane blocked near midspan.",
+    "direction": "Eastbound",
+    "id": "drivebc-open511:RIDE-106649",
+    "isFullClosure": false,
+    "regionId": "british-columbia",
+    "reportedAt": "2026-11-15T09:35:44.000Z",
+    "roadwayName": "Highway 1",
+    "severity": "minor",
+    "sourceId": "drivebc-open511-events",
+    "startsAt": "2026-11-15T09:35:00.000Z",
+    "title": "Hazard on Highway 1",
+    "type": "hazard",
+    "updatedAt": "2026-11-15T09:35:44.000Z"
+   },
+   {
+    "confidence": "official",
+    "coordinate": {
+     "latitude": 49.98769,
+     "longitude": -125.40131
+    },
+    "description": "Tree on road at Highway 28, Westbound Highway 28 at Echo lake. Watch for traffic control. Westbound lane closure. Last update: November 15th, 2026 at 2:35am PCT. Next update: November 15th, 2026 at 4:30am PCT.",
+    "direction": "Westbound",
+    "id": "drivebc-open511:RIDE-106640",
+    "isFullClosure": false,
+    "regionId": "british-columbia",
+    "reportedAt": "2026-11-15T04:43:25.000Z",
+    "roadwayName": "Highway 28",
+    "severity": "minor",
+    "sourceId": "drivebc-open511-events",
+    "startsAt": "2026-11-15T04:43:00.000Z",
+    "title": "Hazard on Highway 28",
+    "type": "hazard",
+    "updatedAt": "2026-11-15T09:35:27.000Z"
+   },
+   {
+    "confidence": "official",
+    "coordinate": {
+     "latitude": 49.03077,
+     "longitude": -117.29268
+    },
+    "description": "Limited visibility with fog between Junction Highway 3 and US Border (BC and WA Border. Last update: November 15th, 2026 at 12:08am PCT. Next update: November 15th, 2026 at 5:00am PCT.",
+    "direction": "Both directions",
+    "id": "drivebc-open511:RIDE-106647",
+    "isFullClosure": false,
+    "regionId": "british-columbia",
+    "reportedAt": "2026-11-15T07:08:12.000Z",
+    "roadwayName": "Highway 6 NS",
+    "severity": "minor",
+    "sourceId": "drivebc-open511-events",
+    "startsAt": "2026-11-15T07:08:00.000Z",
+    "title": "Road conditions on Highway 6 NS",
+    "type": "road-condition",
+    "updatedAt": "2026-11-15T07:08:12.000Z"
+   }
+  ],
+  "generatedAt": "2026-11-15T09:39:17.485Z",
+  "regionId": "british-columbia",
+  "sources": [
+   {
+    "attribution": "Contains information licensed under the Open Government Licence – British Columbia.",
+    "checkedAt": "2026-11-15T09:39:05.657Z",
+    "confidence": "official",
+    "documentationUrl": "https://api.open511.gov.bc.ca/help",
+    "eventCount": 240,
+    "incomplete": false,
+    "licenseUrl": "https://www2.gov.bc.ca/gov/content/data/open-data/open-government-license-bc",
+    "maximumAgeSeconds": 3600,
+    "name": "DriveBC",
+    "refreshIntervalSeconds": 300,
+    "sourceId": "drivebc-open511-events",
+    "status": "current",
+    "timeZone": "America/Vancouver",
+    "updatedAt": "2026-11-15T09:35:44.000Z"
+   }
+  ],
+  "stale": false
+ }
+}

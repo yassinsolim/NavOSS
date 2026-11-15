@@ -1,7 +1,5 @@
 import type {
   Coordinate,
-  OfficialRoadEvent,
-  RoadEvent,
   RouteAlternativeV2,
   SafetyCamera,
   SafetyFacility,
@@ -11,14 +9,12 @@ import type {
 import type { FeatureCollection, LineString, Point } from 'geojson';
 
 import type { MapRegion } from '@/features/map/map-region';
+import { type MapRoadEvent, roadEventLayer } from './road-events';
 
 /**
  * Everything the map draws that is not the basemap, as pure GeoJSON builders. Callers memoise
  * the results: a new collection identity makes MapLibre re-upload the whole source.
  */
-
-export type MapRoadEvent = RoadEvent | OfficialRoadEvent;
-export type RoadEventRegion = 'calgary' | 'kelowna-bc' | 'ontario';
 
 export const EMPTY_POINT_COLLECTION: FeatureCollection<Point> = {
   features: [],
@@ -37,15 +33,6 @@ export const SAFETY_CAMERA_LAYER_IDS = [
 export const SEARCH_RESULT_LAYER_IDS = ['search-result-dots'] as const;
 export const TRAFFIC_CAMERA_LAYER_IDS = ['traffic-camera-dots'] as const;
 export const SAFETY_FACILITY_LAYER_IDS = ['safety-facility-dots'] as const;
-
-/** Road-event overlays exist only for the exact regions that publish them. */
-export function roadEventRegionForMapRegion(
-  mapRegion: MapRegion | undefined,
-): RoadEventRegion | undefined {
-  if (mapRegion === 'calgary-ab') return 'calgary';
-  if (mapRegion === 'ontario' || mapRegion === 'kelowna-bc') return mapRegion;
-  return undefined;
-}
 
 function point(coordinate: Coordinate): Point {
   return { coordinates: [coordinate.longitude, coordinate.latitude], type: 'Point' };
@@ -182,18 +169,26 @@ export function safetyCameraFeatures(
   };
 }
 
+/**
+ * One symbol layer's events. `events` arrive newest first; `rank` lets the layer draw newer
+ * events above older ones where symbols overlap.
+ */
 export function roadEventFeatures(
   events: readonly MapRoadEvent[],
-  type: MapRoadEvent['type'],
+  layer: 'closure' | 'construction' | 'incident',
 ): FeatureCollection<Point> {
   return {
-    features: events
-      .filter((event) => event.type === type)
-      .map((event) => ({
-        geometry: point(event.coordinate),
-        properties: { id: event.id },
-        type: 'Feature',
-      })),
+    features: events.flatMap((event, index) =>
+      roadEventLayer(event) === layer
+        ? [
+            {
+              geometry: point(event.coordinate),
+              properties: { id: event.id, rank: index },
+              type: 'Feature' as const,
+            },
+          ]
+        : [],
+    ),
     type: 'FeatureCollection',
   };
 }
@@ -322,59 +317,27 @@ export function cameraDetailMessage(
   return `${enforcementLabel.length > 0 ? enforcementLabel : 'Unspecified'} enforcement camera.\n${directionLine}`;
 }
 
-export function roadEventMessage(event: MapRoadEvent): string {
-  if ('regionId' in event) {
-    const end = event.endsAt === undefined ? '' : `\nEnds: ${event.endsAt.replace('T', ' ')}`;
-    const source = event.regionId === 'ontario' ? 'Ontario 511' : 'DriveBC Open511';
-    return `Official ${source} road information\n\n${event.description}\n\nStarts: ${event.startsAt.replace('T', ' ')}${end}`;
-  }
-
-  const confidence =
-    event.confidence === 'official'
-      ? 'Official City of Calgary construction information'
-      : 'Unverified current incident information';
-  const end =
-    event.endsAtLocal === undefined ? '' : `\nEnds: ${event.endsAtLocal.replace('T', ' ')}`;
-  return `${confidence}\n\n${event.description}\n\nStarts: ${event.startsAtLocal.replace('T', ' ')}${end}\nTime zone: America/Edmonton`;
-}
-
-/** Source and freshness line for the road-event overlay. Undefined when the overlay is off. */
-export function roadEventStatusLabel({
-  hasSnapshot,
-  refreshDelayed,
-  region,
-  stale,
-}: {
-  hasSnapshot: boolean;
-  refreshDelayed: boolean;
-  region: RoadEventRegion | undefined;
-  stale: boolean;
-}): string | undefined {
-  if (!hasSnapshot) return refreshDelayed ? 'Road events unavailable' : undefined;
-  const source =
-    region === 'ontario'
-      ? 'Road events · Ontario 511 · Official'
-      : region === 'kelowna-bc'
-        ? 'Road events · DriveBC · Official'
-        : 'Road events · City of Calgary · Incidents unverified';
-  return `${source}${stale ? ' · Stale snapshot' : ''}${refreshDelayed ? ' · Refresh delayed' : ''}`;
-}
-
 /** Basemap and overlay data credits for what is currently drawn. */
 export function mapAttributionLabel({
   hasTorontoCameras,
   mapRegion,
-  roadEventRegion,
+  roadEventCredit,
 }: {
   hasTorontoCameras: boolean;
   mapRegion: MapRegion | undefined;
-  roadEventRegion: RoadEventRegion | undefined;
+  /** From `roadEventCredit`: the event sources currently drawn. */
+  roadEventCredit: string | undefined;
 }): string {
   return [
     '© OpenMapTiles · © OpenStreetMap',
-    roadEventRegion === 'calgary' ? ' · © City of Calgary' : '',
-    hasTorontoCameras ? ' · © City of Toronto' : '',
-    roadEventRegion === 'ontario' ? ' · Ontario 511' : '',
-    mapRegion === 'kelowna-bc' ? ' · DriveBC · RCMP' : '',
+    roadEventCredit === undefined ? '' : ` · ${roadEventCredit}`,
+    hasTorontoCameras && roadEventCredit?.includes('City of Toronto') !== true
+      ? ' · © City of Toronto'
+      : '',
+    mapRegion !== 'kelowna-bc'
+      ? ''
+      : roadEventCredit?.includes('DriveBC') === true
+        ? ' · RCMP'
+        : ' · DriveBC · RCMP',
   ].join('');
 }

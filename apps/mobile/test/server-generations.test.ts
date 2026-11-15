@@ -167,6 +167,17 @@ describe('road-event refresh', () => {
     stop();
   });
 
+  it('stops quietly when an older server does not know the region (400)', async () => {
+    vi.useFakeTimers();
+    const load = vi.fn(() => Promise.reject(new NavOssApiError('Bad request', 400)));
+    const delayed: boolean[] = [];
+    const stop = startRoadEventRefresh({ load, onDelayedChange: (value) => delayed.push(value) });
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1_000);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(delayed).toEqual([false]);
+    stop();
+  });
+
   it('flags an outage and retries only on the five-minute refresh', async () => {
     vi.useFakeTimers();
     const load = vi.fn(() => Promise.reject(new NavOssApiError('Unavailable', 503)));
