@@ -348,6 +348,48 @@ final class CommunityTrafficServiceRulesTests: XCTestCase {
     service.navigationDidEnd()
   }
 
+  func testResetCommunityIdentityTurnsSharingOffAndStopsTheTrip() async throws {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock)
+    let (service, preferences) = makeService(transport, clock: clock)
+    preferences.setSharesRoadReports(true)
+    service.navigationDidStart(trip())
+    let sharing = await eventually { service.trafficSharingState() == .sharing }
+    XCTAssertTrue(sharing)
+    try await service.resetIdentity()
+    await settle()
+    XCTAssertFalse(preferences.load().sharesTrafficSpeeds, "traffic sharing needs a new opt-in")
+    XCTAssertFalse(preferences.load().sharesRoadReports, "report sharing needs a new opt-in")
+    XCTAssertEqual(service.trafficSharingState(), .off)
+    let credentials = await transport.credentialRequests
+    XCTAssertEqual(credentials, 1, "no new credential after the reset")
+    service.navigationDidEnd()
+  }
+
+  func testAServerThatIsNotAcceptingTurnsTheSwitchOff() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock)
+    await transport.configure(accepting: false)
+    let (service, preferences) = makeService(transport, clock: clock)
+    service.navigationDidStart(trip())
+    let off = await eventually { !preferences.load().sharesTrafficSpeeds }
+    XCTAssertTrue(off, "a switch the server cannot honour does not stay on in hiding")
+    let state = await eventually { service.trafficSharingState() == .off }
+    XCTAssertTrue(state)
+    service.navigationDidEnd()
+  }
+
+  func testADeviceThatCannotAttestTurnsTheSwitchOff() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock)
+    await transport.configure(credentials: [.failure(.attestationUnsupported)])
+    let (service, preferences) = makeService(transport, clock: clock)
+    service.navigationDidStart(trip())
+    let off = await eventually { !preferences.load().sharesTrafficSpeeds }
+    XCTAssertTrue(off)
+    service.navigationDidEnd()
+  }
+
   func testTurningSharingOnDuringGuidanceSharesForTheRestOfThatTrip() async {
     let clock = Clock(start)
     let transport = RuleTransport(clock: clock)

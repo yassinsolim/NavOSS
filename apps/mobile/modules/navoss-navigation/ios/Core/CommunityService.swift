@@ -329,25 +329,22 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     publishReports()
   }
 
-  /// "Reset community identity": deletes the installation and its reports and votes on the
-  /// server, then forgets the key. The next write registers a new, unrelated installation.
+  /// "Reset community identity": switches **Share road reports** and **Share traffic speeds**
+  /// off (sharing again needs a new opt-in, even if the deletion below fails), stops the
+  /// uploader, then deletes the installation and its reports and votes on the server and forgets
+  /// the key. The next write registers a new, unrelated installation.
   public func resetIdentity() async throws {
     guard let client else { return }
+    preferencesStore.setSharesTrafficSpeeds(false)
+    preferencesStore.setSharesRoadReports(false)
+    await traffic?.setEnabled(false)
     try await client.deleteInstallation()
     lock.withLock {
       ownReportIds.removeAll()
       cache.clear()
       monitor.setReports([])
     }
-    // The uploader's credential belonged to the deleted installation: start the trip afresh.
-    let restart: [NavOSSCarPlayCoordinate]? = lock.withLock {
-      navigationActive ? protectedPoints : nil
-    }
-    await traffic?.endTrip()
     publishReports()
-    if let restart {
-      await traffic?.startTrip(protectedPoints: restart)
-    }
   }
 
   // MARK: Navigation hooks (called by NavOSSNavigationService)
@@ -485,6 +482,14 @@ public final class NavOSSCommunityService: @unchecked Sendable {
 
   private func trafficStateDidChange(_ state: NavOSSTrafficSharingState) {
     lock.withLock { trafficState = state }
+    // The server does not take traffic speeds, or this device cannot take part: the switch is
+    // turned off rather than shown off while kept on, so sharing needs a new opt-in once it is
+    // available.
+    if state == .unavailable(reason: .notAccepting) || state == .unavailable(reason: .unsupported),
+      preferencesStore.load().sharesTrafficSpeeds
+    {
+      preferencesStore.setSharesTrafficSpeeds(false)
+    }
     notifyStateChange()
   }
 

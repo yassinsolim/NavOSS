@@ -11,7 +11,7 @@
 | Share road reports                               | Switch (off by default). Without it, every report is a private draft on the device.                                               |
 | Spoken road reports                              | Switch for a short spoken alert for a report ahead.                                                                               |
 | Share traffic speeds                             | Switch (off by default) for opt-in community traffic.                                                                             |
-| Reset community identity                         | Deletes the installation, its reports and answers from the server and forgets the App Attest key on the phone.                    |
+| Reset community identity                         | Turns off Share road reports and Share traffic speeds, deletes the installation, its reports and answers from the server and forgets the App Attest key on the phone. |
 | Still there? / Not there                         | The question after passing a report, and its answers.                                                                             |
 | Road report                                      | One of eight fixed types: crash, road closed, slow traffic, construction, pothole, object on road, other hazard, stopped vehicle. |
 | Private draft                                    | A report kept on the device (up to 25, two hours).                                                                                |

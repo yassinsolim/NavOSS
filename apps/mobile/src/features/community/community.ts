@@ -104,6 +104,22 @@ export function communityAvailability({
   return { reportSharing, reports, trafficFlow, trafficSharing };
 }
 
+/**
+ * The stored "Share traffic speeds" choice has to be withdrawn: the native state (or the server's
+ * config) says traffic sharing is not available or this device cannot take part, so the switch
+ * is shown off, and it must not quietly come back on once sharing is available again. A new
+ * opt-in is needed then. While the bridge has not answered (`checking`) nothing is withdrawn.
+ */
+export function withdrawsTrafficSharingConsent(
+  availability: CommunityFeatureState,
+  state: NativeCommunityState | undefined,
+): boolean {
+  return (
+    state?.preferences.sharesTrafficSpeeds === true &&
+    (availability === 'not-available' || availability === 'unsupported')
+  );
+}
+
 // --- Reports on the map ---------------------------------------------------------------------
 
 export function communityReportLabel(type: NativeCommunityReportType): string {
