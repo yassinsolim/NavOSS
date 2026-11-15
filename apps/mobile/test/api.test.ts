@@ -21,6 +21,7 @@ import {
   routeChoiceAccessibilityLabel,
   routeTrafficLabel,
 } from '../src/features/navigation/route-progress.js';
+import disconnectedProvinces from './fixtures/routes-v2/disconnected-provinces-400.json' with { type: 'json' };
 import { recordedRoutes } from './route-fixtures.js';
 import ontarioRoadEvents from './fixtures/road-events/v2-events-ontario-2026-11-15.json' with { type: 'json' };
 
@@ -109,6 +110,56 @@ describe('fetchRoutes against recorded /v2/routes responses', () => {
     expect(normalized.routes[0]?.steps[1]?.spokenInstruction).toBe(
       'Take exit 248 toward Glenmore Trail.',
     );
+  });
+});
+
+describe('fetchRoutes against recorded route refusals', () => {
+  const refusedRequest = {
+    ...disconnectedProvinces.request,
+    preferences: ROUTE_REQUEST.preferences,
+  };
+
+  it('sends a refused route once, origin metadata and all', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    await expect(
+      fetchRoutes(refusedRequest, {
+        baseUrl: 'https://api.example.test',
+        fetchImplementation: async (_input, init) => {
+          bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+          return new Response(disconnectedProvinces.body, {
+            headers: { 'content-type': disconnectedProvinces.contentType },
+            status: disconnectedProvinces.status,
+          });
+        },
+        routesV2: true,
+      }),
+    ).rejects.toBeInstanceOf(NavOssApiError);
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toMatchObject({ originHeadingDegrees: 90 });
+  });
+
+  it('still retries an older API that rejects origin metadata as a contract violation', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const contractRejection = JSON.stringify({
+      code: 'invalid_request',
+      detail: 'The request does not match the API contract.',
+      requestId: 'req-1',
+      status: 400,
+      title: 'Invalid request',
+    });
+    await expect(
+      fetchRoutes(refusedRequest, {
+        baseUrl: 'https://api.example.test',
+        fetchImplementation: async (_input, init) => {
+          bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+          return new Response(contractRejection, { status: 400 });
+        },
+        routesV2: true,
+      }),
+    ).rejects.toBeInstanceOf(NavOssApiError);
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).not.toHaveProperty('originHeadingDegrees');
+    expect(bodies[1]).not.toHaveProperty('originHorizontalAccuracyMeters');
   });
 });
 

@@ -326,6 +326,19 @@ export function routeResponseFromV1(response: RouteResponse): RouteResponseV2 {
 }
 
 /**
+ * The API's answer to a body that does not match its contract (`app.ts` error handler), which is
+ * how an API older than origin heading and accuracy rejected them. A 400 with any other title is
+ * the server refusing the route itself ("No route between these provinces"): sending it again
+ * without the optional fields gets the same answer.
+ */
+const CONTRACT_REJECTION_TITLE = 'Invalid request';
+
+async function isContractRejection(response: Response): Promise<boolean> {
+  const problem = ProblemDetailsSchema.safeParse(await response.json().catch(() => undefined));
+  return !problem.success || problem.data.title === CONTRACT_REJECTION_TITLE;
+}
+
+/**
  * Plans routes with `/v2/routes` (lanes, signposts, current road names, speed-limit states and
  * optional community traffic). A server whose config declares only `/v1/routes` is asked there
  * directly; one that has not said answers 404 on `/v2/routes`, and the request is sent to
@@ -349,7 +362,8 @@ export async function fetchRoutes(
     if (
       response.status !== 400 ||
       (request.originHeadingDegrees === undefined &&
-        request.originHorizontalAccuracyMeters === undefined)
+        request.originHorizontalAccuracyMeters === undefined) ||
+      !(await isContractRejection(response.clone()))
     ) {
       return response;
     }
