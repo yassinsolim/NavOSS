@@ -11,6 +11,10 @@ import {
 import { z } from 'zod/v4';
 
 import {
+  primaryLegacyRoadName,
+  spokenInstruction as legacySpokenInstruction,
+} from './road-names.js';
+import {
   buildValhallaPbfRequest,
   parseValhallaPbf,
   VALHALLA_NO_PATH,
@@ -267,8 +271,10 @@ function normalizeRoutes(payload: z.infer<typeof ValhallaResponseSchema>): Route
               geometry: step.geometry.coordinates,
               instruction: step.maneuver.instruction,
               maneuverType: step.maneuver.type,
-              roadName: step.name,
-              ...(spokenInstruction === undefined ? {} : { spokenInstruction }),
+              roadName: primaryLegacyRoadName(step.name),
+              ...(spokenInstruction === undefined
+                ? {}
+                : { spokenInstruction: legacySpokenInstruction(spokenInstruction, []) }),
             };
           }),
         ),

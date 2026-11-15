@@ -12,6 +12,7 @@ import {
 import protobuf from 'protobufjs/light.js';
 import { z } from 'zod/v4';
 
+import { primaryRoadName, spokenInstruction, writtenInstruction } from './road-names.js';
 import descriptor from './valhalla-proto-3.8.2.json' with { type: 'json' };
 
 // Generated from the exact production image's 3.8.2 .proto. The light runtime skips unknown
@@ -192,13 +193,6 @@ function decodePolyline6(encoded: string): [number, number][] {
   return coordinates;
 }
 
-function roadName(names: z.infer<typeof StreetNameSchema>[]): string {
-  const named = names
-    .filter((name) => !name.isRouteNumber)
-    .map((name) => name.value)
-    .filter(Boolean);
-  return (named.length === 0 ? names.map((name) => name.value).filter(Boolean) : named).join('; ');
-}
 function edgeAt(nodes: unknown[], index: number) {
   const parsed = EdgeSchema.safeParse(nodes[index]);
   return parsed.success ? parsed.data.edge : undefined;
@@ -335,7 +329,7 @@ export function normalizeValhallaPbfResponse(payload: unknown): RouteAlternative
       else limitsComplete = false;
       distanceMeters += leg.summary.length * 1_000;
       durationSeconds += leg.summary.time;
-      for (const maneuver of leg.maneuver) {
+      for (const [maneuverIndex, maneuver] of leg.maneuver.entries()) {
         if (
           maneuver.beginShapeIndex > maneuver.endShapeIndex ||
           maneuver.endShapeIndex >= shape.length ||
@@ -357,9 +351,17 @@ export function normalizeValhallaPbfResponse(payload: unknown): RouteAlternative
         const before = BearingSchema.safeParse(incoming?.endHeading);
         const after = BearingSchema.safeParse(outgoing?.beginHeading ?? maneuver.beginHeading);
         const roundabout = PositiveUIntSchema.safeParse(maneuver.roundaboutExitCount);
-        const names = roadName(maneuver.streetName);
+        const names = primaryRoadName(maneuver.streetName);
         const edgeNames = NativeStreetNamesSchema.safeParse(outgoing?.name);
-        const currentRoadName = names || (edgeNames.success ? roadName(edgeNames.data) : '');
+        const currentRoadName = names || (edgeNames.success ? primaryRoadName(edgeNames.data) : '');
+        // A cue names this maneuver's road, the previous one's ("stay on") or, chained with
+        // "Then", the next ones'.
+        const roads = [
+          ...leg.maneuver
+            .slice(Math.max(0, maneuverIndex - 1), maneuverIndex + 3)
+            .map((nearby) => nearby.streetName),
+          ...(edgeNames.success ? [edgeNames.data] : []),
+        ];
         const [maneuverType, maneuverModifier] = MANEUVERS[maneuver.type] ?? [
           `valhalla-${String(maneuver.type)}`,
         ];
@@ -367,7 +369,7 @@ export function normalizeValhallaPbfResponse(payload: unknown): RouteAlternative
           distanceMeters: maneuver.length * 1_000,
           durationSeconds: maneuver.time,
           geometry: stepGeometry,
-          instruction: maneuver.textInstruction,
+          instruction: writtenInstruction(maneuver.textInstruction, roads),
           maneuverType,
           roadName: names,
           ...(currentRoadName === '' ? {} : { currentRoadName }),
@@ -379,7 +381,12 @@ export function normalizeValhallaPbfResponse(payload: unknown): RouteAlternative
           ...signpostFor(maneuver.sign),
           ...(typeof maneuver.verbalPreTransitionInstruction === 'string' &&
           maneuver.verbalPreTransitionInstruction !== ''
-            ? { spokenInstruction: maneuver.verbalPreTransitionInstruction }
+            ? {
+                spokenInstruction: spokenInstruction(
+                  maneuver.verbalPreTransitionInstruction,
+                  roads,
+                ),
+              }
             : {}),
         });
       }

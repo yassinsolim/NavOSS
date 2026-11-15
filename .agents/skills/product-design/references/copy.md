@@ -37,6 +37,10 @@ Official data (City of Calgary cameras, DriveBC and City of Toronto events) is l
 - Do not encourage speeding or evasion. Speed warnings state the limit; camera alerts say "Red light and speed camera ahead".
 - Spoken text: natural en-CA phrasing ("metres", "1.5 kilometres"); say what the signs say only when the route carries it; never read absent data (#75, #84).
 
+## rule/one-road-name
+
+A road is shown and spoken by one name: its first posted name (the street sign; English first on Ontario's bilingual signs), or its route number when it has no name. Official and translated names are dropped ("Highway 401 Express", not "Highway 401 Express; Macdonald-Cartier Freeway"; "Wellington Street", not "Wellington Street; rue Wellington"). Written instructions keep a route number beside the name only when the name does not carry it ("15/Autoroute des Laurentides"); spoken instructions say the name only, and a chained cue continues in lower case ("… Then bear right onto …"). The server applies it (`apps/api/src/road-names.ts`), so shipped builds get it without an update.
+
 ## rule/name-the-object-and-consequence
 
 Controls name the object and the effect: "Reset community identity", "Clear saved and recent destinations", "Share road reports". Avoid "OK", "Confirm", "Submit" alone. Choices that change a route say how: "Use new route" and "Keep mine" (CarPlay), "Accept new route" and "Keep route" (phone).
