@@ -4,7 +4,7 @@ Applies to phone text, CarPlay templates, spoken guidance, accessible names and 
 
 ## rule/claim-matches-deployed-service
 
-User-facing text may claim only what the **deployed** service and the relevant **build** do. The service now supports Alberta+BC coverage and `/v2/routes` lanes and signposts; build 75 uses them when returned, while build 70 uses v1. Community reports, community traffic and offline maps remain unavailable and must not be described as available, including in App Store metadata and the site. Evidence: `AGENTS.md` ("Current checkpoint"), `docs/release/next-build-checklist.md`.
+User-facing text may claim only what the **deployed** service and the relevant **build** do. The service supports Alberta+BC coverage and `/v2/routes` lanes and signposts; build 75 onward uses them when returned, while build 70 uses v1. The owner approved `attested` reports and opt-in traffic `collect` after this copy PR merges and the site redeploys: build 80 onward can share, earlier builds cannot. Verified reports are unconfirmed until corroborated; collected traffic is not displayed or used in routes. Live traffic and offline maps remain unavailable. Evidence: #119, `AGENTS.md` ("Current checkpoint"), `docs/release/next-build-checklist.md`.
 
 ## rule/coverage-from-the-server
 
@@ -43,7 +43,7 @@ Errors say what happened and what to do, in plain language: "No connection. Try 
 
 ## rule/no-hype
 
-No "best", parity claims, competitor names or irrelevant AI claims (`docs/release/app-review.md`, `docs/release/app-store-metadata.md`). The product is "account-free", "open source", "technical beta". The website's roadmap section labels unreleased work "In development" and states what is true today next to it (`apps/site/test/site.test.mjs` keeps live-traffic, offline and community wording out of the "In the app today" section).
+No "best", parity claims, competitor names or irrelevant AI claims (`docs/release/app-review.md`, `docs/release/app-store-metadata.md`). The product is "account-free", "open source", "technical beta". The website's roadmap section labels unreleased work "In development" and states what is true today next to it (`apps/site/test/site.test.mjs` guards live-traffic and offline wording, and build-qualified report sharing, in the "In the app today" section). Evidence: #119.
 
 ## Writing style
 

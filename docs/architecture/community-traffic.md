@@ -4,16 +4,19 @@ Decision date: 2026-11-12 (revised twice the same day after two independent priv
 reviews, and again on 2026-11-14 after a third; the [enablement checklist](#enablement-checklist)
 records what is still required)
 
-NavOSS builds its own live traffic from the speeds of drivers who switch traffic sharing on. There
-is no paid provider and, after review, no usable official flow feed for Alberta or British Columbia
-(see [`../data-sources.md`](../data-sources.md#community-traffic)). This document describes the
-server pipeline as built, the contract the app must follow, what the design does and does not
-protect against, and what is deliberately left for later.
+NavOSS is evaluating traffic built from the speeds of drivers who switch traffic sharing on.
+There is no paid provider and, after review, no usable official flow feed for Alberta or British
+Columbia (see [`../data-sources.md`](../data-sources.md#community-traffic)). This document
+describes the server pipeline as built, the contract the app must follow, what the design does and
+does not protect against, and what is deliberately left for later.
 
-Status: the server is implemented and off by default (`COMMUNITY_TRAFFIC_MODE=off`). No released
-app uploads anything yet. The v2 route hook now applies published community speeds and preserves the
-service's returned route order; phone upload/switch and map-layer integration remain client work.
-With few contributors very little will be published.
+Status: the owner approved production `COMMUNITY_TRAFFIC_MODE=collect` on 2026-11-15, after the
+copy PR merges and the site redeploys. Build 80 carries the App Attest entitlement needed to
+upload; earlier builds cannot share. Traffic sharing is off by default in the app. Opted-in
+batches are accepted, matched and counted for evaluation in memory; nothing is published or shown
+to drivers, routes do not use community traffic, and `features.liveTraffic` remains false. The
+server's code default remains `off`. Real iPhone App Attest registration was not verified before
+the decision.
 
 **This is not an anonymity system and makes no formal anonymity claim.** It is data minimisation
 plus a contributor threshold. The section [What this does not protect against](#what-this-does-not-protect-against)
@@ -51,8 +54,8 @@ phone (sharing on, navigating, App Attest installation registered)
 ```
 
 Code lives in `apps/api/src/traffic/`; contracts in `packages/contracts/src/traffic.ts`. All four
-routes are under `/v2`: nothing under `/v1` was added or changed, and no shipped client calls
-them.
+routes are under `/v2`: nothing under `/v1` was added or changed. Build 80 contains the phone
+upload/switch and map-layer integration; the map layer remains unavailable in `collect` mode.
 
 Traffic batches use the shared sourced Alberta/BC province polygons before trimming and matching,
 the same eligibility predicate as search/routing and attested community reports. The optional
@@ -1020,7 +1023,7 @@ Collection receives exactly the inputs `live` does, so this group is about the i
       keys and must never run with real drivers.
 - [x] The app release that uploads has been audited against the [client rules](#client-rules):
       switch off by default, upload only during navigation, the 400 m trip-end trimming and
-      hold-back, memory-only batches, handling of `401`, `403`, `429` and `503`. **Source audit, 2026-11-15:** an independent audit of `main` found six rule violations (consent surviving Reset, an in-flight upload sent after the trip ended, lost exclusion zones after restore, restrictions cleared by preference changes, early flow refresh); #116 fixed them and the same auditor passed every rule at `8667be5` (merged as `7c3672a`). Only a device can show: signed entitlements, fresh-install defaults, real GPS trimming, locked/background/CarPlay lifecycle, cancellation of bytes already sent, and iOS disk, cache and crash retention. No uploaded build contains these fixes yet.
+      hold-back, memory-only batches, handling of `401`, `403`, `429` and `503`. **Source audit, 2026-11-15:** an independent audit of `main` found six rule violations (consent surviving Reset, an in-flight upload sent after the trip ended, lost exclusion zones after restore, restrictions cleared by preference changes, early flow refresh); #116 fixed them and the same auditor passed every rule at `8667be5` (merged as `7c3672a`). Build 80 contains those fixes and carries the signed App Attest entitlement. Fresh-install defaults, real GPS trimming, locked/background/CarPlay lifecycle, cancellation of bytes already sent, and iOS disk, cache and crash retention still need real-device evidence.
 - [x] Valhalla's container logs, at its configured level, contain no request bodies for
       `trace_attributes` and `/locate`, including on errors (send a malformed trace and read the
       journal). Established locally for 3.8.2 at its default logging; repeat on the host. **Host, 2026-11-15:** a malformed-JSON trace, a bad `shape_match` and a bad `/locate` each logged only a request id, method, path, status and the parser message; no coordinate appeared.
