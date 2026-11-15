@@ -145,4 +145,17 @@ describe('public Canada route-quality matrix', () => {
     );
     expect('maximumLatencyMs' in stress && stress.maximumLatencyMs).toBeGreaterThan(5_000);
   });
+
+  it('has a corridor inside every province with roads, for a declaration of that province alone', () => {
+    // check-coverage.sh routes this corridor; only Nunavut, with no road between communities, has none.
+    for (const { area, connectsTo } of PROVINCE_REGISTRY) {
+      const inside = canadaMatrix.corridors.filter(
+        (corridor) =>
+          provinceOf(corridor.originAnchorId) === area.id &&
+          provinceOf(corridor.destinationAnchorId) === area.id &&
+          !corridor.tags.includes('inter-provincial'),
+      );
+      expect(inside.length > 0, area.id).toBe(connectsTo.length > 0);
+    }
+  });
 });

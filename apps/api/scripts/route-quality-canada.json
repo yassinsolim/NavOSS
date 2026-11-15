@@ -1,7 +1,7 @@
 {
-  "benchmarkId": "canada-68",
-  "description": "68 directed public-anchor routes across every province and territory with roads: the Alberta+BC 22 plus Ontario, Quebec, the Prairies, Atlantic Canada, the North and long inter-provincial routes. Ranges are structural review gates from published highway distances, not measured results; anchors are not verified entrances. Requires a server that declares every province and territory on the route.",
-  "expectedCaseCount": 68,
+  "benchmarkId": "canada-80",
+  "description": "80 directed public-anchor routes across every province and territory with roads: the Alberta+BC 22 plus Ontario, Quebec, the Prairies, Atlantic Canada, the North and long inter-provincial routes, and at least one corridor inside every province and territory with roads (the single-province route check-coverage.sh runs). Ranges are structural review gates from published highway distances, not measured results; anchors are not verified entrances. Requires a server that declares every province and territory on the route.",
+  "expectedCaseCount": 80,
   "licenseUrl": "https://www.openstreetmap.org/copyright",
   "routePath": "/v2/routes",
   "anchors": {
@@ -372,6 +372,54 @@
       },
       "label": "Yellowknife downtown street anchor (Franklin Avenue)",
       "sourceUrl": "https://www.openstreetmap.org/#map=18/62.454/-114.3718"
+    },
+    "dartmouth-downtown": {
+      "coordinate": {
+        "latitude": 44.6658,
+        "longitude": -63.5688
+      },
+      "label": "Dartmouth downtown street anchor (Ochterloney Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/44.6658/-63.5688"
+    },
+    "summerside-downtown": {
+      "coordinate": {
+        "latitude": 46.3929,
+        "longitude": -63.7884
+      },
+      "label": "Summerside downtown street anchor (Granville Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/46.3929/-63.7884"
+    },
+    "mount-pearl-centre": {
+      "coordinate": {
+        "latitude": 47.5195,
+        "longitude": -52.807
+      },
+      "label": "Mount Pearl street anchor (Commonwealth Avenue)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/47.5195/-52.807"
+    },
+    "brandon-downtown": {
+      "coordinate": {
+        "latitude": 49.8475,
+        "longitude": -99.953
+      },
+      "label": "Brandon downtown street anchor (11th Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/49.8475/-99.953"
+    },
+    "carcross-centre": {
+      "coordinate": {
+        "latitude": 60.1665,
+        "longitude": -134.707
+      },
+      "label": "Carcross street anchor (McMurphy Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/60.1665/-134.707"
+    },
+    "behchoko-centre": {
+      "coordinate": {
+        "latitude": 62.8285,
+        "longitude": -116.0494
+      },
+      "label": "Behchokǫ̀ street anchor (Edzo Tili, Rae)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/62.8285/-116.0494"
     }
   },
   "corridors": [
@@ -770,6 +818,60 @@
       "maximumDurationMinutes": 4700,
       "maximumSegmentMeters": 5000,
       "maximumLatencyMs": 30000
+    },
+    {
+      "destinationAnchorId": "dartmouth-downtown",
+      "distanceRangeKm": [2, 10],
+      "id": "halifax-dartmouth",
+      "lengthBand": "short",
+      "maximumEndpointOffsetMeters": 150,
+      "originAnchorId": "halifax-downtown",
+      "tags": ["nova-scotia", "halifax", "dartmouth", "urban", "river-crossing"]
+    },
+    {
+      "destinationAnchorId": "summerside-downtown",
+      "distanceRangeKm": [50, 80],
+      "id": "charlottetown-summerside",
+      "lengthBand": "medium",
+      "maximumEndpointOffsetMeters": 250,
+      "originAnchorId": "charlottetown-downtown",
+      "tags": ["prince-edward-island", "charlottetown", "summerside"]
+    },
+    {
+      "destinationAnchorId": "mount-pearl-centre",
+      "distanceRangeKm": [6, 20],
+      "id": "st-johns-mount-pearl",
+      "lengthBand": "short",
+      "maximumEndpointOffsetMeters": 150,
+      "originAnchorId": "st-johns-downtown",
+      "tags": ["newfoundland-and-labrador", "st-johns", "mount-pearl", "urban"]
+    },
+    {
+      "destinationAnchorId": "brandon-downtown",
+      "distanceRangeKm": [195, 240],
+      "id": "winnipeg-brandon",
+      "lengthBand": "long",
+      "maximumEndpointOffsetMeters": 250,
+      "originAnchorId": "winnipeg-downtown",
+      "tags": ["manitoba", "winnipeg", "brandon"]
+    },
+    {
+      "destinationAnchorId": "carcross-centre",
+      "distanceRangeKm": [60, 90],
+      "id": "whitehorse-carcross",
+      "lengthBand": "medium",
+      "maximumEndpointOffsetMeters": 250,
+      "originAnchorId": "whitehorse-downtown",
+      "tags": ["yukon", "whitehorse", "carcross", "northern-highway"]
+    },
+    {
+      "destinationAnchorId": "behchoko-centre",
+      "distanceRangeKm": [90, 130],
+      "id": "yellowknife-behchoko",
+      "lengthBand": "long",
+      "maximumEndpointOffsetMeters": 250,
+      "originAnchorId": "yellowknife-downtown",
+      "tags": ["northwest-territories", "yellowknife", "behchoko", "northern-highway"]
     }
   ]
 }

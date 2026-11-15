@@ -196,19 +196,22 @@ beyond what pve01 can give VM 100 today.
 Runbook: [`infra/compose/README.md`](../../infra/compose/README.md#canada-coverage-release-geofabrik-261114).
 Artifacts are versioned by release date (`valhalla-canada-261114`, `nominatim/canada-261114`,
 `imports/canada-261114.osm.pbf`) beside the live `…alberta-british-columbia-260730…` ones. A staged
-API on 127.0.0.1:18300 runs `check-coverage.sh` and the 68-route matrix before anything live
+API on 127.0.0.1:18300 runs `check-coverage.sh` and the 80-route matrix before anything live
 changes. The cutover changes the four artifact values in `.env`, declares the provinces and raises
 the two memory limits; rollback restores the saved `.env` and recreates the same four services.
 The Alberta+BC artifacts stay until Canada has run cleanly for a week.
 
 ### Route-quality matrix
 
-`apps/api/scripts/route-quality-canada.json` (68 directed routes): the unchanged Alberta+BC 22;
+`apps/api/scripts/route-quality-canada.json` (80 directed routes): the unchanged Alberta+BC 22;
 Ontario (Toronto 403/401 interchanges with lanes, Hamilton, Ottawa, London, Windsor, Sudbury,
 Thunder Bay); Quebec (Montreal autoroute interchanges with lanes, Quebec City, Gatineau,
 Sherbrooke, Ottawa–Gatineau); the Prairies (Regina, Saskatoon, Winnipeg); Atlantic (Halifax,
 Moncton, Saint John, Charlottetown, St. John's by ferry); the North (Edmonton–Yellowknife,
-Whitehorse–Edmonton); and Calgary–Winnipeg, Toronto–Montreal and Vancouver–Toronto (stress, 30 s
+Whitehorse–Edmonton); one corridor inside each province otherwise crossed only by
+inter-provincial routes (Halifax–Dartmouth, Charlottetown–Summerside, St. John's–Mount Pearl,
+Winnipeg–Brandon, Whitehorse–Carcross, Yellowknife–Behchokǫ̀), which `check-coverage.sh` routes
+when that province is declared alone; and Calgary–Winnipeg, Toronto–Montreal and Vancouver–Toronto (stress, 30 s
 latency allowance). Ranges come from published highway distances and are review gates, not
 measurements; anchors outside Toronto and Montreal have not been routed yet.
 
@@ -372,7 +375,7 @@ licensed flow pipeline described above.
 1. **Alberta+BC source coverage:** deploy the polygon-enforced API, retain strict v1 compatibility,
    run the provincial route matrix and regional search gates, and validate rollback and client use.
 2. **Canada expansion:** one staged Canada release (see "Canada-wide coverage"), verified by the
-   68-route matrix and per-province search before `NAVOSS_SERVICE_AREAS` declares it; Toronto
+   80-route matrix and per-province search before `NAVOSS_SERVICE_AREAS` declares it; Toronto
    cameras and Ontario 511 stay source-labelled overlays.
 3. **United States internal coverage:** add TIGER/postcode search enrichment, interstate/toll/express
    lane cases, unit-address cases, and multi-time-zone route checks.

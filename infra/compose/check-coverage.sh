@@ -35,7 +35,8 @@ printf '%s' "${ready}" | jq -e '.status == "ready" and ((.checks.coverage.status
   fail "/ready: $(printf '%s' "${ready}" | jq -c '.checks.coverage // .status')"
 
 # One route per declared province: the first matrix corridor tagged with it and with no other
-# province, else one wholly inside the declaration. Lanes are required where the matrix requires them.
+# province, else one wholly inside the declaration; none fails the check, except for Nunavut.
+# Lanes are required where the matrix requires them.
 for area in $(printf '%s' "${areas}" | tr ',' ' '); do
   corridor=$(jq -c --arg area "${area}" --argjson declared "${expected}" '
     def provinces: ["alberta", "british-columbia", "ontario", "quebec", "manitoba", "saskatchewan",
@@ -46,8 +47,10 @@ for area in $(printf '%s' "${areas}" | tr ',' ' '); do
       + [$tagged[] | select(([.tags[] | select(. as $tag | provinces | index($tag))] - $declared) == [])]
     | first // empty' "${matrix}")
   if [ -z "${corridor}" ]; then
-    # Nunavut has no road between communities; the readiness probe above already covers its data.
-    continue
+    # Nunavut has no road between communities; the readiness probe above covers its data. Every
+    # other province has a corridor inside it, so a missing one is a matrix or declaration error.
+    [ "${area}" = nunavut ] && continue
+    fail "${area}: no route case in $(basename "${matrix}") applies to this declaration"
   fi
   request=$(jq -c --argjson corridor "${corridor}" '
     {alternatives: 0, origin: .anchors[$corridor.originAnchorId].coordinate,

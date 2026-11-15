@@ -353,13 +353,13 @@ GEOFABRIK_VERSION=261114 GEOFABRIK_MD5=0bba746e7473aac6a7a6796d153ea12d \
 ./stage-coverage.sh verify canada
 ```
 
-Then, from a checkout on your own machine, run the 68-route matrix through a tunnel and keep the
+Then, from a checkout on your own machine, run the 80-route matrix through a tunnel and keep the
 artifact. Every route must pass, or have a reviewed, recorded reason (an anchor that needs moving
 is a matrix fix, not a pass):
 
 ```sh
 ssh -N -L 18300:127.0.0.1:18300 navoss-prod &
-NAVOSS_API_URL=http://127.0.0.1:18300 ROUTE_QUALITY_OUTPUT=artifacts/route-quality-canada-68.json \
+NAVOSS_API_URL=http://127.0.0.1:18300 ROUTE_QUALITY_OUTPUT=artifacts/route-quality-canada-80.json \
   corepack pnpm --filter @navoss/api test:routes:canada
 NAVOSS_API_URL=http://127.0.0.1:18300 ROUTE_QUALITY_OUTPUT=artifacts/route-quality-alberta-bc-22-on-canada.json \
   corepack pnpm --filter @navoss/api test:routes:alberta-bc
