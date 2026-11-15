@@ -23,6 +23,16 @@ on:
         required: false
         default: true
         type: boolean
+      profile:
+        description: >-
+          EAS build profile. production-carplay-google adds Google place details and needs the
+          GOOGLE_PLACES_IOS_API_KEY secret in the app-store-production environment.
+        required: false
+        default: production-carplay
+        type: choice
+        options:
+          - production-carplay
+          - production-carplay-google
 
 concurrency:
   group: ios-testflight-production
@@ -39,6 +49,7 @@ jobs:
     environment: app-store-production
     env:
       RELEASE_TAG: ${{ inputs.release_tag }}
+      EAS_PROFILE: ${{ inputs.profile || 'production-carplay' }}
       # Required by the CarPlay config plugin; the production origin is public, not a secret.
       EXPO_PUBLIC_API_URL: https://navoss-api.yassin.app
     steps:
@@ -69,6 +80,18 @@ jobs:
             exit 1
           fi
 
+      # The Google profile's config plugin and release check refuse to build without the key.
+      # Fail here, before Xcode and EAS, and never print the value.
+      - name: Require Google Places key for the Google profile
+        if: inputs.profile == 'production-carplay-google'
+        env:
+          GOOGLE_PLACES_IOS_API_KEY: ${{ secrets.GOOGLE_PLACES_IOS_API_KEY }}
+        run: |
+          if [ -z "$GOOGLE_PLACES_IOS_API_KEY" ]; then
+            echo 'Configure GOOGLE_PLACES_IOS_API_KEY in the app-store-production GitHub environment.' >&2
+            exit 1
+          fi
+
       # Pin the Xcode that built 55-57. Xcode 27 is present on this image as a preview and fails
       # the ExpoModulesJSI archive phase described above.
       - name: Select Xcode 26.6
@@ -81,13 +104,18 @@ jobs:
         working-directory: apps/mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GOOGLE_PLACES_IOS_API_KEY: ${{ inputs.profile == 'production-carplay-google' && secrets.GOOGLE_PLACES_IOS_API_KEY || '' }}
         run: |
           set -euo pipefail
           # AGENTS.md: ExpoModulesJSI must use Apple Clang, not a toolchain the image exports.
           unset CC CXX || true
+          # Only the Google profile sees the key; the default build stays keyless.
+          if [ "$EAS_PROFILE" != production-carplay-google ]; then
+            unset GOOGLE_PLACES_IOS_API_KEY
+          fi
           npx --yes eas-cli@24.3.0 build \
             --platform ios \
-            --profile production-carplay \
+            --profile "$EAS_PROFILE" \
             --local \
             --non-interactive \
             --output "$RUNNER_TEMP/navoss.ipa"
@@ -130,6 +158,22 @@ jobs:
           fi
           echo "Verified $(basename "$app")"
 
+      # The Google profile must really carry Google place details; the key itself is not printed.
+      - name: Verify Google Places build
+        if: inputs.profile == 'production-carplay-google'
+        run: |
+          set -euo pipefail
+          app="$(find "$RUNNER_TEMP/ipa-audit/Payload" -maxdepth 1 -name '*.app' | head -1)"
+          if [ "$(/usr/libexec/PlistBuddy -c 'Print :NavOSSGooglePlacesEnabled' "$app/Info.plist")" != true ]; then
+            echo 'Google profile built without NavOSSGooglePlacesEnabled' >&2
+            exit 1
+          fi
+          if [ ! -d "$app/GooglePlacesSwiftResources.bundle" ]; then
+            echo 'GooglePlacesSwift resources are missing' >&2
+            exit 1
+          fi
+          echo 'Google Places is linked'
+
       # EAS runs the upload on its own infrastructure, so the CLI only waits on a queue we do not
       # control. Run 35779380209 built and audited the IPA, then burned the remaining 70 minutes
       # waiting and was killed by `timeout-minutes`, marking a submission that was already queued
@@ -143,7 +187,7 @@ jobs:
           set -euo pipefail
           npx --yes eas-cli@24.3.0 submit \
             --platform ios \
-            --profile production-carplay \
+            --profile "$EAS_PROFILE" \
             --path "$RUNNER_TEMP/navoss.ipa" \
             --non-interactive \
             --no-wait
