@@ -57,7 +57,7 @@ A material decision changes the user's task, default, scope, consequence, naviga
 1. **Set scope and mode.** Name the surface (phone, CarPlay, website, speech) and the mode.
 2. **Load context.** Read `AGENTS.md`, the surface file in `references/surfaces*.md`, and the logic that decides what is possible (server flags, native contract fields, permissions).
 3. **Model the decision.** For Shape, Implement, Harden or any flow change write a short brief: user, job, current behaviour, outcome, non-goals, what is sent or changed, reversibility, and which server capabilities it depends on. Read `references/product-judgment.md`.
-4. **Map states.** List entry points, sheets, overlays and exits, then the reachable states from `references/resilience.md`. Include "old production server" as a state for anything that depends on `/v2/*`.
+4. **Map states.** List entry points, sheets, overlays and exits, then the reachable states from `references/resilience.md`. Include a server without the `/v2/*` capability as a state for anything that depends on it.
 5. **Load routed references.**
 
    | Need                                     | Load                                                                                    |
@@ -78,7 +78,7 @@ A material decision changes the user's task, default, scope, consequence, naviga
 - The primary job works end to end on the simulator (see `AGENTS.md` for the dev-client commands).
 - Light and dark; default text size and the largest accessibility size; text-size change while the screen is open (a known weak spot, `exemplars/pr-84-routes-v2-clients.md`).
 - Reduce Motion on; VoiceOver labels present on every control (inspect the accessibility tree where listening is not possible, and say so).
-- Each changed state: loading, empty, error, offline (API stopped), location denied, and the old server (point the app at a server that answers 404 for `/v2/*`, or use the recorded production fixtures).
+- Each changed state: loading, empty, error, offline (API stopped), location denied, and a server without the capability (use a proxy that answers 404 for the relevant `/v2/*` endpoint, or the recorded fixtures).
 - Touch targets at least 44 pt; driving controls 56 pt.
 - For website changes: mobile and desktop widths, light and dark, `corepack pnpm --filter @navoss/site check` and `test`.
 - For CarPlay changes: the visual harness (`validate:navigation:ios --carplay-only`) and an honest statement that templates were not interactive.

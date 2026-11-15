@@ -43,16 +43,16 @@
         <h2>Routing</h2>
         <p>
           Production routes are calculated by self-hosted Valhalla using the same checksum-verified
-          Alberta and British Columbia OpenStreetMap release as self-hosted Nominatim. Current live
-          certification covers Calgary and Kelowna local routes plus both intercity directions.
-          Route responses remain explicit that live traffic is unavailable.
+          Alberta and British Columbia OpenStreetMap release as self-hosted Nominatim. The deployed
+          service passed a 22-directed-route Alberta and British Columbia matrix. Route responses
+          remain explicit that live traffic is unavailable.
         </p>
 
-        <h2>Province boundaries (not yet in the deployed service)</h2>
+        <h2>Province boundaries</h2>
         <p>
-          The updated server code decides what is inside the Alberta and British Columbia service
-          area from Statistics Canada's 2021 Census province and territory digital boundary files
-          (PRUID 48 and 59, published 2022-09-21), under the
+          The deployed server decides what is inside the Alberta and British Columbia service area
+          from Statistics Canada's 2021 Census province and territory digital boundary files (PRUID
+          48 and 59, published 2022-09-21), under the
           <a href="https://open.canada.ca/en/open-government-licence-canada"
             >Open Government Licence &ndash; Canada</a
           >. The polygons are simplified to about 0.001 degrees (up to roughly 110 m) and include
@@ -60,8 +60,7 @@
           Adapted from Statistics Canada, 2021 Census &ndash; Province and territory digital
           boundary files, 2021. This does not constitute an endorsement by Statistics Canada of this
           product. Contains information licensed under the Open Government Licence &ndash; Canada.
-          That updated server is not deployed yet, so the deployed service still declares Calgary
-          and Kelowna.
+          The deployed v2 service declares both Alberta and British Columbia service areas.
         </p>
 
         <h2>Community road reports and traffic (not switched on)</h2>
