@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   startTrafficFlowRefresh,
+  TRAFFIC_FLOW_BODY_LIMIT,
   type TrafficFlowCache,
   trafficFlowAnchorLayerId,
   trafficFlowFeatures,
@@ -173,10 +174,14 @@ describe('traffic flow refresh', () => {
     vi.useRealTimers();
   });
 
-  function start(cache: TrafficFlowCache, load: () => Promise<TrafficFlowResponse>) {
+  function start(
+    cache: TrafficFlowCache,
+    load: () => Promise<TrafficFlowResponse>,
+    bbox: string = BBOX,
+  ) {
     const shown: (TrafficFlowResponse | undefined)[] = [];
     const stop = startTrafficFlowRefresh({
-      bbox: BBOX,
+      bbox,
       cache,
       load,
       onFailure: (cached) => shown.push(cached),
@@ -223,4 +228,30 @@ describe('traffic flow refresh', () => {
     expect(failing.shown).toEqual([undefined]);
     failing.stop();
   });
+
+  for (const areas of [17, 100]) {
+    it(`returning to the first of ${String(areas)} areas asks nothing before its validUntil`, async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(NOW);
+      const cache: TrafficFlowCache = new Map();
+      const load = vi.fn(() => Promise.resolve(response));
+      for (let index = 0; index < areas; index += 1) {
+        const visit = start(cache, load, `area-${String(index)}`);
+        await vi.advanceTimersByTimeAsync(1_000);
+        visit.stop();
+      }
+      expect(load).toHaveBeenCalledTimes(areas);
+      // Memory: every unexpired deadline, but only the newest bodies.
+      expect(cache.size).toBe(areas);
+      expect([...cache.values()].filter((entry) => entry.response !== undefined).length).toBe(
+        Math.min(areas, TRAFFIC_FLOW_BODY_LIMIT),
+      );
+      const back = start(cache, load, 'area-0');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(load).toHaveBeenCalledTimes(areas);
+      await vi.advanceTimersByTimeAsync(Date.parse(response.validUntil) + 5_000 - Date.now());
+      expect(load).toHaveBeenCalledTimes(areas + 1);
+      back.stop();
+    });
+  }
 });
