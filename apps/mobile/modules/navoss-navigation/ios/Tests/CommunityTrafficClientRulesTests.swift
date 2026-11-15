@@ -13,6 +13,12 @@ final class StallGate: @unchecked Sendable {
   private var waiters: [UUID: CheckedContinuation<Void, Never>] = [:]
   private var cancelled: Set<UUID> = []
   private var released = false
+  /// A response already received: cancelling the waiting task does not stop it arriving.
+  private let ignoresCancellation: Bool
+
+  init(ignoresCancellation: Bool = false) {
+    self.ignoresCancellation = ignoresCancellation
+  }
 
   var waiting: Int { lock.withLock { waiters.count } }
 
@@ -27,7 +33,8 @@ final class StallGate: @unchecked Sendable {
         }
         if resumeNow { continuation.resume() }
       }
-    } onCancel: {
+    } onCancel: { [ignoresCancellation] in
+      guard !ignoresCancellation else { return }
       let continuation: CheckedContinuation<Void, Never>? = lock.withLock {
         cancelled.insert(id)
         return waiters.removeValue(forKey: id)
@@ -97,7 +104,9 @@ actor RuleTransport: NavOSSTrafficTransport {
   nonisolated let beforeRequest: StallGate?
   /// Holds the status answer (anonymous) until released.
   nonisolated let statusGate: StallGate?
-
+  /// Holds credential answers already on their way (see `stallCredentials(from:)`).
+  nonisolated let credentialGate = StallGate(ignoresCancellation: true)
+  private var stallCredentialsFrom = Int.max
   /// The permit of the latest upload handed over, and whether its request was cancelled, for
   /// checks made right after a synchronous call returns.
   nonisolated let heldPermit = Locked<NavOSSTrafficUploadPermit?>(nil)
@@ -129,6 +138,11 @@ actor RuleTransport: NavOSSTrafficTransport {
     return NavOSSTrafficStatus(mode: .live, accepting: accepting, rules: NavOSSTrafficProbeRules())
   }
 
+  /// Holds credential answers from the `stallCredentialsFrom`-th request on until released.
+  func stallCredentials(from request: Int) {
+    stallCredentialsFrom = request
+  }
+
   func trafficCredential(
     permit: NavOSSTrafficUploadPermit
   ) async throws -> NavOSSTrafficCredential {
@@ -137,6 +151,7 @@ actor RuleTransport: NavOSSTrafficTransport {
     guard permit.start(id, { {} }) else { throw NavOSSCommunityFailure.network }
     defer { permit.finish(id) }
     credentialRequests += 1
+    if credentialRequests >= stallCredentialsFrom { await credentialGate.wait() }
     let result: Result<NavOSSTrafficCredential, NavOSSCommunityFailure> =
       credentialResults.isEmpty
       ? .success(
@@ -688,6 +703,35 @@ final class CommunityTrafficServiceRulesTests: XCTestCase {
     await settle()
     let credentials = await transport.credentialRequests
     XCTAssertEqual(credentials, 0, "no identity-bearing request after sharing was turned off")
+    service.navigationDidEnd()
+  }
+
+  func testA403FromBeforeResetDoesNotComeBackAfterIt() async throws {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock)
+    // The second batch is refused (401); the replacement credential's answer is held, then 403.
+    await transport.configure(
+      credentials: [
+        .success(NavOSSTrafficCredential(expiresAt: start.addingTimeInterval(7_200), value: "c1")),
+        .failure(.installationTooNew(retryAfterSeconds: 3_600)),
+      ],
+      uploads: [.unauthorized])
+    await transport.stallCredentials(from: 2)
+    let embargo = NavOSSTrafficEmbargoStore()
+    let (service, _) = makeService(transport, clock: clock, embargo: embargo)
+    service.navigationDidStart(trip())
+    _ = await eventually { service.trafficSharingState() == .sharing }
+    var refreshing = false
+    for fix in drive(from: start) where !refreshing {
+      clock.value = fix.timestamp
+      await service.traffic?.ingest(fix)
+      refreshing = await eventually(timeout: 0.02) { transport.credentialGate.waiting == 1 }
+    }
+    XCTAssertTrue(refreshing, "a 401 refresh is waiting for its answer")
+    try await service.resetIdentity()
+    transport.credentialGate.release()  // the old installation's 403 arrives after Reset
+    await settle()
+    XCTAssertNil(embargo.load(), "a deadline from before Reset is not written back")
     service.navigationDidEnd()
   }
 

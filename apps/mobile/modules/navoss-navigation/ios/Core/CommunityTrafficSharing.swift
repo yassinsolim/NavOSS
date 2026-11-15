@@ -172,6 +172,13 @@ public final class NavOSSTrafficEmbargoStore: @unchecked Sendable {
   private let defaults: UserDefaults?
   private let lock = NSLock()
   private var memory: Date?
+  private var currentEpoch: UInt64 = 0
+
+  /// Which identity a deadline belongs to: Reset (`clear`) starts a new epoch, and a deadline
+  /// from an older one (a credential answer that arrives after Reset) is not written.
+  public var epoch: UInt64 {
+    lock.withLock { currentEpoch }
+  }
 
   public init(defaults: UserDefaults? = nil) {
     self.defaults = defaults
@@ -188,12 +195,19 @@ public final class NavOSSTrafficEmbargoStore: @unchecked Sendable {
   /// registered).
   public func clear() {
     lock.withLock {
+      currentEpoch &+= 1
       if let defaults { defaults.removeObject(forKey: Self.key) } else { memory = nil }
     }
   }
 
   public func save(_ until: Date) {
+    save(until, epoch: epoch)
+  }
+
+  /// Writes `until` unless the identity it was asked for has been reset since `epoch`.
+  public func save(_ until: Date, epoch: UInt64) {
     lock.withLock {
+      guard epoch == currentEpoch else { return }
       if let defaults { defaults.set(until, forKey: Self.key) } else { memory = until }
     }
   }
@@ -539,6 +553,7 @@ public actor NavOSSTrafficSharingSession {
   private func refreshCredential(generation current: UInt64) async -> Bool {
     // Identity-bearing: only under a permit that is still open.
     guard let permit, permit.isValid else { return false }
+    let epoch = embargo.epoch
     do {
       let issued = try await transport.trafficCredential(permit: permit)
       guard generation == current else { return false }
@@ -549,7 +564,7 @@ public actor NavOSSTrafficSharingSession {
         // The deadline is about the installation, not this trip: kept even when the trip that
         // asked has ended or sharing was turned off meanwhile.
         let until = now().addingTimeInterval(TimeInterval(retryAfter ?? 24 * 60 * 60))
-        embargo.save(until)
+        embargo.save(until, epoch: epoch)
       }
       // Refused or cancelled by the gate: sharing was turned off or navigation ended, and that
       // change is on its way here.
