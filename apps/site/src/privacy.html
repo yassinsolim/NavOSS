@@ -290,18 +290,18 @@
           they cover 300 metres of it, or half of it if it is shorter, they become your one speed
           for that stretch (distance over time). The speed is measured on the part driven; in a
           future publication mode it would apply to the whole stretch. The server holds these
-          figures in memory and discards the batch. The NavOSS
-          API does not write your positions, the batch, or its timing to its database, a backup, or
-          its log. To match a batch to roads and check the map the API uses routing software
-          (Valhalla) that it requires to be at a local network address; on the production stack that
-          is a container on the same NavOSS-controlled machine in Alberta. The address check by
-          itself does not prove where the software runs or who operates it; live publication
-          requires confirming the deployment. Batches are not forwarded to another routing
-          provider. The map check sends the routing software only points on the map's own roads,
-          never your positions. Like every request to NavOSS, a batch is delivered through
-          Cloudflare, which sees it in transit. The operator checked host Valhalla and proxy error
-          logging, disabled swap and disabled core dumps on November 15, 2026; these protections
-          must remain in place and be checked again if the deployment changes.
+          figures in memory and discards the batch. The NavOSS API does not write your positions,
+          the batch, or its timing to its database, a backup, or its log. To match a batch to roads
+          and check the map the API uses routing software (Valhalla) that it requires to be at a
+          local network address; on the production stack that is a container on the same
+          NavOSS-controlled machine in Alberta. The address check by itself does not prove where
+          the software runs or who operates it; live publication requires confirming the
+          deployment. Batches are not forwarded to another routing provider. The map check sends
+          the routing software only points on the map's own roads, never your positions. Like every
+          request to NavOSS, a batch is delivered through Cloudflare, which sees it in transit. The
+          operator checked host Valhalla and proxy error logging, disabled swap and disabled core
+          dumps on November 15, 2026; these protections must remain in place and be checked again
+          if the deployment changes.
         </p>
         <p>
           <strong>What is kept, and for how long.</strong> In the current collect mode, traffic
@@ -334,15 +334,14 @@
           </li>
           <li>
             <em>After publication, in the database (future live mode only).</em> Once at least
-            three installations have
-            driven the same stretch, the server stores one typical speed for it, rounded to 5 km/h,
-            the public OpenStreetMap shape of that stretch, and the five-minute boundary at which it
-            was published. It is never shown after 15 minutes. It is deleted at that point by the
-            server's next successful database update, which is normally at that moment and otherwise
-            at a later five-minute boundary; it is erased whenever the server starts (including when
-            the feature is switched off, in which case the server retries until the erasure
-            succeeds); and it is excluded from database backups. Nothing deletes it while the server
-            is stopped.
+            three installations have driven the same stretch, the server stores one typical speed
+            for it, rounded to 5 km/h, the public OpenStreetMap shape of that stretch, and the
+            five-minute boundary at which it was published. It is never shown after 15 minutes. It
+            is deleted at that point by the server's next successful database update, which is
+            normally at that moment and otherwise at a later five-minute boundary; it is erased
+            whenever the server starts (including when the feature is switched off, in which case
+            the server retries until the erasure succeeds); and it is excluded from database
+            backups. Nothing deletes it while the server is stopped.
           </li>
           <li>
             <em>Abuse limits, in memory only.</em> The server keeps salted fingerprints of the
@@ -359,15 +358,15 @@
           Everything derived from a batch leaves memory within 20 minutes of its arrival. In a
           future live mode it would no longer be shown within 35 minutes; physical deletion from
           the database could be later, as described above. These periods, the minimum of three
-          contributors, and the road rules are
-          fixed in the server's code and cannot be weakened by configuration.
+          contributors, and the road rules are fixed in the server's code and cannot be weakened by
+          configuration.
         </p>
         <p>
           <strong>What other drivers see.</strong> No community traffic is displayed today. In a
           future live mode, a stretch of road could be coloured, and could affect an estimated
-          arrival time, only after at least three different App Attest installations have
-          each driven at least 300 metres (or half) of that same stretch, in batches whose driving
-          began within the 15 minutes before a five-minute boundary, and only from that boundary. It
+          arrival time, only after at least three different App Attest installations have each
+          driven at least 300 metres (or half) of that same stretch, in batches whose driving began
+          within the 15 minutes before a five-minute boundary, and only from that boundary. It
           stays shown for at most 15 minutes, so what other drivers see rests on driving at most 30
           minutes old. Three installations are three keys, not necessarily three people. A stretch
           driven by one or two contributors is never shown and never stored. Other drivers see, for

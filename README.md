@@ -19,7 +19,7 @@
 	<img src="https://img.shields.io/badge/API-AGPL--3.0-E65342" alt="API license: AGPL-3.0-only">
 </p>
 
-NavOSS is an independently designed navigation app built on OpenStreetMap-derived data, MapLibre and Valhalla. There is no account, no advertising and no analytics SDK. Search, routing, spoken guidance, rerouting and fixed safety-camera alerts run against a self-hosted service in Alberta; route matching, guidance and speech run on the phone. The current milestone is an iPhone and CarPlay technical beta distributed through TestFlight. Android and broader coverage come after the iOS navigation and operations gates are earned.
+NavOSS is an independently designed navigation app built on OpenStreetMap-derived data, MapLibre and Valhalla. There is no account or advertising. The default build has no analytics SDK; build 80 includes Google's Places SDK, whose privacy declarations are described in the policy. Search, routing, spoken guidance, rerouting and fixed safety-camera alerts run against a self-hosted service in Alberta; route matching, guidance and speech run on the phone. The current milestone is an iPhone and CarPlay technical beta distributed through TestFlight. Android and broader coverage come after the iOS navigation and operations gates are earned.
 
 > [!WARNING]
 > NavOSS is pre-release software. The service it talks to today has no live traffic and no production guarantee. Do not rely on it as your only source for navigation, closures, road rules or safety-camera information. Have a passenger operate the controls while a vehicle is moving.
@@ -58,7 +58,7 @@ The features below are in uploaded build 75 unless otherwise noted; offline maps
 | CarPlay quality pass (#77)     | Course-up camera, drawn maneuver symbols, "then" guidance, optional lane guidance, faster search and voice recovery, reroute and camera alerts, instrument-cluster scene, Siri route preview. Not exercised on a head unit                                              |
 | Lanes and signposts (#84)      | Phone and CarPlay can show lanes and exit signs when the deployed v2 server returns them; build 75 uses v2. Interactive CarPlay is unverified on a head unit                                                                                                            |
 | Offline maps app side (#83)    | On-device offline maps, routing (Valhalla 3.9.1 via Rallista valhalla-mobile) and search are in build 75, but no bundles are hosted and the manifest returns 503, so offline maps are not available. Privacy manifest declares Disk Space                               |
-| Community client (#85)         | Native Swift client for community road reports and traffic, shared by phone and CarPlay, with App Attest and a JS bridge. Sharing is off by default. Build 80 carries the entitlement needed to share; build 75 cannot share. |
+| Community client (#85)         | Native Swift client for community road reports and traffic, shared by phone and CarPlay, with App Attest and a JS bridge. Sharing is off by default. Build 80 carries the entitlement needed to share; build 75 cannot share.                                           |
 
 ### Deployed service
 
@@ -68,8 +68,8 @@ The production service (`https://navoss-api.yassin.app`) was deployed on 2026-11
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Alberta and British Columbia coverage (#79) | Deployed; the 22-directed-route regional matrix passed 22/22                                                   |
 | `/v2/routes` lanes, signposts (#79, #86)    | Deployed; the app's JS client planned Calgary to Banff with lane and signpost steps                            |
-| Community road reports (#73)                | `attested` publication: verified installations' reports are visible as unconfirmed until corroborated; sharing is opt-in in build 80 onward |
-| Community traffic (#76, #82, #86)           | `collect`: opt-in batches are matched and counted for evaluation in memory; no traffic is displayed or used in routes; live traffic remains off |
+| Community road reports (#73)                | `attested`: build 80 onward may share; verified reports are unconfirmed until corroborated                     |
+| Community traffic (#76, #82, #86)           | `collect`: opted-in speeds counted in memory for evaluation; nothing shown or used in routes                   |
 | Offline bundles (#80)                       | Not available: no bundles are hosted and the manifest returns 503                                              |
 
 Remaining enablement steps are in [the next-build checklist](docs/release/next-build-checklist.md).
@@ -97,7 +97,7 @@ docs                               Architecture, data provenance, privacy, tests
 - **Controller hooks.** `map-screen.tsx` is a composition root; behaviour lives in `features/map/controller/*`. Camera frames never re-render the screen.
 - **Native contract v10.** The Swift module owns location, matching, guidance, rerouting with consent modes, speech, camera eligibility and phone/CarPlay state. The phone and CarPlay are consumers. The routes client discovers `/v2/routes` through `/v2/config` and falls back to `/v1/routes`.
 - **Community and traffic services.** Reports are structured, expiring and account-free, authenticated with Apple App Attest (`/v2/community/*`); verified reports are shown unconfirmed until corroborated. Opt-in traffic batches (`/v2/traffic/*`) are collected and counted in memory for evaluation, not published or used in routes. Both switches are off by default in the app; builds before 80 cannot share. Design: [community reports](docs/architecture/community-reports.md), [community traffic](docs/architecture/community-traffic.md).
-- **Offline pipeline.** `infra/offline` builds checksummed regional PMTiles, Valhalla 3.9.1 graphs and SQLite search, described by a manifest. The app side (#83) is merged on `main`, unshipped, and has no bundles to download yet.
+- **Offline pipeline.** `infra/offline` builds checksummed regional PMTiles, Valhalla 3.9.1 graphs and SQLite search, described by a manifest. The app side (#83) is in build 75 onward, but has no bundles to download yet.
 - **Coverage follows the server.** The app names the coverage the server declares and never invents it.
 
 The mobile client does not depend on provider-specific route models. Public Photon and FOSSGIS services are development dependencies only; release builds require a stable HTTPS API.
