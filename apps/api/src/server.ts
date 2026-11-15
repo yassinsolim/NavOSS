@@ -4,7 +4,11 @@ import { buildApp } from './app.js';
 import { createCalgaryRoadEventProvider } from './calgary-road-event-provider.js';
 import { createDriveBcRoadEventProvider } from './drivebc-road-event-provider.js';
 import { createDriveBcTrafficCameraProvider } from './drivebc-traffic-camera-provider.js';
-import { createOntarioRoadEventProvider } from './ontario-road-event-provider.js';
+import {
+  createDefaultProvincialRoadEventFeeds,
+  createProvincialRoadEventService,
+  roadEventKeysFromEnvironment,
+} from './provincial-road-events.js';
 
 const ServerEnvironmentSchema = z
   .object({
@@ -24,13 +28,19 @@ const eventProvider = createCalgaryRoadEventProvider({
 });
 const driveBcEventProvider = createDriveBcRoadEventProvider();
 const driveBcTrafficCameraProvider = createDriveBcTrafficCameraProvider();
-const ontarioEventProvider = createOntarioRoadEventProvider();
+const provincialRoadEvents = createProvincialRoadEventService(
+  createDefaultProvincialRoadEventFeeds(roadEventKeysFromEnvironment(), {
+    onFailure: (failure) => {
+      app.log.warn(failure, 'Official road-event feed failed validation or loading');
+    },
+  }),
+);
 const app = await buildApp({
   driveBcEventProvider,
   driveBcTrafficCameraProvider,
   eventProvider,
   logger: true,
-  ontarioEventProvider,
+  provincialRoadEvents,
 });
 
 try {
@@ -38,7 +48,7 @@ try {
   driveBcEventProvider.start?.();
   driveBcTrafficCameraProvider.start?.();
   eventProvider.start?.();
-  ontarioEventProvider.start?.();
+  provincialRoadEvents.start();
 } catch (error: unknown) {
   app.log.error(error);
   process.exitCode = 1;

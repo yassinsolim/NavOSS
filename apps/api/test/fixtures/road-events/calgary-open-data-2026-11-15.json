@@ -1,0 +1,87 @@
+{
+ "retrievedOn": "2026-11-15",
+ "incident": {
+  "source": "https://data.calgary.ca/resource/4jah-h97u.json?$limit=1001",
+  "rows": [
+   {
+    "incident_info": "8 Avenue and 4 Street SW",
+    "description": "Traffic incident. Blocking the left two NB lanes.",
+    "start_dt_utc": "2026-11-15 07:24:34+00:00",
+    "modified_dt_utc": "2026-11-15 08:12:28+00:00",
+    "quadrant": "SW",
+    "longitude": "-114.0715305030582",
+    "latitude": "51.04579497485678",
+    "count": "1",
+    "point": "POINT (-114.0715305030582 51.04579497485678)"
+   }
+  ],
+  "metadata": {
+   "rowsUpdatedAt": 1794735194
+  }
+ },
+ "construction": {
+  "source": "https://data.calgary.ca/resource/w8zq-79bq.json?$limit=1001",
+  "rows": [
+   {
+    "construction_info": "Edmonton Trail at 1 Avenue NE",
+    "description": "Right lane closed north bound on 1 AV NE  ",
+    "start_dt": "2025-06-01T09:00:00.000",
+    "end_dt": "2026-12-31T15:00:00.000",
+    "longitude": "-114.05028321045208",
+    "latitude": "51.053268688758585",
+    "point": {
+     "type": "Point",
+     "coordinates": [
+      -114.05028321045208,
+      51.053268688758585
+     ]
+    },
+    ":@computed_region_4b54_tmc4": "10",
+    ":@computed_region_4a3i_ccfj": "4",
+    ":@computed_region_kxmf_bzkv": "137",
+    ":@computed_region_p8tp_5dkv": "11"
+   },
+   {
+    "construction_info": "5 Street between 5-6 Avenue SW",
+    "description": "¿\tPhase1 :  Nov 13 9am - Nov 16 5am. 2 left lanes and cycle track closure on 5 St between 5-6 Av SW.  ¿\tPhase 2:  Nov 16 5am - Nov 22 11pm. Left Lane and cycle track closure on 5 St between 5-6 Av SW.",
+    "start_dt": "2026-11-13T09:00:00.000",
+    "end_dt": "2026-11-22T22:00:00.000",
+    "longitude": "-114.07375804296747",
+    "latitude": "51.047757037775646",
+    "point": {
+     "type": "Point",
+     "coordinates": [
+      -114.07375804296747,
+      51.047757037775646
+     ]
+    },
+    ":@computed_region_4b54_tmc4": "14",
+    ":@computed_region_4a3i_ccfj": "1",
+    ":@computed_region_kxmf_bzkv": "262",
+    ":@computed_region_p8tp_5dkv": "2"
+   },
+   {
+    "construction_info": "Country Hills Boulevard between 52 Street and Metis Trail NE",
+    "description": "Nightly from 10:00 PM to 5:00 AM. Westbound to southbound on dual left turn and Eastbound right closure on Country Hills boulevard between 52 street and Metis trail NE.",
+    "start_dt": "2026-11-14T22:00:00.000",
+    "end_dt": "2026-11-16T05:00:00.000",
+    "longitude": "-113.96354506542811",
+    "latitude": "51.154255914044164",
+    "point": {
+     "type": "Point",
+     "coordinates": [
+      -113.96354506542811,
+      51.154255914044164
+     ]
+    },
+    ":@computed_region_4b54_tmc4": "11",
+    ":@computed_region_4a3i_ccfj": "4",
+    ":@computed_region_kxmf_bzkv": "176",
+    ":@computed_region_p8tp_5dkv": "1"
+   }
+  ],
+  "metadata": {
+   "rowsUpdatedAt": 1794654047
+  }
+ }
+}

@@ -9,8 +9,8 @@ import {
 } from '@navoss/contracts';
 import { z } from 'zod/v4';
 
-const CONSTRUCTION_DATASET_ID = 'w8zq-79bq';
-const INCIDENT_DATASET_ID = '4jah-h97u';
+export const CONSTRUCTION_DATASET_ID = 'w8zq-79bq';
+export const INCIDENT_DATASET_ID = '4jah-h97u';
 const LICENSE_URL = 'https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa';
 const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1_000;
 const DEFAULT_MAXIMUM_STALE_MS = 24 * 60 * 60 * 1_000;
@@ -31,7 +31,7 @@ const LocationSchema = z
   })
   .loose();
 
-const ConstructionRowSchema = LocationSchema.extend({
+export const ConstructionRowSchema = LocationSchema.extend({
   construction_info: z.string().min(1),
   description: z.string().min(1),
   end_dt: z.string().min(1).optional(),
@@ -40,7 +40,7 @@ const ConstructionRowSchema = LocationSchema.extend({
   start_dt_utc: z.string().min(1).optional(),
 });
 
-const IncidentRowSchema = LocationSchema.extend({
+export const IncidentRowSchema = LocationSchema.extend({
   description: z.string().min(1),
   incident_info: z.string().min(1),
   modified_dt: z.string().min(1).optional(),
@@ -49,9 +49,9 @@ const IncidentRowSchema = LocationSchema.extend({
   start_dt_utc: z.string().min(1).optional(),
 });
 
-const NoIncidentRowSchema = z.object({ incident_info: z.literal('NO TRAFFIC INCIDENTS') }).loose();
+export const NoIncidentRowSchema = z.object({ incident_info: z.literal('NO TRAFFIC INCIDENTS') }).loose();
 const DatasetRowsSchema = z.array(z.unknown()).max(1_000);
-const DatasetMetadataSchema = z.object({ rowsUpdatedAt: z.number().int().positive() }).loose();
+export const DatasetMetadataSchema = z.object({ rowsUpdatedAt: z.number().int().positive() }).loose();
 
 export class CalgaryRoadEventProviderError extends Error {
   public constructor(message: string, options?: ErrorOptions) {
@@ -80,7 +80,7 @@ interface CalgaryRoadEventProviderOptions {
   onFailure?: (failure: { datasetId: string; droppedRows?: number; errorName: string }) => void;
 }
 
-function dataUrl(datasetId: string): string {
+export function dataUrl(datasetId: string): string {
   const url = new URL(`https://data.calgary.ca/resource/${datasetId}.json`);
   // Selecting either generation's fields makes Socrata reject the other generation.
   url.searchParams.set('$limit', '1001');
@@ -115,11 +115,11 @@ function normalizedText(value: string): string {
     .trim();
 }
 
-function eventId(prefix: string, parts: readonly unknown[]): string {
+export function eventId(prefix: string, parts: readonly unknown[]): string {
   return `${prefix}:${createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 20)}`;
 }
 
-function coordinate(row: z.infer<typeof LocationSchema>): { latitude: number; longitude: number } {
+export function coordinate(row: z.infer<typeof LocationSchema>): { latitude: number; longitude: number } {
   const point = PointSchema.safeParse(row.point);
   let longitude: number;
   let latitude: number;
