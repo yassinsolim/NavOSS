@@ -94,7 +94,7 @@ export function RoadEventsSheet({
       <SheetHeader
         closeLabel="Close road events"
         onClose={onClose}
-        subtitle="Newest first. For awareness only: routes do not avoid them."
+        subtitle="Newest first. Routes do not avoid them."
         title="Road events"
       />
       <BottomSheetScrollView
@@ -168,7 +168,7 @@ export function RoadEventsSheet({
                           }}
                           subtitle={subtitle}
                           title={event.title}
-                          titleLines={2}
+                          titleLines={3}
                           trailing="chevron"
                         />
                       </View>
