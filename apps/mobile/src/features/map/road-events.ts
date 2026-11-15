@@ -138,8 +138,8 @@ export function relativeAge(time: number, now: number): string {
 const DATE_FORMAT = new Intl.DateTimeFormat('en-CA', { day: 'numeric', month: 'short' });
 
 function formatLocalDate(value: string): string {
-  const [year, month, day] = value.split('-').map(Number);
-  return DATE_FORMAT.format(new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1, 12)));
+  const [year = 0, month = 1, day = 1] = value.split('-').map(Number);
+  return DATE_FORMAT.format(new Date(Date.UTC(year, month - 1, day, 12)));
 }
 
 /** The age line under an event: from the source's own timestamps only. */
@@ -229,7 +229,7 @@ export function roadEventMessage(
       : `Unverified ${source} information`;
   const facts = [
     'severity' in event && event.severity !== undefined
-      ? `Severity: ${event.severity[0]?.toUpperCase() ?? ''}${event.severity.slice(1)}`
+      ? `Severity: ${event.severity.charAt(0).toUpperCase()}${event.severity.slice(1)}`
       : undefined,
     event.roadwayName === undefined
       ? undefined
