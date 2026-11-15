@@ -7,31 +7,31 @@ import GooglePlacesSwift
 import SwiftUI
 #endif
 
-/// Hosts Google's own Place Details component (Places UI Kit, Essentials tier) for the selected
-/// place, in two steps:
+/// Hosts Google's own Places UI Kit components (Essentials tier) for the selected place. React
+/// moves `phase` forward only after it holds a NavOSS grant for the next component load:
 ///
-/// 1. Resolve: a Places text search for the selected name, restricted to a box of
-///    `NavOSSGooglePlaceMatch.maximumDistanceMeters` around the selected coordinate, asking for the
-///    place ID only (the free Text Search Essentials IDs Only SKU). No result means Google does not
-///    list this place: `noMatch`, and no NavOSS grant is spent.
-/// 2. Load: once React has taken a NavOSS grant (`loadDetails`), Google's component loads that
-///    place ID live; it is shown only if Google's place lies within the same distance.
+/// - `nearest`: Place Details queried by the selected coordinate. Google reports the place it chose
+///   with no name, so the panel is shown only if that place is within
+///   `NavOSSGooglePlaceMatch.maximumDistanceMeters`.
+/// - `search`: after the driver asks to find the place, Place Search lists Google's results for the
+///   selected name near the coordinate; the driver's pick is reported as `picked`.
+/// - `picked`: Place Details for the place the driver picked, shown without a distance check.
 ///
-/// States reported to React: `resolving`, `resolved`, `loading`, `matched`, `noMatch`, `offline`,
-/// `unavailable`. No Google content leaves this view; the place ID is held in memory only.
+/// States reported to React: `loading`, `matched`, `noMatch`, `searchReady`, `searchEmpty`,
+/// `picked`, `offline`, `unavailable`. No Google content leaves this view; the picked place ID is
+/// held in memory only.
 final class NavOSSGooglePlaceRatingView: ExpoView {
   let onStateChange = EventDispatcher()
 
   private var latitude: Double = 0
   private var longitude: Double = 0
   private var name = ""
-  private var loadDetails = false
+  private var phase = "idle"
 
   #if NAVOSS_GOOGLE_PLACES
-  private var hostingController: UIHostingController<GooglePlaceDetailsContent>?
+  private var hostingController: UIHostingController<AnyView>?
   private var renderedKey: String?
-  private var resolvedPlaceID: String?
-  private var resolveTask: Task<Void, Never>?
+  private var pickedPlaceID: String?
   #endif
 
   required init(appContext: AppContext? = nil) {
@@ -51,42 +51,43 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
     name = value
   }
 
-  func setLoadDetails(_ value: Bool) {
-    loadDetails = value
+  func setPhase(_ value: String) {
+    phase = value
   }
 
   func updateContent() {
     #if NAVOSS_GOOGLE_PLACES
-    let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard
-      NavOSSGooglePlacesConfiguration.isAvailable,
-      !trimmedName.isEmpty,
-      let bounds = NavOSSGooglePlaceMatch.searchBounds(latitude: latitude, longitude: longitude)
+    guard NavOSSGooglePlacesConfiguration.isAvailable, CLLocationCoordinate2DIsValid(coordinate)
     else {
       tearDownContent()
       report("unavailable")
       return
     }
-    let key = "\(trimmedName)\u{0}\(latitude)\u{0}\(longitude)"
-    if renderedKey != key {
-      tearDownContent()
-      renderedKey = key
-      report("resolving")
-      resolveTask = Task { @MainActor [weak self] in
-        let state = await Self.resolvePlaceID(name: trimmedName, bounds: bounds)
-        guard let self, !Task.isCancelled, self.renderedKey == key else { return }
-        switch state {
-        case let .resolved(placeID):
-          self.resolvedPlaceID = placeID
-          self.report("resolved")
-          self.loadDetailsIfReady()
-        case let .failed(reported):
-          self.report(reported)
-        }
+    let place = "\(name)\u{0}\(latitude)\u{0}\(longitude)"
+    if renderedKey?.hasPrefix(place) == false {
+      pickedPlaceID = nil
+    }
+    let key = "\(place)\u{0}\(phase)"
+    guard renderedKey != key else { return }
+    detachHostingController()
+    renderedKey = key
+    switch phase {
+    case "nearest":
+      show(details(identifier: .coordinate(coordinate), checkDistance: true, key: key))
+      report("loading")
+    case "search":
+      show(search(key: key))
+      report("loading")
+    case "picked":
+      guard let placeID = pickedPlaceID else {
+        report("noMatch")
+        return
       }
+      show(details(identifier: .placeID(placeID), checkDistance: false, key: key))
+      report("loading")
+    default:
       return
     }
-    loadDetailsIfReady()
     #else
     report("unavailable")
     #endif
@@ -117,76 +118,38 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
     #endif
   }
 
+  private var coordinate: CLLocationCoordinate2D {
+    CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+  }
+
   private func report(_ state: String) {
     onStateChange(["state": state])
   }
 
   #if NAVOSS_GOOGLE_PLACES
-  private enum ResolveState {
-    case resolved(String)
-    case failed(String)
-  }
-
-  /// Exactly the place ID: the field list that bills as Text Search Essentials (IDs Only). Any
-  /// other property moves every search to a paid SKU, so the request is checked before it is sent.
-  static let placeIDSearchProperties: [PlaceProperty] = [.placeID]
-
-  @MainActor
-  private static func resolvePlaceID(
-    name: String,
-    bounds: NavOSSGooglePlaceMatch.Bounds
-  ) async -> ResolveState {
-    guard
-      let restriction = RectangularCoordinateRegion(
-        northEast: CLLocationCoordinate2D(latitude: bounds.north, longitude: bounds.east),
-        southWest: CLLocationCoordinate2D(latitude: bounds.south, longitude: bounds.west)
-      )
-    else {
-      return .failed("noMatch")
-    }
-    let request = SearchByTextRequest(
-      textQuery: name,
-      placeProperties: placeIDSearchProperties,
-      locationRestriction: restriction,
-      maxResultCount: 1,
-      isOpenNow: false,
-      rankPreference: .relevance
-    )
-    precondition(
-      request.placeProperties == [.placeID],
-      "The Google place search must request the place ID only (Text Search Essentials IDs Only)."
-    )
-    switch await PlacesClient.shared.responseForSearchByText(with: request) {
-    case let .success(response):
-      guard let placeID = response.places?.first?.placeID, !placeID.isEmpty else {
-        return .failed("noMatch")
-      }
-      return .resolved(placeID)
-    case let .failure(error):
-      return .failed(state(for: error))
-    }
-  }
-
-  private func loadDetailsIfReady() {
-    guard loadDetails, hostingController == nil, let placeID = resolvedPlaceID, let key = renderedKey
-    else {
-      return
-    }
+  private func details(identifier: PlaceIdentifier, checkDistance: Bool, key: String) -> AnyView {
     let selectedLatitude = latitude
     let selectedLongitude = longitude
-    let controller = UIHostingController(
-      rootView: GooglePlaceDetailsContent(
-        placeID: placeID,
+    return AnyView(
+      GooglePlaceDetailsContent(
+        identifier: identifier,
         onResult: { [weak self] result in
           guard let self, self.renderedKey == key else { return }
-          let state = Self.state(
-            for: result,
-            selectedLatitude: selectedLatitude,
-            selectedLongitude: selectedLongitude
-          )
+          let state: String
+          if let place = result.place {
+            state =
+              !checkDistance
+                || NavOSSGooglePlaceMatch.isNearby(
+                  selectedLatitude: selectedLatitude,
+                  selectedLongitude: selectedLongitude,
+                  candidateLatitude: place.location.latitude,
+                  candidateLongitude: place.location.longitude
+                ) ? "matched" : "noMatch"
+          } else {
+            state = Self.state(for: result.error)
+          }
           if state == "matched" {
-            self.hostingController?.view.alpha = 1
-            self.hostingController?.view.accessibilityElementsHidden = false
+            self.reveal()
           } else {
             self.detachHostingController()
           }
@@ -194,33 +157,54 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
         }
       )
     )
-    controller.view.backgroundColor = .clear
-    // Hidden until Google's place is confirmed near the selection.
-    controller.view.alpha = 0
-    controller.view.accessibilityElementsHidden = true
-    controller.view.frame = bounds
-    controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    hostingController = controller
-    report("loading")
-    attachContentIfPossible()
   }
 
-  private static func state(
-    for result: PlaceDetailsResult,
-    selectedLatitude: Double,
-    selectedLongitude: Double
-  ) -> String {
-    if let place = result.place {
-      return NavOSSGooglePlaceMatch.isNearby(
-        selectedLatitude: selectedLatitude,
-        selectedLongitude: selectedLongitude,
-        candidateLatitude: place.location.latitude,
-        candidateLongitude: place.location.longitude
-      ) ? "matched" : "noMatch"
-    }
-    switch result.error {
+  private func search(key: String) -> AnyView {
+    AnyView(
+      GooglePlaceSearchContent(
+        name: name,
+        coordinate: coordinate,
+        onLoad: { [weak self] places in
+          guard let self, self.renderedKey == key else { return }
+          if places.isEmpty {
+            self.detachHostingController()
+            self.report("searchEmpty")
+          } else {
+            self.reveal()
+            self.report("searchReady")
+          }
+        },
+        onError: { [weak self] error in
+          guard let self, self.renderedKey == key else { return }
+          self.detachHostingController()
+          self.report(Self.state(for: error))
+        },
+        onSelect: { [weak self] place in
+          guard let self, self.renderedKey == key, let placeID = place.placeID else { return }
+          self.pickedPlaceID = placeID
+          self.report("picked")
+        }
+      )
+    )
+  }
+
+  private static func state(for error: (any Error)?) -> String {
+    switch error {
     case let error as PlacesError:
-      return state(for: error)
+      switch error {
+      case .network:
+        return "offline"
+      // A rejected key surfaces as `.server("Authentication failed…")` (seen with a placeholder
+      // key on the simulator), so server and internal failures are "temporarily unavailable".
+      case .keyInvalid, .keyExpired, .usageLimitExceeded, .rateLimitExceeded,
+        .deviceRateLimitExceeded, .accessNotConfigured, .incorrectBundleIdentifier, .server,
+        .internal:
+        return "unavailable"
+      case .location, .invalidRequest:
+        return "noMatch"
+      @unknown default:
+        return "noMatch"
+      }
     case let error as URLError where error.code == .notConnectedToInternet
       || error.code == .networkConnectionLost || error.code == .timedOut:
       return "offline"
@@ -229,21 +213,21 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
     }
   }
 
-  private static func state(for error: PlacesError) -> String {
-    switch error {
-    case .network:
-      return "offline"
-    // A rejected key surfaces as `.server("Authentication failed…")` (seen with a placeholder key
-    // on the simulator), so server and internal failures are "temporarily unavailable".
-    case .keyInvalid, .keyExpired, .usageLimitExceeded, .rateLimitExceeded,
-      .deviceRateLimitExceeded, .accessNotConfigured, .incorrectBundleIdentifier, .server,
-      .internal:
-      return "unavailable"
-    case .location, .invalidRequest:
-      return "noMatch"
-    @unknown default:
-      return "noMatch"
-    }
+  private func show(_ view: AnyView) {
+    let controller = UIHostingController(rootView: view)
+    controller.view.backgroundColor = .clear
+    // Hidden until Google's content is confirmed for this place.
+    controller.view.alpha = 0
+    controller.view.accessibilityElementsHidden = true
+    controller.view.frame = bounds
+    controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    hostingController = controller
+    attachContentIfPossible()
+  }
+
+  private func reveal() {
+    hostingController?.view.alpha = 1
+    hostingController?.view.accessibilityElementsHidden = false
   }
 
   private func attachContentIfPossible() {
@@ -281,20 +265,17 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
   }
 
   private func tearDownContent() {
-    resolveTask?.cancel()
-    resolveTask = nil
     detachHostingController()
-    resolvedPlaceID = nil
     renderedKey = nil
+    pickedPlaceID = nil
   }
   #endif
 }
 
 #if NAVOSS_GOOGLE_PLACES
 /// Every element the Essentials `PlaceDetailsView` offers. Places UI Kit bills per component
-/// load, not per element, so the full list costs the same as any subset. The Pro
-/// `AdvancedPlaceDetailsView` adds only button and review/media filter configuration, which
-/// NavOSS does not need.
+/// load, not per element. Google's place name is always shown in the panel's header, so the driver
+/// can see which listing Google chose.
 let navOSSGooglePlaceDetailsContent: Set<PlaceDetailsContent> = [
   .media(),
   .address(),
@@ -321,8 +302,8 @@ private struct GooglePlaceDetailsContent: View {
     theme: PlacesMaterialTheme()
   )
 
-  init(placeID: String, onResult: @escaping (PlaceDetailsResult) -> Void) {
-    _query = State(initialValue: PlaceDetailsQuery(identifier: .placeID(placeID)))
+  init(identifier: PlaceIdentifier, onResult: @escaping (PlaceDetailsResult) -> Void) {
+    _query = State(initialValue: PlaceDetailsQuery(identifier: identifier))
     self.onResult = onResult
   }
 
@@ -332,6 +313,54 @@ private struct GooglePlaceDetailsContent: View {
       configuration: configuration,
       placeDetailsCallback: onResult
     )
+  }
+}
+
+/// Google's Place Search component listing results for the selected name near its coordinate,
+/// shown only after the driver asks for it. Selecting a result reports Google's place ID.
+private struct GooglePlaceSearchContent: View {
+  /// How far around the selected point Google's results are biased.
+  static let biasRadiusMeters: CLLocationDistance = 500
+
+  @State private var request: PlaceSearchViewRequest
+  private let onLoad: ([Place]) -> Void
+  private let onError: (PlacesError) -> Void
+  private let onSelect: (Place) -> Void
+  private let configuration = PlaceSearchConfiguration(
+    content: [.address(), .rating(), .type(), .openNowStatus()],
+    theme: PlacesMaterialTheme(),
+    selectable: true
+  )
+
+  init(
+    name: String,
+    coordinate: CLLocationCoordinate2D,
+    onLoad: @escaping ([Place]) -> Void,
+    onError: @escaping (PlacesError) -> Void,
+    onSelect: @escaping (Place) -> Void
+  ) {
+    _request = State(
+      initialValue: .searchByText(
+        SearchByTextRequest(
+          textQuery: name,
+          placeProperties: [.all],
+          locationBias: CircularCoordinateRegion(center: coordinate, radius: Self.biasRadiusMeters),
+          maxResultCount: 5,
+          isOpenNow: false,
+          rankPreference: .distance
+        )
+      )
+    )
+    self.onLoad = onLoad
+    self.onError = onError
+    self.onSelect = onSelect
+  }
+
+  var body: some View {
+    GooglePlacesSwift.PlaceSearchView(request: $request, configuration: configuration)
+      .onLoad(onLoad)
+      .onRequestError(onError)
+      .onPlaceSelected(onSelect)
   }
 }
 #endif

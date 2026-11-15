@@ -1,43 +1,18 @@
 import Foundation
 
-/// Geometry for finding the selected place on Google without reading Google's content.
-///
-/// Google's Place Details callback carries no display name, so NavOSS cannot compare names itself.
-/// Instead Google resolves the selected place's name to a place ID with a text search restricted to
-/// a small box around the selected coordinate, and the place Google then loads must lie within
-/// `maximumDistanceMeters` of that coordinate. Only the place ID and its coordinate are used.
+/// The only check NavOSS can make on Google's automatic place panel. Google's Place Details
+/// component, queried by the selected coordinate, reports the place it chose but no name, so the
+/// panel is shown only when that place's own coordinate is within `maximumDistanceMeters` of the
+/// selection. Only that coordinate is read.
 public enum NavOSSGooglePlaceMatch {
-  /// Half the side of the search box, and the furthest Google's place may be from the selected
-  /// coordinate. Large venues (parks, malls, stadiums) can have their OpenStreetMap point and
-  /// Google's pin well apart; 200 m keeps those while excluding the next block's branch.
-  public static let maximumDistanceMeters: Double = 200
-
-  public struct Bounds: Equatable {
-    public let north: Double
-    public let south: Double
-    public let east: Double
-    public let west: Double
-  }
-
-  /// The search box: `maximumDistanceMeters` north, south, east and west of the coordinate.
-  /// Nil for an invalid coordinate or one too close to a pole for a longitude span.
-  public static func searchBounds(latitude: Double, longitude: Double) -> Bounds? {
-    guard
-      latitude.isFinite, longitude.isFinite, abs(latitude) < 89, abs(longitude) <= 180
-    else {
-      return nil
-    }
-    let metersPerDegreeLatitude = 111_320.0
-    let latitudeSpan = maximumDistanceMeters / metersPerDegreeLatitude
-    let longitudeSpan =
-      maximumDistanceMeters / (metersPerDegreeLatitude * cos(latitude * Double.pi / 180))
-    return Bounds(
-      north: latitude + latitudeSpan,
-      south: latitude - latitudeSpan,
-      east: longitude + longitudeSpan,
-      west: longitude - longitudeSpan
-    )
-  }
+  /// Measured on the simulator with the production key (2026-11-15): Google's listing was 2 m from
+  /// the selection for Model Milk and Calgary Tower (the same business), and 8 m for Calgary
+  /// Central Library, where it was a different tenant ("Toast Of The Town Club"). Distance cannot
+  /// tell tenants of one building apart, so the panel is labelled as Google's nearest listing and
+  /// "Find this place on Google" lets the driver pick the right one. 30 m allows for the gap
+  /// between an OpenStreetMap point and Google's pin for the same storefront while keeping a
+  /// listing across the street or on the next lot from opening automatically.
+  public static let maximumDistanceMeters: Double = 30
 
   /// True when Google's place lies within `maximumDistanceMeters` of the selected coordinate.
   public static func isNearby(

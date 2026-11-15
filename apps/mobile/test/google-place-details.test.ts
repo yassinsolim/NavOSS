@@ -6,7 +6,6 @@ import {
   googlePlaceDetailsEligible,
   googlePlaceDetailsHeight,
   googlePlaceDetailsMessage,
-  googlePlaceSearchText,
   nativeGooglePlaceState,
 } from '../src/features/map/google-place-details.js';
 import { NavOssApiError } from '../src/lib/api.js';
@@ -98,20 +97,26 @@ describe('Google place details states', () => {
   it('accepts only known native states and hides Google on anything else', () => {
     expect(nativeGooglePlaceState('matched')).toBe('matched');
     expect(nativeGooglePlaceState('offline')).toBe('offline');
-    expect(nativeGooglePlaceState('resolving')).toBe('resolving');
-    expect(nativeGooglePlaceState('resolved')).toBe('resolved');
+    expect(nativeGooglePlaceState('searchReady')).toBe('searchReady');
+    expect(nativeGooglePlaceState('searchEmpty')).toBe('searchEmpty');
+    expect(nativeGooglePlaceState('picked')).toBe('picked');
     // The grant step belongs to React; native never reports it.
     expect(nativeGooglePlaceState('checking')).toBe('noMatch');
     expect(nativeGooglePlaceState(undefined)).toBe('noMatch');
   });
 
-  it('says nothing about Google when it has no matching place', () => {
-    expect(googlePlaceDetailsMessage('resolving')).toBeUndefined();
-    expect(googlePlaceDetailsMessage('noMatch')).toBeUndefined();
-    expect(googlePlaceDetailsMessage('resolved')).toEqual({ title: 'Loading Google details' });
+  it('labels each state without claiming the listing is the same business', () => {
     expect(googlePlaceDetailsMessage('matched')).toBeUndefined();
-    expect(googlePlaceDetailsMessage('checking')).toEqual({ title: 'Loading Google details' });
-    expect(googlePlaceDetailsMessage('loading')).toEqual({ title: 'Loading Google details' });
+    expect(googlePlaceDetailsMessage('searchReady')).toBeUndefined();
+    expect(googlePlaceDetailsMessage('noMatch')).toEqual({
+      title: 'Google has no listing at this exact spot',
+    });
+    expect(googlePlaceDetailsMessage('searchEmpty')).toEqual({
+      title: 'Google found no listing with this name nearby',
+    });
+    for (const state of ['checking', 'loading', 'picked'] as const) {
+      expect(googlePlaceDetailsMessage(state)).toEqual({ title: 'Loading Google details' });
+    }
     expect(googlePlaceDetailsMessage('unavailable')).toEqual({
       title: 'Google details are temporarily unavailable',
     });
@@ -122,42 +127,5 @@ describe('Google place details states', () => {
     expect(googlePlaceDetailsHeight(568)).toBe(420);
     expect(googlePlaceDetailsHeight(874)).toBe(612);
     expect(googlePlaceDetailsHeight(1366)).toBe(720);
-  });
-});
-
-describe('Google place search text', () => {
-  it('adds the start of the public address so a generic name finds that building', () => {
-    expect(
-      googlePlaceSearchText(
-        place({
-          details: {
-            address:
-              'Calgary Central Library, 800, 3 Street SE, Downtown Commercial Core, Calgary, Alberta',
-          },
-          name: 'Central Library',
-        }),
-      ),
-    ).toBe('Central Library, Calgary Central Library, 800');
-    expect(
-      googlePlaceSearchText(
-        place({ details: { address: '308, 17 Avenue SW, Beltline, Calgary' }, name: 'Model Milk' }),
-      ),
-    ).toBe('Model Milk, 308, 17 Avenue SW');
-  });
-
-  it('uses the Calgary index label without repeating the name', () => {
-    expect(
-      googlePlaceSearchText(
-        place({
-          id: 'calgary-business:1',
-          label: 'Tim Hortons, #165 225 7 Av SW, Calgary, AB',
-          name: 'Tim Hortons',
-        }),
-      ),
-    ).toBe('Tim Hortons, #165 225 7 Av SW, Calgary');
-  });
-
-  it('falls back to the name alone', () => {
-    expect(googlePlaceSearchText(place({ label: 'Calgary Tower' }))).toBe('Calgary Tower');
   });
 });

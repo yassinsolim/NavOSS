@@ -19,17 +19,19 @@ import {
   nativeGooglePlaceState,
 } from '@/features/map/google-place-details';
 import { reserveGooglePlaceQuery } from '@/lib/api';
-import { createThemedStyles, radius, space, typography } from '@/theme';
+import { createThemedStyles, space, typography, useTheme } from '@/theme';
 import { ListRow } from '@/ui/list-row';
 import { StateView } from '@/ui/state-view';
+
+type GooglePhase = 'idle' | 'nearest' | 'search' | 'picked';
 
 interface NativeGooglePlaceDetailsProps {
   latitude: number;
   longitude: number;
-  /** Set once a NavOSS grant is held; Google's component loads only then. */
-  loadDetails: boolean;
   name: string;
   onStateChange: (event: NativeSyntheticEvent<{ state: string }>) => void;
+  /** Moved forward only once a NavOSS grant is held for the next Google component load. */
+  phase: GooglePhase;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -45,16 +47,15 @@ interface GooglePlaceDetailsSectionProps {
   longitude: number;
   name: string;
   onReadReviews: () => void;
-  /** What Google resolves to a place ID: the name and, when known, the street address. */
-  searchText: string;
 }
 
 /**
- * Google's own place details, kept apart from the OpenStreetMap details above it. Google first
- * resolves the selected name near its coordinate to a place ID (free, no grant). Only a place
- * Google lists takes an anonymous grant from the NavOSS server's monthly counter, and only then
- * does Google's component fetch and render the place live. When Google has no matching place the
- * section disappears and says nothing about Google.
+ * Google's own place details, kept apart from the OpenStreetMap details above it. Google's panel
+ * for the listing nearest the selected coordinate opens automatically when that listing is within
+ * a few metres; it shows Google's own name for the listing, and the section says it is Google's
+ * nearest listing rather than claiming it is the same business. "Find this place on Google" shows
+ * Google's search list for the name nearby, and the driver's pick replaces the panel. Every Google
+ * component load first takes an anonymous grant from the NavOSS server's monthly counter.
  */
 export function GooglePlaceDetailsSection({
   available,
@@ -62,41 +63,54 @@ export function GooglePlaceDetailsSection({
   longitude,
   name,
   onReadReviews,
-  searchText,
 }: GooglePlaceDetailsSectionProps) {
   const styles = useStyles();
+  const { colors } = useTheme();
   const { height: windowHeight } = useWindowDimensions();
   const grantKey = `${name}:${latitude}:${longitude}`;
-  const requestRef = useRef<{
+  const firstGrantRef = useRef<{
     key: string;
     request: Promise<GooglePlaceQueryGrantResponse>;
   } | null>(null);
-  const [state, setState] = useState<GooglePlaceDetailsState>('resolving');
-  const [granted, setGranted] = useState(false);
-  // Stays true once Google has listed the place, so moving on to `checking` does not cancel the
-  // grant request below.
-  const [listed, setListed] = useState(false);
+  const [state, setState] = useState<GooglePlaceDetailsState>('checking');
+  const [phase, setPhase] = useState<GooglePhase>('idle');
+  const activeRef = useRef(true);
 
   useEffect(() => {
-    if (!available || !listed) return undefined;
-    let active = true;
-    if (requestRef.current?.key !== grantKey) {
-      requestRef.current = { key: grantKey, request: reserveGooglePlaceQuery() };
-    }
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
+
+  const loadAfterGrant = (
+    next: GooglePhase,
+    request: Promise<GooglePlaceQueryGrantResponse> = reserveGooglePlaceQuery(),
+  ) => {
     setState('checking');
-    void requestRef.current.request
+    void request
       .then((response) => {
-        if (!active) return;
-        setGranted(response.granted);
-        if (!response.granted) setState('unavailable');
+        if (!activeRef.current) return;
+        if (response.granted) {
+          setPhase(next);
+        } else {
+          setState('unavailable');
+        }
       })
       .catch((error: unknown) => {
-        if (active) setState(googleGrantFailureState(error));
+        if (activeRef.current) setState(googleGrantFailureState(error));
       });
-    return () => {
-      active = false;
-    };
-  }, [available, grantKey, listed]);
+  };
+
+  useEffect(() => {
+    if (!available) return;
+    if (firstGrantRef.current?.key !== grantKey) {
+      firstGrantRef.current = { key: grantKey, request: reserveGooglePlaceQuery() };
+    }
+    setPhase('idle');
+    loadAfterGrant('nearest', firstGrantRef.current.request);
+    // Runs once per place; loadAfterGrant only reads refs and setters.
+  }, [available, grantKey]);
 
   const reviewsLink = (
     <ListRow
@@ -124,44 +138,29 @@ export function GooglePlaceDetailsSection({
     );
   }
 
-  if (state === 'noMatch') return null;
-
   const message = googlePlaceDetailsMessage(state);
-  const matched = state === 'matched';
-  const native = (
-    // Mounted while Google resolves and loads; collapsed and hidden until the place matches.
-    <View
-      key="google"
-      style={
-        matched ? [styles.card, { height: googlePlaceDetailsHeight(windowHeight) }] : styles.probe
-      }
-    >
-      <NativeGooglePlaceDetailsView
-        latitude={latitude}
-        loadDetails={granted}
-        longitude={longitude}
-        name={searchText}
-        onStateChange={(event) => {
-          const next = nativeGooglePlaceState(event.nativeEvent.state);
-          if (next === 'resolved') setListed(true);
-          setState(next);
-        }}
-        style={StyleSheet.absoluteFill}
-      />
-    </View>
-  );
+  const showsGoogle = state === 'matched' || state === 'searchReady';
+  const busy = state === 'checking' || state === 'loading' || state === 'picked';
+  const failed = state === 'offline' || state === 'unavailable';
+  const caption =
+    state === 'searchReady'
+      ? 'Choose the Google listing that matches this place.'
+      : state === 'matched' && phase === 'picked'
+        ? 'The Google listing you chose.'
+        : state === 'matched'
+          ? "Google's listing nearest this spot. Check the name: it may be a neighbouring business."
+          : undefined;
+  const canSearch =
+    !busy &&
+    !failed &&
+    state !== 'searchReady' &&
+    (phase === 'nearest' || phase === 'picked' || state === 'searchEmpty');
 
-  // Until Google lists the place, say nothing about Google. The native view keeps one position
-  // in this tree in every state: remounting it would resolve the place again.
-  const resolving = state === 'resolving';
-  const busy = state === 'resolved' || state === 'checking' || state === 'loading';
   return (
-    <View style={resolving ? undefined : styles.section}>
-      {!resolving && (
-        <Text accessibilityRole="header" maxFontSizeMultiplier={1.5} style={styles.title}>
-          Google reviews and details
-        </Text>
-      )}
+    <View style={styles.section}>
+      <Text accessibilityRole="header" maxFontSizeMultiplier={1.5} style={styles.title}>
+        Google reviews and details
+      </Text>
       {message !== undefined && (
         <StateView
           message={message.message}
@@ -169,13 +168,59 @@ export function GooglePlaceDetailsSection({
           visual={
             busy
               ? 'loading'
-              : { android: 'cloud_off', ios: state === 'offline' ? 'wifi.slash' : 'clock' }
+              : {
+                  android: 'cloud_off',
+                  ios:
+                    state === 'offline'
+                      ? 'wifi.slash'
+                      : state === 'unavailable'
+                        ? 'clock'
+                        : 'mappin.slash',
+                }
           }
         />
       )}
-      {native}
-      {/* Google's component has its own "Open in Maps"; the link is the fallback when it is absent. */}
-      {!resolving && !busy && !matched && reviewsLink}
+      {caption !== undefined && (
+        <Text maxFontSizeMultiplier={1.5} style={styles.note}>
+          {caption}
+        </Text>
+      )}
+      {/* One native view in one position: it hosts each Google component in turn. */}
+      <View
+        style={
+          showsGoogle
+            ? [styles.card, { height: googlePlaceDetailsHeight(windowHeight) }]
+            : styles.probe
+        }
+      >
+        <NativeGooglePlaceDetailsView
+          latitude={latitude}
+          longitude={longitude}
+          name={name}
+          onStateChange={(event) => {
+            const next = nativeGooglePlaceState(event.nativeEvent.state);
+            setState(next);
+            if (next === 'picked') loadAfterGrant('picked');
+          }}
+          phase={phase}
+          style={StyleSheet.absoluteFill}
+        />
+      </View>
+      {canSearch && (
+        <ListRow
+          accessibilityHint="Shows Google's listings for this place's name nearby; sends the name and location to Google"
+          accessibilityLabel="Find this place on Google"
+          accessibilityRole="button"
+          icon={{ android: 'search', ios: 'magnifyingglass' }}
+          iconTint={colors.textSecondary}
+          onPress={() => {
+            loadAfterGrant('search');
+          }}
+          title="Find this place on Google"
+          titleLines={2}
+        />
+      )}
+      {failed && reviewsLink}
     </View>
   );
 }
