@@ -74,6 +74,30 @@ Metro's shared transform cache under `$TMPDIR` ignores a changed `EXPO_PUBLIC_AP
 - [ ] **Claims.** App Store metadata, What to Test and review notes say lane guidance, live traffic, shared reports, Alberta and British Columbia coverage and offline maps are **not available** unless the server has been deployed, enabled and verified (section 3).
 - [ ] CarPlay entitlement, template scene, `location` background mode and production API origin audited in the signed IPA (existing audit in [ci-cd.md](ci-cd.md)).
 
+### App Privacy answers for a Google-profile build (`production-carplay-google`)
+
+Enter these in App Store Connect only for an artifact built with the Google profile; the default
+`production-carplay` build keeps its current answers. They come from the privacy manifests embedded
+in GooglePlacesSwift 10.15.0 (`GooglePlacesSwift.bundle`: declares nothing) and its Google Places
+SDK (`GooglePlaces.bundle`), read from the pods on 2026-11-15. Add them to the existing NavOSS
+answers (Other User Content, linked, App Functionality, no tracking).
+
+| App Store Connect data type      | Linked to the user | Used for tracking | Purposes                     |
+| -------------------------------- | ------------------ | ----------------- | ---------------------------- |
+| Location → Precise Location      | No                 | No                | Analytics, App Functionality |
+| Location → Coarse Location       | No                 | No                | Analytics, App Functionality |
+| Identifiers → Device ID          | Yes                | No                | Analytics, App Functionality |
+| Other Data → Other Data Types    | Yes                | No                | Analytics                    |
+| Diagnostics → Performance Data   | No                 | No                | Analytics                    |
+| Usage Data → Product Interaction | No                 | No                | Analytics                    |
+| Search History → Search History  | No                 | No                | Analytics                    |
+
+The SDK manifest also lists required-reason APIs (file timestamp `C617.1`; user defaults `1C8F.1`,
+`C56D.1`, `CA92.1`); those are not App Privacy answers. Use the Google-build review note in
+`app-store-metadata.md`. Before upload, check the IPA has `NavOSSGooglePlacesEnabled` and
+`GooglePlacesSwiftResources.bundle` (the hosted workflow does this) and that the hosted privacy
+policy is the November 15, 2026 version.
+
 ## 2. Head-unit checklist
 
 Run on an entitled physical head unit, parked or passenger-operated. Record build number, phone, iOS version, vehicle and wired or wireless. Do not record route coordinates or trip history. Interactive CarPlay has never been exercised on the maintainer's Mac (Xcode 27.2 has no CarPlay Simulator window), so every item below is unverified until run.

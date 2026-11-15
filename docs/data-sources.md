@@ -155,17 +155,26 @@ preserves relevance for unique names and nearest-first order for chains. This hi
 the device. Submitting a search exposes map markers through a compact results strip, with Show
 list available to return to the full list.
 
-OpenStreetMap does not provide a Google-style review corpus. NavOSS does not scrape reviews or add
-Google values to its open-data result or shared contracts. An optional, key-gated Google Places UI
-Kit component may receive a selected POI name and coordinate and render Google's photos, current
-rating and rating count, review text, and required attribution in its own visually separated native
-view. NavOSS checks the returned name and coordinate to prevent a mismatched place, but does not read
-or persist the photo, rating, count, or review values. The separate **More reviews on Google Maps**
-command is an explicit external search and opens only after the user chooses it. An enabled build
-links GooglePlacesSwift 10.15.0; its underlying SDK privacy manifest declares location, Device ID,
-Other Data, performance, product interaction, and search history collection for analytics and/or app
-functionality, with no tracking. Builds without the Google key make no Google place-details request
-and do not link that SDK.
+OpenStreetMap does not provide a Google-style review corpus. NavOSS does not scrape reviews, call the
+Places web service for review, rating or photo values, or add Google values to its open-data result,
+shared contracts or server. Builds made with the `production-carplay-google` profile embed Google's
+Places UI Kit Place Details component (Essentials tier, `PlaceDetailsView`, GooglePlacesSwift 10.15.0)
+on the phone place sheet for named places, businesses and landmarks; street addresses, streets,
+neighbourhoods and dropped pins are not queried. The component is queried with the selected coordinate
+only, fetches live on each open, and renders, with Google's attribution and in its own visually
+separated block below the OpenStreetMap details, every element that tier offers: photos, address,
+rating and rating count, type, price level, accessible entrance, open-now status, opening hours,
+summary, website, phone number, type-specific highlights, reviews, plus code and feature list. Places
+UI Kit is billed per component load, not per element. NavOSS compares only Google's returned display
+name and coordinate with the selected place (same business name after normalisation, within 200 m)
+and hides the component when they differ, so a neighbouring business is never shown; it keeps
+nothing from Google. Each load first takes an anonymous grant from the NavOSS server's 8,000-per-month
+counter, and the Google key's own quota allows 250 queries a day. CarPlay shows no Google content.
+The separate **More reviews on Google Maps** command is an explicit external search and opens only
+after the user chooses it. The SDK's privacy manifest declares location, Device ID, Other Data,
+performance, product interaction, and search history collection for analytics and/or app
+functionality, with no tracking. Builds without the restricted Google key make no Google place-details
+request and do not link that SDK.
 
 ## Live Traffic Routing
 

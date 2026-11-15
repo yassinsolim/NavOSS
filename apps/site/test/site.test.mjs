@@ -151,7 +151,8 @@ test('legal and support pages keep their published commitments', () => {
   assert.match(privacy, /Location and active navigation/);
   assert.match(privacy, /Clear saved and recent destinations/);
   assert.match(privacy, /No advertising or cross-app tracking/);
-  assert.match(privacy, /selected public name and coordinate directly to Google Places/);
+  assert.match(privacy, /for the place at the selected coordinate/);
+  assert.match(privacy, /the place name is not sent to Google/);
   assert.match(privacy, /More reviews on Google Maps/);
   assert.match(privacy, /denies grants after 8,000 in a month/);
   assert.match(privacy, /no place name, coordinate, account, device identifier/);
@@ -163,7 +164,7 @@ test('legal and support pages keep their published commitments', () => {
   assert.match(privacy, /Community traffic sharing \(opt-in\)/);
   assert.match(privacy, /Community road reports/);
   assert.match(privacy, /not switched on in the deployed service/);
-  assert.match(privacy, /Effective November 14, 2026/);
+  assert.match(privacy, /Effective November 15, 2026/);
   assert.match(
     dataSources,
     /Builds without the restricted Google key make no Google place-details request/,

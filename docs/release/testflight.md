@@ -83,7 +83,8 @@ EXPO_PUBLIC_API_URL=https://navoss-api.yassin.app \
 
 The validator rejects missing, non-HTTPS, loopback, `.local`, and private-network origins.
 
-Google Places photos, ratings, and reviews are a separate opt-in build path. Before enabling them, create a
+Google place details and reviews are a separate build path, approved by the owner on 2026-11-15 for the
+`production-carplay-google` profile only. Before building it, create a
 billing-enabled Google Cloud project, enable Places UI Kit, restrict the iOS key to
 `org.navoss.mobile` and the required API, store it as the EAS secret
 `GOOGLE_PLACES_IOS_API_KEY`, set `NAVOSS_GOOGLE_PLACES_ENABLED=1`, and reconcile App Privacy and
@@ -93,8 +94,11 @@ interaction, and unlinked search history for analytics and/or app functionality,
 An enabled artifact must use matching App Store Connect answers and review notes. The release
 validator and config plugin fail closed when the flag has no key. Checked-in production profiles
 explicitly set `NAVOSS_GOOGLE_PLACES_ENABLED=0`; disabled builds do not link GooglePlacesSwift or
-make place-details requests. Enabled builds use the standard Places UI Kit query rather than its
-higher-priced advanced component. Every enabled query must first receive an anonymous grant from
+make place-details requests. Enabled builds use the Essentials `PlaceDetailsView` (billed per load,
+with every content element it offers) rather than the Pro `AdvancedPlaceDetailsView`. The hosted
+workflow `ios-testflight-runner.yml` builds it with `profile: production-carplay-google`; that run
+fails before Xcode unless the `GOOGLE_PLACES_IOS_API_KEY` secret is set in the
+`app-store-production` GitHub environment (the EAS secret is not readable outside EAS servers). Every enabled query must first receive an anonymous grant from
 the durable NavOSS counter, which hard-stops at 8,000 grants per UTC month and fails closed. Keep
 Google-side quota limits and billing alerts as an independent second layer before release.
 
@@ -579,7 +583,7 @@ was deleted. Existing signed builds remain compatible through the unchanged stri
 `/v1/config`; the new regional client uses `/v2/config`. A replacement signed build is required
 before TestFlight users can access the Kelowna UI and unrestricted map changes.
 
-The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a keyless CarPlay tester build so the approved scene and entitlement are present. After the restricted EAS Google key and matching App Privacy answers are ready, use `production-carplay-google` for the rating-enabled candidate:
+The `preview` profile is an ad hoc production-like build, not TestFlight. Use `production` for a phone-only store build. Use the dedicated `production-carplay` profile for a keyless CarPlay tester build so the approved scene and entitlement are present. After the restricted EAS Google key and matching App Privacy answers are ready, use `production-carplay-google` for the Google place-details candidate:
 
 ```sh
 eas build --platform ios --profile production-carplay
