@@ -26,6 +26,7 @@ import { categoryLabel, searchResultSubtitle } from '@/features/map/search-resul
 import {
   type ApiConnectionState,
   exploreServiceNotice,
+  noMatchesCopy,
   searchSourceLabel,
 } from '@/features/map/search-status';
 import {
@@ -158,6 +159,12 @@ export function ExploreSheet({
     nearbySearchEnabled,
     offlineMapsInstalled,
   });
+  // Outside coverage the notice leads the sheet, so it shows at its lowest detent too.
+  const outsideCoverage = notice?.kind === 'outside-coverage';
+  const noMatches = noMatchesCopy({
+    category: activeCategoryLabel !== undefined,
+    ...(outsideCoverage ? { outsideCoverageName: coverageName } : {}),
+  });
 
   return (
     <BottomSheet
@@ -282,14 +289,8 @@ export function ExploreSheet({
             {searchState === 'success' && results.length === 0 && (
               <StateView
                 layout="block"
-                message={
-                  activeCategoryLabel === undefined
-                    ? 'Try another place name or add a street.'
-                    : 'Try another category or search by name.'
-                }
-                title={
-                  activeCategoryLabel === undefined ? 'No matches found' : 'No places found nearby'
-                }
+                message={noMatches.message}
+                title={noMatches.title}
                 visual={{ android: 'search_off', ios: 'magnifyingglass' }}
               />
             )}
@@ -335,12 +336,21 @@ export function ExploreSheet({
                 </View>
               ))}
             <Text maxFontSizeMultiplier={1.4} style={styles.source}>
-              {searchSourceLabel(searchSource, resultsDegraded)}
+              {searchSourceLabel(searchSource, resultsDegraded, results)}
             </Text>
           </BottomSheetScrollView>
         </>
       ) : (
         <>
+          {outsideCoverage && (
+            <Banner
+              announce
+              message={notice.message}
+              style={styles.leadNotice}
+              title={notice.title}
+              tone={notice.tone}
+            />
+          )}
           <ScrollView
             key={String(fontScale)}
             accessibilityLabel="Explore nearby"
@@ -387,7 +397,7 @@ export function ExploreSheet({
             ))}
           </ScrollView>
           <BottomSheetScrollView contentContainerStyle={styles.listContent}>
-            {notice !== undefined && (
+            {notice !== undefined && !outsideCoverage && (
               <Banner
                 action={
                   locationState === 'denied' && apiConnection !== 'offline' ? (
@@ -491,6 +501,7 @@ const useStyles = createThemedStyles(({ colors }) =>
       paddingVertical: 0,
     },
     listContent: { gap: space.xs, paddingBottom: space.xxl, paddingHorizontal: space.md },
+    leadNotice: { marginBottom: space.md, marginHorizontal: space.lg },
     notice: { marginBottom: space.sm, marginHorizontal: space.xs },
     resultsCount: { ...typography.label, color: colors.text },
     resultsHeader: {
