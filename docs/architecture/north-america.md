@@ -110,7 +110,10 @@ into `422`, title "No road route", detail "No road connects these places. Some a
 air, by water or by a winter road." Other Valhalla failures stay `503` "Routing unavailable". `422`
 is deliberate: builds 75 and 80 show the detail as the route error, while a `400` would make the
 phone retry once without its optional fields and a `404` would send it to `/v1/routes`. CarPlay in
-those builds shows its generic unavailable message for any status other than `400` and `404`.
+those builds shows its generic unavailable message for that status; from the next build the native
+client reads a `422` problem's title and detail and CarPlay shows "No road route" with the detail,
+or its first sentence where the alert is narrow. A `422` without that shape stays "unavailable", and
+it no longer triggers the offline-map fallback (the offline graph holds the same roads).
 
 ### Time zones
 

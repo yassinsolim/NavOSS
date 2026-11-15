@@ -17,6 +17,37 @@ public enum NavOSSNavigationAPIError: Error {
   /// A place on a newly planned route is outside the coverage the server declares, named here
   /// as the server names it (e.g. "Calgary and Kelowna service areas").
   case outsideCoverage(String)
+  /// The server answered 422: every place is covered but no road route joins them. Carries the
+  /// server's own wording, the text the phone shows.
+  case routeNotFound(NavOSSRouteProblem)
+}
+
+/// The server's explanation of a route it cannot plan (`ProblemDetails` title and detail).
+public struct NavOSSRouteProblem: Equatable, Sendable {
+  public let title: String
+  public let detail: String
+
+  /// Longest first, as `CPNavigationAlert` wants: the system shows the longest variant that fits.
+  /// The shorter one is the detail's first sentence.
+  public var detailVariants: [String] {
+    guard let end = detail.firstIndex(of: "."), detail.index(after: end) < detail.endIndex else {
+      return [detail]
+    }
+    return [detail, String(detail[...end])]
+  }
+
+  init?(problemDetails data: Data) {
+    struct Body: Decodable {
+      let detail: String
+      let title: String
+    }
+    guard let body = try? JSONDecoder().decode(Body.self, from: data) else { return nil }
+    let title = body.title.trimmingCharacters(in: .whitespacesAndNewlines)
+    let detail = body.detail.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !title.isEmpty, !detail.isEmpty else { return nil }
+    self.title = title
+    self.detail = detail
+  }
 }
 
 private struct SearchRequest: Encodable {
@@ -465,6 +496,9 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
     }
     guard response.statusCode != 404 else {
       throw NavOSSNavigationAPIError.endpointNotFound
+    }
+    if response.statusCode == 422, let problem = NavOSSRouteProblem(problemDetails: data) {
+      throw NavOSSNavigationAPIError.routeNotFound(problem)
     }
     guard (200..<300).contains(response.statusCode) else {
       throw NavOSSNavigationAPIError.serviceUnavailable

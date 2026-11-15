@@ -228,6 +228,71 @@ final class NavigationRoutesV2Tests: XCTestCase {
     }
   }
 
+  // MARK: No road route
+
+  /// The 422 the API returned for Toronto City Hall to Centre Island (no car ferry), recorded
+  /// from the API with Valhalla's recorded 442 answer (`no-road-route-422.json`).
+  private static func noRoadRoute() throws -> (status: Int, body: Data) {
+    let document = try XCTUnwrap(
+      JSONSerialization.jsonObject(
+        with: Data(contentsOf: fixtures.appendingPathComponent("no-road-route-422.json")))
+        as? [String: Any])
+    return (
+      try XCTUnwrap(document["status"] as? Int),
+      Data(try XCTUnwrap(document["body"] as? String).utf8)
+    )
+  }
+
+  func testNoRoadRouteCarriesTheServersWordsInsteadOfServiceUnavailable() async throws {
+    let recorded = try Self.noRoadRoute()
+    XCTAssertEqual(recorded.status, 422)
+    let paths = PathLog()
+    RoutesURLProtocol.handler = { request in
+      paths.append(request.url!.path)
+      switch request.url!.path {
+      case "/v2/config": return Self.response(request, Self.v2Config)
+      case "/v2/routes": return Self.response(request, recorded.body, status: recorded.status)
+      default: return Self.response(request, Data("{}".utf8), status: 404)
+      }
+    }
+    do {
+      _ = try await makeClient().routes(
+        origin: NavOSSCarPlayCoordinate(latitude: 43.6525, longitude: -79.3832),
+        destination: NavOSSCarPlayDestination(
+          id: "centre-island", label: "Toronto Islands", latitude: 43.6205, longitude: -79.3787,
+          name: "Centre Island"),
+        preferences: NavOSSRoutePreferences(), alternatives: 0, requireCoverage: false)
+      XCTFail("expected routeNotFound")
+    } catch NavOSSNavigationAPIError.routeNotFound(let problem) {
+      XCTAssertEqual(problem.title, "No road route")
+      XCTAssertEqual(
+        problem.detailVariants,
+        [
+          "No road connects these places. Some are reached only by air, by water or by a winter road.",
+          "No road connects these places.",
+        ])
+      // Neither retried as a malformed request nor sent to /v1/routes.
+      XCTAssertEqual(paths.values.filter { $0 == "/v2/routes" }.count, 1)
+      XCTAssertFalse(paths.values.contains("/v1/routes"))
+    }
+  }
+
+  func testA422WithoutTheShippedProblemShapeStaysServiceUnavailable() async throws {
+    RoutesURLProtocol.handler = { request in
+      switch request.url!.path {
+      case "/v2/config": return Self.response(request, Self.v2Config)
+      case "/v2/routes": return Self.response(request, Data(#"{"title":""}"#.utf8), status: 422)
+      default: return Self.response(request, Data("{}".utf8), status: 404)
+      }
+    }
+    do {
+      _ = try await makeClient().routes(
+        origin: Self.calgaryOrigin, destination: Self.calgaryDestination,
+        preferences: NavOSSRoutePreferences(), alternatives: 0, requireCoverage: false)
+      XCTFail("expected serviceUnavailable")
+    } catch NavOSSNavigationAPIError.serviceUnavailable {}
+  }
+
   // MARK: Keep-route rejoin without the step-merging workaround
 
   func testRealThroughResponseHasNoStopAtTheRejoinPoint() throws {
