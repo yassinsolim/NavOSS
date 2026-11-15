@@ -34,6 +34,11 @@ const UPSTREAM = {
 # temporarily enable unsafe import optimization config
 cp /etc/postgresql/16/main/conf.d/postgres-import.conf.disabled /etc/postgresql/16/main/conf.d/postgres-import.conf
 sudo -E -u postgres psql postgres -tAc "ALTER USER nominatim WITH ENCRYPTED PASSWORD '$NOMINATIM_PASSWORD'"
+if [ "$REVERSE_ONLY" = "true" ]; then
+  sudo -E -u nominatim nominatim import --osm-file $OSMFILE --threads $THREADS --reverse-only
+else
+  sudo -E -u nominatim nominatim import --osm-file $OSMFILE --threads $THREADS
+fi
 `,
   'start.sh': `#!/bin/bash -ex
 useradd -m -p \${NOMINATIM_PASSWORD} nominatim
@@ -489,6 +494,12 @@ test(
       await readFile(join(copied, 'init.sh'), 'utf8'),
       /max_locks_per_transaction = \$\{POSTGRES/u,
     );
+    // Both import commands carry the container-sized cache; none is left to Nominatim's default.
+    const imports = (await readFile(join(copied, 'init.sh'), 'utf8'))
+      .split('\n')
+      .filter((line) => line.includes('nominatim import'));
+    assert.equal(imports.length, 2);
+    for (const line of imports) assert.match(line, /--osm2pgsql-cache "\$\{OSM2PGSQL_CACHE:\?\}"/u);
     const stageDirectory = join(fixture.root, 'nominatim', `new-brunswick-${VERSION}`);
     const passwordFile = join(stageDirectory, 'staging-password.env');
     const password = await readFile(passwordFile, 'utf8');

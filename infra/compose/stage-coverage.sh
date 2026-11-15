@@ -240,6 +240,17 @@ nominatim_container() {
     if [ "${script}" = init.sh ]; then
       # The import's lock limit (the image sets it only for the serving configuration).
       sed -i '/cp \/etc\/postgresql\/16\/main\/conf.d\/postgres-import.conf.disabled/a sed -i "s/^#max_locks_per_transaction = 64/max_locks_per_transaction = ${POSTGRES_MAX_LOCKS_PER_TRANSACTION}/" /etc/postgresql/16/main/postgresql.conf' "${image_script}"
+      # The image ignores OSM2PGSQL_CACHE, and Nominatim then sizes the node cache from the host's
+      # memory and the extract (12.4 GB for Canada), not the container's limit: the import was
+      # OOM-killed ten minutes in. Pass the cache explicitly on every import command.
+      sed -i 's|nominatim import --osm-file \$OSMFILE --threads \$THREADS|& --osm2pgsql-cache "${OSM2PGSQL_CACHE:?}"|' "${image_script}"
+      if ! grep -q 'nominatim import' "${image_script}" ||
+        grep 'nominatim import' "${image_script}" | grep -qv -- '--osm2pgsql-cache'; then
+        rm -f "${image_script}"
+        docker rm -f navoss-nominatim-stage >/dev/null
+        echo "The image's /app/init.sh import command changed; refusing to import with an unbounded osm2pgsql cache." >&2
+        exit 1
+      fi
     fi
     if [ "$(head -n 1 "${image_script}")" != '#!/bin/bash -e' ] || grep -q 'set -[a-z]*x' "${image_script}"; then
       rm -f "${image_script}"
