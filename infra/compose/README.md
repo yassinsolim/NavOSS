@@ -354,6 +354,12 @@ that started it, and no step starts a container while another step's container (
 from an older script) still runs; `stop` removes them. `stop` signals the running step only after
 checking that the recorded pid still has the start time it was recorded with.
 
+The Valhalla and Nominatim containers write as root (Valhalla's tiles, archive, configs and admin
+database; the cluster as the image's `postgres` user) into directories `navoss` owns. No step prompts
+(stdin is closed and every replacement is `mv -f`), and whatever the operator cannot delete (an
+interrupted pass 1's tile tree, an interrupted import's cluster) is removed by a root container with no
+network that mounts only that stage, after the same live-directory identity checks.
+
 `navoss` is not in the `docker` group on VM 100, and the scripts call plain `docker`. Put a wrapper
 first on `PATH` for the session, which runs Docker through passwordless sudo:
 

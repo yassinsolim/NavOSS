@@ -186,7 +186,7 @@ fi
 
 replacement_db=${admin_db}.next
 cp -p "${working_dir}/admins.sqlite" "${replacement_db}"
-mv "${replacement_db}" "${admin_db}"
+mv -f "${replacement_db}" "${admin_db}"
 
 printf 'Valhalla admins repaired: %s province rows (%s) linked to Canada.\n' \
   "${linked_state_rows}" "${provinces}"

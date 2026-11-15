@@ -56,7 +56,7 @@ if [ "${new_gaps}" -gt "$((before - after))" ]; then
   echo "$(basename "${output}"): ${new_gaps} relation members missing beyond the removed ways." >&2
   exit 1
 fi
-mv "${partial}" "${output}"
+mv -f "${partial}" "${output}"
 printf 'Removed %s seasonal or ice-road ways (%s) from %s %s\n' "$((before - after))" \
   "${expressions}" "$(basename "${input}")" "${policy}" >"${report}"
 cat "${report}"

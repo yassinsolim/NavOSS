@@ -17,6 +17,8 @@
 # `valhalla`, `nominatim`, `serve` and `stop` hold <artifact root>/.stage.lock for their whole run,
 # and a second one is refused. See docs/architecture/north-america.md.
 set -eu
+# Nothing may wait for an answer during a multi-hour step: anything interactive fails instead.
+exec </dev/null
 
 script_dir=$(cd "$(dirname "$0")" && pwd)
 root=${NAVOSS_ARTIFACT_ROOT:-/srv/navoss/artifacts}
@@ -70,7 +72,7 @@ process_start() {
 hold_stage_lock() {
   # The pid with its start time: `stop` signals it only if that same process still runs.
   printf '%s %s %s %s\n' "$$" "$(process_start "$$")" "${step}" "${label}" >"${holder_file}.next"
-  mv "${holder_file}.next" "${holder_file}"
+  mv -f "${holder_file}.next" "${holder_file}"
 }
 
 # Registry ids and ISO codes of the provinces a release holds.
@@ -177,7 +179,7 @@ nominatim_container() {
   if [ ! -s "${password_file}" ]; then
     (umask 077 && printf 'NOMINATIM_PASSWORD=%s\n' \
       "$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')" >"${password_file}.next")
-    mv "${password_file}.next" "${password_file}"
+    mv -f "${password_file}.next" "${password_file}"
   fi
   container_stage=$1
   shift
@@ -257,22 +259,41 @@ refuse_live() {
   done
 }
 
-discard_cluster() {
-  # discard_cluster STAGE: removes STAGE/postgres. The image chowns a cluster to its postgres user
-  # with mode 0700, which the operator cannot delete; a root container with no network and no other
-  # mount than STAGE does it. STAGE must be <artifact root>/nominatim/<label>-<YYMMDD>, a real
-  # directory, and not hold the live cluster.
+remove_in_stage() {
+  # remove_in_stage valhalla|nominatim STAGE NAME...: removes STAGE/NAME. The Valhalla and Nominatim
+  # containers write as root (tiles, archives, configs; the cluster as the image's postgres user),
+  # which the operator cannot delete; a root container with no network, only DAC_OVERRIDE and no
+  # other mount than STAGE does it. STAGE must be <artifact root>/valhalla-<label>-<YYMMDD> or
+  # <artifact root>/nominatim/<label>-<YYMMDD>, a real directory, and not the live data; each NAME
+  # is a single entry inside it.
+  kind=$1
+  target=$2
+  shift 2
   case "${root}" in /*) ;; *) echo "The artifact root must be absolute: ${root}" >&2; exit 1 ;; esac
-  if ! printf '%s\n' "${1#"${root}/nominatim/"}" | grep -Eqx '[a-z][a-z-]*-[0-9]{6}' ||
-    [ "${1}" != "${root}/nominatim/${1#"${root}/nominatim/"}" ] || [ -L "$1" ] || [ -L "$1/postgres" ]; then
-    echo "Refusing to discard ${1}/postgres: not a staged Nominatim directory." >&2
+  case "${kind}" in
+    valhalla) prefix=${root}/valhalla- live_name=VALHALLA_DATA_DIR live_path=${live_valhalla} ;;
+    nominatim) prefix=${root}/nominatim/ live_name=NOMINATIM_DATA_DIR live_path=${live_nominatim} ;;
+    *) exit 64 ;;
+  esac
+  if ! printf '%s\n' "${target#"${prefix}"}" | grep -Eqx '[a-z][a-z-]*-[0-9]{6}' ||
+    [ "${target}" != "${prefix}${target#"${prefix}"}" ] || [ -L "${target}" ] || [ ! -d "${target}" ]; then
+    echo "Refusing to remove anything in ${target}: not a staged ${kind} directory." >&2
     exit 1
   fi
-  refuse_live NOMINATIM_DATA_DIR "${live_nominatim}" "$1" "$1/postgres"
+  inside=
+  for name do
+    case "${name}" in '' | . | .. | */*) echo "Refusing to remove ${name} in ${target}." >&2; exit 1 ;; esac
+    refuse_live "${live_name}" "${live_path}" "${target}/${name}"
+    inside="${inside} /stage/${name}"
+  done
+  refuse_live "${live_name}" "${live_path}" "${target}"
+  # shellcheck disable=SC2086 # one path per entry, none with spaces (checked above)
   docker run --rm --network none --user 0 --cap-drop ALL --cap-add DAC_OVERRIDE \
     --security-opt no-new-privileges:true --memory 256m --memory-swap 256m --entrypoint rm \
-    -v "$1:/stage" "${nominatim_image}" -rf /stage/postgres
-  [ ! -e "$1/postgres" ] || { echo "${1}/postgres is still there." >&2; exit 1; }
+    -v "${target}:/stage" "${nominatim_image}" -rf ${inside}
+  for name do
+    [ ! -e "${target}/${name}" ] || { echo "${target}/${name} is still there." >&2; exit 1; }
+  done
 }
 
 valhalla_run() {
@@ -336,11 +357,13 @@ case "${step}" in
       -batch -noheader -list /d/timezones.sqlite \
       "SELECT COUNT(DISTINCT TZID) FROM tz_world WHERE TZID IN ('America/St_Johns','America/Halifax','America/Moncton','America/Toronto','America/Winnipeg','America/Regina','America/Edmonton','America/Vancouver','America/Whitehorse');")
     [ "${tz}" = 9 ] || { echo "timezones.sqlite lacks Canadian zones (${tz}/9)." >&2; exit 1; }
+    if [ ! -f "${stage}/.pass1-complete" ]; then
+      # An interrupted first pass leaves partial tiles, written as root by the container; start clean.
+      remove_in_stage valhalla "${stage}" valhalla_tiles valhalla_tiles.tar admins.sqlite \
+        admins.pre-country-parent.sqlite file_hashes.txt valhalla.json
+    fi
     VALHALLA_HYBRID_PROVINCES="${hybrid}" "${script_dir}/prepare-valhalla-speeds.sh" "${stage}"
     if [ ! -f "${stage}/.pass1-complete" ]; then
-      # An interrupted first pass leaves partial tiles; start it clean.
-      rm -rf "${stage}/valhalla_tiles" "${stage}/valhalla_tiles.tar" "${stage}/admins.sqlite" \
-        "${stage}/admins.pre-country-parent.sqlite" "${stage}/file_hashes.txt" "${stage}/valhalla.json"
       valhalla_run "${stage}" True False True
       docker rm -f navoss-valhalla-stage >/dev/null
       touch "${stage}/.pass1-complete"
@@ -349,7 +372,7 @@ case "${step}" in
     valhalla_run "${stage}" False True False
     docker rm -f navoss-valhalla-stage >/dev/null
     (cd "${stage}" && sha256sum valhalla_tiles.tar admins.sqlite default_speeds.json timezones.sqlite \
-      >.navoss-stage-complete.next && mv .navoss-stage-complete.next .navoss-stage-complete)
+      >.navoss-stage-complete.next && mv -f .navoss-stage-complete.next .navoss-stage-complete)
     du -sh "${stage}"
     ;;
 
@@ -368,7 +391,7 @@ case "${step}" in
       # The image treats any existing cluster as imported; an interrupted import must start over.
       echo "Discarding the interrupted import in ${stage}/postgres."
       docker rm -f navoss-nominatim-stage >/dev/null 2>&1 || true
-      discard_cluster "${stage}"
+      remove_in_stage nominatim "${stage}" postgres
     fi
     install -d -m 0700 "${stage}/postgres"
     require_free_space 130
@@ -382,7 +405,7 @@ case "${step}" in
     wait_for http://127.0.0.1:18080/status navoss-nominatim-stage "${NOMINATIM_IMPORT_TIMEOUT:-129600}"
     printf 'Import took %s min.\n' $(( ($(date +%s) - started) / 60 ))
     docker stop navoss-nominatim-stage >/dev/null
-    mv "${stage}/.navoss-import-started" "${stage}/.navoss-import-complete"
+    mv -f "${stage}/.navoss-import-started" "${stage}/.navoss-import-complete"
     du -sh "${stage}/postgres"
     ;;
 

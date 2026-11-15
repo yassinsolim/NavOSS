@@ -90,12 +90,14 @@ case "$command" in
             [ "$previous" = -v ] && mount=$argument
             previous=$argument
           done
-          for target do :; done
           host=\${mount%%:*}
           inside=\${mount#*:}
-          path=$host\${target#"$inside"}
-          chmod -R u+rwx "$path" 2>/dev/null
-          rm -rf "$path"
+          for target do
+            case "$target" in "$inside"/*) ;; *) continue ;; esac
+            path=$host\${target#"$inside"}
+            chmod -R u+rwx "$path" 2>/dev/null
+            rm -rf "$path"
+          done
           ;;
       esac
       exit 0
@@ -675,3 +677,37 @@ test('every step refuses without the deployed .env beside it', options, async (c
   }
   assert.deepEqual(await calls(fixture), []);
 });
+
+test(
+  'an interrupted first pass is cleared even where the container wrote as root',
+  options,
+  async (context) => {
+    const fixture = await createFixture(context);
+    const valhalla = join(fixture.root, `valhalla-new-brunswick-${VERSION}`);
+    // What pass 1 leaves on the VM: a tile tree and files the operator cannot delete.
+    await mkdir(join(valhalla, 'valhalla_tiles', '2', '000'), { recursive: true });
+    await writeFile(join(valhalla, 'valhalla_tiles', '2', '000', '123.gph'), 'tile');
+    await writeFile(join(valhalla, 'valhalla.json'), '{}');
+    await chmod(join(valhalla, 'valhalla_tiles', '2'), 0o555);
+    await chmod(join(valhalla, 'valhalla_tiles'), 0o555);
+    await writeFile(
+      join(fixture.root, 'imports', `new-brunswick-${VERSION}.routing.osm.pbf`),
+      'input',
+    );
+    await writeFile(join(fixture.liveValhalla, 'timezones.sqlite'), 'zones');
+
+    // The speed profile download then fails here (no network in the test); the cleanup came first.
+    stage(fixture, ['valhalla', 'new-brunswick']);
+
+    const cleanup = (await calls(fixture)).filter((call) => call.includes('--entrypoint rm'));
+    assert.equal(cleanup.length, 1);
+    assert.match(
+      cleanup[0],
+      new RegExp(`-v ${valhalla}:/stage .* -rf /stage/valhalla_tiles `, 'u'),
+    );
+    assert.match(cleanup[0], /--user 0 .*--network none|--network none .*--user 0/u);
+    assert.equal(await exists(join(valhalla, 'valhalla_tiles')), false);
+    assert.equal(await exists(join(valhalla, 'valhalla.json')), false);
+    assert.equal(await exists(join(valhalla, `new-brunswick-${VERSION}.osm.pbf`)), true);
+  },
+);

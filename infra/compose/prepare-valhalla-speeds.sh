@@ -92,7 +92,7 @@ profile_hash=$(hash_file "${output_file}")
 printf 'source_url=%s\nsource_sha256=%s\nhybrid_provinces=%s\nprofile_sha256=%s\n' \
   "${source_url}" "${source_hash}" "${hybrid_provinces}" "${profile_hash}" >"${provenance_file}"
 chmod 0644 "${output_file}" "${provenance_file}"
-mv "${output_file}" "${output}"
-mv "${provenance_file}" "${provenance}"
+mv -f "${output_file}" "${output}"
+mv -f "${provenance_file}" "${provenance}"
 
 printf 'Valhalla hybrid speed profile generated: %s\n' "${profile_hash}"
