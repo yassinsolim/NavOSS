@@ -5,17 +5,18 @@ import type {
   TrafficCamera,
   TrafficFlowResponse,
 } from '@navoss/contracts';
-import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useEffect, useRef, useState } from 'react';
 
 import { startTrafficFlowRefresh, type TrafficFlowCache } from '@/features/community/traffic-flow';
 
 import type { MapRegion } from '@/features/map/map-region';
 import { createRoadEventLoader, startRoadEventRefresh } from '@/features/map/road-event-refresh';
 import {
-  currentRoadEvents,
   type MapRoadEvent,
+  nextRoadEventView,
   roadEventFeedForMapRegion,
   type RoadEventSnapshot,
+  type RoadEventView,
 } from '@/features/map/road-events';
 import {
   fetchOfficialRoadEvents,
@@ -73,10 +74,9 @@ export function useOverlayData({
   const [roadEventState, setRoadEventState] = useState<{
     feedKey: string;
     snapshot: RoadEventSnapshot;
+    view: RoadEventView;
   }>();
   const [roadEventRefreshDelayed, setRoadEventRefreshDelayed] = useState(false);
-  // Advanced every minute by the refresh loop, so held events keep expiring during an outage.
-  const [roadEventNow, setRoadEventNow] = useState(Date.now);
   const [torontoSafetyCameras, setTorontoSafetyCameras] = useState<readonly OfficialSafetyCamera[]>(
     [],
   );
@@ -194,24 +194,31 @@ export function useOverlayData({
         fetchOfficial: (region, signal) => fetchOfficialRoadEvents({ region, signal }),
         publish: (snapshot) => {
           startTransition(() => {
-            setRoadEventState({ feedKey: roadEventFeedKey, snapshot });
+            setRoadEventState({
+              feedKey: roadEventFeedKey,
+              snapshot,
+              view: nextRoadEventView(undefined, snapshot, Date.now()),
+            });
           });
         },
       }),
-      onClock: setRoadEventNow,
+      // Every minute, including through failed refreshes, so held events keep expiring. State
+      // changes only when the events in effect or their availability do.
+      onClock: (now) => {
+        setRoadEventState((previous) => {
+          if (previous === undefined) return previous;
+          const view = nextRoadEventView(previous.view, previous.snapshot, now);
+          return view === previous.view ? previous : { ...previous, view };
+        });
+      },
       onDelayedChange: setRoadEventRefreshDelayed,
     });
   }, [legacyRegion, provincialRegion, roadEventFeedKey, showRoadEvents]);
 
-  const roadEventSnapshot =
-    roadEventState?.feedKey === roadEventFeedKey ? roadEventState.snapshot : undefined;
-  const roadEvents = useMemo(
-    () =>
-      roadEventSnapshot === undefined
-        ? NO_EVENTS
-        : currentRoadEvents(roadEventSnapshot, roadEventNow),
-    [roadEventNow, roadEventSnapshot],
-  );
+  const roadEventCurrent =
+    roadEventState?.feedKey === roadEventFeedKey ? roadEventState : undefined;
+  const roadEventSnapshot = roadEventCurrent?.snapshot;
+  const roadEvents = roadEventCurrent?.view.events ?? NO_EVENTS;
 
   return {
     kelownaSafetyFacilities,

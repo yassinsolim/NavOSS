@@ -107,6 +107,34 @@ export function roadEventAvailability(
     : 'unavailable';
 }
 
+/** What the map and list draw from a held snapshot at a moment. */
+export interface RoadEventView {
+  available: boolean;
+  events: readonly MapRoadEvent[];
+}
+
+/**
+ * The view at `now`, reusing `previous` (same object, same events array) when the set of events in
+ * effect and the availability are unchanged, so a clock tick that changes nothing re-renders and
+ * rebuilds nothing.
+ */
+export function nextRoadEventView(
+  previous: RoadEventView | undefined,
+  snapshot: RoadEventSnapshot,
+  now: number,
+): RoadEventView {
+  const available = roadEventAvailability(snapshot, now) === 'available';
+  const events = currentRoadEvents(snapshot, now);
+  if (
+    previous?.available === available &&
+    previous.events.length === events.length &&
+    previous.events.every((event, index) => event === events[index])
+  ) {
+    return previous;
+  }
+  return { available, events };
+}
+
 /**
  * Events still in effect at `now`, newest first. A phone keeps its last response through failed
  * refreshes, so events of a source past its maximum age, and events past their planned end, are

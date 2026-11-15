@@ -10,6 +10,7 @@ import { createRoadEventLoader } from '../src/features/map/road-event-refresh.js
 import {
   currentRoadEvents,
   relativeAge,
+  nextRoadEventView,
   roadEventAgeLabel,
   roadEventAvailability,
   roadEventCredit,
@@ -177,6 +178,26 @@ describe('events in effect, newest first (recorded 2026-11-15)', () => {
       'a-updated-at-fetch',
       'z-clock-skew',
     ]);
+  });
+
+  it('keeps the same view on a clock tick that changes nothing, and a new one when an event ends', () => {
+    const ending = ontario.events[0];
+    if (ending === undefined) throw new Error('fixture has events');
+    const snapshot = {
+      ...ontario,
+      events: [
+        ...ontario.events.slice(1),
+        { ...ending, endsAt: new Date(CAPTURED + 90_000).toISOString() },
+      ],
+    };
+    const first = nextRoadEventView(undefined, snapshot, CAPTURED);
+    const quietTick = nextRoadEventView(first, snapshot, CAPTURED + 60_000);
+    expect(quietTick).toBe(first);
+    expect(quietTick.events).toBe(first.events);
+    const expiringTick = nextRoadEventView(quietTick, snapshot, CAPTURED + 120_000);
+    expect(expiringTick).not.toBe(first);
+    expect(expiringTick.events).toHaveLength(first.events.length - 1);
+    expect(expiringTick.available).toBe(true);
   });
 
   it('drops a source past its maximum age and events past their planned end', () => {
