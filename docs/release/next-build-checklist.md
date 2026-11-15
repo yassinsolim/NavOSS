@@ -1,6 +1,6 @@
 # Next build checklist
 
-Status refreshed: 2026-11-14. The latest shipped build remains `0.1.0 (70)` from `afa4067`. Build 73 was never uploaded and remains held for its matcher regression. Corrected build 74 was signed and verified from `d0594cd` with upload disabled. This checklist distinguishes code/build verification from Apple processing and tester delivery.
+Status refreshed: 2026-11-15. Build `0.1.0 (75)` from `d0594cd` was uploaded on 2026-11-15 (EAS submission finished; Apple processing unchecked). Build 73 was never uploaded and remains held for its matcher regression; 74 was a no-upload preflight. This checklist distinguishes code/build verification from Apple processing and tester delivery.
 
 Context: `main` contains the phone UI refresh (#78), native contract v11 (#102; v10 introduced `/v2/routes` in #75/#84), the CarPlay quality pass (#77), `/v2/routes` clients (#84), the community reports and traffic client (#85) and on-device offline maps (#83). The frozen build-74 candidate remains on native contract v10. The deployed production service (`https://navoss-api.yassin.app`) still runs the older API image (Calgary and Kelowna; no `/v2/routes`, community, traffic or offline manifest) and cannot be redeployed yet. The next build must work against it.
 
