@@ -201,10 +201,17 @@ export function relativeAge(time: number, now: number): string {
 }
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-CA', { day: 'numeric', month: 'short' });
+const DATE_FORMAT_WITH_YEAR = new Intl.DateTimeFormat('en-CA', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
 
-function formatLocalDate(value: string): string {
+/** A calendar date, naming the year when it is not the current one (multi-year roadworks). */
+function formatLocalDate(value: string, now: number): string {
   const [year = 0, month = 1, day = 1] = value.split('-').map(Number);
-  return DATE_FORMAT.format(new Date(Date.UTC(year, month - 1, day, 12)));
+  const format = year === new Date(now).getFullYear() ? DATE_FORMAT : DATE_FORMAT_WITH_YEAR;
+  return format.format(new Date(Date.UTC(year, month - 1, day, 12)));
 }
 
 /** The age line under an event: from the source's own timestamps only. */
@@ -220,7 +227,7 @@ export function roadEventAgeLabel(event: MapRoadEvent, now: number): string | un
     return `${verb} ${relativeAge(sourceTime.time, now)}`;
   }
   if ('startsOn' in event && event.startsOn !== undefined) {
-    return `Since ${formatLocalDate(event.startsOn)}`;
+    return `Since ${formatLocalDate(event.startsOn, now)}`;
   }
   return undefined;
 }
@@ -271,6 +278,20 @@ const TIME_FORMAT = new Intl.DateTimeFormat('en-CA', {
   minute: '2-digit',
   month: 'short',
 });
+const TIME_FORMAT_WITH_YEAR = new Intl.DateTimeFormat('en-CA', {
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  month: 'short',
+  year: 'numeric',
+});
+
+/** An instant, naming the year when it is not the current one. */
+function formatEventTime(value: string, now: number): string {
+  const time = Date.parse(value);
+  const sameYear = new Date(time).getFullYear() === new Date(now).getFullYear();
+  return (sameYear ? TIME_FORMAT : TIME_FORMAT_WITH_YEAR).format(time);
+}
 
 /** Detail text for a tapped or listed event. */
 export function roadEventMessage(
@@ -300,14 +321,14 @@ export function roadEventMessage(
       ? undefined
       : `Road: ${event.roadwayName}${event.direction === undefined ? '' : `, ${event.direction}`}`,
     event.startsAt !== undefined
-      ? `Starts: ${TIME_FORMAT.format(Date.parse(event.startsAt))}`
+      ? `Starts: ${formatEventTime(event.startsAt, now)}`
       : 'startsOn' in event && event.startsOn !== undefined
-        ? `Starts: ${formatLocalDate(event.startsOn)}`
+        ? `Starts: ${formatLocalDate(event.startsOn, now)}`
         : undefined,
     event.endsAt !== undefined
-      ? `Planned end: ${TIME_FORMAT.format(Date.parse(event.endsAt))}`
+      ? `Planned end: ${formatEventTime(event.endsAt, now)}`
       : 'endsOn' in event && event.endsOn !== undefined
-        ? `Planned end: ${formatLocalDate(event.endsOn)}`
+        ? `Planned end: ${formatLocalDate(event.endsOn, now)}`
         : undefined,
     roadEventAgeLabel(event, now),
   ].filter((line): line is string => line !== undefined);
