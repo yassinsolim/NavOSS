@@ -421,7 +421,11 @@ describe('answering a report needs a fresh, accurate fix', () => {
 
 describe('traffic sharing consent', () => {
   const on = {
-    preferences: { announcesRoadReports: false, sharesRoadReports: false, sharesTrafficSpeeds: true },
+    preferences: {
+      announcesRoadReports: false,
+      sharesRoadReports: false,
+      sharesTrafficSpeeds: true,
+    },
   };
 
   it('is withdrawn whenever the switch is shown unavailable, so it needs a new opt-in', () => {

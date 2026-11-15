@@ -9,10 +9,7 @@ import type {
 } from '@navoss/contracts';
 import { startTransition, useEffect, useRef, useState } from 'react';
 
-import {
-  startTrafficFlowRefresh,
-  type TrafficFlowCache,
-} from '@/features/community/traffic-flow';
+import { startTrafficFlowRefresh, type TrafficFlowCache } from '@/features/community/traffic-flow';
 
 import {
   type MapRoadEvent,
