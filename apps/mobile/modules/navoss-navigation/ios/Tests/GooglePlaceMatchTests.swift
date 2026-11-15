@@ -11,17 +11,13 @@ final class GooglePlaceMatchTests: XCTestCase {
     ("St. Mary's Cathedral", "Saint Mary's Cathedral"),
     ("Ft. Calgary", "Fort Calgary"),
     ("Tim Horton's", "Tim Hortons"),
-    ("Mcdonald's Restaurants #40123", "McDonald's"),
     ("Shoppers Drug Mart #2345", "Shoppers Drug Mart"),
-    ("Starbucks Coffee #4512", "Starbucks"),
     ("Tim Hortons - Kensington", "Tim Hortons"),
     ("Safeway (Signal Hill)", "Safeway"),
     ("IKEA", "IKEA Calgary"),
-    ("Superstore", "Real Canadian Superstore"),
     ("Chinook Centre", "CF Chinook Centre"),
     ("Chinook Center", "Chinook Centre"),
     ("The Keg Steakhouse & Bar", "The Keg Steakhouse + Bar"),
-    ("The Keg", "The Keg Steakhouse + Bar - Calgary Macleod"),
     ("Earls Kitchen and Bar", "Earls Kitchen + Bar"),
     ("A&W", "A & W Canada"),
     ("Village Ice Cream Unit 5", "Village Ice Cream"),
@@ -34,7 +30,10 @@ final class GooglePlaceMatchTests: XCTestCase {
     ("Science World", "Science World"),
     ("Stanley Park", "Stanley Park"),
     ("Lee's Donuts", "Lee's Donuts - Granville Island"),
-    ("Japadog", "Japadog Burrard"),
+    ("Tim Hortons", "Tim Hortons (Chinook Centre)"),
+    ("Starbucks (Food Court)", "Starbucks (Food Court)"),
+    ("Earls Kitchen + Bar", "Earls Kitchen + Bar Downtown"),
+    ("Shoppers Drug Mart #2345", "Shoppers Drug Mart SW"),
   ]
 
   private let differentBusinesses: [(navoss: String, google: String)] = [
@@ -50,6 +49,17 @@ final class GooglePlaceMatchTests: XCTestCase {
     ("Costco", "Costco Gas Station"),
     ("Calgary Co-op", "Calgary Co-op Liquor"),
     ("Canadian Tire", "Canadian Tire Gas+"),
+    // Two different qualifiers are two branches or a branch and a department.
+    ("Starbucks (Food Court)", "Starbucks (Main Entrance)"),
+    ("Safeway (Pharmacy)", "Safeway (Signal Hill)"),
+    ("Safeway (Pharmacy)", "Safeway"),
+    ("Tim Hortons - Kensington", "Tim Hortons - Beltline"),
+    // Extra words that are not legal, location or city words name a different business.
+    ("Wok", "Wok Box"),
+    ("IKEA", "IKEA Restaurant"),
+    ("Japadog", "Japadog Burrard"),
+    ("Superstore", "Real Canadian Superstore"),
+    ("Mcdonald's Restaurants #40123", "McDonald's"),
     // Category words alone never identify a business.
     ("Pizza", "Pizza Hut"),
     ("Parking", "Impark Parking"),

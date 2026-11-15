@@ -27,19 +27,20 @@ public enum NavOSSGooglePlaceMatch {
       && namesMatch(selectedName, candidateName)
   }
 
-  /// True when the names identify the same business: equal after normalisation, or one is the
-  /// other plus a branch, city or legal suffix. A longer name that adds a department ("Safeway"
-  /// against "Safeway Pharmacy") is a different listing, and a bare category word ("Pizza") never
-  /// matches by containment.
+  /// True when the names identify the same business. Names are split into a core and an optional
+  /// branch qualifier ("Tim Hortons - Kensington", "Safeway (Signal Hill)"). Two different
+  /// qualifiers are two branches; a qualifier on one side only is ignored. A qualifier that names a
+  /// department ("Safeway (Pharmacy)") is part of the identity, never branch metadata. Cores match
+  /// when equal after normalisation, or when the longer adds only legal, location or city words
+  /// ("IKEA Calgary"). Anything else is rejected: a false reject only hides Google's panel.
   public static func namesMatch(_ left: String, _ right: String) -> Bool {
-    let leftVariants = nameVariants(left)
-    let rightVariants = nameVariants(right)
-    for leftTokens in leftVariants {
-      for rightTokens in rightVariants where tokensMatch(leftTokens, rightTokens) {
-        return true
-      }
+    let leftName = parsedName(left)
+    let rightName = parsedName(right)
+    if let leftQualifier = leftName.qualifier, let rightQualifier = rightName.qualifier,
+      leftQualifier != rightQualifier {
+      return false
     }
-    return false
+    return tokensMatch(leftName.core, rightName.core)
   }
 
   // MARK: - Normalisation
@@ -55,6 +56,16 @@ public enum NavOSSGooglePlaceMatch {
     "bank", "bar", "cafe", "centre", "clinic", "coffee", "dental", "gas", "grill", "gym", "hotel",
     "inn", "library", "market", "mall", "park", "parking", "pharmacy", "pizza", "pub", "restaurant",
     "salon", "school", "shop", "spa", "store", "sushi",
+  ]
+
+  /// The only words a longer name may add and still be the same business: legal forms, compass
+  /// and downtown location words, the cities and provinces NavOSS covers, and the Cadillac
+  /// Fairview mall prefix. Kept short on purpose; an unknown word is a different business.
+  private static let nonIdentityWords: Set<String> = [
+    "ab", "alberta", "bc", "burnaby", "calgary", "canada", "cf", "co", "corp", "corporation",
+    "downtown", "e", "east", "edmonton", "inc", "incorporated", "kelowna", "limited", "llc", "ltd",
+    "n", "ne", "north", "nw", "richmond", "s", "se", "south", "surrey", "sw", "ulc", "vancouver",
+    "w", "west", "yvr", "yyc",
   ]
 
   private static let ignoredWords: Set<String> = ["and", "the"]
@@ -76,37 +87,37 @@ public enum NavOSSGooglePlaceMatch {
     "st": "saint",
   ]
 
-  /// The whole name, and the name without a branch qualifier ("Tim Hortons - Kensington",
-  /// "Safeway (Signal Hill)").
-  static func nameVariants(_ name: String) -> [[String]] {
+  private static let branchSeparators = [" - ", " – ", " — ", " | ", " @ ", ": "]
+
+  /// The identity tokens and, when present, a branch qualifier from parentheses or after a branch
+  /// separator. A department qualifier stays in the core.
+  static func parsedName(_ name: String) -> (core: [String], qualifier: [String]?) {
     let folded = name.folding(
       options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
       locale: Locale(identifier: "en_CA")
     )
-    let withoutParentheses = folded.replacingOccurrences(
-      of: #"\([^)]*\)"#,
-      with: " ",
-      options: .regularExpression
-    )
-    var variants: [[String]] = []
-    for candidate in [folded, withoutParentheses, branchless(withoutParentheses)] {
-      let tokens = normalizedTokens(candidate)
-      if !tokens.isEmpty, !variants.contains(tokens) {
-        variants.append(tokens)
-      }
+    var qualifierParts: [String] = []
+    var remainder = folded
+    while let open = remainder.firstIndex(of: "("),
+      let close = remainder[open...].firstIndex(of: ")") {
+      qualifierParts.append(String(remainder[remainder.index(after: open)..<close]))
+      remainder.replaceSubrange(open...close, with: " ")
     }
-    return variants
-  }
-
-  private static func branchless(_ value: String) -> String {
-    let separators = [" - ", " – ", " — ", " | ", " @ ", ": "]
-    var result = value
-    for separator in separators {
-      if let range = result.range(of: separator) {
-        result = String(result[..<range.lowerBound])
-      }
+    if let separator = branchSeparators
+      .compactMap({ remainder.range(of: $0) })
+      .min(by: { $0.lowerBound < $1.lowerBound }) {
+      qualifierParts.append(String(remainder[separator.upperBound...]))
+      remainder = String(remainder[..<separator.lowerBound])
     }
-    return result
+    let core = normalizedTokens(remainder)
+    let qualifier = normalizedTokens(qualifierParts.joined(separator: " "))
+    if qualifier.isEmpty {
+      return (core, nil)
+    }
+    if qualifier.contains(where: { departmentWords.contains($0) }) {
+      return (normalizedTokens(folded.replacingOccurrences(of: "(", with: " ")), nil)
+    }
+    return (core, qualifier)
   }
 
   static func normalizedTokens(_ value: String) -> [String] {
@@ -150,6 +161,9 @@ public enum NavOSSGooglePlaceMatch {
   // MARK: - Comparison
 
   private static func tokensMatch(_ left: [String], _ right: [String]) -> Bool {
+    guard !left.isEmpty, !right.isEmpty else {
+      return false
+    }
     if left == right {
       return true
     }
@@ -165,7 +179,7 @@ public enum NavOSSGooglePlaceMatch {
       return false
     }
     let extra = Array(longer[..<start]) + Array(longer[(start + shorter.count)...])
-    return !extra.contains { departmentWords.contains($0) }
+    return extra.allSatisfy { nonIdentityWords.contains($0) }
   }
 
   private static func contiguousRange(of needle: [String], in haystack: [String]) -> Int? {
