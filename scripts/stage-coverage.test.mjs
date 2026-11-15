@@ -48,6 +48,8 @@ useradd -m -p \${NOMINATIM_PASSWORD} nominatim
 const fakeDocker = `#!/bin/sh
 # State: $FAKE_STATE/created/<name> holds the create/run arguments, one per line;
 # $FAKE_STATE/running/<name> marks a running container; files/<name>/<path> what was copied in.
+# Docker's daemon state is shared independently of the caller's uid.
+umask 000
 state=$FAKE_STATE
 mkdir -p "$state/created" "$state/running" "$state/files"
 printf '%s\\n' "$*" >>"$state/calls"
@@ -155,9 +157,14 @@ async function exists(path) {
 async function createFixture(context, labels = ['new-brunswick']) {
   const directory = await mkdtemp(join(tmpdir(), 'navoss-stage-coverage-'));
   context.after(async () => {
-    // Undo the unreadable directories some tests create, then remove everything.
+    // Mixed-user tests can leave postgres data and fake container state owned by root.
     spawnSync('chmod', ['-R', 'u+rwx', directory]);
-    await rm(directory, { force: true, recursive: true });
+    try {
+      await rm(directory, { force: true, recursive: true });
+    } catch {
+      const cleanup = spawnSync('sudo', ['-n', 'rm', '-rf', '--', directory]);
+      if (cleanup.status !== 0) console.error(`Could not clean fixture ${directory}`);
+    }
   });
   const compose = join(directory, 'compose');
   const bin = join(directory, 'bin');
@@ -169,6 +176,8 @@ async function createFixture(context, labels = ['new-brunswick']) {
   for (const path of [compose, bin, join(root, 'imports'), upstream, state, live, liveValhalla]) {
     await mkdir(path, { recursive: true });
   }
+  // The fake daemon must accept Docker calls from both users, regardless of who started it.
+  await chmod(state, 0o777);
   for (const file of await readdir(composeSource)) {
     if (file.endsWith('.sh')) await copyFile(join(composeSource, file), join(compose, file));
   }
@@ -348,8 +357,10 @@ test('root-created stages can be resumed by the artifact owner', options, async 
   assert.equal((await stat(join(directory, '.navoss-stage-complete'))).uid, uid);
   assert.equal((await stat(join(directory, 'valhalla_tiles.tar'))).uid, 0);
   const graphRetry = stageAs(fixture, ['valhalla', 'new-brunswick'], false);
+  assert.doesNotMatch(graphRetry.stderr, /Permission denied|Operation not permitted/u);
   assert.equal(graphRetry.status, 0, graphRetry.stderr);
   const retry = stageAs(fixture, ['inputs', 'new-brunswick'], false);
+  assert.doesNotMatch(retry.stderr, /Permission denied|Operation not permitted/u);
   assert.equal(retry.status, 0, retry.stderr);
 });
 
@@ -358,10 +369,15 @@ test('an inaccessible live directory tells the operator to use sudo', options, a
   // Model the root-owned mode-750 ancestor on VM 100.
   const privateParent = join(fixture.root, 'private-live');
   await mkdir(join(privateParent, 'postgres'), { recursive: true });
-  if (process.getuid() !== 0) {
-    assert.equal(spawnSync('sudo', ['-n', 'chown', '0:0', privateParent]).status, 0);
+  const chmodArgs = ['chmod', '0750', privateParent];
+  const chownArgs = ['chown', '0:0', privateParent];
+  for (const args of [chmodArgs, chownArgs]) {
+    const result =
+      process.getuid() === 0
+        ? spawnSync(args[0], args.slice(1))
+        : spawnSync('sudo', ['-n', ...args]);
+    assert.equal(result.status, 0, String(result.stderr));
   }
-  await chmod(privateParent, 0o750);
   await setLive(fixture, { nominatim: join(privateParent, 'postgres') });
   const refused = stageAs(fixture, ['nominatim', 'new-brunswick'], false);
   assert.equal(refused.status, 1, refused.stderr);
