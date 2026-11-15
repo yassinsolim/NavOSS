@@ -151,7 +151,11 @@ test('legal and support pages keep their published commitments', () => {
   assert.match(privacy, /Location and active navigation/);
   assert.match(privacy, /Clear saved and recent destinations/);
   assert.match(privacy, /No advertising or cross-app tracking/);
-  assert.match(privacy, /selected public name and coordinate directly to Google Places/);
+  assert.match(
+    privacy,
+    /for the Google listing at the selected coordinate; the place name is not sent/,
+  );
+  assert.match(privacy, /Only when you choose Find this place on Google/);
   assert.match(privacy, /More reviews on Google Maps/);
   assert.match(privacy, /denies grants after 8,000 in a month/);
   assert.match(privacy, /no place name, coordinate, account, device identifier/);

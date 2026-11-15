@@ -386,6 +386,7 @@ public final class NavOSSNavigationModule: Module {
     Name("NavOSSNavigation")
 
     View(NavOSSGooglePlaceRatingView.self) {
+      Events("onStateChange")
       Prop("latitude") { (view, value: Double) in
         view.setLatitude(value)
       }
@@ -394,6 +395,12 @@ public final class NavOSSNavigationModule: Module {
       }
       Prop("name") { (view, value: String) in
         view.setName(value)
+      }
+      Prop("phase") { (view, value: String) in
+        view.setPhase(value)
+      }
+      Prop("request") { (view, value: Int) in
+        view.setRequest(value)
       }
       OnViewDidUpdateProps { view in
         view.updateContent()

@@ -4,7 +4,11 @@ import { Fragment, useEffect, useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
-import { GooglePlaceRating } from '@/features/map/google-place-rating';
+import {
+  googlePlaceDetailsEligible,
+  googlePlaceIdentity,
+} from '@/features/map/google-place-details';
+import { GooglePlaceDetailsSection } from '@/features/map/google-place-details-section';
 import {
   placeOpenStatus,
   placeOpenStatusLabel,
@@ -259,35 +263,22 @@ export function PlaceSheet({
                 title={`${place.center.latitude.toFixed(5)}, ${place.center.longitude.toFixed(5)}`}
               />
             )}
-            {place.category === 'poi' && (
-              <View style={styles.ratingSection}>
-                <Text accessibilityRole="header" style={styles.ratingTitle}>
-                  Photos & reviews
-                </Text>
-                {ratingAvailable ? (
-                  <GooglePlaceRating
-                    latitude={place.center.latitude}
-                    longitude={place.center.longitude}
-                    name={place.name}
-                    style={styles.ratingView}
-                  />
-                ) : (
-                  <Text style={styles.ratingUnavailable}>
-                    Google photos, ratings, and reviews are unavailable in this build
-                  </Text>
-                )}
-                <ListRow
-                  accessibilityHint="Opens Google Maps; the place query is shared only after you choose this action"
-                  accessibilityLabel="More reviews on Google Maps"
-                  accessibilityRole="link"
-                  onPress={onReadReviews}
-                  title="More reviews on Google Maps"
-                  trailing="external"
-                />
-              </View>
-            )}
-            <Text style={styles.source}>Place data from OpenStreetMap contributors</Text>
+            <Text maxFontSizeMultiplier={1.5} style={styles.source}>
+              Place data from OpenStreetMap contributors
+            </Text>
           </Fragment>
+          {/* Outside the text-size key: a remount would spend another Google query. Google's
+              view follows Dynamic Type itself. */}
+          {googlePlaceDetailsEligible(place) && (
+            <GooglePlaceDetailsSection
+              key={googlePlaceIdentity(place)}
+              available={ratingAvailable}
+              latitude={place.center.latitude}
+              longitude={place.center.longitude}
+              name={place.name}
+              onReadReviews={onReadReviews}
+            />
+          )}
         </BottomSheetScrollView>
       </BottomSheetReveal>
     </BottomSheet>
@@ -298,17 +289,6 @@ const useStyles = createThemedStyles(({ colors }) =>
   StyleSheet.create({
     actions: { gap: space.md - 2, paddingBottom: space.md, paddingHorizontal: space.lg },
     details: { gap: space.xs, paddingHorizontal: space.sm },
-    ratingSection: {
-      borderTopColor: colors.border,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      gap: space.sm,
-      marginHorizontal: space.sm,
-      marginTop: space.md,
-      paddingTop: space.lg,
-    },
-    ratingTitle: { ...typography.title3, color: colors.text },
-    ratingUnavailable: { ...typography.footnote, color: colors.textSecondary },
-    ratingView: { minHeight: 264, width: '100%' },
     reveal: { flex: 1 },
     secondaryAction: {
       alignItems: 'center',
@@ -327,7 +307,7 @@ const useStyles = createThemedStyles(({ colors }) =>
       ...typography.caption,
       color: colors.textTertiary,
       paddingHorizontal: space.sm,
-      paddingTop: space.lg,
+      paddingTop: space.md,
     },
   }),
 );
