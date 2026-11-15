@@ -185,6 +185,163 @@ final class CommunityTrafficUploadCancellationTests: XCTestCase {
   }
 }
 
+final class CommunityTrafficTripRestrictionTests: XCTestCase {
+  private let start = Date()
+
+  func testAServiceUnavailablePauseOutlastsSharingTogglesAndANewTrip() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock)
+    await transport.configure(uploads: [.unavailable])
+    let session = NavOSSTrafficSharingSession(transport: transport, now: { clock.value })
+    await session.setEnabled(true)
+    await session.startTrip(protectedPoints: [origin])
+    var pausedAt: Date?
+    var resumedAt: Date?
+    for fix in drive(from: start, count: 600) {
+      clock.value = fix.timestamp
+      await session.ingest(fix)
+      await session.drain()
+      let sent = await transport.transmitted.count
+      if sent == 1, pausedAt == nil {
+        pausedAt = fix.timestamp
+        // Toggled off and on, and even a new navigation start, inside the five minutes.
+        await session.setEnabled(false)
+        await session.setEnabled(true)
+        await session.startTrip(protectedPoints: [origin])
+      }
+      if sent == 2, resumedAt == nil { resumedAt = fix.timestamp }
+    }
+    guard let pausedAt else { return XCTFail("the first batch was sent") }
+    guard let resumedAt else { return XCTFail("sharing resumes once the pause is over") }
+    XCTAssertGreaterThanOrEqual(resumedAt.timeIntervalSince(pausedAt), 300)
+  }
+
+  func testARateLimitHoldsForTheRestOfTheTripWhateverTheSwitchDoes() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock)
+    await transport.configure(uploads: [.rateLimited])
+    let session = NavOSSTrafficSharingSession(transport: transport, now: { clock.value })
+    await session.setEnabled(true)
+    await session.startTrip(protectedPoints: [origin])
+    var toggled = false
+    for fix in drive(from: start, count: 600) {
+      clock.value = fix.timestamp
+      await session.ingest(fix)
+      await session.drain()
+      if !toggled, await transport.transmitted.count == 1 {
+        toggled = true
+        await session.setEnabled(false)
+        await session.setEnabled(true)
+      }
+    }
+    XCTAssertTrue(toggled)
+    let sent = await transport.transmitted.count
+    let credentials = await transport.credentialRequests
+    let state = await session.state
+    XCTAssertEqual(sent, 1, "nothing more is sent on this trip")
+    XCTAssertEqual(credentials, 1, "no new credential on this trip")
+    XCTAssertEqual(state, .unavailable(reason: .rateLimited))
+
+    // A genuinely new navigation trip may share again.
+    await session.endTrip()
+    await session.startTrip(protectedPoints: [origin])
+    let next = await session.state
+    XCTAssertEqual(next, .sharing)
+  }
+}
+
+/// The service as the phone and CarPlay drive it: preference changes, reset, navigation hooks.
+final class CommunityTrafficServiceRulesTests: XCTestCase {
+  private let start = Date()
+
+  private func trip(waypoints: [NavOSSCarPlayCoordinate] = []) -> NavOSSCarPlayTrip {
+    let geometry = stride(from: 0.0, through: 12_000, by: 250).map { east($0) }
+    let destination = NavOSSCarPlayDestination(
+      category: nil, id: "d", label: "D", latitude: geometry.last!.latitude,
+      longitude: geometry.last!.longitude, name: "D")
+    return NavOSSCarPlayTrip(
+      destination: destination,
+      distanceMeters: 12_000,
+      durationSeconds: 800,
+      geometry: geometry,
+      id: "trip",
+      steps: [
+        NavOSSCarPlayRouteStep(
+          distanceMeters: 12_000, durationSeconds: 800, geometry: geometry,
+          instruction: "Drive east.", maneuverType: "depart", roadName: "Test Road")
+      ],
+      waypoints: waypoints.isEmpty
+        ? nil
+        : waypoints.enumerated().map { index, point in
+          NavOSSCarPlayDestination(
+            category: nil, id: "w\(index)", label: "W", latitude: point.latitude,
+            longitude: point.longitude, name: "W")
+        }
+    )
+  }
+
+  private func makeService(
+    _ transport: RuleTransport, clock: Clock, sharing: Bool = true
+  ) -> (NavOSSCommunityService, NavOSSCommunityPreferencesStore) {
+    let defaults = UserDefaults(suiteName: "traffic-rules-\(UUID().uuidString)")!
+    // Preferences and the service share one center, as they share `.default` in the app.
+    let center = NotificationCenter()
+    let preferences = NavOSSCommunityPreferencesStore(defaults: defaults, notificationCenter: center)
+    if sharing { preferences.setSharesTrafficSpeeds(true) }
+    // The client is only for reports; the uploader talks to `transport`. With no stored key,
+    // reset has nothing to delete on the server.
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [CommunityStubProtocol.self]
+    CommunityStubProtocol.handler = { _ in (404, [:], [:]) }
+    let client = NavOSSCommunityClient(
+      baseURL: URL(string: "http://127.0.0.1:3001")!,
+      provider: NavOSSUnavailableAttestationProvider(),
+      store: NavOSSCommunityMemorySecretStore(),
+      session: URLSession(configuration: configuration), discovery: NavOSSRoutesEndpointDiscovery())
+    let service = NavOSSCommunityService(
+      client: client, preferencesStore: preferences,
+      alertStore: NavOSSCarPlayMapAlertStore(notificationCenter: NotificationCenter()),
+      notificationCenter: center, trafficTransport: transport,
+      now: { clock.value })
+    return (service, preferences)
+  }
+
+  func testPreferenceChangesNeverLiftARateLimitForTheRestOfTheTrip() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock)
+    await transport.configure(credentials: [.failure(.rateLimited(retryAfterSeconds: 600))])
+    let (service, preferences) = makeService(transport, clock: clock)
+    service.navigationDidStart(trip())
+    let limited = await eventually { service.trafficSharingState() == .unavailable(reason: .rateLimited) }
+    XCTAssertTrue(limited)
+    preferences.setAnnouncesRoadReports(false)
+    preferences.setSharesRoadReports(true)
+    preferences.setSharesTrafficSpeeds(false)
+    preferences.setSharesTrafficSpeeds(true)
+    await settle()
+    let credentials = await transport.credentialRequests
+    let statuses = await transport.statusRequests
+    XCTAssertEqual(credentials, 1, "no credential is requested again on this trip")
+    XCTAssertEqual(statuses, 1, "the uploader is not restarted on this trip")
+    XCTAssertEqual(service.trafficSharingState(), .unavailable(reason: .rateLimited))
+    service.navigationDidEnd()
+  }
+
+  func testTurningSharingOnDuringGuidanceSharesForTheRestOfThatTrip() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock)
+    let (service, preferences) = makeService(transport, clock: clock, sharing: false)
+    service.navigationDidStart(trip())
+    await settle()
+    let before = await transport.statusRequests
+    XCTAssertEqual(before, 0, "nothing is asked while the switch is off")
+    preferences.setSharesTrafficSpeeds(true)
+    let sharing = await eventually { service.trafficSharingState() == .sharing }
+    XCTAssertTrue(sharing)
+    service.navigationDidEnd()
+  }
+}
+
 final class CommunityTrafficClientCancellationTests: XCTestCase {
   func testACancelledUploadNeverReachesTheServer() async throws {
     CommunityStubProtocol.sent = []

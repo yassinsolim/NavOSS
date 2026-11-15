@@ -53,6 +53,8 @@ public final class NavOSSCommunityService: @unchecked Sendable {
   private var routeGeometry: [NavOSSCarPlayCoordinate] = []
   private var routeLengthMeters = 0.0
   private var routeProgress = 0.0
+  /// The latest switch change on its way to the uploader; each waits for the one before.
+  private var sharingSwitchTask: Task<Void, Never>?
   private var lastTrafficTick: Date?
   private let traffic: NavOSSTrafficSharingSession?
   private var trafficState: NavOSSTrafficSharingState = .off
@@ -65,20 +67,25 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     }
   }
 
+  /// `trafficTransport` and `now` replace the uploader's client and its clock (tests).
   init(
     client: NavOSSCommunityClient? = NavOSSCommunityService.defaultClient(),
     preferencesStore: NavOSSCommunityPreferencesStore = .shared,
     alertStore: NavOSSCarPlayMapAlertStore = .shared,
-    notificationCenter: NotificationCenter = .default
+    notificationCenter: NotificationCenter = .default,
+    trafficTransport: NavOSSTrafficTransport? = nil,
+    now: @escaping @Sendable () -> Date = { Date() }
   ) {
     self.client = client
     self.preferencesStore = preferencesStore
     self.alertStore = alertStore
     self.notificationCenter = notificationCenter
     let sink = TrafficStateSink()
-    traffic = client.map { client in
+    let transport: NavOSSTrafficTransport? = trafficTransport ?? client
+    traffic = transport.map { transport in
       NavOSSTrafficSharingSession(
-        transport: client,
+        transport: transport,
+        now: now,
         onStateChange: { state in sink.service?.trafficStateDidChange(state) }
       )
     }
@@ -329,10 +336,14 @@ public final class NavOSSCommunityService: @unchecked Sendable {
       cache.clear()
       monitor.setReports([])
     }
+    // The uploader's credential belonged to the deleted installation: start the trip afresh.
+    let restart: [NavOSSCarPlayCoordinate]? = lock.withLock {
+      navigationActive ? protectedPoints : nil
+    }
     await traffic?.endTrip()
     publishReports()
-    if lock.withLock({ navigationActive }) {
-      await startTrafficTrip()
+    if let restart {
+      await traffic?.startTrip(protectedPoints: restart)
     }
   }
 
@@ -350,7 +361,8 @@ public final class NavOSSCommunityService: @unchecked Sendable {
       monitor.startTrip(geometry: trip.geometry, maneuverAlongMeters: Self.maneuvers(trip))
     }
     // Independent: a slow credential request must not delay the reports on the route ahead.
-    Task { await startTrafficTrip() }
+    let points = lock.withLock { protectedPoints }
+    Task { [traffic] in await traffic?.startTrip(protectedPoints: points) }
     Task { await refreshCorridor() }
   }
 
@@ -440,12 +452,6 @@ public final class NavOSSCommunityService: @unchecked Sendable {
 
   // MARK: Private
 
-  private func startTrafficTrip() async {
-    guard let traffic else { return }
-    let points = lock.withLock { protectedPoints }
-    await traffic.startTrip(protectedPoints: points)
-  }
-
   /// Keeps the route ahead fetched during guidance, so CarPlay and alerts see reports on it.
   private func refreshCorridor() async {
     guard client != nil else { return }
@@ -459,12 +465,17 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     _ = try? await fetchReports(in: bounds)
   }
 
+  /// Any community preference changed. Only the sharing switch reaches the uploader, in the
+  /// order the changes happened (an off between two ons still discards everything). Nothing here
+  /// restarts a trip: the uploader keeps the trip's restrictions across toggles.
   private func preferencesDidChange() {
-    let enabled = preferencesStore.load().sharesTrafficSpeeds
-    let active = lock.withLock { navigationActive }
-    Task {
-      await traffic?.setEnabled(enabled)
-      if enabled, active { await startTrafficTrip() }
+    lock.withLock {
+      let enabled = preferencesStore.load().sharesTrafficSpeeds
+      let previous = sharingSwitchTask
+      sharingSwitchTask = Task { [traffic] in
+        await previous?.value
+        await traffic?.setEnabled(enabled)
+      }
     }
     notifyStateChange()
   }

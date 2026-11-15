@@ -24,8 +24,8 @@ public enum NavOSSTrafficSharingState: Equatable, Sendable {
   case paused(until: Date)
   /// A new installation contributes from the next day; nothing is collected before `until`.
   case startsLater(until: Date)
-  /// Not for this trip: the server is not accepting, rate-limited this installation, or this
-  /// device cannot attest.
+  /// Not for this trip: the server is not accepting, rate-limited or refused this installation,
+  /// or this device cannot attest.
   case unavailable(reason: Reason)
 
   public enum Reason: String, Sendable {
@@ -41,24 +41,52 @@ public enum NavOSSTrafficSharingState: Equatable, Sendable {
 /// server contract exactly: status first, one credential held in memory and refreshed shortly
 /// before expiry, batches sent once in order and never retried or stored; 401 → one new
 /// credential, 429 → stop for the trip, 503 → pause five minutes, 400 → drop.
+///
+/// A trip is one navigation start (`startTrip`) to its end (`endTrip`). The sharing switch
+/// (`setEnabled`) starts and stops collection inside it, but never lifts what the server imposed:
+/// a `429` or a refused credential holds until the next navigation start, and a `503` pause
+/// until its five minutes are over. Turning sharing off
+/// or ending the trip cancels the upload in flight, so its batch and credential go with it.
 public actor NavOSSTrafficSharingSession {
   public static let credentialRefreshMarginSeconds: TimeInterval = 300
   public static let unavailablePauseSeconds: TimeInterval = 300
   /// A trip may replace its credential after a 401 at most this often.
   static let maximumCredentialRefreshesPerTrip = 3
 
+  /// What the server (or this trip) ruled out until the next navigation start.
+  private enum TripRestriction {
+    case rateLimited
+    case rejected
+    case unsupported
+    case startsLater(Date)
+
+    var state: NavOSSTrafficSharingState {
+      switch self {
+      case .rateLimited: .unavailable(reason: .rateLimited)
+      case .rejected: .unavailable(reason: .rejected)
+      case .unsupported: .unavailable(reason: .unsupported)
+      case let .startsLater(until): .startsLater(until: until)
+      }
+    }
+  }
+
   private var collector: NavOSSTrafficProbeCollector?
   private var credential: NavOSSTrafficCredential?
   private var credentialRefreshes = 0
+  private var enabled = false
+  /// Advanced whenever collection is discarded: work begun under an older value is abandoned.
+  private var generation: UInt64 = 0
+  private var navigating = false
   private let now: @Sendable () -> Date
   private let onStateChange: @Sendable (NavOSSTrafficSharingState) -> Void
   private var pausedUntil: Date?
+  private var protectedPoints: [NavOSSCarPlayCoordinate] = []
   private var queue: [NavOSSTrafficProbeBatch] = []
+  private var restriction: TripRestriction?
   private var startsLaterUntil: Date?
   private var trafficNotOffered = false
   public private(set) var state: NavOSSTrafficSharingState = .off
   private let transport: NavOSSTrafficTransport
-  private var trip: UInt64 = 0
   private var uploadTask: Task<Void, Never>?
   /// How many uploads ended in each outcome this process: counts only, never content.
   public private(set) var outcomeCounts: [String: Int] = [:]
@@ -73,82 +101,50 @@ public actor NavOSSTrafficSharingSession {
     self.onStateChange = onStateChange
   }
 
-  public func setEnabled(_ enabled: Bool) {
+  /// The driver's switch. Off discards everything in memory, including the credential, and
+  /// cancels the upload in flight; on during guidance starts collecting for the rest of the trip
+  /// unless the trip is restricted.
+  public func setEnabled(_ enabled: Bool) async {
+    guard enabled != self.enabled else { return }
+    self.enabled = enabled
     if !enabled {
-      endTrip()
+      discardCollection()
       set(.off)
-    } else if state == .off {
-      set(.ready)
+    } else if navigating {
+      await beginCollection()
+    } else {
+      set(idleState())
     }
   }
 
-  /// Turn-by-turn guidance started (or the switch was turned on during guidance).
-  /// `protectedPoints` are the route origin, destination and stops.
+  /// Turn-by-turn guidance started: a new trip. `protectedPoints` are the route origin,
+  /// destination and stops.
   public func startTrip(protectedPoints: [NavOSSCarPlayCoordinate]) async {
-    guard state != .off else { return }
-    endTrip()
-    trip &+= 1
-    let current = trip
-    let started = now()
-    if let startsLaterUntil, started < startsLaterUntil {
-      set(.startsLater(until: startsLaterUntil))
-      return
-    }
-    // A server that answered 404 (no community traffic) is not asked again this launch.
-    if trafficNotOffered {
-      set(.unavailable(reason: .notAccepting))
-      return
-    }
-    set(.starting)
-    let status: NavOSSTrafficStatus
-    do {
-      status = try await transport.trafficStatus()
-    } catch NavOSSCommunityFailure.notFound {
-      // A server without community traffic (an older API) answers 404: not available, quietly.
-      trafficNotOffered = true
-      if trip == current { set(.unavailable(reason: .notAccepting)) }
-      return
-    } catch {
-      if trip == current { set(.unavailable(reason: .offline)) }
-      return
-    }
-    guard trip == current else { return }
-    guard status.accepting, status.rules.schemaVersion == 1 else {
-      set(.unavailable(reason: .notAccepting))
-      return
-    }
-    // Collect from the first fix so the trip's start is trimmed even while the credential is
-    // requested; anything completed before a credential exists is dropped.
-    collector = NavOSSTrafficProbeCollector(rules: status.rules, protectedPoints: protectedPoints)
-    guard await refreshCredential(trip: current), trip == current else { return }
-    set(.sharing)
+    discardCollection()
+    navigating = true
+    self.protectedPoints = protectedPoints
+    restriction = nil
+    if enabled { await beginCollection() }
   }
 
   /// A new destination or stop: the collector drops its unsent fixes and batches, and anything
   /// queued for upload is dropped too, so nothing inside the new zone is sent.
   public func protect(_ coordinates: [NavOSSCarPlayCoordinate]) {
+    guard navigating else { return }
+    protectedPoints += coordinates
     if collector?.protect(coordinates) == true {
       queue.removeAll()
     }
   }
 
-  /// Arrival, cancellation, or the switch turned off. Held-back fixes and the open batch are
-  /// discarded, the upload in flight is cancelled (its batch is never sent) and the credential
-  /// forgotten.
+  /// Arrival or cancellation. Held-back fixes and the open batch are discarded, the upload in
+  /// flight is cancelled and the credential forgotten.
   public func endTrip() {
-    trip &+= 1
-    uploadTask?.cancel()
-    uploadTask = nil
-    collector?.finish()
-    collector = nil
-    credential = nil
-    credentialRefreshes = 0
-    queue.removeAll()
-    pausedUntil = nil
-    switch state {
-    case .off, .startsLater: break
-    default: set(.ready)
-    }
+    discardCollection()
+    navigating = false
+    protectedPoints = []
+    restriction = nil
+    set(enabled ? idleState() : .off)
   }
 
   public func ingest(_ fix: NavOSSTrafficFix) {
@@ -172,6 +168,71 @@ public actor NavOSSTrafficSharingSession {
     }
   }
 
+  private func idleState() -> NavOSSTrafficSharingState {
+    if let until = startsLaterUntil, now() < until { return .startsLater(until: until) }
+    return .ready
+  }
+
+  /// Status, collector and credential for the rest of this trip.
+  private func beginCollection() async {
+    guard enabled, navigating, collector == nil else { return }
+    if let restriction {
+      set(restriction.state)
+      return
+    }
+    if let until = startsLaterUntil, now() < until {
+      set(.startsLater(until: until))
+      return
+    }
+    // A server that answered 404 (no community traffic) is not asked again this launch.
+    if trafficNotOffered {
+      set(.unavailable(reason: .notAccepting))
+      return
+    }
+    let current = generation
+    set(.starting)
+    let status: NavOSSTrafficStatus
+    do {
+      status = try await transport.trafficStatus()
+    } catch NavOSSCommunityFailure.notFound {
+      // A server without community traffic (an older API) answers 404: not available, quietly.
+      trafficNotOffered = true
+      if generation == current { set(.unavailable(reason: .notAccepting)) }
+      return
+    } catch {
+      if generation == current { set(.unavailable(reason: .offline)) }
+      return
+    }
+    guard generation == current else { return }
+    guard status.accepting, status.rules.schemaVersion == 1 else {
+      set(.unavailable(reason: .notAccepting))
+      return
+    }
+    // Collect from the first fix so the trip's start is trimmed even while the credential is
+    // requested; anything completed before a credential exists is dropped.
+    collector = NavOSSTrafficProbeCollector(rules: status.rules, protectedPoints: protectedPoints)
+    guard await refreshCredential(generation: current), generation == current else { return }
+    if let pausedUntil, now() < pausedUntil {
+      set(.paused(until: pausedUntil))
+    } else {
+      pausedUntil = nil
+      set(.sharing)
+    }
+  }
+
+  /// Drops everything collected, queued or held for upload, and cancels the upload in flight so
+  /// that its batch is never sent.
+  private func discardCollection() {
+    generation &+= 1
+    uploadTask?.cancel()
+    uploadTask = nil
+    collector?.finish()
+    collector = nil
+    credential = nil
+    credentialRefreshes = 0
+    queue.removeAll()
+  }
+
   private func enqueue(_ batches: [NavOSSTrafficProbeBatch]) {
     guard !batches.isEmpty else { return }
     let current = now()
@@ -183,17 +244,17 @@ public actor NavOSSTrafficSharingSession {
     guard state == .sharing else { return }
     queue.append(contentsOf: batches)
     if uploadTask == nil {
-      let current = trip
-      uploadTask = Task { await self.upload(trip: current) }
+      let current = generation
+      uploadTask = Task { await self.upload(generation: current) }
     }
   }
 
-  private func upload(trip current: UInt64) async {
+  private func upload(generation current: UInt64) async {
     defer {
-      // A newer trip already dropped this task (and may have started another).
-      if trip == current { uploadTask = nil }
+      // A newer generation already dropped this task (and may have started another).
+      if generation == current { uploadTask = nil }
     }
-    while trip == current, !Task.isCancelled, !queue.isEmpty {
+    while generation == current, !Task.isCancelled, !queue.isEmpty {
       let batch = queue.removeFirst()
       // Never send a batch the server would refuse as stale.
       guard now().timeIntervalSince(batch.capturedAt) < 590 else {
@@ -203,12 +264,12 @@ public actor NavOSSTrafficSharingSession {
       if let credential,
         credential.expiresAt.timeIntervalSince(now()) < Self.credentialRefreshMarginSeconds
       {
-        guard await refreshCredential(trip: current) else { return }
+        guard await refreshCredential(generation: current) else { return }
       }
-      guard trip == current, !Task.isCancelled, let credential else { return }
+      guard generation == current, !Task.isCancelled, let credential else { return }
       let outcome = await transport.uploadProbes(batch, credential: credential.value)
       record(outcome)
-      guard trip == current else { return }
+      guard generation == current else { return }
       switch outcome {
       case .accepted, .dropped:
         continue
@@ -216,9 +277,9 @@ public actor NavOSSTrafficSharingSession {
         // One new credential, then continue with the next batch; this batch is gone.
         credentialRefreshes += 1
         guard credentialRefreshes <= Self.maximumCredentialRefreshesPerTrip,
-          await refreshCredential(trip: current)
+          await refreshCredential(generation: current)
         else {
-          if trip == current { stop(.rejected) }
+          if generation == current { stop(.rejected) }
           return
         }
       case .rateLimited:
@@ -235,19 +296,19 @@ public actor NavOSSTrafficSharingSession {
   }
 
   /// Requests a credential; on failure sets the trip's state and returns false.
-  private func refreshCredential(trip current: UInt64) async -> Bool {
+  private func refreshCredential(generation current: UInt64) async -> Bool {
     do {
       let issued = try await transport.trafficCredential()
-      guard trip == current else { return false }
+      guard generation == current else { return false }
       credential = issued
       return true
     } catch let failure as NavOSSCommunityFailure {
-      guard trip == current else { return false }
+      guard generation == current else { return false }
       switch failure {
       case let .installationTooNew(retryAfter):
         let until = now().addingTimeInterval(TimeInterval(retryAfter ?? 24 * 60 * 60))
         startsLaterUntil = until
-        collector = nil
+        discardCollection()
         set(.startsLater(until: until))
       case .attestationUnsupported:
         stop(.unsupported)
@@ -262,7 +323,7 @@ public actor NavOSSTrafficSharingSession {
       }
       return false
     } catch {
-      if trip == current { stop(.rejected) }
+      if generation == current { stop(.rejected) }
       return false
     }
   }
@@ -271,11 +332,17 @@ public actor NavOSSTrafficSharingSession {
     outcomeCounts["\(outcome)", default: 0] += 1
   }
 
+  /// Nothing more on this trip. What the server imposed on this installation (`429`, a refused
+  /// credential, no attestation) holds until the next navigation start; a server that is not
+  /// accepting or unreachable is asked again only when the driver turns sharing on again.
   private func stop(_ reason: NavOSSTrafficSharingState.Reason) {
-    collector?.finish()
-    collector = nil
-    credential = nil
-    queue.removeAll()
+    switch reason {
+    case .rateLimited: restriction = .rateLimited
+    case .rejected: restriction = .rejected
+    case .unsupported: restriction = .unsupported
+    case .notAccepting, .offline: break
+    }
+    discardCollection()
     set(.unavailable(reason: reason))
   }
 
