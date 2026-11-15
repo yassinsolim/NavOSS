@@ -96,9 +96,10 @@ validator and config plugin fail closed when the flag has no key. Checked-in pro
 explicitly set `NAVOSS_GOOGLE_PLACES_ENABLED=0`; disabled builds do not link GooglePlacesSwift or
 make place-details requests. Enabled builds use the Essentials `PlaceDetailsView` (billed per load,
 with every content element it offers) rather than the Pro `AdvancedPlaceDetailsView`. The hosted
-workflow `ios-testflight-runner.yml` builds it with `profile: production-carplay-google`; that run
-fails before Xcode unless the `GOOGLE_PLACES_IOS_API_KEY` secret is set in the
-`app-store-production` GitHub environment (the EAS secret is not readable outside EAS servers). Every enabled query must first receive an anonymous grant from
+workflow `ios-testflight-runner.yml` builds it with `profile: production-carplay-google`; `eas build --local`
+resolves the key from the EAS `production` environment like the profile's other variables, the config
+plugin and release validator still refuse the flag without a key, and the run checks the IPA for
+`NavOSSGooglePlacesEnabled` and `GooglePlacesSwiftResources.bundle`. Every enabled query must first receive an anonymous grant from
 the durable NavOSS counter, which hard-stops at 8,000 grants per UTC month and fails closed. Keep
 Google-side quota limits and billing alerts as an independent second layer before release.
 
