@@ -992,7 +992,7 @@ Collection receives exactly the inputs `live` does, so this group is about the i
 - [x] Valhalla's container logs, at its configured level, contain no request bodies for
       `trace_attributes` and `/locate`, including on errors (send a malformed trace and read the
       journal). Established locally for 3.8.2 at its default logging; repeat on the host. **Host, 2026-11-15:** a malformed-JSON trace, a bad `shape_match` and a bad `/locate` each logged only a request id, method, path, status and the parser message; no coordinate appeared.
-- [ ] Caddy logs no request headers or client addresses on proxy errors.
+- [x] Caddy logs no request headers or client addresses on proxy errors. **Host, 2026-11-15:** it did: with the upstream down, the default error log recorded `Cf-Connecting-Ip`, the peer address and the full URI (a `flow` request's bounding box). The Caddyfile now filters `http.log.error` so only protocol, method, host, status and the dial error remain; re-tested with the same request and deployed.
 - [x] Swap is off or encrypted, and core dumps are disabled, for the API and Valhalla
       containers. **Host, 2026-11-15:** the 4 GiB swapfile is off and removed from `fstab`; Compose sets `ulimits.core: 0` for `api` and `valhalla` (`ulimit -c` reads 0 in both).
 - [ ] The database's availability is monitored: `/ready` reports `database: not_ready` when it
