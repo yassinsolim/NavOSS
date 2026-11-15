@@ -4,21 +4,33 @@ import { offlineSearchSourceLabel } from '../offline/offline-copy';
 
 export type ApiConnectionState = 'connecting' | 'offline' | 'online';
 
-/** Names the data a result list came from, and says so when that data is not live. */
-export function searchSourceLabel(source: SearchSource | undefined, degraded = false): string {
+/**
+ * Names the data a result list came from, and says so when that data is not live. A search that
+ * combines OpenStreetMap with Calgary Open Data credits the City only when a listed result came
+ * from its data (ids `calgary-…`): a search elsewhere, or one that found nothing, did not use it.
+ */
+export function searchSourceLabel(
+  source: SearchSource | undefined,
+  degraded = false,
+  results: readonly { id: string }[] = [],
+): string {
+  const name = searchSourceName(source, results);
   if (source?.id === 'photon-development' && degraded) {
-    return `${searchSourceName(source)} · Results may be incomplete`;
+    return `${name} · Results may be incomplete`;
   }
-  return degraded
-    ? `${searchSourceName(source)} · Some sources unavailable, results may be incomplete`
-    : searchSourceName(source);
+  return degraded ? `${name} · Some sources unavailable, results may be incomplete` : name;
 }
 
-function searchSourceName(source: SearchSource | undefined): string {
+function searchSourceName(
+  source: SearchSource | undefined,
+  results: readonly { id: string }[],
+): string {
   if (source === undefined) return 'Place search';
   if (source.id === 'offline-osm') return offlineSearchSourceLabel(source.updatedAt);
   if (source.id === 'calgary-hybrid-search' || source.id === 'calgary-open-data-index') {
-    return 'Calgary Open Data + OpenStreetMap';
+    return results.some((result) => result.id.startsWith('calgary-'))
+      ? 'Calgary Open Data + OpenStreetMap'
+      : 'OpenStreetMap search';
   }
   if (source.freshness === 'static') {
     return source.id.startsWith('calgary-')
@@ -31,6 +43,13 @@ function searchSourceName(source: SearchSource | undefined): string {
 }
 
 export interface ServiceNotice {
+  kind:
+    | 'connecting'
+    | 'location-denied'
+    | 'location-error'
+    | 'offline-maps'
+    | 'outside-coverage'
+    | 'service-unavailable';
   message: string;
   title: string;
   tone: 'danger' | 'neutral' | 'warning';
@@ -58,6 +77,7 @@ export function exploreServiceNotice({
 }): ServiceNotice | undefined {
   if (apiConnection === 'offline' && offlineMapsInstalled) {
     return {
+      kind: 'offline-maps',
       message:
         'Search and routes use your downloaded offline maps: OpenStreetMap places, no live traffic or closures.',
       title: 'Using offline maps',
@@ -66,6 +86,7 @@ export function exploreServiceNotice({
   }
   if (apiConnection === 'offline') {
     return {
+      kind: 'service-unavailable',
       message: 'Search and routing need a connection to the NavOSS service. The map still works.',
       title: 'Service unavailable',
       tone: 'danger',
@@ -73,6 +94,7 @@ export function exploreServiceNotice({
   }
   if (locationState === 'denied') {
     return {
+      kind: 'location-denied',
       message: 'Allow location in Settings to see your position and get directions from it.',
       title: 'Location access is off',
       tone: 'warning',
@@ -80,17 +102,24 @@ export function exploreServiceNotice({
   }
   if (locationState === 'error') {
     return {
+      kind: 'location-error',
       message: 'NavOSS could not get a location fix. Directions need your current position.',
       title: 'Current location unavailable',
       tone: 'warning',
     };
   }
   if (apiConnection === 'connecting') {
-    return { message: 'Checking the NavOSS service.', title: 'Connecting', tone: 'neutral' };
+    return {
+      kind: 'connecting',
+      message: 'Checking the NavOSS service.',
+      title: 'Connecting',
+      tone: 'neutral',
+    };
   }
   if (locationState === 'visible' && !nearbySearchEnabled) {
     return {
-      message: `Search and directions cover ${coverageName}. Your current location is outside that area.`,
+      kind: 'outside-coverage',
+      message: `NavOSS covers ${coverageName} today. Search and directions work only there.`,
       title: 'Outside current coverage',
       tone: 'neutral',
     };
@@ -119,4 +148,28 @@ export function mapProblemLabels({
   if (routeIsIdle && locationState === 'denied') labels.push('Location access is off');
   if (routeIsIdle && locationState === 'error') labels.push('Current location unavailable');
   return labels;
+}
+
+/**
+ * The empty state of a search. Outside coverage it names what the server covers today, since a
+ * search for a place nearby is the one most likely to find nothing.
+ */
+export function noMatchesCopy({
+  category,
+  outsideCoverageName,
+}: {
+  /** A nearby-category search rather than a name search. */
+  category: boolean;
+  /** The server's coverage name when the current location is outside it. */
+  outsideCoverageName?: string;
+}): { message: string; title: string } {
+  if (outsideCoverageName !== undefined) {
+    return {
+      message: `NavOSS covers ${outsideCoverageName} today. Search for a place there.`,
+      title: 'Outside current coverage',
+    };
+  }
+  return category
+    ? { message: 'Try another category or search by name.', title: 'No places found nearby' }
+    : { message: 'Try another place name or add a street.', title: 'No matches found' };
 }

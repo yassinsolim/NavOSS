@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   exploreServiceNotice,
+  noMatchesCopy,
   mapProblemLabels,
   searchSourceLabel,
 } from '../src/features/map/search-status.js';
@@ -37,8 +38,9 @@ describe('explore service notice', () => {
   it('explains missing coverage only once a location is known', () => {
     expect(exploreServiceNotice({ ...healthy, nearbySearchEnabled: false })).toMatchObject({
       // The server's declared coverage, not the provinces this build bundles.
+      kind: 'outside-coverage',
       message:
-        'Search and directions cover Calgary and Kelowna service areas. Your current location is outside that area.',
+        'NavOSS covers Calgary and Kelowna service areas today. Search and directions work only there.',
       title: 'Outside current coverage',
     });
     expect(
@@ -95,8 +97,23 @@ describe('search source label', () => {
     expect(
       searchSourceLabel({ ...source, freshness: 'fresh', id: 'nominatim-self-hosted' }, true),
     ).toBe('OpenStreetMap search · Some sources unavailable, results may be incomplete');
-    expect(searchSourceLabel({ ...source, freshness: 'fresh', id: 'calgary-hybrid-search' })).toBe(
-      'Calgary Open Data + OpenStreetMap',
+    expect(
+      searchSourceLabel({ ...source, freshness: 'fresh', id: 'calgary-hybrid-search' }, false, [
+        { id: 'nominatim:way:25719793' },
+        { id: 'calgary-business:12557120' },
+      ]),
+    ).toBe('Calgary Open Data + OpenStreetMap');
+  });
+
+  it('credits Calgary Open Data only for a search that listed its places', () => {
+    const hybrid = { ...source, freshness: 'fresh', id: 'calgary-hybrid-search' } as const;
+    // Recorded from production: "Gare Centrale" searched from Montreal found nothing.
+    expect(searchSourceLabel(hybrid, false, [])).toBe('OpenStreetMap search');
+    expect(searchSourceLabel(hybrid, false, [{ id: 'nominatim:node:1' }])).toBe(
+      'OpenStreetMap search',
+    );
+    expect(searchSourceLabel(hybrid, true, [])).toBe(
+      'OpenStreetMap search · Some sources unavailable, results may be incomplete',
     );
   });
 
@@ -110,5 +127,24 @@ describe('search source label', () => {
     expect(
       searchSourceLabel({ ...source, freshness: 'static', id: 'regional-empty-fixtures' }),
     ).toBe('Place data · Not live');
+  });
+});
+
+describe('no matches', () => {
+  it("names the server's coverage outside it, never a fixed list", () => {
+    expect(
+      noMatchesCopy({ category: false, outsideCoverageName: 'Alberta and British Columbia' }),
+    ).toEqual({
+      message: 'NavOSS covers Alberta and British Columbia today. Search for a place there.',
+      title: 'Outside current coverage',
+    });
+    expect(noMatchesCopy({ category: false, outsideCoverageName: 'Ontario' }).message).toBe(
+      'NavOSS covers Ontario today. Search for a place there.',
+    );
+  });
+
+  it('keeps the usual wording inside coverage', () => {
+    expect(noMatchesCopy({ category: false }).title).toBe('No matches found');
+    expect(noMatchesCopy({ category: true }).title).toBe('No places found nearby');
   });
 });

@@ -35,17 +35,11 @@ public enum NavOSSNavigationAPIError: Error {
 }
 
 /// The server's explanation of a route it cannot plan (`ProblemDetails` title and detail).
-extension NavOSSNavigationAPIError {
-  /// A 400: the server rejected the request, with or without its reason.
-  fileprivate var isRejectedRequest: Bool {
-    switch self {
-    case .invalidRequest, .routeRefused: true
-    default: false
-    }
-  }
-}
-
 public struct NavOSSRouteProblem: Equatable, Sendable {
+  /// The title of the API's answer to a body that does not match its contract, which is how an
+  /// API older than origin heading and accuracy rejected them. It is not a reason to show.
+  static let contractRejectionTitle = "Invalid request"
+
   public let title: String
   public let detail: String
 
@@ -457,8 +451,9 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
   }
 
   /// Posts a route request, retrying once without origin heading/accuracy when the server
-  /// rejects them (an older API did not accept them). A 400 that explains itself in the problem
-  /// shape is `routeRefused`, after that retry.
+  /// rejects the body as not matching its contract (an older API did not accept them). A 400
+  /// that gives another reason is `routeRefused` and is not sent again: the server refused the
+  /// route itself, and would refuse it without the optional fields too.
   private func postRoutes(
     path: String,
     _ request: NavigationRouteRequest,
@@ -466,9 +461,8 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
   ) async throws -> NavigationRouteResponseWire {
     do {
       return try await post(path: path, body: request, timeout: timeout, routeProblems: true)
-    } catch let error as NavOSSNavigationAPIError
-      where error.isRejectedRequest
-      && (request.originHeadingDegrees != nil || request.originHorizontalAccuracyMeters != nil)
+    } catch NavOSSNavigationAPIError.invalidRequest
+      where request.originHeadingDegrees != nil || request.originHorizontalAccuracyMeters != nil
     {
       return try await post(
         path: path, body: request.withoutOriginMetadata(), timeout: timeout, routeProblems: true)
@@ -522,7 +516,10 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
       throw NavOSSNavigationAPIError.invalidResponse
     }
     guard response.statusCode != 400 else {
-      if routeProblems, let problem = NavOSSRouteProblem(problemDetails: data) {
+      // The API's contract rejection ("Invalid request") explains nothing a driver can use.
+      if routeProblems, let problem = NavOSSRouteProblem(problemDetails: data),
+        problem.title != NavOSSRouteProblem.contractRejectionTitle
+      {
         throw NavOSSNavigationAPIError.routeRefused(problem)
       }
       throw NavOSSNavigationAPIError.invalidRequest

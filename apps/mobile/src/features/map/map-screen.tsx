@@ -340,7 +340,7 @@ export function MapScreen() {
         <RoutePlanningSheet
           bottomInset={insets.bottom}
           destination={routeState.destination}
-          errorMessage={routeState.type === 'error' ? routeState.message : undefined}
+          failure={routeState.type === 'error' ? routeState : undefined}
           onCancel={c.onCancelRoute}
           onPreviewSupportedRoute={c.onPreviewSupportedRoute}
           onRetry={c.onRetryRoute}

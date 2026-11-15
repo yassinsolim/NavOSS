@@ -15,6 +15,7 @@ import {
 import type { RouteRequestOrigin } from '@/features/navigation/route-origin';
 import {
   IDLE_ROUTE,
+  routeErrorFrom,
   type RouteSource,
   type RouteUiState,
 } from '@/features/navigation/route-ui-state';
@@ -24,7 +25,6 @@ import {
   offlineRegionCovers,
 } from '@/features/offline/offline-maps';
 import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
-import { NavOssApiError } from '@/lib/api';
 
 export interface RoutePlanner {
   /** Aborts an in-flight route request without changing the route state. */
@@ -169,14 +169,7 @@ export function useRoutePlanner({
       });
     } catch (error: unknown) {
       if (superseded()) return;
-      setRouteState({
-        ...plan,
-        message:
-          error instanceof NavOssApiError
-            ? error.message
-            : 'A route could not be calculated. Check the connection and try again.',
-        type: 'error',
-      });
+      setRouteState({ ...plan, ...routeErrorFrom(error), type: 'error' });
     }
   };
 

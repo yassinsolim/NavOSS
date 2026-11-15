@@ -5,7 +5,7 @@ It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
 
-Lockfile SHA-256: `be22f15c1f8dbdd74070867f4b31ab05262aa82f5720f52474650772bea1db63`
+Lockfile SHA-256: `fe68b0f0dc83b7fadbbb3b0efbe2a03e4ff630a0071e3674da888cde63736bbc`
 
 Regenerate with:
 
@@ -559,7 +559,7 @@ corepack pnpm licenses:generate
 - `react-native-drawer-layout` - `4.2.7` - <https://reactnavigation.org/docs/drawer-layout/>
 - `react-native-gesture-handler` - `2.32.0` - <https://docs.swmansion.com/react-native-gesture-handler/>
 - `react-native-is-edge-to-edge` - `1.3.1` - <https://github.com/zoontek/react-native-edge-to-edge>
-- `react-native-reanimated` - `4.5.0` - <https://docs.swmansion.com/react-native-reanimated>
+- `react-native-reanimated` - `4.5.3` - <https://docs.swmansion.com/react-native-reanimated>
 - `react-native-safe-area-context` - `5.7.0` - <https://github.com/AppAndFlow/react-native-safe-area-context#readme>
 - `react-native-screens` - `4.25.2` - <https://github.com/software-mansion/react-native-screens#readme>
 - `react-native-web` - `0.21.2` - <https://github.com/necolas/react-native-web#readme>

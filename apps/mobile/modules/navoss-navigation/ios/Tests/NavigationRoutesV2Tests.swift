@@ -337,9 +337,43 @@ final class NavigationRoutesV2Tests: XCTestCase {
         problem.detailVariants,
         ["NavOSS can't plan a drive between Quebec and Nunavut: no road it covers connects them."])
       XCTAssertEqual(error.serverProblem, problem)
-      // Retried once without the optional origin fields (an older server's 400), never sent to v1.
-      XCTAssertEqual(paths.values.filter { $0 == "/v2/routes" }.count, 2)
+      // A refusal is the server's answer about the route, not about the optional origin fields:
+      // sent once, never retried without them and never sent to v1.
+      XCTAssertEqual(paths.values.filter { $0 == "/v2/routes" }.count, 1)
       XCTAssertFalse(paths.values.contains("/v1/routes"))
+    }
+  }
+
+  func testAContractRejectionIsRetriedOnceWithoutOriginMetadata() async throws {
+    let bodies = BodyLog()
+    let contractRejection = Data(
+      #"{"code":"invalid_request","detail":"The request does not match the API contract.","requestId":"req-1","status":400,"title":"Invalid request"}"#
+        .utf8)
+    RoutesURLProtocol.handler = { request in
+      switch request.url!.path {
+      case "/v2/config": return Self.response(request, Self.v2Config)
+      case "/v2/routes":
+        bodies.append(try XCTUnwrap(
+          JSONSerialization.jsonObject(with: Self.body(request)) as? [String: Any]))
+        return Self.response(request, contractRejection, status: 400)
+      default: return Self.response(request, Data("{}".utf8), status: 404)
+      }
+    }
+    do {
+      _ = try await makeClient().routes(
+        origin: Self.calgaryOrigin, originHeadingDegrees: 90, originHorizontalAccuracyMeters: 10,
+        destination: Self.calgaryDestination,
+        preferences: NavOSSRoutePreferences(), alternatives: 0, requireCoverage: false)
+      XCTFail("expected invalidRequest")
+    } catch let error as NavOSSNavigationAPIError {
+      // An older API's rejection of the optional fields: retried once without them, and never
+      // shown to the driver as a reason.
+      guard case .invalidRequest = error else { return XCTFail("got \(error)") }
+      XCTAssertNil(error.serverProblem)
+      XCTAssertEqual(bodies.values.count, 2)
+      XCTAssertNotNil(bodies.values.first?["originHeadingDegrees"])
+      XCTAssertNil(bodies.values.last?["originHeadingDegrees"])
+      XCTAssertNil(bodies.values.last?["originHorizontalAccuracyMeters"])
     }
   }
 
