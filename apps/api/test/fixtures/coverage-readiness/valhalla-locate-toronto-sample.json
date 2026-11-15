@@ -1,0 +1,43 @@
+{
+  "source": "valhalla-scripted:3.8.2 POST /locate {costing:auto}; graph built 2026-11-15 from a Toronto–Hamilton cut of Geofabrik ontario-261114.osm.pbf (bbox -80.05,43.15,-79.05,44.05)",
+  "capturedAt": "2026-11-15",
+  "torontoCityHall": {
+    "input_lat": 43.6525,
+    "input_lon": -79.3832,
+    "edges": [
+      {
+        "way_id": 43605455,
+        "correlated_lat": 43.652561,
+        "correlated_lon": -79.382913,
+        "side_of_street": "neither",
+        "percent_along": 0.0
+      },
+      {
+        "way_id": 43605455,
+        "correlated_lat": 43.652561,
+        "correlated_lon": -79.382913,
+        "side_of_street": "neither",
+        "percent_along": 1.0
+      },
+      {
+        "way_id": 343286622,
+        "correlated_lat": 43.65287,
+        "correlated_lon": -79.383418,
+        "side_of_street": "right",
+        "percent_along": 0.59292
+      }
+    ],
+    "nodes": [
+      {
+        "lon": -79.382913,
+        "lat": 43.652561
+      }
+    ]
+  },
+  "calgaryOutsideGraph": {
+    "input_lat": 51.04427,
+    "input_lon": -114.06309,
+    "edges": [],
+    "nodes": []
+  }
+}

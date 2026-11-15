@@ -1,0 +1,54 @@
+{
+  "source": "mediagis/nominatim:5.3 GET /reverse?addressdetails=1&format=jsonv2&zoom=10; index imported 2026-11-15 from a Toronto–Hamilton cut (bbox -80.05,43.15,-79.05,44.05) of Geofabrik ontario-261114.osm.pbf",
+  "capturedAt": "2026-11-15",
+  "torontoCityHall": {
+    "place_id": 1353328,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 324211,
+    "lat": "43.6534817",
+    "lon": "-79.3839347",
+    "category": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.24000999999999997,
+    "addresstype": "city",
+    "name": "Toronto",
+    "display_name": "Toronto, Ontario, Canada",
+    "address": {
+      "city": "Toronto",
+      "state": "Ontario",
+      "ISO3166-2-lvl4": "CA-ON",
+      "country": "Canada",
+      "country_code": "ca"
+    },
+    "boundingbox": [
+      "43.5796082",
+      "43.8554425",
+      "-79.6392832",
+      "-79.1132193"
+    ]
+  },
+  "calgaryOutsideIndex": {
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "lat": "61.2481217",
+    "lon": "-94.3924349",
+    "category": "place",
+    "type": "country",
+    "place_rank": 4,
+    "importance": 0.34667666666666663,
+    "addresstype": "country",
+    "name": "Canada",
+    "display_name": "Canada",
+    "address": {
+      "country": "Canada",
+      "country_code": "ca"
+    },
+    "boundingbox": [
+      "41.6766000",
+      "83.3134000",
+      "-141.0027000",
+      "-52.3399000"
+    ]
+  }
+}
