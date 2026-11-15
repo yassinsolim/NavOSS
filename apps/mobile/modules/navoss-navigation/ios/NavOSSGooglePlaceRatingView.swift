@@ -7,25 +7,25 @@ import GooglePlacesSwift
 import SwiftUI
 #endif
 
+/// Hosts Google's own Place Details component (Places UI Kit, Essentials tier) for the selected
+/// place. Google renders, attributes and fetches the content on every open; NavOSS only decides
+/// whether the place Google found is the selected one and reports one of these states to React:
+/// `loading`, `matched`, `noMatch`, `offline`, `unavailable`. No Google content leaves this view.
 final class NavOSSGooglePlaceRatingView: ExpoView {
+  let onStateChange = EventDispatcher()
+
   private var latitude: Double = 0
   private var longitude: Double = 0
   private var name = ""
 
   #if NAVOSS_GOOGLE_PLACES
   private var hostingController: UIHostingController<GooglePlaceDetailsContent>?
-  private var renderedCoordinate: CLLocationCoordinate2D?
-  private let stateLabel = UILabel()
+  private var renderedKey: String?
   #endif
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     backgroundColor = .clear
-    #if NAVOSS_GOOGLE_PLACES
-    stateLabel.font = .preferredFont(forTextStyle: .subheadline)
-    stateLabel.textColor = .secondaryLabel
-    stateLabel.adjustsFontForContentSizeCategory = true
-    #endif
   }
 
   func setLatitude(_ value: Double) {
@@ -47,39 +47,52 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
       CLLocationCoordinate2DIsValid(coordinate)
     else {
       tearDownContent()
+      report("unavailable")
       return
     }
-    if let renderedCoordinate,
-      renderedCoordinate.latitude == coordinate.latitude,
-      renderedCoordinate.longitude == coordinate.longitude {
+    let key = "\(name)\u{0}\(latitude)\u{0}\(longitude)"
+    if renderedKey == key {
       return
     }
 
     tearDownContent()
 
+    let selectedName = name
+    let selectedLatitude = latitude
+    let selectedLongitude = longitude
     let controller = UIHostingController(
       rootView: GooglePlaceDetailsContent(
         coordinate: coordinate,
         onResult: { [weak self] result in
-          guard let self else { return }
-          if self.matchesSelectedPlace(result) {
+          guard let self, self.renderedKey == key else { return }
+          let state = Self.state(
+            for: result,
+            selectedName: selectedName,
+            selectedLatitude: selectedLatitude,
+            selectedLongitude: selectedLongitude
+          )
+          if state == "matched" {
             self.hostingController?.view.alpha = 1
-            self.stateLabel.removeFromSuperview()
+            self.hostingController?.view.accessibilityElementsHidden = false
           } else {
-            self.showUnavailableState()
             self.detachHostingController()
           }
+          self.report(state)
         }
       )
     )
     controller.view.backgroundColor = .clear
+    // Hidden until the gate accepts Google's place, so a different business never flashes up.
     controller.view.alpha = 0
+    controller.view.accessibilityElementsHidden = true
     controller.view.frame = bounds
     controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     hostingController = controller
-    renderedCoordinate = coordinate
-    showLoadingState()
+    renderedKey = key
+    report("loading")
     attachContentIfPossible()
+    #else
+    report("unavailable")
     #endif
   }
 
@@ -105,7 +118,6 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
     super.layoutSubviews()
     #if NAVOSS_GOOGLE_PLACES
     hostingController?.view.frame = bounds
-    stateLabel.frame = bounds
     #endif
   }
 
@@ -113,7 +125,50 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
     CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
   }
 
+  private func report(_ state: String) {
+    onStateChange(["state": state])
+  }
+
   #if NAVOSS_GOOGLE_PLACES
+  private static func state(
+    for result: PlaceDetailsResult,
+    selectedName: String,
+    selectedLatitude: Double,
+    selectedLongitude: Double
+  ) -> String {
+    if let place = result.place {
+      guard let displayName = place.displayName else { return "noMatch" }
+      return NavOSSGooglePlaceMatch.matches(
+        selectedName: selectedName,
+        selectedLatitude: selectedLatitude,
+        selectedLongitude: selectedLongitude,
+        candidateName: displayName,
+        candidateLatitude: place.location.latitude,
+        candidateLongitude: place.location.longitude
+      ) ? "matched" : "noMatch"
+    }
+    switch result.error {
+    case let error as PlacesError:
+      switch error {
+      case .network:
+        return "offline"
+      case .keyInvalid, .keyExpired, .usageLimitExceeded, .rateLimitExceeded,
+        .deviceRateLimitExceeded, .accessNotConfigured, .incorrectBundleIdentifier:
+        return "unavailable"
+      case .server, .internal, .location, .invalidRequest:
+        return "noMatch"
+      @unknown default:
+        return "noMatch"
+      }
+    case let error as URLError where error.code == .notConnectedToInternet
+      || error.code == .networkConnectionLost || error.code == .timedOut:
+      return "offline"
+    default:
+      // No place at this coordinate, or nothing Google could say about it.
+      return "noMatch"
+    }
+  }
+
   private func attachContentIfPossible() {
     guard
       window != nil,
@@ -140,59 +195,6 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
     return nil
   }
 
-  private func matchesSelectedPlace(_ result: PlaceDetailsResult) -> Bool {
-    guard
-      let place = result.place,
-      let displayName = place.displayName,
-      namesMatch(displayName, name)
-    else {
-      return false
-    }
-    let selectedLocation = CLLocation(latitude: latitude, longitude: longitude)
-    let googleLocation = CLLocation(
-      latitude: place.location.latitude,
-      longitude: place.location.longitude
-    )
-    return selectedLocation.distance(from: googleLocation) <= 200
-  }
-
-  private func namesMatch(_ left: String, _ right: String) -> Bool {
-    func normalize(_ value: String) -> String {
-      let normalizedCharacters = value
-        .folding(
-          options: [.caseInsensitive, .diacriticInsensitive],
-          locale: Locale(identifier: "en_CA")
-        )
-        .unicodeScalars
-        .map { CharacterSet.alphanumerics.contains($0) ? Character($0) : " " }
-      return String(normalizedCharacters)
-        .split(separator: " ")
-        .joined(separator: " ")
-    }
-    let normalizedLeft = normalize(left)
-    let normalizedRight = normalize(right)
-    guard !normalizedLeft.isEmpty, !normalizedRight.isEmpty else { return false }
-    return normalizedLeft == normalizedRight
-      || (min(normalizedLeft.count, normalizedRight.count) >= 5
-        && (normalizedLeft.contains(normalizedRight) || normalizedRight.contains(normalizedLeft)))
-  }
-
-  private func showLoadingState() {
-    stateLabel.text = "Loading Google photos and reviews"
-    stateLabel.frame = bounds
-    if stateLabel.superview == nil {
-      addSubview(stateLabel)
-    }
-  }
-
-  private func showUnavailableState() {
-    stateLabel.text = "Google place details unavailable"
-    stateLabel.frame = bounds
-    if stateLabel.superview == nil {
-      addSubview(stateLabel)
-    }
-  }
-
   private func detachHostingController() {
     guard let controller = hostingController else { return }
     controller.willMove(toParent: nil)
@@ -203,18 +205,39 @@ final class NavOSSGooglePlaceRatingView: ExpoView {
 
   private func tearDownContent() {
     detachHostingController()
-    renderedCoordinate = nil
-    stateLabel.removeFromSuperview()
+    renderedKey = nil
   }
   #endif
 }
 
 #if NAVOSS_GOOGLE_PLACES
+/// Every element the Essentials `PlaceDetailsView` offers. Places UI Kit bills per component
+/// load, not per element, so the full list costs the same as the earlier media, rating and
+/// reviews subset. The Pro `AdvancedPlaceDetailsView` adds only button and review/media filter
+/// configuration, which NavOSS does not need.
+let navOSSGooglePlaceDetailsContent: Set<PlaceDetailsContent> = [
+  .media(),
+  .address(),
+  .rating(),
+  .type(),
+  .price(),
+  .accessibleEntranceIcon(),
+  .openNowStatus(),
+  .openingHours(),
+  .summary(),
+  .website(),
+  .phoneNumber(),
+  .typeSpecificHighlights(),
+  .reviews(),
+  .plusCode(),
+  .featureList(),
+]
+
 private struct GooglePlaceDetailsContent: View {
   @State private var query: PlaceDetailsQuery
   private let onResult: (PlaceDetailsResult) -> Void
   private let configuration = PlaceDetailsConfiguration(
-    content: [.media(), .rating(), .reviews()],
+    content: navOSSGooglePlaceDetailsContent,
     theme: PlacesMaterialTheme()
   )
 
