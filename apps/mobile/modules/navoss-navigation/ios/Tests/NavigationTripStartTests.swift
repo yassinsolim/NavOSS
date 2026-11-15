@@ -43,8 +43,9 @@ final class NavigationTripStartTests: XCTestCase {
   }
 
   /// Drives a trip the way `NavOSSNavigationService` does: every fix goes through the session
-  /// and reroute consent; a request is answered from the recorded production responses and
-  /// the replacement is taken the way the service takes it.
+  /// and reroute consent; a request asks for the alternatives the service asks for, is answered
+  /// from the recorded production responses (the preview's three routes, or the reroute's
+  /// one), and the replacement is chosen with the service's rule.
   private final class TripHarness {
     let session = NavigationSession()
     var consent = NavigationRerouteConsent()
@@ -92,7 +93,14 @@ final class NavigationTripStartTests: XCTestCase {
       {
       case .request:
         requests += 1
-        guard let replacement = reroute.first else { return }
+        let hasMatchedRoute = session.hasMatchedRoute
+        let alternatives = navigationRerouteAlternatives(
+          hasMatchedRoute: hasMatchedRoute, waypointCount: 0)
+        let answer = alternatives > 0 ? preview : reroute
+        guard let current = session.trip,
+          let replacement = navigationReplacement(
+            from: answer, closestTo: current, hasMatchedRoute: hasMatchedRoute)
+        else { return }
         switch consent.received(
           replacement, mode: mode,
           remainingDurationSeconds: update.guidance?.remainingDurationSeconds,
@@ -252,7 +260,37 @@ final class NavigationTripStartTests: XCTestCase {
     }
     XCTAssertEqual(trip.requests, 1)
     XCTAssertLessThanOrEqual(driven, 120, "rerouted soon after moving away")
-    XCTAssertNotEqual(trip.activeRouteId, express.id, "a replacement from the car is installed")
+    // Not yet matched, so the server's alternatives are asked for and the one closest to the
+    // chosen route is installed (the recorded preview answer stands in for the server's).
+    XCTAssertEqual(trip.installed, [express.id])
+  }
+
+  // MARK: Which replacement a reroute takes
+
+  func testBeforeTheFirstMatchTheReplacementIsTheAlternativeClosestToTheChosenRoute() throws {
+    let preview = try Self.trips("square-one-scarborough.v2")
+    let express = try Self.route(preview, via: "Highway 401 Express")
+    let collector = try Self.route(preview, via: "Highway 401 Collector")
+    let gardiner = try Self.route(preview, via: "Gardiner Expressway")
+    for selected in [express, collector, gardiner] {
+      for candidates in [preview, preview.reversed()] {
+        XCTAssertEqual(
+          navigationReplacement(from: candidates, closestTo: selected, hasMatchedRoute: false)?.id,
+          selected.id)
+      }
+    }
+    // Without the chosen route itself, the one sharing most of its road: Collector, not QEW.
+    XCTAssertEqual(
+      navigationReplacement(from: [gardiner, collector], closestTo: express, hasMatchedRoute: false)?
+        .id,
+      collector.id)
+    // Once matched, the server's first, as before.
+    XCTAssertEqual(
+      navigationReplacement(from: preview, closestTo: collector, hasMatchedRoute: true)?.id,
+      preview.first?.id)
+    XCTAssertEqual(navigationRerouteAlternatives(hasMatchedRoute: false, waypointCount: 0), 2)
+    XCTAssertEqual(navigationRerouteAlternatives(hasMatchedRoute: false, waypointCount: 1), 0)
+    XCTAssertEqual(navigationRerouteAlternatives(hasMatchedRoute: true, waypointCount: 0), 0)
   }
 
   /// Starting beside the route and driving alongside it, never closer, is not joining it: the

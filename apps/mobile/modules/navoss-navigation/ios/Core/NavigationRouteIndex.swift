@@ -181,6 +181,23 @@ struct RoutePolyline {
     return indices
   }
 
+  /// Distance from `coordinate` to the nearest point of the route. The grid answers within its
+  /// search radius; only a position further than that from all of the route scans every segment.
+  func nearestDistanceMeters(to coordinate: NavigationCoordinate) -> Double {
+    var radiusMeters = 250.0
+    while radiusMeters <= 1_000 {
+      let nearest = segmentIndices(near: coordinate, radiusMeters: radiusMeters)
+        .lazy.map { project(coordinate, ontoSegment: $0).distanceMeters }
+        .min()
+      if let nearest, nearest <= radiusMeters {
+        return nearest
+      }
+      radiusMeters *= 4
+    }
+    return segments.indices.lazy.map { project(coordinate, ontoSegment: $0).distanceMeters }.min()
+      ?? .infinity
+  }
+
   func project(_ coordinate: NavigationCoordinate, ontoSegment index: Int) -> RouteProjection {
     let segment = segments[index]
     let longitudeScale = cos(coordinate.latitude * .pi / 180)

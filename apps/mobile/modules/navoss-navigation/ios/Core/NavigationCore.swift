@@ -17,6 +17,22 @@ private let offRouteDistanceThresholdMeters = 35.0
 private let onRouteRecoveryDistanceThresholdMeters = 20.0
 private let onRouteRecoverySampleCount = 2
 
+// Before the first on-route match. A trip is often started away from the road (a parking lot,
+// a driveway, inside a mall), and the route starts where the router joined the nearest road,
+// which can be 100 m away. Standing there, or crossing the lot towards the road, is not
+// leaving the route: the vehicle has not been on it yet. Until a fix is matched, a fix away
+// from the road counts towards going off route only when the vehicle shows it is not heading
+// for the route: it is further from every part of the route than the closest it has come
+// (`preMatchDepartureMarginMeters`), or has moved further from where it was first seen than
+// reaching the route from there would take (`preMatchWanderMeters`). Either then needs the
+// usual `offRouteConfirmationSampleCount` consecutive fixes.
+/// How much further from the route than its closest approach the vehicle must be, plus both
+/// fixes' accuracy. Above parked GPS noise (see `cumulativeBackwardToleranceMeters`).
+private let preMatchDepartureMarginMeters = 50.0
+/// How much further from its first fix than that fix was from the route the vehicle may move,
+/// plus both fixes' accuracy: room to find the way out of a parking lot.
+private let preMatchWanderMeters = 250.0
+
 // Matching window. Each fix is matched against the road near the previous match instead of the
 // whole route; the grid is consulted only when that window has nothing close to the fix.
 /// Road behind the previous match that stays eligible, so stationary noise and the bounded
@@ -513,6 +529,14 @@ final class NavigationCore {
   // The anchor: the last accepted match. Everything a new fix is judged against.
   /// Whether there is one. False until the first fix of a route, unless the route was resumed.
   private var hasAnchor = false
+  /// Whether a fix has been matched on this route (or the trip resumed from saved progress).
+  /// Until then the vehicle may still be making its way to the road; see
+  /// `preMatchDepartureMarginMeters`.
+  private(set) var hasMatchedRoute = false
+  /// Before the first match: the first fix of the route, its accuracy and distance from the
+  /// route, and the closest the vehicle has come to the route since, with that fix's accuracy.
+  private var preMatchStart: (raw: NavigationCoordinate, accuracyMeters: Double, distanceMeters: Double)?
+  private var preMatchClosest: (distanceMeters: Double, accuracyMeters: Double)?
   /// Raw position and accuracy of the last accepted fix: where the vehicle was last known to be.
   private var anchorRawCoordinate: NavigationCoordinate?
   private var anchorAccuracyMeters = 0.0
@@ -693,6 +717,7 @@ final class NavigationCore {
       // The start of the route is as much a place the trip had got to as any other.
       let point = route.point(alongMeters: saved.alongMeters)
       hasAnchor = true
+      hasMatchedRoute = true
       isAnchorRestored = true
       fixProgress = point.progress
       progressHighWaterMark = max(
@@ -963,6 +988,8 @@ final class NavigationCore {
       || isWrongWaySample
     let isRecoverySample = projection.distanceMeters + accuracyAllowanceMeters <=
       onRouteRecoveryDistanceThresholdMeters && projection.progress >= fixProgress
+    let isLeavingBeforeFirstMatch = !hasMatchedRoute
+      && recordPreMatchFix(sample, on: route, accuracyMeters: accuracyAllowanceMeters)
 
     if isOffRoute {
       departureSampleCount = 0
@@ -975,7 +1002,14 @@ final class NavigationCore {
       }
     } else {
       recoverySampleCount = 0
-      departureSampleCount = isDepartureSample ? departureSampleCount + 1 : 0
+      // Before the first match, a fix off the road is a departure only when the vehicle shows
+      // it is not making for the route (see `preMatchDepartureMarginMeters`). On the road, a
+      // wrong-way or backward fix is one as before.
+      let isOffTheRoad = projection.distanceMeters
+        > offRouteDistanceThresholdMeters + accuracyAllowanceMeters
+      let countsAsDeparture = isDepartureSample
+        && (hasMatchedRoute || !isOffTheRoad || isLeavingBeforeFirstMatch)
+      departureSampleCount = countsAsDeparture ? departureSampleCount + 1 : 0
       if departureSampleCount >= offRouteConfirmationSampleCount {
         departureSampleCount = 0
         isOffRoute = true
@@ -1047,6 +1081,9 @@ final class NavigationCore {
     // rather than a value that drifts down with each tolerated backward step.
     if shouldAcceptProjection {
       progressHighWaterMark = max(progressHighWaterMark, projection.progress)
+      hasMatchedRoute = true
+      preMatchStart = nil
+      preMatchClosest = nil
     }
     // The anchor moves only with an accepted fix, and takes that fix's own time and speed. The
     // first fix of a route is a placement: it becomes the anchor even when it is off the route.
@@ -1182,6 +1219,33 @@ final class NavigationCore {
     isOffRoute = false
     progressHighWaterMark = 0
     recoverySampleCount = 0
+    hasMatchedRoute = false
+    preMatchStart = nil
+    preMatchClosest = nil
+  }
+
+  /// Records a fix taken before the first match and says whether the vehicle is leaving rather
+  /// than making for the route: further from all of it than the closest it has come, or further
+  /// from where it was first seen than reaching the route from there would take, each beyond
+  /// its margin and both fixes' accuracy. See `preMatchDepartureMarginMeters`.
+  private func recordPreMatchFix(
+    _ sample: NavigationLocationSample,
+    on route: RoutePolyline,
+    accuracyMeters: Double
+  ) -> Bool {
+    let distanceMeters = route.nearestDistanceMeters(to: sample.coordinate)
+    let start = preMatchStart
+      ?? (raw: sample.coordinate, accuracyMeters: accuracyMeters, distanceMeters: distanceMeters)
+    preMatchStart = start
+    let here = (distanceMeters: distanceMeters, accuracyMeters: accuracyMeters)
+    let closest = preMatchClosest.map { $0.distanceMeters <= distanceMeters ? $0 : here } ?? here
+    preMatchClosest = closest
+    let isMovingAway = distanceMeters
+      > closest.distanceMeters + preMatchDepartureMarginMeters + accuracyMeters
+      + closest.accuracyMeters
+    let hasWandered = navigationDistanceMeters(from: start.raw, to: sample.coordinate)
+      > start.distanceMeters + preMatchWanderMeters + accuracyMeters + start.accuracyMeters
+    return isMovingAway || hasWandered
   }
 
   /// Whether a fix shows which pass of the route `projection` is on: no other pass fits it, or

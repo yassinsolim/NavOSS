@@ -171,6 +171,68 @@ func navigationShouldInstallReplacement(
   generationMatches && requestMatches && tripMatches && phase == .tracking && isOffRoute
 }
 
+/// Routes a reroute asks the server for. Once the vehicle has been matched on the route it
+/// left, the fastest route from where it is (one route, as always). Before that, the driver has
+/// not driven any of the route they chose yet, so the server's alternatives are asked for and
+/// the one closest to that choice is taken (`navigationReplacement`). Stops ask for one route:
+/// the router offers no alternatives through them.
+func navigationRerouteAlternatives(hasMatchedRoute: Bool, waypointCount: Int) -> Int {
+  hasMatchedRoute || waypointCount > 0 ? 0 : 2
+}
+
+/// Route geometry from one router follows the same road to well within this; separate
+/// carriageways (Highway 401's Express and Collector lanes) are 20 m or more apart.
+let navigationSharedRoadToleranceMeters = 10.0
+
+/// The replacement to take from a reroute's answer. Once matched, the server's first. Before
+/// the first match, the one that follows most of the driver's chosen route and least road it
+/// does not (shared length less unshared length, sampled every
+/// `navigationSharedRoadToleranceMeters`); ties keep the server's order.
+func navigationReplacement(
+  from candidates: [NavOSSCarPlayTrip],
+  closestTo selected: NavOSSCarPlayTrip,
+  hasMatchedRoute: Bool
+) -> NavOSSCarPlayTrip? {
+  guard !hasMatchedRoute, candidates.count > 1,
+    let chosen = try? RoutePolyline(coordinates: selected.geometry.map {
+      NavigationCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+    })
+  else {
+    return candidates.first
+  }
+  func similarityMeters(_ candidate: NavOSSCarPlayTrip) -> Double {
+    var score = 0.0
+    for (start, end) in zip(candidate.geometry, candidate.geometry.dropFirst()) {
+      let from = NavigationCoordinate(latitude: start.latitude, longitude: start.longitude)
+      let to = NavigationCoordinate(latitude: end.latitude, longitude: end.longitude)
+      let length = navigationDistanceMeters(from: from, to: to)
+      let count = max(1, Int((length / navigationSharedRoadToleranceMeters).rounded(.up)))
+      for index in 0..<count {
+        let fraction = (Double(index) + 0.5) / Double(count)
+        let point = NavigationCoordinate(
+          latitude: from.latitude + (to.latitude - from.latitude) * fraction,
+          longitude: from.longitude + (to.longitude - from.longitude) * fraction)
+        let isShared = chosen.segmentIndices(
+          near: point, radiusMeters: navigationSharedRoadToleranceMeters
+        ).contains {
+          chosen.project(point, ontoSegment: $0).distanceMeters
+            <= navigationSharedRoadToleranceMeters
+        }
+        score += isShared ? length / Double(count) : -length / Double(count)
+      }
+    }
+    return score
+  }
+  var best: (trip: NavOSSCarPlayTrip, score: Double)?
+  for candidate in candidates {
+    let score = similarityMeters(candidate)
+    if best.map({ score > $0.score }) ?? true {
+      best = (candidate, score)
+    }
+  }
+  return best?.trip
+}
+
 /// Fetches a recovery route. With a keep-route rejoin point the route goes back onto the
 /// selected route first, passing through the rejoin point (a `/v2/routes` `through` waypoint,
 /// which adds no arrival or departure there). If that request fails for any reason (the API
