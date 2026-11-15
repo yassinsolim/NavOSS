@@ -4,7 +4,9 @@ import {
   ContributionSubmissionResponseSchema,
   GooglePlaceQueryGrantResponseSchema,
   HealthResponseSchema,
+  KelownaRoadEventResponseSchema,
   OfficialRoadEventResponseSchema,
+  ProvincialRoadEventResponseSchema,
   OfficialSafetyCameraResponseSchema,
   ProblemDetailsSchema,
   ReadinessResponseSchema,
@@ -26,7 +28,7 @@ import { CalgaryRoadEventProviderError } from '../src/calgary-road-event-provide
 import { DriveBcRoadEventProviderError } from '../src/drivebc-road-event-provider.js';
 import { DriveBcTrafficCameraProviderError } from '../src/drivebc-traffic-camera-provider.js';
 import { CALGARY_SEARCH_FIXTURES } from '../src/fixtures.js';
-import { OntarioRoadEventProviderError } from '../src/ontario-road-event-provider.js';
+import { ProvincialRoadEventsUnavailableError } from '../src/provincial-road-events.js';
 import { KelownaSafetyFacilityProviderError } from '../src/kelowna-safety-facility-provider.js';
 import { createFixtureSearchProvider } from '../src/search-provider.js';
 import { CameraProviderError } from '../src/safety-camera-provider.js';
@@ -57,7 +59,7 @@ describe('provider lifecycle', () => {
     const stopCalgary = vi.fn();
     const stopDriveBcCameras = vi.fn();
     const stopDriveBcEvents = vi.fn();
-    const stopOntario = vi.fn();
+    const stopProvincial = vi.fn();
     const app = await buildApp({
       driveBcEventProvider: {
         getRoadEvents: () => Promise.reject(new Error('not requested')),
@@ -71,9 +73,10 @@ describe('provider lifecycle', () => {
         getRoadEvents: () => Promise.reject(new Error('not requested')),
         stop: stopCalgary,
       },
-      ontarioEventProvider: {
+      provincialRoadEvents: {
         getRoadEvents: () => Promise.reject(new Error('not requested')),
-        stop: stopOntario,
+        start: vi.fn(),
+        stop: stopProvincial,
       },
       searchProvider: createFixtureSearchProvider(CALGARY_SEARCH_FIXTURES),
     });
@@ -84,7 +87,7 @@ describe('provider lifecycle', () => {
     expect(stopCalgary).toHaveBeenCalledOnce();
     expect(stopDriveBcCameras).toHaveBeenCalledOnce();
     expect(stopDriveBcEvents).toHaveBeenCalledOnce();
-    expect(stopOntario).toHaveBeenCalledOnce();
+    expect(stopProvincial).toHaveBeenCalledOnce();
   });
 });
 
@@ -487,51 +490,87 @@ describe('Calgary road events', () => {
   });
 });
 
-describe('Ontario road events', () => {
-  const roadEventResponse = OfficialRoadEventResponseSchema.parse({
-    degraded: false,
+describe('official road events by region', () => {
+  const roadEventResponse = ProvincialRoadEventResponseSchema.parse({
+    degraded: true,
     events: [
       {
         confidence: 'official',
-        coordinate: { latitude: 43.63599, longitude: -79.668724 },
-        description: 'Construction on HWY 401 Eastbound. One alternating lane.',
-        direction: 'Eastbound',
-        endsAt: '2026-08-24T05:00:00.000Z',
-        id: 'ontario-511:1963:222249',
+        coordinate: { latitude: 43.68448, longitude: -79.49882 },
+        description: 'Jane St at Eglinton Ave W. Toronto-TMC: This street occupancy is required.',
+        direction: 'One direction',
+        endsAt: '2026-11-30T23:00:00.000Z',
+        id: 'toronto-restriction:Tor-RD042026-1428-2',
         isFullClosure: false,
         regionId: 'ontario',
-        reportedAt: '2026-07-15T10:00:00.000Z',
-        roadwayName: 'HWY 401',
-        sourceId: 'ontario-511-events',
-        startsAt: '2026-07-15T10:00:00.000Z',
-        title: 'Construction on HWY 401',
+        roadwayName: 'Jane St',
+        severity: 'moderate',
+        sourceId: 'toronto-road-restrictions',
+        startsAt: '2026-11-11T05:00:00.000Z',
+        title: 'Construction on Jane St',
         type: 'construction',
-        updatedAt: '2026-07-15T11:50:00.000Z',
+        updatedAt: '2026-11-11T17:43:55.000Z',
       },
     ],
-    generatedAt: '2026-07-15T12:00:00.000Z',
+    generatedAt: '2026-11-15T10:00:00.000Z',
     regionId: 'ontario',
-    source: {
-      apiDocumentationUrl: 'https://511on.ca/developers/doc',
-      attribution:
-        'Contains information licensed under the Open Government Licence \u2013 Ontario.',
-      confidence: 'official',
-      licenseUrl: 'https://www.ontario.ca/page/open-government-licence-ontario',
-      refreshIntervalSeconds: 300,
-      sourceId: 'ontario-511-events',
-      updatedAt: '2026-07-15T11:50:00.000Z',
-    },
+    sources: [
+      {
+        attribution:
+          'Contains information licensed under the Open Government Licence \u2013 Ontario.',
+        confidence: 'official',
+        documentationUrl: 'https://511on.ca/developers/doc',
+        eventCount: 0,
+        incomplete: false,
+        licenseUrl: 'https://www.ontario.ca/page/open-government-licence-ontario',
+        maximumAgeSeconds: 3_600,
+        name: 'Ontario 511',
+        refreshIntervalSeconds: 300,
+        sourceId: 'ontario-511-events',
+        status: 'not-configured',
+        timeZone: 'America/Toronto',
+      },
+      {
+        attribution:
+          'Contains information licensed under the Open Government Licence \u2013 Toronto.',
+        checkedAt: '2026-11-15T09:58:00.000Z',
+        confidence: 'official',
+        documentationUrl: 'https://open.toronto.ca/dataset/road-restrictions/',
+        eventCount: 1,
+        incomplete: false,
+        licenseUrl: 'https://open.toronto.ca/open-data-licence/',
+        maximumAgeSeconds: 3_600,
+        name: 'City of Toronto',
+        refreshIntervalSeconds: 300,
+        sourceId: 'toronto-road-restrictions',
+        status: 'current',
+        timeZone: 'America/Toronto',
+        updatedAt: '2026-11-15T07:06:53.000Z',
+      },
+    ],
     stale: false,
   });
 
-  it('returns contract-valid official Ontario events', async () => {
+  it('serves each province from the provincial service', async () => {
+    const regions: string[] = [];
     const app = await createTestApp({
-      ontarioEventProvider: { getRoadEvents: () => Promise.resolve(roadEventResponse) },
+      provincialRoadEvents: {
+        getRoadEvents: (region) => {
+          regions.push(region);
+          return Promise.resolve(roadEventResponse);
+        },
+        start: vi.fn(),
+        stop: vi.fn(),
+      },
     });
     const response = await app.inject({ method: 'GET', url: '/v2/events?region=ontario' });
 
     expect(response.statusCode).toBe(200);
     expect(OfficialRoadEventResponseSchema.parse(response.json())).toEqual(roadEventResponse);
+    for (const region of ['alberta', 'british-columbia']) {
+      await app.inject({ method: 'GET', url: `/v2/events?region=${region}` });
+    }
+    expect(regions).toEqual(['ontario', 'alberta', 'british-columbia']);
   });
 
   it('rejects missing or unsupported regions', async () => {
@@ -543,10 +582,12 @@ describe('Ontario road events', () => {
     ).toBe(400);
   });
 
-  it('returns a stable problem when Ontario road data is unavailable', async () => {
+  it('returns a stable problem when no source of the region has data', async () => {
     const app = await createTestApp({
-      ontarioEventProvider: {
-        getRoadEvents: () => Promise.reject(new OntarioRoadEventProviderError('offline')),
+      provincialRoadEvents: {
+        getRoadEvents: () => Promise.reject(new ProvincialRoadEventsUnavailableError('offline')),
+        start: vi.fn(),
+        stop: vi.fn(),
       },
     });
     const response = await app.inject({ method: 'GET', url: '/v2/events?region=ontario' });
@@ -559,8 +600,8 @@ describe('Ontario road events', () => {
     });
   });
 
-  it('dispatches Kelowna events to DriveBC without changing Ontario', async () => {
-    const kelownaResponse = OfficialRoadEventResponseSchema.parse({
+  it('keeps Kelowna on the original DriveBC shape', async () => {
+    const kelownaResponse = KelownaRoadEventResponseSchema.parse({
       degraded: false,
       events: [],
       generatedAt: '2026-07-15T12:00:00.000Z',
@@ -580,14 +621,16 @@ describe('Ontario road events', () => {
     });
     const app = await createTestApp({
       driveBcEventProvider: { getRoadEvents: () => Promise.resolve(kelownaResponse) },
-      ontarioEventProvider: { getRoadEvents: () => Promise.resolve(roadEventResponse) },
+      provincialRoadEvents: {
+        getRoadEvents: () => Promise.reject(new Error('not requested')),
+        start: vi.fn(),
+        stop: vi.fn(),
+      },
     });
 
     const kelowna = await app.inject({ method: 'GET', url: '/v2/events?region=kelowna-bc' });
-    const ontario = await app.inject({ method: 'GET', url: '/v2/events?region=ontario' });
 
-    expect(OfficialRoadEventResponseSchema.parse(kelowna.json())).toEqual(kelownaResponse);
-    expect(OfficialRoadEventResponseSchema.parse(ontario.json())).toEqual(roadEventResponse);
+    expect(KelownaRoadEventResponseSchema.parse(kelowna.json())).toEqual(kelownaResponse);
   });
 
   it('returns a stable problem when DriveBC road data is unavailable', async () => {

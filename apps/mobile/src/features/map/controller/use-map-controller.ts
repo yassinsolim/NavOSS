@@ -57,13 +57,18 @@ import {
 } from '@/features/map/idle-camera-follow';
 import { createLatestRequestGate } from '@/features/map/latest-request-gate';
 import {
+  type MapRoadEvent,
+  roadEventMessage,
+  type RoadEventSnapshot,
+  roadEventTypeLabel,
+} from '@/features/map/road-events';
+import {
   cameraDetailMessage,
   congestionFeatures,
   droppedPinResult,
   itemsNearRoute,
   renderedFeatureId,
   ROAD_EVENT_LAYER_IDS,
-  roadEventMessage,
   routeBounds,
   SAFETY_CAMERA_LAYER_IDS,
   SAFETY_FACILITY_LAYER_IDS,
@@ -173,6 +178,18 @@ export interface MapFeatureDetail {
   title: string;
 }
 
+function roadEventDetail(
+  event: MapRoadEvent,
+  snapshot: RoadEventSnapshot | undefined,
+): MapFeatureDetail {
+  return {
+    body: roadEventMessage(event, snapshot, Date.now()),
+    eyebrow: `Road event · ${roadEventTypeLabel(event)}`,
+    icon: { android: 'warning', ios: 'exclamationmark.triangle.fill' },
+    title: event.title,
+  };
+}
+
 /** A short confirmation or failure message that appears over the map and dismisses itself. */
 export interface MapNotice {
   id: number;
@@ -238,6 +255,9 @@ export function useMapController() {
   const [isRouteStopsVisible, setIsRouteStopsVisible] = useState(false);
   const [isGuidanceSettingsVisible, setIsGuidanceSettingsVisible] = useState(false);
   const [featureDetail, setFeatureDetail] = useState<MapFeatureDetail>();
+  const [isRoadEventsVisible, setIsRoadEventsVisible] = useState(false);
+  // An event chosen in the road-events list, shown once the list has closed.
+  const queuedRoadEventDetailRef = useRef<MapFeatureDetail | undefined>(undefined);
   // A tapped driver report; its detail is rebuilt from live state so counts stay current.
   const [selectedCommunityReport, setSelectedCommunityReport] = useState<NativeCommunityReport>();
   const [communityActionBusy, setCommunityActionBusy] = useState<CommunityReportAction>();
@@ -820,12 +840,7 @@ export function useMapController() {
       const event = overlays.roadEvents.find((candidate) => candidate.id === eventId);
       if (event !== undefined) {
         Keyboard.dismiss();
-        setFeatureDetail({
-          body: roadEventMessage(event),
-          eyebrow: 'Road event',
-          icon: { android: 'warning', ios: 'exclamationmark.triangle.fill' },
-          title: event.title,
-        });
+        setFeatureDetail(roadEventDetail(event, overlays.roadEventSnapshot));
         return;
       }
     }
@@ -1625,6 +1640,25 @@ export function useMapController() {
     mapBearing,
     mapError,
     mapPreferences,
+    roadEventsSheet: {
+      close: () => {
+        setIsRoadEventsVisible(false);
+      },
+      onClosed: () => {
+        const queued = queuedRoadEventDetailRef.current;
+        queuedRoadEventDetailRef.current = undefined;
+        if (queued !== undefined) setFeatureDetail(queued);
+      },
+      onSelect: (event: MapRoadEvent) => {
+        queuedRoadEventDetailRef.current = roadEventDetail(event, overlays.roadEventSnapshot);
+        setIsRoadEventsVisible(false);
+      },
+      open: () => {
+        Keyboard.dismiss();
+        setIsRoadEventsVisible(true);
+      },
+      visible: isRoadEventsVisible,
+    },
     mapPreferencesSheet: {
       close: () => {
         setIsMapPreferencesVisible(false);

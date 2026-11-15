@@ -1,0 +1,1310 @@
+{
+ "retrievedOn": "2026-11-15",
+ "source": "https://api.open511.gov.bc.ca/events?format=json&status=ACTIVE&limit=500&offset=0",
+ "note": "Trimmed: one event per (type, subtypes, geometry, road state); long LineStrings keep first, middle and last vertices.",
+ "payload": {
+  "events": [
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-100481",
+    "id": "drivebc.ca/RIDE-100481",
+    "headline": "CONSTRUCTION",
+    "status": "ACTIVE",
+    "created": "2026-07-14T14:44:12-07:00",
+    "updated": "2026-09-15T20:06:44-07:00",
+    "description": "Rest area closed at Highway 1, Redgrave Rest Area. Starting Tue Jul 14. Last update: September 15th, 2026 at 9:06pm MDT. Redgrave rest area is permanently closed. New rest area will be built just west of the current location. Stay tuned for more updates as construction progresses.",
+    "+ivr_message": "Rest area closed at Highway 1, Redgrave Rest Area. Starting Tue Jul 14. Last update: September 15th, 2026 at 9:06pm MDT. Redgrave rest area is permanently closed. New rest area will be built just west of the current location. Stay tuned for more updates as construction progresses.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-07-14T21:44/"
+     ]
+    },
+    "event_type": "CONSTRUCTION",
+    "event_subtypes": [
+     "PLANNED_EVENT"
+    ],
+    "severity": "MINOR",
+    "geography": {
+     "type": "Point",
+     "coordinates": [
+      -117.28144803,
+      51.49118676
+     ]
+    },
+    "roads": [
+     {
+      "name": "Highway 1",
+      "from": "Trans-Canada Highway",
+      "direction": "BOTH",
+      "state": "ALL_LANES_OPEN"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630135",
+      "name": "Rocky Mountain District",
+      "id": "drivebc.ca/3"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-104343",
+    "id": "drivebc.ca/RIDE-104343",
+    "headline": "CONSTRUCTION",
+    "status": "ACTIVE",
+    "created": "2026-10-26T11:49:57-07:00",
+    "updated": "2026-10-26T11:49:57-07:00",
+    "description": "Utility work from Highway 1A, In Langley - District and 270th Street to In Langley - District and 264th Street. Starting 8:00 AM MST on Monday November 2, 2026 until 4:00 PM MST on Monday November 30, 2026. From 8:00 AM to 4:00 PM MST, weekdays. Right turn lane closed. Watch for traffic control. Last update: October 26th, 2026 at 11:49am PDT.",
+    "+ivr_message": "Utility work from Highway 1A, In Langley - District and 270th Street to In Langley - District and 264th Street. Starting 8:00 AM MST on Monday November 2, 2026 until 4:00 PM MST on Monday November 30, 2026. From 8:00 AM to 4:00 PM MST, weekdays. Right turn lane closed. Watch for traffic control. Last update: October 26th, 2026 at 11:49am PDT.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-11-02T15:00/2026-11-30T23:00"
+     ]
+    },
+    "event_type": "CONSTRUCTION",
+    "event_subtypes": [
+     "PLANNED_EVENT"
+    ],
+    "severity": "MINOR",
+    "geography": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       -122.47682,
+       49.05829
+      ],
+      [
+       -122.47742,
+       49.05833
+      ],
+      [
+       -122.47927,
+       49.05849
+      ],
+      [
+       -122.48171,
+       49.05869
+      ],
+      [
+       -122.48948,
+       49.05932
+      ],
+      [
+       -122.492,
+       49.05952
+      ]
+     ]
+    },
+    "roads": [
+     {
+      "name": "Highway 1A",
+      "from": "Fraser Highway",
+      "direction": "W",
+      "state": "ALL_LANES_OPEN"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630136",
+      "name": "Lower Mainland District",
+      "id": "drivebc.ca/1"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-101654",
+    "id": "drivebc.ca/RIDE-101654",
+    "headline": "CONSTRUCTION",
+    "status": "ACTIVE",
+    "created": "2026-08-25T11:37:06-07:00",
+    "updated": "2026-09-15T20:09:20-07:00",
+    "description": "Road maintenance from Big Bar Road, At Big Bar Road and Hooke Road to At 3100 Forest Service Road and Big Bar Road. Starting Tue Aug 18. Single lane alternating traffic. Expect minor delays. Last update: September 15th, 2026 at 8:09pm PDT. Watch for crews and equipment working.",
+    "+ivr_message": "Road maintenance from Big Bar Road, At Big Bar Road and Hooke Road to At 3100 Forest Service Road and Big Bar Road. Starting Tue Aug 18. Single lane alternating traffic. Expect minor delays. Last update: September 15th, 2026 at 8:09pm PDT. Watch for crews and equipment working.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-08-18T15:00/"
+     ]
+    },
+    "event_type": "CONSTRUCTION",
+    "event_subtypes": [
+     "ROAD_MAINTENANCE"
+    ],
+    "severity": "MINOR",
+    "geography": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       -121.63007,
+       51.22682
+      ],
+      [
+       -121.631,
+       51.2271
+      ],
+      [
+       -121.6312,
+       51.22716
+      ],
+      [
+       -121.68425,
+       51.25814
+      ],
+      [
+       -121.68516,
+       51.25815
+      ],
+      [
+       -121.68528,
+       51.25816
+      ],
+      [
+       -121.73854,
+       51.28194
+      ],
+      [
+       -121.74058,
+       51.28264
+      ],
+      [
+       -121.74062,
+       51.28265
+      ]
+     ]
+    },
+    "roads": [
+     {
+      "name": "Other Roads",
+      "from": "Big Bar Road",
+      "direction": "BOTH",
+      "state": "ALL_LANES_OPEN"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630134",
+      "name": "Cariboo District",
+      "id": "drivebc.ca/7"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-101670",
+    "id": "drivebc.ca/RIDE-101670",
+    "headline": "CONSTRUCTION",
+    "status": "ACTIVE",
+    "created": "2026-08-25T14:49:58-07:00",
+    "updated": "2026-09-15T20:09:37-07:00",
+    "description": "Bridge maintenance at Chilko-Newton Road, Chilko River Siwash Bridge. Starting Mon Jul 13. Expect delays. Weight vehicle restriction: 32,000KG. Last update: September 15th, 2026 at 8:09pm PDT. Next update time Mon Oct 26.",
+    "+ivr_message": "Bridge maintenance at Chilko-Newton Road, Chilko River Siwash Bridge. Starting Mon Jul 13. Expect delays. Weight vehicle restriction: 32,000KG. Last update: September 15th, 2026 at 8:09pm PDT. Next update time Mon Oct 26.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-07-13T15:00/"
+     ]
+    },
+    "event_type": "CONSTRUCTION",
+    "event_subtypes": [
+     "ROAD_MAINTENANCE"
+    ],
+    "severity": "MINOR",
+    "geography": {
+     "type": "Point",
+     "coordinates": [
+      -123.55472192,
+      52.0673947
+     ]
+    },
+    "roads": [
+     {
+      "name": "Other Roads",
+      "from": "Chilko-Newton Road",
+      "direction": "BOTH",
+      "state": "ALL_LANES_OPEN"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630134",
+      "name": "Cariboo District",
+      "id": "drivebc.ca/7"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-102273",
+    "id": "drivebc.ca/RIDE-102273",
+    "headline": "CONSTRUCTION",
+    "status": "ACTIVE",
+    "created": "2026-09-11T08:50:09-07:00",
+    "updated": "2026-09-11T08:56:44-07:00",
+    "description": "Bridge construction from Gilbert Road, In Richmond to Dinsmore Bridge, In Richmond. Starting Mon Sep 14 until Thu Dec 31. From 10:00 PM to 6:00 AM PDT the next day, Monday to Thursday and Sunday. Bridge closed. Detour in effect. Watch for traffic control. Last update: September 11th, 2026 at 8:56am PDT. Bridge will be open to traffic during the day. Detour via No. 2 Rd. Bridge.",
+    "+ivr_message": "Bridge construction from Gilbert Road, In Richmond to Dinsmore Bridge, In Richmond. Starting Mon Sep 14 until Thu Dec 31. From 10:00 PM to 6:00 AM PDT the next day, Monday to Thursday and Sunday. Bridge closed. Detour in effect. Watch for traffic control. Last update: September 11th, 2026 at 8:56am PDT. Bridge will be open to traffic during the day. Detour via No. 2 Rd. Bridge.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-09-15T05:00/2026-12-31T14:00"
+     ]
+    },
+    "event_type": "CONSTRUCTION",
+    "event_subtypes": [
+     "ROAD_CONSTRUCTION"
+    ],
+    "severity": "MINOR",
+    "geography": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       -123.15146,
+       49.18115
+      ],
+      [
+       -123.15118,
+       49.1809
+      ],
+      [
+       -123.15117,
+       49.18082
+      ],
+      [
+       -123.15024,
+       49.18008
+      ],
+      [
+       -123.14991,
+       49.1798
+      ],
+      [
+       -123.14982,
+       49.17971
+      ],
+      [
+       -123.14966,
+       49.17957
+      ],
+      [
+       -123.14772,
+       49.17784
+      ],
+      [
+       -123.14767,
+       49.17779
+      ]
+     ]
+    },
+    "roads": [
+     {
+      "name": "Other Roads",
+      "from": "Gilbert Road",
+      "direction": "BOTH",
+      "state": "CLOSED"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630136",
+      "name": "Lower Mainland District",
+      "id": "drivebc.ca/1"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-102538",
+    "id": "drivebc.ca/RIDE-102538",
+    "headline": "CONSTRUCTION",
+    "status": "ACTIVE",
+    "created": "2026-09-18T17:23:21-07:00",
+    "updated": "2026-10-15T08:01:51-07:00",
+    "description": "Road construction at Highway 3A. Starting Mon Sep 21. From 7:00 AM to 5:00 PM PDT, Monday to Saturday. Last update: October 15th, 2026 at 8:01am PDT. Speed reduced to 30km/h, lanes shifted, one lane on gravel surface.",
+    "+ivr_message": "Road construction at Highway 3A. Starting Mon Sep 21. From 7:00 AM to 5:00 PM PDT, Monday to Saturday. Last update: October 15th, 2026 at 8:01am PDT. Speed reduced to 30km/h, lanes shifted, one lane on gravel surface.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-09-21T14:00/"
+     ]
+    },
+    "event_type": "CONSTRUCTION",
+    "event_subtypes": [
+     "ROAD_CONSTRUCTION"
+    ],
+    "severity": "MINOR",
+    "geography": {
+     "type": "Point",
+     "coordinates": [
+      -117.27313433,
+      49.52481218
+     ]
+    },
+    "roads": [
+     {
+      "name": "Highway 3A",
+      "from": "Highway 3A",
+      "direction": "BOTH",
+      "state": "ALL_LANES_OPEN"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630139",
+      "name": "West Kootenay District",
+      "id": "drivebc.ca/4"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-100047",
+    "id": "drivebc.ca/RIDE-100047",
+    "headline": "INCIDENT",
+    "status": "ACTIVE",
+    "created": "2026-06-24T17:46:33-07:00",
+    "updated": "2026-09-15T20:01:47-07:00",
+    "description": "Washout at Silver Skagit Road, In Hope. Last update: September 15th, 2026 at 8:01pm PDT. Next update: March 1st, 2027 at 11:00am MST. Road has been impacted by washout, repairs are underway. Expect delays in both directions and drive with caution.",
+    "+ivr_message": "Washout at Silver Skagit Road, In Hope. Last update: September 15th, 2026 at 8:01pm PDT. Next update: March 1st, 2027 at 11:00am MST. Road has been impacted by washout, repairs are underway. Expect delays in both directions and drive with caution.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-06-25T00:46/"
+     ]
+    },
+    "event_type": "INCIDENT",
+    "event_subtypes": [
+     "HAZARD"
+    ],
+    "severity": "MINOR",
+    "geography": {
+     "type": "Point",
+     "coordinates": [
+      -121.47184325,
+      49.36242091
+     ]
+    },
+    "roads": [
+     {
+      "name": "Other Roads",
+      "from": "Silver Skagit Road",
+      "direction": "BOTH",
+      "state": "ALL_LANES_OPEN"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630136",
+      "name": "Lower Mainland District",
+      "id": "drivebc.ca/1"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-103631",
+    "id": "drivebc.ca/RIDE-103631",
+    "headline": "CONSTRUCTION",
+    "status": "ACTIVE",
+    "created": "2026-10-14T09:01:36-07:00",
+    "updated": "2026-10-14T09:01:36-07:00",
+    "description": "Road construction from Highway 26, Wells Visitor Information Centre to At Pooley Street and In Wells. Starting Tue Oct 13 until Mon Nov 30. From 7:00 AM to 7:00 PM PDT, every day. Single lane alternating traffic. Watch for traffic control. Last update: October 14th, 2026 at 9:01am PDT.",
+    "+ivr_message": "Road construction from Highway 26, Wells Visitor Information Centre to At Pooley Street and In Wells. Starting Tue Oct 13 until Mon Nov 30. From 7:00 AM to 7:00 PM PDT, every day. Single lane alternating traffic. Watch for traffic control. Last update: October 14th, 2026 at 9:01am PDT.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-10-13T14:00/2026-12-01T02:00"
+     ]
+    },
+    "event_type": "CONSTRUCTION",
+    "event_subtypes": [
+     "ROAD_CONSTRUCTION"
+    ],
+    "severity": "MINOR",
+    "geography": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       -121.58127,
+       53.09757
+      ],
+      [
+       -121.58033,
+       53.09822
+      ],
+      [
+       -121.57865,
+       53.09957
+      ],
+      [
+       -121.57803,
+       53.10003
+      ],
+      [
+       -121.57751,
+       53.10031
+      ],
+      [
+       -121.57628,
+       53.10077
+      ]
+     ]
+    },
+    "roads": [
+     {
+      "name": "Highway 26",
+      "from": "Barkerville Highway",
+      "direction": "BOTH",
+      "state": "ALL_LANES_OPEN"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630134",
+      "name": "Cariboo District",
+      "id": "drivebc.ca/7"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-105567",
+    "id": "drivebc.ca/RIDE-105567",
+    "headline": "CONSTRUCTION",
+    "status": "ACTIVE",
+    "created": "2026-11-06T07:35:56-07:00",
+    "updated": "2026-11-06T07:38:50-07:00",
+    "description": "Seasonal shutdown from Big Bar Ferry. Starting 8:00 AM PCT on Friday November 6, 2026 until 8:00 AM PCT on Thursday April 1, 2027. Closed. Last update: November 6th, 2026 at 7:38am PCT. Big bar ferry out of service for the season and the aerial car is in service for foot traffic only.",
+    "+ivr_message": "Seasonal shutdown from Big Bar Ferry. Starting 8:00 AM PCT on Friday November 6, 2026 until 8:00 AM PCT on Thursday April 1, 2027. Closed. Last update: November 6th, 2026 at 7:38am PCT. Big bar ferry out of service for the season and the aerial car is in service for foot traffic only.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-11-06T15:00/2027-04-01T15:00"
+     ]
+    },
+    "event_type": "CONSTRUCTION",
+    "event_subtypes": [
+     "ALMOST_IMPASSABLE"
+    ],
+    "severity": "MINOR",
+    "geography": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       -122.13208,
+       51.18371
+      ],
+      [
+       -122.13221,
+       51.18365
+      ],
+      [
+       -122.13315,
+       51.18326
+      ],
+      [
+       -122.13413,
+       51.18286
+      ],
+      [
+       -122.13418,
+       51.18283
+      ]
+     ]
+    },
+    "roads": [
+     {
+      "name": "Big Bar Ferry",
+      "from": "Big Bar Ferry",
+      "direction": "BOTH",
+      "state": "CLOSED"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630134",
+      "name": "Cariboo District",
+      "id": "drivebc.ca/7"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-101668",
+    "id": "drivebc.ca/RIDE-101668",
+    "headline": "INCIDENT",
+    "status": "ACTIVE",
+    "created": "2026-08-25T14:35:04-07:00",
+    "updated": "2026-11-02T14:38:30-07:00",
+    "description": "Washout at Little Lake-Quesnel River Road, 93km Northeast of Williams Lake. Closed. Last update: November 2nd, 2026 at 2:38pm PCT. Next update: April 2nd, 2027 at 12:00pm PCT. Road closed 10 km West of Likely Road Turnoff. No detour. No homes or driveways affected. No access to Quesnel River.",
+    "+ivr_message": "Washout at Little Lake-Quesnel River Road, 93km Northeast of Williams Lake. Closed. Last update: November 2nd, 2026 at 2:38pm PCT. Next update: April 2nd, 2027 at 12:00pm PCT. Road closed 10 km West of Likely Road Turnoff. No detour. No homes or driveways affected. No access to Quesnel River.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-08-25T21:35/"
+     ]
+    },
+    "event_type": "INCIDENT",
+    "event_subtypes": [
+     "HAZARD"
+    ],
+    "severity": "MAJOR",
+    "geography": {
+     "type": "Point",
+     "coordinates": [
+      -121.76173376,
+      52.62353387
+     ]
+    },
+    "roads": [
+     {
+      "name": "Other Roads",
+      "from": "Little Lake-Quesnel River Road",
+      "direction": "BOTH",
+      "state": "CLOSED"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630134",
+      "name": "Cariboo District",
+      "id": "drivebc.ca/7"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-105750",
+    "id": "drivebc.ca/RIDE-105750",
+    "headline": "ROAD_CONDITION",
+    "status": "ACTIVE",
+    "created": "2026-11-08T04:53:13-07:00",
+    "updated": "2026-11-14T15:54:46-07:00",
+    "description": "Slippery sections between Deltaic Creek Bridge (26 miles south of Bell II) and Bob Quinn Camp (Bob Quinn). Last update: November 14th, 2026 at 3:54pm PCT. Next update: November 15th, 2026 at 5:00am PCT.",
+    "+ivr_message": "Slippery sections between Deltaic Creek Bridge (26 miles south of Bell II) and Bob Quinn Camp (Bob Quinn). Last update: November 14th, 2026 at 3:54pm PCT. Next update: November 15th, 2026 at 5:00am PCT.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-11-08T11:53/"
+     ]
+    },
+    "event_type": "ROAD_CONDITION",
+    "event_subtypes": [
+     "HAZARD"
+    ],
+    "severity": "MINOR",
+    "geography": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       -129.54885,
+       56.54647
+      ],
+      [
+       -129.54885,
+       56.54648
+      ],
+      [
+       -129.54899,
+       56.54666
+      ],
+      [
+       -129.95745,
+       56.82063
+      ],
+      [
+       -129.95722,
+       56.82353
+      ],
+      [
+       -129.95519,
+       56.82772
+      ],
+      [
+       -130.24702,
+       56.97957
+      ],
+      [
+       -130.24693,
+       56.98022
+      ],
+      [
+       -130.24694,
+       56.98104
+      ]
+     ]
+    },
+    "roads": [
+     {
+      "name": "Highway 37",
+      "from": "Highway 37",
+      "direction": "BOTH",
+      "state": "ALL_LANES_OPEN"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630133",
+      "name": "Bulkley Stikine District",
+      "id": "drivebc.ca/10"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-106118",
+    "id": "drivebc.ca/RIDE-106118",
+    "headline": "CONSTRUCTION",
+    "status": "ACTIVE",
+    "created": "2026-11-10T17:17:53-07:00",
+    "updated": "2026-11-13T13:26:19-07:00",
+    "description": "Tree pruning from Highway 99, In West Vancouver and Exit 2 to In West Vancouver and Pasco Road/Horseshoe Bay Drive. Starting 8:00 AM PCT on Tuesday November 17, 2026 until 4:00 PM PCT on Wednesday November 18, 2026. From 8:00 AM to 4:00 PM PCT, Tuesday and Wednesday. Road closure. Detour in effect. Last update: November 13th, 2026 at 1:26pm PCT. Hazard tree removal. Detour via Horseshoe Bay Drive.",
+    "+ivr_message": "Tree pruning from Highway 99, In West Vancouver and Exit 2 to In West Vancouver and Pasco Road/Horseshoe Bay Drive. Starting 8:00 AM PCT on Tuesday November 17, 2026 until 4:00 PM PCT on Wednesday November 18, 2026. From 8:00 AM to 4:00 PM PCT, Tuesday and Wednesday. Road closure. Detour in effect. Last update: November 13th, 2026 at 1:26pm PCT. Hazard tree removal. Detour via Horseshoe Bay Drive.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-11-17T15:00/2026-11-18T23:00"
+     ]
+    },
+    "event_type": "CONSTRUCTION",
+    "event_subtypes": [
+     "ROAD_MAINTENANCE"
+    ],
+    "severity": "MAJOR",
+    "geography": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       -123.26457,
+       49.36202
+      ],
+      [
+       -123.26971,
+       49.36113
+      ],
+      [
+       -123.27071,
+       49.36112
+      ],
+      [
+       -123.2705,
+       49.36877
+      ],
+      [
+       -123.27026,
+       49.37055
+      ],
+      [
+       -123.27003,
+       49.37099
+      ],
+      [
+       -123.26036,
+       49.38429
+      ],
+      [
+       -123.25881,
+       49.38543
+      ],
+      [
+       -123.25667,
+       49.38767
+      ]
+     ]
+    },
+    "roads": [
+     {
+      "name": "Highway 99",
+      "from": "Highway 99",
+      "direction": "BOTH",
+      "state": "CLOSED"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630136",
+      "name": "Lower Mainland District",
+      "id": "drivebc.ca/1"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-105633",
+    "id": "drivebc.ca/RIDE-105633",
+    "headline": "CONSTRUCTION",
+    "status": "ACTIVE",
+    "created": "2026-11-06T15:57:32-07:00",
+    "updated": "2026-11-06T16:03:41-07:00",
+    "description": "Planned service interruption at Harrop Ferry. Starting 11:45 PM PCT on Wednesday November 18, 2026 until 2:30 AM PCT on Thursday November 19, 2026. Last update: November 6th, 2026 at 4:03pm PCT. The Harrop Ferry will be out of service due to required maintenance.",
+    "+ivr_message": "Planned service interruption at Harrop Ferry. Starting 11:45 PM PCT on Wednesday November 18, 2026 until 2:30 AM PCT on Thursday November 19, 2026. Last update: November 6th, 2026 at 4:03pm PCT. The Harrop Ferry will be out of service due to required maintenance.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-11-19T06:45/2026-11-19T09:30"
+     ]
+    },
+    "event_type": "CONSTRUCTION",
+    "event_subtypes": [
+     "ALMOST_IMPASSABLE"
+    ],
+    "severity": "MAJOR",
+    "geography": {
+     "type": "Point",
+     "coordinates": [
+      -117.05405869,
+      49.60941088
+     ]
+    },
+    "roads": [
+     {
+      "name": "Harrop Ferry",
+      "from": "Harrop Ferry",
+      "direction": "BOTH",
+      "state": "ALL_LANES_OPEN"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630139",
+      "name": "West Kootenay District",
+      "id": "drivebc.ca/4"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-102782",
+    "id": "drivebc.ca/RIDE-102782",
+    "headline": "INCIDENT",
+    "status": "ACTIVE",
+    "created": "2026-09-24T15:51:19-07:00",
+    "updated": "2026-10-23T13:55:34-07:00",
+    "description": "Debris on road from Pavilion Road, At Pavilion Road and Pear Lake Road to Pavilion-Clinton Road, At Mowich Road and Pavilion-Clinton Road. Closed to all traffic except emergency vehicles. Last update: October 23rd, 2026 at 1:55pm PDT. Next update: November 27th, 2026 at 12:00pm MST.",
+    "+ivr_message": "Debris on road from Pavilion Road, At Pavilion Road and Pear Lake Road to Pavilion-Clinton Road, At Mowich Road and Pavilion-Clinton Road. Closed to all traffic except emergency vehicles. Last update: October 23rd, 2026 at 1:55pm PDT. Next update: November 27th, 2026 at 12:00pm MST.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-09-24T22:51/"
+     ]
+    },
+    "event_type": "INCIDENT",
+    "event_subtypes": [
+     "OBSTRUCTION"
+    ],
+    "severity": "MINOR",
+    "geography": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       -121.79105,
+       50.9936
+      ],
+      [
+       -121.79096,
+       50.99345
+      ],
+      [
+       -121.79074,
+       50.99326
+      ],
+      [
+       -121.78924,
+       50.96033
+      ],
+      [
+       -121.78981,
+       50.96024
+      ],
+      [
+       -121.79052,
+       50.96014
+      ],
+      [
+       -121.83245,
+       50.88193
+      ],
+      [
+       -121.83228,
+       50.882
+      ],
+      [
+       -121.83193,
+       50.88231
+      ]
+     ]
+    },
+    "roads": [
+     {
+      "name": "Other Roads",
+      "from": "Pavilion Road",
+      "direction": "BOTH",
+      "state": "CLOSED"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630134",
+      "name": "Cariboo District",
+      "id": "drivebc.ca/7"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-102731",
+    "id": "drivebc.ca/RIDE-102731",
+    "headline": "INCIDENT",
+    "status": "ACTIVE",
+    "created": "2026-09-23T16:34:08-07:00",
+    "updated": "2026-11-03T11:48:25-07:00",
+    "description": "Geotechnical investigation from Highway 27, In Fort Street James and At Tachie Road to 10km Northeast of Fort Street James. Last update: November 3rd, 2026 at 11:48am PCT. Next update: January 1st, 2027 at 1:00pm PCT. Closed at the 1.7 kilometer mark. Detour in Effect using the Takla Road to Teardrop Forest Service Road.",
+    "+ivr_message": "Geotechnical investigation from Highway 27, In Fort Street James and At Tachie Road to 10km Northeast of Fort Street James. Last update: November 3rd, 2026 at 11:48am PCT. Next update: January 1st, 2027 at 1:00pm PCT. Closed at the 1.7 kilometer mark. Detour in Effect using the Takla Road to Teardrop Forest Service Road.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-09-23T23:34/"
+     ]
+    },
+    "event_type": "INCIDENT",
+    "event_subtypes": [
+     "ROAD_MAINTENANCE"
+    ],
+    "severity": "MINOR",
+    "geography": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       -124.18969,
+       54.47359
+      ],
+      [
+       -124.18964,
+       54.47361
+      ],
+      [
+       -124.18874,
+       54.47409
+      ],
+      [
+       -124.17251,
+       54.47749
+      ],
+      [
+       -124.17184,
+       54.47779
+      ],
+      [
+       -124.1711,
+       54.4783
+      ],
+      [
+       -124.1637,
+       54.488
+      ],
+      [
+       -124.16289,
+       54.48824
+      ],
+      [
+       -124.16186,
+       54.48842
+      ]
+     ]
+    },
+    "roads": [
+     {
+      "name": "Highway 27",
+      "from": "Highway 27 N",
+      "direction": "BOTH",
+      "state": "ALL_LANES_OPEN"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630131",
+      "name": "Fort George District",
+      "id": "drivebc.ca/9"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-102657",
+    "id": "drivebc.ca/RIDE-102657",
+    "headline": "INCIDENT",
+    "status": "ACTIVE",
+    "created": "2026-09-22T14:16:43-07:00",
+    "updated": "2026-11-05T11:47:18-07:00",
+    "description": "Geotechnical investigation at Old Alaska Highway. Assessment in progress. Bridge closed. Last update: November 5th, 2026 at 11:47am MST. Next update: November 5th, 2027 at 11:00am MST. Slide impacting bridge.",
+    "+ivr_message": "Geotechnical investigation at Old Alaska Highway. Assessment in progress. Bridge closed. Last update: November 5th, 2026 at 11:47am MST. Next update: November 5th, 2027 at 11:00am MST. Slide impacting bridge.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-09-22T21:16/"
+     ]
+    },
+    "event_type": "INCIDENT",
+    "event_subtypes": [
+     "ROAD_MAINTENANCE"
+    ],
+    "severity": "MINOR",
+    "geography": {
+     "type": "Point",
+     "coordinates": [
+      -120.56439361,
+      55.95732665
+     ]
+    },
+    "roads": [
+     {
+      "name": "Other Roads",
+      "from": "Old Alaska Highway",
+      "direction": "BOTH",
+      "state": "CLOSED"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630130",
+      "name": "Peace District",
+      "id": "drivebc.ca/8"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-103709",
+    "id": "drivebc.ca/RIDE-103709",
+    "headline": "CONSTRUCTION",
+    "status": "ACTIVE",
+    "created": "2026-10-15T09:23:19-07:00",
+    "updated": "2026-10-15T09:23:19-07:00",
+    "description": "Special event from Highway 3, At 4th Street to 9th Street, At 7th Avenue and 9th Street. Starting Fri Dec 4 until Fri Dec 4. Closed. Detour in effect. Last update: October 15th, 2026 at 9:23am PDT. Keremeos Christmas Light-Up event.",
+    "+ivr_message": "Special event from Highway 3, At 4th Street to 9th Street, At 7th Avenue and 9th Street. Starting Fri Dec 4 until Fri Dec 4. Closed. Detour in effect. Last update: October 15th, 2026 at 9:23am PDT. Keremeos Christmas Light-Up event.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-12-05T00:00/2026-12-05T03:00"
+     ]
+    },
+    "event_type": "CONSTRUCTION",
+    "event_subtypes": [
+     "PLANNED_EVENT"
+    ],
+    "severity": "MINOR",
+    "geography": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       -119.82946,
+       49.20518
+      ],
+      [
+       -119.82946,
+       49.20519
+      ],
+      [
+       -119.82732,
+       49.20517
+      ],
+      [
+       -119.8252,
+       49.20514
+      ],
+      [
+       -119.82303,
+       49.20511
+      ],
+      [
+       -119.8223,
+       49.2051
+      ],
+      [
+       -119.82086,
+       49.20509
+      ],
+      [
+       -119.81872,
+       49.20506
+      ],
+      [
+       -119.81872,
+       49.20508
+      ]
+     ]
+    },
+    "roads": [
+     {
+      "name": "Highway 3",
+      "from": "7th Avenue",
+      "direction": "BOTH",
+      "state": "CLOSED"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630138",
+      "name": "Okanagan-Shuswap District",
+      "id": "drivebc.ca/5"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-104898",
+    "id": "drivebc.ca/RIDE-104898",
+    "headline": "CONSTRUCTION",
+    "status": "ACTIVE",
+    "created": "2026-10-31T06:45:20-07:00",
+    "updated": "2026-11-12T09:48:20-07:00",
+    "description": "Bridge maintenance at Highway 51, 76km Southwest of Dease Lake and 35km Northeast of Telegraph Creek. Starting 8:00 AM PCT on Tuesday November 3, 2026. Expect 4 hours delay. Bridge closed. Last update: November 12th, 2026 at 9:48am PCT. Tuya bridge closed due to a major redeck works. Bridge closed from 8am - 12pm, open from 12pm - 1pm, closed again from 1pm to 5pm then open all night. Starting Nov 3, - Nov 22, 2026.  Mon - Friday.",
+    "+ivr_message": "Bridge maintenance at Highway 51, 76km Southwest of Dease Lake and 35km Northeast of Telegraph Creek. Starting 8:00 AM PCT on Tuesday November 3, 2026. Expect 4 hours delay. Bridge closed. Last update: November 12th, 2026 at 9:48am PCT. Tuya bridge closed due to a major redeck works. Bridge closed from 8am - 12pm, open from 12pm - 1pm, closed again from 1pm to 5pm then open all night. Starting Nov 3, - Nov 22, 2026.  Mon - Friday.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-11-03T15:00/"
+     ]
+    },
+    "event_type": "CONSTRUCTION",
+    "event_subtypes": [
+     "ROAD_MAINTENANCE"
+    ],
+    "severity": "MAJOR",
+    "geography": {
+     "type": "Point",
+     "coordinates": [
+      -130.82345458,
+      58.07467255
+     ]
+    },
+    "roads": [
+     {
+      "name": "Highway 51",
+      "from": "Telegraph Creek Road",
+      "direction": "BOTH",
+      "state": "CLOSED",
+      "+delay": "4 hours"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630133",
+      "name": "Bulkley Stikine District",
+      "id": "drivebc.ca/10"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-106244",
+    "id": "drivebc.ca/RIDE-106244",
+    "headline": "INCIDENT",
+    "status": "ACTIVE",
+    "created": "2026-11-12T00:43:34-07:00",
+    "updated": "2026-11-14T13:14:07-07:00",
+    "description": "Washout from Squamish Valley Road, 3km mark to north of Pilchuk Creek Bridge. Closed. Last update: November 14th, 2026 at 1:14pm PCT. Next update: November 15th, 2026 at 1:00pm PCT. Various areas of road are washed out or covered in debris. Repairs are underway.",
+    "+ivr_message": "Washout from Squamish Valley Road, 3km mark to north of Pilchuk Creek Bridge. Closed. Last update: November 14th, 2026 at 1:14pm PCT. Next update: November 15th, 2026 at 1:00pm PCT. Various areas of road are washed out or covered in debris. Repairs are underway.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-11-12T07:43/"
+     ]
+    },
+    "event_type": "INCIDENT",
+    "event_subtypes": [
+     "HAZARD"
+    ],
+    "severity": "MAJOR",
+    "geography": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       -123.15827,
+       49.80019
+      ],
+      [
+       -123.1592,
+       49.80064
+      ],
+      [
+       -123.1598,
+       49.8007
+      ],
+      [
+       -123.20815,
+       49.82874
+      ],
+      [
+       -123.20827,
+       49.8297
+      ],
+      [
+       -123.21014,
+       49.83199
+      ],
+      [
+       -123.23715,
+       49.86561
+      ],
+      [
+       -123.23725,
+       49.86578
+      ],
+      [
+       -123.23708,
+       49.86657
+      ]
+     ]
+    },
+    "roads": [
+     {
+      "name": "Other Roads",
+      "from": "Squamish Valley Road",
+      "direction": "BOTH",
+      "state": "CLOSED"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630136",
+      "name": "Lower Mainland District",
+      "id": "drivebc.ca/1"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-106250",
+    "id": "drivebc.ca/RIDE-106250",
+    "headline": "INCIDENT",
+    "status": "ACTIVE",
+    "created": "2026-11-12T04:10:06-07:00",
+    "updated": "2026-11-14T13:14:39-07:00",
+    "description": "Flooding from Pemberton Meadows Road, Erickson Rd to 2km south of Erickson Rd. Road open. Last update: November 14th, 2026 at 1:14pm PCT. Next update: November 16th, 2026 at 1:00pm PCT. Road is passable. Please proceed with caution.",
+    "+ivr_message": "Flooding from Pemberton Meadows Road, Erickson Rd to 2km south of Erickson Rd. Road open. Last update: November 14th, 2026 at 1:14pm PCT. Next update: November 16th, 2026 at 1:00pm PCT. Road is passable. Please proceed with caution.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-11-12T11:10/"
+     ]
+    },
+    "event_type": "INCIDENT",
+    "event_subtypes": [
+     "HAZARD"
+    ],
+    "severity": "MAJOR",
+    "geography": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       -122.88159,
+       50.39377
+      ],
+      [
+       -122.88034,
+       50.39269
+      ],
+      [
+       -122.87801,
+       50.39144
+      ],
+      [
+       -122.87287,
+       50.38725
+      ],
+      [
+       -122.87248,
+       50.38646
+      ],
+      [
+       -122.87249,
+       50.3845
+      ],
+      [
+       -122.87104,
+       50.38124
+      ],
+      [
+       -122.8714,
+       50.38008
+      ],
+      [
+       -122.87135,
+       50.37983
+      ]
+     ]
+    },
+    "roads": [
+     {
+      "name": "Other Roads",
+      "from": "Pemberton Meadows Road",
+      "direction": "BOTH",
+      "state": "ALL_LANES_OPEN"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630136",
+      "name": "Lower Mainland District",
+      "id": "drivebc.ca/1"
+     }
+    ]
+   },
+   {
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/RIDE-106343",
+    "id": "drivebc.ca/RIDE-106343",
+    "headline": "INCIDENT",
+    "status": "ACTIVE",
+    "created": "2026-11-12T12:07:36-07:00",
+    "updated": "2026-11-14T11:26:16-07:00",
+    "description": "Mudslide at Anderson Lake Road, Portage Creek Bridge. Bridge closed. No detour available. Watch for traffic control. Last update: November 14th, 2026 at 11:26am PCT. Next update: November 15th, 2026 at 9:00am PCT. Highline Road from Seton Portage to D'Arcy not accessible. Travellers needing to get to D'Arcy use Pemberton-Portage Road.",
+    "+ivr_message": "Mudslide at Anderson Lake Road, Portage Creek Bridge. Bridge closed. No detour available. Watch for traffic control. Last update: November 14th, 2026 at 11:26am PCT. Next update: November 15th, 2026 at 9:00am PCT. Highline Road from Seton Portage to D'Arcy not accessible. Travellers needing to get to D'Arcy use Pemberton-Portage Road.",
+    "+linear_reference_km": 0,
+    "schedule": {
+     "intervals": [
+      "2026-11-12T19:07/"
+     ]
+    },
+    "event_type": "INCIDENT",
+    "event_subtypes": [
+     "MUD"
+    ],
+    "severity": "MAJOR",
+    "geography": {
+     "type": "Point",
+     "coordinates": [
+      -122.29573,
+      50.70569
+     ]
+    },
+    "roads": [
+     {
+      "name": "Other Roads",
+      "from": "Anderson Lake Road",
+      "direction": "BOTH",
+      "state": "CLOSED"
+     }
+    ],
+    "areas": [
+     {
+      "url": "http://www.geonames.org/8630134",
+      "name": "Cariboo District",
+      "id": "drivebc.ca/7"
+     }
+    ]
+   }
+  ],
+  "meta": {
+   "url": "/events",
+   "up_url": "",
+   "version": "v1"
+  },
+  "pagination": {
+   "offset": "0"
+  }
+ }
+}

@@ -1,0 +1,89 @@
+{
+ "retrievedOn": "2026-11-15",
+ "source": "https://511.alberta.ca/help/endpoint/event",
+ "note": "Response sample published in the official API documentation. The live endpoint needs a developer key NavOSS does not have, so no live response could be recorded.",
+ "rows": [
+  {
+   "ID": 58,
+   "SourceId": "4841",
+   "Organization": "ERS",
+   "RoadwayName": "Premier Way",
+   "DirectionOfTravel": "West",
+   "Description": "Parade on Premier Way Westbound from Pitt Ave SW to Carleton St SW .   ",
+   "Reported": 1697738820,
+   "LastUpdated": 1697220531,
+   "StartDate": 1697738820,
+   "PlannedEndDate": 1697743800,
+   "LanesAffected": "No Data",
+   "Latitude": 51.0255326069246,
+   "Longitude": -114.08658917176,
+   "LatitudeSecondary": 51.0263666029486,
+   "LongitudeSecondary": -114.091570338812,
+   "EventType": "specialEvents",
+   "EventSubType": "parade",
+   "IsFullClosure": false,
+   "Severity": "None",
+   "EncodedPolyline": "q|lvHdpiwT?JCrCOfBkA|K?X@L?^GJIDI\\m@dE",
+   "Restrictions": {
+    "Width": null,
+    "Height": null,
+    "Length": null,
+    "Weight": null,
+    "Speed": null
+   },
+   "DetourPolyline": "",
+   "DetourInstructions": "",
+   "Recurrence": "<b>Thu:</b><br/>Active 24 hours a day<br/><br/>",
+   "RecurrenceSchedules": [
+    {
+     "StartDate": "10/19/2023 12:07:00 PM-06:00:00",
+     "EndDate": "10/19/2023 1:30:00 PM-06:00:00",
+     "Times": [
+      {
+       "StartTime": "00:00:00-06:00:00",
+       "EndTime": "23:59:59-06:00:00"
+      }
+     ],
+     "DaysOfWeek": [
+      "Thursday"
+     ]
+    }
+   ],
+   "Details": ""
+  },
+  {
+   "ID": 61,
+   "SourceId": "4898",
+   "Organization": "ERS",
+   "RoadwayName": "HWY-24",
+   "DirectionOfTravel": "South",
+   "Description": "General Information on HWY-24 Southbound near Railway Ave. Lane Blocked. Width Restriction: 1m Height Restriction: 2m Length Restriction: 3m Weight Restriction: 50kg Speed Restriction: 30km/hr  Activities: Road Closed, Lane closure, Sidewalk closed, Use alternate route, One - lane alt traffic, Lane direction reversal, No passing, Speed reduction, Temp traffic signals, Rough road, Fresh oil, No centerline marking, Grooved pavement, Loose chips, Narrow lane, Narrow shoulder, Pavement drop-off, No wide loads, Height restriction, Flag persons, Pilot vehicles, Be prepared to stop, Traffic congestion, On site detour, Local road detour, Expect traffic delays, One lane travel, Ramp closed, Bridge closed, Two way traffic, Uneven pavement, Width restriction, Weight restriction, Treat as 4 way stop   Visibility: Fog   Additional Restrictions: Hazmat Prohibited, Escort Vehicle Required, DPS Escort Required, No Oversized Loads",
+   "Reported": 1697813400,
+   "LastUpdated": 1697814957,
+   "StartDate": 1697813400,
+   "PlannedEndDate": null,
+   "LanesAffected": "Lane Blocked",
+   "Latitude": 51.0209076170721,
+   "Longitude": -113.53989,
+   "LatitudeSecondary": null,
+   "LongitudeSecondary": null,
+   "EventType": "generalInfo",
+   "EventSubType": "general",
+   "IsFullClosure": false,
+   "Severity": "Major",
+   "EncodedPolyline": null,
+   "Restrictions": {
+    "Width": 1.0,
+    "Height": 2.0,
+    "Length": 3.0,
+    "Weight": 50.0,
+    "Speed": 30.0
+   },
+   "DetourPolyline": "",
+   "DetourInstructions": "",
+   "Recurrence": "",
+   "RecurrenceSchedules": "",
+   "Details": ""
+  }
+ ]
+}

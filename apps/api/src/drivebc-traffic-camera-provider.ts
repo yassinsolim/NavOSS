@@ -9,23 +9,25 @@ const DEFAULT_MAXIMUM_STALE_MS = 24 * 60 * 60 * 1_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const KELOWNA_BOUNDS = { east: -119.2, north: 50.15, south: 49.7, west: -119.65 } as const;
 
+/**
+ * The catalogue's current columns (recorded 2026-11-15): `id, cam_group, camName,
+ * links_camDetailsPage, links_imageURL, highway_number, caption, credit, region_name,
+ * orientation, latitude, longitude, elevation`. Unused or added columns are ignored; the image
+ * link is required, so a camera without one is never shown.
+ */
 const CameraRowSchema = z
   .object({
     camName: z.string().trim().min(1),
     caption: z.string().trim().min(1),
-    credit: z.string(),
-    highway_locationDescription: z.string(),
     highway_number: z.string().trim().min(1),
     id: z.string().regex(/^\d+$/u),
     latitude: z.string().trim().min(1),
-    links_bchighwaycam: z.url(),
-    links_imageDisplay: z.url(),
-    links_imageThumbnail: z.url(),
-    links_replayTheDay: z.url(),
+    links_camDetailsPage: z.url(),
+    links_imageURL: z.url(),
     longitude: z.string().trim().min(1),
     orientation: z.string(),
   })
-  .strict();
+  .loose();
 const CameraRowsSchema = z.array(CameraRowSchema).max(5_000);
 
 export class DriveBcTrafficCameraProviderError extends Error {
@@ -127,12 +129,14 @@ export function createDriveBcTrafficCameraProvider(
               enforcement: false as const,
               highway: row.highway_number,
               id: `drivebc-highwaycam:${row.id}`,
-              imageUrl: row.links_imageDisplay,
+              imageUrl: row.links_imageURL,
               name: row.camName,
               ...(orientation.length === 0 ? {} : { orientation }),
-              pageUrl: row.links_bchighwaycam,
+              pageUrl: row.links_camDetailsPage,
               regionId: 'kelowna-bc' as const,
-              thumbnailUrl: row.links_imageThumbnail,
+              // The catalogue no longer publishes a separate thumbnail; shipped clients require
+              // the field, so it carries the same current image.
+              thumbnailUrl: row.links_imageURL,
             },
           ];
         })

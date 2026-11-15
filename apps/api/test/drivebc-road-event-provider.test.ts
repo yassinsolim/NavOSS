@@ -114,7 +114,8 @@ describe('DriveBC road event provider', () => {
     expect(response).toMatchObject({ degraded: false, stale: false });
   });
 
-  it('interprets offsetless schedule intervals in the DriveBC local time zone', async () => {
+  it('reads offsetless schedule intervals as UTC, as the live feed publishes them', async () => {
+    // Recorded 2026-11-15: created 2026-07-14T14:44:12-07:00, interval "2026-07-14T21:44/".
     const provider = createDriveBcRoadEventProvider({
       fetchImplementation: () =>
         Promise.resolve(
@@ -122,7 +123,7 @@ describe('DriveBC road event provider', () => {
             payload([
               {
                 ...construction,
-                schedule: { intervals: ['2026-07-31T04:00:00/2026-07-31T12:00:00'] },
+                schedule: { intervals: ['2026-07-31T04:00/2026-07-31T12:00:00'] },
               },
             ]),
           ),
@@ -130,8 +131,8 @@ describe('DriveBC road event provider', () => {
     });
 
     expect((await provider.getRoadEvents()).events[0]).toMatchObject({
-      endsAt: '2026-07-31T19:00:00.000Z',
-      startsAt: '2026-07-31T11:00:00.000Z',
+      endsAt: '2026-07-31T12:00:00.000Z',
+      startsAt: '2026-07-31T04:00:00.000Z',
     });
   });
 

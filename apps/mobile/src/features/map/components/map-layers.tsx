@@ -15,8 +15,8 @@ import { useMemo } from 'react';
 import { communityReportFeatures } from '@/features/community/community';
 
 import { headingConeFeature } from '@/features/map/heading-cone';
+import type { MapRoadEvent } from '@/features/map/road-events';
 import {
-  type MapRoadEvent,
   roadEventFeatures,
   routeFeatures,
   safetyCameraFeatures,
@@ -429,21 +429,36 @@ export function MapLayers({
           <GeoJSONSource data={roadEventData.construction} id="official-construction-events-source">
             <Layer
               id="official-construction-events"
-              layout={{ 'icon-image': 'road-construction', 'icon-size': 0.58 }}
+              layout={{
+                'icon-image': 'road-construction',
+                'icon-size': 0.58,
+                // Newest first: the newest event keeps its symbol where symbols collide.
+                'symbol-sort-key': ['get', 'rank'],
+              }}
               type="symbol"
             />
           </GeoJSONSource>
           <GeoJSONSource data={roadEventData.closure} id="road-closure-events-source">
             <Layer
               id="road-closure-events"
-              layout={{ 'icon-image': 'road-closure', 'icon-size': 0.58 }}
+              layout={{
+                'icon-image': 'road-closure',
+                'icon-size': 0.58,
+                // Newest first: the newest event keeps its symbol where symbols collide.
+                'symbol-sort-key': ['get', 'rank'],
+              }}
               type="symbol"
             />
           </GeoJSONSource>
           <GeoJSONSource data={roadEventData.incident} id="road-incident-events-source">
             <Layer
               id="road-incident-events"
-              layout={{ 'icon-image': 'road-incident', 'icon-size': 0.58 }}
+              layout={{
+                'icon-image': 'road-incident',
+                'icon-size': 0.58,
+                // Newest first: the newest event keeps its symbol where symbols collide.
+                'symbol-sort-key': ['get', 'rank'],
+              }}
               type="symbol"
             />
           </GeoJSONSource>

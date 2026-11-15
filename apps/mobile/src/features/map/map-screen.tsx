@@ -18,7 +18,7 @@ import { MapNoticeToast } from '@/features/map/components/map-notice';
 import { ContributeScreen } from '@/features/map/contribute-screen';
 import { useMapController } from '@/features/map/controller/use-map-controller';
 import { ExploreSheet } from '@/features/map/explore-sheet';
-import { mapAttributionLabel, roadEventStatusLabel } from '@/features/map/map-features';
+import { mapAttributionLabel } from '@/features/map/map-features';
 import { MapFeatureSheet } from '@/features/map/map-feature-sheet';
 import {
   placePhoneUrl,
@@ -29,6 +29,8 @@ import {
 import { MapPreferencesSheet } from '@/features/map/map-preferences-sheet';
 import { CAMERA_ALERT_HEIGHT, REROUTE_CARD_HEIGHT } from '@/features/map/overlay-layout';
 import { PlaceSheet } from '@/features/map/place-sheet';
+import { roadEventCredit, roadEventStatusLabel } from '@/features/map/road-events';
+import { RoadEventsSheet } from '@/features/map/road-events-sheet';
 import { RoadReportSheet } from '@/features/map/road-report-sheet';
 import { SavedPlacesScreen } from '@/features/map/saved-places-screen';
 import { OfflineMapsSheet } from '@/features/offline/offline-maps-sheet';
@@ -206,7 +208,9 @@ export function MapScreen() {
             mapAttributionLabel({
               hasTorontoCameras: overlays.torontoSafetyCameras.length > 0,
               mapRegion: c.location.mapRegion,
-              roadEventRegion: overlays.roadEventRegion,
+              roadEventCredit: mapPreferences.showRoadEvents
+                ? roadEventCredit(overlays.roadEventSnapshot, Date.now())
+                : undefined,
             })
           }
           bannerStackHeight={
@@ -233,6 +237,7 @@ export function MapScreen() {
           onOpenMapPreferences={c.mapPreferencesSheet.open}
           onOpenReport={c.roadReport.open}
           onRecenter={c.camera.recenter}
+          onOpenRoadEvents={c.roadEventsSheet.open}
           onShowAttribution={c.onShowAttribution}
           onToggleOrientation={c.onToggleOrientation}
           orientation={mapPreferences.navigationOrientation}
@@ -245,10 +250,10 @@ export function MapScreen() {
           roadEventStatus={
             mapPreferences.showRoadEvents
               ? roadEventStatusLabel({
-                  hasSnapshot: overlays.roadEventSnapshot !== undefined,
+                  hasFeed: overlays.roadEventFeedAvailable,
+                  now: Date.now(),
                   refreshDelayed: overlays.roadEventRefreshDelayed,
-                  region: overlays.roadEventRegion,
-                  stale: overlays.roadEventSnapshot?.stale === true,
+                  snapshot: overlays.roadEventSnapshot,
                 })
               : undefined
           }
@@ -481,6 +486,17 @@ export function MapScreen() {
         }
       />
 
+      <RoadEventsSheet
+        events={overlays.roadEvents}
+        metrics={metrics}
+        onClose={c.roadEventsSheet.close}
+        onClosed={c.roadEventsSheet.onClosed}
+        onOpenLink={c.onOpenExternalUrl}
+        onSelect={c.roadEventsSheet.onSelect}
+        refreshDelayed={overlays.roadEventRefreshDelayed}
+        snapshot={overlays.roadEventSnapshot}
+        visible={c.roadEventsSheet.visible}
+      />
       <MapPreferencesSheet
         community={c.community.settings}
         metrics={metrics}
