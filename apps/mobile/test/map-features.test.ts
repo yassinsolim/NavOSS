@@ -10,9 +10,6 @@ import {
   mapAttributionLabel,
   renderedFeatureId,
   roadEventFeatures,
-  roadEventMessage,
-  roadEventRegionForMapRegion,
-  roadEventStatusLabel,
   routeBounds,
   routeFeatures,
   safetyCameraFeatures,
@@ -42,17 +39,6 @@ const incident: RoadEvent = {
   type: 'incident',
 };
 
-describe('road event regions', () => {
-  it('draws road events only for the exact regions that publish them', () => {
-    expect(roadEventRegionForMapRegion('calgary-ab')).toBe('calgary');
-    expect(roadEventRegionForMapRegion('kelowna-bc')).toBe('kelowna-bc');
-    expect(roadEventRegionForMapRegion('ontario')).toBe('ontario');
-    // An unknown or unlocated position must never fall back to Calgary's overlays.
-    expect(roadEventRegionForMapRegion('other')).toBeUndefined();
-    expect(roadEventRegionForMapRegion(undefined)).toBeUndefined();
-  });
-});
-
 describe('map feature builders', () => {
   it('reuses one empty collection when there is nothing to draw', () => {
     expect(selectedPlaceFeature(undefined)).toBe(EMPTY_POINT_COLLECTION);
@@ -80,6 +66,7 @@ describe('map feature builders', () => {
     expect(roadEventFeatures(events, 'incident').features).toHaveLength(1);
     expect(roadEventFeatures(events, 'construction').features[0]?.properties).toEqual({
       id: 'construction-1',
+      rank: 1,
     });
     expect(roadEventFeatures(events, 'closure').features).toEqual([]);
   });
@@ -153,76 +140,47 @@ describe('overlay detail copy', () => {
     );
   });
 
-  it('labels Calgary incidents as unverified and official sources as official', () => {
-    expect(roadEventMessage(incident)).toContain('Unverified current incident information');
-    expect(roadEventMessage(incident)).toContain('Starts: 2026-11-12 08:30:00');
-    expect(
-      roadEventMessage({
-        ...incident,
-        confidence: 'official',
-        sourceId: 'calgary-construction-detours',
-        type: 'construction',
-      }),
-    ).toContain('Official City of Calgary construction information');
-  });
-
-  it('states source, staleness and refresh problems for the road-event overlay', () => {
-    const fresh = { hasSnapshot: true, refreshDelayed: false, stale: false } as const;
-    expect(roadEventStatusLabel({ ...fresh, region: 'calgary' })).toBe(
-      'Road events · City of Calgary · Incidents unverified',
-    );
-    expect(roadEventStatusLabel({ ...fresh, region: 'ontario', stale: true })).toBe(
-      'Road events · Ontario 511 · Official · Stale snapshot',
-    );
-    expect(roadEventStatusLabel({ ...fresh, refreshDelayed: true, region: 'kelowna-bc' })).toBe(
-      'Road events · DriveBC · Official · Refresh delayed',
-    );
-    expect(
-      roadEventStatusLabel({
-        hasSnapshot: false,
-        refreshDelayed: true,
-        region: 'calgary',
-        stale: false,
-      }),
-    ).toBe('Road events unavailable');
-    // Nothing has loaded and nothing has failed: no claim either way.
-    expect(
-      roadEventStatusLabel({
-        hasSnapshot: false,
-        refreshDelayed: false,
-        region: undefined,
-        stale: false,
-      }),
-    ).toBeUndefined();
-  });
-
   it('credits only the data sources that are on the map', () => {
     expect(
       mapAttributionLabel({
         hasTorontoCameras: false,
         mapRegion: 'other',
-        roadEventRegion: undefined,
+        roadEventCredit: undefined,
       }),
     ).toBe('© OpenMapTiles · © OpenStreetMap');
     expect(
       mapAttributionLabel({
         hasTorontoCameras: false,
         mapRegion: 'calgary-ab',
-        roadEventRegion: 'calgary',
+        roadEventCredit: '© City of Calgary',
       }),
     ).toBe('© OpenMapTiles · © OpenStreetMap · © City of Calgary');
     expect(
       mapAttributionLabel({
         hasTorontoCameras: true,
         mapRegion: 'ontario',
-        roadEventRegion: 'ontario',
+        roadEventCredit: 'City of Toronto',
       }),
-    ).toBe('© OpenMapTiles · © OpenStreetMap · © City of Toronto · Ontario 511');
+    ).toBe('© OpenMapTiles · © OpenStreetMap · City of Toronto');
+    expect(
+      mapAttributionLabel({
+        hasTorontoCameras: true,
+        mapRegion: 'ontario',
+        roadEventCredit: undefined,
+      }),
+    ).toBe('© OpenMapTiles · © OpenStreetMap · © City of Toronto');
     expect(
       mapAttributionLabel({
         hasTorontoCameras: false,
         mapRegion: 'kelowna-bc',
-        roadEventRegion: 'kelowna-bc',
+        roadEventCredit: 'DriveBC',
+      }),
+    ).toBe('© OpenMapTiles · © OpenStreetMap · DriveBC · RCMP');
+    expect(
+      mapAttributionLabel({
+        hasTorontoCameras: false,
+        mapRegion: 'kelowna-bc',
+        roadEventCredit: undefined,
       }),
     ).toBe('© OpenMapTiles · © OpenStreetMap · DriveBC · RCMP');
   });

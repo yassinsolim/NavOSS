@@ -13,6 +13,7 @@ import {
   GooglePlaceQueryGrantResponseSchema,
   IsoDateTimeSchema,
   OfficialRoadEventResponseSchema,
+  ProvincialRoadEventSchema,
   OfficialSafetyCameraResponseSchema,
   RoadEventResponseSchema,
   SafetyFacilityResponseSchema,
@@ -203,44 +204,89 @@ describe('SafetyCameraResponseSchema', () => {
 });
 
 describe('OfficialRoadEventResponseSchema', () => {
+  const torontoSource = {
+    attribution: 'Contains information licensed under the Open Government Licence \u2013 Toronto.',
+    checkedAt: '2026-11-15T09:58:00.000Z',
+    confidence: 'official',
+    documentationUrl: 'https://open.toronto.ca/dataset/road-restrictions/',
+    eventCount: 1,
+    incomplete: false,
+    licenseUrl: 'https://open.toronto.ca/open-data-licence/',
+    maximumAgeSeconds: 3_600,
+    name: 'City of Toronto',
+    refreshIntervalSeconds: 300,
+    sourceId: 'toronto-road-restrictions',
+    status: 'current',
+    timeZone: 'America/Toronto',
+    updatedAt: '2026-11-15T07:06:53.000Z',
+  } as const;
+  const torontoEvent = {
+    confidence: 'official',
+    coordinate: { latitude: 43.68448, longitude: -79.49882 },
+    description: 'Jane St at Eglinton Ave W. Rebar delivery.',
+    id: 'toronto-restriction:Tor-RD042026-1428-2',
+    regionId: 'ontario',
+    sourceId: 'toronto-road-restrictions',
+    startsAt: '2026-11-11T05:00:00.000Z',
+    title: 'Construction on Jane St',
+    type: 'construction',
+    updatedAt: '2026-11-11T17:43:55.000Z',
+  } as const;
   const response = {
     degraded: false,
-    events: [
-      {
-        confidence: 'official',
-        coordinate: { latitude: 43.63599, longitude: -79.668724 },
-        description: 'Construction on Highway 401. One alternating lane.',
-        direction: 'Eastbound',
-        endsAt: '2026-08-24T05:00:00.000Z',
-        id: 'ontario-511:1963:222249',
-        isFullClosure: false,
-        regionId: 'ontario',
-        reportedAt: '2026-07-30T04:00:00.000Z',
-        roadwayName: 'HWY 401',
-        sourceId: 'ontario-511-events',
-        startsAt: '2026-07-30T04:00:00.000Z',
-        title: 'Construction on HWY 401',
-        type: 'construction',
-        updatedAt: '2026-07-30T20:00:00.000Z',
-      },
-    ],
-    generatedAt: '2026-07-30T20:32:00.000Z',
+    events: [torontoEvent],
+    generatedAt: '2026-11-15T10:00:00.000Z',
     regionId: 'ontario',
-    source: {
-      apiDocumentationUrl: 'https://511on.ca/developers/doc',
-      attribution:
-        'Contains information licensed under the Open Government Licence \u2013 Ontario.',
-      confidence: 'official',
-      licenseUrl: 'https://www.ontario.ca/page/open-government-licence-ontario',
-      refreshIntervalSeconds: 300,
-      sourceId: 'ontario-511-events',
-      updatedAt: '2026-07-30T20:00:00.000Z',
-    },
+    sources: [torontoSource],
     stale: false,
   };
 
-  it('accepts official Ontario 511 events with UTC source timestamps', () => {
+  it('accepts a provincial response whose flags summarise its sources', () => {
     expect(OfficialRoadEventResponseSchema.safeParse(response).success).toBe(true);
+    expect(
+      OfficialRoadEventResponseSchema.safeParse({
+        ...response,
+        degraded: true,
+        events: [],
+        sources: [{ ...torontoSource, eventCount: 0, status: 'unavailable' }],
+      }).success,
+    ).toBe(true);
+    expect(
+      OfficialRoadEventResponseSchema.safeParse({
+        ...response,
+        sources: [{ ...torontoSource, status: 'stale' }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('never serves events of an unserved source, another region, or the wrong posture', () => {
+    for (const changed of [
+      { ...response, sources: [{ ...torontoSource, status: 'unavailable' }], degraded: true },
+      { ...response, regionId: 'alberta' },
+      { ...response, events: [{ ...torontoEvent, confidence: 'unverified' }] },
+      {
+        ...response,
+        events: [{ ...torontoEvent, coordinate: { latitude: 51.04, longitude: -114.07 } }],
+      },
+    ]) {
+      expect(OfficialRoadEventResponseSchema.safeParse(changed).success).toBe(false);
+    }
+  });
+
+  it('keeps Calgary current incidents the only unverified source', () => {
+    const calgaryIncident = {
+      ...torontoEvent,
+      confidence: 'unverified',
+      coordinate: { latitude: 51.0458, longitude: -114.0715 },
+      id: 'calgary-incident:abc',
+      regionId: 'alberta',
+      sourceId: 'calgary-current-incidents',
+      type: 'incident',
+    };
+    expect(ProvincialRoadEventSchema.safeParse(calgaryIncident).success).toBe(true);
+    expect(
+      ProvincialRoadEventSchema.safeParse({ ...calgaryIncident, confidence: 'official' }).success,
+    ).toBe(false);
   });
 
   it('accepts official DriveBC Open511 events in the Kelowna region', () => {
@@ -284,37 +330,6 @@ describe('OfficialRoadEventResponseSchema', () => {
         stale: false,
       }).success,
     ).toBe(true);
-  });
-
-  it('rejects mixed Ontario and DriveBC region/source metadata', () => {
-    expect(
-      OfficialRoadEventResponseSchema.safeParse({
-        ...response,
-        regionId: 'kelowna-bc',
-      }).success,
-    ).toBe(false);
-    expect(
-      OfficialRoadEventResponseSchema.safeParse({
-        ...response,
-        events: [{ ...response.events[0], regionId: 'kelowna-bc' }],
-      }).success,
-    ).toBe(false);
-  });
-
-  it('rejects out-of-province events and inconsistent stale posture', () => {
-    expect(
-      OfficialRoadEventResponseSchema.safeParse({
-        ...response,
-        degraded: false,
-        events: [
-          {
-            ...response.events[0],
-            coordinate: { latitude: 51.04, longitude: -114.07 },
-          },
-        ],
-        stale: true,
-      }).success,
-    ).toBe(false);
   });
 });
 

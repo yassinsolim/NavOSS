@@ -1,0 +1,105 @@
+{
+  "retrievedOn": "2026-11-15",
+  "source": "Local API (this branch) /v2/events?region=ontario against the live public feeds; events trimmed to three per source, source descriptors unchanged.",
+  "response": {
+    "degraded": true,
+    "events": [
+      {
+        "confidence": "official",
+        "coordinate": {
+          "latitude": 43.758939,
+          "longitude": -79.31016
+        },
+        "description": "Pharmacy Ave before Ellesmere Rd. Toronto-TMC: Northbound and southbound lanes blocked due to a collision.",
+        "direction": "Both directions",
+        "id": "toronto-restriction:12403366",
+        "isFullClosure": false,
+        "regionId": "ontario",
+        "reportedAt": "2026-11-15T08:06:53.000Z",
+        "roadwayName": "Pharmacy Ave",
+        "severity": "minor",
+        "sourceId": "toronto-road-restrictions",
+        "startsAt": "2026-11-15T08:06:53.000Z",
+        "title": "Hazard on Pharmacy Ave",
+        "type": "hazard",
+        "updatedAt": "2026-11-15T08:06:53.000Z"
+      },
+      {
+        "confidence": "official",
+        "coordinate": {
+          "latitude": 43.777582,
+          "longitude": -79.242834
+        },
+        "description": "Bellamy Rd N from East Highland Creek to Progress Ave. Toronto-TMC: One northbound lane is blocked due to water main break. One southbound lane is blocked due to water main break.",
+        "direction": "Both directions",
+        "id": "toronto-restriction:12403331",
+        "isFullClosure": false,
+        "regionId": "ontario",
+        "reportedAt": "2026-11-15T07:48:17.000Z",
+        "roadwayName": "Bellamy Rd N",
+        "severity": "minor",
+        "sourceId": "toronto-road-restrictions",
+        "startsAt": "2026-11-15T07:48:17.000Z",
+        "title": "Hazard on Bellamy Rd N",
+        "type": "hazard",
+        "updatedAt": "2026-11-15T07:48:17.000Z"
+      },
+      {
+        "confidence": "official",
+        "coordinate": {
+          "latitude": 43.80297,
+          "longitude": -79.19544
+        },
+        "description": "Sheppard Ave E 46 m West of Grand Marshall Dr to 3 m West of Grand Marshall Dr. Toronto-TMC: Test Pit",
+        "direction": "One direction",
+        "endsAt": "2027-02-26T09:00:00.000Z",
+        "id": "toronto-restriction:Tor-RD1H2026-2238-4",
+        "isFullClosure": false,
+        "regionId": "ontario",
+        "reportedAt": "2026-11-13T20:15:14.000Z",
+        "roadwayName": "Sheppard Ave E",
+        "severity": "major",
+        "sourceId": "toronto-road-restrictions",
+        "startsAt": "2026-11-12T12:00:00.000Z",
+        "title": "Construction on Sheppard Ave E",
+        "type": "construction",
+        "updatedAt": "2026-11-13T20:15:14.000Z"
+      }
+    ],
+    "generatedAt": "2026-11-15T09:39:17.506Z",
+    "regionId": "ontario",
+    "sources": [
+      {
+        "attribution": "Contains information licensed under the Open Government Licence – Ontario.",
+        "confidence": "official",
+        "documentationUrl": "https://511on.ca/developers/doc",
+        "eventCount": 0,
+        "incomplete": false,
+        "licenseUrl": "https://www.ontario.ca/page/open-government-licence-ontario",
+        "maximumAgeSeconds": 3600,
+        "name": "Ontario 511",
+        "refreshIntervalSeconds": 300,
+        "sourceId": "ontario-511-events",
+        "status": "not-configured",
+        "timeZone": "America/Toronto"
+      },
+      {
+        "attribution": "Contains information licensed under the Open Government Licence – Toronto.",
+        "checkedAt": "2026-11-15T09:39:05.657Z",
+        "confidence": "official",
+        "documentationUrl": "https://open.toronto.ca/dataset/road-restrictions/",
+        "eventCount": 330,
+        "incomplete": false,
+        "licenseUrl": "https://open.toronto.ca/open-data-licence/",
+        "maximumAgeSeconds": 3600,
+        "name": "City of Toronto",
+        "refreshIntervalSeconds": 300,
+        "sourceId": "toronto-road-restrictions",
+        "status": "current",
+        "timeZone": "America/Toronto",
+        "updatedAt": "2026-11-15T08:06:53.000Z"
+      }
+    ],
+    "stale": false
+  }
+}

@@ -1,0 +1,321 @@
+{
+ "retrievedOn": "2026-11-15",
+ "source": "https://data.edmonton.ca/resource/k4tx-5k8p.json?$where=status in ('Current','Revised','Emergency')&$limit=2000",
+ "note": "Trimmed: one row per (status, activity_type, impact).",
+ "rows": [
+  {
+   "disruption_id": "1323",
+   "date_issued": "2026-11-10T00:00:00.000",
+   "start_date": "2026-11-17T00:00:00.000",
+   "finish_date": "2026-11-18T00:00:00.000",
+   "status": "Current",
+   "on_street": "107 Avenue NW",
+   "from_street": "102 Street NW",
+   "to_street": "106 Street NW",
+   "impact": "Travel Delays",
+   "duration": "2",
+   "details": "107 Ave will be reduced to a single lane each direction during off peak hours",
+   "description": "UTILITY REPAIR",
+   "activity_type": "Construction",
+   "traffic_district": "Central",
+   "infrastructure": "Road and Sidewalk",
+   "point": {
+    "type": "Point",
+    "coordinates": [
+     -113.50291237202228,
+     53.55141130915542
+    ]
+   }
+  },
+  {
+   "disruption_id": "832",
+   "date_issued": "2026-07-27T00:00:00.000",
+   "start_date": "2026-07-29T00:00:00.000",
+   "finish_date": "2026-11-15T00:00:00.000",
+   "status": "Current",
+   "on_street": "182 Street SW",
+   "from_street": "28 Avenue SW",
+   "impact": "Total Closure",
+   "duration": "110",
+   "details": "Starts July 29th @ 9am. 182 St & 28 Ave SW intersection will be closed due to road construction. Use other routes.",
+   "description": "ROAD CONSTRUCTION",
+   "activity_type": "Construction",
+   "traffic_district": "Southwest",
+   "infrastructure": "Road and Sidewalk",
+   "point": {
+    "type": "Point",
+    "coordinates": [
+     -113.63646872131791,
+     53.41451346193209
+    ]
+   }
+  },
+  {
+   "disruption_id": "1312",
+   "date_issued": "2026-11-09T00:00:00.000",
+   "start_date": "2026-11-19T00:00:00.000",
+   "finish_date": "2026-11-20T00:00:00.000",
+   "status": "Current",
+   "on_street": "108 Avenue NW",
+   "from_street": "104 Street NW",
+   "to_street": "103 Street NW",
+   "impact": "Directional Closure",
+   "duration": "2",
+   "details": "108 Ave will be directionally closed eastbound during off peak hours. Use 107 Ave as detour",
+   "description": "UTILITY REPAIR",
+   "activity_type": "Construction",
+   "traffic_district": "Central",
+   "infrastructure": "Road and Sidewalk",
+   "point": {
+    "type": "Point",
+    "coordinates": [
+     -113.49923782096853,
+     53.552989271086645
+    ]
+   }
+  },
+  {
+   "disruption_id": "210",
+   "date_issued": "2026-03-23T00:00:00.000",
+   "start_date": "2026-03-28T00:00:00.000",
+   "finish_date": "2026-11-30T00:00:00.000",
+   "status": "Current",
+   "on_street": "111 Street",
+   "from_street": "9 Avenue",
+   "to_street": "19 Avenue",
+   "impact": "Increased Travel Time",
+   "duration": "248",
+   "details": "Reduced to one lane each direction",
+   "description": "ROAD CONSTRUCTION",
+   "activity_type": "Construction",
+   "traffic_district": "Southwest",
+   "infrastructure": "Road and Sidewalk",
+   "point": {
+    "type": "Point",
+    "coordinates": [
+     -113.51825745689013,
+     53.43939857725276
+    ]
+   }
+  },
+  {
+   "disruption_id": "1242",
+   "date_issued": "2026-10-19T00:00:00.000",
+   "start_date": "2026-01-01T00:00:00.000",
+   "finish_date": "2026-12-31T00:00:00.000",
+   "status": "Current",
+   "on_street": "108 Avenue NW",
+   "from_street": "98 Street NW",
+   "to_street": "99 Street NW",
+   "impact": "Permanent Closure",
+   "duration": "365",
+   "details": "108 Ave is permanently closed with the neighbourhood rehab.",
+   "description": "OTHER",
+   "activity_type": "Construction",
+   "traffic_district": "Central",
+   "infrastructure": "Road",
+   "point": {
+    "type": "Point",
+    "coordinates": [
+     -113.49145789573117,
+     53.55353347722474
+    ]
+   }
+  },
+  {
+   "disruption_id": "1276",
+   "date_issued": "2026-10-28T00:00:00.000",
+   "start_date": "2026-11-11T00:00:00.000",
+   "finish_date": "2026-11-11T00:00:00.000",
+   "status": "Current",
+   "on_street": "Gault Boulevard",
+   "from_street": "Griesbach Parade",
+   "to_street": "Colonel Stone Avenue",
+   "impact": "Total Closure",
+   "duration": "1",
+   "details": "Closure of Gault Boulevard from Griesbach Parade to Colonel Stone Avenue to accommodate the 1 PPCLI Day Ceremony. Duration of 3 hours (9 AM-12 PM)",
+   "description": "SPECIAL EVENT",
+   "activity_type": "Special Event",
+   "traffic_district": "Northeast",
+   "infrastructure": "Road",
+   "point": {
+    "type": "Point",
+    "coordinates": [
+     -113.49606663819822,
+     53.601937543533694
+    ]
+   }
+  },
+  {
+   "disruption_id": "1252",
+   "date_issued": "2026-10-22T00:00:00.000",
+   "start_date": "2026-10-29T00:00:00.000",
+   "finish_date": "2026-11-11T00:00:00.000",
+   "status": "Current",
+   "on_street": "111 Avenue NW",
+   "from_street": "109 Street NW",
+   "to_street": "113 Street NW",
+   "impact": "Major Delays",
+   "duration": "14",
+   "details": "111 Ave will be reduced to a single lane eastbound and two lanes westbound starting at 9am.",
+   "description": "UTILITY CONSTRUCTION",
+   "activity_type": "Construction",
+   "traffic_district": "Central",
+   "infrastructure": "Road",
+   "point": {
+    "type": "Point",
+    "coordinates": [
+     -113.51580037890547,
+     53.55888562812375
+    ]
+   }
+  },
+  {
+   "disruption_id": "1306",
+   "date_issued": "2026-11-06T00:00:00.000",
+   "start_date": "2026-11-11T00:00:00.000",
+   "finish_date": "2026-11-11T00:00:00.000",
+   "status": "Current",
+   "on_street": "109 Street",
+   "from_street": "97 Avenue",
+   "to_street": "High Level Bridge",
+   "impact": "Increased Travel Time",
+   "duration": "1",
+   "details": "The east approach to the high level bridge from 97 Av & 109 St will be closed from 10:45 am - 11:30 am to accommodate the Alberta Legislature Artillery Salute. The east walk on the high level bridge will also be closed.",
+   "description": "SPECIAL EVENT",
+   "activity_type": "Special Event",
+   "traffic_district": "Central",
+   "infrastructure": "Road and Sidewalk",
+   "point": {
+    "type": "Point",
+    "coordinates": [
+     -113.51135351601255,
+     53.529590082619464
+    ]
+   }
+  },
+  {
+   "disruption_id": "1120",
+   "date_issued": "2026-09-23T00:00:00.000",
+   "start_date": "2026-09-23T00:00:00.000",
+   "finish_date": "2027-01-31T00:00:00.000",
+   "status": "Emergency",
+   "on_street": "130 Avenue NW",
+   "from_street": "108 Street NW",
+   "to_street": "107 Street NW",
+   "impact": "Directional Closure",
+   "duration": "131",
+   "details": "130 Avenue Eastbound closure from East of 108 Street to 107 Street. South sidewalk closed. South and West crosswalks of 130 Avenue on 107 Street closed. One Westbound lane maintained between 107 Street and 108 Street.",
+   "description": "UTILITY EMERGENCY REPAIR",
+   "activity_type": "Construction",
+   "traffic_district": "Northeast",
+   "infrastructure": "Road and Sidewalk",
+   "point": {
+    "type": "Point",
+    "coordinates": [
+     -113.50659024578201,
+     53.58958091274186
+    ]
+   }
+  },
+  {
+   "disruption_id": "650",
+   "date_issued": "2026-06-22T00:00:00.000",
+   "start_date": "2026-06-22T00:00:00.000",
+   "finish_date": "2026-11-20T00:00:00.000",
+   "status": "Revised",
+   "on_street": "137 Avenue",
+   "from_street": "Starling Dr",
+   "to_street": "199 Street",
+   "impact": "Total Closure",
+   "duration": "152",
+   "details": "Total closure 137 Ave, Starling Dr to 199 St starting at 6pm June 22. Detour using Ray Gibbon Dr. 137 Ave closed, Starling Dr - 199 St. Local access maintained to  Starling Dr via 137 Ave / Ray Gibbon Dr. Detour using Anthony Henday Dr, Yellowhead Tr, Winterburn Rd, 118A Ave/199 St to access locations west of the closure point. The timeline for completion is unknown. *EXTENDED TO NOV 20*",
+   "description": "UTILITY EMERGENCY REPAIR",
+   "activity_type": "Construction",
+   "traffic_district": "Northwest",
+   "infrastructure": "Road",
+   "point": {
+    "type": "Point",
+    "coordinates": [
+     -113.66377796721473,
+     53.599533196545465
+    ]
+   }
+  },
+  {
+   "disruption_id": "673",
+   "date_issued": "2026-06-24T00:00:00.000",
+   "start_date": "2026-06-25T00:00:00.000",
+   "finish_date": "2027-03-31T00:00:00.000",
+   "status": "Revised",
+   "on_street": "127 Avenue NW",
+   "from_street": "109 Street NW",
+   "to_street": "113A Street NW",
+   "impact": "Directional Closure",
+   "duration": "280",
+   "details": "On 127 Ave from 113A Street to 109 St, Eastbound traffic is closed and one Westbound lane remains. An extension of existing site setup.",
+   "description": "UTILITY CONSTRUCTION",
+   "activity_type": "Construction",
+   "traffic_district": "Northeast",
+   "infrastructure": "Road",
+   "point": {
+    "type": "Point",
+    "coordinates": [
+     -113.51655262555607,
+     53.58500787285433
+    ]
+   }
+  },
+  {
+   "disruption_id": "1023",
+   "date_issued": "2026-09-04T00:00:00.000",
+   "start_date": "2026-08-29T00:00:00.000",
+   "finish_date": "2027-03-31T00:00:00.000",
+   "status": "Revised",
+   "on_street": "127 Avenue NW",
+   "from_street": "122 Street NW",
+   "to_street": "124 Street NW",
+   "impact": "Travel Delays",
+   "duration": "215",
+   "details": "127 Avenue reduced to single lanes and split to the South side of 127 Ave between 122 St and 124 St. Sidewalk detoured to the North along 128 Ave.",
+   "description": "UTILITY EMERGENCY REPAIR",
+   "activity_type": "Construction",
+   "traffic_district": "Northeast",
+   "infrastructure": "Road and Sidewalk",
+   "point": {
+    "type": "Point",
+    "coordinates": [
+     -113.53196853602414,
+     53.58495959125504
+    ]
+   }
+  },
+  {
+   "disruption_id": "1179",
+   "date_issued": "2026-10-05T00:00:00.000",
+   "start_date": "2026-10-08T00:00:00.000",
+   "finish_date": "2026-10-11T00:00:00.000",
+   "status": "Revised",
+   "on_street": "102 Street NW",
+   "from_street": "104 Avenue NW",
+   "to_street": "105 Avenue NW",
+   "impact": "Total Closure",
+   "duration": "4",
+   "details": "102 St closed from 104 Ave to approx. 40m north of 104 Ave.",
+   "description": "SPECIAL EVENT",
+   "activity_type": "Special Event",
+   "traffic_district": "Central",
+   "infrastructure": "Road",
+   "point": {
+    "type": "Point",
+    "coordinates": [
+     -113.49553384677675,
+     53.54618111099898
+    ]
+   }
+  }
+ ],
+ "metadata": {
+  "rowsUpdatedAt": 1794730675
+ }
+}

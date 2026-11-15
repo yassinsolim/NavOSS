@@ -516,10 +516,12 @@
           <a href="https://openfreemap.org/privacy/">OpenFreeMap</a>. The requested resources can
           indicate the viewed map area. OpenFreeMap says regular logs omit IP addresses, while it
           may retain incident IP logs for up to 30 days. Regional data can include Calgary and
-          Toronto enforcement cameras, Ontario 511 and DriveBC road events, DriveBC ordinary traffic
-          webcams, and fixed public Kelowna RCMP facilities. The phone selects a region locally and
-          sends only the region identifier for those requests. DriveBC webcams are not enforcement
-          cameras, and RCMP facilities are not live police locations.
+          Toronto enforcement cameras, official road events (City of Calgary, City of Edmonton, City
+          of Toronto, DriveBC, and 511 Alberta or Ontario 511 where the server has a key), DriveBC
+          ordinary traffic webcams, and fixed public Kelowna RCMP facilities. The phone selects a
+          province or region locally and sends only that identifier for those requests; the server
+          polls the public feeds on its own schedule. DriveBC webcams are not enforcement cameras,
+          and RCMP facilities are not live police locations.
         </p>
 
         <h2 id="providers-and-retention">Providers and retention</h2>

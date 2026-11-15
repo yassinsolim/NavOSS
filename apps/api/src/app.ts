@@ -70,15 +70,17 @@ import {
   type CalgaryRoadEventProvider,
 } from './calgary-road-event-provider.js';
 import {
-  createOntarioRoadEventProvider,
-  OntarioRoadEventProviderError,
-  type OntarioRoadEventProvider,
-} from './ontario-road-event-provider.js';
-import {
   createDriveBcRoadEventProvider,
   DriveBcRoadEventProviderError,
   type DriveBcRoadEventProvider,
 } from './drivebc-road-event-provider.js';
+import {
+  createDefaultProvincialRoadEventFeeds,
+  createProvincialRoadEventService,
+  ProvincialRoadEventsUnavailableError,
+  roadEventKeysFromEnvironment,
+  type ProvincialRoadEventService,
+} from './provincial-road-events.js';
 import {
   createDriveBcTrafficCameraProvider,
   DriveBcTrafficCameraProviderError,
@@ -153,7 +155,8 @@ export interface BuildAppOptions {
   googlePlaceQueryBudget?: GooglePlaceQueryBudget;
   logger?: FastifyServerOptions['logger'];
   kelownaSafetyFacilityProvider?: KelownaSafetyFacilityProvider;
-  ontarioEventProvider?: OntarioRoadEventProvider;
+  /** Alberta, British Columbia and Ontario official events (`/v2/events`). */
+  provincialRoadEvents?: ProvincialRoadEventService;
   productionSearch?: boolean;
   routeProvider?: RouteProvider;
   searchProvider?: SearchProvider;
@@ -202,7 +205,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const fixtures = options.searchFixtures ?? CALGARY_SEARCH_FIXTURES;
   const googlePlaceQueryBudget =
     options.googlePlaceQueryBudget ?? createConfiguredGooglePlaceQueryBudget({ clock });
-  const ontarioEventProvider = options.ontarioEventProvider ?? createOntarioRoadEventProvider();
+  const provincialRoadEvents =
+    options.provincialRoadEvents ??
+    createProvincialRoadEventService(
+      createDefaultProvincialRoadEventFeeds(roadEventKeysFromEnvironment(), {
+        onFailure: (failure) => {
+          app.log.warn(failure, 'Official road-event feed failed validation or loading');
+        },
+      }),
+    );
   const kelownaSafetyFacilityProvider =
     options.kelownaSafetyFacilityProvider ?? createKelownaSafetyFacilityProvider();
   const productionSearch = options.productionSearch ?? process.env.NOMINATIM_URL !== undefined;
@@ -250,7 +261,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     driveBcEventProvider.stop?.();
     driveBcTrafficCameraProvider.stop?.();
     eventProvider.stop?.();
-    ontarioEventProvider.stop?.();
+    provincialRoadEvents.stop();
     await Promise.all([
       communityReports?.close(),
       contributionProvider.close?.(),
@@ -558,7 +569,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     {
       schema: {
         description:
-          'Returns official Ontario 511 or DriveBC Open511 construction, closure, and incident points with freshness metadata.',
+          'Returns official road events for Alberta, British Columbia or Ontario from each configured source, newest first, with per-source freshness. `kelowna-bc` keeps the original DriveBC shape.',
         querystring: OfficialRoadEventQuerySchema,
         response: {
           200: OfficialRoadEventResponseSchema,
@@ -568,29 +579,23 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       },
     },
     async (request, reply) => {
+      const { region } = request.query;
       try {
-        return request.query.region === 'ontario'
-          ? await ontarioEventProvider.getRoadEvents()
-          : await driveBcEventProvider.getRoadEvents();
+        return region === 'kelowna-bc'
+          ? await driveBcEventProvider.getRoadEvents()
+          : await provincialRoadEvents.getRoadEvents(region);
       } catch (error: unknown) {
-        if (error instanceof OntarioRoadEventProviderError) {
+        if (
+          error instanceof DriveBcRoadEventProviderError ||
+          error instanceof ProvincialRoadEventsUnavailableError
+        ) {
           reply.status(503).type('application/problem+json');
           return createProblem(
             request,
             503,
             'service_unavailable',
             'Road data unavailable',
-            'Official Ontario 511 road-event data could not be loaded right now.',
-          );
-        }
-        if (error instanceof DriveBcRoadEventProviderError) {
-          reply.status(503).type('application/problem+json');
-          return createProblem(
-            request,
-            503,
-            'service_unavailable',
-            'Road data unavailable',
-            'Official DriveBC Open511 road-event data could not be loaded right now.',
+            'Official road-event data for this region could not be loaded right now.',
           );
         }
         throw error;
