@@ -335,15 +335,22 @@ This builds the whole-country Valhalla graph and Nominatim index beside the live
 verifies them through a staged API, then switches by changing `.env`. Nothing live is touched until
 step 6, and the Alberta+BC artifacts stay until Canada has been proven.
 
-Sized for VM 100 at 6 cores, 24 GiB RAM and a 260 GB artifact disk. Run each step in `tmux` as
-`navoss` from `infra/compose`; every step is resumable by running the same command again. One step
-runs at a time: `inputs`, `valhalla`, `nominatim`, `serve` and `stop` hold
+Sized for VM 100 at 6 cores, 24 GiB RAM and a 260 GB artifact disk. Run each step in `tmux` from
+the deployed `infra/compose`; every step is resumable by running the same command again. `inputs`
+and `valhalla` may run as `navoss` or root. On this VM, run `nominatim`, `serve`, `verify` and
+`stop` as root with `sudo -n env GEOFABRIK_VERSION=<version> ./stage-coverage.sh <step> <label>`:
+the live Nominatim directory's root-owned parent is not inspectable by `navoss`, and the script
+refuses rather than guessing whether a stage is live. `navoss` already reaches Docker through sudo,
+which is root-equivalent, so running the script as root adds no privilege.
+
+One step runs at a time: `inputs`, `valhalla`, `nominatim`, `serve` and `stop` hold
 `/srv/navoss/artifacts/.stage.lock` (`flock`) for their whole run, so a second invocation is refused
 even between Valhalla passes when no container is up, and a heavy step is also refused while the
 staged services from `serve` are running. During steps 2 and 3 keep at least 4 GiB available
-(`free -h`) and no sustained swap; if not, `./stage-coverage.sh stop canada` (from another tmux
-window) ends the running step itself, not only its containers, then removes the staging containers;
-rerun the step to resume.
+(`free -h`) and no sustained swap. Ctrl-C does not stop a lock-holding step: it runs in its own session.
+Instead, use `sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh stop canada` from another
+terminal or tmux window; it ends the running step itself, then removes the staging containers.
+Rerun the step to resume.
 
 Run the script from the deployed `infra/compose` (or a checkout with that `.env` copied beside it):
 it reads the live `VALHALLA_DATA_DIR` and `NOMINATIM_DATA_DIR` from the `.env` next to it, and every
@@ -355,10 +362,15 @@ from an older script) still runs; `stop` removes them. `stop` signals the runnin
 checking that the recorded pid still has the start time it was recorded with.
 
 The Valhalla and Nominatim containers write as root (Valhalla's tiles, archive, configs and admin
-database; the cluster as the image's `postgres` user) into directories `navoss` owns. No step prompts
+database; the cluster as the image's `postgres` user). Root-run steps hand script-created stage
+directories and metadata back to the artifact root's owner; a root-created staging password stays
+root-only (mode 600), and container-written files and the PostgreSQL cluster are never chowned. No step prompts
 (stdin is closed and every replacement is `mv -f`), and whatever the operator cannot delete (an
 interrupted pass 1's tile tree, an interrupted import's cluster) is removed by a root container with no
 network that mounts only that stage, after the same live-directory identity checks.
+An import started by the older script keeps running that older code. After it finishes, run the
+updated `nominatim` step again as root (it detects the completion marker and does not reimport),
+or run the updated `serve` step; either hands its stage and completion marker back for `status`.
 
 `navoss` is not in the `docker` group on VM 100, and the scripts call plain `docker`. Put a wrapper
 first on `PATH` for the session, which runs Docker through passwordless sudo:
@@ -377,9 +389,9 @@ container limit, which is what the kernel enforces; there is no swap.
 | Step | Command                                               | Expected time                 | Disk floor (refuses below) | Artifact disk                    | Memory (container limits)                             |
 | ---- | ----------------------------------------------------- | ----------------------------- | -------------------------- | -------------------------------- | ----------------------------------------------------- |
 | 0    | Update the checkout and API image                     | 5 min                         | —                          | 1 GB                             | image build only                                      |
-| 1    | `inputs`: verify the extract, write the routing input | 15–30 min                     | 20 GB                      | +6.5 GB                          | no container; osmium check-refs ≈ 2 GiB on the host   |
-| 2    | `valhalla`: two graph passes and the admin repair     | 1–4 h                         | 30 GB                      | +8–20 GB peak, ≈ 8–12 GB kept    | build 8 GiB; spatialite helpers 1 GiB, never together |
-| 3    | `nominatim`: search import                            | 12–24 h                       | 130 GB                     | +70–110 GB peak, ≈ 20–30 GB kept | import 10 GiB; cleanup container 256 MiB before it    |
+| 1    | `inputs`: verify the extract, write the routing input | 9 min measured                | 20 GB                      | +6.5 GB                          | no container; osmium check-refs ≈ 2 GiB on the host   |
+| 2    | `valhalla`: two graph passes and the admin repair     | ≈ 35 min measured             | 30 GB                      | +8–20 GB peak, 10 GB kept        | build 8 GiB; spatialite helpers 1 GiB, never together |
+| 3    | `nominatim`: search import                            | 12–24 h estimate              | 130 GB                     | +70–110 GB peak, ≈ 20–30 GB kept | import 10 GiB; cleanup container 256 MiB before it    |
 | 4    | `serve` + `verify`, route matrix over SSH             | 30 min                        | 2 GB                       | —                                | Valhalla 4 + Nominatim 6 + API 0.75 = 10.75 GiB       |
 | 5    | `stop`                                                | 1 min                         | —                          | —                                | frees step 4                                          |
 | 6    | Cutover                                               | 5–10 min, ≈ 1 min API restart | —                          | —                                | live limits 10.19 → 14.19 GiB                         |
@@ -400,9 +412,11 @@ Limits are ceilings, not use: the kernel kills a container at its limit instead 
 swapping. Steps 3 and 4 leave less than the 4 GiB floor only if every container reaches its limit
 at once; watch `free -h` as below.
 
-The time and disk figures for Canada are estimates scaled from the measured Alberta+BC artifacts;
-the architecture document says how. Record the real values in `docs/release/testflight.md` as each
-step finishes.
+The all-Canada `inputs` on VM 100 removed 4,456 seasonal or ice-road ways and passed check-refs;
+both Valhalla passes produced 8,767 tiles and a 10 GB stage in about 35 minutes. The Nominatim
+timing and remaining disk peaks are estimates scaled from Alberta+BC (see the architecture
+document): its import started 2026-11-15 12:51 UTC and had not finished at the time of writing.
+Record further measured values in `docs/release/testflight.md` as each step finishes.
 
 ```sh
 cd /home/navoss/NavOSS/infra/compose
@@ -428,11 +442,11 @@ GEOFABRIK_MD5=0bba746e7473aac6a7a6796d153ea12d ./stage-coverage.sh inputs canada
 #    beginning on the next run (the image cannot resume one): the cluster, owned by the image's
 #    postgres user, is removed by a root container that mounts only that staged directory, with no
 #    network, after checking the path is nominatim/<label>-<YYMMDD> and not the live cluster.
-./stage-coverage.sh nominatim canada
+sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh nominatim canada
 
 # 4. Staged API on 127.0.0.1:18300 declaring Canada, then the coverage checks.
-./stage-coverage.sh serve canada
-./stage-coverage.sh verify canada
+sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh serve canada
+sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh verify canada
 ```
 
 Then, from a checkout on your own machine, run the 80-route matrix through a tunnel and keep the
@@ -453,7 +467,7 @@ names as expected (architecture document, "Quebec").
 
 ```sh
 # 5. Stop staging (frees up to 10.75 GiB); the staged artifacts stay.
-./stage-coverage.sh stop canada
+sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh stop canada
 
 # 6. Cutover: four artifact values, the declaration and two memory limits.
 cp -p .env ".env.pre-canada-$(date -u +%Y%m%dT%H%M%SZ)"
@@ -498,9 +512,10 @@ deliberately, never as part of a deployment.
 
 **Staged search (fallback).** If step 3 cannot finish within these limits (memory pressure,
 swap growth, or the disk peak), keep the Canada graph and import search for fewer provinces, for
-example `./stage-coverage.sh inputs alberta british-columbia ontario quebec` then `nominatim` with
-the same arguments, in the same shell (the exported `GEOFABRIK_VERSION=261114` pins these inputs to
-the graph's release; a mismatch is refused), and declare only those provinces (`NAVOSS_SERVICE_AREAS`,
+example `./stage-coverage.sh inputs alberta british-columbia ontario quebec` then
+`sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh nominatim alberta british-columbia ontario quebec`
+(the exported `GEOFABRIK_VERSION=261114` pins inputs to the graph's release; a mismatch is refused),
+and declare only those provinces (`NAVOSS_SERVICE_AREAS`,
 `NOMINATIM_DATASET_VERSION=alberta-british-columbia-ontario-quebec-geofabrik-2026-11-14`). The API
 refuses to declare a province its search index lacks, so the app never offers search or routes
 where search would fail. `serve` and `verify` expect a graph under the same label; link the Canada

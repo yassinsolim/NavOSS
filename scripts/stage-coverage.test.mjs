@@ -202,6 +202,168 @@ function stage(fixture, args, env = {}) {
   });
 }
 
+// Exercise the same transition on CI's sudo-enabled Linux runner and in a root-run Linux container.
+function stageAs(fixture, args, asRoot) {
+  const script = join(fixture.compose, 'stage-coverage.sh');
+  if (process.getuid() === 0) {
+    return spawnSync('sh', [script, ...args], {
+      encoding: 'utf8',
+      env: fixture.env,
+      ...(asRoot ? {} : { uid: 65534, gid: 65534 }),
+      timeout: 30_000,
+    });
+  }
+  if (!asRoot) return stage(fixture, args);
+  const vars = Object.entries(fixture.env).map(([key, value]) => `${key}=${value}`);
+  return spawnSync('sudo', ['-n', 'env', ...vars, 'sh', script, ...args], {
+    encoding: 'utf8',
+    timeout: 30_000,
+  });
+}
+
+async function mixedFixture(context) {
+  const fixture = await createFixture(context);
+  if (process.getuid() === 0) {
+    assert.equal(spawnSync('chown', ['-R', '65534:65534', fixture.directory]).status, 0);
+  }
+  return fixture;
+}
+
+async function fakeBuildHelpers(fixture) {
+  const scripts = {
+    'prepare-regional-pbf.sh': `#!/bin/sh
+echo "${VERSION}"
+`,
+    'filter-routing-pbf.sh': `#!/bin/sh
+cp "$1" "\${1%.osm.pbf}.routing.osm.pbf"
+`,
+    'prepare-valhalla-speeds.sh': `#!/bin/sh
+echo speeds >"$1/default_speeds.json"
+echo provenance >"$1/default_speeds.provenance"
+`,
+    'repair-valhalla-admins.sh': `#!/bin/sh
+echo admins >"$1/admins.sqlite"
+`,
+  };
+  for (const [name, content] of Object.entries(scripts)) {
+    await writeFile(join(fixture.compose, name), content);
+  }
+  await writeFile(join(fixture.liveValhalla, 'timezones.sqlite'), 'zones');
+}
+
+test('a mixed-user root import stays resumable', options, async (context) => {
+  const fixture = await mixedFixture(context);
+  await fakeBuildHelpers(fixture);
+  // Fake the files the graph container produces; the real parent script still makes its markers.
+  const docker = join(fixture.env.PATH.split(':')[0], 'docker');
+  const original = await readFile(docker, 'utf8');
+  await writeFile(
+    docker,
+    original.replace(
+      'if [ -n "$remove" ]; then',
+      `if [ "$name" = navoss-valhalla-stage ]; then
+      for argument do
+        case "$argument" in *:/custom_files) graph=\${argument%:/custom_files} ;; esac
+      done
+      echo tiles >"$graph/valhalla_tiles.tar"
+    fi
+    if [ -n "$remove" ]; then`,
+    ),
+  );
+  for (const step of ['inputs', 'valhalla']) {
+    const result = stageAs(fixture, [step, 'new-brunswick'], false);
+    assert.equal(result.status, 0, `${step}: ${result.stderr}`);
+  }
+  const imported = stageAs(fixture, ['nominatim', 'new-brunswick'], true);
+  assert.equal(imported.status, 0, imported.stderr);
+  const nominatim = join(fixture.root, 'nominatim', `new-brunswick-${VERSION}`);
+  const uid = (await stat(fixture.root)).uid;
+  assert.equal((await stat(nominatim)).uid, uid);
+  assert.equal((await stat(join(nominatim, '.navoss-import-complete'))).uid, uid);
+  assert.equal((await stat(join(fixture.root, '.stage.holder'))).uid, uid);
+  assert.equal((await stat(join(nominatim, 'postgres'))).uid, 0);
+  assert.equal((await stat(join(nominatim, 'staging-password.env'))).uid, 0);
+  assert.equal((await stat(join(nominatim, 'staging-password.env'))).mode & 0o777, 0o600);
+  const status = stageAs(fixture, ['status', 'new-brunswick'], false);
+  assert.equal(status.status, 0, status.stderr);
+  assert.match(status.stdout, /\.navoss-import-complete/u);
+  for (const step of ['inputs', 'valhalla']) {
+    const result = stageAs(fixture, [step, 'new-brunswick'], false);
+    assert.equal(result.status, 0, `${step}: ${result.stderr}`);
+  }
+  const stopped = stageAs(fixture, ['stop', 'new-brunswick'], true);
+  assert.equal(stopped.status, 0, stopped.stderr);
+  assert.equal(await exists(join(fixture.state, 'created', 'navoss-nominatim-stage')), false);
+  // A stage completed by the old root-run script is repaired by the new serve step.
+  const ownerCommand = process.getuid() === 0 ? 'chown' : 'sudo';
+  const ownerArgs =
+    process.getuid() === 0
+      ? ['0:0', nominatim, join(nominatim, '.navoss-import-complete')]
+      : ['-n', 'chown', '0:0', nominatim, join(nominatim, '.navoss-import-complete')];
+  assert.equal(spawnSync(ownerCommand, ownerArgs).status, 0);
+  const served = stageAs(fixture, ['serve', 'new-brunswick'], true);
+  assert.equal(served.status, 0, served.stderr);
+  assert.equal((await stat(nominatim)).uid, uid);
+  assert.equal((await stat(join(nominatim, '.navoss-import-complete'))).uid, uid);
+  const repairedStatus = stageAs(fixture, ['status', 'new-brunswick'], false);
+  assert.equal(repairedStatus.status, 0, repairedStatus.stderr);
+  assert.match(repairedStatus.stdout, /\.navoss-import-complete/u);
+  const stoppedAgain = stageAs(fixture, ['stop', 'new-brunswick'], true);
+  assert.equal(stoppedAgain.status, 0, stoppedAgain.stderr);
+});
+
+test('root-created stages can be resumed by the artifact owner', options, async (context) => {
+  const fixture = await mixedFixture(context);
+  await fakeBuildHelpers(fixture);
+  const input = stageAs(fixture, ['inputs', 'new-brunswick'], true);
+  assert.equal(input.status, 0, input.stderr);
+  const uid = (await stat(fixture.root)).uid;
+  assert.equal((await stat(join(fixture.root, '.stage.lock'))).uid, uid);
+  assert.equal((await stat(join(fixture.root, 'imports', 'new-brunswick.stage-version'))).uid, uid);
+  const docker = join(fixture.env.PATH.split(':')[0], 'docker');
+  const original = await readFile(docker, 'utf8');
+  await writeFile(
+    docker,
+    original.replace(
+      'if [ -n "$remove" ]; then',
+      `if [ "$name" = navoss-valhalla-stage ]; then
+      for argument do
+        case "$argument" in *:/custom_files) graph=\${argument%:/custom_files} ;; esac
+      done
+      echo tiles >"$graph/valhalla_tiles.tar"
+    fi
+    if [ -n "$remove" ]; then`,
+    ),
+  );
+  const graph = stageAs(fixture, ['valhalla', 'new-brunswick'], true);
+  assert.equal(graph.status, 0, graph.stderr);
+  const directory = join(fixture.root, `valhalla-new-brunswick-${VERSION}`);
+  assert.equal((await stat(directory)).uid, uid);
+  assert.equal((await stat(join(directory, '.pass1-complete'))).uid, uid);
+  assert.equal((await stat(join(directory, '.navoss-stage-complete'))).uid, uid);
+  assert.equal((await stat(join(directory, 'valhalla_tiles.tar'))).uid, 0);
+  const graphRetry = stageAs(fixture, ['valhalla', 'new-brunswick'], false);
+  assert.equal(graphRetry.status, 0, graphRetry.stderr);
+  const retry = stageAs(fixture, ['inputs', 'new-brunswick'], false);
+  assert.equal(retry.status, 0, retry.stderr);
+});
+
+test('an inaccessible live directory tells the operator to use sudo', options, async (context) => {
+  const fixture = await mixedFixture(context);
+  // Model the root-owned mode-750 ancestor on VM 100.
+  const privateParent = join(fixture.root, 'private-live');
+  await mkdir(join(privateParent, 'postgres'), { recursive: true });
+  if (process.getuid() !== 0) {
+    assert.equal(spawnSync('sudo', ['-n', 'chown', '0:0', privateParent]).status, 0);
+  }
+  await chmod(privateParent, 0o750);
+  await setLive(fixture, { nominatim: join(privateParent, 'postgres') });
+  const refused = stageAs(fixture, ['nominatim', 'new-brunswick'], false);
+  assert.equal(refused.status, 1, refused.stderr);
+  assert.match(refused.stderr, /Cannot inspect the live NOMINATIM_DATA_DIR.*sudo/u);
+  assert.equal(startedAnything(await calls(fixture)), false);
+});
+
 function stageInBackground(fixture, args) {
   const child = spawn('sh', [join(fixture.compose, 'stage-coverage.sh'), ...args], {
     env: fixture.env,
@@ -590,7 +752,7 @@ test('valhalla changes nothing in a stage that is the live graph', options, asyn
 });
 
 test('refuses cleanup when the live cluster path cannot be inspected', options, async (context) => {
-  const fixture = await createFixture(context);
+  const fixture = await mixedFixture(context);
   const stageDirectory = await interruptedImport(fixture);
   // Docker resolves this to the staged cluster; the operator cannot traverse the 0700 directory.
   await chmod(join(stageDirectory, 'postgres'), 0o000);
@@ -605,7 +767,7 @@ test('refuses cleanup when the live cluster path cannot be inspected', options, 
   ]) {
     await setLive(fixture, { nominatim: live });
 
-    const refused = stage(fixture, ['nominatim', 'new-brunswick']);
+    const refused = stageAs(fixture, ['nominatim', 'new-brunswick'], false);
 
     assert.equal(refused.status, 1, live);
     assert.match(refused.stderr, refusal, live);
