@@ -1,8 +1,6 @@
-import { createRequire } from 'node:module';
-
 import { expect, it } from 'vitest';
 
-const require = createRequire(import.meta.url);
+import reanimatedPackage from 'react-native-reanimated/package.json' with { type: 'json' };
 
 /** `[major, minor, patch]` of a plain `x.y.z` version; prerelease tags are rejected. */
 function parseVersion(version: string): [number, number, number] {
@@ -29,7 +27,7 @@ function atLeast(version: string, minimum: string): boolean {
 // still correct (build 81 validation, D1). The shared-value state lives in Reanimated's native
 // registry, so the guard is on the resolved package the app bundles and links.
 it('bundles a Reanimated that keeps settled sheet positions across a JS stall', () => {
-  const { version } = require('react-native-reanimated/package.json') as { version: string };
+  const { version } = reanimatedPackage;
   expect(atLeast(version, '4.5.3'), `react-native-reanimated ${version}`).toBe(true);
 });
 
