@@ -407,3 +407,33 @@ test(
     );
   },
 );
+
+test('serve starts Nominatim over the chosen stage, not the last import', options, async (context) => {
+  const fixture = await createFixture(context, ['canada', 'nova-scotia']);
+  for (const label of ['canada', 'nova-scotia']) {
+    const imported = stage(fixture, ['nominatim', label]);
+    assert.equal(imported.status, 0, imported.stderr);
+  }
+  const graph = join(fixture.root, `valhalla-canada-${VERSION}`);
+  await mkdir(graph, { recursive: true });
+  await writeFile(join(graph, '.navoss-stage-complete'), '');
+
+  const served = stage(fixture, ['serve', 'canada']);
+
+  assert.equal(served.status, 0, served.stderr);
+  const created = (
+    await readFile(join(fixture.state, 'created', 'navoss-nominatim-stage'), 'utf8')
+  ).split('\n');
+  const canada = join(fixture.root, 'nominatim', `canada-${VERSION}`);
+  assert.ok(created.includes(`${canada}/postgres:/var/lib/postgresql/16/main`), created.join(' '));
+  assert.ok(
+    created.includes(
+      `${join(fixture.root, 'imports', `canada-${VERSION}.osm.pbf`)}:/regional-data/regional.osm.pbf:ro`,
+    ),
+  );
+  assert.ok(created.includes(`${canada}/staging-password.env`));
+  assert.ok(created.includes('navoss-stage'), 'joins the staging network');
+  assert.equal(await exists(join(fixture.state, 'running', 'navoss-nominatim-stage')), true);
+  const copied = join(fixture.state, 'files', 'navoss-nominatim-stage', 'start.sh');
+  assert.equal((await readFile(copied, 'utf8')).split('\n')[0], '#!/bin/bash -e');
+});

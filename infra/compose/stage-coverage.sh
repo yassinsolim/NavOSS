@@ -314,8 +314,10 @@ case "${step}" in
       -e use_default_speeds_config=True -e use_tiles_ignore_pbf=True \
       -e default_speeds_config_url="${speeds_url}" \
       -v "${valhalla_stage}:/custom_files" "${valhalla_image}" >/dev/null
-    docker network connect "${network}" navoss-nominatim-stage 2>/dev/null || true
-    docker update --memory 6g --memory-swap 6g navoss-nominatim-stage >/dev/null
+    # Always a new container over this stage's own cluster and extract: the one the last import left
+    # may hold another release.
+    nominatim_container "${nominatim_stage}" --network "${network}" --cpus 2 \
+      --memory "${NOMINATIM_SERVE_MEMORY:-6g}" --memory-swap "${NOMINATIM_SERVE_MEMORY:-6g}" -e THREADS=2
     docker start navoss-nominatim-stage >/dev/null
     docker rm -f navoss-api-stage >/dev/null 2>&1 || true
     docker run -d --name navoss-api-stage --network "${network}" --memory 768m --cpus 0.75 \
