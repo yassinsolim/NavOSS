@@ -6,6 +6,7 @@ import {
   isProvincialSnapshot,
   type MapRoadEvent,
   roadEventAgeLabel,
+  roadEventAvailability,
   roadEventConfidenceLabel,
   roadEventSourceLines,
   roadEventSourceName,
@@ -65,6 +66,8 @@ export function RoadEventsSheet({
   const insets = useSafeAreaInsets();
   const now = Date.now();
   const shown = events.slice(0, LIST_LIMIT);
+  // A held snapshot whose sources have all aged out is unavailable, exactly like no snapshot.
+  const available = snapshot !== undefined && roadEventAvailability(snapshot, now) === 'available';
   const sourceLines = isProvincialSnapshot(snapshot)
     ? roadEventSourceLines(snapshot, now)
     : snapshot === undefined
@@ -100,19 +103,20 @@ export function RoadEventsSheet({
       <BottomSheetScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.xxl }]}
       >
+        {!available && (snapshot !== undefined || refreshDelayed) && (
+          <Banner
+            message="Official road-event data could not be loaded. NavOSS tries again every five minutes."
+            title="Road events unavailable"
+            tone="warning"
+          />
+        )}
         {snapshot === undefined ? (
-          refreshDelayed ? (
-            <Banner
-              message="Official road-event data could not be loaded. NavOSS tries again every five minutes."
-              title="Road events unavailable"
-              tone="warning"
-            />
-          ) : (
+          refreshDelayed ? null : (
             <StateView title="Loading road events" visual="loading" />
           )
         ) : (
           <>
-            {refreshDelayed && (
+            {available && refreshDelayed && (
               <Banner
                 message="The latest refresh failed. These are the last events received; each shows when its source last changed it."
                 title="Refresh delayed"
@@ -133,55 +137,59 @@ export function RoadEventsSheet({
                 ))}
               </View>
             </View>
-            <View style={styles.section}>
-              <SectionTitle>{`In effect now · ${String(events.length)}`}</SectionTitle>
-              {events.length === 0 ? (
-                <View style={styles.card}>
-                  <StateView
-                    message="The sources above report nothing in effect here right now."
-                    title="No road events"
-                    visual={{ android: 'check_circle', ios: 'checkmark.circle' }}
-                  />
-                </View>
-              ) : (
-                <View style={styles.card}>
-                  {shown.map((event, index) => {
-                    const age = roadEventAgeLabel(event, now);
-                    const source = roadEventSourceName(event, snapshot);
-                    const subtitle = [age, source].filter((part) => part !== undefined).join(' · ');
-                    return (
-                      <View key={event.id}>
-                        {index > 0 && <View style={styles.divider} />}
-                        <ListRow
-                          accessibilityHint="Shows the source's description"
-                          accessibilityLabel={`${event.title}. ${roadEventConfidenceLabel(event)}. ${subtitle}`}
-                          accessibilityRole="button"
-                          eyebrow={`${roadEventTypeLabel(event)} · ${roadEventConfidenceLabel(event)}`}
-                          icon={TYPE_ICONS[event.type]}
-                          iconTint={
-                            event.confidence === 'official'
-                              ? colors.primaryText
-                              : colors.warningText
-                          }
-                          onPress={() => {
-                            onSelect(event);
-                          }}
-                          subtitle={subtitle}
-                          title={event.title}
-                          titleLines={3}
-                          trailing="chevron"
-                        />
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-              {events.length > shown.length && (
-                <Text maxFontSizeMultiplier={1.5} style={styles.hint}>
-                  {`Showing the ${String(shown.length)} newest. The map shows all ${String(events.length)}.`}
-                </Text>
-              )}
-            </View>
+            {available && (
+              <View style={styles.section}>
+                <SectionTitle>{`In effect now · ${String(events.length)}`}</SectionTitle>
+                {events.length === 0 ? (
+                  <View style={styles.card}>
+                    <StateView
+                      message="The sources above report nothing in effect here right now."
+                      title="No road events"
+                      visual={{ android: 'check_circle', ios: 'checkmark.circle' }}
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.card}>
+                    {shown.map((event, index) => {
+                      const age = roadEventAgeLabel(event, now);
+                      const source = roadEventSourceName(event, snapshot);
+                      const subtitle = [age, source]
+                        .filter((part) => part !== undefined)
+                        .join(' · ');
+                      return (
+                        <View key={event.id}>
+                          {index > 0 && <View style={styles.divider} />}
+                          <ListRow
+                            accessibilityHint="Shows the source's description"
+                            accessibilityLabel={`${event.title}. ${roadEventConfidenceLabel(event)}. ${subtitle}`}
+                            accessibilityRole="button"
+                            eyebrow={`${roadEventTypeLabel(event)} · ${roadEventConfidenceLabel(event)}`}
+                            icon={TYPE_ICONS[event.type]}
+                            iconTint={
+                              event.confidence === 'official'
+                                ? colors.primaryText
+                                : colors.warningText
+                            }
+                            onPress={() => {
+                              onSelect(event);
+                            }}
+                            subtitle={subtitle}
+                            title={event.title}
+                            titleLines={3}
+                            trailing="chevron"
+                          />
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+                {events.length > shown.length && (
+                  <Text maxFontSizeMultiplier={1.5} style={styles.hint}>
+                    {`Showing the ${String(shown.length)} newest. The map shows all ${String(events.length)}.`}
+                  </Text>
+                )}
+              </View>
+            )}
           </>
         )}
       </BottomSheetScrollView>

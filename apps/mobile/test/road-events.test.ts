@@ -11,6 +11,7 @@ import {
   currentRoadEvents,
   relativeAge,
   roadEventAgeLabel,
+  roadEventAvailability,
   roadEventCredit,
   roadEventFeedForMapRegion,
   roadEventLayer,
@@ -270,7 +271,29 @@ describe('road-event wording', () => {
         refreshDelayed: true,
         snapshot: ontario,
       }),
-    ).toBe('Road events · 0 · Official · Some sources unavailable · Refresh delayed');
+    ).toBe('Road events unavailable');
+  });
+
+  it('treats a held snapshot whose sources all expired as unavailable, not as no events', () => {
+    const empty: ProvincialRoadEventResponse = { ...ontario, events: [] };
+    const checkedAt = Date.parse(
+      ontario.sources.find((source) => source.checkedAt !== undefined)?.checkedAt ?? '',
+    );
+    expect(roadEventAvailability(empty, checkedAt + 60_000)).toBe('available');
+    expect(
+      roadEventStatusLabel({
+        hasFeed: true,
+        now: checkedAt + 60_000,
+        refreshDelayed: false,
+        snapshot: empty,
+      }),
+    ).toBe('Road events · 0 · Official');
+    const expired = checkedAt + 2 * 3_600_000;
+    expect(roadEventAvailability(empty, expired)).toBe('unavailable');
+    expect(
+      roadEventStatusLabel({ hasFeed: true, now: expired, refreshDelayed: true, snapshot: empty }),
+    ).toBe('Road events unavailable');
+    expect(roadEventAvailability(undefined, expired)).toBe('unavailable');
   });
 
   it('keeps the pill honest before anything loads and for older feeds', () => {

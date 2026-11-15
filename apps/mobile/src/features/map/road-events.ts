@@ -91,6 +91,22 @@ export function isSourceServed(source: ProvincialRoadEventSource, now: number): 
 }
 
 /**
+ * Whether there is road-event data to show. A held provincial snapshot with no source still
+ * inside its age limit is unavailable, the same as never having loaded: an empty list is said to
+ * be empty only when a source vouches for it.
+ */
+export function roadEventAvailability(
+  snapshot: RoadEventSnapshot | undefined,
+  now: number,
+): 'available' | 'unavailable' {
+  if (snapshot === undefined) return 'unavailable';
+  if (!isProvincialSnapshot(snapshot)) return 'available';
+  return snapshot.sources.some((source) => isSourceServed(source, now))
+    ? 'available'
+    : 'unavailable';
+}
+
+/**
  * Events still in effect at `now`, newest first. A phone keeps its last response through failed
  * refreshes, so events of a source past its maximum age, and events past their planned end, are
  * dropped here as well as on the server.
@@ -342,6 +358,7 @@ export function roadEventStatusLabel({
 }): string | undefined {
   if (snapshot === undefined)
     return hasFeed && refreshDelayed ? 'Road events unavailable' : undefined;
+  if (roadEventAvailability(snapshot, now) === 'unavailable') return 'Road events unavailable';
   const delayed = refreshDelayed ? ' · Refresh delayed' : '';
   if (!isProvincialSnapshot(snapshot)) {
     const source =
