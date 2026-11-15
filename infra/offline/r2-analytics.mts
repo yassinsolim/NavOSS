@@ -121,71 +121,156 @@ export async function cloudflare(
   return json.result ?? json.data;
 }
 
-const QUERY = `query ($account: String!, $monthStart: Time!, $dayAgo: Time!, $now: Time!) {
+/** Operations are summed over a rolling window: Cloudflare bills per billing cycle, which is not
+ * readable with these permissions, and 31 days covers any cycle (the dataset allows 32). */
+export const OPERATIONS_WINDOW_DAYS = 31;
+const DAY_MS = 86_400_000;
+
+const QUERY = `query ($account: String!, $since: Time!, $storageSince: Time!, $now: Time!,
+  $heartbeatSince: Time!, $bucket: String!, $heartbeatAction: String!) {
   viewer { accounts(filter: { accountTag: $account }) {
     operations: r2OperationsAdaptiveGroups(limit: 1000,
-      filter: { datetime_geq: $monthStart, datetime_leq: $now }) {
+      filter: { datetime_geq: $since, datetime_leq: $now }) {
       sum { requests } dimensions { actionType }
     }
+    heartbeat: r2OperationsAdaptiveGroups(limit: 10, filter: { datetime_geq: $heartbeatSince,
+      datetime_leq: $now, bucketName: $bucket, actionType: $heartbeatAction }) {
+      sum { requests }
+    }
     storage: r2StorageAdaptiveGroups(limit: 1000,
-      filter: { datetime_geq: $dayAgo, datetime_leq: $now }, orderBy: [datetime_DESC]) {
+      filter: { datetime_geq: $storageSince, datetime_leq: $now }, orderBy: [datetime_DESC]) {
       max { objectCount payloadSize metadataSize } dimensions { bucketName datetime }
     }
   } }
 }`;
 
+export interface Analytics {
+  classA: number;
+  classB: number;
+  free: number;
+  unknownActions: string[];
+  /** Latest storage sample per bucket from the last 48 hours; a new bucket may have none. */
+  storage: Map<string, { objects: number; bytes: number }>;
+  /** Requests of the heartbeat action on the bucket since `heartbeatSince`. */
+  heartbeats: number;
+}
+
+export async function resolveAccount(token: string, configured: string | undefined) {
+  if (configured) return configured;
+  const accounts = records(await cloudflare(token, '/accounts'), 'account list');
+  if (accounts.length !== 1) throw new Error('Set CLOUDFLARE_ACCOUNT_ID: several accounts');
+  return text(accounts[0]!.id, 'account id');
+}
+
+/** Account-wide operations over the last 31 days, storage samples, and a heartbeat count. */
+export async function readAnalytics(
+  token: string,
+  account: string,
+  options: { bucket: string; now: Date; heartbeatAction?: string; heartbeatSince?: Date },
+): Promise<Analytics> {
+  const { bucket, now } = options;
+  const data = await cloudflare(token, '/graphql', {
+    query: QUERY,
+    variables: {
+      account,
+      since: new Date(now.getTime() - OPERATIONS_WINDOW_DAYS * DAY_MS).toISOString(),
+      storageSince: new Date(now.getTime() - 2 * DAY_MS).toISOString(),
+      now: now.toISOString(),
+      bucket,
+      heartbeatAction: options.heartbeatAction ?? 'ListObjects',
+      heartbeatSince: (options.heartbeatSince ?? now).toISOString(),
+    },
+  });
+  const viewer = isRecord(data) && isRecord(data.viewer) ? data.viewer : undefined;
+  const result = records(viewer?.accounts, 'analytics response')[0];
+  if (!result) throw new Error('Account analytics unavailable');
+  const storage = new Map<string, { objects: number; bytes: number }>();
+  for (const row of records(result.storage, 'storage analytics')) {
+    const max = isRecord(row.max) ? row.max : {};
+    const dimensions = isRecord(row.dimensions) ? row.dimensions : {};
+    const name = text(dimensions.bucketName, 'bucket name');
+    // Rows are newest first; keep each bucket's latest sample.
+    if (storage.has(name)) continue;
+    storage.set(name, {
+      objects: count(max.objectCount, 'object count'),
+      bytes: count(max.payloadSize, 'payload size') + count(max.metadataSize, 'metadata size'),
+    });
+  }
+  const sumRequests = (rows: unknown, what: string) =>
+    records(rows, what).map((row) => ({
+      action: text(isRecord(row.dimensions) ? row.dimensions.actionType : undefined, 'action'),
+      requests: count(isRecord(row.sum) ? row.sum.requests : undefined, 'request count'),
+    }));
+  const heartbeats = records(result.heartbeat, 'heartbeat analytics').reduce(
+    (sum, row) => sum + count(isRecord(row.sum) ? row.sum.requests : undefined, 'request count'),
+    0,
+  );
+  return {
+    ...classifyOperations(sumRequests(result.operations, 'operation analytics')),
+    storage,
+    heartbeats,
+  };
+}
+
+/** Exact object count and bytes of a bucket from the R2 REST listing (one Class A per page). */
+export async function listBucket(
+  token: string,
+  account: string,
+  bucket: string,
+): Promise<{ objects: number; bytes: number }> {
+  let objects = 0;
+  let bytes = 0;
+  let cursor: string | undefined;
+  for (let page = 0; page < 100; page += 1) {
+    const query = new URLSearchParams({ per_page: '1000', ...(cursor ? { cursor } : {}) });
+    const path = `/accounts/${account}/r2/buckets/${encodeURIComponent(bucket)}/objects?${query}`;
+    const response = await cloudflareWithInfo(token, path);
+    for (const item of records(response.result, 'object listing')) {
+      objects += 1;
+      bytes += count(item.size, 'object size');
+    }
+    const info = isRecord(response.resultInfo) ? response.resultInfo : {};
+    cursor =
+      typeof info.cursor === 'string' && info.cursor !== '' && info.is_truncated !== false
+        ? info.cursor
+        : undefined;
+    if (!cursor) return { objects, bytes };
+  }
+  throw new Error('Object listing did not end within 100 pages');
+}
+
+/** Like `cloudflare`, but also returns `result_info` (listing cursors). */
+async function cloudflareWithInfo(token: string, path: string) {
+  const shown = path.replace(/[0-9a-f]{32}/g, (id) => `${id.slice(0, 4)}…`);
+  const response = await fetch(`${API}${path}`, {
+    headers: { authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(30_000),
+  });
+  const json: unknown = await response.json().catch(() => undefined);
+  if (!response.ok || !isRecord(json) || (Array.isArray(json.errors) && json.errors.length > 0))
+    throw new Error(`Cloudflare API ${response.status} for GET ${shown}`);
+  return { result: json.result, resultInfo: json.result_info };
+}
+
+/** Report view for r2-usage.mts: analytics only, so it performs no R2 operation. */
 export async function readUsage(
   token: string,
   configuredAccount: string | undefined,
   bucket: string,
   now = new Date(),
 ): Promise<Usage> {
-  let account = configuredAccount;
-  if (!account) {
-    const accounts = records(await cloudflare(token, '/accounts'), 'account list');
-    if (accounts.length !== 1) throw new Error('Set CLOUDFLARE_ACCOUNT_ID: several accounts');
-    account = text(accounts[0]!.id, 'account id');
-  }
-  // R2 bills per calendar month (UTC); the storage dataset is sampled, so read the last day.
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const dayAgo = new Date(now.getTime() - 86_400_000);
-  const data = await cloudflare(token, '/graphql', {
-    query: QUERY,
-    variables: {
-      account,
-      monthStart: monthStart.toISOString(),
-      dayAgo: dayAgo.toISOString(),
-      now: now.toISOString(),
-    },
-  });
-  const viewer = isRecord(data) && isRecord(data.viewer) ? data.viewer : undefined;
-  const result = records(viewer?.accounts, 'analytics response')[0];
-  if (!result) throw new Error('Account analytics unavailable');
-  const latest = new Map<string, { objects: number; bytes: number }>();
-  for (const row of records(result.storage, 'storage analytics')) {
-    const max = isRecord(row.max) ? row.max : {};
-    const dimensions = isRecord(row.dimensions) ? row.dimensions : {};
-    const name = text(dimensions.bucketName, 'bucket name');
-    // Rows are newest first; keep each bucket's latest sample.
-    if (latest.has(name)) continue;
-    latest.set(name, {
-      objects: count(max.objectCount, 'object count'),
-      bytes: count(max.payloadSize, 'payload size') + count(max.metadataSize, 'metadata size'),
-    });
-  }
-  const own = latest.get(bucket);
+  const account = await resolveAccount(token, configuredAccount);
+  const analytics = await readAnalytics(token, account, { bucket, now });
+  const own = analytics.storage.get(bucket);
   // Never report a missing sample as an empty bucket (new buckets appear after a delay).
-  if (!own) throw new Error(`No storage sample for ${bucket} in the last 24 hours`);
-  const operations = classifyOperations(
-    records(result.operations, 'operation analytics').map((row) => ({
-      action: text(isRecord(row.dimensions) ? row.dimensions.actionType : undefined, 'action'),
-      requests: count(isRecord(row.sum) ? row.sum.requests : undefined, 'request count'),
-    })),
-  );
+  if (!own) throw new Error(`No storage sample for ${bucket} in the last 48 hours`);
   return {
     bucketBytes: own.bytes,
     bucketObjects: own.objects,
-    accountBytes: [...latest.values()].reduce((sum, value) => sum + value.bytes, 0),
-    ...operations,
+    accountBytes: [...analytics.storage.values()].reduce((sum, value) => sum + value.bytes, 0),
+    classA: analytics.classA,
+    classB: analytics.classB,
+    free: analytics.free,
+    unknownActions: analytics.unknownActions,
   };
 }

@@ -512,20 +512,22 @@ sudo install -m 0600 -o root -g root /dev/null /srv/navoss/state/offline-guard.e
 sudoedit /srv/navoss/state/offline-guard.env
 # CLOUDFLARE_API_TOKEN=<guard token>
 # CLOUDFLARE_ACCOUNT_ID=<account id>
-sudo install -m 0644 navoss-offline-guard.service navoss-offline-guard.timer /etc/systemd/system/
+# The guard runs with --pull never, so pull its digest-pinned image once.
+sudo docker pull node:24.18.0-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d
+sudo install -m 0644 navoss-offline-guard.service navoss-offline-guard.timer \
+  navoss-offline-withdraw.service /etc/systemd/system/
 sudo systemctl daemon-reload
-
-# One dry run must print "within limits" and exit 0 before the timer is enabled; a new bucket has
-# no storage sample for its first hours, which the guard counts as a failure.
-sudo docker run --rm --env-file /srv/navoss/state/offline-guard.env \
-  --volume /home/navoss/NavOSS/infra/offline:/guard:ro node:24.18.0-bookworm-slim \
-  node /guard/r2-guard.mts --dry-run
 sudo systemctl enable --now navoss-offline-guard.timer
-sudo systemctl start navoss-offline-guard.service && journalctl -u navoss-offline-guard -n 5
+sudo systemctl start navoss-offline-guard.service; journalctl -u navoss-offline-guard -n 3
+# First run: "usage not established (1/4 …): analytics do not yet show the previous run's
+# heartbeat", exit 2, unit not failed. About 5 minutes later the timer's run prints "within
+# limits (Class A …, Class B …, … bytes)". Any "Cloudflare API 403" means a missing permission.
 ```
 
-A failed unit (`systemctl --failed`) means the guard either stopped hosting (exit 1) or could not
-read usage (exit 2; four in a row stop hosting). Its journal line says which and why.
+A failed unit (`systemctl --failed`) means the guard stopped hosting (exit 1) or could not start;
+either way `navoss-offline-withdraw.service` has withdrawn the manifest. Exit 2 (usage not
+established this run) does not fail the unit; the guard stops hosting itself after four in a row.
+Its journal line says which and why.
 
 ### Publish the manifest
 

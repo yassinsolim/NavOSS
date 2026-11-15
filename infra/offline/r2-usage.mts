@@ -1,5 +1,5 @@
 // Read-only R2 usage check for the offline bundle bucket. It reads Cloudflare's GraphQL analytics
-// (storage and month-to-date operations) and never lists, reads or writes objects, so running it
+// (storage and the last 31 days of operations) and never lists, reads or writes objects, so running it
 // costs no R2 operations. Exit status: 0 within limits, 1 above a limit, 2 when it cannot tell.
 import { execFile } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -59,7 +59,7 @@ export async function main(args: string[]): Promise<number> {
     `Account storage: ${usage.accountBytes} bytes (${percent(usage.accountBytes, FREE_TIER.bytes)})`,
   );
   console.log(
-    `Month to date, whole account: Class A ${usage.classA} (${percent(usage.classA, FREE_TIER.classA)}), ` +
+    `Last 31 days, whole account: Class A ${usage.classA} (${percent(usage.classA, FREE_TIER.classA)}), ` +
       `Class B ${usage.classB} (${percent(usage.classB, FREE_TIER.classB)}), free ${usage.free}`,
   );
   if (usage.unknownActions.length > 0)

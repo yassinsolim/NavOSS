@@ -1,48 +1,54 @@
-// Automatic stop for offline bundle hosting. Every run reads this month's R2 operations and the
-// stored bytes from Cloudflare's analytics. Above a stop threshold, after repeated failures to
-// read them, or when the public r2.dev URL is on, it disables public access to the bucket and
-// takes the manifest out of service, so the API answers the quiet "not available" 503 again. It
-// never re-enables anything; see infra/offline/README.md ("Automatic stop").
+// Automatic stop for offline bundle hosting; see infra/offline/README.md ("Automatic stop").
 //
-// Runs with plain Node 24 (type stripping) on the VM: node infra/offline/r2-guard.mts
-// Exit status: 0 serving within limits, 1 stopped (now or earlier), 2 could not observe (not yet
-// stopped), 3 usage error.
-import { readFile, rename, stat, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+// Each run lists the bucket (exact bytes and objects, one Class A operation that is also the
+// run's heartbeat), reads the last 31 days of account operations from Cloudflare's analytics, and
+// reads the custom domain's and the r2.dev URL's state. It stops hosting (withdraws the manifest,
+// disables the custom domain, confirms r2.dev is off) when a stop condition is established, or
+// after repeated runs that could not establish usage. It never re-enables anything.
+//
+// Runs with plain Node 24 (type stripping): node infra/offline/r2-guard.mts
+// Exit status: 0 serving within limits, 1 stopped (now or earlier), 2 usage unknown this run (not
+// yet stopped), 3 usage error.
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
-import {
-  cloudflare,
-  exceededLimits,
-  isRecord,
-  readUsage,
-  type Usage,
-  type UsageLimits,
-} from './r2-analytics.mts';
+import { cloudflare, isRecord, listBucket, readAnalytics } from './r2-analytics.mts';
 
 export const DEFAULT_STOP = { classA: 200_000, classB: 2_000_000, bytes: 5e9 } as const;
 export const DEFAULT_MAX_FAILURES = 4;
+/** A heartbeat younger than this may not have reached the analytics yet (measured lag: 140 s). */
+export const HEARTBEAT_SETTLE_MS = 4 * 60_000;
 const MANIFEST = 'manifest.json';
 const STOPPED_MANIFEST = 'manifest.json.stopped';
 
+export interface StopLimits {
+  classA: number;
+  classB: number;
+  bytes: number;
+}
+
 export interface GuardState {
-  /** Consecutive runs that could not read analytics or the domain state. */
+  /** Consecutive runs that could not establish usage. */
   failures: number;
   /** When and why this guard last stopped hosting. */
   stoppedAt?: string;
   reason?: string;
+  /** When the previous run's bucket listing (the heartbeat) was made. */
+  heartbeatAt?: string;
 }
 
-/** One run's view of Cloudflare; any field may be missing when its request failed. */
+/** One run's view of Cloudflare; a field is missing when its request failed. */
 export interface Observation {
-  usage?: Usage;
-  /** Whether the custom domain serves the bucket publicly. */
+  /** Last-31-day account operations; `current` says whether the analytics include a heartbeat. */
+  operations?: { classA: number; classB: number; current: boolean };
+  /** Stored bytes: the larger of this bucket's listing and the account's analytics samples. */
+  bytes?: number;
   domainEnabled?: boolean;
-  /** Whether the bucket's managed r2.dev URL is public. */
   devUrlEnabled?: boolean;
   /** Why some part could not be read. */
-  error?: string;
+  errors: string[];
 }
 
 export interface Decision {
@@ -53,51 +59,57 @@ export interface Decision {
   next: GuardState;
 }
 
+/**
+ * Stop conditions that are established are acted on even if other parts of the observation
+ * failed; only then does an incomplete observation get its grace of `maxFailures` runs.
+ */
 export function decide(
   observation: Observation,
   state: GuardState,
-  limits: Omit<UsageLimits, 'objects'>,
+  limits: StopLimits,
   maxFailures: number,
   now: Date,
 ): Decision {
-  const complete =
-    observation.usage !== undefined &&
-    observation.domainEnabled !== undefined &&
-    observation.devUrlEnabled !== undefined &&
-    observation.error === undefined;
-  if (!complete) {
-    const failures = state.failures + 1;
-    const why = observation.error ?? 'incomplete answer';
-    if (failures < maxFailures) {
-      // Unknown is never zero, but one missed reading is not yet a reason to stop.
-      return {
-        action: 'none',
-        exitCode: 2,
-        reason: `could not read usage (${failures}/${maxFailures} before stopping): ${why}`,
-        next: { ...state, failures },
-      };
-    }
-    const reason = `usage unreadable for ${failures} consecutive runs: ${why}`;
-    return { action: 'stop', exitCode: 1, reason, next: stopped(state, failures, reason, now) };
-  }
-  const usage = observation.usage!;
-  const exceeded = exceededLimits(usage, { ...limits, objects: Number.MAX_SAFE_INTEGER });
-  const reasons = [
-    ...exceeded.map((name) => `${name} above the stop threshold`),
-    ...(observation.devUrlEnabled ? ['the public r2.dev URL is enabled'] : []),
-  ];
+  const { operations, bytes } = observation;
+  const reasons: string[] = [];
+  // Analytics only lag; a stale count above a threshold is still above it.
+  if (operations && operations.classB > limits.classB)
+    reasons.push(`Class B operations ${operations.classB} above ${limits.classB}`);
+  if (operations && operations.classA > limits.classA)
+    reasons.push(`Class A operations ${operations.classA} above ${limits.classA}`);
+  if (bytes !== undefined && bytes > limits.bytes)
+    reasons.push(`stored bytes ${bytes} above ${limits.bytes}`);
+  if (observation.devUrlEnabled) reasons.push('the public r2.dev URL is enabled');
   if (reasons.length > 0) {
-    const detail =
-      `${reasons.join('; ')} (Class A ${usage.classA}, Class B ${usage.classB}, ` +
-      `${usage.accountBytes} bytes)`;
-    if (!observation.domainEnabled && !observation.devUrlEnabled && state.stoppedAt)
+    const reason = reasons.join('; ');
+    if (state.stoppedAt && observation.domainEnabled === false)
       return {
         action: 'stop', // idempotent: keeps the manifest withdrawn
         exitCode: 1,
-        reason: `already stopped since ${state.stoppedAt}: ${detail}`,
+        reason: `already stopped since ${state.stoppedAt}: ${reason}`,
         next: { ...state, failures: 0 },
       };
-    return { action: 'stop', exitCode: 1, reason: detail, next: stopped(state, 0, detail, now) };
+    return { action: 'stop', exitCode: 1, reason, next: stopped(state, 0, reason, now) };
+  }
+  const unknown = [...observation.errors];
+  if (!operations) unknown.push('operations unknown');
+  else if (!operations.current)
+    unknown.push('analytics do not yet show the previous run’s heartbeat');
+  if (bytes === undefined) unknown.push('storage unknown');
+  if (observation.domainEnabled === undefined || observation.devUrlEnabled === undefined)
+    unknown.push('domain state unknown');
+  if (unknown.length > 0) {
+    const failures = state.failures + 1;
+    const why = [...new Set(unknown)].join('; ');
+    if (failures < maxFailures)
+      return {
+        action: 'none',
+        exitCode: 2,
+        reason: `usage not established (${failures}/${maxFailures} before stopping): ${why}`,
+        next: { ...state, failures },
+      };
+    const reason = `usage not established for ${failures} consecutive runs: ${why}`;
+    return { action: 'stop', exitCode: 1, reason, next: stopped(state, failures, reason, now) };
   }
   if (!observation.domainEnabled) {
     // Disabled by this guard earlier or by hand: never offer downloads that cannot succeed.
@@ -110,11 +122,12 @@ export function decide(
     };
   }
   // Serving and within limits. An earlier stop record means an operator re-enabled hosting.
+  const { stoppedAt: _stoppedAt, reason: _reason, ...rest } = state;
   return {
     action: 'none',
     exitCode: 0,
-    reason: `within limits (Class A ${usage.classA}, Class B ${usage.classB}, ${usage.accountBytes} bytes)`,
-    next: { failures: 0 },
+    reason: `within limits (Class A ${operations!.classA}, Class B ${operations!.classB}, ${bytes} bytes)`,
+    next: { ...rest, failures: 0 },
   };
 }
 
@@ -131,92 +144,150 @@ export function parseState(text: string | undefined): GuardState {
     failures: value.failures,
     ...(typeof value.stoppedAt === 'string' ? { stoppedAt: value.stoppedAt } : {}),
     ...(typeof value.reason === 'string' ? { reason: value.reason } : {}),
+    ...(typeof value.heartbeatAt === 'string' ? { heartbeatAt: value.heartbeatAt } : {}),
   };
+}
+
+/** Reads KEY=value lines (the systemd/docker env-file format); values are not echoed. */
+export function parseCredentials(text: string): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const line of text.split('\n')) {
+    const match = /^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line);
+    if (match) values[match[1]!] = match[2]!.replace(/^(['"])(.*)\1$/, '$2');
+  }
+  return values;
+}
+
+/** Atomic replace: a crash leaves either the old or the new state, never a truncated file. */
+async function writeState(path: string, state: GuardState): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const temporary = `${path}.${process.pid}.tmp`;
+  await writeFile(temporary, JSON.stringify(state) + '\n', { mode: 0o600 });
+  await rename(temporary, path);
+}
+
+async function readOptional(path: string): Promise<string | undefined> {
+  try {
+    return await readFile(path, 'utf8');
+  } catch (error) {
+    if (isRecord(error) && error.code === 'ENOENT') return undefined;
+    throw error;
+  }
 }
 
 function domainPath(account: string, bucket: string, kind: string): string {
   return `/accounts/${account}/r2/buckets/${encodeURIComponent(bucket)}/domains/${kind}`;
 }
 
-async function observe(token: string, account: string, bucket: string, domain: string) {
-  const observation: Observation = {};
-  const errors: string[] = [];
+function message(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+async function observe(
+  token: string,
+  account: string,
+  bucket: string,
+  domain: string,
+  heartbeatAt: Date | undefined,
+  now: Date,
+): Promise<{ observation: Observation; heartbeatAt?: Date }> {
+  const observation: Observation = { errors: [] };
+  let listedBytes: number | undefined;
+  let newHeartbeat: Date | undefined;
   try {
-    observation.usage = await readUsage(token, account, bucket);
+    const listingAt = new Date();
+    listedBytes = (await listBucket(token, account, bucket)).bytes;
+    newHeartbeat = listingAt;
   } catch (error) {
-    errors.push(error instanceof Error ? error.message : 'analytics failed');
+    observation.errors.push(message(error, 'listing failed'));
+  }
+  // Only a heartbeat old enough to have reached the analytics can prove they are current.
+  const settled =
+    heartbeatAt && now.getTime() - heartbeatAt.getTime() >= HEARTBEAT_SETTLE_MS
+      ? heartbeatAt
+      : undefined;
+  try {
+    const analytics = await readAnalytics(token, account, {
+      bucket,
+      now,
+      heartbeatAction: 'ListObjects',
+      heartbeatSince: new Date((settled ?? now).getTime() - 60_000),
+    });
+    observation.operations = {
+      classA: analytics.classA,
+      classB: analytics.classB,
+      current: settled !== undefined && analytics.heartbeats > 0,
+    };
+    const sampled = [...analytics.storage.values()].reduce((sum, value) => sum + value.bytes, 0);
+    if (listedBytes !== undefined) observation.bytes = Math.max(listedBytes, sampled);
+  } catch (error) {
+    observation.errors.push(message(error, 'analytics failed'));
+    if (listedBytes !== undefined) observation.bytes = listedBytes;
   }
   try {
     const custom = await cloudflare(token, `${domainPath(account, bucket, 'custom')}/${domain}`);
     if (!isRecord(custom) || typeof custom.enabled !== 'boolean')
       throw new Error('Unexpected custom domain answer');
     observation.domainEnabled = custom.enabled;
+  } catch (error) {
+    observation.errors.push(message(error, 'custom domain state failed'));
+  }
+  try {
     const managed = await cloudflare(token, domainPath(account, bucket, 'managed'));
     if (!isRecord(managed) || typeof managed.enabled !== 'boolean')
       throw new Error('Unexpected r2.dev answer');
     observation.devUrlEnabled = managed.enabled;
   } catch (error) {
-    errors.push(error instanceof Error ? error.message : 'domain state failed');
+    observation.errors.push(message(error, 'r2.dev state failed'));
   }
-  if (errors.length > 0) observation.error = errors.join('; ');
-  return observation;
+  // A heartbeat that is not yet settled stays the reference until it is.
+  const keep = heartbeatAt && !settled ? heartbeatAt : newHeartbeat;
+  return { observation, ...(keep ? { heartbeatAt: keep } : {}) };
 }
 
-async function exists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch (error) {
-    if (isRecord(error) && error.code === 'ENOENT') return false;
-    throw error;
-  }
-}
-
-/** Disables public access and withdraws the manifest; each step is attempted independently. */
-async function stop(
-  token: string | undefined,
-  account: string | undefined,
-  bucket: string,
-  domain: string,
-  manifestDirectory: string | undefined,
-  dryRun: boolean,
-): Promise<string[]> {
+/** Disables public access and withdraws the manifest; every step is attempted independently. */
+export async function stop(options: {
+  token?: string;
+  account?: string;
+  bucket: string;
+  domain: string;
+  manifestDirectory?: string;
+  dryRun: boolean;
+}): Promise<string[]> {
+  const { token, account, bucket, domain, manifestDirectory, dryRun } = options;
   const done: string[] = [];
   const failed: string[] = [];
-  const step = async (what: string, action: () => Promise<void>) => {
+  const step = async (what: string, action: () => Promise<string | void>) => {
     if (dryRun) {
       done.push(`would ${what}`);
       return;
     }
     try {
-      await action();
-      done.push(what);
+      done.push((await action()) ?? what);
     } catch (error) {
-      failed.push(`${what}: ${error instanceof Error ? error.message : 'failed'}`);
+      failed.push(`${what}: ${message(error, 'failed')}`);
     }
   };
-  if (manifestDirectory) {
-    const live = join(manifestDirectory, MANIFEST);
+  if (manifestDirectory)
     // The API reads the manifest per request, so the next request answers the quiet 503.
-    if (await exists(live))
-      await step(`move ${MANIFEST} to ${STOPPED_MANIFEST}`, () =>
-        rename(live, join(manifestDirectory, STOPPED_MANIFEST)),
-      );
-  }
+    await step(`move ${MANIFEST} to ${STOPPED_MANIFEST}`, async () => {
+      try {
+        await rename(join(manifestDirectory, MANIFEST), join(manifestDirectory, STOPPED_MANIFEST));
+      } catch (error) {
+        if (isRecord(error) && error.code === 'ENOENT') return `${MANIFEST} already withdrawn`;
+        throw error;
+      }
+    });
   if (token && account) {
-    await step(`disable ${domain}`, async () => {
-      await cloudflare(
-        token,
-        `${domainPath(account, bucket, 'custom')}/${domain}`,
-        {
-          enabled: false,
-        },
-        'PUT',
-      );
-    });
-    await step('keep r2.dev disabled', async () => {
-      await cloudflare(token, domainPath(account, bucket, 'managed'), { enabled: false }, 'PUT');
-    });
+    const set = (kind: string, path: string, label: string) =>
+      step(`disable ${label}`, async () => {
+        await cloudflare(token, path, { enabled: false }, 'PUT');
+        const after = await cloudflare(token, path);
+        if (!isRecord(after) || after.enabled !== false)
+          throw new Error(`${kind} still enabled after the request`);
+      });
+    await set('custom domain', `${domainPath(account, bucket, 'custom')}/${domain}`, domain);
+    await set('r2.dev URL', domainPath(account, bucket, 'managed'), 'r2.dev');
   } else {
     failed.push('no Cloudflare credentials: public access could not be disabled');
   }
@@ -231,6 +302,7 @@ export async function main(args: string[]): Promise<number> {
       bucket: { type: 'string', default: 'navoss-offline' },
       domain: { type: 'string', default: 'navoss-offline.yassin.app' },
       state: { type: 'string' },
+      credentials: { type: 'string' },
       'manifest-dir': { type: 'string' },
       'stop-class-a': { type: 'string', default: String(DEFAULT_STOP.classA) },
       'stop-class-b': { type: 'string', default: String(DEFAULT_STOP.classB) },
@@ -257,38 +329,86 @@ export async function main(args: string[]): Promise<number> {
     console.error('--state FILE is required (it counts consecutive failures)');
     return 3;
   }
-  const token = process.env.CLOUDFLARE_API_TOKEN;
-  const account = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const statePath = values.state;
-  const state = parseState(
-    statePath && (await exists(statePath)) ? await readFile(statePath, 'utf8') : undefined,
-  );
-  const observation: Observation =
-    token && account
-      ? await observe(token, account, values.bucket, values.domain)
-      : { error: 'CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required' };
-  const decision = decide(observation, state, limits, maxFailures, new Date());
-  const prefix = values['dry-run'] ? 'dry run: ' : '';
+  const dryRun = values['dry-run'];
+  const now = new Date();
+  let credentials: Record<string, string> = {};
+  const problems: string[] = [];
+  if (values.credentials) {
+    try {
+      credentials = parseCredentials(await readFile(values.credentials, 'utf8'));
+    } catch (error) {
+      problems.push(`credentials unreadable: ${message(error, 'failed')}`);
+    }
+  }
+  const token = credentials.CLOUDFLARE_API_TOKEN ?? process.env.CLOUDFLARE_API_TOKEN;
+  const account = credentials.CLOUDFLARE_ACCOUNT_ID ?? process.env.CLOUDFLARE_ACCOUNT_ID;
+
+  // An unreadable state file cannot count failures, so it is itself a reason to stop.
+  let state: GuardState = { failures: 0 };
+  let stateProblem: string | undefined;
+  if (values.state) {
+    try {
+      state = parseState(await readOptional(values.state));
+    } catch (error) {
+      stateProblem = `state file unreadable (${message(error, 'failed')})`;
+    }
+  }
+  let decision: Decision;
+  let heartbeatAt: Date | undefined;
+  let observed = false;
+  if (stateProblem) {
+    decision = {
+      action: 'stop',
+      exitCode: 1,
+      reason: stateProblem,
+      next: stopped({ failures: 0 }, 0, stateProblem, now),
+    };
+  } else {
+    let observation: Observation = { errors: [...problems] };
+    if (token && account) {
+      const previous = state.heartbeatAt ? new Date(state.heartbeatAt) : undefined;
+      const result = await observe(token, account, values.bucket, values.domain, previous, now);
+      observation = { ...result.observation, errors: [...problems, ...result.observation.errors] };
+      heartbeatAt = result.heartbeatAt;
+      observed = true;
+    } else {
+      observation.errors.push('CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required');
+    }
+    decision = decide(observation, state, limits, maxFailures, now);
+  }
+  // The heartbeat reference is exactly what this run established (none if its listing failed).
+  const { heartbeatAt: _previousHeartbeat, ...decided } = decision.next;
+  const next: GuardState = observed
+    ? { ...decided, ...(heartbeatAt ? { heartbeatAt: heartbeatAt.toISOString() } : {}) }
+    : decision.next;
+  // Record the run before acting; if the record cannot be kept, failures could never add up.
+  if (values.state && !dryRun) {
+    try {
+      await writeState(values.state, next);
+    } catch (error) {
+      const reason = `state file not writable (${message(error, 'failed')}): ${decision.reason}`;
+      decision = { ...decision, action: 'stop', exitCode: 1, reason };
+    }
+  }
+  const prefix = dryRun ? 'dry run: ' : '';
   let exitCode: number = decision.exitCode;
   let line = decision.reason;
   if (decision.action === 'stop') {
     try {
-      const done = await stop(
+      const done = await stop({
         token,
         account,
-        values.bucket,
-        values.domain,
-        values['manifest-dir'],
-        values['dry-run'],
-      );
-      line = `${values['dry-run'] ? 'WOULD STOP' : 'STOPPED'}: ${decision.reason}${done.length > 0 ? ` [${done.join('; ')}]` : ''}`;
+        bucket: values.bucket,
+        domain: values.domain,
+        manifestDirectory: values['manifest-dir'],
+        dryRun,
+      });
+      line = `${dryRun ? 'WOULD STOP' : 'STOPPED'}: ${decision.reason} [${done.join('; ')}]`;
     } catch (error) {
-      line = `STOP INCOMPLETE: ${decision.reason} [${error instanceof Error ? error.message : 'failed'}]`;
+      line = `STOP INCOMPLETE: ${decision.reason} [${message(error, 'failed')}]`;
       exitCode = 1;
     }
   }
-  if (statePath && !values['dry-run'])
-    await writeFile(statePath, JSON.stringify(decision.next) + '\n', { mode: 0o600 });
   (exitCode === 0 ? console.log : console.error)(`${prefix}${line}`);
   return exitCode;
 }
@@ -300,7 +420,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     },
     (error: unknown) => {
       // Never echo responses: they could contain account identifiers.
-      console.error(error instanceof Error ? error.message : 'R2 guard failed');
+      console.error(message(error, 'R2 guard failed'));
       process.exitCode = 1;
     },
   );

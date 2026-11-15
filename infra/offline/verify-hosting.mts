@@ -1,7 +1,7 @@
 // Checks that every artifact a manifest names is served the way the app downloads it: the
 // manifest's exact length (as the Content-Range total), immutable caching, identity encoding, and resumable byte ranges. It
-// also checks that the zone's WAF allowlist is in place: a query string, an unpublished path or a
-// HEAD on the download host must be refused (403) before it can reach R2, and every file must fit the CDN
+// also checks that the zone's WAF allowlist is in place: a query string, an unpublished path, a
+// HEAD or an Origin header on the download host must be refused (403) before it can reach R2, and every file must fit the CDN
 // cache. Each artifact costs two small ranged GETs (at most two R2 Class B operations
 // when the CDN does not answer from cache); --sha256 also downloads every artifact once in full.
 import { createHash } from 'node:crypto';
@@ -128,11 +128,18 @@ export async function main(args: string[]): Promise<number> {
     },
     // Cloudflare never answers HEAD from cache, so an allowed HEAD would reach R2.
     { what: 'HEAD on a published file', url: first.url, method: 'HEAD' },
+    // Origin is part of the default cache key: a unique value would miss the cache every time.
+    {
+      what: 'an Origin header',
+      url: first.url,
+      method: 'GET',
+      headers: { origin: 'https://navoss-verify.invalid' },
+    },
   ];
   for (const probe of probes) {
     const response = await fetch(probe.url, {
       method: probe.method,
-      headers: { range: 'bytes=0-0' },
+      headers: { range: 'bytes=0-0', ...('headers' in probe ? probe.headers : {}) },
     });
     await response.arrayBuffer();
     requests += 1;

@@ -21,8 +21,8 @@ function manifest(version: string, regions: string[], mapsBytes = 38_084_635) {
 
 const V1 = '2026-11-11-v1-798f5c442644';
 
-// The rule applied to yassin.app on 2026-11-15 (first with GET/HEAD, then GET only), written
-// independently of this helper.
+// The rule live on yassin.app since 2026-11-15 (after HEAD and cache-key headers were closed),
+// as applied by hand, independently of this helper.
 const APPLIED =
   '(http.host eq "navoss-offline.yassin.app" and (not http.request.uri.path in {' +
   '"/2026-11-11-v1-798f5c442644/regions/alberta/maps.pmtiles" ' +
@@ -32,12 +32,13 @@ const APPLIED =
   '"/2026-11-11-v1-798f5c442644/regions/calgary/maps.pmtiles" ' +
   '"/2026-11-11-v1-798f5c442644/regions/calgary/routing.tar" ' +
   '"/2026-11-11-v1-798f5c442644/regions/calgary/search.sqlite"} ' +
-  'or http.request.uri.query ne "" or http.request.method ne "GET"))';
+  'or http.request.uri.query ne "" or http.request.method ne "GET" or any(http.request.headers.names[*] in ' +
+  '{"origin" "x-forwarded-host" "x-host" "x-forwarded-scheme" "x-original-url" "x-rewrite-url" "forwarded"})))';
 
 test('the expression for the published manifest is the rule applied to the zone', () => {
   assert.equal(wafExpression([manifest(V1, ['alberta', 'calgary'])]), APPLIED);
   assert.deepEqual(wafRule([manifest(V1, ['alberta', 'calgary'])]), {
-    description: 'navoss-offline: only published files, GET, no query',
+    description: 'navoss-offline: only published files, GET, no query, no cache-key headers',
     expression: APPLIED,
     action: 'block',
     enabled: true,

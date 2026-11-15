@@ -5,20 +5,28 @@ Requires=docker.service
 RequiresMountsFor=/srv/navoss/state /srv/navoss/artifacts
 After=docker.service network-online.target
 Wants=network-online.target
+# If the guard cannot run or stops hosting, also withdraw the manifest without Docker or network.
+OnFailure=navoss-offline-withdraw.service
 
 [Service]
 Type=oneshot
 User=root
 Group=root
-# The API image's Node base runs the TypeScript guard directly (type stripping); the VM has no
-# host Node. Exit 1 (stopped) or 2 (could not read usage) marks the unit failed in the journal.
-ExecStart=/usr/bin/docker run --rm --name navoss-offline-guard \
+# Exit 2 ("usage not established this run") is counted inside the guard, which stops hosting after
+# four in a row; only a stop (1) or a run that could not start marks the unit failed.
+SuccessExitStatus=2
+# The digest-pinned Node image runs the TypeScript guard directly (type stripping); the VM has no
+# host Node. --pull never: a missing image fails the unit (and withdraws the manifest) instead of
+# pulling something unverified. The token is read from a read-only file inside the container,
+# never passed as an environment variable, so docker inspect does not show it.
+ExecStart=/usr/bin/docker run --rm --pull never --name navoss-offline-guard \
   --read-only --cap-drop ALL --cap-add DAC_OVERRIDE --security-opt no-new-privileges \
   --memory 128m --cpus 0.25 \
-  --env-file /srv/navoss/state/offline-guard.env \
+  --volume /srv/navoss/state/offline-guard.env:/run/secrets/offline-guard.env:ro \
   --volume /home/navoss/NavOSS/infra/offline:/guard:ro \
   --volume /srv/navoss/state/offline-guard:/state \
   --volume /srv/navoss/artifacts/offline:/manifest \
-  node:24.18.0-bookworm-slim \
-  node /guard/r2-guard.mts --state /state/r2-guard.json --manifest-dir /manifest
+  node:24.18.0-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d \
+  node /guard/r2-guard.mts --credentials /run/secrets/offline-guard.env \
+  --state /state/r2-guard.json --manifest-dir /manifest
 TimeoutStartSec=180

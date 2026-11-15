@@ -12,7 +12,22 @@ import { pathToFileURL } from 'node:url';
  */
 export const CACHE_LIMIT_BYTES = 512 * 1024 * 1024;
 
-export const WAF_RULE_DESCRIPTION = 'navoss-offline: only published files, GET, no query';
+export const WAF_RULE_DESCRIPTION =
+  'navoss-offline: only published files, GET, no query, no cache-key headers';
+
+/**
+ * Request headers that Cloudflare's default cache key includes. A unique value of any of them was
+ * a cache miss every time (one R2 read each); measured 2026-11-15.
+ */
+export const CACHE_KEY_HEADERS = [
+  'origin',
+  'x-forwarded-host',
+  'x-host',
+  'x-forwarded-scheme',
+  'x-original-url',
+  'x-rewrite-url',
+  'forwarded',
+] as const;
 
 interface ManifestLike {
   regions: { artifacts: Record<string, { url: string; byteSize: number }> }[];
@@ -58,8 +73,9 @@ export function artifactsOf(manifests: unknown[]): { url: URL; byteSize: number 
 
 /**
  * The zone's WAF custom rule expression: on the download host, block everything except GET without
- * a query string for exactly the published artifact paths. Unknown paths, scanners, cache-busting
- * query strings and HEAD (which Cloudflare never answers from cache) then never reach R2.
+ * a query string or cache-key header for exactly the published artifact paths. Unknown paths,
+ * scanners, cache-busting query strings and headers, and HEAD (which Cloudflare never answers from
+ * cache) then never reach R2.
  */
 export function wafExpression(manifests: unknown[]): string {
   const artifacts = artifactsOf(manifests);
@@ -77,7 +93,8 @@ export function wafExpression(manifests: unknown[]): string {
   const paths = artifacts.map(({ url }) => `"${url.pathname}"`).join(' ');
   return (
     `(http.host eq "${host}" and (not http.request.uri.path in {${paths}} or ` +
-    `http.request.uri.query ne "" or http.request.method ne "GET"))`
+    `http.request.uri.query ne "" or http.request.method ne "GET" or ` +
+    `any(http.request.headers.names[*] in {${CACHE_KEY_HEADERS.map((name) => `"${name}"`).join(' ')}})))`
   );
 }
 

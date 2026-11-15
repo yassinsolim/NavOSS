@@ -44,21 +44,36 @@ if [ "${COMMUNITY_TRAFFIC_MODE:-off}" = live ]; then
 fi
 
 offline_manifest="${NAVOSS_OFFLINE_MANIFEST_DIR:+$NAVOSS_OFFLINE_MANIFEST_DIR/manifest.json}"
-offline_status=$(curl --silent --output /dev/null --write-out '%{http_code}' "$base_url/v1/offline/manifest")
+offline_status=$(curl --silent --connect-timeout 10 --max-time 30 --output /dev/null --write-out '%{http_code}' "$base_url/v1/offline/manifest")
 if [ -n "$offline_manifest" ] && [ ! -e "$offline_manifest" ]; then
   # Withdrawn (by the offline guard, or by hand): the API must have gone back to a quiet 503.
   test "$offline_status" = 503
   printf 'Offline manifest withdrawn: %s is missing (see infra/offline/README.md, "Automatic stop")\n' "$offline_manifest" >&2
   exit 1
 elif [ -n "$offline_manifest" ]; then
+  # Hosting is only offered while the offline guard runs: its timer must be active and its last
+  # run (exit 0, or 2 while usage is being established) must have ended in the last 15 minutes.
+  guard=navoss-offline-guard
+  if ! systemctl is-active --quiet "$guard.timer"; then
+    printf 'Offline guard timer %s.timer is not active\n' "$guard" >&2
+    exit 1
+  fi
+  guard_result=$(systemctl show -p Result --value "$guard.service")
+  guard_exited=$(systemctl show -p ExecMainExitTimestamp --value "$guard.service")
+  if [ "$guard_result" != success ] || [ -z "$guard_exited" ] ||
+    [ $(($(date +%s) - $(date -d "$guard_exited" +%s))) -gt 900 ]; then
+    printf 'Offline guard last run: result %s, ended %s\n' "$guard_result" "${guard_exited:-never}" >&2
+    exit 1
+  fi
   # The host manifest is served unchanged, and each artifact it names reports its exact length.
   expected_version=$(jq -er '.bundleVersion' "$offline_manifest")
-  curl --fail --silent --show-error "$base_url/v1/offline/manifest" |
+  curl --fail --silent --show-error --connect-timeout 10 --max-time 30 "$base_url/v1/offline/manifest" |
     jq -e --arg version "$expected_version" '.bundleVersion == $version and (.regions | length) > 0' >/dev/null
   jq -r '[.regions[].artifacts[] | "\(.url) \(.byteSize)"] | unique[]' "$offline_manifest" |
     while read -r artifact_url artifact_size; do
       # A one-byte ranged GET, not HEAD: Cloudflare answers GETs from cache, but every HEAD reaches R2.
-      served_size=$(curl --fail --silent --show-error --range 0-0 --output /dev/null --dump-header - \
+      served_size=$(curl --fail --silent --show-error --connect-timeout 10 --max-time 60 \
+        --range 0-0 --output /dev/null --dump-header - \
         --header 'accept-encoding: identity' "$artifact_url" |
         tr -d '\r' | awk 'tolower($1) == "content-range:" { split($3, total, "/"); print total[2] }')
       if [ "$served_size" != "$artifact_size" ]; then

@@ -318,13 +318,17 @@ monthly releases (about 120 Class A operations), stays below 1%.
 existing "Leaked credential check", which stays. What limits abuse instead:
 
 - The WAF allowlist rule blocks, before R2, every path except the seven published files, every
-  query string (which would otherwise create new cache keys, so each could miss) and every method
-  except GET. Certificate-transparency scanners began probing the new hostname within
+  query string, every method except GET, and every request carrying a header that Cloudflare's
+  default cache key includes (`Origin`, `X-Forwarded-Host`, `X-Host`, `X-Forwarded-Scheme`,
+  `X-Original-URL`, `X-Rewrite-URL`, `Forwarded`). A unique query string or one of those headers
+  was a cache miss, one R2 read, every time (reproduced 2026-11-15); `Accept-Encoding`, `Cookie`
+  and `Authorization` do not change the cache key. Plain `http://` requests are redirected to
+  HTTPS by Cloudflare (301, no R2 operation), so they do not form a second cache key. Certificate-transparency scanners began probing the new hostname within
   minutes (61 `404` requests reached R2 in its first 25 minutes, about 105,000 a month at that
   rate); they are now answered 403 by Cloudflare and cost nothing.
 - A GET for a published file, ranged or not, is answered from cache once that location holds it
-  (measured above). An attacker cannot choose a new cache key, so looping downloads cost no R2
-  operations. What an attacker can force with GETs on the seven fixed URLs is cache fills:
+  (measured above). With those requests blocked an attacker cannot choose a new cache key, so
+  looping downloads cost no R2 operations. What an attacker can force with GETs on the seven fixed URLs is cache fills:
   - **one fill per file per location**: 7 reads per location, about 2,300 across every
     Cloudflare city, for each release;
   - **refills after eviction**, which an attacker cannot trigger directly (keeping a file hot by
@@ -345,11 +349,20 @@ existing "Leaked credential check", which stays. What limits abuse instead:
 
 `infra/offline/r2-guard.mts` runs on the VM every 5 minutes (`navoss-offline-guard.timer`, up to
 30 s randomized delay). It stops hosting (withdraws the manifest, disables the custom domain,
-confirms `r2.dev` is off) when this month's account totals pass **2,000,000 Class B**,
-**200,000 Class A** or **5 GB** stored, when `r2.dev` is enabled, or after **4 consecutive runs**
-that could not read usage (20 minutes). A missing answer is never read as zero. It never
-re-enables anything. Details and the re-enable procedure:
+confirms `r2.dev` is off) when the account's last-31-day totals pass **2,000,000 Class B** or
+**200,000 Class A**, when stored bytes pass **5 GB**, when `r2.dev` is enabled, when its state file
+cannot be read or written, or after **4 consecutive runs** that could not establish usage (20
+minutes). Each established stop condition is acted on even if other reads failed. Usage counts as
+established only when the analytics include the previous run's heartbeat (its bucket listing), so
+an empty or stale answer is never read as zero; an idle month still contains the guard's own
+heartbeats. Storage comes from the bucket listing (exact, immediate) and the analytics samples,
+whichever is larger. It never re-enables anything. If the guard cannot run at all, systemd
+withdraws the manifest on the host (`OnFailure=`). Details and the re-enable procedure:
 [`infra/offline/README.md`](../../infra/offline/README.md#automatic-stop).
+
+The guard's own cost: one `ListObjects` (Class A) per run, about 8,640 a month (0.9% of the free
+Class A allowance, 4.3% of its stop threshold); analytics and domain-state requests are account
+API calls, not R2 operations.
 
 Measured analytics lag (2026-11-15): five GETs that reached R2 appeared in the GraphQL operations
 dataset **140 seconds** later (polled every 15 s). The time between a burst starting and the stop
@@ -365,9 +378,10 @@ is therefore at most about 5 min (interval) + 30 s (delay) + 140 s (lag) + 10 s 
   The public cannot write at all; only this repository's tooling or a leaked token can.
 - **Storage:** 10 GB − 5 GB = 5 GB of margin, and storage is billed on the month's average of daily
   peaks: a spike would have to stay above 10 GB-month on average. Only uploads can add storage.
-  The storage dataset is slower than operations: a new bucket had **no storage sample yet 40
-  minutes after creation**, which the guard counts as a failure, so it is installed only after its
-  dry run reports "within limits".
+  The storage dataset is much slower than operations: Cloudflare documents no update interval
+  ([R2 metrics](https://developers.cloudflare.com/r2/platform/metrics-analytics/)), and this bucket
+  had **no storage sample more than an hour after creation**. The guard therefore takes storage
+  from its own listing, so a new or idle bucket needs no waiting period.
 
 Disabling the custom domain stops new requests from reaching R2 at once (Cloudflare answers them
 itself); requests already in flight finish. The stop action itself performs no R2 read or write
@@ -383,10 +397,12 @@ narrows the exposure to:
   reads costs $0.36.
 - **Anything that defeats the cache or the WAF rule** (a Cloudflare change in caching behaviour, a
   rule removed or outdated) reopens per-request reads; `verify-hosting.mts` checks both.
-- **The guard not running**: VM, Docker or timer down, or its token revoked or expired. Failed
-  reads stop hosting after 20 minutes only if the guard itself runs; a down VM runs nothing. If the
-  token is invalid, the guard can withdraw the manifest but cannot disable the domain, and its unit
-  fails every 5 minutes.
+- **The guard not running**: a guard that fails to start (Docker down, image missing) or stops
+  hosting triggers `navoss-offline-withdraw.service`, which withdraws the manifest on the host,
+  and `check-stack.sh` fails while the timer is inactive or the last run is older than 15 minutes.
+  But only disabling the custom domain stops clients that already know the URLs, and that needs a
+  running guard with a valid token: a down VM (which also takes the manifest offline) or a revoked
+  token leaves the domain enabled, bounded by the cache as described under Abuse.
 - **Billing rounding**: usage is billed in whole millions and whole GB-months once past the free
   tier.
 
@@ -419,16 +435,17 @@ exactly for the current release (a unit test asserts it):
 
 ```json
 {
-  "description": "navoss-offline: only published files, GET, no query",
-  "expression": "(http.host eq \"navoss-offline.yassin.app\" and (not http.request.uri.path in {\"/2026-11-11-v1-798f5c442644/regions/alberta/maps.pmtiles\" \"/2026-11-11-v1-798f5c442644/regions/alberta/routing.tar\" \"/2026-11-11-v1-798f5c442644/regions/alberta/search.sqlite\" \"/2026-11-11-v1-798f5c442644/resources.tar.gz\" \"/2026-11-11-v1-798f5c442644/regions/calgary/maps.pmtiles\" \"/2026-11-11-v1-798f5c442644/regions/calgary/routing.tar\" \"/2026-11-11-v1-798f5c442644/regions/calgary/search.sqlite\"} or http.request.uri.query ne \"\" or http.request.method ne \"GET\"))",
+  "description": "navoss-offline: only published files, GET, no query, no cache-key headers",
+  "expression": "(http.host eq \"navoss-offline.yassin.app\" and (not http.request.uri.path in {\"/2026-11-11-v1-798f5c442644/regions/alberta/maps.pmtiles\" \"/2026-11-11-v1-798f5c442644/regions/alberta/routing.tar\" \"/2026-11-11-v1-798f5c442644/regions/alberta/search.sqlite\" \"/2026-11-11-v1-798f5c442644/resources.tar.gz\" \"/2026-11-11-v1-798f5c442644/regions/calgary/maps.pmtiles\" \"/2026-11-11-v1-798f5c442644/regions/calgary/routing.tar\" \"/2026-11-11-v1-798f5c442644/regions/calgary/search.sqlite\"} or http.request.uri.query ne \"\" or http.request.method ne \"GET\" or any(http.request.headers.names[*] in {\"origin\" \"x-forwarded-host\" \"x-host\" \"x-forwarded-scheme\" \"x-original-url\" \"x-rewrite-url\" \"forwarded\"})))",
   "action": "block",
   "enabled": true
 }
 ```
 
-Verified when applied (first allowing GET and HEAD; HEAD was removed after it proved to bypass the
-cache): a published file with `?x=1`, `/.env`, an unknown path under the release,
-`provenance.json` and a POST answer 403; the seven manifest URLs answer 206; `navoss.yassin.app`
+Verified when applied (it first allowed GET and HEAD and had no header clause; HEAD and the
+cache-key headers were added after each was shown to bypass the cache): a published file with
+`?x=1`, each of the seven headers in any letter case, `/.env`, an unknown path under the release,
+`provenance.json`, a HEAD and a POST answer 403; a plain ranged GET is a 206 cache hit; the seven manifest URLs answer 206; `navoss.yassin.app`
 and `navoss-api.yassin.app` are unaffected. **A new release must be added to this rule before the
 manifest points at it**; until then its downloads are refused, which fails closed.
 
@@ -446,10 +463,9 @@ is configured.
   against `x-amz-checksum-sha256` on upload). `verify-hosting.mts` passed for all seven manifest
   URLs: `200`, exact length, `Accept-Ranges: bytes`, immutable caching, identity encoding and a
   correct `206` tail range.
-- With the zone rules in place, `verify-hosting.mts` passed 10/10: all seven files answered both
-  ranged GETs from cache (`HIT`), and a query string, an unpublished path and a HEAD were refused
-  with 403. `r2-guard.mts --dry-run` against the real account read the operations and both domain
-  states; it reported "could not read usage" because the new bucket had no storage sample yet.
+- With the zone rules in place, `verify-hosting.mts` passed 11/11: all seven files answered both
+  ranged GETs from cache (`HIT`), and a query string, an unpublished path, a HEAD and an `Origin`
+  header were refused with 403.
 - Manifest: regenerated with `build.sh --base-url https://navoss-offline.yassin.app` from the
   cached build; same bundle version `2026-11-11-v1-798f5c442644`; identical to the loopback
   manifest except the artifact URLs and `generatedAt`.

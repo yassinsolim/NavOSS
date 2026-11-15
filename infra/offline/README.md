@@ -187,10 +187,13 @@ Zone rules on `yassin.app`, applied by API on 2026-11-15 (exact JSON in
 - **Cache rule** `navoss-offline artifacts` (new `http_request_cache_settings` entrypoint): makes
   everything on the download host eligible for cache. All seven artifacts, including the
   524,743,452-byte all-Alberta maps file, are then answered from cache (`cf-cache-status: HIT`).
-- **WAF custom rule** `navoss-offline: only published files, GET, no query` (new
-  `http_request_firewall_custom` entrypoint): on the download host, blocks every path except the
-  manifest's artifact paths, every query string, and every method except GET (Cloudflare never
-  answers HEAD from cache, so each HEAD would reach R2).
+- **WAF custom rule** `navoss-offline: only published files, GET, no query, no cache-key headers`
+  (new `http_request_firewall_custom` entrypoint): on the download host, blocks every path except
+  the manifest's artifact paths, every query string, every method except GET (Cloudflare never
+  answers HEAD from cache, so each HEAD would reach R2), and every request with a header that
+  Cloudflare's default cache key includes (`Origin`, `X-Forwarded-Host`, `X-Host`,
+  `X-Forwarded-Scheme`, `X-Original-URL`, `X-Rewrite-URL`, `Forwarded`), each of which would
+  otherwise make a fresh cache miss.
   `SHA256SUMS` and `provenance.json` are stored but not publicly served.
 - **No rate-limiting rule**: the zone's single free rate-limiting slot holds the owner's existing
   "Leaked credential check" rule, which was left alone.
@@ -262,7 +265,7 @@ auth="Authorization: Bearer $CLOUDFLARE_API_TOKEN"
 ruleset=$(curl -fsS -H "$auth" "$api/phases/http_request_firewall_custom/entrypoint")
 ruleset_id=$(printf '%s' "$ruleset" | jq -r .result.id)
 rule_id=$(printf '%s' "$ruleset" | jq -r '.result.rules[]
-  | select(.description == "navoss-offline: only published files, GET, no query") | .id')
+  | select(.description == "navoss-offline: only published files, GET, no query, no cache-key headers") | .id')
 curl -fsS -X PATCH -H "$auth" -H 'Content-Type: application/json' \
   --data @/tmp/navoss-offline-rule.json "$api/$ruleset_id/rules/$rule_id" >/dev/null
 node --import tsx infra/offline/verify-hosting.mts artifacts/offline/manifest.json --sha256
@@ -271,7 +274,7 @@ node --import tsx infra/offline/verify-hosting.mts artifacts/offline/manifest.js
 `verify-hosting.mts` requires, for every artifact URL in the manifest, correct `206` answers to a
 first-byte and a last-16-bytes ranged GET whose `Content-Range` total is the manifest's exact
 size, an immutable `Cache-Control` and no content encoding; that the WAF refuses a query string,
-an unpublished path and a HEAD (403); and that every file fits the cache. `--sha256` also
+an unpublished path, a HEAD and an `Origin` header (403); and that every file fits the cache. `--sha256` also
 downloads each artifact once and compares its digest. Without `--sha256` it costs at most two
 Class B operations per artifact (only when a location's cache is cold). Only then install the
 manifest on the VM.
@@ -299,35 +302,62 @@ stops hosting above 5 GB.
 ### Automatic stop
 
 `r2-guard.mts` runs every 5 minutes on the VM (`infra/compose/navoss-offline-guard.timer`,
-installed as in [the compose README](../compose/README.md#offline-guard-install-first)). Each run
-reads, from Cloudflare's analytics, the account's month-to-date Class A and Class B operations and
-its stored bytes, plus the custom domain's and the `r2.dev` URL's state. It **stops hosting** when:
+installed as in [the compose README](../compose/README.md#offline-guard-install-first)). Each run:
 
-- Class B operations exceed **2,000,000**, Class A **200,000**, or stored bytes **5 GB** (20% of
-  each free allowance; `--stop-class-b`, `--stop-class-a`, `--stop-bytes` override);
-- the `r2.dev` URL is enabled; or
-- usage could not be read for **4 consecutive runs** (`--max-failures`). A failed request, an
-  incomplete answer or a missing storage sample is never read as zero: each run that cannot read
-  usage exits 2 and counts towards the limit in its state file.
+1. **lists the bucket** through the R2 REST API: exact bytes and objects, one Class A
+   `ListObjects` operation (about 8,640 a month, 0.9% of the free Class A allowance). The listing
+   is also the run's **heartbeat**;
+2. reads the account's Class A and Class B operations over the **last 31 days** (Cloudflare bills
+   per billing cycle, which these permissions cannot read; a rolling 31 days covers any cycle,
+   and the dataset allows at most 32), the account's storage samples, and whether the previous
+   run's heartbeat appears in the analytics;
+3. reads the custom domain's and the `r2.dev` URL's state.
 
-Stopping means, in order: rename the manifest to `manifest.json.stopped`, so the API answers the
-quiet 503 at the next request and the app says "Offline maps are not available yet" rather than
-offering downloads that would fail; then disable the custom domain
-(`PUT …/r2/buckets/navoss-offline/domains/custom/navoss-offline.yassin.app {"enabled": false}`,
-which keeps the domain attached so it can be re-enabled), after which no request reaches R2; and
-confirm the `r2.dev` URL is disabled. Every step is attempted even if an earlier one fails, and
-the run prints one line with the reason and what it did, then exits 1. Later runs keep hosting
-stopped and keep exiting 1. The guard **never re-enables** anything, not even in a new month. A
-domain disabled by hand is treated the same way: the manifest is withdrawn.
+It **stops hosting** as soon as any of these is established, even if other reads failed:
+
+- Class B operations above **2,000,000**, Class A above **200,000**, or stored bytes above
+  **5 GB** (the larger of the listing and the analytics samples; 20% of each free allowance;
+  `--stop-class-b`, `--stop-class-a`, `--stop-bytes` override). Stale analytics only lag, so a
+  stale count above a threshold still stops;
+- the `r2.dev` URL is enabled;
+- the state file cannot be read or written (it could no longer count failures).
+
+Otherwise, a run that cannot **establish** usage exits 2 and counts towards **4 consecutive
+runs** (`--max-failures`), after which it stops. Usage is established only when every read
+succeeded and the analytics contain the previous run's heartbeat (made at least 4 minutes
+earlier; the measured lag is 140 seconds). An empty or zero operations answer is therefore never
+taken as zero by itself: it counts only once the analytics provably include a recent operation.
+A genuinely idle month always has the guard's own heartbeats, so it is "within limits", not a
+failure. A new bucket needs no storage sample (the listing gives its size); the first run after
+installation exits 2 because no earlier heartbeat exists yet, and the next run establishes usage.
+
+Stopping means, each step attempted even if another fails: rename the manifest to
+`manifest.json.stopped`, so the API answers the quiet 503 at the next request and the app says
+"Offline maps are not available yet" rather than offering downloads that would fail; disable the
+custom domain (`PUT …/r2/buckets/navoss-offline/domains/custom/navoss-offline.yassin.app
+{"enabled": false}`, which keeps the domain attached so it can be re-enabled) and read it back to
+confirm `enabled: false`, after which no request reaches R2; and do the same for the `r2.dev`
+URL. The run prints one line with the reason and what it did, then exits 1. Later runs keep
+hosting stopped and keep exiting 1. The guard **never re-enables** anything. A domain disabled by
+hand is treated the same way. The state file is replaced atomically, so a crash cannot truncate it.
+
+If the guard itself cannot run (Docker down, image missing, a crash) or stops hosting, systemd
+starts `navoss-offline-withdraw.service`, which renames the manifest on the host without Docker or
+network. `check-stack.sh` fails while the guard's timer is inactive or its last run is older than
+15 minutes or failed.
 
 ```sh
-# On a workstation: what the guard would do now, with the operator's token. Changes nothing.
+# On a workstation: what the guard would do now, with the operator's token. It changes nothing
+# but its listing (one Class A operation). Without a --state whose heartbeat has settled it
+# reports usage as not established (exit 2).
 CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… node infra/offline/r2-guard.mts --dry-run
 ```
 
 The guard's token needs exactly `Account Analytics Read` and `Workers R2 Storage Write` for this
 account. R2 has no narrower permission for bucket domain settings, so the token can also write
-objects: keep it only in the root-only `/srv/navoss/state/offline-guard.env`.
+objects. It lives only in the root-only `/srv/navoss/state/offline-guard.env`, which the
+container reads as a read-only file: it is not an environment variable of the container, so
+`docker inspect` does not show it. Only root (and so `navoss`, which has sudo) can read it.
 
 **Re-enable** only after finding the cause (`journalctl -u navoss-offline-guard`, `r2-usage.mts`)
 and only when usage is back under the stop thresholds (normally the next month). Order matters:
@@ -345,7 +375,9 @@ sudo systemctl start navoss-offline-guard.service; journalctl -u navoss-offline-
 NAVOSS_OFFLINE_MANIFEST_DIR=/srv/navoss/artifacts/offline ./infra/compose/check-stack.sh
 ```
 
-If usage is still above a threshold, step 2 stops hosting again at once; that is intended.
+If usage is still above a threshold, step 2 stops hosting again at once; that is intended. If the
+stop was caused by an unreadable state file, delete `/srv/navoss/state/offline-guard/r2-guard.json`
+before step 2; the first run then exits 2 while it re-establishes its heartbeat.
 
 ### Usage report
 
