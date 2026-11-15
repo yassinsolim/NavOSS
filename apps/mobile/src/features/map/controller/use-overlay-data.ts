@@ -75,6 +75,8 @@ export function useOverlayData({
     snapshot: RoadEventSnapshot;
   }>();
   const [roadEventRefreshDelayed, setRoadEventRefreshDelayed] = useState(false);
+  // Advanced every minute by the refresh loop, so held events keep expiring during an outage.
+  const [roadEventNow, setRoadEventNow] = useState(Date.now);
   const [torontoSafetyCameras, setTorontoSafetyCameras] = useState<readonly OfficialSafetyCamera[]>(
     [],
   );
@@ -196,6 +198,7 @@ export function useOverlayData({
           });
         },
       }),
+      onClock: setRoadEventNow,
       onDelayedChange: setRoadEventRefreshDelayed,
     });
   }, [legacyRegion, provincialRegion, roadEventFeedKey, showRoadEvents]);
@@ -206,8 +209,8 @@ export function useOverlayData({
     () =>
       roadEventSnapshot === undefined
         ? NO_EVENTS
-        : currentRoadEvents(roadEventSnapshot, Date.now()),
-    [roadEventSnapshot],
+        : currentRoadEvents(roadEventSnapshot, roadEventNow),
+    [roadEventNow, roadEventSnapshot],
   );
 
   return {

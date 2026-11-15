@@ -167,6 +167,26 @@ describe('road-event refresh', () => {
     stop();
   });
 
+  it('keeps a clock running through failed refreshes so held events keep expiring', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse('2026-11-15T10:00:00Z'));
+    const ticks: number[] = [];
+    const stop = startRoadEventRefresh({
+      load: () => Promise.reject(new NavOssApiError('Unavailable', 503)),
+      onClock: (now) => ticks.push(now),
+      onDelayedChange: () => undefined,
+    });
+    await vi.advanceTimersByTimeAsync(3 * 60 * 1_000);
+    expect(ticks).toEqual([
+      Date.parse('2026-11-15T10:01:00Z'),
+      Date.parse('2026-11-15T10:02:00Z'),
+      Date.parse('2026-11-15T10:03:00Z'),
+    ]);
+    stop();
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1_000);
+    expect(ticks).toHaveLength(3);
+  });
+
   it('stops quietly when an older server does not know the region (400)', async () => {
     vi.useFakeTimers();
     const load = vi.fn(() => Promise.reject(new NavOssApiError('Bad request', 400)));

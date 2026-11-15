@@ -9,19 +9,24 @@ import type { RoadEventFeedChoice, RoadEventSnapshot } from '@/features/map/road
 import { NavOssApiError } from '../../lib/api';
 
 export const ROAD_EVENT_REFRESH_INTERVAL_MS = 5 * 60 * 1_000;
+/** How often held events are re-checked against their end times and source age limits. */
+export const ROAD_EVENT_CLOCK_INTERVAL_MS = 60 * 1_000;
 
 /**
  * Loads a regional road-event feed now and every five minutes until stopped. A failed refresh
  * marks the feed delayed and waits for the next tick: no immediate retry. A server that answers
  * 404 (no endpoint) or 400 (a region it does not know) does not publish the feed at all, so the
  * loop stops without flagging anything; it starts again only when the region or the setting
- * changes.
+ * changes. A minute clock (`onClock`) runs alongside, including through failed refreshes, so a
+ * held snapshot keeps dropping events that end and sources that age out.
  */
 export function startRoadEventRefresh({
   load,
+  onClock,
   onDelayedChange,
 }: {
   load: (signal: AbortSignal) => Promise<void>;
+  onClock?: (now: number) => void;
   onDelayedChange: (delayed: boolean) => void;
 }): () => void {
   let controller: AbortController | undefined;
@@ -44,8 +49,15 @@ export function startRoadEventRefresh({
       });
   };
   const interval = setInterval(refresh, ROAD_EVENT_REFRESH_INTERVAL_MS);
+  const clock =
+    onClock === undefined
+      ? undefined
+      : setInterval(() => {
+          onClock(Date.now());
+        }, ROAD_EVENT_CLOCK_INTERVAL_MS);
   const stop = () => {
     clearInterval(interval);
+    if (clock !== undefined) clearInterval(clock);
     controller?.abort();
   };
   refresh();
