@@ -32,12 +32,12 @@ This status distinguishes the deployed service from individual builds. Build ava
 
 The deployed `/v2/routes` service provides Canada-wide routing with lane and signpost data when returned.
 
-Build `0.1.0 (81)` from `14dae86` was uploaded on 2026-11-15 with the `production-carplay-google` profile. Apple processing and tester availability have not been checked; external distribution awaits an on-screen Canada check. It adds the province-wide road-events list, Canada registry and route refusal presentation, plus the Explore-sheet fix.
+Build `0.1.0 (81)` from `14dae86` was processed by Apple and distributed to internal testers and NavOSS Friends on 2026-11-15, with the `production-carplay-google` profile. It adds the province-wide road-events list, Canada registry and route refusal presentation, plus the Explore-sheet fix. A Release simulator pass against production went ahead of distribution; physical iPhone and head-unit checks remain outstanding.
 
 Builds 75 and 80 follow the server's declared coverage for search and routing; they can use the
 Canada service too. This is based on their coverage and route-planner code, not a new on-screen test.
 
-Build `0.1.0 (80)` from `141b394` (native contract v11, `production-carplay-google`) was distributed to internal testers and NavOSS Friends on 2026-11-15. It carries the App Attest entitlement and Google place panel. On the enabled production service, drivers can opt in to share road reports or traffic speeds; reports from verified installations appear unconfirmed until corroborated, while traffic is collected for evaluation and not displayed. Builds before 80 cannot share. As of 11:00 UTC on 2026-11-15, no installation had registered. Interactive CarPlay remains unverified on a head unit.
+Build `0.1.0 (80)` from `141b394` (native contract v11, `production-carplay-google`) was distributed to internal testers and NavOSS Friends on 2026-11-15; it recorded one install and one session. It carries the App Attest entitlement and Google place panel. On the enabled production service, drivers can opt in to share road reports or traffic speeds; reports from verified installations appear unconfirmed until corroborated, while traffic is collected for evaluation and not displayed. Builds before 80 cannot share. As of 16:52 UTC on 2026-11-15, no installation had registered. Interactive CarPlay remains unverified on a head unit.
 
 Build `0.1.0 (75)` from `d0594cd` (native contract v10) supports v2 routing, including lane guidance and signposts when returned, but cannot share reports or traffic.
 
@@ -67,14 +67,14 @@ The features below are in uploaded build 75 unless otherwise noted.
 
 ### Deployed service
 
-The production API image is from `4708d34`. At 15:44 UTC on 2026-11-15 the v2 service switched to Canada-wide search and routing and returns lane and signpost data when available; v1 remains compatible with build 70. Clients still degrade quietly when a server lacks a capability.
+The production API image is from `36c8a9f`, deployed on 2026-11-15 with search and guidance-name fixes (#127); `navoss-api:pre-canada-search-fixes` is the image rollback tag. At 15:44 UTC that day the v2 service switched to Canada-wide search and routing and returns lane and signpost data when available; v1 remains compatible with build 70. Clients still degrade quietly when a server lacks a capability.
 
 - **Canada coverage (#121):** all 13 provinces and territories declared; the Alberta+BC 22-directed-route matrix passed 22/22.
 - **`/v2/routes` lanes and signposts (#79, #86):** the app's JS client planned Calgary to Banff with lane and signpost steps.
 - **Community road reports (#73):** `attested`; build 80 onward may share; verified reports are unconfirmed until corroborated.
 - **Community traffic (#76, #82, #86):** `collect`; opted-in speeds counted in memory for evaluation; nothing shown or used in routes.
 - **Offline bundles (#80, #122):** published 2026-11-15 for All Alberta and Calgary, Airdrie, Cochrane & Okotoks; no BC region.
-- **Province-wide road events (#120):** service returns Alberta, BC and Ontario events; the phone list is in uploaded build 81, not builds 75 or 80.
+- **Province-wide road events (#120):** service returns Alberta, BC and Ontario events; the phone list is in distributed build 81, not builds 75 or 80. 511 Alberta and Ontario 511 are not connected.
 
 Remaining checks are in [the next-build checklist](docs/release/next-build-checklist.md).
 
@@ -160,11 +160,13 @@ out-of-coverage search; requests start at least 550 ms apart. Failure output inc
 and returned rows. Category checks use the API's display-label mapping; labels shared by multiple
 OSM tags cannot identify the exact underlying tag.
 
+The repaired harness (#128) ran against production on 2026-11-15: 738 requests, including 735 category queries at 21 locations; 673 returned results, 62 were empty and none failed.
+
 For native navigation changes also run `corepack pnpm --filter @navoss/mobile test:native:ios` and a full Xcode compile. Maestro journeys and the iOS validation harness are listed in [apps/mobile/README.md](apps/mobile/README.md) and [docs/testing/navigation-validation.md](docs/testing/navigation-validation.md).
 
 ## Limitations
 
-- **Coverage.** The deployed v2 service covers Canada; uploaded build 81 uses it once available to testers. Build 70 uses v1 for Calgary and Kelowna. Some places have no connecting road route.
+- **Coverage.** The deployed v2 service covers Canada; distributed build 81 uses it. Build 70 uses v1 for Calgary and Kelowna. Some places have no connecting road route.
 - **No live traffic or traffic-aware ETA.** Lane guidance and signposts appear only when returned by v2 and are unavailable in build 70.
 - **Offline coverage.** All Alberta and the Calgary area can be downloaded in build 80. British Columbia has no offline region. A physical iPhone download in build 80 remains unverified.
 - **CarPlay is not validated on a head unit.** Apple's CarPlay Navigation entitlement is approved; real wired and wireless checks are still outstanding.
@@ -172,7 +174,7 @@ For native navigation changes also run `corepack pnpm --filter @navoss/mobile te
 - **Map matching** is geometric; it does not use road-network topology. Background guidance and spoken instructions still need sustained on-road evidence.
 - **Data is incomplete.** OpenStreetMap, City of Calgary and DriveBC data can be missing, wrong or late; camera alerts are informational and do not replace signs and signals.
 - **Single operator.** There is no staffed support, no service-level agreement and no direct support email yet.
-- **External TestFlight is manual.** Build 80 was distributed to NavOSS Friends on 2026-11-15; build 81 has been uploaded but is not yet externally distributed.
+- **External TestFlight is manual.** Build 81 was distributed to NavOSS Friends on 2026-11-15; a successful upload alone does not establish external availability.
 
 ## Contributing
 

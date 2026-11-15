@@ -1,17 +1,17 @@
 # App Review readiness
 
-Assessment date: 2026-07-28 (body). Header refreshed: 2026-11-12.
+Assessment date: 2026-07-28 (body). Header refreshed: 2026-11-15.
 
 ## What changed since this assessment
 
-The sections below were written against builds 12 to 17 and are kept as the record of that assessment. Since then:
+The assessment below was written against builds 12 to 17 and is retained as a historical record, including its verdicts and risk matrix. For current build and deployment evidence use [testflight.md](testflight.md), and for remaining candidate checks use [next-build-checklist.md](next-build-checklist.md).
 
-- The latest shipped build is `0.1.0 (70)`. External distribution is manual (#88); nothing has been sent to Beta App Review for the new code.
-- `main` now contains a community client (road reports and traffic sharing, Apple App Attest, a persistent per-installation identifier) that sends precise location off the device when the driver turns it on and a server enables it. That changes the guideline 5.1.1, 5.1.2 and 5.1.5 analysis and the App Privacy answers (see [App Store metadata](app-store-metadata.md#app-privacy-answers-needed-before-community-features-are-enabled)). Shared reports are also user-generated content shown to other users: **reassess Guideline 1.2** (and the age-rating inputs) before any build can see them. This has not been assessed here.
-- The production service still runs the older API image. Review notes must not describe lane guidance, live traffic, shared reports, Alberta and British Columbia coverage or offline maps as available until they are.
-- Items marked pending below (support email, App Privacy, age rating, export compliance, soak and recovery drills, on-road evidence, real CarPlay evidence) were not re-verified in this refresh.
+- Build `0.1.0 (81)` was processed and distributed to internal `testers` and NavOSS Friends on 2026-11-15. External distribution is manual (#88); availability is not proof of installation or a physical-device pass.
+- Production search and routing cover Canada. Distributed build 81 includes province-wide road events for Alberta, BC and Ontario; 511 Alberta and Ontario 511 remain disconnected. Lane guidance and signposts appear when returned. Offline regions are limited to Alberta and the Calgary area.
+- Reports are `attested` and opt-in traffic collection is `collect`. Reports from verified installations are unconfirmed until corroborated. Traffic is not shown or used in routes; live traffic remains unavailable. Builds before 80 cannot share. App Privacy answers were published on 2026-11-15.
+- Build 81 was checked in a Release simulator against production, not on a physical iPhone or head unit. Physical-device, on-road and real CarPlay evidence, support contact verification and other public-release gates remain open.
 
-Status: **NO-GO for external TestFlight or App Store review.** Prepare a small internal TestFlight only after the P0 internal-build gates below pass.
+Status: **external TestFlight is running; public App Store readiness remains incomplete.** Historical claims and gates below are not a current release verdict.
 
 This is an engineering and submission-readiness assessment, not legal advice. Apple can update its rules or apply additional scrutiny. Recheck the linked first-party guidance immediately before submission.
 
@@ -28,9 +28,9 @@ The present rejection risks are concrete:
 3. The reviewer-access blocker is resolved: a visible Calgary Tower preview uses the production route API, is documented in review notes, and disables Start until real-location routing is restored.
 4. Build 16 is attached to the external `NavOSS Friends` group with saved private review contact and beta metadata. Beta App Review remains submitted; build 17 now has stationary physical-iPhone evidence and production screenshots. App Privacy/age-rating/export-compliance answers, public support email, moving-road evidence, and real CarPlay evidence remain unfinished.
 
-## Distribution decision
+## Historical distribution decision (2026-07-28)
 
-| Channel                         | Current verdict       | Meaning                                                                                                                                             |
+| Channel                         | Historical verdict    | Meaning at the time                                                                                                                                 |
 | ------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Local and physical-device alpha | GO                    | Automated checks and stationary physical build-17 discovery, routing, guidance, lock recovery, reporting, and End checks pass.                      |
 | Internal TestFlight             | GO for technical beta | Build 17 is installed and physically smoke-tested; moving-road, Toronto, account-holder, and real CarPlay gates remain before broader distribution. |
@@ -41,7 +41,7 @@ Internal TestFlight is a distribution step, not an exemption from the App Review
 
 ## Verified evidence
 
-The following statements are supported by the current app, repository, or live services:
+The following statements were recorded in the July 2026 assessment; see the current release record before relying on them:
 
 - Bundle ID `org.navoss.mobile`, version `0.1.0`, When in Use authorization, and active-navigation `location` background mode are present.
 - Signed build `0.1.0 (15)` and its provisioning profile assert the Apple-approved `com.apple.developer.carplay-maps` entitlement; its CarPlay template scene is present and the deprecated Maps entitlement is absent.
