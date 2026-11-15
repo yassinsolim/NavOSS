@@ -14,12 +14,10 @@ final class GooglePlaceMatchTests: XCTestCase {
     ("Shoppers Drug Mart #2345", "Shoppers Drug Mart"),
     ("Tim Hortons - Kensington", "Tim Hortons"),
     ("Safeway (Signal Hill)", "Safeway"),
-    ("IKEA", "IKEA Calgary"),
     ("Chinook Centre", "CF Chinook Centre"),
     ("Chinook Center", "Chinook Centre"),
     ("The Keg Steakhouse & Bar", "The Keg Steakhouse + Bar"),
     ("Earls Kitchen and Bar", "Earls Kitchen + Bar"),
-    ("A&W", "A & W Canada"),
     ("Village Ice Cream Unit 5", "Village Ice Cream"),
     ("Peters' Drive-In", "Peters Drive In"),
     ("Café Rosso", "Cafe Rosso"),
@@ -32,8 +30,8 @@ final class GooglePlaceMatchTests: XCTestCase {
     ("Lee's Donuts", "Lee's Donuts - Granville Island"),
     ("Tim Hortons", "Tim Hortons (Chinook Centre)"),
     ("Starbucks (Food Court)", "Starbucks (Food Court)"),
-    ("Earls Kitchen + Bar", "Earls Kitchen + Bar Downtown"),
-    ("Shoppers Drug Mart #2345", "Shoppers Drug Mart SW"),
+    ("Earls Kitchen + Bar", "Earls Kitchen + Bar - Downtown"),
+    ("Safeway", "Safeway (North Vancouver)"),
   ]
 
   private let differentBusinesses: [(navoss: String, google: String)] = [
@@ -60,6 +58,13 @@ final class GooglePlaceMatchTests: XCTestCase {
     ("Japadog", "Japadog Burrard"),
     ("Superstore", "Real Canadian Superstore"),
     ("Mcdonald's Restaurants #40123", "McDonald's"),
+    ("IKEA", "IKEA Calgary"),
+    ("A&W", "A & W Canada"),
+    // Location words do not establish identity unless they are an explicit branch qualifier.
+    ("The North Face", "Face"),
+    ("North Vancouver Pizza", "Vancouver Pizza"),
+    ("Calgary Co-op", "Co-op"),
+    ("West Jet", "Jet"),
     // Category words alone never identify a business.
     ("Pizza", "Pizza Hut"),
     ("Parking", "Impark Parking"),

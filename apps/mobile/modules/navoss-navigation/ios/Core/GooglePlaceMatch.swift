@@ -31,8 +31,8 @@ public enum NavOSSGooglePlaceMatch {
   /// branch qualifier ("Tim Hortons - Kensington", "Safeway (Signal Hill)"). Two different
   /// qualifiers are two branches; a qualifier on one side only is ignored. A qualifier that names a
   /// department ("Safeway (Pharmacy)") is part of the identity, never branch metadata. Cores match
-  /// when equal after normalisation, or when the longer adds only legal, location or city words
-  /// ("IKEA Calgary"). Anything else is rejected: a false reject only hides Google's panel.
+  /// when equal after normalisation, or when the longer adds only a legal form or the CF mall
+  /// prefix ("CF Chinook Centre"). Anything else is rejected: a false reject only hides Google's panel.
   public static func namesMatch(_ left: String, _ right: String) -> Bool {
     let leftName = parsedName(left)
     let rightName = parsedName(right)
@@ -58,14 +58,12 @@ public enum NavOSSGooglePlaceMatch {
     "salon", "school", "shop", "spa", "store", "sushi",
   ]
 
-  /// The only words a longer name may add and still be the same business: legal forms, compass
-  /// and downtown location words, the cities and provinces NavOSS covers, and the Cadillac
-  /// Fairview mall prefix. Kept short on purpose; an unknown word is a different business.
+  /// The only words a longer name may add and still be the same business: legal forms and the
+  /// Cadillac Fairview mall prefix. Location words (compass points, cities, provinces) stay part of
+  /// the name ("The North Face", "Calgary Co-op") and count only as an explicit branch qualifier
+  /// ("Tim Hortons - Downtown", "Safeway (North Vancouver)").
   private static let nonIdentityWords: Set<String> = [
-    "ab", "alberta", "bc", "burnaby", "calgary", "canada", "cf", "co", "corp", "corporation",
-    "downtown", "e", "east", "edmonton", "inc", "incorporated", "kelowna", "limited", "llc", "ltd",
-    "n", "ne", "north", "nw", "richmond", "s", "se", "south", "surrey", "sw", "ulc", "vancouver",
-    "w", "west", "yvr", "yyc",
+    "cf", "co", "corp", "corporation", "inc", "incorporated", "limited", "llc", "ltd", "ulc",
   ]
 
   private static let ignoredWords: Set<String> = ["and", "the"]
