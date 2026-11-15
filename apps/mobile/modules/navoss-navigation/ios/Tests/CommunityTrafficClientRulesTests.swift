@@ -636,6 +636,34 @@ final class CommunityTrafficServiceRulesTests: XCTestCase {
     XCTAssertEqual(transmitted, [], "the request in flight was cancelled when the setter returned")
     service.navigationDidEnd()
   }
+
+  // MARK: A 503 on the credential request pauses; it does not withdraw consent
+
+  func testACredentialOutagePausesSharingAndKeepsTheDriversChoice() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock)
+    await transport.configure(credentials: [.failure(.serviceUnavailable(retryAfterSeconds: 300))])
+    let (service, preferences) = makeService(transport, clock: clock)
+    service.navigationDidStart(trip())
+    let paused = await eventually {
+      service.trafficSharingState() == .paused(until: self.start.addingTimeInterval(300))
+    }
+    XCTAssertTrue(paused, "shown as paused")
+    XCTAssertTrue(preferences.load().sharesTrafficSpeeds, "a five-minute outage is not an opt-out")
+    var firstUpload: Date?
+    for fix in drive(from: start, count: 600) {
+      clock.value = fix.timestamp
+      await service.traffic?.ingest(fix)
+      await service.traffic?.drain()
+      if firstUpload == nil, await transport.transmitted.count == 1 { firstUpload = fix.timestamp }
+    }
+    guard let firstUpload else { return XCTFail("sharing resumes after the pause") }
+    XCTAssertGreaterThanOrEqual(firstUpload.timeIntervalSince(start), 300)
+    let credentials = await transport.credentialRequests
+    XCTAssertEqual(credentials, 2, "one new credential after the pause")
+    XCTAssertEqual(service.trafficSharingState(), .sharing)
+    service.navigationDidEnd()
+  }
 }
 
 final class CommunityTrafficEmbargoTests: XCTestCase {

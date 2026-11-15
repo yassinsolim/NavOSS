@@ -496,9 +496,8 @@ public final class NavOSSCommunityService: @unchecked Sendable {
   private func trafficStateDidChange(_ state: NavOSSTrafficSharingState) {
     lock.withLock { trafficState = state }
     // The server says it does not take traffic speeds (status not accepting, or no traffic
-    // endpoint, or the credential endpoint is not issuing), or this device cannot attest: the
-    // switch is turned off rather than shown off while kept on, so sharing needs a new opt-in
-    // once it is available.
+    // endpoint), or this device cannot attest: the switch is turned off rather than shown off
+    // while kept on, so sharing needs a new opt-in once it is available. A 503 only pauses.
     if state == .unavailable(reason: .notAccepting) || state == .unavailable(reason: .unsupported),
       preferencesStore.load().sharesTrafficSpeeds
     {

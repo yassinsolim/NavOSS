@@ -485,9 +485,11 @@ public actor NavOSSTrafficSharingSession {
         record(.dropped)
         continue
       }
-      if let credential,
-        credential.expiresAt.timeIntervalSince(now()) < Self.credentialRefreshMarginSeconds
-      {
+      // None yet after a 503 pause on the credential request; otherwise renewed shortly before
+      // it expires.
+      if credential.map({
+        $0.expiresAt.timeIntervalSince(now()) < Self.credentialRefreshMarginSeconds
+      }) ?? true {
         guard await refreshCredential(generation: current) else { return }
       }
       guard generation == current, !Task.isCancelled, let credential, let permit else { return }
@@ -546,7 +548,13 @@ public actor NavOSSTrafficSharingSession {
       case .rateLimited:
         stop(.rateLimited)
       case .serviceUnavailable:
-        stop(.notAccepting)
+        // Like a 503 on an upload: pause five minutes, keep the collector and the driver's
+        // choice, and ask for a credential again with the first batch after the pause.
+        credential = nil
+        queue.removeAll()
+        let until = now().addingTimeInterval(Self.unavailablePauseSeconds)
+        pausedUntil = until
+        set(.paused(until: until))
       case .network:
         stop(.offline)
       default:
