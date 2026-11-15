@@ -33,7 +33,8 @@ const APPLIED =
   '"/2026-11-11-v1-798f5c442644/regions/calgary/routing.tar" ' +
   '"/2026-11-11-v1-798f5c442644/regions/calgary/search.sqlite"} ' +
   'or http.request.uri.query ne "" or http.request.method ne "GET" or any(http.request.headers.names[*] in ' +
-  '{"origin" "x-forwarded-host" "x-host" "x-forwarded-scheme" "x-original-url" "x-rewrite-url" "forwarded"})))';
+  '{"origin" "x-http-method-override" "x-http-method" "x-method-override" "x-forwarded-host" ' +
+  '"x-host" "x-forwarded-scheme" "x-original-url" "x-rewrite-url" "forwarded"})))';
 
 test('the expression for the published manifest is the rule applied to the zone', () => {
   assert.equal(wafExpression([manifest(V1, ['alberta', 'calgary'])]), APPLIED);

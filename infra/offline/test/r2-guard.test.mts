@@ -14,6 +14,7 @@ import {
   type GuardState,
   type Observation,
 } from '../r2-guard.mts';
+import { listBucket } from '../r2-analytics.mts';
 
 const NOW = new Date('2026-11-20T12:00:00Z');
 const LIMITS = { ...DEFAULT_STOP };
@@ -377,8 +378,21 @@ test('an already withdrawn manifest is not a failure', async () => {
   }
 });
 
-/** A fake Cloudflare API: listing, analytics with a given heartbeat count, domain states. */
-async function withCloudflare<T>(heartbeats: number, run: () => Promise<T>): Promise<T> {
+interface FakeCloudflare {
+  /** Requests of the heartbeat action the analytics report since the reference time. */
+  heartbeats: number;
+  /** The main totals; by default PutObject 12 plus the heartbeats as ListObjects. */
+  operations?: { actionType: string; requests: number }[];
+  /** The listing's `result_info`. */
+  resultInfo?: Record<string, unknown>;
+}
+
+/** A fake Cloudflare API: listing, analytics, domain states. */
+async function withCloudflare<T>(fake: FakeCloudflare, run: () => Promise<T>): Promise<T> {
+  const operations = fake.operations ?? [
+    { actionType: 'PutObject', requests: 12 },
+    ...(fake.heartbeats > 0 ? [{ actionType: 'ListObjects', requests: fake.heartbeats }] : []),
+  ];
   const original = globalThis.fetch;
   globalThis.fetch = (async (input: string | URL) => {
     const url = new URL(String(input));
@@ -388,8 +402,11 @@ async function withCloudflare<T>(heartbeats: number, run: () => Promise<T>): Pro
             viewer: {
               accounts: [
                 {
-                  operations: [{ sum: { requests: 12 }, dimensions: { actionType: 'PutObject' } }],
-                  heartbeat: heartbeats > 0 ? [{ sum: { requests: heartbeats } }] : [],
+                  operations: operations.map(({ actionType, requests }) => ({
+                    sum: { requests },
+                    dimensions: { actionType },
+                  })),
+                  heartbeat: fake.heartbeats > 0 ? [{ sum: { requests: fake.heartbeats } }] : [],
                   storage: [],
                 },
               ],
@@ -398,7 +415,12 @@ async function withCloudflare<T>(heartbeats: number, run: () => Promise<T>): Pro
           errors: null,
         }
       : url.pathname.endsWith('/objects')
-        ? { success: true, errors: [], result: [{ key: 'k', size: 1_000 }], result_info: {} }
+        ? {
+            success: true,
+            errors: [],
+            result: [{ key: 'k', size: 1_000 }],
+            result_info: fake.resultInfo ?? {},
+          }
         : { success: true, errors: [], result: { enabled: !url.pathname.endsWith('/managed') } };
     return new Response(JSON.stringify(body), { status: 200 });
   }) as typeof fetch;
@@ -409,37 +431,91 @@ async function withCloudflare<T>(heartbeats: number, run: () => Promise<T>): Pro
   }
 }
 
+async function guardRun(directory: string) {
+  const credentials = join(directory, 'guard.env');
+  await writeFile(credentials, 'CLOUDFLARE_API_TOKEN=t\nCLOUDFLARE_ACCOUNT_ID=a\n');
+  return [
+    '--state',
+    join(directory, 'state.json'),
+    '--credentials',
+    credentials,
+    '--manifest-dir',
+    directory,
+  ];
+}
+
 test('zero-free analytics count only once the previous run’s heartbeat shows in them', async () => {
   const directory = await scratch();
   try {
     await quietly(async (lines) => {
       const statePath = join(directory, 'state.json');
-      const credentials = join(directory, 'guard.env');
-      await writeFile(credentials, 'CLOUDFLARE_API_TOKEN=t\nCLOUDFLARE_ACCOUNT_ID=a\n');
-      const args = [
-        '--state',
-        statePath,
-        '--credentials',
-        credentials,
-        '--manifest-dir',
-        directory,
-      ];
+      const args = await guardRun(directory);
       // First run: no earlier heartbeat can prove the analytics are current.
-      assert.equal(await withCloudflare(1, () => main(args)), 2);
+      assert.equal(await withCloudflare({ heartbeats: 1 }, () => main(args)), 2);
       assert.match(lines.at(-1)!, /heartbeat/);
       const first = parseState(await readFile(statePath, 'utf8'));
       assert.ok(first.heartbeatAt);
       // Five minutes later the analytics show it: within limits.
       const settled = new Date(Date.now() - 5 * 60_000).toISOString();
       await writeFile(statePath, JSON.stringify({ ...first, heartbeatAt: settled }));
-      assert.equal(await withCloudflare(1, () => main(args)), 0);
-      assert.match(lines.at(-1)!, /^within limits \(Class A 12, Class B 0, 1000 bytes\)/);
+      assert.equal(await withCloudflare({ heartbeats: 1 }, () => main(args)), 0);
+      assert.match(lines.at(-1)!, /^within limits \(Class A 13, Class B 0, 1000 bytes\)/);
       // Analytics that do not show it are stale: unknown, never zero.
       await writeFile(statePath, JSON.stringify({ failures: 0, heartbeatAt: settled }));
-      assert.equal(await withCloudflare(0, () => main(args)), 2);
+      assert.equal(await withCloudflare({ heartbeats: 0 }, () => main(args)), 2);
       assert.ok((await readdir(directory)).includes('manifest.json'));
     });
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test('a heartbeat must be inside the totals the decision uses', async () => {
+  const directory = await scratch();
+  try {
+    await quietly(async (lines) => {
+      const args = await guardRun(directory);
+      const settled = new Date(Date.now() - 5 * 60_000).toISOString();
+      await writeFile(
+        join(directory, 'state.json'),
+        JSON.stringify({ failures: 0, heartbeatAt: settled }),
+      );
+      // The heartbeat query sees the listing, but the totals are empty: they are not current.
+      assert.equal(await withCloudflare({ heartbeats: 1, operations: [] }, () => main(args)), 2);
+      assert.match(lines.at(-1)!, /usage not established/);
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('a heartbeat reference older than three timer periods is discarded and renewed', async () => {
+  const directory = await scratch();
+  try {
+    await quietly(async (lines) => {
+      const args = await guardRun(directory);
+      const statePath = join(directory, 'state.json');
+      const old = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+      await writeFile(statePath, JSON.stringify({ failures: 0, heartbeatAt: old }));
+      // Analytics frozen at the old heartbeat would still "show" it: not enough after an outage.
+      assert.equal(await withCloudflare({ heartbeats: 1 }, () => main(args)), 2);
+      assert.match(lines.at(-1)!, /heartbeat/);
+      const renewed = parseState(await readFile(statePath, 'utf8')).heartbeatAt!;
+      assert.ok(Date.now() - new Date(renewed).getTime() < 60_000, 'a fresh heartbeat is recorded');
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('a truncated listing without a usable cursor is not a complete size', async () => {
+  for (const resultInfo of [{ is_truncated: true }, { is_truncated: true, cursor: '' }]) {
+    await withCloudflare({ heartbeats: 0, resultInfo }, async () => {
+      await assert.rejects(listBucket('t', 'a', 'b'), /truncated listing without a cursor/);
+    });
+  }
+  // A cursor-less, untruncated answer is complete.
+  await withCloudflare({ heartbeats: 0, resultInfo: { is_truncated: false } }, async () => {
+    assert.deepEqual(await listBucket('t', 'a', 'b'), { objects: 1, bytes: 1_000 });
+  });
 });

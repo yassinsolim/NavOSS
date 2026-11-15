@@ -153,6 +153,8 @@ export interface Analytics {
   storage: Map<string, { objects: number; bytes: number }>;
   /** Requests of the heartbeat action on the bucket since `heartbeatSince`. */
   heartbeats: number;
+  /** Requests of the heartbeat action inside the 31-day totals above. */
+  heartbeatsInTotals: number;
 }
 
 export async function resolveAccount(token: string, configured: string | undefined) {
@@ -205,10 +207,15 @@ export async function readAnalytics(
     (sum, row) => sum + count(isRecord(row.sum) ? row.sum.requests : undefined, 'request count'),
     0,
   );
+  const totals = sumRequests(result.operations, 'operation analytics');
+  const heartbeatAction = options.heartbeatAction ?? 'ListObjects';
   return {
-    ...classifyOperations(sumRequests(result.operations, 'operation analytics')),
+    ...classifyOperations(totals),
     storage,
     heartbeats,
+    heartbeatsInTotals: totals
+      .filter(({ action }) => action === heartbeatAction)
+      .reduce((sum, { requests }) => sum + requests, 0),
   };
 }
 
@@ -230,10 +237,11 @@ export async function listBucket(
       bytes += count(item.size, 'object size');
     }
     const info = isRecord(response.resultInfo) ? response.resultInfo : {};
-    cursor =
-      typeof info.cursor === 'string' && info.cursor !== '' && info.is_truncated !== false
-        ? info.cursor
-        : undefined;
+    const usable = typeof info.cursor === 'string' && info.cursor !== '' ? info.cursor : undefined;
+    // A truncated page without a cursor would make a partial total look complete.
+    if (info.is_truncated === true && !usable)
+      throw new Error('R2 returned a truncated listing without a cursor');
+    cursor = info.is_truncated === false ? undefined : usable;
     if (!cursor) return { objects, bytes };
   }
   throw new Error('Object listing did not end within 100 pages');

@@ -20,6 +20,11 @@ export const DEFAULT_STOP = { classA: 200_000, classB: 2_000_000, bytes: 5e9 } a
 export const DEFAULT_MAX_FAILURES = 4;
 /** A heartbeat younger than this may not have reached the analytics yet (measured lag: 140 s). */
 export const HEARTBEAT_SETTLE_MS = 4 * 60_000;
+/**
+ * A reference older than three timer periods is discarded: after an outage, analytics frozen at
+ * that old point would still show it. The next run establishes a fresh heartbeat instead.
+ */
+export const HEARTBEAT_MAX_AGE_MS = 15 * 60_000;
 const MANIFEST = 'manifest.json';
 const STOPPED_MANIFEST = 'manifest.json.stopped';
 
@@ -201,11 +206,11 @@ async function observe(
   } catch (error) {
     observation.errors.push(message(error, 'listing failed'));
   }
-  // Only a heartbeat old enough to have reached the analytics can prove they are current.
-  const settled =
-    heartbeatAt && now.getTime() - heartbeatAt.getTime() >= HEARTBEAT_SETTLE_MS
-      ? heartbeatAt
-      : undefined;
+  // Only a heartbeat old enough to have reached the analytics, and recent enough to say they are
+  // still moving, can prove they are current.
+  const age = heartbeatAt ? now.getTime() - heartbeatAt.getTime() : undefined;
+  const usable = age !== undefined && age <= HEARTBEAT_MAX_AGE_MS ? heartbeatAt : undefined;
+  const settled = usable && age! >= HEARTBEAT_SETTLE_MS ? usable : undefined;
   try {
     const analytics = await readAnalytics(token, account, {
       bucket,
@@ -216,7 +221,11 @@ async function observe(
     observation.operations = {
       classA: analytics.classA,
       classB: analytics.classB,
-      current: settled !== undefined && analytics.heartbeats > 0,
+      // The heartbeat must also be inside the totals the decision is made on.
+      current:
+        settled !== undefined &&
+        analytics.heartbeats > 0 &&
+        analytics.heartbeatsInTotals >= analytics.heartbeats,
     };
     const sampled = [...analytics.storage.values()].reduce((sum, value) => sum + value.bytes, 0);
     if (listedBytes !== undefined) observation.bytes = Math.max(listedBytes, sampled);
@@ -240,8 +249,8 @@ async function observe(
   } catch (error) {
     observation.errors.push(message(error, 'r2.dev state failed'));
   }
-  // A heartbeat that is not yet settled stays the reference until it is.
-  const keep = heartbeatAt && !settled ? heartbeatAt : newHeartbeat;
+  // A usable heartbeat that is not yet settled stays the reference until it is.
+  const keep = usable && !settled ? usable : newHeartbeat;
   return { observation, ...(keep ? { heartbeatAt: keep } : {}) };
 }
 

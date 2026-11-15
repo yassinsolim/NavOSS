@@ -319,11 +319,16 @@ existing "Leaked credential check", which stays. What limits abuse instead:
 
 - The WAF allowlist rule blocks, before R2, every path except the seven published files, every
   query string, every method except GET, and every request carrying a header that Cloudflare's
-  default cache key includes (`Origin`, `X-Forwarded-Host`, `X-Host`, `X-Forwarded-Scheme`,
-  `X-Original-URL`, `X-Rewrite-URL`, `Forwarded`). A unique query string or one of those headers
-  was a cache miss, one R2 read, every time (reproduced 2026-11-15); `Accept-Encoding`, `Cookie`
-  and `Authorization` do not change the cache key. Plain `http://` requests are redirected to
-  HTTPS by Cloudflare (301, no R2 operation), so they do not form a second cache key. Certificate-transparency scanners began probing the new hostname within
+  default cache key includes ([cache keys](https://developers.cloudflare.com/cache/how-to/cache-keys/)):
+  `Origin`; the method overrides `X-HTTP-Method-Override`, `X-HTTP-Method` and
+  `X-Method-Override`; and the host and URL rewrites `X-Forwarded-Host`, `X-Host`,
+  `X-Forwarded-Scheme`, `X-Original-URL`, `X-Rewrite-URL` and `Forwarded`. A unique query string or
+  value of one of those headers was a cache miss, one R2 read, every time (reproduced
+  2026-11-15). `Accept-Encoding`, `Accept-Language`, `Accept`, `User-Agent`, `Cookie`,
+  `Authorization`, `X-Forwarded-For`, `X-Forwarded-Proto`, `If-None-Match`,
+  `Cache-Control: no-cache` and `Pragma` do not change the cache result. Plain `http://` requests
+  are redirected to HTTPS by Cloudflare (301, no R2 operation), so they do not form a second cache
+  key. Certificate-transparency scanners began probing the new hostname within
   minutes (61 `404` requests reached R2 in its first 25 minutes, about 105,000 a month at that
   rate); they are now answered 403 by Cloudflare and cost nothing.
 - A GET for a published file, ranged or not, is answered from cache once that location holds it
@@ -353,8 +358,9 @@ confirms `r2.dev` is off) when the account's last-31-day totals pass **2,000,000
 **200,000 Class A**, when stored bytes pass **5 GB**, when `r2.dev` is enabled, when its state file
 cannot be read or written, or after **4 consecutive runs** that could not establish usage (20
 minutes). Each established stop condition is acted on even if other reads failed. Usage counts as
-established only when the analytics include the previous run's heartbeat (its bucket listing), so
-an empty or stale answer is never read as zero; an idle month still contains the guard's own
+established only when the analytics include the previous run's heartbeat (its bucket listing,
+4 to 15 minutes old) both in a query for it and inside the totals the decision uses, so an empty,
+stale or frozen answer is never read as zero; an idle month still contains the guard's own
 heartbeats. Storage comes from the bucket listing (exact, immediate) and the analytics samples,
 whichever is larger. It never re-enables anything. If the guard cannot run at all, systemd
 withdraws the manifest on the host (`OnFailure=`). Details and the re-enable procedure:
@@ -436,7 +442,7 @@ exactly for the current release (a unit test asserts it):
 ```json
 {
   "description": "navoss-offline: only published files, GET, no query, no cache-key headers",
-  "expression": "(http.host eq \"navoss-offline.yassin.app\" and (not http.request.uri.path in {\"/2026-11-11-v1-798f5c442644/regions/alberta/maps.pmtiles\" \"/2026-11-11-v1-798f5c442644/regions/alberta/routing.tar\" \"/2026-11-11-v1-798f5c442644/regions/alberta/search.sqlite\" \"/2026-11-11-v1-798f5c442644/resources.tar.gz\" \"/2026-11-11-v1-798f5c442644/regions/calgary/maps.pmtiles\" \"/2026-11-11-v1-798f5c442644/regions/calgary/routing.tar\" \"/2026-11-11-v1-798f5c442644/regions/calgary/search.sqlite\"} or http.request.uri.query ne \"\" or http.request.method ne \"GET\" or any(http.request.headers.names[*] in {\"origin\" \"x-forwarded-host\" \"x-host\" \"x-forwarded-scheme\" \"x-original-url\" \"x-rewrite-url\" \"forwarded\"})))",
+  "expression": "(http.host eq \"navoss-offline.yassin.app\" and (not http.request.uri.path in {\"/2026-11-11-v1-798f5c442644/regions/alberta/maps.pmtiles\" \"/2026-11-11-v1-798f5c442644/regions/alberta/routing.tar\" \"/2026-11-11-v1-798f5c442644/regions/alberta/search.sqlite\" \"/2026-11-11-v1-798f5c442644/resources.tar.gz\" \"/2026-11-11-v1-798f5c442644/regions/calgary/maps.pmtiles\" \"/2026-11-11-v1-798f5c442644/regions/calgary/routing.tar\" \"/2026-11-11-v1-798f5c442644/regions/calgary/search.sqlite\"} or http.request.uri.query ne \"\" or http.request.method ne \"GET\" or any(http.request.headers.names[*] in {\"origin\" \"x-http-method-override\" \"x-http-method\" \"x-method-override\" \"x-forwarded-host\" \"x-host\" \"x-forwarded-scheme\" \"x-original-url\" \"x-rewrite-url\" \"forwarded\"})))",
   "action": "block",
   "enabled": true
 }
@@ -444,7 +450,7 @@ exactly for the current release (a unit test asserts it):
 
 Verified when applied (it first allowed GET and HEAD and had no header clause; HEAD and the
 cache-key headers were added after each was shown to bypass the cache): a published file with
-`?x=1`, each of the seven headers in any letter case, `/.env`, an unknown path under the release,
+`?x=1`, each of the ten headers in any letter case, `/.env`, an unknown path under the release,
 `provenance.json`, a HEAD and a POST answer 403; a plain ranged GET is a 206 cache hit; the seven manifest URLs answer 206; `navoss.yassin.app`
 and `navoss-api.yassin.app` are unaffected. **A new release must be added to this rule before the
 manifest points at it**; until then its downloads are refused, which fails closed.
@@ -463,9 +469,10 @@ is configured.
   against `x-amz-checksum-sha256` on upload). `verify-hosting.mts` passed for all seven manifest
   URLs: `200`, exact length, `Accept-Ranges: bytes`, immutable caching, identity encoding and a
   correct `206` tail range.
-- With the zone rules in place, `verify-hosting.mts` passed 11/11: all seven files answered both
-  ranged GETs from cache (`HIT`), and a query string, an unpublished path, a HEAD and an `Origin`
-  header were refused with 403.
+- With the zone rules in place, `verify-hosting.mts` passed 13/13: all seven files answered both
+  ranged GETs from cache (`HIT`), and a query string, an unpublished path, a HEAD and one header
+  from each cache-key group (`Origin`, `X-HTTP-Method-Override`, `X-Forwarded-Host`) were refused
+  with 403.
 - Manifest: regenerated with `build.sh --base-url https://navoss-offline.yassin.app` from the
   cached build; same bundle version `2026-11-11-v1-798f5c442644`; identical to the loopback
   manifest except the artifact URLs and `generatedAt`.

@@ -16,11 +16,16 @@ export const WAF_RULE_DESCRIPTION =
   'navoss-offline: only published files, GET, no query, no cache-key headers';
 
 /**
- * Request headers that Cloudflare's default cache key includes. A unique value of any of them was
- * a cache miss every time (one R2 read each); measured 2026-11-15.
+ * Request headers that Cloudflare's default cache key includes
+ * (https://developers.cloudflare.com/cache/how-to/cache-keys/): Origin, the method-override
+ * headers, and the host and URL-rewrite headers. A unique value of any of them was a cache miss
+ * every time (one R2 read each); measured 2026-11-15.
  */
 export const CACHE_KEY_HEADERS = [
   'origin',
+  'x-http-method-override',
+  'x-http-method',
+  'x-method-override',
   'x-forwarded-host',
   'x-host',
   'x-forwarded-scheme',

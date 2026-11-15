@@ -191,7 +191,9 @@ Zone rules on `yassin.app`, applied by API on 2026-11-15 (exact JSON in
   (new `http_request_firewall_custom` entrypoint): on the download host, blocks every path except
   the manifest's artifact paths, every query string, every method except GET (Cloudflare never
   answers HEAD from cache, so each HEAD would reach R2), and every request with a header that
-  Cloudflare's default cache key includes (`Origin`, `X-Forwarded-Host`, `X-Host`,
+  Cloudflare's default cache key includes
+  ([cache keys](https://developers.cloudflare.com/cache/how-to/cache-keys/): `Origin`,
+  `X-HTTP-Method-Override`, `X-HTTP-Method`, `X-Method-Override`, `X-Forwarded-Host`, `X-Host`,
   `X-Forwarded-Scheme`, `X-Original-URL`, `X-Rewrite-URL`, `Forwarded`), each of which would
   otherwise make a fresh cache miss.
   `SHA256SUMS` and `provenance.json` are stored but not publicly served.
@@ -274,7 +276,7 @@ node --import tsx infra/offline/verify-hosting.mts artifacts/offline/manifest.js
 `verify-hosting.mts` requires, for every artifact URL in the manifest, correct `206` answers to a
 first-byte and a last-16-bytes ranged GET whose `Content-Range` total is the manifest's exact
 size, an immutable `Cache-Control` and no content encoding; that the WAF refuses a query string,
-an unpublished path, a HEAD and an `Origin` header (403); and that every file fits the cache. `--sha256` also
+an unpublished path, a HEAD and one header from each cache-key group (403); and that every file fits the cache. `--sha256` also
 downloads each artifact once and compares its digest. Without `--sha256` it costs at most two
 Class B operations per artifact (only when a location's cache is cold). Only then install the
 manifest on the VM.
@@ -324,9 +326,13 @@ It **stops hosting** as soon as any of these is established, even if other reads
 
 Otherwise, a run that cannot **establish** usage exits 2 and counts towards **4 consecutive
 runs** (`--max-failures`), after which it stops. Usage is established only when every read
-succeeded and the analytics contain the previous run's heartbeat (made at least 4 minutes
-earlier; the measured lag is 140 seconds). An empty or zero operations answer is therefore never
-taken as zero by itself: it counts only once the analytics provably include a recent operation.
+succeeded and the analytics contain the previous run's heartbeat, both in a query for it and
+inside the 31-day totals the decision uses. The heartbeat must be at least 4 minutes old (the
+measured lag is 140 seconds) and at most 15 minutes (three timer periods): an older reference,
+after an outage, is discarded, because analytics frozen at that point would still show it, and the
+run establishes a fresh one. An empty or zero operations answer is therefore never taken as zero
+by itself: it counts only once the analytics provably include a recent operation. A bucket
+listing that says it is truncated but gives no cursor is treated as unknown, not as complete.
 A genuinely idle month always has the guard's own heartbeats, so it is "within limits", not a
 failure. A new bucket needs no storage sample (the listing gives its size); the first run after
 installation exits 2 because no earlier heartbeat exists yet, and the next run establishes usage.
