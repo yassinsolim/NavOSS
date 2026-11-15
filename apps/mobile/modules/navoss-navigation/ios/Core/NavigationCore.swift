@@ -177,8 +177,11 @@ private let implausibleJumpMarginMeters = 150.0
 //      trip without usable progress is placed as a first fix, but its pass is unconfirmed
 //      (`isPassConfirmed`) until a fix fits only one pass or the moving vehicle's heading picks
 //      it out, and it does not arrive before then. Nothing of a restored trip is guided until
-//      a fix is matched on a confirmed pass. A trip restored before its first match had not
-//      been on the route at all: its first fix is placed as a new route's is.
+//      a fix is matched on a confirmed pass. Before the first match of any route (a new one,
+//      or one restored before its first match), a fix that fits more than one pass and does not
+//      identify one is not matched at all: the trip stays acquiring. Only the opening stretch of
+//      a route asked for where the vehicle is (not a restored one) is trusted to be the pass
+//      the vehicle starts on.
 //
 // Minimum evidence for each irreversible transition:
 //   pass a maneuver  a fix that fits the road past it, no further on than the fix has moved
@@ -684,6 +687,11 @@ final class NavigationCore {
   private var defersArrivalOnNextAcceptedFix = false
   /// A restored trip placed without progress has not yet shown which pass it is on.
   private var requiresPassConfirmation = false
+  /// Whether a fix on the opening stretch of the route may be matched there before the first
+  /// match although a later pass also fits it: the route was asked for where the vehicle was,
+  /// so its beginning is where the vehicle starts. Not for a trip restored before its first
+  /// match: the vehicle may have been moved while the app was closed.
+  private var trustsPlacementAtRouteStart = true
   private var arrivalSampleCount = 0
   private var departureSampleCount = 0
   /// Progress established by the latest real fix. Dead reckoning moves the published snapshot
@@ -882,8 +890,10 @@ final class NavigationCore {
       }
     case .beforeFirstMatch(let reference):
       // Nothing had been matched, so there is no anchor, progress or pass to resume: the first
-      // fix is placed as a new route's. How the vehicle stood towards the route carries on, so
-      // a car moved away from it while the app was closed is seen to have left it.
+      // match is made as a new route's, on a pass a fix identifies, and not even at the start
+      // on trust. How the vehicle stood towards the route carries on, so a car moved away from
+      // it while the app was closed is seen to have left it.
+      trustsPlacementAtRouteStart = false
       preMatchStartDistanceMeters = reference?.startDistanceMeters
       preMatchClosest = reference?.closest.map { ($0.distanceMeters, $0.accuracyMeters) }
       preMatchRestoredTravelMeters = reference?.travelMeters ?? 0
@@ -1176,8 +1186,21 @@ final class NavigationCore {
     // trip stays acquiring. After a match such fixes are judged as they always were.
     let isUnplaceableBeforeMatch = !hasMatchedRoute
       && accuracyAllowanceMeters > navigationPoorAccuracyMeters
+    // Nor is a fix that more than one pass fits and that does not say which (a stopped car on
+    // the return arm of a hairpin, beside the outbound arm): nothing has been matched to judge
+    // it against, and the earliest pass is a guess. It stays acquiring, unguided and silent,
+    // until a fix fits only one pass or the moving vehicle's heading picks one out; meanwhile
+    // the rules before the first match decide whether it is leaving the route. The route's
+    // opening stretch is trusted where the route was asked for (`trustsPlacementAtRouteStart`).
+    // A restored trip without progress has its own pass confirmation instead.
+    let isUnidentifiedBeforeMatch = !hasMatchedRoute && !requiresPassConfirmation
+      && !isOffRoute && !isDepartureSample && !isHeldJump && !isUnplaceableBeforeMatch
+      && !(trustsPlacementAtRouteStart
+        && projection.alongMeters <= offRouteDistanceThresholdMeters + accuracyAllowanceMeters)
+      && !isPassIdentified(projection, by: sample, on: route)
+    let isUnmatchableBeforeMatch = isUnplaceableBeforeMatch || isUnidentifiedBeforeMatch
     let isAcceptableFix = !isOffRoute && !isDepartureSample && !isHeldJump
-      && !isUnplaceableBeforeMatch
+      && !isUnmatchableBeforeMatch
     // A restored trip placed without progress learns its pass from a fix that only one pass
     // fits, or that the heading of the moving vehicle picks out. Until then it does not arrive.
     if requiresPassConfirmation, isAcceptableFix,
@@ -1237,7 +1260,7 @@ final class NavigationCore {
     // zero-tolerance gate here would latch `routeProgress` to the forward extreme of GPS noise
     // and hold the matched coordinate until the vehicle physically drove past it.
     let shouldAcceptProjection = !isOffRoute && !isDepartureSample && !isHeldJump
-      && !isUnplaceableBeforeMatch
+      && !isUnmatchableBeforeMatch
     // Raised only by accepted on-route progress, and read before this line when computing
     // cumulative regression, so the mark is the furthest point genuinely reached this route
     // rather than a value that drifts down with each tolerated backward step.
@@ -1251,8 +1274,12 @@ final class NavigationCore {
     }
     // The anchor moves only with an accepted fix, and takes that fix's own time and speed. The
     // first fix of a route is a placement: it becomes the anchor even when it is off the route.
+    // Not one that fits more than one pass without identifying it: that would bias the next
+    // fix towards the pass it was guessed onto, and the next fix is placed afresh instead.
     isLatestFixAccepted = shouldAcceptProjection
-    if shouldAcceptProjection || isFirstPlacement {
+    if isFirstPlacement && isUnidentifiedBeforeMatch {
+      hasAnchor = false
+    } else if shouldAcceptProjection || isFirstPlacement {
       anchorRawCoordinate = sample.coordinate
       anchorAccuracyMeters = accuracyAllowanceMeters
       anchorTimestamp = sample.timestamp
@@ -1376,6 +1403,7 @@ final class NavigationCore {
     arrivalDeferral = nil
     defersArrivalOnNextAcceptedFix = false
     requiresPassConfirmation = false
+    trustsPlacementAtRouteStart = true
     lastRealSnapshot = nil
     arrivalSampleCount = 0
     departureSampleCount = 0
