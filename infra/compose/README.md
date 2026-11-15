@@ -299,6 +299,125 @@ sudo docker compose up -d --no-build --wait --wait-timeout 300 valhalla nominati
 Rollback restores the previous four `.env` values and reruns the same four-service command.
 Versioned artifacts are never deleted during deployment.
 
+## Canada coverage release (Geofabrik 261114)
+
+Design, sizing and the reasons for each step: [`docs/architecture/north-america.md`](../../docs/architecture/north-america.md#canada-wide-coverage).
+This builds the whole-country Valhalla graph and Nominatim index beside the live Alberta+BC stack,
+verifies them through a staged API, then switches by changing `.env`. Nothing live is touched until
+step 6, and the Alberta+BC artifacts stay until Canada has been proven.
+
+Sized for VM 100 at 6 vCPU, 24 GiB RAM and a 255 GB artifact disk. Run each step in `tmux` as
+`navoss` from `infra/compose`; every step is resumable by running the same command again. Never run
+two heavy steps at once (`stage-coverage.sh` refuses). During steps 2 and 3 keep at least 4 GiB
+available (`free -h`) and no sustained swap; stop the step (`./stage-coverage.sh stop canada`) if
+not, then rerun it.
+
+| Step | Command | Expected time | Artifact disk | Memory |
+| --- | --- | --- | --- | --- |
+| 0 | Update the checkout and API image | 5 min | 1 GB | — |
+| 1 | `inputs`: verify the extract, write the routing input | 15–30 min | +6.5 GB | < 1 GiB |
+| 2 | `valhalla`: two graph passes and the admin repair | 1–4 h | +8–20 GB peak, ≈ 8–12 GB kept | ≤ 8 GiB |
+| 3 | `nominatim`: search import | 10–20 h | +70–110 GB peak, ≈ 20–30 GB kept | ≤ 10 GiB |
+| 4 | `serve` + `verify`, route matrix over SSH | 30 min | — | ≈ 7 GiB while staged |
+| 5 | Stop staging | 1 min | — | frees it |
+| 6 | Cutover | 5–10 min, ≈ 1 min API restart | — | live limits below |
+
+The time, disk and memory figures for Canada are estimates scaled from the measured Alberta+BC
+artifacts; the architecture document says how. Record the real values in
+`docs/release/testflight.md` as each step finishes.
+
+```sh
+cd /home/navoss/NavOSS/infra/compose
+# 0. Code: this branch's API and scripts. The live API keeps running its current image.
+git fetch origin && git checkout <merged main> && sudo docker compose build api
+sudo apt-get install -y osmium-tool jq   # once
+./stage-coverage.sh status canada
+
+# 1. Inputs. Uses the extract already at imports/canada-261114.osm.pbf (MD5 checked on download);
+#    writes canada-261114.osm.pbf.md5, SHA256SUMS-canada-261114 and canada-261114.routing.osm.pbf
+#    (seasonal and ice roads removed; the report says how many).
+GEOFABRIK_VERSION=261114 GEOFABRIK_MD5=0bba746e7473aac6a7a6796d153ea12d \
+  ./stage-coverage.sh inputs canada
+
+# 2. Routing graph: /srv/navoss/artifacts/valhalla-canada-261114 (pass 1 builds admins, the
+#    repair links all 13 provinces to Canada, pass 2 rebuilds with the hybrid speeds for AB and ON).
+./stage-coverage.sh valhalla canada
+
+# 3. Search index: /srv/navoss/artifacts/nominatim/canada-261114/postgres. Follow with
+#    `sudo docker logs --tail 20 navoss-nominatim-stage`. An interrupted import restarts from the
+#    beginning on the next run (the image cannot resume one).
+./stage-coverage.sh nominatim canada
+
+# 4. Staged API on 127.0.0.1:18300 declaring Canada, then the coverage checks.
+./stage-coverage.sh serve canada
+./stage-coverage.sh verify canada
+```
+
+Then, from a checkout on your own machine, run the 68-route matrix through a tunnel and keep the
+artifact. Every route must pass, or have a reviewed, recorded reason (an anchor that needs moving
+is a matrix fix, not a pass):
+
+```sh
+ssh -N -L 18300:127.0.0.1:18300 navoss-prod &
+NAVOSS_API_URL=http://127.0.0.1:18300 ROUTE_QUALITY_OUTPUT=artifacts/route-quality-canada-68.json \
+  corepack pnpm --filter @navoss/api test:routes:canada
+NAVOSS_API_URL=http://127.0.0.1:18300 ROUTE_QUALITY_OUTPUT=artifacts/route-quality-alberta-bc-22-on-canada.json \
+  corepack pnpm --filter @navoss/api test:routes:alberta-bc
+```
+
+Also search in each province on the staged API (a city name with its readiness-probe coordinate),
+compare the Alberta+BC 22 with the live artifact, and check one Montreal route speaks French street
+names as expected (architecture document, "Quebec").
+
+```sh
+# 5. Stop staging (frees ≈ 7 GiB); the staged artifacts stay.
+./stage-coverage.sh stop canada
+
+# 6. Cutover: four artifact values, the declaration and two memory limits.
+cp -p .env ".env.pre-canada-$(date -u +%Y%m%dT%H%M%SZ)"
+sed -i \
+  -e 's|^VALHALLA_DATA_DIR=.*|VALHALLA_DATA_DIR=/srv/navoss/artifacts/valhalla-canada-261114|' \
+  -e 's|^NOMINATIM_DATA_DIR=.*|NOMINATIM_DATA_DIR=/srv/navoss/artifacts/nominatim/canada-261114/postgres|' \
+  -e 's|^NOMINATIM_PBF_PATH=.*|NOMINATIM_PBF_PATH=/srv/navoss/artifacts/imports/canada-261114.osm.pbf|' \
+  -e 's|^NOMINATIM_DATASET_VERSION=.*|NOMINATIM_DATASET_VERSION=canada-geofabrik-2026-11-14|' .env
+grep -q '^NAVOSS_SERVICE_AREAS=' .env || echo 'NAVOSS_SERVICE_AREAS=' >> .env
+grep -q '^VALHALLA_MEM_LIMIT=' .env || echo 'VALHALLA_MEM_LIMIT=' >> .env
+grep -q '^NOMINATIM_MEM_LIMIT=' .env || echo 'NOMINATIM_MEM_LIMIT=' >> .env
+sed -i \
+  -e 's|^NAVOSS_SERVICE_AREAS=.*|NAVOSS_SERVICE_AREAS=alberta,british-columbia,ontario,quebec,manitoba,saskatchewan,new-brunswick,nova-scotia,prince-edward-island,newfoundland-and-labrador,yukon,northwest-territories,nunavut|' \
+  -e 's|^VALHALLA_MEM_LIMIT=.*|VALHALLA_MEM_LIMIT=4g|' -e 's|^NOMINATIM_MEM_LIMIT=.*|NOMINATIM_MEM_LIMIT=8g|' .env
+sudo docker compose config --quiet
+sudo docker compose up -d --no-build --wait --wait-timeout 600 valhalla nominatim api caddy
+./refresh-nominatim-special-phrases.sh
+./check-stack.sh     # includes check-coverage.sh for all 13 provinces
+```
+
+Then rerun the matrix against `https://navoss-api.yassin.app` and record the result. With community
+traffic in `collect`, restart nothing else: traffic stays Alberta+BC (its probes are refused
+elsewhere) and is matched on the new graph.
+
+**Rollback** restores the saved `.env` (all seven values) and recreates the same four services; the
+Alberta+BC artifacts were never changed:
+
+```sh
+cp -p .env.pre-canada-<timestamp> .env
+sudo docker compose up -d --no-build --wait --wait-timeout 600 valhalla nominatim api caddy
+./check-stack.sh
+```
+
+Keep `valhalla-alberta-british-columbia-260730-ca-parent`, `nominatim/alberta-british-columbia-260730`
+and their extracts until Canada has run cleanly for at least a week of tester use; then delete them
+deliberately, never as part of a deployment.
+
+**Staged search (fallback).** If step 3 cannot finish within these limits (memory pressure,
+swap growth, or the disk peak), keep the Canada graph and import search for fewer provinces, for
+example `./stage-coverage.sh inputs alberta british-columbia ontario quebec` then `nominatim` with
+the same arguments, and declare only those provinces (`NAVOSS_SERVICE_AREAS`,
+`NOMINATIM_DATASET_VERSION=alberta-british-columbia-ontario-quebec-geofabrik-2026-11-14`). The API
+refuses to declare a province its search index lacks, so the app never offers search or routes
+where search would fail. `serve` and `verify` expect a graph under the same label; link the Canada
+graph to it first (`ln -s valhalla-canada-261114 /srv/navoss/artifacts/valhalla-<label>-261114`).
+
 ## Database migrations and community reports
 
 Community-report and community-traffic tables are created by explicit, ordered SQL migrations

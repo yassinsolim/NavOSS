@@ -26,6 +26,8 @@ services:
       HOST: 0.0.0.0
       MAPBOX_ACCESS_TOKEN: ${MAPBOX_ACCESS_TOKEN:-}
       MAPBOX_VEHICLE_LICENSE_CONFIRMED: ${MAPBOX_VEHICLE_LICENSE_CONFIRMED:-0}
+      # Provinces this server declares; each needs its routing and search data (fail closed).
+      NAVOSS_SERVICE_AREAS: ${NAVOSS_SERVICE_AREAS:-alberta,british-columbia}
       NODE_ENV: production
       NOMINATIM_DATASET_VERSION: ${NOMINATIM_DATASET_VERSION:?Set NOMINATIM_DATASET_VERSION to the staged regional release}
       NOMINATIM_URL: http://nominatim:8080/
@@ -147,7 +149,8 @@ services:
     cap_drop:
       - ALL
     cpus: 2
-    mem_limit: 2g
+    # 2g serves the Alberta+BC graph; the Canada graph needs 4g (docs/architecture/north-america.md).
+    mem_limit: ${VALHALLA_MEM_LIMIT:-2g}
     networks:
       - backend
       - egress
@@ -193,7 +196,8 @@ services:
       UPDATE_MODE: none
       WARMUP_ON_STARTUP: 'false'
     cpus: 2.5
-    mem_limit: 6g
+    # 6g serves the Alberta+BC index; 8g gives the Canada index more cache.
+    mem_limit: ${NOMINATIM_MEM_LIMIT:-6g}
     networks:
       - backend
       - egress
