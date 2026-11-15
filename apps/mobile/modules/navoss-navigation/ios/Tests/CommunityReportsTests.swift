@@ -268,7 +268,10 @@ private actor FakeTrafficTransport: NavOSSTrafficTransport {
     NavOSSTrafficStatus(mode: .live, accepting: statusAccepting, rules: NavOSSTrafficProbeRules())
   }
 
-  func trafficCredential() async throws -> NavOSSTrafficCredential {
+  func trafficCredential(
+    permit: NavOSSTrafficUploadPermit
+  ) async throws -> NavOSSTrafficCredential {
+    guard permit.start(UUID(), { {} }) else { throw NavOSSCommunityFailure.network }
     credentialRequests += 1
     let result = credentialResults.isEmpty
       ? .success(NavOSSTrafficCredential(expiresAt: clock.addingTimeInterval(7_200), value: "c\(credentialRequests)"))
@@ -276,9 +279,10 @@ private actor FakeTrafficTransport: NavOSSTrafficTransport {
     return try result.get()
   }
 
-  func uploadProbes(_ batch: NavOSSTrafficProbeBatch, credential: String) async
-    -> NavOSSTrafficUploadOutcome
-  {
+  func uploadProbes(
+    _ batch: NavOSSTrafficProbeBatch, credential: String, permit: NavOSSTrafficUploadPermit
+  ) async -> NavOSSTrafficUploadOutcome {
+    guard permit.start(UUID(), { {} }) else { return .dropped }
     uploads.append(credential)
     return uploadResults.isEmpty ? .accepted : uploadResults.removeFirst()
   }

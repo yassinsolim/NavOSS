@@ -241,6 +241,38 @@ rules 1, 2, 3 and 5; they are obligations on the app release, not properties of 
    complete; a `503` means the snapshot could not be published and the layer should keep its
    last response until it expires.
 
+How the iOS app applies them (`NavOSSTrafficSharingSession`, `NavOSSCommunityService`,
+`startTrafficFlowRefresh`):
+
+- **Consent (1).** The stored switch is the switch the driver sees. It is turned off, natively,
+  by **Reset community identity** (with **Share road reports**), and whenever the server says the
+  feature is not offered: the status says not accepting or there is no traffic endpoint, or the
+  server config declares no live traffic while the switch is idle; and when the device cannot
+  attest. Sharing then needs a new opt-in once it is available. A `503` (on an upload or on the
+  credential request) only pauses sharing for five minutes and keeps the driver's choice.
+- **Stopping (1).** Turning the switch off and ending navigation are synchronous: before they
+  return they close an upload gate (`NavOSSTrafficUploadGate`), under whose lock every probe
+  upload and every identity-bearing credential request (registration and the asserted
+  `POST /v2/traffic/credentials`) is created with a permit for the current collection, so no such
+  request is created afterwards and one in flight is cancelled. Anonymous status and challenge
+  reads are not gated. The switch value travels in the preference
+  notification with its write order, so an off written between two ons is never lost. What was
+  already transmitted cannot be recalled.
+- **Trip (6, 7).** A trip is one navigation start. Changing any community preference never
+  restarts it. A `429`, a refused credential or missing attestation holds until the next
+  navigation start; a `503` pause holds for its five minutes across toggles and trips; a `403`
+  deadline is persisted (a time, about a day after the installation registered; Reset clears it
+  and starts a new identity epoch, so an answer from before Reset is not written back), is saved
+  even when the trip that asked has ended, and, if active when a trip starts, holds for
+  that whole trip.
+- **Restored trips (2).** A trip resumed after a relaunch shares nothing: a reroute replaces the
+  saved route with one that lists only the remaining stops, so the zones of stops already visited
+  (and the trip's restrictions) cannot be rebuilt, and visited stops are deliberately not stored.
+- **Flow layer (9).** Snapshots are cached by `bbox` until `validUntil` independently of the
+  layer's visibility; showing the layer again, or returning to an area, reuses a valid snapshot
+  and waits for its boundary. Entries leave on expiry; beyond the 32 newest, only the deadline is
+  kept (no roads), so memory stays bounded without ever asking early.
+
 ## What the server does with a batch
 
 1. **Network rate limit.** 1,200 batches per ten minutes per network bucket (IPv4 /24, IPv6 /48,

@@ -7,12 +7,9 @@ import type {
   TrafficCamera,
   TrafficFlowResponse,
 } from '@navoss/contracts';
-import { startTransition, useEffect, useState } from 'react';
+import { startTransition, useEffect, useRef, useState } from 'react';
 
-import {
-  TRAFFIC_FLOW_RETRY_MS,
-  trafficFlowRefreshDelayMs,
-} from '@/features/community/traffic-flow';
+import { startTrafficFlowRefresh, type TrafficFlowCache } from '@/features/community/traffic-flow';
 
 import {
   type MapRoadEvent,
@@ -56,7 +53,7 @@ export interface OverlayData {
  *
  * Community traffic flow is fetched here too, for the visible grid-aligned box, only while the
  * driver has the traffic layer on and the server declares live traffic, and never sooner than the
- * snapshot's own `validUntil`. Community reports come through the native bridge (`useCommunity`),
+ * snapshot's own `validUntil`, even when the layer is hidden and shown again. Community reports come through the native bridge (`useCommunity`),
  * which shares its cache with CarPlay.
  */
 export function useOverlayData({
@@ -85,44 +82,32 @@ export function useOverlayData({
   );
   const [trafficFlow, setTrafficFlow] = useState<TrafficFlowResponse>();
   const [trafficFlowFailed, setTrafficFlowFailed] = useState(false);
+  const trafficFlowCache = useRef<TrafficFlowCache>(new Map());
   const roadEventRegion = roadEventRegionForMapRegion(mapRegion);
 
   useEffect(() => {
     if (trafficFlowQuery === undefined) {
+      // Hidden, not forgotten: the cache keeps each snapshot until its `validUntil`.
       setTrafficFlow(undefined);
       setTrafficFlowFailed(false);
       return;
     }
-    let controller: AbortController | undefined;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    const load = () => {
-      controller = new AbortController();
-      const { signal } = controller;
-      void fetchTrafficFlow({ bbox: trafficFlowQuery, signal })
-        .then((response) => {
-          startTransition(() => {
-            setTrafficFlow(response);
-            setTrafficFlowFailed(false);
-          });
-          timeout = setTimeout(load, trafficFlowRefreshDelayMs(response, Date.now()));
-        })
-        .catch(() => {
-          if (signal.aborted) return;
-          setTrafficFlowFailed(true);
-          // A published value is never shown after its epoch: drop what has expired.
-          setTrafficFlow((current) =>
-            current !== undefined && Date.parse(current.validUntil) > Date.now()
-              ? current
-              : undefined,
-          );
-          timeout = setTimeout(load, TRAFFIC_FLOW_RETRY_MS);
+    return startTrafficFlowRefresh({
+      bbox: trafficFlowQuery,
+      cache: trafficFlowCache.current,
+      load: (bbox, signal) => fetchTrafficFlow({ bbox, signal }),
+      onFailure: (cached) => {
+        // A published value is never shown after its epoch: only a still-valid snapshot stays.
+        setTrafficFlowFailed(true);
+        setTrafficFlow(cached);
+      },
+      onResponse: (response) => {
+        startTransition(() => {
+          setTrafficFlow(response);
+          setTrafficFlowFailed(false);
         });
-    };
-    load();
-    return () => {
-      controller?.abort();
-      clearTimeout(timeout);
-    };
+      },
+    });
   }, [trafficFlowQuery]);
 
   useEffect(() => {

@@ -3,9 +3,12 @@ import {
   type TrafficFlowResponse,
   TrafficFlowResponseSchema,
 } from '@navoss/contracts';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  startTrafficFlowRefresh,
+  TRAFFIC_FLOW_BODY_LIMIT,
+  type TrafficFlowCache,
   trafficFlowAnchorLayerId,
   trafficFlowFeatures,
   trafficFlowQuery,
@@ -162,4 +165,93 @@ describe('traffic flow placement', () => {
     expect(trafficFlowAnchorLayerId(layers)).toBe('highway_name_other');
     expect(trafficFlowAnchorLayerId([{ id: 'background', type: 'background' }])).toBeUndefined();
   });
+});
+
+describe('traffic flow refresh', () => {
+  const BBOX = '-114.10,51.00,-114.05,51.05';
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function start(
+    cache: TrafficFlowCache,
+    load: () => Promise<TrafficFlowResponse>,
+    bbox: string = BBOX,
+  ) {
+    const shown: (TrafficFlowResponse | undefined)[] = [];
+    const stop = startTrafficFlowRefresh({
+      bbox,
+      cache,
+      load,
+      onFailure: (cached) => shown.push(cached),
+      onResponse: (next) => shown.push(next),
+    });
+    return { shown, stop };
+  }
+
+  it('hiding and showing the layer asks nothing before validUntil, then refreshes at it', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const cache: TrafficFlowCache = new Map();
+    const load = vi.fn(() => Promise.resolve(response));
+    const first = start(cache, load);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(load).toHaveBeenCalledTimes(1);
+    first.stop();
+
+    // Off at a light for 30 s, then on again: the same snapshot is shown, nothing is requested.
+    await vi.advanceTimersByTimeAsync(30_000);
+    const second = start(cache, load);
+    expect(second.shown).toEqual([response]);
+    expect(load).toHaveBeenCalledTimes(1);
+
+    // validUntil is 18:05; the next request waits for the boundary (plus 5 s).
+    await vi.advanceTimersByTimeAsync(Date.parse(response.validUntil) + 5_000 - Date.now() - 1);
+    expect(load).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(load).toHaveBeenCalledTimes(2);
+    second.stop();
+  });
+
+  it('asks at once when the remembered snapshot has expired, and never shows it again', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const cache: TrafficFlowCache = new Map();
+    const load = vi.fn(() => Promise.resolve(response));
+    const first = start(cache, load);
+    await vi.advanceTimersByTimeAsync(0);
+    first.stop();
+    vi.setSystemTime(Date.parse(response.validUntil) + 1);
+    const failing = start(cache, () => Promise.reject(new Error('offline')));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(failing.shown).toEqual([undefined]);
+    failing.stop();
+  });
+
+  for (const areas of [17, 100]) {
+    it(`returning to the first of ${String(areas)} areas asks nothing before its validUntil`, async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(NOW);
+      const cache: TrafficFlowCache = new Map();
+      const load = vi.fn(() => Promise.resolve(response));
+      for (let index = 0; index < areas; index += 1) {
+        const visit = start(cache, load, `area-${String(index)}`);
+        await vi.advanceTimersByTimeAsync(1_000);
+        visit.stop();
+      }
+      expect(load).toHaveBeenCalledTimes(areas);
+      // Memory: every unexpired deadline, but only the newest bodies.
+      expect(cache.size).toBe(areas);
+      expect([...cache.values()].filter((entry) => entry.response !== undefined).length).toBe(
+        Math.min(areas, TRAFFIC_FLOW_BODY_LIMIT),
+      );
+      const back = start(cache, load, 'area-0');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(load).toHaveBeenCalledTimes(areas);
+      await vi.advanceTimersByTimeAsync(Date.parse(response.validUntil) + 5_000 - Date.now());
+      expect(load).toHaveBeenCalledTimes(areas + 1);
+      back.stop();
+    });
+  }
 });

@@ -36,6 +36,7 @@ public final class NavOSSCommunityPreferencesStore: @unchecked Sendable {
   private let defaults: UserDefaults
   private let lock = NSLock()
   private let notificationCenter: NotificationCenter
+  private var trafficSequence: UInt64 = 0
 
   public init(defaults: UserDefaults = .standard, notificationCenter: NotificationCenter = .default) {
     self.defaults = defaults
@@ -53,9 +54,26 @@ public final class NavOSSCommunityPreferencesStore: @unchecked Sendable {
     }
   }
 
+  /// `userInfo` keys of the notification posted by `setSharesTrafficSpeeds`: the value written
+  /// and its place in the order of writes, so an observer acts on each change as it was made
+  /// rather than re-reading a value another thread may already have replaced.
+  public static let trafficValueKey = "sharesTrafficSpeeds"
+  public static let trafficSequenceKey = "trafficSequence"
+
+  /// The traffic-sharing choice and how many times it has been written in this process.
+  public func trafficSharing() -> (enabled: Bool, sequence: UInt64) {
+    lock.withLock { (defaults.bool(forKey: sharesTrafficSpeedsKey), trafficSequence) }
+  }
+
   public func setSharesTrafficSpeeds(_ value: Bool) {
-    lock.withLock { defaults.set(value, forKey: sharesTrafficSpeedsKey) }
-    notificationCenter.post(name: .navOSSCommunityPreferencesDidChange, object: self)
+    let sequence: UInt64 = lock.withLock {
+      defaults.set(value, forKey: sharesTrafficSpeedsKey)
+      trafficSequence &+= 1
+      return trafficSequence
+    }
+    notificationCenter.post(
+      name: .navOSSCommunityPreferencesDidChange, object: self,
+      userInfo: [Self.trafficValueKey: value, Self.trafficSequenceKey: sequence])
   }
 
   public func setSharesRoadReports(_ value: Bool) {

@@ -24,6 +24,7 @@ import {
   snapViewBox,
   trafficSharingRowStatus,
   voteNotice,
+  withdrawsTrafficSharingConsent,
 } from '../src/features/community/community.js';
 import type {
   NativeCommunityReport,
@@ -415,5 +416,41 @@ describe('answering a report needs a fresh, accurate fix', () => {
     });
     expect(withdraw).toHaveBeenCalledWith('r1');
     expect(getFreshSample).not.toHaveBeenCalled();
+  });
+});
+
+describe('traffic sharing consent', () => {
+  const on = {
+    preferences: {
+      announcesRoadReports: false,
+      sharesRoadReports: false,
+      sharesTrafficSpeeds: true,
+    },
+  };
+
+  it('is withdrawn whenever the switch is shown unavailable, so it needs a new opt-in', () => {
+    // The deployed server: config says no live traffic, native is idle.
+    const notLive = communityAvailability({
+      hasNativeReports: true,
+      hasNativeTraffic: true,
+      serverLiveTraffic: false,
+      state: state({ ...on, trafficSharing: { state: 'ready' } }),
+    });
+    expect(withdrawsTrafficSharingConsent(notLive.trafficSharing, state(on))).toBe(true);
+    const cannotSign = communityAvailability({
+      hasNativeReports: true,
+      hasNativeTraffic: true,
+      serverLiveTraffic: true,
+      state: state({ ...on, canWrite: false }),
+    });
+    expect(cannotSign.trafficSharing).toBe('unsupported');
+    expect(withdrawsTrafficSharingConsent(cannotSign.trafficSharing, state(on))).toBe(true);
+  });
+
+  it('is kept while live or still checking, and there is nothing to withdraw when off', () => {
+    expect(withdrawsTrafficSharingConsent('live', state(on))).toBe(false);
+    expect(withdrawsTrafficSharingConsent('checking', state(on))).toBe(false);
+    expect(withdrawsTrafficSharingConsent('checking', undefined)).toBe(false);
+    expect(withdrawsTrafficSharingConsent('not-available', state())).toBe(false);
   });
 });

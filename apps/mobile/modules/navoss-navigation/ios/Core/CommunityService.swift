@@ -53,8 +53,11 @@ public final class NavOSSCommunityService: @unchecked Sendable {
   private var routeGeometry: [NavOSSCarPlayCoordinate] = []
   private var routeLengthMeters = 0.0
   private var routeProgress = 0.0
+  /// The last traffic-switch write applied (see `NavOSSCommunityPreferencesStore.trafficSharing`).
+  private var trafficSwitchSequence: UInt64 = 0
+  private let trafficEmbargo: NavOSSTrafficEmbargoStore
   private var lastTrafficTick: Date?
-  private let traffic: NavOSSTrafficSharingSession?
+  let traffic: NavOSSTrafficSharingSession?
   private var trafficState: NavOSSTrafficSharingState = .off
   private let alertStore: NavOSSCarPlayMapAlertStore
   /// Saved Home and Work, which a public report must not reveal without confirmation.
@@ -65,20 +68,29 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     }
   }
 
+  /// `trafficTransport`, `trafficEmbargo` and `now` replace the uploader's client, its persisted
+  /// `403` deadline and its clock (tests).
   init(
     client: NavOSSCommunityClient? = NavOSSCommunityService.defaultClient(),
     preferencesStore: NavOSSCommunityPreferencesStore = .shared,
     alertStore: NavOSSCarPlayMapAlertStore = .shared,
-    notificationCenter: NotificationCenter = .default
+    notificationCenter: NotificationCenter = .default,
+    trafficTransport: NavOSSTrafficTransport? = nil,
+    trafficEmbargo: NavOSSTrafficEmbargoStore = .shared,
+    now: @escaping @Sendable () -> Date = { Date() }
   ) {
     self.client = client
     self.preferencesStore = preferencesStore
     self.alertStore = alertStore
     self.notificationCenter = notificationCenter
+    self.trafficEmbargo = trafficEmbargo
     let sink = TrafficStateSink()
-    traffic = client.map { client in
+    let transport: NavOSSTrafficTransport? = trafficTransport ?? client
+    traffic = transport.map { transport in
       NavOSSTrafficSharingSession(
-        transport: client,
+        transport: transport,
+        now: now,
+        embargo: trafficEmbargo,
         onStateChange: { state in sink.service?.trafficStateDidChange(state) }
       )
     }
@@ -87,10 +99,12 @@ public final class NavOSSCommunityService: @unchecked Sendable {
       forName: .navOSSCommunityPreferencesDidChange,
       object: preferencesStore,
       queue: nil
-    ) { [weak self] _ in
-      self?.preferencesDidChange()
+    ) { [weak self] notification in
+      self?.preferencesDidChange(notification)
     }
-    preferencesDidChange()
+    let (sharing, sequence) = preferencesStore.trafficSharing()
+    trafficSwitchSequence = sequence
+    traffic?.switchDidChange(sharing)
   }
 
   deinit {
@@ -319,27 +333,31 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     publishReports()
   }
 
-  /// "Reset community identity": deletes the installation and its reports and votes on the
-  /// server, then forgets the key. The next write registers a new, unrelated installation.
+  /// "Reset community identity": switches **Share road reports** and **Share traffic speeds**
+  /// off (sharing again needs a new opt-in, even if the deletion below fails), stops the
+  /// uploader and forgets the stored `403` deadline (it dates the old installation's
+  /// registration), then deletes the installation and its reports and votes on the server and
+  /// forgets the key. The next write registers a new, unrelated installation.
   public func resetIdentity() async throws {
     guard let client else { return }
+    preferencesStore.setSharesTrafficSpeeds(false)
+    preferencesStore.setSharesRoadReports(false)
+    await traffic?.settled()
+    trafficEmbargo.clear()
     try await client.deleteInstallation()
     lock.withLock {
       ownReportIds.removeAll()
       cache.clear()
       monitor.setReports([])
     }
-    await traffic?.endTrip()
     publishReports()
-    if lock.withLock({ navigationActive }) {
-      await startTrafficTrip()
-    }
   }
 
   // MARK: Navigation hooks (called by NavOSSNavigationService)
 
-  /// Turn-by-turn guidance started on `trip`.
-  public func navigationDidStart(_ trip: NavOSSCarPlayTrip) {
+  /// Turn-by-turn guidance started on `trip`; `restored` when it resumes a trip saved before a
+  /// relaunch (no traffic is shared on it, see `NavOSSTrafficSharingSession.startTrip`).
+  public func navigationDidStart(_ trip: NavOSSCarPlayTrip, restored: Bool = false) {
     lock.withLock {
       navigationActive = true
       routeGeometry = trip.geometry
@@ -350,7 +368,8 @@ public final class NavOSSCommunityService: @unchecked Sendable {
       monitor.startTrip(geometry: trip.geometry, maneuverAlongMeters: Self.maneuvers(trip))
     }
     // Independent: a slow credential request must not delay the reports on the route ahead.
-    Task { await startTrafficTrip() }
+    let points = lock.withLock { protectedPoints }
+    traffic?.navigationDidStart(protectedPoints: points, restored: restored)
     Task { await refreshCorridor() }
   }
 
@@ -365,10 +384,8 @@ public final class NavOSSCommunityService: @unchecked Sendable {
       protectedPoints += added
       return added
     }
-    Task {
-      await traffic?.protect(points)
-      await refreshCorridor()
-    }
+    traffic?.routeDidAddStops(points)
+    Task { await refreshCorridor() }
   }
 
   /// Arrival or the end of guidance: trip-scoped traffic state is discarded.
@@ -382,7 +399,8 @@ public final class NavOSSCommunityService: @unchecked Sendable {
       return wasActive
     }
     guard wasActive else { return }
-    Task { await traffic?.endTrip() }
+    // Synchronous: once this returns no probe upload is created, and one in flight is cancelled.
+    traffic?.navigationDidEnd()
     notifyStateChange()
   }
 
@@ -440,12 +458,6 @@ public final class NavOSSCommunityService: @unchecked Sendable {
 
   // MARK: Private
 
-  private func startTrafficTrip() async {
-    guard let traffic else { return }
-    let points = lock.withLock { protectedPoints }
-    await traffic.startTrip(protectedPoints: points)
-  }
-
   /// Keeps the route ahead fetched during guidance, so CarPlay and alerts see reports on it.
   private func refreshCorridor() async {
     guard client != nil else { return }
@@ -459,18 +471,38 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     _ = try? await fetchReports(in: bounds)
   }
 
-  private func preferencesDidChange() {
-    let enabled = preferencesStore.load().sharesTrafficSpeeds
-    let active = lock.withLock { navigationActive }
-    Task {
-      await traffic?.setEnabled(enabled)
-      if enabled, active { await startTrafficTrip() }
+  /// Any community preference changed. Only a traffic-switch write reaches the uploader, with
+  /// the value it wrote, synchronously (turning sharing off has closed the upload gate when the
+  /// setter returns). Writes from different threads may be delivered out of order: a write older
+  /// than one already applied is ignored, and an on that follows a missed write discards the
+  /// current collection first, so an off between two ons always takes the old batch and
+  /// credential with it. Nothing here restarts a trip: the uploader keeps the trip's
+  /// restrictions across toggles.
+  private func preferencesDidChange(_ notification: Notification) {
+    if let info = notification.userInfo,
+      let enabled = info[NavOSSCommunityPreferencesStore.trafficValueKey] as? Bool,
+      let sequence = info[NavOSSCommunityPreferencesStore.trafficSequenceKey] as? UInt64
+    {
+      lock.withLock {
+        guard sequence > trafficSwitchSequence else { return }
+        let restart = enabled && sequence != trafficSwitchSequence &+ 1
+        trafficSwitchSequence = sequence
+        traffic?.switchDidChange(enabled, restart: restart)
+      }
     }
     notifyStateChange()
   }
 
   private func trafficStateDidChange(_ state: NavOSSTrafficSharingState) {
     lock.withLock { trafficState = state }
+    // The server says it does not take traffic speeds (status not accepting, or no traffic
+    // endpoint), or this device cannot attest: the switch is turned off rather than shown off
+    // while kept on, so sharing needs a new opt-in once it is available. A 503 only pauses.
+    if state == .unavailable(reason: .notAccepting) || state == .unavailable(reason: .unsupported),
+      preferencesStore.load().sharesTrafficSpeeds
+    {
+      preferencesStore.setSharesTrafficSpeeds(false)
+    }
     notifyStateChange()
   }
 

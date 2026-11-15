@@ -139,7 +139,7 @@ final class AppAttestFailureMappingTests: XCTestCase {
     XCTAssertFalse(client.canWrite)
     for _ in 0..<3 {
       do {
-        _ = try await client.trafficCredential()
+        _ = try await client.trafficCredential(permit: openTrafficPermit())
         XCTFail("must not proceed")
       } catch {
         XCTAssertEqual(error as? NavOSSCommunityFailure, .attestationUnsupported)

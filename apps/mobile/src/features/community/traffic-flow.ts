@@ -66,6 +66,114 @@ export function trafficFlowRefreshDelayMs(
   return Math.max(MINIMUM_REFRESH_MS, validUntil - nowMs + 5_000);
 }
 
+/**
+ * What was last received for each `bbox`, kept while the layer is hidden so showing it again (or
+ * panning back) asks nothing before that snapshot's `validUntil`. Entries leave when they expire.
+ * Only the most recent `TRAFFIC_FLOW_BODY_LIMIT` keep their roads; older ones keep just their
+ * deadline, so memory is bounded and an early request is still never made.
+ */
+export type TrafficFlowCache = Map<
+  string,
+  { response: TrafficFlowResponse | undefined; validUntilMs: number }
+>;
+
+/** Snapshots kept with their roads at once; the rest keep only their refresh deadline. */
+export const TRAFFIC_FLOW_BODY_LIMIT = 32;
+
+function freshEntry(cache: TrafficFlowCache, bbox: string, nowMs: number) {
+  const entry = cache.get(bbox);
+  return entry !== undefined && entry.validUntilMs > nowMs ? entry : undefined;
+}
+
+/** The snapshot last received for `bbox`, while it is still valid and kept. */
+export function cachedTrafficFlow(
+  cache: TrafficFlowCache,
+  bbox: string,
+  nowMs: number,
+): TrafficFlowResponse | undefined {
+  return freshEntry(cache, bbox, nowMs)?.response;
+}
+
+function rememberTrafficFlow(
+  cache: TrafficFlowCache,
+  bbox: string,
+  response: TrafficFlowResponse,
+  nowMs: number,
+): void {
+  for (const [key, entry] of cache) {
+    if (!(entry.validUntilMs > nowMs)) cache.delete(key);
+  }
+  cache.delete(bbox);
+  const validUntilMs = Date.parse(response.validUntil);
+  if (!(validUntilMs > nowMs)) return;
+  cache.set(bbox, { response, validUntilMs });
+  let bodies = 0;
+  for (const [key, entry] of [...cache].reverse()) {
+    if (entry.response === undefined) continue;
+    bodies += 1;
+    if (bodies > TRAFFIC_FLOW_BODY_LIMIT) cache.set(key, { ...entry, response: undefined });
+  }
+}
+
+/**
+ * Keeps the flow layer for `bbox` current until stopped, never asking before the last snapshot's
+ * `validUntil` (it cannot change before then). A snapshot still valid in `cache` is shown at once
+ * (unless only its deadline was kept) and refreshed at its boundary, so hiding and showing the
+ * layer, or panning back to a box, asks nothing early. A failed request keeps showing that box's snapshot until it expires and is retried
+ * after `TRAFFIC_FLOW_RETRY_MS`.
+ */
+export function startTrafficFlowRefresh({
+  bbox,
+  cache,
+  load,
+  now = Date.now,
+  onFailure,
+  onResponse,
+}: {
+  bbox: string;
+  cache: TrafficFlowCache;
+  load: (bbox: string, signal: AbortSignal) => Promise<TrafficFlowResponse>;
+  now?: () => number;
+  /** The request failed; `cached` is the box's snapshot while it is still valid. */
+  onFailure: (cached: TrafficFlowResponse | undefined) => void;
+  onResponse: (response: TrafficFlowResponse) => void;
+}): () => void {
+  let controller: AbortController | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const refresh = () => {
+    const requestController = new AbortController();
+    controller = requestController;
+    const { signal } = requestController;
+    void load(bbox, signal)
+      .then((response) => {
+        if (signal.aborted) return;
+        rememberTrafficFlow(cache, bbox, response, now());
+        onResponse(response);
+        timeout = setTimeout(refresh, trafficFlowRefreshDelayMs(response, now()));
+      })
+      .catch(() => {
+        if (signal.aborted) return;
+        onFailure(cachedTrafficFlow(cache, bbox, now()));
+        timeout = setTimeout(refresh, TRAFFIC_FLOW_RETRY_MS);
+      });
+  };
+  const entry = freshEntry(cache, bbox, now());
+  if (entry === undefined) {
+    refresh();
+  } else {
+    // A snapshot whose roads were dropped for memory still sets when to ask again.
+    if (entry.response !== undefined) onResponse(entry.response);
+    timeout = setTimeout(
+      refresh,
+      trafficFlowRefreshDelayMs({ validUntil: new Date(entry.validUntilMs).toISOString() }, now()),
+    );
+  }
+  return () => {
+    controller?.abort();
+    clearTimeout(timeout);
+  };
+}
+
 export interface TrafficFlowStatus {
   accessibilityLabel: string;
   text: string;

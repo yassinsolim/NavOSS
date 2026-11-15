@@ -407,12 +407,23 @@
         </ul>
         <p>
           <strong>How to turn it off.</strong> Turn off <strong>Share traffic speeds</strong> in the
-          app's About and Privacy screen. Uploads are required to stop immediately and anything not
-          yet sent to be discarded. Ending navigation or removing the app has the same effect. What
-          was contributed stops being shown within 35 minutes and is deleted as described above.
-          Nothing about traffic is stored with an account, an installation, or a trip identifier, so
-          there is no per-person traffic record to look up or delete. You can see traffic from other
-          drivers without sharing your own.
+          app's Map appearance screen, under Community. Once the switch is off, no new upload or
+          upload-credential request is started, one already in progress is cancelled, and anything
+          not yet sent is discarded; part of a batch that was already transmitted cannot be
+          recalled. Ending navigation has the same effect, and removing the app removes everything.
+          The app also turns the switch off itself when NavOSS says it does not accept traffic
+          speeds or this iPhone cannot take part, and when you reset your community identity, so it
+          never comes back on without a new opt-in; a temporary outage only pauses sharing for five
+          minutes. A trip resumed after the app was closed during navigation shares nothing. If the
+          server says the installation is too new, the phone stores the time after which it may ask
+          for a credential again (about one day after this installation registered its key, so it
+          shows roughly when that happened) so that closing and reopening the app does not ask
+          sooner; it is not a position, and <strong>Reset community identity</strong> deletes it (an
+          answer still on its way from before the reset is not stored). What was contributed stops
+          being shown within 35 minutes and is deleted as described above. Nothing about traffic is
+          stored with an account, an installation, or a trip identifier, so there is no per-person
+          traffic record to look up or delete. You can see traffic from other drivers without
+          sharing your own.
         </p>
 
         <h2 id="community-road-reports">Community road reports</h2>
@@ -469,11 +480,12 @@
           described under <a href="#community-traffic-sharing-opt-in">Community traffic sharing</a>,
           plus, for 24 hours, the position of the installation's latest report or answer rounded to
           about 1 km, to reject impossible travel. You can withdraw a report you made in the same
-          app session. <strong>Reset community identity</strong> deletes the installation from the
-          server with all its reports and answers, and forgets the key on the phone; a later report
-          registers a new key that is not linked to the old one. Development builds running in the
-          iOS Simulator can use a software key that only a test server accepts; release builds
-          cannot.
+          app session. <strong>Reset community identity</strong> turns off
+          <strong>Share road reports</strong> and <strong>Share traffic speeds</strong>, deletes the
+          installation from the server with all its reports and answers, and forgets the key on the
+          phone; sharing again needs a new opt-in, and a later report registers a new key that is
+          not linked to the old one. Development builds running in the iOS Simulator can use a
+          software key that only a test server accepts; release builds cannot.
         </p>
         <p>
           <strong>Private drafts.</strong> When sharing is off or unavailable, the report button
@@ -641,14 +653,14 @@
           local lists. Pending contribution retries can be deleted individually on Contribute.
           Accepted feedback expires automatically after 90 days; its displayed random reference can
           be provided to support for earlier deletion. Road-report private drafts expire after two
-          hours. <strong>Reset community identity</strong> deletes this installation's shared road
-          reports and answers from the server, as described under
-          <a href="#community-road-reports">Community road reports</a>. Removing the app removes the
-          remaining local records.
+          hours. <strong>Reset community identity</strong> turns off both sharing switches and
+          deletes this installation's shared road reports and answers from the server, as described
+          under <a href="#community-road-reports">Community road reports</a>. Removing the app
+          removes the remaining local records.
         </p>
         <p>
           Traffic sharing is optional and off by default; turn <strong>Share traffic speeds</strong>
-          off in About and Privacy to stop it, as described under
+          off in Map appearance, under Community, to stop it, as described under
           <a href="#community-traffic-sharing-opt-in">Community traffic sharing</a>.
         </p>
         <p>

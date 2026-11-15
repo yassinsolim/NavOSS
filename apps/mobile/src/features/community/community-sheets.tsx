@@ -225,7 +225,7 @@ export function CommunitySettings({
   const confirmReset = () => {
     Alert.alert(
       'Reset community identity?',
-      'NavOSS deletes this iPhone’s community identity with every report and answer it shared. Shared reports disappear for other drivers. The next time you share, a new identity is created that is not linked to this one.',
+      'NavOSS deletes this iPhone’s community identity with every report and answer it shared, and turns off Share road reports and Share traffic speeds. Shared reports disappear for other drivers. If you turn sharing on again, a new identity is created that is not linked to this one.',
       [
         { style: 'cancel', text: 'Cancel' },
         {

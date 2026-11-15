@@ -12,6 +12,7 @@ import {
   resetIdentityNotice,
   voteNotice,
   withdrawNotice,
+  withdrawsTrafficSharingConsent,
 } from '@/features/community/community';
 import type { RoadReportType } from '@/features/map/road-report-drafts';
 import {
@@ -128,6 +129,13 @@ export function useCommunity({
     [hasNativeReports, hasNativeTraffic, serverLiveTraffic, state],
   );
   const reportsLive = availability.reports === 'live';
+
+  // A switch shown as unavailable is turned off natively too, so it needs a new opt-in.
+  const withdrawTrafficSharing =
+    hasNativeTraffic && withdrawsTrafficSharingConsent(availability.trafficSharing, state);
+  useEffect(() => {
+    if (withdrawTrafficSharing) setShareTrafficSpeeds(false);
+  }, [withdrawTrafficSharing]);
 
   const west = fetchBounds?.west;
   const south = fetchBounds?.south;
