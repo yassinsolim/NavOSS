@@ -13,7 +13,11 @@ import { createPostgresCalgarySearchProvider } from './calgary-search-provider.j
 import { CALGARY_SEARCH_FIXTURES, type SearchFixture } from './fixtures.js';
 import { searchFixtures } from './search.js';
 import { DEFAULT_SERVICE_COVERAGE } from './service-coverage.js';
-import { normalizeSearchText, placeSearchQueryVariants } from './search-text.js';
+import {
+  normalizeSearchText,
+  placeSearchQueryVariants,
+  streetDirectionVariants,
+} from './search-text.js';
 import {
   canonicalSearchName,
   searchLocation,
@@ -365,9 +369,14 @@ const NominatimResultSchema = z.looseObject({
 
 const NominatimResponseSchema = z.array(NominatimResultSchema);
 
+export interface SearchProviderOptions {
+  /** Search only around the query's origin, skipping the coverage-wide pool. */
+  nearbyOnly?: boolean;
+}
+
 export interface SearchProvider {
   isReady?(): Promise<boolean>;
-  search(query: SearchQuery): Promise<SearchResponse>;
+  search(query: SearchQuery, options?: SearchProviderOptions): Promise<SearchResponse>;
 }
 
 export interface PhotonSearchProviderOptions {
@@ -782,13 +791,15 @@ export function createNominatimSearchProvider(
         return false;
       }
     },
-    async search(query) {
+    async search(query, options = {}) {
       const categoryRadii =
         query.latitude !== undefined &&
         query.longitude !== undefined &&
         coverage.contains({ latitude: query.latitude, longitude: query.longitude })
           ? query.category === undefined
-            ? [NOMINATIM_TEXT_VIEWBOX_RADIUS, undefined]
+            ? options.nearbyOnly === true
+              ? [NOMINATIM_TEXT_VIEWBOX_RADIUS]
+              : [NOMINATIM_TEXT_VIEWBOX_RADIUS, undefined]
             : NOMINATIM_CATEGORY_VIEWBOX_RADII
           : [undefined];
       const urls = [
@@ -951,6 +962,16 @@ function samePlace(left: SearchResult, right: SearchResult): boolean {
   const rightMetadata = resultMetadata(right);
   const leftLocation = leftMetadata.location;
   const rightLocation = rightMetadata.location;
+  // A street's segments in one municipality are one destination, however long the street.
+  if (
+    left.category === 'street' &&
+    right.category === 'street' &&
+    canonicalSearchName(left.name) === canonicalSearchName(right.name) &&
+    leftLocation.city !== undefined &&
+    rightLocation.city !== undefined &&
+    normalizeSearchText(leftLocation.city) === normalizeSearchText(rightLocation.city)
+  )
+    return true;
   const leftKind = placeKind(left);
   const rightKind = placeKind(right);
   const sameAddress =
@@ -1050,6 +1071,10 @@ function mergeResults(
   coverage: ServiceCoverage,
 ): SearchResult[] {
   const clusters: { members: SearchResult[]; result: SearchResult }[] = [];
+  const origin =
+    query.latitude === undefined || query.longitude === undefined
+      ? undefined
+      : { latitude: query.latitude, longitude: query.longitude };
   for (const result of resultGroups.flat()) {
     if (!coverage.contains(result.center)) continue;
     const members = resultMetadata(result).members ?? [result];
@@ -1064,7 +1089,15 @@ function mergeResults(
     }
     const existing = cluster.result;
     const preferred =
-      representativeQuality(result) > representativeQuality(existing) ? result : existing;
+      result.category === 'street' && existing.category === 'street' && origin !== undefined
+        ? // The street row leads to the segment nearest the driver.
+          coordinateDistanceMeters(origin, result.center) <
+          coordinateDistanceMeters(origin, existing.center)
+          ? result
+          : existing
+        : representativeQuality(result) > representativeQuality(existing)
+          ? result
+          : existing;
     const other = preferred === result ? existing : result;
     const details = { ...other.details, ...preferred.details };
     if (
@@ -1304,8 +1337,29 @@ export function createProductionSearchProvider(
             }))
           : []),
       ];
+      // A street named without its direction ("rue Sainte-Catherine") is also looked up nearby
+      // with each direction, keeping only that exact street: Nominatim never returns the
+      // directional street once same-named streets elsewhere match the whole query.
+      const nearbyStreetQueries =
+        query.category === undefined &&
+        query.latitude !== undefined &&
+        query.longitude !== undefined &&
+        coverage.contains({ latitude: query.latitude, longitude: query.longitude })
+          ? streetDirectionVariants(query.q)
+          : [];
       const settled = await Promise.allSettled([
         ...productionQueries.map((productionQuery) => regionalProvider.search(productionQuery)),
+        ...nearbyStreetQueries.map(async (q) => {
+          const response = await regionalProvider.search(
+            { ...providerQuery, q },
+            { nearbyOnly: true },
+          );
+          const street = normalizeSearchText(q);
+          return {
+            ...response,
+            results: response.results.filter(({ name }) => normalizeSearchText(name) === street),
+          };
+        }),
         ...(calgaryProvider === undefined || query.category !== undefined || !useCalgarySources
           ? []
           : [calgaryProvider.search(providerQuery)]),

@@ -6,6 +6,7 @@ import { searchRecordedCanada } from './support/search-response-fixture.js';
 const TORONTO = { latitude: 43.653, longitude: -79.383 };
 const VANCOUVER = { latitude: 49.283, longitude: -123.121 };
 const CALGARY = { latitude: 51.045, longitude: -114.072 };
+const MONTREAL = { latitude: 45.501, longitude: -73.567 };
 
 function rows(results: readonly SearchResult[]) {
   return results.map(({ category, details, label, name }) => ({
@@ -99,5 +100,46 @@ describe('Canadian civic address search (recorded raw Nominatim)', () => {
         .filter(({ name }) => name === '17 Avenue SW')
         .map(({ category }) => category),
     ).not.toContain('address');
+  });
+});
+
+describe('Canadian street search (recorded raw Nominatim)', () => {
+  it.each(['rue Sainte-Catherine', 'rue Sainte Catherine', 'rue Ste-Catherine'])(
+    'puts Montréal first for "%s" from downtown, one row per street and municipality',
+    async (query) => {
+      const { requestedUrls, response } = await searchRecordedCanada(query, MONTREAL);
+
+      expect(response.results.slice(0, 3).map(({ label }) => label)).toEqual([
+        'Rue Sainte-Catherine Ouest, Montreal, Quebec',
+        'Rue Sainte-Catherine Est, Montreal, Quebec',
+        'Rue Sainte-Catherine, Longueuil, Quebec',
+      ]);
+      const labels = response.results.map(({ label }) => label);
+      expect(new Set(labels).size).toBe(labels.length);
+      expect(response.results.every(({ category }) => category === 'street')).toBe(true);
+      // Directional lookups stay near the driver: four local requests, no Canada-wide ones.
+      const directional = requestedUrls.filter((url) => /(?:Ouest|Est|Nord|Sud)&/u.test(url));
+      expect(directional).toHaveLength(4);
+      expect(directional.every((url) => url.includes('viewbox=-74.067'))).toBe(true);
+    },
+  );
+
+  it.each([
+    ['Yonge Street', TORONTO, 'Yonge Street, Toronto, Ontario'],
+    ['Robson Street', VANCOUVER, 'Robson Street, Vancouver, British Columbia'],
+  ])('returns "%s" once per municipality, nearest first', async (query, origin, first) => {
+    const { response } = await searchRecordedCanada(query, origin);
+
+    expect(response.results[0]?.label).toBe(first);
+    const labels = response.results.map(({ label }) => label);
+    expect(new Set(labels).size).toBe(labels.length);
+    // The row leads to the segment nearest the driver.
+    expect(response.results[0]?.distanceMeters).toBeLessThan(500);
+  });
+
+  it("collapses Calgary's 17 Avenue SW to one street row", async () => {
+    const { response } = await searchRecordedCanada('17 Avenue SW', CALGARY);
+
+    expect(response.results.filter(({ name }) => name === '17 Avenue SW')).toHaveLength(1);
   });
 });
