@@ -140,7 +140,8 @@ export function normalize511Event(
     row.Longitude < envelope.west ||
     row.Longitude > envelope.east
   ) {
-    return undefined;
+    // Zeroed, swapped or out-of-province coordinates are a malformed row, counted against the feed.
+    throw new Error('511 event outside the province.');
   }
   const type = eventType(row);
   const roadwayName = optionalLabel(row.RoadwayName);

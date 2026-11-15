@@ -157,7 +157,8 @@ export function normalizeDriveBcEvent(input: unknown): ProvincialRoadEvent | und
   const row = RowSchema.parse(input);
   if (row.status !== undefined && row.status !== 'ACTIVE') return undefined;
   const coordinate = representative(row);
-  if (coordinate === undefined) return undefined;
+  // Zeroed, swapped or out-of-province geometry is a malformed row, counted against the feed.
+  if (coordinate === undefined) throw new Error('DriveBC event has no in-province vertex.');
   const road = row.roads?.[0];
   const closed = road?.state?.toUpperCase() === 'CLOSED';
   const type = eventType(row, closed);

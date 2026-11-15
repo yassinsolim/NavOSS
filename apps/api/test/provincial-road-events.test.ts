@@ -163,6 +163,18 @@ describe('DriveBC province-wide events (recorded 2026-11-15)', () => {
     expect(source).toMatchObject({ incomplete: true, status: 'current' });
   });
 
+  it('counts zeroed or swapped coordinates as malformed rows, never as an empty current feed', async () => {
+    const corrupted = driveBc.payload.events.map((event) => ({
+      ...event,
+      geography: { coordinates: [0, 0], type: 'Point' },
+    }));
+    const feed = createDriveBcProvinceRoadEventFeed({
+      clock: () => CAPTURED,
+      fetchImplementation: () => Promise.resolve(jsonResponse({ events: corrupted })),
+    });
+    expect((await feed.getSnapshot()).source.status).toBe('unavailable');
+  });
+
   it('fails the refresh when more than 10% of rows drift from the documented shape', async () => {
     const feed = createDriveBcProvinceRoadEventFeed({
       clock: () => CAPTURED,
@@ -410,6 +422,18 @@ describe('511 Alberta and Ontario 511', () => {
       ['special-event', undefined, 'West'],
       ['incident', 'major', 'South'],
     ]);
+  });
+
+  it('counts an event placed outside the province as a malformed row', async () => {
+    const swapped = { ...ontario511.rows[0], Latitude: -79.668724, Longitude: 43.63599 };
+    const feed = createProvincial511RoadEventFeed('ontario', 'test-key', {
+      clock: () => Date.parse('2025-05-01T12:00:00Z'),
+      fetchImplementation: () => Promise.resolve(jsonResponse([...ontario511.rows, swapped])),
+    });
+    expect((await feed.getSnapshot()).source).toMatchObject({
+      incomplete: true,
+      status: 'current',
+    });
   });
 
   it('reports the recorded Invalid Key answer as unavailable', async () => {
