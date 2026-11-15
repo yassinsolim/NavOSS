@@ -521,19 +521,31 @@
           sends only the region identifier for those requests. DriveBC webcams are not enforcement
           cameras, and RCMP facilities are not live police locations.
         </p>
+        <p>
+          Offline maps are not available yet. When NavOSS publishes downloadable regions, the
+          Offline maps screen asks the NavOSS API for the list without sending a location, search
+          text, or identifier, and a download fetches the region's map, search, and routing files
+          directly from <span translate="no">navoss-offline.yassin.app</span>, NavOSS's file storage
+          on Cloudflare R2. Cloudflare sees your IP address, the time, and which region you
+          downloaded, not your location, searches, or routes. NavOSS keeps no per-download record.
+          Downloaded regions stay on the device, are excluded from iCloud backup, and are removed
+          with Delete or with the app. When there is no connection or the NavOSS service cannot be
+          reached, search and routing in a downloaded region are computed on the phone.
+        </p>
 
         <h2 id="providers-and-retention">Providers and retention</h2>
         <p>
           <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a> provides DNS, TLS,
-          traffic delivery, and the outbound tunnel. It processes client IP and network/request
-          metadata on its global network under its policy. NavOSS does not enable raw Cloudflare
-          request-log export. Map delivery uses OpenFreeMap; TestFlight feedback, the user-invoked
-          system share sheet and App Attest, which the phone uses to create the key that signs
-          community road reports and obtains traffic-upload credentials, use
-          <a href="https://www.apple.com/legal/privacy/">Apple</a>; and user-initiated support may
-          use GitHub. Optional Google-rendered place details and a user-selected external reviews
-          action use <a href="https://policies.google.com/privacy">Google under Google's policy</a>.
-          Optional licensed live-traffic routing may use
+          traffic delivery, the outbound tunnel, and R2 storage for offline-region downloads. It
+          processes client IP and network/request metadata on its global network under its policy.
+          NavOSS does not enable raw Cloudflare request-log export. Map delivery uses OpenFreeMap;
+          TestFlight feedback, the user-invoked system share sheet and App Attest, which the phone
+          uses to create the key that signs community road reports and obtains traffic-upload
+          credentials, use <a href="https://www.apple.com/legal/privacy/">Apple</a>; and
+          user-initiated support may use GitHub. Optional Google-rendered place details and a
+          user-selected external reviews action use
+          <a href="https://policies.google.com/privacy">Google under Google's policy</a>. Optional
+          licensed live-traffic routing may use
           <a href="https://www.mapbox.com/legal/privacy/">Mapbox</a> and send route endpoints,
           preferences, and request network metadata; it is disabled in current production.
         </p>

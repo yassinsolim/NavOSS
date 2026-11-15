@@ -43,4 +43,23 @@ if [ "${COMMUNITY_TRAFFIC_MODE:-off}" = live ]; then
   curl --fail --silent --show-error "$base_url/v2/config" | jq -e '.features.liveTraffic == true' >/dev/null
 fi
 
+if [ -n "${NAVOSS_OFFLINE_MANIFEST_PATH:-}" ]; then
+  # The host manifest is served unchanged, and each artifact it names answers with its exact length.
+  expected_version=$(jq -er '.bundleVersion' "$NAVOSS_OFFLINE_MANIFEST_PATH")
+  curl --fail --silent --show-error "$base_url/v1/offline/manifest" |
+    jq -e --arg version "$expected_version" '.bundleVersion == $version and (.regions | length) > 0' >/dev/null
+  jq -r '[.regions[].artifacts[] | "\(.url) \(.byteSize)"] | unique[]' "$NAVOSS_OFFLINE_MANIFEST_PATH" |
+    while read -r artifact_url artifact_size; do
+      served_size=$(curl --fail --silent --show-error --head --header 'accept-encoding: identity' "$artifact_url" |
+        tr -d '\r' | awk 'tolower($1) == "content-length:" { print $2 }')
+      if [ "$served_size" != "$artifact_size" ]; then
+        printf 'Offline artifact %s: expected %s bytes, served %s\n' "$artifact_url" "$artifact_size" "${served_size:-nothing}" >&2
+        exit 1
+      fi
+    done
+else
+  # Unconfigured stays a quiet "not available", never an error page or a stale manifest.
+  test "$(curl --silent --output /dev/null --write-out '%{http_code}' "$base_url/v1/offline/manifest")" = 503
+fi
+
 printf 'NavOSS stack checks passed against %s\n' "$base_url"

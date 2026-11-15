@@ -13,7 +13,8 @@ Production status: the API cutover was performed on 2026-11-15 from commit `f780
 The deployed image is `navoss-api:latest` (`9001dda4444f`); the rollback tag
 `navoss-api:pre-provincial-v2` (`351acadeaa57`) is retained. Public ingress is
 `https://navoss-api.yassin.app`. Community reports and community traffic remain off;
-offline maps are unavailable because no bundles are hosted.
+offline maps are unavailable: release `2026-11-11-v1-798f5c442644` is hosted on R2 since
+2026-11-15, but no manifest is installed here yet ([Offline bundle manifest](#offline-bundle-manifest)).
 
 The active routing artifact is `valhalla-alberta-british-columbia-260730-ca-parent`, with hybrid
 profile SHA-256 `0a3f87cfabf76c2428ee851e1d5b61f90ef21d6952e9a4a1d4759887713931d7`. The
@@ -482,6 +483,49 @@ imports and the complete stack check have passed.
 
 Do not start both initial imports simultaneously. During either import, monitor
 `free -h`, `swapon --show`, `docker stats`, disk usage, and kernel OOM messages.
+
+## Offline bundle manifest
+
+Offline bundles are downloaded by the phone directly from Cloudflare R2 at
+`https://navoss-offline.yassin.app` ([hosting record](../offline/README.md#hosting)); this stack
+serves only the small manifest at `GET /v1/offline/manifest` and never proxies artifacts. With
+`NAVOSS_OFFLINE_MANIFEST_PATH` blank (the default) `/dev/null` is mounted, the endpoint answers a
+quiet 503, and the app says "Offline maps are not available yet". The API image is unchanged: the
+endpoint has been deployed since #83.
+
+Publish a manifest only after every artifact it names is uploaded and verified
+(`node --import tsx infra/offline/verify-hosting.mts MANIFEST` from a workstation). Then, on the VM:
+
+```sh
+# 1. Install the manifest read-only. Copy it from the workstation first, e.g.
+#    scp artifacts/offline-hosting/manifest.production.json VM:/tmp/navoss-offline-manifest.json
+sudo install -d -m 0755 -o navoss -g navoss /srv/navoss/artifacts/offline
+sudo install -m 0444 -o navoss -g navoss /tmp/navoss-offline-manifest.json \
+  /srv/navoss/artifacts/offline/manifest.json
+sha256sum /srv/navoss/artifacts/offline/manifest.json   # compare with the workstation's value
+jq -r .bundleVersion /srv/navoss/artifacts/offline/manifest.json
+
+# 2. Point the api at it and recreate only the api (no image build, no other service).
+sudoedit .env   # NAVOSS_OFFLINE_MANIFEST_PATH=/srv/navoss/artifacts/offline/manifest.json
+sudo docker compose config --quiet
+sudo docker compose up -d --no-build --force-recreate --wait --wait-timeout 300 api
+
+# 3. Verify: the endpoint serves this manifest and every artifact answers with its exact length.
+NAVOSS_OFFLINE_MANIFEST_PATH=/srv/navoss/artifacts/offline/manifest.json ./check-stack.sh
+curl -fsS https://navoss-api.yassin.app/v1/offline/manifest | jq -r .bundleVersion
+```
+
+A single-file bind mount keeps the inode the container started with. After replacing the manifest
+(a new release), always recreate the api as in step 2; editing the file in place is never needed.
+A bind source that does not exist stops the api from starting, so install the file before
+setting the variable.
+
+**Roll back** by blanking `NAVOSS_OFFLINE_MANIFEST_PATH` in `.env` and recreating the api as in
+step 2; `./check-stack.sh` (run without the variable) then requires the quiet 503. Devices keep
+regions they already installed; they cannot download or update until a manifest is served again.
+For an emergency stop of all downloads, disable the bucket's custom domain instead (see
+[hosting](../offline/README.md#hosting)); the manifest alone does not stop a client that already
+knows the URLs.
 
 ## Privacy posture
 

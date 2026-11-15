@@ -2,7 +2,8 @@
 
 Build tools run in Docker on macOS/OrbStack or Linux. Nothing here deploys to the production VM,
 changes the online Valhalla service, or downloads tiles from OpenFreeMap's public tile endpoint.
-The current phone/CarPlay app does **not** install these bundles yet.
+The app (build 75 onward) installs these bundles from a published manifest; one release is hosted on
+Cloudflare R2 ([Hosting](#hosting)), but production does not serve its manifest yet.
 
 ## Prerequisites
 
@@ -152,10 +153,130 @@ coverage. Build outputs and screenshots remain under ignored `artifacts/`.
 
 ## Hosting
 
-The API only reads `NAVOSS_OFFLINE_MANIFEST_PATH` at `GET /v1/offline/manifest`; it never proxies
-artifacts. Mount the manifest read-only and serve artifacts separately with Content-Length,
-ETag/Last-Modified, HTTP byte ranges and identity content encoding. Publish artifact keys before
-switching the manifest pointer. **Recommended: R2 Standard object storage with a custom HTTPS
-hostname**, not unlimited multi-GB delivery through the existing free Cloudflare Tunnel/CDN.
-Hosting costs, bandwidth, terms and Caddy alternatives are documented in
-[offline architecture](../../docs/architecture/offline.md). Nothing is provisioned by this builder.
+The phone downloads artifacts straight from object storage; the API only serves the manifest named
+by `NAVOSS_OFFLINE_MANIFEST_PATH` at `GET /v1/offline/manifest` and never proxies artifacts
+([production steps](../compose/README.md#offline-bundle-manifest)). The cost model, the guardrails
+and what cannot be capped are in [offline architecture](../../docs/architecture/offline.md#hosting-cloudflare-r2).
+
+### What is provisioned (2026-11-15)
+
+On the owner's personal Cloudflare account, and nothing else in it:
+
+- R2 bucket **`navoss-offline`**: Standard storage class (the only one the free tier covers),
+  location hint Western North America. The public `r2.dev` URL is **disabled**; the only public
+  path is the custom domain below. Neither path can list objects.
+- Custom domain **`navoss-offline.yassin.app`** on that bucket, minimum TLS 1.2. R2 created and
+  manages its DNS record; no other record in `yassin.app` was touched.
+- Lifecycle rule `abort-incomplete-multipart-1d` (aborts unfinished multipart uploads after one
+  day; it replaced R2's default seven-day rule). There is no expiry rule: releases are removed
+  by hand as below, never by a timer that could delete the live one.
+- Exactly one release, `2026-11-11-v1-798f5c442644`: nine objects, 1,452,230,980 bytes, under
+  the key prefix `<bundleVersion>/` (the same layout as `releases/<bundleVersion>/`): each
+  region's `maps.pmtiles`, `routing.tar` and `search.sqlite`, `resources.tar.gz`, `SHA256SUMS`
+  and `provenance.json`. The release directory's own `manifest.json` (loopback URLs) and
+  `build-report.json` (local cache paths) are not uploaded.
+
+Every object carries `Cache-Control: public, max-age=31536000, immutable`, an exact
+`Content-Type` (`application/vnd.pmtiles`, `application/x-tar`, `application/vnd.sqlite3`,
+`application/gzip`) and no `Content-Encoding`, so the stored bytes are the checksummed bytes and
+byte ranges address them. Cloudflare compresses only `SHA256SUMS` and `provenance.json` on the fly
+for clients that ask; the app requests `identity` and never fetches them.
+
+Not done from this repository, because the `wrangler login` token cannot manage zone rules or
+notifications: the cache rule, the rate-limiting rule and usage notifications. They are dashboard
+steps for the account owner, listed in the architecture document.
+
+### Publish a release
+
+With the pinned Node first in `PATH` (`npx --yes wrangler@4.162.0 login` once, as the owner):
+
+```sh
+V=2026-11-11-v1-798f5c442644      # the new bundleVersion
+R=artifacts/offline/releases/$V
+put() {
+  npx --yes wrangler@4.162.0 r2 object put "navoss-offline/$V/$1" --remote --file "$R/$1" \
+    --content-type "$2" --cache-control 'public, max-age=31536000, immutable'
+}
+put SHA256SUMS 'text/plain; charset=utf-8'
+put provenance.json application/json
+put resources.tar.gz application/gzip
+for region in calgary alberta; do
+  put "regions/$region/maps.pmtiles" application/vnd.pmtiles
+  put "regions/$region/routing.tar" application/x-tar
+  put "regions/$region/search.sqlite" application/vnd.sqlite3
+done
+```
+
+Each `put` is one Class A operation. Wrangler refuses files over 300 MiB (314,572,800 bytes); the
+all-Alberta `maps.pmtiles` (524,743,452 bytes) is larger. For such a file the owner creates a
+temporary R2 **Account API token** in the dashboard (R2, Manage API tokens: Object Read & Write,
+this bucket only) and revokes it right after. R2 accepts up to 5 GiB in one `PutObject`, so a
+single signed request suffices (one Class A operation, no multipart parts to abandon), and
+`x-amz-checksum-sha256` makes R2 reject bytes that do not match the local SHA-256:
+
+```sh
+f="$R/regions/alberta/maps.pmtiles"
+sum=$(shasum -a 256 "$f" | cut -d' ' -f1 | xxd -r -p | base64)
+# Credentials are read from stdin so they never appear in the process list or shell history.
+printf 'user = "%s:%s"\n' "$R2_ACCESS_KEY_ID" "$R2_SECRET_ACCESS_KEY" |
+  curl -K - --fail -sS --aws-sigv4 'aws:amz:auto:s3' -X PUT -T "$f" \
+    -H 'Content-Type: application/vnd.pmtiles' \
+    -H 'Cache-Control: public, max-age=31536000, immutable' \
+    -H "x-amz-checksum-sha256: $sum" \
+    "https://$ACCOUNT_ID.r2.cloudflarestorage.com/navoss-offline/$V/regions/alberta/maps.pmtiles"
+```
+
+Then generate the manifest for the public origin with the same builder. A cached rerun only
+rewrites `manifest.json`; the bundle version is content-derived, so it does not change:
+
+```sh
+./infra/offline/build.sh --date 261111 --regions calgary,alberta \
+  --routing-engine-version 3.9.1 --base-url https://navoss-offline.yassin.app
+node --import tsx infra/offline/verify-hosting.mts artifacts/offline/manifest.json --sha256
+```
+
+`verify-hosting.mts` requires, for every artifact URL in the manifest, `200` with the manifest's
+exact `Content-Length`, `Accept-Ranges: bytes`, an immutable `Cache-Control`, no content
+encoding and a correct `206` tail range; `--sha256` also downloads each artifact once and compares
+its digest. Without `--sha256` it costs at most two Class B operations per artifact. Only then
+install the manifest on the VM.
+
+### Replace a release
+
+1. Upload the new release beside the old one and verify it as above. Two Calgary + Alberta
+   releases are about 2.9 GB, well under the 10 GB free storage.
+2. Install the new manifest on the VM.
+3. After a **seven-day grace period** (a phone that fetched the old manifest can finish or resume
+   its download), delete every key of the old release. Deletes are free operations:
+
+   ```sh
+   for key in SHA256SUMS provenance.json resources.tar.gz \
+     regions/{calgary,alberta}/{maps.pmtiles,routing.tar,search.sqlite}; do
+     npx --yes wrangler@4.162.0 r2 object delete "navoss-offline/$OLD/$key" --remote
+   done
+   ```
+
+Never keep more than two releases. `r2-usage.mts` fails above 3 GB by default.
+
+### Usage check and emergency stop
+
+```sh
+node --import tsx infra/offline/r2-usage.mts   # exit 0 within limits, 1 above, 2 unknown
+```
+
+It reads Cloudflare's GraphQL analytics only (no R2 operation) with `CLOUDFLARE_API_TOKEN`, or the
+operator's `wrangler login` when that is unset, and prints the bucket's object count and bytes,
+the account's stored bytes and month-to-date Class A and Class B operations as shares of the free
+tier. It fails above 3 GB stored, 40 objects, 100,000 Class A or 1,000,000 Class B operations
+(10% of the free allowances; `--max-bytes`, `--max-objects`, `--max-class-a`, `--max-class-b`
+override). Storage figures are sampled and can lag an upload by hours; a missing sample exits 2
+rather than reporting an empty bucket. Run it daily, for example from `launchd` or `cron` on the
+operator's Mac, and act on a non-zero exit.
+
+To stop every download at once, detach the custom domain. Cloudflare then answers no request for
+the hostname, so nothing reaches R2. Installed regions keep working on devices:
+
+```sh
+npx --yes wrangler@4.162.0 r2 bucket domain remove navoss-offline --domain navoss-offline.yassin.app
+# Restore later with `r2 bucket domain add … --zone-id <yassin.app zone> --min-tls 1.2`.
+```
