@@ -39,6 +39,11 @@ describe('Google place details eligibility', () => {
     );
     expect(googlePlaceDetailsEligible(place({ name: '7-Eleven' }))).toBe(true);
     expect(googlePlaceDetailsEligible(place({ name: '17th Avenue Retail' }))).toBe(true);
+    // Business names that start with a number are not addresses.
+    for (const name of ['10 Foot Henry', '88 Brewing Company', '33 Acres Brewing Company']) {
+      expect(googlePlaceDetailsEligible(place({ name }))).toBe(true);
+      expect(googlePlaceDetailsEligible(place({ category: 'landmark', name }))).toBe(true);
+    }
   });
 
   it('spends no Google query on addresses, streets, areas, pins or coordinates', () => {
@@ -62,6 +67,12 @@ describe('Google place details eligibility', () => {
     );
     expect(
       googlePlaceDetailsEligible(place({ category: 'landmark', name: '1200 - 5 Avenue SW' })),
+    ).toBe(false);
+    expect(googlePlaceDetailsEligible(place({ category: 'poi', name: '800 3 Street SE' }))).toBe(
+      false,
+    );
+    expect(
+      googlePlaceDetailsEligible(place({ category: 'landmark', name: '45 Crowfoot Cres NW' })),
     ).toBe(false);
   });
 });

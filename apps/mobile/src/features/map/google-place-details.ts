@@ -18,6 +18,10 @@ export const NATIVE_GOOGLE_PLACE_STATES: readonly GooglePlaceDetailsState[] = [
   'unavailable',
 ];
 
+/** A street address: house number (optionally a unit range), then a street ending in a street type. */
+const STREET_ADDRESS =
+  /^\d+[a-z]?(?:\s*[-–]\s*\d+[a-z]?)?\s+(?:\S+\s+){0,4}(?:avenue|ave|av|boulevard|blvd|circle|close|court|ct|crescent|cres|drive|dr|gate|highway|hwy|lane|ln|mews|parkway|pkwy|place|pl|road|rd|street|st|terrace|trail|tr|way)\.?(?:\s+(?:n|s|e|w|ne|nw|se|sw))?$/iu;
+
 /**
  * Whether Google could plausibly list this place. Named points of interest and landmarks (from
  * search, the Calgary business index, map taps, saved places) qualify; street addresses,
@@ -29,8 +33,8 @@ export function googlePlaceDetailsEligible(place: SearchResult): boolean {
   if (place.id.startsWith('dropped-pin:')) return false;
   const name = place.name.trim();
   if (!/\p{L}/u.test(name)) return false;
-  // "123 Main St" or "1200 - 5 Avenue SW": an address that search labelled as a landmark.
-  return !/^\d+[a-z]?(?:\s*[-–]\s*\d+[a-z]?)?\s+\S/iu.test(name);
+  // "123 Main St" or "1200 - 5 Avenue SW" that search labelled as a place; "10 Foot Henry" is not.
+  return !STREET_ADDRESS.test(name);
 }
 
 /**
