@@ -43,15 +43,24 @@ if [ "${COMMUNITY_TRAFFIC_MODE:-off}" = live ]; then
   curl --fail --silent --show-error "$base_url/v2/config" | jq -e '.features.liveTraffic == true' >/dev/null
 fi
 
-if [ -n "${NAVOSS_OFFLINE_MANIFEST_PATH:-}" ]; then
-  # The host manifest is served unchanged, and each artifact it names answers with its exact length.
-  expected_version=$(jq -er '.bundleVersion' "$NAVOSS_OFFLINE_MANIFEST_PATH")
+offline_manifest="${NAVOSS_OFFLINE_MANIFEST_DIR:+$NAVOSS_OFFLINE_MANIFEST_DIR/manifest.json}"
+offline_status=$(curl --silent --output /dev/null --write-out '%{http_code}' "$base_url/v1/offline/manifest")
+if [ -n "$offline_manifest" ] && [ ! -e "$offline_manifest" ]; then
+  # Withdrawn (by the offline guard, or by hand): the API must have gone back to a quiet 503.
+  test "$offline_status" = 503
+  printf 'Offline manifest withdrawn: %s is missing (see infra/offline/README.md, "Automatic stop")\n' "$offline_manifest" >&2
+  exit 1
+elif [ -n "$offline_manifest" ]; then
+  # The host manifest is served unchanged, and each artifact it names reports its exact length.
+  expected_version=$(jq -er '.bundleVersion' "$offline_manifest")
   curl --fail --silent --show-error "$base_url/v1/offline/manifest" |
     jq -e --arg version "$expected_version" '.bundleVersion == $version and (.regions | length) > 0' >/dev/null
-  jq -r '[.regions[].artifacts[] | "\(.url) \(.byteSize)"] | unique[]' "$NAVOSS_OFFLINE_MANIFEST_PATH" |
+  jq -r '[.regions[].artifacts[] | "\(.url) \(.byteSize)"] | unique[]' "$offline_manifest" |
     while read -r artifact_url artifact_size; do
-      served_size=$(curl --fail --silent --show-error --head --header 'accept-encoding: identity' "$artifact_url" |
-        tr -d '\r' | awk 'tolower($1) == "content-length:" { print $2 }')
+      # A one-byte ranged GET, not HEAD: Cloudflare answers GETs from cache, but every HEAD reaches R2.
+      served_size=$(curl --fail --silent --show-error --range 0-0 --output /dev/null --dump-header - \
+        --header 'accept-encoding: identity' "$artifact_url" |
+        tr -d '\r' | awk 'tolower($1) == "content-range:" { split($3, total, "/"); print total[2] }')
       if [ "$served_size" != "$artifact_size" ]; then
         printf 'Offline artifact %s: expected %s bytes, served %s\n' "$artifact_url" "$artifact_size" "${served_size:-nothing}" >&2
         exit 1
@@ -59,7 +68,7 @@ if [ -n "${NAVOSS_OFFLINE_MANIFEST_PATH:-}" ]; then
     done
 else
   # Unconfigured stays a quiet "not available", never an error page or a stale manifest.
-  test "$(curl --silent --output /dev/null --write-out '%{http_code}' "$base_url/v1/offline/manifest")" = 503
+  test "$offline_status" = 503
 fi
 
 printf 'NavOSS stack checks passed against %s\n' "$base_url"

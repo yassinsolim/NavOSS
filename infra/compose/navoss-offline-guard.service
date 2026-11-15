@@ -1,0 +1,24 @@
+[Unit]
+Description=Stop NavOSS offline bundle hosting before it could cost money
+Documentation=file:///home/navoss/NavOSS/infra/offline/README.md
+Requires=docker.service
+RequiresMountsFor=/srv/navoss/state /srv/navoss/artifacts
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+# The API image's Node base runs the TypeScript guard directly (type stripping); the VM has no
+# host Node. Exit 1 (stopped) or 2 (could not read usage) marks the unit failed in the journal.
+ExecStart=/usr/bin/docker run --rm --name navoss-offline-guard \
+  --read-only --cap-drop ALL --cap-add DAC_OVERRIDE --security-opt no-new-privileges \
+  --memory 128m --cpus 0.25 \
+  --env-file /srv/navoss/state/offline-guard.env \
+  --volume /home/navoss/NavOSS/infra/offline:/guard:ro \
+  --volume /srv/navoss/state/offline-guard:/state \
+  --volume /srv/navoss/artifacts/offline:/manifest \
+  node:24.18.0-bookworm-slim \
+  node /guard/r2-guard.mts --state /state/r2-guard.json --manifest-dir /manifest
+TimeoutStartSec=180

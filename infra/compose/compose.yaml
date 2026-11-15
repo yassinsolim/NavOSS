@@ -26,8 +26,9 @@ services:
       HOST: 0.0.0.0
       MAPBOX_ACCESS_TOKEN: ${MAPBOX_ACCESS_TOKEN:-}
       MAPBOX_VEHICLE_LICENSE_CONFIRMED: ${MAPBOX_VEHICLE_LICENSE_CONFIRMED:-0}
-      # Set only when a host manifest is configured; unset keeps /v1/offline/manifest a quiet 503.
-      NAVOSS_OFFLINE_MANIFEST_PATH: ${NAVOSS_OFFLINE_MANIFEST_PATH:+/run/navoss/offline-manifest.json}
+      # Set only when a host manifest directory is configured; unset keeps /v1/offline/manifest a
+      # quiet 503.
+      NAVOSS_OFFLINE_MANIFEST_PATH: ${NAVOSS_OFFLINE_MANIFEST_DIR:+/run/navoss/offline/manifest.json}
       NODE_ENV: production
       NOMINATIM_DATASET_VERSION: ${NOMINATIM_DATASET_VERSION:?Set NOMINATIM_DATASET_VERSION to the staged regional release}
       NOMINATIM_URL: http://nominatim:8080/
@@ -64,12 +65,13 @@ services:
     tmpfs:
       - /tmp:size=32m,mode=1777
     volumes:
-      # Offline bundle manifest (infra/compose/README.md, "Offline bundle manifest"). A single-file
-      # bind keeps the inode it was created with: recreate the api after replacing the file.
-      # Unset, /dev/null is mounted and the path above stays empty, so nothing is served.
+      # Offline bundle manifest directory (infra/compose/README.md, "Offline bundle manifest"). The
+      # API reads manifest.json in it on every request, so an atomic rename on the host takes
+      # effect at once: installing a release, or the offline guard withdrawing it, needs no
+      # restart. Unset, /dev/null is mounted and the path above stays empty, so nothing is served.
       - type: bind
-        source: ${NAVOSS_OFFLINE_MANIFEST_PATH:-/dev/null}
-        target: /run/navoss/offline-manifest.json
+        source: ${NAVOSS_OFFLINE_MANIFEST_DIR:-/dev/null}
+        target: /run/navoss/offline
         read_only: true
 
   search-indexer:

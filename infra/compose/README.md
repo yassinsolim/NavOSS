@@ -489,43 +489,77 @@ Do not start both initial imports simultaneously. During either import, monitor
 Offline bundles are downloaded by the phone directly from Cloudflare R2 at
 `https://navoss-offline.yassin.app` ([hosting record](../offline/README.md#hosting)); this stack
 serves only the small manifest at `GET /v1/offline/manifest` and never proxies artifacts. With
-`NAVOSS_OFFLINE_MANIFEST_PATH` blank (the default) `/dev/null` is mounted, the endpoint answers a
+`NAVOSS_OFFLINE_MANIFEST_DIR` blank (the default) `/dev/null` is mounted, the endpoint answers a
 quiet 503, and the app says "Offline maps are not available yet". The API image is unchanged: the
 endpoint has been deployed since #83.
 
+The directory, not the file, is mounted read-only. The API reads `manifest.json` in it on every
+request, so a rename on the host takes effect at the next request with no restart: installing a
+new release is an atomic `mv`, and the offline guard withdraws the manifest by renaming it to
+`manifest.json.stopped`, which returns the endpoint to the quiet 503.
+
+### Offline guard (install first)
+
+The guard stops hosting automatically before it could cost money ([how it
+decides](../offline/README.md#automatic-stop)). Install it **before** publishing a manifest. It
+needs an account API token with exactly `Account Analytics Read` and `Workers R2 Storage Write`
+for this account.
+
+```sh
+sudo install -d -m 0700 -o root -g root /srv/navoss/state/offline-guard
+sudo install -d -m 0755 -o navoss -g navoss /srv/navoss/artifacts/offline
+sudo install -m 0600 -o root -g root /dev/null /srv/navoss/state/offline-guard.env
+sudoedit /srv/navoss/state/offline-guard.env
+# CLOUDFLARE_API_TOKEN=<guard token>
+# CLOUDFLARE_ACCOUNT_ID=<account id>
+sudo install -m 0644 navoss-offline-guard.service navoss-offline-guard.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+
+# One dry run must print "within limits" and exit 0 before the timer is enabled; a new bucket has
+# no storage sample for its first hours, which the guard counts as a failure.
+sudo docker run --rm --env-file /srv/navoss/state/offline-guard.env \
+  --volume /home/navoss/NavOSS/infra/offline:/guard:ro node:24.18.0-bookworm-slim \
+  node /guard/r2-guard.mts --dry-run
+sudo systemctl enable --now navoss-offline-guard.timer
+sudo systemctl start navoss-offline-guard.service && journalctl -u navoss-offline-guard -n 5
+```
+
+A failed unit (`systemctl --failed`) means the guard either stopped hosting (exit 1) or could not
+read usage (exit 2; four in a row stop hosting). Its journal line says which and why.
+
+### Publish the manifest
+
 Publish a manifest only after every artifact it names is uploaded and verified
-(`node --import tsx infra/offline/verify-hosting.mts MANIFEST` from a workstation). Then, on the VM:
+(`node --import tsx infra/offline/verify-hosting.mts MANIFEST` from a workstation), and only with
+the guard's timer active. Then, on the VM:
 
 ```sh
 # 1. Install the manifest read-only. Copy it from the workstation first, e.g.
 #    scp artifacts/offline-hosting/manifest.production.json VM:/tmp/navoss-offline-manifest.json
-sudo install -d -m 0755 -o navoss -g navoss /srv/navoss/artifacts/offline
 sudo install -m 0444 -o navoss -g navoss /tmp/navoss-offline-manifest.json \
-  /srv/navoss/artifacts/offline/manifest.json
-sha256sum /srv/navoss/artifacts/offline/manifest.json   # compare with the workstation's value
-jq -r .bundleVersion /srv/navoss/artifacts/offline/manifest.json
+  /srv/navoss/artifacts/offline/manifest.json.next
+sha256sum /srv/navoss/artifacts/offline/manifest.json.next   # compare with the workstation's value
+jq -r .bundleVersion /srv/navoss/artifacts/offline/manifest.json.next
+sudo mv /srv/navoss/artifacts/offline/manifest.json.next /srv/navoss/artifacts/offline/manifest.json
 
-# 2. Point the api at it and recreate only the api (no image build, no other service).
-sudoedit .env   # NAVOSS_OFFLINE_MANIFEST_PATH=/srv/navoss/artifacts/offline/manifest.json
+# 2. First time only: point the api at the directory and recreate only the api.
+sudoedit .env   # NAVOSS_OFFLINE_MANIFEST_DIR=/srv/navoss/artifacts/offline
 sudo docker compose config --quiet
 sudo docker compose up -d --no-build --force-recreate --wait --wait-timeout 300 api
 
 # 3. Verify: the endpoint serves this manifest and every artifact answers with its exact length.
-NAVOSS_OFFLINE_MANIFEST_PATH=/srv/navoss/artifacts/offline/manifest.json ./check-stack.sh
+NAVOSS_OFFLINE_MANIFEST_DIR=/srv/navoss/artifacts/offline ./check-stack.sh
 curl -fsS https://navoss-api.yassin.app/v1/offline/manifest | jq -r .bundleVersion
 ```
 
-A single-file bind mount keeps the inode the container started with. After replacing the manifest
-(a new release), always recreate the api as in step 2; editing the file in place is never needed.
-A bind source that does not exist stops the api from starting, so install the file before
-setting the variable.
+A later release repeats step 1 only (the `mv` replaces the manifest atomically) and step 3.
 
-**Roll back** by blanking `NAVOSS_OFFLINE_MANIFEST_PATH` in `.env` and recreating the api as in
-step 2; `./check-stack.sh` (run without the variable) then requires the quiet 503. Devices keep
-regions they already installed; they cannot download or update until a manifest is served again.
-For an emergency stop of all downloads, disable the bucket's custom domain instead (see
-[hosting](../offline/README.md#hosting)); the manifest alone does not stop a client that already
-knows the URLs.
+**Roll back** by renaming `manifest.json` away (quiet 503 at once), or permanently by blanking
+`NAVOSS_OFFLINE_MANIFEST_DIR` in `.env` and recreating the api as in step 2; `./check-stack.sh`
+run without the variable then requires the quiet 503. Devices keep regions they already
+installed; they cannot download or update until a manifest is served again. The manifest alone
+does not stop a client that already knows the artifact URLs: only disabling the custom domain
+does, which the guard does on its own.
 
 ## Privacy posture
 

@@ -23,6 +23,7 @@ import {
   type BuiltResources,
   type GraphIdentity,
 } from './manifest.mjs';
+import { CACHE_LIMIT_BYTES, oversizedArtifacts } from './hosting.mjs';
 import { routingEnginePin } from './engine.mjs';
 import { buildResources, searchNormalization } from './resources.mjs';
 import {
@@ -601,6 +602,11 @@ export async function build(args: string[]): Promise<void> {
       resources,
       new Date().toISOString(),
     );
+    // Hosting cost depends on the CDN cache absorbing downloads (docs/architecture/offline.md).
+    for (const { url, byteSize } of oversizedArtifacts([manifest]))
+      console.warn(
+        `WARNING: ${url} is ${byteSize} bytes, above the ${CACHE_LIMIT_BYTES}-byte CDN cache limit: every download of it would reach R2`,
+      );
     const release = join(output, 'releases', manifest.bundleVersion);
     if (!(await exists(release))) {
       const stage = await mkdtemp(join(output, '.work/release-'));
