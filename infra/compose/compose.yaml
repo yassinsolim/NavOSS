@@ -54,6 +54,9 @@ services:
       - egress
       - ingress
     read_only: true
+    # No core dumps: a crash must not write request coordinates to disk.
+    ulimits:
+      core: 0
     security_opt:
       - no-new-privileges:true
     tmpfs:
@@ -148,6 +151,9 @@ services:
     networks:
       - backend
       - egress
+    # No core dumps: a crash must not write request coordinates to disk.
+    ulimits:
+      core: 0
     security_opt:
       - no-new-privileges:true
     volumes:

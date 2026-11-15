@@ -989,12 +989,12 @@ Collection receives exactly the inputs `live` does, so this group is about the i
 - [ ] The app release that uploads has been audited against the [client rules](#client-rules):
       switch off by default, upload only during navigation, the 400 m trip-end trimming and
       hold-back, memory-only batches, handling of `401`, `403`, `429` and `503`.
-- [ ] Valhalla's container logs, at its configured level, contain no request bodies for
+- [x] Valhalla's container logs, at its configured level, contain no request bodies for
       `trace_attributes` and `/locate`, including on errors (send a malformed trace and read the
-      journal). Established locally for 3.8.2 at its default logging; repeat on the host.
+      journal). Established locally for 3.8.2 at its default logging; repeat on the host. **Host, 2026-11-15:** a malformed-JSON trace, a bad `shape_match` and a bad `/locate` each logged only a request id, method, path, status and the parser message; no coordinate appeared.
 - [ ] Caddy logs no request headers or client addresses on proxy errors.
-- [ ] Swap is off or encrypted, and core dumps are disabled, for the API and Valhalla
-      containers.
+- [x] Swap is off or encrypted, and core dumps are disabled, for the API and Valhalla
+      containers. **Host, 2026-11-15:** the 4 GiB swapfile is off and removed from `fstab`; Compose sets `ulimits.core: 0` for `api` and `valhalla` (`ulimit -c` reads 0 in both).
 - [ ] The database's availability is monitored: `/ready` reports `database: not_ready` when it
       is unreachable, and deletion of expired releases waits for the next successful boundary.
 - [ ] The privacy policy in force matches [`docs/privacy.md`](../privacy.md) at this revision.
