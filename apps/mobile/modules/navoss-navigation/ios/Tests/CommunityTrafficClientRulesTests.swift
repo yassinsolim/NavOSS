@@ -403,6 +403,33 @@ final class CommunityTrafficServiceRulesTests: XCTestCase {
     XCTAssertTrue(sharing)
     service.navigationDidEnd()
   }
+
+  func testARestoredTripSharesNothingButTheNextTripDoes() async {
+    let clock = Clock(start)
+    let transport = RuleTransport(clock: clock)
+    let (service, _) = makeService(transport, clock: clock)
+    // A stop visited before a reroute and a relaunch is no longer in the saved route, so the
+    // restored trip cannot rebuild the zones the original trip had.
+    let replacement = trip()
+    service.navigationDidStart(replacement, restored: true)
+    let refused = await eventually { service.trafficSharingState() == .unavailable(reason: .rejected) }
+    XCTAssertTrue(refused)
+    for fix in drive(from: start, count: 100) {
+      clock.value = fix.timestamp
+      service.navigationDidReceiveFix(fix)
+    }
+    await settle()
+    let statuses = await transport.statusRequests
+    let credentials = await transport.credentialRequests
+    XCTAssertEqual(statuses, 0, "a restored trip does not even ask the server")
+    XCTAssertEqual(credentials, 0)
+    service.navigationDidEnd()
+
+    service.navigationDidStart(trip(waypoints: [east(6_000)]))
+    let sharing = await eventually { service.trafficSharingState() == .sharing }
+    XCTAssertTrue(sharing, "a trip started on this launch shares as before")
+    service.navigationDidEnd()
+  }
 }
 
 final class CommunityTrafficEmbargoTests: XCTestCase {

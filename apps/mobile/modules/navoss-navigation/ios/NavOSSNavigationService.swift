@@ -1602,7 +1602,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       update: update
     )
     lock.unlock()
-    NavOSSCommunityService.shared.navigationDidStart(trip)
+    NavOSSCommunityService.shared.navigationDidStart(trip, restored: resume != nil)
     cancelNavigationSpeech(expectedGeneration: versionedUpdate.generation)
     if resume == nil {
       publish(versionedUpdate)

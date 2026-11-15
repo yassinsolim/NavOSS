@@ -349,8 +349,9 @@ public final class NavOSSCommunityService: @unchecked Sendable {
 
   // MARK: Navigation hooks (called by NavOSSNavigationService)
 
-  /// Turn-by-turn guidance started on `trip`.
-  public func navigationDidStart(_ trip: NavOSSCarPlayTrip) {
+  /// Turn-by-turn guidance started on `trip`; `restored` when it resumes a trip saved before a
+  /// relaunch (no traffic is shared on it, see `NavOSSTrafficSharingSession.startTrip`).
+  public func navigationDidStart(_ trip: NavOSSCarPlayTrip, restored: Bool = false) {
     lock.withLock {
       navigationActive = true
       routeGeometry = trip.geometry
@@ -362,7 +363,7 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     }
     // Independent: a slow credential request must not delay the reports on the route ahead.
     let points = lock.withLock { protectedPoints }
-    Task { [traffic] in await traffic?.startTrip(protectedPoints: points) }
+    Task { [traffic] in await traffic?.startTrip(protectedPoints: points, restored: restored) }
     Task { await refreshCorridor() }
   }
 

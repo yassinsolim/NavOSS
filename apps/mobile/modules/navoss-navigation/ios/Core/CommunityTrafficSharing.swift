@@ -25,7 +25,7 @@ public enum NavOSSTrafficSharingState: Equatable, Sendable {
   /// A new installation contributes from the next day; nothing is collected before `until`.
   case startsLater(until: Date)
   /// Not for this trip: the server is not accepting, rate-limited or refused this installation,
-  /// or this device cannot attest.
+  /// this device cannot attest, or the trip was restored after a relaunch (`rejected`).
   case unavailable(reason: Reason)
 
   public enum Reason: String, Sendable {
@@ -88,11 +88,13 @@ public actor NavOSSTrafficSharingSession {
     case rejected
     case unsupported
     case startsLater(Date)
+    /// A trip restored after a relaunch: its original trip-end zones may be gone.
+    case restored
 
     var state: NavOSSTrafficSharingState {
       switch self {
       case .rateLimited: .unavailable(reason: .rateLimited)
-      case .rejected: .unavailable(reason: .rejected)
+      case .rejected, .restored: .unavailable(reason: .rejected)
       case .unsupported: .unavailable(reason: .unsupported)
       case let .startsLater(until): .startsLater(until: until)
       }
@@ -149,12 +151,14 @@ public actor NavOSSTrafficSharingSession {
   }
 
   /// Turn-by-turn guidance started: a new trip. `protectedPoints` are the route origin,
-  /// destination and stops.
-  public func startTrip(protectedPoints: [NavOSSCarPlayCoordinate]) async {
+  /// destination and stops. A `restored` trip (resumed after a relaunch) shares nothing: its
+  /// route may have replaced the one navigation started with, and the visited stops and
+  /// restrictions of the original trip are not known.
+  public func startTrip(protectedPoints: [NavOSSCarPlayCoordinate], restored: Bool = false) async {
     discardCollection()
     navigating = true
     self.protectedPoints = protectedPoints
-    restriction = nil
+    restriction = restored ? .restored : nil
     if enabled { await beginCollection() }
   }
 
