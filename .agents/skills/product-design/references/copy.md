@@ -4,7 +4,7 @@ Applies to phone text, CarPlay templates, spoken guidance, accessible names and 
 
 ## rule/claim-matches-deployed-service
 
-User-facing text may claim only what the **deployed** service and the **shipped build** do. A capability merged on `main` but not deployed (Alberta+BC coverage, `/v2/routes` lanes and signposts, community reports, community traffic, offline bundles) must not be described as available, including in App Store metadata and the site. Evidence: `AGENTS.md` ("Current checkpoint"), `docs/release/next-build-checklist.md`.
+User-facing text may claim only what the **deployed** service and the relevant **build** do. The service now supports Alberta+BC coverage and `/v2/routes` lanes and signposts; build 75 uses them when returned, while build 70 uses v1. Community reports, community traffic and offline maps remain unavailable and must not be described as available, including in App Store metadata and the site. Evidence: `AGENTS.md` ("Current checkpoint"), `docs/release/next-build-checklist.md`.
 
 ## rule/coverage-from-the-server
 

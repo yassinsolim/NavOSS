@@ -90,7 +90,7 @@ test('homepage states what NavOSS is and keeps unreleased features labelled', ()
   assert.match(hero, /iOS \+ CarPlay technical beta/);
   assert.match(
     hero,
-    /Calgary and Kelowna\. Alberta and British Columbia are planned and not live yet/,
+    /The service now covers Alberta and British Columbia\. The app reaches it from TestFlight build 75 onward; earlier builds cover Calgary and Kelowna\./,
   );
 
   const shipping = text(section(homepage, 'features'));

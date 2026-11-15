@@ -26,11 +26,15 @@ NavOSS is an independently designed navigation app built on OpenStreetMap-derive
 
 ## Status
 
-This table separates three things that are easy to confuse. Read it before assuming a capability exists.
+This status distinguishes the deployed service from individual builds. Build availability must be confirmed in App Store Connect.
 
-### In the app on TestFlight now: build 0.1.0 (70)
+### TestFlight builds
 
-Built from `afa4067` (native navigation contract v8, the phone UI before the refresh). It talks to the deployed production service, which covers Calgary and Kelowna.
+The deployed `/v2/routes` service provides Alberta and British Columbia routing with lane and signpost data when returned.
+
+Build `0.1.0 (75)` from `d0594cd` (native contract v10) supports v2 routing, including lane guidance and signposts when returned. It was uploaded on 2026-11-15; Apple processing and tester availability have not been confirmed here. Interactive CarPlay remains unverified on a head unit.
+
+Build `0.1.0 (70)` from `afa4067` (native contract v8, the phone UI before the refresh) uses the compatible v1 endpoints for Calgary and Kelowna:
 
 | Area                 | What the build does                                                                                                                                               |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -41,32 +45,32 @@ Built from `afa4067` (native navigation contract v8, the phone UI before the ref
 | Road reports         | The report button stores up to 25 two-hour private drafts on the device. Nothing is sent or shown to other drivers                                                |
 | Not in this build    | Live traffic, lane guidance, signposts, shared road reports, offline maps, the refreshed phone UI, instrument-cluster and Siri route-preview support              |
 
-### Merged on `main`, not yet shipped in a build
+### Build 75 and merged code
 
-Everything below is in the repository and covered by tests, but no TestFlight build contains it.
+The features below are in uploaded build 75; offline maps and community sharing remain unavailable.
 
-| Area                           | State on `main`                                                                                                                                                                                                                                                                                                |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Phone UI refresh (#78)         | Design system (`src/theme`, `src/ui`), gesture bottom sheets, a decomposed map screen with controller hooks, light and dark, loading/empty/error/offline/location-denied states                                                                                                                                |
-| Native contract v10 (#75, #84) | Indexed route matching, geometry-derived guidance, reroute consent modes, native camera alerts and speeding state, and `/v2/routes` step metadata. The client falls back to `/v1/routes` against a server that lacks `/v2/routes`                                                                              |
-| CarPlay quality pass (#77)     | Course-up camera, drawn maneuver symbols, "then" guidance, optional lane guidance, faster search and voice recovery, reroute and camera alerts, instrument-cluster scene, Siri route preview. Not exercised on a head unit                                                                                     |
-| Lanes and signposts (#84)      | Phone and CarPlay can show lanes and exit signs, but only when the server returns them, which the deployed server does not                                                                                                                                                                                     |
-| Offline maps app side (#83)    | On-device offline maps, routing (Valhalla 3.9.1 via Rallista valhalla-mobile) and search, with an Offline maps sheet and a CarPlay/native fallback. No bundles are hosted and the deployed server has no manifest, so the app shows "Offline maps are not available yet". Privacy manifest declares Disk Space |
-| Community client (#85)         | Native Swift client for community road reports and traffic, shared by phone and CarPlay, with App Attest and a JS bridge. Reports and traffic sharing are off by default. The phone-side report UI is not merged yet. CarPlay has report and Community settings screens                                        |
+| Area                           | State on `main`                                                                                                                                                                                                                                                         |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phone UI refresh (#78)         | Design system (`src/theme`, `src/ui`), gesture bottom sheets, a decomposed map screen with controller hooks, light and dark, loading/empty/error/offline/location-denied states                                                                                         |
+| Native contract v10 (#75, #84) | Indexed route matching, geometry-derived guidance, reroute consent modes, native camera alerts and speeding state, and `/v2/routes` step metadata. The client falls back to `/v1/routes` against a server that lacks `/v2/routes`                                       |
+| CarPlay quality pass (#77)     | Course-up camera, drawn maneuver symbols, "then" guidance, optional lane guidance, faster search and voice recovery, reroute and camera alerts, instrument-cluster scene, Siri route preview. Not exercised on a head unit                                              |
+| Lanes and signposts (#84)      | Phone and CarPlay can show lanes and exit signs when the deployed v2 server returns them; build 75 uses v2. Interactive CarPlay is unverified on a head unit                                                                                                            |
+| Offline maps app side (#83)    | On-device offline maps, routing (Valhalla 3.9.1 via Rallista valhalla-mobile) and search are in build 75, but no bundles are hosted and the manifest returns 503, so offline maps are not available. Privacy manifest declares Disk Space                               |
+| Community client (#85)         | Native Swift client for community road reports and traffic, shared by phone and CarPlay, with App Attest and a JS bridge. Reports and traffic sharing are off by default. The phone-side report UI is not merged yet. CarPlay has report and Community settings screens |
 
-### Server-side code merged but NOT deployed
+### Deployed service
 
-The production service (`https://navoss-api.yassin.app`) still runs the older API image: Calgary and Kelowna, no `/v2/routes`, no community or traffic endpoints, no offline manifest. It cannot be redeployed yet. The clients degrade quietly against it.
+The production service (`https://navoss-api.yassin.app`) was deployed on 2026-11-15 from `f780903`. The v2 API covers Alberta and British Columbia and returns lane and signpost data when available; v1 remains compatible with build 70. Clients still degrade quietly when a server lacks a capability.
 
-| Area                                        | State                                                                                                                                                                                                                                             |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Alberta and British Columbia coverage (#79) | Polygon-enforced province coverage from Statistics Canada boundaries; validated locally on a real Alberta and BC graph (#86). Not live                                                                                                            |
-| `/v2/routes` lanes, signposts (#79, #86)    | Lane, signpost, speed-limit and current-road data. Not live                                                                                                                                                                                       |
-| Community road reports (#73)                | Account-free, App Attest-backed reports, publication modes `shadow` (default), `attested`, `corroborated`. Not live                                                                                                                               |
-| Community traffic (#76, #82, #86)           | Live traffic built from opted-in driver speeds, published only where at least three installations drove a road. Off by default (`COMMUNITY_TRAFFIC_MODE=off`). Not live                                                                           |
-| Offline bundles (#80)                       | A reproducible pipeline for dated Alberta and BC map, routing and search bundles and a manifest endpoint. There is no hosting for the bundles. The on-device side is merged on `main` (#83) but unshipped, so offline maps do not exist for users |
+| Area                                        | State                                                                                                          |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Alberta and British Columbia coverage (#79) | Deployed; the 22-directed-route regional matrix passed 22/22                                                   |
+| `/v2/routes` lanes, signposts (#79, #86)    | Deployed; the app's JS client planned Calgary to Banff with lane and signpost steps                            |
+| Community road reports (#73)                | Not available: publication is `shadow`, `features.communityReports` is false, and App Attest is not configured |
+| Community traffic (#76, #82, #86)           | Not available: `COMMUNITY_TRAFFIC_MODE=off`                                                                    |
+| Offline bundles (#80)                       | Not available: no bundles are hosted and the manifest returns 503                                              |
 
-Before any of these can reach users, the server must be deployed, migrated and enabled in a deliberate order, and a new build must ship. See [the next-build checklist](docs/release/next-build-checklist.md).
+Remaining enablement steps are in [the next-build checklist](docs/release/next-build-checklist.md).
 
 ## Architecture
 

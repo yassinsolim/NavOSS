@@ -25,11 +25,12 @@ Route requests send origin and destination coordinates to the NavOSS API. A rero
 ### Traffic sharing (optional, off by default)
 
 NavOSS can build live traffic from the driving speeds of people who choose to share them. Traffic
-sharing is **off by default**. The NavOSS server supports it, but it is not switched on in
-production and no released version of the app sends driving observations yet. The paragraphs
-below describe what the server does. Statements about what the app does are requirements for the
-app version that adds the **Share traffic speeds** switch; no released app has been checked
-against them yet.
+sharing is **off by default** and is not switched on in production. Build `0.1.0 (75)`, uploaded
+2026-11-15, contains the traffic and community reports client but ships without the App Attest
+entitlement; build 70 preceded it. Tester availability of build 75 is unconfirmed. Neither build
+shares driving observations or road reports; reports stay private drafts on the phone. The
+paragraphs below describe what the server would do and the requirements for an app with
+**Share traffic speeds** enabled; no released app has been checked against them yet.
 
 **What is sent.** While sharing is on and turn-by-turn navigation is active, the app sends short
 batches of your driving positions to the NavOSS API. A batch is a list of positions, each with the
@@ -202,10 +203,11 @@ NavOSS does not automatically transmit raw feedback descriptions to an AI provid
 NavOSS can share structured road reports between drivers. The NavOSS server decides whether
 sharing is on (`features.communityReports`); it is off until the operator enables it. While it
 is off, or on a device that cannot use Apple App Attest, the app keeps the private drafts
-described at the end of this section and sends nothing. Sharing is not switched on in the
-deployed NavOSS service today, and no released version of the app (the latest is 0.1.0 (70))
-contains the sharing client: released builds keep only the private drafts. The paragraphs
-below describe the app version that adds **Share road reports**.
+described at the end of this section and sends no shared reports. Sharing is not switched on in
+the deployed NavOSS service. Build `0.1.0 (75)`, uploaded 2026-11-15, contains the community
+client but ships without the App Attest entitlement; build 70 preceded it. Tester availability
+of build 75 is unconfirmed. Reports stay private drafts on the phone; the paragraphs below describe
+what would happen if **Share road reports** were available and enabled.
 
 **What a report sends.** Reports are shared only after you turn on **Share road reports** (off by default; until then every report stays a private draft). Within 400 m of your saved Home or Work, or of the current trip's start, destination or stops, a report stays private unless you explicitly confirm sharing it. When sharing is on and you choose a report type, the app sends one of
 eight fixed types (crash, road closed, slow traffic, construction, pothole, object on road, other

@@ -9,9 +9,11 @@ capacity and rollout decision is documented in
 [`docs/architecture/north-america.md`](../../docs/architecture/north-america.md). Build and validate
 continent artifacts on dedicated import infrastructure before changing production extracts.
 
-Production status: all six containers are healthy, `navoss-stack.service` and
-the nightly backup timer are enabled, and public ingress is
-`https://navoss-api.yassin.app`.
+Production status: the API cutover was performed on 2026-11-15 from commit `f780903`.
+The deployed image is `navoss-api:latest` (`9001dda4444f`); the rollback tag
+`navoss-api:pre-provincial-v2` (`351acadeaa57`) is retained. Public ingress is
+`https://navoss-api.yassin.app`. Community reports and community traffic remain off;
+offline maps are unavailable because no bundles are hosted.
 
 The active routing artifact is `valhalla-alberta-british-columbia-260730-ca-parent`, with hybrid
 profile SHA-256 `0a3f87cfabf76c2428ee851e1d5b61f90ef21d6952e9a4a1d4759887713931d7`. The
@@ -399,8 +401,8 @@ sudo docker compose up -d --no-build --wait --wait-timeout 300 api caddy
 ./check-stack.sh
 ```
 
-Retain the old image tag and the image id/tag record until regional and client validation finish.
-No production cutover or rollback was performed by the routing agent.
+The production API cutover was performed on 2026-11-15; the rollback image tag
+`navoss-api:pre-provincial-v2` is retained. A rollback was not performed.
 
 ## First import
 
