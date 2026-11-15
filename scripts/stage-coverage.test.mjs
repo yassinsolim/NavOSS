@@ -49,7 +49,11 @@ printf '%s\\n' "$*" >>"$state/calls"
 command=$1
 shift
 case "$command" in
-  ps) ls "$state/running" ;;
+  ps)
+    for name in $(ls "$state/running"); do
+      printf '%s %s\\n' "$name" "$(cat "$state/labels/$name" 2>/dev/null)"
+    done
+    ;;
   inspect)
     for name do :; done
     [ -e "$state/created/$name" ] || exit 1
@@ -97,6 +101,8 @@ case "$command" in
       exit 0
     fi
     for argument do printf '%s\\n' "$argument"; done >"$state/created/$name"
+    mkdir -p "$state/labels"
+    sed -n '/^--label$/{n;s/^navoss.stage.step=//p;}' "$state/created/$name" >"$state/labels/$name"
     rm -f "$state/running/$name"
     [ -n "$detach" ] && touch "$state/running/$name"
     exit 0
@@ -146,7 +152,8 @@ async function createFixture(context, labels = ['new-brunswick']) {
   const upstream = join(directory, 'upstream');
   const state = join(directory, 'docker');
   const live = join(root, 'nominatim', 'live', 'postgres');
-  for (const path of [compose, bin, join(root, 'imports'), upstream, state, live]) {
+  const liveValhalla = join(root, 'valhalla-live');
+  for (const path of [compose, bin, join(root, 'imports'), upstream, state, live, liveValhalla]) {
     await mkdir(path, { recursive: true });
   }
   for (const file of await readdir(composeSource)) {
@@ -176,7 +183,7 @@ async function createFixture(context, labels = ['new-brunswick']) {
     PATH: `${bin}:${String(process.env.PATH)}`,
     STAGE_MIN_FREE_GB: '0',
   };
-  return { compose, directory, env, live, root, state };
+  return { compose, directory, env, live, liveValhalla, root, state };
 }
 
 function stage(fixture, args, env = {}) {
@@ -498,4 +505,173 @@ test('every staging container has a memory cap', options, async (context) => {
     assert.equal(memory[1], memory[2], call);
   }
   assert.ok(stageDirectory);
+});
+
+// After a cutover the staged directories are the live ones, named however `.env` names them.
+async function setLive(
+  fixture,
+  { nominatim = fixture.live, valhalla = fixture.liveValhalla } = {},
+) {
+  await writeFile(
+    join(fixture.compose, '.env'),
+    `NOMINATIM_PASSWORD=production-secret-value\nNOMINATIM_DATA_DIR=${nominatim}\nVALHALLA_DATA_DIR=${valhalla}\n`,
+  );
+}
+
+async function completedStages(fixture, label = 'new-brunswick') {
+  const nominatim = join(fixture.root, 'nominatim', `${label}-${VERSION}`);
+  const valhalla = join(fixture.root, `valhalla-${label}-${VERSION}`);
+  await mkdir(join(nominatim, 'postgres'), { recursive: true });
+  await writeFile(join(nominatim, '.navoss-import-complete'), '');
+  await mkdir(valhalla, { recursive: true });
+  await writeFile(join(valhalla, '.navoss-stage-complete'), '');
+  return { nominatim, valhalla };
+}
+
+test(
+  'serve refuses a stage that is the live data, however .env names it',
+  options,
+  async (context) => {
+    for (const which of ['nominatim', 'valhalla']) {
+      const fixture = await createFixture(context);
+      await completedStages(fixture);
+      await setLive(
+        fixture,
+        which === 'nominatim'
+          ? { nominatim: `${fixture.root}/./nominatim/new-brunswick-${VERSION}/postgres` }
+          : { valhalla: `${fixture.root}/.//valhalla-new-brunswick-${VERSION}/` },
+      );
+
+      const refused = stage(fixture, ['serve', 'new-brunswick']);
+
+      assert.equal(refused.status, 1, which);
+      assert.match(refused.stderr, /is the live (NOMINATIM|VALHALLA)_DATA_DIR/u, which);
+      assert.equal(startedAnything(await calls(fixture)), false, which);
+    }
+  },
+);
+
+test('valhalla changes nothing in a stage that is the live graph', options, async (context) => {
+  const fixture = await createFixture(context);
+  const { valhalla } = await completedStages(fixture);
+  await writeFile(
+    join(valhalla, `new-brunswick-${VERSION}.osm.pbf`),
+    'routing input it was built from',
+  );
+  await writeFile(join(valhalla, '.pass1-complete'), '');
+  await writeFile(
+    join(fixture.root, 'imports', `new-brunswick-${VERSION}.routing.osm.pbf`),
+    'regenerated',
+  );
+  await setLive(fixture, { valhalla: `${fixture.root}/./valhalla-new-brunswick-${VERSION}` });
+
+  const refused = stage(fixture, ['valhalla', 'new-brunswick']);
+
+  assert.equal(refused.status, 1);
+  assert.match(refused.stderr, /is the live VALHALLA_DATA_DIR/u);
+  for (const file of [
+    `new-brunswick-${VERSION}.osm.pbf`,
+    '.pass1-complete',
+    '.navoss-stage-complete',
+  ]) {
+    assert.equal(await exists(join(valhalla, file)), true, file);
+  }
+});
+
+test('refuses cleanup when the live cluster path cannot be inspected', options, async (context) => {
+  const fixture = await createFixture(context);
+  const stageDirectory = await interruptedImport(fixture);
+  // Docker resolves this to the staged cluster; the operator cannot traverse the 0700 directory.
+  await chmod(join(stageDirectory, 'postgres'), 0o000);
+  for (const [live, refusal] of [
+    // Docker resolves `..` to the staged cluster itself.
+    [
+      join(stageDirectory, 'postgres', 'base', '..'),
+      /(Cannot inspect the live|is the live) NOMINATIM_DATA_DIR/u,
+    ],
+    // Not inspectable at all: refused, never assumed to be another directory.
+    [join(stageDirectory, 'postgres', 'base'), /Cannot inspect the live NOMINATIM_DATA_DIR/u],
+  ]) {
+    await setLive(fixture, { nominatim: live });
+
+    const refused = stage(fixture, ['nominatim', 'new-brunswick']);
+
+    assert.equal(refused.status, 1, live);
+    assert.match(refused.stderr, refusal, live);
+  }
+  assert.equal(
+    (await calls(fixture)).some((call) => call.includes('--entrypoint rm')),
+    false,
+  );
+});
+
+test(
+  'no staging container starts while another step left one running',
+  options,
+  async (context) => {
+    for (const leftover of ['nominatim', '']) {
+      const fixture = await createFixture(context);
+      await completedStages(fixture);
+      // A crashed import's container: the lock is free, the 10g container is not.
+      for (const kind of ['created', 'running', 'labels']) {
+        await mkdir(join(fixture.state, kind), { recursive: true });
+      }
+      await writeFile(join(fixture.state, 'created', 'navoss-nominatim-stage'), '');
+      await writeFile(join(fixture.state, 'running', 'navoss-nominatim-stage'), '');
+      await writeFile(join(fixture.state, 'labels', 'navoss-nominatim-stage'), leftover);
+
+      const refused = stage(fixture, ['serve', 'new-brunswick']);
+
+      assert.equal(refused.status, 1, leftover);
+      assert.match(refused.stderr, /navoss-nominatim-stage is running/u);
+      assert.equal(startedAnything(await calls(fixture)), false, leftover);
+    }
+  },
+);
+
+test(
+  'every staging container is labelled with the step that started it',
+  options,
+  async (context) => {
+    const fixture = await createFixture(context);
+    await completedStages(fixture);
+    assert.equal(stage(fixture, ['serve', 'new-brunswick']).status, 0);
+    for (const name of ['navoss-valhalla-stage', 'navoss-nominatim-stage', 'navoss-api-stage']) {
+      assert.equal(await readFile(join(fixture.state, 'labels', name), 'utf8'), 'serve\n', name);
+    }
+  },
+);
+
+test('stop never signals a process it cannot verify as the holder', options, async (context) => {
+  const fixture = await createFixture(context);
+  // The lock is held, but the holder record is stale: its pid now names an unrelated process.
+  const unrelated = spawn('sleep', ['30']);
+  const locker = spawn('flock', [join(fixture.root, '.stage.lock'), 'sleep', '30']);
+  context.after(() => {
+    unrelated.kill('SIGKILL');
+    locker.kill('SIGKILL');
+  });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  await writeFile(
+    join(fixture.root, '.stage.holder'),
+    `${String(unrelated.pid)} 1 nominatim new-brunswick\n`,
+  );
+
+  const stopped = stage(fixture, ['stop', 'new-brunswick'], { STAGE_HOLDER_WAIT: '1' });
+
+  assert.equal(stopped.status, 1);
+  assert.match(stopped.stderr, /cannot be verified/u);
+  assert.equal(unrelated.exitCode, null, 'the unrelated process was not signalled');
+  assert.equal(unrelated.signalCode, null);
+});
+
+test('every step refuses without the deployed .env beside it', options, async (context) => {
+  const fixture = await createFixture(context);
+  await rm(join(fixture.compose, '.env'));
+  for (const step of ['status', 'nominatim', 'stop']) {
+    const refused = stage(fixture, [step, 'new-brunswick']);
+    assert.equal(refused.status, 1, step);
+    assert.match(refused.stderr, /\.env is missing or unreadable/u, step);
+  }
+  assert.deepEqual(await calls(fixture), []);
 });

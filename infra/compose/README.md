@@ -345,6 +345,23 @@ staged services from `serve` are running. During steps 2 and 3 keep at least 4 G
 window) ends the running step itself, not only its containers, then removes the staging containers;
 rerun the step to resume.
 
+Run the script from the deployed `infra/compose` (or a checkout with that `.env` copied beside it):
+it reads the live `VALHALLA_DATA_DIR` and `NOMINATIM_DATA_DIR` from the `.env` next to it, and every
+step refuses when that file is missing or unreadable. Before changing, mounting or starting anything,
+a step refuses when its stage directory is the live one by device and inode (however `.env` writes
+the path), or when either cannot be inspected. Every staging container is labelled with the step
+that started it, and no step starts a container while another step's container (or an unlabelled one
+from an older script) still runs; `stop` removes them. `stop` signals the running step only after
+checking that the recorded pid still has the start time it was recorded with.
+
+`navoss` is not in the `docker` group on VM 100, and the scripts call plain `docker`. Put a wrapper
+first on `PATH` for the session, which runs Docker through passwordless sudo:
+
+```sh
+mkdir -p ~/bin && printf '#!/bin/sh\nexec sudo -n docker "$@"\n' >~/bin/docker && chmod 0755 ~/bin/docker
+export PATH="$HOME/bin:$PATH"
+```
+
 Every step needs `GEOFABRIK_VERSION` exported, and every step after `inputs` refuses unless it
 equals the release `inputs` recorded, so no step can resolve a newer daily release (the fallback
 below included). Each step also refuses to start unless its free-space floor is free on the artifact

@@ -35,6 +35,17 @@ step=$1
 shift
 label=$(printf '%s' "$*" | tr ' ' '-')
 
+# The live artifact paths come from the deployed `.env` beside this script; without it no step can
+# tell staged from live data, so none runs.
+env_file=${script_dir}/.env
+if [ ! -r "${env_file}" ]; then
+  echo "${env_file} is missing or unreadable. Run from the deployed infra/compose, whose .env names" >&2
+  echo "the live VALHALLA_DATA_DIR and NOMINATIM_DATA_DIR." >&2
+  exit 1
+fi
+live_valhalla=$(sed -n 's/^VALHALLA_DATA_DIR=//p' "${env_file}" | tail -n 1)
+live_nominatim=$(sed -n 's/^NOMINATIM_DATA_DIR=//p' "${env_file}" | tail -n 1)
+
 lock_file=${root}/.stage.lock
 holder_file=${root}/.stage.holder
 case "${step}" in
@@ -46,14 +57,20 @@ case "${step}" in
     fi
     exec 9>>"${lock_file}"
     if [ "${step}" != stop ] && ! flock -n 9; then
-      echo "Another staging step is running: $(cut -d ' ' -f 2- "${holder_file}" 2>/dev/null)." >&2
+      echo "Another staging step is running: $(cut -d ' ' -f 3- "${holder_file}" 2>/dev/null)." >&2
       echo "Wait for it, or end it with '$0 stop ${label}'." >&2
       exit 1
     fi
     ;;
 esac
+process_start() {
+  # process_start PID: the kernel's start time of PID (clock ticks since boot); empty if none.
+  sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d ' ' -f 20
+}
 hold_stage_lock() {
-  printf '%s %s %s\n' "$$" "${step}" "${label}" >"${holder_file}"
+  # The pid with its start time: `stop` signals it only if that same process still runs.
+  printf '%s %s %s %s\n' "$$" "$(process_start "$$")" "${step}" "${label}" >"${holder_file}.next"
+  mv "${holder_file}.next" "${holder_file}"
 }
 
 # Registry ids and ISO codes of the provinces a release holds.
@@ -137,12 +154,14 @@ wait_for() {
   done
 }
 
-refuse_parallel_heavy_step() {
-  # Under the lock: a container left by `serve`, or by a step this one does not resume, still
-  # holds its memory.
-  for other in navoss-valhalla-stage navoss-nominatim-stage navoss-api-stage; do
-    if [ "${other}" != "$1" ] && docker ps --format '{{.Names}}' | grep -qx "${other}"; then
-      echo "${other} is running. Run one heavy step at a time ('$0 stop ${label}')." >&2
+refuse_other_steps_containers() {
+  # Under the lock, before any container starts: a staging container another step started (or an
+  # unlabelled one from an older script) may outlive its crashed parent and still hold its memory.
+  # This step's own are replaced by it.
+  docker ps --format '{{.Names}} {{.Label "navoss.stage.step"}}' | while read -r name started_by; do
+    case "${name}" in navoss-valhalla-stage | navoss-nominatim-stage | navoss-api-stage) ;; *) continue ;; esac
+    if [ "${started_by}" != "${step}" ]; then
+      echo "${name} is running (started by ${started_by:-an older script}). Run one step at a time ('$0 stop ${label}')." >&2
       exit 1
     fi
   done
@@ -163,7 +182,7 @@ nominatim_container() {
   container_stage=$1
   shift
   docker rm -f navoss-nominatim-stage >/dev/null 2>&1 || true
-  docker create --name navoss-nominatim-stage --env-file "${password_file}" --shm-size 2g \
+  docker create --name navoss-nominatim-stage --label "navoss.stage.step=${step}" --env-file "${password_file}" --shm-size 2g \
     -p 127.0.0.1:18080:8080 \
     -e FREEZE=true -e GUNICORN_WORKERS=2 -e IMPORT_SECONDARY_WIKIPEDIA=false \
     -e IMPORT_STYLE=full -e IMPORT_WIKIPEDIA=false -e PBF_PATH=/regional-data/regional.osm.pbf \
@@ -193,14 +212,49 @@ nominatim_container() {
   rm -f "${image_script}"
 }
 
-refuse_live_nominatim() {
-  # refuse_live_nominatim STAGE LIVE_DATA_DIR: STAGE/postgres must not be the live cluster, by name
-  # or through a link.
-  if [ "$1/postgres" = "$2" ] ||
-    { [ -e "$1/postgres" ] && [ -e "$2" ] && [ "$(realpath "$1/postgres")" = "$(realpath "$2")" ]; }; then
-    echo 'Refusing to touch the live NOMINATIM_DATA_DIR.' >&2
+physical_id() {
+  # physical_id PATH: device:inode of what PATH resolves to; `absent` only when PATH certainly does
+  # not exist (a readable directory on its way lacks the next name). Fails when it cannot tell, e.g.
+  # a path through a directory the operator cannot traverse: callers then refuse, never assume
+  # "different".
+  if canonical=$(realpath -e -- "$1" 2>/dev/null); then
+    stat -L -c '%d:%i' -- "${canonical}"
+    return
+  fi
+  name=$(basename -- "$1")
+  parent=$(dirname -- "$1")
+  case "${name}" in . | .. | /) return 1 ;; esac
+  [ ! -L "$1" ] || return 1
+  if [ -d "${parent}" ] && [ -x "${parent}" ] && [ -r "${parent}" ]; then
+    if ls -A -- "${parent}" | grep -qxF -- "${name}"; then return 1; fi
+    echo absent
+    return
+  fi
+  [ "$(physical_id "${parent}")" = absent ] || return 1
+  echo absent
+}
+
+refuse_live() {
+  # refuse_live NAME LIVE_PATH PATH...: stops the step before it changes or mounts anything when a
+  # PATH is the live NAME directory (same device and inode, however either is written), or when
+  # either cannot be inspected.
+  live_name=$1
+  live_path=$2
+  shift 2
+  if [ -z "${live_path}" ] || ! live_id=$(physical_id "${live_path}") || [ "${live_id}" = absent ]; then
+    echo "Cannot inspect the live ${live_name} (${live_path:-not set in ${env_file}}); refusing." >&2
     exit 1
   fi
+  for candidate do
+    if ! candidate_id=$(physical_id "${candidate}"); then
+      echo "Cannot inspect ${candidate}; refusing." >&2
+      exit 1
+    fi
+    if [ "${candidate_id}" = "${live_id}" ]; then
+      echo "${candidate} is the live ${live_name}; refusing." >&2
+      exit 1
+    fi
+  done
 }
 
 discard_cluster() {
@@ -214,7 +268,7 @@ discard_cluster() {
     echo "Refusing to discard ${1}/postgres: not a staged Nominatim directory." >&2
     exit 1
   fi
-  refuse_live_nominatim "$1" "${live}"
+  refuse_live NOMINATIM_DATA_DIR "${live_nominatim}" "$1" "$1/postgres"
   docker run --rm --network none --user 0 --cap-drop ALL --cap-add DAC_OVERRIDE \
     --security-opt no-new-privileges:true --memory 256m --memory-swap 256m --entrypoint rm \
     -v "$1:/stage" "${nominatim_image}" -rf /stage/postgres
@@ -224,7 +278,7 @@ discard_cluster() {
 valhalla_run() {
   # valhalla_run DIR BUILD_ADMINS FORCE_REBUILD IGNORE_PBF
   docker rm -f navoss-valhalla-stage >/dev/null 2>&1 || true
-  docker run -d --name navoss-valhalla-stage \
+  docker run -d --name navoss-valhalla-stage --label "navoss.stage.step=${step}" \
     --cpus "${VALHALLA_BUILD_CPUS:-4}" --cpuset-cpus "${VALHALLA_BUILD_CPUSET:-0-3}" \
     --memory "${VALHALLA_BUILD_MEMORY:-8g}" --memory-swap "${VALHALLA_BUILD_MEMORY:-8g}" \
     -p 127.0.0.1:18002:8002 \
@@ -239,7 +293,7 @@ valhalla_run() {
 case "${step}" in
   inputs)
     hold_stage_lock
-    refuse_parallel_heavy_step none
+    refuse_other_steps_containers
     pinned=$(pinned_version)
     if [ -s "${version_file}" ] && [ "$(cat "${version_file}")" != "${pinned}" ]; then
       echo "'${label}' is staged from $(cat "${version_file}"); remove ${version_file} to start ${pinned}." >&2
@@ -255,9 +309,10 @@ case "${step}" in
 
   valhalla)
     hold_stage_lock
-    refuse_parallel_heavy_step navoss-valhalla-stage
+    refuse_other_steps_containers
     v=$(version)
     stage=${root}/valhalla-${label}-${v}
+    refuse_live VALHALLA_DATA_DIR "${live_valhalla}" "${stage}"
     routing=${imports}/${label}-${v}.routing.osm.pbf
     staged_pbf=${stage}/${label}-${v}.osm.pbf
     if [ -f "${staged_pbf}" ] && ! [ "${staged_pbf}" -ef "${routing}" ] &&
@@ -272,12 +327,10 @@ case "${step}" in
       exit 0
     fi
     require_free_space 30
-    live=$(sed -n 's/^VALHALLA_DATA_DIR=//p' "${script_dir}/.env" 2>/dev/null | tail -n 1)
-    [ "${stage}" != "${live}" ] || { echo 'Refusing to build into the live VALHALLA_DATA_DIR.' >&2; exit 1; }
     install -d -m 0750 "${stage}"
     [ -f "${staged_pbf}" ] || ln "${routing}" "${staged_pbf}" 2>/dev/null || cp "${routing}" "${staged_pbf}"
     if [ ! -f "${stage}/timezones.sqlite" ]; then
-      cp "${live}/timezones.sqlite" "${stage}/timezones.sqlite"
+      cp "${live_valhalla}/timezones.sqlite" "${stage}/timezones.sqlite"
     fi
     tz=$(docker run --rm --network none --memory 1g --memory-swap 1g --entrypoint spatialite -v "${stage}:/d:ro" "${valhalla_image}" \
       -batch -noheader -list /d/timezones.sqlite \
@@ -302,16 +355,15 @@ case "${step}" in
 
   nominatim)
     hold_stage_lock
-    refuse_parallel_heavy_step navoss-nominatim-stage
+    refuse_other_steps_containers
     v=$(version)
     stage=${root}/nominatim/${label}-${v}
+    refuse_live NOMINATIM_DATA_DIR "${live_nominatim}" "${stage}" "${stage}/postgres"
     if [ -f "${stage}/.navoss-import-complete" ]; then
       echo "Nominatim stage ${stage} is complete."
       exit 0
     fi
-    live=$(sed -n 's/^NOMINATIM_DATA_DIR=//p' "${script_dir}/.env" 2>/dev/null | tail -n 1)
     install -d -m 0750 "${stage}"
-    refuse_live_nominatim "${stage}" "${live}"
     if [ -f "${stage}/.navoss-import-started" ]; then
       # The image treats any existing cluster as imported; an interrupted import must start over.
       echo "Discarding the interrupted import in ${stage}/postgres."
@@ -336,16 +388,19 @@ case "${step}" in
 
   serve)
     hold_stage_lock
+    refuse_other_steps_containers
     v=$(version)
     valhalla_stage=${root}/valhalla-${label}-${v}
     nominatim_stage=${root}/nominatim/${label}-${v}
+    refuse_live VALHALLA_DATA_DIR "${live_valhalla}" "${valhalla_stage}"
+    refuse_live NOMINATIM_DATA_DIR "${live_nominatim}" "${nominatim_stage}" "${nominatim_stage}/postgres"
     [ -f "${valhalla_stage}/.navoss-stage-complete" ] && [ -f "${nominatim_stage}/.navoss-import-complete" ] ||
       { echo 'Finish the valhalla and nominatim steps first.' >&2; exit 1; }
     require_free_space 2
     docker network inspect "${network}" >/dev/null 2>&1 || docker network create "${network}" >/dev/null
     # Serving only: tiles exist, so the image builds nothing.
     docker rm -f navoss-valhalla-stage >/dev/null 2>&1 || true
-    docker run -d --name navoss-valhalla-stage --network "${network}" --cpus 2 \
+    docker run -d --name navoss-valhalla-stage --label "navoss.stage.step=${step}" --network "${network}" --cpus 2 \
       --memory "${VALHALLA_SERVE_MEMORY:-4g}" --memory-swap "${VALHALLA_SERVE_MEMORY:-4g}" \
       -e build_admins=False -e build_elevation=False -e build_tar=True -e build_time_zones=False \
       -e force_rebuild=False -e server_threads=2 -e tile_urls= -e traffic_name= \
@@ -358,7 +413,7 @@ case "${step}" in
       --memory "${NOMINATIM_SERVE_MEMORY:-6g}" --memory-swap "${NOMINATIM_SERVE_MEMORY:-6g}" -e THREADS=2
     docker start navoss-nominatim-stage >/dev/null
     docker rm -f navoss-api-stage >/dev/null 2>&1 || true
-    docker run -d --name navoss-api-stage --network "${network}" --memory 768m --memory-swap 768m \
+    docker run -d --name navoss-api-stage --label "navoss.stage.step=${step}" --network "${network}" --memory 768m --memory-swap 768m \
       --cpus 0.75 \
       -p 127.0.0.1:18300:3000 \
       --read-only --tmpfs /tmp:size=32m --cap-drop ALL --security-opt no-new-privileges:true \
@@ -386,8 +441,29 @@ case "${step}" in
     # End the step holding the lock (its whole process group), then take the lock so no step starts
     # while its containers are removed.
     if ! flock -n 9; then
-      read -r holder holder_step holder_label <"${holder_file}"
-      kill -TERM "-${holder}" 2>/dev/null || kill -TERM "${holder}" 2>/dev/null || true
+      # Signal only a holder whose recorded start time matches the running process: the record
+      # may be stale (a reused pid after a crash or reboot) or not yet written by a step that has
+      # just taken the lock.
+      waited=0
+      while :; do
+        holder= holder_start= holder_step= holder_label=
+        read -r holder holder_start holder_step holder_label <"${holder_file}" 2>/dev/null || true
+        if [ -n "${holder}" ] && [ -n "${holder_start}" ] &&
+          [ "$(process_start "${holder}")" = "${holder_start}" ]; then
+          break
+        fi
+        if [ "${waited}" -ge "${STAGE_HOLDER_WAIT:-10}" ]; then
+          echo "The staging lock is held, but its holder cannot be verified (${holder_file}); nothing signalled or removed." >&2
+          exit 1
+        fi
+        sleep 1
+        waited=$((waited + 1))
+      done
+      if [ "$(sed 's/.*) //' "/proc/${holder}/stat" | cut -d ' ' -f 3)" = "${holder}" ]; then
+        kill -TERM "-${holder}" 2>/dev/null || true
+      else
+        kill -TERM "${holder}" 2>/dev/null || true
+      fi
       flock -w "${STAGE_STOP_TIMEOUT:-120}" 9 ||
         { echo "${holder_step} ${holder_label} (pid ${holder}) did not end; nothing removed." >&2; exit 1; }
       echo "Stopped ${holder_step} ${holder_label}."
@@ -401,7 +477,7 @@ case "${step}" in
     v=$(cat "${version_file}" 2>/dev/null || echo none)
     echo "release ${label} ${v}"
     if [ -e "${lock_file}" ] && ! flock -n "${lock_file}" true; then
-      echo "  step running: $(cut -d ' ' -f 2- "${holder_file}" 2>/dev/null)"
+      echo "  step running: $(cut -d ' ' -f 3- "${holder_file}" 2>/dev/null)"
     fi
     for marker in "${root}/valhalla-${label}-${v}/.pass1-complete" \
       "${root}/valhalla-${label}-${v}/.navoss-stage-complete" \
