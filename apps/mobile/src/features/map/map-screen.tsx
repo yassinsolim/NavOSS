@@ -251,6 +251,7 @@ export function MapScreen() {
             mapPreferences.showRoadEvents
               ? roadEventStatusLabel({
                   hasFeed: overlays.roadEventFeedAvailable,
+                  noFeedProvince: overlays.roadEventNoFeedProvince,
                   now: Date.now(),
                   refreshDelayed: overlays.roadEventRefreshDelayed,
                   snapshot: overlays.roadEventSnapshot,
@@ -493,6 +494,7 @@ export function MapScreen() {
         onClosed={c.roadEventsSheet.onClosed}
         onOpenLink={c.onOpenExternalUrl}
         onSelect={c.roadEventsSheet.onSelect}
+        noFeedProvince={overlays.roadEventNoFeedProvince}
         refreshDelayed={overlays.roadEventRefreshDelayed}
         snapshot={overlays.roadEventSnapshot}
         visible={c.roadEventsSheet.visible}

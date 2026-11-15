@@ -6,6 +6,8 @@ import {
 } from '@navoss/contracts';
 import { describe, expect, it, vi } from 'vitest';
 
+import { ProvincialRoadEventRegionSchema, REGISTERED_SERVICE_AREAS } from '@navoss/contracts';
+import { mapRegionForCoordinate } from '../src/features/map/map-region.js';
 import { createRoadEventLoader } from '../src/features/map/road-event-refresh.js';
 import {
   currentRoadEvents,
@@ -74,6 +76,52 @@ describe('road-event feed per map region', () => {
       legacy: undefined,
       provincial: undefined,
     });
+  });
+
+  it('asks for events by registry province id and names provinces without a feed', () => {
+    // Every feed region is a registered province id, so the phone's map region selects it as is.
+    const registered = new Set(REGISTERED_SERVICE_AREAS.map(({ id }) => id));
+    for (const region of ProvincialRoadEventRegionSchema.options) {
+      expect(registered.has(region), region).toBe(true);
+      expect(roadEventFeedForMapRegion(region).provincial).toBe(region);
+    }
+    for (const area of REGISTERED_SERVICE_AREAS) {
+      const feed = roadEventFeedForMapRegion(area.id);
+      if (ProvincialRoadEventRegionSchema.safeParse(area.id).success) continue;
+      expect(feed, area.id).toEqual({
+        legacy: undefined,
+        noFeedProvince: area.displayName,
+        provincial: undefined,
+      });
+    }
+    // Gatineau is in Quebec, not Ontario: its own province's (absent) feed, never Ontario 511.
+    expect(
+      roadEventFeedForMapRegion(mapRegionForCoordinate({ latitude: 45.4295, longitude: -75.7096 })),
+    ).toEqual({
+      legacy: undefined,
+      noFeedProvince: 'Quebec',
+      provincial: undefined,
+    });
+  });
+
+  it('says a province has no official feed instead of loading or failing', () => {
+    expect(
+      roadEventStatusLabel({
+        hasFeed: false,
+        noFeedProvince: 'Quebec',
+        now: Date.now(),
+        refreshDelayed: false,
+        snapshot: undefined,
+      }),
+    ).toBe('No official road events for Quebec');
+    expect(
+      roadEventStatusLabel({
+        hasFeed: false,
+        now: Date.now(),
+        refreshDelayed: false,
+        snapshot: undefined,
+      }),
+    ).toBeUndefined();
   });
 });
 

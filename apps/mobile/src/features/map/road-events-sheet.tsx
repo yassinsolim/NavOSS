@@ -48,11 +48,14 @@ export function RoadEventsSheet({
   onClose,
   onClosed,
   onOpenLink,
+  noFeedProvince,
   onSelect,
   refreshDelayed,
   snapshot,
   visible,
 }: {
+  /** A registered province without an official feed: said plainly, never "loading". */
+  noFeedProvince?: string | undefined;
   events: readonly MapRoadEvent[];
   metrics: ScreenMetrics;
   onClose: () => void;
@@ -101,7 +104,13 @@ export function RoadEventsSheet({
           />
         )}
         {snapshot === undefined ? (
-          refreshDelayed ? null : (
+          noFeedProvince !== undefined ? (
+            <StateView
+              message={`NavOSS has no official road-event source for ${noFeedProvince} yet.`}
+              title="No official feed here"
+              visual={{ android: 'info', ios: 'info.circle' }}
+            />
+          ) : refreshDelayed ? null : (
             <StateView title="Loading road events" visual="loading" />
           )
         ) : (
