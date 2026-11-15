@@ -94,3 +94,23 @@ test(
     assert.match(result.stdout, /\[routing filter 2\]/u);
   },
 );
+
+test(
+  'writes no routing input whose ways reference missing nodes',
+  { skip: !hasOsmium && 'osmium is not installed' },
+  async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), 'navoss-filter-routing-'));
+    context.after(() => rm(directory, { force: true, recursive: true }));
+    const opl = join(directory, 'fixture.opl');
+    const input = join(directory, 'north-261114.osm.pbf');
+    await writeFile(opl, `${extract}w13 v1 Thighway=residential Nn1,n99\n`);
+    osmium('cat', '--overwrite', '--output', input, opl);
+
+    const result = spawnSync('sh', [filterScript, input], { encoding: 'utf8' });
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /ways reference missing nodes; nothing written/u);
+    const written = spawnSync('ls', [directory], { encoding: 'utf8' }).stdout;
+    assert.doesNotMatch(written, /routing/u);
+  },
+);

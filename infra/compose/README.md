@@ -354,7 +354,7 @@ container limit, which is what the kernel enforces; there is no swap.
 | Step | Command                                               | Expected time                 | Disk floor (refuses below) | Artifact disk                    | Memory (container limits)                             |
 | ---- | ----------------------------------------------------- | ----------------------------- | -------------------------- | -------------------------------- | ----------------------------------------------------- |
 | 0    | Update the checkout and API image                     | 5 min                         | —                          | 1 GB                             | image build only                                      |
-| 1    | `inputs`: verify the extract, write the routing input | 15–30 min                     | 20 GB                      | +6.5 GB                          | no container; osmium < 1 GiB                          |
+| 1    | `inputs`: verify the extract, write the routing input | 15–30 min                     | 20 GB                      | +6.5 GB                          | no container; osmium check-refs ≈ 2 GiB on the host   |
 | 2    | `valhalla`: two graph passes and the admin repair     | 1–4 h                         | 30 GB                      | +8–20 GB peak, ≈ 8–12 GB kept    | build 8 GiB; spatialite helpers 1 GiB, never together |
 | 3    | `nominatim`: search import                            | 12–24 h                       | 130 GB                     | +70–110 GB peak, ≈ 20–30 GB kept | import 10 GiB; cleanup container 256 MiB before it    |
 | 4    | `serve` + `verify`, route matrix over SSH             | 30 min                        | 2 GB                       | —                                | Valhalla 4 + Nominatim 6 + API 0.75 = 10.75 GiB       |
@@ -365,13 +365,13 @@ Worst case against the 24 GiB host, by limits. The live stack's limits are 10.19
 search indexer 0.5, Caddy 0.19, Valhalla 2, Nominatim 6, reports database 0.75). The lock allows
 only one row at a time:
 
-| Phase              | Live limits | Staging limits | Total   | Left of 24 GiB |
-| ------------------ | ----------- | -------------- | ------- | -------------- |
-| `inputs`           | 10.19       | 0 (host < 1)   | < 11.19 | > 12.8         |
-| `valhalla` build   | 10.19       | 8              | 18.19   | 5.81           |
-| `nominatim` import | 10.19       | 10             | 20.19   | 3.81           |
-| `serve` (staged)   | 10.19       | 10.75          | 20.94   | 3.06           |
-| After the cutover  | 14.19       | 0              | 14.19   | 9.81           |
+| Phase              | Live limits | Staging limits | Total  | Left of 24 GiB |
+| ------------------ | ----------- | -------------- | ------ | -------------- |
+| `inputs`           | 10.19       | 0 (host ≈ 2)   | ≈ 12.2 | ≈ 11.8         |
+| `valhalla` build   | 10.19       | 8              | 18.19  | 5.81           |
+| `nominatim` import | 10.19       | 10             | 20.19  | 3.81           |
+| `serve` (staged)   | 10.19       | 10.75          | 20.94  | 3.06           |
+| After the cutover  | 14.19       | 0              | 14.19  | 9.81           |
 
 Limits are ceilings, not use: the kernel kills a container at its limit instead of the host
 swapping. Steps 3 and 4 leave less than the 4 GiB floor only if every container reaches its limit
@@ -392,7 +392,8 @@ export GEOFABRIK_VERSION=261114        # the one release every step below uses
 # 1. Inputs. Uses the extract already at imports/canada-261114.osm.pbf (MD5 checked on download);
 #    writes canada-261114.osm.pbf.md5, SHA256SUMS-canada-261114 and canada-261114.routing.osm.pbf
 #    (seasonal and ice roads removed, relation members included; the report counts what was
-#    removed). A routing input from the earlier filter is regenerated.
+#    removed). It is written only if every kept way's nodes are present and no relation lost a
+#    member other than a removed way (osmium check-refs). An earlier filter's output is regenerated.
 GEOFABRIK_MD5=0bba746e7473aac6a7a6796d153ea12d ./stage-coverage.sh inputs canada
 
 # 2. Routing graph: /srv/navoss/artifacts/valhalla-canada-261114 (pass 1 builds admins, the

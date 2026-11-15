@@ -37,9 +37,25 @@ partial=${output%.osm.pbf}.partial.osm.pbf
 osmium tags-filter --overwrite --invert-match --omit-referenced --output "${partial}" "${input}" \
   ${expressions}
 osmium fileinfo --extended "${partial}" >/dev/null
+# Hard gate before a multi-hour build: every kept way's nodes are present, and the only relation
+# members newly missing are removed ways. (A Geofabrik extract already lacks members outside it.)
+if ! osmium check-refs "${partial}" >/dev/null 2>&1; then
+  rm -f "${partial}"
+  echo "$(basename "${output}"): ways reference missing nodes; nothing written." >&2
+  exit 1
+fi
+relation_gaps() {
+  osmium check-refs --check-relations "$1" 2>&1 | sed -n 's/^Ways *in relations missing: *//p'
+}
 # What was actually removed: every way of the extract that the routing input no longer holds.
 before=$(osmium fileinfo --extended --get data.count.ways "${input}")
 after=$(osmium fileinfo --extended --get data.count.ways "${partial}")
+new_gaps=$(($(relation_gaps "${partial}") - $(relation_gaps "${input}")))
+if [ "${new_gaps}" -gt "$((before - after))" ]; then
+  rm -f "${partial}"
+  echo "$(basename "${output}"): ${new_gaps} relation members missing beyond the removed ways." >&2
+  exit 1
+fi
 mv "${partial}" "${output}"
 printf 'Removed %s seasonal or ice-road ways (%s) from %s %s\n' "$((before - after))" \
   "${expressions}" "$(basename "${input}")" "${policy}" >"${report}"
