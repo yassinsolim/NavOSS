@@ -1,9 +1,13 @@
 import { expect, it, vi } from 'vitest';
 
+import type * as CoverageDataModule from '../src/coverage-data.js';
+
+type CoverageData = typeof CoverageDataModule;
+
 // Counts how often the 1.1 MB boundary data is evaluated, through the one function that builds it.
 const loads = vi.hoisted(() => ({ count: 0 }));
 vi.mock('../src/coverage-data.js', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../src/coverage-data.js')>();
+  const original = await importOriginal<CoverageData>();
   return {
     ...original,
     loadServiceAreaData: () => {

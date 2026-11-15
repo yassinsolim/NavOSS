@@ -1,10 +1,13 @@
 import { expect, it, vi } from 'vitest';
 
+import type * as CoverageDataModule from '../../../packages/contracts/dist/coverage-data.js';
+
+type CoverageData = typeof CoverageDataModule;
+
 // The app resolves @navoss/contracts to its build; count evaluations of the boundary data there.
 const loads = vi.hoisted(() => ({ count: 0 }));
 vi.mock('../../../packages/contracts/dist/coverage-data.js', async (importOriginal) => {
-  const original =
-    await importOriginal<typeof import('../../../packages/contracts/dist/coverage-data.js')>();
+  const original = await importOriginal<CoverageData>();
   return {
     ...original,
     loadServiceAreaData: () => {
