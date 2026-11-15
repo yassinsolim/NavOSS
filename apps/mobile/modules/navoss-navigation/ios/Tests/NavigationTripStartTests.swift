@@ -283,6 +283,26 @@ final class NavigationTripStartTests: XCTestCase {
     }
   }
 
+  /// Re-review of #133: parked 100 m from the road on 400 m fixes. Such a fix "fits" the route
+  /// through its own accuracy, but cannot place the vehicle: before the first usable match it is
+  /// acquiring like any other unmatched fix, and once fixes are usable the trip matches as usual.
+  func testParkedOnFixesTooPoorToPlaceTheTripStaysAcquiring() throws {
+    let (trip, express) = try harness(selecting: "Highway 401 Express")
+    for index in 0..<30 {
+      try trip.fix(
+        Self.offset(Self.parked, east: 0, north: index.isMultiple(of: 2) ? 0 : 0.5),
+        accuracy: 400, after: 2)
+    }
+    assertAcquiring(trip.history[...], "parked on 400 m fixes")
+    XCTAssertFalse(trip.session.hasMatchedRoute)
+    XCTAssertEqual(trip.requests, 0)
+
+    try trip.drive([Self.parked] + Self.points(express, upToMeters: 2_000), speed: 12)
+    XCTAssertTrue(trip.session.hasMatchedRoute)
+    XCTAssertNotNil(trip.latest?.snapshot.matchedCoordinate)
+    XCTAssertEqual(trip.activeRouteId, express.id)
+  }
+
   func testParkedOffTheRoadTheTripIsAcquiringAndSilentUntilItJoinsTheRoute() throws {
     let (trip, express) = try harness(selecting: "Highway 401 Express")
     try trip.standStill(at: Self.parked, seconds: 60)

@@ -1036,7 +1036,13 @@ final class NavigationCore {
       }
     }
 
+    // Before the first match, a fix too poor to place the vehicle (`navigationPoorAccuracyMeters`)
+    // fits the route only through its own accuracy: it is not accepted, so not a match, and the
+    // trip stays acquiring. After a match such fixes are judged as they always were.
+    let isUnplaceableBeforeMatch = !hasMatchedRoute
+      && accuracyAllowanceMeters > navigationPoorAccuracyMeters
     let isAcceptableFix = !isOffRoute && !isDepartureSample && !isHeldJump
+      && !isUnplaceableBeforeMatch
     // A restored trip placed without progress learns its pass from a fix that only one pass
     // fits, or that the heading of the moving vehicle picks out. Until then it does not arrive.
     if requiresPassConfirmation, isAcceptableFix,
@@ -1096,15 +1102,12 @@ final class NavigationCore {
     // zero-tolerance gate here would latch `routeProgress` to the forward extreme of GPS noise
     // and hold the matched coordinate until the vehicle physically drove past it.
     let shouldAcceptProjection = !isOffRoute && !isDepartureSample && !isHeldJump
+      && !isUnplaceableBeforeMatch
     // Raised only by accepted on-route progress, and read before this line when computing
     // cumulative regression, so the mark is the furthest point genuinely reached this route
     // rather than a value that drifts down with each tolerated backward step.
     if shouldAcceptProjection {
       progressHighWaterMark = max(progressHighWaterMark, projection.progress)
-    }
-    // A fix too poor to place the vehicle (`navigationPoorAccuracyMeters`) fits the route from
-    // far away; it is not the first match.
-    if shouldAcceptProjection, accuracyAllowanceMeters <= navigationPoorAccuracyMeters {
       hasMatchedRoute = true
       preMatchStartDistanceMeters = nil
       preMatchClosest = nil

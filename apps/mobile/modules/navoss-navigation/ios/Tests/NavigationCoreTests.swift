@@ -2069,7 +2069,14 @@ final class NavigationCoreTests: XCTestCase {
       horizontalAccuracyMeters: 100
     )
 
-    var snapshot = try core.updateLocation(uncertainSample)
+    // Matched on the route first: before a first match a 100 m fix cannot place the vehicle.
+    var snapshot = try core.updateLocation(
+      NavigationLocationSample(
+        coordinate: NavigationCoordinate(latitude: 51.04, longitude: -114.075),
+        horizontalAccuracyMeters: 5
+      )
+    )
+    snapshot = try core.updateLocation(uncertainSample)
     snapshot = try core.updateLocation(uncertainSample)
     snapshot = try core.updateLocation(uncertainSample)
 
