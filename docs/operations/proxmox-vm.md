@@ -55,6 +55,8 @@ about 89 GB; after cutover 60 GB of 255 GB was used. The first import was OOM-ki
 At 15:44 UTC the Canada cutover used API image `4708d34`. Rollback image tag:
 `navoss-api:pre-canada-registry`; restore `infra/compose/.env.pre-canada-20261115T154413Z`
 and run `docker compose up -d --no-build --wait valhalla nominatim api caddy` for data rollback.
+The current API image is from `36c8a9f`, deployed on 2026-11-15; its immediate image rollback tag is
+`navoss-api:pre-canada-search-fixes`. The earlier cutover tag and data backup above remain distinct.
 
 Format `scsi1` and `scsi2` as ext4 and mount them by filesystem UUID with `defaults,noatime`.
 
@@ -137,7 +139,7 @@ Required access:
 
 ## Acceptance gate
 
-The VM is ready for TestFlight only after:
+The following readiness and recovery exercises remain relevant despite TestFlight distribution:
 
 - [x] QEMU guest agent reports a healthy guest.
 - [x] `scsi1` and `scsi2` remounted correctly after the July 20 controlled VM reboot.

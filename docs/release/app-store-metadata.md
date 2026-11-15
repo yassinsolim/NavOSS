@@ -1,8 +1,8 @@
 # App Store Connect metadata draft
 
-Status (refreshed 2026-11-15): **TestFlight technical beta.** Build `0.1.0 (81)` was uploaded; Apple processing and tester availability are unchecked, and external distribution awaits an on-screen Canada check. Build 80 was distributed to internal testers and NavOSS Friends. The production service covers Canada for search and routing and returns lanes and signposts when available. Reports are `attested` and traffic is `collect`; traffic is not displayed or used in routes. Public App Review remains subject to the applicable gates below.
+Status (refreshed 2026-11-15): **TestFlight technical beta.** Build `0.1.0 (81)` was processed and distributed to NavOSS Friends at 17:54 UTC; App Store Connect shows Testing for that group and internal `testers`. Its beta description and review notes were updated for Canada-wide search and routing, the Alberta, BC and Ontario road-events list, and Alberta and Calgary-area offline maps. The production service covers Canada for search and routing and returns lanes and signposts when available. Reports are `attested` and traffic is `collect`; traffic is not displayed or used in routes. Public App Review remains subject to the applicable gates below.
 
-- Build 80 carries App Attest and the Google place panel; builds before 80 cannot share reports or traffic. As of 11:00 UTC on 2026-11-15 no installation had registered.
+- Build 80 and 81 carry App Attest and the Google place panel; builds before 80 cannot share reports or traffic. As of 16:52 UTC on 2026-11-15 no installation had registered.
 - Live traffic remains unavailable. The production offline manifest publishes All Alberta and Calgary-area regions; BC has no offline region. A physical iPhone download in build 80 remains unverified.
 
 Use `docs/release/app-review.md` for the guideline-by-guideline risk assessment and `docs/release/testflight.md` for the release procedure.
@@ -70,13 +70,13 @@ Do not use “beta,” “alpha,” “technical preview,” “test,” or “h
 
 Beta language belongs here, not in a public App Store listing:
 
-> NavOSS is an account-free navigation technical beta. Its backend provides place search and routing across Canada. Build 81, once available to testers, includes spoken turn-by-turn guidance, locked-phone background continuation, CarPlay search and navigation, and a province-wide road-events list for Alberta, British Columbia and Ontario. Drivers can opt in to share road reports; verified reports appear unconfirmed until corroborated.
+> NavOSS is an account-free navigation technical beta. Its backend provides place search and routing across Canada. Build 81, distributed to testers on November 15, 2026, includes spoken turn-by-turn guidance, locked-phone background continuation, CarPlay search and navigation, and a province-wide road-events list for Alberta, British Columbia and Ontario. Drivers can opt in to share road reports; verified reports appear unconfirmed until corroborated.
 >
 > There is no live traffic. All Alberta and the Calgary area can be downloaded for offline maps, search and routing; British Columbia has no offline region yet. Traffic speeds are collected only from drivers who opt in, for evaluation; nothing is displayed or used in routes. Keep the phone mounted and have a passenger operate controls while moving. Do not rely on this beta as the only navigation, road-closure, traffic, or safety source.
 
 ## What to Test
 
-The following build 81 **What to Test** draft reflects the production state as of 2026-11-15:
+The following build 81 **What to Test** draft reflects the production state as of 2026-11-15. The beta description and review notes in App Store Connect were updated for build 81; this draft is not a verbatim record of those notes:
 
 ```text
 Please test NavOSS 0.1.0 (81) while parked or with a passenger operating the controls.
@@ -107,8 +107,8 @@ In feedback, include the build, iPhone model and a public area or road if useful
 ### Beta App Review notes: build 80 (`production-carplay-google`)
 
 The following build 80 template is a historical record from before the Canada cutover, not
-build 81 review notes. Complete applicable submission gates and update the notes for any later
-submission.
+the updated build 81 review notes. Complete applicable submission gates and update the notes for any
+later submission.
 
 ```text
 NavOSS is an account-free navigation app with search and routing in Alberta and British Columbia. No sign-in, purchase, subscription or demo credential is required.

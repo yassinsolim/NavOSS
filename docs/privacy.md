@@ -1,6 +1,6 @@
 # NavOSS privacy policy
 
-Status: **ready for internal TestFlight**. A direct privacy/support email must be activated before external beta testing.
+Status: **TestFlight technical beta**. Build 81 was distributed to the internal `testers` group and NavOSS Friends on November 15, 2026; external beta testing is running.
 
 Effective date: November 15, 2026
 
@@ -10,9 +10,9 @@ NavOSS is an account-free navigation application beginning with a Calgary techni
 
 NavOSS is operated by Yassin Soliman as an individual developer in Alberta, Canada.
 
-For a non-sensitive question, use the [public issue tracker](https://github.com/yassinsolim/NavOSS/issues). For a security issue or sensitive privacy request, use [GitHub's private vulnerability-reporting form](https://github.com/yassinsolim/NavOSS/security/advisories/new). Internal testers may also use TestFlight feedback, which is processed by Apple. Do not put an address, route, or other private information in a public issue.
+For a non-sensitive question, use the [public issue tracker](https://github.com/yassinsolim/NavOSS/issues). For a security issue or sensitive privacy request, use [GitHub's private vulnerability-reporting form](https://github.com/yassinsolim/NavOSS/security/advisories/new). TestFlight testers may also use TestFlight feedback, which is processed by Apple. Do not put an address, route, or other private information in a public issue.
 
-The direct address `navoss@yassin.app` is not yet verified and is not presented as an active contact. External TestFlight and App Store submission remain blocked until direct delivery and reply handling are tested.
+The direct address `navoss@yassin.app` is not yet verified and is not presented as an active contact. App Store submission remains blocked until direct delivery and reply handling are tested.
 
 ## Data used by the app
 
@@ -185,7 +185,7 @@ The phone obtains normalized safety-camera records from NavOSS. The NavOSS serve
 
 When road-event markers are enabled, builds 75 and 80 request the Calgary or Kelowna region
 identifier from NavOSS; they do not send a coordinate in that request. The province-wide phone
-list in uploaded build 81 instead works out the province (Alberta, British Columbia or Ontario)
+list in distributed build 81 instead works out the province (Alberta, British Columbia or Ontario)
 locally and requests only that identifier. As of 2026-11-15, the NavOSS server polls the public City of Calgary
 and City of Edmonton road datasets, DriveBC Open511 and the City of Toronto road restrictions
 feed. It can also poll 511 Alberta and Ontario 511 if the operator configures developer keys;
