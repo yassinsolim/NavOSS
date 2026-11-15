@@ -1,9 +1,10 @@
 # Regional offline bundles
 
 This is the **server/build contract** for offline maps. The pipeline and manifest endpoint are
-implemented, and the app consumes them (see [App integration](#app-integration)). Artifacts are
-hosted on Cloudflare R2 ([Hosting](#hosting-cloudflare-r2)), but production does not serve the
-manifest yet: until it does, the app says “Offline maps are not available yet”.
+implemented, and the app consumes them (see [App integration](#app-integration)). On 2026-11-15
+production began serving the manifest for All Alberta and Calgary-area bundles hosted on
+Cloudflare R2 ([Hosting](#hosting-cloudflare-r2)). A physical iPhone download on TestFlight build
+80 remains unverified; British Columbia has no offline region.
 
 Reproduce with [`infra/offline/README.md`](../../infra/offline/README.md). Build outputs, raw inputs,
 logs and verification screenshots are ignored under `artifacts/offline/`.

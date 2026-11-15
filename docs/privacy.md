@@ -183,13 +183,14 @@ The phone requests map styles, tiles, fonts, and sprites directly from the publi
 
 The phone obtains normalized safety-camera records from NavOSS. The NavOSS server refreshes the public City of Calgary Intersection Safety Cameras dataset every six hours and independently mirrors public business and parcel-address datasets every 24 hours. The phone and live search requests do not send location, search text, or route data to Calgary Open Data.
 
-When road-event markers are enabled, the phone works out its province (Alberta, British Columbia
-or Ontario) locally and requests only that region identifier from NavOSS; it does not send the
-coordinate in that request. Against an older NavOSS server it may instead request the Calgary or
-Kelowna identifier. The NavOSS server polls the public City of Calgary and City of Edmonton road
-datasets, DriveBC Open511, the City of Toronto road restrictions feed, and, only when the operator
-has configured a developer key, 511 Alberta and Ontario 511. Each is polled on its own schedule
-(five or ten minutes) whether or not a phone asks. In Kelowna, the phone can also request DriveBC
+When road-event markers are enabled, builds 75 and 80 request the Calgary or Kelowna region
+identifier from NavOSS; they do not send a coordinate in that request. The province-wide phone
+list on main instead works out the province (Alberta, British Columbia or Ontario) locally and
+requests only that identifier. As of 2026-11-15, the NavOSS server polls the public City of Calgary
+and City of Edmonton road datasets, DriveBC Open511 and the City of Toronto road restrictions
+feed. It can also poll 511 Alberta and Ontario 511 if the operator configures developer keys;
+neither is configured. Each configured feed is polled on its own schedule (five or ten minutes)
+whether or not a phone asks. In Kelowna, the phone can also request DriveBC
 traffic-webcam metadata and fixed public RCMP facilities using only the `kelowna-bc` region
 identifier. It does not forward phone location, search text, routes, or user identifiers to those
 public-data services. DriveBC webcams
@@ -205,9 +206,10 @@ Map appearance choices, including style, navigation orientation, tilt, visible m
 
 ### Offline map downloads
 
-Offline maps are not available yet: the NavOSS service does not publish downloadable regions. When
-it does, the Offline maps screen asks the NavOSS API for the list of regions; that request carries
-no location, search text, or identifier. Downloading a region fetches its map, search, and routing
+Since 2026-11-15, the NavOSS service publishes downloadable All Alberta and Calgary-area regions;
+British Columbia has no offline region. The Offline maps screen asks the NavOSS API for the list
+of regions; that request carries no location, search text, or identifier. Downloading a region
+fetches its map, search, and routing
 files directly from `navoss-offline.yassin.app`, NavOSS's file storage on Cloudflare R2. Cloudflare
 therefore sees your IP address, the time, and which region you downloaded; it does not receive your
 location, searches, or routes from the download. NavOSS does not keep per-download records or
