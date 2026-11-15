@@ -86,8 +86,8 @@ The validator rejects missing, non-HTTPS, loopback, `.local`, and private-networ
 Google place details and reviews are a separate build path, approved by the owner on 2026-11-15 for the
 `production-carplay-google` profile only. Before building it, create a
 billing-enabled Google Cloud project, enable Places UI Kit, restrict the iOS key to
-`org.navoss.mobile` and the required API, store it as the EAS secret
-`GOOGLE_PLACES_IOS_API_KEY`, set `NAVOSS_GOOGLE_PLACES_ENABLED=1`, and reconcile App Privacy and
+`org.navoss.mobile` and the required API, store it as the EAS production variable
+`GOOGLE_PLACES_IOS_API_KEY` with visibility **sensitive**, set `NAVOSS_GOOGLE_PLACES_ENABLED=1`, and reconcile App Privacy and
 the hosted policy. GooglePlacesSwift 10.15.0's underlying SDK privacy manifest declares precise and
 coarse location, linked Device ID, linked Other Data, unlinked performance data, unlinked product
 interaction, and unlinked search history for analytics and/or app functionality, with no tracking.
@@ -97,11 +97,14 @@ explicitly set `NAVOSS_GOOGLE_PLACES_ENABLED=0`; disabled builds do not link Goo
 make place-details requests. Enabled builds use the Essentials `PlaceDetailsView` (billed per load,
 with every content element it offers) rather than the Pro `AdvancedPlaceDetailsView`. The hosted
 workflow `ios-testflight-runner.yml` builds it with `profile: production-carplay-google`; `eas build --local`
-resolves the key, a secret EAS `production` variable, only inside the EAS build job (`EAS_BUILD=true`).
-There the config plugin and the `eas-build-pre-install` release validator refuse the flag without a
-key; when the EAS CLI evaluates the config on the runner beforehand, the key is unreadable and the
-plugin returns a keyless, Google-disabled config instead of failing (hosted run `43677906278` died
-there). The run then checks the IPA for `NavOSSGooglePlacesEnabled`, a non-empty
+loads the profile's `production` variables into the local build job (`EAS_BUILD=true`). Local
+builds load only "Plain text" and "Sensitive" variables, never "Secret" ones (stated in the EAS log
+of the hosted run on `35bbd57`, which failed in `eas-build-pre-install` with the key missing), so the
+key must be **sensitive**: readable with an EAS token, masked in EAS logs. A secret key cannot reach
+a `--local` build. Inside the job the config plugin and the `eas-build-pre-install` release validator
+refuse the flag without a key; when the EAS CLI evaluates the config before the job, the plugin
+returns a keyless, Google-disabled config instead of failing (hosted run `43677906278` died there
+before that change). The run then checks the IPA for `NavOSSGooglePlacesEnabled`, a non-empty
 `NavOSSGooglePlacesAPIKey` (length only, never printed) and `GooglePlacesSwiftResources.bundle`. Every enabled query must first receive an anonymous grant from
 the durable NavOSS counter, which hard-stops at 8,000 grants per UTC month and fails closed. Keep
 Google-side quota limits and billing alerts as an independent second layer before release.
@@ -116,8 +119,8 @@ cities, 301 Toronto cameras, and out-of-coverage rejection with zero failures.
 The dedicated `navoss-mobile-6792619727` project is linked to billing and has only Places UI Kit
 enabled for this feature. Exactly one active API key remains: `NavOSS iOS Places UI Kit`, restricted
 to iOS bundle `org.navoss.mobile` and one API. All onboarding-generated 35-API keys are deleted, and
-the restricted value is stored only as the secret EAS production variable
-`GOOGLE_PLACES_IOS_API_KEY`. Google quotas are 250 standard queries/day, 30/minute, and
+the restricted value is stored only as the sensitive EAS production variable
+`GOOGLE_PLACES_IOS_API_KEY` (re-created as sensitive on 2026-11-15; it was secret before). Google quotas are 250 standard queries/day, 30/minute, and
 10/minute/user; unused Advanced and Session paths are limited to 1/day and 1/minute. This bounds a
 31-day month to 7,750 standard queries before the independent NavOSS 8,000/month counter.
 
