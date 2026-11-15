@@ -44,11 +44,13 @@ function asManifest(value: unknown): ManifestLike {
         : undefined;
     if (typeof artifacts !== 'object' || artifacts === null)
       throw new Error('Region has no artifacts');
-    for (const artifact of Object.values(artifacts)) {
+    for (const artifact of Object.values<unknown>(artifacts)) {
       if (
         typeof artifact !== 'object' ||
         artifact === null ||
+        !('url' in artifact) ||
         typeof artifact.url !== 'string' ||
+        !('byteSize' in artifact) ||
         typeof artifact.byteSize !== 'number'
       )
         throw new Error('Artifact without url and byteSize');
