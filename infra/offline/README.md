@@ -2,7 +2,8 @@
 
 Build tools run in Docker on macOS/OrbStack or Linux. Nothing here deploys to the production VM,
 changes the online Valhalla service, or downloads tiles from OpenFreeMap's public tile endpoint.
-The current phone/CarPlay app does **not** install these bundles yet.
+The app (build 75 onward) installs these bundles from a published manifest; one release is hosted on
+Cloudflare R2 ([Hosting](#hosting)), but production does not serve its manifest yet.
 
 ## Prerequisites
 
@@ -152,10 +153,250 @@ coverage. Build outputs and screenshots remain under ignored `artifacts/`.
 
 ## Hosting
 
-The API only reads `NAVOSS_OFFLINE_MANIFEST_PATH` at `GET /v1/offline/manifest`; it never proxies
-artifacts. Mount the manifest read-only and serve artifacts separately with Content-Length,
-ETag/Last-Modified, HTTP byte ranges and identity content encoding. Publish artifact keys before
-switching the manifest pointer. **Recommended: R2 Standard object storage with a custom HTTPS
-hostname**, not unlimited multi-GB delivery through the existing free Cloudflare Tunnel/CDN.
-Hosting costs, bandwidth, terms and Caddy alternatives are documented in
-[offline architecture](../../docs/architecture/offline.md). Nothing is provisioned by this builder.
+The phone downloads artifacts straight from object storage; the API only serves the manifest named
+by `NAVOSS_OFFLINE_MANIFEST_PATH` at `GET /v1/offline/manifest` and never proxies artifacts
+([production steps](../compose/README.md#offline-bundle-manifest)). The cost model, the guardrails
+and what cannot be capped are in [offline architecture](../../docs/architecture/offline.md#hosting-cloudflare-r2).
+
+### What is provisioned (2026-11-15)
+
+On the owner's personal Cloudflare account, and nothing else in it:
+
+- R2 bucket **`navoss-offline`**: Standard storage class (the only one the free tier covers),
+  location hint Western North America. The public `r2.dev` URL is **disabled**; the only public
+  path is the custom domain below. Neither path can list objects.
+- Custom domain **`navoss-offline.yassin.app`** on that bucket, minimum TLS 1.2. R2 created and
+  manages its DNS record; no other record in `yassin.app` was touched.
+- Lifecycle rule `abort-incomplete-multipart-1d` (aborts unfinished multipart uploads after one
+  day; it replaced R2's default seven-day rule). There is no expiry rule: releases are removed
+  by hand as below, never by a timer that could delete the live one.
+- Exactly one release, `2026-11-11-v1-798f5c442644`: nine objects, 1,452,230,980 bytes, under
+  the key prefix `<bundleVersion>/` (the same layout as `releases/<bundleVersion>/`): each
+  region's `maps.pmtiles`, `routing.tar` and `search.sqlite`, `resources.tar.gz`, `SHA256SUMS`
+  and `provenance.json`. The release directory's own `manifest.json` (loopback URLs) and
+  `build-report.json` (local cache paths) are not uploaded.
+
+Every object carries `Cache-Control: public, max-age=31536000, immutable`, an exact
+`Content-Type` (`application/vnd.pmtiles`, `application/x-tar`, `application/vnd.sqlite3`,
+`application/gzip`) and no `Content-Encoding`, so the stored bytes are the checksummed bytes and
+byte ranges address them.
+
+Zone rules on `yassin.app`, applied by API on 2026-11-15 (exact JSON in
+[offline architecture](../../docs/architecture/offline.md#zone-rules)):
+
+- **Cache rule** `navoss-offline artifacts` (new `http_request_cache_settings` entrypoint): makes
+  everything on the download host eligible for cache. All seven artifacts, including the
+  524,743,452-byte all-Alberta maps file, are then answered from cache (`cf-cache-status: HIT`).
+- **WAF custom rule** `navoss-offline: only published files, GET, no query, no cache-key headers`
+  (new `http_request_firewall_custom` entrypoint): on the download host, blocks every path except
+  the manifest's artifact paths, every query string, every method except GET (Cloudflare never
+  answers HEAD from cache, so each HEAD would reach R2), and every request with a header that
+  Cloudflare's default cache key includes
+  ([cache keys](https://developers.cloudflare.com/cache/how-to/cache-keys/): `Origin`,
+  `X-HTTP-Method-Override`, `X-HTTP-Method`, `X-Method-Override`, `X-Forwarded-Host`, `X-Host`,
+  `X-Forwarded-Scheme`, `X-Original-URL`, `X-Rewrite-URL`, `Forwarded`), each of which would
+  otherwise make a fresh cache miss.
+  `SHA256SUMS` and `provenance.json` are stored but not publicly served.
+- **No rate-limiting rule**: the zone's single free rate-limiting slot holds the owner's existing
+  "Leaked credential check" rule, which was left alone.
+
+Usage notifications are not available on this plan; the [automatic stop](#automatic-stop) takes
+their place.
+
+### Publish a release
+
+With the pinned Node first in `PATH` (`npx --yes wrangler@4.162.0 login` once, as the owner):
+
+```sh
+V=2026-11-11-v1-798f5c442644      # the new bundleVersion
+R=artifacts/offline/releases/$V
+put() {
+  npx --yes wrangler@4.162.0 r2 object put "navoss-offline/$V/$1" --remote --file "$R/$1" \
+    --content-type "$2" --cache-control 'public, max-age=31536000, immutable'
+}
+put SHA256SUMS 'text/plain; charset=utf-8'
+put provenance.json application/json
+put resources.tar.gz application/gzip
+for region in calgary alberta; do
+  put "regions/$region/maps.pmtiles" application/vnd.pmtiles
+  put "regions/$region/routing.tar" application/x-tar
+  put "regions/$region/search.sqlite" application/vnd.sqlite3
+done
+```
+
+Each `put` is one Class A operation. Wrangler refuses files over 300 MiB (314,572,800 bytes); the
+all-Alberta `maps.pmtiles` (524,743,452 bytes) is larger. For such a file the owner creates a
+temporary R2 **Account API token** in the dashboard (R2, Manage API tokens: Object Read & Write,
+this bucket only) and revokes it right after. R2 accepts up to 5 GiB in one `PutObject`, so a
+single signed request suffices (one Class A operation, no multipart parts to abandon), and
+`x-amz-checksum-sha256` makes R2 reject bytes that do not match the local SHA-256:
+
+```sh
+f="$R/regions/alberta/maps.pmtiles"
+sum=$(shasum -a 256 "$f" | cut -d' ' -f1 | xxd -r -p | base64)
+# Credentials are read from stdin so they never appear in the process list or shell history.
+printf 'user = "%s:%s"\n' "$R2_ACCESS_KEY_ID" "$R2_SECRET_ACCESS_KEY" |
+  curl -K - --fail -sS --aws-sigv4 'aws:amz:auto:s3' -X PUT -T "$f" \
+    -H 'Content-Type: application/vnd.pmtiles' \
+    -H 'Cache-Control: public, max-age=31536000, immutable' \
+    -H "x-amz-checksum-sha256: $sum" \
+    "https://$ACCOUNT_ID.r2.cloudflarestorage.com/navoss-offline/$V/regions/alberta/maps.pmtiles"
+```
+
+Then generate the manifest for the public origin with the same builder. A cached rerun only
+rewrites `manifest.json`; the bundle version is content-derived, so it does not change. The
+builder warns about any artifact above the CDN's 512 MiB cacheable size, because every download
+of such a file would reach R2:
+
+```sh
+./infra/offline/build.sh --date 261111 --regions calgary,alberta \
+  --routing-engine-version 3.9.1 --base-url https://navoss-offline.yassin.app
+node infra/offline/hosting.mts cache-check artifacts/offline/manifest.json
+```
+
+**Allow the new paths in the WAF rule before anything points at them.** Until the rule lists a
+release's paths, every download of it is refused (403): the release fails closed. Generate the
+rule from the manifests that should be served (old and new together during a replacement) and
+update it with a temporary API token that has `Zone WAF: Edit` on `yassin.app` only, revoked
+afterwards:
+
+```sh
+node infra/offline/hosting.mts waf-rule OLD_MANIFEST NEW_MANIFEST > /tmp/navoss-offline-rule.json
+api=https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets
+auth="Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+ruleset=$(curl -fsS -H "$auth" "$api/phases/http_request_firewall_custom/entrypoint")
+ruleset_id=$(printf '%s' "$ruleset" | jq -r .result.id)
+rule_id=$(printf '%s' "$ruleset" | jq -r '.result.rules[]
+  | select(.description == "navoss-offline: only published files, GET, no query, no cache-key headers") | .id')
+curl -fsS -X PATCH -H "$auth" -H 'Content-Type: application/json' \
+  --data @/tmp/navoss-offline-rule.json "$api/$ruleset_id/rules/$rule_id" >/dev/null
+node --import tsx infra/offline/verify-hosting.mts artifacts/offline/manifest.json --sha256
+```
+
+`verify-hosting.mts` requires, for every artifact URL in the manifest, correct `206` answers to a
+first-byte and a last-16-bytes ranged GET whose `Content-Range` total is the manifest's exact
+size, an immutable `Cache-Control` and no content encoding; that the WAF refuses a query string,
+an unpublished path, a HEAD and one header from each cache-key group (403); and that every file fits the cache. `--sha256` also
+downloads each artifact once and compares its digest. Without `--sha256` it costs at most two
+Class B operations per artifact (only when a location's cache is cold). Only then install the
+manifest on the VM.
+
+### Replace a release
+
+1. Upload the new release beside the old one, run `cache-check`, allow both releases' paths in
+   the WAF rule (`waf-rule OLD NEW`), and verify the new release as above. Two Calgary + Alberta
+   releases are about 2.9 GB, well under the 10 GB free storage.
+2. Install the new manifest on the VM.
+3. After a **seven-day grace period** (a phone that fetched the old manifest can finish or resume
+   its download), update the WAF rule from the new manifest alone (`waf-rule NEW`), then delete
+   every key of the old release. Deletes are free operations:
+
+   ```sh
+   for key in SHA256SUMS provenance.json resources.tar.gz \
+     regions/{calgary,alberta}/{maps.pmtiles,routing.tar,search.sqlite}; do
+     npx --yes wrangler@4.162.0 r2 object delete "navoss-offline/$OLD/$key" --remote
+   done
+   ```
+
+Never keep more than two releases. `r2-usage.mts` fails above 3 GB by default and the guard
+stops hosting above 5 GB.
+
+### Automatic stop
+
+`r2-guard.mts` runs every 5 minutes on the VM (`infra/compose/navoss-offline-guard.timer`,
+installed as in [the compose README](../compose/README.md#offline-guard-install-first)). Each run:
+
+1. **lists the bucket** through the R2 REST API: exact bytes and objects, one Class A
+   `ListObjects` operation (about 8,640 a month, 0.9% of the free Class A allowance). The listing
+   is also the run's **heartbeat**;
+2. reads the account's Class A and Class B operations over the **last 31 days** (Cloudflare bills
+   per billing cycle, which these permissions cannot read; a rolling 31 days covers any cycle,
+   and the dataset allows at most 32), the account's storage samples, and whether the previous
+   run's heartbeat appears in the analytics;
+3. reads the custom domain's and the `r2.dev` URL's state.
+
+It **stops hosting** as soon as any of these is established, even if other reads failed:
+
+- Class B operations above **2,000,000**, Class A above **200,000**, or stored bytes above
+  **5 GB** (the larger of the listing and the analytics samples; 20% of each free allowance;
+  `--stop-class-b`, `--stop-class-a`, `--stop-bytes` override). Stale analytics only lag, so a
+  stale count above a threshold still stops;
+- the `r2.dev` URL is enabled;
+- the state file cannot be read or written (it could no longer count failures).
+
+Otherwise, a run that cannot **establish** usage exits 2 and counts towards **4 consecutive
+runs** (`--max-failures`), after which it stops. Usage is established only when every read
+succeeded and the analytics contain the previous run's heartbeat, both in a query for it and
+inside the 31-day totals the decision uses. The heartbeat must be at least 4 minutes old (the
+measured lag is 140 seconds) and at most 15 minutes (three timer periods): an older reference,
+after an outage, is discarded, because analytics frozen at that point would still show it, and the
+run establishes a fresh one. An empty or zero operations answer is therefore never taken as zero
+by itself: it counts only once the analytics provably include a recent operation. A bucket
+listing that says it is truncated but gives no cursor is treated as unknown, not as complete.
+A genuinely idle month always has the guard's own heartbeats, so it is "within limits", not a
+failure. A new bucket needs no storage sample (the listing gives its size); the first run after
+installation exits 2 because no earlier heartbeat exists yet, and the next run establishes usage.
+
+Stopping means, each step attempted even if another fails: rename the manifest to
+`manifest.json.stopped`, so the API answers the quiet 503 at the next request and the app says
+"Offline maps are not available yet" rather than offering downloads that would fail; disable the
+custom domain (`PUT …/r2/buckets/navoss-offline/domains/custom/navoss-offline.yassin.app
+{"enabled": false}`, which keeps the domain attached so it can be re-enabled) and read it back to
+confirm `enabled: false`, after which no request reaches R2; and do the same for the `r2.dev`
+URL. The run prints one line with the reason and what it did, then exits 1. Later runs keep
+hosting stopped and keep exiting 1. The guard **never re-enables** anything. A domain disabled by
+hand is treated the same way. The state file is replaced atomically, so a crash cannot truncate it.
+
+If the guard itself cannot run (Docker down, image missing, a crash) or stops hosting, systemd
+starts `navoss-offline-withdraw.service`, which renames the manifest on the host without Docker or
+network. `check-stack.sh` fails while the guard's timer is inactive or its last run is older than
+15 minutes or failed.
+
+```sh
+# On a workstation: what the guard would do now, with the operator's token. It changes nothing
+# but its listing (one Class A operation). Without a --state whose heartbeat has settled it
+# reports usage as not established (exit 2).
+CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… node infra/offline/r2-guard.mts --dry-run
+```
+
+The guard's token needs exactly `Account Analytics Read` and `Workers R2 Storage Write` for this
+account. R2 has no narrower permission for bucket domain settings, so the token can also write
+objects. It lives only in the root-only `/srv/navoss/state/offline-guard.env`, which the
+container reads as a read-only file: it is not an environment variable of the container, so
+`docker inspect` does not show it. Only root (and so `navoss`, which has sudo) can read it.
+
+**Re-enable** only after finding the cause (`journalctl -u navoss-offline-guard`, `r2-usage.mts`)
+and only when usage is back under the stop thresholds (normally the next month). Order matters:
+the guard withdraws the manifest again while the domain is disabled.
+
+```sh
+# 1. Enable the custom domain (or dashboard: R2 → navoss-offline → Settings → Custom Domains).
+sudo sh -c '. /srv/navoss/state/offline-guard.env && curl -fsS -X PUT \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+  --data "{\"enabled\":true}" \
+  "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets/navoss-offline/domains/custom/navoss-offline.yassin.app" >/dev/null'
+# 2. Put the manifest back and let the guard confirm (exit 0, "within limits").
+sudo mv /srv/navoss/artifacts/offline/manifest.json.stopped /srv/navoss/artifacts/offline/manifest.json
+sudo systemctl start navoss-offline-guard.service; journalctl -u navoss-offline-guard -n 1
+NAVOSS_OFFLINE_MANIFEST_DIR=/srv/navoss/artifacts/offline ./infra/compose/check-stack.sh
+```
+
+If usage is still above a threshold, step 2 stops hosting again at once; that is intended. If the
+stop was caused by an unreadable state file, delete `/srv/navoss/state/offline-guard/r2-guard.json`
+before step 2; the first run then exits 2 while it re-establishes its heartbeat.
+
+### Usage report
+
+```sh
+node --import tsx infra/offline/r2-usage.mts   # exit 0 within limits, 1 above, 2 unknown
+```
+
+It reads the same analytics as the guard (no R2 operation) with `CLOUDFLARE_API_TOKEN`, or the
+operator's `wrangler login` when that is unset, and prints the bucket's object count and bytes,
+the account's stored bytes and month-to-date Class A and Class B operations as shares of the free
+tier. It fails at the lower warning levels: 3 GB stored, 40 objects, 100,000 Class A or 1,000,000
+Class B operations (`--max-bytes`, `--max-objects`, `--max-class-a`, `--max-class-b` override).
+A missing storage sample exits 2 rather than reporting an empty bucket.
+
+To stop every download by hand without the guard, disable the custom domain as in re-enable step 1
+with `{"enabled":false}`, or in the dashboard. Installed regions keep working on devices.

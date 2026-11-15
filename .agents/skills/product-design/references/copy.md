@@ -4,7 +4,7 @@ Applies to phone text, CarPlay templates, spoken guidance, accessible names and 
 
 ## rule/claim-matches-deployed-service
 
-User-facing text may claim only what the **deployed** service and the relevant **build** do. The service supports Alberta+BC coverage and `/v2/routes` lanes and signposts; build 75 onward uses them when returned, while build 70 uses v1. The owner approved `attested` reports and opt-in traffic `collect` after this copy PR merges and the site redeploys: build 80 onward can share, earlier builds cannot. Verified reports are unconfirmed until corroborated; collected traffic is not displayed or used in routes. Live traffic and offline maps remain unavailable. Evidence: #119, `AGENTS.md` ("Current checkpoint"), `docs/release/next-build-checklist.md`.
+User-facing text may claim only what the **deployed** service and the relevant **build** do. The service supports Alberta+BC coverage and `/v2/routes` lanes and signposts; build 75 onward uses them when returned, while build 70 uses v1. As of 2026-11-15 reports are `attested` and opt-in traffic is `collect`: build 80 onward can share, earlier builds cannot. Verified reports are unconfirmed until corroborated; collected traffic is not displayed or used in routes. Live traffic remains unavailable. Alberta and Calgary-area offline regions are available; BC has no offline region. The service has province-wide road events for Alberta, BC and Ontario, but the new phone list is on main only, not in builds 75 or 80. Evidence: #120, #122, `AGENTS.md` ("Current checkpoint"), `docs/release/next-build-checklist.md`.
 
 ## rule/coverage-from-the-server
 
@@ -24,7 +24,7 @@ A report control says before the driver commits whether it is shared: "Report (p
 
 ## rule/official-not-crowd
 
-Official data (City of Calgary cameras, DriveBC and Ontario 511 events) is labelled as official; community reports are "unconfirmed" until confirmed and never officially sourced; incident markers from Calgary are labelled unverified. Never add police, speed-trap or checkpoint wording (`docs/data-sources.md`).
+Official data (City of Calgary cameras, DriveBC and City of Toronto events) is labelled as official; 511 Alberta and Ontario 511 need keys and are not configured. Community reports are "unconfirmed" until confirmed and never officially sourced; incident markers from Calgary are labelled unverified. Never add police, speed-trap or checkpoint wording (`docs/data-sources.md`).
 
 ## rule/driving-safe-wording
 
@@ -43,7 +43,7 @@ Errors say what happened and what to do, in plain language: "No connection. Try 
 
 ## rule/no-hype
 
-No "best", parity claims, competitor names or irrelevant AI claims (`docs/release/app-review.md`, `docs/release/app-store-metadata.md`). The product is "account-free", "open source", "technical beta". The website's roadmap section labels unreleased work "In development" and states what is true today next to it (`apps/site/test/site.test.mjs` guards live-traffic and offline wording, and build-qualified report sharing, in the "In the app today" section). Evidence: #119.
+No "best", parity claims, competitor names or irrelevant AI claims (`docs/release/app-review.md`, `docs/release/app-store-metadata.md`). The product is "account-free", "open source", "technical beta". The website's roadmap section labels unreleased work "In development" and states what is true today next to it (`apps/site/test/site.test.mjs` guards live-traffic wording, Alberta-only offline coverage, and build-qualified report sharing). Evidence: #119, #120, #122.
 
 ## Writing style
 

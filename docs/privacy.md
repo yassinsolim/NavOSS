@@ -183,13 +183,14 @@ The phone requests map styles, tiles, fonts, and sprites directly from the publi
 
 The phone obtains normalized safety-camera records from NavOSS. The NavOSS server refreshes the public City of Calgary Intersection Safety Cameras dataset every six hours and independently mirrors public business and parcel-address datasets every 24 hours. The phone and live search requests do not send location, search text, or route data to Calgary Open Data.
 
-When road-event markers are enabled, the phone works out its province (Alberta, British Columbia
-or Ontario) locally and requests only that region identifier from NavOSS; it does not send the
-coordinate in that request. Against an older NavOSS server it may instead request the Calgary or
-Kelowna identifier. The NavOSS server polls the public City of Calgary and City of Edmonton road
-datasets, DriveBC Open511, the City of Toronto road restrictions feed, and, only when the operator
-has configured a developer key, 511 Alberta and Ontario 511. Each is polled on its own schedule
-(five or ten minutes) whether or not a phone asks. In Kelowna, the phone can also request DriveBC
+When road-event markers are enabled, builds 75 and 80 request the Calgary or Kelowna region
+identifier from NavOSS; they do not send a coordinate in that request. The province-wide phone
+list on main instead works out the province (Alberta, British Columbia or Ontario) locally and
+requests only that identifier. As of 2026-11-15, the NavOSS server polls the public City of Calgary
+and City of Edmonton road datasets, DriveBC Open511 and the City of Toronto road restrictions
+feed. It can also poll 511 Alberta and Ontario 511 if the operator configures developer keys;
+neither is configured. Each configured feed is polled on its own schedule (five or ten minutes)
+whether or not a phone asks. In Kelowna, the phone can also request DriveBC
 traffic-webcam metadata and fixed public RCMP facilities using only the `kelowna-bc` region
 identifier. It does not forward phone location, search text, routes, or user identifiers to those
 public-data services. DriveBC webcams
@@ -202,6 +203,20 @@ or the phone's position, and is repeated no sooner than the published snapshot c
 carries no identifier. Seeing traffic does not share your own speeds.
 
 Map appearance choices, including style, navigation orientation, tilt, visible map content, safety-camera marker visibility, the community report and traffic overlays, and route color, are stored only in the app on the device. These settings are not sent to NavOSS or used for analytics. Selecting a hosted map style changes which OpenFreeMap style resources the phone requests but does not add a new provider. Hiding camera markers does not disable active-navigation safety warnings.
+
+### Offline map downloads
+
+Since 2026-11-15, the NavOSS service publishes downloadable All Alberta and Calgary-area regions;
+British Columbia has no offline region. The Offline maps screen asks the NavOSS API for the list
+of regions; that request carries no location, search text, or identifier. Downloading a region
+fetches its map, search, and routing
+files directly from `navoss-offline.yassin.app`, NavOSS's file storage on Cloudflare R2. Cloudflare
+therefore sees your IP address, the time, and which region you downloaded; it does not receive your
+location, searches, or routes from the download. NavOSS does not keep per-download records or
+export Cloudflare request logs; it sees only aggregate request counts for its storage. Downloaded
+regions stay on the device, are excluded from iCloud backup, and are removed with **Delete** or by
+removing the app. The app still tries the NavOSS service first; when there is no connection or the
+service cannot be reached, search and routing in a downloaded region are computed on the phone.
 
 ### Sharing and external actions
 
@@ -281,7 +296,7 @@ NavOSS does not sell personal information or use it for advertising, marketing p
 | Provider                                                                                           | Purpose and data                                                                                                                                                                                                                             | Location or policy                                                                  |
 | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | NavOSS operator-controlled server                                                                  | API, Nominatim and indexed Calgary search, Valhalla routing and road matching of opted-in traffic batches, camera normalization, and operational security                                                                                    | Alberta, Canada                                                                     |
-| [Cloudflare](https://www.cloudflare.com/privacypolicy/)                                            | DNS, TLS, traffic delivery, tunnel, and network security; processes IP and request traffic                                                                                                                                                   | Global network; Cloudflare describes international transfers in its policy          |
+| [Cloudflare](https://www.cloudflare.com/privacypolicy/)                                            | DNS, TLS, traffic delivery, tunnel, and network security, and R2 storage for offline-region downloads; processes IP and request traffic, including which region is downloaded                                                                | Global network; Cloudflare describes international transfers in its policy          |
 | [OpenFreeMap](https://openfreemap.org/privacy/)                                                    | Direct map style, tile, font, and sprite delivery                                                                                                                                                                                            | Hyperknot Software Kft. in Hungary, with infrastructure that may include Cloudflare |
 | [Ontario 511](https://511on.ca/developers/doc)                                                     | Official construction, closure, and incident data polled by the NavOSS server only when a developer key is configured; receives no phone location or user data                                                                               | Government of Ontario                                                               |
 | [DriveBC](https://www.drivebc.ca/)                                                                 | Official province-wide Open511 road events and ordinary highway-webcam metadata polled by NavOSS; receives no phone location or user data                                                                                                    | Government of British Columbia                                                      |
@@ -306,6 +321,7 @@ Map and route data is derived from OpenStreetMap contributors. Search combines O
 | Active route, trip progress and camera eligibility | On the phone only. Active route and the last confirmed position along it (distances along the route, that fix's capture time and reported speed; together with the route, a position) kept to resume after a relaunch; erased when navigation ends, on arrival, or at the first launch 12 hours or more later; no trip-history database                                                               |
 | Recent and saved destinations                      | Up to 12 recent and 20 saved destination names, labels, and coordinates stored only on the device until cleared in About and Privacy or the app is removed                                                                                                                                                                                                                                            |
 | Map appearance preferences                         | Stored locally in app storage until the app is removed or the settings are changed; not transmitted to NavOSS                                                                                                                                                                                                                                                                                         |
+| Downloaded offline regions                         | Map, search, and routing files stored only on the device, excluded from iCloud backup, until deleted on the Offline maps screen or the app is removed; NavOSS keeps no per-download record                                                                                                                                                                                                            |
 | Accepted beta contributions                        | Type, description, optional place/road label, timestamps, random draft/submission IDs, and review status retained in the live database for up to 90 days; no account, device ID, or precise coordinate                                                                                                                                                                                                |
 | Pending contribution retries                       | Up to 25 failed submissions stored only on the device until successfully retried, individually deleted, or the app is removed                                                                                                                                                                                                                                                                         |
 | Community road reports                             | Type, precise and grid-snapped coordinates, heading, times, and the reporting installation; deleted 24 hours after expiry (immediately expired when withdrawn), at once with Reset community identity; excluded from backups                                                                                                                                                                          |

@@ -1,9 +1,10 @@
 # Regional offline bundles
 
 This is the **server/build contract** for offline maps. The pipeline and manifest endpoint are
-implemented, and the app consumes them (see [App integration](#app-integration)). No production
-artifact hosting is provisioned: until a manifest is published the app says “Offline maps are not
-available yet”. Nothing in this work provisions storage or touches the production VM.
+implemented, and the app consumes them (see [App integration](#app-integration)). On 2026-11-15
+production began serving the manifest for All Alberta and Calgary-area bundles hosted on
+Cloudflare R2 ([Hosting](#hosting-cloudflare-r2)). A physical iPhone download on TestFlight build
+80 remains unverified; British Columbia has no offline region.
 
 Reproduce with [`infra/offline/README.md`](../../infra/offline/README.md). Build outputs, raw inputs,
 logs and verification screenshots are ignored under `artifacts/offline/`.
@@ -243,24 +244,250 @@ Budget from manifest bytes, not province guesses: new download bytes (unique res
   maps/graphs/search from iCloud backups. Offline routes do not carry live community/paid-provider
   traffic or current closure updates; never upload a trip or search merely because a pack is missing.
 
-## Hosting: recommendation and alternatives
+## Hosting: Cloudflare R2
 
-**Recommend R2 Standard + a custom HTTPS download hostname.** Publish immutable release keys,
-including Content-Length, ETag, Last-Modified and HTTP Range support. Keep the small mutable
-manifest behind the existing API. Do not automatically provision a bucket, domain, account,
-billing plan or production mount from this pipeline.
+Artifacts are hosted in the R2 bucket `navoss-offline` behind `https://navoss-offline.yassin.app`
+(provisioned 2026-11-15 on the owner's personal account; exact inventory, publish, replace and
+emergency-stop commands in [`infra/offline/README.md`](../../infra/offline/README.md#hosting)).
+Release keys are immutable (`<bundleVersion>/…`), carry `Content-Length`, `ETag`,
+`Last-Modified`, `Accept-Ranges: bytes`, an exact `Content-Type`, no content encoding and
+`Cache-Control: public, max-age=31536000, immutable`. The small mutable manifest stays behind the
+existing API (`NAVOSS_OFFLINE_MANIFEST_PATH`). The owner's requirement is that hosting costs
+nothing; R2 has **no spending cap**, so the design makes a charge practically impossible and
+small if it ever happened.
 
-[Cloudflare R2 pricing](https://developers.cloudflare.com/r2/pricing/) checked November 12, 2026:
-Standard storage **$0.015/GB-month**, Class A **$4.50/million**, Class B **$0.36/million**, internet
-egress **$0**; free Standard allowance **10 GB-month**, **1 million Class A**, **10 million Class B**.
-Storage includes retained versions/overlap; resumable requests add operations. Infrequent Access
-has retrieval fees and a 30-day minimum and is not recommended for frequently downloaded packs.
-Avoid the development `r2.dev` endpoint for a production distribution plan. Object uploads can use
-multipart requests for large files; CDN cache size still differs from object-storage download size.
-Provider request metadata may reveal the IP and downloaded region, not search text or route GPS;
-disable unnecessary access analytics and disclose download hosting in the app's privacy copy.
+### Cost model
 
-### Existing Cloudflare Tunnel + Caddy
+Sources, checked 2026-11-15: [R2 pricing](https://developers.cloudflare.com/r2/pricing/) (updated
+October 30, 2026), [R2 limits](https://developers.cloudflare.com/r2/platform/limits/),
+[default cache behaviour](https://developers.cloudflare.com/cache/concepts/default-cache-behavior/),
+[range requests](https://developers.cloudflare.com/cache/reference/range-requests/),
+[rate limiting rules](https://developers.cloudflare.com/waf/rate-limiting-rules/),
+[available notifications](https://developers.cloudflare.com/notifications/notification-available/)
+and [public buckets](https://developers.cloudflare.com/r2/buckets/public-buckets/).
+
+| Item             | Free each month                      | Beyond that         |
+| ---------------- | ------------------------------------ | ------------------- |
+| Standard storage | 10 GB-month (average of daily peaks) | $0.015 per GB-month |
+| Class A (writes) | 1,000,000                            | $4.50 per million   |
+| Class B (reads)  | 10,000,000                           | $0.36 per million   |
+| Egress           | always free                          | always free         |
+
+Usage is rounded **up** to the next billing unit (1,000,001 operations bill as two million).
+
+- **Uploads** are Class A: one `PutObject` per file, or `CreateMultipartUpload` +
+  one `UploadPart` per part + `CompleteMultipartUpload`. Listing objects (`ListObjects`, including
+  browsing the bucket in the dashboard) is also Class A. Deletes and multipart aborts are free.
+  Publishing this release cost **9 Class A operations** (eight wrangler puts and one signed S3
+  put); creating the bucket and its lifecycle rules cost three more. The public hostname has no
+  write or list path, so nobody else can cause Class A.
+- **Downloads** are Class B, one `GetObject` per request that reaches R2, ranged or not; a resume is
+  a new request; `HeadObject` also counts. A `404` for a missing key is billed too (the pricing
+  FAQ bills requests that pass authorization). The app makes one request per artifact and one
+  more per resume, and never retries on its own: a region is 4 requests (3 when the shared
+  resources are already installed) plus one per resume.
+- **The CDN cache absorbs reads**, and a cache hit never reaches R2. On the free plan Cloudflare
+  caches by file extension only (`.tar` and `.gz`, not `.pmtiles` or `.sqlite`), so the zone has a
+  cache rule making the download host eligible for cache. The cacheable size limit on
+  Free/Pro/Business is documented as "512 MB"; it is 512 MiB in practice: the 524,743,452-byte
+  all-Alberta maps file is served from cache in full and by range (`cf-cache-status: HIT`,
+  measured 2026-11-15). Every published file therefore fits the cache; the builder and
+  `verify-hosting.mts` flag any future file above 536,870,912 bytes. Each Cloudflare location
+  fills its own cache, so the first request per file per location is a miss. **Measured fill
+  behaviour** (2026-11-15, Vancouver location, R2 analytics per minute): the first _ranged_ GET
+  (`bytes=0-1023`) of each of the four newly cacheable `.pmtiles`/`.sqlite` files produced exactly
+  one R2 `GetObject` answered **200** (the whole object, not the range), and afterwards about
+  forty further GETs (first-byte, last-16-byte, mid-file and two complete 524,743,452-byte
+  downloads) produced **no** R2 operation. Distinct ranges therefore do not fill separately: one
+  fill per file per location, at most 7 reads per location for this release, about 2,300 if every
+  Cloudflare city filled every file. Not measurable from here (only one Cloudflare location is
+  reachable and it is warm): whether simultaneous misses at a cold location are collapsed into
+  one fill, and how soon Cloudflare evicts a rarely requested file. **HEAD requests are never
+  answered from cache** (`cf-cache-status: DYNAMIC`), so each reaches R2; the app and the checks
+  in this repository use GET only.
+- **Storage** is one release, 1,452,230,980 bytes (14.5% of the free 10 GB). During a release swap
+  both releases exist for the seven-day grace period, about 2.9 GB at peak and about 1.8 GB-month
+  for that month.
+
+**Worst realistic beta month.** 200 phones each install all of Alberta and Calgary, and every
+install needs ten resumes on a bad connection: 200 × (7 artifacts + 20 resumes) = 5,400 Class B
+operations even if no request were ever answered from cache, 0.054% of the free allowance. With
+the cache, the real figure is the cache fills (thousands at most). Ten times that, or a year of
+monthly releases (about 120 Class A operations), stays below 1%.
+
+**Abuse.** There is **no rate limit**: the zone's one free rate-limiting rule is the owner's
+existing "Leaked credential check", which stays. What limits abuse instead:
+
+- The WAF allowlist rule blocks, before R2, every path except the seven published files, every
+  query string, every method except GET, and every request carrying a header that Cloudflare's
+  default cache key includes ([cache keys](https://developers.cloudflare.com/cache/how-to/cache-keys/)):
+  `Origin`; the method overrides `X-HTTP-Method-Override`, `X-HTTP-Method` and
+  `X-Method-Override`; and the host and URL rewrites `X-Forwarded-Host`, `X-Host`,
+  `X-Forwarded-Scheme`, `X-Original-URL`, `X-Rewrite-URL` and `Forwarded`. A unique query string or
+  value of one of those headers was a cache miss, one R2 read, every time (reproduced
+  2026-11-15). `Accept-Encoding`, `Accept-Language`, `Accept`, `User-Agent`, `Cookie`,
+  `Authorization`, `X-Forwarded-For`, `X-Forwarded-Proto`, `If-None-Match`,
+  `Cache-Control: no-cache` and `Pragma` do not change the cache result. Plain `http://` requests
+  are redirected to HTTPS by Cloudflare (301, no R2 operation), so they do not form a second cache
+  key. Certificate-transparency scanners began probing the new hostname within
+  minutes (61 `404` requests reached R2 in its first 25 minutes, about 105,000 a month at that
+  rate); they are now answered 403 by Cloudflare and cost nothing.
+- A GET for a published file, ranged or not, is answered from cache once that location holds it
+  (measured above). With those requests blocked an attacker cannot choose a new cache key, so
+  looping downloads cost no R2 operations. What an attacker can force with GETs on the seven fixed URLs is cache fills:
+  - **one fill per file per location**: 7 reads per location, about 2,300 across every
+    Cloudflare city, for each release;
+  - **refills after eviction**, which an attacker cannot trigger directly (keeping a file hot by
+    requesting it prevents eviction). Even if every file were evicted and refilled every hour in
+    every one of about 330 locations all month: 7 × 330 × 720 ≈ 1.66 million reads, under the
+    guard's 2 million stop;
+  - **simultaneous misses at a cold location**, if Cloudflare does not collapse them (not
+    measured): each concurrent request arriving while a location is still filling could reach R2.
+    Filling the 524 MB file takes seconds to tens of seconds; 100 concurrent requests in each of
+    330 locations, once per file, would be about 230,000 reads. Anything larger is what the guard
+    is for.
+- **HEAD is blocked** because it was the exception: Cloudflare never answers HEAD from cache, so
+  each HEAD reached R2 as a billed `HeadObject` (seen in analytics). A client looping HEAD at 20 a
+  second would have made 51.8 million reads a month, about $15 beyond the free tier. The app never
+  sends HEAD; the rule now allows GET only.
+
+### Automatic stop and its arithmetic
+
+`infra/offline/r2-guard.mts` runs on the VM every 5 minutes (`navoss-offline-guard.timer`, up to
+30 s randomized delay). It stops hosting (withdraws the manifest, disables the custom domain,
+confirms `r2.dev` is off) when the account's last-31-day totals pass **2,000,000 Class B** or
+**200,000 Class A**, when stored bytes pass **5 GB**, when `r2.dev` is enabled, when its state file
+cannot be read or written, or after **4 consecutive runs** that could not establish usage (20
+minutes). Each established stop condition is acted on even if other reads failed. Usage counts as
+established only when the analytics include the previous run's heartbeat (its bucket listing,
+4 to 15 minutes old) both in a query for it and inside the totals the decision uses, so an empty,
+stale or frozen answer is never read as zero; an idle month still contains the guard's own
+heartbeats. Storage comes from the bucket listing (exact, immediate) and the analytics samples,
+whichever is larger. It never re-enables anything. If the guard cannot run at all, systemd
+withdraws the manifest on the host (`OnFailure=`). Details and the re-enable procedure:
+[`infra/offline/README.md`](../../infra/offline/README.md#automatic-stop).
+
+The guard's own cost: one `ListObjects` (Class A) per run, about 8,640 a month (0.9% of the free
+Class A allowance, 4.3% of its stop threshold); analytics and domain-state requests are account
+API calls, not R2 operations.
+
+Measured analytics lag (2026-11-15): five GETs that reached R2 appeared in the GraphQL operations
+dataset **140 seconds** later (polled every 15 s). The time between a burst starting and the stop
+is therefore at most about 5 min (interval) + 30 s (delay) + 140 s (lag) + 10 s (the run) ≈
+**8 minutes (480 s)**, during which the counts the guard sees are stale.
+
+- **Class B:** the stop leaves 10,000,000 − 2,000,000 = 8,000,000 reads of margin. To cross the
+  free tier before the stop takes effect, R2 would have to receive 8,000,000 / 480 s ≈ **16,700
+  uncached requests per second**, sustained for the whole window, starting just after a check.
+  Cache fills cannot approach that (all fills of this release in every location are about 2,300),
+  and nothing else the public can send reaches R2.
+- **Class A:** 1,000,000 − 200,000 = 800,000 of margin, about 1,670 writes per second for 480 s.
+  The public cannot write at all; only this repository's tooling or a leaked token can.
+- **Storage:** 10 GB − 5 GB = 5 GB of margin, and storage is billed on the month's average of daily
+  peaks: a spike would have to stay above 10 GB-month on average. Only uploads can add storage.
+  The storage dataset is much slower than operations: Cloudflare documents no update interval
+  ([R2 metrics](https://developers.cloudflare.com/r2/platform/metrics-analytics/)), and this bucket
+  had **no storage sample more than an hour after creation**. The guard therefore takes storage
+  from its own listing, so a new or idle bucket needs no waiting period.
+
+Disabling the custom domain stops new requests from reaching R2 at once (Cloudflare answers them
+itself); requests already in flight finish. The stop action itself performs no R2 read or write
+(domain settings are account API calls, not bucket operations).
+
+**What remains uncappable.** R2 has no spending limit, and Cloudflare offers no hard stop. The guard
+narrows the exposure to:
+
+- **The window between a burst and the stop**, about 8 minutes, plus any extra analytics delay
+  under load (Cloudflare does not guarantee freshness). Within it, more than about 16,700 R2 reads
+  per second would pass the free tier; with the WAF rule and the cache, the only public reads are
+  cache fills and refills, which no known request can force at that rate. Each further million
+  reads costs $0.36.
+- **Anything that defeats the cache or the WAF rule** (a Cloudflare change in caching behaviour, a
+  rule removed or outdated) reopens per-request reads; `verify-hosting.mts` checks both.
+- **The guard not running**: a guard that fails to start (Docker down, image missing) or stops
+  hosting triggers `navoss-offline-withdraw.service`, which withdraws the manifest on the host,
+  and `check-stack.sh` fails while the timer is inactive or the last run is older than 15 minutes.
+  But only disabling the custom domain stops clients that already know the URLs, and that needs a
+  running guard with a valid token: a down VM (which also takes the manifest offline) or a revoked
+  token leaves the domain enabled, bounded by the cache as described under Abuse.
+- **Billing rounding**: usage is billed in whole millions and whole GB-months once past the free
+  tier.
+
+### Zone rules
+
+Applied to `yassin.app` by API on 2026-11-15, each in a new phase entrypoint ruleset named
+`default` (the procedure: `GET /zones/$ZONE/rulesets/phases/<phase>/entrypoint`; on 200 add the rule
+with `POST /zones/$ZONE/rulesets/$RULESET_ID/rules`; on 404 create the entrypoint with
+`POST /zones/$ZONE/rulesets` and `{"name":"default","kind":"zone","phase":"<phase>","rules":[…]}`;
+never `PUT` an entrypoint, which replaces its rules). Cache rules need a token with `Cache Settings
+Write` (dashboard: "Cache Rules: Edit"), WAF custom rules `Zone WAF Write` ("Zone WAF: Edit"),
+both on `yassin.app` only and revoked after use.
+
+Cache rule, phase `http_request_cache_settings` (edge and browser TTL stay at their defaults, which
+respect the objects' one-year immutable `Cache-Control`):
+
+```json
+{
+  "description": "navoss-offline artifacts",
+  "expression": "(http.host eq \"navoss-offline.yassin.app\")",
+  "action": "set_cache_settings",
+  "action_parameters": { "cache": true },
+  "enabled": true
+}
+```
+
+WAF custom rule, phase `http_request_firewall_custom` (the free plan allows five), generated from
+the manifest by `node infra/offline/hosting.mts waf-rule MANIFEST…`, which must reproduce this
+exactly for the current release (a unit test asserts it):
+
+```json
+{
+  "description": "navoss-offline: only published files, GET, no query, no cache-key headers",
+  "expression": "(http.host eq \"navoss-offline.yassin.app\" and (not http.request.uri.path in {\"/2026-11-11-v1-798f5c442644/regions/alberta/maps.pmtiles\" \"/2026-11-11-v1-798f5c442644/regions/alberta/routing.tar\" \"/2026-11-11-v1-798f5c442644/regions/alberta/search.sqlite\" \"/2026-11-11-v1-798f5c442644/resources.tar.gz\" \"/2026-11-11-v1-798f5c442644/regions/calgary/maps.pmtiles\" \"/2026-11-11-v1-798f5c442644/regions/calgary/routing.tar\" \"/2026-11-11-v1-798f5c442644/regions/calgary/search.sqlite\"} or http.request.uri.query ne \"\" or http.request.method ne \"GET\" or any(http.request.headers.names[*] in {\"origin\" \"x-http-method-override\" \"x-http-method\" \"x-method-override\" \"x-forwarded-host\" \"x-host\" \"x-forwarded-scheme\" \"x-original-url\" \"x-rewrite-url\" \"forwarded\"})))",
+  "action": "block",
+  "enabled": true
+}
+```
+
+Verified when applied (it first allowed GET and HEAD and had no header clause; HEAD and the
+cache-key headers were added after each was shown to bypass the cache): a published file with
+`?x=1`, each of the ten headers in any letter case, `/.env`, an unknown path under the release,
+`provenance.json`, a HEAD and a POST answer 403; a plain ranged GET is a 206 cache hit; the seven manifest URLs answer 206; `navoss.yassin.app`
+and `navoss-api.yassin.app` are unaffected. **A new release must be added to this rule before the
+manifest points at it**; until then its downloads are refused, which fails closed.
+
+No rate-limiting rule exists (see Abuse), and usage-based billing notifications are not offered on
+this plan; the guard is the alert and the stop.
+
+Provider request metadata reveals the IP address and the downloaded region (from the key), not
+search text or route positions; it is disclosed in the privacy policy. No Logpush or log export
+is configured.
+
+### Hosted verification record (2026-11-15)
+
+- Upload: every object was read back through `https://navoss-offline.yassin.app` and matched its
+  local size, MD5 `ETag` and SHA-256 (the all-Alberta maps file was also checked by R2 itself
+  against `x-amz-checksum-sha256` on upload). `verify-hosting.mts` passed for all seven manifest
+  URLs: `200`, exact length, `Accept-Ranges: bytes`, immutable caching, identity encoding and a
+  correct `206` tail range.
+- With the zone rules in place, `verify-hosting.mts` passed 13/13: all seven files answered both
+  ranged GETs from cache (`HIT`), and a query string, an unpublished path, a HEAD and one header
+  from each cache-key group (`Origin`, `X-HTTP-Method-Override`, `X-Forwarded-Host`) were refused
+  with 403.
+- Manifest: regenerated with `build.sh --base-url https://navoss-offline.yassin.app` from the
+  cached build; same bundle version `2026-11-11-v1-798f5c442644`; identical to the loopback
+  manifest except the artifact URLs and `generatedAt`.
+- End to end without production: the API ran locally with `NAVOSS_OFFLINE_MANIFEST_PATH` set to
+  that manifest, and a Debug build of `main` on an iOS 26.5 simulator listed All Alberta (1.2 GB)
+  and Calgary (346 MB) and downloaded Calgary from the real hostname. The region was installed,
+  deleted and downloaded again; the second download was paused 84,594,215 bytes into
+  `routing.tar`, resumed with a byte range, and installed. With the API stopped, searching
+  "Calgary Tower" returned four "Offline results · OpenStreetMap data from 2026-11-11", and a route
+  to it was planned on the device ("Offline route · No traffic or closures", 10.0 km). Only the
+  `.pmtiles` and `.sqlite` downloads reached R2 (**4 Class B operations** for both installs); the
+  `.tar` and `.gz` requests, including the ranged resume, were answered from Cloudflare's cache.
+
+### Alternatives considered: existing Cloudflare Tunnel + Caddy
 
 Technically Caddy can mount `releases/` read-only and serve ranged static files without loading
 multi-GB responses into the API. A separate static handle should **not apply `encode zstd gzip`**

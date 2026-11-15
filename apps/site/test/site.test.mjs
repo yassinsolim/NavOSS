@@ -94,7 +94,11 @@ test('homepage states what NavOSS is and keeps unreleased features labelled', ()
   );
 
   const shipping = text(section(homepage, 'features'));
-  assert.doesNotMatch(shipping, /live traffic|offline/i);
+  assert.doesNotMatch(shipping, /live traffic/i);
+  assert.match(
+    shipping,
+    /In the current TestFlight build, download All Alberta or Calgary, Airdrie, Cochrane & Okotoks for offline maps, search and routing\. British Columbia has no offline region yet\./,
+  );
   assert.ok(
     shipping.includes(
       'In build 80 and later, turn on Share road reports to share a road condition with other drivers. Reports from verified installations appear unconfirmed until corroborated; earlier builds cannot share.',
@@ -113,7 +117,7 @@ test('homepage states what NavOSS is and keeps unreleased features labelled', ()
   );
   assert.ok(
     items[1].includes(
-      'In development Offline maps Download a region and keep the map and routing working without a signal. The app side is in build 75, uploaded November 15, 2026; tester availability is unconfirmed.',
+      'In development Province-wide road events Since November 15, 2026, the service has official events for Alberta, British Columbia and Ontario. The province-wide phone list is on main and will come in a later build; builds 75 and 80 use Calgary and Kelowna event feeds. 511 Alberta and Ontario 511 require keys and are not configured.',
     ),
   );
 
