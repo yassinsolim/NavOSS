@@ -1,6 +1,6 @@
 # Next build checklist
 
-Status refreshed: 2026-11-15. Build `0.1.0 (75)` from `d0594cd` was uploaded on 2026-11-15 (EAS submission finished; Apple processing unchecked). Build 73 was never uploaded and remains held for its matcher regression; 74 was a no-upload preflight. This checklist distinguishes code/build verification from Apple processing and tester delivery.
+Status refreshed: 2026-11-15. Build `0.1.0 (80)` from `main` (`141b394`, code `7c3672a`) was uploaded on 2026-11-15 with the Google profile and the App Attest entitlement (EAS submission finished; Apple processing unchecked). Build 75 preceded it. Build 73 was never uploaded and remains held. This checklist distinguishes code/build verification from Apple processing and tester delivery.
 
 Context: `main` contains the phone UI refresh (#78), native contract v11 (#102; v10 introduced `/v2/routes` in #75/#84), the CarPlay quality pass (#77), `/v2/routes` clients (#84), the community reports and traffic client (#85) and on-device offline maps (#83). Uploaded build 75 remains on native contract v10. The production service (`https://navoss-api.yassin.app`) was deployed on 2026-11-15 and supports Alberta and British Columbia `/v2/routes`; build 75 uses v2 and build 70 remains compatible with v1. Community reports, community traffic and offline maps remain unavailable.
 
@@ -58,6 +58,14 @@ Release-validation pass on simulators only; no build was created or uploaded dur
 ### Local Release builds: use a private Metro cache (D10)
 
 Metro's shared transform cache under `$TMPDIR` ignores a changed `EXPO_PUBLIC_API_URL`, even with `--reset-cache`, so a local Release build can embed the API origin of an earlier build. Set `TMPDIR` to a fresh directory for each local Release build or `export:embed`, and check the embedded origin. EAS builds start from a clean machine and are not affected.
+
+## 0b. Validation of `main` before build 80 (2026-11-15, `7c3672a`)
+
+Simulator pass by a dedicated agent; evidence in local ignored `artifacts/release-validation-main-20261115/`. Decision: conditional go for an internal build.
+
+- **Passed:** five gates with caches off; PostGIS suites (739 of 739); 482 native tests; the eight-phase navigation harness with all 5 phone and 32 CarPlay captures inspected; against production through a write-blocking proxy: config and coverage text (Alberta and British Columbia), Banff preview over `/v2/routes`, a Calgary Tower to Airdrie drive with lane strips, exit 285 sign, a camera alert, an automatic reroute and arrival; kill and relaunch mid-trip resumed the same trip without a new route request; Google's panel for Calgary Tower with attribution, the nearest-listing caption and "Find this place on Google"; Community settings read "Not available yet" with both features off; the Offline maps sheet; a Release build with the Google profile (entitlements `carplay-maps` and App Attest `production`, release exclusions clean, Google key present and not printed). The app sent nothing to `/v2/community` or `/v2/traffic`.
+- **Not seen on a render:** the Google panel's street-address case in this pass (earlier feature renders cover dark mode and the largest text size), the "Paused for a few minutes" traffic state, the "Resuming trip" banner (the simulated location never paused), Community settings across a live text-size change.
+- **Observed:** two false reroutes on Deerfoot Trail that recurred with the route's raw points (up to 579 m apart) and not with points every 10 m, so most likely a replay artifact: confirm on a real drive. Once, the search sheet and map buttons did not return after closing Offline maps; it did not reproduce after relaunch.
 
 ## 1. Pre-upload conditions
 
