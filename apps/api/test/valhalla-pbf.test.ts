@@ -19,6 +19,7 @@ import calgary from './fixtures/valhalla/calgary-deerfoot-glenmore.json' with { 
 import stoney from './fixtures/valhalla/calgary-stoney-airport.json' with { type: 'json' };
 import vancouver from './fixtures/valhalla/vancouver-highway-interchange.json' with { type: 'json' };
 import toronto from './fixtures/valhalla/toronto-403-401-interchanges.json' with { type: 'json' };
+import montreal from './fixtures/valhalla/montreal-a520-a40-a15.json' with { type: 'json' };
 import local382 from './fixtures/valhalla/calgary-deerfoot-glenmore-local382.json' with { type: 'json' };
 import directionsOnly from './fixtures/valhalla/calgary-directions-only.json' with { type: 'json' };
 import legacy from './fixtures/valhalla/calgary-legacy-osrm.json' with { type: 'json' };
@@ -110,6 +111,21 @@ describe('real Valhalla lossless response fixtures', () => {
     expect(steps.filter((step) => (step.lanes?.length ?? 0) > 0).length).toBeGreaterThanOrEqual(4);
     expect(route.distanceMeters).toBeGreaterThan(40_000);
     expect(route.distanceMeters).toBeLessThan(50_000);
+  });
+  it('keeps Quebec French names and French-only signs as signed on a recorded Montreal route', () => {
+    const route = fixtureValue(parseValhallaPbf(bytes(montreal.response))[0]);
+    const exit70 = fixtureValue(route.steps.find((step) => step.exitNumber === '70'));
+    expect(exit70.instruction).toBe(
+      'Keep right to take exit 70 onto 15/Autoroute des Laurentides toward Laval.',
+    );
+    // A French-only sign has no English twin to collapse into; drivers see what is posted.
+    expect(exit70.signpostBranch).toEqual(['15 Nord']);
+    expect(exit70.signpostToward).toEqual(['Laval']);
+    expect(route.steps.filter((step) => (step.lanes?.length ?? 0) > 0).length).toBeGreaterThanOrEqual(3);
+    expect(route.steps.map((step) => step.instruction)).toContain(
+      'Bear right onto Boulevard de la Concorde Ouest.',
+    );
+    expect(route.steps.some((step) => step.instruction.includes('Rond-point Dorval'))).toBe(true);
   });
   it('retains real Vancouver branch and toward text separately rather than splitting mixed OSRM destinations', () => {
     const route = fixtureValue(parseValhallaPbf(bytes(vancouver.response))[0]);
