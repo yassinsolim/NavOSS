@@ -44,6 +44,8 @@ describe('search proximity', () => {
     expect(formatSearchDistance(34)).toBe('30 m');
     expect(formatSearchDistance(1_480)).toBe('1.5 km');
     expect(formatSearchDistance(undefined)).toBeUndefined();
+    expect(formatSearchDistance(4_392_300)).toBe('4,392 km');
+    expect(formatSearchDistance(12_400)).toBe('12 km');
   });
 
   it('removes the repeated place name from branch context', () => {

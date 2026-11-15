@@ -1,5 +1,7 @@
 import type { Coordinate, RouteAlternativeV2, RouteResponseV2 } from '@navoss/contracts';
 
+import { readableRoadName } from './instruction-text';
+
 const EARTH_RADIUS_METERS = 6_371_000;
 
 function toRadians(degrees: number): number {
@@ -226,6 +228,9 @@ export function getUpcomingManeuvers(
   return maneuvers;
 }
 
+const HOURS_PER_DAY = 24;
+const WHOLE_KILOMETRES = new Intl.NumberFormat('en-CA', { maximumFractionDigits: 0 });
+
 export function formatDuration(durationSeconds: number): string {
   const minutes = Math.max(1, Math.round(durationSeconds / 60));
   if (minutes < 60) {
@@ -234,6 +239,14 @@ export function formatDuration(durationSeconds: number): string {
 
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
+  if (hours >= HOURS_PER_DAY) {
+    // Minutes are noise on a multi-day trip: whole days and hours.
+    const totalHours = Math.round(minutes / 60);
+    const days = Math.floor(totalHours / HOURS_PER_DAY);
+    const remainingHours = totalHours % HOURS_PER_DAY;
+    const dayText = `${String(days)} ${days === 1 ? 'day' : 'days'}`;
+    return remainingHours === 0 ? dayText : `${dayText} ${String(remainingHours)} hr`;
+  }
   return remainingMinutes === 0
     ? `${String(hours)} hr`
     : `${String(hours)} hr ${String(remainingMinutes)} min`;
@@ -244,20 +257,31 @@ export function formatTrafficDelay(delaySeconds: number): string | undefined {
   return minutes < 1 ? undefined : `+${String(minutes)} min traffic`;
 }
 
+/** "350 m", "9.4 km", then whole kilometres from 10 km: "4,392 km". */
 export function formatDistance(distanceMetersValue: number): string {
   if (distanceMetersValue < 1_000) {
     return `${String(Math.max(10, Math.round(distanceMetersValue / 10) * 10))} m`;
   }
 
-  return `${(distanceMetersValue / 1_000).toFixed(1)} km`;
+  const kilometres = distanceMetersValue / 1_000;
+  const tenths = kilometres.toFixed(1);
+  return Number(tenths) < 10 ? `${tenths} km` : `${WHOLE_KILOMETRES.format(kilometres)} km`;
 }
 
+/** "8:53 a.m." today; "Tue 8:53 a.m." later this week; "Nov 23 8:53 a.m." beyond it. */
 export function formatArrivalTime(durationSeconds: number, now: Date = new Date()): string {
   const arrival = new Date(now.getTime() + durationSeconds * 1_000);
-  return arrival.toLocaleTimeString('en-CA', {
+  const time = arrival.toLocaleTimeString('en-CA', {
     hour: 'numeric',
     minute: '2-digit',
   });
+  if (arrival.toDateString() === now.toDateString()) return time;
+  const withinWeek = arrival.getTime() - now.getTime() < 6 * HOURS_PER_DAY * 3_600_000;
+  const day = arrival.toLocaleDateString(
+    'en-CA',
+    withinWeek ? { weekday: 'short' } : { day: 'numeric', month: 'short' },
+  );
+  return `${day} ${time}`;
 }
 
 export function buildEtaShareMessage(
@@ -273,7 +297,7 @@ export function routeViaLabel(route: RouteAlternativeV2): string {
   const roadDistances = new Map<string, number>();
 
   route.steps.forEach((step) => {
-    const roadName = step.roadName.trim();
+    const roadName = readableRoadName(step.roadName);
     if (roadName.length === 0) {
       return;
     }

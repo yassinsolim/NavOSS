@@ -960,16 +960,44 @@ public func navOSSCarPlayRerouteProposalText(
 
 // MARK: - Search results
 
-/// Short distance label for a list row: "350 m", "1.2 km", "12 km".
+private let navOSSWholeKilometres: NumberFormatter = {
+  let formatter = NumberFormatter()
+  formatter.locale = Locale(identifier: "en_CA")
+  formatter.numberStyle = .decimal
+  formatter.maximumFractionDigits = 0
+  return formatter
+}()
+
+/// Short distance label: "350 m", "1.2 km", then whole kilometres from 10 km: "12 km",
+/// "4,392 km". Canadian English like the rest of the copy, whatever the device locale.
 public func navOSSCarPlayDistanceLabel(_ meters: Double) -> String {
   guard meters.isFinite, meters >= 0 else { return "" }
   if meters < 1_000 {
     return "\(max(10, Int((meters / 10).rounded()) * 10)) m"
   }
-  if meters < 10_000 {
-    return String(format: "%.1f km", meters / 1_000)
+  let tenths = (meters / 100).rounded() / 10
+  if tenths < 10 {
+    return String(format: "%.1f km", tenths)
   }
-  return "\(Int((meters / 1_000).rounded())) km"
+  let kilometres = Int((meters / 1_000).rounded())
+  let grouped = navOSSWholeKilometres.string(from: NSNumber(value: kilometres))
+  return "\(grouped ?? String(kilometres)) km"
+}
+
+/// Trip duration: "20 min", "2 hr 5 min", then whole days and hours beyond a day: "1 day 22 hr".
+public func navOSSCarPlayDurationLabel(_ seconds: Double) -> String {
+  let minutes = max(1, Int((max(0, seconds.isFinite ? seconds : 0) / 60).rounded()))
+  if minutes < 60 { return "\(minutes) min" }
+  let hours = minutes / 60
+  if hours >= 24 {
+    let totalHours = Int((Double(minutes) / 60).rounded())
+    let days = totalHours / 24
+    let remainingHours = totalHours % 24
+    let dayText = "\(days) \(days == 1 ? "day" : "days")"
+    return remainingHours == 0 ? dayText : "\(dayText) \(remainingHours) hr"
+  }
+  let remainingMinutes = minutes % 60
+  return remainingMinutes == 0 ? "\(hours) hr" : "\(hours) hr \(remainingMinutes) min"
 }
 
 /// Straight-line distance from `origin` to a destination, in metres.

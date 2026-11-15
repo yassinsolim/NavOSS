@@ -1,5 +1,7 @@
 import type { Coordinate, SearchResult } from '@navoss/contracts';
 
+import { formatDistance } from '../navigation/route-progress';
+
 const SEARCH_PROXIMITY_DECIMAL_PLACES = 3;
 const SEARCH_PROXIMITY_SCALE = 10 ** SEARCH_PROXIMITY_DECIMAL_PLACES;
 const EARTH_RADIUS_METERS = 6_371_000;
@@ -74,11 +76,7 @@ export function planPlaceSearch(
 }
 
 export function formatSearchDistance(distanceMeters: number | undefined): string | undefined {
-  if (distanceMeters === undefined) return undefined;
-  if (distanceMeters < 1_000) {
-    return `${String(Math.max(10, Math.round(distanceMeters / 10) * 10))} m`;
-  }
-  return `${(distanceMeters / 1_000).toFixed(distanceMeters < 10_000 ? 1 : 0)} km`;
+  return distanceMeters === undefined ? undefined : formatDistance(distanceMeters);
 }
 
 export function searchResultContext(result: SearchResult): string {

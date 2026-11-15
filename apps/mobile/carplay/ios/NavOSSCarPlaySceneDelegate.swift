@@ -877,8 +877,8 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       let alternativeNumber = index < fastestIndex ? index + 1 : index
       let routeName = isFastest ? "Fastest route" : "Alternative \(alternativeNumber)"
       let summary = routeDetail.map { "\(routeName) · \($0)" } ?? routeName
-      let duration = formatDuration(route.durationSeconds)
-      let distance = formatDistance(route.distanceMeters)
+      let duration = navOSSCarPlayDurationLabel(route.durationSeconds)
+      let distance = navOSSCarPlayDistanceLabel(route.distanceMeters)
       let estimates = "\(duration) · \(distance)"
       let routeChoice = CPRouteChoice(
         summaryVariants: [summary, routeName],
@@ -1094,17 +1094,6 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       distanceRemaining: navOSSCarPlayDistanceMeasurement(distanceMeters),
       timeRemaining: max(0, durationSeconds)
     )
-  }
-
-  private func formatDuration(_ seconds: Double) -> String {
-    let minutes = max(1, Int((seconds / 60).rounded()))
-    return "\(minutes) min"
-  }
-
-  private func formatDistance(_ meters: Double) -> String {
-    meters < 1_000
-      ? "\(max(10, Int((meters / 10).rounded()) * 10)) m"
-      : String(format: "%.1f km", meters / 1_000)
   }
 
   private func makeRootActionButton(title: String) -> CPBarButton {

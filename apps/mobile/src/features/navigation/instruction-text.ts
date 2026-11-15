@@ -12,6 +12,15 @@ export function readableRoadNames(text: string): string {
     .replace(/(?<=\S)\/(?=\S)/g, ' / ');
 }
 
+/**
+ * A road the route knows only by its route number ("17") is a highway: "Highway 17". Named roads
+ * are unchanged.
+ */
+export function readableRoadName(roadName: string): string {
+  const road = roadName.trim();
+  return /^\d{1,3}[A-Z]?$/u.test(road) ? `Highway ${road}` : road;
+}
+
 const ARRIVED = /^(?:you have|you've) arrived\b/i;
 
 /**
