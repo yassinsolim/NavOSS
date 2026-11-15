@@ -406,23 +406,13 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
 
   func ingest(_ sample: NavigationLocationSample) throws -> NavigationSnapshot {
     let sample = try navOSSLiveNavigationFix(sample)
-    let versionedUpdate: VersionedNavigationUpdate
-    lock.lock()
-    do {
-      let update = try navigationSession.updateLocation(sample)
-      versionedUpdate = prepareForPublicationLocked(update)
-    } catch {
-      lock.unlock()
-      throw error
-    }
-    lock.unlock()
-    switch persistedNavigationDecision(versionedUpdate) {
+    let (versionedUpdate, decision) = try navigationSessionUpdate(sample)
+    switch decision {
     case .discard:
       clearNavigation(endReason: .restoredTripOffRoute)
     case .publish:
       publish(versionedUpdate)
       evaluateReroute(for: versionedUpdate)
-      persistRecordIfDue(versionedUpdate)
     case .wait:
       publishRestoredTripAcquisition(versionedUpdate)
     }
@@ -434,18 +424,17 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   /// for the first match and whenever an arrival starts or stops waiting for movement (a
   /// relaunch must not lose that). Before the first match, how the vehicle stands towards the
   /// route instead, on the same cadence (`navOSSShouldPersistRecord`).
-  /// Written while holding `lock`: a clear, a restart or a reroute takes the same lock before
+  /// Written in the same transaction under `lock` as the fix it records, before the update is
+  /// published or any reader can see it: a kill at any point leaves no match on any surface
+  /// that the store does not hold. A clear, a restart or a reroute takes the same lock before
   /// it touches the store, so a checkpoint can never be written after them for the trip they
-  /// replaced, even one that keeps the trip's identifier.
-  private func persistRecordIfDue(_ versionedUpdate: VersionedNavigationUpdate) {
+  /// replaced, even one that keeps the trip's identifier. Caller holds `lock`.
+  private func persistRecordIfDueLocked(_ versionedUpdate: VersionedNavigationUpdate) {
     guard let trip = versionedUpdate.update.trip else {
       return
     }
     let now = Date()
-    lock.lock()
-    defer { lock.unlock() }
-    guard isCurrentLocked(versionedUpdate),
-      let record = navigationSession.record(after: versionedUpdate.update.snapshot),
+    guard let record = navigationSession.record(after: versionedUpdate.update.snapshot),
       navOSSShouldPersistRecord(
         record,
         lastPersisted: lastPersistedRecord,
@@ -564,7 +553,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       ? location.course
       : nil
     guard
-      let versionedUpdate = try? navigationSessionUpdate(
+      let result = try? navigationSessionUpdate(
         NavigationLocationSample(
           coordinate: NavigationCoordinate(
             latitude: location.coordinate.latitude,
@@ -581,13 +570,13 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     else {
       return
     }
-    switch persistedNavigationDecision(versionedUpdate) {
+    let (versionedUpdate, decision) = result
+    switch decision {
     case .discard:
       clearNavigation(endReason: .restoredTripOffRoute)
     case .publish:
       publish(versionedUpdate)
       evaluateReroute(for: versionedUpdate)
-      persistRecordIfDue(versionedUpdate)
       // Only real fixes during turn-by-turn guidance can become traffic probes, and only when
       // the driver turned "Share traffic speeds" on; the community service enforces both.
       if versionedUpdate.update.trip != nil, versionedUpdate.update.snapshot.phase == .tracking {
@@ -763,12 +752,19 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     }
   }
 
+  /// A fix, as one transaction under `lock`: the session's update, what to do with it, and,
+  /// for an update to be published, its record (`persistRecordIfDueLocked`).
   private func navigationSessionUpdate(
     _ sample: NavigationLocationSample
-  ) throws -> VersionedNavigationUpdate {
+  ) throws -> (VersionedNavigationUpdate, NavOSSPersistedNavigationDecision) {
     lock.lock()
     defer { lock.unlock() }
-    return prepareForPublicationLocked(try navigationSession.updateLocation(sample))
+    let versionedUpdate = prepareForPublicationLocked(try navigationSession.updateLocation(sample))
+    let decision = persistedNavigationDecisionLocked(versionedUpdate)
+    if decision == .publish {
+      persistRecordIfDueLocked(versionedUpdate)
+    }
+    return (versionedUpdate, decision)
   }
 
   private func prepareForPublicationLocked(
@@ -789,14 +785,10 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
     return VersionedNavigationUpdate(generation: navigationGeneration, update: update)
   }
 
-  private func persistedNavigationDecision(
+  /// Caller holds `lock`, in the transaction that made `versionedUpdate`.
+  private func persistedNavigationDecisionLocked(
     _ versionedUpdate: VersionedNavigationUpdate
   ) -> NavOSSPersistedNavigationDecision {
-    lock.lock()
-    defer { lock.unlock() }
-    guard isCurrentLocked(versionedUpdate) else {
-      return .wait
-    }
     guard validatesPersistedNavigation else {
       return .publish
     }
