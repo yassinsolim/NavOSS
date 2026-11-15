@@ -32,24 +32,17 @@ export type ProvincialRoadEventFeeds = Readonly<
   Record<ProvincialRoadEventRegion, readonly RoadEventFeed[]>
 >;
 
-/** The time an event last changed according to its source, for newest-first ordering. */
-export function roadEventRecency(event: ProvincialRoadEvent): string {
-  return (
-    event.updatedAt ??
-    event.reportedAt ??
-    event.startsAt ??
-    // Date-only values sort as the start of their day.
-    `${event.reportedOn ?? event.startsOn ?? '0000-01-01'}T00:00:00.000Z`
+/**
+ * Newest-first ordering key: the source's update, report or start instant, else its report or
+ * start date (start of that day). A time after `ceiling` (a source clock running ahead) counts as
+ * `ceiling`, so it cannot pin an event above genuinely newer ones. The phone uses the same key.
+ */
+export function roadEventRecency(event: ProvincialRoadEvent, ceiling: number): number {
+  const instant = event.updatedAt ?? event.reportedAt ?? event.startsAt;
+  const time = Date.parse(
+    instant ?? `${event.reportedOn ?? event.startsOn ?? '0000-01-01'}T00:00:00.000Z`,
   );
-}
-
-export function compareRoadEventsNewestFirst(
-  left: ProvincialRoadEvent,
-  right: ProvincialRoadEvent,
-): number {
-  const leftTime = Date.parse(roadEventRecency(left));
-  const rightTime = Date.parse(roadEventRecency(right));
-  return leftTime === rightTime ? left.id.localeCompare(right.id, 'en-CA') : rightTime - leftTime;
+  return Math.min(time, ceiling);
 }
 
 export function createProvincialRoadEventService(
@@ -65,13 +58,20 @@ export function createProvincialRoadEventService(
           `No ${region} road-event source is available.`,
         );
       }
+      const now = clock();
       const events = snapshots
         .flatMap((snapshot) => snapshot.events)
-        .sort(compareRoadEventsNewestFirst);
+        .map((event) => ({ event, recency: roadEventRecency(event, now) }))
+        .sort((left, right) =>
+          left.recency === right.recency
+            ? left.event.id.localeCompare(right.event.id, 'en-CA')
+            : right.recency - left.recency,
+        )
+        .map(({ event }) => event);
       return ProvincialRoadEventResponseSchema.parse({
         degraded: sources.some((source) => source.status !== 'current' || source.incomplete),
         events,
-        generatedAt: new Date(clock()).toISOString(),
+        generatedAt: new Date(now).toISOString(),
         regionId: region,
         sources,
         stale: sources.some((source) => source.status === 'stale'),

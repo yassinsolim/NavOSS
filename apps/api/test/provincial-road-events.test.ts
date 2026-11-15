@@ -24,7 +24,10 @@ import {
   ProvincialRoadEventsUnavailableError,
   roadEventKeysFromEnvironment,
 } from '../src/provincial-road-events.js';
-import { createTorontoRoadEventFeed } from '../src/toronto-road-event-feed.js';
+import {
+  createTorontoRoadEventFeed,
+  normalizeTorontoRestriction,
+} from '../src/toronto-road-event-feed.js';
 
 function fixture(name: string): unknown {
   return JSON.parse(
@@ -523,6 +526,35 @@ describe('provincial road-event service', () => {
     ]);
     const times = response.events.map((event) => Date.parse(event.updatedAt ?? ''));
     expect([...times].sort((left, right) => right - left)).toEqual(times);
+  });
+
+  it('orders a future source timestamp as the fetch time, never above it', async () => {
+    const now = Date.parse('2026-11-15T10:00:00Z');
+    const base = normalizeTorontoRestriction(
+      toronto.payload.Closure.find((row) => row.currImpact === 'High'),
+    );
+    if (base === undefined) throw new Error('fixture has an affecting row');
+    const feed = createRoadEventFeed(
+      { ...descriptor, sourceId: 'toronto-road-restrictions' },
+      () =>
+        Promise.resolve({
+          droppedRows: 0,
+          events: [
+            { ...base, id: 'z-clock-skew', updatedAt: '2026-11-16T10:00:00.000Z' },
+            { ...base, id: 'a-updated-at-fetch', updatedAt: '2026-11-15T10:00:00.000Z' },
+          ],
+          totalRows: 2,
+        }),
+      { clock: () => now },
+    );
+    const service = createProvincialRoadEventService(
+      { alberta: [], 'british-columbia': [], ontario: [feed] },
+      () => now,
+    );
+    expect((await service.getRoadEvents('ontario')).events.map((event) => event.id)).toEqual([
+      'a-updated-at-fetch',
+      'z-clock-skew',
+    ]);
   });
 
   it('fails closed when no source of the region has data', async () => {

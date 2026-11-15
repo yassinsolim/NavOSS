@@ -113,15 +113,29 @@ export function currentRoadEvents(
       return true;
     })
     .sort((left, right) => {
-      const leftTime = roadEventSourceTime(left)?.time ?? Number.NEGATIVE_INFINITY;
-      const rightTime = roadEventSourceTime(right)?.time ?? Number.NEGATIVE_INFINITY;
-      if (leftTime !== rightTime) return rightTime - leftTime;
-      const leftDate = left.startsOn ?? left.reportedOn ?? '';
-      const rightDate = right.startsOn ?? right.reportedOn ?? '';
-      return leftDate === rightDate
+      const leftTime = roadEventRecency(left, sources.get(left.sourceId)?.checkedAt);
+      const rightTime = roadEventRecency(right, sources.get(right.sourceId)?.checkedAt);
+      return leftTime === rightTime
         ? left.id.localeCompare(right.id, 'en-CA')
-        : rightDate.localeCompare(leftDate, 'en-CA');
+        : rightTime - leftTime;
     });
+}
+
+/**
+ * The ordering key, identical to the server's: the source's update, report or start instant, else
+ * its report or start date (start of that day). A time after `fetchedAt` (a source clock running
+ * ahead) counts as `fetchedAt`, so it cannot pin an event above genuinely newer ones.
+ */
+export function roadEventRecency(
+  event: ProvincialRoadEvent,
+  fetchedAt: string | undefined,
+): number {
+  const instant = event.updatedAt ?? event.reportedAt ?? event.startsAt;
+  const time = Date.parse(
+    instant ?? `${event.reportedOn ?? event.startsOn ?? '0000-01-01'}T00:00:00.000Z`,
+  );
+  const ceiling = fetchedAt === undefined ? Number.NaN : Date.parse(fetchedAt);
+  return Number.isFinite(ceiling) ? Math.min(time, ceiling) : time;
 }
 
 /** "just now", "12 min ago", "3 h ago", "2 days ago". Future source times read as "just now". */

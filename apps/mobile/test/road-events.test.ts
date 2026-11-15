@@ -128,6 +128,56 @@ describe('events in effect, newest first (recorded 2026-11-15)', () => {
     expect([...times].sort((left, right) => right - left)).toEqual(times);
   });
 
+  it('orders instants and calendar dates on one key, report before start, as the server does', () => {
+    const edmonton = alberta.events.find(
+      (event) => event.sourceId === 'edmonton-traffic-disruptions',
+    );
+    const construction = alberta.events.find(
+      (event) => event.sourceId === 'calgary-construction-detours',
+    );
+    if (edmonton === undefined || construction === undefined) throw new Error('fixture events');
+    const old = { ...construction, id: 'old', startsAt: '2025-06-01T15:00:00.000Z' };
+    const thisWeek = {
+      ...edmonton,
+      id: 'this-week',
+      reportedOn: '2026-11-13',
+      startsOn: '2026-11-01',
+    };
+    const startedLater = {
+      ...edmonton,
+      id: 'started-later',
+      reportedOn: '2026-11-02',
+      startsOn: '2026-11-14',
+    };
+    const snapshot = { ...alberta, events: [old, startedLater, thisWeek] };
+    expect(currentRoadEvents(snapshot, CAPTURED).map((event) => event.id)).toEqual([
+      'this-week',
+      'started-later',
+      'old',
+    ]);
+  });
+
+  it('never lets a future source timestamp pin an event to the top', () => {
+    const [first, second] = ontario.events;
+    if (first === undefined || second === undefined) throw new Error('fixture events');
+    const toronto = ontario.sources.find(
+      (source) => source.sourceId === 'toronto-road-restrictions',
+    );
+    const checkedAt = Date.parse(toronto?.checkedAt ?? '');
+    const snapshot = {
+      ...ontario,
+      events: [
+        { ...first, id: 'z-clock-skew', updatedAt: new Date(checkedAt + 86_400_000).toISOString() },
+        { ...second, id: 'a-updated-at-fetch', updatedAt: new Date(checkedAt).toISOString() },
+      ],
+    };
+    // A day-ahead time counts as the fetch time: it ties with an update made at fetch time.
+    expect(currentRoadEvents(snapshot, checkedAt + 120_000).map((event) => event.id)).toEqual([
+      'a-updated-at-fetch',
+      'z-clock-skew',
+    ]);
+  });
+
   it('drops a source past its maximum age and events past their planned end', () => {
     const toronto = ontario.sources.find(
       (source) => source.sourceId === 'toronto-road-restrictions',
