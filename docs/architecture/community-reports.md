@@ -14,23 +14,23 @@ Report types match the phone's structured draft types: `collision`, `road-closur
 
 ## Status
 
-| Area                                                                       | State                                                                    |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Phone: local two-hour drafts during guidance                               | Shipped. Drafts stay on the phone.                                       |
-| API contracts, `/v2/community/*` routes, OpenAPI                           | Implemented (`packages/contracts/src/community-report.ts`).              |
-| App Attest attestation and assertion verification                          | Implemented (`apps/api/src/app-attest.ts`).                              |
-| PostGIS tables and explicit SQL migrations                                 | Implemented (`apps/api/src/migrations.ts`, `node dist/migrate.js`).      |
-| Rate limits, replay, travel, self-vote, duplicate-vote controls            | Implemented (`apps/api/src/community-trust.ts`, `community-reports.ts`). |
-| Beta-posterior credibility with decay, lower bound, device minimum         | Implemented.                                                             |
-| Publication modes `shadow`, `attested`, `corroborated`                     | Implemented; `shadow` is the default.                                    |
-| Native client: App Attest key, registration, submit, vote, withdraw, reset | Implemented (`ios/Core/Community*.swift`), shared by phone and CarPlay.  |
-| App Attest entitlement in release builds                                   | Off (`NAVOSS_APP_ATTEST_ENTITLEMENT_ENABLED=0`) until the App ID has it. |
-| Phone map layer, report sheet, "Still there?" sheet, reset control         | Planned (wave 2 phone slice, on the native bridge).                      |
-| Privacy policy and App Privacy disclosures for shared reports              | Policy updated; App Privacy answers required before any build ships.     |
-| Least-privilege runtime and migration database roles                       | Planned. Both currently use the `navoss` role.                           |
-| Moderation tooling and operator review of closures                         | Planned.                                                                 |
-| CarPlay reporting, markers, "Still there?" alert                           | Implemented; submits only while publication is live, else local drafts.  |
-| Routing influence                                                          | Not implemented. No community report changes a route.                    |
+| Area                                                                       | State                                                                                                                               |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Phone: local two-hour drafts during guidance                               | Shipped. Drafts stay on the phone.                                                                                                  |
+| API contracts, `/v2/community/*` routes, OpenAPI                           | Implemented (`packages/contracts/src/community-report.ts`).                                                                         |
+| App Attest attestation and assertion verification                          | Implemented (`apps/api/src/app-attest.ts`).                                                                                         |
+| PostGIS tables and explicit SQL migrations                                 | Implemented (`apps/api/src/migrations.ts`, `node dist/migrate.js`).                                                                 |
+| Rate limits, replay, travel, self-vote, duplicate-vote controls            | Implemented (`apps/api/src/community-trust.ts`, `community-reports.ts`).                                                            |
+| Beta-posterior credibility with decay, lower bound, device minimum         | Implemented.                                                                                                                        |
+| Publication modes `shadow`, `attested`, `corroborated`                     | Implemented; `shadow` is the default.                                                                                               |
+| Native client: App Attest key, registration, submit, vote, withdraw, reset | Implemented (`ios/Core/Community*.swift`), shared by phone and CarPlay.                                                             |
+| App Attest entitlement in release builds                                   | On for the store profiles since 2026-11-15 (capability on the App ID, regenerated profile). No build with it has been uploaded yet. |
+| Phone map layer, report sheet, "Still there?" sheet, reset control         | Planned (wave 2 phone slice, on the native bridge).                                                                                 |
+| Privacy policy and App Privacy disclosures for shared reports              | Policy updated; App Privacy answers required before any build ships.                                                                |
+| Least-privilege runtime and migration database roles                       | Planned. Both currently use the `navoss` role.                                                                                      |
+| Moderation tooling and operator review of closures                         | Planned.                                                                                                                            |
+| CarPlay reporting, markers, "Still there?" alert                           | Implemented; submits only while publication is live, else local drafts.                                                             |
+| Routing influence                                                          | Not implemented. No community report changes a route.                                                                               |
 
 ## API
 

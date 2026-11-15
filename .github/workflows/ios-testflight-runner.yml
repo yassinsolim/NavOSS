@@ -128,6 +128,13 @@ jobs:
             echo 'Missing provisioning profile' >&2
             exit 1
           fi
+          # Store profiles build with App Attest (eas.json). A build signed without the production
+          # environment could not register for community sharing, so refuse it before upload.
+          attest="$(printf '%s' "$entitlements" | plutil -extract 'com\.apple\.developer\.devicecheck\.appattest-environment' raw -o - - 2>/dev/null || true)"
+          if [ "$attest" != production ]; then
+            echo 'Missing production com.apple.developer.devicecheck.appattest-environment entitlement' >&2
+            exit 1
+          fi
           echo "Verified $(basename "$app")"
 
       # EAS runs the upload on its own infrastructure, so the CLI only waits on a queue we do not
