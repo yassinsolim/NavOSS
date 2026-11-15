@@ -1,0 +1,12 @@
+[Unit]
+Description=Withdraw the NavOSS offline manifest after the offline guard failed
+Documentation=file:///home/navoss/NavOSS/infra/offline/README.md
+RequiresMountsFor=/srv/navoss/artifacts
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+# The API answers the quiet "not available" 503 from the next request. Runs on the host, so it
+# works when Docker or the network does not. A missing manifest (already withdrawn) is success.
+ExecStart=/bin/sh -c 'test ! -e /srv/navoss/artifacts/offline/manifest.json || mv -f /srv/navoss/artifacts/offline/manifest.json /srv/navoss/artifacts/offline/manifest.json.stopped'
