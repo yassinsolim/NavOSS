@@ -541,6 +541,39 @@ final class NavigationTripStartTests: XCTestCase {
     XCTAssertEqual(trip.activeRouteId, express.id)
   }
 
+  /// Review of #133: crawling at 0.8 m/s, below the stationary speed, along a frontage road
+  /// 100 m from the chosen route, with accurate fixes. Once the vehicle is further from where its
+  /// travel was last counted than any parked receiver wanders, its position wins over the
+  /// reported speed: it is rerouted within the travel budget (its 100 m start plus 500 m) plus
+  /// that bound (100 m and both accuracies).
+  func testCrawlingAlongAParallelRoadBelowTheStationarySpeedIsRerouted() throws {
+    let selected = Self.syntheticTrip(NavigationTrace.route([(-1_000.0, 0.0), (3_000.0, 0.0)]))
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    let trip = try TripHarness(selected: selected, preview: [selected], reroute: replacement)
+    var x = 0.0
+    while trip.requests == 0, x < 1_000 {
+      x += 0.8
+      try trip.fix(NavigationTrace.coordinate(x, -100), speed: 0.8, course: 90, after: 1)
+    }
+    XCTAssertEqual(trip.requests, 1)
+    XCTAssertGreaterThanOrEqual(x, 600, "not before the budget is driven")
+    XCTAssertLessThanOrEqual(x, 100 + 500 + 110 + 10)
+  }
+
+  /// Parked for fifteen minutes reporting a speed of zero, with a multipath jump of 40 m every
+  /// half minute that returns to the true position on the next fix: never travel.
+  func testParkedWithMultipathJumpsAtZeroSpeedIsNeverRerouted() throws {
+    let (trip, express) = try harness(selecting: "Highway 401 Express")
+    for second in 1...900 {
+      let jumped = second.isMultiple(of: 30)
+      try trip.fix(
+        Self.offset(Self.parked, east: jumped ? 40 : 0, north: 0), speed: 0, after: 1)
+    }
+    XCTAssertEqual(trip.requests, 0)
+    XCTAssertEqual(trip.offRouteFixes, 0)
+    XCTAssertEqual(trip.activeRouteId, express.id)
+  }
+
   /// Before the first match a fix worse than `navigationPoorAccuracyMeters` counts neither way,
   /// as its own accuracy keeps it from departing after a match. In particular its accuracy never
   /// becomes part of a margin: a start on a 400 m fix does not let the vehicle drive 450 m

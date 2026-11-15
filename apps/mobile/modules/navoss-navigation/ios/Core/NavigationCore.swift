@@ -33,8 +33,9 @@ let navigationPoorAccuracyMeters = 50.0
 //
 // Travel is positional only: it accumulates from movement between fixes of more than
 // `preMatchTravelStepMeters` and more than both fixes' accuracy. A reported speed can only
-// veto it (below `preMatchStationarySpeedMetersPerSecond` the vehicle is stationary), never
-// credit it: every way of crediting speed alone also credited parked receivers reporting a
+// veto it (below `preMatchStationarySpeedMetersPerSecond` the vehicle is stationary, but only
+// within `preMatchStationaryVetoMeters` and both accuracies of where travel was last counted;
+// further than that the position wins), never credit it: every way of crediting speed alone also credited parked receivers reporting a
 // spurious speed, and rerouting a parked driver is what this rule exists to prevent. The
 // trade-off: a vehicle circling inside about 30 m (a parkade ramp, a small roundabout in a lot)
 // is never counted as travelling. It is not going anywhere; it stays acquiring, unguided and
@@ -51,8 +52,16 @@ private let preMatchTravelBudgetMeters = 500.0
 /// Travel is counted between fixes further apart than this, or than both accuracies: two fixes
 /// of a parked vehicle that wander within 15 m of where it stands are at most 30 m apart.
 private let preMatchTravelStepMeters = 30.0
-/// A fix reporting a speed below this is a stationary vehicle, however far it wandered.
+/// A fix reporting a speed below this is a stationary vehicle, unless it is further than
+/// `preMatchStationaryVetoMeters` from where travel was last counted.
 private let preMatchStationarySpeedMetersPerSecond = 1.0
+/// How far from where travel was last counted a stationary speed still vetoes the step, plus
+/// both fixes' accuracy. Fixes of usable accuracy (at most `navigationPoorAccuracyMeters`) of a
+/// parked receiver lie within their accuracy of it, so two of them are within both accuracies
+/// of each other; this allows 100 m more for the odd multipath fix outside its stated accuracy
+/// (40 m jumps that return are common under tall buildings). A vehicle that has moved further
+/// than that, whatever speed it reports, has moved: a slow crawl along a frontage road counts.
+private let preMatchStationaryVetoMeters = 100.0
 /// Beyond 1 km from all of the route, the exact distance is rescanned only after the vehicle
 /// has moved this far; in between a lower bound stands in (see `preMatchDistance`).
 private let preMatchRescanMeters = 100.0
@@ -1290,10 +1299,15 @@ final class NavigationCore {
     }
     var travel = preMatchTravel ?? (sample.coordinate, accuracyMeters, 0)
     let step = navigationDistanceMeters(from: travel.from, to: sample.coordinate)
-    let isStationary = sample.speedMetersPerSecond.map {
+    // A stationary speed vetoes the step only while it stays within what a parked receiver's
+    // fixes can wander; beyond that the position wins.
+    let isVetoedAsStationary = sample.speedMetersPerSecond.map {
       $0 < preMatchStationarySpeedMetersPerSecond
     } ?? false
-    if !isStationary, step > max(preMatchTravelStepMeters, travel.accuracyMeters + accuracyMeters) {
+      && step <= preMatchStationaryVetoMeters + travel.accuracyMeters + accuracyMeters
+    if !isVetoedAsStationary,
+      step > max(preMatchTravelStepMeters, travel.accuracyMeters + accuracyMeters)
+    {
       travel = (sample.coordinate, accuracyMeters, travel.meters + step)
     }
     preMatchTravel = travel
