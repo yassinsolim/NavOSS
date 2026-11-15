@@ -5,8 +5,8 @@ import {
   ProblemDetailsSchema,
   ReadinessResponseSchema,
   REGISTERED_SERVICE_AREAS,
-  type RouteAlternative,
 } from '@navoss/contracts';
+import type { RouteAlternative } from '@navoss/contracts';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -168,8 +168,8 @@ describe('declared coverage in the configuration', () => {
     expect(v2Canada.coverage.serviceAreas).toHaveLength(13);
 
     const legacy = await Promise.all(
-      [western, withOntario, canada].map(
-        async (app) => (await app.inject({ method: 'GET', url: '/v1/config' })).json() as unknown,
+      [western, withOntario, canada].map(async (app) =>
+        (await app.inject({ method: 'GET', url: '/v1/config' })).json<unknown>(),
       ),
     );
     for (const payload of legacy) {
@@ -259,10 +259,12 @@ describe('declared coverage in the configuration', () => {
 
 describe('per-province readiness', () => {
   function recordedFetch(options: { iso?: string; locateStatus?: number } = {}) {
-    return vi.fn((input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input);
+    return vi.fn<typeof fetch>((input, init) => {
+      const url = input instanceof Request ? input.url : input.toString();
       if (url.endsWith('/locate')) {
-        const body = JSON.parse(String(init?.body)) as { locations: { lat: number }[] };
+        const body = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as {
+          locations: { lat: number }[];
+        };
         const answer =
           body.locations[0]?.lat === 43.6525 ? locate.torontoCityHall : locate.calgaryOutsideGraph;
         return Promise.resolve(
@@ -288,14 +290,14 @@ describe('per-province readiness', () => {
     const fetchImplementation = recordedFetch();
     const readiness = createCoverageReadiness(WESTERN_ONTARIO, {
       ...endpoints,
-      fetchImplementation: fetchImplementation as typeof fetch,
+      fetchImplementation: fetchImplementation,
     });
     // The recorded graph and index are a Toronto sample: Ontario answers, Alberta and BC do not.
     expect(await readiness.missingAreas()).toEqual(['Alberta', 'British Columbia']);
     expect(
       await createCoverageReadiness(createServiceCoverage(['ontario']), {
         ...endpoints,
-        fetchImplementation: fetchImplementation as typeof fetch,
+        fetchImplementation: fetchImplementation,
       }).missingAreas(),
     ).toEqual([]);
   });
@@ -306,7 +308,7 @@ describe('per-province readiness', () => {
   ])('treats Ontario as missing when %s', async (_, options) => {
     const readiness = createCoverageReadiness(createServiceCoverage(['ontario']), {
       ...endpoints,
-      fetchImplementation: recordedFetch(options) as typeof fetch,
+      fetchImplementation: recordedFetch(options),
     });
     expect(await readiness.missingAreas()).toEqual(['Ontario']);
   });

@@ -186,10 +186,10 @@ export interface ServiceCoverage {
   readonly bounds: GeographicBounds;
   readonly displayName: string;
   readonly id: string;
-  areaForCoordinate(coordinate: Coordinate): ServiceArea | undefined;
-  contains(coordinate: Coordinate): boolean;
-  /** The first pair of served places whose provinces no imported road connects. */
-  disconnectedAreas(coordinates: readonly Coordinate[]): DisconnectedAreas | undefined;
+  readonly areaForCoordinate: (coordinate: Coordinate) => ServiceArea | undefined;
+  readonly contains: (coordinate: Coordinate) => boolean;
+  /** The first pair of served places whose provinces no declared road connects. */
+  readonly disconnectedAreas: (coordinates: readonly Coordinate[]) => DisconnectedAreas | undefined;
 }
 
 /**
@@ -244,7 +244,7 @@ export function createServiceCoverage(ids: readonly string[]): ServiceCoverage {
       },
     ),
     contains: (coordinate) => areaForCoordinate(coordinate) !== undefined,
-    disconnectedAreas(coordinates) {
+    disconnectedAreas: (coordinates) => {
       let first: ServiceArea | undefined;
       for (const coordinate of coordinates) {
         const area = areaForCoordinate(coordinate);
