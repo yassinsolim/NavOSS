@@ -18,6 +18,8 @@ EAS Submit sends iOS builds to TestFlight. It does not submit them for public Ap
 
 Nightly run `43733475080` failed on both attempts on 2026-11-15: after the app built successfully and native tests passed, `xcrun simctl bootstatus` timed out after 120 seconds on the hosted runner. The same harness passed locally twice that day. The cause is not established; investigate the hosted simulator boot failure before treating the job as reliable. A local harness pass does not prove interactive CarPlay on a head unit.
 
+A manually dispatched run on the same day, `43745963979` on `24f534d`, passed every scenario, including the CarPlay formatter change from #127. The timeouts are therefore treated as hosted-runner simulator boot flakiness, cause still not established; if it recurs, raise the `bootstatus` allowance or pre-boot the simulator before the build.
+
 ## Local PR review
 
 There is currently no automatic PR review. The GitHub Action was removed because the repository
