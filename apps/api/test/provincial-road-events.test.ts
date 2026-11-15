@@ -26,10 +26,10 @@ import {
 } from '../src/provincial-road-events.js';
 import { createTorontoRoadEventFeed } from '../src/toronto-road-event-feed.js';
 
-function fixture<T>(name: string): T {
+function fixture(name: string): unknown {
   return JSON.parse(
     readFileSync(new URL(`./fixtures/road-events/${name}`, import.meta.url), 'utf8'),
-  ) as T;
+  ) as unknown;
 }
 
 function jsonResponse(value: unknown, status = 200): Response {
@@ -39,51 +39,64 @@ function jsonResponse(value: unknown, status = 200): Response {
   });
 }
 
-const driveBc = fixture<{ payload: { events: Record<string, unknown>[] } }>(
-  'drivebc-open511-2026-11-15.json',
-);
-const edmonton = fixture<{ metadata: { rowsUpdatedAt: number }; rows: Record<string, unknown>[] }>(
-  'edmonton-traffic-disruptions-2026-11-15.json',
-);
-const toronto = fixture<{ payload: { Closure: Record<string, unknown>[] } }>(
-  'toronto-road-restrictions-2026-11-15.json',
-);
-const calgary = fixture<{
+const driveBc = fixture('drivebc-open511-2026-11-15.json') as {
+  payload: { events: Record<string, unknown>[] };
+};
+const edmonton = fixture('edmonton-traffic-disruptions-2026-11-15.json') as {
+  metadata: { rowsUpdatedAt: number };
+  rows: Record<string, unknown>[];
+};
+const toronto = fixture('toronto-road-restrictions-2026-11-15.json') as {
+  payload: { Closure: Record<string, unknown>[] };
+};
+const calgary = fixture('calgary-open-data-2026-11-15.json') as {
   construction: { metadata: { rowsUpdatedAt: number }; rows: Record<string, unknown>[] };
   incident: { metadata: { rowsUpdatedAt: number }; rows: Record<string, unknown>[] };
-}>('calgary-open-data-2026-11-15.json');
-const ontario511 = fixture<{ rows: Record<string, unknown>[] }>(
-  'ontario-511-event-documentation-sample.json',
-);
-const alberta511 = fixture<{ rows: Record<string, unknown>[] }>(
-  'alberta-511-event-documentation-sample.json',
-);
+};
+const ontario511 = fixture('ontario-511-event-documentation-sample.json') as {
+  rows: Record<string, unknown>[];
+};
+const alberta511 = fixture('alberta-511-event-documentation-sample.json') as {
+  rows: Record<string, unknown>[];
+};
 const invalidKey = readFileSync(
   new URL('./fixtures/road-events/511-invalid-key-2026-11-15.xml', import.meta.url),
   'utf8',
 );
+
+function requestUrl(input: string | URL | Request): string {
+  return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+}
 
 const CAPTURED = Date.parse('2026-11-15T09:30:00Z');
 
 describe('local times', () => {
   it('converts wall time on both sides of daylight-saving transitions', () => {
     // Mountain: MDT (UTC-6) in July, MST (UTC-7) in December.
-    expect(new Date(parseLocalDateTime('2026-07-01T09:00:00.000', 'America/Edmonton') ?? 0).toISOString()).toBe(
-      '2026-07-01T15:00:00.000Z',
-    );
-    expect(new Date(parseLocalDateTime('2026-12-01T09:00:00', 'America/Edmonton') ?? 0).toISOString()).toBe(
-      '2026-12-01T16:00:00.000Z',
-    );
+    expect(
+      new Date(
+        parseLocalDateTime('2026-07-01T09:00:00.000', 'America/Edmonton') ?? 0,
+      ).toISOString(),
+    ).toBe('2026-07-01T15:00:00.000Z');
+    expect(
+      new Date(parseLocalDateTime('2026-12-01T09:00:00', 'America/Edmonton') ?? 0).toISOString(),
+    ).toBe('2026-12-01T16:00:00.000Z');
     // Repeated 01:30 on 2026-11-01 resolves to the first (daylight) occurrence.
     expect(
       new Date(
-        zonedTimeToInstant({ day: 1, hour: 1, minute: 30, month: 11, year: 2026 }, 'America/Toronto'),
+        zonedTimeToInstant(
+          { day: 1, hour: 1, minute: 30, month: 11, year: 2026 },
+          'America/Toronto',
+        ),
       ).toISOString(),
     ).toBe('2026-11-01T05:30:00.000Z');
     // 02:30 on 2026-03-08 does not exist in Edmonton; it resolves past the gap.
     expect(
       new Date(
-        zonedTimeToInstant({ day: 8, hour: 2, minute: 30, month: 3, year: 2026 }, 'America/Edmonton'),
+        zonedTimeToInstant(
+          { day: 8, hour: 2, minute: 30, month: 3, year: 2026 },
+          'America/Edmonton',
+        ),
       ).toISOString(),
     ).toBe('2026-03-08T09:30:00.000Z');
     expect(parseLocalDateTime('2026-02-31', 'America/Edmonton')).toBeUndefined();
@@ -97,7 +110,7 @@ describe('DriveBC province-wide events (recorded 2026-11-15)', () => {
     const feed = createDriveBcProvinceRoadEventFeed({
       clock: () => CAPTURED,
       fetchImplementation: (url) => {
-        urls.push(String(url));
+        urls.push(requestUrl(url));
         return Promise.resolve(jsonResponse(driveBc.payload));
       },
     });
@@ -106,7 +119,11 @@ describe('DriveBC province-wide events (recorded 2026-11-15)', () => {
     expect(urls).toEqual([
       'https://api.open511.gov.bc.ca/events?format=json&status=ACTIVE&limit=500&offset=0',
     ]);
-    expect(source).toMatchObject({ incomplete: false, sourceId: 'drivebc-open511-events', status: 'current' });
+    expect(source).toMatchObject({
+      incomplete: false,
+      sourceId: 'drivebc-open511-events',
+      status: 'current',
+    });
     expect(events.length).toBeGreaterThan(0);
     const types = new Set(events.map((event) => event.type));
     expect(types.has('closure')).toBe(true);
@@ -137,7 +154,9 @@ describe('DriveBC province-wide events (recorded 2026-11-15)', () => {
       clock: () => CAPTURED,
       fetchImplementation: (url) =>
         Promise.resolve(
-          jsonResponse({ events: page(Number(new URL(String(url)).searchParams.get('offset'))) }),
+          jsonResponse({
+            events: page(Number(new URL(requestUrl(url)).searchParams.get('offset'))),
+          }),
         ),
     });
     const { source } = await feed.getSnapshot();
@@ -150,7 +169,9 @@ describe('DriveBC province-wide events (recorded 2026-11-15)', () => {
       fetchImplementation: () =>
         Promise.resolve(
           jsonResponse({
-            events: driveBc.payload.events.map(({ updated: _updated, ...event }) => event),
+            events: driveBc.payload.events.map((event) =>
+              Object.fromEntries(Object.entries(event).filter(([key]) => key !== 'updated')),
+            ),
           }),
         ),
     });
@@ -164,7 +185,7 @@ describe('City of Edmonton traffic disruptions (recorded 2026-11-15)', () => {
       clock: () => now,
       fetchImplementation: (url) =>
         Promise.resolve(
-          String(url).includes('/api/views/')
+          requestUrl(url).includes('/api/views/')
             ? metadata === undefined
               ? jsonResponse({}, 503)
               : jsonResponse(metadata)
@@ -185,16 +206,26 @@ describe('City of Edmonton traffic disruptions (recorded 2026-11-15)', () => {
       expect(event.startsOn).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
       expect(event.updatedAt).toBeUndefined();
     }
-    expect(events.some((event) => event.type === 'special-event' || event.type === 'closure')).toBe(true);
+    expect(events.some((event) => event.type === 'special-event' || event.type === 'closure')).toBe(
+      true,
+    );
   });
 
   it('keeps an event through its last local day and drops it the next Edmonton day', async () => {
-    const row = { ...edmonton.rows[0], finish_date: '2026-11-15T00:00:00.000', start_date: '2026-11-01T00:00:00.000' };
+    const row = {
+      ...edmonton.rows[0],
+      finish_date: '2026-11-15T00:00:00.000',
+      start_date: '2026-11-01T00:00:00.000',
+    };
     const feedAt = (now: number) =>
       createEdmontonRoadEventFeed({
         clock: () => now,
         fetchImplementation: (url) =>
-          Promise.resolve(String(url).includes('/api/views/') ? jsonResponse(edmonton.metadata) : jsonResponse([row])),
+          Promise.resolve(
+            requestUrl(url).includes('/api/views/')
+              ? jsonResponse(edmonton.metadata)
+              : jsonResponse([row]),
+          ),
       });
     // 23:30 MST on 2026-11-15 is 06:30Z on the 16th: still the last day locally.
     expect((await feedAt(Date.parse('2026-11-16T06:30:00Z')).getSnapshot()).events).toHaveLength(1);
@@ -220,11 +251,15 @@ describe('City of Toronto road restrictions (recorded 2026-11-15)', () => {
     expect(events.length).toBeGreaterThan(0);
     expect(source.status).toBe('current');
     for (const event of events) {
-      const row = toronto.payload.Closure.find((candidate) => `toronto-restriction:${String(candidate.id)}` === event.id);
+      const row = toronto.payload.Closure.find(
+        (candidate) => `toronto-restriction:${String(candidate.id)}` === event.id,
+      );
       expect(row?.currImpact).not.toBe('None');
       expect(event.updatedAt).toBe(new Date(Number(row?.lastUpdated)).toISOString());
     }
-    expect(events.filter((event) => event.type === 'closure').every((event) => event.isFullClosure)).toBe(true);
+    expect(
+      events.filter((event) => event.type === 'closure').every((event) => event.isFullClosure),
+    ).toBe(true);
   });
 });
 
@@ -234,7 +269,11 @@ describe('City of Calgary datasets in the Alberta response (recorded 2026-11-15)
       clock: () => CAPTURED,
       fetchImplementation: (url) =>
         Promise.resolve(
-          jsonResponse(String(url).includes('/api/views/') ? calgary.incident.metadata : calgary.incident.rows),
+          jsonResponse(
+            requestUrl(url).includes('/api/views/')
+              ? calgary.incident.metadata
+              : calgary.incident.rows,
+          ),
         ),
     });
     const { events, source } = await feed.getSnapshot();
@@ -253,18 +292,26 @@ describe('City of Calgary datasets in the Alberta response (recorded 2026-11-15)
       fetchImplementation: (url) =>
         Promise.resolve(
           jsonResponse(
-            String(url).includes('/api/views/')
+            requestUrl(url).includes('/api/views/')
               ? calgary.incident.metadata
               : [{ incident_info: 'NO TRAFFIC INCIDENTS' }],
           ),
         ),
     });
-    expect((await feed.getSnapshot()).source).toMatchObject({ eventCount: 0, incomplete: false, status: 'current' });
+    expect((await feed.getSnapshot()).source).toMatchObject({
+      eventCount: 0,
+      incomplete: false,
+      status: 'current',
+    });
   });
 
   it('reads construction wall times in Calgary time across daylight saving', () => {
     const row = calgary.construction.rows[0];
-    const summer = normalizeCalgaryConstruction({ ...row, end_dt: '2026-12-31T15:00:00.000', start_dt: '2026-07-01T09:00:00.000' });
+    const summer = normalizeCalgaryConstruction({
+      ...row,
+      end_dt: '2026-12-31T15:00:00.000',
+      start_dt: '2026-07-01T09:00:00.000',
+    });
     expect(summer.startsAt).toBe('2026-07-01T15:00:00.000Z');
     expect(summer.endsAt).toBe('2026-12-31T22:00:00.000Z');
   });
@@ -274,12 +321,18 @@ describe('City of Calgary datasets in the Alberta response (recorded 2026-11-15)
       clock: () => CAPTURED,
       fetchImplementation: (url) =>
         Promise.resolve(
-          jsonResponse(String(url).includes('/api/views/') ? calgary.construction.metadata : calgary.construction.rows),
+          jsonResponse(
+            requestUrl(url).includes('/api/views/')
+              ? calgary.construction.metadata
+              : calgary.construction.rows,
+          ),
         ),
     });
     const { events, source } = await feed.getSnapshot();
     expect(source).toMatchObject({ confidence: 'official', status: 'current' });
-    expect(events.every((event) => event.confidence === 'official' && event.type === 'construction')).toBe(true);
+    expect(
+      events.every((event) => event.confidence === 'official' && event.type === 'construction'),
+    ).toBe(true);
   });
 });
 
@@ -289,11 +342,16 @@ describe('511 Alberta and Ontario 511', () => {
     for (const province of ['alberta', 'ontario'] as const) {
       const feed = createProvincial511RoadEventFeed(province, '  ', { fetchImplementation });
       feed.start();
-      expect((await feed.getSnapshot()).source).toMatchObject({ eventCount: 0, status: 'not-configured' });
+      expect((await feed.getSnapshot()).source).toMatchObject({
+        eventCount: 0,
+        status: 'not-configured',
+      });
       feed.stop();
     }
     expect(fetchImplementation).not.toHaveBeenCalled();
-    expect(roadEventKeysFromEnvironment({ ALBERTA_511_API_KEY: '', ONTARIO_511_API_KEY: ' k ' })).toEqual({
+    expect(
+      roadEventKeysFromEnvironment({ ALBERTA_511_API_KEY: '', ONTARIO_511_API_KEY: ' k ' }),
+    ).toEqual({
       ontario511ApiKey: 'k',
     });
   });
@@ -304,7 +362,7 @@ describe('511 Alberta and Ontario 511', () => {
       // Inside both documented events' planned windows.
       clock: () => Date.parse('2025-05-01T12:00:00Z'),
       fetchImplementation: (url) => {
-        urls.push(String(url));
+        urls.push(requestUrl(url));
         return Promise.resolve(jsonResponse(ontario511.rows));
       },
     });
@@ -337,7 +395,9 @@ describe('511 Alberta and Ontario 511', () => {
   it('reports the recorded Invalid Key answer as unavailable', async () => {
     const feed = createProvincial511RoadEventFeed('ontario', 'revoked', {
       fetchImplementation: () =>
-        Promise.resolve(new Response(invalidKey, { headers: { 'content-type': 'application/xml' }, status: 400 })),
+        Promise.resolve(
+          new Response(invalidKey, { headers: { 'content-type': 'application/xml' }, status: 400 }),
+        ),
     });
     expect((await feed.getSnapshot()).source.status).toBe('unavailable');
   });
@@ -360,7 +420,10 @@ describe('feed freshness', () => {
     expect(stale.source).toMatchObject({ checkedAt: first.source.checkedAt, status: 'stale' });
     expect(stale.events).toEqual(first.events);
     now += 3_600_000;
-    expect(await feed.getSnapshot()).toMatchObject({ events: [], source: { status: 'unavailable' } });
+    expect(await feed.getSnapshot()).toMatchObject({
+      events: [],
+      source: { status: 'unavailable' },
+    });
   });
 
   it('shares one request between concurrent callers', async () => {
@@ -419,9 +482,8 @@ describe('provincial road-event service', () => {
   });
 
   it('fails closed when no source of the region has data', async () => {
-    const dead = createRoadEventFeed(
-      { ...descriptor, sourceId: 'toronto-road-restrictions' },
-      () => Promise.reject(new Error('dead')),
+    const dead = createRoadEventFeed({ ...descriptor, sourceId: 'toronto-road-restrictions' }, () =>
+      Promise.reject(new Error('dead')),
     );
     const service = createProvincialRoadEventService({
       alberta: [],

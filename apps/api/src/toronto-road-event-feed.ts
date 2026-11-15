@@ -137,7 +137,8 @@ export function createTorontoRoadEventFeed(
   const dataUrl = options.dataUrl ?? TORONTO_ROAD_RESTRICTIONS_URL;
   return createRoadEventFeed(
     {
-      attribution: 'Contains information licensed under the Open Government Licence \u2013 Toronto.',
+      attribution:
+        'Contains information licensed under the Open Government Licence \u2013 Toronto.',
       confidence: 'official',
       documentationUrl: 'https://open.toronto.ca/dataset/road-restrictions/',
       licenseUrl: 'https://open.toronto.ca/open-data-licence/',

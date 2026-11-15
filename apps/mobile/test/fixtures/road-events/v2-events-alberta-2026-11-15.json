@@ -1,198 +1,198 @@
 {
- "retrievedOn": "2026-11-15",
- "source": "Local API (this branch) /v2/events?region=alberta against the live public feeds; events trimmed to three per source, source descriptors unchanged.",
- "response": {
-  "degraded": true,
-  "events": [
-   {
-    "confidence": "unverified",
-    "coordinate": {
-     "latitude": 51.04579497485678,
-     "longitude": -114.0715305030582
-    },
-    "description": "Traffic incident. Blocking the left two NB lanes.",
-    "id": "calgary-incident:611da65ef8f983463761",
+  "retrievedOn": "2026-11-15",
+  "source": "Local API (this branch) /v2/events?region=alberta against the live public feeds; events trimmed to three per source, source descriptors unchanged.",
+  "response": {
+    "degraded": true,
+    "events": [
+      {
+        "confidence": "unverified",
+        "coordinate": {
+          "latitude": 51.04579497485678,
+          "longitude": -114.0715305030582
+        },
+        "description": "Traffic incident. Blocking the left two NB lanes.",
+        "id": "calgary-incident:611da65ef8f983463761",
+        "regionId": "alberta",
+        "reportedAt": "2026-11-15T07:24:34.000Z",
+        "roadwayName": "8 Avenue and 4 Street SW",
+        "sourceId": "calgary-current-incidents",
+        "startsAt": "2026-11-15T07:24:34.000Z",
+        "title": "Incident at 8 Avenue and 4 Street SW",
+        "type": "incident",
+        "updatedAt": "2026-11-15T08:12:28.000Z"
+      },
+      {
+        "confidence": "official",
+        "coordinate": {
+          "latitude": 51.154425028143585,
+          "longitude": -113.95848156482784
+        },
+        "description": "Nightly form 10:00 PM to 5:00 AM. Right Lane Closure and Left Lane Closures on Country Hills Blvd & 52 St NE",
+        "endsAt": "2026-11-16T12:00:00.000Z",
+        "id": "calgary-construction:25895637dc169551c5c1",
+        "regionId": "alberta",
+        "roadwayName": "County Hills Boulevard and 52 Street NE",
+        "sourceId": "calgary-construction-detours",
+        "startsAt": "2026-11-15T05:00:00.000Z",
+        "title": "Construction at County Hills Boulevard and 52 Street NE",
+        "type": "construction"
+      },
+      {
+        "confidence": "official",
+        "coordinate": {
+          "latitude": 51.15446739357534,
+          "longitude": -113.946777106655
+        },
+        "description": "Nightly from 10:00 PM to 5:00 AM. Left Lane Closures on Country Hills Blvd & 60 St NE",
+        "endsAt": "2026-11-16T12:00:00.000Z",
+        "id": "calgary-construction:6476b857fb683ada0fc3",
+        "regionId": "alberta",
+        "roadwayName": "Country Hills Boulevard and 60 Street NE",
+        "sourceId": "calgary-construction-detours",
+        "startsAt": "2026-11-15T05:00:00.000Z",
+        "title": "Construction at Country Hills Boulevard and 60 Street NE",
+        "type": "construction"
+      },
+      {
+        "confidence": "official",
+        "coordinate": {
+          "latitude": 51.15368696019725,
+          "longitude": -113.97742202334805
+        },
+        "description": "WB Right Lane Closure on Country Hills Blvd & 38 St NESB Lane Closure on 38 St & Country Hills Blvd NE",
+        "endsAt": "2026-11-16T12:00:00.000Z",
+        "id": "calgary-construction:74793a236ae6149ea88b",
+        "regionId": "alberta",
+        "roadwayName": "Country Hills Boulevard and 38 Street NE",
+        "sourceId": "calgary-construction-detours",
+        "startsAt": "2026-11-15T05:00:00.000Z",
+        "title": "Construction at Country Hills Boulevard and 38 Street NE",
+        "type": "construction"
+      },
+      {
+        "confidence": "official",
+        "coordinate": {
+          "latitude": 53.58070508980353,
+          "longitude": -113.54124322478002
+        },
+        "description": "Yellowhead Trail reduced to one lane Eastbound and one lane Westbound at 127 Street nightly from 8PM to 6AM. Yellowhead Trail will have a speed reduction in place. ROAD CONSTRUCTION",
+        "endsOn": "2026-11-16",
+        "id": "edmonton-disruption:1329",
+        "isFullClosure": false,
+        "regionId": "alberta",
+        "reportedOn": "2026-11-13",
+        "roadwayName": "Yellowhead Trail",
+        "severity": "moderate",
+        "sourceId": "edmonton-traffic-disruptions",
+        "startsOn": "2026-11-13",
+        "title": "Construction on Yellowhead Trail",
+        "type": "construction"
+      },
+      {
+        "confidence": "official",
+        "coordinate": {
+          "latitude": 53.5767452310126,
+          "longitude": -113.48816223277888
+        },
+        "description": "Yellowhead Trail reduced to one lane Eastbound and one lane Westbound at 127 Street nightly from 8PM to 6AM. Yellowhead Trail will have a speed reduction in place. ROAD CONSTRUCTION",
+        "endsOn": "2026-11-16",
+        "id": "edmonton-disruption:1329",
+        "isFullClosure": false,
+        "regionId": "alberta",
+        "reportedOn": "2026-11-13",
+        "roadwayName": "Yellowhead Trail",
+        "severity": "moderate",
+        "sourceId": "edmonton-traffic-disruptions",
+        "startsOn": "2026-11-13",
+        "title": "Construction on Yellowhead Trail",
+        "type": "construction"
+      },
+      {
+        "confidence": "official",
+        "coordinate": {
+          "latitude": 53.58046569812904,
+          "longitude": -113.54454614744
+        },
+        "description": "124 Avenue NW from 129 Street NW to 130 Street NW. 124 Avenue closed between 129 Street and 130 Street. UTILITY CONSTRUCTION",
+        "endsOn": "2026-11-21",
+        "id": "edmonton-disruption:1325",
+        "isFullClosure": true,
+        "regionId": "alberta",
+        "reportedOn": "2026-11-12",
+        "roadwayName": "124 Avenue NW",
+        "severity": "major",
+        "sourceId": "edmonton-traffic-disruptions",
+        "startsOn": "2026-11-11",
+        "title": "Closure on 124 Avenue NW",
+        "type": "closure"
+      }
+    ],
+    "generatedAt": "2026-11-15T09:39:17.458Z",
     "regionId": "alberta",
-    "reportedAt": "2026-11-15T07:24:34.000Z",
-    "roadwayName": "8 Avenue and 4 Street SW",
-    "sourceId": "calgary-current-incidents",
-    "startsAt": "2026-11-15T07:24:34.000Z",
-    "title": "Incident at 8 Avenue and 4 Street SW",
-    "type": "incident",
-    "updatedAt": "2026-11-15T08:12:28.000Z"
-   },
-   {
-    "confidence": "official",
-    "coordinate": {
-     "latitude": 51.154425028143585,
-     "longitude": -113.95848156482784
-    },
-    "description": "Nightly form 10:00 PM to 5:00 AM. Right Lane Closure and Left Lane Closures on Country Hills Blvd & 52 St NE",
-    "endsAt": "2026-11-16T12:00:00.000Z",
-    "id": "calgary-construction:25895637dc169551c5c1",
-    "regionId": "alberta",
-    "roadwayName": "County Hills Boulevard and 52 Street NE",
-    "sourceId": "calgary-construction-detours",
-    "startsAt": "2026-11-15T05:00:00.000Z",
-    "title": "Construction at County Hills Boulevard and 52 Street NE",
-    "type": "construction"
-   },
-   {
-    "confidence": "official",
-    "coordinate": {
-     "latitude": 51.15446739357534,
-     "longitude": -113.946777106655
-    },
-    "description": "Nightly from 10:00 PM to 5:00 AM. Left Lane Closures on Country Hills Blvd & 60 St NE",
-    "endsAt": "2026-11-16T12:00:00.000Z",
-    "id": "calgary-construction:6476b857fb683ada0fc3",
-    "regionId": "alberta",
-    "roadwayName": "Country Hills Boulevard and 60 Street NE",
-    "sourceId": "calgary-construction-detours",
-    "startsAt": "2026-11-15T05:00:00.000Z",
-    "title": "Construction at Country Hills Boulevard and 60 Street NE",
-    "type": "construction"
-   },
-   {
-    "confidence": "official",
-    "coordinate": {
-     "latitude": 51.15368696019725,
-     "longitude": -113.97742202334805
-    },
-    "description": "WB Right Lane Closure on Country Hills Blvd & 38 St NESB Lane Closure on 38 St & Country Hills Blvd NE",
-    "endsAt": "2026-11-16T12:00:00.000Z",
-    "id": "calgary-construction:74793a236ae6149ea88b",
-    "regionId": "alberta",
-    "roadwayName": "Country Hills Boulevard and 38 Street NE",
-    "sourceId": "calgary-construction-detours",
-    "startsAt": "2026-11-15T05:00:00.000Z",
-    "title": "Construction at Country Hills Boulevard and 38 Street NE",
-    "type": "construction"
-   },
-   {
-    "confidence": "official",
-    "coordinate": {
-     "latitude": 53.58070508980353,
-     "longitude": -113.54124322478002
-    },
-    "description": "Yellowhead Trail reduced to one lane Eastbound and one lane Westbound at 127 Street nightly from 8PM to 6AM. Yellowhead Trail will have a speed reduction in place. ROAD CONSTRUCTION",
-    "endsOn": "2026-11-16",
-    "id": "edmonton-disruption:1329",
-    "isFullClosure": false,
-    "regionId": "alberta",
-    "reportedOn": "2026-11-13",
-    "roadwayName": "Yellowhead Trail",
-    "severity": "moderate",
-    "sourceId": "edmonton-traffic-disruptions",
-    "startsOn": "2026-11-13",
-    "title": "Construction on Yellowhead Trail",
-    "type": "construction"
-   },
-   {
-    "confidence": "official",
-    "coordinate": {
-     "latitude": 53.5767452310126,
-     "longitude": -113.48816223277888
-    },
-    "description": "Yellowhead Trail reduced to one lane Eastbound and one lane Westbound at 127 Street nightly from 8PM to 6AM. Yellowhead Trail will have a speed reduction in place. ROAD CONSTRUCTION",
-    "endsOn": "2026-11-16",
-    "id": "edmonton-disruption:1329",
-    "isFullClosure": false,
-    "regionId": "alberta",
-    "reportedOn": "2026-11-13",
-    "roadwayName": "Yellowhead Trail",
-    "severity": "moderate",
-    "sourceId": "edmonton-traffic-disruptions",
-    "startsOn": "2026-11-13",
-    "title": "Construction on Yellowhead Trail",
-    "type": "construction"
-   },
-   {
-    "confidence": "official",
-    "coordinate": {
-     "latitude": 53.58046569812904,
-     "longitude": -113.54454614744
-    },
-    "description": "124 Avenue NW from 129 Street NW to 130 Street NW. 124 Avenue closed between 129 Street and 130 Street. UTILITY CONSTRUCTION",
-    "endsOn": "2026-11-21",
-    "id": "edmonton-disruption:1325",
-    "isFullClosure": true,
-    "regionId": "alberta",
-    "reportedOn": "2026-11-12",
-    "roadwayName": "124 Avenue NW",
-    "severity": "major",
-    "sourceId": "edmonton-traffic-disruptions",
-    "startsOn": "2026-11-11",
-    "title": "Closure on 124 Avenue NW",
-    "type": "closure"
-   }
-  ],
-  "generatedAt": "2026-11-15T09:39:17.458Z",
-  "regionId": "alberta",
-  "sources": [
-   {
-    "attribution": "Source: 511 Alberta, Government of Alberta.",
-    "confidence": "official",
-    "documentationUrl": "https://511.alberta.ca/developers/doc",
-    "eventCount": 0,
-    "incomplete": false,
-    "licenseUrl": "https://511.alberta.ca/about/about",
-    "maximumAgeSeconds": 3600,
-    "name": "511 Alberta",
-    "refreshIntervalSeconds": 300,
-    "sourceId": "alberta-511-events",
-    "status": "not-configured",
-    "timeZone": "America/Edmonton"
-   },
-   {
-    "attribution": "Contains information licensed under the Open Government Licence – City of Calgary.",
-    "checkedAt": "2026-11-15T09:39:05.656Z",
-    "confidence": "unverified",
-    "documentationUrl": "https://data.calgary.ca/d/4jah-h97u",
-    "eventCount": 1,
-    "incomplete": false,
-    "licenseUrl": "https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa",
-    "maximumAgeSeconds": 3600,
-    "name": "City of Calgary incidents",
-    "refreshIntervalSeconds": 300,
-    "sourceId": "calgary-current-incidents",
-    "status": "current",
-    "timeZone": "America/Edmonton",
-    "updatedAt": "2026-11-15T09:33:14.000Z"
-   },
-   {
-    "attribution": "Contains information licensed under the Open Government Licence – City of Calgary.",
-    "checkedAt": "2026-11-15T09:39:05.656Z",
-    "confidence": "official",
-    "documentationUrl": "https://data.calgary.ca/d/w8zq-79bq",
-    "eventCount": 100,
-    "incomplete": false,
-    "licenseUrl": "https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa",
-    "maximumAgeSeconds": 86400,
-    "name": "City of Calgary construction",
-    "refreshIntervalSeconds": 300,
-    "sourceId": "calgary-construction-detours",
-    "status": "current",
-    "timeZone": "America/Edmonton",
-    "updatedAt": "2026-11-14T11:00:47.000Z"
-   },
-   {
-    "attribution": "Contains information licensed under the Open Government Licence – City of Edmonton.",
-    "checkedAt": "2026-11-15T09:39:05.657Z",
-    "confidence": "official",
-    "documentationUrl": "https://data.edmonton.ca/d/k4tx-5k8p",
-    "eventCount": 141,
-    "incomplete": false,
-    "licenseUrl": "https://data.edmonton.ca/stories/s/Open-Government-Licence-Edmonton/msh8-if28",
-    "maximumAgeSeconds": 86400,
-    "name": "City of Edmonton",
-    "refreshIntervalSeconds": 600,
-    "sourceId": "edmonton-traffic-disruptions",
-    "status": "current",
-    "timeZone": "America/Edmonton",
-    "updatedAt": "2026-11-15T08:17:55.000Z"
-   }
-  ],
-  "stale": false
- }
+    "sources": [
+      {
+        "attribution": "Source: 511 Alberta, Government of Alberta.",
+        "confidence": "official",
+        "documentationUrl": "https://511.alberta.ca/developers/doc",
+        "eventCount": 0,
+        "incomplete": false,
+        "licenseUrl": "https://511.alberta.ca/about/about",
+        "maximumAgeSeconds": 3600,
+        "name": "511 Alberta",
+        "refreshIntervalSeconds": 300,
+        "sourceId": "alberta-511-events",
+        "status": "not-configured",
+        "timeZone": "America/Edmonton"
+      },
+      {
+        "attribution": "Contains information licensed under the Open Government Licence – City of Calgary.",
+        "checkedAt": "2026-11-15T09:39:05.656Z",
+        "confidence": "unverified",
+        "documentationUrl": "https://data.calgary.ca/d/4jah-h97u",
+        "eventCount": 1,
+        "incomplete": false,
+        "licenseUrl": "https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa",
+        "maximumAgeSeconds": 3600,
+        "name": "City of Calgary incidents",
+        "refreshIntervalSeconds": 300,
+        "sourceId": "calgary-current-incidents",
+        "status": "current",
+        "timeZone": "America/Edmonton",
+        "updatedAt": "2026-11-15T09:33:14.000Z"
+      },
+      {
+        "attribution": "Contains information licensed under the Open Government Licence – City of Calgary.",
+        "checkedAt": "2026-11-15T09:39:05.656Z",
+        "confidence": "official",
+        "documentationUrl": "https://data.calgary.ca/d/w8zq-79bq",
+        "eventCount": 100,
+        "incomplete": false,
+        "licenseUrl": "https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa",
+        "maximumAgeSeconds": 86400,
+        "name": "City of Calgary construction",
+        "refreshIntervalSeconds": 300,
+        "sourceId": "calgary-construction-detours",
+        "status": "current",
+        "timeZone": "America/Edmonton",
+        "updatedAt": "2026-11-14T11:00:47.000Z"
+      },
+      {
+        "attribution": "Contains information licensed under the Open Government Licence – City of Edmonton.",
+        "checkedAt": "2026-11-15T09:39:05.657Z",
+        "confidence": "official",
+        "documentationUrl": "https://data.edmonton.ca/d/k4tx-5k8p",
+        "eventCount": 141,
+        "incomplete": false,
+        "licenseUrl": "https://data.edmonton.ca/stories/s/Open-Government-Licence-Edmonton/msh8-if28",
+        "maximumAgeSeconds": 86400,
+        "name": "City of Edmonton",
+        "refreshIntervalSeconds": 600,
+        "sourceId": "edmonton-traffic-disruptions",
+        "status": "current",
+        "timeZone": "America/Edmonton",
+        "updatedAt": "2026-11-15T08:17:55.000Z"
+      }
+    ],
+    "stale": false
+  }
 }

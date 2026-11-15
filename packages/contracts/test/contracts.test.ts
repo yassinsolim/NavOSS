@@ -263,7 +263,10 @@ describe('OfficialRoadEventResponseSchema', () => {
       { ...response, sources: [{ ...torontoSource, status: 'unavailable' }], degraded: true },
       { ...response, regionId: 'alberta' },
       { ...response, events: [{ ...torontoEvent, confidence: 'unverified' }] },
-      { ...response, events: [{ ...torontoEvent, coordinate: { latitude: 51.04, longitude: -114.07 } }] },
+      {
+        ...response,
+        events: [{ ...torontoEvent, coordinate: { latitude: 51.04, longitude: -114.07 } }],
+      },
     ]) {
       expect(OfficialRoadEventResponseSchema.safeParse(changed).success).toBe(false);
     }

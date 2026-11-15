@@ -49,9 +49,13 @@ export const IncidentRowSchema = LocationSchema.extend({
   start_dt_utc: z.string().min(1).optional(),
 });
 
-export const NoIncidentRowSchema = z.object({ incident_info: z.literal('NO TRAFFIC INCIDENTS') }).loose();
+export const NoIncidentRowSchema = z
+  .object({ incident_info: z.literal('NO TRAFFIC INCIDENTS') })
+  .loose();
 const DatasetRowsSchema = z.array(z.unknown()).max(1_000);
-export const DatasetMetadataSchema = z.object({ rowsUpdatedAt: z.number().int().positive() }).loose();
+export const DatasetMetadataSchema = z
+  .object({ rowsUpdatedAt: z.number().int().positive() })
+  .loose();
 
 export class CalgaryRoadEventProviderError extends Error {
   public constructor(message: string, options?: ErrorOptions) {
@@ -119,7 +123,10 @@ export function eventId(prefix: string, parts: readonly unknown[]): string {
   return `${prefix}:${createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 20)}`;
 }
 
-export function coordinate(row: z.infer<typeof LocationSchema>): { latitude: number; longitude: number } {
+export function coordinate(row: z.infer<typeof LocationSchema>): {
+  latitude: number;
+  longitude: number;
+} {
   const point = PointSchema.safeParse(row.point);
   let longitude: number;
   let latitude: number;

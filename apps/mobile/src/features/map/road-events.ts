@@ -190,7 +190,9 @@ export function roadEventSourceName(
     if (source !== undefined) return source.name;
   }
   if ('regionId' in event) return 'DriveBC';
-  return event.confidence === 'official' ? 'City of Calgary construction' : 'City of Calgary incidents';
+  return event.confidence === 'official'
+    ? 'City of Calgary construction'
+    : 'City of Calgary incidents';
 }
 
 /** "Official" or "Unverified", as each source describes itself. */
@@ -248,7 +250,10 @@ export function roadEventMessage(
 }
 
 /** Credits for the map attribution line, from the sources actually drawn. */
-export function roadEventCredit(snapshot: RoadEventSnapshot | undefined, now: number): string | undefined {
+export function roadEventCredit(
+  snapshot: RoadEventSnapshot | undefined,
+  now: number,
+): string | undefined {
   if (snapshot === undefined) return undefined;
   if (!isProvincialSnapshot(snapshot)) {
     return 'sources' in snapshot ? '© City of Calgary' : 'DriveBC';
@@ -277,10 +282,18 @@ export function roadEventSourceLines(
   return snapshot.sources.map((source) => {
     const label = `${source.name} · ${source.confidence === 'official' ? 'Official' : 'Unverified'}`;
     if (source.status === 'not-configured') {
-      return { sourceId: source.sourceId, text: `${source.name} · Not connected on this server`, tone: 'neutral' };
+      return {
+        sourceId: source.sourceId,
+        text: `${source.name} · Not connected on this server`,
+        tone: 'neutral',
+      };
     }
     if (!isSourceServed(source, now)) {
-      return { sourceId: source.sourceId, text: `${source.name} · Unavailable right now`, tone: 'warning' };
+      return {
+        sourceId: source.sourceId,
+        text: `${source.name} · Unavailable right now`,
+        tone: 'warning',
+      };
     }
     const updated =
       source.updatedAt === undefined
@@ -313,7 +326,8 @@ export function roadEventStatusLabel({
   refreshDelayed: boolean;
   snapshot: RoadEventSnapshot | undefined;
 }): string | undefined {
-  if (snapshot === undefined) return hasFeed && refreshDelayed ? 'Road events unavailable' : undefined;
+  if (snapshot === undefined)
+    return hasFeed && refreshDelayed ? 'Road events unavailable' : undefined;
   const delayed = refreshDelayed ? ' · Refresh delayed' : '';
   if (!isProvincialSnapshot(snapshot)) {
     const source =

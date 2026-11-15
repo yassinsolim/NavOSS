@@ -50,7 +50,9 @@ const RowSchema = z
     from_street: z.string().nullish(),
     impact: z.string().nullish(),
     on_street: z.string().trim().min(1),
-    point: z.object({ coordinates: z.tuple([z.number(), z.number()]), type: z.literal('Point') }).loose(),
+    point: z
+      .object({ coordinates: z.tuple([z.number(), z.number()]), type: z.literal('Point') })
+      .loose(),
     start_date: FloatingDateSchema,
     status: z.string(),
     to_street: z.string().nullish(),
@@ -105,7 +107,9 @@ export function normalizeEdmontonDisruption(input: unknown): ProvincialRoadEvent
     confidence: 'official',
     coordinate: { latitude, longitude },
     description: truncate(text === '' ? `${TYPE_LABELS[type]} on ${roadwayName}` : text, 4_000),
-    ...(row.finish_date == null || row.finish_date < row.start_date ? {} : { endsOn: row.finish_date }),
+    ...(row.finish_date == null || row.finish_date < row.start_date
+      ? {}
+      : { endsOn: row.finish_date }),
     id: `edmonton-disruption:${String(row.disruption_id)}`,
     isFullClosure: fullClosure,
     regionId: 'alberta',
@@ -147,8 +151,10 @@ export function createEdmontonRoadEventFeed(
       const rows = z.array(z.unknown()).max(5_000).parse(data.value);
       const rowsUpdatedAt =
         metadata.status === 'fulfilled'
-          ? z.object({ rowsUpdatedAt: z.number().int().positive() }).loose().safeParse(metadata.value)
-              .data?.rowsUpdatedAt
+          ? z
+              .object({ rowsUpdatedAt: z.number().int().positive() })
+              .loose()
+              .safeParse(metadata.value).data?.rowsUpdatedAt
           : undefined;
       const events: ProvincialRoadEvent[] = [];
       let droppedRows = 0;

@@ -73,10 +73,12 @@ export function RoadEventsSheet({
           {
             sourceId: 'legacy',
             text:
-              roadEventStatusLabel({ hasFeed: true, now, refreshDelayed: false, snapshot })?.replace(
-                /^Road events · /u,
-                '',
-              ) ?? '',
+              roadEventStatusLabel({
+                hasFeed: true,
+                now,
+                refreshDelayed: false,
+                snapshot,
+              })?.replace(/^Road events · /u, '') ?? '',
             tone: snapshot.stale ? ('warning' as const) : ('neutral' as const),
           },
         ];
@@ -157,7 +159,9 @@ export function RoadEventsSheet({
                           eyebrow={`${roadEventTypeLabel(event)} · ${roadEventConfidenceLabel(event)}`}
                           icon={TYPE_ICONS[event.type]}
                           iconTint={
-                            event.confidence === 'official' ? colors.primaryText : colors.warningText
+                            event.confidence === 'official'
+                              ? colors.primaryText
+                              : colors.warningText
                           }
                           onPress={() => {
                             onSelect(event);

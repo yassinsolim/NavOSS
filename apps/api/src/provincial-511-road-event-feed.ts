@@ -41,7 +41,8 @@ const PROVINCES = {
   },
   ontario: {
     descriptor: {
-      attribution: 'Contains information licensed under the Open Government Licence \u2013 Ontario.',
+      attribution:
+        'Contains information licensed under the Open Government Licence \u2013 Ontario.',
       confidence: 'official',
       documentationUrl: 'https://511on.ca/developers/doc',
       licenseUrl: 'https://www.ontario.ca/page/open-government-licence-ontario',
@@ -53,10 +54,7 @@ const PROVINCES = {
     },
     endpoint: 'https://511on.ca/api/v2/get/event',
   },
-} as const satisfies Record<
-  string,
-  { descriptor: RoadEventSourceDescriptor; endpoint: string }
->;
+} as const satisfies Record<string, { descriptor: RoadEventSourceDescriptor; endpoint: string }>;
 
 export type Provincial511Province = keyof typeof PROVINCES;
 
@@ -200,7 +198,10 @@ export function createProvincial511RoadEventFeed(
   return createRoadEventFeed(
     descriptor,
     async ({ fetchJson }) => {
-      const rows = z.array(z.unknown()).max(10_000).parse(await fetchJson(url.toString()));
+      const rows = z
+        .array(z.unknown())
+        .max(10_000)
+        .parse(await fetchJson(url.toString()));
       const events: ProvincialRoadEvent[] = [];
       let droppedRows = 0;
       for (const row of rows) {

@@ -47,16 +47,31 @@ const calgaryIncident: RoadEvent = {
 
 describe('road-event feed per map region', () => {
   it('reads the province, with the older feed only where an older server had one', () => {
-    expect(roadEventFeedForMapRegion('calgary-ab')).toEqual({ legacy: 'calgary', provincial: 'alberta' });
-    expect(roadEventFeedForMapRegion('alberta')).toEqual({ legacy: undefined, provincial: 'alberta' });
+    expect(roadEventFeedForMapRegion('calgary-ab')).toEqual({
+      legacy: 'calgary',
+      provincial: 'alberta',
+    });
+    expect(roadEventFeedForMapRegion('alberta')).toEqual({
+      legacy: undefined,
+      provincial: 'alberta',
+    });
     expect(roadEventFeedForMapRegion('kelowna-bc')).toEqual({
       legacy: 'kelowna-bc',
       provincial: 'british-columbia',
     });
-    expect(roadEventFeedForMapRegion('ontario')).toEqual({ legacy: undefined, provincial: 'ontario' });
+    expect(roadEventFeedForMapRegion('ontario')).toEqual({
+      legacy: undefined,
+      provincial: 'ontario',
+    });
     // An unknown or unlocated position never falls back to another region's events.
-    expect(roadEventFeedForMapRegion('other')).toEqual({ legacy: undefined, provincial: undefined });
-    expect(roadEventFeedForMapRegion(undefined)).toEqual({ legacy: undefined, provincial: undefined });
+    expect(roadEventFeedForMapRegion('other')).toEqual({
+      legacy: undefined,
+      provincial: undefined,
+    });
+    expect(roadEventFeedForMapRegion(undefined)).toEqual({
+      legacy: undefined,
+      provincial: undefined,
+    });
   });
 });
 
@@ -114,20 +129,27 @@ describe('events in effect, newest first (recorded 2026-11-15)', () => {
   });
 
   it('drops a source past its maximum age and events past their planned end', () => {
-    const toronto = ontario.sources.find((source) => source.sourceId === 'toronto-road-restrictions');
+    const toronto = ontario.sources.find(
+      (source) => source.sourceId === 'toronto-road-restrictions',
+    );
     const checkedAt = Date.parse(toronto?.checkedAt ?? '');
     expect(currentRoadEvents(ontario, checkedAt + 3_599_000).length).toBeGreaterThan(0);
     expect(currentRoadEvents(ontario, checkedAt + 3_601_000)).toEqual([]);
 
     const ending = ontario.events[0];
     if (ending === undefined) throw new Error('fixture has events');
-    const snapshot = { ...ontario, events: [{ ...ending, endsAt: new Date(CAPTURED + 60_000).toISOString() }] };
+    const snapshot = {
+      ...ontario,
+      events: [{ ...ending, endsAt: new Date(CAPTURED + 60_000).toISOString() }],
+    };
     expect(currentRoadEvents(snapshot, CAPTURED)).toHaveLength(1);
     expect(currentRoadEvents(snapshot, CAPTURED + 61_000)).toHaveLength(0);
   });
 
   it('drops a date-only event after its last local day', () => {
-    const edmonton = alberta.events.find((event) => event.sourceId === 'edmonton-traffic-disruptions');
+    const edmonton = alberta.events.find(
+      (event) => event.sourceId === 'edmonton-traffic-disruptions',
+    );
     if (edmonton === undefined) throw new Error('fixture has an Edmonton event');
     const snapshot = { ...alberta, events: [{ ...edmonton, endsOn: '2026-11-15' }] };
     // 23:30 in Edmonton on the 15th, then 00:30 on the 16th.
@@ -144,11 +166,16 @@ describe('road-event wording', () => {
     expect(relativeAge(CAPTURED - 49 * 3_600_000, CAPTURED)).toBe('2 days ago');
     const event = ontario.events[0];
     if (event === undefined) throw new Error('fixture has events');
-    expect(roadEventAgeLabel({ ...event, updatedAt: new Date(CAPTURED - 5 * 60_000).toISOString() }, CAPTURED)).toBe(
-      'Updated 5 min ago',
-    );
+    expect(
+      roadEventAgeLabel(
+        { ...event, updatedAt: new Date(CAPTURED - 5 * 60_000).toISOString() },
+        CAPTURED,
+      ),
+    ).toBe('Updated 5 min ago');
     const edmonton = alberta.events.find((candidate) => candidate.startsOn !== undefined);
-    expect(edmonton === undefined ? undefined : roadEventAgeLabel(edmonton, CAPTURED)).toMatch(/^Since /u);
+    expect(edmonton === undefined ? undefined : roadEventAgeLabel(edmonton, CAPTURED)).toMatch(
+      /^Since /u,
+    );
   });
 
   it('labels each source official or unverified and names a missing key plainly', () => {
@@ -157,7 +184,9 @@ describe('road-event wording', () => {
     expect(lines.find((line) => line.startsWith('City of Calgary incidents'))).toMatch(
       /^City of Calgary incidents · Unverified/u,
     );
-    expect(lines.find((line) => line.startsWith('City of Edmonton'))).toMatch(/^City of Edmonton · Official/u);
+    expect(lines.find((line) => line.startsWith('City of Edmonton'))).toMatch(
+      /^City of Edmonton · Official/u,
+    );
   });
 
   it('says when a feed is not refreshing or unavailable rather than showing it as current', () => {
@@ -169,22 +198,48 @@ describe('road-event wording', () => {
       ),
       stale: true,
     };
-    expect(roadEventSourceLines(stale, CAPTURED)[1]?.text).toContain('Not refreshing, showing the last copy');
-    expect(roadEventStatusLabel({ hasFeed: true, now: CAPTURED, refreshDelayed: false, snapshot: stale })).toContain(
-      'Some not refreshing',
+    expect(roadEventSourceLines(stale, CAPTURED)[1]?.text).toContain(
+      'Not refreshing, showing the last copy',
     );
+    expect(
+      roadEventStatusLabel({
+        hasFeed: true,
+        now: CAPTURED,
+        refreshDelayed: false,
+        snapshot: stale,
+      }),
+    ).toContain('Some not refreshing');
     const expired = Date.parse(ontario.sources[1]?.checkedAt ?? '') + 2 * 3_600_000;
-    expect(roadEventSourceLines(ontario, expired)[1]?.text).toBe('City of Toronto · Unavailable right now');
-    expect(roadEventStatusLabel({ hasFeed: true, now: expired, refreshDelayed: true, snapshot: ontario })).toBe(
-      'Road events · 0 · Official · Some sources unavailable · Refresh delayed',
+    expect(roadEventSourceLines(ontario, expired)[1]?.text).toBe(
+      'City of Toronto · Unavailable right now',
     );
+    expect(
+      roadEventStatusLabel({
+        hasFeed: true,
+        now: expired,
+        refreshDelayed: true,
+        snapshot: ontario,
+      }),
+    ).toBe('Road events · 0 · Official · Some sources unavailable · Refresh delayed');
   });
 
   it('keeps the pill honest before anything loads and for older feeds', () => {
-    expect(roadEventStatusLabel({ hasFeed: true, now: CAPTURED, refreshDelayed: true, snapshot: undefined })).toBe(
-      'Road events unavailable',
-    );
-    expect(roadEventStatusLabel({ hasFeed: true, now: CAPTURED, refreshDelayed: false, snapshot: undefined })).toBeUndefined();
+    expect(
+      roadEventStatusLabel({
+        hasFeed: true,
+        now: CAPTURED,
+        refreshDelayed: true,
+        snapshot: undefined,
+      }),
+    ).toBe('Road events unavailable');
+    expect(
+      roadEventStatusLabel({
+        hasFeed: true,
+        now: CAPTURED,
+        refreshDelayed: false,
+        snapshot: undefined,
+      }),
+    ).toBeUndefined();
     expect(
       roadEventStatusLabel({
         hasFeed: true,
@@ -198,17 +253,26 @@ describe('road-event wording', () => {
   it('describes provincial and Calgary v1 events with their trust posture', () => {
     const unverified = alberta.events.find((event) => event.confidence === 'unverified');
     if (unverified !== undefined) {
-      expect(roadEventMessage(unverified, alberta, CAPTURED)).toMatch(/^Unverified City of Calgary incidents information/u);
+      expect(roadEventMessage(unverified, alberta, CAPTURED)).toMatch(
+        /^Unverified City of Calgary incidents information/u,
+      );
     }
     const official = ontario.events[0];
     if (official === undefined) throw new Error('fixture has events');
-    expect(roadEventMessage(official, ontario, CAPTURED)).toMatch(/^Official City of Toronto road information/u);
-    expect(roadEventMessage(calgaryIncident, undefined, CAPTURED)).toContain('Unverified current incident information');
+    expect(roadEventMessage(official, ontario, CAPTURED)).toMatch(
+      /^Official City of Toronto road information/u,
+    );
+    expect(roadEventMessage(calgaryIncident, undefined, CAPTURED)).toContain(
+      'Unverified current incident information',
+    );
   });
 
   it('draws every type on one of the three symbol layers and credits drawn sources', () => {
     expect(roadEventLayer({ ...calgaryIncident })).toBe('incident');
-    const collision = { ...ontario.events[0], type: 'collision' } as (typeof ontario.events)[number];
+    const collision = {
+      ...ontario.events[0],
+      type: 'collision',
+    } as (typeof ontario.events)[number];
     expect(roadEventLayer(collision)).toBe('incident');
     expect(roadEventCredit(alberta, CAPTURED)).toBe('City of Calgary · City of Edmonton');
     expect(roadEventCredit(ontario, CAPTURED)).toBe('City of Toronto');

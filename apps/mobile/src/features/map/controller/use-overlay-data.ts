@@ -204,7 +204,9 @@ export function useOverlayData({
     roadEventState?.feedKey === roadEventFeedKey ? roadEventState.snapshot : undefined;
   const roadEvents = useMemo(
     () =>
-      roadEventSnapshot === undefined ? NO_EVENTS : currentRoadEvents(roadEventSnapshot, Date.now()),
+      roadEventSnapshot === undefined
+        ? NO_EVENTS
+        : currentRoadEvents(roadEventSnapshot, Date.now()),
     [roadEventSnapshot],
   );
 

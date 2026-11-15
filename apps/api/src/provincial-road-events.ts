@@ -5,7 +5,10 @@ import {
   type ProvincialRoadEventResponse,
 } from '@navoss/contracts';
 
-import { createCalgaryConstructionRoadEventFeed, createCalgaryIncidentRoadEventFeed } from './calgary-province-road-event-feed.js';
+import {
+  createCalgaryConstructionRoadEventFeed,
+  createCalgaryIncidentRoadEventFeed,
+} from './calgary-province-road-event-feed.js';
 import { createDriveBcProvinceRoadEventFeed } from './drivebc-province-road-event-feed.js';
 import { createEdmontonRoadEventFeed } from './edmonton-road-event-feed.js';
 import type { RoadEventFeed, RoadEventFeedOptions } from './official-road-event-feed.js';
@@ -58,7 +61,9 @@ export function createProvincialRoadEventService(
       const snapshots = await Promise.all(feeds[region].map((feed) => feed.getSnapshot()));
       const sources = snapshots.map((snapshot) => snapshot.source);
       if (!sources.some((source) => source.status === 'current' || source.status === 'stale')) {
-        throw new ProvincialRoadEventsUnavailableError(`No ${region} road-event source is available.`);
+        throw new ProvincialRoadEventsUnavailableError(
+          `No ${region} road-event source is available.`,
+        );
       }
       const events = snapshots
         .flatMap((snapshot) => snapshot.events)
@@ -85,9 +90,10 @@ export function createProvincialRoadEventService(
  * `ALBERTA_511_API_KEY` and `ONTARIO_511_API_KEY`: developer keys for the 511 event APIs. Both are
  * optional; an absent or empty key leaves that feed `not-configured`.
  */
-export function roadEventKeysFromEnvironment(
-  environment: NodeJS.ProcessEnv = process.env,
-): { alberta511ApiKey?: string; ontario511ApiKey?: string } {
+export function roadEventKeysFromEnvironment(environment: NodeJS.ProcessEnv = process.env): {
+  alberta511ApiKey?: string;
+  ontario511ApiKey?: string;
+} {
   const alberta = environment.ALBERTA_511_API_KEY?.trim();
   const ontario = environment.ONTARIO_511_API_KEY?.trim();
   return {

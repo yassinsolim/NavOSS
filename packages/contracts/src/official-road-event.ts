@@ -228,10 +228,7 @@ export const ProvincialRoadEventSchema = z
         path: ['coordinate'],
       });
     }
-    if (
-      (event.confidence === 'unverified') !==
-      (event.sourceId === 'calgary-current-incidents')
-    ) {
+    if ((event.confidence === 'unverified') !== (event.sourceId === 'calgary-current-incidents')) {
       context.addIssue({
         code: 'custom',
         message: 'only Calgary current incidents are unverified',
@@ -249,7 +246,11 @@ export const ProvincialRoadEventSchema = z
         path: ['endsAt'],
       });
     }
-    if (event.startsOn !== undefined && event.endsOn !== undefined && event.endsOn < event.startsOn) {
+    if (
+      event.startsOn !== undefined &&
+      event.endsOn !== undefined &&
+      event.endsOn < event.startsOn
+    ) {
       context.addIssue({
         code: 'custom',
         message: 'road-event end date cannot precede its start date',
@@ -297,7 +298,11 @@ export const ProvincialRoadEventResponseSchema = z
   .superRefine((response, context) => {
     const sources = new Map(response.sources.map((source) => [source.sourceId, source]));
     if (sources.size !== response.sources.length) {
-      context.addIssue({ code: 'custom', message: 'duplicate road-event source', path: ['sources'] });
+      context.addIssue({
+        code: 'custom',
+        message: 'duplicate road-event source',
+        path: ['sources'],
+      });
     }
     for (const [index, source] of response.sources.entries()) {
       if (PROVINCIAL_SOURCE_REGIONS[source.sourceId] !== response.regionId) {

@@ -516,7 +516,8 @@ describe('official road events by region', () => {
     regionId: 'ontario',
     sources: [
       {
-        attribution: 'Contains information licensed under the Open Government Licence \u2013 Ontario.',
+        attribution:
+          'Contains information licensed under the Open Government Licence \u2013 Ontario.',
         confidence: 'official',
         documentationUrl: 'https://511on.ca/developers/doc',
         eventCount: 0,
@@ -530,7 +531,8 @@ describe('official road events by region', () => {
         timeZone: 'America/Toronto',
       },
       {
-        attribution: 'Contains information licensed under the Open Government Licence \u2013 Toronto.',
+        attribution:
+          'Contains information licensed under the Open Government Licence \u2013 Toronto.',
         checkedAt: '2026-11-15T09:58:00.000Z',
         confidence: 'official',
         documentationUrl: 'https://open.toronto.ca/dataset/road-restrictions/',

@@ -37,7 +37,9 @@ const LICENSE_URL = 'https://data.calgary.ca/d/Open-Data-Terms/u45n-7awa';
 /** `start_dt_utc` style text (`2026-11-13 04:42:51+00:00`) or floating Calgary wall time. */
 function instant(local: string | undefined, utc: string | undefined): string | undefined {
   if (utc !== undefined) {
-    const match = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(\.\d{1,3})?(?:Z|\+00:00)?$/u.exec(utc);
+    const match = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(\.\d{1,3})?(?:Z|\+00:00)?$/u.exec(
+      utc,
+    );
     if (match === null) throw new Error('Invalid UTC timestamp.');
     const time = Date.parse(`${match[1] ?? ''}T${match[2] ?? ''}${match[3] ?? ''}Z`);
     if (!Number.isFinite(time)) throw new Error('Invalid UTC timestamp.');
@@ -120,7 +122,8 @@ function calgaryFeed(
   const metadataUrl = options.metadataUrl ?? `https://data.calgary.ca/api/views/${datasetId}`;
   return createRoadEventFeed(
     {
-      attribution: 'Contains information licensed under the Open Government Licence \u2013 City of Calgary.',
+      attribution:
+        'Contains information licensed under the Open Government Licence \u2013 City of Calgary.',
       confidence: construction ? 'official' : 'unverified',
       documentationUrl: `https://data.calgary.ca/d/${datasetId}`,
       licenseUrl: LICENSE_URL,

@@ -40,14 +40,21 @@ const RowSchema = z
     geography: z.union([
       z.object({ coordinates: PairSchema, type: z.literal('Point') }).loose(),
       z
-        .object({ coordinates: z.array(PairSchema).min(1).max(20_000), type: z.literal('LineString') })
+        .object({
+          coordinates: z.array(PairSchema).min(1).max(20_000),
+          type: z.literal('LineString'),
+        })
         .loose(),
     ]),
     id: z.string().min(1).max(120),
     roads: z
       .array(
         z
-          .object({ direction: z.string().optional(), name: z.string().optional(), state: z.string().optional() })
+          .object({
+            direction: z.string().optional(),
+            name: z.string().optional(),
+            state: z.string().optional(),
+          })
           .loose(),
       )
       .max(20)
@@ -56,7 +63,11 @@ const RowSchema = z
       .object({
         intervals: z.array(z.string()).max(500).optional(),
         recurring_schedules: z
-          .array(z.object({ end_date: z.string().optional(), start_date: z.string().optional() }).loose())
+          .array(
+            z
+              .object({ end_date: z.string().optional(), start_date: z.string().optional() })
+              .loose(),
+          )
           .max(100)
           .optional(),
       })
@@ -128,7 +139,8 @@ function eventType(row: z.infer<typeof RowSchema>, closed: boolean): ProvincialR
 function representative(
   row: z.infer<typeof RowSchema>,
 ): { latitude: number; longitude: number } | undefined {
-  const pairs = row.geography.type === 'Point' ? [row.geography.coordinates] : row.geography.coordinates;
+  const pairs =
+    row.geography.type === 'Point' ? [row.geography.coordinates] : row.geography.coordinates;
   const envelope = PROVINCIAL_ROAD_EVENT_ENVELOPES['british-columbia'];
   const inside = pairs.filter(
     ([longitude, latitude]) =>

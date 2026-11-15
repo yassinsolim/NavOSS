@@ -82,12 +82,7 @@ describe('DriveBC traffic camera provider', () => {
     const withoutImages = createDriveBcTrafficCameraProvider({
       fetchImplementation: () =>
         Promise.resolve(
-          csvResponse(
-            [
-              header.replace('"links_imageURL"', '"links_image"'),
-              north,
-            ].join('\n'),
-          ),
+          csvResponse([header.replace('"links_imageURL"', '"links_image"'), north].join('\n')),
         ),
     });
     await expect(withoutImages.getCameras()).rejects.toBeInstanceOf(

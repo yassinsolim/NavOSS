@@ -35,7 +35,7 @@ export interface RoadEventFeedLoad {
 }
 
 export interface RoadEventFeedContext {
-  fetchJson(url: string, init?: { headers?: Record<string, string> }): Promise<unknown>;
+  fetchJson: (url: string, init?: { headers?: Record<string, string> }) => Promise<unknown>;
   now: number;
 }
 
@@ -167,9 +167,10 @@ export function zonedTimeToInstant(
 
 /** Parses `YYYY-MM-DD[T ]HH:MM[:SS[.fff]]` without an offset as wall time in `timeZone`. */
 export function parseLocalDateTime(value: string, timeZone: string): number | undefined {
-  const match = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?$/u.exec(
-    value.trim(),
-  );
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?$/u.exec(
+      value.trim(),
+    );
   if (match === null) return undefined;
   const [year, month, day, hour, minute, second] = [1, 2, 3, 4, 5, 6].map((index) =>
     Number(match[index] ?? 0),
@@ -190,7 +191,7 @@ export function parseLocalDateTime(value: string, timeZone: string): number | un
     timeZone,
   );
   // Reject calendar overflow such as 2026-02-31 (Canadian transitions never cross midnight).
-  return localDate(instant, timeZone) === `${match[1]}-${match[2]}-${match[3]}`
+  return localDate(instant, timeZone) === `${match[1] ?? ''}-${match[2] ?? ''}-${match[3] ?? ''}`
     ? instant
     : undefined;
 }
@@ -312,9 +313,7 @@ export function createRoadEventFeed(
     if (lastValid === undefined || now - lastValid.checkedAt > maximumAgeMs) {
       return { events: [], source: { ...base, status: 'unavailable' } };
     }
-    const events = lastValid.events.filter((event) =>
-      isInEffect(event, now, descriptor.timeZone),
-    );
+    const events = lastValid.events.filter((event) => isInEffect(event, now, descriptor.timeZone));
     return {
       events,
       source: {
