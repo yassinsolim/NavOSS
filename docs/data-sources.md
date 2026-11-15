@@ -155,27 +155,28 @@ preserves relevance for unique names and nearest-first order for chains. This hi
 the device. Submitting a search exposes map markers through a compact results strip, with Show
 list available to return to the full list.
 
-OpenStreetMap does not provide a Google-style review corpus. NavOSS does not scrape reviews, call the
-Places web service for review, rating or photo values, or add Google values to its open-data result,
-shared contracts or server. Builds made with the `production-carplay-google` profile embed Google's
-Places UI Kit Place Details component (Essentials tier, `PlaceDetailsView`, GooglePlacesSwift 10.15.0)
-on the phone place sheet for named places, businesses and landmarks; street addresses, streets,
-neighbourhoods and dropped pins are not queried. The phone first resolves the selected name and, when known, its street address with a
-Places text search restricted to a box of about 200 m around the selected coordinate that asks for
-the place ID only (the free Text Search Essentials IDs Only SKU, one result). Google's Place Details
-callback carries no display name, so this is how the right business is found: no ID, no Google
-section. A resolved place then takes an anonymous grant from the NavOSS server's 8,000-per-month
-counter, and the component loads that place ID live and is shown only if Google's place lies within
-200 m of the selection. It renders, with Google's attribution and in its own visually separated block
-below the OpenStreetMap details, every element that tier offers: photos, address, rating and rating
-count, type, price level, accessible entrance, open-now status, opening hours, summary, website,
-phone number, type-specific highlights, reviews, plus code and feature list. Places UI Kit is billed
-per component load, not per element. The place ID is held in memory only and nothing from Google is
-kept. CarPlay shows no Google content. The separate **More reviews on Google Maps** command is an
-explicit external search and opens only after the user chooses it. The SDK's privacy manifest
-declares location, Device ID, Other Data, performance, product interaction, and search history
-collection for analytics and/or app functionality, with no tracking. Builds without the restricted
-Google key make no Google place-details request and do not link that SDK.
+OpenStreetMap does not provide a Google-style review corpus. NavOSS does not scrape reviews, call
+Google Maps Platform web services or other Core Services such as Places API text search (Google's
+terms do not allow their content with a non-Google map), or add Google values to its open-data
+result, shared contracts or server. Builds made with the `production-carplay-google` profile embed
+only Google's Places UI Kit components (Essentials tier, GooglePlacesSwift 10.15.0), which Google
+allows next to a non-Google map. On the phone place sheet for named places, businesses and landmarks
+(not street addresses, streets, neighbourhoods or dropped pins), Place Details is queried by the
+selected coordinate and shows Google's listing nearest that spot, with Google's own name for it and
+every element that tier offers: photos, address, rating and rating count, type, price level,
+accessible entrance, open-now status, opening hours, summary, website, phone number, type-specific
+highlights, reviews, plus code and feature list. Google's callback carries no name, so the only
+check NavOSS can make is distance: the panel is shown only when Google's listing is within 30 m of
+the selection, and it is labelled as Google's nearest listing rather than the same business. **Find
+this place on Google** shows Google's Place Search component for the place's name near the
+coordinate; the listing the driver picks then loads in Place Details. Each component load (automatic
+panel, search list, picked listing) takes an anonymous grant from the NavOSS server's
+8,000-per-month counter and is billed by Google per load. Nothing from Google is kept. CarPlay shows
+no Google content. The separate **More reviews on Google Maps** command is an explicit external
+search and opens only after the user chooses it. The SDK's privacy manifest declares location,
+Device ID, Other Data, performance, product interaction, and search history collection for analytics
+and/or app functionality, with no tracking. Builds without the restricted Google key make no Google
+place-details request and do not link that SDK.
 
 ## Live Traffic Routing
 

@@ -95,7 +95,7 @@ An enabled artifact must use matching App Store Connect answers and review notes
 validator and config plugin fail closed when the flag has no key. Checked-in production profiles
 explicitly set `NAVOSS_GOOGLE_PLACES_ENABLED=0`; disabled builds do not link GooglePlacesSwift or
 make place-details requests. Enabled builds use the Essentials `PlaceDetailsView` (billed per load,
-with every content element it offers) rather than the Pro `AdvancedPlaceDetailsView`. The hosted
+with every content element it offers) and `PlaceSearchView` rather than the Pro `AdvancedPlaceDetailsView`. The hosted
 workflow `ios-testflight-runner.yml` builds it with `profile: production-carplay-google`; `eas build --local`
 loads the profile's `production` variables into the local build job (`EAS_BUILD=true`). Local
 builds load only "Plain text" and "Sensitive" variables, never "Secret" ones (stated in the EAS log
@@ -123,12 +123,12 @@ the restricted value is stored only as the sensitive EAS production variable
 `GOOGLE_PLACES_IOS_API_KEY` (re-created as sensitive on 2026-11-15; it was secret before). Google quotas are 250 standard queries/day, 30/minute, and
 10/minute/user; unused Advanced and Session paths are limited to 1/day and 1/minute. This bounds a
 31-day month to 7,750 standard queries before the independent NavOSS 8,000/month counter.
-Places API (New) (`places.googleapis.com`) is also enabled on the project and is the key's second
-API target, for the place-ID lookup only: Text Search is capped at 300 requests/day and 20/minute for
-the whole project, and every other Places (New) method (place details, nearby, autocomplete,
-photos, media, review posts) is capped at 0 (2026-11-15). The lookup requests the place ID only
-(Text Search Essentials IDs Only) and takes no NavOSS grant; a quota error from it ends in "no
-Google section" or "temporarily unavailable" without a retry.
+The app uses only Places UI Kit components (Place Details and, after the driver asks, Place
+Search). Places API (New) web-service methods such as Text Search are Core Services that Google's
+terms (3.2.3(e)) do not allow with a non-Google map; `places.googleapis.com` was removed from the
+key and disabled on the project on 2026-11-15. Place Search is billed each time its request is set,
+like any UI Kit load, and every load (automatic panel, search list, picked listing) takes a NavOSS
+grant.
 
 An 80% standard daily-quota alert sends to the `NavOSS Google Cloud alerts` email channel. A CAD $1
 monthly budget scoped only to the NavOSS project and Places UI Kit alerts billing admins, project

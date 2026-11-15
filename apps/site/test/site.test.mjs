@@ -153,9 +153,9 @@ test('legal and support pages keep their published commitments', () => {
   assert.match(privacy, /No advertising or cross-app tracking/);
   assert.match(
     privacy,
-    /sends that place's public name, its public street address when NavOSS has one, and a box/,
+    /for the Google listing at the selected coordinate; the place name is not sent/,
   );
-  assert.match(privacy, /answers with at most one place ID/);
+  assert.match(privacy, /Only when you choose Find this place on Google/);
   assert.match(privacy, /More reviews on Google Maps/);
   assert.match(privacy, /denies grants after 8,000 in a month/);
   assert.match(privacy, /no place name, coordinate, account, device identifier/);
