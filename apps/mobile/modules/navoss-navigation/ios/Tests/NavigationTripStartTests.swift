@@ -74,6 +74,9 @@ final class NavigationTripStartTests: XCTestCase {
     private(set) var endedOffRoute = false
     /// `history` index of the first update after the last relaunch.
     private(set) var relaunchedAt = 0
+    /// Injected failure: progress records are not written until the next relaunch, as if the
+    /// app were killed after the first match and before its record.
+    var dropsNextProgressRecord = false
 
     init(
       selected: NavOSSCarPlayTrip,
@@ -106,6 +109,7 @@ final class NavigationTripStartTests: XCTestCase {
       lastRecord = nil
       lastRecordAt = nil
       relaunchedAt = history.count
+      dropsNextProgressRecord = false
       guard let store, let trip = store.load() else { return }
       let resume = store.loadProgress(for: trip)
       try session.start(trip, resume: resume)
@@ -119,6 +123,7 @@ final class NavigationTripStartTests: XCTestCase {
         navOSSShouldPersistRecord(
           record, lastPersisted: lastRecord, now: now, lastPersistedAt: lastRecordAt)
       else { return }
+      if dropsNextProgressRecord, case .progress = record { return }
       lastRecord = record
       lastRecordAt = now
       store.save(record, forTripId: trip.id)
@@ -840,6 +845,128 @@ final class NavigationTripStartTests: XCTestCase {
     XCTAssertNotNil(snapshot.matchedCoordinate)
     XCTAssertEqual(
       snapshot.routeProgress * (trip.session.routeLengthMeters ?? 0), 6_000, accuracy: 200)
+  }
+
+  // MARK: A first match that fits more than one pass
+
+  /// A hairpin: 140 m north, 20 m east, then south past the start on the return arm 20 m from
+  /// the outbound one, and east to the destination. A fix on either arm fits both.
+  private static let hairpin: [(Double, Double)] = [
+    (0, 0), (0, 140), (20, 140), (20, -600), (600, -600),
+  ]
+
+  private static func legTrip(_ corners: [(Double, Double)]) -> NavOSSCarPlayTrip {
+    func carPlay(_ points: [NavigationCoordinate]) -> [NavOSSCarPlayCoordinate] {
+      points.map { NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude) }
+    }
+    var steps: [NavOSSCarPlayRouteStep] = []
+    for (index, (start, end)) in zip(corners, corners.dropFirst()).enumerated() {
+      let length = hypot(end.0 - start.0, end.1 - start.1)
+      steps.append(
+        NavOSSCarPlayRouteStep(
+          distanceMeters: length, durationSeconds: length / 10,
+          geometry: carPlay(NavigationTrace.route([start, end])),
+          instruction: index == 0 ? "Head north" : "Turn \(index == 3 ? "left" : "right")",
+          maneuverType: index == 0 ? "depart" : "turn", roadName: "Hairpin \(index)"))
+    }
+    let last = corners[corners.count - 1]
+    let end = NavigationTrace.coordinate(last.0, last.1)
+    steps.append(
+      NavOSSCarPlayRouteStep(
+        distanceMeters: 0, durationSeconds: 0, geometry: carPlay([end, end]),
+        instruction: "Arrive", maneuverType: "arrive", roadName: ""))
+    return NavOSSCarPlayTrip(
+      destination: NavOSSCarPlayDestination(
+        id: "d", label: "d", latitude: end.latitude, longitude: end.longitude, name: "d"),
+      distanceMeters: steps.reduce(0) { $0 + $1.distanceMeters },
+      durationSeconds: steps.reduce(0) { $0 + $1.durationSeconds },
+      geometry: carPlay(NavigationTrace.route(corners)), id: "hairpin", steps: steps)
+  }
+
+  private func along(_ trip: TripHarness) -> Double? {
+    trip.latest.flatMap { update in
+      update.snapshot.matchedCoordinate.map { _ in
+        update.snapshot.routeProgress * (trip.session.routeLengthMeters ?? 0)
+      }
+    }
+  }
+
+  /// Stopped halfway down the return arm, then driving south on it: nothing is matched,
+  /// guided or spoken from the outbound arm, and once the heading tells the arms apart the
+  /// return arm is matched and guided.
+  private func assertJoinsTheReturnArm(
+    _ trip: TripHarness, _ label: String, file: StaticString = #filePath, line: UInt = #line
+  ) throws {
+    let stopped = trip.history.count
+    for _ in 0..<15 {
+      try trip.fix(NavigationTrace.coordinate(20, 70), speed: 0, after: 2)
+    }
+    assertAcquiring(trip.history[stopped...], "\(label): stopped on the return arm", file: file, line: line)
+    var y = 70.0
+    while along(trip) == nil, y > -200 {
+      y -= 10
+      try trip.fix(NavigationTrace.coordinate(20, y), speed: 10, course: 180, after: 1)
+    }
+    let joined = try XCTUnwrap(along(trip), label, file: file, line: line)
+    XCTAssertGreaterThan(joined, 160, "\(label): matched on the return arm", file: file, line: line)
+    while y > -500 {
+      y -= 10
+      try trip.fix(NavigationTrace.coordinate(20, y), speed: 10, course: 180, after: 1)
+    }
+    XCTAssertTrue(
+      trip.history[stopped...].contains { $0.prompt != nil }, "\(label): guided once matched",
+      file: file, line: line)
+    XCTAssertFalse(trip.endedOffRoute, label, file: file, line: line)
+    XCTAssertEqual(trip.requests, 0, label, file: file, line: line)
+  }
+
+  /// Review of this change: started parked off the road, closed before the first match; while
+  /// the app was closed the car was moved onto the return arm of a hairpin. Its stopped fixes
+  /// fit both arms; the outbound arm must not be taken for it.
+  func testARestoredTripOnTheReturnArmOfAHairpinIsNotPlacedOnTheOutboundArm() throws {
+    let selected = Self.legTrip(Self.hairpin)
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    let trip = try TripHarness(
+      selected: selected, preview: [selected], reroute: replacement, persisting: true)
+    try trip.standStill(at: NavigationTrace.coordinate(-100, 0), seconds: 20)
+    try trip.relaunch(after: 120)
+    try assertJoinsTheReturnArm(trip, "restored")
+  }
+
+  /// The same exposure without a relaunch: the route was asked for at its start, and the
+  /// trip's first fix is on the return arm (the car was moved after the preview, before Start,
+  /// or location came back only there). A first fix at the route's beginning is where the
+  /// route was asked for: one there that also fits the return arm is matched at once.
+  func testAFreshStartFirstPlacedOnTheReturnArmOfAHairpinIsNotPlacedOnTheOutboundArm() throws {
+    let selected = Self.legTrip(Self.hairpin)
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    let trip = try TripHarness(selected: selected, preview: [selected], reroute: replacement)
+    try assertJoinsTheReturnArm(trip, "fresh")
+
+    let atStart = try TripHarness(selected: selected, preview: [selected], reroute: replacement)
+    try atStart.fix(NavigationTrace.coordinate(0, 10), speed: 0, after: 1)
+    XCTAssertEqual(try XCTUnwrap(along(atStart)), 10, accuracy: 2, "matched at once at the start")
+  }
+
+  /// Review of this change: the first match is followed by its progress record, and the app is
+  /// killed between the two (injected here: the record is not written). The trip is restored
+  /// as one before its first match, so it is placed only on a pass a fix identifies.
+  func testATripKilledBeforeItsFirstMatchWasRecordedIsPlacedConservatively() throws {
+    let selected = Self.legTrip(Self.hairpin)
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    let trip = try TripHarness(
+      selected: selected, preview: [selected], reroute: replacement, persisting: true)
+    try trip.standStill(at: NavigationTrace.coordinate(-100, 0), seconds: 10)
+    trip.dropsNextProgressRecord = true
+    try trip.drive(
+      [NavigationTrace.coordinate(-100, 0), NavigationTrace.coordinate(0, 0),
+        NavigationTrace.coordinate(0, 60)], speed: 10)
+    XCTAssertTrue(trip.session.hasMatchedRoute)
+    guard case .beforeFirstMatch = try XCTUnwrap(trip.store).loadProgress(for: selected) else {
+      return XCTFail("the first match's record was not dropped")
+    }
+    try trip.relaunch(after: 60)
+    try assertJoinsTheReturnArm(trip, "killed between the match and its record")
   }
 
   private static func syntheticTrip(_ points: [NavigationCoordinate]) -> NavOSSCarPlayTrip {
