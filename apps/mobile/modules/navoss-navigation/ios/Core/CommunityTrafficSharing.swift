@@ -150,7 +150,9 @@ public enum NavOSSTrafficSharingState: Equatable, Sendable {
 
 /// Where the uploader keeps the one thing it persists: the time before which this installation
 /// must not ask for a credential again after a `403` with `retry-after`. A deadline, never a
-/// position or an identifier. Without `defaults` it lives in memory (tests).
+/// position or an identifier, though it says roughly when the installation registered (the
+/// server answers `403` for a day after registration), so Reset community identity clears it.
+/// Without `defaults` it lives in memory (tests).
 public final class NavOSSTrafficEmbargoStore: @unchecked Sendable {
   public static let shared = NavOSSTrafficEmbargoStore(defaults: .standard)
 
@@ -167,6 +169,14 @@ public final class NavOSSTrafficEmbargoStore: @unchecked Sendable {
     lock.withLock {
       guard let defaults else { return memory }
       return defaults.object(forKey: Self.key) as? Date
+    }
+  }
+
+  /// Forgets the deadline (Reset community identity: it tells roughly when the old installation
+  /// registered).
+  public func clear() {
+    lock.withLock {
+      if let defaults { defaults.removeObject(forKey: Self.key) } else { memory = nil }
     }
   }
 

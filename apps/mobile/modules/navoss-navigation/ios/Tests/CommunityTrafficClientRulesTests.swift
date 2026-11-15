@@ -409,7 +409,10 @@ final class CommunityTrafficServiceRulesTests: XCTestCase {
     service.navigationDidStart(trip())
     let sharing = await eventually { service.trafficSharingState() == .sharing }
     XCTAssertTrue(sharing)
+    // A 403 deadline from earlier: it dates the old installation's registration.
+    embargo.save(start.addingTimeInterval(-60))
     try await service.resetIdentity()
+    XCTAssertNil(embargo.load(), "Reset forgets the stored credential deadline")
     await settle()
     XCTAssertFalse(preferences.load().sharesTrafficSpeeds, "traffic sharing needs a new opt-in")
     XCTAssertFalse(preferences.load().sharesRoadReports, "report sharing needs a new opt-in")

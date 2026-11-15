@@ -55,6 +55,7 @@ public final class NavOSSCommunityService: @unchecked Sendable {
   private var routeProgress = 0.0
   /// The last traffic-switch write applied (see `NavOSSCommunityPreferencesStore.trafficSharing`).
   private var trafficSwitchSequence: UInt64 = 0
+  private let trafficEmbargo: NavOSSTrafficEmbargoStore
   private var lastTrafficTick: Date?
   let traffic: NavOSSTrafficSharingSession?
   private var trafficState: NavOSSTrafficSharingState = .off
@@ -82,6 +83,7 @@ public final class NavOSSCommunityService: @unchecked Sendable {
     self.preferencesStore = preferencesStore
     self.alertStore = alertStore
     self.notificationCenter = notificationCenter
+    self.trafficEmbargo = trafficEmbargo
     let sink = TrafficStateSink()
     let transport: NavOSSTrafficTransport? = trafficTransport ?? client
     traffic = transport.map { transport in
@@ -333,13 +335,15 @@ public final class NavOSSCommunityService: @unchecked Sendable {
 
   /// "Reset community identity": switches **Share road reports** and **Share traffic speeds**
   /// off (sharing again needs a new opt-in, even if the deletion below fails), stops the
-  /// uploader, then deletes the installation and its reports and votes on the server and forgets
-  /// the key. The next write registers a new, unrelated installation.
+  /// uploader and forgets the stored `403` deadline (it dates the old installation's
+  /// registration), then deletes the installation and its reports and votes on the server and
+  /// forgets the key. The next write registers a new, unrelated installation.
   public func resetIdentity() async throws {
     guard let client else { return }
     preferencesStore.setSharesTrafficSpeeds(false)
     preferencesStore.setSharesRoadReports(false)
     await traffic?.settled()
+    trafficEmbargo.clear()
     try await client.deleteInstallation()
     lock.withLock {
       ownReportIds.removeAll()
