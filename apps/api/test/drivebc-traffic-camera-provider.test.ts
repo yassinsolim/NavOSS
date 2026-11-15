@@ -5,14 +5,15 @@ import {
   DriveBcTrafficCameraProviderError,
 } from '../src/drivebc-traffic-camera-provider.js';
 
+// Rows recorded from the live DriveBC HighwayCams catalogue CSV on 2026-11-15.
 const header =
-  'links_bchighwaycam,links_imageDisplay,links_imageThumbnail,links_replayTheDay,id,highway_number,highway_locationDescription,camName,caption,credit,orientation,latitude,longitude';
+  '"id","cam_group","camName","links_camDetailsPage","links_imageURL","highway_number","caption","credit","region_name","orientation","latitude","longitude","elevation"';
 const north =
-  'https://images.drivebc.ca/bchighwaycam/pub/html/www/532.html,https://images.drivebc.ca/bchighwaycam/pub/cameras/532.jpg,https://images.drivebc.ca/bchighwaycam/pub/cameras/tn/532.jpg,https://images.drivebc.ca/ReplayTheDay/player.html?cam=532,532,97,Southern Interior Region,Lake Country - N,"Highway 97 in Lake Country by Wood Lake, looking north.",,N,50.057111,-119.407653';
+  '"532","532","Lake Country - N","https://www.drivebc.ca/cameras/532","https://www.drivebc.ca/images/532.jpg","97","Highway 97 in Lake Country by Wood Lake, looking north.","","Southern Interior","N","50.057111","-119.407653","399"';
 const south =
-  'https://images.drivebc.ca/bchighwaycam/pub/html/www/533.html,https://images.drivebc.ca/bchighwaycam/pub/cameras/533.jpg,https://images.drivebc.ca/bchighwaycam/pub/cameras/tn/533.jpg,https://images.drivebc.ca/ReplayTheDay/player.html?cam=533,533,97,Southern Interior Region,Lake Country - S,"Highway 97 in Lake Country by Wood Lake, looking south.",,S,50.057111,-119.407653';
+  '"533","532","Lake Country - S","https://www.drivebc.ca/cameras/533","https://www.drivebc.ca/images/533.jpg","97","Highway 97 in Lake Country by Wood Lake, looking south.","","Southern Interior","S","50.057111","-119.407653","399"';
 const outside =
-  'https://images.drivebc.ca/bchighwaycam/pub/html/www/999.html,https://images.drivebc.ca/bchighwaycam/pub/cameras/999.jpg,https://images.drivebc.ca/bchighwaycam/pub/cameras/tn/999.jpg,https://images.drivebc.ca/ReplayTheDay/player.html?cam=999,999,1,,Outside,"Outside the region.",,E,49.0,-119.4';
+  '"20","18","LGB North End 2","https://www.drivebc.ca/cameras/20","https://www.drivebc.ca/images/20.jpg","99","Lions Gate Bridge north end, looking north.","Counterflow operations in effect for Lions Gate Bridge -<a href=""https://www2.gov.bc.ca/gov/content?id=859F1B6A4CD74BBFA27C67A438A3B899"" target=""_blank"">read more here</a>.<br>","Lower Mainland","N","49.324198","-123.130153","20"';
 
 function csvResponse(body: string, status = 200): Response {
   return new Response(body, {
@@ -37,6 +38,11 @@ describe('DriveBC traffic camera provider', () => {
       ['drivebc-highwaycam:533', 'S'],
     ]);
     expect(response.cameras.map((camera) => camera.enforcement)).toEqual([false, false]);
+    expect(response.cameras[0]).toMatchObject({
+      imageUrl: 'https://www.drivebc.ca/images/532.jpg',
+      pageUrl: 'https://www.drivebc.ca/cameras/532',
+      thumbnailUrl: 'https://www.drivebc.ca/images/532.jpg',
+    });
     expect(response.source).toMatchObject({
       sourceId: 'drivebc-highwaycams',
       updatedAt: '2026-06-05T16:31:00.000Z',
@@ -44,7 +50,8 @@ describe('DriveBC traffic camera provider', () => {
   });
 
   it('accepts the official feed credit field with embedded HTML quotes', async () => {
-    const row = north.replace(',,N,', ',View <a href="https://example.com">details</a>,N,');
+    const credit = outside.slice(outside.indexOf('"Counterflow'), outside.indexOf(',"Lower'));
+    const row = north.replace('"","Southern', `${credit},"Southern`);
     const provider = createDriveBcTrafficCameraProvider({
       fetchImplementation: () => Promise.resolve(csvResponse([header, row].join('\n'))),
     });
@@ -54,7 +61,7 @@ describe('DriveBC traffic camera provider', () => {
 
   it('fails closed on invalid URLs, coordinates, or CSV columns', async () => {
     for (const row of [
-      north.replace('https://images.drivebc.ca/bchighwaycam/pub/html/www/532.html', 'not-a-url'),
+      north.replace('https://www.drivebc.ca/images/532.jpg', 'not-a-url'),
       north.replace('50.057111', 'north'),
       `${north},unexpected`,
     ]) {
@@ -63,6 +70,24 @@ describe('DriveBC traffic camera provider', () => {
       });
       await expect(provider.getCameras()).rejects.toBeInstanceOf(DriveBcTrafficCameraProviderError);
     }
+  });
+
+  it('tolerates added columns but fails closed when the image link column disappears', async () => {
+    const added = createDriveBcTrafficCameraProvider({
+      fetchImplementation: () =>
+        Promise.resolve(csvResponse([`${header},"new_column"`, `${north},"x"`].join('\n'))),
+    });
+    expect((await added.getCameras()).cameras).toHaveLength(1);
+
+    const withoutImages = createDriveBcTrafficCameraProvider({
+      fetchImplementation: () =>
+        Promise.resolve(
+          csvResponse([header.replace('"links_imageURL"', '"links_image"'), north].join('\n')),
+        ),
+    });
+    await expect(withoutImages.getCameras()).rejects.toBeInstanceOf(
+      DriveBcTrafficCameraProviderError,
+    );
   });
 
   it('returns no more than 24 hours of marked stale fallback', async () => {

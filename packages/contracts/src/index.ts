@@ -103,20 +103,39 @@ export { ProblemCodeSchema, ProblemDetailsSchema } from './problem.js';
 export type { ProblemCode, ProblemDetails } from './problem.js';
 
 export {
+  KelownaRoadEventResponseSchema,
+  KelownaRoadEventSchema,
+  KelownaRoadEventSourceSchema,
+  KelownaRoadEventTypeSchema,
   OfficialRoadEventQuerySchema,
   OfficialRoadEventRegionSchema,
   OfficialRoadEventResponseSchema,
-  OfficialRoadEventSchema,
-  OfficialRoadEventSourceSchema,
-  OfficialRoadEventTypeSchema,
+  PROVINCIAL_ROAD_EVENT_ENVELOPES,
+  ProvincialRoadEventRegionSchema,
+  ProvincialRoadEventResponseSchema,
+  ProvincialRoadEventSchema,
+  ProvincialRoadEventSourceIdSchema,
+  ProvincialRoadEventSourceSchema,
+  ProvincialRoadEventTypeSchema,
+  RoadEventSeveritySchema,
+  RoadEventSourceStatusSchema,
 } from './official-road-event.js';
 export type {
-  OfficialRoadEvent,
+  KelownaRoadEvent,
+  KelownaRoadEventResponse,
+  KelownaRoadEventSource,
+  KelownaRoadEventType,
   OfficialRoadEventQuery,
   OfficialRoadEventRegion,
   OfficialRoadEventResponse,
-  OfficialRoadEventSource,
-  OfficialRoadEventType,
+  ProvincialRoadEvent,
+  ProvincialRoadEventRegion,
+  ProvincialRoadEventResponse,
+  ProvincialRoadEventSource,
+  ProvincialRoadEventSourceId,
+  ProvincialRoadEventType,
+  RoadEventSeverity,
+  RoadEventSourceStatus,
 } from './official-road-event.js';
 
 export {

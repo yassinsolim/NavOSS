@@ -22,6 +22,7 @@ import {
   routeTrafficLabel,
 } from '../src/features/navigation/route-progress.js';
 import { recordedRoutes } from './route-fixtures.js';
+import ontarioRoadEvents from './fixtures/road-events/v2-events-ontario-2026-11-15.json' with { type: 'json' };
 
 const ROUTE_REQUEST = {
   alternatives: 0,
@@ -781,57 +782,25 @@ describe('fetchRoadEvents', () => {
 });
 
 describe('fetchOfficialRoadEvents', () => {
-  it('requests and validates official Ontario 511 events', async () => {
+  it('requests and validates a recorded provincial response', async () => {
     const response = await fetchOfficialRoadEvents({
       baseUrl: 'http://127.0.0.1:3001/',
       fetchImplementation: (input) => {
         expect(input).toBe('http://127.0.0.1:3001/v2/events?region=ontario');
         return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              degraded: false,
-              events: [
-                {
-                  confidence: 'official',
-                  coordinate: { latitude: 43.63599, longitude: -79.668724 },
-                  description: 'Construction on HWY 401 Eastbound.',
-                  direction: 'Eastbound',
-                  endsAt: '2026-08-24T05:00:00.000Z',
-                  id: 'ontario-511:1963:222249',
-                  isFullClosure: false,
-                  regionId: 'ontario',
-                  reportedAt: '2026-07-30T04:00:00.000Z',
-                  roadwayName: 'HWY 401',
-                  sourceId: 'ontario-511-events',
-                  startsAt: '2026-07-30T04:00:00.000Z',
-                  title: 'Construction on HWY 401',
-                  type: 'construction',
-                  updatedAt: '2026-07-30T20:00:00.000Z',
-                },
-              ],
-              generatedAt: '2026-07-30T20:32:00.000Z',
-              regionId: 'ontario',
-              source: {
-                apiDocumentationUrl: 'https://511on.ca/developers/doc',
-                attribution:
-                  'Contains information licensed under the Open Government Licence \u2013 Ontario.',
-                confidence: 'official',
-                licenseUrl: 'https://www.ontario.ca/page/open-government-licence-ontario',
-                refreshIntervalSeconds: 300,
-                sourceId: 'ontario-511-events',
-                updatedAt: '2026-07-30T20:00:00.000Z',
-              },
-              stale: false,
-            }),
-            { headers: { 'content-type': 'application/json' }, status: 200 },
-          ),
+          new Response(JSON.stringify(ontarioRoadEvents.response), {
+            headers: { 'content-type': 'application/json' },
+            status: 200,
+          }),
         );
       },
       region: 'ontario',
     });
 
-    expect(response.events[0]?.confidence).toBe('official');
-    expect(response.regionId).toBe('ontario');
+    expect('sources' in response && response.sources.map((source) => source.status)).toEqual([
+      'not-configured',
+      'current',
+    ]);
   });
 });
 

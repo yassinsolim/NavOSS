@@ -1,8 +1,8 @@
 import {
-  OfficialRoadEventResponseSchema,
-  OfficialRoadEventSchema,
-  type OfficialRoadEvent,
-  type OfficialRoadEventResponse,
+  KelownaRoadEventResponseSchema,
+  KelownaRoadEventSchema,
+  type KelownaRoadEvent,
+  type KelownaRoadEventResponse,
 } from '@navoss/contracts';
 import { z } from 'zod/v4';
 
@@ -108,7 +108,7 @@ export class DriveBcRoadEventProviderError extends Error {
 }
 
 export interface DriveBcRoadEventProvider {
-  getRoadEvents(): Promise<OfficialRoadEventResponse>;
+  getRoadEvents(): Promise<KelownaRoadEventResponse>;
   start?(): void;
   stop?(): void;
 }
@@ -203,13 +203,26 @@ function parseDriveBcTimestamp(value: string | undefined): string | undefined {
   return new Date(timestamp).toISOString();
 }
 
+/**
+ * Offsetless interval bounds are UTC: on 2026-11-15 the start of 121 of 298 live intervals equalled
+ * the event's `created` time in UTC, and none equalled it as Pacific wall time.
+ */
+function parseIntervalBound(value: string | undefined): string | undefined {
+  if (value === undefined || value === '') return undefined;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/u.test(value)) {
+    const timestamp = Date.parse(`${value}Z`);
+    return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined;
+  }
+  return parseDriveBcTimestamp(value);
+}
+
 function parseInterval(schedule: z.infer<typeof ScheduleSchema> | undefined): {
   endsAt?: string;
   startsAt?: string;
 } {
   const [start, end] = schedule?.intervals?.[0]?.split('/') ?? [];
-  const startsAt = parseDriveBcTimestamp(start);
-  const endsAt = parseDriveBcTimestamp(end);
+  const startsAt = parseIntervalBound(start);
+  const endsAt = parseIntervalBound(end);
   const recurring = schedule?.recurring_schedules?.[0];
   const recurringStartsAt = parseDriveBcTimestamp(
     recurring === undefined
@@ -235,7 +248,7 @@ function recurringScheduleDescription(
   return `Recurring daily work window ${recurring.daily_start_time}–${recurring.daily_end_time} on source-listed days through ${recurring.end_date} (America/Vancouver).`;
 }
 
-function normalizeEvent(row: z.infer<typeof Open511EventSchema>): OfficialRoadEvent | undefined {
+function normalizeEvent(row: z.infer<typeof Open511EventSchema>): KelownaRoadEvent | undefined {
   const coordinate = representativeCoordinate(row);
   if (coordinate === undefined) return undefined;
   const recurringDescription = recurringScheduleDescription(row.schedule);
@@ -255,7 +268,7 @@ function normalizeEvent(row: z.infer<typeof Open511EventSchema>): OfficialRoadEv
     type === 'construction' ? 'Construction' : type === 'closure' ? 'Closure' : 'Incident';
   const interval = parseInterval(row.schedule);
   const startsAt = interval.startsAt ?? new Date(row.created).toISOString();
-  return OfficialRoadEventSchema.parse({
+  return KelownaRoadEventSchema.parse({
     confidence: 'official',
     coordinate,
     description,
@@ -299,11 +312,11 @@ export function createDriveBcRoadEventProvider(
   const maximumStaleMs = options.maximumStaleMs ?? DEFAULT_MAXIMUM_STALE_MS;
   const refreshIntervalMs = options.refreshIntervalMs ?? cacheTtlMs;
   const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
-  let cached: { expiresAt: number; loadedAt: number; value: OfficialRoadEventResponse } | undefined;
+  let cached: { expiresAt: number; loadedAt: number; value: KelownaRoadEventResponse } | undefined;
   let interval: ReturnType<typeof setInterval> | undefined;
-  let refreshing: Promise<OfficialRoadEventResponse> | undefined;
+  let refreshing: Promise<KelownaRoadEventResponse> | undefined;
 
-  const loadRoadEvents = async (): Promise<OfficialRoadEventResponse> => {
+  const loadRoadEvents = async (): Promise<KelownaRoadEventResponse> => {
     const now = clock();
     if (cached !== undefined && now < cached.expiresAt) return cached.value;
     try {
@@ -321,7 +334,7 @@ export function createDriveBcRoadEventProvider(
           latest === undefined || event.updated > latest ? event.updated : latest,
         undefined,
       );
-      const value = OfficialRoadEventResponseSchema.parse({
+      const value = KelownaRoadEventResponseSchema.parse({
         degraded: false,
         events,
         generatedAt: new Date(now).toISOString(),
@@ -344,7 +357,7 @@ export function createDriveBcRoadEventProvider(
       return value;
     } catch (error: unknown) {
       if (cached !== undefined && now - cached.loadedAt <= maximumStaleMs) {
-        return OfficialRoadEventResponseSchema.parse({
+        return KelownaRoadEventResponseSchema.parse({
           ...cached.value,
           degraded: true,
           generatedAt: new Date(now).toISOString(),
@@ -358,7 +371,7 @@ export function createDriveBcRoadEventProvider(
     }
   };
 
-  const getRoadEvents = (): Promise<OfficialRoadEventResponse> => {
+  const getRoadEvents = (): Promise<KelownaRoadEventResponse> => {
     if (refreshing !== undefined) return refreshing;
     refreshing = loadRoadEvents().finally(() => {
       refreshing = undefined;

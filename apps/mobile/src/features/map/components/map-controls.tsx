@@ -29,6 +29,8 @@ export interface MapControlsProps {
   onOpenReport: () => void;
   onRecenter: () => void;
   onShowAttribution: () => void;
+  /** Opens the road-events list from the road-events status line. */
+  onOpenRoadEvents: () => void;
   onToggleOrientation: () => void;
   orientation: NavigationMapOrientation;
   /** Problems the driver must not miss, e.g. no basemap or no location. Joined with ` · `. */
@@ -61,6 +63,7 @@ export function MapControls({
   onOpenReport,
   onRecenter,
   onShowAttribution,
+  onOpenRoadEvents,
   onToggleOrientation,
   orientation,
   problems,
@@ -153,11 +156,18 @@ export function MapControls({
             </View>
           )}
           {roadEventStatus !== undefined && (
-            <View style={styles.creditPill}>
+            <Pressable
+              accessibilityHint="Opens the list of road events, newest first"
+              accessibilityLabel={roadEventStatus}
+              accessibilityRole="button"
+              hitSlop={12}
+              onPress={onOpenRoadEvents}
+              style={styles.creditPill}
+            >
               <Text maxFontSizeMultiplier={1.2} style={styles.statusText}>
                 {roadEventStatus}
               </Text>
-            </View>
+            </Pressable>
           )}
           {trafficStatus !== undefined && (
             <View
