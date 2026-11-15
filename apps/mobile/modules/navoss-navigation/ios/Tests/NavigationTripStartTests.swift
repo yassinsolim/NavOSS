@@ -466,22 +466,51 @@ final class NavigationTripStartTests: XCTestCase {
     XCTAssertLessThanOrEqual(driven, 650)
   }
 
+  /// Re-review of #133: a loop of 10 m radius (a parkade ramp, a small roundabout in a lot) at
+  /// 3 m/s, 55 m from the chosen route. No two fixes are more than 20 m apart and the distance
+  /// to the route never grows past its margin, so only the reported speed shows the travel: the
+  /// vehicle is rerouted once that travel passes the budget (its 45 m start plus 500 m, about
+  /// three minutes).
+  func testCirclingATightLoopBesideTheRouteIsReroutedOnReportedSpeed() throws {
+    let selected = Self.syntheticTrip(NavigationTrace.route([(-2_000.0, 55.0), (2_000.0, 55.0)]))
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    let trip = try TripHarness(selected: selected, preview: [selected], reroute: replacement)
+    var seconds = 0
+    while trip.requests == 0, seconds < 600 {
+      seconds += 1
+      let angle = Double(seconds) * 3 / 10
+      try trip.fix(
+        NavigationTrace.coordinate(10 * cos(angle), 10 * sin(angle)), speed: 3,
+        course: ((-angle * 180 / .pi).truncatingRemainder(dividingBy: 360) + 360)
+          .truncatingRemainder(dividingBy: 360),
+        after: 1)
+    }
+    XCTAssertEqual(trip.requests, 1)
+    XCTAssertEqual(trip.offRouteFixes, 1)
+    XCTAssertGreaterThanOrEqual(seconds, 170, "not before the budget is driven")
+    XCTAssertLessThanOrEqual(seconds, 200)
+  }
+
   /// Ten minutes parked off the road with the fix wandering never adds up to travel: half a
-  /// metre (the simulator), and within 15 m in every direction (a poor sky view).
+  /// metre (the simulator), and within 15 m in every direction (a poor sky view); with a
+  /// reported speed of zero, and with none.
   func testTenMinutesParkedOffTheRoadWithJitterIsNeverRerouted() throws {
     for (jitter, accuracy) in [(0.5, 5.0), (15.0, 10.0), (15.0, 5.0)] {
-      let (trip, express) = try harness(selecting: "Highway 401 Express")
-      var generator = SplitMix64(seed: 7)
-      for _ in 0..<600 {
-        let angle = Double(generator.next() % 3_600) / 3_600 * 2 * .pi
-        let radius = jitter * Double(generator.next() % 1_000) / 1_000
-        try trip.fix(
-          Self.offset(Self.parked, east: radius * cos(angle), north: radius * sin(angle)),
-          accuracy: accuracy, after: 1)
+      for speed in [nil, 0.0] as [Double?] {
+        let label = "jitter \(jitter) m, accuracy \(accuracy) m, speed \(String(describing: speed))"
+        let (trip, express) = try harness(selecting: "Highway 401 Express")
+        var generator = SplitMix64(seed: 7)
+        for _ in 0..<600 {
+          let angle = Double(generator.next() % 3_600) / 3_600 * 2 * .pi
+          let radius = jitter * Double(generator.next() % 1_000) / 1_000
+          try trip.fix(
+            Self.offset(Self.parked, east: radius * cos(angle), north: radius * sin(angle)),
+            speed: speed, accuracy: accuracy, after: 1)
+        }
+        XCTAssertEqual(trip.requests, 0, label)
+        XCTAssertEqual(trip.offRouteFixes, 0, label)
+        XCTAssertEqual(trip.activeRouteId, express.id, label)
       }
-      XCTAssertEqual(trip.requests, 0, "jitter \(jitter) m, accuracy \(accuracy) m")
-      XCTAssertEqual(trip.offRouteFixes, 0, "jitter \(jitter) m, accuracy \(accuracy) m")
-      XCTAssertEqual(trip.activeRouteId, express.id)
     }
   }
 
