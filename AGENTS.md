@@ -2,7 +2,7 @@
 
 ## Product and safety
 
-- NavOSS is a privacy-first navigation technical beta for iOS and CarPlay. The deployed search and routing service covers Canada; build 80 was distributed to internal testers and NavOSS Friends, and build 81 was uploaded on 2026-11-15 (see Current checkpoint).
+- NavOSS is a privacy-first navigation technical beta for iOS and CarPlay. The deployed search and routing service covers Canada; build 81 was distributed to internal testers and NavOSS Friends on 2026-11-15 (see Current checkpoint).
 - Claim only what the **deployed** service and the relevant **build** do. Build 80 supports lane guidance and signposts when returned by the server; build 70 uses v1 for Calgary and Kelowna. Reports are `attested` and opt-in traffic collection is `collect`: build 80 onward can share, earlier builds cannot. Reports from verified installations are unconfirmed until corroborated. Collected traffic is not displayed or used in routes; live traffic is unavailable. Offline regions for Alberta and the Calgary area are available; British Columbia has none.
 - Never invent route, traffic, closure, camera, place, or safety data. Fail conservatively.
 - Never log search text, route coordinates, raw location, or private trip history.
@@ -55,12 +55,12 @@ Any change to what a driver sees, hears, or is told (phone, CarPlay, spoken guid
 
 ## Current checkpoint
 
-- The latest uploaded build is `0.1.0 (81)` from `14dae86` (`main`, profile `production-carplay-google`): hosted run `43729757481`, EAS submission `5c6791e9-1d5e-4e15-ad7d-101f34d512fb` finished 2026-11-15 15:44 UTC. Signature, team, CarPlay, production App Attest and Google Places were verified. Apple processing and tester availability are unchecked; external distribution awaits an on-screen Canada check. It includes #120, #121 and #125. Build 80 was distributed to internal testers and NavOSS Friends; build 73 remains held.
+- The latest distributed build is `0.1.0 (81)` from `14dae86` (`main`, profile `production-carplay-google`): hosted run `43729757481`, EAS submission `5c6791e9-1d5e-4e15-ad7d-101f34d512fb` finished 2026-11-15 15:44 UTC. Signature, team, CarPlay, production App Attest and Google Places were verified. Apple processed it; at 17:54 UTC it was distributed to NavOSS Friends and App Store Connect shows Testing for that group and internal `testers`. It includes #120, #121 and #125. Build 73 remains held.
 - External TestFlight distribution is manual since #88: an upload no longer assigns to `NavOSS Friends` or starts Beta App Review; a maintainer runs `testflight-distribute.yml` for a chosen build. EAS reads event-triggered workflows from the default branch; whether the old trigger is deregistered is unverified. The internal `testers` group receives uploads.
-- **Canada cutover 2026-11-15 15:44 UTC:** API image from `4708d34`, rollback tag `navoss-api:pre-canada-registry`; data rollback backup `.env.pre-canada-20261115T154413Z`. `/v1/config` remains strict v1; `/v2/config` declares all 13 provinces and territories as Canada. The Alberta+BC matrix passed 22/22; staged and live Canada matrices passed 72/80, with eight threshold failures reviewed as real straight rural segments or Winnipeg–Brandon durations. Clients must still treat unknown `/v2/*` capabilities quietly.
-- Reports are `attested` and traffic is `collect`; live traffic is unavailable. Province-wide `/v2/events` serves Alberta, BC and Ontario; the phone list is in uploaded build 81, not builds 75 or 80. 511 Alberta and Ontario 511 need keys and are not configured. Offline regions remain Alberta and Calgary only.
+- **Canada cutover 2026-11-15 15:44 UTC:** API image was `4708d34`, with image rollback `navoss-api:pre-canada-registry` and data backup `.env.pre-canada-20261115T154413Z`. The current API image is from `36c8a9f` (#127), deployed 2026-11-15; its image rollback is `navoss-api:pre-canada-search-fixes`. `/v1/config` remains strict v1; `/v2/config` declares all 13 provinces and territories as Canada. Clients must still treat unknown `/v2/*` capabilities quietly.
+- Reports are `attested` and traffic is `collect`; live traffic is unavailable. Province-wide `/v2/events` serves Alberta, BC and Ontario; the phone list is in distributed build 81, not builds 75 or 80. 511 Alberta and Ontario 511 developer accounts await the owner's email confirmation; neither has a key and both remain disconnected. Offline regions remain Alberta and Calgary only.
 - Interactive CarPlay is unverified end to end. A hosted-runner probe (GitHub Actions, simulator host) showed the entitled icon but crashed Apple's `CarPlayTemplateUIHost` on iOS 26.4 (`CPSTemplateInstance vehicleSupportsDestinationSharing` unrecognized selector) before Search appeared, and host screen capture failed on 26.5. All CarPlay verification is the harness (production map, mocked template chrome) plus native tests; a head unit is required (`docs/release/next-build-checklist.md`).
-- Hosted CarPlay visuals run `43449279047` passed preflight, native tests, the simulator build, all 32 captures and pixel validation. This verifies the harness, not interactive head-unit operation.
+- Hosted CarPlay visuals run `43449279047` passed all 32 captures and pixel validation. Nightly run `43733475080` failed twice on 2026-11-15 when simulator boot status timed out after 120 seconds, after the app built and native tests passed; the same harness passed locally twice that day. Cause is unestablished. Neither result verifies interactive head-unit operation.
 - Build numbers and source commits must come from current EAS/App Store Connect evidence and `docs/release/testflight.md`, not from this file. Later source or test commits do not imply a new distributed binary.
 - Release source of truth: `docs/release/testflight.md`; next build conditions: `docs/release/next-build-checklist.md`; CarPlay design and gaps: `docs/architecture/carplay.md`.
 
@@ -86,7 +86,7 @@ Any change to what a driver sees, hears, or is told (phone, CarPlay, spoken guid
 
 ## Immediate next work
 
-1. Check build 81 on screen against the Canada service before external distribution; confirm Apple processing and tester availability. Keep live traffic unavailable and degrade quietly against servers without capabilities.
+1. Carry #127's long-trip formatter into the next build; verify it on screen on phone and CarPlay and compile the CarPlay change in Xcode. Keep live traffic unavailable and degrade quietly against servers without capabilities.
 2. Verify an offline download on a physical iPhone, the first App Attest registration and Google's place panel. Never retry build 73.
 3. Record real head-unit outcomes against the CarPlay checklist; interactive CarPlay remains unverified.
 4. Run focused checks and the applicable release gates before publishing changes; record exact build and distribution state rather than inferring it from a successful upload.

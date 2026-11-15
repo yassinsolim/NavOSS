@@ -90,7 +90,7 @@ test('homepage states what NavOSS is and keeps unreleased features labelled', ()
   assert.match(hero, /iOS \+ CarPlay technical beta/);
   assert.match(
     hero,
-    /The service covers Canada for search and routing\. Builds 75 and 80 follow the server's coverage\. Uploaded build 81 uses it once available to testers; Apple processing and availability have not been checked\./,
+    /The service covers Canada for search and routing\. Builds 75 and 80 follow the server's coverage\. Build 81 uses it and was distributed to testers on November 15, 2026\./,
   );
 
   const shipping = text(section(homepage, 'features'));
@@ -117,7 +117,7 @@ test('homepage states what NavOSS is and keeps unreleased features labelled', ()
   );
   assert.ok(
     items[1].includes(
-      'Uploaded in build 81 Province-wide road events The service has official events for Alberta, British Columbia and Ontario. The province-wide phone list is in uploaded build 81, once available to testers; builds 75 and 80 use Calgary and Kelowna feeds. 511 Alberta and Ontario 511 need keys and are not configured.',
+      'In build 81 Province-wide road events The service has official events for Alberta, British Columbia and Ontario. The province-wide phone list is in build 81, distributed to testers on November 15, 2026; builds 75 and 80 use Calgary and Kelowna feeds. 511 Alberta and Ontario 511 need keys and are not configured.',
     ),
   );
 
@@ -195,6 +195,10 @@ test('legal and support pages keep their published commitments', () => {
   );
   assert.match(privacy, /Effective November 15, 2026/);
   assert.match(
+    privacy,
+    /Build 81 was distributed to the internal testers group and NavOSS Friends on November 15, 2026\. External beta testing is running\./,
+  );
+  assert.match(
     dataSources,
     /Builds without the restricted Google key make no Google place-details request/,
   );
@@ -202,6 +206,7 @@ test('legal and support pages keep their published commitments', () => {
   assert.match(dataSources, /Geofabrik Canada 261114/);
   assert.match(dataSources, /declares all thirteen provinces and territories/);
   assert.match(support, /service covers Canada for search and routing/);
+  assert.match(support, /Build 81 uses it and was distributed to testers on November 15, 2026/);
   assert.match(dataSources, /illustrations on this website are original artwork/);
   assert.match(support, /GitHub Issues/);
   assert.match(support, /not an emergency service/);

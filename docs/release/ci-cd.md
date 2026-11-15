@@ -14,6 +14,10 @@ The delivery path is:
 
 EAS Submit sends iOS builds to TestFlight. It does not submit them for public App Store review.
 
+## Open item: CarPlay visuals runner
+
+Nightly run `43733475080` failed on both attempts on 2026-11-15: after the app built successfully and native tests passed, `xcrun simctl bootstatus` timed out after 120 seconds on the hosted runner. The same harness passed locally twice that day. The cause is not established; investigate the hosted simulator boot failure before treating the job as reliable. A local harness pass does not prove interactive CarPlay on a head unit.
+
 ## Local PR review
 
 There is currently no automatic PR review. The GitHub Action was removed because the repository

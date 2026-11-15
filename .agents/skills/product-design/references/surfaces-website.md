@@ -6,7 +6,7 @@
 
 - CSP from `site.json`: `script-src 'none'`, `style-src 'self'`, `img-src 'self' data:`, `font-src 'self'`, `frame-ancestors 'none'`. No inline scripts or style attributes, no third-party request of any kind (analytics, fonts, maps, embeds).
 - Every internal link resolves; every page shares one header and footer; the privacy "On this page" list must match the page's `<h2 id>` sections one for one.
-- The homepage's "In the app today" section may describe report sharing only with the build 80-and-later qualification and opt-in/unconfirmed status. Offline downloads are limited to Alberta and the Calgary area; BC has no offline region. Never claim live traffic is available: collection for evaluation is not display. Province-wide road events for Alberta, BC and Ontario are in uploaded build 81, not builds 75 or 80; tester availability is unchecked. Evidence: #120, #121, #125 (2026-11-15).
+- The homepage's "In the app today" section may describe report sharing only with the build 80-and-later qualification and opt-in/unconfirmed status. Offline downloads are limited to Alberta and the Calgary area; BC has no offline region. Never claim live traffic is available: collection for evaluation is not display. Province-wide road events for Alberta, BC and Ontario are in build 81, distributed to testers on 2026-11-15, not builds 75 or 80; 511 Alberta and Ontario 511 are not connected. Evidence: #120, #121, #125.
 - The hero must keep stating what the product is and the technical-beta status; illustrations are invented streets and say so.
 
 ## Design
