@@ -263,7 +263,7 @@ function normalizedCuisineWord(cuisine: string | undefined): string | undefined 
   return /^[a-z]+( [a-z]+)?$/.test(firstValue) ? firstValue : undefined;
 }
 
-function finalizeDetailCategory(rawCategory: string, cuisine?: string): string | undefined {
+export function finalizeDetailCategory(rawCategory: string, cuisine?: string): string | undefined {
   const rawTag = rawCategory.trim().toLocaleLowerCase('en-CA');
   if (rawTag === '' || OMITTED_PLACE_CATEGORIES[rawTag] === true) return undefined;
   const words = rawTag.replaceAll(/[_-]+/g, ' ').split(/\s+/).filter(Boolean);

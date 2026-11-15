@@ -152,6 +152,14 @@ corepack pnpm format:check
 
 CI runs those five, plus a check that `THIRD_PARTY_NOTICES.md` is current, native Swift tests, CarPlay generated-source parity and scene declarations, and the **PostGIS suites** (community reports and traffic) against a `postgis/postgis:16-3.5-alpine` service with `NAVOSS_REQUIRE_TEST_DATABASE=1`, so they fail instead of silently skipping. Locally those suites skip when no database variable is set.
 
+The read-only live search-quality harness uses the built API and contracts:
+`corepack pnpm build && corepack pnpm --filter @navoss/api test:search:live`. Set
+`NAVOSS_BASE_URL` to target another server. It checks all search categories at Calgary, Kelowna,
+Toronto, Montreal, Halifax and Winnipeg, plus Ontario events, Toronto cameras and an
+out-of-coverage search; requests start at least 550 ms apart. Failure output includes the query
+and returned rows. Category checks use the API's display-label mapping; labels shared by multiple
+OSM tags cannot identify the exact underlying tag.
+
 For native navigation changes also run `corepack pnpm --filter @navoss/mobile test:native:ios` and a full Xcode compile. Maestro journeys and the iOS validation harness are listed in [apps/mobile/README.md](apps/mobile/README.md) and [docs/testing/navigation-validation.md](docs/testing/navigation-validation.md).
 
 ## Limitations
