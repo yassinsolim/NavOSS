@@ -64,9 +64,14 @@ function routeProvider() {
   return { getEnrichedRoutes: route, getRoutes: route, route };
 }
 
+const names = (areas: readonly { displayName: string }[]) =>
+  areas.map(({ displayName }) => displayName);
+const areasOf = (...ids: string[]) => registeredServiceAreas().filter(({ id }) => ids.includes(id));
+
 async function createApp(options: Parameters<typeof buildApp>[0] = {}) {
   const app = await buildApp({
     clock: () => FIXED_DATE,
+    coveragePublication: { minRefreshMs: 0, startupMs: 0 },
     coverageReadiness: null,
     searchProvider: createFixtureSearchProvider([]),
     ...options,
@@ -128,7 +133,9 @@ describe('NAVOSS_SERVICE_AREAS', () => {
     ).toBe('alberta-british-columbia');
     expect(
       serviceCoverageFromEnvironment({
-        NAVOSS_SERVICE_AREAS: registeredServiceAreas().map(({ id }) => id).join(','),
+        NAVOSS_SERVICE_AREAS: registeredServiceAreas()
+          .map(({ id }) => id)
+          .join(','),
         NOMINATIM_DATASET_VERSION: 'canada-geofabrik-2026-11-14',
         NOMINATIM_URL: 'http://nominatim:8080/',
       }).displayName,
@@ -293,12 +300,14 @@ describe('per-province readiness', () => {
       fetchImplementation: fetchImplementation,
     });
     // The recorded graph and index are a Toronto sample: Ontario answers, Alberta and BC do not.
-    expect(await readiness.missingAreas()).toEqual(['Alberta', 'British Columbia']);
+    expect(names(await readiness.missingAreas())).toEqual(['Alberta', 'British Columbia']);
     expect(
-      await createCoverageReadiness(createServiceCoverage(['ontario']), {
-        ...endpoints,
-        fetchImplementation: fetchImplementation,
-      }).missingAreas(),
+      names(
+        await createCoverageReadiness(createServiceCoverage(['ontario']), {
+          ...endpoints,
+          fetchImplementation: fetchImplementation,
+        }).missingAreas(),
+      ),
     ).toEqual([]);
   });
 
@@ -310,13 +319,13 @@ describe('per-province readiness', () => {
       ...endpoints,
       fetchImplementation: recordedFetch(options),
     });
-    expect(await readiness.missingAreas()).toEqual(['Ontario']);
+    expect(names(await readiness.missingAreas())).toEqual(['Ontario']);
   });
 
   it('fails /ready when a declared province has no data, without leaking anything else', async () => {
     const app = await createApp({
       coverage: WESTERN_ONTARIO,
-      coverageReadiness: { missingAreas: () => Promise.resolve(['Ontario']) },
+      coverageReadiness: { missingAreas: () => Promise.resolve(areasOf('ontario')) },
     });
     const response = await app.inject({ method: 'GET', url: '/ready' });
     expect(response.statusCode).toBe(503);
@@ -333,5 +342,129 @@ describe('per-province readiness', () => {
     expect(ReadinessResponseSchema.parse(readyResponse.json()).checks.coverage?.detail).toBe(
       'Routing and search data answer for Alberta, British Columbia and Ontario.',
     );
+  });
+});
+
+describe('published coverage', () => {
+  // Data for the provinces in `answering` answers the readiness probes; the rest does not.
+  function readinessOver(answering: Set<string>, declared = WESTERN_ONTARIO) {
+    const missingAreas = vi.fn(() =>
+      Promise.resolve(declared.areas.filter(({ id }) => !answering.has(id))),
+    );
+    return { missingAreas };
+  }
+  const quick = { intervalMs: 60_000, minRefreshMs: 0, retryMs: 1, startupMs: 5 };
+  const torontoRoute = { destination: OTTAWA, origin: TORONTO };
+
+  async function publishedIds(app: FastifyInstance) {
+    const response = await app.inject({ method: 'GET', url: '/v2/config' });
+    expect(response.statusCode).toBe(200);
+    return AppConfigResponseSchema.parse(response.json()).coverage.serviceAreas.map(({ id }) => id);
+  }
+
+  it('publishes only the declared provinces whose data answered', async () => {
+    const provider = routeProvider();
+    const app = await createApp({
+      coverage: WESTERN_ONTARIO,
+      coveragePublication: quick,
+      coverageReadiness: readinessOver(new Set(['alberta', 'british-columbia'])),
+      routeProvider: provider,
+    });
+
+    expect(await publishedIds(app)).toEqual(['alberta', 'british-columbia']);
+    const config = AppConfigResponseSchema.parse(
+      (await app.inject({ method: 'GET', url: '/v2/config' })).json(),
+    );
+    expect(config.coverage.displayName).toBe('Alberta and British Columbia');
+    const toronto = await app.inject({ method: 'POST', payload: torontoRoute, url: '/v2/routes' });
+    expect(toronto.statusCode).toBe(400);
+    expect(ProblemDetailsSchema.parse(toronto.json()).title).toBe('Route outside coverage');
+    expect(provider.route).not.toHaveBeenCalled();
+    const calgary = await app.inject({
+      method: 'POST',
+      payload: { destination: VANCOUVER, origin: CALGARY },
+      url: '/v2/routes',
+    });
+    expect(calgary.statusCode).toBe(200);
+    const ready = await app.inject({ method: 'GET', url: '/ready' });
+    expect(ready.statusCode).toBe(503);
+    expect(ReadinessResponseSchema.parse(ready.json()).checks.coverage?.detail).toBe(
+      'Routing or search data do not answer for Ontario.',
+    );
+  });
+
+  it('answers 503 while no province has answered, and serves as soon as the data answers', async () => {
+    const answering = new Set<string>();
+    const readiness = readinessOver(answering);
+    const app = await createApp({
+      coverage: WESTERN_ONTARIO,
+      coveragePublication: { ...quick, intervalMs: 3_600_000 },
+      coverageReadiness: readiness,
+      routeProvider: routeProvider(),
+    });
+    const legacy = await createApp({ coverageReadiness: null });
+
+    const gated = [
+      app.inject({ method: 'GET', url: '/v2/config' }),
+      app.inject({ method: 'POST', payload: { limit: 3, q: 'Calgary Tower' }, url: '/v1/search' }),
+      ...['/v1/routes', '/v2/routes'].map((url) =>
+        app.inject({ method: 'POST', payload: { destination: VANCOUVER, origin: CALGARY }, url }),
+      ),
+    ];
+    for (const response of await Promise.all(gated)) {
+      expect(response.statusCode, response.body).toBe(503);
+      expect(ProblemDetailsSchema.parse(response.json()).code).toBe('service_unavailable');
+    }
+    // Build 70's strict v1 configuration never depends on it.
+    const v1 = await app.inject({ method: 'GET', url: '/v1/config' });
+    expect(v1.statusCode).toBe(200);
+    expect(v1.body).toBe((await legacy.inject({ method: 'GET', url: '/v1/config' })).body);
+    expect(LegacyAppConfigResponseSchema.safeParse(v1.json()).success).toBe(true);
+
+    // The dependency is back: the next request checks again and is served, no background wait.
+    answering.add('alberta').add('british-columbia').add('ontario');
+    expect(await publishedIds(app)).toEqual(['alberta', 'british-columbia', 'ontario']);
+    expect(
+      (await app.inject({ method: 'POST', payload: torontoRoute, url: '/v2/routes' })).statusCode,
+    ).toBe(200);
+  });
+
+  it('adds a province when its data answers later and never removes one', async () => {
+    const answering = new Set(['alberta', 'british-columbia']);
+    const app = await createApp({
+      coverage: WESTERN_ONTARIO,
+      coveragePublication: { ...quick, intervalMs: 10 },
+      coverageReadiness: readinessOver(answering),
+    });
+    expect(await publishedIds(app)).toEqual(['alberta', 'british-columbia']);
+
+    answering.add('ontario');
+    await vi.waitFor(async () => {
+      expect(await publishedIds(app)).toEqual(['alberta', 'british-columbia', 'ontario']);
+    });
+    // A later hiccup fails /ready but does not shrink what phones were told.
+    answering.clear();
+    expect((await app.inject({ method: 'GET', url: '/ready' })).statusCode).toBe(503);
+    expect(await publishedIds(app)).toEqual(['alberta', 'british-columbia', 'ontario']);
+  });
+
+  it('waits at startup for data that answers within the startup window', async () => {
+    const answering = new Set<string>();
+    const readiness = readinessOver(answering);
+    readiness.missingAreas.mockImplementation(() => {
+      // The dependencies come up on the third startup check.
+      if (readiness.missingAreas.mock.calls.length >= 3) {
+        answering.add('alberta').add('british-columbia').add('ontario');
+      }
+      return Promise.resolve(WESTERN_ONTARIO.areas.filter(({ id }) => !answering.has(id)));
+    });
+    const app = await createApp({
+      coverage: WESTERN_ONTARIO,
+      coveragePublication: { ...quick, startupMs: 5_000 },
+      coverageReadiness: readiness,
+    });
+    await app.ready();
+    expect(readiness.missingAreas).toHaveBeenCalledTimes(3);
+    expect(await publishedIds(app)).toEqual(['alberta', 'british-columbia', 'ontario']);
   });
 });

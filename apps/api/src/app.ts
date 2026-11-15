@@ -28,7 +28,13 @@ import {
   type RouteAlternativeV2,
   type ServiceCoverage,
 } from '@navoss/contracts';
-import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions } from 'fastify';
+import Fastify, {
+  LogController,
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+  type FastifyServerOptions,
+} from 'fastify';
 import {
   hasZodFastifySchemaValidationErrors,
   isResponseSerializationError,
@@ -49,6 +55,12 @@ import {
   type CommunityReportService,
 } from './community-reports.js';
 import { registerCommunityRoutes } from './community-routes.js';
+import {
+  createCoveragePublication,
+  createStaticCoveragePublication,
+  publishedCoverageView,
+  type CoveragePublicationOptions,
+} from './coverage-publication.js';
 import { createConfiguredCoverageReadiness, type CoverageReadiness } from './coverage-readiness.js';
 import {
   ContributionProviderError,
@@ -142,8 +154,13 @@ export interface BuildAppOptions {
   contributionRateLimiter?: Pick<ContributionRateLimiter, 'consume'>;
   /** Declared provinces; omitted reads `NAVOSS_SERVICE_AREAS` and fails closed. */
   coverage?: ServiceCoverage;
-  /** `null` skips the per-province data check; omitted builds it from the environment. */
+  /**
+   * `null` skips the per-province data check and publishes every declared province; omitted builds
+   * the check from the environment. With a check, only provinces whose data answered are published.
+   */
   coverageReadiness?: CoverageReadiness | null;
+  /** Startup, background and request-triggered timing of the publication check. */
+  coveragePublication?: Omit<CoveragePublicationOptions, 'onChange'>;
   /** `null` reports no database check; omitted builds it from the environment. */
   databaseReadiness?: DatabaseReadiness | null;
   driveBcEventProvider?: DriveBcRoadEventProvider;
@@ -167,11 +184,24 @@ export interface BuildAppOptions {
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const clock = options.clock ?? (() => new Date());
-  const coverage = options.coverage ?? serviceCoverageFromEnvironment();
+  const declaredCoverage = options.coverage ?? serviceCoverageFromEnvironment();
   const coverageReadiness =
     options.coverageReadiness === undefined
-      ? createConfiguredCoverageReadiness(coverage)
+      ? createConfiguredCoverageReadiness(declaredCoverage)
       : (options.coverageReadiness ?? undefined);
+  // Only provinces whose routing and search data have answered are published (and served).
+  const publication =
+    coverageReadiness === undefined
+      ? createStaticCoveragePublication(declaredCoverage)
+      : createCoveragePublication(declaredCoverage, coverageReadiness, {
+          ...options.coveragePublication,
+          onChange: (published, pending) => {
+            const log =
+              pending.length === 0 ? app.log.info.bind(app.log) : app.log.warn.bind(app.log);
+            log({ pending, published }, 'Published coverage changed');
+          },
+        });
+  const coverage = publishedCoverageView(publication);
   const cameraProvider = options.cameraProvider ?? createCalgarySafetyCameraProvider();
   const contributionProvider =
     options.contributionProvider ?? createConfiguredContributionProvider({ clock });
@@ -258,6 +288,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   };
 
   app.addHook('onClose', async () => {
+    publication.close();
     driveBcEventProvider.stop?.();
     driveBcTrafficCameraProvider.stop?.();
     eventProvider.stop?.();
@@ -273,6 +304,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   app.addHook('onReady', async () => {
+    // Waits up to the startup window for the declared provinces' data, then serves what answered.
+    await publication.start();
     communityReports?.start();
     contributionProvider.start?.();
     // Fails startup when traffic is enabled but its schema cannot be prepared.
@@ -379,6 +412,25 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   );
 
   const typedApp = app.withTypeProvider<ZodTypeProvider>();
+
+  // Search, routes and the regional config serve only published coverage. Before any declared
+  // province's data has answered, a request checks again first, so the API serves as soon as the
+  // data answers; otherwise it is 503. A partial publication is topped up in the background.
+  const requirePublishedCoverage = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (publication.current() === undefined) await publication.refresh();
+    else void publication.refresh();
+    if (publication.current() !== undefined) return;
+    reply.status(503).type('application/problem+json');
+    return reply.send(
+      createProblem(
+        request,
+        503,
+        'service_unavailable',
+        'Service starting',
+        'NavOSS is checking its map data. Try again in a moment.',
+      ),
+    );
+  };
   await app.register(registerOfflineBundleManifest);
 
   typedApp.get(
@@ -427,7 +479,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             ? false
             : undefined;
       const databaseReady = await databaseReadiness?.isReady();
-      const missingAreas = await coverageReadiness?.missingAreas();
+      const missingAreas =
+        coverageReadiness === undefined
+          ? undefined
+          : (await publication.missingNow()).map(({ displayName }) => displayName);
       const isReady =
         searchFixturesReady &&
         routingProviderReady !== false &&
@@ -449,7 +504,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                 coverage: {
                   detail:
                     missingAreas.length === 0
-                      ? `Routing and search data answer for ${coverage.displayName}.`
+                      ? `Routing and search data answer for ${declaredCoverage.displayName}.`
                       : `Routing or search data do not answer for ${missingAreas.join(', ')}.`,
                   status: missingAreas.length === 0 ? ('ready' as const) : ('not_ready' as const),
                 },
@@ -626,9 +681,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     {
       schema: {
         description: 'Returns regional mobile-client coverage and feature configuration.',
-        response: { 200: AppConfigResponseSchema },
+        response: { 200: AppConfigResponseSchema, 503: ProblemDetailsSchema },
         tags: ['config'],
       },
+      preHandler: requirePublishedCoverage,
     },
     () =>
       createAppConfig(
@@ -827,9 +883,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         response: {
           200: SearchResponseSchema,
           400: ProblemDetailsSchema,
+          503: ProblemDetailsSchema,
         },
         tags: ['search'],
       },
+      preHandler: requirePublishedCoverage,
     },
     (request, reply) => {
       const { category, latitude, longitude } = request.body;
@@ -880,6 +938,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           },
           tags: ['routes'],
         },
+        preHandler: requirePublishedCoverage,
       },
       async (request, reply) => {
         const routeCoordinates = [

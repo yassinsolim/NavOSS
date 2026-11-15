@@ -449,6 +449,11 @@ sudo docker compose up -d --no-build --wait --wait-timeout 600 valhalla nominati
 ./check-stack.sh     # includes check-coverage.sh for all 13 provinces
 ```
 
+The API publishes a declared province only once its routing and search data have answered its
+probe (it retries for 20 s at startup, then checks every 30 s). If `check-stack.sh` fails on
+`/v2/config` or `/ready` coverage, the cutover is half-applied (for example search still on the
+Alberta+BC index): phones are told only what answers, but roll back rather than wait.
+
 Then rerun the matrix against `https://navoss-api.yassin.app` and record the result. With community
 traffic in `collect`, restart nothing else: traffic stays Alberta+BC (its probes are refused
 elsewhere) and is matched on the new graph.

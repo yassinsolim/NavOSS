@@ -12,8 +12,8 @@ const NominatimReverseSchema = z.object({
 
 /** Whether the installed routing graph and search index hold every declared province. */
 export interface CoverageReadiness {
-  /** Display names of declared provinces whose data did not answer, in registry order. */
-  missingAreas(): Promise<string[]>;
+  /** Declared provinces whose data did not answer, in registry order. */
+  missingAreas(): Promise<ServiceArea[]>;
 }
 
 export interface CoverageReadinessOptions {
@@ -27,7 +27,8 @@ export interface CoverageReadinessOptions {
 /**
  * Asks the graph and the index about each declared province at its fixed public probe point (no
  * user data): Valhalla must find a road edge there and Nominatim must place the point in that
- * province. A province declared over data imported without it makes `/ready` fail.
+ * province. A province declared over data imported without it makes `/ready` fail and is not
+ * published (`coverage-publication.ts`).
  */
 export function createCoverageReadiness(
   coverage: ServiceCoverage,
@@ -94,7 +95,7 @@ export function createCoverageReadiness(
           }
         }),
       );
-      return probes.filter((_, index) => !answered[index]).map(({ area }) => area.displayName);
+      return probes.filter((_, index) => !answered[index]).map(({ area }) => area);
     },
   };
 }

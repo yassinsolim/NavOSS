@@ -85,6 +85,20 @@ Decision date: 2026-11-15 (owner: Canada-wide, VM may grow). This replaces the O
   fails when Valhalla `/locate` finds no road at a province's fixed public probe point or
   Nominatim `/reverse` does not place it in that province. Adding a province later is a registry
   entry (boundary, neighbours, certain time zones, probe) plus data.
+- **Publish only what the data answers for** (`apps/api/src/coverage-publication.ts`). A declared
+  province is published (in `/v2/config`, search, routes and community reports) only after its
+  probes have answered once, so a half-applied cutover (Canada declared, search still Alberta+BC)
+  publishes Alberta+BC, not 13 provinces. At startup the API retries for up to 20 s before
+  listening; then it serves what answered and checks the rest every 30 s, and on requests at most
+  every 5 s. While nothing has answered, `/v2/config`, `/v1/search` and both route endpoints answer
+  `503` ("Service starting"), and each such request checks again first, so service resumes when
+  the dependency answers, not at the next interval. A province is never removed: the installed
+  data does not change while the API runs (a release recreates it), the phone keeps `/v2/config`
+  for its launch and the native client for an hour, and a later outage already fails its own
+  requests. `/ready` keeps probing live and stays `503` until every declared province is published,
+  and `check-coverage.sh` (in `check-stack.sh`) requires `/v2/config` to declare exactly
+  `NAVOSS_SERVICE_AREAS`, so a partial cutover fails the checks and is rolled back. `/v1/config`
+  does not depend on it.
 - **Copy from the declaration.** `/v2/config` names the declared provinces in registry order
   ("Alberta, British Columbia and Ontario"); all 13 are "Canada" (`id: canada`). The app already
   shows the server's name ("Search and directions cover Canada."). `/v1/config` stays the strict
