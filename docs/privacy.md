@@ -24,13 +24,13 @@ Route requests send origin and destination coordinates to the NavOSS API. A rero
 
 ### Traffic sharing (optional, off by default)
 
-NavOSS can build live traffic from the driving speeds of people who choose to share them. Traffic
-sharing is **off by default** and is not switched on in production. Build `0.1.0 (75)`, uploaded
-2026-11-15, contains the traffic and community reports client but ships without the App Attest
-entitlement; build 70 preceded it. Tester availability of build 75 is unconfirmed. Neither build
-shares driving observations or road reports; reports stay private drafts on the phone. The
-paragraphs below describe what the server would do and the requirements for an app with
-**Share traffic speeds** enabled; no released app has been checked against them yet.
+Traffic sharing is **off by default**. In production, drivers who opt in with **Share traffic
+speeds** contribute batches for evaluation in `collect` mode. The server accepts, matches and
+counts them in memory; no traffic data is published or shown to drivers, and routes do not use
+it. Aggregate operational counters and App Attest registration information are retained as
+described below. Build `0.1.0 (80)` carries the App Attest entitlement needed to share; builds
+before 80 cannot share traffic or road reports. No real iPhone had registered through App Attest
+before the decision to enable collection.
 
 **What is sent.** While sharing is on and turn-by-turn navigation is active, the app sends short
 batches of your driving positions to the NavOSS API. A batch is a list of positions, each with the
@@ -80,27 +80,27 @@ the stretch), how far you moved there and how long you spent there, including ti
 stretch is often longer than one batch covers, so the parts you drive of one stretch in
 successive batches are joined; once they cover 300 metres of it, or half of it if it is shorter,
 they become your one speed for that stretch (distance over time). The speed is measured on the
-part driven and shown for the whole stretch. It holds these figures in memory and discards the
-batch. The NavOSS API does
+part driven. In a future publication mode it would apply to the whole stretch. The server holds
+these figures in memory and discards the batch. The NavOSS API does
 not write your positions, the batch, or its timing to its database, a backup, or its log. To
 match a batch to roads and check the map the API uses routing software (Valhalla) that it
 requires to be at a local network address; on the production stack that is a container on the
 same NavOSS-controlled machine in Alberta. The address check by itself does not prove where the
-software runs or who operates it, and NavOSS will confirm the production deployment before
-switching publication on. Batches are not forwarded to another routing provider. The map check
-sends the routing software only points on the map's own roads, never your positions. Like every
-request to NavOSS, a batch is delivered through Cloudflare, which sees it in transit. NavOSS has
-not yet verified that the routing software, the reverse proxy's error handling, system swap, or
-crash dumps on the production machine never write any part of a batch, and will not switch
-publication on until it has.
+software runs or who operates it; live publication requires confirming the deployment. Batches
+are not forwarded to another routing provider. The map check sends the routing software only
+points on the map's own roads, never your positions. Like every request to NavOSS, a batch is
+delivered through Cloudflare, which sees it in transit. The operator checked host Valhalla and
+proxy error logging, disabled swap and disabled core dumps on 2026-11-15; these protections must
+remain in place and be checked again if the deployment changes. See the
+[enablement checklist](architecture/community-traffic.md#enablement-checklist).
 
-**What is kept, and for how long.**
+**What is kept, and for how long.** In the current `collect` mode, traffic data is held only in memory and is never published or written to the database. The publication details below describe a possible future `live` mode, not what drivers see today.
 
 - _Before publication, in memory only._ For each stretch of road, the server's memory holds, for each contributor, what it has driven of that stretch: which parts, how far and for how long, and where along it and when, by the batch's own clock, the contributor stood still. Once enough of the stretch is covered, this becomes the contributor's one speed, and these details are still kept with it until the stretch is published or they are dropped, because standing still reported later can still count. It also holds the five-minute period in which the speed was completed, when the oldest driving counted for it began, and a scrambled marker that tells contributors apart. The marker is derived from your
   App Attest installation and that one stretch of road using a secret that exists only in the
   running server's memory. It is scrambled again for each group of contributors on that stretch: once the stretch is published, new contributions on it get unrelated markers. Markers for two different roads, or for two published groups on one road, are unrelated, so they cannot be matched to each other by comparing them. Until the stretch is next published, your marker for it stays the same across five-minute periods and credentials (if it is never published, until the server restarts or nothing about the stretch is left in memory). For an installation registered in the last seven days, the memory also holds a marker of the network the batch came from, scrambled the same way, so that several new keys on one network count once. This is dropped after at most 20
   minutes and is lost whenever the server restarts. It is never written to the database.
-- _After publication, in the database._ Once at least three installations have driven the same
+- _After publication, in the database (future `live` mode only)._ Once at least three installations have driven the same
   stretch, the server stores one typical speed for it, rounded to 5 km/h, the public
   OpenStreetMap shape of that stretch, and the five-minute boundary at which it was published. It
   is never shown after 15 minutes. It is deleted at that point by the server's next successful
@@ -114,13 +114,15 @@ publication on until it has.
   stretches published, failures). They contain no road, position, address or installation and
   are kept as long as other operational logs.
 
-Everything derived from a batch leaves memory within 20 minutes of its arrival and is no longer
-shown within 35 minutes; physical deletion from the database can be later, as described above.
+Everything derived from a batch leaves memory within 20 minutes of its arrival. In a future
+`live` mode it would no longer be shown within 35 minutes; physical deletion from the database
+could be later, as described above.
 These periods, the minimum of three contributors, and the road rules are fixed in the server's
 code and cannot be weakened by configuration.
 
-**What other drivers see.** A stretch of road is coloured, and can affect an estimated arrival
-time, only after at least three different App Attest installations have each driven at least
+**What other drivers see.** No community traffic is displayed today. In a future `live` mode,
+a stretch of road could be coloured, and could affect an estimated arrival time, only after at
+least three different App Attest installations have each driven at least
 300 metres (or half) of that same stretch, in batches whose driving began within the 15 minutes
 before a five-minute boundary, and only from that boundary. It stays shown for at most 15 minutes, so what other drivers see rests on
 driving at most 30 minutes old. Three installations are three keys, not necessarily three
@@ -131,6 +133,8 @@ never see a vehicle, a trip, a count of contributors, or who contributed. With f
 most roads will show no traffic at all.
 
 **What NavOSS cannot rule out.** This is data minimisation with a threshold, not anonymity.
+Risks involving published traffic below apply if a future `live` mode is enabled; access to
+in-memory data and network transit remain risks in `collect` mode.
 
 - Three installations are not necessarily three unrelated people. They can be one household, or
   one person who has registered several keys and kept them for a week or used several networks.
@@ -156,10 +160,10 @@ after the app was closed during navigation shares nothing. If the server says th
 is too new, the phone stores the time after which it may ask for a credential again (about one
 day after this installation registered its key, so it shows roughly when that happened) so that
 closing and reopening the app does not ask sooner; it is not a position, and **Reset community
-identity** deletes it (an answer still on its way from before the reset is not stored). What was contributed stops being shown
-within 35 minutes and is deleted as described above. Nothing about traffic is stored with an
-account, an installation, or a trip identifier, so there is no per-person traffic record to look
-up or delete. You can see traffic from other drivers without sharing your own.
+identity** deletes it (an answer still on its way from before the reset is not stored). In a future
+`live` mode, what was contributed would stop being shown within 35 minutes and be deleted as
+described above. Nothing about traffic is stored with an account, an installation, or a trip
+identifier, so there is no per-person traffic record to look up or delete.
 
 ### Search text and place details
 
@@ -209,14 +213,12 @@ NavOSS does not automatically transmit raw feedback descriptions to an AI provid
 
 ### Community road reports
 
-NavOSS can share structured road reports between drivers. The NavOSS server decides whether
-sharing is on (`features.communityReports`); it is off until the operator enables it. While it
-is off, or on a device that cannot use Apple App Attest, the app keeps the private drafts
-described at the end of this section and sends no shared reports. Sharing is not switched on in
-the deployed NavOSS service. Build `0.1.0 (75)`, uploaded 2026-11-15, contains the community
-client but ships without the App Attest entitlement; build 70 preceded it. Tester availability
-of build 75 is unconfirmed. Reports stay private drafts on the phone; the paragraphs below describe
-what would happen if **Share road reports** were available and enabled.
+The production service shares structured road reports in `attested` mode. A report from an
+App Attest-verified installation is shown to other drivers as unconfirmed until corroborated.
+Sharing is off by default in the app and requires **Share road reports** to be turned on.
+Build `0.1.0 (80)` carries the App Attest entitlement; builds before 80 cannot share.
+When the server does not offer sharing, or the device cannot use App Attest, the app keeps
+the private drafts described at the end of this section and sends no shared reports.
 
 **What a report sends.** Reports are shared only after you turn on **Share road reports** (off by default; until then every report stays a private draft). Within 400 m of your saved Home or Work, or of the current trip's start, destination or stops, a report stays private unless you explicitly confirm sharing it. When sharing is on and you choose a report type, the app sends one of
 eight fixed types (crash, road closed, slow traffic, construction, pothole, object on road, other
@@ -295,7 +297,7 @@ Map and route data is derived from OpenStreetMap contributors. Search combines O
 | Route and reroute coordinates                      | Processed in memory for the response, then discarded; not written to a NavOSS database, access log, or backup                                                                                                                                                                                                                                                                                         |
 | Traffic-sharing batches (only when switched on)    | Positions and timing processed in memory and discarded; not written by the NavOSS API to its database, log, or a backup                                                                                                                                                                                                                                                                               |
 | Unpublished traffic speeds                         | API memory only: one speed per contributor and road stretch, with the parts driven, distances, times and stopping places behind it, and a scrambled marker per road and per group of contributors (and, for keys registered in the last seven days, a scrambled network marker); dropped within 20 minutes; never in the database                                                                     |
-| Published traffic speeds                           | Per road stretch: speed rounded to 5 km/h, public road shape, five-minute publication time; never shown after 15 minutes; deleted by the next successful database update after that, erased on every server start, excluded from backups                                                                                                                                                              |
+| Published traffic speeds (future `live` mode only) | None are published in `collect` mode. If live publication is enabled: per road stretch, speed rounded to 5 km/h, public road shape and five-minute publication time; never shown after 15 minutes; deleted by the next successful database update after that, erased on every server start and excluded from backups |
 | App Attest key for traffic sharing                 | Keyed hash of the key identifier, encrypted public key, counter, registration and last-use times; removed by a periodic best-effort cleanup after 90 days without use                                                                                                                                                                                                                                 |
 | Active route, trip progress and camera eligibility | On the phone only. Active route and the last confirmed position along it (distances along the route, that fix's capture time and reported speed; together with the route, a position) kept to resume after a relaunch; erased when navigation ends, on arrival, or at the first launch 12 hours or more later; no trip-history database                                                               |
 | Recent and saved destinations                      | Up to 12 recent and 20 saved destination names, labels, and coordinates stored only on the device until cleared in About and Privacy or the app is removed                                                                                                                                                                                                                                            |

@@ -4,9 +4,10 @@ Decision date: 2026-07-27. Server implementation: 2026-11-12.
 
 ## Decision
 
-Community road reports launch in shadow mode before any report is visible to another driver, then
-open to a small group of beta drivers. NavOSS does not accept police, checkpoint, or speed-trap
-reports, free text, photos, public usernames, rankings, or rewards.
+The owner approved `attested` publication for beta drivers on 2026-11-15, to be enabled after
+the truth-in-copy PR merges and the site redeploys. Reports from verified installations appear
+unconfirmed until corroborated. NavOSS does not accept police, checkpoint, or speed-trap reports,
+free text, photos, public usernames, rankings, or rewards.
 
 Report types match the phone's structured draft types: `collision`, `road-closure`,
 `slow-traffic`, `construction`, `pothole`, `object-on-road`, `road-hazard`, and
@@ -22,14 +23,14 @@ Report types match the phone's structured draft types: `collision`, `road-closur
 | PostGIS tables and explicit SQL migrations                                 | Implemented (`apps/api/src/migrations.ts`, `node dist/migrate.js`).                                                                 |
 | Rate limits, replay, travel, self-vote, duplicate-vote controls            | Implemented (`apps/api/src/community-trust.ts`, `community-reports.ts`).                                                            |
 | Beta-posterior credibility with decay, lower bound, device minimum         | Implemented.                                                                                                                        |
-| Publication modes `shadow`, `attested`, `corroborated`                     | Implemented; `shadow` is the default.                                                                                               |
-| Native client: App Attest key, registration, submit, vote, withdraw, reset | Implemented (`ios/Core/Community*.swift`), shared by phone and CarPlay.                                                             |
-| App Attest entitlement in release builds                                   | On for the store profiles since 2026-11-15 (capability on the App ID, regenerated profile). No build with it has been uploaded yet. |
-| Phone map layer, report sheet, "Still there?" sheet, reset control         | Planned (wave 2 phone slice, on the native bridge).                                                                                 |
-| Privacy policy and App Privacy disclosures for shared reports              | Policy updated; App Privacy answers required before any build ships.                                                                |
+| Publication modes `shadow`, `attested`, `corroborated`                     | Implemented; `shadow` is the code default. The owner approved production `attested` after the site redeploys. |
+| Native client: App Attest key, registration, submit, vote, withdraw, reset | Implemented (`ios/Core/Community*.swift`), shared by phone and CarPlay. |
+| App Attest entitlement in release builds                                   | On for store profiles; TestFlight build 80 carries it. Builds before 80 cannot share. Real iPhone registration is unverified. |
+| Phone map layer, report sheet, "Still there?" sheet, reset control         | Implemented in build 80. |
+| Privacy policy and App Privacy disclosures for shared reports              | Policy updated; App Privacy answers published 2026-11-15. |
 | Least-privilege runtime and migration database roles                       | Planned. Both currently use the `navoss` role.                                                                                      |
 | Moderation tooling and operator review of closures                         | Planned.                                                                                                                            |
-| CarPlay reporting, markers, "Still there?" alert                           | Implemented; submits only while publication is live, else local drafts.                                                             |
+| CarPlay reporting, markers, "Still there?" alert                           | Implemented; submits when sharing is enabled, else local drafts. Real head-unit operation remains unverified. |
 | Routing influence                                                          | Not implemented. No community report changes a route.                                                                               |
 
 ## API

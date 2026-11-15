@@ -20,20 +20,18 @@
         <p>
           NavOSS is operated by Yassin Soliman as an individual developer in Alberta, Canada. It is
           an account-free navigation technical beta. The service covers Alberta and British
-          Columbia; app support starts with uploaded TestFlight build 75, whose tester availability
-          is not yet confirmed.
+          Columbia; app support starts with TestFlight build 75.
         </p>
         <div class="callout">
           This policy is ready for internal TestFlight. External testing remains blocked until a
           direct privacy and support email has been activated and tested.
         </div>
         <div class="callout callout--warning">
-          <strong>Community features are not switched on.</strong> Community traffic sharing and
-          shared road reports are not switched on in the deployed service. Build 0.1.0 (75),
-          uploaded November 15, 2026, contains both clients but ships without the App Attest
-          entitlement; build 70 preceded it. Tester availability of build 75 is unconfirmed. Neither
-          build shares traffic observations or road reports; reports stay private drafts on the
-          phone.
+          <strong>Community sharing is optional.</strong> Build 80 carries the App Attest
+          entitlement needed to share road reports and traffic speeds; earlier builds cannot share.
+          Road reports are off by default and shared only when you turn on Share road reports.
+          Traffic sharing is also off by default. Opted-in traffic is collected for evaluation in
+          memory and is not displayed to anyone.
         </div>
 
         <nav class="toc" aria-labelledby="toc-title">
@@ -85,7 +83,7 @@
           traffic sharing, positions along through roads are also sent during navigation as
           described under
           <a href="#community-traffic-sharing-opt-in">Community traffic sharing</a>; it is off
-          unless you turn it on, and it is not switched on in the deployed service.
+          unless you turn it on.
         </p>
 
         <h2 id="search-and-routing">Search and routing</h2>
@@ -203,17 +201,16 @@
 
         <h2 id="community-traffic-sharing-opt-in">Community traffic sharing (opt-in)</h2>
         <div class="callout callout--warning">
-          <strong>Not switched on.</strong> Traffic sharing is not switched on in the deployed
-          service. Build 0.1.0 (75), uploaded November 15, 2026, contains the traffic client but
-          ships without the App Attest entitlement; build 70 preceded it. Tester availability of
-          build 75 is unconfirmed. Neither build sends driving observations. This section describes
-          what the server would do and the requirements for an app with
-          <strong>Share traffic speeds</strong> enabled; no released app has been checked against
-          them yet.
+          <strong>Collection for evaluation.</strong> Traffic sharing is off by default. With
+          <strong>Share traffic speeds</strong> enabled, build 80 and later can send batches for
+          the service to accept, match and count in memory. No community traffic is published or
+          displayed to drivers, and routes do not use it. Builds before 80 cannot share. Aggregate
+          operational counters and App Attest registration information are retained as described
+          below. No real iPhone had registered through App Attest before the decision to enable
+          collection.
         </div>
         <p>
-          NavOSS can build live traffic from the driving speeds of people who choose to share them.
-          Traffic sharing is <strong>off by default</strong>.
+          Community traffic sharing is <strong>off by default</strong>.
         </p>
         <p>
           <strong>What is sent.</strong> While sharing is on and turn-by-turn navigation is active,
@@ -291,22 +288,27 @@
           you did not move is not sent to the routing software. A stretch is often longer than one
           batch covers, so the parts you drive of one stretch in successive batches are joined; once
           they cover 300 metres of it, or half of it if it is shorter, they become your one speed
-          for that stretch (distance over time). The speed is measured on the part driven and shown
-          for the whole stretch. It holds these figures in memory and discards the batch. The NavOSS
+          for that stretch (distance over time). The speed is measured on the part driven; in a
+          future publication mode it would apply to the whole stretch. The server holds these
+          figures in memory and discards the batch. The NavOSS
           API does not write your positions, the batch, or its timing to its database, a backup, or
           its log. To match a batch to roads and check the map the API uses routing software
           (Valhalla) that it requires to be at a local network address; on the production stack that
           is a container on the same NavOSS-controlled machine in Alberta. The address check by
-          itself does not prove where the software runs or who operates it, and NavOSS will confirm
-          the production deployment before switching publication on. Batches are not forwarded to
-          another routing provider. The map check sends the routing software only points on the
-          map's own roads, never your positions. Like every request to NavOSS, a batch is delivered
-          through Cloudflare, which sees it in transit. NavOSS has not yet verified that the routing
-          software, the reverse proxy's error handling, system swap, or crash dumps on the
-          production machine never write any part of a batch, and will not switch publication on
-          until it has.
+          itself does not prove where the software runs or who operates it; live publication
+          requires confirming the deployment. Batches are not forwarded to another routing
+          provider. The map check sends the routing software only points on the map's own roads,
+          never your positions. Like every request to NavOSS, a batch is delivered through
+          Cloudflare, which sees it in transit. The operator checked host Valhalla and proxy error
+          logging, disabled swap and disabled core dumps on November 15, 2026; these protections
+          must remain in place and be checked again if the deployment changes.
         </p>
-        <p><strong>What is kept, and for how long.</strong></p>
+        <p>
+          <strong>What is kept, and for how long.</strong> In the current collect mode, traffic
+          data is held only in memory and is never published or written to the database. The
+          publication details below describe a possible future live mode, not what drivers see
+          today.
+        </p>
         <ul>
           <li>
             <em>Before publication, in memory only.</em> For each stretch of road, the server's
@@ -331,7 +333,8 @@
             written to the database.
           </li>
           <li>
-            <em>After publication, in the database.</em> Once at least three installations have
+            <em>After publication, in the database (future live mode only).</em> Once at least
+            three installations have
             driven the same stretch, the server stores one typical speed for it, rounded to 5 km/h,
             the public OpenStreetMap shape of that stretch, and the five-minute boundary at which it
             was published. It is never shown after 15 minutes. It is deleted at that point by the
@@ -353,14 +356,16 @@
           </li>
         </ul>
         <p>
-          Everything derived from a batch leaves memory within 20 minutes of its arrival and is no
-          longer shown within 35 minutes; physical deletion from the database can be later, as
-          described above. These periods, the minimum of three contributors, and the road rules are
+          Everything derived from a batch leaves memory within 20 minutes of its arrival. In a
+          future live mode it would no longer be shown within 35 minutes; physical deletion from
+          the database could be later, as described above. These periods, the minimum of three
+          contributors, and the road rules are
           fixed in the server's code and cannot be weakened by configuration.
         </p>
         <p>
-          <strong>What other drivers see.</strong> A stretch of road is coloured, and can affect an
-          estimated arrival time, only after at least three different App Attest installations have
+          <strong>What other drivers see.</strong> No community traffic is displayed today. In a
+          future live mode, a stretch of road could be coloured, and could affect an estimated
+          arrival time, only after at least three different App Attest installations have
           each driven at least 300 metres (or half) of that same stretch, in batches whose driving
           began within the 15 minutes before a five-minute boundary, and only from that boundary. It
           stays shown for at most 15 minutes, so what other drivers see rests on driving at most 30
@@ -373,7 +378,8 @@
         </p>
         <p>
           <strong>What NavOSS cannot rule out.</strong> This is data minimisation with a threshold,
-          not anonymity.
+          not anonymity. Risks involving published traffic below apply if a future live mode is
+          enabled; access to in-memory data and network transit remain risks in collect mode.
         </p>
         <ul>
           <li>
@@ -419,27 +425,24 @@
           for a credential again (about one day after this installation registered its key, so it
           shows roughly when that happened) so that closing and reopening the app does not ask
           sooner; it is not a position, and <strong>Reset community identity</strong> deletes it (an
-          answer still on its way from before the reset is not stored). What was contributed stops
-          being shown within 35 minutes and is deleted as described above. Nothing about traffic is
-          stored with an account, an installation, or a trip identifier, so there is no per-person
-          traffic record to look up or delete. You can see traffic from other drivers without
-          sharing your own.
+          answer still on its way from before the reset is not stored). In a future live mode,
+          what was contributed would stop being shown within 35 minutes and be deleted as described
+          above. Nothing about traffic is stored with an account, an installation, or a trip
+          identifier, so there is no per-person traffic record to look up or delete.
         </p>
 
         <h2 id="community-road-reports">Community road reports</h2>
         <div class="callout callout--warning">
-          <strong>Not switched on.</strong> Sharing road reports is not switched on in the deployed
-          NavOSS service. Build 0.1.0 (75), uploaded November 15, 2026, contains the community
-          client but ships without the App Attest entitlement; build 70 preceded it. Tester
-          availability of build 75 is unconfirmed. Reports stay private drafts on the phone. The
-          paragraphs below describe what would happen if <strong>Share road reports</strong> were
-          available and enabled.
+          <strong>Road reports are shared only if you opt in.</strong> Build 80 carries the App
+          Attest entitlement needed to share; earlier builds cannot share. A report from an
+          App Attest-verified installation is shown to other drivers as unconfirmed until
+          corroborated.
         </div>
         <p>
-          NavOSS can share structured road reports between drivers. The NavOSS server decides
-          whether sharing is on (<code>features.communityReports</code>); it is off until the
-          operator enables it. While it is off, or on a device that cannot use Apple App Attest, the
-          app keeps the private drafts described at the end of this section and sends nothing.
+          The production service shares structured road reports in attested mode. Sharing is off
+          by default in the app; turn on <strong>Share road reports</strong> to share. When the
+          server does not offer sharing, or a device cannot use Apple App Attest, the app keeps the
+          private drafts described at the end of this section and sends no shared reports.
         </p>
         <p>
           <strong>What a report sends.</strong> Reports are shared only after you turn on
@@ -549,14 +552,12 @@
         </p>
         <p>
           NavOSS's operational logs exclude HTTP request and response bodies, search text, route
-          coordinates, shared traffic positions, and normal HTTP access events. NavOSS has not yet
-          verified that the routing software and the reverse proxy never log request content or
-          client addresses when a request fails; traffic publication stays off until it has. When
-          traffic sharing is enabled on the server, a periodic summary records only counts of
-          batches, credentials, and road stretches, with no road, position, address, or
-          installation.
+          coordinates, shared traffic positions, and normal HTTP access events. Host Valhalla and
+          proxy error logging, swap and core dumps were checked as described above; live traffic
+          publication remains off. A periodic summary records only counts of batches, credentials,
+          and road stretches, with no road, position, address, or installation.
         </p>
-        <p>Retention of community data, if and when the features are switched on:</p>
+        <p>Retention of community data:</p>
         <div class="table-wrap">
           <table>
             <caption class="visually-hidden">
@@ -587,9 +588,10 @@
                 </td>
               </tr>
               <tr>
-                <th scope="row">Published traffic speeds</th>
+                <th scope="row">Published traffic speeds (future live mode only)</th>
                 <td>
-                  Per road stretch: speed rounded to 5 km/h, public road shape, five-minute
+                  None are published in collect mode. If live publication is enabled: per road
+                  stretch, speed rounded to 5 km/h, public road shape, five-minute
                   publication time; never shown after 15 minutes; deleted by the next successful
                   database update after that, erased on every server start, excluded from backups
                 </td>

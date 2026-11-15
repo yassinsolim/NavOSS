@@ -6,7 +6,7 @@
 
 - CSP from `site.json`: `script-src 'none'`, `style-src 'self'`, `img-src 'self' data:`, `font-src 'self'`, `frame-ancestors 'none'`. No inline scripts or style attributes, no third-party request of any kind (analytics, fonts, maps, embeds).
 - Every internal link resolves; every page shares one header and footer; the privacy "On this page" list must match the page's `<h2 id>` sections one for one.
-- The homepage's "In the app today" section must not mention live traffic, offline, community or reports. Unreleased work sits in the labelled "In development" section.
+- The homepage's "In the app today" section may describe report sharing only with the build 80-and-later qualification and opt-in/unconfirmed status. It must not claim live traffic or offline maps are available. Those remain in the labelled "In development" section; traffic collection for evaluation is not display. Evidence: this PR.
 - The hero must keep stating what the product is and the technical-beta status; illustrations are invented streets and say so.
 
 ## Design

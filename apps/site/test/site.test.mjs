@@ -94,20 +94,28 @@ test('homepage states what NavOSS is and keeps unreleased features labelled', ()
   );
 
   const shipping = text(section(homepage, 'features'));
-  assert.doesNotMatch(shipping, /live traffic|offline|community|report/i);
+  assert.doesNotMatch(shipping, /live traffic|offline/i);
+  assert.ok(
+    shipping.includes(
+      'In build 80 and later, turn on Share road reports to share a road condition with other drivers. Reports from verified installations appear unconfirmed until corroborated; earlier builds cannot share.',
+    ),
+  );
 
   const roadmap = section(homepage, 'roadmap');
   const items = [...roadmap.matchAll(/<li class="roadmap__item">[\s\S]*?<\/li>/g)].map(([item]) =>
     text(item),
   );
-  assert.equal(items.length, 3);
-  for (const [index, label] of [
-    'Community road reports',
-    'Community traffic',
-    'Offline maps',
-  ].entries()) {
-    assert.match(items[index], new RegExp(`In development ${label}`));
-  }
+  assert.equal(items.length, 2);
+  assert.ok(
+    items[0].includes(
+      'In development Community traffic Collection of opted-in traffic speeds for evaluation has started. Nothing is displayed to drivers, and routes do not use community traffic.',
+    ),
+  );
+  assert.ok(
+    items[1].includes(
+      'In development Offline maps Download a region and keep the map and routing working without a signal. The app side is in build 75, uploaded November 15, 2026; tester availability is unconfirmed.',
+    ),
+  );
 
   const beta = section(homepage, 'beta');
   assert.match(beta, /href="https:\/\/github\.com\/yassinsolim\/NavOSS"/);
@@ -166,7 +174,21 @@ test('legal and support pages keep their published commitments', () => {
   assert.match(privacy, /DriveBC webcams are not enforcement cameras/);
   assert.match(privacy, /Community traffic sharing \(opt-in\)/);
   assert.match(privacy, /Community road reports/);
-  assert.match(privacy, /not switched on in the deployed service/);
+  assert.ok(
+    privacy.includes(
+      'Road reports are off by default and shared only when you turn on Share road reports.',
+    ),
+  );
+  assert.ok(
+    privacy.includes(
+      'Traffic sharing is also off by default. Opted-in traffic is collected for evaluation in memory and is not displayed to anyone.',
+    ),
+  );
+  assert.ok(
+    privacy.includes(
+      'A report from an App Attest-verified installation is shown to other drivers as unconfirmed until corroborated.',
+    ),
+  );
   assert.match(privacy, /Effective November 15, 2026/);
   assert.match(
     dataSources,
