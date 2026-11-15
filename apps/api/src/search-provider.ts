@@ -1,18 +1,18 @@
 import {
   CALGARY_REGION_BOUNDS,
   isCoordinateInBounds,
-  isCoordinateInServiceCoverage,
-  SERVICE_COVERAGE_BOUNDS,
   type SearchCategory,
   type SearchQuery,
   type SearchResponse,
   type SearchResult,
+  type ServiceCoverage,
 } from '@navoss/contracts';
 import { z } from 'zod/v4';
 
 import { createPostgresCalgarySearchProvider } from './calgary-search-provider.js';
 import { CALGARY_SEARCH_FIXTURES, type SearchFixture } from './fixtures.js';
 import { searchFixtures } from './search.js';
+import { DEFAULT_SERVICE_COVERAGE } from './service-coverage.js';
 import { normalizeSearchText, placeSearchQueryVariants } from './search-text.js';
 import {
   canonicalSearchName,
@@ -23,12 +23,6 @@ import {
 
 const DEFAULT_PHOTON_URL = 'https://photon.komoot.io/api/';
 const PHOTON_TIMEOUT_MS = 3_000;
-const SEARCH_BOUNDS = [
-  SERVICE_COVERAGE_BOUNDS.southWest.longitude,
-  SERVICE_COVERAGE_BOUNDS.southWest.latitude,
-  SERVICE_COVERAGE_BOUNDS.northEast.longitude,
-  SERVICE_COVERAGE_BOUNDS.northEast.latitude,
-].join(',');
 const NOMINATIM_TIMEOUT_MS = 4_000;
 const EARTH_RADIUS_METERS = 6_371_000;
 const DUPLICATE_RADIUS_METERS = 150;
@@ -53,13 +47,6 @@ export function isCalgarySearchCoordinate(coordinate: {
   longitude: number;
 }): boolean {
   return isCoordinateInBounds(coordinate, CALGARY_REGION_BOUNDS);
-}
-
-export function isSupportedSearchCoordinate(coordinate: {
-  latitude: number;
-  longitude: number;
-}): boolean {
-  return isCoordinateInServiceCoverage(coordinate);
 }
 
 export const SEARCH_CATEGORY_TYPES = {
@@ -301,6 +288,7 @@ function finalizeResultDetails(result: SearchResult): SearchResult {
 
 function nominatimViewbox(
   query: SearchQuery,
+  coverage: ServiceCoverage,
   radius: { latitude: number; longitude: number } | undefined = query.category === undefined
     ? undefined
     : NOMINATIM_CATEGORY_VIEWBOX_RADII.at(-1),
@@ -309,31 +297,19 @@ function nominatimViewbox(
     radius === undefined ||
     query.latitude === undefined ||
     query.longitude === undefined ||
-    !isSupportedSearchCoordinate({ latitude: query.latitude, longitude: query.longitude })
+    !coverage.contains({ latitude: query.latitude, longitude: query.longitude })
   ) {
     return [
-      SERVICE_COVERAGE_BOUNDS.southWest.longitude,
-      SERVICE_COVERAGE_BOUNDS.northEast.latitude,
-      SERVICE_COVERAGE_BOUNDS.northEast.longitude,
-      SERVICE_COVERAGE_BOUNDS.southWest.latitude,
+      coverage.bounds.southWest.longitude,
+      coverage.bounds.northEast.latitude,
+      coverage.bounds.northEast.longitude,
+      coverage.bounds.southWest.latitude,
     ].join(',');
   }
-  const west = Math.max(
-    SERVICE_COVERAGE_BOUNDS.southWest.longitude,
-    query.longitude - radius.longitude,
-  );
-  const north = Math.min(
-    SERVICE_COVERAGE_BOUNDS.northEast.latitude,
-    query.latitude + radius.latitude,
-  );
-  const east = Math.min(
-    SERVICE_COVERAGE_BOUNDS.northEast.longitude,
-    query.longitude + radius.longitude,
-  );
-  const south = Math.max(
-    SERVICE_COVERAGE_BOUNDS.southWest.latitude,
-    query.latitude - radius.latitude,
-  );
+  const west = Math.max(coverage.bounds.southWest.longitude, query.longitude - radius.longitude);
+  const north = Math.min(coverage.bounds.northEast.latitude, query.latitude + radius.latitude);
+  const east = Math.min(coverage.bounds.northEast.longitude, query.longitude + radius.longitude);
+  const south = Math.max(coverage.bounds.southWest.latitude, query.latitude - radius.latitude);
   return [west, north, east, south].map((value) => String(Number(value.toFixed(3)))).join(',');
 }
 
@@ -393,12 +369,14 @@ export interface SearchProvider {
 }
 
 export interface PhotonSearchProviderOptions {
+  coverage?: ServiceCoverage;
   endpoint?: string;
   fetchImplementation?: typeof fetch;
   now?: () => Date;
 }
 
 export interface NominatimSearchProviderOptions {
+  coverage?: ServiceCoverage;
   datasetVersion?: string;
   endpoint?: string;
   fetchImplementation?: typeof fetch;
@@ -455,10 +433,11 @@ function displayLabel(properties: z.infer<typeof PhotonFeatureSchema>['propertie
 function normalizePhotonResults(
   payload: z.infer<typeof PhotonResponseSchema>,
   query: SearchQuery,
+  coverage: ServiceCoverage,
 ): SearchResult[] {
   return payload.features
     .filter((feature) =>
-      isSupportedSearchCoordinate({
+      coverage.contains({
         latitude: feature.geometry.coordinates[1],
         longitude: feature.geometry.coordinates[0],
       }),
@@ -533,11 +512,12 @@ function nonEmptyText(value: string | undefined): string | undefined {
 function normalizeNominatimResults(
   payload: z.infer<typeof NominatimResponseSchema>,
   query: SearchQuery,
+  coverage: ServiceCoverage,
 ): SearchResult[] {
   const normalizedQuery = normalizeSearchText(query.q);
   return payload
     .filter((result) =>
-      isSupportedSearchCoordinate({
+      coverage.contains({
         latitude: result.lat,
         longitude: result.lon,
       }),
@@ -615,9 +595,21 @@ function normalizeNominatimResults(
     });
 }
 
-export function buildPhotonSearchUrl(query: SearchQuery, endpoint = DEFAULT_PHOTON_URL): string {
+export function buildPhotonSearchUrl(
+  query: SearchQuery,
+  endpoint = DEFAULT_PHOTON_URL,
+  coverage: ServiceCoverage = DEFAULT_SERVICE_COVERAGE,
+): string {
   const url = new URL(endpoint);
-  url.searchParams.set('bbox', SEARCH_BOUNDS);
+  url.searchParams.set(
+    'bbox',
+    [
+      coverage.bounds.southWest.longitude,
+      coverage.bounds.southWest.latitude,
+      coverage.bounds.northEast.longitude,
+      coverage.bounds.northEast.latitude,
+    ].join(','),
+  );
   url.searchParams.set('lang', 'en');
   url.searchParams.set('limit', String(query.limit));
   url.searchParams.set('q', query.q);
@@ -632,6 +624,7 @@ export function buildNominatimSearchUrl(
   query: SearchQuery,
   endpoint: string,
   categoryRadius?: { latitude: number; longitude: number },
+  coverage: ServiceCoverage = DEFAULT_SERVICE_COVERAGE,
 ): string {
   const url = new URL('search', endpoint.endsWith('/') ? endpoint : `${endpoint}/`);
   url.searchParams.set('accept-language', 'en-CA,en');
@@ -644,12 +637,13 @@ export function buildNominatimSearchUrl(
     'q',
     query.category === undefined ? query.q : NOMINATIM_CATEGORY_QUERIES[query.category],
   );
-  url.searchParams.set('viewbox', nominatimViewbox(query, categoryRadius));
+  url.searchParams.set('viewbox', nominatimViewbox(query, coverage, categoryRadius));
   return url.toString();
 }
 
 export function createFixtureSearchProvider(
   fixtures: readonly SearchFixture[] = CALGARY_SEARCH_FIXTURES,
+  coverage: ServiceCoverage = DEFAULT_SERVICE_COVERAGE,
 ): SearchProvider {
   return {
     search(query) {
@@ -665,7 +659,9 @@ export function createFixtureSearchProvider(
       }
       return Promise.resolve({
         ...response,
-        results: mergeResults([response.results], query, query.limit).map(finalizeResultDetails),
+        results: mergeResults([response.results], query, query.limit, coverage).map(
+          finalizeResultDetails,
+        ),
       });
     },
   };
@@ -675,12 +671,13 @@ export function createPhotonSearchProvider(
   options: PhotonSearchProviderOptions = {},
 ): SearchProvider {
   const endpoint = options.endpoint ?? process.env.PHOTON_URL ?? DEFAULT_PHOTON_URL;
+  const coverage = options.coverage ?? DEFAULT_SERVICE_COVERAGE;
   const fetchImplementation = options.fetchImplementation ?? fetch;
   const now = options.now ?? (() => new Date());
 
   return {
     async search(query) {
-      const response = await fetchImplementation(buildPhotonSearchUrl(query, endpoint), {
+      const response = await fetchImplementation(buildPhotonSearchUrl(query, endpoint, coverage), {
         headers: { accept: 'application/json' },
         signal: AbortSignal.timeout(PHOTON_TIMEOUT_MS),
       });
@@ -690,7 +687,12 @@ export function createPhotonSearchProvider(
       const parsed = PhotonResponseSchema.parse(await response.json());
       return {
         degraded: true,
-        results: mergeResults([normalizePhotonResults(parsed, query)], query, query.limit),
+        results: mergeResults(
+          [normalizePhotonResults(parsed, query, coverage)],
+          query,
+          query.limit,
+          coverage,
+        ),
         source: {
           datasetVersion: 'openstreetmap-continuous',
           freshness: 'fresh',
@@ -713,6 +715,7 @@ export function createNominatimSearchProvider(
     options.datasetVersion ??
     process.env.NOMINATIM_DATASET_VERSION ??
     'alberta-british-columbia-geofabrik';
+  const coverage = options.coverage ?? DEFAULT_SERVICE_COVERAGE;
   const fetchImplementation = options.fetchImplementation ?? fetch;
   const now = options.now ?? (() => new Date());
 
@@ -733,13 +736,15 @@ export function createNominatimSearchProvider(
       const categoryRadii =
         query.latitude !== undefined &&
         query.longitude !== undefined &&
-        isSupportedSearchCoordinate({ latitude: query.latitude, longitude: query.longitude })
+        coverage.contains({ latitude: query.latitude, longitude: query.longitude })
           ? query.category === undefined
             ? [NOMINATIM_TEXT_VIEWBOX_RADIUS, undefined]
             : NOMINATIM_CATEGORY_VIEWBOX_RADII
           : [undefined];
       const urls = [
-        ...new Set(categoryRadii.map((radius) => buildNominatimSearchUrl(query, endpoint, radius))),
+        ...new Set(
+          categoryRadii.map((radius) => buildNominatimSearchUrl(query, endpoint, radius, coverage)),
+        ),
       ];
       // Local and provincial pools start together and share one timeout budget.
       const signal = AbortSignal.timeout(NOMINATIM_TIMEOUT_MS);
@@ -755,6 +760,7 @@ export function createNominatimSearchProvider(
           return normalizeNominatimResults(
             NominatimResponseSchema.parse(await response.json()),
             query,
+            coverage,
           );
         }),
       );
@@ -770,7 +776,7 @@ export function createNominatimSearchProvider(
       }
       return {
         degraded: settled.some((result) => result.status === 'rejected'),
-        results: mergeResults(resultGroups, query, query.limit),
+        results: mergeResults(resultGroups, query, query.limit, coverage),
         source: {
           datasetVersion,
           freshness: 'fresh',
@@ -980,10 +986,11 @@ function mergeResults(
   resultGroups: SearchResult[][],
   query: SearchQuery,
   limit: number,
+  coverage: ServiceCoverage,
 ): SearchResult[] {
   const clusters: { members: SearchResult[]; result: SearchResult }[] = [];
   for (const result of resultGroups.flat()) {
-    if (!isSupportedSearchCoordinate(result.center)) continue;
+    if (!coverage.contains(result.center)) continue;
     const members = resultMetadata(result).members ?? [result];
     const cluster =
       clusters.find((existing) => existing.members.some((member) => member.id === result.id)) ??
@@ -1132,9 +1139,11 @@ function combinedSource(responses: SearchResponse[]): SearchResponse['source'] {
 
 export function createDevelopmentSearchProvider(
   fixtures: readonly SearchFixture[] = CALGARY_SEARCH_FIXTURES,
-  photonProvider: SearchProvider = createPhotonSearchProvider(),
+  photonProvider?: SearchProvider,
+  coverage: ServiceCoverage = DEFAULT_SERVICE_COVERAGE,
 ): SearchProvider {
-  const fixtureProvider = createFixtureSearchProvider(fixtures);
+  const fixtureProvider = createFixtureSearchProvider(fixtures, coverage);
+  const regionalProvider = photonProvider ?? createPhotonSearchProvider({ coverage });
   return {
     async search(query) {
       const useCalgarySources =
@@ -1154,7 +1163,7 @@ export function createDevelopmentSearchProvider(
             },
           };
       try {
-        const photonResponse = await photonProvider.search({
+        const photonResponse = await regionalProvider.search({
           ...query,
           includeDetails: query.includeDetails === true || query.category !== undefined,
           limit: Math.min(20, query.limit * 2),
@@ -1167,6 +1176,7 @@ export function createDevelopmentSearchProvider(
             ),
             query,
             query.limit,
+            coverage,
           ).map(finalizeResultDetails),
           source: photonResponse.source,
         };
@@ -1179,16 +1189,18 @@ export function createDevelopmentSearchProvider(
 
 export function createProductionSearchProvider(
   fixtures: readonly SearchFixture[] = CALGARY_SEARCH_FIXTURES,
-  productionProvider: SearchProvider = createNominatimSearchProvider({}),
+  productionProvider?: SearchProvider,
   calgaryProvider: SearchProvider | undefined = process.env.SEARCH_DATABASE_ENABLED !== '1'
     ? undefined
     : createPostgresCalgarySearchProvider(),
+  coverage: ServiceCoverage = DEFAULT_SERVICE_COVERAGE,
 ): SearchProvider {
-  const fixtureProvider = createFixtureSearchProvider(fixtures);
+  const fixtureProvider = createFixtureSearchProvider(fixtures, coverage);
+  const regionalProvider = productionProvider ?? createNominatimSearchProvider({ coverage });
   return {
     async isReady() {
       const providers = [
-        productionProvider,
+        regionalProvider,
         ...(calgaryProvider === undefined ? [] : [calgaryProvider]),
       ];
       const readiness = await Promise.all(
@@ -1232,7 +1244,7 @@ export function createProductionSearchProvider(
           : []),
       ];
       const settled = await Promise.allSettled([
-        ...productionQueries.map((productionQuery) => productionProvider.search(productionQuery)),
+        ...productionQueries.map((productionQuery) => regionalProvider.search(productionQuery)),
         ...(calgaryProvider === undefined || query.category !== undefined || !useCalgarySources
           ? []
           : [calgaryProvider.search(providerQuery)]),
@@ -1256,6 +1268,7 @@ export function createProductionSearchProvider(
           ),
           query,
           query.limit,
+          coverage,
         ).map(finalizeResultDetails),
         source:
           useCalgarySources || responses[0] === undefined

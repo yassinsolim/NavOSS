@@ -6,11 +6,11 @@ base_url="${NAVOSS_BASE_URL:-http://127.0.0.1:8080}"
 
 curl --fail --silent --show-error "$base_url/health" >/dev/null
 curl --fail --silent --show-error "$base_url/ready" >/dev/null
-# Clients older than /v2/routes read the strict v1 configuration.
-curl --fail --silent --show-error "$base_url/v1/config" |
-  jq -e '.apiVersion == "v1" and .coverage.id == "calgary-ab" and .endpoints.routes == "/v1/routes"' >/dev/null
 curl --fail --silent --show-error "$base_url/v2/config" |
-  jq -e '.features.productionSearch == true and .coverage.id == "alberta-british-columbia" and .endpoints.routes == "/v2/routes" and (.coverage.serviceAreas | map(.id) == ["alberta", "british-columbia"])' >/dev/null
+  jq -e '.features.productionSearch == true' >/dev/null
+# Strict v1 for shipped clients, exactly the declared provinces in /v2/config, per-province data
+# readiness and one public route in each (NAVOSS_SERVICE_AREAS from .env; default Alberta+BC).
+NAVOSS_BASE_URL="$base_url" "$(dirname "$0")/check-coverage.sh"
 curl --fail --silent --show-error \
   --header 'content-type: application/json' \
   --data '{"limit":3,"q":"Calgary Tower"}' \

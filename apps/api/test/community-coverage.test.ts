@@ -2,11 +2,15 @@ import { TrafficProbeBatchRequestSchema, type TrafficProbeBatchRequest } from '@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import borderPoints from '../../../packages/contracts/test/fixtures/coverage-border-points.json' with { type: 'json' };
-import { isSupportedSearchCoordinate } from '../src/search-provider.js';
+import { DEFAULT_SERVICE_COVERAGE } from '../src/service-coverage.js';
 import { findProbeRejection } from '../src/traffic/probe-validation.js';
 import { createTrafficService, type TrafficService } from '../src/traffic/service.js';
 import { DEFAULT_TRAFFIC_SETTINGS } from '../src/traffic/settings.js';
 import { assertionFor, fakeAttestation } from './traffic-fixture.js';
+
+// The deployed default declaration: Alberta and British Columbia.
+const servedByDefault = (provinceId: string | null) =>
+  provinceId === 'alberta' || provinceId === 'british-columbia';
 
 const now = new Date('2026-11-13T00:05:30Z');
 const services: TrafficService[] = [];
@@ -32,9 +36,9 @@ function batchAt(
 describe('reports and traffic use the shared AB/BC jurisdiction boundary', () => {
   it.each(borderPoints.cases)(
     '$id has the same report/search and default probe eligibility',
-    ({ coordinate, serviceAreaId }) => {
-      const supported = serviceAreaId !== null;
-      expect(isSupportedSearchCoordinate(coordinate)).toBe(supported);
+    ({ coordinate, provinceId }) => {
+      const supported = servedByDefault(provinceId);
+      expect(DEFAULT_SERVICE_COVERAGE.contains(coordinate)).toBe(supported);
       expect(
         findProbeRejection(
           batchAt(coordinate, 'c'.repeat(64)),
@@ -47,7 +51,7 @@ describe('reports and traffic use the shared AB/BC jurisdiction boundary', () =>
 
   it.each(borderPoints.cases)(
     '$id is checked by credentialed service ingest before trimming/matching',
-    async ({ coordinate, serviceAreaId }) => {
+    async ({ coordinate, provinceId }) => {
       const matchTrace = vi.fn(() => Promise.resolve(undefined));
       const service = createTrafficService({
         attestation: fakeAttestation(),
@@ -60,7 +64,7 @@ describe('reports and traffic use the shared AB/BC jurisdiction boundary', () =>
       if (credential === undefined) throw new Error('Expected fixture credential');
       const result = await service.ingest(batchAt(coordinate, credential.credential));
       expect(result).toEqual(
-        serviceAreaId === null
+        !servedByDefault(provinceId)
           ? { status: 'rejected', reason: 'outside_coverage' }
           : { status: 'accepted' },
       );

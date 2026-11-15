@@ -79,9 +79,27 @@ const NativeSpeedLimitsSchema = z.object({ speedLimit: z.array(UIntSchema.max(25
 const NativeLanesSchema = z.array(NativeLaneSchema).min(1);
 const NativeStreetNamesSchema = z.array(StreetNameSchema);
 const PositiveUIntSchema = UIntSchema.positive();
+// Error codes are uint64 on the wire; protobufjs decodes them as Long objects.
+const ErrorCodeSchema = z.union([
+  z.number().int(),
+  z.object({ high: z.literal(0), low: z.number().int() }).transform(({ low }) => low),
+]);
 const ErrorStatusSchema = z.object({
-  info: z.object({ errors: z.array(z.unknown()).default([]) }).optional(),
+  info: z
+    .object({
+      errors: z
+        .array(
+          z
+            .unknown()
+            .transform((error) => z.object({ code: ErrorCodeSchema }).safeParse(error).data?.code),
+        )
+        .default([]),
+    })
+    .optional(),
 });
+
+/** Valhalla's "No path could be found for input": the places share no road (or ferry) route. */
+export const VALHALLA_NO_PATH = 442;
 
 // Valhalla 3.8.2 TurnLane::directions_mask; wire bits and lane order are preserved.
 const LANE_DIRECTIONS: readonly (readonly [number, RouteLaneIndication])[] = [
@@ -139,9 +157,12 @@ export class ValhallaDecodeError extends Error {
   }
 }
 export class ValhallaRoutingError extends Error {
-  public constructor() {
+  /** Valhalla error codes reported, e.g. 442 for no path. */
+  public readonly codes: readonly number[];
+  public constructor(codes: readonly number[] = []) {
     super('Valhalla reported a routing error.');
     this.name = 'ValhallaRoutingError';
+    this.codes = codes;
   }
 }
 
@@ -215,6 +236,29 @@ function lanesFor(value: unknown): RouteLane[] | undefined {
   }
   return lanes;
 }
+const FRENCH_CARDINALS: Readonly<Record<string, string>> = {
+  Est: 'East',
+  Nord: 'North',
+  Ouest: 'West',
+  Sud: 'South',
+};
+
+/**
+ * Ontario's bilingual guide signs carry each direction twice ("401 East Express" and "401 Est
+ * Express"); keep the English one when both are on the same sign. A French-only sign (Quebec's
+ * "A-40 Ouest") is kept as signed.
+ */
+function withoutTranslatedDuplicates(texts: string[]): string[] {
+  const signed = new Set(texts);
+  return texts.filter((text) => {
+    const english = text.replace(
+      /\b(Est|Nord|Ouest|Sud)\b/gu,
+      (word) => FRENCH_CARDINALS[word] ?? word,
+    );
+    return english === text || !signed.has(english);
+  });
+}
+
 function signpostFor(
   value: unknown,
 ): Pick<
@@ -228,11 +272,11 @@ function signpostFor(
     sign.exitOntoStreets.length > 0 ||
     sign.exitTowardLocations.length > 0 ||
     sign.exitNames.length > 0;
-  const branch = (exit ? sign.exitOntoStreets : sign.guideOntoStreets).map(
-    (element) => element.text,
+  const branch = withoutTranslatedDuplicates(
+    (exit ? sign.exitOntoStreets : sign.guideOntoStreets).map((element) => element.text),
   );
-  const toward = (exit ? sign.exitTowardLocations : sign.guideTowardLocations).map(
-    (element) => element.text,
+  const toward = withoutTranslatedDuplicates(
+    (exit ? sign.exitTowardLocations : sign.guideTowardLocations).map((element) => element.text),
   );
   const exitNumber = sign.exitNumbers.map((element) => element.text).join(', ');
   const junctionName = (sign.junctionNames.length > 0 ? sign.junctionNames : sign.exitNames)
@@ -264,7 +308,9 @@ function speedLimitsFor(value: unknown): RouteSpeedLimit[] | undefined {
 export function normalizeValhallaPbfResponse(payload: unknown): RouteAlternativeV2[] {
   const status = ErrorStatusSchema.safeParse(payload);
   if (status.success && (status.data.info?.errors.length ?? 0) > 0)
-    throw new ValhallaRoutingError();
+    throw new ValhallaRoutingError(
+      (status.data.info?.errors ?? []).filter((code) => code !== undefined),
+    );
   const parsed = ResponseSchema.safeParse(payload);
   if (!parsed.success) throw new ValhallaDecodeError();
   const trip = TripSchema.safeParse(parsed.data.trip);

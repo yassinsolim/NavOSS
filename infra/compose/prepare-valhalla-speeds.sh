@@ -44,42 +44,55 @@ if [ "${source_hash}" != "${expected_source_hash}" ]; then
   exit 1
 fi
 
-jq '
+# Provinces whose urban rows are replaced by the global urban profile with urban trunk at 50 km/h
+# (docs/testing/route-quality.md, "Alberta speed-model evaluation"). The default keeps the deployed
+# Alberta+BC profile byte-identical; an Ontario build passes `AB ON` (docs/architecture/north-america.md).
+hybrid_provinces=${VALHALLA_HYBRID_PROVINCES:-AB}
+provinces_json=$(printf '%s\n' ${hybrid_provinces} | jq -R . | jq -cs .)
+if ! printf '%s' "${provinces_json}" | jq -e 'length > 0 and all(.[]; . == "AB" or . == "ON") and (unique | length) == length' >/dev/null; then
+  echo "VALHALLA_HYBRID_PROVINCES must list AB and/or ON once each: ${hybrid_provinces}" >&2
+  exit 1
+fi
+
+jq --argjson provinces "${provinces_json}" '
   if ([.[] | select(has("iso3166-1") | not)] | length) != 1 then
     error("expected exactly one global speed profile")
-  elif ([.[] | select(."iso3166-1" == "CA" and ."iso3166-2" == "AB")] | length) != 1 then
-    error("expected exactly one Alberta speed profile")
   else
     . as $profiles
-    | ($profiles[] | select(has("iso3166-1") | not) | .urban) as $globalUrban
-    | map(
-        if ."iso3166-1" == "CA" and ."iso3166-2" == "AB" then
-          .urban = $globalUrban
-          | .urban.way[1] = 50
-        else
-          .
-        end
-      )
+    | if any($provinces[]; . as $p | ([$profiles[] | select(."iso3166-1" == "CA" and ."iso3166-2" == $p)] | length) != 1) then
+        error("expected exactly one speed profile for each hybrid province")
+      else
+        ($profiles[] | select(has("iso3166-1") | not) | .urban) as $globalUrban
+        | map(
+            if ."iso3166-1" == "CA" and (."iso3166-2" as $p | $provinces | index($p)) != null then
+              .urban = $globalUrban
+              | .urban.way[1] = 50
+            else
+              .
+            end
+          )
+      end
   end
 ' "${source_file}" >"${output_file}"
 
-if ! jq -e '
+if ! jq -e --argjson provinces "${provinces_json}" '
   . as $profiles
   | ($profiles[] | select(has("iso3166-1") | not) | .urban) as $globalUrban
-  | ($profiles[] | select(."iso3166-1" == "CA" and ."iso3166-2" == "AB") | .urban) as $albertaUrban
-  | ($albertaUrban.way | length) == 8
-    and $albertaUrban.way[1] == 50
-    and ($albertaUrban | .way[1] = $globalUrban.way[1]) == $globalUrban
+  | all($provinces[]; . as $p
+      | ($profiles[] | select(."iso3166-1" == "CA" and ."iso3166-2" == $p) | .urban) as $urban
+      | ($urban.way | length) == 8
+        and $urban.way[1] == 50
+        and ($urban | .way[1] = $globalUrban.way[1]) == $globalUrban)
 ' "${output_file}" >/dev/null; then
-  echo 'Generated Alberta speed profile failed validation.' >&2
+  echo "Generated hybrid speed profile (${hybrid_provinces}) failed validation." >&2
   exit 1
 fi
 
 profile_hash=$(hash_file "${output_file}")
-printf 'source_url=%s\nsource_sha256=%s\nprofile_sha256=%s\n' \
-  "${source_url}" "${source_hash}" "${profile_hash}" >"${provenance_file}"
+printf 'source_url=%s\nsource_sha256=%s\nhybrid_provinces=%s\nprofile_sha256=%s\n' \
+  "${source_url}" "${source_hash}" "${hybrid_provinces}" "${profile_hash}" >"${provenance_file}"
 chmod 0644 "${output_file}" "${provenance_file}"
-mv "${output_file}" "${output}"
-mv "${provenance_file}" "${provenance}"
+mv -f "${output_file}" "${output}"
+mv -f "${provenance_file}" "${provenance}"
 
 printf 'Valhalla hybrid speed profile generated: %s\n' "${profile_hash}"

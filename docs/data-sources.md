@@ -2,13 +2,14 @@
 
 ## Provincial Service-Area Boundaries
 
-Routing/search coverage is Alberta and British Columbia in the v2 configuration. The single registry
-is `packages/contracts/src/coverage-data.ts`; adding a Canadian province is a data change after its
-routing/search imports and quality gates are ready. V1 configuration remains Calgary-shaped for
+Routing/search coverage is what the server declares (`NAVOSS_SERVICE_AREAS`); the deployed v2
+configuration declares Alberta and British Columbia. The single registry,
+`packages/contracts/src/coverage-data.ts`, holds all thirteen provinces and territories; a province
+is declared only over routing and search data imported with it. V1 configuration remains Calgary-shaped for
 strict shipped clients. Calgary civic/camera data and Kelowna/DriveBC context are **local overlays**,
 not province-wide datasets.
 
-- Source: [Statistics Canada, 2021 Census province/territory digital boundaries](https://geo.statcan.gc.ca/geo_wa/rest/services/2021/Digital_boundary_files/MapServer/0), PRUID `48` and `59`, published 2022-09-21.
+- Source: [Statistics Canada, 2021 Census province/territory digital boundaries](https://geo.statcan.gc.ca/geo_wa/rest/services/2021/Digital_boundary_files/MapServer/0), every province and territory (PRUID `10`, `11`, `12`, `13`, `24`, `35`, `46`, `47`, `48`, `59`, `60`, `61` and `62`), published 2022-09-21. `48` and `59` (Alberta, British Columbia) were retrieved for #79; the other eleven on 2026-11-15 with the same query, which reproduced `48` and `59` exactly.
 - Licence declared by the service metadata: [Open Government Licence – Canada](https://open.canada.ca/en/open-government-licence-canada).
 - Retrieval: `outSR=4326`, `maxAllowableOffset=0.001`, `geometryPrecision=6`.
 - Adaptation: normalize polygons to GeoJSON MultiPolygon and compute retrieval envelopes. No

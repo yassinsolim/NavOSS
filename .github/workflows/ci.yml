@@ -67,10 +67,15 @@ jobs:
       - name: Lint
         run: corepack pnpm lint
 
+      # The routing-input filter test runs the real osmium.
+      - name: Install osmium-tool
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends osmium-tool
+
       - name: Test
         run: corepack pnpm test
         env:
-          # Fail instead of skipping when the database is unreachable.
+          # Fail instead of skipping when osmium or the database is unavailable.
+          NAVOSS_REQUIRE_OSMIUM: '1'
           NAVOSS_REQUIRE_TEST_DATABASE: '1'
           NAVOSS_TEST_DATABASE_URL: postgres://navoss:navoss@127.0.0.1:5432/navoss
           NAVOSS_TRAFFIC_TEST_DATABASE_URL: postgres://navoss:navoss@127.0.0.1:5432/navoss

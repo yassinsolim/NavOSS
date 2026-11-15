@@ -52,6 +52,13 @@ async function createFixture() {
       suburban: context([82, 47, 37, 35, 31, 21, 18, 11]),
       urban: context([76, 36, 32, 31, 31, 21, 17, 10]),
     },
+    {
+      'iso3166-1': 'CA',
+      'iso3166-2': 'ON',
+      rural: context([107, 92, 71, 59, 44, 36, 23, 10]),
+      suburban: context([95, 47, 39, 36, 30, 21, 17, 10]),
+      urban: context([85, 20, 29, 23, 22, 15, 16, 10]),
+    },
   ];
   const sourceText = `${JSON.stringify(profiles)}\n`;
   await mkdir(dataDirectory);
@@ -67,11 +74,12 @@ async function createFixture() {
   };
 }
 
-function runProfile(fixture, expectedHash = fixture.sourceHash) {
+function runProfile(fixture, expectedHash = fixture.sourceHash, hybridProvinces = undefined) {
   return spawnSync('sh', [profileScript, fixture.dataDirectory], {
     encoding: 'utf8',
     env: {
       ...process.env,
+      ...(hybridProvinces === undefined ? {} : { VALHALLA_HYBRID_PROVINCES: hybridProvinces }),
       VALHALLA_DEFAULT_SPEEDS_SHA256: expectedHash,
       VALHALLA_DEFAULT_SPEEDS_URL: fixture.sourceUrl,
     },
@@ -99,11 +107,52 @@ test('generates only the validated Alberta hybrid and is idempotent', async (con
     way: [85, 50, 27, 25, 23, 17, 15, 10],
   });
   assert.deepEqual(britishColumbia, fixture.profiles[2]);
+  assert.deepEqual(
+    generated.find((profile) => profile['iso3166-2'] === 'ON'),
+    fixture.profiles[3],
+  );
   assert.equal(secondOutput, firstOutput);
   assert.match(
     await readFile(join(fixture.dataDirectory, 'default_speeds.provenance'), 'utf8'),
     new RegExp(`source_sha256=${fixture.sourceHash}`),
   );
+});
+
+test('applies the same hybrid to Ontario only when asked', async (context) => {
+  const fixture = await createFixture();
+  context.after(() => rm(fixture.fixture, { force: true, recursive: true }));
+
+  const result = runProfile(fixture, fixture.sourceHash, 'AB ON');
+  const generated = JSON.parse(
+    await readFile(join(fixture.dataDirectory, 'default_speeds.json'), 'utf8'),
+  );
+  const ontario = generated.find((profile) => profile['iso3166-2'] === 'ON');
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(ontario.rural, fixture.profiles[3].rural);
+  assert.deepEqual(ontario.suburban, fixture.profiles[3].suburban);
+  assert.deepEqual(ontario.urban, {
+    ...fixture.globalUrban,
+    way: [85, 50, 27, 25, 23, 17, 15, 10],
+  });
+  assert.deepEqual(
+    generated.find((profile) => profile['iso3166-2'] === 'BC'),
+    fixture.profiles[2],
+  );
+  assert.match(
+    await readFile(join(fixture.dataDirectory, 'default_speeds.provenance'), 'utf8'),
+    /hybrid_provinces=AB ON/,
+  );
+});
+
+test('refuses a province without a reviewed hybrid', async (context) => {
+  const fixture = await createFixture();
+  context.after(() => rm(fixture.fixture, { force: true, recursive: true }));
+
+  const result = runProfile(fixture, fixture.sourceHash, 'AB BC');
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /must list AB and\/or ON/);
 });
 
 test('rejects an unexpected source without replacing an existing profile', async (context) => {

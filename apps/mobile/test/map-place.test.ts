@@ -374,10 +374,35 @@ describe('place opening-hours status', () => {
     expect(placeOpenStatus(place('constructor 09:00-17:00'), now)).toBeUndefined();
   });
 
-  it('keeps hours unknown outside the app-supported time zone regions', () => {
+  it('uses Eastern time in southern Ontario but keeps hours unknown where the zone is uncertain', () => {
+    // 21:30 UTC on a September Wednesday is 17:30 in Toronto (closed) but 16:30 Central (open).
+    const evening = new Date('2026-09-23T21:30:00Z');
+    expect(placeOpenStatus(place('Mo-Su 09:00-17:00', torontoCenter), evening)).toBe('closed');
+    // Kenora, west of 90° W: Central by law, but local practice varies nearby; no guess.
     expect(
-      placeOpenStatus(place('Mo-Su 09:00-17:00', torontoCenter), new Date('2026-09-23T18:30:00Z')),
+      placeOpenStatus(
+        place('Mo-Su 09:00-17:00', { latitude: 49.7671, longitude: -94.4894 }),
+        evening,
+      ),
     ).toBeUndefined();
+    // Detroit is not in any registered province.
+    expect(
+      placeOpenStatus(
+        place('Mo-Su 09:00-17:00', { latitude: 42.3314, longitude: -83.0458 }),
+        evening,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('uses Newfoundland time, half an hour off Atlantic, on the island', () => {
+    // 12:31 UTC on a January Thursday is 09:01 in St. John's (UTC−3:30) and 08:31 in Halifax.
+    const now = new Date('2026-01-15T12:31:00Z');
+    expect(
+      placeOpenStatus(place('Mo-Su 09:00-17:00', { latitude: 47.5615, longitude: -52.7126 }), now),
+    ).toBe('open');
+    expect(
+      placeOpenStatus(place('Mo-Su 09:00-17:00', { latitude: 44.6488, longitude: -63.5752 }), now),
+    ).toBe('closed');
   });
 
   it('resolves a Kelowna coordinate to the Pacific time zone', () => {

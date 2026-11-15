@@ -1,4 +1,4 @@
-import type { Coordinate, SearchResult } from '@navoss/contracts';
+import { provinceTimeZone, type Coordinate, type SearchResult } from '@navoss/contracts';
 import type { Feature, GeoJsonProperties } from 'geojson';
 
 import { mapRegionForCoordinate } from './map-region';
@@ -445,13 +445,12 @@ function utcOffsetMinutes(date: Date, timeZone: string): number {
   return Math.round((asUtc - date.getTime()) / 60_000);
 }
 
-// Alberta shares one IANA zone. BC has multiple zones, so only the known Kelowna overlay is
-// mapped here; other BC locations keep raw hours rather than guessing a zone from the province.
+// The registry declares a zone only where it is certain (see `PROVINCE_PROFILES`); elsewhere, such
+// as most of British Columbia, raw hours are kept rather than guessing a zone from the province.
+// The Kelowna overlay is the one British Columbia area known to keep Pacific time.
 function regionTimeZone(coordinate: Coordinate): string | undefined {
-  const region = mapRegionForCoordinate(coordinate);
-  if (region === 'calgary-ab' || region === 'alberta') return 'America/Edmonton';
-  if (region === 'kelowna-bc') return 'America/Vancouver';
-  return undefined;
+  if (mapRegionForCoordinate(coordinate) === 'kelowna-bc') return 'America/Vancouver';
+  return provinceTimeZone(coordinate);
 }
 
 /**

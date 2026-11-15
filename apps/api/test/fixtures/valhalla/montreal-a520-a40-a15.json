@@ -1,0 +1,5277 @@
+{
+  "capturedAt": "2026-11-15T10:03:11.902Z",
+  "endpoint": "valhalla-scripted:3.8.2 (local sample graph)",
+  "decoderVersion": "3.8.2",
+  "attribution": "Routing by Valhalla using OpenStreetMap data",
+  "licenseUrl": "https://www.openstreetmap.org/copyright",
+  "graph": "Montreal cut (bbox -74.1,45.3,-73.3,45.75) of Geofabrik quebec-261114.osm.pbf plus the Quebec boundary relation r61549, hybrid speeds e7348efa (AB ON), admins repaired with VALHALLA_ADMIN_PROVINCES=QC, built 2026-11-15",
+  "rawResponseSha256": "cb1ff66745a199364feb139be41a293d9a9a0243a70f49a5b9a2146e2049e0b7",
+  "rawResponseBytes": 66976,
+  "trimmed": "Full decoded response; nothing removed.",
+  "request": {
+    "alternatives": 0,
+    "origin": {
+      "latitude": 45.4486,
+      "longitude": -73.7449
+    },
+    "destination": {
+      "latitude": 45.5575,
+      "longitude": -73.7224
+    },
+    "preferences": {
+      "avoidFerries": false,
+      "avoidHighways": false,
+      "avoidTolls": false,
+      "avoidUnpaved": false
+    }
+  },
+  "response": {
+    "trip": {
+      "routes": [
+        {
+          "legs": [
+            {
+              "node": [
+                {
+                  "edge": {
+                    "beginHeading": 350,
+                    "endHeading": 350,
+                    "endShapeIndex": 1
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 80,
+                    "endHeading": 80,
+                    "beginShapeIndex": 1,
+                    "endShapeIndex": 2
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 163,
+                    "endHeading": 172,
+                    "beginShapeIndex": 2,
+                    "endShapeIndex": 5
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 172,
+                    "endHeading": 203,
+                    "beginShapeIndex": 5,
+                    "endShapeIndex": 10
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 166,
+                    "endHeading": 166,
+                    "beginShapeIndex": 10,
+                    "endShapeIndex": 11
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 169,
+                    "endHeading": 169,
+                    "beginShapeIndex": 11,
+                    "endShapeIndex": 12
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 174,
+                    "endHeading": 184,
+                    "beginShapeIndex": 12,
+                    "endShapeIndex": 17
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 193,
+                    "endHeading": 193,
+                    "beginShapeIndex": 17,
+                    "endShapeIndex": 18
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 285,
+                    "endHeading": 285,
+                    "beginShapeIndex": 18,
+                    "endShapeIndex": 19
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 284,
+                    "endHeading": 284,
+                    "beginShapeIndex": 19,
+                    "endShapeIndex": 21
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 280,
+                    "endHeading": 279,
+                    "beginShapeIndex": 21,
+                    "endShapeIndex": 24
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 278,
+                    "endHeading": 278,
+                    "beginShapeIndex": 24,
+                    "endShapeIndex": 25
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 277,
+                    "endHeading": 277,
+                    "beginShapeIndex": 25,
+                    "endShapeIndex": 26
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 283,
+                    "endHeading": 284,
+                    "beginShapeIndex": 26,
+                    "endShapeIndex": 28
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 284,
+                    "endHeading": 284,
+                    "beginShapeIndex": 28,
+                    "endShapeIndex": 29
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 284,
+                    "endHeading": 284,
+                    "beginShapeIndex": 29,
+                    "endShapeIndex": 30
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 285,
+                    "endHeading": 285,
+                    "beginShapeIndex": 30,
+                    "endShapeIndex": 32
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 287,
+                    "endHeading": 288,
+                    "beginShapeIndex": 32,
+                    "endShapeIndex": 36
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 287,
+                    "endHeading": 287,
+                    "beginShapeIndex": 36,
+                    "endShapeIndex": 37
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 300,
+                    "endHeading": 300,
+                    "beginShapeIndex": 37,
+                    "endShapeIndex": 38
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 293,
+                    "endHeading": 293,
+                    "beginShapeIndex": 38,
+                    "endShapeIndex": 39
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 294,
+                    "endHeading": 293,
+                    "beginShapeIndex": 39,
+                    "endShapeIndex": 41
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 291,
+                    "endHeading": 283,
+                    "beginShapeIndex": 41,
+                    "endShapeIndex": 49
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 281,
+                    "endHeading": 281,
+                    "beginShapeIndex": 49,
+                    "endShapeIndex": 50
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Montréal-Toronto"
+                      }
+                    ],
+                    "beginHeading": 281,
+                    "endHeading": 281,
+                    "beginShapeIndex": 50,
+                    "endShapeIndex": 51
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Fénelon"
+                      }
+                    ],
+                    "beginHeading": 170,
+                    "endHeading": 170,
+                    "beginShapeIndex": 51,
+                    "endShapeIndex": 52
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Fénelon"
+                      }
+                    ],
+                    "beginHeading": 169,
+                    "endHeading": 169,
+                    "beginShapeIndex": 52,
+                    "endShapeIndex": 54
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Fénelon"
+                      }
+                    ],
+                    "beginHeading": 169,
+                    "endHeading": 169,
+                    "beginShapeIndex": 54,
+                    "endShapeIndex": 55
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard Fénelon"
+                      }
+                    ],
+                    "beginHeading": 169,
+                    "endHeading": 170,
+                    "beginShapeIndex": 55,
+                    "endShapeIndex": 57
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Avenue Dumont"
+                      }
+                    ],
+                    "beginHeading": 277,
+                    "endHeading": 277,
+                    "beginShapeIndex": 57,
+                    "endShapeIndex": 58
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Avenue Dumont"
+                      }
+                    ],
+                    "beginHeading": 280,
+                    "endHeading": 280,
+                    "beginShapeIndex": 58,
+                    "endShapeIndex": 60
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Avenue Dumont"
+                      }
+                    ],
+                    "beginHeading": 280,
+                    "endHeading": 295,
+                    "beginShapeIndex": 60,
+                    "endShapeIndex": 65
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Avenue Dumont"
+                      }
+                    ],
+                    "beginHeading": 342,
+                    "endHeading": 350,
+                    "beginShapeIndex": 65,
+                    "endShapeIndex": 70
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Avenue Dumont"
+                      }
+                    ],
+                    "beginHeading": 349,
+                    "endHeading": 351,
+                    "beginShapeIndex": 70,
+                    "endShapeIndex": 72
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Avenue Dumont"
+                      }
+                    ],
+                    "beginHeading": 2,
+                    "endHeading": 2,
+                    "beginShapeIndex": 72,
+                    "endShapeIndex": 74
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin Herron"
+                      }
+                    ],
+                    "beginHeading": 99,
+                    "endHeading": 102,
+                    "beginShapeIndex": 74,
+                    "endShapeIndex": 81
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin Herron"
+                      }
+                    ],
+                    "beginHeading": 103,
+                    "endHeading": 103,
+                    "beginShapeIndex": 81,
+                    "endShapeIndex": 82
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin Herron"
+                      }
+                    ],
+                    "beginHeading": 104,
+                    "endHeading": 104,
+                    "beginShapeIndex": 82,
+                    "endShapeIndex": 83
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin Herron"
+                      }
+                    ],
+                    "beginHeading": 104,
+                    "endHeading": 104,
+                    "beginShapeIndex": 83,
+                    "endShapeIndex": 84
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin Herron"
+                      }
+                    ],
+                    "beginHeading": 104,
+                    "endHeading": 105,
+                    "beginShapeIndex": 84,
+                    "endShapeIndex": 89
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin Herron"
+                      }
+                    ],
+                    "beginHeading": 105,
+                    "endHeading": 105,
+                    "beginShapeIndex": 89,
+                    "endShapeIndex": 90
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin Herron"
+                      }
+                    ],
+                    "beginHeading": 105,
+                    "endHeading": 105,
+                    "beginShapeIndex": 90,
+                    "endShapeIndex": 91
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin Herron"
+                      }
+                    ],
+                    "beginHeading": 105,
+                    "endHeading": 105,
+                    "beginShapeIndex": 91,
+                    "endShapeIndex": 93
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin Herron"
+                      }
+                    ],
+                    "beginHeading": 106,
+                    "endHeading": 106,
+                    "beginShapeIndex": 93,
+                    "endShapeIndex": 94
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin Herron"
+                      }
+                    ],
+                    "beginHeading": 105,
+                    "endHeading": 112,
+                    "beginShapeIndex": 94,
+                    "endShapeIndex": 103
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin Herron"
+                      }
+                    ],
+                    "beginHeading": 114,
+                    "endHeading": 114,
+                    "beginShapeIndex": 103,
+                    "endShapeIndex": 104
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin Herron"
+                      }
+                    ],
+                    "beginHeading": 99,
+                    "endHeading": 99,
+                    "beginShapeIndex": 104,
+                    "endShapeIndex": 105
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rond-point Dorval"
+                      }
+                    ],
+                    "beginHeading": 122,
+                    "endHeading": 121,
+                    "beginShapeIndex": 105,
+                    "endShapeIndex": 108
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rond-point Dorval"
+                      }
+                    ],
+                    "beginHeading": 110,
+                    "endHeading": 108,
+                    "beginShapeIndex": 108,
+                    "endShapeIndex": 112
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rond-point Dorval"
+                      }
+                    ],
+                    "beginHeading": 98,
+                    "endHeading": 98,
+                    "beginShapeIndex": 112,
+                    "endShapeIndex": 115
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rond-point Dorval"
+                      }
+                    ],
+                    "beginHeading": 89,
+                    "endHeading": 89,
+                    "beginShapeIndex": 115,
+                    "endShapeIndex": 118,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 66,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 64
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rond-point Dorval"
+                      }
+                    ],
+                    "beginHeading": 80,
+                    "endHeading": 74,
+                    "beginShapeIndex": 118,
+                    "endShapeIndex": 123,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 66,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 64
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rond-point Dorval"
+                      }
+                    ],
+                    "beginHeading": 66,
+                    "endHeading": 66,
+                    "beginShapeIndex": 123,
+                    "endShapeIndex": 125,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 66,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 64
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rond-point Dorval"
+                      }
+                    ],
+                    "beginHeading": 57,
+                    "endHeading": 57,
+                    "beginShapeIndex": 125,
+                    "endShapeIndex": 128
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rond-point Dorval"
+                      }
+                    ],
+                    "beginHeading": 47,
+                    "endHeading": 45,
+                    "beginShapeIndex": 128,
+                    "endShapeIndex": 132
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rond-point Dorval"
+                      }
+                    ],
+                    "beginHeading": 31,
+                    "endHeading": 31,
+                    "beginShapeIndex": 132,
+                    "endShapeIndex": 135
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rond-point Dorval"
+                      }
+                    ],
+                    "beginHeading": 13,
+                    "endHeading": 332,
+                    "beginShapeIndex": 135,
+                    "endShapeIndex": 145,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 66,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 64
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rond-point Dorval"
+                      }
+                    ],
+                    "beginHeading": 318,
+                    "endHeading": 318,
+                    "beginShapeIndex": 145,
+                    "endShapeIndex": 147,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 66,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 64
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rond-point Dorval"
+                      }
+                    ],
+                    "beginHeading": 300,
+                    "endHeading": 300,
+                    "beginShapeIndex": 147,
+                    "endShapeIndex": 150
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rond-point Dorval"
+                      }
+                    ],
+                    "beginHeading": 292,
+                    "endHeading": 292,
+                    "beginShapeIndex": 150,
+                    "endShapeIndex": 153
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rond-point Dorval"
+                      }
+                    ],
+                    "beginHeading": 286,
+                    "endHeading": 286,
+                    "beginShapeIndex": 153,
+                    "endShapeIndex": 154
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 310,
+                    "endHeading": 310,
+                    "beginShapeIndex": 154,
+                    "endShapeIndex": 155
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 318,
+                    "endHeading": 5,
+                    "beginShapeIndex": 155,
+                    "endShapeIndex": 173
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 7,
+                    "endHeading": 7,
+                    "beginShapeIndex": 173,
+                    "endShapeIndex": 174
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 7,
+                    "endHeading": 7,
+                    "beginShapeIndex": 174,
+                    "endShapeIndex": 175
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 8,
+                    "endHeading": 8,
+                    "beginShapeIndex": 175,
+                    "endShapeIndex": 176
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 5,
+                    "endHeading": 2,
+                    "beginShapeIndex": 176,
+                    "endShapeIndex": 179
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 1,
+                    "endHeading": 1,
+                    "beginShapeIndex": 179,
+                    "endShapeIndex": 180
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 1,
+                    "endHeading": 1,
+                    "beginShapeIndex": 180,
+                    "endShapeIndex": 181,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 32
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 360,
+                    "beginShapeIndex": 181,
+                    "endShapeIndex": 183,
+                    "turnLanes": [
+                      {},
+                      {
+                        "directionsMask": 512
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "endHeading": 1,
+                    "beginShapeIndex": 183,
+                    "endShapeIndex": 186,
+                    "turnLanes": [
+                      {},
+                      {
+                        "directionsMask": 512
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 11,
+                    "endHeading": 38,
+                    "beginShapeIndex": 186,
+                    "endShapeIndex": 197
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 45,
+                    "endHeading": 63,
+                    "beginShapeIndex": 197,
+                    "endShapeIndex": 210,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 64
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 65,
+                    "endHeading": 65,
+                    "beginShapeIndex": 210,
+                    "endShapeIndex": 211
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 68,
+                    "endHeading": 52,
+                    "beginShapeIndex": 211,
+                    "endShapeIndex": 225
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 56,
+                    "endHeading": 56,
+                    "beginShapeIndex": 225,
+                    "endShapeIndex": 226
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 49,
+                    "endHeading": 50,
+                    "beginShapeIndex": 226,
+                    "endShapeIndex": 229
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 50,
+                    "endHeading": 50,
+                    "beginShapeIndex": 229,
+                    "endShapeIndex": 230,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 32
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 50,
+                    "endHeading": 50,
+                    "beginShapeIndex": 230,
+                    "endShapeIndex": 231
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 50,
+                    "endHeading": 49,
+                    "beginShapeIndex": 231,
+                    "endShapeIndex": 236
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 48,
+                    "endHeading": 48,
+                    "beginShapeIndex": 236,
+                    "endShapeIndex": 237
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 47,
+                    "endHeading": 44,
+                    "beginShapeIndex": 237,
+                    "endShapeIndex": 243
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 45,
+                    "endHeading": 45,
+                    "beginShapeIndex": 243,
+                    "endShapeIndex": 244
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 44,
+                    "endHeading": 44,
+                    "beginShapeIndex": 244,
+                    "endShapeIndex": 245
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 45,
+                    "endHeading": 45,
+                    "beginShapeIndex": 245,
+                    "endShapeIndex": 246
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 44,
+                    "endHeading": 44,
+                    "beginShapeIndex": 246,
+                    "endShapeIndex": 251
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 251,
+                    "endShapeIndex": 252
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 252,
+                    "endShapeIndex": 253
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 44,
+                    "endHeading": 43,
+                    "beginShapeIndex": 253,
+                    "endShapeIndex": 261
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 261,
+                    "endShapeIndex": 262,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 34,
+                        "state": 2,
+                        "activeDirection": 2
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 262,
+                    "endShapeIndex": 266
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 266,
+                    "endShapeIndex": 267
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 267,
+                    "endShapeIndex": 268
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 268,
+                    "endShapeIndex": 269
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 269,
+                    "endShapeIndex": 273
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 273,
+                    "endShapeIndex": 274
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 274,
+                    "endShapeIndex": 277
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 277,
+                    "endShapeIndex": 278,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 32
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 278,
+                    "endShapeIndex": 279
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 44,
+                    "endHeading": 44,
+                    "beginShapeIndex": 279,
+                    "endShapeIndex": 280
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 280,
+                    "endShapeIndex": 283
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 283,
+                    "endShapeIndex": 284
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 284,
+                    "endShapeIndex": 285
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 285,
+                    "endShapeIndex": 286
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 286,
+                    "endShapeIndex": 287,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 32
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 44,
+                    "endHeading": 43,
+                    "beginShapeIndex": 287,
+                    "endShapeIndex": 296
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Chemin de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 296,
+                    "endShapeIndex": 297
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Chemin de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 64,
+                    "beginShapeIndex": 297,
+                    "endShapeIndex": 316
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Chemin de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 65,
+                    "endHeading": 65,
+                    "beginShapeIndex": 316,
+                    "endShapeIndex": 317,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 34,
+                        "state": 2,
+                        "activeDirection": 2
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Chemin de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 64,
+                    "endHeading": 42,
+                    "beginShapeIndex": 317,
+                    "endShapeIndex": 340
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "520",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Chemin de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 49,
+                    "endHeading": 49,
+                    "beginShapeIndex": 340,
+                    "endShapeIndex": 341
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 40,
+                    "endHeading": 40,
+                    "beginShapeIndex": 341,
+                    "endShapeIndex": 342
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 40,
+                    "endHeading": 40,
+                    "beginShapeIndex": 342,
+                    "endShapeIndex": 343
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 42,
+                    "endHeading": 42,
+                    "beginShapeIndex": 343,
+                    "endShapeIndex": 344
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 43,
+                    "endHeading": 43,
+                    "beginShapeIndex": 344,
+                    "endShapeIndex": 345
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 42,
+                    "endHeading": 42,
+                    "beginShapeIndex": 345,
+                    "endShapeIndex": 347
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 42,
+                    "endHeading": 42,
+                    "beginShapeIndex": 347,
+                    "endShapeIndex": 348
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 42,
+                    "endHeading": 42,
+                    "beginShapeIndex": 348,
+                    "endShapeIndex": 350
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Chemin de la Côte-de-Liesse"
+                      }
+                    ],
+                    "beginHeading": 39,
+                    "endHeading": 39,
+                    "beginShapeIndex": 350,
+                    "endShapeIndex": 351
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Route Transcanadienne"
+                      }
+                    ],
+                    "beginHeading": 42,
+                    "endHeading": 42,
+                    "beginShapeIndex": 351,
+                    "endShapeIndex": 352
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Route Transcanadienne"
+                      }
+                    ],
+                    "beginHeading": 42,
+                    "endHeading": 42,
+                    "beginShapeIndex": 352,
+                    "endShapeIndex": 353
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Route Transcanadienne"
+                      }
+                    ],
+                    "beginHeading": 42,
+                    "endHeading": 42,
+                    "beginShapeIndex": 353,
+                    "endShapeIndex": 354
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Route Transcanadienne"
+                      }
+                    ],
+                    "beginHeading": 41,
+                    "endHeading": 41,
+                    "beginShapeIndex": 354,
+                    "endShapeIndex": 355
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Route Transcanadienne"
+                      }
+                    ],
+                    "beginHeading": 41,
+                    "endHeading": 41,
+                    "beginShapeIndex": 355,
+                    "endShapeIndex": 358
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Route Transcanadienne"
+                      }
+                    ],
+                    "beginHeading": 42,
+                    "endHeading": 42,
+                    "beginShapeIndex": 358,
+                    "endShapeIndex": 374
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 22,
+                    "endHeading": 22,
+                    "beginShapeIndex": 374,
+                    "endShapeIndex": 375
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 26,
+                    "endHeading": 26,
+                    "beginShapeIndex": 375,
+                    "endShapeIndex": 376
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Félix-Leclerc"
+                      }
+                    ],
+                    "beginHeading": 42,
+                    "endHeading": 42,
+                    "beginShapeIndex": 376,
+                    "endShapeIndex": 377
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Félix-Leclerc"
+                      }
+                    ],
+                    "beginHeading": 42,
+                    "endHeading": 42,
+                    "beginShapeIndex": 377,
+                    "endShapeIndex": 378
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Félix-Leclerc"
+                      }
+                    ],
+                    "beginHeading": 42,
+                    "endHeading": 41,
+                    "beginShapeIndex": 378,
+                    "endShapeIndex": 381
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Félix-Leclerc"
+                      }
+                    ],
+                    "beginHeading": 40,
+                    "endHeading": 43,
+                    "beginShapeIndex": 381,
+                    "endShapeIndex": 388,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 16
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 47,
+                    "endHeading": 47,
+                    "beginShapeIndex": 388,
+                    "endShapeIndex": 390
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 53,
+                    "endHeading": 16,
+                    "beginShapeIndex": 390,
+                    "endShapeIndex": 428
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 11,
+                    "endHeading": 11,
+                    "beginShapeIndex": 428,
+                    "endShapeIndex": 432
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 11,
+                    "endHeading": 11,
+                    "beginShapeIndex": 432,
+                    "endShapeIndex": 433
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 15,
+                    "endHeading": 20,
+                    "beginShapeIndex": 433,
+                    "endShapeIndex": 438
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 18,
+                    "endHeading": 21,
+                    "beginShapeIndex": 438,
+                    "endShapeIndex": 443
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 24,
+                    "endHeading": 24,
+                    "beginShapeIndex": 443,
+                    "endShapeIndex": 448
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 24,
+                    "endHeading": 24,
+                    "beginShapeIndex": 448,
+                    "endShapeIndex": 456
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 24,
+                    "endHeading": 24,
+                    "beginShapeIndex": 456,
+                    "endShapeIndex": 457
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 24,
+                    "endHeading": 24,
+                    "beginShapeIndex": 457,
+                    "endShapeIndex": 458
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 24,
+                    "endHeading": 24,
+                    "beginShapeIndex": 458,
+                    "endShapeIndex": 459
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 24,
+                    "endHeading": 24,
+                    "beginShapeIndex": 459,
+                    "endShapeIndex": 462
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 24,
+                    "endHeading": 24,
+                    "beginShapeIndex": 462,
+                    "endShapeIndex": 463,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 32
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 22,
+                    "endHeading": 22,
+                    "beginShapeIndex": 463,
+                    "endShapeIndex": 464
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 24,
+                    "endHeading": 25,
+                    "beginShapeIndex": 464,
+                    "endShapeIndex": 468
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 24,
+                    "endHeading": 24,
+                    "beginShapeIndex": 468,
+                    "endShapeIndex": 470
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 24,
+                    "endHeading": 24,
+                    "beginShapeIndex": 470,
+                    "endShapeIndex": 473
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 23,
+                    "endHeading": 23,
+                    "beginShapeIndex": 473,
+                    "endShapeIndex": 474
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "40",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute Métropolitaine"
+                      }
+                    ],
+                    "beginHeading": 22,
+                    "endHeading": 20,
+                    "beginShapeIndex": 474,
+                    "endShapeIndex": 479
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 27,
+                    "endHeading": 27,
+                    "beginShapeIndex": 479,
+                    "endShapeIndex": 480
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 22,
+                    "endHeading": 22,
+                    "beginShapeIndex": 480,
+                    "endShapeIndex": 487
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 20,
+                    "endHeading": 18,
+                    "beginShapeIndex": 487,
+                    "endShapeIndex": 490
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 14,
+                    "endHeading": 7,
+                    "beginShapeIndex": 490,
+                    "endShapeIndex": 498
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 358,
+                    "endHeading": 315,
+                    "beginShapeIndex": 498,
+                    "endShapeIndex": 519
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 306,
+                    "endHeading": 281,
+                    "beginShapeIndex": 519,
+                    "endShapeIndex": 531
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 279,
+                    "endHeading": 279,
+                    "beginShapeIndex": 531,
+                    "endShapeIndex": 532
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 279,
+                    "endHeading": 279,
+                    "beginShapeIndex": 532,
+                    "endShapeIndex": 536
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 282,
+                    "endHeading": 289,
+                    "beginShapeIndex": 536,
+                    "endShapeIndex": 545
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 290,
+                    "endHeading": 292,
+                    "beginShapeIndex": 545,
+                    "endShapeIndex": 548
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 293,
+                    "endHeading": 293,
+                    "beginShapeIndex": 548,
+                    "endShapeIndex": 549
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 293,
+                    "endHeading": 293,
+                    "beginShapeIndex": 549,
+                    "endShapeIndex": 550
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 293,
+                    "endHeading": 293,
+                    "beginShapeIndex": 550,
+                    "endShapeIndex": 551,
+                    "turnLanes": [
+                      {},
+                      {},
+                      {},
+                      {
+                        "directionsMask": 512
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 293,
+                    "endHeading": 293,
+                    "beginShapeIndex": 551,
+                    "endShapeIndex": 552
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 293,
+                    "endHeading": 293,
+                    "beginShapeIndex": 552,
+                    "endShapeIndex": 553
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 293,
+                    "endHeading": 292,
+                    "beginShapeIndex": 553,
+                    "endShapeIndex": 557
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 293,
+                    "endHeading": 293,
+                    "beginShapeIndex": 557,
+                    "endShapeIndex": 558
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 294,
+                    "endHeading": 294,
+                    "beginShapeIndex": 558,
+                    "endShapeIndex": 559
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 292,
+                    "endHeading": 292,
+                    "beginShapeIndex": 559,
+                    "endShapeIndex": 560
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 292,
+                    "endHeading": 293,
+                    "beginShapeIndex": 560,
+                    "endShapeIndex": 562
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 291,
+                    "endHeading": 291,
+                    "beginShapeIndex": 562,
+                    "endShapeIndex": 563
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 292,
+                    "endHeading": 277,
+                    "beginShapeIndex": 563,
+                    "endShapeIndex": 579
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 276,
+                    "endHeading": 272,
+                    "beginShapeIndex": 579,
+                    "endShapeIndex": 586
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 271,
+                    "endHeading": 266,
+                    "beginShapeIndex": 586,
+                    "endShapeIndex": 592
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 265,
+                    "endHeading": 254,
+                    "beginShapeIndex": 592,
+                    "endShapeIndex": 606
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 254,
+                    "endHeading": 252,
+                    "beginShapeIndex": 606,
+                    "endShapeIndex": 613
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 252,
+                    "endHeading": 252,
+                    "beginShapeIndex": 613,
+                    "endShapeIndex": 614
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 252,
+                    "endHeading": 253,
+                    "beginShapeIndex": 614,
+                    "endShapeIndex": 621
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 255,
+                    "endHeading": 261,
+                    "beginShapeIndex": 621,
+                    "endShapeIndex": 630
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 262,
+                    "endHeading": 268,
+                    "beginShapeIndex": 630,
+                    "endShapeIndex": 640
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 270,
+                    "endHeading": 275,
+                    "beginShapeIndex": 640,
+                    "endShapeIndex": 647
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 276,
+                    "endHeading": 312,
+                    "beginShapeIndex": 647,
+                    "endShapeIndex": 684
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 312,
+                    "endHeading": 312,
+                    "beginShapeIndex": 684,
+                    "endShapeIndex": 685
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 312,
+                    "endHeading": 312,
+                    "beginShapeIndex": 685,
+                    "endShapeIndex": 686,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 32
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 312,
+                    "endHeading": 310,
+                    "beginShapeIndex": 686,
+                    "endShapeIndex": 695
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 308,
+                    "endHeading": 307,
+                    "beginShapeIndex": 695,
+                    "endShapeIndex": 698
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 305,
+                    "endHeading": 285,
+                    "beginShapeIndex": 698,
+                    "endShapeIndex": 720
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 285,
+                    "endHeading": 292,
+                    "beginShapeIndex": 720,
+                    "endShapeIndex": 734,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 1
+                      },
+                      {
+                        "directionsMask": 1
+                      },
+                      {
+                        "directionsMask": 1
+                      },
+                      {
+                        "directionsMask": 1
+                      },
+                      {
+                        "directionsMask": 512
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 294,
+                    "endHeading": 306,
+                    "beginShapeIndex": 734,
+                    "endShapeIndex": 749
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 308,
+                    "endHeading": 326,
+                    "beginShapeIndex": 749,
+                    "endShapeIndex": 784
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 325,
+                    "endHeading": 326,
+                    "beginShapeIndex": 784,
+                    "endShapeIndex": 790
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "15",
+                        "isRouteNumber": true
+                      },
+                      {
+                        "value": "Autoroute des Laurentides"
+                      }
+                    ],
+                    "beginHeading": 326,
+                    "endHeading": 326,
+                    "beginShapeIndex": 790,
+                    "endShapeIndex": 791
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 338,
+                    "endHeading": 338,
+                    "beginShapeIndex": 791,
+                    "endShapeIndex": 792
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 330,
+                    "endHeading": 330,
+                    "beginShapeIndex": 792,
+                    "endShapeIndex": 797
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 328,
+                    "endHeading": 328,
+                    "beginShapeIndex": 797,
+                    "endShapeIndex": 798
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Desserte est des Laurentides (A-15)"
+                      }
+                    ],
+                    "beginHeading": 323,
+                    "endHeading": 323,
+                    "beginShapeIndex": 798,
+                    "endShapeIndex": 799
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Desserte est des Laurentides (A-15)"
+                      }
+                    ],
+                    "beginHeading": 323,
+                    "endHeading": 323,
+                    "beginShapeIndex": 799,
+                    "endShapeIndex": 800
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Desserte est des Laurentides (A-15)"
+                      }
+                    ],
+                    "beginHeading": 322,
+                    "endHeading": 322,
+                    "beginShapeIndex": 800,
+                    "endShapeIndex": 801
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Desserte est des Laurentides (A-15)"
+                      }
+                    ],
+                    "beginHeading": 322,
+                    "endHeading": 322,
+                    "beginShapeIndex": 801,
+                    "endShapeIndex": 802
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 329,
+                    "endHeading": 329,
+                    "beginShapeIndex": 802,
+                    "endShapeIndex": 804
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 324,
+                    "endHeading": 326,
+                    "beginShapeIndex": 804,
+                    "endShapeIndex": 808
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 330,
+                    "endHeading": 343,
+                    "beginShapeIndex": 808,
+                    "endShapeIndex": 817
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 348,
+                    "endHeading": 348,
+                    "beginShapeIndex": 817,
+                    "endShapeIndex": 818,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 2
+                      },
+                      {
+                        "directionsMask": 34,
+                        "state": 1,
+                        "activeDirection": 32
+                      },
+                      {
+                        "directionsMask": 32,
+                        "state": 2,
+                        "activeDirection": 32
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 355,
+                    "endHeading": 355,
+                    "beginShapeIndex": 818,
+                    "endShapeIndex": 819
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 346,
+                    "endHeading": 346,
+                    "beginShapeIndex": 819,
+                    "endShapeIndex": 820
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 338,
+                    "endHeading": 330,
+                    "beginShapeIndex": 820,
+                    "endShapeIndex": 829,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 64,
+                        "state": 2,
+                        "activeDirection": 64
+                      },
+                      {
+                        "directionsMask": 64,
+                        "state": 2,
+                        "activeDirection": 64
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 347,
+                    "endHeading": 347,
+                    "beginShapeIndex": 829,
+                    "endShapeIndex": 830,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 64,
+                        "state": 2,
+                        "activeDirection": 64
+                      },
+                      {
+                        "directionsMask": 64,
+                        "state": 2,
+                        "activeDirection": 64
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 357,
+                    "endHeading": 357,
+                    "beginShapeIndex": 830,
+                    "endShapeIndex": 831,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 64,
+                        "state": 2,
+                        "activeDirection": 64
+                      },
+                      {
+                        "directionsMask": 64,
+                        "state": 2,
+                        "activeDirection": 64
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 25,
+                    "endHeading": 25,
+                    "beginShapeIndex": 831,
+                    "endShapeIndex": 834,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 64,
+                        "state": 2,
+                        "activeDirection": 64
+                      },
+                      {
+                        "directionsMask": 64,
+                        "state": 2,
+                        "activeDirection": 64
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard de la Concorde Ouest"
+                      }
+                    ],
+                    "beginHeading": 51,
+                    "endHeading": 51,
+                    "beginShapeIndex": 834,
+                    "endShapeIndex": 835
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard de la Concorde Ouest"
+                      }
+                    ],
+                    "beginHeading": 51,
+                    "endHeading": 50,
+                    "beginShapeIndex": 835,
+                    "endShapeIndex": 839
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard de la Concorde Ouest"
+                      }
+                    ],
+                    "beginHeading": 48,
+                    "endHeading": 48,
+                    "beginShapeIndex": 839,
+                    "endShapeIndex": 843,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 8
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard de la Concorde Ouest"
+                      }
+                    ],
+                    "beginHeading": 48,
+                    "endHeading": 48,
+                    "beginShapeIndex": 843,
+                    "endShapeIndex": 845,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 8
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard de la Concorde Ouest"
+                      }
+                    ],
+                    "beginHeading": 46,
+                    "endHeading": 46,
+                    "beginShapeIndex": 845,
+                    "endShapeIndex": 846,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 8
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard de la Concorde Ouest"
+                      }
+                    ],
+                    "beginHeading": 49,
+                    "endHeading": 49,
+                    "beginShapeIndex": 846,
+                    "endShapeIndex": 847,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 8
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 2,
+                        "state": 1,
+                        "activeDirection": 2
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard de la Concorde Ouest"
+                      }
+                    ],
+                    "beginHeading": 53,
+                    "endHeading": 53,
+                    "beginShapeIndex": 847,
+                    "endShapeIndex": 848
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard de la Concorde Ouest"
+                      }
+                    ],
+                    "beginHeading": 50,
+                    "endHeading": 50,
+                    "beginShapeIndex": 848,
+                    "endShapeIndex": 849
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard de la Concorde Ouest"
+                      }
+                    ],
+                    "beginHeading": 51,
+                    "endHeading": 51,
+                    "beginShapeIndex": 849,
+                    "endShapeIndex": 850
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard de la Concorde Ouest"
+                      }
+                    ],
+                    "beginHeading": 50,
+                    "endHeading": 50,
+                    "beginShapeIndex": 850,
+                    "endShapeIndex": 851
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard de la Concorde Ouest"
+                      }
+                    ],
+                    "beginHeading": 49,
+                    "endHeading": 49,
+                    "beginShapeIndex": 851,
+                    "endShapeIndex": 852
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard de la Concorde Ouest"
+                      }
+                    ],
+                    "beginHeading": 52,
+                    "endHeading": 52,
+                    "beginShapeIndex": 852,
+                    "endShapeIndex": 853
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard de la Concorde Ouest"
+                      }
+                    ],
+                    "beginHeading": 52,
+                    "endHeading": 52,
+                    "beginShapeIndex": 853,
+                    "endShapeIndex": 856,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 8,
+                        "state": 2,
+                        "activeDirection": 8
+                      },
+                      {
+                        "directionsMask": 2
+                      },
+                      {
+                        "directionsMask": 2
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard de la Concorde Ouest"
+                      }
+                    ],
+                    "beginHeading": 56,
+                    "endHeading": 56,
+                    "beginShapeIndex": 856,
+                    "endShapeIndex": 857,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 8,
+                        "state": 2,
+                        "activeDirection": 8
+                      },
+                      {
+                        "directionsMask": 2
+                      },
+                      {
+                        "directionsMask": 2
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Boulevard de la Concorde Ouest"
+                      }
+                    ],
+                    "beginHeading": 52,
+                    "endHeading": 52,
+                    "beginShapeIndex": 857,
+                    "endShapeIndex": 858,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 8,
+                        "state": 2,
+                        "activeDirection": 8
+                      },
+                      {
+                        "directionsMask": 2
+                      },
+                      {
+                        "directionsMask": 2
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rue Lucien Paiement"
+                      }
+                    ],
+                    "beginHeading": 324,
+                    "endHeading": 324,
+                    "beginShapeIndex": 858,
+                    "endShapeIndex": 859
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rue Lucien Paiement"
+                      }
+                    ],
+                    "beginHeading": 325,
+                    "endHeading": 325,
+                    "beginShapeIndex": 859,
+                    "endShapeIndex": 860
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rue Lucien Paiement"
+                      }
+                    ],
+                    "beginHeading": 323,
+                    "endHeading": 323,
+                    "beginShapeIndex": 860,
+                    "endShapeIndex": 861
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rue Lucien Paiement"
+                      }
+                    ],
+                    "beginHeading": 325,
+                    "endHeading": 325,
+                    "beginShapeIndex": 861,
+                    "endShapeIndex": 863
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rue Lucien Paiement"
+                      }
+                    ],
+                    "beginHeading": 325,
+                    "endHeading": 325,
+                    "beginShapeIndex": 863,
+                    "endShapeIndex": 864
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rue Lucien Paiement"
+                      }
+                    ],
+                    "beginHeading": 326,
+                    "endHeading": 326,
+                    "beginShapeIndex": 864,
+                    "endShapeIndex": 865
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rue Lucien Paiement"
+                      }
+                    ],
+                    "beginHeading": 325,
+                    "endHeading": 325,
+                    "beginShapeIndex": 865,
+                    "endShapeIndex": 866,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 10,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 64
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rue Lucien Paiement"
+                      }
+                    ],
+                    "beginHeading": 325,
+                    "endHeading": 326,
+                    "beginShapeIndex": 866,
+                    "endShapeIndex": 868,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 10,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 64
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rue Lucien Paiement"
+                      }
+                    ],
+                    "beginHeading": 327,
+                    "endHeading": 327,
+                    "beginShapeIndex": 868,
+                    "endShapeIndex": 869,
+                    "turnLanes": [
+                      {
+                        "directionsMask": 10,
+                        "state": 2,
+                        "activeDirection": 2
+                      },
+                      {
+                        "directionsMask": 64
+                      }
+                    ]
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rue Lucien Paiement"
+                      }
+                    ],
+                    "beginHeading": 331,
+                    "endHeading": 331,
+                    "beginShapeIndex": 869,
+                    "endShapeIndex": 870
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rue Lucien Paiement"
+                      }
+                    ],
+                    "beginHeading": 328,
+                    "endHeading": 328,
+                    "beginShapeIndex": 870,
+                    "endShapeIndex": 872
+                  }
+                },
+                {
+                  "edge": {
+                    "name": [
+                      {
+                        "value": "Rue Lucien Paiement"
+                      }
+                    ],
+                    "beginHeading": 326,
+                    "endHeading": 326,
+                    "beginShapeIndex": 872,
+                    "endShapeIndex": 873
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 249,
+                    "endHeading": 249,
+                    "beginShapeIndex": 873,
+                    "endShapeIndex": 874
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 284,
+                    "endHeading": 284,
+                    "beginShapeIndex": 874,
+                    "endShapeIndex": 876
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 321,
+                    "endHeading": 321,
+                    "beginShapeIndex": 876,
+                    "endShapeIndex": 877
+                  }
+                },
+                {
+                  "edge": {
+                    "beginHeading": 334,
+                    "endHeading": 340,
+                    "beginShapeIndex": 877,
+                    "endShapeIndex": 880
+                  }
+                },
+                {}
+              ],
+              "shapeAttributes": {
+                "speedLimit": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  30,
+                  30,
+                  30,
+                  40,
+                  40,
+                  40,
+                  40,
+                  40,
+                  40,
+                  40,
+                  40,
+                  40,
+                  40,
+                  40,
+                  40,
+                  40,
+                  40,
+                  40,
+                  40,
+                  40,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  100,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  70,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  50,
+                  30,
+                  30,
+                  30,
+                  30,
+                  30,
+                  30,
+                  30,
+                  30,
+                  30,
+                  30,
+                  30,
+                  30,
+                  30,
+                  30,
+                  30,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "directions": {
+      "routes": [
+        {
+          "legs": [
+            {
+              "summary": {
+                "length": 21.605073928833008,
+                "time": 1437.6468505859375
+              },
+              "maneuver": [
+                {
+                  "type": 1,
+                  "textInstruction": "Drive north.",
+                  "length": 0.005250941030681133,
+                  "time": 1.5752822160720825,
+                  "beginHeading": 350,
+                  "endShapeIndex": 1,
+                  "verbalPreTransitionInstruction": "Drive north. Then Turn right.",
+                  "verbalSuccinctTransitionInstruction": "Drive north. Then Turn right."
+                },
+                {
+                  "type": 10,
+                  "textInstruction": "Turn right.",
+                  "length": 0.14900000393390656,
+                  "time": 77.13448798656464,
+                  "beginHeading": 80,
+                  "beginShapeIndex": 1,
+                  "endShapeIndex": 18,
+                  "verbalPreTransitionInstruction": "Turn right.",
+                  "beginPathIndex": 1,
+                  "turnDegree": 90,
+                  "verbalSuccinctTransitionInstruction": "Turn right."
+                },
+                {
+                  "type": 10,
+                  "textInstruction": "Turn right onto Boulevard Montréal-Toronto.",
+                  "streetName": [
+                    {
+                      "value": "Boulevard Montréal-Toronto"
+                    }
+                  ],
+                  "length": 0.5360000729560852,
+                  "time": 58.258689880371094,
+                  "beginHeading": 285,
+                  "beginShapeIndex": 18,
+                  "endShapeIndex": 51,
+                  "verbalPreTransitionInstruction": "Turn right onto Boulevard Montréal-Toronto.",
+                  "beginPathIndex": 8,
+                  "turnDegree": 92,
+                  "verbalSuccinctTransitionInstruction": "Turn right."
+                },
+                {
+                  "type": 15,
+                  "textInstruction": "Turn left onto Boulevard Fénelon.",
+                  "streetName": [
+                    {
+                      "value": "Boulevard Fénelon"
+                    }
+                  ],
+                  "length": 0.24400001764297485,
+                  "time": 36.25439453125,
+                  "beginHeading": 170,
+                  "beginShapeIndex": 51,
+                  "endShapeIndex": 57,
+                  "verbalPreTransitionInstruction": "Turn left onto Boulevard Fénelon.",
+                  "beginPathIndex": 25,
+                  "turnDegree": 249,
+                  "verbalSuccinctTransitionInstruction": "Turn left."
+                },
+                {
+                  "type": 10,
+                  "textInstruction": "Turn right onto Avenue Dumont.",
+                  "streetName": [
+                    {
+                      "value": "Avenue Dumont"
+                    }
+                  ],
+                  "length": 0.25999999046325684,
+                  "time": 35.409149169921875,
+                  "beginHeading": 277,
+                  "beginShapeIndex": 57,
+                  "endShapeIndex": 74,
+                  "verbalPreTransitionInstruction": "Turn right onto Avenue Dumont.",
+                  "beginPathIndex": 29,
+                  "turnDegree": 107,
+                  "verbalSuccinctTransitionInstruction": "Turn right."
+                },
+                {
+                  "type": 10,
+                  "textInstruction": "Turn right onto Chemin Herron.",
+                  "streetName": [
+                    {
+                      "value": "Chemin Herron"
+                    }
+                  ],
+                  "length": 0.7560000419616699,
+                  "time": 78.55165100097656,
+                  "beginHeading": 99,
+                  "beginShapeIndex": 74,
+                  "endShapeIndex": 105,
+                  "verbalPreTransitionInstruction": "Turn right onto Chemin Herron.",
+                  "beginPathIndex": 35,
+                  "turnDegree": 97,
+                  "verbalSuccinctTransitionInstruction": "Turn right."
+                },
+                {
+                  "type": 26,
+                  "textInstruction": "Enter Rond-point Dorval and take the 6th exit onto 520/Autoroute de la Côte-de-Liesse.",
+                  "streetName": [
+                    {
+                      "value": "Rond-point Dorval"
+                    }
+                  ],
+                  "length": 0.3179999887943268,
+                  "time": 54.829376220703125,
+                  "beginHeading": 122,
+                  "beginShapeIndex": 105,
+                  "endShapeIndex": 154,
+                  "verbalPreTransitionInstruction": "Enter Rond-point Dorval and take the 6th exit onto 520, Autoroute de la Côte-de-Liesse.",
+                  "roundaboutExitCount": 6,
+                  "beginPathIndex": 47,
+                  "turnDegree": 23,
+                  "verbalSuccinctTransitionInstruction": "Enter the roundabout and take the 6th exit."
+                },
+                {
+                  "type": 27,
+                  "textInstruction": "Exit the roundabout onto 520/Autoroute de la Côte-de-Liesse.",
+                  "streetName": [
+                    {
+                      "value": "520",
+                      "isRouteNumber": true
+                    },
+                    {
+                      "value": "Autoroute de la Côte-de-Liesse"
+                    }
+                  ],
+                  "length": 0.5610000491142273,
+                  "time": 22.248626708984375,
+                  "beginHeading": 310,
+                  "beginShapeIndex": 154,
+                  "endShapeIndex": 210,
+                  "verbalPreTransitionInstruction": "Exit the roundabout onto 520, Autoroute de la Côte-de-Liesse.",
+                  "beginPathIndex": 61,
+                  "turnDegree": 24,
+                  "verbalSuccinctTransitionInstruction": "Exit the roundabout."
+                },
+                {
+                  "type": 24,
+                  "textInstruction": "Keep left to stay on 520/Autoroute de la Côte-de-Liesse.",
+                  "streetName": [
+                    {
+                      "value": "520",
+                      "isRouteNumber": true
+                    },
+                    {
+                      "value": "Autoroute de la Côte-de-Liesse"
+                    }
+                  ],
+                  "length": 7.237000465393066,
+                  "time": 379.313232421875,
+                  "beginHeading": 65,
+                  "beginShapeIndex": 210,
+                  "endShapeIndex": 374,
+                  "verbalPreTransitionInstruction": "Keep left to stay on 520, Autoroute de la Côte-de-Liesse.",
+                  "beginPathIndex": 73,
+                  "turnDegree": 2
+                },
+                {
+                  "type": 16,
+                  "textInstruction": "Bear left onto 40.",
+                  "streetName": [
+                    {
+                      "value": "40",
+                      "isRouteNumber": true
+                    }
+                  ],
+                  "length": 3.437999725341797,
+                  "time": 169.601318359375,
+                  "beginHeading": 42,
+                  "beginShapeIndex": 374,
+                  "endShapeIndex": 479,
+                  "verbalPreTransitionInstruction": "Bear left onto 40.",
+                  "beginPathIndex": 125,
+                  "verbalSuccinctTransitionInstruction": "Bear left."
+                },
+                {
+                  "type": 23,
+                  "textInstruction": "Keep right to take exit 70 onto 15/Autoroute des Laurentides toward Laval.",
+                  "streetName": [
+                    {
+                      "value": "15",
+                      "isRouteNumber": true
+                    },
+                    {
+                      "value": "Autoroute des Laurentides"
+                    }
+                  ],
+                  "length": 6.552000522613525,
+                  "time": 318.86968994140625,
+                  "beginHeading": 27,
+                  "beginShapeIndex": 479,
+                  "endShapeIndex": 791,
+                  "verbalPreTransitionInstruction": "Keep right to take exit 70 onto 15, Autoroute des Laurentides toward Laval.",
+                  "sign": {
+                    "exitNumbers": [
+                      {
+                        "text": "70"
+                      }
+                    ],
+                    "exitOntoStreets": [
+                      {
+                        "text": "15 Nord"
+                      }
+                    ],
+                    "exitTowardLocations": [
+                      {
+                        "text": "Laval"
+                      }
+                    ]
+                  },
+                  "beginPathIndex": 150,
+                  "turnDegree": 7
+                },
+                {
+                  "type": 20,
+                  "textInstruction": "Take exit 7 onto Boulevard de la Concorde.",
+                  "length": 0.3630000054836273,
+                  "time": 22.767578125,
+                  "beginHeading": 338,
+                  "beginShapeIndex": 791,
+                  "endShapeIndex": 800,
+                  "verbalPreTransitionInstruction": "Take exit 7 onto Boulevard de la Concorde.",
+                  "sign": {
+                    "exitNumbers": [
+                      {
+                        "text": "7"
+                      }
+                    ],
+                    "exitOntoStreets": [
+                      {
+                        "text": "Boulevard de la Concorde"
+                      },
+                      {
+                        "text": "Boulevard Notre-Dame"
+                      },
+                      {
+                        "text": "Boulevard Cartier"
+                      }
+                    ]
+                  },
+                  "beginPathIndex": 192,
+                  "turnDegree": 12
+                },
+                {
+                  "type": 24,
+                  "textInstruction": "Keep left to take Boulevard de la Concorde toward Saint-Jérôme.",
+                  "streetName": [
+                    {
+                      "value": "Desserte est des Laurentides (A-15)"
+                    }
+                  ],
+                  "length": 0.15000000596046448,
+                  "time": 9.439697265625,
+                  "beginHeading": 322,
+                  "beginShapeIndex": 800,
+                  "endShapeIndex": 802,
+                  "verbalPreTransitionInstruction": "Keep left to take Boulevard de la Concorde toward Saint-Jérôme. Then Keep right to take Boulevard de la Concorde.",
+                  "sign": {
+                    "exitOntoStreets": [
+                      {
+                        "text": "Boulevard de la Concorde"
+                      },
+                      {
+                        "text": "Boulevard Notre-Dame"
+                      },
+                      {
+                        "text": "15 Nord"
+                      }
+                    ],
+                    "exitTowardLocations": [
+                      {
+                        "text": "Saint-Jérôme"
+                      }
+                    ]
+                  },
+                  "beginPathIndex": 197,
+                  "turnDegree": 359
+                },
+                {
+                  "type": 23,
+                  "textInstruction": "Keep right to take Boulevard de la Concorde.",
+                  "length": 0.19900000095367432,
+                  "time": 27.7611083984375,
+                  "beginHeading": 329,
+                  "beginShapeIndex": 802,
+                  "endShapeIndex": 818,
+                  "verbalPreTransitionInstruction": "Keep right to take Boulevard de la Concorde.",
+                  "sign": {
+                    "exitOntoStreets": [
+                      {
+                        "text": "Boulevard de la Concorde"
+                      },
+                      {
+                        "text": "Boulevard Notre-Dame"
+                      }
+                    ]
+                  },
+                  "beginPathIndex": 199,
+                  "turnDegree": 7
+                },
+                {
+                  "type": 23,
+                  "textInstruction": "Keep right to take Boulevard de la Concorde.",
+                  "length": 0.1420000195503235,
+                  "time": 19.783447265625,
+                  "beginHeading": 355,
+                  "beginShapeIndex": 818,
+                  "endShapeIndex": 834,
+                  "verbalPreTransitionInstruction": "Keep right to take Boulevard de la Concorde.",
+                  "sign": {
+                    "exitOntoStreets": [
+                      {
+                        "text": "Boulevard de la Concorde"
+                      }
+                    ]
+                  },
+                  "beginPathIndex": 203,
+                  "turnDegree": 7
+                },
+                {
+                  "type": 9,
+                  "textInstruction": "Bear right onto Boulevard de la Concorde Ouest.",
+                  "streetName": [
+                    {
+                      "value": "Boulevard de la Concorde Ouest"
+                    }
+                  ],
+                  "length": 0.4309999942779541,
+                  "time": 67.6077880859375,
+                  "beginHeading": 51,
+                  "beginShapeIndex": 834,
+                  "endShapeIndex": 858,
+                  "verbalPreTransitionInstruction": "Bear right onto Boulevard de la Concorde Ouest.",
+                  "beginPathIndex": 209,
+                  "turnDegree": 26,
+                  "verbalSuccinctTransitionInstruction": "Bear right."
+                },
+                {
+                  "type": 15,
+                  "textInstruction": "Turn left onto Rue Lucien Paiement.",
+                  "streetName": [
+                    {
+                      "value": "Rue Lucien Paiement"
+                    }
+                  ],
+                  "length": 0.21699999272823334,
+                  "time": 39.2276611328125,
+                  "beginHeading": 325,
+                  "beginShapeIndex": 858,
+                  "endShapeIndex": 873,
+                  "verbalPreTransitionInstruction": "Turn left onto Rue Lucien Paiement.",
+                  "beginPathIndex": 224,
+                  "turnDegree": 273,
+                  "verbalSuccinctTransitionInstruction": "Turn left."
+                },
+                {
+                  "type": 15,
+                  "textInstruction": "Turn left.",
+                  "length": 0.04681042581796646,
+                  "time": 19.013671875,
+                  "beginHeading": 249,
+                  "beginShapeIndex": 873,
+                  "endShapeIndex": 880,
+                  "verbalPreTransitionInstruction": "Turn left.",
+                  "beginPathIndex": 236,
+                  "turnDegree": 283,
+                  "verbalSuccinctTransitionInstruction": "Turn left."
+                },
+                {
+                  "type": 6,
+                  "textInstruction": "Your destination is on the left.",
+                  "beginShapeIndex": 880,
+                  "endShapeIndex": 880,
+                  "verbalPreTransitionInstruction": "Your destination is on the left.",
+                  "beginPathIndex": 240
+                }
+              ],
+              "shape": "wx}tuAl}_tkC{AVqAgTLe@j@]rKsApUwCp@Fh@Xn@h@z@hAbDy@jAUfEe@^Et@@dAHhAZjAXsH`r@aAzJi@fFSfCSvC_ApPO~CgAfYqApNcCfVoC|WmAvL_@lDeCjUk@pE}@|G_ApGw@~F{@pG}DlMsCfNkDlPcAdF_CtMw@|E{@zFu@pFqAnLs@zGi@lGIbA[pEYzDbHkA|]uGtJgBxE}@deAcRvDk@KbCEh@cBhY{Bl]WjC[~Ae@hAs@fAk@f@s@h@mAb@sAXmc@fHgd@zHqBJiA?_AGl@oL~@qPj@gKn@kKj@gJpAuPv@{IbIc|@nAaMbBiPnByRjAcMnAmM|AcOjE{a@nC{V`DoZrHer@vHys@lFyd@xBkShAkJx@sGp@qF|@kG~@_G`BcJbBwINaAz@_Ef@{JhAsCnA_E~@oDd@}Bf@oCf@wD`@uDX}DPqDHwD@aE?qAEaBGwBWeE]kEw@gGUkAc@gCcAkE}@_DeAsCeA_Cq@{AsAcCiAeBuAkBw@}@sBaBy@c@y@a@gBk@kB_@}AEgBLwAX{Br@}AbA{AlAuArAkAxAaA|Ay@vB}@xCcAtDw@rDe@lC]zBaAnI_GrLu@~Aw@tAeArAiApAsAfAgBrAwAr@{BdAeC|@oBf@uBb@{ATqALwAHiBFaBAgBIoGg@eLeAaEa@gFm@oGi@wFQ_FE}ECuWWgFBqHEyWA_CCmBIwAOgBSeB]_Co@cBq@yAq@}A_A}AmAeBiBuAaB}B}C{A}BsBkDwBqDqBgEqAqCsAgDoA}CaBuEkB{FmB_G{AkFuAsFiA}EwJmc@gBkJcBwJaByIsBqIoBsHkA{D_AuCsBwGmBsFiBsEaB}DmCgGoBoEkEuJgFgNkLiUaGwLqFaLmyAcwCyt@{xAujAa~Bg`@yv@{_@_v@{NeYqOeZw_@_r@iPkYo]kk@sGgK_Uo]gJ}NeGgJgKePqIsMm`@{m@uWga@sLqR}h@ey@oi@az@kh@ow@_Te[eLqP{Sm[i\\of@qOeU}PgW_l@i{@ac@ao@_pAqjBq]ig@gd@gp@kv@yhAaXo`@a`AouAw~@_tAeP}UgpAujBid@yp@cNyRu\\cg@sUy\\q`@mk@gLmPyl@m{@yw@ajAeZyb@aYsa@gfBwiCqKgP}Ve_@_j@yx@yKcPil@e|@qz@ynAsUm]oEuGiPmVeMsQsQmWo`@_k@{Xaa@sNkS_TsZeR}WgKaOsPgV{c@ko@wDwFyCyE}BuDoBiDiBeD{AwCuBmEgB}DaB_EsAeD_D_I}BuGgCmI{BiI}A}FwAgGuB{IoBoIsM{j@qIm^mEaRsEkRmEeRyCcMeCmKcBuGuAkFiBkGgBiFsCgI_BiEwAoDgC}FsCeGoCoFmBwDiB}CoEaHuCoEkG{I}OqT}Wq^mRi_@sWg\\kOuR{GkJaGsIi@w@{Y_b@wNqSkAcBeEuFwFaHyDmFeXo_@sGgJuG{IeCkDsIyKqKqNkEgGgFsHoDwFwDsGqC}EeDsG{C_G}AwCyBsDmBcDmCsEyCcFuBeDiDiFmEuGsG_JcFeCiLeHmFsHyPoUk]oe@sgAg{A_RwVo^ke@_JmLsFsH_KkNmIcMiHoK}EiHqA}BeWcd@kBaEeAkCaB_EoBiFmB_G{AmFoAeFyAgGeBiI}AoHcA}E{@mDeA_EiAcEeAcDiAiDaAqCiAsC}AgDiBmDcByCaBuC_CwDcCaDsBiC_CkCwBwBgCcCiC{BuB{AuB}AaDoB{CcBuCqAuEeB{DqA_Cq@eBa@cB]cCe@sAW{Ck@eNaCeBa@kCu@eCw@eDoAgHaD}CcAoCcAqB{@sBaAgAi@{BiAqDqBgE}B}QiK{PeJoUaMeKoFuKqFaLsFwe@mU}NqHgT{Kee@yVs}@ag@y_@_Tox@{c@iK{F}EmCisAkt@m_Bs{@mYiNwW}NwhAip@w|@uh@k`BaaAyv@{b@clAup@ys@}`@a]mQoC}A{M_H}FuCmJmEkJkEcOsGkUyJcj@k^iB{@oGyCsI}DkHoD_IwDmUuKeLmFcEkBeE}AsDoAgCy@gBe@kBc@eBY{BY_BOsAIkAEyBEiDFsBNyBReBRkBZcCl@aCv@aDjA_CbAiB`AwBtA_BlAuB|AkBhB{AzAkAtAiAxAkBnCcBfCuBrDsAxCuAbDsAzDcBxFaA~DgAfF_AvFm@tFc@tEa@dFWpDU`EkB|^WrEk@fLi@dJYlF]dEYtD]rD]tDe@fEm@fFiAtIoAhJaAdGaArGgAlGoGp]mVfoAyJdg@iTdhAeYzxAyDxRcJxd@{H`a@wOpx@eEjTmRpaA{C~NuNdu@qThiAsRlbAaLxn@gKli@_CnMkBvKiB`LoBtMuAbKmA`KeAfJs@`H_AdK}@|Jw@pKw@|Ls@nLi@dLc@pLW~HS~HOvIMdHItGGvKChDAfDAdL?jHJnMLjJJ~EDtBRlIVpJZvIXtH\\nHb@rIf@xIf@xHp@hIt@~Ht@bIr@lG`AjIfArJlA|JdAzIjArIfA|HhF~^`DvTjQjnAlQjnAxc@f~CjIvk@rBrNrAvJzA~KfAhI~@~H|@pI|@dJn@rHp@pIXvDl@vIj@bKRvDPxD`@hJZrHRjHTnJRvMF~DBdCJxHBdJBvJCxJGfJMfKOfIOlHQxGIfCa@xLq@rNw@pN{@pM}@xLaAxKiApLoA|KwAnLqAdKyAnKqAlIyAtI{AvIcBzIkBjJwBzJyBzJcB|GuBjI{BhIeCrIoDhLaD~JoD`KqD|JwDrJ_EtJmE|JuDhIwElJ_CvEgCrE}E`JsUlc@eOzXq^rp@}t@huA}[`m@iLlT_PfZ_Wde@_EtHgFpJaE~HwElJkClFkB|DmCfGeDbIcDdIoBnFeBxEiBnFsBlGuBfHsAjEeBpGcBjGcB`HyAfGcBpHuArGqA`HuAlHcA`GgAbH_AlGeAhH}@jHgApJcBjO_BlOgAbKeAbJeAfJeA`JiAbJ}@vGq@|Eu@~EwAhJkAfHiAlG{@pE{@dEqAhG{AvGsAxFuArFiAlEsA~EsAnEsB|GuAhEwAfEaBxEoBpF}AdEgBhEeBdEyCzGiAdCwA|CmBxDoAbCkBrD_B|CeE`IsDbHqD|G{DnHwIhPwC`GsD|G}aArkBoHhN{AnCgDdGsBpDyBpDiC`EmBzCwCjEwB`DmBlCqCpDyBtCcCvCoBzBoDfEyBdCkBpBiEnEsGlGoGbGmW`W}OvOgdAnaAsm@bl@}|@x{@mU~Tqd@rc@ka@xRwCzBoG|E}GbF{IzGqDrCaWzTuf@bj@wa@vd@sYd]}e@bk@eGbFoXzToEzEmCjC_B~AsAjAyApAyAnAqBvAkBlA{BlAqBfAcCbAoCdAaEhA{LhCa\\vBsCr@qAb@eAd@{Ap@mAr@eAv@mB~A_DtCsC`C{@Zw@PqADgCc@y@c@aBwBmAgC}IkRcEcJeEqIyHwOeCwE_D_GsByDoC_FoPiZo@qA]k@yAqCiDeI{DaIYm@cFcKcOuY{Tag@yLmXwAaDk@sAWq@mBkEcFlF}A|Aa@b@o@n@_QzPyGvGqQdQiGdGmJhJyApAeDvC{C|BkCpB{AzAkBfBbA`G@`Eu@bB}@fAiE~CiBP??"
+            }
+          ]
+        }
+      ]
+    },
+    "info": {}
+  }
+}

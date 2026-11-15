@@ -1,7 +1,7 @@
 import {
   AppConfigResponseSchema,
   isCoordinateServed,
-  SERVICE_AREAS,
+  registeredServiceAreas,
   serverAreaForCoordinate,
   serverConfigFromPayload,
 } from '@navoss/contracts';
@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 
 import borderPoints from '../../../packages/contracts/test/fixtures/coverage-border-points.json' with { type: 'json' };
 import { fixtureValue } from '../../../packages/contracts/test/fixture-value.js';
-import { fetchAppConfig } from '../src/lib/api.js';
+import { fetchAppConfig, fetchAppConfigUntilKnown } from '../src/lib/api.js';
 import newServerV1 from './fixtures/server-config/new-server.v1-config.json' with { type: 'json' };
 import newServerV2 from './fixtures/server-config/new-server.v2-config.json' with { type: 'json' };
 import productionV1 from './fixtures/server-config/production-2026-11.v1-config.json' with { type: 'json' };
@@ -74,9 +74,12 @@ describe('server config from the new server (this branch, #79)', () => {
 
   it.each(borderPoints.cases)(
     '$id follows the polygons the server sent',
-    ({ coordinate, serviceAreaId }) => {
+    ({ coordinate, provinceId }) => {
       const { coverage } = serverConfigFromPayload(newServerV2.response);
-      expect(serverAreaForCoordinate(coverage, coordinate)?.id ?? null).toBe(serviceAreaId);
+      const declared = provinceId === 'alberta' || provinceId === 'british-columbia';
+      expect(serverAreaForCoordinate(coverage, coordinate)?.id ?? null).toBe(
+        declared ? provinceId : null,
+      );
     },
   );
 
@@ -96,7 +99,7 @@ describe('server config leniency', () => {
     const { coverage } = serverConfigFromPayload(payload);
     expect(coverage.areas.map((area) => area.boundary)).toEqual(
       ['alberta', 'british-columbia'].map(
-        (id) => fixtureValue(SERVICE_AREAS.find((area) => area.id === id)).boundary,
+        (id) => fixtureValue(registeredServiceAreas().find((area) => area.id === id)).boundary,
       ),
     );
     // The BC rectangle reaches Seattle; the province polygon does not.
@@ -200,5 +203,48 @@ describe('fetchAppConfig', () => {
       'https://api.example.test/v1/config',
     ]);
     expect(config.coverage.displayName).toBe('Calgary, Alberta');
+  });
+});
+
+describe('fetchAppConfigUntilKnown', () => {
+  it('asks again with backoff while a restarted server answers 503', async () => {
+    let calls = 0;
+    const waits: number[] = [];
+    const failures: unknown[] = [];
+    const config = await fetchAppConfigUntilKnown({
+      baseUrl: 'https://api.example.test',
+      fetchImplementation: async () => {
+        calls += 1;
+        return calls <= 3
+          ? new Response(JSON.stringify({ code: 'service_unavailable' }), { status: 503 })
+          : new Response(JSON.stringify(newServerV2.response));
+      },
+      onFailure: (error) => failures.push(error),
+      retryDelaysMs: [2_000, 4_000],
+      wait: async (milliseconds) => {
+        waits.push(milliseconds);
+      },
+    });
+    expect(calls).toBe(4);
+    expect(waits).toEqual([2_000, 4_000, 4_000]);
+    expect(failures).toHaveLength(3);
+    expect(config.capabilities.routesV2).toBe(true);
+  });
+
+  it('stops when the screen goes away', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const result = fetchAppConfigUntilKnown({
+      baseUrl: 'https://api.example.test',
+      fetchImplementation: async () => {
+        calls += 1;
+        controller.abort();
+        return new Response('{}', { status: 503 });
+      },
+      signal: controller.signal,
+      wait: async () => undefined,
+    });
+    await expect(result).rejects.toBeDefined();
+    expect(calls).toBe(1);
   });
 });

@@ -179,7 +179,7 @@ function analyze(routeCase, route, response, latencyMs, avoidHighways) {
     failures.push('geometry detail');
   }
   if (Math.abs(metrics.geometryRatio - 1) > 0.03) failures.push('geometry distance');
-  if (latencyMs > 5_000) failures.push('latency');
+  if (latencyMs > (routeCase.maximumLatencyMs ?? 5_000)) failures.push('latency');
   if (metrics.maximumSegmentMeters > (routeCase.maximumSegmentMeters ?? 2_000)) {
     failures.push('geometry gap');
   }

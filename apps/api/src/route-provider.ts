@@ -13,6 +13,7 @@ import { z } from 'zod/v4';
 import {
   buildValhallaPbfRequest,
   parseValhallaPbf,
+  VALHALLA_NO_PATH,
   ValhallaDecodeError,
   ValhallaRoutingError,
 } from './valhalla-pbf.js';
@@ -99,6 +100,24 @@ export class RouteProviderError extends Error {
     this.name = 'RouteProviderError';
   }
 }
+
+/** The routing graph holds every place but no road (or ferry) route joins them. */
+export class RouteNotFoundError extends RouteProviderError {
+  public constructor(options?: ErrorOptions) {
+    super('No road route joins these places.', options);
+    this.name = 'RouteNotFoundError';
+  }
+}
+
+function routingFailure(error: ValhallaRoutingError): RouteProviderError {
+  return error.codes.includes(VALHALLA_NO_PATH)
+    ? new RouteNotFoundError({ cause: error })
+    : new RouteProviderError('The routing provider could not calculate a route.', {
+        cause: error,
+      });
+}
+
+const ValhallaJsonErrorSchema = z.object({ error_code: z.number() });
 
 export interface RouteProvider {
   getRoutes(request: RouteRequest): Promise<RouteAlternative[]>;
@@ -451,6 +470,14 @@ export function createValhallaRouteProvider(
           cause: error,
         });
       }
+      if (response.status === 400) {
+        // Valhalla answers "no path" with 400 and its error in the protobuf body.
+        try {
+          parseValhallaPbf(new Uint8Array(await response.arrayBuffer()));
+        } catch (error: unknown) {
+          if (error instanceof ValhallaRoutingError) throw routingFailure(error);
+        }
+      }
       if (!response.ok) {
         throw new RouteProviderError(
           `The routing provider returned status ${String(response.status)}.`,
@@ -469,11 +496,7 @@ export function createValhallaRouteProvider(
         enrichmentDegraded = false;
         return applyFastestLabel(routes.sort(compareRouteAlternatives));
       } catch (error: unknown) {
-        if (error instanceof ValhallaRoutingError) {
-          throw new RouteProviderError('The routing provider could not calculate a route.', {
-            cause: error,
-          });
-        }
+        if (error instanceof ValhallaRoutingError) throw routingFailure(error);
         if (!(error instanceof ValhallaDecodeError)) throw error;
         // A protocol mismatch must not take routing down. Exactly one legacy fallback is
         // permitted for a received but undecodable response, never for a transport/status error.
@@ -499,6 +522,12 @@ export function createValhallaRouteProvider(
         });
       }
 
+      if (response.status === 400) {
+        const failure = ValhallaJsonErrorSchema.safeParse(await response.json().catch(() => null));
+        if (failure.success && failure.data.error_code === VALHALLA_NO_PATH) {
+          throw new RouteNotFoundError();
+        }
+      }
       if (!response.ok) {
         throw new RouteProviderError(
           `The routing provider returned status ${String(response.status)}.`,

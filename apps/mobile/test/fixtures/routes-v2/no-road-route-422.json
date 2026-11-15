@@ -1,0 +1,24 @@
+{
+  "recorded": "POST /v2/routes from this API (feat/ontario-coverage) with the recorded Valhalla 442 protobuf answer in apps/api/test/fixtures/valhalla/toronto-island-no-path.json; Toronto City Hall to Centre Island",
+  "capturedAt": "2026-11-15T10:28:43.240Z",
+  "request": {
+    "alternatives": 0,
+    "origin": {
+      "latitude": 43.6525,
+      "longitude": -79.3832
+    },
+    "destination": {
+      "latitude": 43.6205,
+      "longitude": -79.3787
+    },
+    "preferences": {
+      "avoidFerries": false,
+      "avoidHighways": false,
+      "avoidTolls": false,
+      "avoidUnpaved": false
+    }
+  },
+  "status": 422,
+  "contentType": "application/problem+json; charset=utf-8",
+  "body": "{\"code\":\"invalid_request\",\"detail\":\"No road connects these places. Some are reached only by air, by water or by a winter road.\",\"requestId\":\"req-1\",\"status\":422,\"title\":\"No road route\"}"
+}

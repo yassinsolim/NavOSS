@@ -5,11 +5,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import borderPoints from '../../../packages/contracts/test/fixtures/coverage-border-points.json' with { type: 'json' };
 import { buildApp } from '../src/app.js';
 import { RouteProviderError } from '../src/route-provider.js';
-import {
-  createFixtureSearchProvider,
-  isCalgarySearchCoordinate,
-  isSupportedSearchCoordinate,
-} from '../src/search-provider.js';
+import { createFixtureSearchProvider, isCalgarySearchCoordinate } from '../src/search-provider.js';
+import { DEFAULT_SERVICE_COVERAGE } from '../src/service-coverage.js';
+
+// The deployed default declaration: Alberta and British Columbia.
+const servedByDefault = (provinceId: string | null) =>
+  provinceId === 'alberta' || provinceId === 'british-columbia';
 
 const origin = { latitude: 51.04427, longitude: -114.06309 };
 const destination = { latitude: 51.13157, longitude: -114.01055 };
@@ -38,9 +39,9 @@ beforeEach(() => {
 describe('AB and BC search/route eligibility', () => {
   it.each(borderPoints.cases)(
     '$id uses polygon eligibility for nearby search and both route versions',
-    async ({ coordinate, serviceAreaId }) => {
-      const supported = serviceAreaId !== null;
-      expect(isSupportedSearchCoordinate(coordinate)).toBe(supported);
+    async ({ coordinate, provinceId }) => {
+      const supported = servedByDefault(provinceId);
+      expect(DEFAULT_SERVICE_COVERAGE.contains(coordinate)).toBe(supported);
       const result = await app.inject({
         method: 'POST',
         url: '/v1/search',
@@ -66,7 +67,7 @@ describe('AB and BC search/route eligibility', () => {
     },
   );
 
-  it.each(borderPoints.cases.filter(({ serviceAreaId }) => serviceAreaId === null))(
+  it.each(borderPoints.cases.filter(({ provinceId }) => !servedByDefault(provinceId)))(
     '$id rejects every route coordinate position, not just the destination',
     async ({ coordinate }) => {
       for (const version of ['v1', 'v2']) {

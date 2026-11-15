@@ -65,15 +65,19 @@ final class NavigationServerCompatibilityTests: XCTestCase {
       struct Case: Decodable {
         let id: String
         let coordinate: NavOSSCarPlayCoordinate
-        let serviceAreaId: String?
+        /// The registered province the point lies in, served or not.
+        let provinceId: String?
       }
       let cases: [Case]
     }
     let points = try JSONDecoder().decode(Points.self, from: Data(contentsOf: Self.borderPoints))
     XCTAssertGreaterThan(points.cases.count, 40)
     for point in points.cases {
+      // This server declares Alberta and British Columbia only.
+      let declared = ["alberta", "british-columbia"].contains(point.provinceId ?? "")
       XCTAssertEqual(
-        coverage.areas.first { $0.contains(point.coordinate) }?.id, point.serviceAreaId, point.id)
+        coverage.areas.first { $0.contains(point.coordinate) }?.id,
+        declared ? point.provinceId : nil, point.id)
     }
   }
 

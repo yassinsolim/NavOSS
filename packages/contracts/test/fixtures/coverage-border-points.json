@@ -1,7 +1,7 @@
 {
   "source": "https://geo.statcan.gc.ca/geo_wa/rest/services/2021/Digital_boundary_files/MapServer/0",
   "licenseUrl": "https://open.canada.ca/en/open-government-licence-canada",
-  "description": "Public city anchors and offsets on each side of the source provincial boundaries. No route results.",
+  "description": "Public city anchors, islands, shorelines and points on each side of the source province and territory boundaries, with the province each lies in by geography (null: outside Canada). Points near a border are at least 300 m from the simplified boundary. No route results.",
   "cases": [
     {
       "id": "calgary",
@@ -9,7 +9,7 @@
         "latitude": 51.04427,
         "longitude": -114.06309
       },
-      "serviceAreaId": "alberta"
+      "provinceId": "alberta"
     },
     {
       "id": "edmonton",
@@ -17,7 +17,7 @@
         "latitude": 53.5461,
         "longitude": -113.4938
       },
-      "serviceAreaId": "alberta"
+      "provinceId": "alberta"
     },
     {
       "id": "red-deer",
@@ -25,7 +25,7 @@
         "latitude": 52.2681,
         "longitude": -113.8112
       },
-      "serviceAreaId": "alberta"
+      "provinceId": "alberta"
     },
     {
       "id": "lethbridge",
@@ -33,7 +33,7 @@
         "latitude": 49.6956,
         "longitude": -112.8451
       },
-      "serviceAreaId": "alberta"
+      "provinceId": "alberta"
     },
     {
       "id": "banff",
@@ -41,7 +41,7 @@
         "latitude": 51.1784,
         "longitude": -115.5708
       },
-      "serviceAreaId": "alberta"
+      "provinceId": "alberta"
     },
     {
       "id": "vancouver",
@@ -49,7 +49,7 @@
         "latitude": 49.2827,
         "longitude": -123.1207
       },
-      "serviceAreaId": "british-columbia"
+      "provinceId": "british-columbia"
     },
     {
       "id": "victoria",
@@ -57,7 +57,7 @@
         "latitude": 48.4284,
         "longitude": -123.3656
       },
-      "serviceAreaId": "british-columbia"
+      "provinceId": "british-columbia"
     },
     {
       "id": "kelowna",
@@ -65,7 +65,7 @@
         "latitude": 49.8879,
         "longitude": -119.496
       },
-      "serviceAreaId": "british-columbia"
+      "provinceId": "british-columbia"
     },
     {
       "id": "kamloops",
@@ -73,7 +73,7 @@
         "latitude": 50.6745,
         "longitude": -120.3273
       },
-      "serviceAreaId": "british-columbia"
+      "provinceId": "british-columbia"
     },
     {
       "id": "prince-george",
@@ -81,7 +81,7 @@
         "latitude": 53.9171,
         "longitude": -122.7497
       },
-      "serviceAreaId": "british-columbia"
+      "provinceId": "british-columbia"
     },
     {
       "id": "masset-haida-gwaii",
@@ -89,7 +89,7 @@
         "latitude": 54.0105,
         "longitude": -132.1479
       },
-      "serviceAreaId": "british-columbia"
+      "provinceId": "british-columbia"
     },
     {
       "id": "alberta-north-inside",
@@ -97,15 +97,15 @@
         "latitude": 59.98,
         "longitude": -115
       },
-      "serviceAreaId": "alberta"
+      "provinceId": "alberta"
     },
     {
-      "id": "northwest-territories-outside",
+      "id": "northwest-territories-north-of-alberta",
       "coordinate": {
         "latitude": 60.02,
         "longitude": -115
       },
-      "serviceAreaId": null
+      "provinceId": "northwest-territories"
     },
     {
       "id": "alberta-east-inside",
@@ -113,15 +113,15 @@
         "latitude": 53.3,
         "longitude": -110.02
       },
-      "serviceAreaId": "alberta"
+      "provinceId": "alberta"
     },
     {
-      "id": "saskatchewan-outside",
+      "id": "saskatchewan-east-of-alberta",
       "coordinate": {
         "latitude": 53.3,
         "longitude": -109.98
       },
-      "serviceAreaId": null
+      "provinceId": "saskatchewan"
     },
     {
       "id": "alberta-south-inside",
@@ -129,7 +129,7 @@
         "latitude": 49.02,
         "longitude": -112
       },
-      "serviceAreaId": "alberta"
+      "provinceId": "alberta"
     },
     {
       "id": "montana-outside",
@@ -137,7 +137,7 @@
         "latitude": 48.98,
         "longitude": -112
       },
-      "serviceAreaId": null
+      "provinceId": null
     },
     {
       "id": "bc-north-inside",
@@ -145,15 +145,15 @@
         "latitude": 59.98,
         "longitude": -130
       },
-      "serviceAreaId": "british-columbia"
+      "provinceId": "british-columbia"
     },
     {
-      "id": "yukon-outside",
+      "id": "yukon-north-of-bc",
       "coordinate": {
         "latitude": 60.02,
         "longitude": -130
       },
-      "serviceAreaId": null
+      "provinceId": "yukon"
     },
     {
       "id": "bc-mainland-south-inside",
@@ -161,7 +161,7 @@
         "latitude": 49.02,
         "longitude": -122.75
       },
-      "serviceAreaId": "british-columbia"
+      "provinceId": "british-columbia"
     },
     {
       "id": "washington-mainland-outside",
@@ -169,7 +169,7 @@
         "latitude": 48.98,
         "longitude": -122.75
       },
-      "serviceAreaId": null
+      "provinceId": null
     },
     {
       "id": "point-roberts-outside",
@@ -177,7 +177,7 @@
         "latitude": 48.985,
         "longitude": -123.052
       },
-      "serviceAreaId": null
+      "provinceId": null
     },
     {
       "id": "san-juan-island-outside",
@@ -185,7 +185,7 @@
         "latitude": 48.5343,
         "longitude": -123.0171
       },
-      "serviceAreaId": null
+      "provinceId": null
     },
     {
       "id": "port-angeles-outside",
@@ -193,7 +193,7 @@
         "latitude": 48.1181,
         "longitude": -123.4307
       },
-      "serviceAreaId": null
+      "provinceId": null
     },
     {
       "id": "seattle-outside",
@@ -201,7 +201,7 @@
         "latitude": 47.6062,
         "longitude": -122.3321
       },
-      "serviceAreaId": null
+      "provinceId": null
     },
     {
       "id": "stewart-bc-inside",
@@ -209,7 +209,7 @@
         "latitude": 55.938,
         "longitude": -129.9824
       },
-      "serviceAreaId": "british-columbia"
+      "provinceId": "british-columbia"
     },
     {
       "id": "hyder-alaska-outside",
@@ -217,15 +217,15 @@
         "latitude": 55.9177,
         "longitude": -130.0241
       },
-      "serviceAreaId": null
+      "provinceId": null
     },
     {
-      "id": "toronto-overlay-not-route",
+      "id": "toronto",
       "coordinate": {
         "latitude": 43.6532,
         "longitude": -79.3832
       },
-      "serviceAreaId": null
+      "provinceId": "ontario"
     },
     {
       "id": "ab-bc-border-49.6-east",
@@ -233,7 +233,7 @@
         "latitude": 49.6,
         "longitude": -114.723903
       },
-      "serviceAreaId": "alberta"
+      "provinceId": "alberta"
     },
     {
       "id": "ab-bc-border-49.6-west",
@@ -241,7 +241,7 @@
         "latitude": 49.6,
         "longitude": -114.763903
       },
-      "serviceAreaId": "british-columbia"
+      "provinceId": "british-columbia"
     },
     {
       "id": "ab-bc-border-51.5-east",
@@ -249,7 +249,7 @@
         "latitude": 51.5,
         "longitude": -116.369246
       },
-      "serviceAreaId": "alberta"
+      "provinceId": "alberta"
     },
     {
       "id": "ab-bc-border-51.5-west",
@@ -257,7 +257,7 @@
         "latitude": 51.5,
         "longitude": -116.409246
       },
-      "serviceAreaId": "british-columbia"
+      "provinceId": "british-columbia"
     },
     {
       "id": "ab-bc-border-53.5-east",
@@ -265,7 +265,7 @@
         "latitude": 53.5,
         "longitude": -119.792592
       },
-      "serviceAreaId": "alberta"
+      "provinceId": "alberta"
     },
     {
       "id": "ab-bc-border-53.5-west",
@@ -273,7 +273,7 @@
         "latitude": 53.5,
         "longitude": -119.832592
       },
-      "serviceAreaId": "british-columbia"
+      "provinceId": "british-columbia"
     },
     {
       "id": "ab-bc-border-55.5-east",
@@ -281,7 +281,7 @@
         "latitude": 55.5,
         "longitude": -119.981707
       },
-      "serviceAreaId": "alberta"
+      "provinceId": "alberta"
     },
     {
       "id": "ab-bc-border-55.5-west",
@@ -289,7 +289,7 @@
         "latitude": 55.5,
         "longitude": -120.021707
       },
-      "serviceAreaId": "british-columbia"
+      "provinceId": "british-columbia"
     },
     {
       "id": "ab-bc-border-58-east",
@@ -297,7 +297,7 @@
         "latitude": 58,
         "longitude": -119.980018
       },
-      "serviceAreaId": "alberta"
+      "provinceId": "alberta"
     },
     {
       "id": "ab-bc-border-58-west",
@@ -305,7 +305,7 @@
         "latitude": 58,
         "longitude": -120.020018
       },
-      "serviceAreaId": "british-columbia"
+      "provinceId": "british-columbia"
     },
     {
       "id": "bc-alaska-border-inside",
@@ -313,7 +313,7 @@
         "latitude": 58,
         "longitude": -133.049483
       },
-      "serviceAreaId": "british-columbia"
+      "provinceId": "british-columbia"
     },
     {
       "id": "bc-alaska-border-outside",
@@ -321,32 +321,527 @@
         "latitude": 58,
         "longitude": -133.089483
       },
-      "serviceAreaId": null
+      "provinceId": null
     },
     {
       "id": "bc-nwt-north-inside",
-      "coordinate": { "latitude": 59.98, "longitude": -122 },
-      "serviceAreaId": "british-columbia"
+      "coordinate": {
+        "latitude": 59.98,
+        "longitude": -122
+      },
+      "provinceId": "british-columbia"
     },
     {
-      "id": "bc-nwt-north-outside",
-      "coordinate": { "latitude": 60.02, "longitude": -122 },
-      "serviceAreaId": null
+      "id": "northwest-territories-north-of-bc",
+      "coordinate": {
+        "latitude": 60.02,
+        "longitude": -122
+      },
+      "provinceId": "northwest-territories"
     },
     {
       "id": "ab-bc-north-corner-alberta",
-      "coordinate": { "latitude": 59.98, "longitude": -119.98 },
-      "serviceAreaId": "alberta"
+      "coordinate": {
+        "latitude": 59.98,
+        "longitude": -119.98
+      },
+      "provinceId": "alberta"
     },
     {
       "id": "ab-bc-north-corner-bc",
-      "coordinate": { "latitude": 59.98, "longitude": -120.02 },
-      "serviceAreaId": "british-columbia"
+      "coordinate": {
+        "latitude": 59.98,
+        "longitude": -120.02
+      },
+      "provinceId": "british-columbia"
     },
     {
-      "id": "nwt-shared-corner-outside",
-      "coordinate": { "latitude": 60.02, "longitude": -120.02 },
-      "serviceAreaId": null
+      "id": "northwest-territories-shared-corner",
+      "coordinate": {
+        "latitude": 60.02,
+        "longitude": -120.02
+      },
+      "provinceId": "northwest-territories"
+    },
+    {
+      "id": "toronto-islands",
+      "coordinate": {
+        "latitude": 43.6205,
+        "longitude": -79.3787
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "hamilton",
+      "coordinate": {
+        "latitude": 43.2557,
+        "longitude": -79.8711
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "london-on",
+      "coordinate": {
+        "latitude": 42.9849,
+        "longitude": -81.2453
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "sudbury",
+      "coordinate": {
+        "latitude": 46.4917,
+        "longitude": -80.993
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "thunder-bay",
+      "coordinate": {
+        "latitude": 48.3809,
+        "longitude": -89.2477
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "kenora",
+      "coordinate": {
+        "latitude": 49.7671,
+        "longitude": -94.4894
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "moosonee",
+      "coordinate": {
+        "latitude": 51.2794,
+        "longitude": -80.6463
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "ottawa-parliament",
+      "coordinate": {
+        "latitude": 45.4236,
+        "longitude": -75.7009
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "gatineau-museum",
+      "coordinate": {
+        "latitude": 45.4295,
+        "longitude": -75.7096
+      },
+      "provinceId": "quebec"
+    },
+    {
+      "id": "ottawa-river-orleans",
+      "coordinate": {
+        "latitude": 45.4795,
+        "longitude": -75.5103
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "gatineau-masson",
+      "coordinate": {
+        "latitude": 45.547,
+        "longitude": -75.413
+      },
+      "provinceId": "quebec"
+    },
+    {
+      "id": "windsor",
+      "coordinate": {
+        "latitude": 42.3149,
+        "longitude": -83.0364
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "detroit",
+      "coordinate": {
+        "latitude": 42.3314,
+        "longitude": -83.0458
+      },
+      "provinceId": null
+    },
+    {
+      "id": "windsor-riverside",
+      "coordinate": {
+        "latitude": 42.337,
+        "longitude": -82.937
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "belle-isle-detroit",
+      "coordinate": {
+        "latitude": 42.342,
+        "longitude": -82.98
+      },
+      "provinceId": null
+    },
+    {
+      "id": "sault-ste-marie-on",
+      "coordinate": {
+        "latitude": 46.5219,
+        "longitude": -84.3461
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "sault-ste-marie-mi",
+      "coordinate": {
+        "latitude": 46.4953,
+        "longitude": -84.3453
+      },
+      "provinceId": null
+    },
+    {
+      "id": "niagara-falls-on",
+      "coordinate": {
+        "latitude": 43.0896,
+        "longitude": -79.0849
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "niagara-falls-ny",
+      "coordinate": {
+        "latitude": 43.0962,
+        "longitude": -79.0377
+      },
+      "provinceId": null
+    },
+    {
+      "id": "cobourg-lake-ontario-shore",
+      "coordinate": {
+        "latitude": 43.959,
+        "longitude": -78.166
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "lake-ontario-us-water",
+      "coordinate": {
+        "latitude": 43.35,
+        "longitude": -78
+      },
+      "provinceId": null
+    },
+    {
+      "id": "port-stanley-lake-erie-shore",
+      "coordinate": {
+        "latitude": 42.665,
+        "longitude": -81.214
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "lake-erie-us-water",
+      "coordinate": {
+        "latitude": 42.15,
+        "longitude": -81
+      },
+      "provinceId": null
+    },
+    {
+      "id": "marathon-lake-superior-shore",
+      "coordinate": {
+        "latitude": 48.7197,
+        "longitude": -86.3797
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "lake-superior-us-water",
+      "coordinate": {
+        "latitude": 47.3,
+        "longitude": -87
+      },
+      "provinceId": null
+    },
+    {
+      "id": "southampton-lake-huron-shore",
+      "coordinate": {
+        "latitude": 44.4975,
+        "longitude": -81.372
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "lake-huron-us-water",
+      "coordinate": {
+        "latitude": 44.6,
+        "longitude": -82.9
+      },
+      "provinceId": null
+    },
+    {
+      "id": "manitoulin-island",
+      "coordinate": {
+        "latitude": 45.8,
+        "longitude": -82.2
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "pelee-island",
+      "coordinate": {
+        "latitude": 41.77,
+        "longitude": -82.66
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "point-pelee",
+      "coordinate": {
+        "latitude": 41.96,
+        "longitude": -82.518
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "wolfe-island",
+      "coordinate": {
+        "latitude": 44.2,
+        "longitude": -76.43
+      },
+      "provinceId": "ontario"
+    },
+    {
+      "id": "kelleys-island-ohio",
+      "coordinate": {
+        "latitude": 41.6,
+        "longitude": -82.7
+      },
+      "provinceId": null
+    },
+    {
+      "id": "drummond-island-mi",
+      "coordinate": {
+        "latitude": 46,
+        "longitude": -83.7
+      },
+      "provinceId": null
+    },
+    {
+      "id": "isle-royale-mi",
+      "coordinate": {
+        "latitude": 48,
+        "longitude": -88.9
+      },
+      "provinceId": null
+    },
+    {
+      "id": "montreal",
+      "coordinate": {
+        "latitude": 45.5019,
+        "longitude": -73.5674
+      },
+      "provinceId": "quebec"
+    },
+    {
+      "id": "quebec-city",
+      "coordinate": {
+        "latitude": 46.8139,
+        "longitude": -71.208
+      },
+      "provinceId": "quebec"
+    },
+    {
+      "id": "sherbrooke",
+      "coordinate": {
+        "latitude": 45.4042,
+        "longitude": -71.8929
+      },
+      "provinceId": "quebec"
+    },
+    {
+      "id": "magdalen-islands",
+      "coordinate": {
+        "latitude": 47.38,
+        "longitude": -61.86
+      },
+      "provinceId": "quebec"
+    },
+    {
+      "id": "anticosti",
+      "coordinate": {
+        "latitude": 49.5,
+        "longitude": -63
+      },
+      "provinceId": "quebec"
+    },
+    {
+      "id": "fermont",
+      "coordinate": {
+        "latitude": 52.793,
+        "longitude": -67.085
+      },
+      "provinceId": "quebec"
+    },
+    {
+      "id": "labrador-city",
+      "coordinate": {
+        "latitude": 52.944,
+        "longitude": -66.914
+      },
+      "provinceId": "newfoundland-and-labrador"
+    },
+    {
+      "id": "st-johns",
+      "coordinate": {
+        "latitude": 47.5615,
+        "longitude": -52.7126
+      },
+      "provinceId": "newfoundland-and-labrador"
+    },
+    {
+      "id": "saint-pierre-france",
+      "coordinate": {
+        "latitude": 46.7811,
+        "longitude": -56.1764
+      },
+      "provinceId": null
+    },
+    {
+      "id": "winnipeg",
+      "coordinate": {
+        "latitude": 49.8954,
+        "longitude": -97.1385
+      },
+      "provinceId": "manitoba"
+    },
+    {
+      "id": "regina",
+      "coordinate": {
+        "latitude": 50.4452,
+        "longitude": -104.6189
+      },
+      "provinceId": "saskatchewan"
+    },
+    {
+      "id": "saskatoon",
+      "coordinate": {
+        "latitude": 52.1332,
+        "longitude": -106.67
+      },
+      "provinceId": "saskatchewan"
+    },
+    {
+      "id": "lloydminster-ab",
+      "coordinate": {
+        "latitude": 53.278,
+        "longitude": -110.03
+      },
+      "provinceId": "alberta"
+    },
+    {
+      "id": "lloydminster-sk",
+      "coordinate": {
+        "latitude": 53.278,
+        "longitude": -109.98
+      },
+      "provinceId": "saskatchewan"
+    },
+    {
+      "id": "halifax",
+      "coordinate": {
+        "latitude": 44.6488,
+        "longitude": -63.5752
+      },
+      "provinceId": "nova-scotia"
+    },
+    {
+      "id": "sydney-cape-breton",
+      "coordinate": {
+        "latitude": 46.1368,
+        "longitude": -60.1942
+      },
+      "provinceId": "nova-scotia"
+    },
+    {
+      "id": "sable-island",
+      "coordinate": {
+        "latitude": 43.9337,
+        "longitude": -59.9149
+      },
+      "provinceId": "nova-scotia"
+    },
+    {
+      "id": "moncton",
+      "coordinate": {
+        "latitude": 46.0878,
+        "longitude": -64.7782
+      },
+      "provinceId": "new-brunswick"
+    },
+    {
+      "id": "saint-john",
+      "coordinate": {
+        "latitude": 45.2733,
+        "longitude": -66.0633
+      },
+      "provinceId": "new-brunswick"
+    },
+    {
+      "id": "charlottetown",
+      "coordinate": {
+        "latitude": 46.2382,
+        "longitude": -63.1311
+      },
+      "provinceId": "prince-edward-island"
+    },
+    {
+      "id": "whitehorse",
+      "coordinate": {
+        "latitude": 60.7212,
+        "longitude": -135.0568
+      },
+      "provinceId": "yukon"
+    },
+    {
+      "id": "yellowknife",
+      "coordinate": {
+        "latitude": 62.454,
+        "longitude": -114.3718
+      },
+      "provinceId": "northwest-territories"
+    },
+    {
+      "id": "inuvik",
+      "coordinate": {
+        "latitude": 68.3607,
+        "longitude": -133.723
+      },
+      "provinceId": "northwest-territories"
+    },
+    {
+      "id": "iqaluit",
+      "coordinate": {
+        "latitude": 63.7467,
+        "longitude": -68.517
+      },
+      "provinceId": "nunavut"
+    },
+    {
+      "id": "akimiski-island",
+      "coordinate": {
+        "latitude": 53,
+        "longitude": -81.3
+      },
+      "provinceId": "nunavut"
+    },
+    {
+      "id": "juneau-alaska",
+      "coordinate": {
+        "latitude": 58.3019,
+        "longitude": -134.4197
+      },
+      "provinceId": null
     }
   ]
 }

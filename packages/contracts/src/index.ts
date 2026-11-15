@@ -28,19 +28,29 @@ export {
   CoverageBoundarySchema,
   CoverageBoundarySourceSchema,
   CoverageOverlaySchema,
+  createServiceCoverage,
+  DEFAULT_SERVICE_AREA_IDS,
   isCoordinateInBoundary,
   isCoordinateInBounds,
-  isCoordinateInServiceCoverage,
   KELOWNA_REGION_BOUNDS,
+  listDisplayNames,
   LOCAL_OVERLAY_AREAS,
-  SERVICE_AREAS,
-  SERVICE_COVERAGE_BOUNDS,
-  SERVICE_COVERAGE_ID,
-  SERVICE_COVERAGE_NAME,
+  parseServiceAreaIds,
+  provinceRegistry,
+  provinceForCoordinate,
+  provinceTimeZone,
+  registeredServiceAreas,
   ServiceAreaSchema,
-  serviceAreaForCoordinate,
 } from './coverage.js';
-export type { CoverageBoundary, ServiceArea } from './coverage.js';
+export type {
+  CoverageBoundary,
+  DisconnectedAreas,
+  ProvinceProfile,
+  ProvinceRegistration,
+  ProvinceTimeZone,
+  ServiceArea,
+  ServiceCoverage,
+} from './coverage.js';
 
 export {
   ContributionSubmissionRequestSchema,

@@ -152,7 +152,7 @@ import {
   isResumingTrip,
   vehicleMatchStatus as vehicleMatchStatusOf,
 } from '@/features/navigation/trip-status';
-import { fetchAppConfig, searchPlaces } from '@/lib/api';
+import { fetchAppConfigUntilKnown, searchPlaces } from '@/lib/api';
 import { useStableCallback } from '@/lib/use-stable-callback';
 import { createValueStore } from '@/lib/value-store';
 import { haptics } from '@/theme/haptics';
@@ -526,14 +526,18 @@ export function useMapController() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void fetchAppConfig({ signal: controller.signal })
+    // Keeps asking while the config is unknown (a server that has just restarted answers 503).
+    void fetchAppConfigUntilKnown({
+      onFailure: () => {
+        if (!controller.signal.aborted) setApiConnection('offline');
+      },
+      signal: controller.signal,
+    })
       .then((config) => {
         setApiConnection('online');
         setServerConfig(config);
       })
-      .catch(() => {
-        if (!controller.signal.aborted) setApiConnection('offline');
-      });
+      .catch(() => undefined);
     return () => {
       controller.abort();
     };

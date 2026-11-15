@@ -26,6 +26,8 @@ services:
       HOST: 0.0.0.0
       MAPBOX_ACCESS_TOKEN: ${MAPBOX_ACCESS_TOKEN:-}
       MAPBOX_VEHICLE_LICENSE_CONFIRMED: ${MAPBOX_VEHICLE_LICENSE_CONFIRMED:-0}
+      # Provinces this server declares; each needs its routing and search data (fail closed).
+      NAVOSS_SERVICE_AREAS: ${NAVOSS_SERVICE_AREAS:-alberta,british-columbia}
       # Set only when a host manifest directory is configured; unset keeps /v1/offline/manifest a
       # quiet 503.
       NAVOSS_OFFLINE_MANIFEST_PATH: ${NAVOSS_OFFLINE_MANIFEST_DIR:+/run/navoss/offline/manifest.json}
@@ -159,7 +161,8 @@ services:
     cap_drop:
       - ALL
     cpus: 2
-    mem_limit: 2g
+    # 2g serves the Alberta+BC graph; the Canada graph needs 4g (docs/architecture/north-america.md).
+    mem_limit: ${VALHALLA_MEM_LIMIT:-2g}
     networks:
       - backend
       - egress
@@ -181,6 +184,9 @@ services:
 
   nominatim:
     image: mediagis/nominatim:5.3
+    # The image's start.sh runs under `bash -ex` and traces `useradd -p <password>` in every new
+    # container; started as `bash -e` it prints no command. A cluster here is already imported.
+    entrypoint: ['/bin/bash', '-e', '/app/start.sh']
     logging: *navoss-logging
     restart: unless-stopped
     shm_size: 2g
@@ -205,7 +211,8 @@ services:
       UPDATE_MODE: none
       WARMUP_ON_STARTUP: 'false'
     cpus: 2.5
-    mem_limit: 6g
+    # 6g serves the Alberta+BC index; 8g gives the Canada index more cache.
+    mem_limit: ${NOMINATIM_MEM_LIMIT:-6g}
     networks:
       - backend
       - egress

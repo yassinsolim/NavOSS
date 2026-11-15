@@ -35,6 +35,8 @@ export interface OverlayData {
   kelownaTrafficCameras: readonly TrafficCamera[];
   /** The map region has an official road-event feed (whether or not it has loaded). */
   roadEventFeedAvailable: boolean;
+  /** A registered province without an official feed (its name), for the "no feed" state. */
+  roadEventNoFeedProvince: string | undefined;
   roadEventRefreshDelayed: boolean;
   /** Undefined until the active region's first snapshot arrives. */
   roadEventSnapshot: RoadEventSnapshot | undefined;
@@ -87,8 +89,11 @@ export function useOverlayData({
   const [trafficFlow, setTrafficFlow] = useState<TrafficFlowResponse>();
   const [trafficFlowFailed, setTrafficFlowFailed] = useState(false);
   const trafficFlowCache = useRef<TrafficFlowCache>(new Map());
-  const { legacy: legacyRegion, provincial: provincialRegion } =
-    roadEventFeedForMapRegion(mapRegion);
+  const {
+    legacy: legacyRegion,
+    noFeedProvince: roadEventNoFeedProvince,
+    provincial: provincialRegion,
+  } = roadEventFeedForMapRegion(mapRegion);
   const roadEventFeedKey = `${provincialRegion ?? ''}|${legacyRegion ?? ''}`;
 
   useEffect(() => {
@@ -224,6 +229,7 @@ export function useOverlayData({
     kelownaSafetyFacilities,
     kelownaTrafficCameras,
     roadEventFeedAvailable: provincialRegion !== undefined || legacyRegion !== undefined,
+    roadEventNoFeedProvince,
     roadEventRefreshDelayed,
     roadEventSnapshot,
     roadEvents,

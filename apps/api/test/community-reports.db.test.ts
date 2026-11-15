@@ -19,13 +19,17 @@ import {
 } from '../src/community-reports.js';
 import { MIGRATIONS, MigrationError, pendingMigrations, runMigrations } from '../src/migrations.js';
 import { rateLimitCell } from '../src/community-trust.js';
-import { isSupportedSearchCoordinate } from '../src/search-provider.js';
+import { DEFAULT_SERVICE_COVERAGE } from '../src/service-coverage.js';
 import {
   createTestAppAttestAuthority,
   type TestAttestedDevice,
   type TestDevice,
 } from './support/app-attest-fixture.js';
 import borderPoints from '../../../packages/contracts/test/fixtures/coverage-border-points.json' with { type: 'json' };
+
+// The deployed default declaration: Alberta and British Columbia.
+const servedByDefault = (provinceId: string | null) =>
+  provinceId === 'alberta' || provinceId === 'british-columbia';
 
 /**
  * Runs against a real PostGIS. Locally: `docker run --platform linux/amd64 -d --name
@@ -93,7 +97,7 @@ describe.skipIf(!available)('community reports on PostGIS', () => {
       attestationMode,
       clock: () => now,
       installationSecret: Buffer.alloc(32, 7),
-      isInCoverage: isSupportedSearchCoordinate,
+      isInCoverage: DEFAULT_SERVICE_COVERAGE.contains,
       pool: schemaPool(),
       publication,
       verifier: createAppAttestVerifier({
@@ -412,11 +416,11 @@ describe.skipIf(!available)('community reports on PostGIS', () => {
 
   it.each(borderPoints.cases)(
     '$id enforces the shared provincial coverage on attested report submission',
-    async ({ coordinate, serviceAreaId }) => {
+    async ({ coordinate, provinceId }) => {
       const { app } = await makeApp('attested');
       const device = await register(app);
       const response = await submit(app, device, coordinate);
-      expect(response.statusCode).toBe(serviceAreaId === null ? 400 : 201);
+      expect(response.statusCode).toBe(servedByDefault(provinceId) ? 201 : 400);
     },
   );
 

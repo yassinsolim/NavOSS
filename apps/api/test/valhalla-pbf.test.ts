@@ -14,10 +14,19 @@ import {
   parseValhallaPbf,
   ValhallaDecodeError,
 } from '../src/valhalla-pbf.js';
-import { createValhallaRouteProvider, RouteProviderError } from '../src/route-provider.js';
+import { createServiceCoverage, ProblemDetailsSchema } from '@navoss/contracts';
+import { buildApp } from '../src/app.js';
+import {
+  createValhallaRouteProvider,
+  RouteNotFoundError,
+  RouteProviderError,
+} from '../src/route-provider.js';
+import noPath from './fixtures/valhalla/toronto-island-no-path.json' with { type: 'json' };
 import calgary from './fixtures/valhalla/calgary-deerfoot-glenmore.json' with { type: 'json' };
 import stoney from './fixtures/valhalla/calgary-stoney-airport.json' with { type: 'json' };
 import vancouver from './fixtures/valhalla/vancouver-highway-interchange.json' with { type: 'json' };
+import toronto from './fixtures/valhalla/toronto-403-401-interchanges.json' with { type: 'json' };
+import montreal from './fixtures/valhalla/montreal-a520-a40-a15.json' with { type: 'json' };
 import local382 from './fixtures/valhalla/calgary-deerfoot-glenmore-local382.json' with { type: 'json' };
 import directionsOnly from './fixtures/valhalla/calgary-directions-only.json' with { type: 'json' };
 import legacy from './fixtures/valhalla/calgary-legacy-osrm.json' with { type: 'json' };
@@ -88,6 +97,50 @@ describe('real Valhalla lossless response fixtures', () => {
     expect(
       route.steps.find((step) => step.signpostBranch?.includes('Deerfoot Trail'))?.signpostToward,
     ).toEqual(['Fort Macleod']);
+  });
+  it('keeps lanes, exit numbers and signposts on recorded Ontario 400-series interchanges', () => {
+    const route = fixtureValue(parseValhallaPbf(bytes(toronto.response))[0]);
+    const steps = route.steps;
+    const express = fixtureValue(
+      steps.find((step) => step.signpostBranch?.includes('401 East Express')),
+    );
+    // The sign reads "401 EAST / EST EXPRESS"; drivers see and hear the English direction once.
+    expect(express.signpostBranch).toEqual(['401 East Express']);
+    expect(express.signpost).toBe('401 East Express');
+    expect(express.lanes?.map((lane) => lane.active)).toEqual([true, true, true, false]);
+    const collector = fixtureValue(
+      steps.find((step) => step.signpostToward?.includes('Islington Avenue')),
+    );
+    expect(collector.signpostToward).toEqual([
+      'Islington Avenue',
+      'Weston Road',
+      'Black Creek Drive',
+    ]);
+    expect(collector.currentRoadName).toContain('Highway 401 Collector');
+    const exit = fixtureValue(steps.find((step) => step.exitNumber === '380'));
+    expect(exit.instruction).toBe('Take exit 380 onto Brimley Road South.');
+    expect(exit.signpostBranch).toEqual(['Brimley Road South', 'Progress Avenue']);
+    expect(exit.lanes?.filter((lane) => lane.active)).toHaveLength(1);
+    expect(steps.filter((step) => (step.lanes?.length ?? 0) > 0).length).toBeGreaterThanOrEqual(4);
+    expect(route.distanceMeters).toBeGreaterThan(40_000);
+    expect(route.distanceMeters).toBeLessThan(50_000);
+  });
+  it('keeps Quebec French names and French-only signs as signed on a recorded Montreal route', () => {
+    const route = fixtureValue(parseValhallaPbf(bytes(montreal.response))[0]);
+    const exit70 = fixtureValue(route.steps.find((step) => step.exitNumber === '70'));
+    expect(exit70.instruction).toBe(
+      'Keep right to take exit 70 onto 15/Autoroute des Laurentides toward Laval.',
+    );
+    // A French-only sign has no English twin to collapse into; drivers see what is posted.
+    expect(exit70.signpostBranch).toEqual(['15 Nord']);
+    expect(exit70.signpostToward).toEqual(['Laval']);
+    expect(
+      route.steps.filter((step) => (step.lanes?.length ?? 0) > 0).length,
+    ).toBeGreaterThanOrEqual(3);
+    expect(route.steps.map((step) => step.instruction)).toContain(
+      'Bear right onto Boulevard de la Concorde Ouest.',
+    );
+    expect(route.steps.some((step) => step.instruction.includes('Rond-point Dorval'))).toBe(true);
   });
   it('retains real Vancouver branch and toward text separately rather than splitting mixed OSRM destinations', () => {
     const route = fixtureValue(parseValhallaPbf(bytes(vancouver.response))[0]);
@@ -412,5 +465,86 @@ describe('lossless Valhalla provider failure policy', () => {
       useTolls: 0,
     });
     expect(sent).not.toHaveProperty('options.dateTime');
+  });
+});
+
+describe('no road route', () => {
+  const recorded = (status: number, body: BodyInit) =>
+    vi.fn<typeof fetch>(() => Promise.resolve(new Response(body, { status })));
+  const islandTrip = noPath.request;
+
+  it('reads the recorded protobuf 442 as no road route, not an outage', async () => {
+    expect(noPath.pbf.decoded).toEqual({ info: { errors: [{ code: 442 }] } });
+    const provider = createValhallaRouteProvider({
+      endpoint: 'http://valhalla.test/route',
+      fetchImplementation: recorded(400, Buffer.from(noPath.pbf.bodyBase64, 'base64')),
+    });
+    await expect(provider.getEnrichedRoutes?.(islandTrip)).rejects.toBeInstanceOf(
+      RouteNotFoundError,
+    );
+  });
+
+  it('reads the recorded JSON 442 on the legacy path the same way', async () => {
+    expect(noPath.json.body.error_code).toBe(442);
+    const provider = createValhallaRouteProvider({
+      endpoint: 'http://valhalla.test/route',
+      fetchImplementation: recorded(400, JSON.stringify(noPath.json.body)),
+    });
+    await expect(provider.getRoutes(islandTrip)).rejects.toBeInstanceOf(RouteNotFoundError);
+  });
+
+  it('keeps other upstream failures as outages', async () => {
+    const otherError = JSON.stringify({ ...noPath.json.body, error_code: 154 });
+    const provider = createValhallaRouteProvider({
+      endpoint: 'http://valhalla.test/route',
+      fetchImplementation: recorded(400, otherError),
+    });
+    const failure = await provider.getRoutes(islandTrip).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(RouteProviderError);
+    expect(failure).not.toBeInstanceOf(RouteNotFoundError);
+    const unavailable = createValhallaRouteProvider({
+      endpoint: 'http://valhalla.test/route',
+      fetchImplementation: recorded(503, 'busy'),
+    });
+    const outage = await unavailable
+      .getEnrichedRoutes?.(islandTrip)
+      .catch((error: unknown) => error);
+    expect(outage).not.toBeInstanceOf(RouteNotFoundError);
+  });
+
+  it('tells the driver there is no road route, in a problem shipped builds parse', async () => {
+    const app = await buildApp({
+      coverage: createServiceCoverage(['ontario']),
+      coverageReadiness: null,
+      routeProvider: createValhallaRouteProvider({
+        endpoint: 'http://valhalla.test/route',
+        fetchImplementation: vi.fn<typeof fetch>((_input, init) =>
+          Promise.resolve(
+            init?.body instanceof Uint8Array
+              ? new Response(Buffer.from(noPath.pbf.bodyBase64, 'base64'), { status: 400 })
+              : new Response(JSON.stringify(noPath.json.body), { status: 400 }),
+          ),
+        ),
+      }),
+      searchProvider: { search: () => Promise.reject(new Error('unused')) },
+    });
+    try {
+      for (const version of ['v1', 'v2']) {
+        const response = await app.inject({
+          method: 'POST',
+          payload: islandTrip,
+          url: `/${version}/routes`,
+        });
+        expect(response.statusCode, version).toBe(422);
+        expect(ProblemDetailsSchema.parse(response.json())).toMatchObject({
+          code: 'invalid_request',
+          detail:
+            'No road connects these places. Some are reached only by air, by water or by a winter road.',
+          title: 'No road route',
+        });
+      }
+    } finally {
+      await app.close();
+    }
   });
 });

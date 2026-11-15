@@ -30,7 +30,11 @@ import {
   type DeadEndMaskWays,
 } from '../../apps/api/src/traffic/dead-end-mask.js';
 import { verifyServingGraph } from '../../apps/api/src/traffic/serving-graph.js';
-import { SERVICE_AREA_DATA } from '../../packages/contracts/src/coverage-data.js';
+import { loadServiceAreaData } from '../../packages/contracts/src/coverage-data.js';
+
+// The mask belongs to the Alberta+BC serving graph community traffic uses
+// (`apps/api/src/traffic/settings.ts`), whatever else the registry holds.
+const COMMUNITY_TRAFFIC_AREA_IDS: readonly string[] = ['alberta', 'british-columbia'];
 import { routingEnginePin } from './engine.mjs';
 import { sha256File } from './tools.mjs';
 
@@ -944,7 +948,9 @@ export function maskWays(
 export function createCoverageTest(
   areas: readonly {
     boundary: { coordinates: number[][][][] };
-  }[] = SERVICE_AREA_DATA as unknown as {
+  }[] = loadServiceAreaData().filter(({ id }) =>
+    COMMUNITY_TRAFFIC_AREA_IDS.includes(id),
+  ) as unknown as {
     boundary: { coordinates: number[][][][] };
   }[],
 ): (longitude: number, latitude: number) => boolean {

@@ -1,0 +1,45 @@
+{
+  "capturedAt": "2026-11-15T10:15:58.401Z",
+  "endpoint": "valhalla-scripted:3.8.2 (local sample graph)",
+  "graph": "Toronto–Hamilton cut of Geofabrik ontario-261114.osm.pbf (see toronto-403-401-interchanges.json); Centre Island has no car ferry, so no road route exists",
+  "request": {
+    "alternatives": 0,
+    "origin": {
+      "latitude": 43.6525,
+      "longitude": -79.3832
+    },
+    "destination": {
+      "latitude": 43.6205,
+      "longitude": -79.3787
+    },
+    "preferences": {
+      "avoidFerries": false,
+      "avoidHighways": false,
+      "avoidTolls": false,
+      "avoidUnpaved": false
+    }
+  },
+  "pbf": {
+    "status": 400,
+    "contentType": "application/json;charset=utf-8",
+    "bodyBase64": "ogHkAQonChpyb3V0ZS5pbmZvLmxva2kubGF0ZW5jeV9tcxELCRhd3lwjQCACCicKGnJvdXRlLmluZm8udGhvci5sYXRlbmN5X21zEVgdOdIZ33RAIAIKIgoXcm91dGUud2Fybi50aG9yLm5vX3BhdGgRAAAAAAAA8D8SJQogTm8gcGF0aCBjb3VsZCBiZSBmb3VuZCBmb3IgaW5wdXQQugMaRQpAUm91dGluZyBmYWlsZWQgb24gZmlyc3QgcGFzcywgcmV0cnlpbmcgd2l0aCByZWxheGVkIHJlc3RyaWN0aW9ucxCRAw==",
+    "decoded": {
+      "info": {
+        "errors": [
+          {
+            "code": 442
+          }
+        ]
+      }
+    }
+  },
+  "json": {
+    "status": 400,
+    "body": {
+      "error_code": 442,
+      "error": "No path could be found for input",
+      "status_code": 400,
+      "status": "Bad Request"
+    }
+  }
+}

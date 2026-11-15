@@ -10,6 +10,9 @@ describe('map region', () => {
     expect(mapRegionForCoordinate({ latitude: 48.3809, longitude: -89.2477 })).toBe('ontario');
     expect(mapRegionForCoordinate({ latitude: 42.3149, longitude: -83.0364 })).toBe('ontario');
     expect(mapRegionForCoordinate({ latitude: 46.5219, longitude: -84.3461 })).toBe('ontario');
+    // Gatineau is across the Ottawa River: Quebec, not Ontario (StatCan boundary).
+    expect(mapRegionForCoordinate({ latitude: 45.4295, longitude: -75.7096 })).toBe('quebec');
+    expect(mapRegionForCoordinate({ latitude: 45.5019, longitude: -73.5674 })).toBe('quebec');
     expect(mapRegionForCoordinate({ latitude: 51.0447, longitude: -114.0719 })).toBe('calgary-ab');
     expect(mapRegionForCoordinate({ latitude: 41.8781, longitude: -87.6298 })).toBe('other');
     expect(mapRegionForCoordinate({ latitude: 46.7867, longitude: -92.1005 })).toBe('other');

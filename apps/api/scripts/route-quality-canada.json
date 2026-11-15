@@ -1,0 +1,877 @@
+{
+  "benchmarkId": "canada-80",
+  "description": "80 directed public-anchor routes across every province and territory with roads: the Alberta+BC 22 plus Ontario, Quebec, the Prairies, Atlantic Canada, the North and long inter-provincial routes, and at least one corridor inside every province and territory with roads (the single-province route check-coverage.sh runs). Ranges are structural review gates from published highway distances, not measured results; anchors are not verified entrances. Requires a server that declares every province and territory on the route.",
+  "expectedCaseCount": 80,
+  "licenseUrl": "https://www.openstreetmap.org/copyright",
+  "routePath": "/v2/routes",
+  "anchors": {
+    "calgary-downtown": {
+      "coordinate": {
+        "latitude": 51.04427,
+        "longitude": -114.06309
+      },
+      "label": "Calgary downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/51.04427/-114.06309"
+    },
+    "calgary-interchange-north": {
+      "coordinate": {
+        "latitude": 51.0626,
+        "longitude": -114.0201
+      },
+      "label": "Calgary public interchange approach",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/51.0626/-114.0201"
+    },
+    "calgary-glenmore-west": {
+      "coordinate": {
+        "latitude": 50.9932,
+        "longitude": -114.0943
+      },
+      "label": "Calgary Glenmore-area street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/50.9932/-114.0943"
+    },
+    "edmonton-downtown": {
+      "coordinate": {
+        "latitude": 53.5461,
+        "longitude": -113.4938
+      },
+      "label": "Edmonton downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/53.5461/-113.4938"
+    },
+    "edmonton-university-area": {
+      "coordinate": {
+        "latitude": 53.5232,
+        "longitude": -113.5263
+      },
+      "label": "Edmonton university-area street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/53.5232/-113.5263"
+    },
+    "red-deer-downtown": {
+      "coordinate": {
+        "latitude": 52.2681,
+        "longitude": -113.8112
+      },
+      "label": "Red Deer downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/52.2681/-113.8112"
+    },
+    "red-deer-south": {
+      "coordinate": {
+        "latitude": 52.2538,
+        "longitude": -113.8131
+      },
+      "label": "Red Deer south urban street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/52.2538/-113.8131"
+    },
+    "lethbridge-downtown": {
+      "coordinate": {
+        "latitude": 49.6956,
+        "longitude": -112.8451
+      },
+      "label": "Lethbridge downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/49.6956/-112.8451"
+    },
+    "lethbridge-west": {
+      "coordinate": {
+        "latitude": 49.6791,
+        "longitude": -112.8672
+      },
+      "label": "Lethbridge west urban street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/49.6791/-112.8672"
+    },
+    "banff-downtown": {
+      "coordinate": {
+        "latitude": 51.1784,
+        "longitude": -115.5708
+      },
+      "label": "Banff downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/51.1784/-115.5708"
+    },
+    "banff-south": {
+      "coordinate": {
+        "latitude": 51.1668,
+        "longitude": -115.5803
+      },
+      "label": "Banff south street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/51.1668/-115.5803"
+    },
+    "vancouver-downtown": {
+      "coordinate": {
+        "latitude": 49.2827,
+        "longitude": -123.1207
+      },
+      "label": "Vancouver downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/49.2827/-123.1207"
+    },
+    "richmond-yvr-area": {
+      "coordinate": {
+        "latitude": 49.1949,
+        "longitude": -123.1328
+      },
+      "label": "Richmond/YVR-area public anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/49.1949/-123.1328"
+    },
+    "victoria-downtown": {
+      "coordinate": {
+        "latitude": 48.4284,
+        "longitude": -123.3656
+      },
+      "label": "Victoria downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/48.4284/-123.3656"
+    },
+    "victoria-university-area": {
+      "coordinate": {
+        "latitude": 48.4629,
+        "longitude": -123.3117
+      },
+      "label": "Victoria university-area street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/48.4629/-123.3117"
+    },
+    "kelowna-downtown": {
+      "coordinate": {
+        "latitude": 49.8879,
+        "longitude": -119.496
+      },
+      "label": "Kelowna downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/49.8879/-119.496"
+    },
+    "kelowna-airport": {
+      "coordinate": {
+        "latitude": 49.9561,
+        "longitude": -119.378
+      },
+      "label": "Kelowna airport-area public anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/49.9561/-119.378"
+    },
+    "kamloops-downtown": {
+      "coordinate": {
+        "latitude": 50.6745,
+        "longitude": -120.3273
+      },
+      "label": "Kamloops downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/50.6745/-120.3273"
+    },
+    "kamloops-west": {
+      "coordinate": {
+        "latitude": 50.6712,
+        "longitude": -120.3651
+      },
+      "label": "Kamloops west urban street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/50.6712/-120.3651"
+    },
+    "prince-george-downtown": {
+      "coordinate": {
+        "latitude": 53.9171,
+        "longitude": -122.7497
+      },
+      "label": "Prince George downtown street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/53.9171/-122.7497"
+    },
+    "prince-george-west": {
+      "coordinate": {
+        "latitude": 53.912,
+        "longitude": -122.8004
+      },
+      "label": "Prince George west urban street anchor",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/53.912/-122.8004"
+    },
+    "toronto-downtown": {
+      "coordinate": {
+        "latitude": 43.6525,
+        "longitude": -79.3832
+      },
+      "label": "Toronto downtown street anchor (Queen Street West at Bay Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/43.6525/-79.3832"
+    },
+    "mississauga-city-centre": {
+      "coordinate": {
+        "latitude": 43.5933,
+        "longitude": -79.6441
+      },
+      "label": "Mississauga City Centre street anchor (Square One Drive)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/43.5933/-79.6441"
+    },
+    "scarborough-town-centre": {
+      "coordinate": {
+        "latitude": 43.7757,
+        "longitude": -79.2578
+      },
+      "label": "Scarborough Town Centre street anchor (Brimley Road at Progress Avenue)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/43.7757/-79.2578"
+    },
+    "hamilton-downtown": {
+      "coordinate": {
+        "latitude": 43.2557,
+        "longitude": -79.8711
+      },
+      "label": "Hamilton downtown street anchor (King Street at James Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/43.2557/-79.8711"
+    },
+    "ottawa-downtown": {
+      "coordinate": {
+        "latitude": 45.4209,
+        "longitude": -75.6918
+      },
+      "label": "Ottawa downtown street anchor (Laurier Avenue West at Elgin Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/45.4209/-75.6918"
+    },
+    "london-downtown": {
+      "coordinate": {
+        "latitude": 42.9834,
+        "longitude": -81.2497
+      },
+      "label": "London downtown street anchor (Dundas Street at Richmond Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/42.9834/-81.2497"
+    },
+    "windsor-downtown": {
+      "coordinate": {
+        "latitude": 42.3149,
+        "longitude": -83.0364
+      },
+      "label": "Windsor downtown street anchor (Ouellette Avenue)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/42.3149/-83.0364"
+    },
+    "sudbury-downtown": {
+      "coordinate": {
+        "latitude": 46.4907,
+        "longitude": -80.993
+      },
+      "label": "Greater Sudbury downtown street anchor (Elm Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/46.4907/-80.993"
+    },
+    "thunder-bay-downtown": {
+      "coordinate": {
+        "latitude": 48.4361,
+        "longitude": -89.2257
+      },
+      "label": "Thunder Bay street anchor (Red River Road, Port Arthur)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/48.4361/-89.2257"
+    },
+    "gatineau-downtown": {
+      "coordinate": {
+        "latitude": 45.4295,
+        "longitude": -75.7174
+      },
+      "label": "Gatineau (Hull) street anchor (boulevard Maisonneuve)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/45.4295/-75.7174"
+    },
+    "montreal-downtown": {
+      "coordinate": {
+        "latitude": 45.5019,
+        "longitude": -73.5674
+      },
+      "label": "Montreal downtown street anchor (rue Sainte-Catherine Ouest)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/45.5019/-73.5674"
+    },
+    "montreal-dorval": {
+      "coordinate": {
+        "latitude": 45.4486,
+        "longitude": -73.7449
+      },
+      "label": "Dorval street anchor near the A-20/A-520 interchange",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/45.4486/-73.7449"
+    },
+    "laval-centre": {
+      "coordinate": {
+        "latitude": 45.5575,
+        "longitude": -73.7224
+      },
+      "label": "Laval street anchor (boulevard Le Corbusier near A-15)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/45.5575/-73.7224"
+    },
+    "quebec-city-downtown": {
+      "coordinate": {
+        "latitude": 46.8106,
+        "longitude": -71.2148
+      },
+      "label": "Québec City street anchor (boulevard René-Lévesque Est)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/46.8106/-71.2148"
+    },
+    "sherbrooke-downtown": {
+      "coordinate": {
+        "latitude": 45.4006,
+        "longitude": -71.8929
+      },
+      "label": "Sherbrooke downtown street anchor (rue King Ouest)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/45.4006/-71.8929"
+    },
+    "regina-downtown": {
+      "coordinate": {
+        "latitude": 50.4452,
+        "longitude": -104.6189
+      },
+      "label": "Regina downtown street anchor (Victoria Avenue)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/50.4452/-104.6189"
+    },
+    "saskatoon-downtown": {
+      "coordinate": {
+        "latitude": 52.1301,
+        "longitude": -106.66
+      },
+      "label": "Saskatoon downtown street anchor (2nd Avenue North)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/52.1301/-106.66"
+    },
+    "winnipeg-downtown": {
+      "coordinate": {
+        "latitude": 49.8954,
+        "longitude": -97.1385
+      },
+      "label": "Winnipeg downtown street anchor (Portage Avenue at Main Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/49.8954/-97.1385"
+    },
+    "halifax-downtown": {
+      "coordinate": {
+        "latitude": 44.6488,
+        "longitude": -63.5752
+      },
+      "label": "Halifax downtown street anchor (Barrington Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/44.6488/-63.5752"
+    },
+    "moncton-downtown": {
+      "coordinate": {
+        "latitude": 46.0878,
+        "longitude": -64.7782
+      },
+      "label": "Moncton downtown street anchor (Main Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/46.0878/-64.7782"
+    },
+    "saint-john-downtown": {
+      "coordinate": {
+        "latitude": 45.2733,
+        "longitude": -66.0633
+      },
+      "label": "Saint John uptown street anchor (King Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/45.2733/-66.0633"
+    },
+    "charlottetown-downtown": {
+      "coordinate": {
+        "latitude": 46.2382,
+        "longitude": -63.1311
+      },
+      "label": "Charlottetown downtown street anchor (Grafton Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/46.2382/-63.1311"
+    },
+    "st-johns-downtown": {
+      "coordinate": {
+        "latitude": 47.5615,
+        "longitude": -52.7126
+      },
+      "label": "St. John's downtown street anchor (Water Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/47.5615/-52.7126"
+    },
+    "whitehorse-downtown": {
+      "coordinate": {
+        "latitude": 60.7212,
+        "longitude": -135.0568
+      },
+      "label": "Whitehorse downtown street anchor (Main Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/60.7212/-135.0568"
+    },
+    "yellowknife-downtown": {
+      "coordinate": {
+        "latitude": 62.454,
+        "longitude": -114.3718
+      },
+      "label": "Yellowknife downtown street anchor (Franklin Avenue)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/62.454/-114.3718"
+    },
+    "dartmouth-downtown": {
+      "coordinate": {
+        "latitude": 44.6658,
+        "longitude": -63.5688
+      },
+      "label": "Dartmouth downtown street anchor (Ochterloney Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/44.6658/-63.5688"
+    },
+    "summerside-downtown": {
+      "coordinate": {
+        "latitude": 46.3929,
+        "longitude": -63.7884
+      },
+      "label": "Summerside downtown street anchor (Granville Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/46.3929/-63.7884"
+    },
+    "mount-pearl-centre": {
+      "coordinate": {
+        "latitude": 47.5195,
+        "longitude": -52.807
+      },
+      "label": "Mount Pearl street anchor (Commonwealth Avenue)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/47.5195/-52.807"
+    },
+    "brandon-downtown": {
+      "coordinate": {
+        "latitude": 49.8475,
+        "longitude": -99.953
+      },
+      "label": "Brandon downtown street anchor (11th Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/49.8475/-99.953"
+    },
+    "carcross-centre": {
+      "coordinate": {
+        "latitude": 60.1665,
+        "longitude": -134.707
+      },
+      "label": "Carcross street anchor (McMurphy Street)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/60.1665/-134.707"
+    },
+    "behchoko-centre": {
+      "coordinate": {
+        "latitude": 62.8285,
+        "longitude": -116.0494
+      },
+      "label": "Behchokǫ̀ street anchor (Edzo Tili, Rae)",
+      "sourceUrl": "https://www.openstreetmap.org/#map=18/62.8285/-116.0494"
+    }
+  },
+  "corridors": [
+    {
+      "id": "calgary-interchange",
+      "minimumLaneManeuvers": 1,
+      "originAnchorId": "calgary-interchange-north",
+      "destinationAnchorId": "calgary-glenmore-west",
+      "distanceRangeKm": [8, 30],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["alberta", "calgary", "interchange"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "edmonton",
+      "originAnchorId": "edmonton-downtown",
+      "destinationAnchorId": "edmonton-university-area",
+      "distanceRangeKm": [2, 12],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["alberta", "edmonton", "urban", "river-crossing"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "red-deer",
+      "originAnchorId": "red-deer-downtown",
+      "destinationAnchorId": "red-deer-south",
+      "distanceRangeKm": [1, 10],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["alberta", "red-deer", "urban"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "lethbridge",
+      "originAnchorId": "lethbridge-downtown",
+      "destinationAnchorId": "lethbridge-west",
+      "distanceRangeKm": [2, 12],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["alberta", "lethbridge", "urban", "river-crossing"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "banff",
+      "originAnchorId": "banff-downtown",
+      "destinationAnchorId": "banff-south",
+      "distanceRangeKm": [1, 10],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["alberta", "banff", "mountain-town"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "vancouver",
+      "originAnchorId": "vancouver-downtown",
+      "destinationAnchorId": "richmond-yvr-area",
+      "distanceRangeKm": [10, 25],
+      "maximumEndpointOffsetMeters": 300,
+      "tags": ["british-columbia", "vancouver", "urban", "airport"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "victoria",
+      "originAnchorId": "victoria-downtown",
+      "destinationAnchorId": "victoria-university-area",
+      "distanceRangeKm": [3, 15],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["british-columbia", "victoria", "island", "urban"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "kelowna",
+      "originAnchorId": "kelowna-downtown",
+      "destinationAnchorId": "kelowna-airport",
+      "distanceRangeKm": [10, 22],
+      "maximumEndpointOffsetMeters": 300,
+      "tags": ["british-columbia", "kelowna", "airport"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "kamloops",
+      "originAnchorId": "kamloops-downtown",
+      "destinationAnchorId": "kamloops-west",
+      "distanceRangeKm": [1.5, 12],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["british-columbia", "kamloops", "urban"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "prince-george",
+      "originAnchorId": "prince-george-downtown",
+      "destinationAnchorId": "prince-george-west",
+      "distanceRangeKm": [2, 15],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["british-columbia", "prince-george", "northern-urban"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "calgary-vancouver",
+      "originAnchorId": "calgary-downtown",
+      "destinationAnchorId": "vancouver-downtown",
+      "distanceRangeKm": [900, 1150],
+      "maximumEndpointOffsetMeters": 150,
+      "tags": ["alberta", "british-columbia", "inter-provincial", "mountain-highway"],
+      "maximumDurationMinutes": 1000,
+      "maximumSegmentMeters": 3000,
+      "lengthBand": "long"
+    },
+    {
+      "id": "toronto-401-interchanges",
+      "originAnchorId": "mississauga-city-centre",
+      "destinationAnchorId": "scarborough-town-centre",
+      "distanceRangeKm": [35, 60],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["ontario", "toronto", "400-series", "interchange"],
+      "lengthBand": "medium",
+      "minimumLaneManeuvers": 2,
+      "maximumDurationMinutes": 90
+    },
+    {
+      "id": "toronto-hamilton",
+      "originAnchorId": "toronto-downtown",
+      "destinationAnchorId": "hamilton-downtown",
+      "distanceRangeKm": [55, 90],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["ontario", "toronto", "hamilton", "400-series"],
+      "lengthBand": "medium",
+      "minimumLaneManeuvers": 1,
+      "maximumDurationMinutes": 120
+    },
+    {
+      "id": "toronto-ottawa",
+      "originAnchorId": "toronto-downtown",
+      "destinationAnchorId": "ottawa-downtown",
+      "distanceRangeKm": [400, 520],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["ontario", "toronto", "ottawa", "400-series"],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 520,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "toronto-london",
+      "originAnchorId": "toronto-downtown",
+      "destinationAnchorId": "london-downtown",
+      "distanceRangeKm": [170, 230],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["ontario", "toronto", "london", "400-series"],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 230,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "london-windsor",
+      "originAnchorId": "london-downtown",
+      "destinationAnchorId": "windsor-downtown",
+      "distanceRangeKm": [170, 215],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["ontario", "london", "windsor", "400-series"],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 215,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "toronto-sudbury",
+      "originAnchorId": "toronto-downtown",
+      "destinationAnchorId": "sudbury-downtown",
+      "distanceRangeKm": [360, 450],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["ontario", "toronto", "sudbury", "400-series"],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 450,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "sudbury-thunder-bay",
+      "originAnchorId": "sudbury-downtown",
+      "destinationAnchorId": "thunder-bay-downtown",
+      "distanceRangeKm": [950, 1200],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["ontario", "sudbury", "thunder-bay", "northern-highway"],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 1200,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "montreal-autoroute-interchanges",
+      "originAnchorId": "montreal-dorval",
+      "destinationAnchorId": "laval-centre",
+      "distanceRangeKm": [12, 35],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["quebec", "montreal", "autoroute", "interchange", "french-names"],
+      "lengthBand": "short",
+      "minimumLaneManeuvers": 1,
+      "maximumDurationMinutes": 60
+    },
+    {
+      "id": "montreal-quebec-city",
+      "originAnchorId": "montreal-downtown",
+      "destinationAnchorId": "quebec-city-downtown",
+      "distanceRangeKm": [230, 290],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["quebec", "montreal", "quebec-city", "autoroute", "french-names"],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 290,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "montreal-gatineau",
+      "originAnchorId": "montreal-downtown",
+      "destinationAnchorId": "gatineau-downtown",
+      "distanceRangeKm": [190, 240],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["quebec", "montreal", "gatineau", "autoroute", "french-names"],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 240,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "montreal-sherbrooke",
+      "originAnchorId": "montreal-downtown",
+      "destinationAnchorId": "sherbrooke-downtown",
+      "distanceRangeKm": [140, 180],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["quebec", "montreal", "sherbrooke", "autoroute", "french-names"],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 180,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "ottawa-gatineau",
+      "originAnchorId": "ottawa-downtown",
+      "destinationAnchorId": "gatineau-downtown",
+      "distanceRangeKm": [2, 10],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["ontario", "quebec", "ottawa", "gatineau", "inter-provincial", "river-crossing"],
+      "lengthBand": "short"
+    },
+    {
+      "id": "regina-saskatoon",
+      "originAnchorId": "regina-downtown",
+      "destinationAnchorId": "saskatoon-downtown",
+      "distanceRangeKm": [230, 275],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["saskatchewan", "regina", "saskatoon"],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 275,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "regina-winnipeg",
+      "originAnchorId": "regina-downtown",
+      "destinationAnchorId": "winnipeg-downtown",
+      "distanceRangeKm": [550, 620],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["saskatchewan", "manitoba", "regina", "winnipeg", "inter-provincial"],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 620,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "halifax-moncton",
+      "originAnchorId": "halifax-downtown",
+      "destinationAnchorId": "moncton-downtown",
+      "distanceRangeKm": [240, 300],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["nova-scotia", "new-brunswick", "halifax", "moncton", "inter-provincial"],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 300,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "moncton-saint-john",
+      "originAnchorId": "moncton-downtown",
+      "destinationAnchorId": "saint-john-downtown",
+      "distanceRangeKm": [140, 180],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["new-brunswick", "moncton", "saint-john"],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 180,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "moncton-charlottetown",
+      "originAnchorId": "moncton-downtown",
+      "destinationAnchorId": "charlottetown-downtown",
+      "distanceRangeKm": [150, 200],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": [
+        "new-brunswick",
+        "prince-edward-island",
+        "charlottetown",
+        "confederation-bridge",
+        "inter-provincial"
+      ],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 200,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "halifax-st-johns-ferry",
+      "originAnchorId": "halifax-downtown",
+      "destinationAnchorId": "st-johns-downtown",
+      "distanceRangeKm": [1000, 1650],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": [
+        "nova-scotia",
+        "newfoundland-and-labrador",
+        "halifax",
+        "st-johns",
+        "ferry",
+        "inter-provincial"
+      ],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 2400,
+      "maximumSegmentMeters": 120000
+    },
+    {
+      "id": "edmonton-yellowknife",
+      "originAnchorId": "edmonton-downtown",
+      "destinationAnchorId": "yellowknife-downtown",
+      "distanceRangeKm": [1400, 1650],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": [
+        "alberta",
+        "northwest-territories",
+        "yellowknife",
+        "northern-highway",
+        "inter-provincial"
+      ],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 1650,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "whitehorse-edmonton",
+      "originAnchorId": "whitehorse-downtown",
+      "destinationAnchorId": "edmonton-downtown",
+      "distanceRangeKm": [1900, 2300],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": [
+        "yukon",
+        "british-columbia",
+        "alberta",
+        "whitehorse",
+        "alaska-highway",
+        "inter-provincial"
+      ],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 2300,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "calgary-winnipeg",
+      "originAnchorId": "calgary-downtown",
+      "destinationAnchorId": "winnipeg-downtown",
+      "distanceRangeKm": [1250, 1450],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": ["alberta", "saskatchewan", "manitoba", "calgary", "winnipeg", "inter-provincial"],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 1450,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "toronto-montreal",
+      "originAnchorId": "toronto-downtown",
+      "destinationAnchorId": "montreal-downtown",
+      "distanceRangeKm": [510, 600],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": [
+        "ontario",
+        "quebec",
+        "toronto",
+        "montreal",
+        "400-series",
+        "autoroute",
+        "inter-provincial"
+      ],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 600,
+      "maximumSegmentMeters": 5000
+    },
+    {
+      "id": "vancouver-toronto-stress",
+      "originAnchorId": "vancouver-downtown",
+      "destinationAnchorId": "toronto-downtown",
+      "distanceRangeKm": [4200, 4700],
+      "maximumEndpointOffsetMeters": 250,
+      "tags": [
+        "british-columbia",
+        "alberta",
+        "saskatchewan",
+        "manitoba",
+        "ontario",
+        "inter-provincial",
+        "stress"
+      ],
+      "lengthBand": "long",
+      "maximumDurationMinutes": 4700,
+      "maximumSegmentMeters": 5000,
+      "maximumLatencyMs": 30000
+    },
+    {
+      "destinationAnchorId": "dartmouth-downtown",
+      "distanceRangeKm": [2, 10],
+      "id": "halifax-dartmouth",
+      "lengthBand": "short",
+      "maximumEndpointOffsetMeters": 150,
+      "originAnchorId": "halifax-downtown",
+      "tags": ["nova-scotia", "halifax", "dartmouth", "urban", "river-crossing"]
+    },
+    {
+      "destinationAnchorId": "summerside-downtown",
+      "distanceRangeKm": [50, 80],
+      "id": "charlottetown-summerside",
+      "lengthBand": "medium",
+      "maximumEndpointOffsetMeters": 250,
+      "originAnchorId": "charlottetown-downtown",
+      "tags": ["prince-edward-island", "charlottetown", "summerside"]
+    },
+    {
+      "destinationAnchorId": "mount-pearl-centre",
+      "distanceRangeKm": [6, 20],
+      "id": "st-johns-mount-pearl",
+      "lengthBand": "short",
+      "maximumEndpointOffsetMeters": 150,
+      "originAnchorId": "st-johns-downtown",
+      "tags": ["newfoundland-and-labrador", "st-johns", "mount-pearl", "urban"]
+    },
+    {
+      "destinationAnchorId": "brandon-downtown",
+      "distanceRangeKm": [195, 240],
+      "id": "winnipeg-brandon",
+      "lengthBand": "long",
+      "maximumEndpointOffsetMeters": 250,
+      "originAnchorId": "winnipeg-downtown",
+      "tags": ["manitoba", "winnipeg", "brandon"]
+    },
+    {
+      "destinationAnchorId": "carcross-centre",
+      "distanceRangeKm": [60, 90],
+      "id": "whitehorse-carcross",
+      "lengthBand": "medium",
+      "maximumEndpointOffsetMeters": 250,
+      "originAnchorId": "whitehorse-downtown",
+      "tags": ["yukon", "whitehorse", "carcross", "northern-highway"]
+    },
+    {
+      "destinationAnchorId": "behchoko-centre",
+      "distanceRangeKm": [90, 130],
+      "id": "yellowknife-behchoko",
+      "lengthBand": "long",
+      "maximumEndpointOffsetMeters": 250,
+      "originAnchorId": "yellowknife-downtown",
+      "tags": ["northwest-territories", "yellowknife", "behchoko", "northern-highway"]
+    }
+  ]
+}

@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import {
-  SearchCategorySchema,
-  SearchResponseSchema,
-  SERVICE_COVERAGE_BOUNDS,
-} from '@navoss/contracts';
+import { SearchCategorySchema, SearchResponseSchema } from '@navoss/contracts';
 
 import {
   buildNominatimSearchUrl,
@@ -18,6 +14,7 @@ import {
   SEARCH_CATEGORY_TYPES,
   type SearchProvider,
 } from '../src/search-provider.js';
+import { DEFAULT_SERVICE_COVERAGE } from '../src/service-coverage.js';
 
 describe('Photon search provider', () => {
   it('builds a province-envelope, proximity-biased query', () => {
@@ -33,10 +30,10 @@ describe('Photon search provider', () => {
     expect(url.hostname).toBe('photon.komoot.io');
     expect(url.searchParams.get('bbox')).toBe(
       [
-        SERVICE_COVERAGE_BOUNDS.southWest.longitude,
-        SERVICE_COVERAGE_BOUNDS.southWest.latitude,
-        SERVICE_COVERAGE_BOUNDS.northEast.longitude,
-        SERVICE_COVERAGE_BOUNDS.northEast.latitude,
+        DEFAULT_SERVICE_COVERAGE.bounds.southWest.longitude,
+        DEFAULT_SERVICE_COVERAGE.bounds.southWest.latitude,
+        DEFAULT_SERVICE_COVERAGE.bounds.northEast.longitude,
+        DEFAULT_SERVICE_COVERAGE.bounds.northEast.latitude,
       ].join(','),
     );
     expect(url.searchParams.get('lat')).toBe('51.0447');
@@ -217,10 +214,10 @@ describe('Nominatim search provider', () => {
     expect(url.searchParams.get('format')).toBe('jsonv2');
     expect(url.searchParams.get('viewbox')).toBe(
       [
-        SERVICE_COVERAGE_BOUNDS.southWest.longitude,
-        SERVICE_COVERAGE_BOUNDS.northEast.latitude,
-        SERVICE_COVERAGE_BOUNDS.northEast.longitude,
-        SERVICE_COVERAGE_BOUNDS.southWest.latitude,
+        DEFAULT_SERVICE_COVERAGE.bounds.southWest.longitude,
+        DEFAULT_SERVICE_COVERAGE.bounds.northEast.latitude,
+        DEFAULT_SERVICE_COVERAGE.bounds.northEast.longitude,
+        DEFAULT_SERVICE_COVERAGE.bounds.southWest.latitude,
       ].join(','),
     );
   });

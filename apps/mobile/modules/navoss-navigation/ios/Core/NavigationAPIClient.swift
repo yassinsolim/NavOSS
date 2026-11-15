@@ -17,6 +17,59 @@ public enum NavOSSNavigationAPIError: Error {
   /// A place on a newly planned route is outside the coverage the server declares, named here
   /// as the server names it (e.g. "Calgary and Kelowna service areas").
   case outsideCoverage(String)
+  /// The server answered 422: every place is covered but no road route joins them. Carries the
+  /// server's own wording, the text the phone shows.
+  case routeNotFound(NavOSSRouteProblem)
+  /// The server refused the route request with a 400 and said why, for example "No route between
+  /// these provinces" when no road it covers joins them. Carries the server's own wording.
+  case routeRefused(NavOSSRouteProblem)
+
+  /// The server's own title and detail for a route it will not plan, shown instead of a generic
+  /// "unavailable" message; `nil` for every other failure.
+  public var serverProblem: NavOSSRouteProblem? {
+    switch self {
+    case .routeNotFound(let problem), .routeRefused(let problem): problem
+    default: nil
+    }
+  }
+}
+
+/// The server's explanation of a route it cannot plan (`ProblemDetails` title and detail).
+extension NavOSSNavigationAPIError {
+  /// A 400: the server rejected the request, with or without its reason.
+  fileprivate var isRejectedRequest: Bool {
+    switch self {
+    case .invalidRequest, .routeRefused: true
+    default: false
+    }
+  }
+}
+
+public struct NavOSSRouteProblem: Equatable, Sendable {
+  public let title: String
+  public let detail: String
+
+  /// Longest first, as `CPNavigationAlert` wants: the system shows the longest variant that fits.
+  /// The shorter one is the detail's first sentence.
+  public var detailVariants: [String] {
+    guard let end = detail.firstIndex(of: "."), detail.index(after: end) < detail.endIndex else {
+      return [detail]
+    }
+    return [detail, String(detail[...end])]
+  }
+
+  init?(problemDetails data: Data) {
+    struct Body: Decodable {
+      let detail: String
+      let title: String
+    }
+    guard let body = try? JSONDecoder().decode(Body.self, from: data) else { return nil }
+    let title = body.title.trimmingCharacters(in: .whitespacesAndNewlines)
+    let detail = body.detail.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !title.isEmpty, !detail.isEmpty else { return nil }
+    self.title = title
+    self.detail = detail
+  }
 }
 
 private struct SearchRequest: Encodable {
@@ -404,18 +457,21 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
   }
 
   /// Posts a route request, retrying once without origin heading/accuracy when the server
-  /// rejects them (an older API did not accept them).
+  /// rejects them (an older API did not accept them). A 400 that explains itself in the problem
+  /// shape is `routeRefused`, after that retry.
   private func postRoutes(
     path: String,
     _ request: NavigationRouteRequest,
     timeout: TimeInterval
   ) async throws -> NavigationRouteResponseWire {
     do {
-      return try await post(path: path, body: request, timeout: timeout)
-    } catch NavOSSNavigationAPIError.invalidRequest
-      where request.originHeadingDegrees != nil || request.originHorizontalAccuracyMeters != nil
+      return try await post(path: path, body: request, timeout: timeout, routeProblems: true)
+    } catch let error as NavOSSNavigationAPIError
+      where error.isRejectedRequest
+      && (request.originHeadingDegrees != nil || request.originHorizontalAccuracyMeters != nil)
     {
-      return try await post(path: path, body: request.withoutOriginMetadata(), timeout: timeout)
+      return try await post(
+        path: path, body: request.withoutOriginMetadata(), timeout: timeout, routeProblems: true)
     }
   }
 
@@ -445,26 +501,37 @@ public final class NavOSSNavigationAPIClient: @unchecked Sendable {
   private func post<Request: Encodable, Response: Decodable>(
     path: String,
     body: Request,
-    timeout: TimeInterval = 20
+    timeout: TimeInterval = 20,
+    routeProblems: Bool = false
   ) async throws -> Response {
     var request = URLRequest(url: baseURL.appending(path: path))
     request.httpBody = try encoder.encode(body)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "content-type")
     request.timeoutInterval = timeout
-    return try await send(request)
+    return try await send(request, routeProblems: routeProblems)
   }
 
-  private func send<Response: Decodable>(_ request: URLRequest) async throws -> Response {
+  /// `routeProblems`: a 400 in the problem shape is the server refusing a route and saying why.
+  private func send<Response: Decodable>(
+    _ request: URLRequest,
+    routeProblems: Bool = false
+  ) async throws -> Response {
     let (data, urlResponse) = try await session.data(for: request)
     guard let response = urlResponse as? HTTPURLResponse else {
       throw NavOSSNavigationAPIError.invalidResponse
     }
     guard response.statusCode != 400 else {
+      if routeProblems, let problem = NavOSSRouteProblem(problemDetails: data) {
+        throw NavOSSNavigationAPIError.routeRefused(problem)
+      }
       throw NavOSSNavigationAPIError.invalidRequest
     }
     guard response.statusCode != 404 else {
       throw NavOSSNavigationAPIError.endpointNotFound
+    }
+    if response.statusCode == 422, let problem = NavOSSRouteProblem(problemDetails: data) {
+      throw NavOSSNavigationAPIError.routeNotFound(problem)
     }
     guard (200..<300).contains(response.statusCode) else {
       throw NavOSSNavigationAPIError.serviceUnavailable

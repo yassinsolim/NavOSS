@@ -1,3 +1,4 @@
+import { ProvincialRoadEventRegionSchema, registeredServiceAreas } from '@navoss/contracts';
 import type {
   KelownaRoadEvent,
   KelownaRoadEventResponse,
@@ -25,6 +26,8 @@ export type LegacyRoadEventRegion = 'calgary' | 'kelowna-bc';
 
 export interface RoadEventFeedChoice {
   legacy: LegacyRoadEventRegion | undefined;
+  /** A registered province with no official feed, by name: the map says so instead of nothing. */
+  noFeedProvince?: string;
   provincial: ProvincialRoadEventRegion | undefined;
 }
 
@@ -46,12 +49,15 @@ export function roadEventFeedForMapRegion(mapRegion: MapRegion | undefined): Roa
       return { legacy: undefined, provincial: 'alberta' };
     case 'kelowna-bc':
       return { legacy: 'kelowna-bc', provincial: 'british-columbia' };
-    case 'british-columbia':
-      return { legacy: undefined, provincial: 'british-columbia' };
-    case 'ontario':
-      return { legacy: undefined, provincial: 'ontario' };
-    default:
-      return { legacy: undefined, provincial: undefined };
+    default: {
+      // Province ids are the registry's (`coverage-data.ts`); the feed regions use the same ids.
+      const provincial = ProvincialRoadEventRegionSchema.safeParse(mapRegion);
+      if (provincial.success) return { legacy: undefined, provincial: provincial.data };
+      const province = registeredServiceAreas().find(({ id }) => id === mapRegion);
+      return province === undefined
+        ? { legacy: undefined, provincial: undefined }
+        : { legacy: undefined, noFeedProvince: province.displayName, provincial: undefined };
+    }
   }
 }
 
@@ -408,15 +414,19 @@ export function legacyRoadEventSourceLines(
 /** Source and freshness pill on the map. Undefined when the overlay is off or not published. */
 export function roadEventStatusLabel({
   hasFeed,
+  noFeedProvince,
   now,
   refreshDelayed,
   snapshot,
 }: {
   hasFeed: boolean;
+  noFeedProvince?: string | undefined;
   now: number;
   refreshDelayed: boolean;
   snapshot: RoadEventSnapshot | undefined;
 }): string | undefined {
+  if (snapshot === undefined && noFeedProvince !== undefined)
+    return `No official road events for ${noFeedProvince}`;
   if (snapshot === undefined)
     return hasFeed && refreshDelayed ? 'Road events unavailable' : undefined;
   if (roadEventAvailability(snapshot, now) === 'unavailable') return 'Road events unavailable';
