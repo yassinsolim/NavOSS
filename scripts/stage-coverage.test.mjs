@@ -88,6 +88,11 @@ case "$command" in
           previous=
           for argument do
             [ "$previous" = -v ] && mount=$argument
+            if [ "$previous" = --mount ]; then
+              src=$(printf '%s' "$argument" | sed -n 's/.*src=\\([^,]*\\).*/\\1/p')
+              dst=$(printf '%s' "$argument" | sed -n 's/.*dst=\\([^,]*\\).*/\\1/p')
+              mount=$src:$dst
+            fi
             previous=$argument
           done
           host=\${mount%%:*}
@@ -126,6 +131,7 @@ case "$command" in
         ;;
     esac
     ;;
+  version) echo "\${FAKE_DOCKER_VERSION:-27.3.1}" ;;
   network | update | logs) exit 0 ;;
   *) echo "fake docker: unexpected $command" >&2; exit 64 ;;
 esac
@@ -389,9 +395,12 @@ test(
     assert.match(cleanup[0], /--user 0/u);
     assert.match(
       cleanup[0],
-      new RegExp(`-v ${stageDirectory}:/stage .* -rf /stage/postgres$`, 'u'),
+      new RegExp(
+        `src=${stageDirectory},dst=/stage,bind-recursive=disabled .* -rf /stage/postgres$`,
+        'u',
+      ),
     );
-    assert.equal(cleanup[0].match(/ -v /gu)?.length, 1, 'one mount: the stage');
+    assert.equal(cleanup[0].match(/ (-v|--mount) /gu)?.length, 1, 'one mount: the stage');
     assert.equal(await exists(join(stageDirectory, '.navoss-import-complete')), true);
   },
 );
@@ -656,7 +665,7 @@ test('stop never signals a process it cannot verify as the holder', options, asy
   await new Promise((resolve) => setTimeout(resolve, 300));
   await writeFile(
     join(fixture.root, '.stage.holder'),
-    `${String(unrelated.pid)} 1 nominatim new-brunswick\n`,
+    `${String(unrelated.pid)} 1 ${await readFile('/proc/sys/kernel/random/boot_id', 'utf8').then((id) => id.trim())} nominatim new-brunswick\n`,
   );
 
   const stopped = stage(fixture, ['stop', 'new-brunswick'], { STAGE_HOLDER_WAIT: '1' });
@@ -703,7 +712,10 @@ test(
     assert.equal(cleanup.length, 1);
     assert.match(
       cleanup[0],
-      new RegExp(`-v ${valhalla}:/stage .* -rf /stage/valhalla_tiles `, 'u'),
+      new RegExp(
+        `src=${valhalla},dst=/stage,bind-recursive=disabled .* -rf /stage/valhalla_tiles `,
+        'u',
+      ),
     );
     assert.match(cleanup[0], /--user 0 .*--network none|--network none .*--user 0/u);
     assert.equal(await exists(join(valhalla, 'valhalla_tiles')), false);
@@ -711,3 +723,62 @@ test(
     assert.equal(await exists(join(valhalla, `new-brunswick-${VERSION}.osm.pbf`)), true);
   },
 );
+
+test(
+  'cleanup refuses a Docker that would mount the stage with its submounts',
+  options,
+  async (context) => {
+    const fixture = await createFixture(context);
+    await interruptedImport(fixture);
+
+    const refused = stage(fixture, ['nominatim', 'new-brunswick'], {
+      FAKE_DOCKER_VERSION: '24.0.7',
+    });
+
+    assert.equal(refused.status, 1);
+    assert.match(refused.stderr, /needs 25 or later/u);
+    assert.equal(
+      (await calls(fixture)).some((call) => call.includes('--entrypoint rm')),
+      false,
+    );
+  },
+);
+
+test(
+  'a relative live path in .env is relative to the .env, not the caller',
+  options,
+  async (context) => {
+    const fixture = await createFixture(context);
+    await completedStages(fixture);
+    await setLive(fixture, {
+      nominatim: `../artifacts/nominatim/new-brunswick-${VERSION}/postgres`,
+    });
+
+    const refused = stage(fixture, ['serve', 'new-brunswick']);
+
+    assert.equal(refused.status, 1);
+    assert.match(refused.stderr, /is the live NOMINATIM_DATA_DIR/u);
+  },
+);
+
+test('stop treats a holder record from another boot as no holder', options, async (context) => {
+  const fixture = await createFixture(context);
+  const locker = spawn('flock', [join(fixture.root, '.stage.lock'), 'sleep', '30']);
+  context.after(() => locker.kill('SIGKILL'));
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  // The right pid and start time, recorded under another boot.
+  const start = (await readFile(`/proc/${String(locker.pid)}/stat`, 'utf8'))
+    .replace(/^.*\) /su, '')
+    .split(' ')[19];
+  await writeFile(
+    join(fixture.root, '.stage.holder'),
+    `${String(locker.pid)} ${String(start)} 00000000-0000-0000-0000-000000000000 nominatim new-brunswick\n`,
+  );
+
+  const stopped = stage(fixture, ['stop', 'new-brunswick'], { STAGE_HOLDER_WAIT: '1' });
+
+  assert.equal(stopped.status, 1);
+  assert.match(stopped.stderr, /cannot be verified/u);
+  assert.equal(locker.exitCode, null);
+  assert.equal(locker.signalCode, null);
+});

@@ -47,6 +47,9 @@ if [ ! -r "${env_file}" ]; then
 fi
 live_valhalla=$(sed -n 's/^VALHALLA_DATA_DIR=//p' "${env_file}" | tail -n 1)
 live_nominatim=$(sed -n 's/^NOMINATIM_DATA_DIR=//p' "${env_file}" | tail -n 1)
+# Relative values are relative to the .env's directory, as Compose reads them.
+case "${live_valhalla}" in '' | /*) ;; *) live_valhalla=${script_dir}/${live_valhalla} ;; esac
+case "${live_nominatim}" in '' | /*) ;; *) live_nominatim=${script_dir}/${live_nominatim} ;; esac
 
 lock_file=${root}/.stage.lock
 holder_file=${root}/.stage.holder
@@ -59,7 +62,7 @@ case "${step}" in
     fi
     exec 9>>"${lock_file}"
     if [ "${step}" != stop ] && ! flock -n 9; then
-      echo "Another staging step is running: $(cut -d ' ' -f 3- "${holder_file}" 2>/dev/null)." >&2
+      echo "Another staging step is running: $(cut -d ' ' -f 4- "${holder_file}" 2>/dev/null)." >&2
       echo "Wait for it, or end it with '$0 stop ${label}'." >&2
       exit 1
     fi
@@ -71,7 +74,8 @@ process_start() {
 }
 hold_stage_lock() {
   # The pid with its start time: `stop` signals it only if that same process still runs.
-  printf '%s %s %s %s\n' "$$" "$(process_start "$$")" "${step}" "${label}" >"${holder_file}.next"
+  printf '%s %s %s %s %s\n' "$$" "$(process_start "$$")" "$(cat /proc/sys/kernel/random/boot_id)" \
+    "${step}" "${label}" >"${holder_file}.next"
   mv -f "${holder_file}.next" "${holder_file}"
 }
 
@@ -282,15 +286,33 @@ remove_in_stage() {
   fi
   inside=
   for name do
-    case "${name}" in '' | . | .. | */*) echo "Refusing to remove ${name} in ${target}." >&2; exit 1 ;; esac
+    case "${name}" in
+      '' | . | .. | */* | *[[:space:]]* | *[*?[]*) echo "Refusing to remove '${name}' in ${target}." >&2; exit 1 ;;
+    esac
     refuse_live "${live_name}" "${live_path}" "${target}/${name}"
     inside="${inside} /stage/${name}"
   done
   refuse_live "${live_name}" "${live_path}" "${target}"
+  # A bind mount includes the mounts below it: if anything under the stage were a mount of other data,
+  # a root `rm -rf` would delete through it. Refuse any mount point at or below the stage, and mount
+  # the stage itself without them (Docker 25 or later).
+  canonical_target=$(realpath -e -- "${target}")
+  if awk '{ print $5 }' /proc/self/mountinfo | sed 's/\\040/ /g' |
+    grep -qxE "$(printf '%s' "${canonical_target}" | sed 's/[][\.*^$+?(){}|/]/\\&/g')(/.*)?"; then
+    echo "Refusing to remove anything in ${target}: a mount point is at or below it." >&2
+    exit 1
+  fi
+  docker_major=$(docker version --format '{{.Server.Version}}' 2>/dev/null | cut -d . -f 1)
+  case "${docker_major}" in '' | *[!0-9]*) docker_major=0 ;; esac
+  if [ "${docker_major}" -lt 25 ]; then
+    echo "Docker ${docker_major} cannot bind-mount without submounts (needs 25 or later); nothing removed." >&2
+    exit 1
+  fi
   # shellcheck disable=SC2086 # one path per entry, none with spaces (checked above)
   docker run --rm --network none --user 0 --cap-drop ALL --cap-add DAC_OVERRIDE \
     --security-opt no-new-privileges:true --memory 256m --memory-swap 256m --entrypoint rm \
-    -v "${target}:/stage" "${nominatim_image}" -rf ${inside}
+    --mount "type=bind,src=${canonical_target},dst=/stage,bind-recursive=disabled" \
+    "${nominatim_image}" -rf ${inside}
   for name do
     [ ! -e "${target}/${name}" ] || { echo "${target}/${name} is still there." >&2; exit 1; }
   done
@@ -469,9 +491,11 @@ case "${step}" in
       # just taken the lock.
       waited=0
       while :; do
-        holder= holder_start= holder_step= holder_label=
-        read -r holder holder_start holder_step holder_label <"${holder_file}" 2>/dev/null || true
+        holder= holder_start= holder_boot= holder_step= holder_label=
+        read -r holder holder_start holder_boot holder_step holder_label <"${holder_file}" 2>/dev/null || true
+        # Start times count from boot: a record from another boot names no running process.
         if [ -n "${holder}" ] && [ -n "${holder_start}" ] &&
+          [ "${holder_boot}" = "$(cat /proc/sys/kernel/random/boot_id)" ] &&
           [ "$(process_start "${holder}")" = "${holder_start}" ]; then
           break
         fi
@@ -500,7 +524,7 @@ case "${step}" in
     v=$(cat "${version_file}" 2>/dev/null || echo none)
     echo "release ${label} ${v}"
     if [ -e "${lock_file}" ] && ! flock -n "${lock_file}" true; then
-      echo "  step running: $(cut -d ' ' -f 3- "${holder_file}" 2>/dev/null)"
+      echo "  step running: $(cut -d ' ' -f 4- "${holder_file}" 2>/dev/null)"
     fi
     for marker in "${root}/valhalla-${label}-${v}/.pass1-complete" \
       "${root}/valhalla-${label}-${v}/.navoss-stage-complete" \
