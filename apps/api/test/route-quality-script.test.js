@@ -3,7 +3,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { maximumGeometrySegmentMeters } from '../scripts/route-quality-gap.mjs';
 import { resolveInputPath } from '../scripts/resolve-input-path.mjs';
+
+describe('route geometry gaps', () => {
+  it('accepts a sparse 9 km segment on a 1,993 km route but rejects it on an urban route', () => {
+    expect(9_000).toBeLessThanOrEqual(maximumGeometrySegmentMeters(1_993_000));
+    expect(9_000).toBeGreaterThan(maximumGeometrySegmentMeters(12_000));
+    expect(maximumGeometrySegmentMeters(12_000)).toBe(2_000);
+  });
+
+  it('retains explicitly configured larger limits', () => {
+    expect(maximumGeometrySegmentMeters(100_000, 120_000)).toBe(120_000);
+  });
+});
 
 describe('route-quality script paths', () => {
   it('falls back from the root invocation directory to the package working directory', async () => {

@@ -852,6 +852,9 @@
       "id": "winnipeg-brandon",
       "lengthBand": "long",
       "maximumEndpointOffsetMeters": 250,
+      "maximumDurationMinutes": 150,
+      "maximumSegmentMeters": 3000,
+      "notes": "Road Trip Manitoba describes approximately 215 km and 2.5 hours by car: https://roadtripmanitoba.com/manitoba-route-guides/winnipeg-to-brandon/",
       "originAnchorId": "winnipeg-downtown",
       "tags": ["manitoba", "winnipeg", "brandon"]
     },

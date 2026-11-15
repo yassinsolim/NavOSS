@@ -4,7 +4,11 @@ Applies to phone text, CarPlay templates, spoken guidance, accessible names and 
 
 ## rule/claim-matches-deployed-service
 
-User-facing text may claim only what the **deployed** service and the relevant **build** do. The service supports Alberta+BC coverage and `/v2/routes` lanes and signposts; build 75 onward uses them when returned, while build 70 uses v1. As of 2026-11-15 reports are `attested` and opt-in traffic is `collect`: build 80 onward can share, earlier builds cannot. Verified reports are unconfirmed until corroborated; collected traffic is not displayed or used in routes. Live traffic remains unavailable. Alberta and Calgary-area offline regions are available; BC has no offline region. The service has province-wide road events for Alberta, BC and Ontario, but the new phone list is on main only, not in builds 75 or 80. Evidence: #120, #122, `AGENTS.md` ("Current checkpoint"), `docs/release/next-build-checklist.md`.
+User-facing text may claim only what the **deployed** service and the relevant **build** do. The service supports Canada-wide search and routing and `/v2/routes` lanes and signposts when returned. Build 81 was uploaded but tester availability is unchecked; build 70 uses v1. Reports are `attested` and opt-in traffic is `collect`: build 80 onward can share, earlier builds cannot. Verified reports are unconfirmed until corroborated; collected traffic is not displayed or used in routes. Live traffic remains unavailable. Alberta and Calgary-area offline regions are available; BC has no offline region. Province-wide road events for Alberta, BC and Ontario are in uploaded build 81, not builds 75 or 80. Evidence: #120, #121, #125, `AGENTS.md`.
+
+Builds 75 and 80 follow the server's declared areas for search and routing (their shipped
+`client-config.ts`, route planner and native `NavigationServerConfig.swift`); this is code evidence,
+not an on-screen Canada validation.
 
 ## rule/coverage-from-the-server
 

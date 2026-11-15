@@ -1,6 +1,6 @@
 # NavOSS production stack
 
-This stack serves the NavOSS API using the Alberta–British Columbia geospatial artifacts.
+This stack serves the NavOSS API using Canada-wide geospatial artifacts.
 All geospatial and database services remain private. Caddy binds only to
 `127.0.0.1:8080`; Cloudflare Tunnel is the sole public ingress.
 
@@ -9,16 +9,11 @@ capacity and rollout decision is documented in
 [`docs/architecture/north-america.md`](../../docs/architecture/north-america.md). Build and validate
 continent artifacts on dedicated import infrastructure before changing production extracts.
 
-Production status: the API cutover was performed on 2026-11-15 from commit `f780903`.
-The deployed image is `navoss-api:latest` (`9001dda4444f`); the rollback tag
-`navoss-api:pre-provincial-v2` (`351acadeaa57`) is retained. Public ingress is
-`https://navoss-api.yassin.app`. Community reports and community traffic remain off;
-offline maps are unavailable: release `2026-11-11-v1-798f5c442644` is hosted on R2 since
-2026-11-15, but no manifest is installed here yet ([Offline bundle manifest](#offline-bundle-manifest)).
-
-The active routing artifact is `valhalla-alberta-british-columbia-260730-ca-parent`, with hybrid
-profile SHA-256 `0a3f87cfabf76c2428ee851e1d5b61f90ef21d6952e9a4a1d4759887713931d7`. The
-previous `valhalla-alberta-british-columbia-260730` artifact remains available for rollback.
+Production status: the Canada cutover was performed on 2026-11-15 at 15:44 UTC. The API image is
+from `4708d34`, with rollback tag `navoss-api:pre-canada-registry`; the data rollback backup is
+`.env.pre-canada-20261115T154413Z`. Public ingress is `https://navoss-api.yassin.app`. Reports
+are `attested` and traffic is `collect` (not displayed or used in routes). Offline regions are
+published for Alberta and the Calgary area only. The Alberta+BC artifacts remain for rollback.
 
 ## Storage
 
@@ -386,15 +381,13 @@ below included). Each step also refuses to start unless its free-space floor is 
 disk (`STAGE_MIN_FREE_GB` overrides the floor for small samples only). Memory is the configured
 container limit, which is what the kernel enforces; there is no swap.
 
-| Step | Command                                               | Expected time                 | Disk floor (refuses below) | Artifact disk                    | Memory (container limits)                             |
-| ---- | ----------------------------------------------------- | ----------------------------- | -------------------------- | -------------------------------- | ----------------------------------------------------- |
-| 0    | Update the checkout and API image                     | 5 min                         | —                          | 1 GB                             | image build only                                      |
-| 1    | `inputs`: verify the extract, write the routing input | 9 min measured                | 20 GB                      | +6.5 GB                          | no container; osmium check-refs ≈ 2 GiB on the host   |
-| 2    | `valhalla`: two graph passes and the admin repair     | ≈ 35 min measured             | 30 GB                      | +8–20 GB peak, 10 GB kept        | build 8 GiB; spatialite helpers 1 GiB, never together |
-| 3    | `nominatim`: search import                            | 12–24 h estimate              | 130 GB                     | +70–110 GB peak, ≈ 20–30 GB kept | import 10 GiB; cleanup container 256 MiB before it    |
-| 4    | `serve` + `verify`, route matrix over SSH             | 30 min                        | 2 GB                       | —                                | Valhalla 4 + Nominatim 6 + API 0.75 = 10.75 GiB       |
-| 5    | `stop`                                                | 1 min                         | —                          | —                                | frees step 4                                          |
-| 6    | Cutover                                               | 5–10 min, ≈ 1 min API restart | —                          | —                                | live limits 10.19 → 14.19 GiB                         |
+0. **Update checkout and API image:** approximately 5 minutes; 1 GB on disk; image build only.
+1. **`inputs`:** 9 minutes measured, 20 GB disk floor, +6.5 GB artifacts; no container, osmium check-refs approximately 2 GiB on the host.
+2. **`valhalla`:** both passes and admin repair approximately 35 minutes measured, 30 GB floor, 3.9 GB kept after cleanup; build 8 GiB and spatialite helpers 1 GiB, never together.
+3. **`nominatim`:** 147 minutes measured, 130 GB floor, 18 GB frozen database, peak disk about 89 GB; import 10 GiB with `--osm2pgsql-cache 3000`.
+4. **`serve` and `verify`, host-network matrix:** approximately 30 minutes, 2 GB floor; Valhalla 4 GiB, Nominatim 6 GiB, API 0.75 GiB.
+5. **`stop`:** approximately 1 minute; frees the staged serving containers.
+6. **Cutover:** 5–10 minutes, approximately 1 minute API restart; live limits 10.19 → 14.19 GiB.
 
 Worst case against the 24 GiB host, by limits. The live stack's limits are 10.19 GiB (API 0.75,
 search indexer 0.5, Caddy 0.19, Valhalla 2, Nominatim 6, reports database 0.75). The lock allows
@@ -412,11 +405,11 @@ Limits are ceilings, not use: the kernel kills a container at its limit instead 
 swapping. Steps 3 and 4 leave less than the 4 GiB floor only if every container reaches its limit
 at once; watch `free -h` as below.
 
-The all-Canada `inputs` on VM 100 removed 4,456 seasonal or ice-road ways and passed check-refs;
-both Valhalla passes produced 8,767 tiles and a 10 GB stage in about 35 minutes. The Nominatim
-timing and remaining disk peaks are estimates scaled from Alberta+BC (see the architecture
-document): its import started 2026-11-15 12:51 UTC and had not finished at the time of writing.
-Record further measured values in `docs/release/testflight.md` as each step finishes.
+The all-Canada `inputs` removed 4,456 seasonal or ice-road ways and passed check-refs.
+Both Valhalla passes produced 8,767 tiles and a 3.9 GB stage after cleanup in about 35 minutes.
+Nominatim took 147 minutes and produced an 18 GB frozen database. The first attempt was OOM-killed
+after 10 minutes: the image ignored `OSM2PGSQL_CACHE` and selected 12.4 GB. #124 passes
+`--osm2pgsql-cache 3000` explicitly. After cutover 60 GB of 255 GB was used.
 
 ```sh
 cd /home/navoss/NavOSS/infra/compose
@@ -449,16 +442,28 @@ sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh serve canada
 sudo -n env GEOFABRIK_VERSION=261114 ./stage-coverage.sh verify canada
 ```
 
-Then, from a checkout on your own machine, run the 80-route matrix through a tunnel and keep the
-artifact. Every route must pass, or have a reviewed, recorded reason (an anchor that needs moving
-is a matrix fix, not a pass):
+On VM 100, sshd has `AllowTcpForwarding no`, so an SSH tunnel cannot reach the staged port. Run
+the matrices from a read-only Node container on the host network instead. Every route must pass,
+or have a reviewed, recorded reason:
 
 ```sh
-ssh -N -L 18300:127.0.0.1:18300 navoss-prod &
-NAVOSS_API_URL=http://127.0.0.1:18300 ROUTE_QUALITY_OUTPUT=artifacts/route-quality-canada-80.json \
-  corepack pnpm --filter @navoss/api test:routes:canada
-NAVOSS_API_URL=http://127.0.0.1:18300 ROUTE_QUALITY_OUTPUT=artifacts/route-quality-alberta-bc-22-on-canada.json \
-  corepack pnpm --filter @navoss/api test:routes:alberta-bc
+mkdir -p /tmp/rq
+sudo docker run --rm --network host --read-only --cap-drop ALL --memory 512m -v ~/NavOSS/apps/api/scripts:/s:ro -v /tmp/rq:/out -w /s -e NAVOSS_API_URL=http://127.0.0.1:18300 -e ROUTE_QUALITY_CASES=./route-quality-canada.json -e ROUTE_QUALITY_OUTPUT=/out/route-quality-canada-staged.json node:24.18.0-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d node ./route-quality.mjs
+# Repeat with ROUTE_QUALITY_CASES=./route-quality-alberta-bc.json and a different output name.
+```
+
+For the live stack use `NAVOSS_API_URL=http://127.0.0.1:8080`. On 2026-11-15 staged and live
+Alberta+BC passed 22/22 and Canada 72/80 (live p95 475 ms); all eight failures were reviewed as
+threshold artifacts. After adjusting the checks, a sequential public HTTPS run at 15:53 UTC with
+at most one request per second passed 80/80 at 652 ms p95.
+
+To run from a local checkout against production without exceeding one request per second:
+
+```sh
+NAVOSS_API_URL=https://navoss-api.yassin.app \
+  ROUTE_QUALITY_CASES=./apps/api/scripts/route-quality-canada.json \
+  ROUTE_QUALITY_OUTPUT=artifacts/route-quality-canada-live.json \
+  ROUTE_QUALITY_REQUEST_INTERVAL_MS=1100 node apps/api/scripts/route-quality.mjs
 ```
 
 Also search in each province on the staged API (a city name with its readiness-probe coordinate),
@@ -497,7 +502,8 @@ Then rerun the matrix against `https://navoss-api.yassin.app` and record the res
 traffic in `collect`, restart nothing else: traffic stays Alberta+BC (its probes are refused
 elsewhere) and is matched on the new graph.
 
-**Rollback** restores the saved `.env` (all seven values) and recreates the same four services; the
+**Rollback** restores the saved `.env` (pattern `.env.pre-canada-YYYYMMDDTHHMMSSZ`; the 2026-11-15
+backup is `.env.pre-canada-20261115T154413Z`) and recreates the same four services. The
 Alberta+BC artifacts were never changed:
 
 ```sh
@@ -505,6 +511,11 @@ cp -p .env.pre-canada-<timestamp> .env
 sudo docker compose up -d --no-build --wait --wait-timeout 600 valhalla nominatim api caddy
 ./check-stack.sh
 ```
+
+The guard freshness check can coincide with the five-minute timer. While the oneshot is
+activating, `check-stack.sh` waits up to 184 seconds for the configured 180-second service timeout
+and then checks its result and completed timestamp; failure, a stale run or a withdrawn manifest
+still fails the check. At cutover the original check saw `ended never` during a run; a rerun passed.
 
 Keep `valhalla-alberta-british-columbia-260730-ca-parent`, `nominatim/alberta-british-columbia-260730`
 and their extracts until Canada has run cleanly for at least a week of tester use; then delete them

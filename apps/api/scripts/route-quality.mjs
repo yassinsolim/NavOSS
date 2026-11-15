@@ -3,7 +3,9 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
+import { maximumGeometrySegmentMeters } from './route-quality-gap.mjs';
 import { resolveInputPath } from './resolve-input-path.mjs';
 
 const apiUrl = process.env.NAVOSS_API_URL ?? 'http://127.0.0.1:3001';
@@ -180,7 +182,10 @@ function analyze(routeCase, route, response, latencyMs, avoidHighways) {
   }
   if (Math.abs(metrics.geometryRatio - 1) > 0.03) failures.push('geometry distance');
   if (latencyMs > (routeCase.maximumLatencyMs ?? 5_000)) failures.push('latency');
-  if (metrics.maximumSegmentMeters > (routeCase.maximumSegmentMeters ?? 2_000)) {
+  if (
+    metrics.maximumSegmentMeters >
+    maximumGeometrySegmentMeters(route.distanceMeters, routeCase.maximumSegmentMeters)
+  ) {
     failures.push('geometry gap');
   }
   if (metrics.originOffsetMeters > routeCase.maximumEndpointOffsetMeters) {
@@ -217,7 +222,13 @@ function analyze(routeCase, route, response, latencyMs, avoidHighways) {
   };
 }
 
+const minimumRequestIntervalMs = Number(process.env.ROUTE_QUALITY_REQUEST_INTERVAL_MS ?? 0);
+let previousRequestStartedAt = -Infinity;
+
 async function runCase(routeCase, avoidHighways) {
+  const waitMs = minimumRequestIntervalMs - (performance.now() - previousRequestStartedAt);
+  if (waitMs > 0) await delay(Math.ceil(waitMs));
+  previousRequestStartedAt = performance.now();
   const startedAt = performance.now();
   const response = await fetch(new URL(routePath, apiUrl), {
     body: JSON.stringify({

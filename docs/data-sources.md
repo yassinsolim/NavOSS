@@ -3,11 +3,11 @@
 ## Provincial Service-Area Boundaries
 
 Routing/search coverage is what the server declares (`NAVOSS_SERVICE_AREAS`); the deployed v2
-configuration declares Alberta and British Columbia. The single registry,
-`packages/contracts/src/coverage-data.ts`, holds all thirteen provinces and territories; a province
-is declared only over routing and search data imported with it. V1 configuration remains Calgary-shaped for
-strict shipped clients. Calgary civic/camera data and Kelowna/DriveBC context are **local overlays**,
-not province-wide datasets.
+configuration declares Canada and all thirteen provinces and territories in the registry
+`packages/contracts/src/coverage-data.ts`. A province is declared only over routing and search
+data imported with it. The deployed Geofabrik `canada-261114.osm.pbf` is 6,502,858,272 bytes
+(MD5 `0bba746e7473aac6a7a6796d153ea12d`). V1 remains Calgary-shaped for strict shipped clients.
+Calgary civic/camera data and Kelowna/DriveBC context are **local overlays**, not province-wide datasets.
 
 - Source: [Statistics Canada, 2021 Census province/territory digital boundaries](https://geo.statcan.gc.ca/geo_wa/rest/services/2021/Digital_boundary_files/MapServer/0), every province and territory (PRUID `10`, `11`, `12`, `13`, `24`, `35`, `46`, `47`, `48`, `59`, `60`, `61` and `62`), published 2022-09-21. `48` and `59` (Alberta, British Columbia) were retrieved for #79; the other eleven on 2026-11-15 with the same query, which reproduced `48` and `59` exactly.
 - Licence declared by the service metadata: [Open Government Licence – Canada](https://open.canada.ca/en/open-government-licence-canada).
@@ -28,10 +28,8 @@ origin, waypoint and destination must lie in a supported province.
 
 ## Calgary Place and Address Search
 
-The result-quality behaviour below describes this implementation, not the shipped build. The
-deployed service still uses the older Calgary/Kelowna image; province-wide retrieval and expanded
-station/campus/variant deduplication are not live there until deployment. The new phone
-presentation accepts the older response shape, but is not in TestFlight build 70.
+The deployed service uses Canada-wide OSM search with Calgary-specific local enrichment.
+The new phone presentation is not in TestFlight build 70.
 
 NavOSS combines a local copy of two City of Calgary datasets with its self-hosted
 OpenStreetMap/Nominatim index. The local copy is refreshed every 24 hours and swapped
@@ -182,8 +180,8 @@ place-details request and do not link that SDK.
 ## Live Traffic Routing
 
 The North America coverage, infrastructure, and provider decision is recorded in
-[`architecture/north-america.md`](architecture/north-america.md). V2 selects Alberta and British
-Columbia while retaining Calgary-shaped v1 compatibility and staged Canada/US/Mexico quality gates.
+[`architecture/north-america.md`](architecture/north-america.md). V2 declares Canada while retaining
+Calgary-shaped v1 compatibility; US and Mexico remain future quality gates.
 
 NavOSS's own live traffic is built from opted-in driver speeds and is described under
 [Community Traffic](#community-traffic). Commercial live traffic stays disabled until a provider
@@ -443,10 +441,10 @@ or live police locations.
 
 ## Self-built regional offline data
 
-The build pipeline in [`infra/offline`](../infra/offline/README.md) produces downloadable artifacts,
-not an already-enabled phone/CarPlay offline feature. It uses public, dated Geofabrik Alberta and
-British Columbia PBFs with matching OSM timestamps, provider MD5 verification and recorded SHA-256.
-No tiles are bulk-scraped from OpenFreeMap's public endpoint.
+The build pipeline in [`infra/offline`](../infra/offline/README.md) produces downloadable artifacts.
+All Alberta and Calgary-area bundles are hosted; BC has no offline region. The pipeline uses public,
+dated Geofabrik Alberta and British Columbia PBFs with matching OSM timestamps, provider MD5
+verification and recorded SHA-256. No tiles are bulk-scraped from OpenFreeMap's public endpoint.
 
 | Component                                        | Source and licence                                                                                                                                                       | Required notices / limitations                                                                                                                                                                                       |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
