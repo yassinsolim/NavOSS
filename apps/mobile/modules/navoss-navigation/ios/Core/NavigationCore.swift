@@ -27,11 +27,19 @@ let navigationPoorAccuracyMeters = 50.0
 // from the road counts towards going off route only when the vehicle shows it is not heading
 // for the route: it is further from every part of the route than the closest it has come
 // (`preMatchDepartureMarginMeters`), or it has driven further than finding its way to the
-// route can take (`preMatchTravelBudgetMeters`; travel is what its fixes show it has covered,
-// or, where they are too close together to tell, what a reported speed of known accuracy shows
-// that the positions corroborate: `recordPreMatchSpeedTravel`). Either then needs the usual
+// route can take (`preMatchTravelBudgetMeters`). Either then needs the usual
 // `offRouteConfirmationSampleCount` consecutive fixes. A fix too poor to say where the vehicle
 // is (`navigationPoorAccuracyMeters`) counts neither way.
+//
+// Travel is positional only: it accumulates from movement between fixes of more than
+// `preMatchTravelStepMeters` and more than both fixes' accuracy. A reported speed can only
+// veto it (below `preMatchStationarySpeedMetersPerSecond` the vehicle is stationary), never
+// credit it: every way of crediting speed alone also credited parked receivers reporting a
+// spurious speed, and rerouting a parked driver is what this rule exists to prevent. The
+// trade-off: a vehicle circling inside about 30 m (a parkade ramp, a small roundabout in a lot)
+// is never counted as travelling. It is not going anywhere; it stays acquiring, unguided and
+// silent, and once it leaves the circle the positional rules apply: it matches the route, moves
+// away from it, or accumulates travel.
 /// How much further from the route than its closest approach the vehicle must be, plus both
 /// fixes' accuracy. Above parked GPS noise (see `cumulativeBackwardToleranceMeters`).
 private let preMatchDepartureMarginMeters = 50.0
@@ -45,15 +53,6 @@ private let preMatchTravelBudgetMeters = 500.0
 private let preMatchTravelStepMeters = 30.0
 /// A fix reporting a speed below this is a stationary vehicle, however far it wandered.
 private let preMatchStationarySpeedMetersPerSecond = 1.0
-/// Reported speeds count as travel only between fixes at most this far apart in time.
-private let preMatchSpeedGapSeconds = 5.0
-/// How far a step between fixes may differ from the distance the reported speed covers (or
-/// half of that distance, if more) for the speed to count: a moving receiver's fixes follow its
-/// speed, a parked one's jumps do not.
-private let preMatchSpeedStepToleranceMeters = 3.0
-/// A run of fixes must spread at least this far (and twice its worst accuracy) before its
-/// speed counts.
-private let preMatchSpeedSpanMinimumMeters = 10.0
 /// Beyond 1 km from all of the route, the exact distance is rescanned only after the vehicle
 /// has moved this far; in between a lower bound stands in (see `preMatchDistance`).
 private let preMatchRescanMeters = 100.0
@@ -421,8 +420,6 @@ struct NavigationLocationSample: Equatable, Sendable {
   let horizontalAccuracyMeters: Double?
   /// Ground speed reported with the fix. Feeds transition plausibility and dead reckoning.
   let speedMetersPerSecond: Double?
-  /// Uncertainty of that speed (Core Location's `speedAccuracy`), when reported as valid.
-  let speedAccuracyMetersPerSecond: Double?
   /// Fix time in seconds since the reference date (`Date.timeIntervalSinceReferenceDate`).
   let timestamp: TimeInterval?
 
@@ -431,14 +428,12 @@ struct NavigationLocationSample: Equatable, Sendable {
     courseDegrees: Double? = nil,
     horizontalAccuracyMeters: Double?,
     speedMetersPerSecond: Double? = nil,
-    speedAccuracyMetersPerSecond: Double? = nil,
     timestamp: TimeInterval? = nil
   ) {
     self.coordinate = coordinate
     self.courseDegrees = courseDegrees
     self.horizontalAccuracyMeters = horizontalAccuracyMeters
     self.speedMetersPerSecond = speedMetersPerSecond
-    self.speedAccuracyMetersPerSecond = speedAccuracyMetersPerSecond
     self.timestamp = timestamp
   }
 
@@ -569,20 +564,6 @@ final class NavigationCore {
   private var preMatchStartDistanceMeters: Double?
   private var preMatchClosest: (distanceMeters: Double, accuracyMeters: Double)?
   private var preMatchTravel: (from: NavigationCoordinate, accuracyMeters: Double, meters: Double)?
-  /// Travel proven by reported speed before the first match, and the current run of fixes
-  /// whose speed is being weighed (see `recordPreMatchSpeedTravel`).
-  private var preMatchSpeedTravelMeters = 0.0
-  private var preMatchSpeedRun: PreMatchSpeedRun?
-
-  private struct PreMatchSpeedRun {
-    let start: NavigationCoordinate
-    var maximumAccuracyMeters: Double
-    var last: NavigationCoordinate
-    var lastTimestamp: TimeInterval
-    var lastLowerSpeed: Double
-    var pendingMeters: Double
-    var isProven: Bool
-  }
   private var preMatchScan: (coordinate: NavigationCoordinate, distanceMeters: Double)?
   /// Full scans of the route made for pre-match fixes. Exposed so tests can bound the cost.
   private(set) var preMatchFullScanCount = 0
@@ -1141,8 +1122,6 @@ final class NavigationCore {
       preMatchStartDistanceMeters = nil
       preMatchClosest = nil
       preMatchTravel = nil
-      preMatchSpeedTravelMeters = 0
-      preMatchSpeedRun = nil
       preMatchScan = nil
     }
     // The anchor moves only with an accepted fix, and takes that fix's own time and speed. The
@@ -1287,8 +1266,6 @@ final class NavigationCore {
     preMatchStartDistanceMeters = nil
     preMatchClosest = nil
     preMatchTravel = nil
-    preMatchSpeedTravelMeters = 0
-    preMatchSpeedRun = nil
     preMatchScan = nil
   }
 
@@ -1320,70 +1297,11 @@ final class NavigationCore {
       travel = (sample.coordinate, accuracyMeters, travel.meters + step)
     }
     preMatchTravel = travel
-    recordPreMatchSpeedTravel(sample, accuracyMeters: accuracyMeters)
     let isMovingAway = preMatchClosest.map {
       distance.meters
         > $0.distanceMeters + preMatchDepartureMarginMeters + accuracyMeters + $0.accuracyMeters
     } ?? false
-    return isMovingAway
-      || max(travel.meters, preMatchSpeedTravelMeters)
-        > startDistanceMeters + preMatchTravelBudgetMeters
-  }
-
-  /// Motion too tight for the spatial filter (a parkade ramp, a small roundabout in a lot) shows
-  /// in the reported speed, but a parked receiver can report a spurious one. Speed is credited
-  /// only with evidence on both counts:
-  /// - its quality: Core Location's `speedAccuracy` is valid and the lower bound
-  ///   `speed - speedAccuracy` is a moving speed; only that bound is credited, for the slower
-  ///   of two consecutive fixes, over at most `preMatchSpeedGapSeconds`;
-  /// - the positions: each step between consecutive fixes is the distance that speed covers
-  ///   in the time (within `preMatchSpeedStepToleranceMeters` or half of it), so a jumping
-  ///   parked fix breaks the run; and the run's positions have spread further from where it
-  ///   began than both ends could be wrong (twice the worst accuracy, at least
-  ///   `preMatchSpeedSpanMinimumMeters`), which a parked car's cluster does not.
-  /// Until a run shows that spread its speed is only pending, and a broken run's pending speed is
-  /// dropped. Travel already proven stays: a vehicle that drove, stopped and drove on has driven.
-  private func recordPreMatchSpeedTravel(
-    _ sample: NavigationLocationSample,
-    accuracyMeters: Double
-  ) {
-    guard let timestamp = sample.timestamp, let speed = sample.speedMetersPerSecond,
-      speed <= maximumPlausibleSpeedMetersPerSecond,
-      let speedAccuracy = sample.speedAccuracyMetersPerSecond, speedAccuracy >= 0,
-      speed - speedAccuracy >= preMatchStationarySpeedMetersPerSecond
-    else {
-      preMatchSpeedRun = nil
-      return
-    }
-    let lowerSpeed = speed - speedAccuracy
-    if var run = preMatchSpeedRun {
-      let elapsed = timestamp - run.lastTimestamp
-      let step = navigationDistanceMeters(from: run.last, to: sample.coordinate)
-      if elapsed > 0, elapsed <= preMatchSpeedGapSeconds,
-        abs(step - speed * elapsed)
-          <= max(preMatchSpeedStepToleranceMeters, 0.5 * speed * elapsed)
-      {
-        run.pendingMeters += min(lowerSpeed, run.lastLowerSpeed) * elapsed
-        run.maximumAccuracyMeters = max(run.maximumAccuracyMeters, accuracyMeters)
-        if navigationDistanceMeters(from: run.start, to: sample.coordinate)
-          > max(preMatchSpeedSpanMinimumMeters, 2 * run.maximumAccuracyMeters)
-        {
-          run.isProven = true
-        }
-        if run.isProven {
-          preMatchSpeedTravelMeters += run.pendingMeters
-          run.pendingMeters = 0
-        }
-        run.last = sample.coordinate
-        run.lastTimestamp = timestamp
-        run.lastLowerSpeed = lowerSpeed
-        preMatchSpeedRun = run
-        return
-      }
-    }
-    preMatchSpeedRun = PreMatchSpeedRun(
-      start: sample.coordinate, maximumAccuracyMeters: accuracyMeters, last: sample.coordinate,
-      lastTimestamp: timestamp, lastLowerSpeed: lowerSpeed, pendingMeters: 0, isProven: false)
+    return isMovingAway || travel.meters > startDistanceMeters + preMatchTravelBudgetMeters
   }
 
   /// Distance from `coordinate` to all of the route. Within 1 km the grid answers exactly.

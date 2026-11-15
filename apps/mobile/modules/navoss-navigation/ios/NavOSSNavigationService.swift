@@ -575,10 +575,6 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
           speedMetersPerSecond: location.speed >= 0 && location.speed.isFinite
             ? location.speed
             : nil,
-          speedAccuracyMetersPerSecond: location.speedAccuracy >= 0
-            && location.speedAccuracy.isFinite
-            ? location.speedAccuracy
-            : nil,
           timestamp: location.timestamp.timeIntervalSinceReferenceDate
         )
       )
