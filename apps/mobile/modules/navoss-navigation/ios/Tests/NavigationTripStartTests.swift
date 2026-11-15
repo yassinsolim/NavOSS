@@ -81,13 +81,15 @@ final class NavigationTripStartTests: XCTestCase {
       speed: Double? = nil,
       course: Double? = nil,
       accuracy: Double = 5,
+      speedAccuracy: Double? = nil,
       after seconds: TimeInterval
     ) throws {
       time += seconds
       let update = try session.updateLocation(
         NavigationLocationSample(
           coordinate: coordinate, courseDegrees: course, horizontalAccuracyMeters: accuracy,
-          speedMetersPerSecond: speed, timestamp: time))
+          speedMetersPerSecond: speed, speedAccuracyMetersPerSecond: speedAccuracy,
+          timestamp: time))
       latest = update
       history.append((update, planner.prompt(for: update, now: time)?.text))
       let isOffRoute = update.snapshot.phase == .tracking && update.snapshot.isOffRoute
@@ -468,9 +470,9 @@ final class NavigationTripStartTests: XCTestCase {
 
   /// Re-review of #133: a loop of 10 m radius (a parkade ramp, a small roundabout in a lot) at
   /// 3 m/s, 55 m from the chosen route. No two fixes are more than 20 m apart and the distance
-  /// to the route never grows past its margin, so only the reported speed shows the travel: the
-  /// vehicle is rerouted once that travel passes the budget (its 45 m start plus 500 m, about
-  /// three minutes).
+  /// to the route never grows past its margin, so only the reported speed (3 m/s with a speed
+  /// accuracy of 0.5 m/s) shows the travel: the vehicle is rerouted once that travel passes the
+  /// budget (its 55 m start plus 500 m, under four minutes).
   func testCirclingATightLoopBesideTheRouteIsReroutedOnReportedSpeed() throws {
     let selected = Self.syntheticTrip(NavigationTrace.route([(-2_000.0, 55.0), (2_000.0, 55.0)]))
     let replacement = try Self.trips("square-one-scarborough-reroute.v2")
@@ -483,12 +485,13 @@ final class NavigationTripStartTests: XCTestCase {
         NavigationTrace.coordinate(10 * cos(angle), 10 * sin(angle)), speed: 3,
         course: ((-angle * 180 / .pi).truncatingRemainder(dividingBy: 360) + 360)
           .truncatingRemainder(dividingBy: 360),
-        after: 1)
+        speedAccuracy: 0.5, after: 1)
     }
     XCTAssertEqual(trip.requests, 1)
     XCTAssertEqual(trip.offRouteFixes, 1)
-    XCTAssertGreaterThanOrEqual(seconds, 170, "not before the budget is driven")
-    XCTAssertLessThanOrEqual(seconds, 200)
+    // Credited at the speed's lower bound, 3 - 0.5 = 2.5 m/s: 555 m take 222 s.
+    XCTAssertGreaterThanOrEqual(seconds, 215, "not before the budget is driven")
+    XCTAssertLessThanOrEqual(seconds, 235)
   }
 
   /// Ten minutes parked off the road with the fix wandering never adds up to travel: half a
@@ -511,6 +514,33 @@ final class NavigationTripStartTests: XCTestCase {
         XCTAssertEqual(trip.offRouteFixes, 0, label)
         XCTAssertEqual(trip.activeRouteId, express.id, label)
       }
+    }
+  }
+
+  /// Final review of #133: a parked car whose fixes report a spurious 2 m/s for ten minutes,
+  /// at one fix a second. With unchanged coordinates (20 m accuracy), the speed is credited
+  /// neither without a valid speed accuracy nor with one: the positions show no motion. With
+  /// 15 m of jitter, at 5 m and at 15 m accuracy, the jumps between fixes are not the motion a
+  /// steady 2 m/s would make.
+  func testParkedWithASpuriousReportedSpeedIsNeverRerouted() throws {
+    let cases: [(jitter: Double, accuracy: Double, speedAccuracy: Double?)] = [
+      (0, 20, nil), (0, 20, 0.5), (15, 5, 0.5), (15, 15, 0.5), (15, 5, nil),
+    ]
+    for (jitter, accuracy, speedAccuracy) in cases {
+      let label = "jitter \(jitter) m, accuracy \(accuracy) m, "
+        + "speed accuracy \(String(describing: speedAccuracy))"
+      let (trip, express) = try harness(selecting: "Highway 401 Express")
+      var generator = SplitMix64(seed: 3)
+      for _ in 0..<600 {
+        let angle = Double(generator.next() % 3_600) / 3_600 * 2 * .pi
+        let radius = jitter * Double(generator.next() % 1_000) / 1_000
+        try trip.fix(
+          Self.offset(Self.parked, east: radius * cos(angle), north: radius * sin(angle)),
+          speed: 2, accuracy: accuracy, speedAccuracy: speedAccuracy, after: 1)
+      }
+      XCTAssertEqual(trip.requests, 0, label)
+      XCTAssertEqual(trip.offRouteFixes, 0, label)
+      XCTAssertEqual(trip.activeRouteId, express.id, label)
     }
   }
 
