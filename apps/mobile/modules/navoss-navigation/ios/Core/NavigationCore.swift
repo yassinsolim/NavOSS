@@ -207,6 +207,9 @@ private let implausibleJumpMarginMeters = 150.0
 // that is indistinguishable from GPS error; progress then follows the fixes, but arrival still
 // needs them to move on along the route after the last jump (rule 6).
 
+/// Two passes of a route this close, in the same direction, are the same road driven twice.
+/// Repeated road is drawn identically; a separate carriageway or parallel road is further.
+private let sameRoadToleranceMeters = 5.0
 /// How wrong a GPS position can credibly be while the vehicle stands still (urban multipath).
 private let credibleBiasMeters = 300.0
 /// A candidate is direct when it is no further along the route from the anchor than this many
@@ -693,6 +696,8 @@ final class NavigationCore {
   /// and not for a trip restored before its first match (it may have been moved while the app
   /// was closed).
   private var trustsPlacementAtRouteStart = true
+  /// Whether a usable fix has fitted the route (been on the road) before the first match.
+  private var hasFitRouteBeforeMatch = false
   private var arrivalSampleCount = 0
   private var departureSampleCount = 0
   /// Progress established by the latest real fix. Dead reckoning moves the published snapshot
@@ -1154,10 +1159,18 @@ final class NavigationCore {
       || isWrongWaySample
     let isRecoverySample = projection.distanceMeters + accuracyAllowanceMeters <=
       onRouteRecoveryDistanceThresholdMeters && projection.progress >= fixProgress
-    // Whether this is the route's first usable fix: only it can be where the route was asked
-    // for (`trustsPlacementAtRouteStart`); by the next the vehicle may have moved.
-    let isFirstUsableFix = !hasMatchedRoute && preMatchStartDistanceMeters == nil
+    // Whether this is the first usable fix on the road (fitting the route) before the first
+    // match: only it can join the route where it was asked for (`trustsPlacementAtRouteStart`).
+    // Fixes off the road (a parking lot) before it do not count; after it the vehicle has been
+    // on the road and may have moved along it.
+    let isUsableBeforeMatch = !hasMatchedRoute
       && accuracyAllowanceMeters <= navigationPoorAccuracyMeters
+    let isFirstRoadFixBeforeMatch = isUsableBeforeMatch && !hasFitRouteBeforeMatch
+    if isUsableBeforeMatch,
+      projection.distanceMeters <= offRouteDistanceThresholdMeters + accuracyAllowanceMeters
+    {
+      hasFitRouteBeforeMatch = true
+    }
     let isLeavingBeforeFirstMatch = !hasMatchedRoute
       && recordPreMatchFix(sample, on: route, accuracyMeters: accuracyAllowanceMeters)
 
@@ -1195,15 +1208,17 @@ final class NavigationCore {
     // the return arm of a hairpin, beside the outbound arm): nothing has been matched to judge
     // it against, and the earliest pass is a guess. It stays acquiring, unguided and silent,
     // until a fix fits only one pass or the moving vehicle's heading picks one out; meanwhile
-    // the rules before the first match decide whether it is leaving the route. The route's
-    // opening stretch is trusted for the first usable fix of a route asked for where the
-    // vehicle was (`trustsPlacementAtRouteStart`).
+    // the rules before the first match decide whether it is leaving the route. A later pass
+    // over the same road in the same direction (a loop back through the start) is no other
+    // pass: the vehicle is on that road, going that way, and the earliest use of it is taken
+    // (`isPassIdentified`). The route's opening stretch is trusted for the first fix on the
+    // road of a route asked for where the vehicle was (`trustsPlacementAtRouteStart`).
     // A restored trip without progress has its own pass confirmation instead.
     let isUnidentifiedBeforeMatch = !hasMatchedRoute && !requiresPassConfirmation
       && !isOffRoute && !isDepartureSample && !isHeldJump && !isUnplaceableBeforeMatch
-      && !(trustsPlacementAtRouteStart && isFirstUsableFix
+      && !(trustsPlacementAtRouteStart && isFirstRoadFixBeforeMatch
         && projection.alongMeters <= offRouteDistanceThresholdMeters + accuracyAllowanceMeters)
-      && !isPassIdentified(projection, by: sample, on: route)
+      && !isPassIdentified(projection, by: sample, on: route, ignoringSameRoadLaterPasses: true)
     let isUnmatchableBeforeMatch = isUnplaceableBeforeMatch || isUnidentifiedBeforeMatch
     let isAcceptableFix = !isOffRoute && !isDepartureSample && !isHeldJump
       && !isUnmatchableBeforeMatch
@@ -1419,6 +1434,7 @@ final class NavigationCore {
     defersArrivalOnNextAcceptedFix = false
     requiresPassConfirmation = false
     trustsPlacementAtRouteStart = true
+    hasFitRouteBeforeMatch = false
     lastRealSnapshot = nil
     arrivalSampleCount = 0
     departureSampleCount = 0
@@ -1504,21 +1520,36 @@ final class NavigationCore {
 
   /// Whether a fix shows which pass of the route `projection` is on: no other pass fits it, or
   /// the moving vehicle's heading agrees with this pass and opposes every other that fits.
+  /// With `ignoringSameRoadLaterPasses`, a later pass over the same place in the same direction
+  /// as `projection` (within `sameRoadToleranceMeters`, courses agreeing) is not another pass:
+  /// before the first match nothing of the route has been driven, and either way the vehicle is
+  /// on that road going that way.
   private func isPassIdentified(
     _ projection: RouteProjection,
     by sample: NavigationLocationSample,
-    on route: RoutePolyline
+    on route: RoutePolyline,
+    ignoringSameRoadLaterPasses: Bool = false
   ) -> Bool {
     let fittingLimitMeters = offRouteDistanceThresholdMeters
       + (sample.horizontalAccuracyMeters ?? 0)
-    let otherPasses = route.segmentIndices(
+    let fitting = route.segmentIndices(
       near: sample.coordinate,
       radiusMeters: min(globalSearchMaximumRadiusMeters, fittingLimitMeters)
     )
     .map { route.project(sample.coordinate, ontoSegment: $0) }
-    .filter {
-      $0.distanceMeters <= fittingLimitMeters
-        && !Self.isSamePass($0, as: projection, fittingLimitMeters: fittingLimitMeters)
+    .filter { $0.distanceMeters <= fittingLimitMeters }
+    // Later uses of the same road in the same direction, and everything of those passes.
+    let repeats = !ignoringSameRoadLaterPasses ? [] : fitting.filter {
+      $0.alongMeters > projection.alongMeters
+        && navigationDistanceMeters(from: $0.coordinate, to: projection.coordinate)
+          <= sameRoadToleranceMeters
+        && navigationCourseDifferenceDegrees($0.courseDegrees, projection.courseDegrees)
+          <= headingAgreesMaximumDifferenceDegrees
+    }
+    let otherPasses = fitting.filter { candidate in
+      !([projection] + repeats).contains {
+        Self.isSamePass(candidate, as: $0, fittingLimitMeters: fittingLimitMeters)
+      }
     }
     guard !otherPasses.isEmpty else {
       return true
