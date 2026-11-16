@@ -855,7 +855,9 @@ final class NavigationTripStartTests: XCTestCase {
     (0, 0), (0, 140), (20, 140), (20, -600), (600, -600),
   ]
 
-  private static func legTrip(_ corners: [(Double, Double)]) -> NavOSSCarPlayTrip {
+  private static func legTrip(
+    _ corners: [(Double, Double)], stops: [(Double, Double)] = []
+  ) -> NavOSSCarPlayTrip {
     func carPlay(_ points: [NavigationCoordinate]) -> [NavOSSCarPlayCoordinate] {
       points.map { NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude) }
     }
@@ -880,7 +882,15 @@ final class NavigationTripStartTests: XCTestCase {
         id: "d", label: "d", latitude: end.latitude, longitude: end.longitude, name: "d"),
       distanceMeters: steps.reduce(0) { $0 + $1.distanceMeters },
       durationSeconds: steps.reduce(0) { $0 + $1.durationSeconds },
-      geometry: carPlay(NavigationTrace.route(corners)), id: "hairpin", steps: steps)
+      geometry: carPlay(NavigationTrace.route(corners)), id: "hairpin", steps: steps,
+      waypoints: stops.isEmpty
+        ? nil
+        : stops.enumerated().map { index, stop in
+          let point = NavigationTrace.coordinate(stop.0, stop.1)
+          return NavOSSCarPlayDestination(
+            id: "stop-\(index)", label: "Stop \(index)", latitude: point.latitude,
+            longitude: point.longitude, name: "Stop \(index)")
+        })
   }
 
   private func along(_ trip: TripHarness) -> Double? {
@@ -1085,6 +1095,159 @@ final class NavigationTripStartTests: XCTestCase {
           XCTAssertFalse(trip.session.hasMatchedRoute, label)
         }
         assertAcquiring(trip.history[start...], label)
+        XCTAssertEqual(trip.requests, 0, label)
+      }
+    }
+  }
+
+  // MARK: Routes that use a road more than once
+
+  /// A multi-stop route that drives the same road north twice: a 1 km square loop through two
+  /// stops back to the origin, then on north.
+  private static let loop: [(Double, Double)] = [
+    (0, 0), (0, 1_000), (1_000, 1_000), (1_000, 0), (0, 0), (0, 2_000),
+  ]
+
+  private static func loopTrip() -> NavOSSCarPlayTrip {
+    legTrip(loop, stops: [(1_000, 1_000), (1_000, 0)])
+  }
+
+  private static func points(_ corners: [(Double, Double)]) -> [NavigationCoordinate] {
+    corners.map { NavigationTrace.coordinate($0.0, $0.1) }
+  }
+
+  /// Along-route position of the first matched update after `index`, and the index of it.
+  private func firstMatch(_ trip: TripHarness, after index: Int) -> (along: Double, index: Int)? {
+    guard let found = trip.history.indices.first(where: {
+      $0 >= index && trip.history[$0].update.snapshot.matchedCoordinate != nil
+    }) else { return nil }
+    let snapshot = trip.history[found].update.snapshot
+    return (snapshot.routeProgress * (trip.session.routeLengthMeters ?? 0), found)
+  }
+
+  /// Re-review of this change: parked 100 m off the road, a fresh start joins the loop route at
+  /// its origin. The first pass is matched on the first fixes on the road, and the trip is
+  /// guided round the loop through its stops and on north, with no route request.
+  func testAFreshStartParkedOffTheRoadJoiningALoopAtItsOriginMatchesTheFirstPass() throws {
+    let selected = Self.loopTrip()
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    let trip = try TripHarness(selected: selected, preview: [selected], reroute: replacement)
+    try trip.standStill(at: NavigationTrace.coordinate(-100, 0), seconds: 20)
+    let joining = trip.history.count
+    try trip.drive(Self.points([(-100, 0), (0, 0)]), speed: 5)
+    let onRoad = trip.history.count
+    try trip.drive(Self.points([(0, 0), (0, 1_000)]), speed: 12)
+    let first = try XCTUnwrap(firstMatch(trip, after: joining))
+    XCTAssertLessThan(first.along, 60, "the first pass")
+    XCTAssertLessThanOrEqual(first.index, onRoad + 1, "on the first fixes on the road")
+    try trip.drive(Self.points(Array(Self.loop[1...4]) + [(0, 1_500)]), speed: 12)
+    let steps = Set(trip.history[first.index...].compactMap { $0.update.guidance?.stepIndex })
+    XCTAssertTrue(steps.isSuperset(of: [0, 1, 2, 3, 4]), "\(steps)")
+    XCTAssertEqual(try XCTUnwrap(along(trip)), 5_500, accuracy: 60)
+    XCTAssertEqual(trip.requests, 0)
+  }
+
+  /// Joined at the origin, then straight on past the loop's first turn: off the route and
+  /// rerouted, never placed on the later pass of the shared road (which would skip the loop and
+  /// its stops).
+  func testAFreshStartThatMissesTheLoopIsReroutedNotSkippedAhead() throws {
+    let selected = Self.loopTrip()
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    let trip = try TripHarness(selected: selected, preview: [selected], reroute: replacement)
+    try trip.standStill(at: NavigationTrace.coordinate(-100, 0), seconds: 20)
+    try trip.drive(Self.points([(-100, 0), (0, 0), (0, 1_400)]), speed: 12)
+    XCTAssertGreaterThanOrEqual(trip.requests, 1)
+    let beforeReroute = trip.history.prefix { !$0.update.snapshot.isOffRoute }
+    XCTAssertFalse(
+      beforeReroute.contains {
+        $0.update.snapshot.matchedCoordinate != nil
+          && $0.update.snapshot.routeProgress * (trip.session.routeLengthMeters ?? 0) > 1_100
+      }, "skipped to the later pass")
+  }
+
+  /// Restored before its first match with the car stopped at the loop's origin: the shared
+  /// road is driven in one direction, so the stopped fix is on that road whichever pass, and is
+  /// matched to the first one; guided round the loop as before.
+  func testARestoredTripAtTheOriginOfALoopIsMatchedToTheFirstPass() throws {
+    let selected = Self.loopTrip()
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    let trip = try TripHarness(
+      selected: selected, preview: [selected], reroute: replacement, persisting: true)
+    try trip.standStill(at: NavigationTrace.coordinate(-100, 0), seconds: 20)
+    try trip.relaunch(after: 120)
+    let restored = trip.history.count
+    for _ in 0..<3 {
+      try trip.fix(NavigationTrace.coordinate(0, 10), speed: 0, after: 2)
+    }
+    let first = try XCTUnwrap(firstMatch(trip, after: restored))
+    XCTAssertEqual(first.along, 10, accuracy: 5)
+    try trip.drive(Self.points(Array(Self.loop[0...4]) + [(0, 1_500)]), speed: 12)
+    XCTAssertEqual(try XCTUnwrap(along(trip)), 5_500, accuracy: 60)
+    XCTAssertEqual(trip.requests, 0)
+  }
+
+  /// Other shapes that use a road twice, fresh (parked off the road) and restored before the
+  /// first match: where the passes are the same road in the same direction the first is taken
+  /// at once; where they differ (opposite directions of a two-way street, crossing roads) a
+  /// stopped fix is held and the moving vehicle's heading picks the pass.
+  func testRoutesThatUseARoadTwice() throws {
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    struct Case {
+      let name: String
+      let corners: [(Double, Double)]
+      let parked: (Double, Double)
+      let stop: (Double, Double)
+      let heldWhileStopped: Bool
+      let moveTo: (Double, Double)
+      let along: ClosedRange<Double>
+    }
+    let outAndBack: [(Double, Double)] = [(0, 0), (0, 1_000), (0, 0), (600, 0)]
+    let passesStart: [(Double, Double)] = [
+      (0, 0), (0, 500), (500, 500), (500, -500), (0, -500), (0, 0), (0, 1_500),
+    ]
+    let figureEight: [(Double, Double)] = [
+      (0, 0), (0, 1_000), (500, 1_000), (500, 500), (-500, 500), (-500, -300), (300, -300),
+    ]
+    let cases = [
+      // Opposite directions of one street: held until the heading says which.
+      Case(name: "out and back, north", corners: outAndBack, parked: (-100, 500), stop: (0, 500),
+        heldWhileStopped: true, moveTo: (0, 700), along: 500...720),
+      Case(name: "out and back, south", corners: outAndBack, parked: (-100, 500), stop: (0, 500),
+        heldWhileStopped: true, moveTo: (0, 300), along: 1_480...1_720),
+      // Back through its own start in the same direction: the first pass at once.
+      Case(name: "passes its start", corners: passesStart, parked: (-100, 0), stop: (0, 10),
+        heldWhileStopped: false, moveTo: (0, 200), along: 0...220),
+      // Crossing roads: held until the heading says which.
+      Case(name: "figure eight, north", corners: figureEight, parked: (-100, 450),
+        stop: (0, 500), heldWhileStopped: true, moveTo: (0, 700), along: 500...720),
+      Case(name: "figure eight, west", corners: figureEight, parked: (-100, 450),
+        stop: (0, 500), heldWhileStopped: true, moveTo: (-200, 500), along: 2_480...2_720),
+    ]
+    for item in cases {
+      for restored in [false, true] {
+        let label = "\(item.name), \(restored ? "restored" : "fresh")"
+        let selected = Self.legTrip(item.corners)
+        let trip = try TripHarness(
+          selected: selected, preview: [selected], reroute: replacement, persisting: restored)
+        try trip.standStill(
+          at: NavigationTrace.coordinate(item.parked.0, item.parked.1), seconds: 20)
+        if restored {
+          try trip.relaunch(after: 120)
+        } else {
+          try trip.drive(Self.points([item.parked, item.stop]), speed: 5)
+        }
+        let stopped = trip.history.count
+        for _ in 0..<5 {
+          try trip.fix(NavigationTrace.coordinate(item.stop.0, item.stop.1), speed: 0, after: 2)
+        }
+        if item.heldWhileStopped {
+          assertAcquiring(trip.history[stopped...], "\(label): stopped")
+        } else {
+          XCTAssertNotNil(trip.latest?.snapshot.matchedCoordinate, "\(label): matched stopped")
+        }
+        try trip.drive(Self.points([item.stop, item.moveTo]), speed: 10)
+        let along = try XCTUnwrap(along(trip), label)
+        XCTAssertTrue(item.along.contains(along), "\(label): \(along)")
         XCTAssertEqual(trip.requests, 0, label)
       }
     }
