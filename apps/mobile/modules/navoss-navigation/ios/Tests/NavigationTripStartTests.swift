@@ -1253,6 +1253,37 @@ final class NavigationTripStartTests: XCTestCase {
     }
   }
 
+  /// An out-and-back street, started parked off the road and joined at its origin, where the
+  /// two directions share the road: a fresh start is on the route's beginning, where it was
+  /// asked for, so its first fix on the road is matched to the outbound pass at once even
+  /// stopped (parking-lot fixes before it do not use up that trust). A restored trip may have
+  /// been driven while the app was closed: it is held until the heading says which way.
+  func testJoiningAnOutAndBackStreetAtItsOriginAfterParking() throws {
+    let selected = Self.legTrip([(0, 0), (0, 1_000), (0, 0), (600, 0)])
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    for restored in [false, true] {
+      let label = restored ? "restored" : "fresh"
+      let trip = try TripHarness(
+        selected: selected, preview: [selected], reroute: replacement, persisting: restored)
+      try trip.standStill(at: NavigationTrace.coordinate(-100, 20), seconds: 20)
+      if restored {
+        try trip.relaunch(after: 120)
+      }
+      let stopped = trip.history.count
+      for _ in 0..<3 {
+        try trip.fix(NavigationTrace.coordinate(0, 10), speed: 0, after: 2)
+      }
+      if restored {
+        assertAcquiring(trip.history[stopped...], "\(label): stopped at the origin")
+      } else {
+        XCTAssertEqual(try XCTUnwrap(along(trip), label), 10, accuracy: 5, label)
+      }
+      try trip.drive(Self.points([(0, 10), (0, 300)]), speed: 10)
+      XCTAssertEqual(try XCTUnwrap(along(trip), label), 300, accuracy: 20, label)
+      XCTAssertEqual(trip.requests, 0, label)
+    }
+  }
+
   private static func syntheticTrip(_ points: [NavigationCoordinate]) -> NavOSSCarPlayTrip {
     let geometry = points.map {
       NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
