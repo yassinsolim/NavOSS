@@ -30,7 +30,7 @@
     "fastify-type-provider-zod": "catalog:",
     "openapi-types": "catalog:",
     "pg": "8.23.1",
-    "protobufjs": "7.5.4",
+    "protobufjs": "7.6.6",
     "zod": "catalog:"
   },
   "devDependencies": {
