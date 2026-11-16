@@ -1031,6 +1031,65 @@ final class NavigationTripStartTests: XCTestCase {
     XCTAssertEqual(trip.requests, 0)
   }
 
+  /// Every consumer of a position on the route, for a fix not matched before the first match
+  /// (held as unidentified, too poor to place, or off the road), restored and fresh: none is
+  /// fed from the guessed projection.
+  /// - snapshot: no matched position, course, geometry segment or progress, not off route;
+  /// - road context (current road, speed limit, so speeding) unknown;
+  /// - guidance: the route's first step, with its full distance (so the "then" maneuver, lane
+  ///   guidance and CarPlay's estimates are the route's start, never a guessed step);
+  /// - speech: no maneuver prompt;
+  /// - arrival: never;
+  /// - checkpoint: not a progress checkpoint; the trip record stays "before the first match",
+  ///   and there is no resume context (no anchor);
+  /// - dead reckoning: none;
+  /// - safety cameras and road-report alerts, which require a matched position (asserted nil);
+  /// - CarPlay's position: the raw fix (`assertAcquiring`).
+  /// The rerouting rules before the first match still see the fix (tested above).
+  func testAFixNotMatchedBeforeTheFirstMatchFeedsNothingFromItsGuess() throws {
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    let hairpin = Self.legTrip(Self.hairpin)
+    let besideDestination = Self.legTrip([(0, -6_000), (0, 50), (20, 50), (20, 0)])
+    let scenarios: [(String, NavOSSCarPlayTrip, [(x: Double, y: Double, accuracy: Double)])] = [
+      ("return arm", hairpin, [(20, 70, 5), (20, 40, 5), (20, 10, 5), (20, -20, 5)]),
+      ("too poor", hairpin, [(20, 70, 400), (0, 70, 400)]),
+      ("off the road", hairpin, [(-100, 70, 5), (-100, 40, 5)]),
+      ("beside the destination", besideDestination, [(0, 0, 5), (0, 0, 5), (0, 0, 5)]),
+    ]
+    for (name, selected, fixes) in scenarios {
+      for restored in [true, false] {
+        let label = "\(name), \(restored ? "restored" : "fresh")"
+        let trip = try TripHarness(
+          selected: selected, preview: [selected], reroute: replacement, persisting: restored)
+        if restored {
+          try trip.relaunch(after: 60)
+        }
+        let first = try XCTUnwrap(selected.steps.first)
+        let start = trip.history.count
+        for fix in fixes {
+          try trip.fix(
+            NavigationTrace.coordinate(fix.x, fix.y), speed: 2, accuracy: fix.accuracy, after: 15)
+          let update = try XCTUnwrap(trip.latest, label)
+          XCTAssertFalse(update.snapshot.isOffRoute, label)
+          XCTAssertNotEqual(update.snapshot.phase, .arrived, label)
+          XCTAssertEqual(update.guidance?.stepIndex, 0, label)
+          XCTAssertEqual(
+            update.guidance?.distanceToManeuverMeters ?? 0, first.distanceMeters, accuracy: 1,
+            label)
+          XCTAssertFalse(navOSSIsProgressCheckpoint(update.snapshot), label)
+          if case .progress = trip.session.record(after: update.snapshot) {
+            XCTFail("\(label): a progress record")
+          }
+          XCTAssertNil(trip.session.resumeContext, label)
+          XCTAssertNil(trip.session.deadReckon(at: trip.time + 3), label)
+          XCTAssertFalse(trip.session.hasMatchedRoute, label)
+        }
+        assertAcquiring(trip.history[start...], label)
+        XCTAssertEqual(trip.requests, 0, label)
+      }
+    }
+  }
+
   private static func syntheticTrip(_ points: [NavigationCoordinate]) -> NavOSSCarPlayTrip {
     let geometry = points.map {
       NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
