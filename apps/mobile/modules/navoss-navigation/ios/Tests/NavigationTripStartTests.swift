@@ -974,6 +974,39 @@ final class NavigationTripStartTests: XCTestCase {
     try assertJoinsTheReturnArm(trip, "killed between the match and its record")
   }
 
+  /// Re-review of this change: 6 km north to 50 m short of a turn, 20 m east, and 50 m back
+  /// south to the destination, across the carriageway from the outbound side. Stopped fixes at
+  /// the outbound side fit both passes; the outbound one is past 98% of the route and within
+  /// 30 m of the destination. They must not arrive, restored or fresh; driving round does.
+  func testAnUnidentifiedFixBesideTheDestinationDoesNotArrive() throws {
+    let selected = Self.legTrip([(0, -6_000), (0, 50), (20, 50), (20, 0)])
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    for restored in [true, false] {
+      let label = restored ? "restored" : "fresh"
+      let trip = try TripHarness(
+        selected: selected, preview: [selected], reroute: replacement, persisting: restored)
+      if restored {
+        try trip.standStill(at: NavigationTrace.coordinate(-100, -6_000), seconds: 10)
+        try trip.relaunch(after: 600)
+      }
+      let stopped = trip.history.count
+      for _ in 0..<10 {
+        try trip.fix(NavigationTrace.coordinate(0, 0), speed: 0, after: 2)
+      }
+      XCTAssertFalse(
+        trip.history[stopped...].contains { $0.update.snapshot.phase == .arrived }, label)
+      assertAcquiring(trip.history[stopped...], "\(label): stopped beside the destination")
+      try trip.drive(
+        [NavigationTrace.coordinate(0, 0), NavigationTrace.coordinate(0, 50),
+          NavigationTrace.coordinate(20, 50), NavigationTrace.coordinate(20, 0)], speed: 5)
+      for _ in 0..<3 {
+        try trip.fix(NavigationTrace.coordinate(20, 0), speed: 0, after: 1)
+      }
+      XCTAssertEqual(trip.latest?.snapshot.phase, .arrived, "\(label): arrives once driven round")
+      XCTAssertEqual(trip.requests, 0, label)
+    }
+  }
+
   private static func syntheticTrip(_ points: [NavigationCoordinate]) -> NavOSSCarPlayTrip {
     let geometry = points.map {
       NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
