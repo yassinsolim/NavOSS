@@ -1019,14 +1019,14 @@ final class NavigationTripStartTests: XCTestCase {
     try trip.standStill(at: NavigationTrace.coordinate(-100, 0), seconds: 20)
     try trip.relaunch(after: 120)
     let slow = trip.history.count
-    for y in [70.0, 40, 10, -20] {
+    for y in [110.0, 80, 50, 20] {
       try trip.fix(NavigationTrace.coordinate(20, y), speed: 2, after: 15)
     }
     assertAcquiring(trip.history[slow...], "following the return arm slowly")
     XCTAssertEqual(trip.offRouteFixes, 0)
     XCTAssertEqual(trip.requests, 0)
     try trip.drive(
-      [NavigationTrace.coordinate(20, -20), NavigationTrace.coordinate(20, -400)], speed: 10)
+      [NavigationTrace.coordinate(20, 20), NavigationTrace.coordinate(20, -400)], speed: 10)
     XCTAssertGreaterThan(try XCTUnwrap(along(trip)), 160)
     XCTAssertEqual(trip.requests, 0)
   }
