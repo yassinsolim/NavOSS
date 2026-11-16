@@ -179,9 +179,9 @@ private let implausibleJumpMarginMeters = 150.0
 //      it out, and it does not arrive before then. Nothing of a restored trip is guided until
 //      a fix is matched on a confirmed pass. Before the first match of any route (a new one,
 //      or one restored before its first match), a fix that fits more than one pass and does not
-//      identify one is not matched at all: the trip stays acquiring. Only the opening stretch of
-//      a route asked for where the vehicle is (not a restored one) is trusted to be the pass
-//      the vehicle starts on.
+//      identify one is not matched at all: the trip stays acquiring. Only the first usable fix of
+//      a route asked for where the vehicle is (not a restored one), on its opening stretch, is
+//      trusted to be on the pass the vehicle starts on.
 //
 // Minimum evidence for each irreversible transition:
 //   pass a maneuver  a fix that fits the road past it, no further on than the fix has moved
@@ -687,10 +687,11 @@ final class NavigationCore {
   private var defersArrivalOnNextAcceptedFix = false
   /// A restored trip placed without progress has not yet shown which pass it is on.
   private var requiresPassConfirmation = false
-  /// Whether a fix on the opening stretch of the route may be matched there before the first
-  /// match although a later pass also fits it: the route was asked for where the vehicle was,
-  /// so its beginning is where the vehicle starts. Not for a trip restored before its first
-  /// match: the vehicle may have been moved while the app was closed.
+  /// Whether the route's first usable fix, on its opening stretch, may be matched there
+  /// although a later pass also fits it: the route was asked for where the vehicle was, so its
+  /// beginning is where the vehicle starts. Not a later fix (the vehicle may have moved since),
+  /// and not for a trip restored before its first match (it may have been moved while the app
+  /// was closed).
   private var trustsPlacementAtRouteStart = true
   private var arrivalSampleCount = 0
   private var departureSampleCount = 0
@@ -1153,6 +1154,10 @@ final class NavigationCore {
       || isWrongWaySample
     let isRecoverySample = projection.distanceMeters + accuracyAllowanceMeters <=
       onRouteRecoveryDistanceThresholdMeters && projection.progress >= fixProgress
+    // Whether this is the route's first usable fix: only it can be where the route was asked
+    // for (`trustsPlacementAtRouteStart`); by the next the vehicle may have moved.
+    let isFirstUsableFix = !hasMatchedRoute && preMatchStartDistanceMeters == nil
+      && accuracyAllowanceMeters <= navigationPoorAccuracyMeters
     let isLeavingBeforeFirstMatch = !hasMatchedRoute
       && recordPreMatchFix(sample, on: route, accuracyMeters: accuracyAllowanceMeters)
 
@@ -1191,11 +1196,12 @@ final class NavigationCore {
     // it against, and the earliest pass is a guess. It stays acquiring, unguided and silent,
     // until a fix fits only one pass or the moving vehicle's heading picks one out; meanwhile
     // the rules before the first match decide whether it is leaving the route. The route's
-    // opening stretch is trusted where the route was asked for (`trustsPlacementAtRouteStart`).
+    // opening stretch is trusted for the first usable fix of a route asked for where the
+    // vehicle was (`trustsPlacementAtRouteStart`).
     // A restored trip without progress has its own pass confirmation instead.
     let isUnidentifiedBeforeMatch = !hasMatchedRoute && !requiresPassConfirmation
       && !isOffRoute && !isDepartureSample && !isHeldJump && !isUnplaceableBeforeMatch
-      && !(trustsPlacementAtRouteStart
+      && !(trustsPlacementAtRouteStart && isFirstUsableFix
         && projection.alongMeters <= offRouteDistanceThresholdMeters + accuracyAllowanceMeters)
       && !isPassIdentified(projection, by: sample, on: route)
     let isUnmatchableBeforeMatch = isUnplaceableBeforeMatch || isUnidentifiedBeforeMatch
