@@ -1007,6 +1007,30 @@ final class NavigationTripStartTests: XCTestCase {
     }
   }
 
+  /// Re-review of this change: restored before its first match onto the hairpin's return arm,
+  /// and followed south on it slowly (2 m/s, a fix every 15 s, no heading). Each fix fits both
+  /// arms and is held; none may count as backward travel against the outbound arm that a held
+  /// fix was guessed onto, so nothing is rerouted. Faster, the heading picks the return arm.
+  func testFollowingTheReturnArmSlowlyBeforeTheFirstMatchIsNotADeparture() throws {
+    let selected = Self.legTrip(Self.hairpin)
+    let replacement = try Self.trips("square-one-scarborough-reroute.v2")
+    let trip = try TripHarness(
+      selected: selected, preview: [selected], reroute: replacement, persisting: true)
+    try trip.standStill(at: NavigationTrace.coordinate(-100, 0), seconds: 20)
+    try trip.relaunch(after: 120)
+    let slow = trip.history.count
+    for y in [70.0, 40, 10, -20] {
+      try trip.fix(NavigationTrace.coordinate(20, y), speed: 2, after: 15)
+    }
+    assertAcquiring(trip.history[slow...], "following the return arm slowly")
+    XCTAssertEqual(trip.offRouteFixes, 0)
+    XCTAssertEqual(trip.requests, 0)
+    try trip.drive(
+      [NavigationTrace.coordinate(20, -20), NavigationTrace.coordinate(20, -400)], speed: 10)
+    XCTAssertGreaterThan(try XCTUnwrap(along(trip)), 160)
+    XCTAssertEqual(trip.requests, 0)
+  }
+
   private static func syntheticTrip(_ points: [NavigationCoordinate]) -> NavOSSCarPlayTrip {
     let geometry = points.map {
       NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
