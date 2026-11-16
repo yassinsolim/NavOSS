@@ -1222,8 +1222,10 @@ final class NavigationCore {
     {
       arrivalDeferral = nil
     }
+    // A fix not matched before the first match (`isUnmatchableBeforeMatch`) is no arrival
+    // sample either: its projection is a guess.
     let isArrivalSample = !isOffRoute && !isHeldJump && arrivalDeferral == nil &&
-      !requiresPassConfirmation &&
+      !requiresPassConfirmation && !isUnmatchableBeforeMatch &&
       projection.progress >= arrivalProgressThreshold &&
       sample.horizontalAccuracyMeters != nil &&
       route.distanceToDestination(from: sample.coordinate) + accuracyAllowanceMeters <=
