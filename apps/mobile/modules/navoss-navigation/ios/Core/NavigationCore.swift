@@ -1275,11 +1275,15 @@ final class NavigationCore {
       preMatchScan = nil
     }
     // The anchor moves only with an accepted fix, and takes that fix's own time and speed. The
-    // first fix of a route is a placement: it becomes the anchor even when it is off the route.
-    // Not one that fits more than one pass without identifying it: that would bias the next
-    // fix towards the pass it was guessed onto, and the next fix is placed afresh instead.
+    // first fix of a matched trip placed afresh is a placement: it becomes the anchor even when
+    // it is off the route. Before the first match nothing but a match is: an unmatched fix's
+    // projection is a guess (the outbound arm of a hairpin for a car on the return arm, the
+    // nearest road for a car in a parking lot), and an anchor or progress left by it would bias
+    // the next fix towards that guess and measure backward travel from it. Each fix until the
+    // first match is placed afresh, and `fixProgress` stays at the start (below).
+    let isAcquiring = !hasMatchedRoute && !shouldAcceptProjection
     isLatestFixAccepted = shouldAcceptProjection
-    if isFirstPlacement && isUnidentifiedBeforeMatch {
+    if isAcquiring {
       hasAnchor = false
     } else if shouldAcceptProjection || isFirstPlacement {
       anchorRawCoordinate = sample.coordinate
@@ -1294,7 +1298,6 @@ final class NavigationCore {
     // yet is the vehicle still finding its way to the route (or not on it), so the trip is
     // acquiring, with the raw position, no place on the route and no progress (from it the
     // route's first maneuver is the step ahead), and nothing is spoken (`NavigationSpeechPlanner`).
-    let isAcquiring = !hasMatchedRoute && !shouldAcceptProjection
     let previous = lastRealSnapshot
     let previousMatchedCoordinate = previous?.matchedCoordinate
     let provisionalMatchedCoordinate = isFirstPlacement
@@ -1331,7 +1334,11 @@ final class NavigationCore {
       speedMetersPerSecond: sample.speedMetersPerSecond,
       isPassConfirmed: !requiresPassConfirmation
     )
-    fixProgress = routeProgress
+    // Before the first match there is no progress: a fix that is not matched leaves none
+    // behind, so a later fix is never backward travel against a guessed placement.
+    if !isAcquiring {
+      fixProgress = routeProgress
+    }
     lastRealSnapshot = snapshot
     return snapshot
   }
