@@ -1161,7 +1161,7 @@ final class NavigationTripStartTests: XCTestCase {
     XCTAssertFalse(
       beforeReroute.contains {
         $0.update.snapshot.matchedCoordinate != nil
-          && $0.update.snapshot.routeProgress * (trip.session.routeLengthMeters ?? 0) > 1_100
+          && $0.update.snapshot.routeProgress * selected.distanceMeters > 1_100
       }, "skipped to the later pass")
   }
 
@@ -1186,8 +1186,8 @@ final class NavigationTripStartTests: XCTestCase {
     XCTAssertEqual(trip.requests, 0)
   }
 
-  /// Other shapes that use a road twice, fresh (parked off the road) and restored before the
-  /// first match: where the passes are the same road in the same direction the first is taken
+  /// Other shapes that use a road twice, fresh (parked off the road, next placeable at a point
+  /// two passes share) and restored before the first match: where the passes are the same road in the same direction the first is taken
   /// at once; where they differ (opposite directions of a two-way street, crossing roads) a
   /// stopped fix is held and the moving vehicle's heading picks the pass.
   func testRoutesThatUseARoadTwice() throws {
@@ -1218,9 +1218,9 @@ final class NavigationTripStartTests: XCTestCase {
       Case(name: "passes its start", corners: passesStart, parked: (-100, 0), stop: (0, 10),
         heldWhileStopped: false, moveTo: (0, 200), along: 0...220),
       // Crossing roads: held until the heading says which.
-      Case(name: "figure eight, north", corners: figureEight, parked: (-100, 450),
+      Case(name: "figure eight, north", corners: figureEight, parked: (-100, 400),
         stop: (0, 500), heldWhileStopped: true, moveTo: (0, 700), along: 500...720),
-      Case(name: "figure eight, west", corners: figureEight, parked: (-100, 450),
+      Case(name: "figure eight, west", corners: figureEight, parked: (-100, 400),
         stop: (0, 500), heldWhileStopped: true, moveTo: (-200, 500), along: 2_480...2_720),
     ]
     for item in cases {
@@ -1233,9 +1233,9 @@ final class NavigationTripStartTests: XCTestCase {
           at: NavigationTrace.coordinate(item.parked.0, item.parked.1), seconds: 20)
         if restored {
           try trip.relaunch(after: 120)
-        } else {
-          try trip.drive(Self.points([item.parked, item.stop]), speed: 5)
         }
+        // The next usable fix is on the road (moved while the app was closed, or with fixes
+        // too poor to place the vehicle on the way).
         let stopped = trip.history.count
         for _ in 0..<5 {
           try trip.fix(NavigationTrace.coordinate(item.stop.0, item.stop.1), speed: 0, after: 2)
