@@ -130,7 +130,7 @@ final class CarPlayGuidancePresentationTests: XCTestCase {
     XCTAssertEqual(presentation.primary.kind, .right)
     XCTAssertEqual(presentation.primary.roadName, "Left Bank Road")
     XCTAssertEqual(presentation.primary.legDistanceMeters, 333)
-    XCTAssertEqual(presentation.primary.instructionVariants.first, "Turn right onto Left Bank Road.")
+    XCTAssertEqual(presentation.primary.instructionVariants.first, "Left Bank Road")
   }
 
   func testThenManeuverOnlyWhenItFollowsClosely() throws {
@@ -488,7 +488,7 @@ final class CarPlayGuidancePresentationTests: XCTestCase {
     XCTAssertEqual(presentation.currentRoadName, "Macleod Trail")
   }
 
-  func testSignpostAndJunctionTextLeadTheInstructionVariants() throws {
+  func testCardShowsTheSignOrTheRoadNotTheSentence() throws {
     var steps = trip().steps
     let turn = steps[1]
     steps[1] = NavOSSCarPlayRouteStep(
@@ -501,17 +501,11 @@ final class CarPlayGuidancePresentationTests: XCTestCase {
       destination: base.destination, distanceMeters: base.distanceMeters,
       durationSeconds: base.durationSeconds, geometry: base.geometry, id: base.id, steps: steps)
     let info = try XCTUnwrap(navOSSCarPlayManeuverInfo(trip: annotated, stepIndex: 1))
-    XCTAssertEqual(
-      info.instructionVariants,
-      [
-        "Take the exit AB-8 toward Banff at Sarcee Interchange",
-        "Take the exit AB-8 toward Banff",
-        "Take the exit.",
-        "Glenmore Trail",
-      ])
+    // The sign leads; "toward" is only in the longest variant; the junction name is not signage.
+    XCTAssertEqual(info.instructionVariants, ["AB-8 toward Banff", "AB-8"])
     XCTAssertEqual(
       navOSSCarPlayManeuverInfo(trip: trip(), stepIndex: 1)?.instructionVariants,
-      ["Turn right onto Left Bank Road.", "Left Bank Road"])
+      ["Left Bank Road", "Left Bank Rd"])
   }
 
   func testRoundaboutAngleUsesTheExitRoadNotTheRing() throws {
