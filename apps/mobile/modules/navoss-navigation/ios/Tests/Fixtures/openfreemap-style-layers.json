@@ -1,796 +1,796 @@
 {
- "source": "https://tiles.openfreemap.org/styles/{liberty,dark}, fetched 2026-11-17",
- "styles": {
-  "liberty": [
-   {
-    "id": "background",
-    "type": "background"
-   },
-   {
-    "id": "natural_earth",
-    "type": "raster"
-   },
-   {
-    "id": "park",
-    "type": "fill",
-    "sourceLayer": "park"
-   },
-   {
-    "id": "park_outline",
-    "type": "line",
-    "sourceLayer": "park"
-   },
-   {
-    "id": "landuse_residential",
-    "type": "fill",
-    "sourceLayer": "landuse"
-   },
-   {
-    "id": "landcover_wood",
-    "type": "fill",
-    "sourceLayer": "landcover"
-   },
-   {
-    "id": "landcover_grass",
-    "type": "fill",
-    "sourceLayer": "landcover"
-   },
-   {
-    "id": "landcover_ice",
-    "type": "fill",
-    "sourceLayer": "landcover"
-   },
-   {
-    "id": "landcover_wetland",
-    "type": "fill",
-    "sourceLayer": "landcover"
-   },
-   {
-    "id": "landuse_pitch",
-    "type": "fill",
-    "sourceLayer": "landuse"
-   },
-   {
-    "id": "landuse_track",
-    "type": "fill",
-    "sourceLayer": "landuse"
-   },
-   {
-    "id": "landuse_cemetery",
-    "type": "fill",
-    "sourceLayer": "landuse"
-   },
-   {
-    "id": "landuse_hospital",
-    "type": "fill",
-    "sourceLayer": "landuse"
-   },
-   {
-    "id": "landuse_school",
-    "type": "fill",
-    "sourceLayer": "landuse"
-   },
-   {
-    "id": "waterway_tunnel",
-    "type": "line",
-    "sourceLayer": "waterway"
-   },
-   {
-    "id": "waterway_river",
-    "type": "line",
-    "sourceLayer": "waterway"
-   },
-   {
-    "id": "waterway_other",
-    "type": "line",
-    "sourceLayer": "waterway"
-   },
-   {
-    "id": "water",
-    "type": "fill",
-    "sourceLayer": "water"
-   },
-   {
-    "id": "landcover_sand",
-    "type": "fill",
-    "sourceLayer": "landcover"
-   },
-   {
-    "id": "aeroway_fill",
-    "type": "fill",
-    "sourceLayer": "aeroway"
-   },
-   {
-    "id": "aeroway_runway",
-    "type": "line",
-    "sourceLayer": "aeroway"
-   },
-   {
-    "id": "aeroway_taxiway",
-    "type": "line",
-    "sourceLayer": "aeroway"
-   },
-   {
-    "id": "tunnel_motorway_link_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_service_track_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_link_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_street_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_secondary_tertiary_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_trunk_primary_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_motorway_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_path_pedestrian",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_motorway_link",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_service_track",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_link",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_minor",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_secondary_tertiary",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_trunk_primary",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_motorway",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_major_rail",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_major_rail_hatching",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_transit_rail",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "tunnel_transit_rail_hatching",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_area_pattern",
-    "type": "fill",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_motorway_link_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_service_track_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_link_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_minor_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_secondary_tertiary_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_trunk_primary_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_motorway_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_path_pedestrian",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_motorway_link",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_service_track",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_link",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_minor",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_secondary_tertiary",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_trunk_primary",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_motorway",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_major_rail",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_major_rail_hatching",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_transit_rail",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_transit_rail_hatching",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_one_way_arrow",
-    "type": "symbol",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_one_way_arrow_opposite",
-    "type": "symbol",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_motorway_link_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_service_track_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_link_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_street_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_path_pedestrian_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_secondary_tertiary_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_trunk_primary_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_motorway_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_path_pedestrian",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_motorway_link",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_service_track",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_link",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_street",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_secondary_tertiary",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_trunk_primary",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_motorway",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_major_rail",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_major_rail_hatching",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_transit_rail",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "bridge_transit_rail_hatching",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "building",
-    "type": "fill",
-    "sourceLayer": "building"
-   },
-   {
-    "id": "building-3d",
-    "type": "fill-extrusion",
-    "sourceLayer": "building"
-   },
-   {
-    "id": "boundary_3",
-    "type": "line",
-    "sourceLayer": "boundary"
-   },
-   {
-    "id": "boundary_2",
-    "type": "line",
-    "sourceLayer": "boundary"
-   },
-   {
-    "id": "boundary_disputed",
-    "type": "line",
-    "sourceLayer": "boundary"
-   },
-   {
-    "id": "waterway_line_label",
-    "type": "symbol",
-    "sourceLayer": "waterway"
-   },
-   {
-    "id": "water_name_point_label",
-    "type": "symbol",
-    "sourceLayer": "water_name"
-   },
-   {
-    "id": "water_name_line_label",
-    "type": "symbol",
-    "sourceLayer": "water_name"
-   },
-   {
-    "id": "poi_r20",
-    "type": "symbol",
-    "sourceLayer": "poi"
-   },
-   {
-    "id": "poi_r7",
-    "type": "symbol",
-    "sourceLayer": "poi"
-   },
-   {
-    "id": "poi_r1",
-    "type": "symbol",
-    "sourceLayer": "poi"
-   },
-   {
-    "id": "poi_transit",
-    "type": "symbol",
-    "sourceLayer": "poi"
-   },
-   {
-    "id": "highway-name-path",
-    "type": "symbol",
-    "sourceLayer": "transportation_name"
-   },
-   {
-    "id": "highway-name-minor",
-    "type": "symbol",
-    "sourceLayer": "transportation_name"
-   },
-   {
-    "id": "highway-name-major",
-    "type": "symbol",
-    "sourceLayer": "transportation_name"
-   },
-   {
-    "id": "highway-shield-non-us",
-    "type": "symbol",
-    "sourceLayer": "transportation_name"
-   },
-   {
-    "id": "highway-shield-us-interstate",
-    "type": "symbol",
-    "sourceLayer": "transportation_name"
-   },
-   {
-    "id": "road_shield_us",
-    "type": "symbol",
-    "sourceLayer": "transportation_name"
-   },
-   {
-    "id": "airport",
-    "type": "symbol",
-    "sourceLayer": "aerodrome_label"
-   },
-   {
-    "id": "label_other",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "label_village",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "label_town",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "label_state",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "label_city",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "label_city_capital",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "label_country_3",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "label_country_2",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "label_country_1",
-    "type": "symbol",
-    "sourceLayer": "place"
-   }
-  ],
-  "dark": [
-   {
-    "id": "background",
-    "type": "background"
-   },
-   {
-    "id": "water",
-    "type": "fill",
-    "sourceLayer": "water"
-   },
-   {
-    "id": "landcover_ice_shelf",
-    "type": "fill",
-    "sourceLayer": "landcover"
-   },
-   {
-    "id": "landcover_glacier",
-    "type": "fill",
-    "sourceLayer": "landcover"
-   },
-   {
-    "id": "landuse_residential",
-    "type": "fill",
-    "sourceLayer": "landuse"
-   },
-   {
-    "id": "landcover_wood",
-    "type": "fill",
-    "sourceLayer": "landcover"
-   },
-   {
-    "id": "landuse_park",
-    "type": "fill",
-    "sourceLayer": "landuse"
-   },
-   {
-    "id": "waterway",
-    "type": "line",
-    "sourceLayer": "waterway"
-   },
-   {
-    "id": "water_name",
-    "type": "symbol",
-    "sourceLayer": "water_name"
-   },
-   {
-    "id": "building",
-    "type": "fill",
-    "sourceLayer": "building"
-   },
-   {
-    "id": "aeroway-taxiway",
-    "type": "line",
-    "sourceLayer": "aeroway"
-   },
-   {
-    "id": "aeroway-runway-casing",
-    "type": "line",
-    "sourceLayer": "aeroway"
-   },
-   {
-    "id": "aeroway-area",
-    "type": "fill",
-    "sourceLayer": "aeroway"
-   },
-   {
-    "id": "aeroway-runway",
-    "type": "line",
-    "sourceLayer": "aeroway"
-   },
-   {
-    "id": "road_area_pier",
-    "type": "fill",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_pier",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "highway_path",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "highway_minor",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "highway_major_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "highway_major_inner",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "highway_major_subtle",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "highway_motorway_casing",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "highway_motorway_inner",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_oneway",
-    "type": "symbol",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "road_oneway_opposite",
-    "type": "symbol",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "highway_motorway_subtle",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "railway_transit",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "railway_transit_dashline",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "railway_minor",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "railway_minor_dashline",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "railway",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "railway_dashline",
-    "type": "line",
-    "sourceLayer": "transportation"
-   },
-   {
-    "id": "highway_name_other",
-    "type": "symbol",
-    "sourceLayer": "transportation_name"
-   },
-   {
-    "id": "highway_name_motorway",
-    "type": "symbol",
-    "sourceLayer": "transportation_name"
-   },
-   {
-    "id": "boundary_state",
-    "type": "line",
-    "sourceLayer": "boundary"
-   },
-   {
-    "id": "boundary_country_z0-4",
-    "type": "line",
-    "sourceLayer": "boundary"
-   },
-   {
-    "id": "boundary_country_z5-",
-    "type": "line",
-    "sourceLayer": "boundary"
-   },
-   {
-    "id": "place_other",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "place_suburb",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "place_village",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "place_town",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "place_city",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "place_city_large",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "place_state",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "place_country_other",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "place_country_minor",
-    "type": "symbol",
-    "sourceLayer": "place"
-   },
-   {
-    "id": "place_country_major",
-    "type": "symbol",
-    "sourceLayer": "place"
-   }
-  ]
- }
+  "source": "https://tiles.openfreemap.org/styles/{liberty,dark}, fetched 2026-11-17",
+  "styles": {
+    "liberty": [
+      {
+        "id": "background",
+        "type": "background"
+      },
+      {
+        "id": "natural_earth",
+        "type": "raster"
+      },
+      {
+        "id": "park",
+        "type": "fill",
+        "sourceLayer": "park"
+      },
+      {
+        "id": "park_outline",
+        "type": "line",
+        "sourceLayer": "park"
+      },
+      {
+        "id": "landuse_residential",
+        "type": "fill",
+        "sourceLayer": "landuse"
+      },
+      {
+        "id": "landcover_wood",
+        "type": "fill",
+        "sourceLayer": "landcover"
+      },
+      {
+        "id": "landcover_grass",
+        "type": "fill",
+        "sourceLayer": "landcover"
+      },
+      {
+        "id": "landcover_ice",
+        "type": "fill",
+        "sourceLayer": "landcover"
+      },
+      {
+        "id": "landcover_wetland",
+        "type": "fill",
+        "sourceLayer": "landcover"
+      },
+      {
+        "id": "landuse_pitch",
+        "type": "fill",
+        "sourceLayer": "landuse"
+      },
+      {
+        "id": "landuse_track",
+        "type": "fill",
+        "sourceLayer": "landuse"
+      },
+      {
+        "id": "landuse_cemetery",
+        "type": "fill",
+        "sourceLayer": "landuse"
+      },
+      {
+        "id": "landuse_hospital",
+        "type": "fill",
+        "sourceLayer": "landuse"
+      },
+      {
+        "id": "landuse_school",
+        "type": "fill",
+        "sourceLayer": "landuse"
+      },
+      {
+        "id": "waterway_tunnel",
+        "type": "line",
+        "sourceLayer": "waterway"
+      },
+      {
+        "id": "waterway_river",
+        "type": "line",
+        "sourceLayer": "waterway"
+      },
+      {
+        "id": "waterway_other",
+        "type": "line",
+        "sourceLayer": "waterway"
+      },
+      {
+        "id": "water",
+        "type": "fill",
+        "sourceLayer": "water"
+      },
+      {
+        "id": "landcover_sand",
+        "type": "fill",
+        "sourceLayer": "landcover"
+      },
+      {
+        "id": "aeroway_fill",
+        "type": "fill",
+        "sourceLayer": "aeroway"
+      },
+      {
+        "id": "aeroway_runway",
+        "type": "line",
+        "sourceLayer": "aeroway"
+      },
+      {
+        "id": "aeroway_taxiway",
+        "type": "line",
+        "sourceLayer": "aeroway"
+      },
+      {
+        "id": "tunnel_motorway_link_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_service_track_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_link_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_street_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_secondary_tertiary_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_trunk_primary_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_motorway_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_path_pedestrian",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_motorway_link",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_service_track",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_link",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_minor",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_secondary_tertiary",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_trunk_primary",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_motorway",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_major_rail",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_major_rail_hatching",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_transit_rail",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "tunnel_transit_rail_hatching",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_area_pattern",
+        "type": "fill",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_motorway_link_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_service_track_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_link_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_minor_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_secondary_tertiary_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_trunk_primary_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_motorway_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_path_pedestrian",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_motorway_link",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_service_track",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_link",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_minor",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_secondary_tertiary",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_trunk_primary",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_motorway",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_major_rail",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_major_rail_hatching",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_transit_rail",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_transit_rail_hatching",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_one_way_arrow",
+        "type": "symbol",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_one_way_arrow_opposite",
+        "type": "symbol",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_motorway_link_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_service_track_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_link_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_street_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_path_pedestrian_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_secondary_tertiary_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_trunk_primary_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_motorway_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_path_pedestrian",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_motorway_link",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_service_track",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_link",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_street",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_secondary_tertiary",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_trunk_primary",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_motorway",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_major_rail",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_major_rail_hatching",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_transit_rail",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "bridge_transit_rail_hatching",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "building",
+        "type": "fill",
+        "sourceLayer": "building"
+      },
+      {
+        "id": "building-3d",
+        "type": "fill-extrusion",
+        "sourceLayer": "building"
+      },
+      {
+        "id": "boundary_3",
+        "type": "line",
+        "sourceLayer": "boundary"
+      },
+      {
+        "id": "boundary_2",
+        "type": "line",
+        "sourceLayer": "boundary"
+      },
+      {
+        "id": "boundary_disputed",
+        "type": "line",
+        "sourceLayer": "boundary"
+      },
+      {
+        "id": "waterway_line_label",
+        "type": "symbol",
+        "sourceLayer": "waterway"
+      },
+      {
+        "id": "water_name_point_label",
+        "type": "symbol",
+        "sourceLayer": "water_name"
+      },
+      {
+        "id": "water_name_line_label",
+        "type": "symbol",
+        "sourceLayer": "water_name"
+      },
+      {
+        "id": "poi_r20",
+        "type": "symbol",
+        "sourceLayer": "poi"
+      },
+      {
+        "id": "poi_r7",
+        "type": "symbol",
+        "sourceLayer": "poi"
+      },
+      {
+        "id": "poi_r1",
+        "type": "symbol",
+        "sourceLayer": "poi"
+      },
+      {
+        "id": "poi_transit",
+        "type": "symbol",
+        "sourceLayer": "poi"
+      },
+      {
+        "id": "highway-name-path",
+        "type": "symbol",
+        "sourceLayer": "transportation_name"
+      },
+      {
+        "id": "highway-name-minor",
+        "type": "symbol",
+        "sourceLayer": "transportation_name"
+      },
+      {
+        "id": "highway-name-major",
+        "type": "symbol",
+        "sourceLayer": "transportation_name"
+      },
+      {
+        "id": "highway-shield-non-us",
+        "type": "symbol",
+        "sourceLayer": "transportation_name"
+      },
+      {
+        "id": "highway-shield-us-interstate",
+        "type": "symbol",
+        "sourceLayer": "transportation_name"
+      },
+      {
+        "id": "road_shield_us",
+        "type": "symbol",
+        "sourceLayer": "transportation_name"
+      },
+      {
+        "id": "airport",
+        "type": "symbol",
+        "sourceLayer": "aerodrome_label"
+      },
+      {
+        "id": "label_other",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "label_village",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "label_town",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "label_state",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "label_city",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "label_city_capital",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "label_country_3",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "label_country_2",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "label_country_1",
+        "type": "symbol",
+        "sourceLayer": "place"
+      }
+    ],
+    "dark": [
+      {
+        "id": "background",
+        "type": "background"
+      },
+      {
+        "id": "water",
+        "type": "fill",
+        "sourceLayer": "water"
+      },
+      {
+        "id": "landcover_ice_shelf",
+        "type": "fill",
+        "sourceLayer": "landcover"
+      },
+      {
+        "id": "landcover_glacier",
+        "type": "fill",
+        "sourceLayer": "landcover"
+      },
+      {
+        "id": "landuse_residential",
+        "type": "fill",
+        "sourceLayer": "landuse"
+      },
+      {
+        "id": "landcover_wood",
+        "type": "fill",
+        "sourceLayer": "landcover"
+      },
+      {
+        "id": "landuse_park",
+        "type": "fill",
+        "sourceLayer": "landuse"
+      },
+      {
+        "id": "waterway",
+        "type": "line",
+        "sourceLayer": "waterway"
+      },
+      {
+        "id": "water_name",
+        "type": "symbol",
+        "sourceLayer": "water_name"
+      },
+      {
+        "id": "building",
+        "type": "fill",
+        "sourceLayer": "building"
+      },
+      {
+        "id": "aeroway-taxiway",
+        "type": "line",
+        "sourceLayer": "aeroway"
+      },
+      {
+        "id": "aeroway-runway-casing",
+        "type": "line",
+        "sourceLayer": "aeroway"
+      },
+      {
+        "id": "aeroway-area",
+        "type": "fill",
+        "sourceLayer": "aeroway"
+      },
+      {
+        "id": "aeroway-runway",
+        "type": "line",
+        "sourceLayer": "aeroway"
+      },
+      {
+        "id": "road_area_pier",
+        "type": "fill",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_pier",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "highway_path",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "highway_minor",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "highway_major_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "highway_major_inner",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "highway_major_subtle",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "highway_motorway_casing",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "highway_motorway_inner",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_oneway",
+        "type": "symbol",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "road_oneway_opposite",
+        "type": "symbol",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "highway_motorway_subtle",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "railway_transit",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "railway_transit_dashline",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "railway_minor",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "railway_minor_dashline",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "railway",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "railway_dashline",
+        "type": "line",
+        "sourceLayer": "transportation"
+      },
+      {
+        "id": "highway_name_other",
+        "type": "symbol",
+        "sourceLayer": "transportation_name"
+      },
+      {
+        "id": "highway_name_motorway",
+        "type": "symbol",
+        "sourceLayer": "transportation_name"
+      },
+      {
+        "id": "boundary_state",
+        "type": "line",
+        "sourceLayer": "boundary"
+      },
+      {
+        "id": "boundary_country_z0-4",
+        "type": "line",
+        "sourceLayer": "boundary"
+      },
+      {
+        "id": "boundary_country_z5-",
+        "type": "line",
+        "sourceLayer": "boundary"
+      },
+      {
+        "id": "place_other",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "place_suburb",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "place_village",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "place_town",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "place_city",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "place_city_large",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "place_state",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "place_country_other",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "place_country_minor",
+        "type": "symbol",
+        "sourceLayer": "place"
+      },
+      {
+        "id": "place_country_major",
+        "type": "symbol",
+        "sourceLayer": "place"
+      }
+    ]
+  }
 }
