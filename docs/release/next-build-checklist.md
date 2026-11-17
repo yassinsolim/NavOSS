@@ -1,15 +1,15 @@
 # Next build checklist
 
-Status refreshed: 2026-11-17. Build `0.1.0 (82)` from `main` (`65649ab`) was distributed to internal `testers` and NavOSS Friends on 2026-11-15. The Google-profile build carries CarPlay and production App Attest. Build 73 remains held.
+Status refreshed: 2026-11-17. Build `0.1.0 (83)` from `main` (`2cb5c70`) was submitted successfully; internal `testers` receive uploads automatically. The NavOSS Friends distribution request succeeded, but its Testing state was not confirmed on screen. The Google-profile build carries CarPlay and production App Attest. Build 73 remains held.
 
 Context: production search and routing cover Canada. Reports are `attested`, traffic `collect`; live traffic is not shown. Offline bundles cover All Alberta and the Calgary area, not BC. Build 81 includes the Alberta, BC and Ontario province-wide road-events list, Canada refusal handling and the Explore-sheet fix; builds 75 and 80 use Calgary and Kelowna feeds. 511 Alberta and Ontario 511 were connected in production on 2026-11-15; build 81's list now includes their events. A Debug simulator downloaded Calgary and searched and routed with the API stopped. Physical offline download, first App Attest registration, Google's place panel and real CarPlay remain to be checked.
 
 The 2026-11-15 Release simulator Canada pass on `14dae86` against production was a go before build 81 distribution; see [the release record](testflight.md#build-81-canada-validation-and-subsequent-fixes-2026-11-15) and `artifacts/release-validation-main-81/round3/`. CarPlay refusal alerts were Swift-tested only; no physical iPhone or head unit was exercised.
 
-## Upcoming build 83: build 82 feedback
+## Build 83: build 82 feedback and car checks
 
 On 2026-11-16 the owner filed two build 82 reports after driving with an iPhone 15 Pro Max on
-iOS 26.6.1 and a small Toyota head unit: CarPlay was cluttered and Share ETA was broken. Main now
+iOS 26.6.1 and a small Toyota head unit: CarPlay was cluttered and Share ETA was broken. Build 83
 contains [#139](https://github.com/yassinsolim/NavOSS/pull/139) (`f2df5d3`), which fixes the
 clipped phone share sheet using a scene-backed window and drops its "Shared from NavOSS" suffix;
 [#140](https://github.com/yassinsolim/NavOSS/pull/140) (`ccd3fd6`) and
@@ -28,6 +28,11 @@ Release simulator, not on iOS 26.6.1 hardware.
 The simulator map harness uses mocked chrome and the card layout was probed against Apple's layout
 code; neither captured real CarPlay chrome. The new offline restyle, actual safe-area insets and
 frame pacing on a phone or head unit are also unverified.
+
+The [build 83 release record](testflight.md#build-83-build-82-feedback-validation-and-limits-2026-11-17)
+includes simulator validation and the known phone and card-wording limits. Real CarPlay chrome, a
+head unit and iOS 26.6.1 hardware have not been checked for build 83. Closing the app before its
+first route match still ends the trip on relaunch; #135 is parked.
 
 ## Corrected candidate and prior binary hold
 
@@ -107,8 +112,8 @@ Simulator pass by a dedicated agent; evidence in local ignored `artifacts/releas
 - [ ] **511 and city-feed overlap.** On screen, check whether the two 511 sources duplicate city-feed events for the same incident.
 - [ ] **Release exclusions.** Run `apps/mobile/scripts/check-release-exclusions.sh` against the Release archive: the DEBUG-only software App Attest key and simulator harness code must be absent from device builds.
 - [ ] **Privacy manifest.** The app privacy manifest, SDK manifests, App Store Connect App Privacy answers and the permission string agree. The Disk Space condition is met on `main`: #83 merged and `apps/mobile/app.json` declares `NSPrivacyAccessedAPICategoryDiskSpace` (verify it in the signed archive). The permission string and App Privacy changes for community features are in [app-store-metadata.md](app-store-metadata.md#app-privacy-answers-needed-before-community-features-are-enabled); they must be in place before the server enables community features, and are best shipped in this build.
-- [x] **External distribution is manual (#88).** Build 81 was distributed to NavOSS Friends at 17:54 UTC on 2026-11-15; App Store Connect shows Testing for that group and internal `testers`.
-- [ ] **Build number.** `appVersionSource` is `remote`: the latest uploaded build is 82. Record the actual number and commit in [testflight.md](testflight.md) after any later build exists.
+- [x] **External distribution is manual (#88).** The build 83 request for NavOSS Friends reported success, but its Testing state was not confirmed on screen.
+- [ ] **Build number.** `appVersionSource` is `remote`: the latest uploaded build is 83. Record the actual number and commit in [testflight.md](testflight.md) after any later build exists.
 - [ ] **Gates on the candidate commit:** `corepack pnpm check`, `lint`, `test`, `build`, `format:check`; `corepack pnpm --filter @navoss/mobile test:native:ios`; a full Xcode compile with CarPlay enabled; `corepack pnpm validate:navigation:ios`. Read each command's exit status.
 - [ ] **Claims.** Distinguish the Canada service and distributed build 81 from build 70's v1 behavior. Live traffic remains unavailable; lanes and signs appear only when returned; offline maps cover Alberta and Calgary only. The province-wide road-events list is not in builds 75 or 80.
 - [ ] **Long-trip formatting (Canada pass F1).** #127 (`36c8a9f`) is in build 82. Phone long-trip text was seen in a Release simulator; on screen in CarPlay, check the route choice distance and duration, since the CarPlay formatter change has not been seen on screen.

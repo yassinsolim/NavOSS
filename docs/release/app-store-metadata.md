@@ -1,8 +1,8 @@
 # App Store Connect metadata draft
 
-Status (refreshed 2026-11-15): **TestFlight technical beta.** Build `0.1.0 (82)` was distributed at 23:18 UTC; App Store Connect shows Testing for NavOSS Friends and internal `testers`. Its TestFlight description was updated for build 82. The production service covers Canada for search and routing and returns lanes and signposts when available. Reports are `attested` and traffic is `collect`; traffic is not displayed or used in routes. Public App Review remains subject to the applicable gates below.
+Status (refreshed 2026-11-17): **TestFlight technical beta.** Build `0.1.0 (83)` was submitted on 2026-11-17; internal `testers` receive uploads automatically. The NavOSS Friends distribution request reported success with Beta App Review submission, but its Testing state was not confirmed on screen. The TestFlight Test Information description was not updated for build 83. The production service covers Canada for search and routing and returns lanes and signposts when available. Reports are `attested` and traffic is `collect`; traffic is not displayed or used in routes. Public App Review remains subject to the applicable gates below.
 
-- Builds 80, 81 and 82 carry App Attest and the Google place panel; builds before 80 cannot share reports or traffic. As of 16:52 UTC on 2026-11-15 no installation had registered.
+- Builds 80, 81, 82 and 83 carry App Attest and the Google place panel; builds before 80 cannot share reports or traffic. As of 16:52 UTC on 2026-11-15 no installation had registered.
 - Live traffic remains unavailable. The production offline manifest publishes All Alberta and Calgary-area regions; BC has no offline region. A physical iPhone download in build 80 remains unverified.
 
 Use `docs/release/app-review.md` for the guideline-by-guideline risk assessment and `docs/release/testflight.md` for the release procedure.
@@ -70,29 +70,27 @@ Do not use “beta,” “alpha,” “technical preview,” “test,” or “h
 
 Beta language belongs here, not in a public App Store listing:
 
-> NavOSS is an account-free navigation technical beta. Its backend provides place search and routing across Canada. Build 82, distributed to testers on November 15, 2026, includes spoken turn-by-turn guidance, locked-phone background continuation, CarPlay search and navigation, and a province-wide road-events list for Alberta, British Columbia and Ontario. Drivers can opt in to share road reports; verified reports appear unconfirmed until corroborated.
+> NavOSS is an account-free navigation technical beta. Its backend provides place search and routing across Canada. Build 83, distributed to testers on November 17, 2026, includes spoken turn-by-turn guidance, locked-phone background continuation, CarPlay search and navigation, and a province-wide road-events list for Alberta, British Columbia and Ontario. Drivers can opt in to share road reports; verified reports appear unconfirmed until corroborated.
 >
 > There is no live traffic. All Alberta and the Calgary area can be downloaded for offline maps, search and routing; British Columbia has no offline region yet. Traffic speeds are collected only from drivers who opt in, for evaluation; nothing is displayed or used in routes. Keep the phone mounted and have a passenger operate controls while moving. Do not rely on this beta as the only navigation, road-closure, traffic, or safety source.
 
 ## What to Test
 
-The following build 82 **What to Test** draft reflects the production state as of 2026-11-15. The TestFlight description was updated for build 82; this draft is not a verbatim record:
+The following **What to Test** text was sent with the build 83 distribution request. The TestFlight
+Test Information description was not updated for build 83:
 
 ```text
-Please test NavOSS 0.1.0 (82) while parked or with a passenger operating the controls.
+Please test NavOSS 0.1.0 (83) while parked or with a passenger operating the controls.
 
-1. Search for places and plan routes across Canada. Report missing results or incorrect routes. Some places have no connecting road route.
-2. When a route provides lanes or exit signs, check that the guidance matches the road signs.
-3. Open a named place and look for the Google place panel. If the nearest listing is not the right place, try "Find this place on Google" and select the correct listing.
-4. If you encounter a road condition, turn on Share road reports and submit the matching report when safe. Reports from verified installations are unconfirmed until corroborated. Sharing is off by default.
-5. Connect CarPlay and try search, route preview and guidance. Report any display, voice or reconnection problems.
-6. Open the road-events list for Alberta, British Columbia and Ontario. 511 Alberta and Ontario 511 were connected in production on 2026-11-15.
-7. Start a trip away from the road and check that the chosen route stays selected while the app acquires your position. If the app is closed before the first route match, the trip currently ends on relaunch.
-8. Check long-trip estimates and road-event dates. Dates outside the current year show the year. The Alberta list shows the 100 newest events, so Edmonton events may be absent from the list even though they appear on the map.
+New in this build (from car testing of build 82):
+1. CarPlay turn card: now shows what to look for (the road, exit or sign, for example "1A East / Crowchild Trail" or "Exit 248 · Glenmore Trail") instead of the full spoken sentence, with the arrow beside the distance. Voice prompts are unchanged.
+2. CarPlay map: calmer map colours, a blue route, a closer tilted view that keeps the car low on the screen, one small speed and speed-limit unit at the top right, and the full current road name under the car.
+3. CarPlay buttons: three on the map (sound, report, overview). To end a trip, touch the screen and use End in the top bar, or open Trip.
+4. Phone: Share ETA and Share place open the normal full-size share sheet again.
 
-There is no live traffic. All Alberta and the Calgary area are available for offline download; British Columbia has no offline region. A download on a physical iPhone still needs verification. Optional traffic sharing is collected for evaluation only; nothing is displayed or used in routes. Do not rely on this beta as your only source for navigation or safety.
+Please tell us: is the turn card readable at a glance, is anything on the CarPlay screen overlapping or cut off on your car's display, and is End easy enough to reach.
 
-In feedback, include the build, iPhone model and a public area or road if useful. Do not include a home address or precise personal trip history.
+Known limits: no live traffic is shown yet; closing the app before a trip reaches the road ends that trip when you reopen it.
 ```
 
 ## App Review information
