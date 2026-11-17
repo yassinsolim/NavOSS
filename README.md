@@ -19,7 +19,7 @@
 	<img src="https://img.shields.io/badge/API-AGPL--3.0-E65342" alt="API license: AGPL-3.0-only">
 </p>
 
-NavOSS is an independently designed navigation app built on OpenStreetMap-derived data, MapLibre and Valhalla. There is no account or advertising. The default build has no analytics SDK; builds 80, 81 and 82 include Google's Places SDK, whose privacy declarations are described in the policy. Search and routing use a self-hosted service in Alberta covering Canada; route matching, guidance and speech run on the phone. Fixed safety-camera alerts are a local Calgary overlay. The current milestone is an iPhone and CarPlay technical beta distributed through TestFlight. Android and coverage beyond Canada follow the iOS navigation and operations gates.
+NavOSS is an independently designed navigation app built on OpenStreetMap-derived data, MapLibre and Valhalla. There is no account or advertising. The default build has no analytics SDK; builds 80, 81, 82 and 83 include Google's Places SDK, whose privacy declarations are described in the policy. Search and routing use a self-hosted service in Alberta covering Canada; route matching, guidance and speech run on the phone. Fixed safety-camera alerts are a local Calgary overlay. The current milestone is an iPhone and CarPlay technical beta distributed through TestFlight. Android and coverage beyond Canada follow the iOS navigation and operations gates.
 
 > [!WARNING]
 > NavOSS is pre-release software. The service it talks to today has no live traffic and no production guarantee. Do not rely on it as your only source for navigation, closures, road rules or safety-camera information. Have a passenger operate the controls while a vehicle is moving.
@@ -32,9 +32,11 @@ This status distinguishes the deployed service from individual builds. Build ava
 
 The deployed `/v2/routes` service provides Canada-wide routing with lane and signpost data when returned.
 
-Build `0.1.0 (82)` from `65649ab` was distributed to internal testers and NavOSS Friends on 2026-11-15 with the `production-carplay-google` profile. It fixes repeated rerouting and lost route choice when starting away from the road, adds long-trip formatting on phone and CarPlay, and shows the year for event dates outside the current year. A Release simulator pass against production checked trip starts and phone long-trip text; CarPlay long-trip text has only Swift test and compile evidence. First on-phone checks for every build since 80 and head-unit checks remain outstanding.
+Build `0.1.0 (83)` from `2cb5c70` was distributed to internal testers and NavOSS Friends on 2026-11-17 with the `production-carplay-google` profile. App Store Connect showed Testing for both groups, with no installs or sessions yet. It includes the Share ETA / Share place sheet fix and CarPlay card, controls and map changes. The navigation harness passed; two Maestro flows failed on stale label checks fixed after the build commit. The owner's car check, real CarPlay chrome and iOS 26.6.1 hardware remain unverified. See the [release record](docs/release/testflight.md#build-83-build-82-feedback-validation-and-limits-2026-11-17) for known limits.
 
-Build 82 still ends a trip on relaunch if the app was closed before its first route match; PR #135 is in review. The Alberta events list can omit Edmonton rows from Calgary because only the 100 newest are shown; those events remain on the map. Alberta search rows show the city without the province. Repeated confirmed departures can trigger repeated reroutes without backoff.
+Build `0.1.0 (82)` from `65649ab` was distributed to internal testers and NavOSS Friends on 2026-11-15 with the `production-carplay-google` profile. It fixes repeated rerouting and lost route choice when starting away from the road, adds long-trip formatting on phone and CarPlay, and shows the year for event dates outside the current year. A Release simulator pass against production checked trip starts and phone long-trip text; CarPlay long-trip text has only Swift test and compile evidence.
+
+Build 83 still ends a trip on relaunch if the app was closed before its first route match; PR #135 is parked. The Alberta events list can omit Edmonton rows from Calgary because only the 100 newest are shown; those events remain on the map. Alberta search rows show the city without the province. Repeated confirmed departures can trigger repeated reroutes without backoff.
 
 Build `0.1.0 (81)` from `14dae86` was processed by Apple and distributed to internal testers and NavOSS Friends on 2026-11-15, with the `production-carplay-google` profile. It adds the province-wide road-events list, Canada registry and route refusal presentation, plus the Explore-sheet fix. When a trip starts away from the road, it can reroute about every six seconds and replace the chosen alternative.
 
@@ -170,15 +172,15 @@ For native navigation changes also run `corepack pnpm --filter @navoss/mobile te
 
 ## Limitations
 
-- **Coverage.** The deployed v2 service covers Canada; distributed build 82 uses it. Build 70 uses v1 for Calgary and Kelowna. Some places have no connecting road route.
+- **Coverage.** The deployed v2 service covers Canada; build 83 uses it. Build 70 uses v1 for Calgary and Kelowna. Some places have no connecting road route.
 - **No live traffic or traffic-aware ETA.** Lane guidance and signposts appear only when returned by v2 and are unavailable in build 70.
 - **Offline coverage.** All Alberta and the Calgary area can be downloaded in build 80. British Columbia has no offline region. A physical iPhone download in build 80 remains unverified.
-- **CarPlay needs further head-unit validation.** The owner reported on build 82 in a car; complete wired and wireless checks of the current changes remain outstanding.
+- **CarPlay needs further head-unit validation.** The owner reported on build 82 in a car; build 83's real CarPlay chrome and head-unit appearance have not been seen.
 - **iOS only.** Android is planned after the iOS navigation core is stable.
 - **Map matching** is geometric; it does not use road-network topology. Background guidance and spoken instructions still need sustained on-road evidence.
 - **Data is incomplete.** OpenStreetMap, City of Calgary and DriveBC data can be missing, wrong or late; camera alerts are informational and do not replace signs and signals.
 - **Single operator.** There is no staffed support, no service-level agreement and no direct support email yet.
-- **External TestFlight is manual.** Build 82 was distributed to NavOSS Friends on 2026-11-15; a successful upload alone does not establish external availability.
+- **External TestFlight is manual.** Build 83 was confirmed Testing for NavOSS Friends; a successful distribution request alone does not establish external availability or an installation.
 
 ## Contributing
 

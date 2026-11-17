@@ -1,20 +1,20 @@
 # TestFlight beta runbook
 
-Status refreshed: 2026-11-15. The dated entries below are the release record and are not rewritten; this block is the current summary.
+Status refreshed: 2026-11-17. The dated entries below are the release record and are not rewritten; this block is the current summary.
 
 ## Current status
 
-- **Latest distributed build:** `0.1.0 (82)` from `65649ab` (`main`), profile `production-carplay-google`; hosted run `43771911635`, EAS submission `a5de686e-b166-47f7-b5b0-237f6775ff3b` finished 2026-11-15 23:13 UTC. Signature and Google Places linkage were verified. Beyond build 81 it includes #133 trip-start correction, #127 phone and CarPlay long-trip formatting, and #134 event dates outside the current year showing the year.
+- **Latest distributed build:** `0.1.0 (83)` from `2cb5c70` (`main`), profile `production-carplay-google`; hosted run `44169976512` succeeded, linked Google Places and contained no key-like strings in its log. EAS submission `9c4cf8d5-ecb8-410c-b584-c2a22726a9af` was scheduled at 20:46 UTC on 2026-11-17, waited in EAS's queue and finished at 21:23 UTC. The internal `testers` group receives uploads automatically.
 - **Built, not delivered:** No-upload signing preflights: 74 (`d0594cd`, run `43601926831`), 76 (App Attest entitlement, run `43674818814`), 78 and 79 (Google profile on the #113 branch, runs `43682190454` and `43687223016`). Run `43677906278` and run `43681889973` failed before building while the Google key was an EAS "secret" (77 was consumed). Run `43688847904` on `7c3672a` was started by mistake before validation and cancelled during the build step; nothing was submitted.
 - **Older builds:** Build 81 (`14dae86`, hosted run `43729757481`, EAS submission `5c6791e9-1d5e-4e15-ad7d-101f34d512fb`) was distributed on 2026-11-15. Its province-wide phone road-events list (#120) is absent from builds 75 and 80, which request Calgary `/v1/events` and Kelowna `/v2/events?region=kelowna-bc`. Starting away from the road in build 81 can reroute about every six seconds and replace the chosen alternative. Build 80 (`141b394`, hosted run `43693475548`, EAS submission `11f05277-2bd4-46cc-9bc7-1e7ba2978ae3`) was processed and distributed and shows one install and one session. Builds 75 and 70 preceded it. Build 73 was never uploaded and remains held permanently.
 - **Production service:** Canada cutover was 2026-11-15 15:44 UTC using API image `4708d34`; the current API image is from `36c8a9f` (#127), deployed on 2026-11-15, with image rollback tag `navoss-api:pre-canada-search-fixes`. The earlier cutover image rollback is `navoss-api:pre-canada-registry`; its data backup is `infra/compose/.env.pre-canada-20261115T154413Z`, restored by recreating Valhalla, Nominatim, API and Caddy. `/v2/config` declares all 13 provinces and territories; `/v1/config` is unchanged. Province-wide events cover Alberta, BC and Ontario; 511 Alberta and Ontario 511 were connected in production on 2026-11-15; build 81's list now includes their events. Reports are `attested`, traffic is `collect` and not displayed. Offline maps: Alberta and Calgary only.
-- **Distribution:** At 23:18 UTC on 2026-11-15, EAS workflow run `01a1e181-7965-703b-8029-e9b1ba6a2bec` distributed App Store Connect build `e3db03ee-57ed-4008-87dc-4d27ff733bb1` to internal `testers` and NavOSS Friends. App Store Connect shows build 82 **Testing** for both groups. The TestFlight description was updated for build 82. Distribution remains manual; group availability does not prove an installation.
-- **Next delivery:** Build 83 after #135 (restore before first match) is reviewed and merged. First on-phone checks for every build since 80, including physical iPhone offline download, first App Attest registration, Google's place panel and CarPlay head-unit checks remain outstanding ([checklist](next-build-checklist.md)). Never retry build 73.
+- **Distribution:** App Store Connect build `22053f21-da31-4230-bec2-30a6c25ea350`: the first external workflow run `01a1eb6d-2623-74d4-9fa4-0c4f12ba727b` at 21:32 UTC failed with "App Store Connect resource was not found" while Apple was still processing. Retry `01a1eb73-9b1f-7493-acd7-2def643441fc` at 21:41 UTC reported SUCCESS for NavOSS Friends with Beta App Review submission. On 2026-11-17 App Store Connect showed build 83 **Testing**, expiring in 90 days, in internal `testers` and NavOSS Friends (8 testers), with no installs or sessions yet. The TestFlight Test Information description was updated for build 83 and read back after saving; Review Notes were unchanged. The What to Test text sent is recorded in [app-store-metadata.md](app-store-metadata.md#what-to-test).
+- **Next checks:** The owner's car check of build 83 comes first. Physical iPhone offline download, first App Attest registration, Google's place panel and full wired/wireless CarPlay checks remain outstanding ([checklist](next-build-checklist.md)). Never retry build 73.
 
-### Upcoming build 83: build 82 feedback (2026-11-16)
+### Build 83: build 82 feedback, validation and limits (2026-11-17)
 
 The owner filed two reports after driving build 82 on an iPhone 15 Pro Max with iOS 26.6.1 and a
-small Toyota head unit: CarPlay looked cluttered, and Share ETA was broken. In response, main has:
+small Toyota head unit: CarPlay looked cluttered, and Share ETA was broken. Build 83 contains:
 
 - [#139](https://github.com/yassinsolim/NavOSS/pull/139) (`f2df5d3`): host the phone's React
   Native root in a scene-backed window so the Share ETA / Share place sheet is not clipped on iOS
@@ -27,12 +27,32 @@ small Toyota head unit: CarPlay looked cluttered, and Share ETA was broken. In r
   route, closer follow camera and corrected preview/overview fit, compact speed unit, road pill,
   attribution and per-fix caching.
 
-For the upcoming build, check in the car while parked or passenger-operated: the card is readable at
-a glance, nothing overlaps on the display, End is reachable, the speed unit stays in position, the
-road name is readable, and night appearance is legible. Check Share ETA on the phone too. The card
-layout was probed against Apple's layout code and the map was exercised with mocked chrome, not
-captured with real CarPlay chrome. Offline restyling, real safe-area insets, sunlight legibility and
-phone/head-unit frame pacing remain unverified.
+Release validation at `2cb5c70` passed the five gates and `test:native:ios` (527 tests, 3 skipped).
+Evidence: `artifacts/release-validation-main-83/`. A Release-configuration Google-profile simulator
+build on iOS 26.5 was exercised on screen against production read-only: launch, search, place sheet
+with the Google panel, preview with alternatives, simulated drive, full-width Share ETA and Share
+place in light and dark, report sheet, map preferences, Community, Offline maps, background /
+foreground, kill and relaunch restore, largest text size, and `navoss://` deep link.
+`validate:navigation:ios` passed all eight phases. Maestro passed 9 of 11 flows at `2cb5c70`;
+the two failures were stale label checks fixed in #144 (`d0fdb2f`, test-only, after the build commit).
+Card text was checked against four live production route answers: the owner's step shows
+"1A East / Crowchild Trail", nothing exceeded 40 characters, and no wrong road was shown.
+
+Real CarPlay chrome and a head unit were not seen; iOS 26.6.1 hardware was not tested, and the
+offline map style with the new CarPlay colours was not captured. The card layout was probed against
+Apple's layout code and the map was exercised with mocked chrome. Real safe-area insets, sunlight
+legibility and phone/head-unit frame pacing remain unverified.
+
+Closing the app before the trip first matches its route still ends the trip on relaunch (#135 is
+parked). Low items in build 83: the status-bar clock is white on the light map during guidance,
+and floating controls overlap when the trip sheet is expanded; a fix is in progress on main, not
+in build 83. Card wording also drops "Express" from "401 East" at the Express / Collector split,
+repeats "Queen Elizabeth Way / QEW", and at one Montreal exit names the boulevard rather than the
+airport on the sign.
+
+For the owner's car check, while parked or passenger-operated: check that the card is readable at a
+glance, nothing overlaps on the display, End is reachable, the speed unit stays in position, the
+road name is readable, and night appearance is legible. Check Share ETA on the phone too.
 
 ### Build 82 validation and known limits (2026-11-15)
 
