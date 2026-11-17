@@ -644,8 +644,26 @@ private func navOSSCardRoadName(_ raw: String) -> String {
   let name = navOSSReadableRoadName(navOSSReadableRoadNames(first))
     .trimmingCharacters(in: .whitespacesAndNewlines)
   guard name.contains(" / ") else { return name }
-  return navOSSCardDistinctNames(name.components(separatedBy: " / "), roadName: name)
-    .joined(separator: " / ")
+  var names = name.components(separatedBy: " / ")
+  navOSSCardRemoveInitialisms(from: &names, roadName: name)
+  return names.joined(separator: " / ")
+}
+
+/// Remove only a same-step exact uppercase initialism; do not run road-name formatting again.
+/// Joined numeric refs ("1 / 16 Avenue NE") have already been formatted and must stay as given.
+private func navOSSCardRemoveInitialisms(from names: inout [String], roadName: String) {
+  guard names.count > 1 else { return }
+  for road in roadName.components(separatedBy: " / ") {
+    let words = navOSSCardNameParts(road).core
+    let roadKey = navOSSCardCoreKey(road)
+    guard words.count >= 3, names.contains(where: { navOSSCardCoreKey($0) == roadKey }) else {
+      continue
+    }
+    let initials = words.reduce(into: "") { text, word in
+      if let first = word.first { text.append(contentsOf: String(first).uppercased()) }
+    }
+    names.removeAll { $0 == initials }
+  }
 }
 
 /// 2 when a name ends in a direction of travel ("North", "W"), 1 in an address quadrant only
@@ -682,21 +700,7 @@ private func navOSSCardDistinctNames(_ names: [String], roadName: String = "") -
       result.append(name)
     }
   }
-  // Only remove an exact uppercase initialism when this same step supplies its full mapped
-  // name alongside it, either on the sign or in a joined roadName. Partial/lone refs stay.
-  if result.count > 1 {
-    for road in roadName.components(separatedBy: " / ") {
-      let words = navOSSCardNameParts(road).core
-      let roadKey = navOSSCardCoreKey(road)
-      guard words.count >= 3, result.contains(where: { navOSSCardCoreKey($0) == roadKey }) else {
-        continue
-      }
-      let initials = words.reduce(into: "") { text, word in
-        if let first = word.first { text.append(contentsOf: String(first).uppercased()) }
-      }
-      result.removeAll { $0 == initials }
-    }
-  }
+  navOSSCardRemoveInitialisms(from: &result, roadName: roadName)
   return result
 }
 

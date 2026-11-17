@@ -159,6 +159,24 @@ final class CarPlayCardTextTests: XCTestCase {
     }
   }
 
+  func testJoinedInitialismDedupeDoesNotReformatRecordedNumericRefs() throws {
+    let destination = NavOSSCarPlayDestination(
+      id: "dest", label: "Destination", latitude: 51.0866, longitude: -114.1305, name: "Destination")
+    let cases: [(String, Int, Int, [String])] = [
+      ("calgary-deerfoot-glenmore", 0, 5, ["1 / 16 Avenue NE", "1 / 16 Ave NE", "1"]),
+      ("calgary-downtown-north", 2, 4, ["1 / 16 Avenue NW", "1 / 16 Ave NW", "1"]),
+      ("calgary-downtown-north", 2, 5, ["1A / Crowchild Trail NW", "1A"]),
+      ("calgary-waypoint", 0, 5, ["1 / 16 Avenue NE", "1 / 16 Ave NE", "1"]),
+      ("calgary-waypoint", 0, 9, ["2 / Deerfoot Trail SE", "2"]),
+    ]
+    for (file, route, index, expected) in cases {
+      let trips = try navOSSOfflineTrips(
+        fromValhallaJSON: OfflineFixtures.data(file + ".response.json"),
+        destination: destination, waypoints: [], preferences: NavOSSRoutePreferences())
+      XCTAssertEqual(try card(trips[route], index), expected)
+    }
+  }
+
   /// The step itself gives both the road name and its uppercase initialism; no alias table.
   func testRoadNameAndItsSignedInitialismAreNotRepeated() throws {
     let trips = try NavigationRoutesV2Tests.trips("squareone-scarborough-validation83.v2", version: .v2)
