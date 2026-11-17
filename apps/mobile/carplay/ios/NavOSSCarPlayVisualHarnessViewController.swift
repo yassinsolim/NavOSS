@@ -336,8 +336,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
           return
         }
         // Restore the limit through the real display() path and confirm the speed badge
-        // slides back to its original slot without changing the visible ordering (speed
-        // left, limit right, no overlap).
+        // keeps its slot and the sign returns beside it (sign left, speed right, no overlap).
         self.mapViewController.display(
           route: Self.wideRoute,
           routeId: "visual-hud-wide-chrome",
@@ -355,7 +354,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
           abs(speedRestored.origin.x - resizedExpectedSpeedLeft) < 0.5,
           abs(limitRestored.origin.x - (resizedExpectedSpeedLeft - Map.hudGap - limitSize.width))
             < 0.5,
-          speedRestored.maxX < limitRestored.minX
+          limitRestored.maxX < speedRestored.minX
         else {
           assertionFailure(
             "CarPlay speed/limit readouts did not restore correctly: "
@@ -1528,6 +1527,14 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
   }
 
   private func markReady() {
+    let camera = mapViewController.mapView.camera
+    if camera.pitch > 0 {
+      // The follow camera as rendered, for comparing camera tuning between builds.
+      print(
+        String(
+          format: "NAVOSS_CARPLAY_CAMERA zoom=%.2f pitch=%.1f altitude=%.0f",
+          mapViewController.mapView.zoomLevel, camera.pitch, camera.altitude))
+    }
     view.accessibilityLabel = "CarPlay visual \(scenario) ready"
     view.isAccessibilityElement = true
     // The validator redirects this to a file, where stdout is block buffered, so a few bytes would

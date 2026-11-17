@@ -124,7 +124,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   static let hudPadding: CGFloat = 3
   static let hudGap: CGFloat = 4
   static let speedCellSize = CGSize(width: 42, height: 42)
-  static let speedLimitSignSize = CGSize(width: 32, height: 38)
+  static let speedLimitSignSize = CGSize(width: 36, height: 38)
   /// Where the vehicle sits in the visible map during guidance, from its top (0) to its bottom (1):
   /// the lower third, so most of the view is road ahead.
   static let puckVerticalFraction: CGFloat = 0.72
@@ -324,6 +324,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     mapView.isScrollEnabled = true
     mapView.isZoomEnabled = false
     mapView.compassView.isHidden = true
+    // The guidance focal point is set explicitly from the safe area (`updateGuidanceContentInset`).
+    mapView.automaticallyAdjustsContentInset = false
     mapView.logoView.isHidden = true
     mapView.attributionButton.isHidden = true
     mapView.delegate = self
@@ -372,6 +374,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     speedLimitLabel.numberOfLines = 2
     speedLimitLabel.textAlignment = .center
     speedLimitLabel.textColor = .black
+    speedLimitLabel.adjustsFontSizeToFitWidth = true
+    speedLimitLabel.minimumScaleFactor = 0.7
     speedLimitLabel.isHidden = true
     speedLimitLabel.accessibilityIdentifier = "carplay-speed-limit"
     speedLabel.layer.cornerRadius = 7
@@ -685,7 +689,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
   }
 
-  /// During guidance the camera's focal point, where the vehicle sits, is the horizontal centre of
+  /// The map's focal point. During guidance it is where the vehicle sits: the horizontal centre of
   /// the visible map (what CarPlay's safe area leaves beside the card and the map buttons) and
   /// `puckVerticalFraction` down it, so the vehicle sits in the lower third with the road ahead
   /// above it. The top is measured from the view's own top, not the safe area: the top inset
@@ -704,7 +708,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         right: insets.right
       )
     } else {
-      target = .zero
+      // Idle, preview and overview centre in the visible map, as MapLibre's automatic inset did.
+      target = UIEdgeInsets(top: 0, left: insets.left, bottom: insets.bottom, right: insets.right)
     }
     guard mapView.contentInset != target else { return }
     mapView.setContentInset(target, animated: false, completionHandler: nil)
@@ -1511,7 +1516,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     text.append(
       NSAttributedString(
         string: "\(speedLimitKph)",
-        attributes: [.font: UIFont.monospacedDigitSystemFont(ofSize: 16, weight: .heavy)]
+        attributes: [.font: UIFont.monospacedDigitSystemFont(ofSize: 15, weight: .heavy)]
       )
     )
     speedLimitLabel.attributedText = text
@@ -1574,6 +1579,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       )
       if role == .hidden {
         layer.isVisible = false
+        continue
+      }
+      if role == .roadShield, let shield = layer as? MLNSymbolStyleLayer {
+        // Shields keep the style's artwork but repeat far less along a road.
+        shield.symbolSpacing = NSExpression(forConstantValue: 800)
         continue
       }
       guard let rgb = palette.color(for: role) else { continue }
@@ -2117,7 +2127,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     installEndpointOverlay(
       latestDestination, installed: &installedDestination,
       sourceIdentifier: destinationSourceIdentifier, layerIdentifier: destinationLayerIdentifier,
-      color: UIColor(rgb: 0xE5484D), radius: 7)
+      color: UIColor(rgb: 0xE5484D), radius: 6)
   }
 
   /// The origin in route preview: a green dot.

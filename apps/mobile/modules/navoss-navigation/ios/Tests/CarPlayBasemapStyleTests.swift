@@ -81,7 +81,7 @@ final class CarPlayBasemapStyleTests: XCTestCase {
       ("liberty", "road_area_pattern", .hidden),
       ("liberty", "highway-name-major", .roadLabel),
       ("liberty", "highway-name-path", .hidden),
-      ("liberty", "highway-shield-non-us", .untouched),
+      ("liberty", "highway-shield-non-us", .roadShield),
       ("liberty", "poi_r1", .untouched),
       ("liberty", "natural_earth", .untouched),
       ("liberty", "label_city", .placeLabel),

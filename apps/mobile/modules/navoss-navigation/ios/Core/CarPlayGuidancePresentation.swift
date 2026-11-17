@@ -847,9 +847,10 @@ public func navOSSCarPlayCameraTarget(
     distance = min(distance, 200 + distanceToManeuverMeters * 0.6)
   }
   distance = max(navOSSCarPlayCameraClosestMeters, distance)
-  // 58° when close, easing to 50° at the widest view so distant labels stay legible.
+  // 55° when close, easing to 50° at the widest view so distant labels stay legible. Steeper
+  // pitches put most of a small car display into the distance, where labels are unreadable.
   let spread = navOSSCarPlayCameraWidestMeters - navOSSCarPlayCameraClosestMeters
-  let pitch = 58 - (distance - navOSSCarPlayCameraClosestMeters) / spread * 8
+  let pitch = 55 - (distance - navOSSCarPlayCameraClosestMeters) / spread * 5
   return NavOSSCarPlayCameraTarget(viewingDistanceMeters: distance, pitchDegrees: pitch)
 }
 
