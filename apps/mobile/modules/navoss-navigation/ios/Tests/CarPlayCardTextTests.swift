@@ -130,6 +130,26 @@ final class CarPlayCardTextTests: XCTestCase {
     XCTAssertEqual(try card(trip, arrival).first, trip.destination.name)
   }
 
+  /// Review of #140: a stop's arrival named the final destination. The recorded Glenmore break
+  /// route arrives at the Glenmore Trail stop (step 3) with maneuvers still ahead.
+  func testIntermediateArrivalNamesTheStopNotTheFinalDestination() throws {
+    let trip = try recorded("calgary-deerfoot-glenmore-break.v2")
+    let arrivals = trip.steps.indices.filter { trip.steps[$0].maneuverType == "arrive" }
+    XCTAssertEqual(arrivals, [3, trip.steps.count - 1])
+    // No stop list on the trip: the stop is not given the destination's name.
+    XCTAssertEqual(try card(trip, 3), ["Stop"])
+    let stop = NavOSSCarPlayDestination(
+      id: "glenmore", label: "", latitude: 50.98, longitude: -114.07, name: "Glenmore Landing")
+    let withStop = trip.replacingWaypoints([stop])
+    XCTAssertEqual(try card(withStop, 3).first, "Glenmore Landing")
+    XCTAssertEqual(try card(withStop, trip.steps.count - 1).first, trip.destination.name)
+    // A stop without a usable name is "Stop", numbered when the trip has more than one.
+    let unnamed = NavOSSCarPlayDestination(
+      id: "a", label: " ", latitude: 50.98, longitude: -114.07, name: " ")
+    XCTAssertEqual(try card(trip.replacingWaypoints([unnamed]), 3), ["Stop"])
+    XCTAssertEqual(try card(trip.replacingWaypoints([unnamed, stop]), 3), ["Stop 1"])
+  }
+
   func testOfflineRoundaboutNamesTheExitRoad() throws {
     let destination = NavOSSCarPlayDestination(
       id: "dest", label: "Destination", latitude: 51.0866, longitude: -114.1305, name: "Destination")

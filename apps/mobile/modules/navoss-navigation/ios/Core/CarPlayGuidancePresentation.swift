@@ -702,7 +702,23 @@ public func navOSSCarPlayCardInstructionVariants(
   var variants: [String]
   switch kind {
   case .arrive, .arriveLeft, .arriveRight:
-    let name = trip.destination.name.trimmingCharacters(in: .whitespacesAndNewlines)
+    let isArrival = { (step: NavOSSCarPlayRouteStep) in step.maneuverType.lowercased() == "arrive" }
+    let laterArrival = trip.steps[(stepIndex + 1)...].contains(where: isArrival)
+    let name: String
+    if laterArrival {
+      // A stop on the way: its own name, or "Stop" ("Stop 2" among several). Never the final
+      // destination's name, which is still ahead.
+      let ordinal = trip.steps[..<stepIndex].filter(isArrival).count
+      let stops = trip.waypoints ?? []
+      let stopCount = max(stops.count, trip.steps.dropLast().filter(isArrival).count)
+      let stop = stops.indices.contains(ordinal) ? stops[ordinal] : nil
+      name =
+        [stop?.name, stop?.label].compactMap {
+          $0?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        }.first ?? (stopCount > 1 ? "Stop \(ordinal + 1)" : "Stop")
+    } else {
+      name = trip.destination.name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
     variants = name.isEmpty ? [action] : [name, navOSSCarPlayCardAbbreviated(name)]
   case let .roundabout(exit):
     // The roundabout step names the ring ("Rond-point Dorval"); the road taken out of it is the
