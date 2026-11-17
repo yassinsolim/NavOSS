@@ -46,6 +46,20 @@ describe('versioned route enrichment contract', () => {
     expect(RouteRequestSchema.safeParse({ ...request, waypoints: [waypoint] }).success).toBe(true);
   });
 
+  it('accepts eight distinct waypoints with defaults and rejects a ninth', () => {
+    const waypoints = Array.from({ length: 8 }, (_, index) => ({
+      latitude: 50 + index / 10,
+      longitude: -115,
+    }));
+    expect(RouteRequestSchema.safeParse({ ...request, waypoints }).success).toBe(true);
+    expect(RouteRequestV2Schema.parse({ ...request, waypoints }).waypoints).toEqual(
+      waypoints.map((point) => ({ ...point, type: 'break' })),
+    );
+    const tooMany = [...waypoints, { latitude: 51, longitude: -115 }];
+    expect(RouteRequestSchema.safeParse({ ...request, waypoints: tooMany }).success).toBe(false);
+    expect(RouteRequestV2Schema.safeParse({ ...request, waypoints: tooMany }).success).toBe(false);
+  });
+
   it('keeps coordinate validation and duplicate-stop rejection for through waypoints', () => {
     expect(
       RouteRequestV2Schema.safeParse({
