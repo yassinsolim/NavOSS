@@ -26,13 +26,49 @@ Release simulator, not on iOS 26.6.1 hardware.
       night appearance. Check sunlight legibility when conditions allow.
 
 The simulator map harness uses mocked chrome and the card layout was probed against Apple's layout
-code; neither captured real CarPlay chrome. The new offline restyle, actual safe-area insets and
-frame pacing on a phone or head unit are also unverified.
+code; neither captured real CarPlay chrome. Build 83's own binary was not captured with the offline
+restyle. Actual safe-area insets and frame pacing on a phone or head unit are also unverified.
 
 The [build 83 release record](testflight.md#build-83-build-82-feedback-validation-and-limits-2026-11-17)
 includes simulator validation and the known phone and card-wording limits. Real CarPlay chrome, a
 head unit and iOS 26.6.1 hardware have not been checked for build 83. Closing the app before its
 first route match still ends the trip on relaunch; #135 is parked.
+
+## Merged after build 83, for the next build
+
+These changes are on `main`, not in build 83. Check the next build on screen, parked or with a
+passenger operating controls:
+
+- [ ] **Phone guidance [#147](https://github.com/yassinsolim/NavOSS/pull/147) (`a1787ff`).** The
+      status-bar content follows the basemap: dark on light, light on dark. Map controls, the road
+      pill and bottom group fade out, stop taking touches and leave VoiceOver focus when they would
+      touch the turn banner or expanded trip sheet. Seen in a Release iPhone 15 Pro Max simulator
+      on iOS 26.5 in light, dark and largest text. Check those appearances and expand the sheet;
+      check VoiceOver and Reduce Motion, a camera, reroute or report-ahead card stacked under the
+      banner, small screens and a physical phone. These cases have not been verified on screen;
+      the stacked-card cases have unit tests only.
+- [ ] **CarPlay card [#149](https://github.com/yassinsolim/NavOSS/pull/149) (`4031d25`).** At the
+      Ontario 401 split the card keeps the carriageway named in the provider sentence: "Highway 401
+      Express" or "Highway 401 Collector". "Queen Elizabeth Way / QEW" no longer repeats the road.
+      When a numbered exit's sign names a destination and the sentence names no road, the
+      destination leads: the Montreal example is "Airport Pierre-Elliott-Trudeau", with "Exit 56-O"
+      as the shorter variant, so the number appears only if the longer text does not fit. Arrow
+      image scale now follows the car display's traits, clamped to 1–3. Twelve of 358 recorded
+      card rows changed; speech and the phone list did not. Independent review rejected the first
+      version and passed the final version. Check the wording, truncation and symbol sizing in
+      real CarPlay chrome and on a head unit; neither has been seen for this change.
+- [ ] **Offline CarPlay [#150](https://github.com/yassinsolim/NavOSS/pull/150) (`eb61be1`).**
+      Preview and guidance for the production Calgary region were captured on a simulator in light
+      and dark and matched the hosted look. A unit test covers the shipped offline layer lists;
+      `corepack pnpm validate:navigation:ios -- --offline` is an opt-in check. In the next build,
+      check the offline map and automatic switch when the hosted style fails on screen; the switch
+      remains unverified, and build 83's own binary was not captured for the offline restyle.
+- [ ] **Dependency refresh [#148](https://github.com/yassinsolim/NavOSS/pull/148) (`683bc99`).**
+      Vitest 4.1.12, protobufjs 7.6.6, `@fastify/swagger` 9.9.4, Fastify 5.12.8, Zod 4.6.7,
+      Prettier 3.10.1, Turbo 2.11.11 and `@types/pg` 8.23.1 were refreshed; generated OpenAPI is
+      identical. `@maplibre/maplibre-react-native` 11.5.1 was deliberately not taken pending
+      on-screen and offline-map validation. Exercise search, route preview, guidance and offline
+      maps on screen in the next build. The production API image was not redeployed for this refresh.
 
 ## Corrected candidate and prior binary hold
 

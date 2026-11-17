@@ -38,6 +38,14 @@ Build `0.1.0 (82)` from `65649ab` was distributed to internal testers and NavOSS
 
 Build 83 still ends a trip on relaunch if the app was closed before its first route match; PR #135 is parked. The Alberta events list can omit Edmonton rows from Calgary because only the 100 newest are shown; those events remain on the map. Alberta search rows show the city without the province. Repeated confirmed departures can trigger repeated reroutes without backoff.
 
+Build 83's phone guidance can show a white status-bar clock on the light map and overlapping
+controls when the trip sheet is expanded. Its CarPlay card can omit "Express" from "401 East",
+repeat "Queen Elizabeth Way / QEW", and name a Montreal boulevard instead of the airport on the
+sign. Fixes for these are merged on `main` but are not in build 83. The offline CarPlay restyle
+was captured on a later simulator build, not build 83's own binary; automatic switching to the
+offline style if the hosted style fails remains unverified. See the
+[next-build checklist](docs/release/next-build-checklist.md#merged-after-build-83-for-the-next-build).
+
 Build `0.1.0 (81)` from `14dae86` was processed by Apple and distributed to internal testers and NavOSS Friends on 2026-11-15, with the `production-carplay-google` profile. It adds the province-wide road-events list, Canada registry and route refusal presentation, plus the Explore-sheet fix. When a trip starts away from the road, it can reroute about every six seconds and replace the chosen alternative.
 
 Builds 75 and 80 follow the server's declared coverage for search and routing; they can use the
