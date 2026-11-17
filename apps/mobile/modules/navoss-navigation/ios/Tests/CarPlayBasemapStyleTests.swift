@@ -4,7 +4,8 @@ import XCTest
 @testable import NavOSSNavigationCore
 
 /// The restyle is checked against the real layer lists of OpenFreeMap's hosted `liberty` and
-/// `dark` styles (fetched 2026-11-17), which the offline styles are built from.
+/// `dark` styles (fetched 2026-11-17) and of the offline styles built from them (the production
+/// offline resources artifact), which CarPlay draws without signal.
 final class CarPlayBasemapStyleTests: XCTestCase {
   private struct Layer: Decodable {
     let id: String
@@ -16,10 +17,9 @@ final class CarPlayBasemapStyleTests: XCTestCase {
     let styles: [String: [Layer]]
   }
 
-  private func styles() throws -> [String: [Layer]] {
+  private func styles(_ fixture: String = "openfreemap-style-layers") throws -> [String: [Layer]] {
     let url = try XCTUnwrap(
-      Bundle.module.url(
-        forResource: "openfreemap-style-layers", withExtension: "json", subdirectory: "Fixtures"))
+      Bundle.module.url(forResource: fixture, withExtension: "json", subdirectory: "Fixtures"))
     return try JSONDecoder().decode(Fixture.self, from: Data(contentsOf: url)).styles
   }
 
@@ -36,8 +36,11 @@ final class CarPlayBasemapStyleTests: XCTestCase {
     return navOSSCarPlayBasemapRole(type: type, identifier: layer.id, sourceLayer: layer.sourceLayer)
   }
 
-  func testEveryRoadLineInTheHostedStylesIsRestyled() throws {
-    for (name, layers) in try styles() {
+  func testEveryRoadLineInTheHostedAndOfflineStylesIsRestyled() throws {
+    let all = try styles().merging(
+      styles("offline-style-layers").map { ("offline \($0.key)", $0.value) }, uniquingKeysWith: { $1 })
+    XCTAssertEqual(all.count, 4)
+    for (name, layers) in all {
       var classes: Set<String> = []
       for layer in layers where layer.sourceLayer == "transportation" && layer.type == "line" {
         switch role(layer) {
@@ -97,6 +100,26 @@ final class CarPlayBasemapStyleTests: XCTestCase {
     ]
     for (style, id, expectedRole) in expected {
       XCTAssertEqual(try classify(style, id), expectedRole, "\(style) \(id)")
+    }
+  }
+
+  /// A driver without signal gets the same map: every layer the offline style draws is restyled
+  /// as its hosted twin is, and the offline style lacks nothing the hosted look depends on.
+  func testTheOfflineStylesAreRestyledLikeTheHostedOnes() throws {
+    let hosted = try styles()
+    let offline = try styles("offline-style-layers")
+    for name in ["liberty", "dark"] {
+      let hostedLayers = try XCTUnwrap(hosted[name])
+      let offlineLayers = try XCTUnwrap(offline[name], "no offline \(name) style")
+      let hostedRoles = Dictionary(uniqueKeysWithValues: hostedLayers.map { ($0.id, role($0)) })
+      for layer in offlineLayers {
+        let twin = try XCTUnwrap(hostedRoles[layer.id], "offline \(name) \(layer.id) is not hosted")
+        XCTAssertEqual(role(layer), twin, "offline \(name) \(layer.id)")
+      }
+      // Only the hosted Natural Earth hillshade raster is left out of the offline styles.
+      let offlineIds = Set(offlineLayers.map(\.id))
+      let missing = hostedLayers.filter { !offlineIds.contains($0.id) && $0.type != "raster" }
+      XCTAssertEqual(missing.map(\.id), [], "offline \(name) lacks hosted layers")
     }
   }
 

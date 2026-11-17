@@ -42,6 +42,18 @@ corepack pnpm --filter @navoss/mobile validate:navigation:ios -- --carplay-only 
 
 Build reuse is intentionally opt-in. The complete release command always regenerates and compiles the native project.
 
+Add `--offline` to also capture CarPlay on the installed offline style: `offline-preview` and
+`offline-guidance` (the `real-calgary-exit` view), each in light and dark. It needs the Calgary or
+All Alberta region installed in the app on the harness simulator first (download it once from the
+phone app's offline maps screen, see `docs/architecture/offline.md`); without one the run fails
+rather than capturing the hosted map. The offline captures must show the route and endpoint
+markers like their hosted twins and differ from them in at most 12% of perceptual cells; with the restyle skipped on the offline style
+they differed in 24% to 97%.
+
+```sh
+corepack pnpm --filter @navoss/mobile validate:navigation:ios -- --carplay-only --reuse-build --offline
+```
+
 ## Coverage
 
 The phone suite validates:
@@ -60,8 +72,8 @@ The CarPlay visual suite mounts the exact production `NavOSSCarPlayMapViewContro
 
 - selected route, alternate route, destination and on-screen endpoint markers in preview, including
   short routes and resized views; preview assertions keep the route and endpoints in the free map;
-- light and dark restyled OpenFreeMap maps, matched arrow and forward camera, travelled-route
-  removal, overview and route cleanup;
+- light and dark restyled OpenFreeMap maps (and, with `--offline`, the offline style), matched
+  arrow and forward camera, travelled-route removal, overview and route cleanup;
 - `guidance-far-stopped` and `guidance-far-moving` with a distant maneuver, plus `guidance-narrow`,
   which asserts the road name fits below the vehicle and does not overlap attribution;
 - guidance captures assert the vehicle is inside the visible map and follow mode has a pitched

@@ -699,8 +699,12 @@ not app screenshots or a physical offline-driving claim.
   `src/features/offline/offline-maps.ts`. Offline routes are labelled “Offline route · No traffic
   or closures”, offline search “Offline results · OpenStreetMap data from <date>”. Maps switch to
   the bound local style (same four slugs, same customisation) with no network, with “Prefer
-  offline maps” inside a region, or when the hosted style fails; phone and CarPlay attribution
-  say “Offline map · © OpenMapTiles · © OpenStreetMap”.
-- **CarPlay harness.** Scenario `offline-preview` (`NAVOSS_CARPLAY_VISUAL_SCENARIO`) draws the
-  installed region's offline style; it needs a region installed on the simulator, so it is not in
-  the default `validate:navigation:ios` list.
+  offline maps” inside a region, or when the hosted style fails; phone attribution says
+  “Offline map · © OpenMapTiles · © OpenStreetMap”, CarPlay “© OpenStreetMap © OpenMapTiles”.
+- **CarPlay harness.** Scenarios `offline-preview` and `offline-guidance`
+  (`NAVOSS_CARPLAY_VISUAL_SCENARIO`) draw the installed region's offline style and fail when no
+  region is drawn. They need a region installed on the simulator, so they run only with
+  `validate:navigation:ios -- --offline` (`docs/testing/navigation-validation.md`), which checks
+  each against its hosted twin. On 2026-11-17 the Calgary region's captures in light and dark
+  matched the hosted look: CarPlay's runtime restyle applies to the offline styles unchanged,
+  because they keep the hosted styles' layer ids, types and source layers.

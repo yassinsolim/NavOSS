@@ -266,6 +266,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   /// Draws the installed offline map regardless of connectivity (the visual harness's offline
   /// scenarios). Set before the view loads.
   var forcesOfflineStyle = false
+  /// Whether the map is drawing an installed region's local style rather than the hosted one.
+  var drawsOfflineStyle: Bool { loadedStyleURL?.isFileURL == true }
   private let attributionLabel = UILabel()
   private var vehicleMarker = NavOSSCarPlayVehicleMarker.arrow
   private(set) var mapView: MLNMapView!
