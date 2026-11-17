@@ -589,19 +589,36 @@ func navOSSCarPlayCardAbbreviated(_ name: String) -> String {
 let navOSSCarPlayCardMaximumCharacters = 40
 
 private let navOSSCardKeyLocale = Locale(identifier: "en_CA")
-private let navOSSCardKeyIgnoredWords: Set<String> = [
-  "north", "south", "east", "west", "n", "s", "e", "w", "ne", "nw", "se", "sw", "nord", "sud",
-  "est", "ouest", "highway", "hwy", "route",
-]
+private let navOSSCardKeyIgnoredWords: Set<String> = ["highway", "hwy", "route"]
 
-/// A name reduced to what identifies the road: case, accents, punctuation ("/", ",", "."),
-/// quadrants and the word "Highway" removed, so "Glenmore Trail West" matches "Glenmore Trail SE"
-/// and "Highway 403" matches "403 East".
+private let navOSSCardTravelDirections: Set<String> = [
+  "north", "south", "east", "west", "n", "s", "e", "w", "nord", "sud", "est", "ouest",
+]
+private let navOSSCardQuadrants: Set<String> = ["ne", "nw", "se", "sw"]
+
+/// A name's words, case and accents folded and punctuation dropped, split into the name itself and
+/// its trailing direction or quadrant suffix ("Crowchild Trail SW" → "crowchild trail" + "sw").
+/// Only trailing tokens are a suffix: in "North Shore Road" the direction is part of the name.
+private func navOSSCardNameParts(_ name: String) -> (core: [String], suffix: [String]) {
+  var words = name.folding(
+    options: [.caseInsensitive, .diacriticInsensitive], locale: navOSSCardKeyLocale
+  )
+  .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+  .map(String.init)
+  var suffix: [String] = []
+  while words.count > 1, let last = words.last,
+    navOSSCardTravelDirections.contains(last) || navOSSCardQuadrants.contains(last)
+  {
+    suffix.insert(words.removeLast(), at: 0)
+  }
+  return (words, suffix)
+}
+
+/// What identifies the road: the name without its trailing direction or quadrant and without the
+/// word "Highway", so "Glenmore Trail West" matches "Glenmore Trail SE" and "Highway 403" matches
+/// "403 East", but "North Shore Road" does not match "South Shore Road East".
 private func navOSSCardCoreKey(_ name: String) -> String {
-  name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: navOSSCardKeyLocale)
-    .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
-    .map(String.init)
-    .filter { !navOSSCardKeyIgnoredWords.contains($0) }
+  navOSSCardNameParts(name).core.filter { !navOSSCardKeyIgnoredWords.contains($0) }
     .joined(separator: " ")
 }
 
@@ -613,6 +630,24 @@ private func navOSSCardRoadName(_ raw: String) -> String {
     .trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
+/// 2 when a name ends in a direction of travel ("North", "W"), 1 in an address quadrant only
+/// ("SW"), 0 for neither. A sign's direction of travel is what the driver chooses between.
+private func navOSSCardTravelDirectionRank(_ name: String) -> Int {
+  let suffix = navOSSCardNameParts(name).suffix
+  if suffix.contains(where: navOSSCardTravelDirections.contains) { return 2 }
+  return suffix.isEmpty ? 0 : 1
+}
+
+/// `name`, or a sign naming the same road with a direction of travel when `name` has none
+/// ("Crowchild Trail North" for "Crowchild Trail SW"): the direction is the driver's decision, the
+/// address quadrant is not.
+private func navOSSCardSignedName(_ name: String, signs: [String]) -> String {
+  guard !name.isEmpty, navOSSCardTravelDirectionRank(name) < 2 else { return name }
+  let key = navOSSCardCoreKey(name)
+  return signs.first { navOSSCardCoreKey($0) == key && navOSSCardTravelDirectionRank($0) == 2 }
+    ?? name
+}
+
 /// Sign or road names with blanks and repeats (by core key) removed. Of two names for one road the
 /// one that carries a direction wins ("403 East" over "Highway 403"): it is what the sign adds.
 private func navOSSCardDistinctNames(_ names: [String]) -> [String] {
@@ -622,10 +657,9 @@ private func navOSSCardDistinctNames(_ names: [String]) -> [String] {
     let key = navOSSCardCoreKey(name)
     guard !name.isEmpty, !key.isEmpty else { continue }
     if let existing = result.firstIndex(where: { navOSSCardCoreKey($0) == key }) {
-      let hasDirection = { (value: String) in
-        value.split(separator: " ").contains { navOSSCardDirections.contains(String($0)) }
+      if navOSSCardTravelDirectionRank(name) > navOSSCardTravelDirectionRank(result[existing]) {
+        result[existing] = name
       }
-      if hasDirection(name), !hasDirection(result[existing]) { result[existing] = name }
     } else {
       result.append(name)
     }
@@ -672,6 +706,106 @@ private func navOSSCardNameVariants(_ names: [String], prefix: String) -> [Strin
   }
 }
 
+/// Sign-led variants: `Exit N · names toward places`, then fewer names, then the exit alone.
+/// "toward" appears only in the longest variant and only for places the names do not already say.
+private func navOSSCardSignVariants(
+  exitNumber: String?,
+  targets: [String],
+  toward: [String],
+  towardIsTheSign: Bool
+) -> [String] {
+  let targetKeys = targets.map(navOSSCardCoreKey)
+  let joinedKey = targetKeys.joined(separator: " ")
+  let newToward =
+    towardIsTheSign
+    ? []
+    : toward.filter {
+      let key = navOSSCardCoreKey($0)
+      return !targetKeys.contains(key) && !joinedKey.contains(key)
+    }
+  let prefix = exitNumber.map { "Exit \($0) · " } ?? ""
+  var variants: [String] = []
+  if !newToward.isEmpty, !targets.isEmpty {
+    variants.append(
+      prefix + targets.joined(separator: " / ") + " toward "
+        + newToward.prefix(2).joined(separator: " / "))
+  }
+  variants += navOSSCardNameVariants(targets, prefix: prefix)
+  if let exitNumber { variants.append("Exit \(exitNumber)") }
+  return variants
+}
+
+private let navOSSCardInstructionExit = try! NSRegularExpression(
+  pattern: #"\bexit ([0-9]{1,4}[A-Za-z]?)\b"#, options: .caseInsensitive)
+private let navOSSCardInstructionToward = try! NSRegularExpression(
+  pattern: #"^(.*?) toward (.+)$"#, options: .caseInsensitive)
+private let navOSSCardInstructionTargets = [
+  #"\bonto (.+)$"#,
+  #"\bto (?:take|stay on) (.+)$"#,
+  #"^take the (.+) (?:exit|ramp)(?: on the (?:left|right))?$"#,
+].map { try! NSRegularExpression(pattern: $0, options: .caseInsensitive) }
+
+/// Words that end in a period inside a name ("No. 3 Rd", "St. Albert"), so the period is not the
+/// end of a sentence. Single letters (initials) count too.
+private let navOSSCardAbbreviationWords: Set<String> = [
+  "no", "st", "ste", "dr", "mt", "ft", "rd", "ave", "blvd", "hwy",
+]
+/// Words that open a provider cue ("…Main Rd. Then turn left…"), so the period before them ends
+/// a sentence even after an abbreviation.
+private let navOSSCardClauseStarters: Set<String> = [
+  "Then", "Turn", "Keep", "Take", "Continue", "Bear", "Merge", "Make", "Enter", "Exit", "Stay",
+  "Drive", "Head", "Your", "You",
+]
+private let navOSSCardSentenceBoundary = try! NSRegularExpression(
+  pattern: #"(\S+)\. +(\p{Lu}\p{L}*)"#)
+
+/// Whether `text` holds more than one sentence: a period, a space and a capitalised word, where
+/// the word before the period is not an abbreviation or the word after it opens a cue.
+private func navOSSCardHasSentenceBoundary(_ text: String) -> Bool {
+  navOSSCardSentenceBoundary.matches(
+    in: text, range: NSRange(text.startIndex..<text.endIndex, in: text)
+  ).contains { match in
+    guard let range = Range(match.range(at: 1), in: text),
+      let nextRange = Range(match.range(at: 2), in: text)
+    else { return true }
+    if navOSSCardClauseStarters.contains(String(text[nextRange])) { return true }
+    let word = text[range].lowercased()
+    let isInitial = word.count == 1 && word.first?.isLetter == true
+    return !isInitial && !navOSSCardAbbreviationWords.contains(word)
+  }
+}
+
+/// What a provider sentence without structured sign fields states: an exit number ("exit 248B"),
+/// the road or sign after "onto", "to take" or "take the … exit", and the place after "toward".
+/// `nil` when the sentence states none of them, or is more than one sentence, so nothing is
+/// guessed.
+private func navOSSCardInstructionParts(
+  _ instruction: String
+) -> (exit: String?, target: String?, toward: String?)? {
+  var text = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+  while text.hasSuffix(".") { text.removeLast() }
+  guard !text.isEmpty, !navOSSCardHasSentenceBoundary(text) else { return nil }
+  func group(_ expression: NSRegularExpression, in value: String, _ index: Int) -> String? {
+    guard
+      let match = expression.firstMatch(
+        in: value, range: NSRange(value.startIndex..<value.endIndex, in: value)),
+      let range = Range(match.range(at: index), in: value)
+    else { return nil }
+    return String(value[range]).trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+  }
+  let exit = group(navOSSCardInstructionExit, in: text, 1)
+  let head = group(navOSSCardInstructionToward, in: text, 1) ?? text
+  let toward = group(navOSSCardInstructionToward, in: text, 2)
+  let target = navOSSCardInstructionTargets.lazy.compactMap { group($0, in: head, 1) }.first
+    .flatMap { candidate -> String? in
+      // "to take exit 248B" names the exit, not a road.
+      candidate.range(of: #"^exit \S+$"#, options: [.regularExpression, .caseInsensitive]) == nil
+        ? candidate : nil
+    }
+  guard exit != nil || target != nil || toward != nil else { return nil }
+  return (exit, target, toward)
+}
+
 /// Card variants for the maneuver that begins `steps[stepIndex]`, most to least verbose, with no
 /// trailing period and no name said twice:
 /// - variants longer than `navOSSCarPlayCardMaximumCharacters` (a third card line) are dropped
@@ -689,7 +823,7 @@ public func navOSSCarPlayCardInstructionVariants(
 ) -> [String] {
   guard trip.steps.indices.contains(stepIndex) else { return [navOSSCarPlayCardAction(kind)] }
   let step = trip.steps[stepIndex]
-  let road = navOSSCardRoadName(step.roadName)
+  let mappedRoad = navOSSCardRoadName(step.roadName)
   let exitNumber = step.exitNumber?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
   let branch = navOSSCardDistinctNames(step.signpostBranch ?? [])
   var toward = navOSSCardDistinctNames(step.signpostToward ?? [])
@@ -697,12 +831,29 @@ public func navOSSCarPlayCardInstructionVariants(
     // An older server sends only the joined signpost text, "branch: toward".
     toward = navOSSCardDistinctNames(signpost.components(separatedBy: CharacterSet(charactersIn: ":,")))
   }
+  let road = navOSSCardSignedName(mappedRoad, signs: branch + toward)
   let action = navOSSCarPlayCardAction(kind)
 
   var variants: [String]
   switch kind {
   case .arrive, .arriveLeft, .arriveRight:
-    let name = trip.destination.name.trimmingCharacters(in: .whitespacesAndNewlines)
+    let isArrival = { (step: NavOSSCarPlayRouteStep) in step.maneuverType.lowercased() == "arrive" }
+    let laterArrival = trip.steps[(stepIndex + 1)...].contains(where: isArrival)
+    let name: String
+    if laterArrival {
+      // A stop on the way: its own name, or "Stop" ("Stop 2" among several). Never the final
+      // destination's name, which is still ahead.
+      let ordinal = trip.steps[..<stepIndex].filter(isArrival).count
+      let stops = trip.waypoints ?? []
+      let stopCount = max(stops.count, trip.steps.dropLast().filter(isArrival).count)
+      let stop = stops.indices.contains(ordinal) ? stops[ordinal] : nil
+      name =
+        [stop?.name, stop?.label].compactMap {
+          $0?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        }.first ?? (stopCount > 1 ? "Stop \(ordinal + 1)" : "Stop")
+    } else {
+      name = trip.destination.name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
     variants = name.isEmpty ? [action] : [name, navOSSCarPlayCardAbbreviated(name)]
   case let .roundabout(exit):
     // The roundabout step names the ring ("Rond-point Dorval"); the road taken out of it is the
@@ -726,35 +877,34 @@ public func navOSSCarPlayCardInstructionVariants(
       ["fork", "merge", "on ramp", "off ramp"].contains(type)
       || [.keepLeft, .keepRight, .mergeLeft, .mergeRight, .onRamp, .offRampLeft, .offRampRight]
         .contains(kind)
-    if isRamp || exitNumber != nil, exitNumber != nil || !branch.isEmpty || !toward.isEmpty {
-      let towardIsTheSign = branch.isEmpty && road.isEmpty
+    let hasSignFields = exitNumber != nil || !branch.isEmpty || !toward.isEmpty
+    if isRamp || exitNumber != nil, hasSignFields {
       let targets =
         !branch.isEmpty
         ? branch : !road.isEmpty ? road.components(separatedBy: " / ") : toward
-      let targetKeys = targets.map(navOSSCardCoreKey)
-      let joinedKey = targetKeys.joined(separator: " ")
-      let newToward =
-        towardIsTheSign
-        ? []
-        : toward.filter {
-          let key = navOSSCardCoreKey($0)
-          return !targetKeys.contains(key) && !joinedKey.contains(key)
-        }
-      let prefix = exitNumber.map { "Exit \($0) · " } ?? ""
-      variants = []
-      if !newToward.isEmpty, !targets.isEmpty {
-        variants.append(
-          prefix + targets.joined(separator: " / ") + " toward "
-            + newToward.prefix(2).joined(separator: " / "))
-      }
-      variants += navOSSCardNameVariants(targets, prefix: prefix)
-      if let exitNumber { variants.append("Exit \(exitNumber)") }
+      variants = navOSSCardSignVariants(
+        exitNumber: exitNumber, targets: targets, toward: toward,
+        towardIsTheSign: branch.isEmpty && road.isEmpty)
+    } else if !hasSignFields, isRamp || road.isEmpty,
+      let parts = navOSSCardInstructionParts(step.instruction)
+    {
+      // No structured sign fields (the `/v1/routes` fallback, some on-device steps): the exit
+      // number and names the provider's own sentence states. The step's road name, when it has
+      // one, stays the name; the sentence's "toward" can only add its direction of travel.
+      let towardNames = navOSSCardDistinctNames(parts.toward?.components(separatedBy: " / ") ?? [])
+      let named = road.isEmpty ? parts.target ?? "" : road
+      let targets = navOSSCardDistinctNames(named.components(separatedBy: " / "))
+        .map { navOSSCardSignedName($0, signs: towardNames) }
+      variants = navOSSCardSignVariants(
+        exitNumber: parts.exit, targets: targets.isEmpty ? towardNames : targets,
+        toward: towardNames, towardIsTheSign: targets.isEmpty)
     } else if !road.isEmpty {
       variants = navOSSCardNameVariants(road.components(separatedBy: " / "), prefix: "")
     } else if !toward.isEmpty {
       variants = ["\(action) toward \(toward.prefix(2).joined(separator: " / "))", action]
     } else {
-      variants = [action]
+      // Nothing that parses cleanly: the sentence itself when it says more than the action.
+      variants = [step.instruction, action]
     }
   }
   var seen = Set<String>()
