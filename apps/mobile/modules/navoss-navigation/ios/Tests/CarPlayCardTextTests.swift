@@ -150,6 +150,27 @@ final class CarPlayCardTextTests: XCTestCase {
     XCTAssertEqual(try card(trip.replacingWaypoints([unnamed, stop]), 3), ["Stop 1"])
   }
 
+  /// Review of #140: without structured sign fields (the `/v1/routes` fallback, some on-device
+  /// steps) exits read "Exit right". What the provider's own instruction says is used instead.
+  func testExitsWithoutSignFieldsKeepTheirNumberAndNameFromTheInstruction() throws {
+    let v1 = try XCTUnwrap(try NavigationRoutesV2Tests.trips("calgary-deerfoot-glenmore.v1", version: .v1).first)
+    XCTAssertNil(v1.steps[1].exitNumber)
+    XCTAssertEqual(v1.steps[1].instruction, "Take exit 248 toward Glenmore Trail.")
+    XCTAssertEqual(try card(v1, 1), ["Exit 248 · Glenmore Trail", "Exit 248"])
+    // "toward 14 Street West (Hospital)" would be a third card line.
+    XCTAssertEqual(try card(v1, 3), ["14 Street W South", "14 St W South"])
+    XCTAssertEqual(try card(v1, 4), ["14 Street W South", "14 St W South"])
+
+    // On-device: nothing to name, so the sentence (it says which side) and then the action.
+    let destination = NavOSSCarPlayDestination(
+      id: "dest", label: "Destination", latitude: 51.0866, longitude: -114.1305, name: "Destination")
+    let offline = try navOSSOfflineTrips(
+      fromValhallaJSON: OfflineFixtures.data("calgary-stoney-airport.response.json"),
+      destination: destination, waypoints: [], preferences: NavOSSRoutePreferences())
+    XCTAssertEqual(offline[1].steps[3].instruction, "Take the exit on the left.")
+    XCTAssertEqual(try card(offline[1], 3), ["Take the exit on the left", "Exit left"])
+  }
+
   func testOfflineRoundaboutNamesTheExitRoad() throws {
     let destination = NavOSSCarPlayDestination(
       id: "dest", label: "Destination", latitude: 51.0866, longitude: -114.1305, name: "Destination")

@@ -672,6 +672,76 @@ private func navOSSCardNameVariants(_ names: [String], prefix: String) -> [Strin
   }
 }
 
+/// Sign-led variants: `Exit N · names toward places`, then fewer names, then the exit alone.
+/// "toward" appears only in the longest variant and only for places the names do not already say.
+private func navOSSCardSignVariants(
+  exitNumber: String?,
+  targets: [String],
+  toward: [String],
+  towardIsTheSign: Bool
+) -> [String] {
+  let targetKeys = targets.map(navOSSCardCoreKey)
+  let joinedKey = targetKeys.joined(separator: " ")
+  let newToward =
+    towardIsTheSign
+    ? []
+    : toward.filter {
+      let key = navOSSCardCoreKey($0)
+      return !targetKeys.contains(key) && !joinedKey.contains(key)
+    }
+  let prefix = exitNumber.map { "Exit \($0) · " } ?? ""
+  var variants: [String] = []
+  if !newToward.isEmpty, !targets.isEmpty {
+    variants.append(
+      prefix + targets.joined(separator: " / ") + " toward "
+        + newToward.prefix(2).joined(separator: " / "))
+  }
+  variants += navOSSCardNameVariants(targets, prefix: prefix)
+  if let exitNumber { variants.append("Exit \(exitNumber)") }
+  return variants
+}
+
+private let navOSSCardInstructionExit = try! NSRegularExpression(
+  pattern: #"\bexit ([0-9]{1,4}[A-Za-z]?)\b"#, options: .caseInsensitive)
+private let navOSSCardInstructionToward = try! NSRegularExpression(
+  pattern: #"^(.*?) toward (.+)$"#, options: .caseInsensitive)
+private let navOSSCardInstructionTargets = [
+  #"\bonto (.+)$"#,
+  #"\bto (?:take|stay on) (.+)$"#,
+  #"^take the (.+) (?:exit|ramp)(?: on the (?:left|right))?$"#,
+].map { try! NSRegularExpression(pattern: $0, options: .caseInsensitive) }
+
+/// What a provider sentence without structured sign fields states: an exit number ("exit 248B"),
+/// the road or sign after "onto", "to take" or "take the … exit", and the place after "toward".
+/// `nil` when the sentence states none of them, or is more than one sentence, so nothing is
+/// guessed.
+private func navOSSCardInstructionParts(
+  _ instruction: String
+) -> (exit: String?, target: String?, toward: String?)? {
+  var text = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+  while text.hasSuffix(".") { text.removeLast() }
+  guard !text.isEmpty, !text.contains(". ") else { return nil }
+  func group(_ expression: NSRegularExpression, in value: String, _ index: Int) -> String? {
+    guard
+      let match = expression.firstMatch(
+        in: value, range: NSRange(value.startIndex..<value.endIndex, in: value)),
+      let range = Range(match.range(at: index), in: value)
+    else { return nil }
+    return String(value[range]).trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+  }
+  let exit = group(navOSSCardInstructionExit, in: text, 1)
+  let head = group(navOSSCardInstructionToward, in: text, 1) ?? text
+  let toward = group(navOSSCardInstructionToward, in: text, 2)
+  let target = navOSSCardInstructionTargets.lazy.compactMap { group($0, in: head, 1) }.first
+    .flatMap { candidate -> String? in
+      // "to take exit 248B" names the exit, not a road.
+      candidate.range(of: #"^exit \S+$"#, options: [.regularExpression, .caseInsensitive]) == nil
+        ? candidate : nil
+    }
+  guard exit != nil || target != nil || toward != nil else { return nil }
+  return (exit, target, toward)
+}
+
 /// Card variants for the maneuver that begins `steps[stepIndex]`, most to least verbose, with no
 /// trailing period and no name said twice:
 /// - variants longer than `navOSSCarPlayCardMaximumCharacters` (a third card line) are dropped
@@ -743,34 +813,27 @@ public func navOSSCarPlayCardInstructionVariants(
       || [.keepLeft, .keepRight, .mergeLeft, .mergeRight, .onRamp, .offRampLeft, .offRampRight]
         .contains(kind)
     if isRamp || exitNumber != nil, exitNumber != nil || !branch.isEmpty || !toward.isEmpty {
-      let towardIsTheSign = branch.isEmpty && road.isEmpty
       let targets =
         !branch.isEmpty
         ? branch : !road.isEmpty ? road.components(separatedBy: " / ") : toward
-      let targetKeys = targets.map(navOSSCardCoreKey)
-      let joinedKey = targetKeys.joined(separator: " ")
-      let newToward =
-        towardIsTheSign
-        ? []
-        : toward.filter {
-          let key = navOSSCardCoreKey($0)
-          return !targetKeys.contains(key) && !joinedKey.contains(key)
-        }
-      let prefix = exitNumber.map { "Exit \($0) · " } ?? ""
-      variants = []
-      if !newToward.isEmpty, !targets.isEmpty {
-        variants.append(
-          prefix + targets.joined(separator: " / ") + " toward "
-            + newToward.prefix(2).joined(separator: " / "))
-      }
-      variants += navOSSCardNameVariants(targets, prefix: prefix)
-      if let exitNumber { variants.append("Exit \(exitNumber)") }
+      variants = navOSSCardSignVariants(
+        exitNumber: exitNumber, targets: targets, toward: toward,
+        towardIsTheSign: branch.isEmpty && road.isEmpty)
     } else if !road.isEmpty {
       variants = navOSSCardNameVariants(road.components(separatedBy: " / "), prefix: "")
     } else if !toward.isEmpty {
       variants = ["\(action) toward \(toward.prefix(2).joined(separator: " / "))", action]
+    } else if let parts = navOSSCardInstructionParts(step.instruction) {
+      // No structured sign or road (the `/v1/routes` fallback, some on-device steps): the exit
+      // number and names the provider's own sentence states.
+      let targets = navOSSCardDistinctNames(parts.target?.components(separatedBy: " / ") ?? [])
+      let towardNames = navOSSCardDistinctNames(parts.toward?.components(separatedBy: " / ") ?? [])
+      variants = navOSSCardSignVariants(
+        exitNumber: parts.exit, targets: targets.isEmpty ? towardNames : targets,
+        toward: towardNames, towardIsTheSign: targets.isEmpty)
     } else {
-      variants = [action]
+      // Nothing that parses cleanly: the sentence itself when it says more than the action.
+      variants = [step.instruction, action]
     }
   }
   var seen = Set<String>()
