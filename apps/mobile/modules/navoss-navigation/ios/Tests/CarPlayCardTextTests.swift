@@ -72,6 +72,28 @@ final class CarPlayCardTextTests: XCTestCase {
     XCTAssertEqual(try card(trip(with: localRoad), 1).first, "Downtown")
   }
 
+  /// The step itself gives both the road name and its uppercase initialism; no alias table.
+  func testRoadNameAndItsSignedInitialismAreNotRepeated() throws {
+    let trips = try NavigationRoutesV2Tests.trips("squareone-scarborough-validation83.v2", version: .v2)
+    XCTAssertEqual(
+      try card(trips[2], 3), ["Queen Elizabeth Way toward Toronto", "Queen Elizabeth Way"])
+    for sign in ["QEW", "QE", "qew", "403"] {
+      let maneuver = NavOSSCarPlayRouteStep(
+        distanceMeters: 0, durationSeconds: 0, geometry: [],
+        instruction: "Take the Queen Elizabeth Way ramp.", maneuverType: "on ramp",
+        roadName: "Queen Elizabeth Way", signpostBranch: ["Queen Elizabeth Way", sign])
+      let signedName = sign == "403" ? "Highway 403" : sign
+      let expected = sign == "QEW" ? "Queen Elizabeth Way" : "Queen Elizabeth Way / \(signedName)"
+      XCTAssertEqual(try card(trip(with: maneuver), 1).first, expected)
+    }
+    // A lone abbreviation on the sign is not replaced with the name from the map.
+    let lone = NavOSSCarPlayRouteStep(
+      distanceMeters: 0, durationSeconds: 0, geometry: [],
+      instruction: "Take the Queen Elizabeth Way ramp.", maneuverType: "on ramp",
+      roadName: "Queen Elizabeth Way", signpostBranch: ["QEW"])
+    XCTAssertEqual(try card(trip(with: lone), 1), ["QEW"])
+  }
+
   /// Build 82, Crowchild Trail (owner's TestFlight photo, 2026-11-16): the card showed the spoken
   /// sentence and, with the navigation bar hidden, "...ramp on the left 1A East / Crowchild Trail
   /// toward 1A East, Crowchild Trail".

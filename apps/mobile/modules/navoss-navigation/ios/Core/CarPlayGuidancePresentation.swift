@@ -650,7 +650,7 @@ private func navOSSCardSignedName(_ name: String, signs: [String]) -> String {
 
 /// Sign or road names with blanks and repeats (by core key) removed. Of two names for one road the
 /// one that carries a direction wins ("403 East" over "Highway 403"): it is what the sign adds.
-private func navOSSCardDistinctNames(_ names: [String]) -> [String] {
+private func navOSSCardDistinctNames(_ names: [String], roadName: String = "") -> [String] {
   var result: [String] = []
   for raw in names {
     let name = navOSSReadableRoadName(raw.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -662,6 +662,18 @@ private func navOSSCardDistinctNames(_ names: [String]) -> [String] {
       }
     } else {
       result.append(name)
+    }
+  }
+  // Only remove an exact uppercase initialism when this same step supplies the full mapped
+  // road name alongside it on the sign ("Queen Elizabeth Way", "QEW"). A lone ref, a partial
+  // match or a numeric route designation says something different and stays.
+  if result.count > 1 {
+    let words = navOSSCardNameParts(roadName).core
+    if words.count >= 3, result.contains(where: { navOSSCardCoreKey($0) == navOSSCardCoreKey(roadName) }) {
+      let initials = words.reduce(into: "") { text, word in
+        if let first = word.first { text.append(contentsOf: String(first).uppercased()) }
+      }
+      result.removeAll { $0 == initials }
     }
   }
   return result
@@ -850,8 +862,8 @@ public func navOSSCarPlayCardInstructionVariants(
   let step = trip.steps[stepIndex]
   let mappedRoad = navOSSCardRoadName(step.roadName)
   let exitNumber = step.exitNumber?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-  let branch = navOSSCardDistinctNames(step.signpostBranch ?? [])
-  var toward = navOSSCardDistinctNames(step.signpostToward ?? [])
+  let branch = navOSSCardDistinctNames(step.signpostBranch ?? [], roadName: mappedRoad)
+  var toward = navOSSCardDistinctNames(step.signpostToward ?? [], roadName: mappedRoad)
   if toward.isEmpty, branch.isEmpty, let signpost = step.signpost {
     // An older server sends only the joined signpost text, "branch: toward".
     toward = navOSSCardDistinctNames(signpost.components(separatedBy: CharacterSet(charactersIn: ":,")))
