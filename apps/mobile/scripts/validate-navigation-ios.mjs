@@ -331,7 +331,7 @@ async function waitForCarPlayScenarioReady(name, scenario, outputPath, timeoutMs
   );
 }
 
-async function captureCarPlayScenario(name, scenario, appearance) {
+async function captureCarPlayScenario(name, scenario, appearance, readyTimeoutMs = 120_000) {
   // The harness prints a ready token once its scenario has rendered. Screenshotting after a fixed
   // delay instead captured the splash screen on hosted runners, which are slower to launch than a
   // developer Mac, and two such checkpoints came out byte-identical.
@@ -364,8 +364,9 @@ async function captureCarPlayScenario(name, scenario, appearance) {
       timeoutMs: 120_000,
     },
   );
-  await waitForCarPlayScenarioReady(name, scenario, outputPath);
+  await waitForCarPlayScenarioReady(name, scenario, outputPath, readyTimeoutMs);
   await screenshot(name);
+  return outputPath;
 }
 
 async function sha256(path) {
@@ -691,6 +692,11 @@ try {
         ['carplay-hud-wide-chrome', 'hud-wide-chrome', 'light'],
         ['carplay-guidance-maneuver', 'guidance-maneuver', 'light'],
         ['carplay-guidance-night', 'guidance-night', 'dark'],
+        // The owner's build 82 case: 5.7 km to the next maneuver, stopped and at 60 km/h.
+        ['carplay-guidance-far-stopped', 'guidance-far-stopped', 'light'],
+        ['carplay-guidance-far-moving', 'guidance-far-moving', 'light'],
+        // A visible map about 250 pt wide; the full current-road name must fit.
+        ['carplay-guidance-narrow', 'guidance-narrow', 'light'],
         ['carplay-guidance-annotations', 'guidance-annotations', 'light'],
         ['carplay-community-reports', 'community-reports', 'light'],
         ['carplay-flow-report-private', 'report-private', 'light'],
@@ -716,6 +722,21 @@ try {
       ]) {
         await captureCarPlayScenario(name, scenario, appearance);
       }
+      // A 60 s simulated drive at 1 Hz; the harness prints render-loop timings. Recorded, not
+      // gated: simulator timings vary by Mac and load.
+      const pacingOutput = await captureCarPlayScenario(
+        'carplay-frame-pacing',
+        'frame-pacing',
+        'light',
+        240_000,
+      );
+      const pacingLine = (await readFile(pacingOutput, 'utf8'))
+        .split('\n')
+        .find((line) => line.startsWith('NAVOSS_CARPLAY_FRAME_PACING '));
+      if (pacingLine === undefined) throw new Error('Frame pacing drive printed no measurement.');
+      const pacing = pacingLine.slice('NAVOSS_CARPLAY_FRAME_PACING '.length);
+      await writeFile(join(temporaryArtifacts, 'carplay-frame-pacing.json'), `${pacing}\n`);
+      console.log(`CarPlay frame pacing (simulator): ${pacing}`);
     });
   }
 
@@ -776,6 +797,9 @@ try {
       metricsByName.get('carplay-overview.png'),
       metricsByName.get('carplay-guidance-maneuver.png'),
       metricsByName.get('carplay-guidance-night.png'),
+      metricsByName.get('carplay-guidance-far-stopped.png'),
+      metricsByName.get('carplay-guidance-far-moving.png'),
+      metricsByName.get('carplay-guidance-narrow.png'),
       metricsByName.get('carplay-flow-guidance-lanes-then.png'),
       metricsByName.get('carplay-flow-guidance-roundabout.png'),
       metricsByName.get('carplay-flow-dashboard.png'),
@@ -784,8 +808,10 @@ try {
       metricsByName.get('carplay-real-vancouver-exit.png'),
       metricsByName.get('carplay-real-vancouver-lanes-night.png'),
     ].filter((metric) => metric !== undefined);
-    if (guidanceRouteMetrics.some((metric) => metric.routeGreenRatio < 0.0014)) {
-      throw new Error('A CarPlay guidance scenario does not contain enough route-green pixels.');
+    // The tilted guidance camera draws the route ahead foreshortened and part of it sits under
+    // the card, so a present route covers less of the frame than the old flat camera's did.
+    if (guidanceRouteMetrics.some((metric) => metric.routeBlueRatio < 0.0007)) {
+      throw new Error('A CarPlay guidance scenario does not contain enough route-blue pixels.');
     }
     // The recorded routes' exit numbers come from the router; the turn card must show them.
     for (const [name, exitNumber] of [
@@ -804,13 +830,16 @@ try {
       metricsByName.get('carplay-preview-light.png'),
       metricsByName.get('carplay-preview-dark.png'),
       metricsByName.get('carplay-preview-resize.png'),
+      metricsByName.get('carplay-flow-preview-alternatives.png'),
     ].filter((metric) => metric !== undefined);
-    if (previewRouteMetrics.some((metric) => metric.routeGreenRatio < 0.0007)) {
-      throw new Error('A widened CarPlay preview does not contain enough route-green pixels.');
+    // The preview fits the route into the third of the map the route-choice sheet leaves; the
+    // correct fit draws 0.00064 (resize) to 0.0016 (alternatives) of the frame in route blue.
+    if (previewRouteMetrics.some((metric) => metric.routeBlueRatio < 0.0005)) {
+      throw new Error('A widened CarPlay preview does not contain enough route-blue pixels.');
     }
     if (
       previewRouteMetrics.some(
-        (metric) => metric.originGreenRatio < 0.00002 || metric.destinationBlueRatio < 0.00002,
+        (metric) => metric.originGreenRatio < 0.00002 || metric.destinationRedRatio < 0.00002,
       )
     ) {
       throw new Error('A widened CarPlay preview is missing an endpoint marker.');
@@ -820,17 +849,19 @@ try {
     const clearMetric = metricsByName.get('carplay-clear.png');
     if (
       shortPreviewMetric === undefined ||
-      shortPreviewMetric.routeGreenRatio < 0.00006 ||
-      shortPreviewMetric.routeGreenRatio > 0.0015 ||
+      // The 600 m route fills the sheet-free third (about 0.0008 of the frame): present, and not
+      // blown up past its breathing room.
+      shortPreviewMetric.routeBlueRatio < 0.0004 ||
+      shortPreviewMetric.routeBlueRatio > 0.002 ||
       shortPreviewMetric.originGreenRatio < 0.00002 ||
-      shortPreviewMetric.destinationBlueRatio < 0.00002
+      shortPreviewMetric.destinationRedRatio < 0.00002
     ) {
       throw new Error('Short CarPlay preview is missing or framed too tightly.');
     }
     if (
       previewMetric !== undefined &&
       clearMetric !== undefined &&
-      clearMetric.routeGreenRatio > previewMetric.routeGreenRatio * 0.35
+      clearMetric.routeBlueRatio > previewMetric.routeBlueRatio * 0.35
     ) {
       throw new Error('CarPlay clear scenario retained the route overlay.');
     }

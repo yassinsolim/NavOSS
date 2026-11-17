@@ -1194,36 +1194,41 @@ public final class NavOSSCarPlayMapAlertStore: @unchecked Sendable {
 
 // MARK: - Camera
 
-/// Where the follow camera should be for the current driving situation.
+/// Where the follow camera should be for the current driving situation. The vehicle's place on
+/// screen is fixed by the map (lower third of the visible map), so this is only how much ground the
+/// view spans and how far it tilts.
 public struct NavOSSCarPlayCameraTarget: Equatable, Sendable {
   /// Ground distance across the view, in metres.
   public let viewingDistanceMeters: Double
   public let pitchDegrees: Double
-  /// Fraction of `viewingDistanceMeters` the camera centre sits ahead of the vehicle, which puts
-  /// the puck in the lower part of the view, above the current-road pill, with more road ahead.
-  public let lookAheadFraction: Double
 }
 
-/// Speed sets the baseline zoom (more road ahead at motorway speed); an approaching maneuver pulls
-/// the camera in so the junction is readable. Pitch flattens as the view widens so distant labels
-/// stay legible.
+/// Closest and widest guidance views, in metres across.
+public let navOSSCarPlayCameraClosestMeters = 240.0
+public let navOSSCarPlayCameraWidestMeters = 800.0
+
+/// Guidance stays close and tilted. Speed widens the view modestly and quadratically, so city
+/// driving stays near street level while a motorway shows more road ahead; an approaching maneuver
+/// pulls in so the junction is readable; a maneuver kilometres away never widens it.
 public func navOSSCarPlayCameraTarget(
   speedMetersPerSecond: Double?,
   distanceToManeuverMeters: Double?
 ) -> NavOSSCarPlayCameraTarget {
   let speed = min(40, max(0, speedMetersPerSecond.flatMap { $0.isFinite ? $0 : nil } ?? 0))
-  // 0 m/s → 550 m, 14 m/s (50 km/h) → ~830 m, 28 m/s (100 km/h) → ~1,110 m, capped at 1,350 m.
-  var distance = min(1_350, 550 + speed * 20)
-  if let distanceToManeuverMeters, distanceToManeuverMeters.isFinite {
-    distance = min(distance, navOSSCarPlayViewingDistance(distanceToManeuverMeters) + speed * 6)
+  // 0 → 280 m, 50 km/h → 390 m, 60 km/h → 430 m, 100 km/h → 710 m, then capped at 800 m.
+  var distance = min(navOSSCarPlayCameraWidestMeters, 280 + 0.55 * speed * speed)
+  if let distanceToManeuverMeters, distanceToManeuverMeters.isFinite,
+    distanceToManeuverMeters >= 0
+  {
+    // 100 m out → 260 m across, 300 m → 380 m; beyond about 1 km this no longer binds.
+    distance = min(distance, 200 + distanceToManeuverMeters * 0.6)
   }
-  distance = max(420, distance)
-  let pitch = 50 - (distance - 420) / (1_350 - 420) * 14
-  return NavOSSCarPlayCameraTarget(
-    viewingDistanceMeters: distance,
-    pitchDegrees: min(50, max(36, pitch)),
-    lookAheadFraction: 0.16
-  )
+  distance = max(navOSSCarPlayCameraClosestMeters, distance)
+  // 55° when close, easing to 50° at the widest view so distant labels stay legible. Steeper
+  // pitches put most of a small car display into the distance, where labels are unreadable.
+  let spread = navOSSCarPlayCameraWidestMeters - navOSSCarPlayCameraClosestMeters
+  let pitch = 55 - (distance - navOSSCarPlayCameraClosestMeters) / spread * 5
+  return NavOSSCarPlayCameraTarget(viewingDistanceMeters: distance, pitchDegrees: pitch)
 }
 
 /// Exponential smoothing toward `target` that behaves the same at any frame rate.
@@ -1465,4 +1470,65 @@ public func navOSSCarPlayPreviewResumeAction(
 
 extension String {
   fileprivate var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+// MARK: - Route fit
+
+/// The flat camera that shows every coordinate inside a padded part of the map view.
+public struct NavOSSCarPlayFitCamera: Equatable, Sendable {
+  public let center: NavOSSCarPlayCoordinate
+  public let zoomLevel: Double
+}
+
+/// Fits `coordinates` into the view minus its padding, with the map rotated to `headingDegrees`,
+/// using Web Mercator at MapLibre's 512-point world size. Computed here rather than with MapLibre's
+/// `setVisibleCoordinates`, which on CarPlay-sized views with a large side padding zoomed in by
+/// several levels and left the route and the vehicle off screen.
+public func navOSSCarPlayFitCamera(
+  coordinates: [NavOSSCarPlayCoordinate],
+  viewWidth: Double,
+  viewHeight: Double,
+  padding: (top: Double, left: Double, bottom: Double, right: Double),
+  headingDegrees: Double,
+  maximumZoomLevel: Double = 20
+) -> NavOSSCarPlayFitCamera? {
+  let points = coordinates.filter(\.isValid)
+  let width = viewWidth - padding.left - padding.right
+  let height = viewHeight - padding.top - padding.bottom
+  guard let first = points.first, width > 0, height > 0 else { return nil }
+  func project(_ coordinate: NavOSSCarPlayCoordinate) -> (x: Double, y: Double) {
+    let latitude = min(85, max(-85, coordinate.latitude)) * .pi / 180
+    return (
+      (coordinate.longitude + 180) / 360,
+      (1 - log(tan(latitude) + 1 / cos(latitude)) / .pi) / 2
+    )
+  }
+  let heading = (headingDegrees.isFinite ? headingDegrees : 0) * .pi / 180
+  let origin = project(first)
+  // World offsets (x east, y south) rotated into screen axes for a map turned to `heading`.
+  func rotate(_ x: Double, _ y: Double) -> (x: Double, y: Double) {
+    (x * cos(heading) + y * sin(heading), -x * sin(heading) + y * cos(heading))
+  }
+  let rotated = points.map { point -> (x: Double, y: Double) in
+    let world = project(point)
+    return rotate(world.x - origin.x, world.y - origin.y)
+  }
+  let minX = rotated.map(\.x).min()!, maxX = rotated.map(\.x).max()!
+  let minY = rotated.map(\.y).min()!, maxY = rotated.map(\.y).max()!
+  let spanX = max(maxX - minX, 1e-12)
+  let spanY = max(maxY - minY, 1e-12)
+  let zoom = min(maximumZoomLevel, max(0, log2(min(width / spanX, height / spanY) / 512)))
+  let scale = 512 * pow(2, zoom)
+  // The padded area's centre sits this far from the view's centre, in screen points.
+  let offsetX = (padding.left - padding.right) / 2
+  let offsetY = (padding.top - padding.bottom) / 2
+  let centerX = (minX + maxX) / 2 - offsetX / scale
+  let centerY = (minY + maxY) / 2 - offsetY / scale
+  // Back to world axes, then to latitude and longitude.
+  let worldX = origin.x + centerX * cos(heading) - centerY * sin(heading)
+  let worldY = origin.y + centerX * sin(heading) + centerY * cos(heading)
+  let longitude = worldX * 360 - 180
+  let latitude = atan(sinh(.pi * (1 - 2 * worldY))) * 180 / .pi
+  return NavOSSCarPlayFitCamera(
+    center: NavOSSCarPlayCoordinate(latitude: latitude, longitude: longitude), zoomLevel: zoom)
 }

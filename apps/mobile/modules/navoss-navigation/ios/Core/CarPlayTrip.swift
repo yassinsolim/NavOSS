@@ -9,16 +9,6 @@ public func navOSSCarPlayDistanceMeasurement(
     : Measurement(value: distance, unit: .meters)
 }
 
-public func navOSSCarPlayViewingDistance(_ distanceToManeuverMeters: Double?) -> Double {
-  guard let distanceToManeuverMeters, distanceToManeuverMeters.isFinite else {
-    return 850
-  }
-  if distanceToManeuverMeters < 120 { return 450 }
-  if distanceToManeuverMeters < 500 { return 650 }
-  if distanceToManeuverMeters < 2_000 { return 900 }
-  return 1_200
-}
-
 private func navOSSCarPlayDistanceToSegment(
   _ coordinate: NavOSSCarPlayCoordinate,
   start: NavOSSCarPlayCoordinate,
@@ -951,45 +941,6 @@ private func navOSSCarPlaySegmentProjection(
   return (hypot(startX + fraction * deltaX, startY + fraction * deltaY), fraction)
 }
 
-/// Closed polygon ring for the vehicle's forward-looking heading cone.
-///
-/// Bearings use the navigation convention: 0° is true north and values increase clockwise.
-/// The local metre conversion intentionally matches `navOSSCarPlaySegmentProjection`.
-public func navOSSHeadingConePolygon(
-  apex: NavOSSCarPlayCoordinate,
-  headingDegrees: Double,
-  radiusMeters: Double,
-  spreadDegrees: Double
-) -> [NavOSSCarPlayCoordinate] {
-  guard apex.isValid, headingDegrees.isFinite, radiusMeters.isFinite, radiusMeters >= 0,
-    spreadDegrees.isFinite, (0...360).contains(spreadDegrees)
-  else {
-    return []
-  }
-
-  let latitudeScale = 111_320.0
-  let longitudeScale = latitudeScale * cos(apex.latitude * .pi / 180)
-  let segmentCount = max(1, Int(ceil(spreadDegrees / 5)))
-  let startBearingDegrees = headingDegrees - spreadDegrees / 2
-  var polygon = [apex]
-  polygon.reserveCapacity(segmentCount + 3)
-
-  for segment in 0...segmentCount {
-    let bearingDegrees = startBearingDegrees
-      + spreadDegrees * Double(segment) / Double(segmentCount)
-    let bearingRadians = bearingDegrees * .pi / 180
-    polygon.append(
-      NavOSSCarPlayCoordinate(
-        latitude: apex.latitude + radiusMeters * cos(bearingRadians) / latitudeScale,
-        longitude: apex.longitude + radiusMeters * sin(bearingRadians) / longitudeScale
-      )
-    )
-  }
-
-  polygon.append(apex)
-  return polygon
-}
-
 private func navOSSCarPlayCoordinateDistance(
   from start: NavOSSCarPlayCoordinate,
   to end: NavOSSCarPlayCoordinate
@@ -1051,16 +1002,138 @@ public let navOSSCarPlayPathInterpolationMaxOffsetMeters = 30.0
 /// rotation across the approach and exit at any speed while still turning promptly.
 public let navOSSCarPlayBearingWindowMeters = 8.0
 
-/// Where the vehicle sits between two fixes, and which way it points, following the road.
+/// A route measured once: its vertices and the distance from the start to each. Building it is
+/// O(vertices); point lookups are O(log vertices), so the render loop never re-measures the route.
+public struct NavOSSCarPlayRoutePath: Sendable {
+  public let geometry: [NavOSSCarPlayCoordinate]
+  let cumulativeLengths: [Double]
+
+  public init(_ geometry: [NavOSSCarPlayCoordinate]) {
+    self.geometry = geometry
+    var lengths = [0.0]
+    lengths.reserveCapacity(geometry.count)
+    for index in geometry.indices.dropFirst() {
+      lengths.append(
+        lengths[index - 1]
+          + navOSSCarPlayCoordinateDistance(from: geometry[index - 1], to: geometry[index]))
+    }
+    cumulativeLengths = geometry.isEmpty ? [] : lengths
+  }
+
+  public var lengthMeters: Double { cumulativeLengths.last ?? 0 }
+
+  /// Distance of `coordinate` measured along the route, or `nil` when it sits farther than
+  /// `maxOffsetMeters` from every segment.
+  func distanceAlong(_ coordinate: NavOSSCarPlayCoordinate, maxOffsetMeters: Double) -> Double? {
+    var bestDistanceMeters = Double.infinity
+    var bestAlongMeters: Double?
+    for index in geometry.indices.dropLast() {
+      let projection = navOSSCarPlaySegmentProjection(
+        coordinate,
+        start: geometry[index],
+        end: geometry[index + 1]
+      )
+      guard projection.distanceMeters < bestDistanceMeters else { continue }
+      bestDistanceMeters = projection.distanceMeters
+      let segmentLength = cumulativeLengths[index + 1] - cumulativeLengths[index]
+      bestAlongMeters = cumulativeLengths[index] + segmentLength * projection.fraction
+    }
+    guard bestDistanceMeters <= maxOffsetMeters else { return nil }
+    return bestAlongMeters
+  }
+
+  /// The point `distanceMeters` along the route, with the bearing of the segment carrying it.
+  func point(atDistance distanceMeters: Double)
+    -> (coordinate: NavOSSCarPlayCoordinate, bearingDegrees: Double)?
+  {
+    guard geometry.count >= 2, lengthMeters > 0 else { return nil }
+    let clamped = min(max(distanceMeters, 0), lengthMeters)
+    // First segment whose end lies at or beyond `clamped`.
+    var low = 0
+    var high = geometry.count - 2
+    while low < high {
+      let middle = (low + high) / 2
+      if clamped <= cumulativeLengths[middle + 1] {
+        high = middle
+      } else {
+        low = middle + 1
+      }
+    }
+    let start = geometry[low]
+    let end = geometry[low + 1]
+    let segmentLength = cumulativeLengths[low + 1] - cumulativeLengths[low]
+    let fraction = segmentLength > 0 ? (clamped - cumulativeLengths[low]) / segmentLength : 0
+    return (
+      NavOSSCarPlayCoordinate(
+        latitude: start.latitude + (end.latitude - start.latitude) * fraction,
+        longitude: start.longitude + (end.longitude - start.longitude) * fraction
+      ),
+      navOSSCarPlayBearingDegrees(from: start, to: end)
+    )
+  }
+}
+
+/// The stretch of road the vehicle covers between two fixes, resolved once when a fix arrives.
+/// The render loop then only asks where along it the vehicle is.
+public struct NavOSSCarPlayPathSpan: Sendable {
+  public let path: NavOSSCarPlayRoutePath
+  public let startMeters: Double
+  public let endMeters: Double
+
+  /// Where the vehicle sits at `progress` (0 at the earlier fix, 1 at the later), and which way it
+  /// points. The bearing of the single segment under the vehicle is constant along that segment
+  /// and then changes in one step at the vertex, so a right-angle intersection would still snap
+  /// the arrow round in a single frame. Measuring across a short window of road either side turns
+  /// it over the approach and exit instead, which is what the corner looks like from the seat.
+  public func position(at progress: Double)
+    -> (coordinate: NavOSSCarPlayCoordinate, bearingDegrees: Double)?
+  {
+    let clampedProgress = min(1, max(0, progress.isFinite ? progress : 0))
+    let travelled = startMeters + (endMeters - startMeters) * clampedProgress
+    guard let point = path.point(atDistance: travelled) else { return nil }
+    // Clamping narrows the window at the ends of the route — and a route shorter than the window
+    // is spanned whole — but over a route of non-zero length the two offsets cannot collapse onto
+    // one another, so there is always a direction to measure.
+    guard
+      let behind = path.point(atDistance: max(0, travelled - navOSSCarPlayBearingWindowMeters)),
+      let ahead = path.point(
+        atDistance: min(path.lengthMeters, travelled + navOSSCarPlayBearingWindowMeters))
+    else {
+      return point
+    }
+    return (
+      point.coordinate,
+      navOSSCarPlayBearingDegrees(from: behind.coordinate, to: ahead.coordinate)
+    )
+  }
+}
+
+/// The road between two fixes, or `nil` when the road cannot honestly describe the movement —
+/// either endpoint too far off route, or travel that is not forward along it — so the caller
+/// falls back to a straight line rather than inventing a path the vehicle did not take.
 ///
 /// Consecutive fixes are already matched to the route, but a straight line between two of them
 /// that straddle a corner cuts across it: the vehicle leaves the road mid-turn and the arrow then
 /// swings in one late jump when the next fix lands. Walking the road between the two projections
 /// keeps the vehicle on the carriageway and rotates it progressively through the corner.
-///
-/// Returns `nil` when the road cannot honestly describe the movement — either endpoint too far off
-/// route, or travel that is not forward along it — so the caller falls back to a straight line
-/// rather than inventing a path the vehicle did not take.
+public func navOSSCarPlayPathSpan(
+  from origin: NavOSSCarPlayCoordinate,
+  to destination: NavOSSCarPlayCoordinate,
+  along path: NavOSSCarPlayRoutePath,
+  maxOffsetMeters: Double = navOSSCarPlayPathInterpolationMaxOffsetMeters
+) -> NavOSSCarPlayPathSpan? {
+  guard path.geometry.count >= 2, origin.isValid, destination.isValid,
+    let startMeters = path.distanceAlong(origin, maxOffsetMeters: maxOffsetMeters),
+    let endMeters = path.distanceAlong(destination, maxOffsetMeters: maxOffsetMeters),
+    endMeters > startMeters
+  else {
+    return nil
+  }
+  return NavOSSCarPlayPathSpan(path: path, startMeters: startMeters, endMeters: endMeters)
+}
+
+/// Where the vehicle sits between two fixes, and which way it points, following the road. A
+/// one-shot form of `navOSSCarPlayPathSpan(from:to:along:)` and `position(at:)`.
 public func navOSSCarPlayPathInterpolation(
   from origin: NavOSSCarPlayCoordinate,
   to destination: NavOSSCarPlayCoordinate,
@@ -1068,120 +1141,13 @@ public func navOSSCarPlayPathInterpolation(
   progress: Double,
   maxOffsetMeters: Double = navOSSCarPlayPathInterpolationMaxOffsetMeters
 ) -> (coordinate: NavOSSCarPlayCoordinate, bearingDegrees: Double)? {
-  guard geometry.count >= 2, origin.isValid, destination.isValid, progress.isFinite else {
-    return nil
-  }
-  var cumulativeLengths = [0.0]
-  cumulativeLengths.reserveCapacity(geometry.count)
-  for index in 1..<geometry.count {
-    cumulativeLengths.append(
-      cumulativeLengths[index - 1]
-        + navOSSCarPlayCoordinateDistance(from: geometry[index - 1], to: geometry[index])
-    )
-  }
-  guard let originAlong = navOSSCarPlayDistanceAlong(
-    origin,
-    in: geometry,
-    cumulativeLengths: cumulativeLengths,
+  guard progress.isFinite else { return nil }
+  return navOSSCarPlayPathSpan(
+    from: origin,
+    to: destination,
+    along: NavOSSCarPlayRoutePath(geometry),
     maxOffsetMeters: maxOffsetMeters
-  ),
-    let destinationAlong = navOSSCarPlayDistanceAlong(
-      destination,
-      in: geometry,
-      cumulativeLengths: cumulativeLengths,
-      maxOffsetMeters: maxOffsetMeters
-    ),
-    destinationAlong > originAlong
-  else {
-    return nil
-  }
-  let clampedProgress = min(1, max(0, progress))
-  let travelled = originAlong + (destinationAlong - originAlong) * clampedProgress
-  guard let point = navOSSCarPlayPointAlong(
-    geometry,
-    cumulativeLengths: cumulativeLengths,
-    distanceMeters: travelled
-  )
-  else {
-    return nil
-  }
-  // The bearing of the single segment under the vehicle is constant along that segment and then
-  // changes in one step at the vertex, so a right-angle intersection would still snap the arrow
-  // round in a single frame. Measuring across a short window of road either side turns it over the
-  // approach and exit instead, which is what the corner actually looks like from the driver's seat.
-  let total = cumulativeLengths[cumulativeLengths.count - 1]
-  let behind = navOSSCarPlayPointAlong(
-    geometry,
-    cumulativeLengths: cumulativeLengths,
-    distanceMeters: max(0, travelled - navOSSCarPlayBearingWindowMeters)
-  )
-  let ahead = navOSSCarPlayPointAlong(
-    geometry,
-    cumulativeLengths: cumulativeLengths,
-    distanceMeters: min(total, travelled + navOSSCarPlayBearingWindowMeters)
-  )
-  // Clamping narrows the window at the ends of the route — and a route shorter than the window is
-  // spanned whole — but over a route of non-zero length the two offsets cannot collapse onto one
-  // another, so there is always a direction to measure.
-  guard let behind, let ahead else {
-    return (point.coordinate, point.bearingDegrees)
-  }
-  return (
-    point.coordinate,
-    navOSSCarPlayBearingDegrees(from: behind.coordinate, to: ahead.coordinate)
-  )
-}
-
-/// Distance of `coordinate` measured along the route, or `nil` when it sits farther than
-/// `maxOffsetMeters` from every segment.
-private func navOSSCarPlayDistanceAlong(
-  _ coordinate: NavOSSCarPlayCoordinate,
-  in geometry: [NavOSSCarPlayCoordinate],
-  cumulativeLengths: [Double],
-  maxOffsetMeters: Double
-) -> Double? {
-  var bestDistanceMeters = Double.infinity
-  var bestAlongMeters: Double?
-  for index in geometry.indices.dropLast() {
-    let projection = navOSSCarPlaySegmentProjection(
-      coordinate,
-      start: geometry[index],
-      end: geometry[index + 1]
-    )
-    guard projection.distanceMeters < bestDistanceMeters else { continue }
-    bestDistanceMeters = projection.distanceMeters
-    let segmentLength = cumulativeLengths[index + 1] - cumulativeLengths[index]
-    bestAlongMeters = cumulativeLengths[index] + segmentLength * projection.fraction
-  }
-  guard bestDistanceMeters <= maxOffsetMeters else { return nil }
-  return bestAlongMeters
-}
-
-/// The point `distanceMeters` along the route, with the bearing of the segment carrying it.
-private func navOSSCarPlayPointAlong(
-  _ geometry: [NavOSSCarPlayCoordinate],
-  cumulativeLengths: [Double],
-  distanceMeters: Double
-) -> (coordinate: NavOSSCarPlayCoordinate, bearingDegrees: Double)? {
-  guard let totalLength = cumulativeLengths.last, totalLength > 0 else { return nil }
-  let clamped = min(max(distanceMeters, 0), totalLength)
-  var segmentIndex = geometry.count - 2
-  for index in geometry.indices.dropLast() where clamped <= cumulativeLengths[index + 1] {
-    segmentIndex = index
-    break
-  }
-  let start = geometry[segmentIndex]
-  let end = geometry[segmentIndex + 1]
-  let segmentLength = cumulativeLengths[segmentIndex + 1] - cumulativeLengths[segmentIndex]
-  let fraction =
-    segmentLength > 0 ? (clamped - cumulativeLengths[segmentIndex]) / segmentLength : 0
-  return (
-    NavOSSCarPlayCoordinate(
-      latitude: start.latitude + (end.latitude - start.latitude) * fraction,
-      longitude: start.longitude + (end.longitude - start.longitude) * fraction
-    ),
-    navOSSCarPlayBearingDegrees(from: start, to: end)
-  )
+  )?.position(at: progress)
 }
 
 public final class NavOSSCarPlayTripStore: @unchecked Sendable {

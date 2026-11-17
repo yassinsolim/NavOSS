@@ -6,7 +6,24 @@ import UIKit
 #if targetEnvironment(simulator)
 @MainActor
 final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
+  /// Every scenario the harness renders; the phone scene shows the harness only for these.
+  static let scenarios: Set<String> = [
+    "preview", "preview-short", "preview-resize", "progress-05",
+    "guidance-position-fallback", "progress-60", "overview", "clear", "idle-location",
+    "hud-wide-chrome", "guidance-maneuver", "guidance-night", "guidance-annotations",
+    "guidance-far-stopped", "guidance-far-moving", "guidance-narrow", "frame-pacing",
+    "community-reports", "report-private", "report-shared", "community-settings",
+    "maneuver-symbols", "simulated-drive", "search-hub", "search-results",
+    "real-calgary-exit", "real-calgary-exit-night", "real-vancouver-exit",
+    "real-vancouver-lanes-night",
+    "preview-alternatives", "guidance-lanes-then", "guidance-roundabout", "reroute-proposal",
+    "arrival", "end", "dashboard",
+    "audio-release", "idle-live-location", "offline-preview",
+  ]
+
   private let mapViewController = NavOSSCarPlayMapViewController()
+  private let isDarkAppearance =
+    ProcessInfo.processInfo.environment["NAVOSS_CARPLAY_VISUAL_APPEARANCE"] == "dark"
   private let scenario: String
 
   init(scenario: String) {
@@ -22,10 +39,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = .black
-    let darkAppearance = ProcessInfo.processInfo.environment[
-      "NAVOSS_CARPLAY_VISUAL_APPEARANCE"
-    ] == "dark"
-    mapViewController.applyAppearance(darkAppearance ? .dark : .light)
+    mapViewController.applyAppearance(isDarkAppearance ? .dark : .light)
     // Offline scenarios draw the installed offline region's local style (needs a region
     // installed on the simulator; see docs/architecture/offline.md).
     mapViewController.forcesOfflineStyle = scenario.hasPrefix("offline-")
@@ -224,23 +238,26 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
         guard let self else { return }
         self.view.layoutIfNeeded()
-        let margin = NavOSSCarPlayMapViewController.hudMargin
-        let speedWidth = NavOSSCarPlayMapViewController.speedBadgeSize.width
-        let limitSize = NavOSSCarPlayMapViewController.speedLimitBadgeSize
-        let gap = NavOSSCarPlayMapViewController.hudGap
-        let expectedTop = margin
-        // The round speed badge is centred on the taller limit sign.
-        let expectedSpeedTop = margin + (limitSize.height - NavOSSCarPlayMapViewController.speedBadgeSize.height) / 2
+        // One unit pinned top-right: the sign, then the speed flush with the unit's trailing edge.
+        typealias Map = NavOSSCarPlayMapViewController
+        let inset = Map.hudMargin + Map.hudPadding
+        let speedSize = Map.speedCellSize
+        let limitSize = Map.speedLimitSignSize
+        let expectedSpeedTop = inset
+        let expectedLimitTop = inset + (speedSize.height - limitSize.height) / 2
         let beforeChrome = self.mapViewController.speedReadoutFrame
         let limitBeforeChrome = self.mapViewController.speedLimitReadoutFrame
-        let expectedSpeedLeftWithLimit = hudFrame.width - margin - limitSize.width - gap - speedWidth
-        let expectedLimitLeft = hudFrame.width - margin - limitSize.width
+        let expectedSpeedLeft = hudFrame.width - inset - speedSize.width
+        let expectedLimitLeft = expectedSpeedLeft - Map.hudGap - limitSize.width
+        let unit = self.mapViewController.speedUnitFrame
         guard self.mapViewController.speedReadoutIsVisible,
           abs(beforeChrome.origin.y - expectedSpeedTop) < 0.5,
-          abs(beforeChrome.origin.x - expectedSpeedLeftWithLimit) < 0.5,
+          abs(beforeChrome.origin.x - expectedSpeedLeft) < 0.5,
           let limitBeforeChrome,
-          abs(limitBeforeChrome.origin.y - expectedTop) < 0.5,
-          abs(limitBeforeChrome.origin.x - expectedLimitLeft) < 0.5
+          abs(limitBeforeChrome.origin.y - expectedLimitTop) < 0.5,
+          abs(limitBeforeChrome.origin.x - expectedLimitLeft) < 0.5,
+          // Smaller than build 82's separate 52 pt speed circle and 46 x 56 sign.
+          unit.width < 46 + 6 + 52, unit.height < 56
         else {
           assertionFailure(
             "CarPlay speed/limit readouts are not at the content top-right margin: "
@@ -282,8 +299,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         )
         self.view.layoutIfNeeded()
         let resizedReadout = self.mapViewController.speedReadoutFrame
-        let resizedExpectedSpeedLeft =
-          resizedBounds.width - margin - limitSize.width - gap - speedWidth
+        let resizedExpectedSpeedLeft = resizedBounds.width - inset - speedSize.width
         guard abs(resizedReadout.minX - resizedExpectedSpeedLeft) < 0.5,
           abs(resizedReadout.minY - expectedSpeedTop) < 0.5
         else {
@@ -305,7 +321,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         )
         self.view.layoutIfNeeded()
         let speedWithoutLimit = self.mapViewController.speedReadoutFrame
-        let expectedSpeedLeftAlone = resizedBounds.width - margin - speedWidth
+        let expectedSpeedLeftAlone = resizedExpectedSpeedLeft
         guard self.mapViewController.speedReadoutIsVisible,
           self.mapViewController.speedLimitReadoutFrame == nil,
           abs(speedWithoutLimit.origin.x - expectedSpeedLeftAlone) < 0.5,
@@ -319,8 +335,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
           return
         }
         // Restore the limit through the real display() path and confirm the speed badge
-        // slides back to its original slot without changing the visible ordering (speed
-        // left, limit right, no overlap).
+        // keeps its slot and the sign returns beside it (sign left, speed right, no overlap).
         self.mapViewController.display(
           route: Self.wideRoute,
           routeId: "visual-hud-wide-chrome",
@@ -336,14 +351,39 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         let limitRestored = self.mapViewController.speedLimitReadoutFrame
         guard self.mapViewController.speedReadoutIsVisible, let limitRestored,
           abs(speedRestored.origin.x - resizedExpectedSpeedLeft) < 0.5,
-          abs(limitRestored.origin.x - (resizedBounds.width - margin - limitSize.width)) < 0.5,
-          speedRestored.maxX < limitRestored.minX
+          abs(limitRestored.origin.x - (resizedExpectedSpeedLeft - Map.hudGap - limitSize.width))
+            < 0.5,
+          limitRestored.maxX < speedRestored.minX
         else {
           assertionFailure(
             "CarPlay speed/limit readouts did not restore correctly: "
               + "speed=\(speedRestored) limit=\(String(describing: limitRestored))"
           )
           return
+        }
+        // The speeding verdict flips at an unchanged 86 km/h, both ways: the spoken label must
+        // follow it although the drawn number stays the same.
+        for (verdict, expected) in [
+          (NavOSSSpeedingState.overLimit, "86 kilometres per hour, over the limit"),
+          (NavOSSSpeedingState.withinLimit, "86 kilometres per hour"),
+        ] {
+          self.mapViewController.display(
+            route: Self.wideRoute,
+            routeId: "visual-hud-wide-chrome",
+            activeGuidance: true,
+            position: NavOSSCarPlayPosition(
+              coordinate: Self.wideRoute[2], courseDegrees: 70, speedMetersPerSecond: 24
+            ),
+            routeProgress: 0.35,
+            speedLimitKph: 80,
+            overlay: NavOSSCarPlayGuidanceOverlay(speeding: verdict)
+          )
+          guard self.mapViewController.speedReadoutAccessibilityLabel == expected else {
+            assertionFailure(
+              "CarPlay speed accessibility label did not follow the verdict \(verdict): "
+                + "\(String(describing: self.mapViewController.speedReadoutAccessibilityLabel))")
+            return
+          }
         }
         self.markReady()
       }
@@ -370,6 +410,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       renderGuidance(
         trip: trip, guidance: guidance, position: position, progress: 0.29, speedLimitKph: 50,
         speeding: night ? .overLimit : .withinLimit)
+      showMockCard(trip: trip, guidance: guidance)
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
         guard let self else { return }
         guard self.mapViewController.currentRoadNameReadout == "9 Avenue SW" else {
@@ -378,8 +419,10 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
           )
           return
         }
-        guard self.mapViewController.enlargedRoadLabelLayerCount > 0 else {
-          assertionFailure("Road labels were not enlarged for guidance")
+        guard self.mapViewController.enlargedRoadLabelLayerCount > 0,
+          self.mapViewController.widenedRoadLayerCount > 0
+        else {
+          assertionFailure("Road labels or road widths were not enlarged for guidance")
           return
         }
         self.markReady()
@@ -424,7 +467,14 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
           guard let self else { return }
           let count = self.mapViewController.mapAlertMarkerCount
           if count == 4 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in self?.markReady() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+              guard let self else { return }
+              guard self.mapViewController.visibleMapAlertCount > 0 else {
+                assertionFailure("Community report markers are off screen")
+                return
+              }
+              self.markReady()
+            }
           } else if attempt < 50 {
             awaitMarkers(attempt + 1)
           } else {
@@ -460,13 +510,29 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       _ = mapViewController.toggleRouteOverview()
       // The fixture alerts stay published: the app process ends after this scenario's capture.
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
-        self?.markReady()
+        guard let self else { return }
+        guard self.mapViewController.visibleMapAlertCount > 0,
+          self.mapViewController.congestionIsVisible
+        else {
+          assertionFailure("Camera markers or congestion are off screen")
+          return
+        }
+        self.markReady()
       }
       return
     case "real-calgary-exit", "real-calgary-exit-night", "real-vancouver-exit",
-      "real-vancouver-lanes-night":
+      "real-vancouver-lanes-night", "guidance-far-stopped", "guidance-far-moving",
+      "guidance-narrow":
       // Ready is signalled below only when the recording decoded and rendered.
       guard renderRecordedRouteScenario() else { return }
+      if scenario == "guidance-narrow" {
+        assertNarrowRoadName()
+        return
+      }
+    case "frame-pacing":
+      // Not a visual checkpoint: measures the render loop over a simulated drive, then captures.
+      runFramePacingDrive()
+      return
     case "maneuver-symbols":
       showManeuverSymbols()
       return
@@ -490,18 +556,30 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     }
   }
 
-  /// Lays the map out at a CarPlay display size, scaled to fit the phone, with the left inset the
-  /// guidance card takes on a real head unit.
-  private func useCarPlayFrame(_ size: CGSize, guidanceCardInset: CGFloat) {
+  /// Lays the map out at a CarPlay display size, scaled to fit the phone. A guidance card inset
+  /// simulates the left column CarPlay keeps for the card and ETA bar, and the right column its map
+  /// buttons take, as live safe-area insets; the mock buttons show where they are drawn.
+  private func useCarPlayFrame(
+    _ size: CGSize,
+    guidanceCardInset: CGFloat,
+    mapButtonsInset: CGFloat? = nil
+  ) {
     mapViewController.view.autoresizingMask = []
     mapViewController.view.bounds = CGRect(origin: .zero, size: size)
     let scale = min(view.bounds.width / size.width, view.bounds.height / size.height)
     mapViewController.view.transform = CGAffineTransform(scaleX: scale, y: scale)
     mapViewController.view.center = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
+    let buttons = mapButtonsInset ?? (guidanceCardInset > 0 ? Self.mapButtonsColumnWidth : 0)
     mapViewController.additionalSafeAreaInsets = UIEdgeInsets(
-      top: 0, left: guidanceCardInset, bottom: 0, right: 0)
+      top: 0, left: guidanceCardInset, bottom: 0, right: buttons)
     mapViewController.anchorsSpeedHUDToViewBounds = true
+    if buttons > 0 {
+      showMockMapButtons(columnWidth: buttons)
+    }
   }
+
+  /// Width CarPlay's map-button column takes on the trailing edge during guidance.
+  private static let mapButtonsColumnWidth: CGFloat = 60
 
   /// Renders guidance through the same presentation path the CarPlay scenes use.
   private func renderGuidance(
@@ -510,7 +588,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     position: NavOSSCarPlayPosition,
     progress: Double,
     speedLimitKph: Int?,
-    speeding: NavOSSSpeedingState = .unknown
+    speeding: NavOSSSpeedingState = .unknown,
+    currentRoadName: String? = nil
   ) {
     let presentation = navOSSCarPlayGuidancePresentation(trip: trip, guidance: guidance)
     mapViewController.display(
@@ -525,7 +604,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
         maneuverArrow: presentation.map {
           navOSSCarPlayManeuverArrow(trip: trip, maneuverStepIndex: $0.primary.stepIndex)
         } ?? [],
-        currentRoadName: presentation?.currentRoadName,
+        currentRoadName: currentRoadName ?? presentation?.currentRoadName,
         congestion: trip.congestion,
         speeding: speeding
       )
@@ -539,13 +618,45 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
   // The lanes, exit numbers, signposts and posted limits shown are the router's; the harness only
   // chooses where along the recorded route the vehicle is.
 
-  private func renderRecordedRouteScenario() -> Bool {
-    let (fixture, maneuverIndex, metersBefore): (String, Int, Double) =
-      switch scenario {
-      case "real-calgary-exit", "real-calgary-exit-night": ("calgary-deerfoot-glenmore.v2", 1, 450)
-      case "real-vancouver-exit": ("vancouver-bc91-highway99.v2", 1, 450)
-      default: ("vancouver-bc91-highway99.v2", 3, 160)
-      }
+  /// Where a recorded-route scenario puts the vehicle and how the head unit is laid out.
+  private struct RecordedScenario {
+    var fixture: String
+    var maneuverIndex: Int
+    var metersBefore: Double
+    var speedMetersPerSecond = 22.0
+    var frame = CGSize(width: 800, height: 480)
+    var cardInset: CGFloat = 300
+    /// Harness fixture text for the current-road pill, in place of the recording's road name.
+    var currentRoadName: String?
+  }
+
+  private var recordedScenario: RecordedScenario {
+    switch scenario {
+    case "real-calgary-exit", "real-calgary-exit-night":
+      RecordedScenario(fixture: "calgary-deerfoot-glenmore.v2", maneuverIndex: 1, metersBefore: 450)
+    case "real-vancouver-exit":
+      RecordedScenario(fixture: "vancouver-bc91-highway99.v2", maneuverIndex: 1, metersBefore: 450)
+    case "guidance-far-stopped", "guidance-far-moving":
+      // The owner's build 82 report: 5.7 km to the next maneuver, stopped and then at 60 km/h,
+      // with the card taking about 45% of a small head unit's width.
+      RecordedScenario(
+        fixture: "square-one-scarborough.v2", maneuverIndex: 5, metersBefore: 5_700,
+        speedMetersPerSecond: scenario == "guidance-far-stopped" ? 0 : 16.7, cardInset: 360)
+    case "guidance-narrow":
+      // A small head unit whose visible map is about 250 pt wide once CarPlay's card (45%) and
+      // map buttons (60 pt) are taken out. The road name is the one the owner saw truncated.
+      RecordedScenario(
+        fixture: "calgary-deerfoot-glenmore.v2", maneuverIndex: 1, metersBefore: 1_200,
+        speedMetersPerSecond: 16.7, frame: CGSize(width: 560, height: 480), cardInset: 252,
+        currentRoadName: Self.narrowRoadName)
+    default:
+      RecordedScenario(fixture: "vancouver-bc91-highway99.v2", maneuverIndex: 3, metersBefore: 160)
+    }
+  }
+
+  private static let narrowRoadName = "Shaganappi Trail NW"
+
+  private func loadRecordedTrip(_ fixture: String) -> NavOSSCarPlayTrip? {
     guard
       let directory = ProcessInfo.processInfo.environment["NAVOSS_ROUTE_FIXTURES_DIR"],
       let data = try? Data(
@@ -555,19 +666,27 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       let body = try? JSONSerialization.data(withJSONObject: response),
       let request = document["request"] as? [String: Any],
       let target = request["destination"] as? [String: Double],
-      let latitude = target["latitude"], let longitude = target["longitude"],
-      let trip = try? navOSSTripsFromRoutesV2Response(
-        body,
-        destination: NavOSSCarPlayDestination(
-          id: fixture, label: "Recorded route", latitude: latitude, longitude: longitude,
-          name: "Recorded destination")
-      ).first,
+      let latitude = target["latitude"], let longitude = target["longitude"]
+    else { return nil }
+    return try? navOSSTripsFromRoutesV2Response(
+      body,
+      destination: NavOSSCarPlayDestination(
+        id: fixture, label: "Recorded route", latitude: latitude, longitude: longitude,
+        name: "Recorded destination")
+    ).first
+  }
+
+  private func renderRecordedRouteScenario() -> Bool {
+    let setup = recordedScenario
+    let maneuverIndex = setup.maneuverIndex
+    guard let trip = loadRecordedTrip(setup.fixture),
       trip.steps.indices.contains(maneuverIndex), maneuverIndex > 0
     else {
       print("NAVOSS_CARPLAY_VISUAL_FAILED \(scenario): recorded route unavailable")
       return false
     }
-    useCarPlayFrame(CGSize(width: 800, height: 480), guidanceCardInset: 300)
+    let metersBefore = setup.metersBefore
+    useCarPlayFrame(setup.frame, guidanceCardInset: setup.cardInset)
     let drivenIndex = maneuverIndex - 1
     let driven = trip.steps[drivenIndex]
     let toManeuver = min(metersBefore, driven.distanceMeters * 0.9)
@@ -621,9 +740,11 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     renderGuidance(
       trip: trip, guidance: guidance,
       position: NavOSSCarPlayPosition(
-        coordinate: position, courseDegrees: course, speedMetersPerSecond: 22),
+        coordinate: position, courseDegrees: course,
+        speedMetersPerSecond: setup.speedMetersPerSecond),
       progress: trip.distanceMeters > 0 ? travelled / trip.distanceMeters : 0,
-      speedLimitKph: limit, speeding: limit == nil ? .unknown : .withinLimit)
+      speedLimitKph: limit, speeding: limit == nil ? .unknown : .withinLimit,
+      currentRoadName: setup.currentRoadName)
     showMockCard(trip: trip, guidance: guidance)
     return true
   }
@@ -898,12 +1019,52 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     return label
   }
 
+  /// The label sits at the bottom of the left column (card and ETA bar), so it never hides the
+  /// map's own corner readouts.
   private func addMockBadge(to view: UIView) {
     let badge = mockLabel("HARNESS MOCK · CarPlay draws the real template", size: 9, weight: .bold, color: .black)
     badge.backgroundColor = UIColor(red: 0.97, green: 0.79, blue: 0.28, alpha: 1)
     badge.textAlignment = .center
-    badge.frame = CGRect(x: view.bounds.width - 250, y: view.bounds.height - 16, width: 250, height: 16)
+    let width = min(250, view.bounds.width * 0.45)
+    badge.frame = CGRect(x: 0, y: view.bounds.height - 16, width: width, height: 16)
     view.addSubview(badge)
+  }
+
+  /// CarPlay's map buttons during guidance (sound, report, overview), stacked from the bottom of
+  /// the trailing column the live safe area leaves out.
+  private func showMockMapButtons(columnWidth: CGFloat) {
+    let host = mockHost
+    let size: CGFloat = 44
+    for (index, symbol) in ["speaker.wave.2.fill", "exclamationmark.bubble.fill", "map.fill"]
+      .enumerated()
+    {
+      let button = UIImageView(image: UIImage(systemName: symbol))
+      button.contentMode = .center
+      button.tintColor = .white
+      button.backgroundColor = UIColor(white: 0.12, alpha: 0.9)
+      button.layer.cornerRadius = size / 2
+      button.clipsToBounds = true
+      button.frame = CGRect(
+        x: host.bounds.width - columnWidth + (columnWidth - size) / 2,
+        y: host.bounds.height - 12 - size - CGFloat(index) * (size + 10),
+        width: size, height: size)
+      host.addSubview(button)
+    }
+  }
+
+  /// CarPlay's trip estimates bar under the card, in the same left column.
+  private func showMockETABar(columnWidth: CGFloat, guidance: NavOSSCarPlayGuidance) {
+    let bar = mockLabel(
+      "\(navOSSCarPlayDurationLabel(guidance.remainingDurationSeconds))    "
+        + navOSSCarPlayDistanceLabel(guidance.remainingDistanceMeters),
+      size: 14, weight: .semibold)
+    bar.textAlignment = .center
+    bar.backgroundColor = UIColor(white: 0.12, alpha: 0.94)
+    bar.layer.cornerRadius = 12
+    bar.clipsToBounds = true
+    bar.frame = CGRect(
+      x: 10, y: mockHost.bounds.height - 76, width: columnWidth - 20, height: 52)
+    mockHost.addSubview(bar)
   }
 
   private func mockPanel(width: CGFloat? = nil) -> UIView {
@@ -988,8 +1149,15 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     guard let presentation = navOSSCarPlayGuidancePresentation(trip: trip, guidance: guidance) else {
       return
     }
-    let card = UIView(frame: CGRect(x: 10, y: 10, width: 280, height: 0))
-    card.backgroundColor = UIColor(red: 0.08, green: 0.38, blue: 0.24, alpha: 1)
+    let column = mapViewController.additionalSafeAreaInsets.left > 0
+      ? mapViewController.additionalSafeAreaInsets.left : 300
+    let cardWidth = column - 20
+    let card = UIView(frame: CGRect(x: 10, y: 10, width: cardWidth, height: 0))
+    // The scene delegate's guidance background: ink on the light map, raised surface on the dark.
+    card.backgroundColor =
+      isDarkAppearance
+      ? UIColor(red: 0x1E / 255, green: 0x2B / 255, blue: 0x2C / 255, alpha: 1)
+      : UIColor(red: 0x0E / 255, green: 0x15 / 255, blue: 0x16 / 255, alpha: 1)
     card.layer.cornerRadius = 12
     card.clipsToBounds = true
     mockHost.addSubview(card)
@@ -998,16 +1166,17 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       image: NavOSSCarPlayManeuverSymbols.image(kind: primary.kind, angleDegrees: primary.turnAngleDegrees))
     symbol.tintColor = .white
     symbol.contentMode = .scaleAspectFit
-    symbol.frame = CGRect(x: 12, y: 12, width: 56, height: 56)
+    // Arrow beside the distance on one row, then the card text (the production variants).
+    symbol.frame = CGRect(x: 12, y: 12, width: 40, height: 40)
     card.addSubview(symbol)
     let distance = mockLabel(
       navOSSCarPlayDistanceLabel(guidance.distanceToManeuverMeters), size: 24, weight: .bold)
-    distance.frame = CGRect(x: 80, y: 12, width: 190, height: 30)
+    distance.frame = CGRect(x: 62, y: 17, width: cardWidth - 72, height: 30)
     card.addSubview(distance)
     let instruction = mockLabel(primary.instructionVariants[0], size: 15, weight: .semibold)
-    instruction.frame = CGRect(x: 80, y: 42, width: 190, height: 40)
+    instruction.frame = CGRect(x: 12, y: 58, width: cardWidth - 24, height: 40)
     card.addSubview(instruction)
-    var y: CGFloat = 92
+    var y: CGFloat = 104
     if let lanes = primary.lanes {
       let laneWidth: CGFloat = 40
       for (index, lane) in lanes.enumerated() {
@@ -1027,7 +1196,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       y += 52
     }
     if let then = presentation.then {
-      let thenRow = UIView(frame: CGRect(x: 0, y: y, width: 280, height: 40))
+      let thenRow = UIView(frame: CGRect(x: 0, y: y, width: cardWidth, height: 40))
       thenRow.backgroundColor = UIColor(white: 0, alpha: 0.25)
       let label = mockLabel("Then", size: 14, weight: .semibold)
       label.frame = CGRect(x: 12, y: 10, width: 50, height: 20)
@@ -1043,9 +1212,10 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     let road = mockLabel(
       "Now on \(presentation.currentRoadName ?? "an unnamed road")", size: 12, weight: .regular,
       color: UIColor(white: 1, alpha: 0.8))
-    road.frame = CGRect(x: 12, y: y + 6, width: 260, height: 18)
+    road.frame = CGRect(x: 12, y: y + 6, width: cardWidth - 20, height: 18)
     card.addSubview(road)
     card.frame.size.height = y + 30
+    showMockETABar(columnWidth: column, guidance: guidance)
     addMockBadge(to: mockHost)
   }
 
@@ -1093,6 +1263,153 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
   }
 
   private var driveTimer: Timer?
+
+  // MARK: Frame pacing
+
+  /// Drives the recorded Calgary route for 60 s at about 60 km/h with one fix a second, the way
+  /// the navigation service feeds the map, and prints the render loop's display-link frame
+  /// intervals, the time spent per render frame, and the time each fix's `display` took. These are
+  /// simulator numbers: they compare builds on one Mac, not head units.
+  private func runFramePacingDrive() {
+    guard let trip = loadRecordedTrip("calgary-deerfoot-glenmore.v2") else {
+      print("NAVOSS_CARPLAY_VISUAL_FAILED frame-pacing: recorded route unavailable")
+      return
+    }
+    useCarPlayFrame(CGSize(width: 800, height: 480), guidanceCardInset: 300)
+    let geometry = trip.geometry
+    var cumulative = [0.0]
+    for index in 1..<geometry.count {
+      cumulative.append(
+        cumulative[index - 1]
+          + CLLocation(latitude: geometry[index].latitude, longitude: geometry[index].longitude)
+          .distance(
+            from: CLLocation(
+              latitude: geometry[index - 1].latitude, longitude: geometry[index - 1].longitude)))
+    }
+    let total = cumulative[cumulative.count - 1]
+    // Step ends along the geometry, scaled so the recorded step lengths sum to the drawn line.
+    let stepTotal = max(1, trip.steps.reduce(0) { $0 + $1.distanceMeters })
+    var stepEnds: [Double] = []
+    var runningStep = 0.0
+    for step in trip.steps {
+      runningStep += step.distanceMeters
+      stepEnds.append(runningStep / stepTotal * total)
+    }
+    let speed = 16.7
+    let fixCount = 60
+    let warmUpFixes = 2
+    var intervals: [Double] = []
+    var renders: [Double] = []
+    var fixUpdates: [Double] = []
+    var measuring = false
+    mapViewController.onRenderFrame = { interval, render in
+      guard measuring else { return }
+      if let interval { intervals.append(interval) }
+      renders.append(render)
+    }
+    var second = 0
+    driveTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
+      MainActor.assumeIsolated {
+        guard let self else { return timer.invalidate() }
+        let travelled = min(total, speed * Double(second))
+        var segment = 0
+        while segment < geometry.count - 2, cumulative[segment + 1] < travelled { segment += 1 }
+        let start = geometry[segment]
+        let end = geometry[segment + 1]
+        let fraction =
+          (travelled - cumulative[segment]) / max(0.001, cumulative[segment + 1] - cumulative[segment])
+        let coordinate = NavOSSCarPlayCoordinate(
+          latitude: start.latitude + (end.latitude - start.latitude) * fraction,
+          longitude: start.longitude + (end.longitude - start.longitude) * fraction)
+        let course = CLLocation(latitude: start.latitude, longitude: start.longitude)
+          .bearing(to: CLLocation(latitude: end.latitude, longitude: end.longitude))
+        let stepIndex = min(
+          trip.steps.count - 1, stepEnds.firstIndex(where: { $0 > travelled }) ?? trip.steps.count - 1)
+        let toManeuver = max(0, stepEnds[stepIndex] - travelled)
+        let guidance = NavOSSCarPlayGuidance(
+          distanceToManeuverMeters: toManeuver, durationToManeuverSeconds: toManeuver / speed,
+          instruction: "", maneuverType: "turn", phase: .navigating,
+          remainingDistanceMeters: total - travelled,
+          remainingDurationSeconds: (total - travelled) / speed, roadName: "",
+          stepIndex: stepIndex)
+        let limit = trip.speedLimitsKph.flatMap {
+          $0.indices.contains(segment) && $0[segment] > 0 ? $0[segment] : nil
+        }
+        let started = CACurrentMediaTime()
+        self.renderGuidance(
+          trip: trip, guidance: guidance,
+          position: NavOSSCarPlayPosition(
+            coordinate: coordinate, courseDegrees: course, speedMetersPerSecond: speed),
+          progress: travelled / total, speedLimitKph: limit,
+          speeding: limit == nil ? .unknown : .withinLimit)
+        if measuring { fixUpdates.append(CACurrentMediaTime() - started) }
+        second += 1
+        if second == warmUpFixes { measuring = true }
+        guard second > fixCount + warmUpFixes else { return }
+        timer.invalidate()
+        measuring = false
+        self.mapViewController.onRenderFrame = nil
+        func summary(_ values: [Double]) -> [String: Double] {
+          let sorted = values.sorted()
+          func percentile(_ p: Double) -> Double {
+            guard !sorted.isEmpty else { return 0 }
+            return sorted[min(sorted.count - 1, Int((Double(sorted.count - 1) * p).rounded()))]
+          }
+          let milliseconds = { (value: Double) in (value * 10_000).rounded() / 10 }
+          return [
+            "p50": milliseconds(percentile(0.5)), "p95": milliseconds(percentile(0.95)),
+            "max": milliseconds(sorted.last ?? 0),
+          ]
+        }
+        let report: [String: Any] = [
+          "simulator": true,
+          "fixes": fixUpdates.count,
+          "frames": intervals.count,
+          "frameIntervalMs": summary(intervals),
+          "framesOver20ms": intervals.filter { $0 > 0.020 }.count,
+          "renderFrameMs": summary(renders),
+          "fixUpdateMs": summary(fixUpdates),
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.sortedKeys]),
+          let json = String(data: data, encoding: .utf8)
+        {
+          print("NAVOSS_CARPLAY_FRAME_PACING \(json)")
+        }
+        self.markReady()
+      }
+    }
+  }
+
+  /// The owner's failing case: the full road name must fit the narrow visible map, under the
+  /// vehicle, clear of the attribution and inside the visible map (so clear of the map buttons).
+  private func assertNarrowRoadName() {
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+      guard let self else { return }
+      let map = self.mapViewController
+      map.view.layoutIfNeeded()
+      let visible = map.visibleMapFrame
+      guard map.currentRoadNameReadout == Self.narrowRoadName, map.currentRoadNameFits,
+        let pill = map.currentRoadPillFrame,
+        visible.width < 260,
+        visible.insetBy(dx: -0.5, dy: -0.5).contains(pill),
+        visible.insetBy(dx: -0.5, dy: -0.5).contains(map.attributionFrame),
+        !pill.intersects(map.attributionFrame),
+        let vehicle = map.vehicleScreenPoint,
+        pill.minY > vehicle.y + 20,
+        abs(vehicle.x - visible.midX) < 2,
+        vehicle.y > visible.minY + visible.height * 0.62
+      else {
+        assertionFailure(
+          "Narrow CarPlay map: road=\(String(describing: map.currentRoadNameReadout)) "
+            + "fits=\(map.currentRoadNameFits) pill=\(String(describing: map.currentRoadPillFrame)) "
+            + "attribution=\(map.attributionFrame) vehicle=\(String(describing: map.vehicleScreenPoint)) "
+            + "visible=\(visible)")
+        return
+      }
+      self.markReady()
+    }
+  }
+
 
   private func startSimulatedDrive() {
     let trip = Self.turnTrip
@@ -1254,6 +1571,52 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
   }
 
   private func markReady() {
+    let map = mapViewController
+    let camera = map.mapView.camera
+    if camera.pitch > 0 {
+      // The follow camera as rendered, for comparing camera tuning between builds.
+      print(
+        String(
+          format: "NAVOSS_CARPLAY_CAMERA zoom=%.2f pitch=%.1f altitude=%.0f",
+          map.mapView.zoomLevel, camera.pitch, camera.altitude))
+    }
+    // A route preview must show the whole selected route and both end markers in the part of the
+    // map the route-choice sheet leaves free.
+    if map.isPresentingRoutePreview {
+      map.view.layoutIfNeeded()
+      guard let free = map.routeFitFrame,
+        map.routeScreenPoints.allSatisfy({ free.insetBy(dx: -1.5, dy: -1.5).contains($0) })
+      else {
+        assertionFailure(
+          "\(scenario): preview route or end markers outside the free map "
+            + "\(String(describing: map.routeFitFrame)): \(map.routeScreenPoints)")
+        return
+      }
+    }
+    // Every guidance capture must show the vehicle: in follow mode on the 72% line of the visible
+    // map under a tilted camera, in the overview somewhere inside the visible map.
+    if map.isFollowingVehicle || map.isPresentingRouteOverview {
+      map.view.layoutIfNeeded()
+      let visible = map.visibleMapFrame
+      guard let vehicle = map.vehicleScreenPoint, visible.contains(vehicle) else {
+        assertionFailure(
+          "\(scenario): vehicle \(String(describing: map.vehicleScreenPoint)) is not in the "
+            + "visible map \(visible)")
+        return
+      }
+      if map.isFollowingVehicle {
+        let line =
+          NavOSSCarPlayMapViewController.puckVerticalFraction
+          * (map.view.bounds.height - map.view.safeAreaInsets.bottom)
+        guard abs(vehicle.y - line) < 16, abs(vehicle.x - visible.midX) < 16, camera.pitch > 40
+        else {
+          assertionFailure(
+            "\(scenario): follow camera lost the vehicle: vehicle=\(vehicle) line=\(line) "
+              + "visible=\(visible) pitch=\(camera.pitch)")
+          return
+        }
+      }
+    }
     view.accessibilityLabel = "CarPlay visual \(scenario) ready"
     view.isAccessibilityElement = true
     // The validator redirects this to a file, where stdout is block buffered, so a few bytes would

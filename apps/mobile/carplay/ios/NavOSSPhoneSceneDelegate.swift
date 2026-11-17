@@ -18,19 +18,7 @@ final class NavOSSPhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
     #if targetEnvironment(simulator)
     if let scenario = ProcessInfo.processInfo.environment["NAVOSS_CARPLAY_VISUAL_SCENARIO"],
-      [
-        "preview", "preview-short", "preview-resize", "progress-05",
-        "guidance-position-fallback", "progress-60", "overview", "clear", "idle-location",
-        "hud-wide-chrome", "guidance-maneuver", "guidance-night", "guidance-annotations",
-        "community-reports", "report-private", "report-shared", "community-settings",
-        "maneuver-symbols", "simulated-drive", "search-hub", "search-results",
-        "real-calgary-exit", "real-calgary-exit-night", "real-vancouver-exit",
-        "real-vancouver-lanes-night",
-        "preview-alternatives", "guidance-lanes-then", "guidance-roundabout", "reroute-proposal",
-        "arrival", "end", "dashboard",
-        "audio-release", "idle-live-location", "offline-preview",
-      ]
-      .contains(scenario)
+      NavOSSCarPlayVisualHarnessViewController.scenarios.contains(scenario)
     {
       appWindow.rootViewController = NavOSSCarPlayVisualHarnessViewController(scenario: scenario)
     }

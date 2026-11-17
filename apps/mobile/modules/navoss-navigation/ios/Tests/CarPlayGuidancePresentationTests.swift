@@ -291,23 +291,108 @@ final class CarPlayGuidancePresentationTests: XCTestCase {
 
   // MARK: Camera
 
-  func testCameraWidensWithSpeedAndTightensNearAManeuver() {
-    let parked = navOSSCarPlayCameraTarget(speedMetersPerSecond: 0, distanceToManeuverMeters: nil)
-    let city = navOSSCarPlayCameraTarget(speedMetersPerSecond: 14, distanceToManeuverMeters: nil)
-    let highway = navOSSCarPlayCameraTarget(speedMetersPerSecond: 30, distanceToManeuverMeters: nil)
-    XCTAssertLessThan(parked.viewingDistanceMeters, city.viewingDistanceMeters)
-    XCTAssertLessThan(city.viewingDistanceMeters, highway.viewingDistanceMeters)
-    XCTAssertGreaterThan(parked.pitchDegrees, highway.pitchDegrees)
-    let approaching = navOSSCarPlayCameraTarget(
-      speedMetersPerSecond: 30, distanceToManeuverMeters: 80)
-    XCTAssertLessThan(approaching.viewingDistanceMeters, highway.viewingDistanceMeters)
-    for target in [parked, city, highway, approaching] {
-      XCTAssertTrue((420...1_350).contains(target.viewingDistanceMeters))
-      XCTAssertTrue((36...50).contains(target.pitchDegrees))
+  func testCameraStaysCloseAndTiltedAtEverySpeed() {
+    func target(_ kph: Double, toManeuver: Double? = nil) -> NavOSSCarPlayCameraTarget {
+      navOSSCarPlayCameraTarget(
+        speedMetersPerSecond: kph / 3.6, distanceToManeuverMeters: toManeuver)
     }
+    // City speeds stay at street level; a motorway widens to roughly 700-800 m, no further.
+    XCTAssertEqual(target(0).viewingDistanceMeters, 280, accuracy: 1)
+    XCTAssertTrue((280...450).contains(target(30).viewingDistanceMeters))
+    XCTAssertTrue((280...450).contains(target(60).viewingDistanceMeters))
+    XCTAssertTrue((650...800).contains(target(100).viewingDistanceMeters))
+    XCTAssertEqual(target(140).viewingDistanceMeters, 800, accuracy: 0.001)
+    XCTAssertLessThan(target(30).viewingDistanceMeters, target(60).viewingDistanceMeters)
+    XCTAssertLessThan(target(60).viewingDistanceMeters, target(100).viewingDistanceMeters)
+    for kph in stride(from: 0.0, through: 160, by: 10) {
+      XCTAssertTrue((50...60).contains(target(kph).pitchDegrees), "pitch at \(kph) km/h")
+      XCTAssertGreaterThanOrEqual(target(kph).pitchDegrees, target(kph + 10).pitchDegrees)
+    }
+  }
+
+  func testAFarManeuverNeverWidensTheView() {
+    // The build 82 report: stopped, 5.7 km from the next maneuver, the view showed a whole
+    // interchange. Distance to a far maneuver must not change the camera at all.
+    for kph in [0.0, 60, 100] {
+      let free = navOSSCarPlayCameraTarget(
+        speedMetersPerSecond: kph / 3.6, distanceToManeuverMeters: nil)
+      let far = navOSSCarPlayCameraTarget(
+        speedMetersPerSecond: kph / 3.6, distanceToManeuverMeters: 5_700)
+      XCTAssertEqual(far, free)
+    }
+    XCTAssertLessThanOrEqual(
+      navOSSCarPlayCameraTarget(speedMetersPerSecond: 0, distanceToManeuverMeters: 5_700)
+        .viewingDistanceMeters, 450)
+  }
+
+  func testAnApproachingManeuverPullsTheCameraIn() {
+    let motorway = navOSSCarPlayCameraTarget(speedMetersPerSecond: 28, distanceToManeuverMeters: nil)
+    var previous = motorway.viewingDistanceMeters
+    for toManeuver in [800.0, 500, 300, 150, 50, 0] {
+      let near = navOSSCarPlayCameraTarget(
+        speedMetersPerSecond: 28, distanceToManeuverMeters: toManeuver)
+      XCTAssertLessThanOrEqual(near.viewingDistanceMeters, previous, "at \(toManeuver) m")
+      XCTAssertGreaterThanOrEqual(near.viewingDistanceMeters, navOSSCarPlayCameraClosestMeters)
+      XCTAssertGreaterThanOrEqual(near.pitchDegrees, motorway.pitchDegrees)
+      previous = near.viewingDistanceMeters
+    }
+    XCTAssertLessThan(previous, 300)
+  }
+
+  func testCameraIgnoresUnusableInputs() {
+    let parked = navOSSCarPlayCameraTarget(speedMetersPerSecond: 0, distanceToManeuverMeters: nil)
     XCTAssertEqual(
       navOSSCarPlayCameraTarget(speedMetersPerSecond: .nan, distanceToManeuverMeters: .infinity),
       parked)
+    XCTAssertEqual(
+      navOSSCarPlayCameraTarget(speedMetersPerSecond: -5, distanceToManeuverMeters: -10), parked)
+  }
+
+  func testRouteFitKeepsEveryPointInsideThePaddedView() throws {
+    // The build 83 overview on an 800 x 480 head unit with the card's 324 pt on the left.
+    let route = [
+      NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07400),
+      NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.06500),
+      NavOSSCarPlayCoordinate(latitude: 51.04920, longitude: -114.06500),
+      NavOSSCarPlayCoordinate(latitude: 51.05300, longitude: -114.06500),
+    ]
+    let padding = (top: 56.0, left: 324.0, bottom: 96.0, right: 108.0)
+    for heading in [0.0, 90, 215] {
+      let fit = try XCTUnwrap(
+        navOSSCarPlayFitCamera(
+          coordinates: route, viewWidth: 800, viewHeight: 480, padding: padding,
+          headingDegrees: heading))
+      // Project the route back with the fitted camera, as the map would draw it.
+      func world(_ c: NavOSSCarPlayCoordinate) -> (Double, Double) {
+        let lat = c.latitude * .pi / 180
+        return ((c.longitude + 180) / 360, (1 - log(tan(lat) + 1 / cos(lat)) / .pi) / 2)
+      }
+      let scale = 512 * pow(2, fit.zoomLevel)
+      let center = world(fit.center)
+      let h = heading * .pi / 180
+      var touchesEdge = false
+      for point in route {
+        let w = world(point)
+        let dx = w.0 - center.0, dy = w.1 - center.1
+        let x = 400 + (dx * cos(h) + dy * sin(h)) * scale
+        let y = 240 + (-dx * sin(h) + dy * cos(h)) * scale
+        XCTAssertGreaterThanOrEqual(x, padding.left - 0.01, "heading \(heading)")
+        XCTAssertLessThanOrEqual(x, 800 - padding.right + 0.01, "heading \(heading)")
+        XCTAssertGreaterThanOrEqual(y, padding.top - 0.01, "heading \(heading)")
+        XCTAssertLessThanOrEqual(y, 480 - padding.bottom + 0.01, "heading \(heading)")
+        if abs(x - padding.left) < 0.5 || abs(x - (800 - padding.right)) < 0.5
+          || abs(y - padding.top) < 0.5 || abs(y - (480 - padding.bottom)) < 0.5
+        {
+          touchesEdge = true
+        }
+      }
+      XCTAssertTrue(touchesEdge, "the fit is tight at heading \(heading)")
+      // About 1 km of route in a ~330 pt box is a city overview, not a street close-up.
+      XCTAssertTrue((13...16).contains(fit.zoomLevel), "zoom \(fit.zoomLevel)")
+    }
+    XCTAssertNil(
+      navOSSCarPlayFitCamera(
+        coordinates: route, viewWidth: 100, viewHeight: 100, padding: padding, headingDegrees: 0))
   }
 
   func testSmoothingIsFrameRateIndependent() {
