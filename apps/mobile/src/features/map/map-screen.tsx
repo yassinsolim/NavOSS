@@ -35,6 +35,7 @@ import { RoadReportSheet } from '@/features/map/road-report-sheet';
 import { SavedPlacesScreen } from '@/features/map/saved-places-screen';
 import { OfflineMapsSheet } from '@/features/offline/offline-maps-sheet';
 import { mapProblemLabels } from '@/features/map/search-status';
+import { statusBarContent } from '@/features/map/status-bar-style';
 import { CarPlayCompanionPanel, CarPlayIdlePanel } from '@/features/navigation/carplay-panels';
 import {
   ArrivalSheet,
@@ -143,12 +144,20 @@ export function MapScreen() {
     navigating && c.community.reportAhead !== undefined ? REPORT_AHEAD_HEIGHT : 0;
   const stillThereHeight =
     navigating && c.community.stillThere !== undefined ? STILL_THERE_HEIGHT : 0;
+  // Everything stacked under the status bar, top to bottom: the maneuver (or resuming) banner,
+  // then the cards that can follow it.
+  const bannerStackHeight =
+    guidance.bannerHeight +
+    cameraAlertHeight +
+    rerouteCardHeight +
+    reportAheadHeight +
+    stillThereHeight;
   const guidanceStackTop =
     insets.top + guidance.bannerHeight + 8 + cameraAlertHeight + rerouteCardHeight;
 
   return (
     <View style={styles.container}>
-      <StatusBar style={navigating || (exploring && c.darkMap) ? 'light' : 'auto'} />
+      <StatusBar style={statusBarContent({ darkMap: c.darkMap, mapVisible: exploring })} />
       <MapCanvas
         accessibilityLabel={mapSummary}
         cameraRef={c.cameraRef}
@@ -213,13 +222,7 @@ export function MapScreen() {
                 : undefined,
             })
           }
-          bannerStackHeight={
-            guidance.bannerHeight +
-            cameraAlertHeight +
-            rerouteCardHeight +
-            reportAheadHeight +
-            stillThereHeight
-          }
+          bannerStackHeight={bannerStackHeight}
           locating={c.location.locationState === 'locating'}
           mapBearing={c.mapBearing}
           metrics={metrics}
@@ -267,6 +270,7 @@ export function MapScreen() {
 
       {navigating && (
         <DrivingStatus
+          bannerBottom={insets.top + bannerStackHeight + 8}
           creditsHeight={creditsHeight}
           roadName={guidance.currentRoadName}
           sheetPosition={c.sheetPosition}
@@ -474,17 +478,7 @@ export function MapScreen() {
       <MapNoticeToast
         notice={c.notice}
         onDismiss={c.onDismissNotice}
-        top={
-          insets.top +
-          8 +
-          (navigating
-            ? guidance.bannerHeight +
-              cameraAlertHeight +
-              rerouteCardHeight +
-              reportAheadHeight +
-              stillThereHeight
-            : 0)
-        }
+        top={insets.top + 8 + (navigating ? bannerStackHeight : 0)}
       />
 
       <RoadEventsSheet
