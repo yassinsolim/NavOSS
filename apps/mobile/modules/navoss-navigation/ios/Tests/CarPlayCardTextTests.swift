@@ -94,6 +94,23 @@ final class CarPlayCardTextTests: XCTestCase {
     XCTAssertEqual(try card(trip(with: lone), 1), ["QEW"])
   }
 
+  /// A numbered exit's destination sign is not the street reached after leaving the highway.
+  func testMontrealAirportExitUsesItsDestinationSign() throws {
+    let trip = try recorded("montreal-oldport-yul-validation83.v2")
+    XCTAssertEqual(trip.steps[9].junctionName, "Aéroport P.-E.-Trudeau")
+    XCTAssertEqual(trip.steps[9].signpostToward, ["Airport Pierre-Elliott-Trudeau"])
+    // The destination plus exit prefix is 42 characters. Keep the supplied destination,
+    // rather than inventing a shorter airport name from the junction's different name.
+    XCTAssertEqual(try card(trip, 9), ["Airport Pierre-Elliott-Trudeau", "Exit 56-O"])
+    let unsigned = NavOSSCarPlayRouteStep(
+      distanceMeters: 0, durationSeconds: 0, geometry: [],
+      instruction: "Take exit 56-O.", maneuverType: "off ramp",
+      roadName: "Boulevard Roméo-Vachon Nord", exitNumber: "56-O")
+    XCTAssertEqual(
+      try card(self.trip(with: unsigned), 1),
+      ["Exit 56-O · Boulevard Roméo-Vachon Nord", "Exit 56-O"])
+  }
+
   /// Build 82, Crowchild Trail (owner's TestFlight photo, 2026-11-16): the card showed the spoken
   /// sentence and, with the navigation bar hidden, "...ramp on the left 1A East / Crowchild Trail
   /// toward 1A East, Crowchild Trail".
