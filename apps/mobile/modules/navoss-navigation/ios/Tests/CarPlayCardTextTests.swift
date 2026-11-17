@@ -19,6 +19,35 @@ final class CarPlayCardTextTests: XCTestCase {
     return expression.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
   }
 
+  /// A two-step trip whose second step is `step`, for provider texts no fixture records.
+  private func trip(with step: NavOSSCarPlayRouteStep) -> NavOSSCarPlayTrip {
+    let start = NavOSSCarPlayCoordinate(latitude: 51.0, longitude: -114.0)
+    let turn = NavOSSCarPlayCoordinate(latitude: 51.001, longitude: -114.0)
+    let end = NavOSSCarPlayCoordinate(latitude: 51.001, longitude: -114.001)
+    let depart = NavOSSCarPlayRouteStep(
+      distanceMeters: 110, durationSeconds: 10, geometry: [start, turn], instruction: "Drive north.",
+      maneuverType: "depart", roadName: "")
+    let maneuver = NavOSSCarPlayRouteStep(
+      distanceMeters: 70, durationSeconds: 8, geometry: [turn, end], instruction: step.instruction,
+      maneuverType: step.maneuverType, roadName: step.roadName,
+      maneuverModifier: step.maneuverModifier, exitNumber: step.exitNumber, signpost: step.signpost,
+      signpostBranch: step.signpostBranch, signpostToward: step.signpostToward)
+    return NavOSSCarPlayTrip(
+      destination: NavOSSCarPlayDestination(
+        id: "d", label: "D", latitude: end.latitude, longitude: end.longitude, name: "D"),
+      distanceMeters: 180, durationSeconds: 18, geometry: [start, turn, end], id: "t",
+      steps: [depart, maneuver])
+  }
+
+  private func step(
+    _ instruction: String, type: String, road: String = "", modifier: String? = nil,
+    toward: [String]? = nil
+  ) -> NavOSSCarPlayRouteStep {
+    NavOSSCarPlayRouteStep(
+      distanceMeters: 0, durationSeconds: 0, geometry: [], instruction: instruction,
+      maneuverType: type, roadName: road, maneuverModifier: modifier, signpostToward: toward)
+  }
+
   private func recorded(_ name: String) throws -> NavOSSCarPlayTrip {
     try XCTUnwrap(try NavigationRoutesV2Tests.trips(name, version: .v2).first)
   }
@@ -186,6 +215,20 @@ final class CarPlayCardTextTests: XCTestCase {
     XCTAssertEqual(trip.steps[7].roadName, "Crowchild Trail SW")
     XCTAssertEqual(trip.steps[7].signpostToward, ["Crowchild Trail North"])
     XCTAssertEqual(try card(trip, 7), ["Crowchild Trail North", "Crowchild Trail N"])
+  }
+
+  /// Only a trailing direction or quadrant is a suffix; a leading or interior one is the name.
+  func testOnlyATrailingDirectionMakesTwoNamesTheSameRoad() throws {
+    let northShore = trip(
+      with: step(
+        "Turn right onto North Shore Road toward South Shore Road East.", type: "turn",
+        road: "North Shore Road", modifier: "right", toward: ["South Shore Road East"]))
+    XCTAssertEqual(try card(northShore, 1).first, "North Shore Road")
+    let crowchild = trip(
+      with: step(
+        "Keep right to take Crowchild Trail SW toward Crowchild Trail North.", type: "fork",
+        road: "Crowchild Trail SW", modifier: "slight right", toward: ["Crowchild Trail North"]))
+    XCTAssertEqual(try card(crowchild, 1).first, "Crowchild Trail North")
   }
 
   func testOfflineRoundaboutNamesTheExitRoad() throws {

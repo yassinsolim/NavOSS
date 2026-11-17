@@ -589,19 +589,36 @@ func navOSSCarPlayCardAbbreviated(_ name: String) -> String {
 let navOSSCarPlayCardMaximumCharacters = 40
 
 private let navOSSCardKeyLocale = Locale(identifier: "en_CA")
-private let navOSSCardKeyIgnoredWords: Set<String> = [
-  "north", "south", "east", "west", "n", "s", "e", "w", "ne", "nw", "se", "sw", "nord", "sud",
-  "est", "ouest", "highway", "hwy", "route",
-]
+private let navOSSCardKeyIgnoredWords: Set<String> = ["highway", "hwy", "route"]
 
-/// A name reduced to what identifies the road: case, accents, punctuation ("/", ",", "."),
-/// quadrants and the word "Highway" removed, so "Glenmore Trail West" matches "Glenmore Trail SE"
-/// and "Highway 403" matches "403 East".
+private let navOSSCardTravelDirections: Set<String> = [
+  "north", "south", "east", "west", "n", "s", "e", "w", "nord", "sud", "est", "ouest",
+]
+private let navOSSCardQuadrants: Set<String> = ["ne", "nw", "se", "sw"]
+
+/// A name's words, case and accents folded and punctuation dropped, split into the name itself and
+/// its trailing direction or quadrant suffix ("Crowchild Trail SW" → "crowchild trail" + "sw").
+/// Only trailing tokens are a suffix: in "North Shore Road" the direction is part of the name.
+private func navOSSCardNameParts(_ name: String) -> (core: [String], suffix: [String]) {
+  var words = name.folding(
+    options: [.caseInsensitive, .diacriticInsensitive], locale: navOSSCardKeyLocale
+  )
+  .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+  .map(String.init)
+  var suffix: [String] = []
+  while words.count > 1, let last = words.last,
+    navOSSCardTravelDirections.contains(last) || navOSSCardQuadrants.contains(last)
+  {
+    suffix.insert(words.removeLast(), at: 0)
+  }
+  return (words, suffix)
+}
+
+/// What identifies the road: the name without its trailing direction or quadrant and without the
+/// word "Highway", so "Glenmore Trail West" matches "Glenmore Trail SE" and "Highway 403" matches
+/// "403 East", but "North Shore Road" does not match "South Shore Road East".
 private func navOSSCardCoreKey(_ name: String) -> String {
-  name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: navOSSCardKeyLocale)
-    .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
-    .map(String.init)
-    .filter { !navOSSCardKeyIgnoredWords.contains($0) }
+  navOSSCardNameParts(name).core.filter { !navOSSCardKeyIgnoredWords.contains($0) }
     .joined(separator: " ")
 }
 
@@ -613,19 +630,12 @@ private func navOSSCardRoadName(_ raw: String) -> String {
     .trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
-private let navOSSCardTravelDirections: Set<String> = [
-  "north", "south", "east", "west", "n", "s", "e", "w", "nord", "sud", "est", "ouest",
-]
-private let navOSSCardQuadrants: Set<String> = ["ne", "nw", "se", "sw"]
-
-/// 2 when a name carries a direction of travel ("North", "W"), 1 for an address quadrant only
+/// 2 when a name ends in a direction of travel ("North", "W"), 1 in an address quadrant only
 /// ("SW"), 0 for neither. A sign's direction of travel is what the driver chooses between.
 private func navOSSCardTravelDirectionRank(_ name: String) -> Int {
-  // Whole words, the first excluded, so "North Shore Road" is not a direction of travel.
-  let words = name.lowercased().split(whereSeparator: \.isWhitespace)
-    .map { $0.trimmingCharacters(in: .punctuationCharacters) }
-  if words.dropFirst().contains(where: navOSSCardTravelDirections.contains) { return 2 }
-  return words.contains(where: navOSSCardQuadrants.contains) ? 1 : 0
+  let suffix = navOSSCardNameParts(name).suffix
+  if suffix.contains(where: navOSSCardTravelDirections.contains) { return 2 }
+  return suffix.isEmpty ? 0 : 1
 }
 
 /// Sign or road names with blanks and repeats (by core key) removed. Of two names for one road the
