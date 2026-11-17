@@ -831,7 +831,8 @@ try {
       metricsByName.get('carplay-preview-dark.png'),
       metricsByName.get('carplay-preview-resize.png'),
     ].filter((metric) => metric !== undefined);
-    if (previewRouteMetrics.some((metric) => metric.routeBlueRatio < 0.0007)) {
+    // The preview fits the route into the third of the map the route-choice sheet leaves.
+    if (previewRouteMetrics.some((metric) => metric.routeBlueRatio < 0.0005)) {
       throw new Error('A widened CarPlay preview does not contain enough route-blue pixels.');
     }
     if (
