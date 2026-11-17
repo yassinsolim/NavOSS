@@ -6,7 +6,7 @@ import ImageIO
 import Vision
 
 struct Metrics: Codable {
-  let destinationBlueRatio: Double
+  let destinationRedRatio: Double
   let dominantRatio: Double
   let height: Int
   let luminanceVariance: Double
@@ -16,7 +16,7 @@ struct Metrics: Codable {
   let quantizedColorCount: Int
   let recognizedText: [String]
   let originGreenRatio: Double
-  let routeGreenRatio: Double
+  let routeBlueRatio: Double
   let width: Int
 }
 
@@ -50,9 +50,9 @@ func analyze(path: String) throws -> Metrics {
   var luminanceSquaredSum = 0.0
   var sampleCount = 0
   var nearBackgroundCount = 0
-  var destinationBlueCount = 0
+  var destinationRedCount = 0
   var originGreenCount = 0
-  var routeGreenCount = 0
+  var routeBlueCount = 0
 
   for y in Swift.stride(from: 0, to: height, by: stride) {
     for x in Swift.stride(from: 0, to: width, by: stride) {
@@ -68,20 +68,20 @@ func analyze(path: String) throws -> Metrics {
       if max(red, green, blue) - min(red, green, blue) < 5 && (luminance < 10 || luminance > 245) {
         nearBackgroundCount += 1
       }
-      if Int(green) > 80 && Int(green) > Int(red) + 35 && Int(green) > Int(blue) + 20
-        && Int(blue) > Int(red) + 30
+      // The CarPlay route blue: #2F7BF6 on the light map, #5B9BFF on the dark one.
+      if Int(blue) > 200 && Int(red) < 120 && Int(blue) > Int(red) + 110 && Int(green) > 90
+        && Int(green) < 185
       {
-        routeGreenCount += 1
+        routeBlueCount += 1
       }
       if Int(red) < 90 && Int(green) > 160 && Int(blue) >= 50 && Int(blue) < 130
         && Int(green) > Int(blue) + 70
       {
         originGreenCount += 1
       }
-      if Int(red) < 80 && Int(green) >= 70 && Int(green) < 180 && Int(blue) > 180
-        && Int(blue) > Int(green) + 70
-      {
-        destinationBlueCount += 1
+      // The coral destination dot, #E5484D.
+      if Int(red) > 200 && Int(green) < 110 && Int(blue) < 120 && Int(red) > Int(green) + 100 {
+        destinationRedCount += 1
       }
       sampleCount += 1
     }
@@ -111,7 +111,7 @@ func analyze(path: String) throws -> Metrics {
     $0.topCandidates(1).first?.string
   }
   return Metrics(
-    destinationBlueRatio: Double(destinationBlueCount) / Double(sampleCount),
+    destinationRedRatio: Double(destinationRedCount) / Double(sampleCount),
     dominantRatio: Double(dominant) / Double(sampleCount),
     height: height,
     luminanceVariance: variance,
@@ -121,7 +121,7 @@ func analyze(path: String) throws -> Metrics {
     quantizedColorCount: colors.count,
     recognizedText: recognizedText,
     originGreenRatio: Double(originGreenCount) / Double(sampleCount),
-    routeGreenRatio: Double(routeGreenCount) / Double(sampleCount),
+    routeBlueRatio: Double(routeBlueCount) / Double(sampleCount),
     width: width
   )
 }
