@@ -18,7 +18,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     "real-vancouver-lanes-night",
     "preview-alternatives", "guidance-lanes-then", "guidance-roundabout", "reroute-proposal",
     "arrival", "end", "dashboard",
-    "audio-release", "idle-live-location", "offline-preview",
+    "audio-release", "idle-live-location", "offline-preview", "offline-guidance",
   ]
 
   private let mapViewController = NavOSSCarPlayMapViewController()
@@ -522,7 +522,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       return
     case "real-calgary-exit", "real-calgary-exit-night", "real-vancouver-exit",
       "real-vancouver-lanes-night", "guidance-far-stopped", "guidance-far-moving",
-      "guidance-narrow":
+      "guidance-narrow", "offline-guidance":
       // Ready is signalled below only when the recording decoded and rendered.
       guard renderRecordedRouteScenario() else { return }
       if scenario == "guidance-narrow" {
@@ -632,7 +632,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
 
   private var recordedScenario: RecordedScenario {
     switch scenario {
-    case "real-calgary-exit", "real-calgary-exit-night":
+    case "real-calgary-exit", "real-calgary-exit-night", "offline-guidance":
+      // `offline-guidance` is the same Calgary exit drawn on the installed offline style.
       RecordedScenario(fixture: "calgary-deerfoot-glenmore.v2", maneuverIndex: 1, metersBefore: 450)
     case "real-vancouver-exit":
       RecordedScenario(fixture: "vancouver-bc91-highway99.v2", maneuverIndex: 1, metersBefore: 450)
@@ -1572,6 +1573,13 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
 
   private func markReady() {
     let map = mapViewController
+    // An offline scenario must draw the installed region: without one the map silently keeps the
+    // hosted style, and the capture would pass for an offline one.
+    if scenario.hasPrefix("offline-"), !map.drawsOfflineStyle {
+      print("NAVOSS_CARPLAY_VISUAL_FAILED \(scenario): no installed offline region was drawn")
+      fflush(stdout)
+      return
+    }
     let camera = map.mapView.camera
     if camera.pitch > 0 {
       // The follow camera as rendered, for comparing camera tuning between builds.
