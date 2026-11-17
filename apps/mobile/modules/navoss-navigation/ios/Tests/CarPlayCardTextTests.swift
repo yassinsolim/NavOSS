@@ -128,6 +128,26 @@ final class CarPlayCardTextTests: XCTestCase {
     }
   }
 
+  func testNumberedExitKeepsTheRoadNamedByTheProvider() throws {
+    let exit = NavOSSCarPlayRouteStep(
+      distanceMeters: 0, durationSeconds: 0, geometry: [],
+      instruction: "Take exit 380 onto Brimley Road South toward Toronto.",
+      maneuverType: "off ramp", roadName: "Brimley Road South", exitNumber: "380",
+      signpost: "Toronto", signpostToward: ["Toronto"])
+    XCTAssertEqual(
+      try card(trip(with: exit), 1),
+      ["Exit 380 · Brimley Road South", "Exit 380 · Brimley Rd S", "Exit 380"])
+    // An unmarked toward field does not prove which text is the exit's destination sign.
+    let unsigned = NavOSSCarPlayRouteStep(
+      distanceMeters: 0, durationSeconds: 0, geometry: [],
+      instruction: "Take exit 56-O toward Airport Pierre-Elliott-Trudeau.",
+      maneuverType: "off ramp", roadName: "Boulevard Roméo-Vachon Nord", exitNumber: "56-O",
+      signpostToward: ["Airport Pierre-Elliott-Trudeau"])
+    XCTAssertEqual(
+      try card(trip(with: unsigned), 1),
+      ["Exit 56-O · Boulevard Roméo-Vachon Nord", "Exit 56-O"])
+  }
+
   /// The step itself gives both the road name and its uppercase initialism; no alias table.
   func testRoadNameAndItsSignedInitialismAreNotRepeated() throws {
     let trips = try NavigationRoutesV2Tests.trips("squareone-scarborough-validation83.v2", version: .v2)

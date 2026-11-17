@@ -939,11 +939,15 @@ public func navOSSCarPlayCardInstructionVariants(
         variants += navOSSCardNameVariants([carriageway], prefix: "")
       }
     } else if isRamp || exitNumber != nil, hasSignFields {
-      // At a numbered highway exit, a supplied destination sign is what the driver looks for,
-      // not an unrelated street reached afterward. Keep today's road/direction choice when
-      // the sign names that same road, or no destination sign was supplied.
+      // A destination can replace an unrelated post-exit road only when the provider names no
+      // maneuver target (in particular, no "onto" road) and explicitly marks these destinations
+      // as its signpost. Unparsed sentences and unmarked toward fields keep today's road text.
       let destinationIsTheSign =
         type == "off ramp" && exitNumber != nil && branch.isEmpty && !toward.isEmpty
+        && parts != nil && parts?.target == nil
+        && step.signpost.map {
+          navOSSCardCoreKey($0) == navOSSCardCoreKey(toward.joined(separator: " / "))
+        } == true
         && !toward.contains { navOSSCardCoreKey($0) == navOSSCardCoreKey(road) }
       let targets =
         !branch.isEmpty ? branch
@@ -952,8 +956,10 @@ public func navOSSCarPlayCardInstructionVariants(
       variants = navOSSCardSignVariants(
         exitNumber: exitNumber, targets: targets, toward: toward,
         towardIsTheSign: destinationIsTheSign || (branch.isEmpty && road.isEmpty))
-      if destinationIsTheSign,
-        !variants.contains(where: { $0.count <= navOSSCarPlayCardMaximumCharacters && $0 != "Exit \(exitNumber!)" })
+      if destinationIsTheSign, let exitNumber,
+        !variants.contains(where: {
+          $0.count <= navOSSCarPlayCardMaximumCharacters && $0 != "Exit \(exitNumber)"
+        })
       {
         // The sign plus "Exit N" can exceed two lines. Use the supplied sign alone ahead of
         // the exit-only variant; never abbreviate an airport/place name by guessing.
