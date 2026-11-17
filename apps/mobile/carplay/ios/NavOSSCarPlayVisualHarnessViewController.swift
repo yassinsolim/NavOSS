@@ -22,6 +22,8 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
   ]
 
   private let mapViewController = NavOSSCarPlayMapViewController()
+  private let isDarkAppearance =
+    ProcessInfo.processInfo.environment["NAVOSS_CARPLAY_VISUAL_APPEARANCE"] == "dark"
   private let scenario: String
 
   init(scenario: String) {
@@ -37,10 +39,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = .black
-    let darkAppearance = ProcessInfo.processInfo.environment[
-      "NAVOSS_CARPLAY_VISUAL_APPEARANCE"
-    ] == "dark"
-    mapViewController.applyAppearance(darkAppearance ? .dark : .light)
+    mapViewController.applyAppearance(isDarkAppearance ? .dark : .light)
     // Offline scenarios draw the installed offline region's local style (needs a region
     // installed on the simulator; see docs/architecture/offline.md).
     mapViewController.forcesOfflineStyle = scenario.hasPrefix("offline-")
@@ -387,6 +386,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       renderGuidance(
         trip: trip, guidance: guidance, position: position, progress: 0.29, speedLimitKph: 50,
         speeding: night ? .overLimit : .withinLimit)
+      showMockCard(trip: trip, guidance: guidance)
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
         guard let self else { return }
         guard self.mapViewController.currentRoadNameReadout == "9 Avenue SW" else {
@@ -1113,8 +1113,11 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       ? mapViewController.additionalSafeAreaInsets.left : 300
     let cardWidth = column - 20
     let card = UIView(frame: CGRect(x: 10, y: 10, width: cardWidth, height: 0))
-    // The brief's ink card (CarPlay's guidance background colour is set by the scene delegate).
-    card.backgroundColor = UIColor(red: 0.102, green: 0.141, blue: 0.149, alpha: 1)
+    // The scene delegate's guidance background: ink on the light map, raised surface on the dark.
+    card.backgroundColor =
+      isDarkAppearance
+      ? UIColor(red: 0x1E / 255, green: 0x2B / 255, blue: 0x2C / 255, alpha: 1)
+      : UIColor(red: 0x0E / 255, green: 0x15 / 255, blue: 0x16 / 255, alpha: 1)
     card.layer.cornerRadius = 12
     card.clipsToBounds = true
     mockHost.addSubview(card)
@@ -1123,16 +1126,17 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       image: NavOSSCarPlayManeuverSymbols.image(kind: primary.kind, angleDegrees: primary.turnAngleDegrees))
     symbol.tintColor = .white
     symbol.contentMode = .scaleAspectFit
-    symbol.frame = CGRect(x: 12, y: 12, width: 56, height: 56)
+    // Arrow beside the distance on one row, then the card text (the production variants).
+    symbol.frame = CGRect(x: 12, y: 12, width: 40, height: 40)
     card.addSubview(symbol)
     let distance = mockLabel(
       navOSSCarPlayDistanceLabel(guidance.distanceToManeuverMeters), size: 24, weight: .bold)
-    distance.frame = CGRect(x: 80, y: 12, width: cardWidth - 90, height: 30)
+    distance.frame = CGRect(x: 62, y: 17, width: cardWidth - 72, height: 30)
     card.addSubview(distance)
     let instruction = mockLabel(primary.instructionVariants[0], size: 15, weight: .semibold)
-    instruction.frame = CGRect(x: 80, y: 42, width: cardWidth - 90, height: 40)
+    instruction.frame = CGRect(x: 12, y: 58, width: cardWidth - 24, height: 40)
     card.addSubview(instruction)
-    var y: CGFloat = 92
+    var y: CGFloat = 104
     if let lanes = primary.lanes {
       let laneWidth: CGFloat = 40
       for (index, lane) in lanes.enumerated() {
