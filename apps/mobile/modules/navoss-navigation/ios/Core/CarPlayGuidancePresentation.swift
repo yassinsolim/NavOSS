@@ -613,6 +613,21 @@ private func navOSSCardRoadName(_ raw: String) -> String {
     .trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
+private let navOSSCardTravelDirections: Set<String> = [
+  "north", "south", "east", "west", "n", "s", "e", "w", "nord", "sud", "est", "ouest",
+]
+private let navOSSCardQuadrants: Set<String> = ["ne", "nw", "se", "sw"]
+
+/// 2 when a name carries a direction of travel ("North", "W"), 1 for an address quadrant only
+/// ("SW"), 0 for neither. A sign's direction of travel is what the driver chooses between.
+private func navOSSCardTravelDirectionRank(_ name: String) -> Int {
+  // Whole words, the first excluded, so "North Shore Road" is not a direction of travel.
+  let words = name.lowercased().split(whereSeparator: \.isWhitespace)
+    .map { $0.trimmingCharacters(in: .punctuationCharacters) }
+  if words.dropFirst().contains(where: navOSSCardTravelDirections.contains) { return 2 }
+  return words.contains(where: navOSSCardQuadrants.contains) ? 1 : 0
+}
+
 /// Sign or road names with blanks and repeats (by core key) removed. Of two names for one road the
 /// one that carries a direction wins ("403 East" over "Highway 403"): it is what the sign adds.
 private func navOSSCardDistinctNames(_ names: [String]) -> [String] {
@@ -622,10 +637,9 @@ private func navOSSCardDistinctNames(_ names: [String]) -> [String] {
     let key = navOSSCardCoreKey(name)
     guard !name.isEmpty, !key.isEmpty else { continue }
     if let existing = result.firstIndex(where: { navOSSCardCoreKey($0) == key }) {
-      let hasDirection = { (value: String) in
-        value.split(separator: " ").contains { navOSSCardDirections.contains(String($0)) }
+      if navOSSCardTravelDirectionRank(name) > navOSSCardTravelDirectionRank(result[existing]) {
+        result[existing] = name
       }
-      if hasDirection(name), !hasDirection(result[existing]) { result[existing] = name }
     } else {
       result.append(name)
     }
@@ -759,7 +773,7 @@ public func navOSSCarPlayCardInstructionVariants(
 ) -> [String] {
   guard trip.steps.indices.contains(stepIndex) else { return [navOSSCarPlayCardAction(kind)] }
   let step = trip.steps[stepIndex]
-  let road = navOSSCardRoadName(step.roadName)
+  let mappedRoad = navOSSCardRoadName(step.roadName)
   let exitNumber = step.exitNumber?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
   let branch = navOSSCardDistinctNames(step.signpostBranch ?? [])
   var toward = navOSSCardDistinctNames(step.signpostToward ?? [])
@@ -767,6 +781,15 @@ public func navOSSCarPlayCardInstructionVariants(
     // An older server sends only the joined signpost text, "branch: toward".
     toward = navOSSCardDistinctNames(signpost.components(separatedBy: CharacterSet(charactersIn: ":,")))
   }
+  // When a sign names the road the step joins with its direction of travel ("Crowchild Trail
+  // North" over "Crowchild Trail SW"), the sign wins: the direction is the driver's decision, the
+  // address quadrant is not.
+  let road =
+    navOSSCardTravelDirectionRank(mappedRoad) == 2
+    ? mappedRoad
+    : (branch + toward).first {
+      navOSSCardCoreKey($0) == navOSSCardCoreKey(mappedRoad) && navOSSCardTravelDirectionRank($0) == 2
+    } ?? mappedRoad
   let action = navOSSCarPlayCardAction(kind)
 
   var variants: [String]

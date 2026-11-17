@@ -64,13 +64,15 @@ final class CarPlayCardTextTests: XCTestCase {
     let trip = try recorded("calgary-deerfoot-glenmore.v2")
     // "Take exit 248 toward Glenmore Trail.": no branch, so the place on the sign is the target.
     XCTAssertEqual(try card(trip, 1), ["Exit 248 · Glenmore Trail", "Exit 248"])
-    // "Glenmore Trail West" names the road the step already joins, so no "toward".
-    XCTAssertEqual(try card(trip, 2), ["Exit 248B · Glenmore Trail SE", "Exit 248B"])
+    // The sign names the road the step joins with its direction of travel; that is what the
+    // driver picks, so it wins over the address quadrant ("SE").
+    XCTAssertEqual(
+      try card(trip, 2), ["Exit 248B · Glenmore Trail West", "Exit 248B · Glenmore Trail W", "Exit 248B"])
     // "(Hospital)" is new, but "... toward 14 Street West (Hospital)" (50 characters) would be a
     // third card line, so the sign leads.
     XCTAssertEqual(try card(trip, 3), ["14 Street W South", "14 St W South"])
-    // A plain "Continue toward ..." shows the road the step joins.
-    XCTAssertEqual(try card(trip, 5), ["14 Street SW", "14 St SW"])
+    // "Continue toward 14 Street W South" on 14 Street SW: the signed direction, not the quadrant.
+    XCTAssertEqual(try card(trip, 5), ["14 Street W South", "14 St W South"])
   }
 
   func testVancouverLanesRouteShowsSignsRoadsAndBareTurns() throws {
@@ -169,6 +171,21 @@ final class CarPlayCardTextTests: XCTestCase {
       destination: destination, waypoints: [], preferences: NavOSSRoutePreferences())
     XCTAssertEqual(offline[1].steps[3].instruction, "Take the exit on the left.")
     XCTAssertEqual(try card(offline[1], 3), ["Take the exit on the left", "Exit left"])
+  }
+
+  /// Review of #140: Bow Trail to Crowchild (on-device route, step 7) joins "Crowchild Trail SW"
+  /// under a "Crowchild Trail North" sign; the card dropped the northbound the driver must pick.
+  func testSignedDirectionOfTravelWinsOverTheAddressQuadrant() throws {
+    let destination = NavOSSCarPlayDestination(
+      id: "dest", label: "Destination", latitude: 51.0866, longitude: -114.1305, name: "Destination")
+    let trip = try XCTUnwrap(
+      try navOSSOfflineTrips(
+        fromValhallaJSON: OfflineFixtures.data("calgary-downtown-north.response.json"),
+        destination: destination, waypoints: [], preferences: NavOSSRoutePreferences()
+      ).first)
+    XCTAssertEqual(trip.steps[7].roadName, "Crowchild Trail SW")
+    XCTAssertEqual(trip.steps[7].signpostToward, ["Crowchild Trail North"])
+    XCTAssertEqual(try card(trip, 7), ["Crowchild Trail North", "Crowchild Trail N"])
   }
 
   func testOfflineRoundaboutNamesTheExitRoad() throws {
