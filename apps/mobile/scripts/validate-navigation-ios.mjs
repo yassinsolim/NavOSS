@@ -31,6 +31,9 @@ const developerDirectory =
 const carPlayOnly = process.argv.includes('--carplay-only');
 const phoneOnly = process.argv.includes('--phone-only');
 const reuseBuild = process.argv.includes('--reuse-build');
+// Also captures CarPlay on the installed offline style. Needs a region installed on the simulator
+// beforehand (docs/testing/navigation-validation.md), so it is opt-in.
+const offlineStyles = process.argv.includes('--offline');
 const phases = [];
 const failures = [];
 const children = new Set();
@@ -324,6 +327,11 @@ async function waitForCarPlayScenarioReady(name, scenario, outputPath, timeoutMs
   while (Date.now() < deadline) {
     const output = await readFile(outputPath, 'utf8').catch(() => '');
     if (output.includes(token)) return;
+    const failure = output
+      .split('\n')
+      .find((line) => line.startsWith('NAVOSS_CARPLAY_VISUAL_FAILED'));
+    if (failure !== undefined)
+      throw new Error(`CarPlay visual scenario failed: ${name}: ${failure}`);
     await delay(250);
   }
   throw new Error(
@@ -656,6 +664,24 @@ try {
       if (carPlayOnly && !reuseBuild) {
         await installSimulatorApp();
       }
+      if (offlineStyles) {
+        const container = spawnSync(
+          'xcrun',
+          ['simctl', 'get_app_container', simulatorId, 'org.navoss.mobile', 'data'],
+          { encoding: 'utf8', env: environment },
+        );
+        const active = await readFile(
+          join(container.stdout.trim(), 'Library/Application Support/NavOSSOffline/active.json'),
+          'utf8',
+        ).catch(() => undefined);
+        if (
+          container.status !== 0 ||
+          active === undefined ||
+          JSON.parse(active).regions.length === 0
+        ) {
+          throw new Error('--offline needs an offline region installed on the simulator.');
+        }
+      }
       await setLocationPrivacy('grant');
       await run(
         'xcrun',
@@ -678,7 +704,17 @@ try {
           120_000,
         );
       }
+      const offlineCaptures = offlineStyles
+        ? [
+            // The installed region's local style, restyled like the hosted one above.
+            ['carplay-offline-preview-light', 'offline-preview', 'light'],
+            ['carplay-offline-preview-dark', 'offline-preview', 'dark'],
+            ['carplay-offline-guidance-light', 'offline-guidance', 'light'],
+            ['carplay-offline-guidance-dark', 'offline-guidance', 'dark'],
+          ]
+        : [];
       for (const [name, scenario, appearance] of [
+        ...offlineCaptures,
         ['carplay-preview-light', 'preview', 'light'],
         ['carplay-preview-dark', 'preview', 'dark'],
         ['carplay-preview-short', 'preview-short', 'light'],
@@ -807,6 +843,8 @@ try {
       metricsByName.get('carplay-real-calgary-exit-night.png'),
       metricsByName.get('carplay-real-vancouver-exit.png'),
       metricsByName.get('carplay-real-vancouver-lanes-night.png'),
+      metricsByName.get('carplay-offline-guidance-light.png'),
+      metricsByName.get('carplay-offline-guidance-dark.png'),
     ].filter((metric) => metric !== undefined);
     // The tilted guidance camera draws the route ahead foreshortened and part of it sits under
     // the card, so a present route covers less of the frame than the old flat camera's did.
@@ -831,6 +869,8 @@ try {
       metricsByName.get('carplay-preview-dark.png'),
       metricsByName.get('carplay-preview-resize.png'),
       metricsByName.get('carplay-flow-preview-alternatives.png'),
+      metricsByName.get('carplay-offline-preview-light.png'),
+      metricsByName.get('carplay-offline-preview-dark.png'),
     ].filter((metric) => metric !== undefined);
     // The preview fits the route into the third of the map the route-choice sheet leaves; the
     // correct fit draws 0.00064 (resize) to 0.0016 (alternatives) of the frame in route blue.
@@ -870,6 +910,7 @@ try {
       ['carplay-progress-05.png', 'carplay-progress-60.png'],
       ['carplay-progress-05.png', 'carplay-overview.png'],
       ['carplay-guidance-maneuver.png', 'carplay-guidance-night.png'],
+      ['carplay-offline-preview-light.png', 'carplay-offline-preview-dark.png'],
     ]) {
       const firstMetric = metricsByName.get(first);
       const secondMetric = metricsByName.get(second);
@@ -879,6 +920,27 @@ try {
       ).length;
       if (changedCells / firstMetric.perceptualSignature.length < 0.08) {
         throw new Error(`Screenshots are not visually distinct: ${first} and ${second}`);
+      }
+    }
+    // The offline style must get the hosted look. Each offline capture renders the same view as
+    // a hosted one: on 2026-11-17 they differed in 0-7% of cells (newer hosted OSM data), and with
+    // the restyle skipped on the offline style in 24% (guidance, mostly black phone margin) to 97%.
+    for (const [offline, hosted] of [
+      ['carplay-offline-preview-light.png', 'carplay-preview-light.png'],
+      ['carplay-offline-preview-dark.png', 'carplay-preview-dark.png'],
+      ['carplay-offline-guidance-light.png', 'carplay-real-calgary-exit.png'],
+      ['carplay-offline-guidance-dark.png', 'carplay-real-calgary-exit-night.png'],
+    ]) {
+      const offlineMetric = metricsByName.get(offline);
+      const hostedMetric = metricsByName.get(hosted);
+      if (offlineMetric === undefined) continue;
+      if (hostedMetric === undefined)
+        throw new Error(`${offline} has no hosted capture ${hosted}.`);
+      const changedCells = offlineMetric.perceptualSignature.filter(
+        (value, index) => Math.abs(value - hostedMetric.perceptualSignature[index]) >= 8,
+      ).length;
+      if (changedCells / offlineMetric.perceptualSignature.length > 0.12) {
+        throw new Error(`Offline style does not look like the hosted one: ${offline} vs ${hosted}`);
       }
     }
     await writeFile(

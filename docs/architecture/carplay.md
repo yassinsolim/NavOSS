@@ -460,8 +460,14 @@ with `#C4CACC` casing / `#2F3B3F` with `#182023` casing; motorways `#F3E0B4` wit
 casing / `#5C5446` with `#2A2620` casing; road labels `#4A5357` / `#C3CBCE`. Land-use fills,
 footpaths, one-way arrows, 3D buildings, and transit-stop POIs are hidden. During guidance,
 recognized road fills and casings widen 2.2× for minor/secondary roads and 1.6× for major/
-motorways, then restore afterward. Unknown layers are left alone. The offline restyle has not been
-visually verified.
+motorways, then restore afterward. Unknown layers are left alone. The offline styles (bundle
+`2026-11-11-v1-798f5c442644`) have the hosted styles' layers verbatim minus the Natural Earth
+hillshade raster, so every layer gets the same role (`CarPlayBasemapStyleTests` checks the shipped
+offline layer lists). On 2026-11-17 the harness's `--offline` captures of the installed Calgary
+region, preview and guidance in light and dark, matched their hosted twins: blue route above muted
+roads, legible labels, visible puck, `© OpenMapTiles` attribution. A failed restyle cannot blank
+the map: it only sets colours, widths, spacing, visibility of land-use/extrusion/path layers and a
+POI filter, and leaves layers it does not recognise as the style drew them.
 
 Overview and preview use `navOSSCarPlayFitCamera`, a flat Web Mercator fit accounting for heading,
 padding, and safe area. MapLibre's `setVisibleCoordinates` over-zoomed a 1 km route to about
