@@ -19,6 +19,35 @@ final class CarPlayCardTextTests: XCTestCase {
     return expression.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
   }
 
+  /// A two-step trip whose second step is `step`, for provider texts no fixture records.
+  private func trip(with step: NavOSSCarPlayRouteStep) -> NavOSSCarPlayTrip {
+    let start = NavOSSCarPlayCoordinate(latitude: 51.0, longitude: -114.0)
+    let turn = NavOSSCarPlayCoordinate(latitude: 51.001, longitude: -114.0)
+    let end = NavOSSCarPlayCoordinate(latitude: 51.001, longitude: -114.001)
+    let depart = NavOSSCarPlayRouteStep(
+      distanceMeters: 110, durationSeconds: 10, geometry: [start, turn], instruction: "Drive north.",
+      maneuverType: "depart", roadName: "")
+    let maneuver = NavOSSCarPlayRouteStep(
+      distanceMeters: 70, durationSeconds: 8, geometry: [turn, end], instruction: step.instruction,
+      maneuverType: step.maneuverType, roadName: step.roadName,
+      maneuverModifier: step.maneuverModifier, exitNumber: step.exitNumber, signpost: step.signpost,
+      signpostBranch: step.signpostBranch, signpostToward: step.signpostToward)
+    return NavOSSCarPlayTrip(
+      destination: NavOSSCarPlayDestination(
+        id: "d", label: "D", latitude: end.latitude, longitude: end.longitude, name: "D"),
+      distanceMeters: 180, durationSeconds: 18, geometry: [start, turn, end], id: "t",
+      steps: [depart, maneuver])
+  }
+
+  private func step(
+    _ instruction: String, type: String, road: String = "", modifier: String? = nil,
+    toward: [String]? = nil
+  ) -> NavOSSCarPlayRouteStep {
+    NavOSSCarPlayRouteStep(
+      distanceMeters: 0, durationSeconds: 0, geometry: [], instruction: instruction,
+      maneuverType: type, roadName: road, maneuverModifier: modifier, signpostToward: toward)
+  }
+
   private func recorded(_ name: String) throws -> NavOSSCarPlayTrip {
     try XCTUnwrap(try NavigationRoutesV2Tests.trips(name, version: .v2).first)
   }
@@ -64,13 +93,15 @@ final class CarPlayCardTextTests: XCTestCase {
     let trip = try recorded("calgary-deerfoot-glenmore.v2")
     // "Take exit 248 toward Glenmore Trail.": no branch, so the place on the sign is the target.
     XCTAssertEqual(try card(trip, 1), ["Exit 248 · Glenmore Trail", "Exit 248"])
-    // "Glenmore Trail West" names the road the step already joins, so no "toward".
-    XCTAssertEqual(try card(trip, 2), ["Exit 248B · Glenmore Trail SE", "Exit 248B"])
+    // The sign names the road the step joins with its direction of travel; that is what the
+    // driver picks, so it wins over the address quadrant ("SE").
+    XCTAssertEqual(
+      try card(trip, 2), ["Exit 248B · Glenmore Trail West", "Exit 248B · Glenmore Trail W", "Exit 248B"])
     // "(Hospital)" is new, but "... toward 14 Street West (Hospital)" (50 characters) would be a
     // third card line, so the sign leads.
     XCTAssertEqual(try card(trip, 3), ["14 Street W South", "14 St W South"])
-    // A plain "Continue toward ..." shows the road the step joins.
-    XCTAssertEqual(try card(trip, 5), ["14 Street SW", "14 St SW"])
+    // "Continue toward 14 Street W South" on 14 Street SW: the signed direction, not the quadrant.
+    XCTAssertEqual(try card(trip, 5), ["14 Street W South", "14 St W South"])
   }
 
   func testVancouverLanesRouteShowsSignsRoadsAndBareTurns() throws {
@@ -128,6 +159,106 @@ final class CarPlayCardTextTests: XCTestCase {
     let arrival = trip.steps.count - 1
     XCTAssertEqual(trip.steps[arrival].maneuverType, "arrive")
     XCTAssertEqual(try card(trip, arrival).first, trip.destination.name)
+  }
+
+  /// Review of #140: a stop's arrival named the final destination. The recorded Glenmore break
+  /// route arrives at the Glenmore Trail stop (step 3) with maneuvers still ahead.
+  func testIntermediateArrivalNamesTheStopNotTheFinalDestination() throws {
+    let trip = try recorded("calgary-deerfoot-glenmore-break.v2")
+    let arrivals = trip.steps.indices.filter { trip.steps[$0].maneuverType == "arrive" }
+    XCTAssertEqual(arrivals, [3, trip.steps.count - 1])
+    // No stop list on the trip: the stop is not given the destination's name.
+    XCTAssertEqual(try card(trip, 3), ["Stop"])
+    let stop = NavOSSCarPlayDestination(
+      id: "glenmore", label: "", latitude: 50.98, longitude: -114.07, name: "Glenmore Landing")
+    let withStop = trip.replacingWaypoints([stop])
+    XCTAssertEqual(try card(withStop, 3).first, "Glenmore Landing")
+    XCTAssertEqual(try card(withStop, trip.steps.count - 1).first, trip.destination.name)
+    // A stop without a usable name is "Stop", numbered when the trip has more than one.
+    let unnamed = NavOSSCarPlayDestination(
+      id: "a", label: " ", latitude: 50.98, longitude: -114.07, name: " ")
+    XCTAssertEqual(try card(trip.replacingWaypoints([unnamed]), 3), ["Stop"])
+    XCTAssertEqual(try card(trip.replacingWaypoints([unnamed, stop]), 3), ["Stop 1"])
+  }
+
+  /// Review of #140: without structured sign fields (the `/v1/routes` fallback, some on-device
+  /// steps) exits read "Exit right". What the provider's own instruction says is used instead.
+  func testExitsWithoutSignFieldsKeepTheirNumberAndNameFromTheInstruction() throws {
+    let v1 = try XCTUnwrap(try NavigationRoutesV2Tests.trips("calgary-deerfoot-glenmore.v1", version: .v1).first)
+    XCTAssertNil(v1.steps[1].exitNumber)
+    XCTAssertEqual(v1.steps[1].instruction, "Take exit 248 toward Glenmore Trail.")
+    XCTAssertEqual(try card(v1, 1), ["Exit 248 · Glenmore Trail", "Exit 248"])
+    // A road name but no sign fields: the sentence's exit number leads, and its signed direction
+    // ("Glenmore Trail West") wins over the road's quadrant.
+    XCTAssertEqual(v1.steps[2].roadName, "Glenmore Trail SE")
+    XCTAssertNil(v1.steps[2].signpostToward)
+    XCTAssertEqual(try card(v1, 2).first, "Exit 248B · Glenmore Trail West")
+    // "toward 14 Street West (Hospital)" would be a third card line.
+    XCTAssertEqual(try card(v1, 3), ["14 Street W South", "14 St W South"])
+    XCTAssertEqual(try card(v1, 4), ["14 Street W South", "14 St W South"])
+
+    // On-device: nothing to name, so the sentence (it says which side) and then the action.
+    let destination = NavOSSCarPlayDestination(
+      id: "dest", label: "Destination", latitude: 51.0866, longitude: -114.1305, name: "Destination")
+    let offline = try navOSSOfflineTrips(
+      fromValhallaJSON: OfflineFixtures.data("calgary-stoney-airport.response.json"),
+      destination: destination, waypoints: [], preferences: NavOSSRoutePreferences())
+    XCTAssertEqual(offline[1].steps[3].instruction, "Take the exit on the left.")
+    XCTAssertEqual(try card(offline[1], 3), ["Take the exit on the left", "Exit left"])
+  }
+
+  /// Review of #140: Bow Trail to Crowchild (on-device route, step 7) joins "Crowchild Trail SW"
+  /// under a "Crowchild Trail North" sign; the card dropped the northbound the driver must pick.
+  func testSignedDirectionOfTravelWinsOverTheAddressQuadrant() throws {
+    let destination = NavOSSCarPlayDestination(
+      id: "dest", label: "Destination", latitude: 51.0866, longitude: -114.1305, name: "Destination")
+    let trip = try XCTUnwrap(
+      try navOSSOfflineTrips(
+        fromValhallaJSON: OfflineFixtures.data("calgary-downtown-north.response.json"),
+        destination: destination, waypoints: [], preferences: NavOSSRoutePreferences()
+      ).first)
+    XCTAssertEqual(trip.steps[7].roadName, "Crowchild Trail SW")
+    XCTAssertEqual(trip.steps[7].signpostToward, ["Crowchild Trail North"])
+    XCTAssertEqual(try card(trip, 7), ["Crowchild Trail North", "Crowchild Trail N"])
+  }
+
+  /// Only a trailing direction or quadrant is a suffix; a leading or interior one is the name.
+  func testOnlyATrailingDirectionMakesTwoNamesTheSameRoad() throws {
+    let northShore = trip(
+      with: step(
+        "Turn right onto North Shore Road toward South Shore Road East.", type: "turn",
+        road: "North Shore Road", modifier: "right", toward: ["South Shore Road East"]))
+    XCTAssertEqual(try card(northShore, 1).first, "North Shore Road")
+    let crowchild = trip(
+      with: step(
+        "Keep right to take Crowchild Trail SW toward Crowchild Trail North.", type: "fork",
+        road: "Crowchild Trail SW", modifier: "slight right", toward: ["Crowchild Trail North"]))
+    XCTAssertEqual(try card(crowchild, 1).first, "Crowchild Trail North")
+  }
+
+  /// "No. " and "St. " end abbreviations, not sentences; the exit keeps its number and sign.
+  func testAbbreviationsInsideTheInstructionAreNotSentenceEnds() throws {
+    let numberThree = trip(
+      with: step(
+        "Take exit 12 on the right toward No. 3 Rd NORTH.", type: "off ramp",
+        modifier: "slight right"))
+    XCTAssertEqual(try card(numberThree, 1).first, "Exit 12 · No. 3 Rd NORTH")
+    let stAlbert = trip(
+      with: step("Take exit 7 toward St. Albert.", type: "off ramp", modifier: "slight right"))
+    XCTAssertEqual(try card(stAlbert, 1).first, "Exit 7 · St. Albert")
+    // A whitelisted abbreviation before a clause starter still ends the sentence: the next
+    // maneuver's road must not become this card's name.
+    let mainRoad = trip(
+      with: step(
+        "Keep right to take Main Rd. Then turn left onto Oak Road.", type: "fork",
+        modifier: "slight right"))
+    XCTAssertFalse(try card(mainRoad, 1).contains { $0.contains("Oak Road") })
+    XCTAssertEqual(try card(mainRoad, 1).last, "Keep right")
+    // Two sentences are still refused rather than mined for names.
+    let chained = trip(
+      with: step(
+        "Take exit 4. Then keep left.", type: "off ramp", modifier: "slight right"))
+    XCTAssertEqual(try card(chained, 1), ["Take exit 4. Then keep left", "Exit right"])
   }
 
   func testOfflineRoundaboutNamesTheExitRoad() throws {
