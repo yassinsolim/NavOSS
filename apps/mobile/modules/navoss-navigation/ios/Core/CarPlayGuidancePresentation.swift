@@ -525,6 +525,21 @@ public func navOSSCarPlayManeuverInfo(
   )
 }
 
+/// Draw maneuver symbols at the car's trait scale, not the backing screen's scale. CarPlay's
+/// layout can move an oversized symbol above the distance, or hide the instruction entirely.
+/// Positive finite traits are clamped to the supported 1...3 display-scale range.
+public func navOSSCarPlayManeuverDisplayScale(
+  windowTraitScale: CGFloat?, controllerTraitScale: CGFloat?
+) -> CGFloat {
+  if let windowTraitScale, windowTraitScale.isFinite, windowTraitScale > 0 {
+    return min(3, max(1, windowTraitScale))
+  }
+  if let controllerTraitScale, controllerTraitScale.isFinite, controllerTraitScale > 0 {
+    return min(3, max(1, controllerTraitScale))
+  }
+  return 2
+}
+
 // MARK: - Card text
 //
 // The card answers "what do I look for": the road to turn onto, or the sign over the ramp. It is
@@ -626,8 +641,29 @@ private func navOSSCardCoreKey(_ name: String) -> String {
 /// as "Highway 17", and Valhalla's "2/Deerfoot Trail SE" spaced as "Highway 2 / Deerfoot Trail SE".
 private func navOSSCardRoadName(_ raw: String) -> String {
   let first = raw.split(separator: ";").first.map(String.init) ?? ""
-  return navOSSReadableRoadName(navOSSReadableRoadNames(first))
+  let name = navOSSReadableRoadName(navOSSReadableRoadNames(first))
     .trimmingCharacters(in: .whitespacesAndNewlines)
+  guard name.contains(" / ") else { return name }
+  var names = name.components(separatedBy: " / ")
+  navOSSCardRemoveInitialisms(from: &names, roadName: name)
+  return names.joined(separator: " / ")
+}
+
+/// Remove only a same-step exact uppercase initialism; do not run road-name formatting again.
+/// Joined numeric refs ("1 / 16 Avenue NE") have already been formatted and must stay as given.
+private func navOSSCardRemoveInitialisms(from names: inout [String], roadName: String) {
+  guard names.count > 1 else { return }
+  for road in roadName.components(separatedBy: " / ") {
+    let words = navOSSCardNameParts(road).core
+    let roadKey = navOSSCardCoreKey(road)
+    guard words.count >= 3, names.contains(where: { navOSSCardCoreKey($0) == roadKey }) else {
+      continue
+    }
+    let initials = words.reduce(into: "") { text, word in
+      if let first = word.first { text.append(contentsOf: String(first).uppercased()) }
+    }
+    names.removeAll { $0 == initials }
+  }
 }
 
 /// 2 when a name ends in a direction of travel ("North", "W"), 1 in an address quadrant only
@@ -650,7 +686,7 @@ private func navOSSCardSignedName(_ name: String, signs: [String]) -> String {
 
 /// Sign or road names with blanks and repeats (by core key) removed. Of two names for one road the
 /// one that carries a direction wins ("403 East" over "Highway 403"): it is what the sign adds.
-private func navOSSCardDistinctNames(_ names: [String]) -> [String] {
+private func navOSSCardDistinctNames(_ names: [String], roadName: String = "") -> [String] {
   var result: [String] = []
   for raw in names {
     let name = navOSSReadableRoadName(raw.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -664,6 +700,7 @@ private func navOSSCardDistinctNames(_ names: [String]) -> [String] {
       result.append(name)
     }
   }
+  navOSSCardRemoveInitialisms(from: &result, roadName: roadName)
   return result
 }
 
@@ -806,6 +843,21 @@ private func navOSSCardInstructionParts(
   return (exit, target, toward)
 }
 
+private let navOSSCardCarriagewayWords: Set<String> = ["express", "collector", "collectors", "local"]
+
+/// A trailing carriageway qualifier, not "Expressway" or "Local Road". These are the words
+/// present in the recorded Ontario steps; no road aliases or inferred carriageways are added.
+private func navOSSCardHasCarriageway(_ name: String) -> Bool {
+  guard let space = name.lastIndex(of: " ") else { return false }
+  return navOSSCardCarriagewayWords.contains(name[name.index(after: space)...].lowercased())
+}
+
+/// Only the provider's own maneuver target identifies which carriageway to take. `roadName`
+/// can be the highway being left, and a branch sign can list both Express and Collector.
+private func navOSSCardCarriagewayName(_ instructionTarget: String?) -> String? {
+  instructionTarget?.components(separatedBy: " / ").first(where: navOSSCardHasCarriageway)
+}
+
 /// Card variants for the maneuver that begins `steps[stepIndex]`, most to least verbose, with no
 /// trailing period and no name said twice:
 /// - variants longer than `navOSSCarPlayCardMaximumCharacters` (a third card line) are dropped
@@ -825,8 +877,8 @@ public func navOSSCarPlayCardInstructionVariants(
   let step = trip.steps[stepIndex]
   let mappedRoad = navOSSCardRoadName(step.roadName)
   let exitNumber = step.exitNumber?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-  let branch = navOSSCardDistinctNames(step.signpostBranch ?? [])
-  var toward = navOSSCardDistinctNames(step.signpostToward ?? [])
+  let branch = navOSSCardDistinctNames(step.signpostBranch ?? [], roadName: mappedRoad)
+  var toward = navOSSCardDistinctNames(step.signpostToward ?? [], roadName: mappedRoad)
   if toward.isEmpty, branch.isEmpty, let signpost = step.signpost {
     // An older server sends only the joined signpost text, "branch: toward".
     toward = navOSSCardDistinctNames(signpost.components(separatedBy: CharacterSet(charactersIn: ":,")))
@@ -878,15 +930,54 @@ public func navOSSCarPlayCardInstructionVariants(
       || [.keepLeft, .keepRight, .mergeLeft, .mergeRight, .onRamp, .offRampLeft, .offRampRight]
         .contains(kind)
     let hasSignFields = exitNumber != nil || !branch.isEmpty || !toward.isEmpty
-    if isRamp || exitNumber != nil, hasSignFields {
+    let parts =
+      isRamp || (!hasSignFields && road.isEmpty)
+      ? navOSSCardInstructionParts(step.instruction) : nil
+    if isRamp,
+      let carriageway = navOSSCardCarriagewayName(parts?.target)
+    {
+      // The carriageway is the decision at this fork. Destinations or an unqualified route
+      // number must not displace it, even in the shortest variant.
+      let exit = hasSignFields ? exitNumber : parts?.exit
+      let places = hasSignFields ? toward : navOSSCardDistinctNames(
+        parts?.toward?.components(separatedBy: " / ") ?? [])
+      variants = navOSSCardSignVariants(
+        exitNumber: exit, targets: [carriageway], toward: places, towardIsTheSign: false)
+      if let exit { variants.removeAll { $0 == "Exit \(exit)" } }
+      // If the exit prefix makes every qualified name too long, keep the road rather than
+      // losing the carriageway to an exit-number-only fallback.
+      if !variants.contains(where: { $0.count <= navOSSCarPlayCardMaximumCharacters }) {
+        variants += navOSSCardNameVariants([carriageway], prefix: "")
+      }
+    } else if isRamp || exitNumber != nil, hasSignFields {
+      // A destination can replace an unrelated post-exit road only when the provider names no
+      // maneuver target (in particular, no "onto" road) and explicitly marks these destinations
+      // as its signpost. Unparsed sentences and unmarked toward fields keep today's road text.
+      let destinationIsTheSign =
+        type == "off ramp" && exitNumber != nil && branch.isEmpty && !toward.isEmpty
+        && parts != nil && parts?.target == nil
+        && step.signpost.map {
+          navOSSCardCoreKey($0) == navOSSCardCoreKey(toward.joined(separator: " / "))
+        } == true
+        && !toward.contains { navOSSCardCoreKey($0) == navOSSCardCoreKey(road) }
       let targets =
-        !branch.isEmpty
-        ? branch : !road.isEmpty ? road.components(separatedBy: " / ") : toward
+        !branch.isEmpty ? branch
+        : destinationIsTheSign ? toward
+        : !road.isEmpty ? road.components(separatedBy: " / ") : toward
       variants = navOSSCardSignVariants(
         exitNumber: exitNumber, targets: targets, toward: toward,
-        towardIsTheSign: branch.isEmpty && road.isEmpty)
+        towardIsTheSign: destinationIsTheSign || (branch.isEmpty && road.isEmpty))
+      if destinationIsTheSign, let exitNumber,
+        !variants.contains(where: {
+          $0.count <= navOSSCarPlayCardMaximumCharacters && $0 != "Exit \(exitNumber)"
+        })
+      {
+        // The sign plus "Exit N" can exceed two lines. Use the supplied sign alone ahead of
+        // the exit-only variant; never abbreviate an airport/place name by guessing.
+        variants = navOSSCardNameVariants(targets, prefix: "") + variants
+      }
     } else if !hasSignFields, isRamp || road.isEmpty,
-      let parts = navOSSCardInstructionParts(step.instruction)
+      let parts
     {
       // No structured sign fields (the `/v1/routes` fallback, some on-device steps): the exit
       // number and names the provider's own sentence states. The step's road name, when it has

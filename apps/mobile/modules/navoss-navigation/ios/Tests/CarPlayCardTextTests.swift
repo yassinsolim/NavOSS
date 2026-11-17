@@ -52,6 +52,170 @@ final class CarPlayCardTextTests: XCTestCase {
     try XCTUnwrap(try NavigationRoutesV2Tests.trips(name, version: .v2).first)
   }
 
+  func testManeuverSymbolScaleUsesTheCarTraitsInPriorityOrder() {
+    let cases: [(CGFloat?, CGFloat?, CGFloat)] = [
+      (1, 3, 1), (2, 3, 2), (3, 1, 3), (nil, 1, 1),
+      (0, 1, 1), (-1, 3, 3), (nil, nil, 2), (0, -1, 2),
+      (.nan, 1, 1), (.infinity, 1, 1),
+      (0.5, 2, 1), (4, 2, 3), (10_000, 1, 3), (nil, 0.5, 1), (nil, 10_000, 3),
+    ]
+    for (window, controller, expected) in cases {
+      XCTAssertEqual(
+        navOSSCarPlayManeuverDisplayScale(
+          windowTraitScale: window, controllerTraitScale: controller), expected)
+    }
+  }
+
+  /// Build 83 validation: Express / Collector is the carriageway decision, not optional detail.
+  func testCarriagewaySurvivesTheBranchSign() throws {
+    let trips = try NavigationRoutesV2Tests.trips("squareone-scarborough-validation83.v2", version: .v2)
+    XCTAssertEqual(try card(trips[0], 5).first, "Highway 401 Express")
+    XCTAssertEqual(try card(trips[1], 6).first, "Highway 401 Collector")
+    for qualifier in ["Express", "Collector", "Collectors", "Local"] {
+      let maneuver = NavOSSCarPlayRouteStep(
+        distanceMeters: 0, durationSeconds: 0, geometry: [],
+        instruction: "Keep left to take Highway 401 \(qualifier).",
+        maneuverType: "fork", roadName: "", signpostBranch: ["401 East"])
+      XCTAssertEqual(try card(trip(with: maneuver), 1).first, "Highway 401 \(qualifier)")
+    }
+    // A word inside a street name is not a carriageway suffix.
+    let localRoad = NavOSSCarPlayRouteStep(
+      distanceMeters: 0, durationSeconds: 0, geometry: [],
+      instruction: "Keep left to take Local Road.", maneuverType: "fork",
+      roadName: "Local Road", signpostBranch: ["Downtown"])
+    XCTAssertEqual(try card(trip(with: localRoad), 1).first, "Downtown")
+  }
+
+  func testExitTargetsDoNotBecomeTheCarriagewayBeingLeft() throws {
+    for name in ["square-one-scarborough.v2", "squareone-scarborough-validation83.v2"] {
+      let trips = try NavigationRoutesV2Tests.trips(name, version: .v2)
+      XCTAssertEqual(
+        try card(trips[0], 7),
+        [
+          "Kennedy Rd / Brimley Rd S / McCowan Rd", "Kennedy Road / Brimley Road South",
+          "Kennedy Rd / Brimley Rd S", "Kennedy Road", "Kennedy Rd",
+        ])
+      XCTAssertEqual(
+        try card(trips[2], 8),
+        [
+          "Victoria Park Avenue / Warden Avenue", "Victoria Park Ave / Warden Ave",
+          "Victoria Park Avenue", "Victoria Park Ave",
+        ])
+    }
+    for road in ["Highway 401 Collector", "Highway 401 Express"] {
+      let exit = NavOSSCarPlayRouteStep(
+        distanceMeters: 0, durationSeconds: 0, geometry: [],
+        instruction: "Take exit 380 toward Progress Avenue.", maneuverType: "off ramp",
+        roadName: road, exitNumber: "380", signpost: "Progress Avenue",
+        signpostToward: ["Progress Avenue"])
+      XCTAssertEqual(
+        try card(trip(with: exit), 1),
+        ["Exit 380 · Progress Avenue", "Exit 380 · Progress Ave", "Exit 380"])
+    }
+  }
+
+  func testProviderCarriagewayTargetWinsOverConflictingSignBranches() throws {
+    for names in [
+      ["401 East Express", "401 East Collector"],
+      ["401 East Collector", "401 East Express"],
+    ] {
+      for target in ["Highway 401 Express", "Highway 401 Collector"] {
+        let fork = NavOSSCarPlayRouteStep(
+          distanceMeters: 0, durationSeconds: 0, geometry: [],
+          instruction: "Keep left to take \(target).", maneuverType: "fork",
+          roadName: "Highway 401 Express", signpostBranch: names)
+        XCTAssertEqual(try card(trip(with: fork), 1), [target])
+      }
+    }
+  }
+
+  func testNumberedExitKeepsTheRoadNamedByTheProvider() throws {
+    let exit = NavOSSCarPlayRouteStep(
+      distanceMeters: 0, durationSeconds: 0, geometry: [],
+      instruction: "Take exit 380 onto Brimley Road South toward Toronto.",
+      maneuverType: "off ramp", roadName: "Brimley Road South", exitNumber: "380",
+      signpost: "Toronto", signpostToward: ["Toronto"])
+    XCTAssertEqual(
+      try card(trip(with: exit), 1),
+      ["Exit 380 · Brimley Road South", "Exit 380 · Brimley Rd S", "Exit 380"])
+    // An unmarked toward field does not prove which text is the exit's destination sign.
+    let unsigned = NavOSSCarPlayRouteStep(
+      distanceMeters: 0, durationSeconds: 0, geometry: [],
+      instruction: "Take exit 56-O toward Airport Pierre-Elliott-Trudeau.",
+      maneuverType: "off ramp", roadName: "Boulevard Roméo-Vachon Nord", exitNumber: "56-O",
+      signpostToward: ["Airport Pierre-Elliott-Trudeau"])
+    XCTAssertEqual(
+      try card(trip(with: unsigned), 1),
+      ["Exit 56-O · Boulevard Roméo-Vachon Nord", "Exit 56-O"])
+  }
+
+  func testJoinedRoadNameDeduplicatesOnlyItsExactInitialism() throws {
+    for alias in ["QEW", "QE", "qew"] {
+      let road = "Queen Elizabeth Way / \(alias)"
+      let maneuver = step("Continue on \(road).", type: "continue", road: road)
+      let expected =
+        alias == "QEW" ? ["Queen Elizabeth Way"] : [road, "Queen Elizabeth Way"]
+      XCTAssertEqual(try card(trip(with: maneuver), 1), expected)
+    }
+  }
+
+  func testJoinedInitialismDedupeDoesNotReformatRecordedNumericRefs() throws {
+    let destination = NavOSSCarPlayDestination(
+      id: "dest", label: "Destination", latitude: 51.0866, longitude: -114.1305, name: "Destination")
+    let cases: [(String, Int, Int, [String])] = [
+      ("calgary-deerfoot-glenmore", 0, 5, ["1 / 16 Avenue NE", "1 / 16 Ave NE", "1"]),
+      ("calgary-downtown-north", 2, 4, ["1 / 16 Avenue NW", "1 / 16 Ave NW", "1"]),
+      ("calgary-downtown-north", 2, 5, ["1A / Crowchild Trail NW", "1A"]),
+      ("calgary-waypoint", 0, 5, ["1 / 16 Avenue NE", "1 / 16 Ave NE", "1"]),
+      ("calgary-waypoint", 0, 9, ["2 / Deerfoot Trail SE", "2"]),
+    ]
+    for (file, route, index, expected) in cases {
+      let trips = try navOSSOfflineTrips(
+        fromValhallaJSON: OfflineFixtures.data(file + ".response.json"),
+        destination: destination, waypoints: [], preferences: NavOSSRoutePreferences())
+      XCTAssertEqual(try card(trips[route], index), expected)
+    }
+  }
+
+  /// The step itself gives both the road name and its uppercase initialism; no alias table.
+  func testRoadNameAndItsSignedInitialismAreNotRepeated() throws {
+    let trips = try NavigationRoutesV2Tests.trips("squareone-scarborough-validation83.v2", version: .v2)
+    XCTAssertEqual(
+      try card(trips[2], 3), ["Queen Elizabeth Way toward Toronto", "Queen Elizabeth Way"])
+    for sign in ["QEW", "QE", "qew", "403"] {
+      let maneuver = NavOSSCarPlayRouteStep(
+        distanceMeters: 0, durationSeconds: 0, geometry: [],
+        instruction: "Take the Queen Elizabeth Way ramp.", maneuverType: "on ramp",
+        roadName: "Queen Elizabeth Way", signpostBranch: ["Queen Elizabeth Way", sign])
+      let signedName = sign == "403" ? "Highway 403" : sign
+      let expected = sign == "QEW" ? "Queen Elizabeth Way" : "Queen Elizabeth Way / \(signedName)"
+      XCTAssertEqual(try card(trip(with: maneuver), 1).first, expected)
+    }
+    // A lone abbreviation on the sign is not replaced with the name from the map.
+    let lone = NavOSSCarPlayRouteStep(
+      distanceMeters: 0, durationSeconds: 0, geometry: [],
+      instruction: "Take the Queen Elizabeth Way ramp.", maneuverType: "on ramp",
+      roadName: "Queen Elizabeth Way", signpostBranch: ["QEW"])
+    XCTAssertEqual(try card(trip(with: lone), 1), ["QEW"])
+  }
+
+  /// A numbered exit's destination sign is not the street reached after leaving the highway.
+  func testMontrealAirportExitUsesItsDestinationSign() throws {
+    let trip = try recorded("montreal-oldport-yul-validation83.v2")
+    XCTAssertEqual(trip.steps[9].junctionName, "Aéroport P.-E.-Trudeau")
+    XCTAssertEqual(trip.steps[9].signpostToward, ["Airport Pierre-Elliott-Trudeau"])
+    // The destination plus exit prefix is 42 characters. Keep the supplied destination,
+    // rather than inventing a shorter airport name from the junction's different name.
+    XCTAssertEqual(try card(trip, 9), ["Airport Pierre-Elliott-Trudeau", "Exit 56-O"])
+    let unsigned = NavOSSCarPlayRouteStep(
+      distanceMeters: 0, durationSeconds: 0, geometry: [],
+      instruction: "Take exit 56-O.", maneuverType: "off ramp",
+      roadName: "Boulevard Roméo-Vachon Nord", exitNumber: "56-O")
+    XCTAssertEqual(
+      try card(self.trip(with: unsigned), 1),
+      ["Exit 56-O · Boulevard Roméo-Vachon Nord", "Exit 56-O"])
+  }
+
   /// Build 82, Crowchild Trail (owner's TestFlight photo, 2026-11-16): the card showed the spoken
   /// sentence and, with the navigation bar hidden, "...ramp on the left 1A East / Crowchild Trail
   /// toward 1A East, Crowchild Trail".
@@ -120,6 +284,7 @@ final class CarPlayCardTextTests: XCTestCase {
 
   func testLongTorontoSignsShortenByAbbreviationThenByDroppingNames() throws {
     let trip = try recorded("square-one-scarborough.v2")
+    // The provider names this exit's roads; roadName is the Collector road being left.
     XCTAssertEqual(
       try card(trip, 7),
       [
@@ -278,15 +443,16 @@ final class CarPlayCardTextTests: XCTestCase {
   func testCardVariantsStayWithinTwoLines() throws {
     XCTAssertEqual(navOSSCarPlayCardMaximumCharacters, 40)
     let toronto = try recorded("square-one-scarborough.v2")
-    // 38 characters survive once abbreviated; the 48-character full names do not.
-    XCTAssertEqual(try card(toronto, 7).first, "Kennedy Rd / Brimley Rd S / McCowan Rd")
+    // The two signed roads plus exit prefix fit once abbreviated; the full names do not.
+    XCTAssertEqual(try card(toronto, 8).first, "Exit 380 · Brimley Rd S / Progress Ave")
     // A short "toward" still fits and stays.
     XCTAssertEqual(try card(toronto, 3).first, "403 East toward Toronto")
     XCTAssertEqual(
       try card(try recorded("vancouver-bc91-highway99.v2"), 1).first, "Exit 23B · 99 North")
     for name in [
       "calgary-deerfoot-glenmore.v2", "vancouver-bc91-highway99.v2", "square-one-scarborough.v2",
-      "montreal-a520-a40-a15.v2",
+      "montreal-a520-a40-a15.v2", "squareone-scarborough-validation83.v2",
+      "montreal-oldport-yul-validation83.v2",
     ] {
       let trip = try recorded(name)
       for index in trip.steps.indices.dropFirst() {
@@ -314,6 +480,7 @@ final class CarPlayCardTextTests: XCTestCase {
     for name in [
       "calgary-deerfoot-glenmore.v2", "vancouver-bc91-highway99.v2", "square-one-scarborough.v2",
       "square-one-scarborough-reroute.v2", "montreal-a520-a40-a15.v2",
+      "squareone-scarborough-validation83.v2", "montreal-oldport-yul-validation83.v2",
     ] {
       for trip in try NavigationRoutesV2Tests.trips(name, version: .v2) {
         for index in trip.steps.indices.dropFirst() {
