@@ -2,7 +2,7 @@
 
 ## Product and safety
 
-- NavOSS is a privacy-first navigation technical beta for iOS and CarPlay. The deployed search and routing service covers Canada; build 83 was submitted on 2026-11-17 and internal testers receive uploads automatically. Its NavOSS Friends distribution request succeeded, but Testing was not confirmed on screen (see Current checkpoint).
+- NavOSS is a privacy-first navigation technical beta for iOS and CarPlay. The deployed search and routing service covers Canada; build 83 was distributed to internal testers and NavOSS Friends on 2026-11-17 (see Current checkpoint).
 - Claim only what the **deployed** service and the relevant **build** do. Build 80 supports lane guidance and signposts when returned by the server; build 70 uses v1 for Calgary and Kelowna. Reports are `attested` and opt-in traffic collection is `collect`: build 80 onward can share, earlier builds cannot. Reports from verified installations are unconfirmed until corroborated. Collected traffic is not displayed or used in routes; live traffic is unavailable. Offline regions for Alberta and the Calgary area are available; British Columbia has none.
 - Never invent route, traffic, closure, camera, place, or safety data. Fail conservatively.
 - Never log search text, route coordinates, raw location, or private trip history.
@@ -55,7 +55,7 @@ Any change to what a driver sees, hears, or is told (phone, CarPlay, spoken guid
 
 ## Current checkpoint
 
-- The latest build is `0.1.0 (83)` from `2cb5c70` (`main`, profile `production-carplay-google`): hosted run `44169976512` succeeded; EAS submission `9c4cf8d5-ecb8-410c-b584-c2a22726a9af` finished 2026-11-17 21:23 UTC. The internal `testers` group receives uploads automatically. The NavOSS Friends distribution request reported success with Beta App Review submission; its Testing state was not confirmed on screen. The TestFlight Test Information description was not updated for build 83. Build 73 remains held.
+- The latest build is `0.1.0 (83)` from `2cb5c70` (`main`, profile `production-carplay-google`): hosted run `44169976512` succeeded; EAS submission `9c4cf8d5-ecb8-410c-b584-c2a22726a9af` finished 2026-11-17 21:23 UTC. App Store Connect showed Testing for internal `testers` and NavOSS Friends (8 testers), expiring in 90 days, with no installs or sessions yet. The TestFlight Test Information description was updated and read back; Review Notes were unchanged. Build 73 remains held.
 - Build 81 can reroute about every six seconds and replace the selected alternative when a trip starts away from the road. Build 82 fixes this; build 83 still ends a trip on relaunch if closed before its first route match, and #135 is parked. The Alberta events list can omit Edmonton rows from Calgary because it shows the 100 newest; those events remain on the map. Alberta search rows omit the province. Repeated confirmed departures can trigger repeated reroutes without backoff.
 - External TestFlight distribution is manual since #88: an upload no longer assigns to `NavOSS Friends` or starts Beta App Review; a maintainer runs `testflight-distribute.yml` for a chosen build. EAS reads event-triggered workflows from the default branch; whether the old trigger is deregistered is unverified. The internal `testers` group receives uploads.
 - **Canada cutover 2026-11-15 15:44 UTC:** API image was `4708d34`, with image rollback `navoss-api:pre-canada-registry` and data backup `.env.pre-canada-20261115T154413Z`. The current API image is from `36c8a9f` (#127), deployed 2026-11-15; its image rollback is `navoss-api:pre-canada-search-fixes`. `/v1/config` remains strict v1; `/v2/config` declares all 13 provinces and territories as Canada. Clients must still treat unknown `/v2/*` capabilities quietly.
@@ -89,5 +89,4 @@ Any change to what a driver sees, hears, or is told (phone, CarPlay, spoken guid
 
 1. Have the owner check build 83 in the car, parked or passenger-operated, and record outcomes against the CarPlay checklist; real chrome and head-unit behaviour remain unverified.
 2. Perform physical iPhone checks including offline download, first App Attest registration and Google's place panel. Never retry build 73.
-3. Check the build 83 NavOSS Friends Testing state on screen and update the TestFlight Test Information description.
-4. Run focused checks and the applicable release gates before publishing changes; record exact build and distribution state rather than inferring it from a successful upload.
+3. Run focused checks and the applicable release gates before publishing changes; record exact build and distribution state rather than inferring it from a successful upload.
