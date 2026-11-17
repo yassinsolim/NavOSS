@@ -5,7 +5,7 @@ It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
 
-Lockfile SHA-256: `fe68b0f0dc83b7fadbbb3b0efbe2a03e4ff630a0071e3674da888cde63736bbc`
+Lockfile SHA-256: `d30d789e56863a507798c8eb407cc1d6c4074a9a92300d004086a514c9c209e0`
 
 Regenerate with:
 
@@ -72,7 +72,6 @@ corepack pnpm licenses:generate
 - `@protobufjs/eventemitter` - `1.1.1` - <https://github.com/dcodeIO/protobuf.js#readme>
 - `@protobufjs/fetch` - `1.1.1` - <https://github.com/dcodeIO/protobuf.js#readme>
 - `@protobufjs/float` - `1.0.2` - <https://github.com/dcodeIO/protobuf.js#readme>
-- `@protobufjs/inquire` - `1.1.2` - <https://github.com/dcodeIO/protobuf.js#readme>
 - `@protobufjs/path` - `1.1.2` - <https://github.com/dcodeIO/protobuf.js#readme>
 - `@protobufjs/pool` - `1.1.0` - <https://github.com/dcodeIO/protobuf.js#readme>
 - `@protobufjs/utf8` - `1.1.2` - <https://github.com/protobufjs/protobuf.js#readme>
@@ -82,7 +81,7 @@ corepack pnpm licenses:generate
 - `hyphenate-style-name` - `1.1.0` - <https://github.com/rexxars/hyphenate-style-name#readme>
 - `light-my-request` - `6.6.0` - <https://github.com/fastify/light-my-request#readme>
 - `makeerror` - `1.0.12` - <https://github.com/daaku/nodejs-makeerror#readme>
-- `protobufjs` - `7.5.4` - <https://protobufjs.github.io/protobuf.js/>
+- `protobufjs` - `7.6.6` - <https://protobufjs.github.io/protobuf.js/>
 - `secure-json-parse` - `4.1.0` - <https://github.com/fastify/secure-json-parse#readme>
 - `source-map` - `0.5.7, 0.6.1` - <https://github.com/mozilla/source-map>
 - `source-map-js` - `1.2.1` - <https://github.com/7rulnik/source-map-js>
@@ -237,7 +236,7 @@ corepack pnpm licenses:generate
 - `@fastify/forwarded` - `3.0.1` - <https://github.com/fastify/forwarded#readme>
 - `@fastify/merge-json-schemas` - `0.2.1` - <https://github.com/fastify/merge-json-schemas#readme>
 - `@fastify/proxy-addr` - `5.1.0` - <https://github.com/fastify/proxy-addr#readme>
-- `@fastify/swagger` - `9.9.1` - <https://github.com/fastify/fastify-swagger#readme>
+- `@fastify/swagger` - `9.9.4` - <https://github.com/fastify/fastify-swagger#readme>
 - `@jest/schemas` - `29.6.3` - <https://github.com/jestjs/jest#readme>
 - `@jest/types` - `29.6.3` - <https://github.com/jestjs/jest#readme>
 - `@jridgewell/gen-mapping` - `0.3.13` - <https://github.com/jridgewell/sourcemaps/tree/main/packages/gen-mapping>
@@ -301,7 +300,7 @@ corepack pnpm licenses:generate
 - `@types/istanbul-lib-coverage` - `2.0.6` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-lib-coverage>
 - `@types/istanbul-lib-report` - `3.0.3` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-lib-report>
 - `@types/istanbul-reports` - `3.0.4` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-reports>
-- `@types/node` - `24.19.2, 26.4.1` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node>
+- `@types/node` - `24.19.2` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node>
 - `@types/react` - `19.2.17` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react>
 - `@types/react-test-renderer` - `19.1.0` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react-test-renderer>
 - `@types/yargs` - `17.0.35` - <https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/yargs>
@@ -418,7 +417,7 @@ corepack pnpm licenses:generate
 - `fast-deep-equal` - `3.1.3` - <https://github.com/epoberezkin/fast-deep-equal#readme>
 - `fast-json-stringify` - `7.0.1` - <https://github.com/fastify/fast-json-stringify#readme>
 - `fast-querystring` - `1.1.2` - <https://github.com/anonrig/fast-querystring#readme>
-- `fastify` - `5.12.5` - <https://fastify.dev/>
+- `fastify` - `5.12.8` - <https://fastify.dev/>
 - `fastify-plugin` - `6.0.0` - <https://github.com/fastify/fastify-plugin#readme>
 - `fastify-type-provider-zod` - `7.0.0` - <https://github.com/turkerdev/fastify-type-provider-zod>
 - `fbjs` - `3.0.5` - <https://github.com/facebook/fbjs#readme>
@@ -428,7 +427,7 @@ corepack pnpm licenses:generate
 - `fill-range` - `7.1.1` - <https://github.com/jonschlinkert/fill-range>
 - `filter-obj` - `1.1.0` - <https://github.com/sindresorhus/filter-obj#readme>
 - `finalhandler` - `1.1.2` - <https://github.com/pillarjs/finalhandler#readme>
-- `find-my-way` - `9.6.0` - <https://github.com/delvedor/find-my-way#readme>
+- `find-my-way` - `9.10.1` - <https://github.com/delvedor/find-my-way#readme>
 - `flow-enums-runtime` - `0.0.6` - <https://github.com/facebook/flow#readme>
 - `fresh` - `0.5.2` - <https://github.com/jshttp/fresh#readme>
 - `function-bind` - `1.1.2` - <https://github.com/Raynos/function-bind>
@@ -541,7 +540,7 @@ corepack pnpm licenses:generate
 - `postgres-date` - `1.0.7` - <https://github.com/bendrucker/postgres-date#readme>
 - `postgres-interval` - `1.2.0` - <https://github.com/bendrucker/postgres-interval#readme>
 - `pretty-format` - `27.5.1, 29.7.0` - <https://github.com/jestjs/jest#readme>
-- `process-warning` - `4.0.1, 5.0.0, 5.1.1` - <https://github.com/fastify/fastify-warning#readme>
+- `process-warning` - `4.0.1, 5.1.1` - <https://github.com/fastify/fastify-warning#readme>
 - `progress` - `2.0.3` - <https://github.com/visionmedia/node-progress#readme>
 - `promise` - `7.3.1, 8.3.0` - <https://github.com/then/promise#readme>
 - `prompts` - `2.4.2` - <https://github.com/terkelg/prompts#readme>
@@ -629,7 +628,7 @@ corepack pnpm licenses:generate
 - `toqr` - `0.1.1` - <https://github.com/kitten/toqr#readme>
 - `tr46` - `0.0.3` - <https://github.com/Sebmaster/tr46.js#readme>
 - `ua-parser-js` - `0.7.41, 1.0.41` - <https://uaparser.dev>
-- `undici-types` - `7.24.6, 8.3.0` - <https://undici.nodejs.org>
+- `undici-types` - `7.24.6` - <https://undici.nodejs.org>
 - `unicode-canonical-property-names-ecmascript` - `2.0.1` - <https://github.com/mathiasbynens/unicode-canonical-property-names-ecmascript>
 - `unicode-match-property-ecmascript` - `2.0.0` - <https://github.com/mathiasbynens/unicode-match-property-ecmascript>
 - `unicode-match-property-value-ecmascript` - `2.2.1` - <https://github.com/mathiasbynens/unicode-match-property-value-ecmascript>
@@ -655,7 +654,7 @@ corepack pnpm licenses:generate
 - `xmlbuilder` - `11.0.1, 15.1.1` - <http://github.com/oozcitak/xmlbuilder-js>
 - `xtend` - `4.0.2` - <https://github.com/Raynos/xtend>
 - `yargs` - `17.7.3` - <https://yargs.js.org/>
-- `zod` - `3.25.76, 4.6.5` - <https://zod.dev>
+- `zod` - `3.25.76, 4.6.7` - <https://zod.dev>
 
 ## MIT AND Apache-2.0
 
