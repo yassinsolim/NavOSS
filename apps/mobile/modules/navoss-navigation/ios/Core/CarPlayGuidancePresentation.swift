@@ -527,14 +527,15 @@ public func navOSSCarPlayManeuverInfo(
 
 /// Draw maneuver symbols at the car's trait scale, not the backing screen's scale. CarPlay's
 /// layout can move an oversized symbol above the distance, or hide the instruction entirely.
+/// Positive finite traits are clamped to the supported 1...3 display-scale range.
 public func navOSSCarPlayManeuverDisplayScale(
   windowTraitScale: CGFloat?, controllerTraitScale: CGFloat?
 ) -> CGFloat {
   if let windowTraitScale, windowTraitScale.isFinite, windowTraitScale > 0 {
-    return windowTraitScale
+    return min(3, max(1, windowTraitScale))
   }
   if let controllerTraitScale, controllerTraitScale.isFinite, controllerTraitScale > 0 {
-    return controllerTraitScale
+    return min(3, max(1, controllerTraitScale))
   }
   return 2
 }

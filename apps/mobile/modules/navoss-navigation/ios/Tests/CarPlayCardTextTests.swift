@@ -57,6 +57,7 @@ final class CarPlayCardTextTests: XCTestCase {
       (1, 3, 1), (2, 3, 2), (3, 1, 3), (nil, 1, 1),
       (0, 1, 1), (-1, 3, 3), (nil, nil, 2), (0, -1, 2),
       (.nan, 1, 1), (.infinity, 1, 1),
+      (0.5, 2, 1), (4, 2, 3), (10_000, 1, 3), (nil, 0.5, 1), (nil, 10_000, 3),
     ]
     for (window, controller, expected) in cases {
       XCTAssertEqual(
