@@ -52,6 +52,19 @@ final class CarPlayCardTextTests: XCTestCase {
     try XCTUnwrap(try NavigationRoutesV2Tests.trips(name, version: .v2).first)
   }
 
+  func testManeuverSymbolScaleUsesTheCarTraitsInPriorityOrder() {
+    let cases: [(CGFloat?, CGFloat?, CGFloat)] = [
+      (1, 3, 1), (2, 3, 2), (3, 1, 3), (nil, 1, 1),
+      (0, 1, 1), (-1, 3, 3), (nil, nil, 2), (0, -1, 2),
+      (.nan, 1, 1), (.infinity, 1, 1),
+    ]
+    for (window, controller, expected) in cases {
+      XCTAssertEqual(
+        navOSSCarPlayManeuverDisplayScale(
+          windowTraitScale: window, controllerTraitScale: controller), expected)
+    }
+  }
+
   /// Build 83 validation: Express / Collector is the carriageway decision, not optional detail.
   func testCarriagewaySurvivesTheBranchSign() throws {
     let trips = try NavigationRoutesV2Tests.trips("squareone-scarborough-validation83.v2", version: .v2)

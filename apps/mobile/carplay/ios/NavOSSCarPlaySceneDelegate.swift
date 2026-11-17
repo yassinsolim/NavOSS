@@ -991,12 +991,14 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     maneuver.instructionVariants = info.instructionVariants
     maneuver.dashboardInstructionVariants = info.instructionVariants
     maneuver.notificationInstructionVariants = info.instructionVariants
-    // Drawn at the car screen's scale so CarPlay keeps the arrow beside the distance; see
-    // `NavOSSCarPlayManeuverSymbols`.
+    // The car traits reflect CarPlay's layout scale, which can differ from the backing screen.
+    // An image above that scale can put the arrow on its own row.
     let symbol = NavOSSCarPlayManeuverSymbols.image(
       kind: info.kind,
       angleDegrees: info.turnAngleDegrees,
-      displayScale: carWindow?.screen.scale ?? 2
+      displayScale: navOSSCarPlayManeuverDisplayScale(
+        windowTraitScale: carWindow?.traitCollection.displayScale,
+        controllerTraitScale: interfaceController?.carTraitCollection.displayScale)
     )
     maneuver.symbolImage = symbol
     maneuver.dashboardSymbolImage = symbol
