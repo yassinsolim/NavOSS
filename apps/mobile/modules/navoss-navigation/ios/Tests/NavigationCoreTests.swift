@@ -776,26 +776,37 @@ final class NavigationCoreTests: XCTestCase {
 
   func testCarPlayEndControlsFollowActiveTripAcrossTemplates() {
     let inactive = NavOSSCarPlayControlState(hasActiveTrip: false, searchVisible: false)
-    XCTAssertFalse(inactive.drivingControlsVisible)
-    XCTAssertFalse(inactive.endNavigationVisible)
-    XCTAssertFalse(inactive.reportVisible)
+    XCTAssertEqual(inactive.mapControls, [.search, .recenter, .settings])
+    XCTAssertEqual(inactive.trailingBarItems, [])
     XCTAssertFalse(inactive.returnToRootFromSearch)
-    XCTAssertTrue(inactive.searchVisible)
-    XCTAssertTrue(inactive.settingsVisible)
-    XCTAssertFalse(inactive.soundSettingsVisible)
 
+    // Guidance: three map buttons; End is in the navigation bar, not on the map.
     let activeMap = NavOSSCarPlayControlState(hasActiveTrip: true, searchVisible: false)
-    XCTAssertTrue(activeMap.drivingControlsVisible)
-    XCTAssertTrue(activeMap.endNavigationVisible)
-    XCTAssertTrue(activeMap.reportVisible)
+    XCTAssertEqual(activeMap.mapControls, [.sound, .report, .overview])
+    XCTAssertEqual(activeMap.trailingBarItems, [.end])
     XCTAssertFalse(activeMap.returnToRootFromSearch)
-    XCTAssertFalse(activeMap.searchVisible)
-    XCTAssertFalse(activeMap.settingsVisible)
-    XCTAssertTrue(activeMap.soundSettingsVisible)
 
     let activeSearch = NavOSSCarPlayControlState(hasActiveTrip: true, searchVisible: true)
-    XCTAssertTrue(activeSearch.endNavigationVisible)
+    XCTAssertEqual(activeSearch.trailingBarItems, [.end])
     XCTAssertTrue(activeSearch.returnToRootFromSearch)
+  }
+
+  func testTrafficCreditStaysReachableWithoutCrowdingEnd() {
+    let credit = "Traffic: NavOSS drivers · updated 4:42 p.m."
+    // Previewing routes: the credit is the only trailing button and shows in full.
+    XCTAssertEqual(
+      NavOSSCarPlayControlState(hasActiveTrip: false, searchVisible: false, trafficAttribution: credit)
+        .trailingBarItems,
+      [.trafficCredit(title: credit, credit: credit)])
+    // Guiding: End first, the credit shortened beside it and shown in full when tapped.
+    XCTAssertEqual(
+      NavOSSCarPlayControlState(hasActiveTrip: true, searchVisible: false, trafficAttribution: credit)
+        .trailingBarItems,
+      [.end, .trafficCredit(title: "Traffic", credit: credit)])
+    XCTAssertEqual(
+      NavOSSCarPlayControlState(hasActiveTrip: true, searchVisible: false, trafficAttribution: "")
+        .trailingBarItems,
+      [.end])
   }
 
   func testNavigationAnnouncementsCanRemainMutedAcrossUpdates() {

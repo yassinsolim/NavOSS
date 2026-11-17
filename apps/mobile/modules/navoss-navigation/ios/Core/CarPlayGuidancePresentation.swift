@@ -453,7 +453,9 @@ public struct NavOSSCarPlayManeuverInfo: Equatable, Sendable {
   /// Index of the route step that begins with this maneuver.
   public let stepIndex: Int
   public let kind: NavOSSCarPlayManeuverKind
-  /// Instruction variants from most to least verbose. Never empty.
+  /// What the guidance card, Dashboard, notification banner and lane guidance show, from most to
+  /// least verbose: what to look for (the road or the sign), never the spoken sentence. Never
+  /// empty. The spoken prompt and the phone's step list keep the provider's instruction.
   public let instructionVariants: [String]
   /// Road the driver joins at this maneuver, when known.
   public let roadName: String?
@@ -501,28 +503,7 @@ public func navOSSCarPlayManeuverInfo(
       measuresThroughStep: isRoundabout
     )
   let roadName = step.roadName.trimmingCharacters(in: .whitespacesAndNewlines)
-  let instruction = step.instruction.trimmingCharacters(in: .whitespacesAndNewlines)
-  var variants = [instruction]
-  let clean: ([String]?) -> [String] = { values in
-    (values ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-  }
-  let branch = clean(step.signpostBranch).joined(separator: " / ")
-  let toward =
-    clean(step.signpostToward).joined(separator: " / ").nilIfEmpty
-    ?? step.signpost?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-  let sign = [branch.nilIfEmpty, toward.map { "toward \($0)" }].compactMap { $0 }
-    .joined(separator: " ")
-  if !sign.isEmpty, !instruction.localizedCaseInsensitiveContains(toward ?? branch) {
-    variants.insert("\(instruction.trimmingCharacters(in: CharacterSet(charactersIn: "."))) \(sign)", at: 0)
-  }
-  if let junction = step.junctionName?.trimmingCharacters(in: .whitespacesAndNewlines),
-    !junction.isEmpty, !variants[0].localizedCaseInsensitiveContains(junction)
-  {
-    variants.insert("\(variants[0].trimmingCharacters(in: CharacterSet(charactersIn: "."))) at \(junction)", at: 0)
-  }
-  if !roadName.isEmpty, !variants.contains(roadName) {
-    variants.append(roadName)
-  }
+  let variants = navOSSCarPlayCardInstructionVariants(trip: trip, stepIndex: stepIndex, kind: kind)
   let exitNumber = step.exitNumber?.trimmingCharacters(in: .whitespacesAndNewlines)
   let leg = stepIndex > 0 ? trip.steps[stepIndex - 1] : step
   return NavOSSCarPlayManeuverInfo(
@@ -542,6 +523,252 @@ public func navOSSCarPlayManeuverInfo(
     legDistanceMeters: stepIndex > 0 ? leg.distanceMeters : 0,
     legDurationSeconds: stepIndex > 0 ? leg.durationSeconds : 0
   )
+}
+
+// MARK: - Card text
+//
+// The card answers "what do I look for": the road to turn onto, or the sign over the ramp. It is
+// never the spoken sentence (that is what made the build 82 card a wall of text), and no variant
+// repeats a name. CarPlay picks the longest variant that fits, so variants run from most to least
+// verbose and every one of them is complete on its own.
+
+/// English street types written as Canada Post abbreviates them. Trail, Way, Lane and Gate have
+/// no shorter form drivers read reliably, so they stay whole.
+private let navOSSCardStreetTypeAbbreviations: [String: String] = [
+  "Avenue": "Ave", "Boulevard": "Blvd", "Circle": "Cir", "Court": "Crt", "Crescent": "Cres",
+  "Drive": "Dr", "Expressway": "Expy", "Heights": "Hts", "Highway": "Hwy", "Parkway": "Pky",
+  "Place": "Pl", "Road": "Rd", "Square": "Sq", "Street": "St", "Terrace": "Terr",
+]
+
+/// Street types that keep their full name but still end a street name, so a direction after them
+/// ("Deerfoot Trail South") is a quadrant that can be abbreviated.
+private let navOSSCardStreetTypes: Set<String> =
+  Set(navOSSCardStreetTypeAbbreviations.keys)
+  .union(navOSSCardStreetTypeAbbreviations.values)
+  .union([
+    "Trail", "Way", "Lane", "Gate", "Link", "Close", "Common", "Green", "Bay", "Manor", "Mews",
+    "Path", "Walk", "View", "Row", "Rise", "Grove", "Landing", "Point", "Hill", "Freeway",
+    "Connector",
+  ])
+
+private let navOSSCardDirectionAbbreviations: [String: String] = [
+  "Northwest": "NW", "Northeast": "NE", "Southwest": "SW", "Southeast": "SE",
+  "North": "N", "South": "S", "East": "E", "West": "W",
+]
+
+private let navOSSCardDirections: Set<String> =
+  Set(navOSSCardDirectionAbbreviations.keys).union(navOSSCardDirectionAbbreviations.values)
+
+/// The abbreviated form of a road or sign name: an English street type is shortened only where it
+/// ends the name (alone or before a quadrant), and a quadrant only right after a street type, so
+/// "Avenue Road", "Boulevard René-Lévesque Est" and the route direction in "1A East" are untouched.
+func navOSSCarPlayCardAbbreviated(_ name: String) -> String {
+  name.components(separatedBy: " / ").map { part in
+    var words = part.split(separator: " ").map(String.init)
+    for index in words.indices {
+      let rest = words[(index + 1)...]
+      if index > 0, let short = navOSSCardStreetTypeAbbreviations[words[index]],
+        rest.allSatisfy({ navOSSCardDirections.contains($0) })
+      {
+        words[index] = short
+      } else if index > 0, index == words.count - 1,
+        let short = navOSSCardDirectionAbbreviations[words[index]],
+        navOSSCardStreetTypes.contains(words[index - 1])
+      {
+        words[index] = short
+      }
+    }
+    return words.joined(separator: " ")
+  }.joined(separator: " / ")
+}
+
+/// The longest card variant that stays on two lines of the guidance card. On the owner's Toyota
+/// head unit (build 82 photo, bar shown) a card line held 18–22 characters ("Take the 1A East /",
+/// "Crowchild Trail", "ramp on the left."), so anything past about 40 characters becomes a third
+/// line; with the bar hidden CarPlay lets the card grow to fit it (the second build 82 photo).
+let navOSSCarPlayCardMaximumCharacters = 40
+
+private let navOSSCardKeyLocale = Locale(identifier: "en_CA")
+private let navOSSCardKeyIgnoredWords: Set<String> = [
+  "north", "south", "east", "west", "n", "s", "e", "w", "ne", "nw", "se", "sw", "nord", "sud",
+  "est", "ouest", "highway", "hwy", "route",
+]
+
+/// A name reduced to what identifies the road: case, accents, punctuation ("/", ",", "."),
+/// quadrants and the word "Highway" removed, so "Glenmore Trail West" matches "Glenmore Trail SE"
+/// and "Highway 403" matches "403 East".
+private func navOSSCardCoreKey(_ name: String) -> String {
+  name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: navOSSCardKeyLocale)
+    .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+    .map(String.init)
+    .filter { !navOSSCardKeyIgnoredWords.contains($0) }
+    .joined(separator: " ")
+}
+
+/// A road name as the card writes it: the first of a legacy ";"-joined list, a bare route number
+/// as "Highway 17", and Valhalla's "2/Deerfoot Trail SE" spaced as "Highway 2 / Deerfoot Trail SE".
+private func navOSSCardRoadName(_ raw: String) -> String {
+  let first = raw.split(separator: ";").first.map(String.init) ?? ""
+  return navOSSReadableRoadName(navOSSReadableRoadNames(first))
+    .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+/// Sign or road names with blanks and repeats (by core key) removed. Of two names for one road the
+/// one that carries a direction wins ("403 East" over "Highway 403"): it is what the sign adds.
+private func navOSSCardDistinctNames(_ names: [String]) -> [String] {
+  var result: [String] = []
+  for raw in names {
+    let name = navOSSReadableRoadName(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+    let key = navOSSCardCoreKey(name)
+    guard !name.isEmpty, !key.isEmpty else { continue }
+    if let existing = result.firstIndex(where: { navOSSCardCoreKey($0) == key }) {
+      let hasDirection = { (value: String) in
+        value.split(separator: " ").contains { navOSSCardDirections.contains(String($0)) }
+      }
+      if hasDirection(name), !hasDirection(result[existing]) { result[existing] = name }
+    } else {
+      result.append(name)
+    }
+  }
+  return result
+}
+
+/// Two or three words for a maneuver with nothing to name.
+private func navOSSCarPlayCardAction(_ kind: NavOSSCarPlayManeuverKind) -> String {
+  switch kind {
+  case .depart: "Start"
+  case .straight, .followRoad: "Continue"
+  case .slightLeft: "Bear left"
+  case .left, .leftAtEnd: "Turn left"
+  case .sharpLeft: "Sharp left"
+  case .slightRight: "Bear right"
+  case .right, .rightAtEnd: "Turn right"
+  case .sharpRight: "Sharp right"
+  case .uTurn: "Make a U-turn"
+  case .keepLeft: "Keep left"
+  case .keepRight: "Keep right"
+  case .mergeLeft: "Merge left"
+  case .mergeRight: "Merge right"
+  case .onRamp: "Take the ramp"
+  case .offRampLeft: "Exit left"
+  case .offRampRight: "Exit right"
+  case let .roundabout(exit): exit.map { "Exit \($0)" } ?? "Enter the roundabout"
+  case .exitRoundabout: "Exit the roundabout"
+  case .ferry: "Take the ferry"
+  case .arrive, .arriveLeft, .arriveRight: "Destination"
+  }
+}
+
+/// The names joined as the sign shows them, then progressively fewer of them, each followed by its
+/// abbreviated form when that is shorter.
+private func navOSSCardNameVariants(_ names: [String], prefix: String) -> [String] {
+  guard !names.isEmpty else { return [] }
+  var groups = [names]
+  if names.count > 2 { groups.append(Array(names.prefix(2))) }
+  if names.count > 1 { groups.append([names[0]]) }
+  return groups.flatMap { group -> [String] in
+    let text = group.joined(separator: " / ")
+    return [prefix + text, prefix + navOSSCarPlayCardAbbreviated(text)]
+  }
+}
+
+/// Card variants for the maneuver that begins `steps[stepIndex]`, most to least verbose, with no
+/// trailing period and no name said twice:
+/// - variants longer than `navOSSCarPlayCardMaximumCharacters` (a third card line) are dropped
+///   whenever a shorter one exists;
+/// - a ramp, exit or fork with a sign shows the sign ("1A East / Crowchild Trail", then "1A East"),
+///   led by the exit number when the provider gave one ("Exit 248 · Glenmore Trail"), with
+///   "toward" only in the longest variant and only for places the sign's names do not already say;
+/// - a turn onto a named road shows the road, then its abbreviated form;
+/// - a roundabout shows "Exit 2 · Main Street"; arrival shows the destination name;
+/// - anything else is a two- or three-word action ("Turn right", "Keep left").
+public func navOSSCarPlayCardInstructionVariants(
+  trip: NavOSSCarPlayTrip,
+  stepIndex: Int,
+  kind: NavOSSCarPlayManeuverKind
+) -> [String] {
+  guard trip.steps.indices.contains(stepIndex) else { return [navOSSCarPlayCardAction(kind)] }
+  let step = trip.steps[stepIndex]
+  let road = navOSSCardRoadName(step.roadName)
+  let exitNumber = step.exitNumber?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+  let branch = navOSSCardDistinctNames(step.signpostBranch ?? [])
+  var toward = navOSSCardDistinctNames(step.signpostToward ?? [])
+  if toward.isEmpty, branch.isEmpty, let signpost = step.signpost {
+    // An older server sends only the joined signpost text, "branch: toward".
+    toward = navOSSCardDistinctNames(signpost.components(separatedBy: CharacterSet(charactersIn: ":,")))
+  }
+  let action = navOSSCarPlayCardAction(kind)
+
+  var variants: [String]
+  switch kind {
+  case .arrive, .arriveLeft, .arriveRight:
+    let name = trip.destination.name.trimmingCharacters(in: .whitespacesAndNewlines)
+    variants = name.isEmpty ? [action] : [name, navOSSCarPlayCardAbbreviated(name)]
+  case let .roundabout(exit):
+    // The roundabout step names the ring ("Rond-point Dorval"); the road taken out of it is the
+    // following exit step's.
+    let next = trip.steps.indices.contains(stepIndex + 1) ? trip.steps[stepIndex + 1] : nil
+    let exitRoad =
+      next.flatMap {
+        $0.maneuverType.lowercased().hasPrefix("exit") ? navOSSCardRoadName($0.roadName).nilIfEmpty : nil
+      } ?? road.nilIfEmpty
+    let label = exit.map { "Exit \($0)" }
+    if let exitRoad {
+      variants = navOSSCardNameVariants(
+        exitRoad.components(separatedBy: " / "), prefix: label.map { "\($0) · " } ?? "")
+      if let label { variants.append(label) }
+    } else {
+      variants = [action]
+    }
+  default:
+    let type = step.maneuverType.lowercased()
+    let isRamp =
+      ["fork", "merge", "on ramp", "off ramp"].contains(type)
+      || [.keepLeft, .keepRight, .mergeLeft, .mergeRight, .onRamp, .offRampLeft, .offRampRight]
+        .contains(kind)
+    if isRamp || exitNumber != nil, exitNumber != nil || !branch.isEmpty || !toward.isEmpty {
+      let towardIsTheSign = branch.isEmpty && road.isEmpty
+      let targets =
+        !branch.isEmpty
+        ? branch : !road.isEmpty ? road.components(separatedBy: " / ") : toward
+      let targetKeys = targets.map(navOSSCardCoreKey)
+      let joinedKey = targetKeys.joined(separator: " ")
+      let newToward =
+        towardIsTheSign
+        ? []
+        : toward.filter {
+          let key = navOSSCardCoreKey($0)
+          return !targetKeys.contains(key) && !joinedKey.contains(key)
+        }
+      let prefix = exitNumber.map { "Exit \($0) · " } ?? ""
+      variants = []
+      if !newToward.isEmpty, !targets.isEmpty {
+        variants.append(
+          prefix + targets.joined(separator: " / ") + " toward "
+            + newToward.prefix(2).joined(separator: " / "))
+      }
+      variants += navOSSCardNameVariants(targets, prefix: prefix)
+      if let exitNumber { variants.append("Exit \(exitNumber)") }
+    } else if !road.isEmpty {
+      variants = navOSSCardNameVariants(road.components(separatedBy: " / "), prefix: "")
+    } else if !toward.isEmpty {
+      variants = ["\(action) toward \(toward.prefix(2).joined(separator: " / "))", action]
+    } else {
+      variants = [action]
+    }
+  }
+  var seen = Set<String>()
+  let cleaned = variants.compactMap { variant -> String? in
+    var text = variant.trimmingCharacters(in: .whitespacesAndNewlines)
+    while text.hasSuffix(".") { text.removeLast() }
+    guard !text.isEmpty, seen.insert(text).inserted else { return nil }
+    return text
+  }
+  guard !cleaned.isEmpty else { return [action] }
+  // Two card lines at most: longer variants go whenever a shorter one exists; if none does, the
+  // shortest is kept alone.
+  let fitting = cleaned.filter { $0.count <= navOSSCarPlayCardMaximumCharacters }
+  return fitting.isEmpty ? [cleaned.min { $0.count < $1.count }!] : fitting
 }
 
 /// Distance between two maneuvers under which the second is shown as "Then".
