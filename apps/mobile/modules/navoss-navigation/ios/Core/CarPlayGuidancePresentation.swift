@@ -1321,3 +1321,64 @@ public func navOSSCarPlayPreviewResumeAction(
 extension String {
   fileprivate var nilIfEmpty: String? { isEmpty ? nil : self }
 }
+
+// MARK: - Route fit
+
+/// The flat camera that shows every coordinate inside a padded part of the map view.
+public struct NavOSSCarPlayFitCamera: Equatable, Sendable {
+  public let center: NavOSSCarPlayCoordinate
+  public let zoomLevel: Double
+}
+
+/// Fits `coordinates` into the view minus its padding, with the map rotated to `headingDegrees`,
+/// using Web Mercator at MapLibre's 512-point world size. Computed here rather than with MapLibre's
+/// `setVisibleCoordinates`, which on CarPlay-sized views with a large side padding zoomed in by
+/// several levels and left the route and the vehicle off screen.
+public func navOSSCarPlayFitCamera(
+  coordinates: [NavOSSCarPlayCoordinate],
+  viewWidth: Double,
+  viewHeight: Double,
+  padding: (top: Double, left: Double, bottom: Double, right: Double),
+  headingDegrees: Double,
+  maximumZoomLevel: Double = 20
+) -> NavOSSCarPlayFitCamera? {
+  let points = coordinates.filter(\.isValid)
+  let width = viewWidth - padding.left - padding.right
+  let height = viewHeight - padding.top - padding.bottom
+  guard let first = points.first, width > 0, height > 0 else { return nil }
+  func project(_ coordinate: NavOSSCarPlayCoordinate) -> (x: Double, y: Double) {
+    let latitude = min(85, max(-85, coordinate.latitude)) * .pi / 180
+    return (
+      (coordinate.longitude + 180) / 360,
+      (1 - log(tan(latitude) + 1 / cos(latitude)) / .pi) / 2
+    )
+  }
+  let heading = (headingDegrees.isFinite ? headingDegrees : 0) * .pi / 180
+  let origin = project(first)
+  // World offsets (x east, y south) rotated into screen axes for a map turned to `heading`.
+  func rotate(_ x: Double, _ y: Double) -> (x: Double, y: Double) {
+    (x * cos(heading) + y * sin(heading), -x * sin(heading) + y * cos(heading))
+  }
+  let rotated = points.map { point -> (x: Double, y: Double) in
+    let world = project(point)
+    return rotate(world.x - origin.x, world.y - origin.y)
+  }
+  let minX = rotated.map(\.x).min()!, maxX = rotated.map(\.x).max()!
+  let minY = rotated.map(\.y).min()!, maxY = rotated.map(\.y).max()!
+  let spanX = max(maxX - minX, 1e-12)
+  let spanY = max(maxY - minY, 1e-12)
+  let zoom = min(maximumZoomLevel, max(0, log2(min(width / spanX, height / spanY) / 512)))
+  let scale = 512 * pow(2, zoom)
+  // The padded area's centre sits this far from the view's centre, in screen points.
+  let offsetX = (padding.left - padding.right) / 2
+  let offsetY = (padding.top - padding.bottom) / 2
+  let centerX = (minX + maxX) / 2 - offsetX / scale
+  let centerY = (minY + maxY) / 2 - offsetY / scale
+  // Back to world axes, then to latitude and longitude.
+  let worldX = origin.x + centerX * cos(heading) - centerY * sin(heading)
+  let worldY = origin.y + centerX * sin(heading) + centerY * cos(heading)
+  let longitude = worldX * 360 - 180
+  let latitude = atan(sinh(.pi * (1 - 2 * worldY))) * 180 / .pi
+  return NavOSSCarPlayFitCamera(
+    center: NavOSSCarPlayCoordinate(latitude: latitude, longitude: longitude), zoomLevel: zoom)
+}

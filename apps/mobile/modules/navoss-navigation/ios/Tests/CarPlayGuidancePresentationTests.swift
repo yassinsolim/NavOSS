@@ -348,6 +348,53 @@ final class CarPlayGuidancePresentationTests: XCTestCase {
       navOSSCarPlayCameraTarget(speedMetersPerSecond: -5, distanceToManeuverMeters: -10), parked)
   }
 
+  func testRouteFitKeepsEveryPointInsideThePaddedView() throws {
+    // The build 83 overview on an 800 x 480 head unit with the card's 324 pt on the left.
+    let route = [
+      NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.07400),
+      NavOSSCarPlayCoordinate(latitude: 51.04470, longitude: -114.06500),
+      NavOSSCarPlayCoordinate(latitude: 51.04920, longitude: -114.06500),
+      NavOSSCarPlayCoordinate(latitude: 51.05300, longitude: -114.06500),
+    ]
+    let padding = (top: 56.0, left: 324.0, bottom: 96.0, right: 108.0)
+    for heading in [0.0, 90, 215] {
+      let fit = try XCTUnwrap(
+        navOSSCarPlayFitCamera(
+          coordinates: route, viewWidth: 800, viewHeight: 480, padding: padding,
+          headingDegrees: heading))
+      // Project the route back with the fitted camera, as the map would draw it.
+      func world(_ c: NavOSSCarPlayCoordinate) -> (Double, Double) {
+        let lat = c.latitude * .pi / 180
+        return ((c.longitude + 180) / 360, (1 - log(tan(lat) + 1 / cos(lat)) / .pi) / 2)
+      }
+      let scale = 512 * pow(2, fit.zoomLevel)
+      let center = world(fit.center)
+      let h = heading * .pi / 180
+      var touchesEdge = false
+      for point in route {
+        let w = world(point)
+        let dx = w.0 - center.0, dy = w.1 - center.1
+        let x = 400 + (dx * cos(h) + dy * sin(h)) * scale
+        let y = 240 + (-dx * sin(h) + dy * cos(h)) * scale
+        XCTAssertGreaterThanOrEqual(x, padding.left - 0.01, "heading \(heading)")
+        XCTAssertLessThanOrEqual(x, 800 - padding.right + 0.01, "heading \(heading)")
+        XCTAssertGreaterThanOrEqual(y, padding.top - 0.01, "heading \(heading)")
+        XCTAssertLessThanOrEqual(y, 480 - padding.bottom + 0.01, "heading \(heading)")
+        if abs(x - padding.left) < 0.5 || abs(x - (800 - padding.right)) < 0.5
+          || abs(y - padding.top) < 0.5 || abs(y - (480 - padding.bottom)) < 0.5
+        {
+          touchesEdge = true
+        }
+      }
+      XCTAssertTrue(touchesEdge, "the fit is tight at heading \(heading)")
+      // About 1 km of route in a ~330 pt box is a city overview, not a street close-up.
+      XCTAssertTrue((13...16).contains(fit.zoomLevel), "zoom \(fit.zoomLevel)")
+    }
+    XCTAssertNil(
+      navOSSCarPlayFitCamera(
+        coordinates: route, viewWidth: 100, viewHeight: 100, padding: padding, headingDegrees: 0))
+  }
+
   func testSmoothingIsFrameRateIndependent() {
     var sixty = 0.0
     for _ in 0..<60 {

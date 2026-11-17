@@ -240,7 +240,6 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   /// OpenMapTiles POI classes for bus, tram, rail and subway stops and stations.
   private static let transitPointOfInterestClasses = ["bus", "railway", "rail", "tram", "subway"]
   private var lastLaidOutMapSize = CGSize.zero
-  private var routeFitGeneration: UInt64 = 0
   private var alternateRouteCoordinates: [CLLocationCoordinate2D] = []
   private var routeCoordinates: [CLLocationCoordinate2D] = []
   private var routeGeometry: [NavOSSCarPlayCoordinate] = []
@@ -649,6 +648,35 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     return view.convert(point, from: mapView)
   }
 
+  /// Whether the camera is following the vehicle (guidance, not the overview).
+  var isFollowingVehicle: Bool { activeGuidance && !presentsRouteOverview }
+  var isPresentingRouteOverview: Bool { activeGuidance && presentsRouteOverview }
+
+  /// Camera and report markers whose point lies inside the visible map.
+  var visibleMapAlertCount: Int {
+    let visible = visibleMapFrame
+    return mapAlerts.filter { alert in
+      let point = mapView.convert(
+        CLLocationCoordinate2D(
+          latitude: alert.coordinate.latitude, longitude: alert.coordinate.longitude),
+        toPointTo: view)
+      return visible.contains(point)
+    }.count
+  }
+
+  /// Whether any drawn congestion run has a vertex inside the visible map.
+  var congestionIsVisible: Bool {
+    let visible = visibleMapFrame
+    return (installedCongestionRuns ?? []).contains { run in
+      run.coordinates.contains { coordinate in
+        visible.contains(
+          mapView.convert(
+            CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude),
+            toPointTo: view))
+      }
+    }
+  }
+
   /// The visible map: what CarPlay's live safe area leaves, in `view` coordinates.
   var visibleMapFrame: CGRect { view.safeAreaLayoutGuide.layoutFrame }
 
@@ -715,8 +743,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         right: insets.right
       )
     } else {
-      // Idle, preview and overview centre in the visible map, as MapLibre's automatic inset did.
-      target = UIEdgeInsets(top: 0, left: insets.left, bottom: insets.bottom, right: insets.right)
+      // Idle, preview and overview use no content inset. MapLibre's route fit
+      // (`setVisibleCoordinates`) mis-zooms by several levels with a large side inset (a 300 pt
+      // card inset fitted a 1 km route at zoom 17.5, leaving no route on screen), so `fitRoute`
+      // passes the safe area as edge padding instead.
+      target = .zero
     }
     guard mapView.contentInset != target else { return }
     mapView.setContentInset(target, animated: false, completionHandler: nil)
@@ -1002,7 +1033,6 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   }
 
   func clearRoute() {
-    routeFitGeneration &+= 1
     if activeGuidance {
       flattenCamera()
     }
@@ -1046,7 +1076,6 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   }
 
   func deactivate() {
-    routeFitGeneration &+= 1
     invalidateDisplayLink()
     latestPosition = nil
     renderedPosition = nil
@@ -1221,40 +1250,49 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       ? routeCoordinates
       : previewCoordinatesWithBreathingRoom(routeCoordinates)
     let previewSheetInset = max(64, mapView.bounds.width * 0.66)
-    let edgePadding =
+    let safe = view.safeAreaInsets
+    let basePadding =
       activeGuidance
       ? UIEdgeInsets(top: 56, left: 48, bottom: 96, right: 48)
       : reservesRouteChoiceSheet
         ? UIEdgeInsets(top: 56, left: previewSheetInset, bottom: 56, right: 48)
         : UIEdgeInsets(top: 32, left: 32, bottom: 32, right: 32)
-    routeFitGeneration &+= 1
-    let fitGeneration = routeFitGeneration
-    // The overview is a flat map of the whole route; fitting while the tilted follow camera is
-    // still in place frames the route through that perspective.
-    if activeGuidance {
-      flattenCamera()
-    }
-    fittedCoordinates.withUnsafeBufferPointer { coordinates in
-      guard let baseAddress = coordinates.baseAddress else {
-        return
-      }
-      mapView.setVisibleCoordinates(
-        baseAddress,
-        count: UInt(coordinates.count),
-        edgePadding: edgePadding,
-        direction: -1,
-        duration: animated ? 0.35 : 0,
-        animationTimingFunction: nil
-      ) { [weak self] in
-        guard let self, self.routeFitGeneration == fitGeneration, !self.activeGuidance else {
-          return
-        }
-        let maximumZoomLevel = self.reservesRouteChoiceSheet ? 9.25 : 12.5
-        if self.mapView.zoomLevel > maximumZoomLevel {
-          self.mapView.setZoomLevel(maximumZoomLevel, animated: false)
-        }
-      }
-    }
+    // The visible map is what the safe area leaves; the content inset is zero outside follow.
+    let edgePadding = UIEdgeInsets(
+      top: basePadding.top,
+      left: max(basePadding.left, safe.left + 24),
+      bottom: basePadding.bottom + safe.bottom,
+      right: basePadding.right + safe.right
+    )
+    updateGuidanceContentInset()
+    // A flat camera computed here (`navOSSCarPlayFitCamera`), not MapLibre's
+    // `setVisibleCoordinates`: with the card's side padding on an 800 x 480 head unit that zoomed
+    // a 1 km route in to about zoom 17.5, leaving the route, the vehicle and its markers off
+    // screen in the overview.
+    let maximumZoomLevel = activeGuidance ? 18 : reservesRouteChoiceSheet ? 9.25 : 12.5
+    guard
+      let fit = navOSSCarPlayFitCamera(
+        coordinates: fittedCoordinates.map {
+          NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+        },
+        viewWidth: Double(mapView.bounds.width),
+        viewHeight: Double(mapView.bounds.height),
+        padding: (
+          Double(edgePadding.top), Double(edgePadding.left), Double(edgePadding.bottom),
+          Double(edgePadding.right)
+        ),
+        headingDegrees: mapView.direction,
+        maximumZoomLevel: maximumZoomLevel
+      )
+    else { return }
+    flattenCamera()
+    mapView.setCenter(
+      CLLocationCoordinate2D(latitude: fit.center.latitude, longitude: fit.center.longitude),
+      zoomLevel: fit.zoomLevel,
+      direction: mapView.direction,
+      animated: animated,
+      completionHandler: nil
+    )
   }
 
   private func previewCoordinatesWithBreathingRoom(

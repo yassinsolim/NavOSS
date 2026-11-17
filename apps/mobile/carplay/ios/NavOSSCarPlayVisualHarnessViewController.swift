@@ -443,7 +443,14 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
           guard let self else { return }
           let count = self.mapViewController.mapAlertMarkerCount
           if count == 4 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in self?.markReady() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+              guard let self else { return }
+              guard self.mapViewController.visibleMapAlertCount > 0 else {
+                assertionFailure("Community report markers are off screen")
+                return
+              }
+              self.markReady()
+            }
           } else if attempt < 50 {
             awaitMarkers(attempt + 1)
           } else {
@@ -479,7 +486,14 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       _ = mapViewController.toggleRouteOverview()
       // The fixture alerts stay published: the app process ends after this scenario's capture.
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
-        self?.markReady()
+        guard let self else { return }
+        guard self.mapViewController.visibleMapAlertCount > 0,
+          self.mapViewController.congestionIsVisible
+        else {
+          assertionFailure("Camera markers or congestion are off screen")
+          return
+        }
+        self.markReady()
       }
       return
     case "real-calgary-exit", "real-calgary-exit-night", "real-vancouver-exit",
@@ -1533,13 +1547,38 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
   }
 
   private func markReady() {
-    let camera = mapViewController.mapView.camera
+    let map = mapViewController
+    let camera = map.mapView.camera
     if camera.pitch > 0 {
       // The follow camera as rendered, for comparing camera tuning between builds.
       print(
         String(
           format: "NAVOSS_CARPLAY_CAMERA zoom=%.2f pitch=%.1f altitude=%.0f",
-          mapViewController.mapView.zoomLevel, camera.pitch, camera.altitude))
+          map.mapView.zoomLevel, camera.pitch, camera.altitude))
+    }
+    // Every guidance capture must show the vehicle: in follow mode on the 72% line of the visible
+    // map under a tilted camera, in the overview somewhere inside the visible map.
+    if map.isFollowingVehicle || map.isPresentingRouteOverview {
+      map.view.layoutIfNeeded()
+      let visible = map.visibleMapFrame
+      guard let vehicle = map.vehicleScreenPoint, visible.contains(vehicle) else {
+        assertionFailure(
+          "\(scenario): vehicle \(String(describing: map.vehicleScreenPoint)) is not in the "
+            + "visible map \(visible)")
+        return
+      }
+      if map.isFollowingVehicle {
+        let line =
+          NavOSSCarPlayMapViewController.puckVerticalFraction
+          * (map.view.bounds.height - map.view.safeAreaInsets.bottom)
+        guard abs(vehicle.y - line) < 16, abs(vehicle.x - visible.midX) < 16, camera.pitch > 40
+        else {
+          assertionFailure(
+            "\(scenario): follow camera lost the vehicle: vehicle=\(vehicle) line=\(line) "
+              + "visible=\(visible) pitch=\(camera.pitch)")
+          return
+        }
+      }
     }
     view.accessibilityLabel = "CarPlay visual \(scenario) ready"
     view.isAccessibilityElement = true
