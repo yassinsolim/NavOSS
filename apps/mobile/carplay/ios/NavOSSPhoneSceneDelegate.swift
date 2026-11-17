@@ -23,9 +23,20 @@ final class NavOSSPhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
       appWindow.rootViewController = NavOSSCarPlayVisualHarnessViewController(scenario: scenario)
     }
     #endif
-    window = appWindow
-    appWindow.windowScene = windowScene
-    appWindow.makeKeyAndVisible()
+    // The generated `AppDelegate` builds its window with `UIWindow(frame:)` before any scene
+    // exists, and attaching that window to the scene afterwards is not enough: on iOS 26 the
+    // system share sheet presented from it appears as a small panel in the bottom-right corner
+    // (reproduced on the 26.5 simulator). Host the React Native root in a window created for this
+    // scene instead.
+    let sceneWindow = UIWindow(windowScene: windowScene)
+    sceneWindow.backgroundColor = appWindow.backgroundColor
+    let rootViewController = appWindow.rootViewController
+    appWindow.rootViewController = nil
+    appWindow.isHidden = true
+    sceneWindow.rootViewController = rootViewController
+    appDelegate?.window = sceneWindow
+    window = sceneWindow
+    sceneWindow.makeKeyAndVisible()
     open(connectionOptions.urlContexts)
     continueActivities(connectionOptions.userActivities)
   }
