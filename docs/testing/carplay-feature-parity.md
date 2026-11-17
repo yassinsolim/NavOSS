@@ -17,13 +17,12 @@ Evidence combines:
 No competitor incident was submitted. Test routes were started while parked. Temporary captures
 containing private location or saved-place details were deleted after local inspection.
 
-The decisions below describe source on main, including the changes after distributed build 82;
-they do not imply those changes have shipped or passed a head-unit check.
+The decisions below describe source in build 83; they do not imply a head-unit check has passed.
 
 ## Status legend
 
 - **Matched**: available now in NavOSS.
-- **Implemented**: added in the current working tree; requires a new signed build.
+- **Implemented**: included in build 83; head-unit validation remains outstanding.
 - **Next**: technically feasible, but requires a larger separately tested milestone.
 - **Data gated**: requires reliable licensed, official, or moderated data.
 - **Platform gated**: requires Apple/OEM support and physical vehicle validation.
