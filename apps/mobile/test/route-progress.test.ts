@@ -195,7 +195,7 @@ describe('route progress', () => {
     expect(formatTrafficDelay(29)).toBeUndefined();
   });
 
-  it('shares an ETA without coordinates or live tracking', () => {
+  it('shares one readable sentence with the arrival time, duration and distance', () => {
     const message = buildEtaShareMessage(
       'Calgary Tower',
       1_200,
@@ -203,10 +203,10 @@ describe('route progress', () => {
       new Date(2026, 6, 15, 12, 0, 0),
     );
 
-    expect(message).toContain('Calgary Tower');
-    expect(message).toContain('12:20');
-    expect(message).toContain('20 min');
-    expect(message).toContain('20 km');
+    expect(message).toBe(
+      `I'm heading to Calgary Tower. ETA ${formatArrivalTime(1_200, new Date(2026, 6, 15, 12, 0, 0))} (20 min, 20 km).`,
+    );
+    expect(message).toMatch(/ETA 12:20/);
     expect(message).not.toMatch(/-114|51\.0|track/i);
   });
 
