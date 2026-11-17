@@ -8,42 +8,72 @@ import UIKit
 ///
 /// Images are template images: CarPlay tints them for the guidance card, Dashboard, and
 /// notification banners in both light and dark appearances.
+///
+/// The image must be drawn at the car screen's own scale. CarPlay sends the maneuver to its host
+/// as pixels and lays the card out from pixels ÷ the car display's scale: a 50 pt symbol rendered
+/// at the phone's 3x reaches a 2x head unit as a 75 pt image, which CarPlay treats as a wide image
+/// and puts on its own row above the distance (or, with a short instruction, drops the
+/// instruction). At the car's scale it stays 50 pt and sits beside the distance.
 @MainActor
 enum NavOSSCarPlayManeuverSymbols {
+  /// CarPlay's maximum for a symbol shown on the same row as the distance (CarPlay Developer
+  /// Guide, "First maneuver symbol, symbol and instruction on one line": 50 pt × 50 pt).
   private static let canvas = CGSize(width: 50, height: 50)
   private static var cache: [String: UIImage] = [:]
 
-  static func image(kind: NavOSSCarPlayManeuverKind, angleDegrees: Double) -> UIImage? {
+  /// `displayScale` is the scale of the screen the symbol is shown on: the CarPlay window's for
+  /// the guidance card, Dashboard and notifications.
+  static func image(
+    kind: NavOSSCarPlayManeuverKind,
+    angleDegrees: Double,
+    displayScale: CGFloat = 3
+  ) -> UIImage? {
+    let scale = max(1, displayScale.rounded())
     // Quantize the angle so near-identical junctions share one cached image.
     let angle = (max(-180, min(180, angleDegrees)) / 5).rounded() * 5
-    let key = "\(kind)|\(angle)"
+    let key = "\(kind)|\(angle)|\(scale)"
     if let cached = cache[key] { return cached }
     let image: UIImage?
     switch kind {
     case .arrive, .arriveLeft, .arriveRight:
-      image = UIImage(systemName: "flag.checkered")
+      image = systemSymbol("flag.checkered", scale: scale)
     case .ferry:
-      image = UIImage(systemName: "ferry.fill")
+      image = systemSymbol("ferry.fill", scale: scale)
     case .uTurn:
-      image = render { drawUTurn(in: $0) }
+      image = render(scale: scale) { drawUTurn(in: $0) }
     case let .roundabout(exit):
-      image = render { drawRoundabout(exitAngle: angle, exit: exit, in: $0) }
+      image = render(scale: scale) { drawRoundabout(exitAngle: angle, exit: exit, in: $0) }
     default:
-      image = render { drawTurn(angle: angle, in: $0) }
+      image = render(scale: scale) { drawTurn(angle: angle, in: $0) }
     }
     let template = image?.withRenderingMode(.alwaysTemplate)
     cache[key] = template
     return template
   }
 
-  private static func render(_ draw: (CGContext) -> Void) -> UIImage {
+  private static func render(scale: CGFloat, _ draw: (CGContext) -> Void) -> UIImage {
     let format = UIGraphicsImageRendererFormat()
-    format.scale = 3
+    format.scale = scale
     format.opaque = false
     return UIGraphicsImageRenderer(size: canvas, format: format).image { context in
       UIColor.black.setStroke()
       UIColor.black.setFill()
       draw(context.cgContext)
+    }
+  }
+
+  /// An SF Symbol centred in the same 50 pt canvas at the same scale as the drawn arrows.
+  private static func systemSymbol(_ name: String, scale: CGFloat) -> UIImage? {
+    let configuration = UIImage.SymbolConfiguration(pointSize: 30, weight: .semibold)
+    guard let symbol = UIImage(systemName: name, withConfiguration: configuration) else {
+      return nil
+    }
+    return render(scale: scale) { _ in
+      let size = symbol.size
+      symbol.withTintColor(.black).draw(
+        in: CGRect(
+          x: (canvas.width - size.width) / 2, y: (canvas.height - size.height) / 2,
+          width: size.width, height: size.height))
     }
   }
 

@@ -693,23 +693,43 @@ public struct NavOSSCarPlayState: Equatable, Sendable {
   }
 }
 
-public struct NavOSSCarPlayControlState: Equatable, Sendable {
-  public let drivingControlsVisible: Bool
-  public let endNavigationVisible: Bool
-  public let reportVisible: Bool
-  public let returnToRootFromSearch: Bool
-  public let searchVisible: Bool
-  public let settingsVisible: Bool
-  public let soundSettingsVisible: Bool
+/// A button on the CarPlay map.
+public enum NavOSSCarPlayMapControl: Hashable, Sendable {
+  case search
+  case recenter
+  case settings
+  /// Guidance sound (all, alerts only, muted).
+  case sound
+  case report
+  /// Route overview, toggling back to following the car.
+  case overview
+}
 
-  public init(hasActiveTrip: Bool, searchVisible: Bool) {
-    drivingControlsVisible = hasActiveTrip
-    endNavigationVisible = hasActiveTrip
-    reportVisible = hasActiveTrip
+/// A button in the map's trailing navigation-bar slot.
+public enum NavOSSCarPlayBarItem: Equatable, Sendable {
+  case end
+  /// The traffic credit for the route on screen: `title` is what the bar shows, `credit` the full
+  /// attribution shown when it is tapped.
+  case trafficCredit(title: String, credit: String)
+}
+
+public struct NavOSSCarPlayControlState: Equatable, Sendable {
+  /// Map buttons, top to bottom. During a trip there are three; End is not a map button.
+  public let mapControls: [NavOSSCarPlayMapControl]
+  /// The trailing navigation-bar buttons. CarPlay reveals the bar (with the leading Trip button)
+  /// on any touch while guiding. During a trip End comes first and the traffic credit, when the
+  /// route has one, shrinks to "Traffic" so it never crowds End; tapping it shows the full credit.
+  public let trailingBarItems: [NavOSSCarPlayBarItem]
+  public let returnToRootFromSearch: Bool
+
+  public init(hasActiveTrip: Bool, searchVisible: Bool, trafficAttribution: String? = nil) {
+    mapControls = hasActiveTrip ? [.sound, .report, .overview] : [.search, .recenter, .settings]
+    let credit = trafficAttribution.flatMap { $0.isEmpty ? nil : $0 }
+    trailingBarItems =
+      hasActiveTrip
+      ? [.end] + (credit.map { [.trafficCredit(title: "Traffic", credit: $0)] } ?? [])
+      : credit.map { [.trafficCredit(title: $0, credit: $0)] } ?? []
     returnToRootFromSearch = hasActiveTrip && searchVisible
-    self.searchVisible = !hasActiveTrip
-    settingsVisible = !hasActiveTrip
-    soundSettingsVisible = hasActiveTrip
   }
 }
 

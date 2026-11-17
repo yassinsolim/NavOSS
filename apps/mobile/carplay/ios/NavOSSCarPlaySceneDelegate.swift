@@ -187,17 +187,17 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private var activeTripId: String?
   private var activeTripControlsVisible = false
   private var destinationSelectionMode = DestinationSelectionMode.newTrip
-  private var endNavigationMapButton: CPMapButton?
-  private var idleMapButtons: [CPMapButton] = []
+  private var mapButtons: [NavOSSCarPlayMapControl: CPMapButton] = [:]
   private var isPreviewingRoutes = false
   private var mapTemplate: CPMapTemplate?
   private var mapViewController: NavOSSCarPlayMapViewController?
-  private var muteGuidanceMapButton: CPMapButton?
   private var navigationSession: CPNavigationSession?
-  private var overviewMapButton: CPMapButton?
   private let preferencesStore = NavOSSCarPlayPreferencesStore.shared
   private var preferencesObserver: NSObjectProtocol?
-  private var reportMapButton: CPMapButton?
+  /// The traffic credit for the route on screen, when traffic data colours it.
+  private var routeTrafficAttribution: String?
+  /// The vehicle's suggested map appearance; `.unspecified` until CarPlay reports one.
+  private var templateContentStyle = UIUserInterfaceStyle.unspecified
   private var routePreviewReplacesActiveTrip = false
   private var rootActionShowsTrip = false
   private let reportStore = NavOSSCarPlayReportStore.shared
@@ -335,6 +335,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       }
     )
     carWindow = window
+    templateContentStyle = templateApplicationScene.contentStyle
 
     let mapViewController = NavOSSCarPlayMapViewController()
     let preferences = preferencesStore.load()
@@ -358,6 +359,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
     let mapTemplate = makeMapTemplate()
     self.mapTemplate = mapTemplate
+    applyGuidanceCardColor()
     interfaceController.setRootTemplate(mapTemplate, animated: false, completion: nil)
     stateObserver = NotificationCenter.default.addObserver(
       forName: .navOSSCarPlayStateDidChange,
@@ -438,7 +440,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   /// The vehicle's suggested map style changed, typically at dusk or when headlights come on.
   func contentStyleDidChange(_ contentStyle: UIUserInterfaceStyle) {
+    templateContentStyle = contentStyle
     mapViewController?.applyContentStyle(contentStyle)
+    applyGuidanceCardColor()
   }
 
   func templateApplicationScene(
@@ -488,11 +492,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     activeTripControlsVisible = false
     destinationSelectionMode = .newTrip
     isPreviewingRoutes = false
-    endNavigationMapButton = nil
-    idleMapButtons = []
-    muteGuidanceMapButton = nil
-    overviewMapButton = nil
-    reportMapButton = nil
+    mapButtons = [:]
+    routeTrafficAttribution = nil
+    templateContentStyle = .unspecified
     rootActionShowsTrip = false
     routePreviewReplacesActiveTrip = false
     routeChoicesByIdentifier = [:]
@@ -511,8 +513,9 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private func applySharedPreferences() {
     let preferences = preferencesStore.load()
     NavOSSNavigationService.shared.setAudioMode(preferences.audioMode)
-    muteGuidanceMapButton?.image = audioModeImage(preferences.audioMode)
+    mapButtons[.sound]?.image = mapButtonImage(audioModeSymbolName(preferences.audioMode))
     mapViewController?.applyAppearance(preferences.appearance)
+    applyGuidanceCardColor()
     mapViewController?.applyMapOrientation(preferences.mapOrientation)
     mapViewController?.applyMapPreferences(
       showsPointsOfInterest: preferences.showsPointsOfInterest,
@@ -528,7 +531,8 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   private func makeMapTemplate() -> CPMapTemplate {
     let template = CPMapTemplate()
     template.mapDelegate = self
-    template.guidanceBackgroundColor = UIColor(red: 0.08, green: 0.38, blue: 0.24, alpha: 1)
+    // The trip estimates panel matches the dark guidance card on both map styles.
+    template.tripEstimateStyle = .dark
     template.automaticallyHidesNavigationBar = false
     template.hidesButtonsWithNavigationBar = false
 
@@ -537,44 +541,66 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     let recenterButton = CPMapButton { [weak self] _ in
       self?.mapViewController?.recenter()
     }
-    recenterButton.image = UIImage(systemName: "location.fill")
+    recenterButton.image = mapButtonImage("location.fill")
     let searchButton = CPMapButton { [weak self] _ in
       self?.showPlaces()
     }
-    searchButton.image = UIImage(systemName: "magnifyingglass")
+    searchButton.image = mapButtonImage("magnifyingglass")
     let settingsButton = CPMapButton { [weak self] _ in
       self?.showSettings(audioOnly: false)
     }
-    settingsButton.image = UIImage(systemName: "gearshape.fill")
-    let endNavigationButton = CPMapButton { [weak self] _ in
-      self?.endNavigation()
-    }
-    endNavigationButton.image = UIImage(systemName: "xmark.circle.fill")
+    settingsButton.image = mapButtonImage("gearshape.fill")
     let overviewButton = CPMapButton { [weak self] button in
       guard let self else {
         return
       }
       let overviewVisible = self.mapViewController?.toggleRouteOverview() ?? false
-      button.image = UIImage(systemName: overviewVisible ? "location.fill" : "map")
+      button.image = self.mapButtonImage(overviewVisible ? "location.fill" : "map.fill")
     }
-    overviewButton.image = UIImage(systemName: "map")
-    let muteGuidanceButton = CPMapButton { [weak self] _ in
+    overviewButton.image = mapButtonImage("map.fill")
+    let soundButton = CPMapButton { [weak self] _ in
       self?.showSettings(audioOnly: true)
     }
-    muteGuidanceButton.image = audioModeImage(preferencesStore.load().audioMode)
-    // Reporting is one tap from the driving map and one more for the type; the Trip list (the
-    // navigation bar's Trip button) keeps stops, routes, and End.
+    soundButton.image = mapButtonImage(audioModeSymbolName(preferencesStore.load().audioMode))
+    // Reporting is one tap from the driving map and one more for the type; the navigation bar
+    // keeps End (trailing) and the Trip list (leading: stops, routes, and End again).
     let reportButton = CPMapButton { [weak self] _ in
       self?.showReports()
     }
-    reportButton.image = UIImage(systemName: "exclamationmark.bubble.fill")
-    endNavigationMapButton = endNavigationButton
-    overviewMapButton = overviewButton
-    muteGuidanceMapButton = muteGuidanceButton
-    reportMapButton = reportButton
-    idleMapButtons = [searchButton, recenterButton, settingsButton]
-    template.mapButtons = idleMapButtons
+    reportButton.image = mapButtonImage("exclamationmark.bubble.fill")
+    mapButtons = [
+      .search: searchButton, .recenter: recenterButton, .settings: settingsButton,
+      .sound: soundButton, .report: reportButton, .overview: overviewButton,
+    ]
+    template.mapButtons = NavOSSCarPlayControlState(hasActiveTrip: false, searchVisible: false)
+      .mapControls.compactMap { mapButtons[$0] }
     return template
+  }
+
+  /// One symbol family and weight for every map button, idle or guiding.
+  private func mapButtonImage(_ systemName: String) -> UIImage? {
+    UIImage(
+      systemName: systemName,
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold)
+    )
+  }
+
+  /// Brand ink, not green, behind the maneuver card and the "Then" row: `#0E1516` on the light map,
+  /// lifted to the raised dark surface `#1E2B2C` on the dark map so the card does not merge with
+  /// it. Text stays white on both.
+  private func applyGuidanceCardColor() {
+    let isDarkMap: Bool =
+      switch preferencesStore.load().appearance {
+      case .dark: true
+      case .light: false
+      case .automatic:
+        (templateContentStyle == .unspecified
+          ? carWindow?.traitCollection.userInterfaceStyle : templateContentStyle) == .dark
+      }
+    mapTemplate?.guidanceBackgroundColor =
+      isDarkMap
+      ? UIColor(red: 0x1E / 255, green: 0x2B / 255, blue: 0x2C / 255, alpha: 1)
+      : UIColor(red: 0x0E / 255, green: 0x15 / 255, blue: 0x16 / 255, alpha: 1)
   }
 
   private func apply(_ state: NavOSSCarPlayState) {
@@ -600,7 +626,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       presentedArrivalTripId = nil
       isPreviewingRoutes = false
       mapTemplate?.automaticallyHidesNavigationBar = false
-      mapTemplate?.trailingNavigationBarButtons = []
+      configureRouteAttribution(trip: nil)
       mapViewController?.clearRoute()
       return
     }
@@ -897,9 +923,30 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   }
 
   private func configureRouteAttribution(trip: NavOSSCarPlayTrip?) {
-    mapTemplate?.trailingNavigationBarButtons =
-      trip.flatMap { navOSSCarPlayTrafficAttribution($0) }.map { [CPBarButton(title: $0) { _ in }] }
-      ?? []
+    routeTrafficAttribution = trip.flatMap { navOSSCarPlayTrafficAttribution($0) }
+    updateTrailingNavigationBarButtons()
+  }
+
+  /// End (during a trip) and the traffic credit share the trailing navigation-bar slot; see
+  /// `NavOSSCarPlayControlState.trailingBarItems`.
+  private func updateTrailingNavigationBarButtons() {
+    mapTemplate?.trailingNavigationBarButtons = NavOSSCarPlayControlState(
+      hasActiveTrip: activeTripControlsVisible,
+      searchVisible: false,
+      trafficAttribution: routeTrafficAttribution
+    ).trailingBarItems.map(makeBarButton)
+  }
+
+  private func makeBarButton(_ item: NavOSSCarPlayBarItem) -> CPBarButton {
+    switch item {
+    case .end:
+      return makeEndNavigationBarButton()
+    case let .trafficCredit(title, credit):
+      return CPBarButton(title: title) { [weak self] _ in
+        guard title != credit else { return }
+        self?.showNavigationAlert(title: "Traffic on this route", subtitle: credit, duration: 6)
+      }
+    }
   }
 
   private func resetManeuvers() {
@@ -944,9 +991,12 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     maneuver.instructionVariants = info.instructionVariants
     maneuver.dashboardInstructionVariants = info.instructionVariants
     maneuver.notificationInstructionVariants = info.instructionVariants
+    // Drawn at the car screen's scale so CarPlay keeps the arrow beside the distance; see
+    // `NavOSSCarPlayManeuverSymbols`.
     let symbol = NavOSSCarPlayManeuverSymbols.image(
       kind: info.kind,
-      angleDegrees: info.turnAngleDegrees
+      angleDegrees: info.turnAngleDegrees,
+      displayScale: carWindow?.screen.scale ?? 2
     )
     maneuver.symbolImage = symbol
     maneuver.dashboardSymbolImage = symbol
@@ -1115,13 +1165,14 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   }
 
   private func audioModeImage(_ mode: NavOSSCarPlayAudioMode) -> UIImage? {
+    UIImage(systemName: audioModeSymbolName(mode))
+  }
+
+  private func audioModeSymbolName(_ mode: NavOSSCarPlayAudioMode) -> String {
     switch mode {
-    case .alertsOnly:
-      UIImage(systemName: "bell.fill")
-    case .allGuidance:
-      UIImage(systemName: "speaker.wave.2.fill")
-    case .muted:
-      UIImage(systemName: "speaker.slash.fill")
+    case .alertsOnly: "bell.fill"
+    case .allGuidance: "speaker.wave.2.fill"
+    case .muted: "speaker.slash.fill"
     }
   }
 
@@ -2289,23 +2340,18 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     activeTripControlsVisible = visible
     let controlState = NavOSSCarPlayControlState(
       hasActiveTrip: visible,
-      searchVisible: interfaceController?.topTemplate is CPSearchTemplate
+      searchVisible: interfaceController?.topTemplate is CPSearchTemplate,
+      trafficAttribution: routeTrafficAttribution
     )
-    if controlState.drivingControlsVisible, let endNavigationMapButton,
-      let overviewMapButton, let muteGuidanceMapButton, let reportMapButton
-    {
-      overviewMapButton.image = UIImage(systemName: "map")
-      muteGuidanceMapButton.image = audioModeImage(preferencesStore.load().audioMode)
-      // CarPlay limits the map to four controls. Trip actions live behind the navigation bar's
-      // Trip button, which CarPlay reveals on any touch.
-      mapTemplate?.mapButtons = [
-        endNavigationMapButton, overviewMapButton, muteGuidanceMapButton, reportMapButton,
-      ]
-      if controlState.returnToRootFromSearch {
-        interfaceController?.popToRootTemplate(animated: true, completion: nil)
-      }
-    } else {
-      mapTemplate?.mapButtons = idleMapButtons
+    if visible {
+      mapButtons[.overview]?.image = mapButtonImage("map.fill")
+      mapButtons[.sound]?.image = mapButtonImage(
+        audioModeSymbolName(preferencesStore.load().audioMode))
+    }
+    mapTemplate?.mapButtons = controlState.mapControls.compactMap { mapButtons[$0] }
+    mapTemplate?.trailingNavigationBarButtons = controlState.trailingBarItems.map(makeBarButton)
+    if controlState.returnToRootFromSearch {
+      interfaceController?.popToRootTemplate(animated: true, completion: nil)
     }
     if let placesTemplate {
       placesTemplate.trailingNavigationBarButtons =
