@@ -148,6 +148,16 @@ final class CarPlayCardTextTests: XCTestCase {
       ["Exit 56-O · Boulevard Roméo-Vachon Nord", "Exit 56-O"])
   }
 
+  func testJoinedRoadNameDeduplicatesOnlyItsExactInitialism() throws {
+    for alias in ["QEW", "QE", "qew"] {
+      let road = "Queen Elizabeth Way / \(alias)"
+      let maneuver = step("Continue on \(road).", type: "continue", road: road)
+      let expected =
+        alias == "QEW" ? ["Queen Elizabeth Way"] : [road, "Queen Elizabeth Way"]
+      XCTAssertEqual(try card(trip(with: maneuver), 1), expected)
+    }
+  }
+
   /// The step itself gives both the road name and its uppercase initialism; no alias table.
   func testRoadNameAndItsSignedInitialismAreNotRepeated() throws {
     let trips = try NavigationRoutesV2Tests.trips("squareone-scarborough-validation83.v2", version: .v2)

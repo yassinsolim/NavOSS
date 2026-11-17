@@ -640,8 +640,11 @@ private func navOSSCardCoreKey(_ name: String) -> String {
 /// as "Highway 17", and Valhalla's "2/Deerfoot Trail SE" spaced as "Highway 2 / Deerfoot Trail SE".
 private func navOSSCardRoadName(_ raw: String) -> String {
   let first = raw.split(separator: ";").first.map(String.init) ?? ""
-  return navOSSReadableRoadName(navOSSReadableRoadNames(first))
+  let name = navOSSReadableRoadName(navOSSReadableRoadNames(first))
     .trimmingCharacters(in: .whitespacesAndNewlines)
+  guard name.contains(" / ") else { return name }
+  return navOSSCardDistinctNames(name.components(separatedBy: " / "), roadName: name)
+    .joined(separator: " / ")
 }
 
 /// 2 when a name ends in a direction of travel ("North", "W"), 1 in an address quadrant only
@@ -678,12 +681,15 @@ private func navOSSCardDistinctNames(_ names: [String], roadName: String = "") -
       result.append(name)
     }
   }
-  // Only remove an exact uppercase initialism when this same step supplies the full mapped
-  // road name alongside it on the sign ("Queen Elizabeth Way", "QEW"). A lone ref, a partial
-  // match or a numeric route designation says something different and stays.
+  // Only remove an exact uppercase initialism when this same step supplies its full mapped
+  // name alongside it, either on the sign or in a joined roadName. Partial/lone refs stay.
   if result.count > 1 {
-    let words = navOSSCardNameParts(roadName).core
-    if words.count >= 3, result.contains(where: { navOSSCardCoreKey($0) == navOSSCardCoreKey(roadName) }) {
+    for road in roadName.components(separatedBy: " / ") {
+      let words = navOSSCardNameParts(road).core
+      let roadKey = navOSSCardCoreKey(road)
+      guard words.count >= 3, result.contains(where: { navOSSCardCoreKey($0) == roadKey }) else {
+        continue
+      }
       let initials = words.reduce(into: "") { text, word in
         if let first = word.first { text.append(contentsOf: String(first).uppercased()) }
       }
