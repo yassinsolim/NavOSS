@@ -85,8 +85,8 @@ final class NavigationRoutesV2Tests: XCTestCase {
     let later = try XCTUnwrap(navOSSCarPlayManeuverInfo(trip: trip, stepIndex: 3))
     XCTAssertEqual(
       later.instructionVariants.first,
-      "14 Street W South toward 14 Street West (Hospital)",
-      "the card shows the sign, not the provider's sentence"
+      "14 Street W South",
+      "the card shows the sign, not the provider's sentence, within two card lines"
     )
   }
 

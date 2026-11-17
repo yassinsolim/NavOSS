@@ -582,6 +582,12 @@ func navOSSCarPlayCardAbbreviated(_ name: String) -> String {
   }.joined(separator: " / ")
 }
 
+/// The longest card variant that stays on two lines of the guidance card. On the owner's Toyota
+/// head unit (build 82 photo, bar shown) a card line held 18–22 characters ("Take the 1A East /",
+/// "Crowchild Trail", "ramp on the left."), so anything past about 40 characters becomes a third
+/// line; with the bar hidden CarPlay lets the card grow to fit it (the second build 82 photo).
+let navOSSCarPlayCardMaximumCharacters = 40
+
 private let navOSSCardKeyLocale = Locale(identifier: "en_CA")
 private let navOSSCardKeyIgnoredWords: Set<String> = [
   "north", "south", "east", "west", "n", "s", "e", "w", "ne", "nw", "se", "sw", "nord", "sud",
@@ -668,6 +674,8 @@ private func navOSSCardNameVariants(_ names: [String], prefix: String) -> [Strin
 
 /// Card variants for the maneuver that begins `steps[stepIndex]`, most to least verbose, with no
 /// trailing period and no name said twice:
+/// - variants longer than `navOSSCarPlayCardMaximumCharacters` (a third card line) are dropped
+///   whenever a shorter one exists;
 /// - a ramp, exit or fork with a sign shows the sign ("1A East / Crowchild Trail", then "1A East"),
 ///   led by the exit number when the provider gave one ("Exit 248 · Glenmore Trail"), with
 ///   "toward" only in the longest variant and only for places the sign's names do not already say;
@@ -756,7 +764,11 @@ public func navOSSCarPlayCardInstructionVariants(
     guard !text.isEmpty, seen.insert(text).inserted else { return nil }
     return text
   }
-  return cleaned.isEmpty ? [action] : cleaned
+  guard !cleaned.isEmpty else { return [action] }
+  // Two card lines at most: longer variants go whenever a shorter one exists; if none does, the
+  // shortest is kept alone.
+  let fitting = cleaned.filter { $0.count <= navOSSCarPlayCardMaximumCharacters }
+  return fitting.isEmpty ? [cleaned.min { $0.count < $1.count }!] : fitting
 }
 
 /// Distance between two maneuvers under which the second is shown as "Then".
