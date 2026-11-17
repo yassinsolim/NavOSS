@@ -13,10 +13,11 @@ Design constraints come from Apple's CarPlay framework and are recorded in `docs
 - A connected display holds a background-activity session so location keeps flowing with the phone locked.
 - The restricted entitlement `com.apple.developer.carplay-maps` and the `production-carplay` EAS profile gate everything.
 
-## What the code does (#77, #85)
+## What the code does (#77, #85, #140, #141, #142)
 
-- Idle map follows the vehicle; guidance camera is course-up with look-ahead, pitch 36 to 50 degrees, eased up to 60 fps.
-- Template content: search hub (Home, Work, Recents, Saved, categories), debounced typed search, nearest-first results with distances, route preview with alternatives, drawn maneuver symbols (roundabout exits included), "then" when the next maneuver is within 250 m, `CPLaneGuidance` only when the route carries lanes, arrival and reroute alerts.
+- Idle map follows the vehicle; guidance camera is course-up with look-ahead, pitch 55 to 50 degrees, eased up to 60 fps.
+- Template content: search hub (Home, Work, Recents, Saved, categories), debounced typed search, nearest-first results with distances, route preview with alternatives, car-screen-scale maneuver symbols (roundabout exits included), concise road/sign/stop card text, "then" when the next maneuver is within 250 m, `CPLaneGuidance` only when the route carries lanes, arrival and reroute alerts. Speech keeps the provider instruction.
+- Guidance has an ink card and three map buttons: Sound, Report and Overview/Follow. End is in the navigation bar and Trip list. The compact speed/limit unit is at the map's top-right; the road pill is below the vehicle.
 - Every list has loading, empty and error states. Voice failure offers retry, typing or saved places.
 - Report grid: two taps, titled "Report (private)" or "Report to drivers" before a type is chosen; Settings has Rerouting, Speeding warning and a Community group (Share road reports, Share traffic speeds, Spoken road reports).
 - Still-there is a `CPNavigationAlert` (Still there, Not there; timeout or Dismiss sends nothing), never over another alert and never near a maneuver.

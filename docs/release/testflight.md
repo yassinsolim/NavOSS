@@ -11,6 +11,29 @@ Status refreshed: 2026-11-15. The dated entries below are the release record and
 - **Distribution:** At 23:18 UTC on 2026-11-15, EAS workflow run `01a1e181-7965-703b-8029-e9b1ba6a2bec` distributed App Store Connect build `e3db03ee-57ed-4008-87dc-4d27ff733bb1` to internal `testers` and NavOSS Friends. App Store Connect shows build 82 **Testing** for both groups. The TestFlight description was updated for build 82. Distribution remains manual; group availability does not prove an installation.
 - **Next delivery:** Build 83 after #135 (restore before first match) is reviewed and merged. First on-phone checks for every build since 80, including physical iPhone offline download, first App Attest registration, Google's place panel and CarPlay head-unit checks remain outstanding ([checklist](next-build-checklist.md)). Never retry build 73.
 
+### Upcoming build 83: build 82 feedback (2026-11-16)
+
+The owner filed two reports after driving build 82 on an iPhone 15 Pro Max with iOS 26.6.1 and a
+small Toyota head unit: CarPlay looked cluttered, and Share ETA was broken. In response, main has:
+
+- [#139](https://github.com/yassinsolim/NavOSS/pull/139) (`f2df5d3`): host the phone's React
+  Native root in a scene-backed window so the Share ETA / Share place sheet is not clipped on iOS
+  26; remove the "Shared from NavOSS" suffix. Reproduced and verified in a Release iOS 26.5
+  simulator, not on iOS 26.6.1 hardware.
+- [#140](https://github.com/yassinsolim/NavOSS/pull/140) (`ccd3fd6`) and
+  [#141](https://github.com/yassinsolim/NavOSS/pull/141) (`2eac789`): shorter sign and road names,
+  car-screen-scale maneuver symbols, ink guidance card, three map buttons and End in the bar.
+- [#142](https://github.com/yassinsolim/NavOSS/pull/142) (`2cb5c70`): restyled CarPlay map, blue
+  route, closer follow camera and corrected preview/overview fit, compact speed unit, road pill,
+  attribution and per-fix caching.
+
+For the upcoming build, check in the car while parked or passenger-operated: the card is readable at
+a glance, nothing overlaps on the display, End is reachable, the speed unit stays in position, the
+road name is readable, and night appearance is legible. Check Share ETA on the phone too. The card
+layout was probed against Apple's layout code and the map was exercised with mocked chrome, not
+captured with real CarPlay chrome. Offline restyling, real safe-area insets, sunlight legibility and
+phone/head-unit frame pacing remain unverified.
+
 ### Build 82 validation and known limits (2026-11-15)
 
 Validation of `65649ab` passed the gates, 506 native tests and all eight navigation harness phases. Evidence: `artifacts/release-validation-main-82/` and its `round2/`. A Release-configuration simulator build against production showed phone long-trip text ("1 day 22 hr", "4,389 km · arrive Tue 1:25 PM", "via Highway 17 / Trans-Canada Highway"). In Calgary, a parking-lot start stayed acquiring for 71 seconds without a request or speech and kept the chosen route, then matched and spoke, rerouted once after a wrong turn and arrived. In Toronto, a 60-second parked start kept Express. Kill and relaunch after matching restored the trip and arrived. Road-event lists showed 511 Alberta and Ontario 511 rows; search was spot-checked.

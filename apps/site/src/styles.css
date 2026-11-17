@@ -675,6 +675,24 @@ code {
   inset: 0;
 }
 
+.carplay__screen .map__route-casing {
+  stroke: #1b4fb8;
+}
+
+.carplay__screen .map__route {
+  stroke: #2f7bf6;
+}
+
+@media (prefers-color-scheme: dark) {
+  .carplay__screen .map__route-casing {
+    stroke: #0b2a6b;
+  }
+
+  .carplay__screen .map__route {
+    stroke: #5b9bff;
+  }
+}
+
 .carplay__card {
   position: absolute;
   top: 0.6rem;
@@ -684,8 +702,14 @@ code {
   min-width: 7rem;
   padding: 0.6rem 0.75rem;
   border-radius: 0.8rem;
-  background: var(--ui-maneuver);
+  background: #0e1516;
   color: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .carplay__card {
+    background: #1e2b2c;
+  }
 }
 
 .carplay__card strong {

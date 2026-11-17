@@ -66,9 +66,9 @@ The direct session found and fixed three more NavOSS defects:
 Google and Waze category screens use large familiar icons and disclosure affordances. NavOSS keeps
 its richer list, Home, Work, favourites, and recents, but now adds SF Symbols and disclosure
 indicators to category rows and icons to settings rows. NavOSS and Waze both provide three sound
-modes: all guidance, alerts only, and muted. NavOSS active guidance keeps End, overview/follow,
-sound, and private Report controls directly available; its sound icon now reflects the selected
-mode instead of appearing as a generic gear.
+modes: all guidance, alerts only, and muted. NavOSS active guidance keeps overview/follow, sound,
+and Report as map controls; End is in the navigation bar and Trip list. The sound icon reflects the
+selected mode instead of appearing as a generic gear.
 
 The exhaustive status and implementation decisions are tracked in
 [CarPlay feature parity matrix](carplay-feature-parity.md).
