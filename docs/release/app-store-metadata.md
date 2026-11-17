@@ -1,6 +1,6 @@
 # App Store Connect metadata draft
 
-Status (refreshed 2026-11-17): **TestFlight technical beta.** Build `0.1.0 (83)` was submitted on 2026-11-17; internal `testers` receive uploads automatically. The NavOSS Friends distribution request reported success with Beta App Review submission, but its Testing state was not confirmed on screen. The TestFlight Test Information description was not updated for build 83. The production service covers Canada for search and routing and returns lanes and signposts when available. Reports are `attested` and traffic is `collect`; traffic is not displayed or used in routes. Public App Review remains subject to the applicable gates below.
+Status (refreshed 2026-11-17): **TestFlight technical beta.** Build `0.1.0 (83)` was distributed to internal `testers` and NavOSS Friends on 2026-11-17. App Store Connect showed Testing for both groups, with no installs or sessions yet. The TestFlight Test Information description was updated for build 83 and read back after saving; Review Notes were unchanged. The production service covers Canada for search and routing and returns lanes and signposts when available. Reports are `attested` and traffic is `collect`; traffic is not displayed or used in routes. Public App Review remains subject to the applicable gates below.
 
 - Builds 80, 81, 82 and 83 carry App Attest and the Google place panel; builds before 80 cannot share reports or traffic. As of 16:52 UTC on 2026-11-15 no installation had registered.
 - Live traffic remains unavailable. The production offline manifest publishes All Alberta and Calgary-area regions; BC has no offline region. A physical iPhone download in build 80 remains unverified.
@@ -74,10 +74,13 @@ Beta language belongs here, not in a public App Store listing:
 >
 > There is no live traffic. All Alberta and the Calgary area can be downloaded for offline maps, search and routing; British Columbia has no offline region yet. Traffic speeds are collected only from drivers who opt in, for evaluation; nothing is displayed or used in routes. Keep the phone mounted and have a passenger operate controls while moving. Do not rely on this beta as the only navigation, road-closure, traffic, or safety source.
 
+The saved TestFlight Test Information description's build-specific text was read back as:
+
+> Build 83 redesigns CarPlay after car testing: a short turn card that shows the road, exit or sign to look for, a calmer map with the route in blue and a closer camera, one small speed and limit unit, and End in the top bar. It also fixes the Share ETA sheet on the phone.
+
 ## What to Test
 
-The following **What to Test** text was sent with the build 83 distribution request. The TestFlight
-Test Information description was not updated for build 83:
+The following **What to Test** text was sent with the build 83 distribution request:
 
 ```text
 Please test NavOSS 0.1.0 (83) while parked or with a passenger operating the controls.

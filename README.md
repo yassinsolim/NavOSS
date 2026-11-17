@@ -32,7 +32,7 @@ This status distinguishes the deployed service from individual builds. Build ava
 
 The deployed `/v2/routes` service provides Canada-wide routing with lane and signpost data when returned.
 
-Build `0.1.0 (83)` from `2cb5c70` was submitted on 2026-11-17 with the `production-carplay-google` profile; internal testers receive uploads automatically. The NavOSS Friends distribution request succeeded, but its Testing state was not confirmed on screen. It includes the Share ETA / Share place sheet fix and CarPlay card, controls and map changes. The navigation harness passed; two Maestro flows failed on stale label checks fixed after the build commit. The owner's car check, real CarPlay chrome and iOS 26.6.1 hardware remain unverified. See the [release record](docs/release/testflight.md#build-83-build-82-feedback-validation-and-limits-2026-11-17) for known limits.
+Build `0.1.0 (83)` from `2cb5c70` was distributed to internal testers and NavOSS Friends on 2026-11-17 with the `production-carplay-google` profile. App Store Connect showed Testing for both groups, with no installs or sessions yet. It includes the Share ETA / Share place sheet fix and CarPlay card, controls and map changes. The navigation harness passed; two Maestro flows failed on stale label checks fixed after the build commit. The owner's car check, real CarPlay chrome and iOS 26.6.1 hardware remain unverified. See the [release record](docs/release/testflight.md#build-83-build-82-feedback-validation-and-limits-2026-11-17) for known limits.
 
 Build `0.1.0 (82)` from `65649ab` was distributed to internal testers and NavOSS Friends on 2026-11-15 with the `production-carplay-google` profile. It fixes repeated rerouting and lost route choice when starting away from the road, adds long-trip formatting on phone and CarPlay, and shows the year for event dates outside the current year. A Release simulator pass against production checked trip starts and phone long-trip text; CarPlay long-trip text has only Swift test and compile evidence.
 
@@ -180,7 +180,7 @@ For native navigation changes also run `corepack pnpm --filter @navoss/mobile te
 - **Map matching** is geometric; it does not use road-network topology. Background guidance and spoken instructions still need sustained on-road evidence.
 - **Data is incomplete.** OpenStreetMap, City of Calgary and DriveBC data can be missing, wrong or late; camera alerts are informational and do not replace signs and signals.
 - **Single operator.** There is no staffed support, no service-level agreement and no direct support email yet.
-- **External TestFlight is manual.** The build 83 NavOSS Friends distribution request succeeded, but Testing was not confirmed on screen; a successful request does not establish external availability.
+- **External TestFlight is manual.** Build 83 was confirmed Testing for NavOSS Friends; a successful distribution request alone does not establish external availability or an installation.
 
 ## Contributing
 
