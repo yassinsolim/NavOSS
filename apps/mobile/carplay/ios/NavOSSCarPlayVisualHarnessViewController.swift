@@ -395,8 +395,10 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
           )
           return
         }
-        guard self.mapViewController.enlargedRoadLabelLayerCount > 0 else {
-          assertionFailure("Road labels were not enlarged for guidance")
+        guard self.mapViewController.enlargedRoadLabelLayerCount > 0,
+          self.mapViewController.widenedRoadLayerCount > 0
+        else {
+          assertionFailure("Road labels or road widths were not enlarged for guidance")
           return
         }
         self.markReady()

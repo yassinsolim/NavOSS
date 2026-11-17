@@ -234,6 +234,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   /// Original text sizes of road-label layers, kept so guidance can enlarge them and restore them.
   private var roadLabelFontSizes: [String: NSExpression] = [:]
   private var roadLabelHaloWidths: [String: NSExpression] = [:]
+  /// Road line layers with their guidance width factor, and the style's own widths while scaled.
+  private var roadLineLayers: [(layer: MLNLineStyleLayer, scale: Double)] = []
+  private var roadLineWidths: [String: NSExpression] = [:]
+  /// OpenMapTiles POI classes for bus, tram, rail and subway stops and stations.
+  private static let transitPointOfInterestClasses = ["bus", "railway", "rail", "tram", "subway"]
   private var lastLaidOutMapSize = CGSize.zero
   private var routeFitGeneration: UInt64 = 0
   private var alternateRouteCoordinates: [CLLocationCoordinate2D] = []
@@ -649,6 +654,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   /// Road-label layers currently enlarged for guidance, for the visual harness.
   var enlargedRoadLabelLayerCount: Int { activeGuidance ? roadLabelFontSizes.count : 0 }
+  /// Road line layers currently widened for guidance, for the visual harness.
+  var widenedRoadLayerCount: Int { activeGuidance ? roadLineWidths.count : 0 }
   /// Camera and community-report markers drawn: the alerts received from the store, once their
   /// symbol layer is installed in the loaded style.
   var mapAlertMarkerCount: Int {
@@ -1081,6 +1088,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     vehicleLayers = nil
     pointOfInterestLayers = []
     roadLabelLayers = []
+    roadLineLayers = []
     appliedDeclutter = nil
   }
 
@@ -1561,12 +1569,22 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     let halo = NSExpression(forConstantValue: UIColor(rgb: palette.labelHalo))
     pointOfInterestLayers = []
     roadLabelLayers = []
+    roadLineLayers = []
+    roadLineWidths = [:]
     roadLabelFontSizes = [:]
     roadLabelHaloWidths = [:]
     appliedDeclutter = nil
     for layer in style.layers {
       if layer.identifier.lowercased().contains("poi") {
         pointOfInterestLayers.append(layer)
+        // Transit stops and stations stay off the car map whatever the POI setting says.
+        if let symbol = layer as? MLNSymbolStyleLayer {
+          let notTransit = NSPredicate(format: "NOT (class IN %@)", Self.transitPointOfInterestClasses)
+          symbol.predicate =
+            symbol.predicate.map {
+              NSCompoundPredicate(andPredicateWithSubpredicates: [$0, notTransit])
+            } ?? notTransit
+        }
       }
       let type: NavOSSCarPlayBasemapLayerType =
         switch layer {
@@ -1602,6 +1620,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         fill.fillOpacity = NSExpression(forConstantValue: 1)
       case let line as MLNLineStyleLayer:
         line.lineColor = color
+        if case let .road(roadClass, _) = role {
+          // Guidance widens road surfaces so the tilted view reads as roads, not outlines.
+          roadLineLayers.append((line, roadClass == .minor || roadClass == .secondary ? 2.2 : 1.6))
+        }
       case let symbol as MLNSymbolStyleLayer:
         symbol.textColor = color
         symbol.textHaloColor = halo
@@ -1628,14 +1650,16 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       layer.isVisible = state.pointsOfInterest && !state.guidance
     }
     updateRoadLabelLegibility()
+    updateRoadWidths()
   }
 
   /// Widths for both casings and both lines. Only depends on `activeGuidance`.
   private func applyRouteLineWidths(in style: MLNStyle) {
     guard appliedRouteLineGuidance != activeGuidance else { return }
     appliedRouteLineGuidance = activeGuidance
-    let casingWidth = NSExpression(forConstantValue: activeGuidance ? 14 : 8)
-    let lineWidth = NSExpression(forConstantValue: activeGuidance ? 10 : 5)
+    // In guidance the route stays wider than the widened road it runs on.
+    let casingWidth = NSExpression(forConstantValue: activeGuidance ? 19 : 8)
+    let lineWidth = NSExpression(forConstantValue: activeGuidance ? 14 : 5)
     for identifier in [routeCasingLayerIdentifier, routeHeadCasingLayerIdentifier] {
       (style.layer(withIdentifier: identifier) as? MLNLineStyleLayer)?.lineWidth = casingWidth
     }
@@ -1884,7 +1908,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       layer.lineCap = NSExpression(forConstantValue: "round")
       layer.lineJoin = NSExpression(forConstantValue: "round")
       layer.lineColor = NSExpression(forConstantValue: UIColor(rgb: palette.travelledRoute))
-      layer.lineWidth = NSExpression(forConstantValue: 8)
+      layer.lineWidth = NSExpression(forConstantValue: 11)
       if let casing = style.layer(withIdentifier: routeCasingLayerIdentifier) {
         style.insertLayer(layer, below: casing)
       } else {
@@ -1921,7 +1945,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       let layer = MLNLineStyleLayer(identifier: congestionLayerIdentifier, source: source)
       layer.lineCap = NSExpression(forConstantValue: "round")
       layer.lineJoin = NSExpression(forConstantValue: "round")
-      layer.lineWidth = NSExpression(forConstantValue: 10)
+      layer.lineWidth = NSExpression(forConstantValue: 14)
       layer.lineColor = NSExpression(
         forMLNMatchingKey: NSExpression(forKeyPath: "level"),
         in: [
@@ -2064,6 +2088,27 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   }
 
   // MARK: Road labels
+
+  /// Widens road fills and casings during guidance (2.2x minor and secondary, 1.6x major and
+  /// motorway) and restores the style's own widths afterwards, like the road-name sizes. Only
+  /// constant widths and zoom-interpolated constant stops are scaled; anything else is left alone.
+  private func updateRoadWidths() {
+    for (line, scale) in roadLineLayers {
+      let identifier = line.identifier
+      if activeGuidance {
+        if roadLineWidths[identifier] == nil {
+          roadLineWidths[identifier] = line.lineWidth
+        }
+        if let original = roadLineWidths[identifier],
+          let scaled = navOSSScaledSizeExpression(original, by: scale)
+        {
+          line.lineWidth = scaled
+        }
+      } else if let original = roadLineWidths.removeValue(forKey: identifier) {
+        line.lineWidth = original
+      }
+    }
+  }
 
   /// Enlarges road names during guidance so they stay readable at driving zoom and pitch, and
   /// restores the style's own sizes afterwards. Only constant sizes and zoom-interpolated stops
