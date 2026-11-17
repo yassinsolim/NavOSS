@@ -290,7 +290,7 @@ export function buildEtaShareMessage(
   distanceMetersValue: number,
   now: Date = new Date(),
 ): string {
-  return `I'm heading to ${destinationName}. ETA ${formatArrivalTime(durationSeconds, now)}, with ${formatDuration(durationSeconds)} and ${formatDistance(distanceMetersValue)} remaining. Shared from NavOSS.`;
+  return `I'm heading to ${destinationName}. ETA ${formatArrivalTime(durationSeconds, now)} (${formatDuration(durationSeconds)}, ${formatDistance(distanceMetersValue)}).`;
 }
 
 export function routeViaLabel(route: RouteAlternativeV2): string {
