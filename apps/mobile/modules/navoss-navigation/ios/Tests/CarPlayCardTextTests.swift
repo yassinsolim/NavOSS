@@ -192,12 +192,8 @@ final class CarPlayCardTextTests: XCTestCase {
 
   func testLongTorontoSignsShortenByAbbreviationThenByDroppingNames() throws {
     let trip = try recorded("square-one-scarborough.v2")
-    XCTAssertEqual(
-      try card(trip, 7),
-      [
-        "Kennedy Rd / Brimley Rd S / McCowan Rd", "Kennedy Road / Brimley Road South",
-        "Kennedy Rd / Brimley Rd S", "Kennedy Road", "Kennedy Rd",
-      ])
+    // The branch lists downstream roads, but this step stays on the Collector carriageway.
+    XCTAssertEqual(try card(trip, 7), ["Highway 401 Collector"])
     XCTAssertEqual(
       try card(trip, 8),
       [
@@ -350,15 +346,16 @@ final class CarPlayCardTextTests: XCTestCase {
   func testCardVariantsStayWithinTwoLines() throws {
     XCTAssertEqual(navOSSCarPlayCardMaximumCharacters, 40)
     let toronto = try recorded("square-one-scarborough.v2")
-    // 38 characters survive once abbreviated; the 48-character full names do not.
-    XCTAssertEqual(try card(toronto, 7).first, "Kennedy Rd / Brimley Rd S / McCowan Rd")
+    // The two signed roads plus exit prefix fit once abbreviated; the full names do not.
+    XCTAssertEqual(try card(toronto, 8).first, "Exit 380 · Brimley Rd S / Progress Ave")
     // A short "toward" still fits and stays.
     XCTAssertEqual(try card(toronto, 3).first, "403 East toward Toronto")
     XCTAssertEqual(
       try card(try recorded("vancouver-bc91-highway99.v2"), 1).first, "Exit 23B · 99 North")
     for name in [
       "calgary-deerfoot-glenmore.v2", "vancouver-bc91-highway99.v2", "square-one-scarborough.v2",
-      "montreal-a520-a40-a15.v2",
+      "montreal-a520-a40-a15.v2", "squareone-scarborough-validation83.v2",
+      "montreal-oldport-yul-validation83.v2",
     ] {
       let trip = try recorded(name)
       for index in trip.steps.indices.dropFirst() {
@@ -386,6 +383,7 @@ final class CarPlayCardTextTests: XCTestCase {
     for name in [
       "calgary-deerfoot-glenmore.v2", "vancouver-bc91-highway99.v2", "square-one-scarborough.v2",
       "square-one-scarborough-reroute.v2", "montreal-a520-a40-a15.v2",
+      "squareone-scarborough-validation83.v2", "montreal-oldport-yul-validation83.v2",
     ] {
       for trip in try NavigationRoutesV2Tests.trips(name, version: .v2) {
         for index in trip.steps.indices.dropFirst() {
