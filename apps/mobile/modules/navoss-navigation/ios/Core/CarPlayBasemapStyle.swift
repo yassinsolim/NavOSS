@@ -153,25 +153,28 @@ public struct NavOSSCarPlayMapPalette: Equatable, Sendable {
     }
   }
 
+  /// Light map, tuned for a sunlit screen: grey-green land, white roads with visibly grey casings.
   public static let light = NavOSSCarPlayMapPalette(
-    land: 0xEEF0EC, water: 0xBCD2E3, greenery: 0xDCE7D5, building: 0xE5E6E2, aeroway: 0xE7E8E4,
-    rail: 0xD2D5D6, boundary: 0xC7CACE,
-    motorway: RoadColors(fill: 0xF7E7C4, casing: 0xD9C59C),
-    major: RoadColors(fill: 0xFFFFFF, casing: 0xB9C0C5),
-    secondary: RoadColors(fill: 0xFFFFFF, casing: 0xC3C9CD),
-    minor: RoadColors(fill: 0xFFFFFF, casing: 0xCDD2D5),
-    roadLabel: 0x4F585D, placeLabel: 0x6A7276, waterLabel: 0x5F7F99, labelHalo: 0xFFFFFF,
-    route: 0x2F7BF6, routeCasing: 0x1B4FB8, travelledRoute: 0xB3BAC0,
-    alternateRoute: 0xA3B7D6, alternateRouteCasing: 0x7A90B2)
+    land: 0xE6EAE4, water: 0xB4CADB, greenery: 0xD5E2CF, building: 0xDEE2DC, aeroway: 0xDFE3DD,
+    rail: 0xC9CED0, boundary: 0xBFC4C8,
+    motorway: RoadColors(fill: 0xF3E0B4, casing: 0xC4B087),
+    major: RoadColors(fill: 0xFFFFFF, casing: 0xAEB6BA),
+    secondary: RoadColors(fill: 0xFFFFFF, casing: 0xBAC1C4),
+    minor: RoadColors(fill: 0xFFFFFF, casing: 0xC4CACC),
+    roadLabel: 0x4A5357, placeLabel: 0x646C70, waterLabel: 0x5A7A94, labelHalo: 0xFFFFFF,
+    route: 0x2F7BF6, routeCasing: 0x1B4FB8, travelledRoute: 0xA9B1B6,
+    alternateRoute: 0x9FB4D4, alternateRouteCasing: 0x7489AB)
 
+  /// Dark map: land well below the card's `#1E2B2C`, roads clearly lighter than the land, building
+  /// footprints a hair off the land so the street grid is what reads.
   public static let dark = NavOSSCarPlayMapPalette(
-    land: 0x1C2427, water: 0x14212B, greenery: 0x1F2B27, building: 0x252E31, aeroway: 0x232C2F,
-    rail: 0x343D41, boundary: 0x3D464A,
-    motorway: RoadColors(fill: 0x5A5348, casing: 0x37332D),
-    major: RoadColors(fill: 0x46525A, casing: 0x2C363B),
-    secondary: RoadColors(fill: 0x3D484E, casing: 0x293236),
-    minor: RoadColors(fill: 0x343E43, casing: 0x262E32),
-    roadLabel: 0xBAC3C7, placeLabel: 0x98A2A6, waterLabel: 0x6F8799, labelHalo: 0x1C2427,
-    route: 0x5B9BFF, routeCasing: 0x0B2A6B, travelledRoute: 0x4C565B,
+    land: 0x10181A, water: 0x0B161E, greenery: 0x13201C, building: 0x141C1E, aeroway: 0x151E21,
+    rail: 0x27312F, boundary: 0x2E383C,
+    motorway: RoadColors(fill: 0x5C5446, casing: 0x2A2620),
+    major: RoadColors(fill: 0x47555C, casing: 0x1E282B),
+    secondary: RoadColors(fill: 0x3B484E, casing: 0x1B2427),
+    minor: RoadColors(fill: 0x2F3B3F, casing: 0x182023),
+    roadLabel: 0xC3CBCE, placeLabel: 0x9AA4A8, waterLabel: 0x6F8799, labelHalo: 0x10181A,
+    route: 0x5B9BFF, routeCasing: 0x0B2A6B, travelledRoute: 0x48535A,
     alternateRoute: 0x4D6283, alternateRouteCasing: 0x22324A)
 }
