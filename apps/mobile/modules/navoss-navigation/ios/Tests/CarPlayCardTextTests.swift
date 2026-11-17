@@ -52,6 +52,26 @@ final class CarPlayCardTextTests: XCTestCase {
     try XCTUnwrap(try NavigationRoutesV2Tests.trips(name, version: .v2).first)
   }
 
+  /// Build 83 validation: Express / Collector is the carriageway decision, not optional detail.
+  func testCarriagewaySurvivesTheBranchSign() throws {
+    let trips = try NavigationRoutesV2Tests.trips("squareone-scarborough-validation83.v2", version: .v2)
+    XCTAssertEqual(try card(trips[0], 5).first, "Highway 401 Express")
+    XCTAssertEqual(try card(trips[1], 6).first, "Highway 401 Collector")
+    for qualifier in ["Express", "Collector", "Collectors", "Local"] {
+      let maneuver = NavOSSCarPlayRouteStep(
+        distanceMeters: 0, durationSeconds: 0, geometry: [],
+        instruction: "Keep left to take Highway 401 \(qualifier).",
+        maneuverType: "fork", roadName: "", signpostBranch: ["401 East"])
+      XCTAssertEqual(try card(trip(with: maneuver), 1).first, "Highway 401 \(qualifier)")
+    }
+    // A word inside a street name is not a carriageway suffix.
+    let localRoad = NavOSSCarPlayRouteStep(
+      distanceMeters: 0, durationSeconds: 0, geometry: [],
+      instruction: "Keep left to take Local Road.", maneuverType: "fork",
+      roadName: "Local Road", signpostBranch: ["Downtown"])
+    XCTAssertEqual(try card(trip(with: localRoad), 1).first, "Downtown")
+  }
+
   /// Build 82, Crowchild Trail (owner's TestFlight photo, 2026-11-16): the card showed the spoken
   /// sentence and, with the navigation bar hidden, "...ramp on the left 1A East / Crowchild Trail
   /// toward 1A East, Crowchild Trail".

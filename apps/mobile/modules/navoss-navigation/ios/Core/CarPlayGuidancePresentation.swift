@@ -806,6 +806,31 @@ private func navOSSCardInstructionParts(
   return (exit, target, toward)
 }
 
+private let navOSSCardCarriagewayWords: Set<String> = ["express", "collector", "collectors", "local"]
+
+/// A trailing carriageway qualifier, not "Expressway" or "Local Road". These are the words
+/// present in the recorded Ontario steps; no road aliases or inferred carriageways are added.
+private func navOSSCardHasCarriageway(_ name: String) -> Bool {
+  guard let space = name.lastIndex(of: " ") else { return false }
+  return navOSSCardCarriagewayWords.contains(name[name.index(after: space)...].lowercased())
+}
+
+/// A sign's qualified road wins, then the mapped road, then a single parsed provider target.
+/// The latter is needed when the sign names only "401 East" but the sentence says "401 Express".
+private func navOSSCardCarriagewayName(
+  road: String, branch: [String], toward: [String], instructionTarget: String?
+) -> String? {
+  for name in branch where navOSSCardHasCarriageway(name) { return name }
+  for name in road.components(separatedBy: " / ") where navOSSCardHasCarriageway(name) {
+    return name
+  }
+  if let instructionTarget {
+    for name in instructionTarget.components(separatedBy: " / ")
+    where navOSSCardHasCarriageway(name) { return name }
+  }
+  return toward.first(where: navOSSCardHasCarriageway)
+}
+
 /// Card variants for the maneuver that begins `steps[stepIndex]`, most to least verbose, with no
 /// trailing period and no name said twice:
 /// - variants longer than `navOSSCarPlayCardMaximumCharacters` (a third card line) are dropped
@@ -878,7 +903,25 @@ public func navOSSCarPlayCardInstructionVariants(
       || [.keepLeft, .keepRight, .mergeLeft, .mergeRight, .onRamp, .offRampLeft, .offRampRight]
         .contains(kind)
     let hasSignFields = exitNumber != nil || !branch.isEmpty || !toward.isEmpty
-    if isRamp || exitNumber != nil, hasSignFields {
+    let parts = navOSSCardInstructionParts(step.instruction)
+    if isRamp,
+      let carriageway = navOSSCardCarriagewayName(
+        road: road, branch: branch, toward: toward, instructionTarget: parts?.target)
+    {
+      // The carriageway is the decision at this fork. Destinations or an unqualified route
+      // number must not displace it, even in the shortest variant.
+      let exit = hasSignFields ? exitNumber : parts?.exit
+      let places = hasSignFields ? toward : navOSSCardDistinctNames(
+        parts?.toward?.components(separatedBy: " / ") ?? [])
+      variants = navOSSCardSignVariants(
+        exitNumber: exit, targets: [carriageway], toward: places, towardIsTheSign: false)
+      if let exit { variants.removeAll { $0 == "Exit \(exit)" } }
+      // If the exit prefix makes every qualified name too long, keep the road rather than
+      // losing the carriageway to an exit-number-only fallback.
+      if !variants.contains(where: { $0.count <= navOSSCarPlayCardMaximumCharacters }) {
+        variants += navOSSCardNameVariants([carriageway], prefix: "")
+      }
+    } else if isRamp || exitNumber != nil, hasSignFields {
       let targets =
         !branch.isEmpty
         ? branch : !road.isEmpty ? road.components(separatedBy: " / ") : toward
@@ -886,7 +929,7 @@ public func navOSSCarPlayCardInstructionVariants(
         exitNumber: exitNumber, targets: targets, toward: toward,
         towardIsTheSign: branch.isEmpty && road.isEmpty)
     } else if !hasSignFields, isRamp || road.isEmpty,
-      let parts = navOSSCardInstructionParts(step.instruction)
+      let parts
     {
       // No structured sign fields (the `/v1/routes` fallback, some on-device steps): the exit
       // number and names the provider's own sentence states. The step's road name, when it has
