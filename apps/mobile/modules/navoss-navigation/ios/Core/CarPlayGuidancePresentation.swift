@@ -750,16 +750,25 @@ private let navOSSCardInstructionTargets = [
 private let navOSSCardAbbreviationWords: Set<String> = [
   "no", "st", "ste", "dr", "mt", "ft", "rd", "ave", "blvd", "hwy",
 ]
+/// Words that open a provider cue ("…Main Rd. Then turn left…"), so the period before them ends
+/// a sentence even after an abbreviation.
+private let navOSSCardClauseStarters: Set<String> = [
+  "Then", "Turn", "Keep", "Take", "Continue", "Bear", "Merge", "Make", "Enter", "Exit", "Stay",
+  "Drive", "Head", "Your", "You",
+]
 private let navOSSCardSentenceBoundary = try! NSRegularExpression(
-  pattern: #"(\S+)\. +\p{Lu}"#)
+  pattern: #"(\S+)\. +(\p{Lu}\p{L}*)"#)
 
-/// Whether `text` holds more than one sentence: a period, a space and an uppercase letter, where
-/// the word before the period is not an abbreviation.
+/// Whether `text` holds more than one sentence: a period, a space and a capitalised word, where
+/// the word before the period is not an abbreviation or the word after it opens a cue.
 private func navOSSCardHasSentenceBoundary(_ text: String) -> Bool {
   navOSSCardSentenceBoundary.matches(
     in: text, range: NSRange(text.startIndex..<text.endIndex, in: text)
   ).contains { match in
-    guard let range = Range(match.range(at: 1), in: text) else { return true }
+    guard let range = Range(match.range(at: 1), in: text),
+      let nextRange = Range(match.range(at: 2), in: text)
+    else { return true }
+    if navOSSCardClauseStarters.contains(String(text[nextRange])) { return true }
     let word = text[range].lowercased()
     let isInitial = word.count == 1 && word.first?.isLetter == true
     return !isInitial && !navOSSCardAbbreviationWords.contains(word)

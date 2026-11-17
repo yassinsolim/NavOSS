@@ -246,6 +246,14 @@ final class CarPlayCardTextTests: XCTestCase {
     let stAlbert = trip(
       with: step("Take exit 7 toward St. Albert.", type: "off ramp", modifier: "slight right"))
     XCTAssertEqual(try card(stAlbert, 1).first, "Exit 7 · St. Albert")
+    // A whitelisted abbreviation before a clause starter still ends the sentence: the next
+    // maneuver's road must not become this card's name.
+    let mainRoad = trip(
+      with: step(
+        "Keep right to take Main Rd. Then turn left onto Oak Road.", type: "fork",
+        modifier: "slight right"))
+    XCTAssertFalse(try card(mainRoad, 1).contains { $0.contains("Oak Road") })
+    XCTAssertEqual(try card(mainRoad, 1).last, "Keep right")
     // Two sentences are still refused rather than mined for names.
     let chained = trip(
       with: step(
