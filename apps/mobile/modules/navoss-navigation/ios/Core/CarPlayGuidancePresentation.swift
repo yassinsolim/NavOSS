@@ -745,6 +745,27 @@ private let navOSSCardInstructionTargets = [
   #"^take the (.+) (?:exit|ramp)(?: on the (?:left|right))?$"#,
 ].map { try! NSRegularExpression(pattern: $0, options: .caseInsensitive) }
 
+/// Words that end in a period inside a name ("No. 3 Rd", "St. Albert"), so the period is not the
+/// end of a sentence. Single letters (initials) count too.
+private let navOSSCardAbbreviationWords: Set<String> = [
+  "no", "st", "ste", "dr", "mt", "ft", "rd", "ave", "blvd", "hwy",
+]
+private let navOSSCardSentenceBoundary = try! NSRegularExpression(
+  pattern: #"(\S+)\. +\p{Lu}"#)
+
+/// Whether `text` holds more than one sentence: a period, a space and an uppercase letter, where
+/// the word before the period is not an abbreviation.
+private func navOSSCardHasSentenceBoundary(_ text: String) -> Bool {
+  navOSSCardSentenceBoundary.matches(
+    in: text, range: NSRange(text.startIndex..<text.endIndex, in: text)
+  ).contains { match in
+    guard let range = Range(match.range(at: 1), in: text) else { return true }
+    let word = text[range].lowercased()
+    let isInitial = word.count == 1 && word.first?.isLetter == true
+    return !isInitial && !navOSSCardAbbreviationWords.contains(word)
+  }
+}
+
 /// What a provider sentence without structured sign fields states: an exit number ("exit 248B"),
 /// the road or sign after "onto", "to take" or "take the … exit", and the place after "toward".
 /// `nil` when the sentence states none of them, or is more than one sentence, so nothing is
@@ -754,7 +775,7 @@ private func navOSSCardInstructionParts(
 ) -> (exit: String?, target: String?, toward: String?)? {
   var text = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
   while text.hasSuffix(".") { text.removeLast() }
-  guard !text.isEmpty, !text.contains(". ") else { return nil }
+  guard !text.isEmpty, !navOSSCardHasSentenceBoundary(text) else { return nil }
   func group(_ expression: NSRegularExpression, in value: String, _ index: Int) -> String? {
     guard
       let match = expression.firstMatch(

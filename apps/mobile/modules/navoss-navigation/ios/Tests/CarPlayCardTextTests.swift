@@ -236,6 +236,23 @@ final class CarPlayCardTextTests: XCTestCase {
     XCTAssertEqual(try card(crowchild, 1).first, "Crowchild Trail North")
   }
 
+  /// "No. " and "St. " end abbreviations, not sentences; the exit keeps its number and sign.
+  func testAbbreviationsInsideTheInstructionAreNotSentenceEnds() throws {
+    let numberThree = trip(
+      with: step(
+        "Take exit 12 on the right toward No. 3 Rd NORTH.", type: "off ramp",
+        modifier: "slight right"))
+    XCTAssertEqual(try card(numberThree, 1).first, "Exit 12 · No. 3 Rd NORTH")
+    let stAlbert = trip(
+      with: step("Take exit 7 toward St. Albert.", type: "off ramp", modifier: "slight right"))
+    XCTAssertEqual(try card(stAlbert, 1).first, "Exit 7 · St. Albert")
+    // Two sentences are still refused rather than mined for names.
+    let chained = trip(
+      with: step(
+        "Take exit 4. Then keep left.", type: "off ramp", modifier: "slight right"))
+    XCTAssertEqual(try card(chained, 1), ["Take exit 4. Then keep left", "Exit right"])
+  }
+
   func testOfflineRoundaboutNamesTheExitRoad() throws {
     let destination = NavOSSCarPlayDestination(
       id: "dest", label: "Destination", latitude: 51.0866, longitude: -114.1305, name: "Destination")
