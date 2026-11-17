@@ -173,7 +173,7 @@ For native navigation changes also run `corepack pnpm --filter @navoss/mobile te
 - **Coverage.** The deployed v2 service covers Canada; distributed build 82 uses it. Build 70 uses v1 for Calgary and Kelowna. Some places have no connecting road route.
 - **No live traffic or traffic-aware ETA.** Lane guidance and signposts appear only when returned by v2 and are unavailable in build 70.
 - **Offline coverage.** All Alberta and the Calgary area can be downloaded in build 80. British Columbia has no offline region. A physical iPhone download in build 80 remains unverified.
-- **CarPlay is not validated on a head unit.** Apple's CarPlay Navigation entitlement is approved; real wired and wireless checks are still outstanding.
+- **CarPlay needs further head-unit validation.** The owner reported on build 82 in a car; complete wired and wireless checks of the current changes remain outstanding.
 - **iOS only.** Android is planned after the iOS navigation core is stable.
 - **Map matching** is geometric; it does not use road-network topology. Background guidance and spoken instructions still need sustained on-road evidence.
 - **Data is incomplete.** OpenStreetMap, City of Calgary and DriveBC data can be missing, wrong or late; camera alerts are informational and do not replace signs and signals.

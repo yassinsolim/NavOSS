@@ -32,7 +32,7 @@ Official data (City of Calgary cameras, DriveBC, City of Toronto, 511 Alberta an
 
 ## rule/driving-safe-wording
 
-- Short first: distance, then action, then where it leads. Never truncate the action (#78 maneuver banner).
+- Short first. Phone guidance keeps distance, action and destination; never truncate the phone action (#78). CarPlay card text names what to look for (road, sign or stop) and falls back to a short action. Spoken guidance keeps the provider instruction. Evidence: #140, #141 and `CarPlayGuidancePresentation.swift`.
 - No instruction that needs reading while moving beyond the maneuver itself. Anything longer is for a parked or passenger moment.
 - Do not encourage speeding or evasion. Speed warnings state the limit; camera alerts say "Red light and speed camera ahead".
 - Spoken text: natural en-CA phrasing ("metres", "1.5 kilometres"); say what the signs say only when the route carries it; never read absent data (#75, #84).

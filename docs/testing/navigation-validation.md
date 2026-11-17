@@ -58,13 +58,20 @@ The native suite validates 48 navigation and CarPlay core behaviors, including t
 
 The CarPlay visual suite mounts the exact production `NavOSSCarPlayMapViewController` in a simulator-only phone window and validates:
 
-- selected route, alternate route, and destination preview;
-- light and dark OpenFreeMap styles;
-- matched arrow and forward camera at 5% progress;
-- travelled-route removal at 60% progress;
-- route cleanup;
-- permission-overlay absence through Vision OCR;
-- nonblank pixels, color diversity, luminance variance, unique hashes, and perceptual differences between scenarios.
+- selected route, alternate route, destination and on-screen endpoint markers in preview, including
+  short routes and resized views; preview assertions keep the route and endpoints in the free map;
+- light and dark restyled OpenFreeMap maps, matched arrow and forward camera, travelled-route
+  removal, overview and route cleanup;
+- `guidance-far-stopped` and `guidance-far-moving` with a distant maneuver, plus `guidance-narrow`,
+  which asserts the road name fits below the vehicle and does not overlap attribution;
+- guidance captures assert the vehicle is inside the visible map and follow mode has a pitched
+  camera; marker scenarios assert a marker is on screen;
+- `guidance-maneuver` and `guidance-night` show the maneuver arrow, road pill and compact speed
+  unit; annotation and community-report scenarios assert fixture markers are visible;
+- `frame-pacing` measures frame and per-fix work during a 60-second simulated drive at about
+  60 km/h with 1 Hz fixes (not head-unit performance);
+- permission-overlay absence through Vision OCR, nonblank pixels, color diversity, luminance
+  variance, unique hashes and perceptual differences between scenarios.
 
 The visual entrypoint is compiled only for Simulator and requires `NAVOSS_CARPLAY_VISUAL_SCENARIO`. It is absent from device builds and cannot be activated in TestFlight.
 
@@ -85,6 +92,6 @@ artifacts/navigation-validation/
 
 ## Limits
 
-The simulator visual host verifies production map rendering and shared navigation state, not Apple's external CarPlay host, `CPMapTemplate` chrome, or vehicle-specific input behavior. Apple strips the managed CarPlay entitlement from ordinary simulator signatures on this machine.
+The simulator visual host verifies production map rendering and shared navigation state, not Apple's external CarPlay host, `CPMapTemplate` chrome, or vehicle-specific input behavior. On this Mac, an ad hoc simulator signature with `NAVOSS_CARPLAY_ENTITLEMENT_ENABLED=1` retains `com.apple.developer.carplay-maps` in `__TEXT,__entitlements`. Xcode 27's Device Hub has no CarPlay external-display menu; Apple's CarPlay processes crash on missing selectors in the iOS 26.5 simulator runtime, and no frames reach the simulated car display. The card layout was probed against Apple's layout code, and the map harness uses mocked card chrome; neither captures real CarPlay chrome.
 
 Before broader distribution, still validate the signed TestFlight build on at least one wired and one wireless real CarPlay system. That manual check should focus on connection/reconnection, vehicle controls, search templates, route preview, Start, rerouting, arrival, persistent End controls, lock behavior, and phone synchronization. The automated harness is intended to make that final hardware check short and focused, not to pretend the hardware boundary does not exist.
