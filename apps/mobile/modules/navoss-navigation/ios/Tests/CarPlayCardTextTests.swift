@@ -113,6 +113,21 @@ final class CarPlayCardTextTests: XCTestCase {
     }
   }
 
+  func testProviderCarriagewayTargetWinsOverConflictingSignBranches() throws {
+    for names in [
+      ["401 East Express", "401 East Collector"],
+      ["401 East Collector", "401 East Express"],
+    ] {
+      for target in ["Highway 401 Express", "Highway 401 Collector"] {
+        let fork = NavOSSCarPlayRouteStep(
+          distanceMeters: 0, durationSeconds: 0, geometry: [],
+          instruction: "Keep left to take \(target).", maneuverType: "fork",
+          roadName: "Highway 401 Express", signpostBranch: names)
+        XCTAssertEqual(try card(trip(with: fork), 1), [target])
+      }
+    }
+  }
+
   /// The step itself gives both the road name and its uppercase initialism; no alias table.
   func testRoadNameAndItsSignedInitialismAreNotRepeated() throws {
     let trips = try NavigationRoutesV2Tests.trips("squareone-scarborough-validation83.v2", version: .v2)

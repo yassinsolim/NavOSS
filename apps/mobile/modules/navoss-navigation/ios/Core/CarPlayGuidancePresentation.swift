@@ -841,15 +841,10 @@ private func navOSSCardHasCarriageway(_ name: String) -> Bool {
   return navOSSCardCarriagewayWords.contains(name[name.index(after: space)...].lowercased())
 }
 
-/// A carriageway is eligible only when the provider's own maneuver target names it. `roadName`
-/// can be the highway being left at an exit, so it is never evidence of the road to take.
-private func navOSSCardCarriagewayName(
-  branch: [String], instructionTarget: String?
-) -> String? {
-  guard let instructionTarget,
-    let target = instructionTarget.components(separatedBy: " / ").first(where: navOSSCardHasCarriageway)
-  else { return nil }
-  return branch.first(where: navOSSCardHasCarriageway) ?? target
+/// Only the provider's own maneuver target identifies which carriageway to take. `roadName`
+/// can be the highway being left, and a branch sign can list both Express and Collector.
+private func navOSSCardCarriagewayName(_ instructionTarget: String?) -> String? {
+  instructionTarget?.components(separatedBy: " / ").first(where: navOSSCardHasCarriageway)
 }
 
 /// Card variants for the maneuver that begins `steps[stepIndex]`, most to least verbose, with no
@@ -928,8 +923,7 @@ public func navOSSCarPlayCardInstructionVariants(
       isRamp || (!hasSignFields && road.isEmpty)
       ? navOSSCardInstructionParts(step.instruction) : nil
     if isRamp,
-      let carriageway = navOSSCardCarriagewayName(
-        branch: branch, instructionTarget: parts?.target)
+      let carriageway = navOSSCardCarriagewayName(parts?.target)
     {
       // The carriageway is the decision at this fork. Destinations or an unqualified route
       // number must not displace it, even in the shortest variant.
