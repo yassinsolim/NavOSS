@@ -15,15 +15,20 @@ import Animated, {
   ReduceMotion,
   type SharedValue,
   useAnimatedStyle,
+  useDerivedValue,
+  useSharedValue,
 } from 'react-native-reanimated';
 
 import type { NavigationRouteStatus } from '@/features/map/controller/use-navigation-session';
 import {
   CONTROL_MARGIN,
+  fitOpacity,
   GUIDANCE_BANNER_HEIGHT,
+  ridingControlsRoom,
   type ScreenMetrics,
   tripSheetDetents,
 } from '@/features/map/overlay-layout';
+import { useControlVisible } from '@/features/map/use-control-fit';
 import { rerouteDeltaLabel, type SpeedReadout } from '@/features/navigation/guidance-settings';
 import { audioModeOption } from '@/features/navigation/guidance-settings-sheet';
 import type { LaneStrip, ManeuverSignage } from '@/features/navigation/lane-guidance';
@@ -406,11 +411,14 @@ export function SafetyCameraAlertBanner({
  * coral only when the core reports it over the limit plus the driver's tolerance.
  */
 export function DrivingStatus({
+  bannerBottom,
   creditsHeight,
   roadName,
   sheetPosition,
   speed,
 }: {
+  /** Distance from the top of the screen to the lower edge of the guidance banners. */
+  bannerBottom: number;
   /** Height of the map-credit labels below; the readouts sit above them, never over them. */
   creditsHeight: number;
   roadName: string | undefined;
@@ -418,15 +426,35 @@ export function DrivingStatus({
   speed: SpeedReadout | undefined;
 }) {
   const clearance = Math.max(creditsHeight, 36) + space.sm;
+  // Re-measure the road name when Dynamic Type changes mid-trip (see `ManeuverBanner`).
+  const { fontScale, height: windowHeight } = useWindowDimensions();
+  const height = useSharedValue(0);
+  // The readouts ride the sheet's edge. With the sheet raised they would slide under the
+  // banners, so they fade out before they reach them.
+  const opacity = useDerivedValue(() =>
+    fitOpacity(
+      ridingControlsRoom({
+        bannerBottom,
+        bottom: sheetPosition.value + CONTROL_MARGIN + clearance,
+        height: height.value,
+        windowHeight,
+      }),
+    ),
+  );
+  const visible = useControlVisible(opacity);
   const style = useAnimatedStyle(() => ({
     bottom: sheetPosition.value + CONTROL_MARGIN + clearance,
+    opacity: opacity.value,
   }));
-  // Re-measure the road name when Dynamic Type changes mid-trip (see `ManeuverBanner`).
-  const { fontScale } = useWindowDimensions();
   if (speed === undefined && roadName === undefined) return null;
   return (
     <Animated.View
+      accessibilityElementsHidden={!visible}
+      importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
       key={String(fontScale)}
+      onLayout={(event) => {
+        height.value = event.nativeEvent.layout.height;
+      }}
       pointerEvents="none"
       style={[guidanceStyles.drivingStatus, style]}
     >

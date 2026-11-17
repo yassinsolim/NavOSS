@@ -6,9 +6,19 @@ import Animated, {
   ReduceMotion,
   type SharedValue,
   useAnimatedStyle,
+  useDerivedValue,
+  useSharedValue,
 } from 'react-native-reanimated';
 
-import { CONTROL_MARGIN, controlsFollow, type ScreenMetrics } from '@/features/map/overlay-layout';
+import {
+  CONTROL_MARGIN,
+  controlsFollow,
+  fitOpacity,
+  ridingControlsRoom,
+  type ScreenMetrics,
+  topControlsRoom,
+} from '@/features/map/overlay-layout';
+import { useControlVisible } from '@/features/map/use-control-fit';
 import type { NavigationMapOrientation } from '@/features/navigation/navigation-camera';
 import { useRenderCounter } from '@/lib/render-counter';
 import { createThemedStyles, motion, radius, space, typography, useTheme } from '@/theme';
@@ -77,22 +87,63 @@ export function MapControls({
   const styles = useStyles();
   const { fontScale } = useWindowDimensions();
   const guidance = mode === 'guidance';
-  const followLimit = Math.round(metrics.windowHeight * 0.56);
+  const { windowHeight } = metrics;
+  const followLimit = Math.round(windowHeight * 0.56);
   const minimumBottom = metrics.bottomInset + CONTROL_MARGIN;
+  const topOffset = metrics.topInset + (guidance ? bannerStackHeight + space.md : space.sm);
+  // Where the guidance banners end; controls that ride the sheet must stay clear of it.
+  const bannerBottom = metrics.topInset + bannerStackHeight;
+  // Measured, not assumed: both groups grow with their buttons and credit labels.
+  const topGroupHeight = useSharedValue(0);
+  const bottomGroupHeight = useSharedValue(0);
 
-  const bottomGroupStyle = useAnimatedStyle(() => {
+  // The top controls hang under the banners. With the trip sheet raised there is no room left
+  // between banner and sheet, so they fade out instead of sliding under the sheet.
+  const topOpacity = useDerivedValue(() =>
+    guidance
+      ? fitOpacity(
+          topControlsRoom({
+            controlsBottom: topOffset + topGroupHeight.value,
+            sheetHeight: sheetPosition.value,
+            windowHeight,
+          }),
+        )
+      : 1,
+  );
+  // The bottom group rides the sheet's edge (see `controlsFollow`); during guidance it also
+  // fades before it would reach the banners.
+  const bottomPlacement = useDerivedValue(() => {
     const follow = controlsFollow(sheetPosition.value, followLimit);
-    return { bottom: Math.max(follow.bottom, minimumBottom), opacity: follow.opacity };
+    const bottom = Math.max(follow.bottom, minimumBottom);
+    const room = guidance
+      ? ridingControlsRoom({ bannerBottom, bottom, height: bottomGroupHeight.value, windowHeight })
+      : Number.POSITIVE_INFINITY;
+    return { bottom, opacity: Math.min(follow.opacity, fitOpacity(room)) };
   });
+  const bottomOpacity = useDerivedValue(() => bottomPlacement.value.opacity);
+  const topVisible = useControlVisible(topOpacity);
+  const bottomVisible = useControlVisible(bottomOpacity);
+
+  const topGroupStyle = useAnimatedStyle(() => ({ opacity: topOpacity.value }));
+  const bottomGroupStyle = useAnimatedStyle(() => ({
+    bottom: bottomPlacement.value.bottom,
+    opacity: bottomPlacement.value.opacity,
+  }));
   const needleStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${String(-mapBearing.value)}deg` }],
   }));
 
-  const topOffset = metrics.topInset + (guidance ? bannerStackHeight + space.md : space.sm);
-
   return (
     <>
-      <View pointerEvents="box-none" style={[styles.topGroup, { top: topOffset }]}>
+      <Animated.View
+        accessibilityElementsHidden={!topVisible}
+        importantForAccessibility={topVisible ? 'auto' : 'no-hide-descendants'}
+        onLayout={(event) => {
+          topGroupHeight.value = event.nativeEvent.layout.height;
+        }}
+        pointerEvents={topVisible ? 'box-none' : 'none'}
+        style={[styles.topGroup, { top: topOffset }, topGroupStyle]}
+      >
         {guidance ? (
           <IconButton
             accessibilityHint="Toggles between keeping the road ahead at the top and keeping north at the top"
@@ -131,9 +182,17 @@ export function MapControls({
           size={48}
           variant="floating"
         />
-      </View>
+      </Animated.View>
 
-      <Animated.View pointerEvents="box-none" style={[styles.bottomGroup, bottomGroupStyle]}>
+      <Animated.View
+        accessibilityElementsHidden={!bottomVisible}
+        importantForAccessibility={bottomVisible ? 'auto' : 'no-hide-descendants'}
+        onLayout={(event) => {
+          bottomGroupHeight.value = event.nativeEvent.layout.height;
+        }}
+        pointerEvents={bottomVisible ? 'box-none' : 'none'}
+        style={[styles.bottomGroup, bottomGroupStyle]}
+      >
         <View
           // Re-measure the credit labels when Dynamic Type changes while the app is open.
           key={String(fontScale)}

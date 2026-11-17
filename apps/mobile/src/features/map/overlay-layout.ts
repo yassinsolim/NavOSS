@@ -142,3 +142,56 @@ export function controlsFollow(
     opacity: overshoot <= 0 ? 1 : Math.max(0, 1 - overshoot / 48),
   };
 }
+
+/** Distance over which a control fades out as the room left for it runs out. */
+export const FIT_FADE_DISTANCE = 24;
+
+/**
+ * Opacity of a floating control that must not overlap its neighbours: opaque with
+ * `FIT_FADE_DISTANCE` or more room to spare, gone at none. It is fully transparent before it
+ * would touch the banner or the sheet, so a control never shows clipped.
+ */
+export function fitOpacity(room: number): number {
+  'worklet';
+  return Math.min(1, Math.max(0, room / FIT_FADE_DISTANCE));
+}
+
+/**
+ * Room between controls hung under the guidance banners and the top edge of the trip sheet
+ * (`sheetHeight` is how far the sheet reaches up from the bottom of the screen). Negative once
+ * the sheet reaches into the controls.
+ */
+export function topControlsRoom({
+  controlsBottom,
+  sheetHeight,
+  windowHeight,
+}: {
+  /** Distance from the top of the screen to the lower edge of the controls. */
+  controlsBottom: number;
+  sheetHeight: number;
+  windowHeight: number;
+}): number {
+  'worklet';
+  return windowHeight - sheetHeight - CONTROL_MARGIN - controlsBottom;
+}
+
+/**
+ * Room between the guidance banners and a control that rides above the trip sheet: `bottom` is
+ * the distance from the bottom of the screen to the control's lower edge, `height` its height.
+ * Negative once the control would reach into the banners.
+ */
+export function ridingControlsRoom({
+  bannerBottom,
+  bottom,
+  height,
+  windowHeight,
+}: {
+  /** Distance from the top of the screen to the lower edge of the banner stack. */
+  bannerBottom: number;
+  bottom: number;
+  height: number;
+  windowHeight: number;
+}): number {
+  'worklet';
+  return windowHeight - bottom - height - bannerBottom;
+}

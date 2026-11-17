@@ -4,13 +4,17 @@ import {
   CONTROL_MARGIN,
   controlsFollow,
   exploreSheetDetents,
+  FIT_FADE_DISTANCE,
+  fitOpacity,
   fullSheetHeight,
   guidanceCameraPadding,
   placeSheetDetents,
+  ridingControlsRoom,
   routePreviewCameraPadding,
   routePreviewSheetDetents,
   searchResultsCameraPadding,
   TAB_BAR_HEIGHT,
+  topControlsRoom,
   tripSheetDetents,
 } from '../src/features/map/overlay-layout.js';
 
@@ -73,5 +77,75 @@ describe('overlay layout', () => {
     expect(fading.bottom).toBe(480 + CONTROL_MARGIN);
     expect(fading.opacity).toBeCloseTo(0.5);
     expect(controlsFollow(700, 480)).toEqual({ bottom: 480 + CONTROL_MARGIN, opacity: 0 });
+  });
+
+  describe('controls that must fit between the banners and the trip sheet', () => {
+    const [collapsed = 0, expanded = 0] = tripSheetDetents(phone).values;
+    // Maneuver banner with a lane strip: 200pt under the status bar, then two 48pt buttons.
+    const bannerStack = 200;
+    const topControlsBottom = phone.topInset + bannerStack + 12 + 2 * 48 + 10;
+
+    it('is opaque with room to spare, gone with none, and fades in between', () => {
+      expect(fitOpacity(FIT_FADE_DISTANCE)).toBe(1);
+      expect(fitOpacity(500)).toBe(1);
+      expect(fitOpacity(FIT_FADE_DISTANCE / 2)).toBeCloseTo(0.5);
+      expect(fitOpacity(0)).toBe(0);
+      expect(fitOpacity(-80)).toBe(0);
+    });
+
+    it('keeps the top controls when the sheet rests and hides them once it is expanded', () => {
+      const room = (sheetHeight: number) =>
+        topControlsRoom({
+          controlsBottom: topControlsBottom,
+          sheetHeight,
+          windowHeight: phone.windowHeight,
+        });
+      expect(fitOpacity(room(collapsed))).toBe(1);
+      expect(fitOpacity(room(expanded))).toBe(0);
+      // Dragging up, the controls are gone before the sheet's edge reaches them.
+      const hiddenAt = phone.windowHeight - topControlsBottom - CONTROL_MARGIN;
+      expect(fitOpacity(room(hiddenAt))).toBe(0);
+      expect(fitOpacity(room(hiddenAt - FIT_FADE_DISTANCE))).toBe(1);
+    });
+
+    it('hides the top controls sooner when more cards stack under the banner', () => {
+      const sheetHeight = Math.round(phone.windowHeight * 0.4);
+      const opacityFor = (stack: number) =>
+        fitOpacity(
+          topControlsRoom({
+            controlsBottom: phone.topInset + stack + 12 + 2 * 48 + 10,
+            sheetHeight,
+            windowHeight: phone.windowHeight,
+          }),
+        );
+      expect(opacityFor(200)).toBe(1);
+      expect(opacityFor(200 + 176)).toBe(0);
+    });
+
+    it('keeps a readout riding the resting sheet clear of the banner and hides it when expanded', () => {
+      const readoutHeight = 48;
+      const clearance = 36 + 8;
+      const room = (sheetHeight: number) =>
+        ridingControlsRoom({
+          bannerBottom: phone.topInset + bannerStack + 8,
+          bottom: sheetHeight + CONTROL_MARGIN + clearance,
+          height: readoutHeight,
+          windowHeight: phone.windowHeight,
+        });
+      expect(fitOpacity(room(collapsed))).toBe(1);
+      expect(fitOpacity(room(expanded))).toBe(0);
+    });
+
+    it('hides a readout on a small screen where the banner leaves no room even at rest', () => {
+      const small = { bottomInset: 0, topInset: 20, windowHeight: 568 };
+      const [rest = 0] = tripSheetDetents(small).values;
+      const room = ridingControlsRoom({
+        bannerBottom: small.topInset + 400,
+        bottom: rest + CONTROL_MARGIN + 44,
+        height: 48,
+        windowHeight: small.windowHeight,
+      });
+      expect(fitOpacity(room)).toBe(0);
+    });
   });
 });

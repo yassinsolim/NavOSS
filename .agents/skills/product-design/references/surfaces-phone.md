@@ -13,6 +13,8 @@ Bottom sheets with detents: explore and search, place, route planning and previe
 - Current speed and the posted limit with the speeding state; current road name from the step's `currentRoadName` (#78, #84).
 - Camera alerts come from the native snapshot's payload; the phone only presents them. Ask-first reroute offers present **Keep route** and **Accept new route**.
 - The trip panel shows a notice only when it matters (weak GPS, waiting for GPS, off route, rerouted); otherwise the destination (#78).
+- The status bar's content colour follows the basemap behind it, not the system appearance: the map runs under the status bar and the banner starts below it (`status-bar-style.ts`).
+- Floating controls that no longer fit between the maneuver banner and the trip sheet (raised sheet, tall banner stack, large text) fade out and leave touch and VoiceOver focus until there is room again (`fitOpacity` in `overlay-layout.ts`).
 
 ## Behaviour that must not regress
 
