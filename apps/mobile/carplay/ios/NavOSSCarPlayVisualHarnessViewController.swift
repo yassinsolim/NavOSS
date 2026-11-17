@@ -361,6 +361,30 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
           )
           return
         }
+        // The speeding verdict flips at an unchanged 86 km/h, both ways: the spoken label must
+        // follow it although the drawn number stays the same.
+        for (verdict, expected) in [
+          (NavOSSSpeedingState.overLimit, "86 kilometres per hour, over the limit"),
+          (NavOSSSpeedingState.withinLimit, "86 kilometres per hour"),
+        ] {
+          self.mapViewController.display(
+            route: Self.wideRoute,
+            routeId: "visual-hud-wide-chrome",
+            activeGuidance: true,
+            position: NavOSSCarPlayPosition(
+              coordinate: Self.wideRoute[2], courseDegrees: 70, speedMetersPerSecond: 24
+            ),
+            routeProgress: 0.35,
+            speedLimitKph: 80,
+            overlay: NavOSSCarPlayGuidanceOverlay(speeding: verdict)
+          )
+          guard self.mapViewController.speedReadoutAccessibilityLabel == expected else {
+            assertionFailure(
+              "CarPlay speed accessibility label did not follow the verdict \(verdict): "
+                + "\(String(describing: self.mapViewController.speedReadoutAccessibilityLabel))")
+            return
+          }
+        }
         self.markReady()
       }
       return

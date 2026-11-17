@@ -613,6 +613,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   /// whenever the speed limit is unknown or hidden.
   var speedReadoutFrame: CGRect { view.convert(speedLabel.frame, from: speedHUDStack) }
 
+  /// What VoiceOver says for the current-speed readout.
+  var speedReadoutAccessibilityLabel: String? { speedLabel.accessibilityLabel }
+
   var speedReadoutIsVisible: Bool { !speedHUD.isHidden && !speedLabel.isHidden }
 
   /// The speed-limit sign's frame in `view` coordinates, or `nil` while it is hidden — an unknown
@@ -1547,11 +1550,20 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
     let speedKph = Int((speedMetersPerSecond * 3.6).rounded())
     let speeding = speeding == .overLimit
-    if speeding != isSpeeding {
+    let verdictChanged = speeding != isSpeeding
+    if verdictChanged {
       isSpeeding = speeding
       applySpeedColors()
     }
-    guard speedKph != displayedSpeedKph || speedLabel.isHidden else { return }
+    let numberChanged = speedKph != displayedSpeedKph || speedLabel.isHidden
+    // The verdict can flip at an unchanged speed (held over a new limit, or onto a faster road):
+    // the spoken wording must follow it even when the drawn number does not change.
+    if numberChanged || verdictChanged {
+      speedLabel.accessibilityLabel = isSpeeding
+        ? "\(speedKph) kilometres per hour, over the limit"
+        : "\(speedKph) kilometres per hour"
+    }
+    guard numberChanged else { return }
     displayedSpeedKph = speedKph
     let text = NSMutableAttributedString(
       string: "\(speedKph)",
@@ -1564,9 +1576,6 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       )
     )
     speedLabel.attributedText = text
-    speedLabel.accessibilityLabel = isSpeeding
-      ? "\(speedKph) kilometres per hour, over the limit"
-      : "\(speedKph) kilometres per hour"
     speedLabel.isHidden = false
   }
 
