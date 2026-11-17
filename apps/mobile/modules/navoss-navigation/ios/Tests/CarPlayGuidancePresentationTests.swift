@@ -291,23 +291,61 @@ final class CarPlayGuidancePresentationTests: XCTestCase {
 
   // MARK: Camera
 
-  func testCameraWidensWithSpeedAndTightensNearAManeuver() {
-    let parked = navOSSCarPlayCameraTarget(speedMetersPerSecond: 0, distanceToManeuverMeters: nil)
-    let city = navOSSCarPlayCameraTarget(speedMetersPerSecond: 14, distanceToManeuverMeters: nil)
-    let highway = navOSSCarPlayCameraTarget(speedMetersPerSecond: 30, distanceToManeuverMeters: nil)
-    XCTAssertLessThan(parked.viewingDistanceMeters, city.viewingDistanceMeters)
-    XCTAssertLessThan(city.viewingDistanceMeters, highway.viewingDistanceMeters)
-    XCTAssertGreaterThan(parked.pitchDegrees, highway.pitchDegrees)
-    let approaching = navOSSCarPlayCameraTarget(
-      speedMetersPerSecond: 30, distanceToManeuverMeters: 80)
-    XCTAssertLessThan(approaching.viewingDistanceMeters, highway.viewingDistanceMeters)
-    for target in [parked, city, highway, approaching] {
-      XCTAssertTrue((420...1_350).contains(target.viewingDistanceMeters))
-      XCTAssertTrue((36...50).contains(target.pitchDegrees))
+  func testCameraStaysCloseAndTiltedAtEverySpeed() {
+    func target(_ kph: Double, toManeuver: Double? = nil) -> NavOSSCarPlayCameraTarget {
+      navOSSCarPlayCameraTarget(
+        speedMetersPerSecond: kph / 3.6, distanceToManeuverMeters: toManeuver)
     }
+    // City speeds stay at street level; a motorway widens to roughly 700-800 m, no further.
+    XCTAssertEqual(target(0).viewingDistanceMeters, 280, accuracy: 1)
+    XCTAssertTrue((280...450).contains(target(30).viewingDistanceMeters))
+    XCTAssertTrue((280...450).contains(target(60).viewingDistanceMeters))
+    XCTAssertTrue((650...800).contains(target(100).viewingDistanceMeters))
+    XCTAssertEqual(target(140).viewingDistanceMeters, 800, accuracy: 0.001)
+    XCTAssertLessThan(target(30).viewingDistanceMeters, target(60).viewingDistanceMeters)
+    XCTAssertLessThan(target(60).viewingDistanceMeters, target(100).viewingDistanceMeters)
+    for kph in stride(from: 0.0, through: 160, by: 10) {
+      XCTAssertTrue((50...60).contains(target(kph).pitchDegrees), "pitch at \(kph) km/h")
+      XCTAssertGreaterThanOrEqual(target(kph).pitchDegrees, target(kph + 10).pitchDegrees)
+    }
+  }
+
+  func testAFarManeuverNeverWidensTheView() {
+    // The build 82 report: stopped, 5.7 km from the next maneuver, the view showed a whole
+    // interchange. Distance to a far maneuver must not change the camera at all.
+    for kph in [0.0, 60, 100] {
+      let free = navOSSCarPlayCameraTarget(
+        speedMetersPerSecond: kph / 3.6, distanceToManeuverMeters: nil)
+      let far = navOSSCarPlayCameraTarget(
+        speedMetersPerSecond: kph / 3.6, distanceToManeuverMeters: 5_700)
+      XCTAssertEqual(far, free)
+    }
+    XCTAssertLessThanOrEqual(
+      navOSSCarPlayCameraTarget(speedMetersPerSecond: 0, distanceToManeuverMeters: 5_700)
+        .viewingDistanceMeters, 450)
+  }
+
+  func testAnApproachingManeuverPullsTheCameraIn() {
+    let motorway = navOSSCarPlayCameraTarget(speedMetersPerSecond: 28, distanceToManeuverMeters: nil)
+    var previous = motorway.viewingDistanceMeters
+    for toManeuver in [800.0, 500, 300, 150, 50, 0] {
+      let near = navOSSCarPlayCameraTarget(
+        speedMetersPerSecond: 28, distanceToManeuverMeters: toManeuver)
+      XCTAssertLessThanOrEqual(near.viewingDistanceMeters, previous, "at \(toManeuver) m")
+      XCTAssertGreaterThanOrEqual(near.viewingDistanceMeters, navOSSCarPlayCameraClosestMeters)
+      XCTAssertGreaterThanOrEqual(near.pitchDegrees, motorway.pitchDegrees)
+      previous = near.viewingDistanceMeters
+    }
+    XCTAssertLessThan(previous, 300)
+  }
+
+  func testCameraIgnoresUnusableInputs() {
+    let parked = navOSSCarPlayCameraTarget(speedMetersPerSecond: 0, distanceToManeuverMeters: nil)
     XCTAssertEqual(
       navOSSCarPlayCameraTarget(speedMetersPerSecond: .nan, distanceToManeuverMeters: .infinity),
       parked)
+    XCTAssertEqual(
+      navOSSCarPlayCameraTarget(speedMetersPerSecond: -5, distanceToManeuverMeters: -10), parked)
   }
 
   func testSmoothingIsFrameRateIndependent() {

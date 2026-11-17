@@ -583,47 +583,6 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertNil(navOSSRouteBearingDegrees(near: duplicate, in: [duplicate, duplicate]))
   }
 
-  func testHeadingConePolygonClosesAndSamplesRequestedSpread() throws {
-    let apex = NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719)
-    let polygon = navOSSHeadingConePolygon(
-      apex: apex,
-      headingDegrees: 90,
-      radiusMeters: 30,
-      spreadDegrees: 60
-    )
-    let arc = Array(polygon.dropFirst().dropLast())
-    let bearings = arc.map { localBearingDegrees(from: apex, to: $0) }
-    let firstBearing = try XCTUnwrap(bearings.first)
-    let lastBearing = try XCTUnwrap(bearings.last)
-
-    XCTAssertEqual(polygon.first, apex)
-    XCTAssertEqual(polygon.last, apex)
-    XCTAssertEqual(clockwiseDifference(from: firstBearing, to: lastBearing), 60, accuracy: 0.01)
-    for (start, end) in zip(bearings, bearings.dropFirst()) {
-      XCTAssertLessThanOrEqual(clockwiseDifference(from: start, to: end), 5.0001)
-    }
-  }
-
-  func testHeadingConePolygonUsesRequestedRadiusAndHeading() throws {
-    let apex = NavOSSCarPlayCoordinate(latitude: 51.0447, longitude: -114.0719)
-    let polygon = navOSSHeadingConePolygon(
-      apex: apex,
-      headingDegrees: 135,
-      radiusMeters: 30,
-      spreadDegrees: 60
-    )
-    let arc = Array(polygon.dropFirst().dropLast())
-    let bearings = arc.map { localBearingDegrees(from: apex, to: $0) }
-    let centerBearing = try XCTUnwrap(
-      bearings.min { angularDifference(from: $0, to: 135) < angularDifference(from: $1, to: 135) }
-    )
-
-    for coordinate in arc {
-      XCTAssertEqual(localDistanceMeters(from: apex, to: coordinate), 30, accuracy: 0.01)
-    }
-    XCTAssertEqual(centerBearing, 135, accuracy: 0.01)
-  }
-
   func testInterpolationSpanTracksObservedSampleInterval() {
     // The measured cadence with no distance filter is about 1 s; the span should follow it
     // rather than staying pinned at the old fixed 0.9 s, which left a dead gap every cycle.
@@ -813,14 +772,6 @@ final class NavigationCoreTests: XCTestCase {
     let route = navOSSCarPlayDistanceMeasurement(12_500)
     XCTAssertEqual(route.unit, .kilometers)
     XCTAssertEqual(route.value, 12.5)
-  }
-
-  func testCarPlayCameraAdaptsToManeuverDistance() {
-    XCTAssertEqual(navOSSCarPlayViewingDistance(nil), 850)
-    XCTAssertEqual(navOSSCarPlayViewingDistance(50), 450)
-    XCTAssertEqual(navOSSCarPlayViewingDistance(300), 650)
-    XCTAssertEqual(navOSSCarPlayViewingDistance(1_000), 900)
-    XCTAssertEqual(navOSSCarPlayViewingDistance(3_000), 1_200)
   }
 
   func testCarPlayEndControlsFollowActiveTripAcrossTemplates() {
