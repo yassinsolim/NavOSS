@@ -841,20 +841,15 @@ private func navOSSCardHasCarriageway(_ name: String) -> Bool {
   return navOSSCardCarriagewayWords.contains(name[name.index(after: space)...].lowercased())
 }
 
-/// A sign's qualified road wins, then the mapped road, then a single parsed provider target.
-/// The latter is needed when the sign names only "401 East" but the sentence says "401 Express".
+/// A carriageway is eligible only when the provider's own maneuver target names it. `roadName`
+/// can be the highway being left at an exit, so it is never evidence of the road to take.
 private func navOSSCardCarriagewayName(
-  road: String, branch: [String], toward: [String], instructionTarget: String?
+  branch: [String], instructionTarget: String?
 ) -> String? {
-  for name in branch where navOSSCardHasCarriageway(name) { return name }
-  for name in road.components(separatedBy: " / ") where navOSSCardHasCarriageway(name) {
-    return name
-  }
-  if let instructionTarget {
-    for name in instructionTarget.components(separatedBy: " / ")
-    where navOSSCardHasCarriageway(name) { return name }
-  }
-  return toward.first(where: navOSSCardHasCarriageway)
+  guard let instructionTarget,
+    let target = instructionTarget.components(separatedBy: " / ").first(where: navOSSCardHasCarriageway)
+  else { return nil }
+  return branch.first(where: navOSSCardHasCarriageway) ?? target
 }
 
 /// Card variants for the maneuver that begins `steps[stepIndex]`, most to least verbose, with no
@@ -929,10 +924,12 @@ public func navOSSCarPlayCardInstructionVariants(
       || [.keepLeft, .keepRight, .mergeLeft, .mergeRight, .onRamp, .offRampLeft, .offRampRight]
         .contains(kind)
     let hasSignFields = exitNumber != nil || !branch.isEmpty || !toward.isEmpty
-    let parts = navOSSCardInstructionParts(step.instruction)
+    let parts =
+      isRamp || (!hasSignFields && road.isEmpty)
+      ? navOSSCardInstructionParts(step.instruction) : nil
     if isRamp,
       let carriageway = navOSSCardCarriagewayName(
-        road: road, branch: branch, toward: toward, instructionTarget: parts?.target)
+        branch: branch, instructionTarget: parts?.target)
     {
       // The carriageway is the decision at this fork. Destinations or an unqualified route
       // number must not displace it, even in the shortest variant.

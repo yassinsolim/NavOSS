@@ -85,6 +85,34 @@ final class CarPlayCardTextTests: XCTestCase {
     XCTAssertEqual(try card(trip(with: localRoad), 1).first, "Downtown")
   }
 
+  func testExitTargetsDoNotBecomeTheCarriagewayBeingLeft() throws {
+    for name in ["square-one-scarborough.v2", "squareone-scarborough-validation83.v2"] {
+      let trips = try NavigationRoutesV2Tests.trips(name, version: .v2)
+      XCTAssertEqual(
+        try card(trips[0], 7),
+        [
+          "Kennedy Rd / Brimley Rd S / McCowan Rd", "Kennedy Road / Brimley Road South",
+          "Kennedy Rd / Brimley Rd S", "Kennedy Road", "Kennedy Rd",
+        ])
+      XCTAssertEqual(
+        try card(trips[2], 8),
+        [
+          "Victoria Park Avenue / Warden Avenue", "Victoria Park Ave / Warden Ave",
+          "Victoria Park Avenue", "Victoria Park Ave",
+        ])
+    }
+    for road in ["Highway 401 Collector", "Highway 401 Express"] {
+      let exit = NavOSSCarPlayRouteStep(
+        distanceMeters: 0, durationSeconds: 0, geometry: [],
+        instruction: "Take exit 380 toward Progress Avenue.", maneuverType: "off ramp",
+        roadName: road, exitNumber: "380", signpost: "Progress Avenue",
+        signpostToward: ["Progress Avenue"])
+      XCTAssertEqual(
+        try card(trip(with: exit), 1),
+        ["Exit 380 · Progress Avenue", "Exit 380 · Progress Ave", "Exit 380"])
+    }
+  }
+
   /// The step itself gives both the road name and its uppercase initialism; no alias table.
   func testRoadNameAndItsSignedInitialismAreNotRepeated() throws {
     let trips = try NavigationRoutesV2Tests.trips("squareone-scarborough-validation83.v2", version: .v2)
@@ -192,8 +220,13 @@ final class CarPlayCardTextTests: XCTestCase {
 
   func testLongTorontoSignsShortenByAbbreviationThenByDroppingNames() throws {
     let trip = try recorded("square-one-scarborough.v2")
-    // The branch lists downstream roads, but this step stays on the Collector carriageway.
-    XCTAssertEqual(try card(trip, 7), ["Highway 401 Collector"])
+    // The provider names this exit's roads; roadName is the Collector road being left.
+    XCTAssertEqual(
+      try card(trip, 7),
+      [
+        "Kennedy Rd / Brimley Rd S / McCowan Rd", "Kennedy Road / Brimley Road South",
+        "Kennedy Rd / Brimley Rd S", "Kennedy Road", "Kennedy Rd",
+      ])
     XCTAssertEqual(
       try card(trip, 8),
       [
