@@ -638,6 +638,16 @@ private func navOSSCardTravelDirectionRank(_ name: String) -> Int {
   return suffix.isEmpty ? 0 : 1
 }
 
+/// `name`, or a sign naming the same road with a direction of travel when `name` has none
+/// ("Crowchild Trail North" for "Crowchild Trail SW"): the direction is the driver's decision, the
+/// address quadrant is not.
+private func navOSSCardSignedName(_ name: String, signs: [String]) -> String {
+  guard !name.isEmpty, navOSSCardTravelDirectionRank(name) < 2 else { return name }
+  let key = navOSSCardCoreKey(name)
+  return signs.first { navOSSCardCoreKey($0) == key && navOSSCardTravelDirectionRank($0) == 2 }
+    ?? name
+}
+
 /// Sign or road names with blanks and repeats (by core key) removed. Of two names for one road the
 /// one that carries a direction wins ("403 East" over "Highway 403"): it is what the sign adds.
 private func navOSSCardDistinctNames(_ names: [String]) -> [String] {
@@ -791,15 +801,7 @@ public func navOSSCarPlayCardInstructionVariants(
     // An older server sends only the joined signpost text, "branch: toward".
     toward = navOSSCardDistinctNames(signpost.components(separatedBy: CharacterSet(charactersIn: ":,")))
   }
-  // When a sign names the road the step joins with its direction of travel ("Crowchild Trail
-  // North" over "Crowchild Trail SW"), the sign wins: the direction is the driver's decision, the
-  // address quadrant is not.
-  let road =
-    navOSSCardTravelDirectionRank(mappedRoad) == 2
-    ? mappedRoad
-    : (branch + toward).first {
-      navOSSCardCoreKey($0) == navOSSCardCoreKey(mappedRoad) && navOSSCardTravelDirectionRank($0) == 2
-    } ?? mappedRoad
+  let road = navOSSCardSignedName(mappedRoad, signs: branch + toward)
   let action = navOSSCarPlayCardAction(kind)
 
   var variants: [String]
@@ -845,25 +847,31 @@ public func navOSSCarPlayCardInstructionVariants(
       ["fork", "merge", "on ramp", "off ramp"].contains(type)
       || [.keepLeft, .keepRight, .mergeLeft, .mergeRight, .onRamp, .offRampLeft, .offRampRight]
         .contains(kind)
-    if isRamp || exitNumber != nil, exitNumber != nil || !branch.isEmpty || !toward.isEmpty {
+    let hasSignFields = exitNumber != nil || !branch.isEmpty || !toward.isEmpty
+    if isRamp || exitNumber != nil, hasSignFields {
       let targets =
         !branch.isEmpty
         ? branch : !road.isEmpty ? road.components(separatedBy: " / ") : toward
       variants = navOSSCardSignVariants(
         exitNumber: exitNumber, targets: targets, toward: toward,
         towardIsTheSign: branch.isEmpty && road.isEmpty)
+    } else if !hasSignFields, isRamp || road.isEmpty,
+      let parts = navOSSCardInstructionParts(step.instruction)
+    {
+      // No structured sign fields (the `/v1/routes` fallback, some on-device steps): the exit
+      // number and names the provider's own sentence states. The step's road name, when it has
+      // one, stays the name; the sentence's "toward" can only add its direction of travel.
+      let towardNames = navOSSCardDistinctNames(parts.toward?.components(separatedBy: " / ") ?? [])
+      let named = road.isEmpty ? parts.target ?? "" : road
+      let targets = navOSSCardDistinctNames(named.components(separatedBy: " / "))
+        .map { navOSSCardSignedName($0, signs: towardNames) }
+      variants = navOSSCardSignVariants(
+        exitNumber: parts.exit, targets: targets.isEmpty ? towardNames : targets,
+        toward: towardNames, towardIsTheSign: targets.isEmpty)
     } else if !road.isEmpty {
       variants = navOSSCardNameVariants(road.components(separatedBy: " / "), prefix: "")
     } else if !toward.isEmpty {
       variants = ["\(action) toward \(toward.prefix(2).joined(separator: " / "))", action]
-    } else if let parts = navOSSCardInstructionParts(step.instruction) {
-      // No structured sign or road (the `/v1/routes` fallback, some on-device steps): the exit
-      // number and names the provider's own sentence states.
-      let targets = navOSSCardDistinctNames(parts.target?.components(separatedBy: " / ") ?? [])
-      let towardNames = navOSSCardDistinctNames(parts.toward?.components(separatedBy: " / ") ?? [])
-      variants = navOSSCardSignVariants(
-        exitNumber: parts.exit, targets: targets.isEmpty ? towardNames : targets,
-        toward: towardNames, towardIsTheSign: targets.isEmpty)
     } else {
       // Nothing that parses cleanly: the sentence itself when it says more than the action.
       variants = [step.instruction, action]

@@ -188,6 +188,11 @@ final class CarPlayCardTextTests: XCTestCase {
     XCTAssertNil(v1.steps[1].exitNumber)
     XCTAssertEqual(v1.steps[1].instruction, "Take exit 248 toward Glenmore Trail.")
     XCTAssertEqual(try card(v1, 1), ["Exit 248 · Glenmore Trail", "Exit 248"])
+    // A road name but no sign fields: the sentence's exit number leads, and its signed direction
+    // ("Glenmore Trail West") wins over the road's quadrant.
+    XCTAssertEqual(v1.steps[2].roadName, "Glenmore Trail SE")
+    XCTAssertNil(v1.steps[2].signpostToward)
+    XCTAssertEqual(try card(v1, 2).first, "Exit 248B · Glenmore Trail West")
     // "toward 14 Street West (Hospital)" would be a third card line.
     XCTAssertEqual(try card(v1, 3), ["14 Street W South", "14 St W South"])
     XCTAssertEqual(try card(v1, 4), ["14 Street W South", "14 St W South"])
