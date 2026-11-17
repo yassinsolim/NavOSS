@@ -19,4 +19,4 @@ appId: org.navoss.mobile
     visible: 'Start navigation'
     timeout: 20000
 - assertVisible: 'Dropped pin'
-- assertVisible: 'Select fastest .* route, .*, .*'
+- assertVisible: 'Fastest route, .*, .*'
