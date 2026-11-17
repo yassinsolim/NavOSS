@@ -1556,6 +1556,19 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
           format: "NAVOSS_CARPLAY_CAMERA zoom=%.2f pitch=%.1f altitude=%.0f",
           map.mapView.zoomLevel, camera.pitch, camera.altitude))
     }
+    // A route preview must show the whole selected route and both end markers in the part of the
+    // map the route-choice sheet leaves free.
+    if map.isPresentingRoutePreview {
+      map.view.layoutIfNeeded()
+      guard let free = map.routeFitFrame,
+        map.routeScreenPoints.allSatisfy({ free.insetBy(dx: -1.5, dy: -1.5).contains($0) })
+      else {
+        assertionFailure(
+          "\(scenario): preview route or end markers outside the free map "
+            + "\(String(describing: map.routeFitFrame)): \(map.routeScreenPoints)")
+        return
+      }
+    }
     // Every guidance capture must show the vehicle: in follow mode on the 72% line of the visible
     // map under a tilted camera, in the overview somewhere inside the visible map.
     if map.isFollowingVehicle || map.isPresentingRouteOverview {

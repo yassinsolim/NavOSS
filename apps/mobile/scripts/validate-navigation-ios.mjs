@@ -830,8 +830,10 @@ try {
       metricsByName.get('carplay-preview-light.png'),
       metricsByName.get('carplay-preview-dark.png'),
       metricsByName.get('carplay-preview-resize.png'),
+      metricsByName.get('carplay-flow-preview-alternatives.png'),
     ].filter((metric) => metric !== undefined);
-    // The preview fits the route into the third of the map the route-choice sheet leaves.
+    // The preview fits the route into the third of the map the route-choice sheet leaves; the
+    // correct fit draws 0.00064 (resize) to 0.0016 (alternatives) of the frame in route blue.
     if (previewRouteMetrics.some((metric) => metric.routeBlueRatio < 0.0005)) {
       throw new Error('A widened CarPlay preview does not contain enough route-blue pixels.');
     }
@@ -847,9 +849,10 @@ try {
     const clearMetric = metricsByName.get('carplay-clear.png');
     if (
       shortPreviewMetric === undefined ||
-      // At the preview's zoom cap a route this short lies under its two endpoint markers, so only
-      // the upper bound (not framed too tightly) is checked for the line itself.
-      shortPreviewMetric.routeBlueRatio > 0.0015 ||
+      // The 600 m route fills the sheet-free third (about 0.0008 of the frame): present, and not
+      // blown up past its breathing room.
+      shortPreviewMetric.routeBlueRatio < 0.0004 ||
+      shortPreviewMetric.routeBlueRatio > 0.002 ||
       shortPreviewMetric.originGreenRatio < 0.00002 ||
       shortPreviewMetric.destinationRedRatio < 0.00002
     ) {

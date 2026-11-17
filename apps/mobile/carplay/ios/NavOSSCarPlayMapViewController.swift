@@ -648,6 +648,21 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     return view.convert(point, from: mapView)
   }
 
+  /// The part of the map the last route fit framed the route in (view minus the route-choice sheet,
+  /// safe area and margins), in `view` coordinates.
+  private(set) var routeFitFrame: CGRect?
+
+  /// The selected route's points and its end markers on screen, in `view` coordinates.
+  var routeScreenPoints: [CGPoint] {
+    let ends = [latestOrigin, latestDestination].compactMap { $0 }.map {
+      CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
+    }
+    return (routeCoordinates + ends).map { mapView.convert($0, toPointTo: view) }
+  }
+
+  /// Whether a route preview (not guidance) is on the map.
+  var isPresentingRoutePreview: Bool { !activeGuidance && routeCoordinates.count >= 2 }
+
   /// Whether the camera is following the vehicle (guidance, not the overview).
   var isFollowingVehicle: Bool { activeGuidance && !presentsRouteOverview }
   var isPresentingRouteOverview: Bool { activeGuidance && presentsRouteOverview }
@@ -1269,7 +1284,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     // `setVisibleCoordinates`: with the card's side padding on an 800 x 480 head unit that zoomed
     // a 1 km route in to about zoom 17.5, leaving the route, the vehicle and its markers off
     // screen in the overview.
-    let maximumZoomLevel = activeGuidance ? 18 : reservesRouteChoiceSheet ? 9.25 : 12.5
+    // Previews fill the part of the map the route-choice sheet leaves; the breathing room added to
+    // the fitted coordinates keeps a very short route off the edges.
+    let maximumZoomLevel = activeGuidance ? 18 : reservesRouteChoiceSheet ? 15.5 : 16
     guard
       let fit = navOSSCarPlayFitCamera(
         coordinates: fittedCoordinates.map {
@@ -1285,6 +1302,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         maximumZoomLevel: maximumZoomLevel
       )
     else { return }
+    routeFitFrame = mapView.bounds.inset(by: edgePadding)
     flattenCamera()
     mapView.setCenter(
       CLLocationCoordinate2D(latitude: fit.center.latitude, longitude: fit.center.longitude),
