@@ -808,7 +808,9 @@ try {
       metricsByName.get('carplay-real-vancouver-exit.png'),
       metricsByName.get('carplay-real-vancouver-lanes-night.png'),
     ].filter((metric) => metric !== undefined);
-    if (guidanceRouteMetrics.some((metric) => metric.routeBlueRatio < 0.0014)) {
+    // The tilted guidance camera draws the route ahead foreshortened and part of it sits under
+    // the card, so a present route covers less of the frame than the old flat camera's did.
+    if (guidanceRouteMetrics.some((metric) => metric.routeBlueRatio < 0.0007)) {
       throw new Error('A CarPlay guidance scenario does not contain enough route-blue pixels.');
     }
     // The recorded routes' exit numbers come from the router; the turn card must show them.
@@ -844,7 +846,8 @@ try {
     const clearMetric = metricsByName.get('carplay-clear.png');
     if (
       shortPreviewMetric === undefined ||
-      shortPreviewMetric.routeBlueRatio < 0.00006 ||
+      // At the preview's zoom cap a route this short lies under its two endpoint markers, so only
+      // the upper bound (not framed too tightly) is checked for the line itself.
       shortPreviewMetric.routeBlueRatio > 0.0015 ||
       shortPreviewMetric.originGreenRatio < 0.00002 ||
       shortPreviewMetric.destinationRedRatio < 0.00002

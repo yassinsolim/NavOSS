@@ -1221,6 +1221,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         : UIEdgeInsets(top: 32, left: 32, bottom: 32, right: 32)
     routeFitGeneration &+= 1
     let fitGeneration = routeFitGeneration
+    // The overview is a flat map of the whole route; fitting while the tilted follow camera is
+    // still in place frames the route through that perspective.
+    if activeGuidance {
+      flattenCamera()
+    }
     fittedCoordinates.withUnsafeBufferPointer { coordinates in
       guard let baseAddress = coordinates.baseAddress else {
         return
