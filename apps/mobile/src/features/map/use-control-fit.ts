@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { type SharedValue, useAnimatedReaction } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import {
   type ControlsShown,
   controlsShown,
+  type ControlZone,
+  controlZone,
   isControlInteractive,
 } from '@/features/map/overlay-layout';
 
@@ -27,15 +29,24 @@ export function useControlInteractive(opacity: SharedValue<number>): boolean {
 }
 
 /**
- * A key that changes each time a group of glass controls comes back after being hidden. Glass
- * material is set up once, when its view first lays out, and a view that first lays out inside
- * a group faded to nothing can be left without it for good (bare glyphs where a circle of glass
- * belongs). Keying the glass buttons by this remounts them as the group reappears, when it is
- * visible enough for the material to take.
+ * A key that changes each time a group of glass controls comes back after being fully hidden.
+ * Glass material is set up once, when its view first lays out, and a view that first lays out
+ * inside a group faded to nothing can be left without it for good (bare glyphs where a circle of
+ * glass belongs). Keying the glass buttons by this remounts them as the group reappears, when it
+ * is visible enough for the material to take. A group that only fades part of the way and
+ * returns is left alone (see `controlsShown`).
  */
-export function useGlassKey(interactive: boolean): number {
-  const [shown, setShown] = useState<ControlsShown>({ epoch: 0, interactive });
-  const next = controlsShown(shown, interactive);
-  if (next !== shown) setShown(next);
-  return next.epoch;
+export function useGlassKey(opacity: SharedValue<number>): number {
+  const [shown, setShown] = useState<ControlsShown>({ epoch: 0, wasHidden: false });
+  const update = useCallback((zone: ControlZone) => {
+    setShown((previous) => controlsShown(previous, zone));
+  }, []);
+  useAnimatedReaction(
+    () => controlZone(opacity.value),
+    (now, before) => {
+      if (now !== before) scheduleOnRN(update, now);
+    },
+    [opacity, update],
+  );
+  return shown.epoch;
 }

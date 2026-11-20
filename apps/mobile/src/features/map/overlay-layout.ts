@@ -223,16 +223,33 @@ export function ridingControlsRoom({
   return windowHeight - bottom - height - bannerBottom;
 }
 
+/** Where a fading group of controls stands: gone, drawn but not yet usable, or usable. */
+export type ControlZone = 'hidden' | 'faded' | 'clear';
+
+export function controlZone(opacity: number): ControlZone {
+  'worklet';
+  if (opacity <= 0) return 'hidden';
+  return isControlInteractive(opacity) ? 'clear' : 'faded';
+}
+
 /**
- * Tracks when a group of controls has just come back after being hidden. `epoch` rises each time
- * `interactive` turns true after being false.
+ * Tracks when a group of controls has come back after being fully hidden. `epoch` rises once
+ * each time the group is clear again after its opacity reached zero. A group that only dips
+ * below the interactive threshold and returns, as top controls do when the banner changes height
+ * while the trip sheet is expanded, keeps its epoch: its glass was never laid out hidden, and
+ * remounting it would flicker and drop a press in progress.
  */
 export interface ControlsShown {
   epoch: number;
-  interactive: boolean;
+  wasHidden: boolean;
 }
 
-export function controlsShown(previous: ControlsShown, interactive: boolean): ControlsShown {
-  if (previous.interactive === interactive) return previous;
-  return { epoch: interactive ? previous.epoch + 1 : previous.epoch, interactive };
+export function controlsShown(previous: ControlsShown, zone: ControlZone): ControlsShown {
+  if (zone === 'hidden') {
+    return previous.wasHidden ? previous : { epoch: previous.epoch, wasHidden: true };
+  }
+  if (zone === 'clear' && previous.wasHidden) {
+    return { epoch: previous.epoch + 1, wasHidden: false };
+  }
+  return previous;
 }

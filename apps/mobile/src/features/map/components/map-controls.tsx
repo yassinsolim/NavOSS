@@ -132,10 +132,10 @@ export function MapControls({
   const bottomOpacity = useDerivedValue(() => bottomPlacement.value.opacity);
   const topInteractive = useControlInteractive(topOpacity);
   const bottomInteractive = useControlInteractive(bottomOpacity);
-  // Glass buttons mounted while their group is faded out can be left without material for good;
-  // they are remounted as the group comes back (see `useGlassKey`).
-  const topGlassKey = useGlassKey(topInteractive);
-  const bottomGlassKey = useGlassKey(bottomInteractive);
+  // Glass buttons mounted while their group is fully hidden can be left without material for
+  // good; they are remounted as the group comes back (see `useGlassKey`).
+  const topGlassKey = useGlassKey(topOpacity);
+  const bottomGlassKey = useGlassKey(bottomOpacity);
 
   const topGroupStyle = useAnimatedStyle(() => ({ opacity: topOpacity.value }));
   const bottomGroupStyle = useAnimatedStyle(() => ({
