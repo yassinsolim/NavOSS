@@ -19,16 +19,22 @@ import {
   type ScreenMetrics,
   topControlsRoom,
 } from '@/features/map/overlay-layout';
+import { mapChromeColors, mapChromeScheme } from '@/features/map/map-chrome';
 import { useControlInteractive } from '@/features/map/use-control-fit';
 import type { NavigationMapOrientation } from '@/features/navigation/navigation-camera';
 import { useRenderCounter } from '@/lib/render-counter';
-import { createThemedStyles, motion, radius, space, typography, useTheme } from '@/theme';
+import { createSchemeStyles, motion, radius, space, typography } from '@/theme';
 import { IconButton } from '@/ui/icon-button';
 
 export interface MapControlsProps {
   attribution: string;
   /** Height of the guidance banners at the top of the screen; the top controls sit below them. */
   bannerStackHeight: number;
+  /**
+   * Whether the basemap behind the controls is dark. The controls take their glass and glyph
+   * colours from the map they sit on, not from the system appearance.
+   */
+  darkMap: boolean;
   locating: boolean;
   mapBearing: SharedValue<number>;
   metrics: ScreenMetrics;
@@ -63,6 +69,7 @@ export interface MapControlsProps {
 export function MapControls({
   attribution,
   bannerStackHeight,
+  darkMap,
   locating,
   mapBearing,
   metrics,
@@ -84,8 +91,9 @@ export function MapControls({
   trafficStatus,
 }: MapControlsProps) {
   useRenderCounter('MapControls');
-  const { colors } = useTheme();
-  const styles = useStyles();
+  const colors = mapChromeColors(darkMap);
+  const scheme = mapChromeScheme(darkMap);
+  const styles = stylesFor(scheme);
   const { fontScale } = useWindowDimensions();
   const guidance = mode === 'guidance';
   const { windowHeight } = metrics;
@@ -154,6 +162,7 @@ export function MapControls({
             icon={{ android: 'navigation', ios: 'location.north.line.fill' }}
             onPress={onToggleOrientation}
             selected={orientation === 'north-up'}
+            scheme={scheme}
             size={48}
             variant="floating"
           >
@@ -171,6 +180,7 @@ export function MapControls({
               accessibilityLabel="About and privacy"
               icon={{ android: 'info', ios: 'info.circle' }}
               onPress={onOpenAbout}
+              scheme={scheme}
               size={48}
               variant="floating"
             />
@@ -180,6 +190,7 @@ export function MapControls({
           accessibilityLabel="Map appearance"
           icon={{ android: 'layers', ios: 'square.3.layers.3d' }}
           onPress={onOpenMapPreferences}
+          scheme={scheme}
           size={48}
           variant="floating"
         />
@@ -259,6 +270,7 @@ export function MapControls({
               accessibilityLabel="Report a road condition"
               icon={{ android: 'report_problem', ios: 'exclamationmark.bubble.fill' }}
               onPress={onOpenReport}
+              scheme={scheme}
               size={48}
               variant="floating"
             />
@@ -270,6 +282,7 @@ export function MapControls({
               disabled={locating}
               icon={{ android: 'my_location', ios: 'location.fill' }}
               onPress={onLocate}
+              scheme={scheme}
               size={56}
               tintColor={colors.primaryText}
               variant="floating"
@@ -284,6 +297,7 @@ export function MapControls({
                 accessibilityLabel="Recenter map on vehicle"
                 icon={{ android: 'my_location', ios: 'location.fill' }}
                 onPress={onRecenter}
+                scheme={scheme}
                 size={56}
                 variant="primary"
               />
@@ -295,7 +309,7 @@ export function MapControls({
   );
 }
 
-const useStyles = createThemedStyles(({ colors, scheme }) =>
+const stylesFor = createSchemeStyles(({ colors, scheme }) =>
   StyleSheet.create({
     actions: { alignItems: 'flex-end', gap: space.md - 2 },
     bottomGroup: {

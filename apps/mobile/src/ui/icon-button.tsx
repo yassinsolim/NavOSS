@@ -2,7 +2,13 @@ import { SymbolView } from 'expo-symbols';
 import type { ComponentProps, ReactNode } from 'react';
 import { type AccessibilityState, type StyleProp, StyleSheet, type ViewStyle } from 'react-native';
 
-import { createThemedStyles, touchTarget, useTheme } from '@/theme';
+import {
+  type ColorScheme,
+  createSchemeStyles,
+  themeForScheme,
+  touchTarget,
+  useTheme,
+} from '@/theme';
 import type { SymbolName } from '@/ui/button';
 import { GlassSurface, supportsLiquidGlass } from '@/ui/glass-surface';
 import { PressableScale } from '@/ui/pressable-scale';
@@ -20,6 +26,11 @@ export interface IconButtonProps {
   icon: SymbolName;
   iconSize?: number;
   onPress: () => void;
+  /**
+   * Colour scheme of the button, for controls that sit on the basemap and so follow it, not the
+   * system appearance. Defaults to the system.
+   */
+  scheme?: ColorScheme;
   selected?: boolean;
   /** Diameter. Never below the 44pt minimum. */
   size?: number;
@@ -39,6 +50,7 @@ export function IconButton({
   icon,
   iconSize,
   onPress,
+  scheme,
   selected = false,
   size = touchTarget.min,
   style,
@@ -46,8 +58,9 @@ export function IconButton({
   tintColor,
   variant = 'well',
 }: IconButtonProps) {
-  const { colors } = useTheme();
-  const styles = useStyles();
+  const system = useTheme();
+  const { colors, scheme: resolvedScheme } = scheme === undefined ? system : themeForScheme(scheme);
+  const styles = stylesFor(resolvedScheme);
   const diameter = Math.max(size, touchTarget.min);
   const shape = { borderRadius: diameter / 2, height: diameter, width: diameter };
   const tint =
@@ -89,7 +102,7 @@ export function IconButton({
       testID={testID}
     >
       {floatingGlass ? (
-        <GlassSurface interactive style={[styles.glass, shape]}>
+        <GlassSurface interactive scheme={scheme} style={[styles.glass, shape]}>
           {symbol}
         </GlassSurface>
       ) : (
@@ -99,7 +112,7 @@ export function IconButton({
   );
 }
 
-const useStyles = createThemedStyles(({ colors }) =>
+const stylesFor = createSchemeStyles(({ colors }) =>
   StyleSheet.create({
     base: { alignItems: 'center', justifyContent: 'center' },
     danger: { backgroundColor: colors.danger },
