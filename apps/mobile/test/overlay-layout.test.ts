@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   CONTROL_MARGIN,
   controlsFollow,
+  controlsFollowLimit,
   exploreSheetDetents,
   FIT_FADE_DISTANCE,
   fitOpacity,
   fullSheetHeight,
   guidanceCameraPadding,
+  isControlInteractive,
   placeSheetDetents,
   ridingControlsRoom,
   routePreviewCameraPadding,
@@ -73,10 +75,68 @@ describe('overlay layout', () => {
   it('floats controls on the sheet edge, then holds and fades them once the sheet passes the limit', () => {
     expect(controlsFollow(200, 480)).toEqual({ bottom: 200 + CONTROL_MARGIN, opacity: 1 });
     expect(controlsFollow(480, 480)).toEqual({ bottom: 480 + CONTROL_MARGIN, opacity: 1 });
-    const fading = controlsFollow(504, 480);
+    const fading = controlsFollow(480 + CONTROL_MARGIN / 4, 480);
     expect(fading.bottom).toBe(480 + CONTROL_MARGIN);
     expect(fading.opacity).toBeCloseTo(0.5);
     expect(controlsFollow(700, 480)).toEqual({ bottom: 480 + CONTROL_MARGIN, opacity: 0 });
+  });
+
+  describe('a control that is not clearly visible is not interactive', () => {
+    it('takes touches and VoiceOver focus from half opacity up, and not below it', () => {
+      expect(isControlInteractive(1)).toBe(true);
+      expect(isControlInteractive(0.5)).toBe(true);
+      expect(isControlInteractive(0.49)).toBe(false);
+      expect(isControlInteractive(0.15)).toBe(false);
+      expect(isControlInteractive(0)).toBe(false);
+    });
+
+    const phoneHeights = [568, 667, 736, 812, 844, 852, 874, 896, 926, 932, 956];
+    const sheetsOf = (metrics: typeof phone) =>
+      [
+        ['explore', exploreSheetDetents(metrics)],
+        ['place', placeSheetDetents(metrics)],
+        ['preview', routePreviewSheetDetents(metrics, { demoOrigin: false })],
+        ['demo preview', routePreviewSheetDetents(metrics, { demoOrigin: true })],
+        ['trip', tripSheetDetents(metrics)],
+      ] as const;
+
+    it.each(phoneHeights)(
+      'never leaves the bottom group visible under a sheet, on a %i pt tall phone',
+      (windowHeight) => {
+        const metrics = { bottomInset: windowHeight > 700 ? 34 : 0, topInset: 20, windowHeight };
+        const limit = controlsFollowLimit(windowHeight);
+        for (let sheetTop = 0; sheetTop <= windowHeight; sheetTop += 1) {
+          const { bottom, opacity } = controlsFollow(sheetTop, limit);
+          // Wherever the group is drawn below the sheet's top edge, it must be gone, and
+          // while it can still be pressed it must sit wholly above the sheet.
+          if (bottom < sheetTop) expect(opacity).toBe(0);
+          if (isControlInteractive(opacity)) expect(bottom).toBeGreaterThanOrEqual(sheetTop);
+        }
+        for (const [, { values }] of sheetsOf(metrics)) {
+          for (const height of values) {
+            // A sheet rests at a detent: the group is there in full or not at all, never a ghost.
+            expect([0, 1]).toContain(controlsFollow(height, limit).opacity);
+          }
+        }
+      },
+    );
+
+    it.each(phoneHeights)(
+      'hides the bottom group with the trip sheet expanded and returns it when collapsed, on a %i pt tall phone',
+      (windowHeight) => {
+        const metrics = { bottomInset: windowHeight > 700 ? 34 : 0, topInset: 20, windowHeight };
+        const limit = controlsFollowLimit(windowHeight);
+        const [collapsed = 0, expanded = 0] = tripSheetDetents(metrics).values;
+        expect(controlsFollow(collapsed, limit).opacity).toBe(1);
+        expect(controlsFollow(expanded, limit).opacity).toBe(0);
+      },
+    );
+
+    it('keeps the bottom group at the route preview detent on a 667 pt phone', () => {
+      const metrics = { bottomInset: 0, topInset: 20, windowHeight: 667 };
+      const { initial, values } = routePreviewSheetDetents(metrics, { demoOrigin: false });
+      expect(controlsFollow(values[initial] ?? 0, controlsFollowLimit(667)).opacity).toBe(1);
+    });
   });
 
   describe('controls that must fit between the banners and the trip sheet', () => {

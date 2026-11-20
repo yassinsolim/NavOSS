@@ -15,6 +15,7 @@ Bottom sheets with detents: explore and search, place, route planning and previe
 - The trip panel shows a notice only when it matters (weak GPS, waiting for GPS, off route, rerouted); otherwise the destination (#78).
 - The status bar's content colour follows the basemap behind it, not the system appearance: the map runs under the status bar and the banner starts below it (`status-bar-style.ts`).
 - Floating controls that no longer fit between the maneuver banner and the trip sheet (raised sheet, tall banner stack, large text) fade out and leave touch and VoiceOver focus until there is room again (`fitOpacity` in `overlay-layout.ts`).
+- One rule for every faded floating group (top buttons, the bottom group of road-events chip, credits, report and recenter, the speed and road readouts): below half opacity (`isControlInteractive`) a control takes no touches and leaves VoiceOver focus. The bottom group rides the sheet's edge up to 60% of the window (`controlsFollowLimit`) and is fully gone before a sheet would sit over it, so the credits are never drawn under a sheet; they return when it collapses.
 
 ## Behaviour that must not regress
 

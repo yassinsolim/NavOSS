@@ -13,12 +13,13 @@ import Animated, {
 import {
   CONTROL_MARGIN,
   controlsFollow,
+  controlsFollowLimit,
   fitOpacity,
   ridingControlsRoom,
   type ScreenMetrics,
   topControlsRoom,
 } from '@/features/map/overlay-layout';
-import { useControlVisible } from '@/features/map/use-control-fit';
+import { useControlInteractive } from '@/features/map/use-control-fit';
 import type { NavigationMapOrientation } from '@/features/navigation/navigation-camera';
 import { useRenderCounter } from '@/lib/render-counter';
 import { createThemedStyles, motion, radius, space, typography, useTheme } from '@/theme';
@@ -88,7 +89,7 @@ export function MapControls({
   const { fontScale } = useWindowDimensions();
   const guidance = mode === 'guidance';
   const { windowHeight } = metrics;
-  const followLimit = Math.round(windowHeight * 0.56);
+  const followLimit = controlsFollowLimit(windowHeight);
   const minimumBottom = metrics.bottomInset + CONTROL_MARGIN;
   const topOffset = metrics.topInset + (guidance ? bannerStackHeight + space.md : space.sm);
   // Where the guidance banners end; controls that ride the sheet must stay clear of it.
@@ -121,8 +122,8 @@ export function MapControls({
     return { bottom, opacity: Math.min(follow.opacity, fitOpacity(room)) };
   });
   const bottomOpacity = useDerivedValue(() => bottomPlacement.value.opacity);
-  const topVisible = useControlVisible(topOpacity);
-  const bottomVisible = useControlVisible(bottomOpacity);
+  const topInteractive = useControlInteractive(topOpacity);
+  const bottomInteractive = useControlInteractive(bottomOpacity);
 
   const topGroupStyle = useAnimatedStyle(() => ({ opacity: topOpacity.value }));
   const bottomGroupStyle = useAnimatedStyle(() => ({
@@ -136,12 +137,12 @@ export function MapControls({
   return (
     <>
       <Animated.View
-        accessibilityElementsHidden={!topVisible}
-        importantForAccessibility={topVisible ? 'auto' : 'no-hide-descendants'}
+        accessibilityElementsHidden={!topInteractive}
+        importantForAccessibility={topInteractive ? 'auto' : 'no-hide-descendants'}
         onLayout={(event) => {
           topGroupHeight.value = event.nativeEvent.layout.height;
         }}
-        pointerEvents={topVisible ? 'box-none' : 'none'}
+        pointerEvents={topInteractive ? 'box-none' : 'none'}
         style={[styles.topGroup, { top: topOffset }, topGroupStyle]}
       >
         {guidance ? (
@@ -185,12 +186,12 @@ export function MapControls({
       </Animated.View>
 
       <Animated.View
-        accessibilityElementsHidden={!bottomVisible}
-        importantForAccessibility={bottomVisible ? 'auto' : 'no-hide-descendants'}
+        accessibilityElementsHidden={!bottomInteractive}
+        importantForAccessibility={bottomInteractive ? 'auto' : 'no-hide-descendants'}
         onLayout={(event) => {
           bottomGroupHeight.value = event.nativeEvent.layout.height;
         }}
-        pointerEvents={bottomVisible ? 'box-none' : 'none'}
+        pointerEvents={bottomInteractive ? 'box-none' : 'none'}
         style={[styles.bottomGroup, bottomGroupStyle]}
       >
         <View

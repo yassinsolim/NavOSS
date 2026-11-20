@@ -28,7 +28,7 @@ import {
   type ScreenMetrics,
   tripSheetDetents,
 } from '@/features/map/overlay-layout';
-import { useControlVisible } from '@/features/map/use-control-fit';
+import { useControlInteractive } from '@/features/map/use-control-fit';
 import { rerouteDeltaLabel, type SpeedReadout } from '@/features/navigation/guidance-settings';
 import { audioModeOption } from '@/features/navigation/guidance-settings-sheet';
 import type { LaneStrip, ManeuverSignage } from '@/features/navigation/lane-guidance';
@@ -441,7 +441,7 @@ export function DrivingStatus({
       }),
     ),
   );
-  const visible = useControlVisible(opacity);
+  const interactive = useControlInteractive(opacity);
   const style = useAnimatedStyle(() => ({
     bottom: sheetPosition.value + CONTROL_MARGIN + clearance,
     opacity: opacity.value,
@@ -449,8 +449,8 @@ export function DrivingStatus({
   if (speed === undefined && roadName === undefined) return null;
   return (
     <Animated.View
-      accessibilityElementsHidden={!visible}
-      importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
+      accessibilityElementsHidden={!interactive}
+      importantForAccessibility={interactive ? 'auto' : 'no-hide-descendants'}
       key={String(fontScale)}
       onLayout={(event) => {
         height.value = event.nativeEvent.layout.height;

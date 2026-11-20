@@ -127,8 +127,35 @@ export function guidanceCameraPadding(metrics: ScreenMetrics): CameraPadding {
 }
 
 /**
- * How far floating controls follow a sheet. They ride its top edge up to `followLimit` and
- * then fade out, so a sheet at full height never pushes buttons under the status bar.
+ * Highest a sheet's edge may carry the floating bottom group: 60% of the window, which keeps the
+ * route preview's default detent on a 667 pt phone (58%) in reach and the expanded trip panel
+ * (62%) out of it.
+ */
+export function controlsFollowLimit(windowHeight: number): number {
+  return Math.round(windowHeight * 0.6);
+}
+
+/**
+ * Opacity below which a floating control is not clearly visible. A control that is not clearly
+ * visible is not interactive: it takes no touches and leaves VoiceOver focus, so the driver
+ * never presses or hears a button they can barely see. One rule for every faded group.
+ */
+export const CONTROL_INTERACTIVE_OPACITY = 0.5;
+
+export function isControlInteractive(opacity: number): boolean {
+  'worklet';
+  return opacity >= CONTROL_INTERACTIVE_OPACITY;
+}
+
+/** Distance past the follow limit over which the bottom group fades out; half the margin, so it is gone well before the sheet reaches it. */
+const CONTROLS_FOLLOW_FADE = CONTROL_MARGIN / 2;
+
+/**
+ * How far floating controls follow a sheet. They ride its top edge up to `followLimit`; past it
+ * they hold still and are gone before the sheet's edge reaches their lower edge, so a control
+ * is never drawn under a sheet and a sheet at full height never pushes buttons under the status
+ * bar. They are fully opaque anywhere they ride, so a sheet resting at a detent never leaves
+ * them half faded.
  */
 export function controlsFollow(
   sheetTop: number,
@@ -139,7 +166,7 @@ export function controlsFollow(
   const overshoot = sheetTop - followLimit;
   return {
     bottom,
-    opacity: overshoot <= 0 ? 1 : Math.max(0, 1 - overshoot / 48),
+    opacity: overshoot <= 0 ? 1 : Math.max(0, 1 - overshoot / CONTROLS_FOLLOW_FADE),
   };
 }
 
