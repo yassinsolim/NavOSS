@@ -420,6 +420,57 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
     let arrivalDeferral: Deferral?
   }
 
+  /// In place of progress while no fix has been matched on the stored route (the driver
+  /// started it away from the road and has not reached it): written with the route, then with
+  /// how the vehicle stands towards it, as distances from all of the route (the first usable
+  /// fix's, the closest it has come and that fix's accuracy) and how far it has credibly
+  /// travelled. No coordinate, heading or fix history. Its presence is what says the trip had
+  /// not matched: a trip with no record at all was saved by a build that did not write one.
+  private struct StoredBeforeFirstMatch: Codable {
+    let format: Int
+    let tripId: String
+    /// Always `true`: what tells this record from progress.
+    let beforeFirstMatch: Bool
+    let startDistanceMeters: Double?
+    let closestDistanceMeters: Double?
+    let closestAccuracyMeters: Double?
+    let travelMeters: Double?
+
+    init(tripId: String, reference: NavigationPreMatchReference?) {
+      format = StoredProgress.currentFormat
+      self.tripId = tripId
+      beforeFirstMatch = true
+      startDistanceMeters = reference?.startDistanceMeters
+      closestDistanceMeters = reference?.closest?.distanceMeters
+      closestAccuracyMeters = reference?.closest?.accuracyMeters
+      travelMeters = reference?.travelMeters
+    }
+
+    /// How the trip resumes from this record, if it is one this build wrote.
+    func resumePoint(for tripId: String) -> NavigationResumePoint {
+      guard format == StoredProgress.currentFormat, self.tripId == tripId, beforeFirstMatch else {
+        return .unusable
+      }
+      switch (startDistanceMeters, closestDistanceMeters, closestAccuracyMeters, travelMeters) {
+      case (nil, nil, nil, nil):
+        return .beforeFirstMatch(nil)
+      case (let start?, let closest, let accuracy, let travel?) where (closest == nil) == (accuracy == nil):
+        let reference = NavigationPreMatchReference(
+          startDistanceMeters: start,
+          closest: closest.flatMap { distance in
+            accuracy.map {
+              NavigationPreMatchReference.Closest(distanceMeters: distance, accuracyMeters: $0)
+            }
+          },
+          travelMeters: travel
+        )
+        return reference.isUsable ? .beforeFirstMatch(reference) : .unusable
+      default:
+        return .unusable
+      }
+    }
+  }
+
   /// Identifier of the trip this store currently holds, as far as this process has seen. A
   /// checkpoint for any other trip (one that has since been cleared or replaced) is dropped.
   private var storedTripId: String?
@@ -461,14 +512,18 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
     storedTripId = nil
   }
 
-  /// How the stored trip resumes. `.withoutProgress` for a trip saved without a progress
-  /// record (by a build that did not write one); `.unusable` when a record is there but is
-  /// damaged, in another format, or another trip's.
+  /// How the stored trip resumes. `.beforeFirstMatch` for a trip no fix had been matched on;
+  /// `.withoutProgress` for a trip saved without any record (by a build that did not write
+  /// one); `.unusable` when a record is there but is damaged, in another format, or another
+  /// trip's.
   func loadProgress(for trip: NavOSSCarPlayTrip) -> NavigationResumePoint {
     lock.lock()
     defer { lock.unlock() }
     guard let data = defaults.data(forKey: progressKey) else {
       return .withoutProgress
+    }
+    if let stored = try? JSONDecoder().decode(StoredBeforeFirstMatch.self, from: data) {
+      return stored.resumePoint(for: trip.id)
     }
     guard let stored = try? JSONDecoder().decode(StoredProgress.self, from: data),
       stored.format == StoredProgress.currentFormat, stored.tripId == trip.id
@@ -487,6 +542,16 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
       }
     )
     return progress.isUsable ? .progress(progress) : .unusable
+  }
+
+  /// Records `record` for the stored trip: see `saveProgress` and `saveBeforeFirstMatch`.
+  func save(_ record: NavigationTripRecord, forTripId tripId: String) {
+    switch record {
+    case .progress(let progress):
+      saveProgress(progress, forTripId: tripId)
+    case .beforeFirstMatch(let reference):
+      saveBeforeFirstMatch(reference, forTripId: tripId)
+    }
   }
 
   /// Records where the stored trip has got to. Dropped unless `tripId` is the trip this store
@@ -513,6 +578,22 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
     else {
       return
     }
+    write(data, forTripId: tripId)
+  }
+
+  /// Records how the vehicle stands towards the stored route before its first match, under
+  /// the same rule as `saveProgress`.
+  func saveBeforeFirstMatch(_ reference: NavigationPreMatchReference, forTripId tripId: String) {
+    guard reference.isUsable,
+      let data = try? JSONEncoder().encode(
+        StoredBeforeFirstMatch(tripId: tripId, reference: reference))
+    else {
+      return
+    }
+    write(data, forTripId: tripId)
+  }
+
+  private func write(_ data: Data, forTripId tripId: String) {
     lock.lock()
     if storedTripId == tripId {
       defaults.set(data, forKey: progressKey)
@@ -539,13 +620,16 @@ public final class NavOSSActiveTripStore: @unchecked Sendable {
       expiresAt: clock().addingTimeInterval(expirationInterval),
       trip: trip
     )
-    guard trip.isValid, let data = try? JSONEncoder().encode(stored) else {
+    guard trip.isValid, let data = try? JSONEncoder().encode(stored),
+      let record = try? JSONEncoder().encode(
+        StoredBeforeFirstMatch(tripId: trip.id, reference: nil))
+    else {
       return
     }
     lock.lock()
     defaults.set(data, forKey: key)
-    // A new route starts from its own beginning.
-    defaults.removeObject(forKey: progressKey)
+    // A new route starts from its own beginning, before its first match.
+    defaults.set(record, forKey: progressKey)
     storedTripId = trip.id
     lock.unlock()
   }

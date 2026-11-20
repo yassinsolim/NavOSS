@@ -212,14 +212,16 @@ export function routeSourceForNativeTrip(
 /**
  * What the phone says when the navigation core ended a trip on its own. A trip restored after the
  * app was closed is dropped when the first position is off its route; without a word the driver
- * would see guidance vanish.
+ * would see guidance vanish. "Not on its route", not "no longer": a trip saved by an earlier build
+ * before it first reached its route (started in a parking lot) is dropped the same way, and that
+ * driver was never on it.
  */
 export function tripEndNotice(
   reason: 'restored-trip-off-route' | undefined,
 ): { message: string; title: string; tone: 'info' } | undefined {
   if (reason !== 'restored-trip-off-route') return undefined;
   return {
-    message: 'Your earlier trip was ended because you are no longer on its route.',
+    message: 'Your earlier trip was ended because you are not on its route.',
     title: 'Trip ended',
     tone: 'info',
   };
