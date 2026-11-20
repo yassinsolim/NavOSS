@@ -4,7 +4,9 @@ import {
   CONTROL_MARGIN,
   controlsFollow,
   controlsFollowLimit,
+  type ControlsShown,
   controlsShown,
+  controlZone,
   exploreSheetDetents,
   FIT_FADE_DISTANCE,
   fitOpacity,
@@ -211,26 +213,50 @@ describe('overlay layout', () => {
   });
 
   describe('glass controls that come back after being hidden', () => {
-    it('advances the epoch each time the group turns interactive again, and only then', () => {
-      let state = { epoch: 0, interactive: true };
-      const steps: [boolean, number][] = [
-        [true, 0],
-        [false, 0],
-        [false, 0],
-        [true, 1],
-        [true, 1],
-        [false, 1],
-        [true, 2],
+    it('sorts an opacity into hidden, faded or clear', () => {
+      expect(controlZone(0)).toBe('hidden');
+      expect(controlZone(0.01)).toBe('faded');
+      expect(controlZone(0.49)).toBe('faded');
+      expect(controlZone(0.5)).toBe('clear');
+      expect(controlZone(1)).toBe('clear');
+    });
+
+    it('advances the epoch only when a group is clear again after being fully hidden', () => {
+      let state: ControlsShown = { epoch: 0, wasHidden: false };
+      const steps: [number, number][] = [
+        [1, 0],
+        [0.3, 0],
+        [0, 0],
+        [0, 0],
+        [0.2, 0],
+        [0.6, 1],
+        [1, 1],
+        [0, 1],
+        [1, 2],
       ];
-      for (const [interactive, epoch] of steps) {
-        state = controlsShown(state, interactive);
-        expect(state).toEqual({ epoch, interactive });
+      for (const [opacity, epoch] of steps) {
+        state = controlsShown(state, controlZone(opacity));
+        expect(state.epoch).toBe(epoch);
       }
     });
 
+    it('does not remount a group that hovers around the interactive threshold', () => {
+      // Top controls rest near half opacity on a large phone with the trip sheet expanded; a
+      // banner that grows or shrinks moves them across the threshold without ever hiding them.
+      let state: ControlsShown = { epoch: 0, wasHidden: false };
+      for (const opacity of [0.52, 0.48, 0.51, 0.3, 0.55, 0.49, 0.5, 0.1, 0.9]) {
+        state = controlsShown(state, controlZone(opacity));
+      }
+      expect(state.epoch).toBe(0);
+    });
+
     it('returns the same object when nothing changed, so React does not re-render', () => {
-      const state = { epoch: 3, interactive: true };
-      expect(controlsShown(state, true)).toBe(state);
+      const state: ControlsShown = { epoch: 3, wasHidden: false };
+      expect(controlsShown(state, 'clear')).toBe(state);
+      expect(controlsShown(state, 'faded')).toBe(state);
+      const hidden: ControlsShown = { epoch: 3, wasHidden: true };
+      expect(controlsShown(hidden, 'hidden')).toBe(hidden);
+      expect(controlsShown(hidden, 'faded')).toBe(hidden);
     });
   });
 });
