@@ -36,14 +36,25 @@ export function useTheme(): Theme {
 }
 
 /**
+ * Builds a style sheet once per colour scheme, for surfaces that take their colours from
+ * something other than the system appearance (the basemap behind floating map controls).
+ * Factories must depend only on the theme.
+ */
+export function createSchemeStyles<T>(factory: (theme: Theme) => T): (scheme: ColorScheme) => T {
+  const cache: Partial<Record<ColorScheme, T>> = {};
+  return function stylesForScheme(scheme: ColorScheme): T {
+    return (cache[scheme] ??= factory(THEMES[scheme]));
+  };
+}
+
+/**
  * Builds a style sheet once per colour scheme. Factories must depend only on the theme, so both
  * results are cached for the life of the app and a scheme flip swaps object identity, not values.
  */
 export function createThemedStyles<T>(factory: (theme: Theme) => T): () => T {
-  const cache: Partial<Record<ColorScheme, T>> = {};
+  const stylesForScheme = createSchemeStyles(factory);
   return function useThemedStyles(): T {
-    const theme = useTheme();
-    return (cache[theme.scheme] ??= factory(theme));
+    return stylesForScheme(useTheme().scheme);
   };
 }
 

@@ -13,21 +13,28 @@ import Animated, {
 import {
   CONTROL_MARGIN,
   controlsFollow,
+  controlsFollowLimit,
   fitOpacity,
   ridingControlsRoom,
   type ScreenMetrics,
   topControlsRoom,
 } from '@/features/map/overlay-layout';
-import { useControlVisible } from '@/features/map/use-control-fit';
+import { mapChromeColors, mapChromeScheme } from '@/features/map/map-chrome';
+import { useControlInteractive, useGlassKey } from '@/features/map/use-control-fit';
 import type { NavigationMapOrientation } from '@/features/navigation/navigation-camera';
 import { useRenderCounter } from '@/lib/render-counter';
-import { createThemedStyles, motion, radius, space, typography, useTheme } from '@/theme';
+import { createSchemeStyles, motion, radius, space, typography } from '@/theme';
 import { IconButton } from '@/ui/icon-button';
 
 export interface MapControlsProps {
   attribution: string;
   /** Height of the guidance banners at the top of the screen; the top controls sit below them. */
   bannerStackHeight: number;
+  /**
+   * Whether the basemap behind the controls is dark. The controls take their glass and glyph
+   * colours from the map they sit on, not from the system appearance.
+   */
+  darkMap: boolean;
   locating: boolean;
   mapBearing: SharedValue<number>;
   metrics: ScreenMetrics;
@@ -62,6 +69,7 @@ export interface MapControlsProps {
 export function MapControls({
   attribution,
   bannerStackHeight,
+  darkMap,
   locating,
   mapBearing,
   metrics,
@@ -83,12 +91,13 @@ export function MapControls({
   trafficStatus,
 }: MapControlsProps) {
   useRenderCounter('MapControls');
-  const { colors } = useTheme();
-  const styles = useStyles();
+  const colors = mapChromeColors(darkMap);
+  const scheme = mapChromeScheme(darkMap);
+  const styles = stylesFor(scheme);
   const { fontScale } = useWindowDimensions();
   const guidance = mode === 'guidance';
   const { windowHeight } = metrics;
-  const followLimit = Math.round(windowHeight * 0.56);
+  const followLimit = controlsFollowLimit(windowHeight);
   const minimumBottom = metrics.bottomInset + CONTROL_MARGIN;
   const topOffset = metrics.topInset + (guidance ? bannerStackHeight + space.md : space.sm);
   // Where the guidance banners end; controls that ride the sheet must stay clear of it.
@@ -121,8 +130,12 @@ export function MapControls({
     return { bottom, opacity: Math.min(follow.opacity, fitOpacity(room)) };
   });
   const bottomOpacity = useDerivedValue(() => bottomPlacement.value.opacity);
-  const topVisible = useControlVisible(topOpacity);
-  const bottomVisible = useControlVisible(bottomOpacity);
+  const topInteractive = useControlInteractive(topOpacity);
+  const bottomInteractive = useControlInteractive(bottomOpacity);
+  // Glass buttons mounted while their group is faded out can be left without material for good;
+  // they are remounted as the group comes back (see `useGlassKey`).
+  const topGlassKey = useGlassKey(topInteractive);
+  const bottomGlassKey = useGlassKey(bottomInteractive);
 
   const topGroupStyle = useAnimatedStyle(() => ({ opacity: topOpacity.value }));
   const bottomGroupStyle = useAnimatedStyle(() => ({
@@ -136,16 +149,17 @@ export function MapControls({
   return (
     <>
       <Animated.View
-        accessibilityElementsHidden={!topVisible}
-        importantForAccessibility={topVisible ? 'auto' : 'no-hide-descendants'}
+        accessibilityElementsHidden={!topInteractive}
+        importantForAccessibility={topInteractive ? 'auto' : 'no-hide-descendants'}
         onLayout={(event) => {
           topGroupHeight.value = event.nativeEvent.layout.height;
         }}
-        pointerEvents={topVisible ? 'box-none' : 'none'}
+        pointerEvents={topInteractive ? 'box-none' : 'none'}
         style={[styles.topGroup, { top: topOffset }, topGroupStyle]}
       >
         {guidance ? (
           <IconButton
+            key={`top-${String(topGlassKey)}-1`}
             accessibilityHint="Toggles between keeping the road ahead at the top and keeping north at the top"
             accessibilityLabel={
               orientation === 'heading-up' ? 'Switch map to north up' : 'Switch map to heading up'
@@ -153,6 +167,7 @@ export function MapControls({
             icon={{ android: 'navigation', ios: 'location.north.line.fill' }}
             onPress={onToggleOrientation}
             selected={orientation === 'north-up'}
+            scheme={scheme}
             size={48}
             variant="floating"
           >
@@ -167,30 +182,34 @@ export function MapControls({
         ) : (
           mode !== 'arrived' && (
             <IconButton
+              key={`top-${String(topGlassKey)}-2`}
               accessibilityLabel="About and privacy"
               icon={{ android: 'info', ios: 'info.circle' }}
               onPress={onOpenAbout}
+              scheme={scheme}
               size={48}
               variant="floating"
             />
           )
         )}
         <IconButton
+          key={`top-${String(topGlassKey)}-3`}
           accessibilityLabel="Map appearance"
           icon={{ android: 'layers', ios: 'square.3.layers.3d' }}
           onPress={onOpenMapPreferences}
+          scheme={scheme}
           size={48}
           variant="floating"
         />
       </Animated.View>
 
       <Animated.View
-        accessibilityElementsHidden={!bottomVisible}
-        importantForAccessibility={bottomVisible ? 'auto' : 'no-hide-descendants'}
+        accessibilityElementsHidden={!bottomInteractive}
+        importantForAccessibility={bottomInteractive ? 'auto' : 'no-hide-descendants'}
         onLayout={(event) => {
           bottomGroupHeight.value = event.nativeEvent.layout.height;
         }}
-        pointerEvents={bottomVisible ? 'box-none' : 'none'}
+        pointerEvents={bottomInteractive ? 'box-none' : 'none'}
         style={[styles.bottomGroup, bottomGroupStyle]}
       >
         <View
@@ -254,21 +273,25 @@ export function MapControls({
         <View pointerEvents="box-none" style={styles.actions}>
           {!guidance && (
             <IconButton
+              key={`bottom-${String(bottomGlassKey)}-2`}
               accessibilityHint="Opens the road report sheet for hazards, closures, and other road conditions"
               accessibilityLabel="Report a road condition"
               icon={{ android: 'report_problem', ios: 'exclamationmark.bubble.fill' }}
               onPress={onOpenReport}
+              scheme={scheme}
               size={48}
               variant="floating"
             />
           )}
           {mode !== 'guidance' && mode !== 'arrived' && (
             <IconButton
+              key={`bottom-${String(bottomGlassKey)}-3`}
               accessibilityLabel="Center map on my location"
               animationSpec={locating ? { effect: { type: 'pulse' } } : undefined}
               disabled={locating}
               icon={{ android: 'my_location', ios: 'location.fill' }}
               onPress={onLocate}
+              scheme={scheme}
               size={56}
               tintColor={colors.primaryText}
               variant="floating"
@@ -280,9 +303,11 @@ export function MapControls({
               exiting={FadeOut.duration(motion.duration.fast).reduceMotion(ReduceMotion.System)}
             >
               <IconButton
+                key={`bottom-${String(bottomGlassKey)}-4`}
                 accessibilityLabel="Recenter map on vehicle"
                 icon={{ android: 'my_location', ios: 'location.fill' }}
                 onPress={onRecenter}
+                scheme={scheme}
                 size={56}
                 variant="primary"
               />
@@ -294,7 +319,7 @@ export function MapControls({
   );
 }
 
-const useStyles = createThemedStyles(({ colors, scheme }) =>
+const stylesFor = createSchemeStyles(({ colors, scheme }) =>
   StyleSheet.create({
     actions: { alignItems: 'flex-end', gap: space.md - 2 },
     bottomGroup: {

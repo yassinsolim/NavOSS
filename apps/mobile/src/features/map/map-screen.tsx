@@ -223,6 +223,7 @@ export function MapScreen() {
             })
           }
           bannerStackHeight={bannerStackHeight}
+          darkMap={c.darkMap}
           locating={c.location.locationState === 'locating'}
           mapBearing={c.mapBearing}
           metrics={metrics}
