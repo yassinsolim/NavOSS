@@ -1,12 +1,12 @@
 # Next build checklist
 
-Status refreshed: 2026-11-17. Build `0.1.0 (83)` from `main` (`2cb5c70`) was distributed to internal `testers` and NavOSS Friends. App Store Connect showed Testing for both groups, with no installs or sessions yet. The Google-profile build carries CarPlay and production App Attest. Build 73 remains held.
+Status refreshed: 2026-11-20. Build `0.1.0 (84)` from `main` (`cf2afaa`) was distributed to internal `testers` and NavOSS Friends. App Store Connect showed Testing for both groups, with no installs or sessions yet. The Google-profile build carries CarPlay and production App Attest. Build 73 remains held.
 
 Context: production search and routing cover Canada. Reports are `attested`, traffic `collect`; live traffic is not shown. Offline bundles cover All Alberta and the Calgary area, not BC. Build 81 includes the Alberta, BC and Ontario province-wide road-events list, Canada refusal handling and the Explore-sheet fix; builds 75 and 80 use Calgary and Kelowna feeds. 511 Alberta and Ontario 511 were connected in production on 2026-11-15; build 81's list now includes their events. A Debug simulator downloaded Calgary and searched and routed with the API stopped. Physical offline download, first App Attest registration, Google's place panel and real CarPlay remain to be checked.
 
 The 2026-11-15 Release simulator Canada pass on `14dae86` against production was a go before build 81 distribution; see [the release record](testflight.md#build-81-canada-validation-and-subsequent-fixes-2026-11-15) and `artifacts/release-validation-main-81/round3/`. CarPlay refusal alerts were Swift-tested only; no physical iPhone or head unit was exercised.
 
-## Build 83: build 82 feedback and car checks
+## Build 83: build 82 feedback and car checks (historical)
 
 On 2026-11-16 the owner filed two build 82 reports after driving with an iPhone 15 Pro Max on
 iOS 26.6.1 and a small Toyota head unit: CarPlay was cluttered and Share ETA was broken. Build 83
@@ -34,41 +34,48 @@ includes simulator validation and the known phone and card-wording limits. Real 
 head unit and iOS 26.6.1 hardware have not been checked for build 83. Closing the app before its
 first route match still ends the trip on relaunch; #135 is parked.
 
-## Merged after build 83, for the next build
+## Build 84 owner checks
 
-These changes are on `main`, not in build 83. Check the next build on screen, parked or with a
-passenger operating controls:
+Build 84 includes #147 (`a1787ff`), #149 (`4031d25`), #150 (`eb61be1`), #148 (`683bc99`)
+and the #144 Maestro label fixes. The production API was not redeployed. Check the signed build
+while parked or with a passenger operating controls:
 
-- [ ] **Phone guidance [#147](https://github.com/yassinsolim/NavOSS/pull/147) (`a1787ff`).** The
-      status-bar content follows the basemap: dark on light, light on dark. Map controls, the road
-      pill and bottom group fade out, stop taking touches and leave VoiceOver focus when they would
-      touch the turn banner or expanded trip sheet. Seen in a Release iPhone 15 Pro Max simulator
-      on iOS 26.5 in light, dark and largest text. Check those appearances and expand the sheet;
-      check VoiceOver and Reduce Motion, a camera, reroute or report-ahead card stacked under the
-      banner, small screens and a physical phone. These cases have not been verified on screen;
-      the stacked-card cases have unit tests only.
-- [ ] **CarPlay card [#149](https://github.com/yassinsolim/NavOSS/pull/149) (`4031d25`).** At the
-      Ontario 401 split the card keeps the carriageway named in the provider sentence: "Highway 401
-      Express" or "Highway 401 Collector". "Queen Elizabeth Way / QEW" no longer repeats the road.
-      When a numbered exit's sign names a destination and the sentence names no road, the
-      destination leads: the Montreal example is "Airport Pierre-Elliott-Trudeau", with "Exit 56-O"
-      as the shorter variant, so the number appears only if the longer text does not fit. Arrow
-      image scale now follows the car display's traits, clamped to 1–3. Twelve of 358 recorded
-      card rows changed; speech and the phone list did not. Independent review rejected the first
-      version and passed the final version. Check the wording, truncation and symbol sizing in
-      real CarPlay chrome and on a head unit; neither has been seen for this change.
-- [ ] **Offline CarPlay [#150](https://github.com/yassinsolim/NavOSS/pull/150) (`eb61be1`).**
-      Preview and guidance for the production Calgary region were captured on a simulator in light
-      and dark and matched the hosted look. A unit test covers the shipped offline layer lists;
-      `corepack pnpm validate:navigation:ios -- --offline` is an opt-in check. In the next build,
-      check the offline map and automatic switch when the hosted style fails on screen; the switch
-      remains unverified, and build 83's own binary was not captured for the offline restyle.
-- [ ] **Dependency refresh [#148](https://github.com/yassinsolim/NavOSS/pull/148) (`683bc99`).**
-      Vitest 4.1.12, protobufjs 7.6.6, `@fastify/swagger` 9.9.4, Fastify 5.12.8, Zod 4.6.7,
-      Prettier 3.10.1, Turbo 2.11.11 and `@types/pg` 8.23.1 were refreshed; generated OpenAPI is
-      identical. `@maplibre/maplibre-react-native` 11.5.1 was deliberately not taken pending
-      on-screen and offline-map validation. Exercise search, route preview, guidance and offline
-      maps on screen in the next build. The production API image was not redeployed for this refresh.
+- [ ] **Phone guidance (#147).** Check the clock and battery on the light map and the controls and
+      road name as the trip sheet expands and collapses. Check light, dark, Day map under dark
+      system appearance and largest text. Release simulator validation at `cf2afaa` covered those
+      appearances, a three-line banner with lanes and an iPhone SE-class simulator. VoiceOver driven
+      by a person, Reduce Motion and camera/reroute/report-ahead cards stacked under the banner were
+      not verified on screen; the stacked-card cases have unit tests only.
+- [ ] **CarPlay card and map (#149).** Check wording and arrow size on the car display, especially
+      Highway 401 Express/Collector and signed exit destinations. Check readability, overlaps or
+      cut-off, End in the top bar, speed unit position, road name, night appearance and sunlight
+      legibility. Real CarPlay chrome and a head unit have not been checked for build 84.
+- [ ] **Offline CarPlay (#150).** Check preview and guidance in light and dark using an offline
+      region, and the automatic switch when the hosted style fails. The restyle was captured on a
+      simulator before build 84, but not from this binary; automatic switching remains unverified.
+- [ ] **Phone and dependencies (#148).** Check search, route preview, guidance, Share ETA and offline
+      maps on a physical iPhone. Release simulator validation parsed live production answers with
+      the app's Zod 4.6.7. Generated OpenAPI was identical; MapLibre React Native 11.5.1 was
+      deliberately deferred pending on-screen and offline-map validation.
+
+### Build 84 open follow-ups
+
+- [ ] On a small phone with the trip sheet expanded, the road-events chip fades to about 15% but
+      still takes taps and VoiceOver focus; map credits slide under the sheet.
+- [ ] With Day map in dark system appearance, floating-button icons are nearly invisible: white on
+      light glass.
+- [ ] Report and recenter appeared once without glass circles after a trip; they did not reproduce
+      in three tries.
+- [ ] Route preview did not refit after the simulated location jumped between cities.
+- [ ] Changing to the largest text size mid-trip clips the trip-sheet step list until relaunch.
+- [ ] A Montreal alternative reads "Exit 1-0 · Boulevard Roméo-Vachon Nord"; Square One's
+      "stay on 403" step shows "401 East Express".
+- [ ] Closing the app before a trip first matches its route ends the trip on relaunch; #135 is draft
+      and parked. No live traffic is shown.
+
+These findings are low except the pre-existing trip-restore and live-traffic limits. Real CarPlay
+chrome, a head unit, a physical iPhone, iOS 26.6.x, the signed build and the other checks above remain
+unverified. See the [build 84 release record](testflight.md#build-84-validation-and-known-limits-2026-11-20).
 
 ## Corrected candidate and prior binary hold
 
@@ -148,8 +155,8 @@ Simulator pass by a dedicated agent; evidence in local ignored `artifacts/releas
 - [ ] **511 and city-feed overlap.** On screen, check whether the two 511 sources duplicate city-feed events for the same incident.
 - [ ] **Release exclusions.** Run `apps/mobile/scripts/check-release-exclusions.sh` against the Release archive: the DEBUG-only software App Attest key and simulator harness code must be absent from device builds.
 - [ ] **Privacy manifest.** The app privacy manifest, SDK manifests, App Store Connect App Privacy answers and the permission string agree. The Disk Space condition is met on `main`: #83 merged and `apps/mobile/app.json` declares `NSPrivacyAccessedAPICategoryDiskSpace` (verify it in the signed archive). The permission string and App Privacy changes for community features are in [app-store-metadata.md](app-store-metadata.md#app-privacy-answers-needed-before-community-features-are-enabled); they must be in place before the server enables community features, and are best shipped in this build.
-- [x] **External distribution is manual (#88).** App Store Connect showed build 83 Testing for NavOSS Friends; no installs or sessions were shown yet.
-- [ ] **Build number.** `appVersionSource` is `remote`: the latest uploaded build is 83. Record the actual number and commit in [testflight.md](testflight.md) after any later build exists.
+- [x] **External distribution is manual (#88).** App Store Connect showed build 84 Testing for NavOSS Friends; no installs or sessions were shown yet.
+- [ ] **Build number.** `appVersionSource` is `remote`: the latest uploaded build is 84. Record the actual number and commit in [testflight.md](testflight.md) after any later build exists.
 - [ ] **Gates on the candidate commit:** `corepack pnpm check`, `lint`, `test`, `build`, `format:check`; `corepack pnpm --filter @navoss/mobile test:native:ios`; a full Xcode compile with CarPlay enabled; `corepack pnpm validate:navigation:ios`. Read each command's exit status.
 - [ ] **Claims.** Distinguish the Canada service and distributed build 81 from build 70's v1 behavior. Live traffic remains unavailable; lanes and signs appear only when returned; offline maps cover Alberta and Calgary only. The province-wide road-events list is not in builds 75 or 80.
 - [ ] **Long-trip formatting (Canada pass F1).** #127 (`36c8a9f`) is in build 82. Phone long-trip text was seen in a Release simulator; on screen in CarPlay, check the route choice distance and duration, since the CarPlay formatter change has not been seen on screen.
