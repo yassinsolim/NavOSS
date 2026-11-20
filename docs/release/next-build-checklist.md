@@ -60,12 +60,19 @@ while parked or with a passenger operating controls:
 
 ### Build 84 open follow-ups
 
-- [ ] On a small phone with the trip sheet expanded, the road-events chip fades to about 15% but
-      still takes taps and VoiceOver focus; map credits slide under the sheet.
-- [ ] With Day map in dark system appearance, floating-button icons are nearly invisible: white on
-      light glass.
-- [ ] Report and recenter appeared once without glass circles after a trip; they did not reproduce
-      in three tries.
+- [ ] **Fixed in [#153](https://github.com/yassinsolim/NavOSS/pull/153), not in build 84.** On a
+      small phone with the trip sheet expanded, the road-events chip faded to about 15% but still
+      took taps and VoiceOver focus, and the credits slid under the sheet. Below half opacity a
+      floating control now takes no touches and leaves VoiceOver focus, and the bottom group is
+      gone before a sheet covers it. Seen on a Release iPhone SE (3rd generation) and iPhone 15 Pro
+      Max simulator; check on the build with VoiceOver.
+- [ ] **Fixed in #153.** With Day map in dark system appearance, floating-button icons were nearly
+      invisible: white on light glass. The buttons and pills now follow the basemap. Seen in all
+      four light/dark system and Day/Night map combinations on a simulator.
+- [ ] **Fixed in #153.** Report and recenter appeared without glass circles after a trip. Cause
+      reproduced on a Release iPhone 15 Pro Max simulator: ending a trip with the trip sheet
+      expanded mounts them inside the faded-out bottom group. They are now remounted when the group
+      returns. Check by ending a trip from the expanded sheet on the build.
 - [ ] Route preview did not refit after the simulated location jumped between cities.
 - [ ] Changing to the largest text size mid-trip clips the trip-sheet step list until relaunch.
 - [ ] A Montreal alternative reads "Exit 1-0 · Boulevard Roméo-Vachon Nord"; Square One's
