@@ -20,7 +20,7 @@ import {
   topControlsRoom,
 } from '@/features/map/overlay-layout';
 import { mapChromeColors, mapChromeScheme } from '@/features/map/map-chrome';
-import { useControlInteractive } from '@/features/map/use-control-fit';
+import { useControlInteractive, useGlassKey } from '@/features/map/use-control-fit';
 import type { NavigationMapOrientation } from '@/features/navigation/navigation-camera';
 import { useRenderCounter } from '@/lib/render-counter';
 import { createSchemeStyles, motion, radius, space, typography } from '@/theme';
@@ -132,6 +132,10 @@ export function MapControls({
   const bottomOpacity = useDerivedValue(() => bottomPlacement.value.opacity);
   const topInteractive = useControlInteractive(topOpacity);
   const bottomInteractive = useControlInteractive(bottomOpacity);
+  // Glass buttons mounted while their group is faded out can be left without material for good;
+  // they are remounted as the group comes back (see `useGlassKey`).
+  const topGlassKey = useGlassKey(topInteractive);
+  const bottomGlassKey = useGlassKey(bottomInteractive);
 
   const topGroupStyle = useAnimatedStyle(() => ({ opacity: topOpacity.value }));
   const bottomGroupStyle = useAnimatedStyle(() => ({
@@ -155,6 +159,7 @@ export function MapControls({
       >
         {guidance ? (
           <IconButton
+            key={`top-${String(topGlassKey)}-1`}
             accessibilityHint="Toggles between keeping the road ahead at the top and keeping north at the top"
             accessibilityLabel={
               orientation === 'heading-up' ? 'Switch map to north up' : 'Switch map to heading up'
@@ -177,6 +182,7 @@ export function MapControls({
         ) : (
           mode !== 'arrived' && (
             <IconButton
+              key={`top-${String(topGlassKey)}-2`}
               accessibilityLabel="About and privacy"
               icon={{ android: 'info', ios: 'info.circle' }}
               onPress={onOpenAbout}
@@ -187,6 +193,7 @@ export function MapControls({
           )
         )}
         <IconButton
+          key={`top-${String(topGlassKey)}-3`}
           accessibilityLabel="Map appearance"
           icon={{ android: 'layers', ios: 'square.3.layers.3d' }}
           onPress={onOpenMapPreferences}
@@ -266,6 +273,7 @@ export function MapControls({
         <View pointerEvents="box-none" style={styles.actions}>
           {!guidance && (
             <IconButton
+              key={`bottom-${String(bottomGlassKey)}-2`}
               accessibilityHint="Opens the road report sheet for hazards, closures, and other road conditions"
               accessibilityLabel="Report a road condition"
               icon={{ android: 'report_problem', ios: 'exclamationmark.bubble.fill' }}
@@ -277,6 +285,7 @@ export function MapControls({
           )}
           {mode !== 'guidance' && mode !== 'arrived' && (
             <IconButton
+              key={`bottom-${String(bottomGlassKey)}-3`}
               accessibilityLabel="Center map on my location"
               animationSpec={locating ? { effect: { type: 'pulse' } } : undefined}
               disabled={locating}
@@ -294,6 +303,7 @@ export function MapControls({
               exiting={FadeOut.duration(motion.duration.fast).reduceMotion(ReduceMotion.System)}
             >
               <IconButton
+                key={`bottom-${String(bottomGlassKey)}-4`}
                 accessibilityLabel="Recenter map on vehicle"
                 icon={{ android: 'my_location', ios: 'location.fill' }}
                 onPress={onRecenter}

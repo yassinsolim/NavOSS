@@ -222,3 +222,17 @@ export function ridingControlsRoom({
   'worklet';
   return windowHeight - bottom - height - bannerBottom;
 }
+
+/**
+ * Tracks when a group of controls has just come back after being hidden. `epoch` rises each time
+ * `interactive` turns true after being false.
+ */
+export interface ControlsShown {
+  epoch: number;
+  interactive: boolean;
+}
+
+export function controlsShown(previous: ControlsShown, interactive: boolean): ControlsShown {
+  if (previous.interactive === interactive) return previous;
+  return { epoch: interactive ? previous.epoch + 1 : previous.epoch, interactive };
+}

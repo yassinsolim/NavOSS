@@ -4,6 +4,7 @@ import {
   CONTROL_MARGIN,
   controlsFollow,
   controlsFollowLimit,
+  controlsShown,
   exploreSheetDetents,
   FIT_FADE_DISTANCE,
   fitOpacity,
@@ -206,6 +207,30 @@ describe('overlay layout', () => {
         windowHeight: small.windowHeight,
       });
       expect(fitOpacity(room)).toBe(0);
+    });
+  });
+
+  describe('glass controls that come back after being hidden', () => {
+    it('advances the epoch each time the group turns interactive again, and only then', () => {
+      let state = { epoch: 0, interactive: true };
+      const steps: [boolean, number][] = [
+        [true, 0],
+        [false, 0],
+        [false, 0],
+        [true, 1],
+        [true, 1],
+        [false, 1],
+        [true, 2],
+      ];
+      for (const [interactive, epoch] of steps) {
+        state = controlsShown(state, interactive);
+        expect(state).toEqual({ epoch, interactive });
+      }
+    });
+
+    it('returns the same object when nothing changed, so React does not re-render', () => {
+      const state = { epoch: 3, interactive: true };
+      expect(controlsShown(state, true)).toBe(state);
     });
   });
 });
