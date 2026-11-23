@@ -33,6 +33,10 @@ shared engine. Merged on `main` after `3b57b04`:
   window scene, so a Debug build made with Xcode 27 launches on iOS 27. The CarPlay flavours that
   ship already had a scene manifest; their generated `Info.plist` and `AppDelegate.swift` are
   byte-identical to before. TestFlight builds are made with Xcode 26.6.
+- [#171](https://github.com/yassinsolim/NavOSS/pull/171): a driver who leaves the route and keeps
+  going their own way gets a new route at once, then about 400 m later, then at most about one a
+  minute, instead of one every block; a route that changes nothing is not installed or announced
+  (below). Run in replay tests only, not on a simulator or in a car.
 - [#162](https://github.com/yassinsolim/NavOSS/pull/162),
   [#166](https://github.com/yassinsolim/NavOSS/pull/166),
   [#169](https://github.com/yassinsolim/NavOSS/pull/169): workflows and the CarPlay harness; no app
@@ -92,7 +96,6 @@ Known and open:
 - The "Trip ended" notice after a restore shows for a few seconds only on iOS.
 - The `carplay-free-drive-no-fix` harness pixel gate fails on a simulator whose status bar shows
   the blue location badge; it is not a product defect.
-- Open pull request not on `main`: reroute spacing on long detours (#171).
 
 ## Build 85, in testers' hands
 
