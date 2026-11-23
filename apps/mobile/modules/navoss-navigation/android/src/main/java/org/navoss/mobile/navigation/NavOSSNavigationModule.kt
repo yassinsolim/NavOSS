@@ -11,7 +11,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
-import org.json.JSONObject
+import android.util.Log
 
 private const val NAVIGATION_SNAPSHOT_EVENT = "onNavigationSnapshot"
 private const val NAVIGATION_PREFERENCES_EVENT = "onNavigationPreferencesChanged"
@@ -125,11 +125,11 @@ class NavOSSNavigationModule : Module() {
 
     Function("setRoute") { trip: Map<String, Any?> ->
       requestNotificationPermission()
-      snapshot(guarded { navigation.setRoute(JSONObject(trip).toString()) })
+      snapshot(guarded { navigation.setRoute(record(trip)) })
     }
 
     Function("updateLocation") { location: Map<String, Any?> ->
-      snapshot(guarded { navigation.updateLocation(JSONObject(location).toString()) })
+      snapshot(guarded { navigation.updateLocation(record(location)) })
     }
 
     Function("clearRoute") { snapshot(engine.clearRoute()) }
@@ -148,7 +148,7 @@ class NavOSSNavigationModule : Module() {
 
     Function("startSimulatedDrive") { trip: Map<String, Any?> ->
       requestNotificationPermission()
-      snapshot(guarded { navigation.startSimulatedDrive(JSONObject(trip).toString()) })
+      snapshot(guarded { navigation.startSimulatedDrive(record(trip)) })
     }
 
     Function("isSimulatingDrive") { navigation.isSimulating }
@@ -288,6 +288,13 @@ class NavOSSNavigationModule : Module() {
   }
 
   private fun snapshot(json: String): Map<String, Any?> = mapOf("snapshotJson" to json)
+
+  /** A trip or fix for the core, `null` values dropped; each new dropped path is logged once (names only). */
+  private fun record(map: Map<String, Any?>): String = JsRecordJson.encode(map) { path ->
+    if (reportedNullPaths.add(path)) Log.i(NavigationRuntime.LOG_TAG, "dropped null field $path")
+  }
+
+  private val reportedNullPaths = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
   /** Android 13+ shows the trip notification only with this permission; guidance works without it. */
   private fun requestNotificationPermission() {

@@ -32,7 +32,10 @@ class CoreNavigationEngineTest {
 
     override fun resumePersistedTrip() = answer.also { calls += "resume" }
     override fun setRoute(tripJson: String) = answer.also { calls += "setRoute $tripJson" }
-    override fun updateLocation(sampleJson: String) = answer.also { calls += "update $sampleJson" }
+    override fun updateLocation(sampleJson: String): String {
+      failure?.let { throw it }
+      return answer.also { calls += "update $sampleJson" }
+    }
     override fun clearRoute() = answer.also { calls += "clear" }
     override fun getSnapshot() = answer
     override fun acceptRerouteProposal(id: String) = id == "p"
@@ -45,7 +48,7 @@ class CoreNavigationEngineTest {
     override fun clockTick() { calls += "tick" }
     override fun isCurrentGeneration(generation: Long) = generation == 4L
     override fun completeHttpRequest(requestId: Long, responseJson: String) { calls += "http $requestId $responseJson" }
-    override fun close() { calls += "close" }
+    var failure: Throwable? = null
   }
 
   private fun loader(error: Throwable? = null, core: NavigationCore = ScriptedCore(), refuse: RuntimeException? = null) =
@@ -53,9 +56,11 @@ class CoreNavigationEngineTest {
       var config: String? = null
       override fun loadError() = error
       override fun contractVersion() = 11
+      var host: NavigationCoreHost? = null
       override fun create(configJson: String, host: NavigationCoreHost): NavigationCore {
         refuse?.let { throw it }
         config = configJson
+        this.host = host
         return core
       }
     }
@@ -114,5 +119,52 @@ class CoreNavigationEngineTest {
       host,
     ) { RerouteMode.ADAPTIVE }
     assertNull(engine.contractVersion)
+  }
+
+  @Test
+  fun `an out-of-memory error at the boundary is a refused call, not a crash`() {
+    val core = ScriptedCore().apply { failure = OutOfMemoryError("NewString") }
+    val engine = CoreNavigationEngine.create(loader(core = core), "{}", host) { RerouteMode.ADAPTIVE }
+    try {
+      engine.updateLocation("{}")
+      fail("expected a refusal")
+    } catch (refused: NavigationEngineException) {
+      assertEquals(CoreNavigationEngine.OUT_OF_MEMORY, refused.code)
+    }
+    // The core's own refusals pass through unchanged.
+    core.failure = NavigationEngineException("internal", "DecodingError")
+    try {
+      engine.updateLocation("{}")
+      fail("expected a refusal")
+    } catch (refused: NavigationEngineException) {
+      assertEquals("internal", refused.code)
+      assertEquals("DecodingError", refused.message)
+    }
+  }
+
+  @Test
+  fun `the host's own exceptions in callbacks are reported and never reach the core`() {
+    val throwing = object : NavigationCoreHost by host {
+      override fun onStateChanged(snapshotJson: String) = throw IllegalStateException("listener")
+      override fun storageRead(key: String): String? = throw java.io.IOException("disk")
+      override fun nowMs(): Double = throw OutOfMemoryError()
+    }
+    val reported = mutableListOf<String>()
+    val loader = loader()
+    CoreNavigationEngine.create(
+      loader,
+      "{}",
+      throwing,
+      reportHostFailure = { callback, error -> reported += "$callback ${error.javaClass.simpleName}" },
+    ) { RerouteMode.ADAPTIVE }
+    val guarded = loader.host!!
+    guarded.onStateChanged("{}")
+    assertNull(guarded.storageRead("k"))
+    val before = System.currentTimeMillis().toDouble()
+    assertTrue(guarded.nowMs() >= before)
+    assertEquals(
+      listOf("onStateChanged IllegalStateException", "storageRead IOException", "nowMs OutOfMemoryError"),
+      reported,
+    )
   }
 }

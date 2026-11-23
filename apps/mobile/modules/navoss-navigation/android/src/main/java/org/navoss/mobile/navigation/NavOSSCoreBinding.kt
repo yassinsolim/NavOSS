@@ -31,7 +31,6 @@ private class NavOSSCoreBinding(private val core: NavOSSCore) : NavigationCore {
   override fun isCurrentGeneration(generation: Long): Boolean = coreCall { core.isCurrentGeneration(generation) }
   override fun completeHttpRequest(requestId: Long, responseJson: String) =
     coreCall { core.completeHttpRequest(requestId, responseJson) }
-  override fun close() = core.close()
 }
 
 private class HostAdapter(private val host: NavigationCoreHost) : NavOSSCore.Host {

@@ -21,8 +21,12 @@ import org.json.JSONObject
  *
  * Every request is completed exactly once through [complete] — `{"status","body"}` or
  * `{"error": "unreachable" | "timeout"}` — unless [cancel] arrives first, after which it is never
- * completed and never sent, even when the cancel overtakes the request itself. `timeoutMs` bounds
- * the whole exchange. Nothing is logged: URLs carry coordinates.
+ * completed. `timeoutMs` bounds the whole exchange. Nothing is logged: URLs carry coordinates.
+ *
+ * Contract v2 orders a cancel after its request ([request] has returned) but delivers it
+ * asynchronously on a Swift thread, possibly after `clearRoute()` returned and possibly after
+ * the answer: a cancel for an id not in flight (answered, or unknown) is ignored and leaves no
+ * state behind.
  *
  * Only [apiOrigin] is contacted (scheme, host and port; HTTPS except on the loopback interface,
  * see [originOf]); redirects are not followed, and a body over [MAX_RESPONSE_BYTES] after
@@ -44,8 +48,9 @@ class HttpTransport(
   private val origin: String? = originOf(apiOrigin)
   private val calls = ConcurrentHashMap<Long, Call>()
 
-  /** Ids cancelled before their request was registered, oldest first; bounded. */
-  private val cancelledEarly = LinkedHashSet<Long>()
+  /** Requests in flight (registered, not yet completed or cancelled). */
+  val pendingCount: Int
+    get() = calls.size
 
   /** Returns at once; the exchange runs on [executor]. */
   fun request(requestId: Long, requestJson: String) {
@@ -56,15 +61,12 @@ class HttpTransport(
     } catch (_: IllegalArgumentException) {
       null
     }
-    val call = Call()
-    synchronized(cancelledEarly) {
-      if (cancelledEarly.remove(requestId)) return
-      if (request != null) calls[requestId] = call
-    }
     if (request == null) {
       complete(requestId, ERROR_UNREACHABLE)
       return
     }
+    val call = Call()
+    calls[requestId] = call
     val timeoutMs = request.optLong("timeoutMs", DEFAULT_TIMEOUT_MS).takeIf { it > 0 } ?: DEFAULT_TIMEOUT_MS
     synchronized(call) {
       call.deadline = timer.schedule({
@@ -76,20 +78,7 @@ class HttpTransport(
 
   /** The trip was cleared or replaced: abandon the exchange and never complete it. */
   fun cancel(requestId: Long) {
-    val call = synchronized(cancelledEarly) {
-      calls.remove(requestId) ?: run {
-        // Not registered yet (or already completed): remember it so it is never sent.
-        cancelledEarly += requestId
-        if (cancelledEarly.size > MAX_EARLY_CANCELS) cancelledEarly.remove(cancelledEarly.first())
-        null
-      }
-    } ?: return
-    stop(call)
-  }
-
-  /** Cancels everything in flight (the engine is closing). */
-  fun cancelAll() {
-    calls.keys.toList().forEach(::cancel)
+    calls.remove(requestId)?.let(::stop)
   }
 
   private fun perform(requestId: Long, call: Call, request: JSONObject, timeoutMs: Long) {
@@ -164,7 +153,6 @@ class HttpTransport(
   companion object {
     /** Larger than any route answer (a long trip with alternatives is a few hundred KB). */
     const val MAX_RESPONSE_BYTES = 8 * 1024 * 1024
-    private const val MAX_EARLY_CANCELS = 64
     private val LOOPBACK_HOSTS = setOf("127.0.0.1", "localhost", "::1", "[::1]", "10.0.2.2")
 
     /**

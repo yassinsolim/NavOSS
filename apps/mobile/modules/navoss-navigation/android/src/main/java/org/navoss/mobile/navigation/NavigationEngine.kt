@@ -43,7 +43,7 @@ class NavigationEngineException(val code: String, message: String?, cause: Throw
  * the module hands JS objects in as JSON and returns the snapshot JSON to JS without touching a
  * field. Failing calls throw [NavigationEngineException].
  */
-interface NavigationEngine : AutoCloseable {
+interface NavigationEngine {
   /** The JS contract version of the loaded core, or `null` when guidance is unavailable. */
   val contractVersion: Int?
 
@@ -117,8 +117,6 @@ class UnavailableNavigationEngine(
   override fun clockTick() = Unit
 
   override fun completeHttpRequest(requestId: Long, responseJson: String) = Unit
-
-  override fun close() = Unit
 
   private fun unavailable() = NavigationEngineException(
     GUIDANCE_UNAVAILABLE,

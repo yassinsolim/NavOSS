@@ -145,14 +145,29 @@ class HttpTransportTest {
   }
 
   @Test
-  fun `a request cancelled before it was registered never goes out`() {
-    transport.cancel(8)
+  fun `a cancel for an answered or unknown request is ignored and remembers nothing`() {
+    // ABI 2: a cancel only ever follows its request, so an id the transport does not hold was
+    // answered already (the cancel crossed the answer) or never existed. Neither may be kept.
     transport.request(8, request("/v2/routes", "POST", "{}"))
-    assertNull(completions.poll(1, TimeUnit.SECONDS))
-    assertNull(received.poll(100, TimeUnit.MILLISECONDS))
-    // Other requests are not affected.
-    transport.request(9, request("/v2/routes", "POST", "{}"))
-    assertEquals(9L, nextCompletion().first)
+    assertEquals(8L, nextCompletion().first)
+    transport.cancel(8)
+    transport.cancel(99)
+    transport.request(99, request("/v2/routes", "POST", "{}"))
+    assertEquals(99L, nextCompletion().first)
+    assertEquals(0, transport.pendingCount)
+  }
+
+  @Test
+  fun `a cancel racing the answer on another thread completes at most once`() {
+    val ids = 100L until 140L
+    for (id in ids) {
+      transport.request(id, request("/v2/routes", "POST", "{}"))
+      Thread { transport.cancel(id) }.start()
+    }
+    Thread.sleep(1_500)
+    val seen = generateSequence { completions.poll() }.map { it.first }.toList()
+    assertEquals(seen.size, seen.toSet().size)
+    assertEquals(0, transport.pendingCount)
   }
 
   @Test

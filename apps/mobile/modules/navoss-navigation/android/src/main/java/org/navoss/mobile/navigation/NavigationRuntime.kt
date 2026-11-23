@@ -22,6 +22,13 @@ import org.json.JSONObject
  *
  * Effects the core asks for are posted to one navigation thread and checked against the current
  * navigation generation there, as the iOS service does on its main queue.
+ *
+ * The core is never closed. It lives exactly as long as the process: a trip must survive the
+ * module's `OnDestroy` (a JS reload, the activity finishing, End from the notification with no
+ * activity), and Android gives a process no teardown callback before it is killed, which frees
+ * the native memory and the core's threads anyway. Closing would also be the one call that waits
+ * for callbacks on other threads (contract v2, "Closing"); with no caller, no lock a callback
+ * takes ([snapshotLock], [TripStorage]'s) can ever be held across it.
  */
 class NavigationRuntime private constructor(
   context: Context,
@@ -84,7 +91,14 @@ class NavigationRuntime private constructor(
 
   init {
     speech = GuidanceSpeech(synthesizer, focus, HandlerScheduler(handler), ::isCurrentGeneration)
-    engine = CoreNavigationEngine.create(loader, createConfig(), this) { preferences.load().rerouteMode }
+    engine = CoreNavigationEngine.create(
+      loader,
+      createConfig(),
+      this,
+      rerouteMode = { preferences.load().rerouteMode },
+      // Type only: a message could quote a snapshot or a request.
+      reportHostFailure = { callback, error -> Log.e(LOG_TAG, "host callback $callback failed: ${error.javaClass.name}") },
+    )
     (engine as? UnavailableNavigationEngine)?.reason?.let {
       Log.w(LOG_TAG, "navigation core unavailable: ${it.javaClass.simpleName}: ${it.message}")
     }
