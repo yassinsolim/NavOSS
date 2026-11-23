@@ -16,6 +16,25 @@ final class RecordingEngineHost: NavigationEngineHost, @unchecked Sendable {
     case reconcileLocationUpdates(generation: UInt64)
     case startClock(generation: UInt64)
     case stopClock(generation: UInt64)
+    /// A `RecordingEngineCompanion` call, in the same order as the host's.
+    case companion(String)
+
+    /// Short form for order assertions: the effect and its generation.
+    var label: String {
+      switch self {
+      case .publication(let generation, _, _): "publication#\(generation)"
+      case .restoredTripAcquisition(let generation, _): "acquisition#\(generation)"
+      case .clearTrip(let generation): "clearTrip#\(generation)"
+      case .stateDidChange: "stateDidChange"
+      case .speak(let speech, let generation): "speak(\(speech.kind))#\(generation)"
+      case .cancelSpeech(let generation): "cancelSpeech#\(generation)"
+      case .needsLocationUpdates: "needsLocationUpdates"
+      case .reconcileLocationUpdates(let generation): "reconcile#\(generation)"
+      case .startClock(let generation): "startClock#\(generation)"
+      case .stopClock(let generation): "stopClock#\(generation)"
+      case .companion(let call): "companion.\(call)"
+      }
+    }
   }
 
   private let lock = NSLock()
@@ -36,7 +55,7 @@ final class RecordingEngineHost: NavigationEngineHost, @unchecked Sendable {
     lock.withLock { recorded.removeAll() }
   }
 
-  private func record(_ event: Event) {
+  fileprivate func record(_ event: Event) {
     lock.withLock { recorded.append(event) }
   }
 
@@ -199,31 +218,62 @@ final class EngineTestClock: @unchecked Sendable {
   }
 }
 
+/// Records the companion's calls into `host`'s events, so their order against the host's
+/// effects can be asserted.
+final class RecordingEngineCompanion: NavigationEngineCompanion {
+  private let host: RecordingEngineHost
+  /// Announcement returned for every published update; `nil` for none.
+  var announcement: (() -> String?)?
+
+  init(host: RecordingEngineHost) {
+    self.host = host
+  }
+
+  func navigationDidStart(_ trip: NavOSSCarPlayTrip, restored: Bool) {
+    host.record(.companion(restored ? "didStart(restored)" : "didStart"))
+  }
+
+  func navigationRouteDidChange(_ trip: NavOSSCarPlayTrip) {
+    host.record(.companion("routeDidChange"))
+  }
+
+  func navigationDidEnd() {
+    host.record(.companion("didEnd"))
+  }
+
+  func navigationClockTick() {}
+
+  func navigationDidUpdateLocked(routeProgress: Double, isTracking: Bool) -> (() -> String?)? {
+    announcement
+  }
+}
+
+/// Blocks until `task` finishes.
+func waitForEngineTask(_ task: Task<Void, Never>?) {
+  guard let task else { return }
+  let done = DispatchSemaphore(value: 0)
+  Task {
+    await task.value
+    done.signal()
+  }
+  done.wait()
+}
+
 extension NavigationEngine {
   /// Lets an in-flight reroute through `network`'s gate and waits for it to finish. Returns
   /// whether one was in flight.
   @discardableResult
   func completePendingReroute(through network: ScriptedEngineNetwork) -> Bool {
-    guard currentState().routeStatus == .rerouting else { return false }
+    guard let task = pendingRerouteTask else { return false }
     network.setGateOpen(true)
     defer { network.setGateOpen(false) }
-    let done = DispatchSemaphore(value: 0)
-    Task {
-      await self.waitForPendingReroute()
-      done.signal()
-    }
-    done.wait()
+    waitForEngineTask(task)
     return true
   }
 
   /// Waits for an in-flight safety-camera fetch.
   func completePendingSafetyCameraFetch() {
-    let done = DispatchSemaphore(value: 0)
-    Task {
-      await self.waitForPendingSafetyCameraFetch()
-      done.signal()
-    }
-    done.wait()
+    waitForEngineTask(pendingSafetyCameraTask)
   }
 }
 

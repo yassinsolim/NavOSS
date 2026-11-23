@@ -11,13 +11,6 @@ import Foundation
 // (`NavigationEngineHost`): on iOS that is `NavOSSNavigationService` with CoreLocation,
 // AVFoundation and CarPlay; on Android the JNI layer. Nothing here imports a platform framework
 // or the community and offline code, so the Android build can leave those out.
-//
-// Threading: every entry point may be called from any thread. All state is guarded by `lock`,
-// a recursive lock the host shares (the iOS service guards its own location state with it too,
-// so the two stay consistent exactly as when they were one object). Host callbacks run
-// synchronously on the calling thread: those named `...Locked` or documented as such run while
-// `lock` is held, every other one after it is released. Reroute and camera requests run in
-// unstructured tasks and re-enter through the same lock.
 
 /// A session update and the navigation generation it was produced in. A later start, reroute or
 /// clear moves the generation on, which makes everything produced earlier stale.
@@ -150,6 +143,35 @@ protocol NavigationEngineHost: AnyObject {
   ) -> NavOSSNavigationRouteOrigin?
 }
 
+/// Runs a trip: see the file comment for what it owns.
+///
+/// Threading model:
+///
+/// - Every entry point may be called from any thread, and they are: on iOS fixes and the clock
+///   arrive on the main thread, the JavaScript module calls from its own queue, and reroute and
+///   camera results arrive on the Swift concurrency pool. The engine needs no particular thread.
+/// - All state is guarded by `lock`, one recursive lock which the host shares: the iOS service
+///   guards its own location and CarPlay-connection state with it, so what the two read together
+///   is consistent exactly as when they were one object.
+/// - Host and companion callbacks run synchronously on the calling thread. Those named
+///   `...Locked` run while `lock` is held: they read state and return, and must not wait on
+///   another thread or call back into the engine's entry points. Every other callback runs
+///   after `lock` is released, in the order written in each entry point; a host may hop to its
+///   main queue there.
+/// - Nothing computed under the lock is trusted after it is released. An update is published,
+///   rerouted from and checkpointed only while it is still current (`isCurrentLocked`: same
+///   generation, trip and sequence). A reroute result is used only for the generation, request,
+///   trip and off-route state that asked for it, and its task is cancelled when any of them
+///   moves on. Effects a host defers (speech, the clock, location) carry the generation they
+///   were issued for, and the host drops them once it is no longer current.
+/// - Reroute and camera requests are unstructured tasks holding the engine weakly; they re-enter
+///   through the same lock. The camera list does not belong to a trip, so its result is kept
+///   whatever the generation.
+/// - `host` is weak and `companion` strong; set both before the first trip and leave them.
+///
+/// `@unchecked Sendable` rests on the above: apart from `host` and `companion`, which are set
+/// once before the first trip, every stored property is immutable or read and written only with
+/// `lock` held.
 final class NavigationEngine: @unchecked Sendable {
   /// Guards all engine state. Shared with the host; see the file comment.
   let lock: NSRecursiveLock
@@ -1018,16 +1040,10 @@ final class NavigationEngine: @unchecked Sendable {
   }
 
   #if DEBUG
-    /// Tests only: waits for an in-flight reroute request to finish.
-    func waitForPendingReroute() async {
-      let task = lock.withLock { rerouteTask }
-      await task?.value
-    }
+    /// Tests only: the in-flight reroute request, to wait for.
+    var pendingRerouteTask: Task<Void, Never>? { lock.withLock { rerouteTask } }
 
-    /// Tests only: waits for an in-flight safety-camera fetch to finish.
-    func waitForPendingSafetyCameraFetch() async {
-      let task = lock.withLock { safetyCameraTask }
-      await task?.value
-    }
+    /// Tests only: the in-flight safety-camera fetch, to wait for.
+    var pendingSafetyCameraTask: Task<Void, Never>? { lock.withLock { safetyCameraTask } }
   #endif
 }
