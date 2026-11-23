@@ -137,22 +137,24 @@ class FeedFetcherTest {
   }
 
   @Test
-  fun aReadThatStartsNearTheDeadlineStillEndsAtTheDeadline() {
-    // Bytes arrive every 100 ms until 0.9 s, then nothing for 5 s. Each successful read restarts
-    // the socket's read timeout, so the last read could wait a full timeout past the deadline.
-    val fake =
-      serve(
-        FakeResponse(
-          body = ByteArray(20) { ' '.code.toByte() },
-          sendLength = false,
-          trickleMillis = 100,
-          stallAtByte = 10,
-          stallMillis = 5_000,
-        ),
-      )
-    val took = elapsedMillis {
-      assertEquals("network", fetchError(FeedFetcher(fake::connect, deadlineMillis = 1_000)))
+  fun aBodyThatStallsEndsWithinTheDeadlinePlusOneStall() {
+    // Bytes arrive every 100 ms until 0.9 s, then nothing for 5 s; with and without a known
+    // length (with one, closing the stream can wait behind a blocked read).
+    for (sendLength in listOf(true, false)) {
+      val fake =
+        serve(
+          FakeResponse(
+            body = ByteArray(20) { ' '.code.toByte() },
+            sendLength = sendLength,
+            trickleMillis = 100,
+            stallAtByte = 10,
+            stallMillis = 5_000,
+          ),
+        )
+      val fetcher = FeedFetcher(fake::connect, deadlineMillis = 1_000, stallMillis = 300)
+      val took = elapsedMillis { assertEquals("network", fetchError(fetcher)) }
+      assertTrue("sendLength=$sendLength took $took ms", took < 1_000 + 300 + 400)
+      fake.close()
     }
-    assertTrue("took $took ms", took < 1_400)
   }
 }

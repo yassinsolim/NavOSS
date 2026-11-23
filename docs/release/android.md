@@ -96,8 +96,9 @@ and Android releases share the repository, and rather than `update.json` because
 carries the tag, the APK's size and the SHA-256 GitHub computed for it, in one request to one host.
 It asks for the newest 10 releases (`per_page=10`) and reads only those, at most 20 assets each.
 The request is made by the app's native updater module, which refuses an answer that announces or
-sends more than 1 MiB (ten NavOSS releases are a few tens of kilobytes), and gives up after 30
-seconds.
+sends more than 1 MiB (ten NavOSS releases are a few tens of kilobytes), and gives up within about 35
+seconds: a 30 s deadline is checked before every hop and between reads, and no single connect or
+read waits more than 5 s.
 
 Every request follows redirects itself, at most three, and refuses a hop that is not HTTPS on the
 default port to an expected host, before connecting to it:

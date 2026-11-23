@@ -5,7 +5,6 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.MalformedURLException
 import java.net.URL
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The most the releases list may be. Ten small NavOSS releases are a few tens of kilobytes; even
@@ -29,33 +28,20 @@ class FeedFetcher(
   },
   private val maxBytes: Int = MAX_FEED_BYTES,
   private val deadlineMillis: Long = 30_000,
+  /** The longest one connect or read may wait; the feed is a few kilobytes. */
+  private val stallMillis: Int = 5_000,
   /** Monotonic milliseconds; wall-clock changes cannot stretch or cut the deadline. */
   private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
   private val policy: HostPolicy = HostPolicy.FEED,
 ) {
   /**
-   * Throws [DownloadException] with `invalid`, `network`, `redirect` or `too-large`. Returns or
-   * throws by the deadline: a watchdog disconnects the open connection when it passes, which
-   * unblocks a read that a socket timeout would otherwise let run on.
+   * Throws [DownloadException] with `invalid`, `network`, `redirect` or `too-large`. The deadline
+   * is checked before every hop and between reads, and no single connect or read waits longer
+   * than [stallMillis], so the check ends within about the deadline plus one stall (35 s).
    */
   fun fetch(url: String): FeedResponse {
     // One deadline for every redirect hop, connect, headers and body.
     val deadline = clock() + deadlineMillis
-    val current = AtomicReference<HttpURLConnection?>(null)
-    val watchdog =
-      Thread {
-          try {
-            val wait = deadline - clock()
-            if (wait > 0) Thread.sleep(wait)
-            current.get()?.disconnect()
-          } catch (_: InterruptedException) {
-            // The check finished first.
-          }
-        }
-        .apply {
-          isDaemon = true
-          name = "NavOSSUpdateCheckDeadline"
-        }
     fun remaining(): Int {
       val left = deadline - clock()
       if (left <= 0) throw DownloadException("network", "Too slow")
@@ -67,15 +53,14 @@ class FeedFetcher(
       } catch (_: MalformedURLException) {
         throw DownloadException("invalid", "Bad URL")
       }
-    watchdog.start()
     try {
       val connection =
         UpdateHttp.open(parsed, policy, openConnection) { hop ->
-          // Registered before the deadline check, so the watchdog can always reach it.
-          current.set(hop)
-          val left = remaining()
-          hop.connectTimeout = left
-          hop.readTimeout = left
+          // Every wait is bounded directly: a connect or a single read never waits longer than
+          // the time left or [stallMillis], whichever is shorter.
+          val wait = minOf(remaining(), stallMillis)
+          hop.connectTimeout = wait
+          hop.readTimeout = wait
           hop.useCaches = false
           hop.setRequestProperty("Accept", "application/vnd.github+json")
         }
@@ -106,8 +91,6 @@ class FeedFetcher(
       throw error
     } catch (error: IOException) {
       throw DownloadException("network", error.javaClass.simpleName)
-    } finally {
-      watchdog.interrupt()
     }
   }
 }
