@@ -5,6 +5,7 @@ import {
   hiddenFromFocusProps,
   keyFocusRequested,
   readoutFocusProps,
+  resultFocusKey,
 } from '../src/ui/focus.js';
 
 describe('hiddenFromFocusProps', () => {
@@ -62,5 +63,26 @@ describe('focusRingVisible', () => {
 
   it('draws nothing for an unfocused control', () => {
     expect(focusRingVisible({ focused: false, layer: 0, openModals: 0 })).toBe(false);
+  });
+});
+
+describe('resultFocusKey', () => {
+  it('never moves focus while the search field is being edited', () => {
+    expect(
+      resultFocusKey({ fieldFocused: true, query: 'Calgary', submittedQuery: undefined }),
+    ).toBeUndefined();
+    // Editing after a submit: the submitted query no longer matches.
+    expect(
+      resultFocusKey({ fieldFocused: true, query: 'Calgary T', submittedQuery: 'Calgary' }),
+    ).toBeUndefined();
+  });
+
+  it('hands focus to the results after a submit, or once the field has no focus', () => {
+    expect(
+      resultFocusKey({ fieldFocused: true, query: 'Calgary', submittedQuery: 'Calgary' }),
+    ).toBe('results:Calgary');
+    expect(
+      resultFocusKey({ fieldFocused: false, query: 'Calgary', submittedQuery: undefined }),
+    ).toBe('results:Calgary');
   });
 });

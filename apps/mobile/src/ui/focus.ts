@@ -60,3 +60,21 @@ export function focusRingVisible({
 }): boolean {
   return focused && layer >= openModals;
 }
+
+/**
+ * The focus key for a search sheet's results (`useKeyFocus`): focus moves from the search field
+ * to the results only after the driver submits that query, or once the field has no focus. While
+ * the field is being edited nothing moves: a result taking focus mid-word would swallow the next
+ * keys, and Enter or A would then open a result, possibly of the previous query.
+ */
+export function resultFocusKey({
+  fieldFocused,
+  query,
+  submittedQuery,
+}: {
+  fieldFocused: boolean;
+  query: string;
+  submittedQuery: string | undefined;
+}): string | undefined {
+  return !fieldFocused || submittedQuery === query ? `results:${query}` : undefined;
+}
