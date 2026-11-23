@@ -459,7 +459,17 @@ type NavOSSNavigationEvents = {
   onOfflineStateChanged(state: NativeOfflineState): void;
   /** Android only: a simulated drive started or ended. */
   onSimulatedDriveChanged(event: { active: boolean }): void;
+  /** Android only: speech or trip storage changed (`getHostStatus`). */
+  onHostStatusChanged(status: NativeHostStatus): void;
 };
+
+/** Android only: what the native host knows that the snapshot does not say. */
+export interface NativeHostStatus {
+  /** `false` when text-to-speech failed to start or has no usable voice: prompts are not spoken. */
+  speechAvailable: boolean;
+  /** `false` while the active trip is not saved on the device: it would not survive the app closing. */
+  tripSaved: boolean;
+}
 
 /**
  * Android only: whether this device can follow a moving car. `no-gps`: no GPS receiver (Wi-Fi
@@ -498,6 +508,8 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   offlineRegionCovers(points: NativeNavigationCoordinate[]): boolean;
   getRecentDestinationIds(): string[];
   getRoutePreferences(): NativeRoutePreferences;
+  /** Android only. */
+  getHostStatus?(): NativeHostStatus;
   /** Android only. */
   getLocationAvailability?(): NativeLocationAvailability;
   getSnapshot(): NativeSnapshotPayload;

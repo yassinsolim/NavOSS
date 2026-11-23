@@ -649,7 +649,11 @@ interface TripSheetProps {
   routeSource: RouteSource | undefined;
   /** Android: a simulated drive, not the phone's location, is moving this trip. */
   simulated?: boolean;
+  /** Android: the trip is not saved on the device; it would not be restored if the app closed. */
+  tripNotSaved?: boolean;
   upcomingManeuvers: readonly UpcomingManeuver[];
+  /** Android: the device's text-to-speech cannot speak; prompts are not spoken. */
+  voiceUnavailable?: boolean;
 }
 
 /**
@@ -674,7 +678,9 @@ export function TripSheet({
   route,
   routeSource,
   simulated = false,
+  tripNotSaved = false,
   upcomingManeuvers,
+  voiceUnavailable = false,
 }: TripSheetProps) {
   const { colors } = useTheme();
   const styles = useStyles();
@@ -765,9 +771,13 @@ export function TripSheet({
       <View key={`actions-${String(fontScale)}`} style={styles.tripActions}>
         <TripAction
           accessibilityHint="Opens guidance settings: sound, rerouting and speed warning"
-          accessibilityLabel={`Guidance sound, ${sound.label}`}
+          accessibilityLabel={
+            voiceUnavailable
+              ? 'Guidance sound, voice guidance is unavailable on this device'
+              : `Guidance sound, ${sound.label}`
+          }
           icon={sound.icon}
-          label={sound.label}
+          label={voiceUnavailable ? 'No voice' : sound.label}
           onPress={onSound}
         />
         <TripAction
@@ -797,6 +807,22 @@ export function TripSheet({
         >
           {notice !== undefined && (
             <Banner announce message={notice.message} title={notice.title} tone="warning" />
+          )}
+          {voiceUnavailable && (
+            <Banner
+              announce
+              message="Voice guidance is unavailable on this device. Follow the directions on screen."
+              title="No voice guidance"
+              tone="warning"
+            />
+          )}
+          {tripNotSaved && (
+            <Banner
+              announce
+              message="This trip cannot be saved; it will not be restored if NavOSS closes."
+              title="Trip not saved"
+              tone="warning"
+            />
           )}
           <Text maxFontSizeMultiplier={1.4} style={styles.tripDestination}>
             To {destinationName}

@@ -5,11 +5,13 @@ import java.nio.file.Files
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TripStorageTest {
   private val directory: File = Files.createTempDirectory("trip-storage").toFile()
   private val key = "org.navoss.mobile.active-navigation-trip.v2"
+  private val progressKey = "$key.progress"
 
   @Test
   fun `values survive a new process byte for byte`() {
@@ -32,5 +34,65 @@ class TripStorageTest {
   fun `keys cannot escape the directory`() {
     TripStorage(directory).write("../escape/key", "x")
     assertEquals(listOf("..%2fescape%2fkey"), directory.list()!!.toList())
+  }
+
+  @Test
+  fun `a failed write is retried at the next write and reported until it lands`() {
+    val storage = TripStorage(directory)
+    directory.setWritable(false)
+    try {
+      storage.write(key, "trip")
+      assertFalse(storage.isDurable)
+      assertEquals("trip", storage.read(key))
+      assertNull(TripStorage(directory).read(key))
+      // A checkpoint while the trip itself is not saved stays in memory too: a durable
+      // progress record must never be newer than the durable trip it belongs to.
+      storage.write(progressKey, "p1")
+      assertNull(TripStorage(directory).read(progressKey))
+    } finally {
+      directory.setWritable(true)
+    }
+    storage.write(progressKey, "p2")
+    assertTrue(storage.isDurable)
+    assertEquals("trip", TripStorage(directory).read(key))
+    assertEquals("p2", TripStorage(directory).read(progressKey))
+  }
+
+  @Test
+  fun `a failed rename leaves no staging file behind`() {
+    val storage = TripStorage(directory)
+    // A directory where the final file belongs makes the rename fail after staging.
+    File(directory, key).mkdirs()
+    storage.write(key, "route data")
+    assertFalse(storage.isDurable)
+    assertFalse(File(directory, "$key.tmp").exists())
+  }
+
+  @Test
+  fun `deleting a key deletes its staging file and startup sweeps leftovers`() {
+    File(directory, "$key.tmp").writeText("route data")
+    File(directory, "$progressKey.tmp").writeText("progress")
+    val storage = TripStorage(directory)
+    assertEquals(emptyList<String>(), directory.list()!!.toList())
+
+    storage.write(key, "trip")
+    File(directory, "$key.tmp").writeText("route data")
+    storage.write(key, null)
+    assertEquals(emptyList<String>(), directory.list()!!.toList())
+  }
+
+  @Test
+  fun `durability changes are reported`() {
+    val changes = mutableListOf<Boolean>()
+    val storage = TripStorage(directory) { changes += it }
+    directory.setWritable(false)
+    try {
+      storage.write(key, "trip")
+      storage.write(progressKey, "p1")
+    } finally {
+      directory.setWritable(true)
+    }
+    storage.write(progressKey, "p2")
+    assertEquals(listOf(false, true), changes)
   }
 }

@@ -438,7 +438,9 @@ export function MapScreen() {
             route={route.selectedRoute}
             routeSource={route.source}
             simulated={c.simulatedDrive}
+            tripNotSaved={!c.hostStatus.tripSaved}
             upcomingManeuvers={guidance.upcomingManeuvers ?? []}
+            voiceUnavailable={!c.hostStatus.speechAvailable}
           />
         )}
 

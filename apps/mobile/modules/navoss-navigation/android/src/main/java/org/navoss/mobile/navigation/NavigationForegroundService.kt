@@ -9,7 +9,7 @@ import android.util.Log
 
 /**
  * Keeps a trip alive with the screen off and the app in the background: a `location` foreground
- * service started from the foreground when a trip starts and stopped when it ends or arrives. It
+ * service (`specialUse` for a simulated drive on Android 14+, which reads no location) started from the foreground when a trip starts and stopped when it ends or arrives. It
  * holds no state of its own; [NavigationRuntime] owns location, speech and the engine. Not
  * restarted by the system after the process dies: the next launch restores the trip instead.
  */
@@ -20,7 +20,11 @@ class NavigationForegroundService : Service() {
     val runtime = NavigationRuntime.get(this)
     try {
       val notification = runtime.notification.build(runtime.notificationContent())
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && runtime.isSimulating) {
+        // A simulated drive reads no location, and Android 14+ refuses a `location` service
+        // without location permission: it runs as the declared `specialUse` subtype instead.
+        startForeground(TripNotification.NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+      } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         startForeground(TripNotification.NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
       } else {
         startForeground(TripNotification.NOTIFICATION_ID, notification)

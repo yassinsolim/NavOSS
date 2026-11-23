@@ -131,6 +131,7 @@ import {
   liveGuidanceRefusal,
   startSimulatedDrive,
 } from '@/features/navigation/native-navigation';
+import { useHostStatus } from '@/features/navigation/use-host-status';
 import { useSimulatedDrive } from '@/features/navigation/use-simulated-drive';
 import {
   DEFAULT_GUIDANCE_SETTINGS,
@@ -1130,6 +1131,7 @@ export function useMapController() {
   };
 
   const simulatedDrive = useSimulatedDrive();
+  const hostStatus = useHostStatus();
 
   /** Android: drives the selected route without GPS, labelled as a simulation throughout. */
   const handleSimulateDrive = () => {
@@ -1841,6 +1843,7 @@ export function useMapController() {
     onSelectTab: handleSelectTab,
     onShareEta: handleShareEta,
     onSimulateDrive: canSimulateDrive() ? handleSimulateDrive : undefined,
+    hostStatus,
     simulatedDrive,
     onSharePlace: handleSharePlace,
     onShortcutPress: handleShortcutPress,

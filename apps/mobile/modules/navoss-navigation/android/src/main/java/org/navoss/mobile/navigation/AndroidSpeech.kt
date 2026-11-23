@@ -29,10 +29,16 @@ internal class AndroidSpeechSynthesizer(
   private val handler: Handler,
   private val onStart: (String) -> Unit,
   private val onDone: (String) -> Unit,
+  /** Called on [handler]'s thread when [isAvailable] turns false. */
+  private val onAvailabilityChanged: () -> Unit = {},
 ) : SpeechSynthesizer {
   private enum class State { STARTING, READY, FAILED }
 
   @Volatile private var state = State.STARTING
+
+  /** False once the engine failed to start or has no English voice: prompts are not spoken. */
+  val isAvailable: Boolean
+    get() = state != State.FAILED
   private var waiting: Pair<String, String>? = null
   private val engine: TextToSpeech = TextToSpeech(context.applicationContext) { status ->
     handler.post { initialized(status) }
@@ -66,6 +72,7 @@ internal class AndroidSpeechSynthesizer(
       Log.w(SPEECH_LOG_TAG, "text-to-speech unavailable (status=$status)")
       waiting?.let { (id, _) -> onDone(id) }
       waiting = null
+      onAvailabilityChanged()
       return
     }
     state = State.READY

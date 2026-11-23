@@ -1,17 +1,22 @@
 const { AndroidConfig, withAndroidManifest, withAppBuildGradle } = require('@expo/config-plugins');
 
 const SERVICE_NAME = 'org.navoss.mobile.navigation.NavigationForegroundService';
+/** Read by `NavigationRuntime`: the API origin reroutes and safety cameras use. */
+const API_URL_META_DATA = 'org.navoss.mobile.API_URL';
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '10.0.2.2']);
 
 /**
  * What turn-by-turn guidance needs from the manifest: a `location` foreground service that keeps
  * a trip running with the screen off, the permissions to start it, and the notification it shows.
  * The service is started only while the app is visible, so there is no background-location
- * permission.
+ * permission. A simulated drive reads no location: it runs the same service as `specialUse`
+ * (Android 14+ refuses a `location` service without location permission), declared below.
  */
 const PERMISSIONS = [
   'android.permission.ACCESS_FINE_LOCATION',
   'android.permission.FOREGROUND_SERVICE',
   'android.permission.FOREGROUND_SERVICE_LOCATION',
+  'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
   'android.permission.POST_NOTIFICATIONS',
 ];
 
@@ -34,8 +39,17 @@ function withNavigationService(manifest) {
     $: {
       'android:name': SERVICE_NAME,
       'android:exported': 'false',
-      'android:foregroundServiceType': 'location',
+      'android:foregroundServiceType': 'location|specialUse',
     },
+    property: [
+      {
+        $: {
+          'android:name': 'android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE',
+          'android:value':
+            'A simulated drive: turn-by-turn guidance along a planned route from simulated positions, with no location access, kept running with the screen off like a real trip.',
+        },
+      },
+    ],
   };
   const index = services.findIndex((item) => item.$['android:name'] === SERVICE_NAME);
   if (index === -1) {
@@ -87,6 +101,56 @@ android.applicationVariants.configureEach { variant ->
 }
 `;
 
+/**
+ * The API URL the JS bundle is built with (`EXPO_PUBLIC_API_URL`), so native reroutes reach the
+ * same server as JS planning. HTTPS, except a local development API on the loopback interface
+ * (or the emulator's alias for the host).
+ */
+function configuredApiUrl(environment = process.env) {
+  const value = environment.EXPO_PUBLIC_API_URL?.trim();
+  if (value === undefined || value.length === 0) {
+    throw new Error('EXPO_PUBLIC_API_URL is required for an Android navigation build.');
+  }
+  const url = new URL(value);
+  if (
+    url.protocol !== 'https:' &&
+    !(url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname))
+  ) {
+    throw new Error(
+      'Android navigation builds require an HTTPS API URL outside local development.',
+    );
+  }
+  return url.toString();
+}
+
+/** Set the API URL meta-data once, replacing an earlier value. */
+function withApiUrl(manifest, url) {
+  const application = AndroidConfig.Manifest.getMainApplicationOrThrow(manifest);
+  const entries = (application['meta-data'] ??= []);
+  const entry = { $: { 'android:name': API_URL_META_DATA, 'android:value': url } };
+  const index = entries.findIndex((item) => item.$['android:name'] === API_URL_META_DATA);
+  if (index === -1) {
+    entries.push(entry);
+  } else {
+    entries[index] = entry;
+  }
+  return manifest;
+}
+
+const TTS_SERVICE = 'android.intent.action.TTS_SERVICE';
+
+/** Android 11+ package visibility: without this query no text-to-speech engine is visible. */
+function withTextToSpeechQuery(manifest) {
+  const queries = (manifest.manifest.queries ??= []);
+  const declared = queries.some((query) =>
+    (query.intent ?? []).some((intent) =>
+      (intent.action ?? []).some((action) => action.$['android:name'] === TTS_SERVICE),
+    ),
+  );
+  if (!declared) queries.push({ intent: [{ action: [{ $: { 'android:name': TTS_SERVICE } }] }] });
+  return manifest;
+}
+
 /** Append the libc++ replacement once to `app/build.gradle`. */
 function withLibcxxReplacement(buildGradle) {
   if (buildGradle.includes(LIBCXX_MARKER)) return buildGradle;
@@ -95,7 +159,12 @@ function withLibcxxReplacement(buildGradle) {
 
 function withNavOSSAndroidNavigation(config) {
   config = withAndroidManifest(config, (modConfig) => {
-    modConfig.modResults = withNavigationService(withNavigationPermissions(modConfig.modResults));
+    modConfig.modResults = withTextToSpeechQuery(
+      withApiUrl(
+        withNavigationService(withNavigationPermissions(modConfig.modResults)),
+        configuredApiUrl(),
+      ),
+    );
     return modConfig;
   });
   return withAppBuildGradle(config, (modConfig) => {
@@ -105,7 +174,11 @@ function withNavOSSAndroidNavigation(config) {
 }
 
 module.exports = withNavOSSAndroidNavigation;
+module.exports.API_URL_META_DATA = API_URL_META_DATA;
 module.exports.PERMISSIONS = PERMISSIONS;
+module.exports.configuredApiUrl = configuredApiUrl;
+module.exports.withApiUrl = withApiUrl;
+module.exports.withTextToSpeechQuery = withTextToSpeechQuery;
 module.exports.SERVICE_NAME = SERVICE_NAME;
 module.exports.withNavigationPermissions = withNavigationPermissions;
 module.exports.withNavigationService = withNavigationService;

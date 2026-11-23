@@ -19,6 +19,7 @@ class HttpTransportTest {
   private val release = CountDownLatch(1)
   private val received = LinkedBlockingQueue<String>()
   private val transport = HttpTransport(
+    "http://127.0.0.1:${server.localPort}",
     Executors.newCachedThreadPool(),
     Executors.newSingleThreadScheduledExecutor(),
     { id, response -> completions += id to response },
@@ -58,6 +59,11 @@ class HttpTransportTest {
         200 to """{"routes":["é"]}"""
       }
       "/v2/missing" -> 404 to """{"title":"Not found"}"""
+      "/v2/huge" -> 200 to "x".repeat(HttpTransport.MAX_RESPONSE_BYTES + 1)
+      "/v2/redirect" -> {
+        received += "redirect"
+        302 to ""
+      }
       else -> {
         release.await(10, TimeUnit.SECONDS)
         200 to ""
@@ -65,7 +71,8 @@ class HttpTransportTest {
     }
     val bytes = answer.toByteArray(Charsets.UTF_8)
     val output = socket.getOutputStream()
-    output.write("HTTP/1.1 $status X\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray())
+    val location = if (status == 302) "Location: http://localhost:${server.localPort}/v2/routes\r\n" else ""
+    output.write("HTTP/1.1 $status X\r\n${location}Content-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray())
     output.write(bytes)
     output.flush()
   }
@@ -135,5 +142,52 @@ class HttpTransportTest {
   fun `a malformed request is unreachable`() {
     transport.request(5, "not json")
     assertEquals(5L to HttpTransport.ERROR_UNREACHABLE, nextCompletion())
+  }
+
+  @Test
+  fun `a request cancelled before it was registered never goes out`() {
+    transport.cancel(8)
+    transport.request(8, request("/v2/routes", "POST", "{}"))
+    assertNull(completions.poll(1, TimeUnit.SECONDS))
+    assertNull(received.poll(100, TimeUnit.MILLISECONDS))
+    // Other requests are not affected.
+    transport.request(9, request("/v2/routes", "POST", "{}"))
+    assertEquals(9L, nextCompletion().first)
+  }
+
+  @Test
+  fun `only the configured origin is contacted`() {
+    for ((id, other) in listOf(
+      10L to "http://localhost:${server.localPort}/v2/routes",
+      11L to "https://127.0.0.1:${server.localPort}/v2/routes",
+      12L to "http://127.0.0.1:1/v2/routes",
+      13L to "file:///etc/hosts",
+    )) {
+      transport.request(id, JSONObject().put("url", other).toString())
+      assertEquals(id to HttpTransport.ERROR_UNREACHABLE, nextCompletion())
+    }
+    assertNull(received.poll(100, TimeUnit.MILLISECONDS))
+  }
+
+  @Test
+  fun `redirects are not followed`() {
+    transport.request(14, request("/v2/redirect"))
+    assertEquals(302, JSONObject(nextCompletion().second).getInt("status"))
+    assertEquals("redirect", received.poll(1, TimeUnit.SECONDS))
+    assertNull(received.poll(500, TimeUnit.MILLISECONDS))
+  }
+
+  @Test
+  fun `a body larger than the cap fails the request`() {
+    transport.request(15, request("/v2/huge"))
+    assertEquals(15L to HttpTransport.ERROR_UNREACHABLE, nextCompletion())
+  }
+
+  @Test
+  fun `only HTTPS origins are accepted outside the loopback interface`() {
+    assertEquals(null, HttpTransport.originOf("http://navoss.example"))
+    assertEquals("https://navoss.example:443", HttpTransport.originOf("https://navoss.example/"))
+    assertEquals("http://10.0.2.2:3001", HttpTransport.originOf("http://10.0.2.2:3001"))
+    assertEquals(null, HttpTransport.originOf("ftp://navoss.example"))
   }
 }

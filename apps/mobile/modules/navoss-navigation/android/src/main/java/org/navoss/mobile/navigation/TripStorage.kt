@@ -8,12 +8,32 @@ import java.io.IOException
  * The core's trip blobs (`storageRead` / `storageWrite`): one file per key in an app-private
  * directory the caller places under `noBackupFilesDir`, so a restored backup never resurrects a
  * trip. Writes are atomic (temporary file, sync, rename) and values come back byte for byte.
- * Called with the engine lock held, so it never calls into the core; a write that fails is
- * dropped (the core rewrites the trip on the next checkpoint) and never throws into Swift.
+ * Called with the engine lock held, so it never calls into the core and never throws into Swift.
+ *
+ * A write that fails (a full disk, a failed rename) stays in memory for this process and is
+ * retried, in order, before every later write: the core writes a progress checkpoint every
+ * fifteen seconds, so that is the retry. Writes land on disk in the order they were made, so a
+ * durable progress record is never newer than the durable trip it belongs to. While anything is
+ * unsaved [isDurable] is false and [onDurabilityChanged] has said so: the trip would not be
+ * restored if the process died. Staging files never outlive a failed write or a deleted key, and
+ * any left by a process that died mid-write are swept when the storage opens.
  */
-class TripStorage(private val directory: File) {
+class TripStorage(
+  private val directory: File,
+  private val onDurabilityChanged: (Boolean) -> Unit = {},
+) {
   private val lock = Any()
   private val cache = HashMap<String, String?>()
+  /** Writes not yet on disk, oldest first; one entry per key holding its latest value. */
+  private val pending = LinkedHashMap<String, String?>()
+
+  init {
+    directory.listFiles { file -> file.name.endsWith(STAGING_SUFFIX) }?.forEach { it.delete() }
+  }
+
+  /** Whether every write so far is on disk. */
+  val isDurable: Boolean
+    get() = synchronized(lock) { pending.isEmpty() }
 
   fun read(key: String): String? = synchronized(lock) {
     cache.getOrPut(key) {
@@ -26,26 +46,48 @@ class TripStorage(private val directory: File) {
     }
   }
 
-  fun write(key: String, value: String?) = synchronized(lock) {
-    cache[key] = value
+  fun write(key: String, value: String?) {
+    val change = synchronized(lock) {
+      val wasDurable = pending.isEmpty()
+      cache[key] = value
+      pending.remove(key)
+      pending[key] = value
+      flushLocked()
+      val durable = pending.isEmpty()
+      durable.takeIf { it != wasDurable }
+    }
+    change?.let(onDurabilityChanged)
+  }
+
+  /** Writes pending values in order, stopping at the first that fails. */
+  private fun flushLocked() {
+    val iterator = pending.entries.iterator()
+    while (iterator.hasNext()) {
+      val (key, value) = iterator.next()
+      if (!persist(key, value)) return
+      iterator.remove()
+    }
+  }
+
+  private fun persist(key: String, value: String?): Boolean {
     val file = fileFor(key)
+    val staging = File(directory, file.name + STAGING_SUFFIX)
+    if (value == null) {
+      staging.delete()
+      return !file.exists() || file.delete()
+    }
     try {
-      if (value == null) {
-        file.delete()
-        return@synchronized
-      }
       directory.mkdirs()
-      val temporary = File(directory, "${file.name}.tmp")
-      FileOutputStream(temporary).use { stream ->
+      FileOutputStream(staging).use { stream ->
         stream.write(value.toByteArray(Charsets.UTF_8))
         stream.fd.sync()
       }
-      if (!temporary.renameTo(file)) {
-        temporary.delete()
-      }
+      if (staging.renameTo(file)) return true
     } catch (_: IOException) {
-      // Kept in memory for this process; the next checkpoint writes again.
+      // Falls through: nothing of this write may stay behind.
     }
+    staging.delete()
+    return false
   }
 
   private fun fileFor(key: String): File {
@@ -59,5 +101,9 @@ class TripStorage(private val directory: File) {
       }
     }
     return File(directory, name)
+  }
+
+  private companion object {
+    const val STAGING_SUFFIX = ".tmp"
   }
 }

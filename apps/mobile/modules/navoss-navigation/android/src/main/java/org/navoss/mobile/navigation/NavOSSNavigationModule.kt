@@ -20,6 +20,7 @@ private const val CARPLAY_NAVIGATION_ENDED_EVENT = "onCarPlayNavigationEnded"
 private const val OFFLINE_STATE_EVENT = "onOfflineStateChanged"
 private const val COMMUNITY_STATE_EVENT = "onCommunityStateChanged"
 private const val SIMULATED_DRIVE_EVENT = "onSimulatedDriveChanged"
+private const val HOST_STATUS_EVENT = "onHostStatusChanged"
 
 private const val SHARES_TRAFFIC_SPEEDS = "org.navoss.mobile.community.share-traffic-speeds"
 private const val SHARES_ROAD_REPORTS = "org.navoss.mobile.community.share-road-reports"
@@ -75,6 +76,12 @@ class NavOSSNavigationModule : Module() {
   private val simulationListener: (Boolean) -> Unit = { active ->
     sendEvent(SIMULATED_DRIVE_EVENT, mapOf("active" to active))
   }
+  private val hostStatusListener: (NavigationRuntime.HostStatus) -> Unit = { status ->
+    sendEvent(HOST_STATUS_EVENT, hostStatusPayload(status))
+  }
+
+  private fun hostStatusPayload(status: NavigationRuntime.HostStatus) =
+    mapOf("speechAvailable" to status.speechAvailable, "tripSaved" to status.tripSaved)
 
   override fun definition() = ModuleDefinition {
     Name("NavOSSNavigation")
@@ -87,20 +94,26 @@ class NavOSSNavigationModule : Module() {
       OFFLINE_STATE_EVENT,
       COMMUNITY_STATE_EVENT,
       SIMULATED_DRIVE_EVENT,
+      HOST_STATUS_EVENT,
     )
 
     OnCreate {
       // Creating the runtime restores a trip saved before the process died, as iOS does at launch.
       navigation.addSnapshotListener(snapshotListener)
       navigation.addSimulationListener(simulationListener)
+      navigation.addHostStatusListener(hostStatusListener)
     }
 
     OnDestroy {
       navigation.removeSnapshotListener(snapshotListener)
       navigation.removeSimulationListener(simulationListener)
+      navigation.removeHostStatusListener(hostStatusListener)
     }
 
     Function("getCapabilities") { navigation.capabilities }
+
+    // Android only: what the core's snapshot cannot say (speech engine, trip storage).
+    Function("getHostStatus") { hostStatusPayload(navigation.hostStatus) }
 
     Function("isGooglePlaceRatingAvailable") { false }
     Function("isCarPlayVisualHarness") { false }
