@@ -154,8 +154,26 @@ export function nextTripSimulated(
   routeState: string,
   simulatedNow: boolean,
 ): boolean {
-  if (routeState !== 'navigating' && routeState !== 'arrived') return false;
+  if (!isTripState(routeState)) return false;
   return previous || simulatedNow;
+}
+
+/**
+ * Whether to take the native trip's simulated flag now: once, when the screen first sees a trip.
+ * A screen mounted after a simulated arrival starts without a trip and adopts it a moment later,
+ * after the native simulation has stopped; only the native trip still knows where it came from.
+ */
+export function simulatedAtTripEntry(
+  routeState: string,
+  wasInTrip: boolean,
+  nativeTripSimulated: () => boolean,
+): boolean {
+  return isTripState(routeState) && !wasInTrip && nativeTripSimulated();
+}
+
+/** A trip is on screen: under way or just arrived. */
+export function isTripState(routeState: string): boolean {
+  return routeState === 'navigating' || routeState === 'arrived';
 }
 
 /** The arrival sheet's statement: a simulated drive must not read as a real arrival. */

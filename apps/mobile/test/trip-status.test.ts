@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   arrivalTitle,
   isResumingTrip,
+  isTripState,
   nextTripSimulated,
+  simulatedAtTripEntry,
   tripNotice,
   tripStatusLabel,
   tripActions,
@@ -136,6 +138,34 @@ describe('a simulated trip at arrival', () => {
   it('is cleared once the trip is over', () => {
     expect(nextTripSimulated(true, 'idle', false)).toBe(false);
     expect(nextTripSimulated(true, 'preview', false)).toBe(false);
+  });
+
+  it('is taken from the native trip by a screen mounted after the arrival', () => {
+    // The screen starts without a trip, so nothing is read and the flag is clear ...
+    let wasInTrip = false;
+    let simulated = nextTripSimulated(
+      false,
+      'idle',
+      simulatedAtTripEntry('idle', wasInTrip, () => true),
+    );
+    expect(simulated).toBe(false);
+    // ... then adopts the arrived trip: the native flag is read once, at that moment.
+    simulated = nextTripSimulated(
+      simulated,
+      'arrived',
+      simulatedAtTripEntry('arrived', wasInTrip, () => true),
+    );
+    expect(simulated).toBe(true);
+    wasInTrip = isTripState('arrived');
+    const read = () => {
+      throw new Error('read again');
+    };
+    expect(simulatedAtTripEntry('arrived', wasInTrip, read)).toBe(false);
+    expect(nextTripSimulated(simulated, 'arrived', false)).toBe(true);
+  });
+
+  it('is not taken from the native trip for a live one', () => {
+    expect(simulatedAtTripEntry('navigating', false, () => false)).toBe(false);
   });
 
   it('is never set by a live trip', () => {
