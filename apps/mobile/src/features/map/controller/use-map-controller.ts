@@ -93,6 +93,7 @@ import {
 } from '@/features/map/map-place';
 import {
   GUIDANCE_BANNER_HEIGHT,
+  guidanceCameraPadding,
   idleCameraPadding,
   routePreviewCameraPadding,
   type ScreenMetrics,
@@ -1740,6 +1741,11 @@ export function useMapController() {
     enabled: IS_ANDROID && phoneMapVisible,
     mapRef,
     onMove: stopFollowingAfterGesture,
+    // The padding the map canvas gives its camera (map-canvas.tsx), so key moves match touch.
+    padding:
+      routeState.type === 'navigating'
+        ? guidanceCameraPadding(metrics)
+        : (idleCameraPadding(metrics) ?? { bottom: 0, left: 0, right: 0, top: 0 }),
     onRecenter: () => {
       if (routeState.type === 'navigating') {
         stable.recenter();

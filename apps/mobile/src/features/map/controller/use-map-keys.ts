@@ -3,6 +3,7 @@ import { type RefObject, useEffect, useRef } from 'react';
 
 import { NavOSSInput } from '../../../../modules/navoss-input';
 import { keyZoom, stickPanCenter } from '@/features/map/map-keys';
+import type { CameraPadding } from '@/features/map/overlay-layout';
 import { useStableCallback } from '@/lib/use-stable-callback';
 
 /** How often a held stick moves the camera. */
@@ -20,15 +21,24 @@ export function useMapKeys({
   mapRef,
   onMove,
   onRecenter,
+  padding,
 }: {
   cameraRef: RefObject<CameraRef | null>;
   enabled: boolean;
   mapRef: RefObject<MapRef | null>;
+  /**
+   * The camera padding the map is using (the side panel's share in landscape). Every camera move
+   * from keys passes it: MapLibre Android treats a move without padding as zero padding, which
+   * would shift the centre under the side panel.
+   */
+  padding: CameraPadding;
   /** The driver moved the map: stop following, as after a touch gesture. */
   onMove: () => void;
   onRecenter: () => void;
 }) {
   const stick = useRef({ x: 0, y: 0 });
+  const paddingRef = useRef(padding);
+  paddingRef.current = padding;
   const moved = useStableCallback(onMove);
   const recenter = useStableCallback(onRecenter);
 
@@ -49,7 +59,7 @@ export function useMapKeys({
         lastTick = now;
         const view = await map.getViewState();
         const center = stickPanCenter(view, stick.current, seconds);
-        cameraRef.current?.jumpTo({ center });
+        cameraRef.current?.jumpTo({ center, padding: paddingRef.current });
       } catch {
         // The map is gone or not ready: the next tick tries again.
       } finally {
@@ -66,7 +76,10 @@ export function useMapKeys({
       void mapRef.current
         ?.getZoom()
         .then((zoom) => {
-          cameraRef.current?.zoomTo(keyZoom(zoom, command), { duration: 250 });
+          cameraRef.current?.zoomTo(keyZoom(zoom, command), {
+            duration: 250,
+            padding: paddingRef.current,
+          });
         })
         .catch(() => undefined);
     });
