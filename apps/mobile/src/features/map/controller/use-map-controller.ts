@@ -51,6 +51,7 @@ import {
 } from '@/features/map/controller/map-notice-slots';
 import { useMapPreferences, useMapStyle } from '@/features/map/controller/use-map-preferences';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
+import { TRIP_END_NOTICE } from '@/features/map/controller/trip-end-notice-memory';
 import { useNavigationSession } from '@/features/map/controller/use-navigation-session';
 import { useOverlayData } from '@/features/map/controller/use-overlay-data';
 import { usePlaceSearch } from '@/features/map/controller/use-place-search';
@@ -272,6 +273,8 @@ export function useMapController() {
   const placeInteractionRef = useRef(createLatestRequestGate());
   const noticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const noticeIdRef = useRef(0);
+  /** The id of the trip-end notice on screen, so dismissing it (or its timeout) settles it. */
+  const tripEndNoticeIdRef = useRef<number | undefined>(undefined);
   const guidanceSettingsQueuedRef = useRef(false);
   const offlineMapsQueuedRef = useRef(false);
   const [isOfflineMapsVisible, setIsOfflineMapsVisible] = useState(false);
@@ -340,15 +343,17 @@ export function useMapController() {
 
   // A notice that stays until dismissed keeps its own slot: a later transient notice cannot
   // replace it (see `map-notice-slots`).
-  const showNotice = (next: Omit<MapNotice, 'id'>) => {
+  const showNotice = (next: Omit<MapNotice, 'id'>): number => {
     noticeIdRef.current += 1;
     const id = noticeIdRef.current;
     setNoticeSlots((slots) => showNoticeInSlots(slots, { ...next, id }));
-    if (next.untilDismissed === true) return;
+    if (next.untilDismissed === true) return id;
     clearTimeout(noticeTimeoutRef.current);
     noticeTimeoutRef.current = setTimeout(() => {
+      if (id === tripEndNoticeIdRef.current) TRIP_END_NOTICE.settle();
       setNoticeSlots((slots) => dismissNotice(slots, id));
     }, NOTICE_VISIBLE_MS);
+    return id;
   };
 
   // --- Route planning and the navigation session -------------------------------------------
@@ -377,7 +382,7 @@ export function useMapController() {
     onTripEnded: (reason) => {
       setIsIdleCameraFollowing(true);
       const ended = tripEndNotice(reason, IS_ANDROID ? 'android' : 'ios');
-      if (ended !== undefined) showNotice(ended);
+      if (ended !== undefined) tripEndNoticeIdRef.current = showNotice(ended);
     },
     routeState,
     setRouteSource: planner.setRouteSource,
@@ -1888,9 +1893,13 @@ export function useMapController() {
       // Dismissing the transient notice also cancels its timer (always the case on iOS, which
       // shows no persistent notice), as before notices had slots.
       if (noticeSlots.persistent === undefined) clearTimeout(noticeTimeoutRef.current);
+      const visible = visibleNotice(noticeSlots);
+      if (visible !== undefined && visible.id === tripEndNoticeIdRef.current) {
+        TRIP_END_NOTICE.settle();
+      }
       setNoticeSlots((slots) => {
-        const visible = visibleNotice(slots);
-        return visible === undefined ? slots : dismissNotice(slots, visible.id);
+        const current = visibleNotice(slots);
+        return current === undefined ? slots : dismissNotice(slots, current.id);
       });
     },
     onEndNavigation: handleEndNavigation,

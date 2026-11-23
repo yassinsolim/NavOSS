@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 
+import { TRIP_END_NOTICE, tripEndToReport } from '@/features/map/controller/trip-end-notice-memory';
 import {
   getNavigationSnapshot,
   type NativeNavigationSnapshot,
@@ -42,11 +43,6 @@ export interface NavigationSession {
  * active route) arrive here. Read them from `snapshot` in the guidance components; nothing in
  * this hook needs to change for an additive field.
  */
-/** The trip end last reported to the map; shared across mounts of the map screen. */
-const REPORTED_END_REASON: { current: NativeNavigationSnapshot['tripEndReason'] } = {
-  current: undefined,
-};
-
 export function useNavigationSession({
   onFix,
   onTripEnded,
@@ -69,8 +65,8 @@ export function useNavigationSession({
   const [routeStatus, setRouteStatus] = useState<NavigationRouteStatus>('tracking');
   const [rerouteCount, setRerouteCount] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
-  // Module-wide, not per mount: a remounted map must not report (and show) the same end again.
-  const reportedEndReasonRef = REPORTED_END_REASON;
+  // Per mount: a remounted map reports an end again unless its notice was settled (dismissed).
+  const reportedEndReasonRef = useRef<NativeNavigationSnapshot['tripEndReason']>(undefined);
 
   const applySnapshot = useEffectEvent((next: NativeNavigationSnapshot) => {
     if (next.stateVersion < stateVersionRef.current) return;
@@ -82,10 +78,11 @@ export function useNavigationSession({
     setStepIndex(next.guidance?.stepIndex ?? 0);
     if (next.trip === undefined) {
       adoptedTripRef.current = undefined;
-      const reason =
-        next.tripEndReason !== undefined && reportedEndReasonRef.current === undefined
-          ? next.tripEndReason
-          : undefined;
+      const reason = tripEndToReport(
+        next.tripEndReason,
+        { reportedThisMount: reportedEndReasonRef.current !== undefined },
+        TRIP_END_NOTICE,
+      );
       reportedEndReasonRef.current = next.tripEndReason;
       onTripEnded(reason);
       setRouteState((current) =>
@@ -94,6 +91,7 @@ export function useNavigationSession({
       return;
     }
     reportedEndReasonRef.current = undefined;
+    TRIP_END_NOTICE.tripActive();
     // Snapshots arrive about once a second. Rebuilding the route copies every polyline, so it
     // happens only when the core reports a different route or a different phase of it.
     const trip = next.trip;
