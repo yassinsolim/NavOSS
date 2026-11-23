@@ -56,7 +56,10 @@ import {
 } from '@/features/navigation/guidance';
 import { GuidanceSettingsSheet } from '@/features/navigation/guidance-settings-sheet';
 import { maneuverSignage } from '@/features/navigation/lane-guidance';
-import { isCarPlayVisualHarness } from '@/features/navigation/native-navigation';
+import {
+  getLocationAvailability,
+  isCarPlayVisualHarness,
+} from '@/features/navigation/native-navigation';
 import { RoutePlanningSheet, RoutePreviewSheet } from '@/features/navigation/route-sheets';
 import { RouteStartPicker } from '@/features/navigation/route-start-picker';
 import { RouteStopsEditor } from '@/features/navigation/route-stops-editor';
@@ -221,6 +224,8 @@ export function MapScreen() {
       orientation={mapPreferences.navigationOrientation}
       problems={mapProblemLabels({
         apiConnection: c.apiConnection,
+        locationAvailability:
+          c.location.locationState === 'error' ? getLocationAvailability() : 'available',
         locationState: c.location.locationState,
         mapError: c.mapError,
         routeIsIdle,

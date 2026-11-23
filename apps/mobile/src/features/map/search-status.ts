@@ -1,4 +1,5 @@
 import type { SearchSource } from '@navoss/contracts';
+import type { NativeLocationAvailability } from '../../../modules/navoss-navigation';
 
 import { offlineSearchSourceLabel } from '../offline/offline-copy';
 
@@ -47,6 +48,8 @@ export interface ServiceNotice {
     | 'connecting'
     | 'location-denied'
     | 'location-error'
+    | 'location-off'
+    | 'no-gps'
     | 'offline-maps'
     | 'outside-coverage'
     | 'service-unavailable';
@@ -63,11 +66,17 @@ export interface ServiceNotice {
 export function exploreServiceNotice({
   apiConnection,
   coverageName,
+  locationAvailability = 'available',
   locationState,
   nearbySearchEnabled,
   offlineMapsInstalled = false,
 }: {
   apiConnection: ApiConnectionState;
+  /**
+   * Android only: why the device cannot have a position, so a failed fix names the true reason.
+   * iOS never passes it.
+   */
+  locationAvailability?: NativeLocationAvailability;
   /** What the server declared, e.g. 'Alberta and British Columbia'. */
   coverageName: string;
   locationState: 'denied' | 'error' | 'idle' | 'locating' | 'visible';
@@ -98,6 +107,24 @@ export function exploreServiceNotice({
       message: 'Allow location in Settings to see your position and get directions from it.',
       title: 'Location access is off',
       tone: 'warning',
+    };
+  }
+  if (locationState === 'error' && locationAvailability === 'location-off') {
+    return {
+      kind: 'location-off',
+      message:
+        'Turn on Location in system settings to see your position and get directions from it.',
+      title: 'Location is off',
+      tone: 'warning',
+    };
+  }
+  if (locationState === 'error' && locationAvailability === 'no-gps') {
+    return {
+      kind: 'no-gps',
+      message:
+        'This device cannot find its position. You can still search, preview a route from a start you choose and simulate the drive.',
+      title: 'No GPS on this device',
+      tone: 'neutral',
     };
   }
   if (locationState === 'error') {
@@ -133,11 +160,14 @@ export function exploreServiceNotice({
  */
 export function mapProblemLabels({
   apiConnection,
+  locationAvailability = 'available',
   locationState,
   mapError,
   routeIsIdle,
 }: {
   apiConnection: ApiConnectionState;
+  /** Android only, as in `exploreServiceNotice`. */
+  locationAvailability?: NativeLocationAvailability;
   locationState: 'denied' | 'error' | 'idle' | 'locating' | 'visible';
   mapError: boolean;
   routeIsIdle: boolean;
@@ -146,8 +176,15 @@ export function mapProblemLabels({
   if (mapError) labels.push('Basemap unavailable');
   if (apiConnection === 'offline') labels.push('Service unavailable');
   if (routeIsIdle && locationState === 'denied') labels.push('Location access is off');
-  if (routeIsIdle && locationState === 'error') labels.push('Current location unavailable');
+  if (routeIsIdle && locationState === 'error')
+    labels.push(locationErrorLabel(locationAvailability));
   return labels;
+}
+
+function locationErrorLabel(availability: NativeLocationAvailability): string {
+  if (availability === 'location-off') return 'Location is off';
+  if (availability === 'no-gps') return 'No GPS';
+  return 'Current location unavailable';
 }
 
 /**

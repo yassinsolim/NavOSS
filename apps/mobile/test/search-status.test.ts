@@ -49,6 +49,56 @@ describe('explore service notice', () => {
   });
 });
 
+describe('explore notice without a position on Android', () => {
+  it('says Location is off rather than blaming the fix, with the setting as the fix', () => {
+    expect(
+      exploreServiceNotice({
+        ...healthy,
+        locationAvailability: 'location-off',
+        locationState: 'error',
+      }),
+    ).toMatchObject({
+      kind: 'location-off',
+      message:
+        'Turn on Location in system settings to see your position and get directions from it.',
+      title: 'Location is off',
+    });
+  });
+
+  it('says the device has no GPS rather than that a fix failed', () => {
+    expect(
+      exploreServiceNotice({ ...healthy, locationAvailability: 'no-gps', locationState: 'error' }),
+    ).toMatchObject({ kind: 'no-gps', title: 'No GPS on this device' });
+  });
+
+  it('keeps the fix wording when a provider exists (and on iOS, which never passes one)', () => {
+    expect(
+      exploreServiceNotice({
+        ...healthy,
+        locationAvailability: 'available',
+        locationState: 'error',
+      })?.kind,
+    ).toBe('location-error');
+    expect(exploreServiceNotice({ ...healthy, locationState: 'error' })?.kind).toBe(
+      'location-error',
+    );
+  });
+
+  it('pins the true reason to the map', () => {
+    const base = {
+      apiConnection: 'online',
+      locationState: 'error',
+      mapError: false,
+      routeIsIdle: true,
+    } as const;
+    expect(mapProblemLabels({ ...base, locationAvailability: 'location-off' })).toEqual([
+      'Location is off',
+    ]);
+    expect(mapProblemLabels({ ...base, locationAvailability: 'no-gps' })).toEqual(['No GPS']);
+    expect(mapProblemLabels(base)).toEqual(['Current location unavailable']);
+  });
+});
+
 describe('map problem labels', () => {
   const clear = {
     apiConnection: 'online',

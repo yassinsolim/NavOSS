@@ -30,6 +30,7 @@ import {
   searchSourceLabel,
 } from '@/features/map/search-status';
 import {
+  getLocationAvailability,
   type NativeDestinationCatalog,
   nativeDestinationToSearchResult,
 } from '@/features/navigation/native-navigation';
@@ -155,6 +156,8 @@ export function ExploreSheet({
   const notice = exploreServiceNotice({
     apiConnection,
     coverageName,
+    // Android only (iOS answers `available`): read when a fix failed, to name the true reason.
+    locationAvailability: locationState === 'error' ? getLocationAvailability() : 'available',
     locationState,
     nearbySearchEnabled,
     offlineMapsInstalled,
@@ -411,6 +414,17 @@ export function ExploreSheet({
                       hitSlop={12}
                       onPress={() => {
                         void Linking.openSettings();
+                      }}
+                    >
+                      <Text style={styles.bannerAction}>Settings</Text>
+                    </Pressable>
+                  ) : notice.kind === 'location-off' ? (
+                    <Pressable
+                      accessibilityLabel="Open Location settings"
+                      accessibilityRole="button"
+                      hitSlop={12}
+                      onPress={() => {
+                        void Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
                       }}
                     >
                       <Text style={styles.bannerAction}>Settings</Text>
