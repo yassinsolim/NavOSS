@@ -369,11 +369,10 @@ export function useMapController() {
   // A trip restored after a relaunch carries no step until it has found its place on the route;
   // the step it was saved on may be behind the vehicle, so nothing is derived from it.
   const resumingTrip = routeState.type === 'navigating' && isResumingTrip(navigationSnapshot);
-  // Nor while a restored trip is off its route and not matched since (`hasNoRouteGuidance`).
+  // Nor while the core says the trip has no maneuver (`hasNoRouteGuidance`).
+  const tripPaused = routeState.type === 'navigating' && hasNoRouteGuidance(navigationSnapshot);
   const guidingRoute =
-    routeState.type === 'navigating' && !hasNoRouteGuidance(navigationSnapshot)
-      ? routeState.route
-      : undefined;
+    routeState.type === 'navigating' && !tripPaused ? routeState.route : undefined;
   const guidanceStep =
     guidingRoute === undefined
       ? undefined
@@ -1729,6 +1728,7 @@ export function useMapController() {
       remainingRoute,
       remainingStep,
       resumingTrip,
+      tripPaused,
       rerouteCount: session.rerouteCount,
       rerouteProposal,
       routeStatus: session.routeStatus,

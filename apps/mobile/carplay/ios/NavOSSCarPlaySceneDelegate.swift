@@ -232,7 +232,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     switch navOSSCarPlayPreviewResumeAction(
       isPreviewing: isPreviewingRoutes,
       previewReplacesActiveTrip: routePreviewReplacesActiveTrip,
-      guidancePhase: state.guidance?.phase
+      isTripUnderWay: state.isTripUnderWay
     ) {
     case .discard:
       discardRoutePreview(in: mapTemplate)
@@ -296,7 +296,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     guard interfaceController != nil, let destination = NavOSSCarPlayIntentRequests.take() else {
       return
     }
-    if NavOSSCarPlayTripStore.shared.snapshot().guidance?.phase == .navigating {
+    if NavOSSCarPlayTripStore.shared.snapshot().isTripUnderWay {
       destinationSelectionMode = .changeDestination
       returnToMapAndLoadReplacementRoute(to: destination)
     } else {
@@ -632,7 +632,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     }
 
     if isPreviewingRoutes, routePreviewReplacesActiveTrip,
-      state.guidance?.phase == .navigating || state.tripPause != nil
+      state.isTripUnderWay
     {
       return
     }
@@ -1273,7 +1273,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   private func prepareDestinationSearch(selectionMode: DestinationSelectionMode) -> Bool {
     let state = NavOSSCarPlayTripStore.shared.snapshot()
-    guard state.guidance?.phase != .navigating || selectionMode != .newTrip else {
+    guard !state.isTripUnderWay || selectionMode != .newTrip else {
       showNavigationAlert(
         title: "Navigation in progress",
         subtitle: "End the current trip before searching for another destination."
@@ -2186,7 +2186,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       return
     }
     let state = NavOSSCarPlayTripStore.shared.snapshot()
-    guard state.trip != nil, state.guidance?.phase == .navigating else {
+    guard state.isTripUnderWay else {
       showNavigationAlert(title: "Trip unavailable", subtitle: "Start navigation and try again.")
       return
     }
@@ -2280,7 +2280,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   private func loadEditedStopRoute(waypoints: [NavOSSCarPlayDestination], summary: String) {
     let state = NavOSSCarPlayTripStore.shared.snapshot()
-    guard let trip = state.trip, state.guidance?.phase == .navigating else {
+    guard let trip = state.trip, state.isTripUnderWay else {
       showNavigationAlert(title: "Trip unavailable", subtitle: "Start navigation and try again.")
       return
     }
@@ -2500,7 +2500,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   private func loadStopRoute(adding stop: NavOSSCarPlayDestination) {
     let state = NavOSSCarPlayTripStore.shared.snapshot()
-    guard let trip = state.trip, state.guidance?.phase == .navigating else {
+    guard let trip = state.trip, state.isTripUnderWay else {
       showNavigationAlert(title: "Trip unavailable", subtitle: "Start navigation and try again.")
       return
     }
@@ -2593,7 +2593,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   }
   private func loadReplacementRoute(to destination: NavOSSCarPlayDestination) {
     let state = NavOSSCarPlayTripStore.shared.snapshot()
-    guard let trip = state.trip, state.guidance?.phase == .navigating else {
+    guard let trip = state.trip, state.isTripUnderWay else {
       showNavigationAlert(title: "Trip unavailable", subtitle: "Start navigation and try again.")
       return
     }
@@ -2614,7 +2614,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   }
   private func loadActiveRouteAlternatives() {
     let state = NavOSSCarPlayTripStore.shared.snapshot()
-    guard let trip = state.trip, state.guidance?.phase == .navigating else {
+    guard let trip = state.trip, state.isTripUnderWay else {
       showNavigationAlert(title: "Trip unavailable", subtitle: "Start navigation and try again.")
       return
     }
@@ -2690,7 +2690,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
 
   private func loadRoutes(to destination: NavOSSCarPlayDestination) {
     let state = NavOSSCarPlayTripStore.shared.snapshot()
-    if state.guidance?.phase == .navigating {
+    if state.isTripUnderWay {
       showNavigationAlert(
         title: "Navigation in progress",
         subtitle: "End the current trip before choosing another destination."
@@ -2775,7 +2775,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     }
     guard
       replacingActiveTrip
-        || NavOSSCarPlayTripStore.shared.snapshot().guidance?.phase != .navigating
+        || !NavOSSCarPlayTripStore.shared.snapshot().isTripUnderWay
     else { return }
     finishRoutePreviewLocationLease()
     routePreviewLocationLease = NavOSSNavigationService.shared.beginCarPlayRoutePlanning()
@@ -2850,7 +2850,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       destinationSelectionMode = .newTrip
       mapTemplate.hideTripPreviews()
       let state = NavOSSCarPlayTripStore.shared.snapshot()
-      if state.guidance?.phase == .navigating || state.guidance?.phase == .arrived {
+      if state.isNavigating {
         apply(state)
       } else {
         configureRouteAttribution(trip: nil)

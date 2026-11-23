@@ -7,7 +7,6 @@ import {
   tripStatusLabel,
   vehicleMatchStatus,
 } from '../src/features/navigation/trip-status.js';
-import type { NativeNavigationSnapshot } from '../src/features/navigation/native-navigation.js';
 
 const coordinate = { latitude: 51.04, longitude: -114.07 };
 
@@ -78,15 +77,12 @@ describe('trip notice without native guidance', () => {
 });
 
 describe('a restored trip off its route', () => {
-  const guidance = {} as NonNullable<NativeNavigationSnapshot['guidance']>;
   const tracking = { phase: 'tracking' as const };
 
-  it('derives nothing from the route until the core matches it again, in every reroute mode', () => {
+  it('derives nothing from the route while the core says the trip has no maneuver', () => {
     for (const restored of [
-      { ...tracking, isOffRoute: true, rerouteMode: 'adaptive', routeStatus: 'rerouting' },
-      { ...tracking, isOffRoute: true, rerouteMode: 'adaptive', routeStatus: 'reroute-failed' },
-      { ...tracking, isOffRoute: true, rerouteMode: 'ask-first', rerouteProposal: {} },
-      { ...tracking, isOffRoute: true, rerouteMode: 'keep-route', routeStatus: 'rerouting' },
+      { ...tracking, isOffRoute: true, tripPause: 'rerouting' as const },
+      { ...tracking, isOffRoute: true, tripPause: 'proceed-to-route' as const },
     ]) {
       expect(hasNoRouteGuidance(restored)).toBe(true);
       expect(vehicleMatchStatus(restored)).toBe('off-route');
@@ -102,13 +98,16 @@ describe('a restored trip off its route', () => {
     expect(
       hasNoRouteGuidance({
         ...tracking,
-        guidance,
         isOffRoute: false,
         matchedCoordinate: coordinate,
       }),
     ).toBe(false);
-    // A mid-trip departure keeps its guidance and its notice.
-    expect(hasNoRouteGuidance({ ...tracking, guidance, isOffRoute: true })).toBe(false);
+    // Paused on the route (a fix the matcher did not accept): no step, still the trip.
+    expect(hasNoRouteGuidance({ ...tracking, isOffRoute: false, tripPause: 'locating' })).toBe(
+      true,
+    );
+    // A mid-trip departure (guided, or between guidance and a reroute) is not a pause.
+    expect(hasNoRouteGuidance({ ...tracking, isOffRoute: true })).toBe(false);
     expect(
       tripNotice({
         matchStatus: 'off-route',
@@ -118,7 +117,7 @@ describe('a restored trip off its route', () => {
       })?.title,
     ).toBe('Off route');
     // A fresh trip before its first match: guidance from the route's start.
-    expect(hasNoRouteGuidance({ ...tracking, guidance, isOffRoute: false })).toBe(false);
+    expect(hasNoRouteGuidance({ ...tracking, isOffRoute: false })).toBe(false);
     // A restored trip still finding its place stays resuming.
     expect(hasNoRouteGuidance({ ...tracking, isAcquiringPosition: true, isOffRoute: false })).toBe(
       true,

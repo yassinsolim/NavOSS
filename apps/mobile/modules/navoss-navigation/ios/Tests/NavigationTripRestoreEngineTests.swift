@@ -195,7 +195,7 @@ final class NavigationTripRestoreEngineTests: XCTestCase {
         network: network, session: session, clock: { [clock = phone.clock] in clock.now })
       engine.host = host
       engine.companion = companion
-      host.tripPause = { [unowned engine] in engine.carPlayTripPauseLocked(for: $0) }
+      host.tripPause = { [unowned engine] in engine.lock.withLock { engine.tripPauseLocked } }
     }
 
     var state: NavOSSNavigationServiceState { engine.currentState() }
@@ -816,6 +816,101 @@ final class NavigationTripRestoreEngineTests: XCTestCase {
       XCTAssertTrue(
         restored.host.publishedGuidance.allSatisfy { $0 == nil }, "\(label): published")
     }
+  }
+
+  /// Review finding: only the matcher's own verdict on a fix releases checkpoint guidance. After
+  /// an 80 m fix matched near the checkpoint, an accurate fix 100 m behind it travelling the
+  /// wrong way is rejected (a departure sample, not yet off route); its snapshot still carries
+  /// the earlier match with the new position and accuracy. Nothing from the checkpoint is shown
+  /// or spoken for it. Accurate fixes the matcher accepts then bring guidance back.
+  func testOnlyAnAccurateFixTheMatcherAcceptsReleasesCheckpointGuidance() throws {
+    let phone = phone()
+    _ = try driveThenKill(phone, through: 127)
+    let restored = relaunch(phone, at: fixes[128].timestamp! - 0.5)
+    func assertWithheld(_ what: String) {
+      XCTAssertNil(restored.state.guidance, what)
+      XCTAssertNil(restored.state.roadContext.currentRoadName, what)
+      XCTAssertTrue(restored.host.publishedGuidance.allSatisfy { $0 == nil }, what)
+      XCTAssertFalse(
+        restored.host.spoken.contains { $0.kind == .maneuver }, "\(what): \(restored.host.spoken)")
+      XCTAssertNotNil(restored.state.tripPause, what)
+    }
+    try restored.fix(beside(128, meters: 0, accuracy: 80))
+    assertWithheld("poor match")
+    let behind = fixes[124]
+    let backward = NavigationLocationSample(
+      coordinate: behind.coordinate,
+      courseDegrees: ((behind.courseDegrees ?? 0) + 180).truncatingRemainder(dividingBy: 360),
+      horizontalAccuracyMeters: 5, speedMetersPerSecond: behind.speedMetersPerSecond,
+      timestamp: fixes[128].timestamp! + 0.5)
+    try restored.fix(backward)
+    // The case under review: rejected, not off route, an earlier match kept, this fix's accuracy.
+    let snapshot = restored.engine.lock.withLock { restored.session.currentUpdate().snapshot }
+    XCTAssertFalse(restored.session.acceptedLatestFix)
+    XCTAssertFalse(snapshot.isOffRoute)
+    XCTAssertNotNil(snapshot.matchedCoordinate)
+    XCTAssertEqual(snapshot.horizontalAccuracyMeters, 5)
+    assertWithheld("rejected accurate fix")
+    // Accepted accurate fixes: guided again from the matched position.
+    for index in 140...150 where restored.state.guidance == nil {
+      try restored.fix(fixes[index])
+      if restored.state.guidance == nil {
+        assertWithheld("fix \(index)")
+      } else {
+        XCTAssertTrue(restored.session.acceptedLatestFix, "released by fix \(index)")
+      }
+    }
+    XCTAssertNotNil(restored.state.guidance, "guided again")
+    XCTAssertNil(restored.state.tripPause)
+    XCTAssertNotNil(restored.host.publishedGuidance.last ?? nil)
+    XCTAssertEqual(restored.requests, 0)
+  }
+
+  /// A poor fix matched near the checkpoint, then an accurate fix the matcher accepts: guidance
+  /// comes back with that fix, not with the poor one.
+  func testAPoorMatchThenAnAcceptedAccurateFixReleasesCheckpointGuidance() throws {
+    let phone = phone()
+    _ = try driveThenKill(phone, through: 127)
+    let restored = relaunch(phone, at: fixes[128].timestamp! - 0.5)
+    try restored.fix(beside(128, meters: 0, accuracy: 80))
+    XCTAssertNil(restored.state.guidance)
+    XCTAssertEqual(restored.state.tripPause, .locating)
+    try restored.fix(fixes[129])
+    XCTAssertTrue(restored.session.acceptedLatestFix)
+    XCTAssertNotNil(restored.state.guidance)
+    XCTAssertNil(restored.state.tripPause)
+    XCTAssertNotNil(restored.host.publishedGuidance.last ?? nil)
+  }
+
+  /// Review finding: the reason a trip has no maneuver changes with the reroute status, not
+  /// only with fixes. "Finding a new route" was stored; GPS stops; the request fails: the state
+  /// and what the host is told at that change say "off route" (proceed to the route).
+  func testWhyATripHasNoManeuverFollowsTheRerouteStatusWithoutFixes() throws {
+    let phone = phone()
+    _ = try driveThenKill(phone, through: 127)
+    let restored = relaunch(phone, at: fixes[128].timestamp! - 0.5, network: false)
+    restored.answersReroutes = false
+    for index in 128..<136 where restored.requests == 0 {
+      try restored.fix(beside(index, meters: 100))
+    }
+    XCTAssertEqual(restored.requests, 1)
+    XCTAssertEqual(restored.state.routeStatus, .rerouting)
+    XCTAssertEqual(restored.state.tripPause, .rerouting)
+    XCTAssertEqual(restored.host.tripPausesAtStateChange.last, .some(.rerouting))
+    // No further fix: the request fails.
+    restored.engine.completePendingReroute(through: restored.network)
+    XCTAssertEqual(restored.state.routeStatus, .rerouteFailed)
+    XCTAssertEqual(restored.state.tripPause, .proceedToRoute)
+    XCTAssertEqual(restored.host.tripPausesAtStateChange.last, .some(.proceedToRoute))
+    // CarPlay's store, as the iOS service feeds it on that change.
+    let store = NavOSSCarPlayTripStore(notificationCenter: NotificationCenter())
+    let trip = try XCTUnwrap(restored.state.trip)
+    store.publishNavigationState(
+      trip: trip, guidance: nil, tripPause: .rerouting, generation: 1, sequence: 1)
+    store.publishTripPause(restored.state.tripPause, forTripId: trip.id)
+    XCTAssertEqual(store.snapshot().tripPause, .proceedToRoute)
+    store.publishTripPause(.rerouting, forTripId: "another trip")
+    XCTAssertEqual(store.snapshot().tripPause, .proceedToRoute)
   }
 
   /// "A trip is active" and "there is a maneuver to show" are two facts: CarPlay runs its

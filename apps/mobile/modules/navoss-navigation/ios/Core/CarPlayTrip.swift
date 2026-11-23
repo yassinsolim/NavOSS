@@ -741,16 +741,17 @@ public struct NavOSSCarPlayGuidance: Codable, Equatable, Sendable {
 
 /// Why a trip under way has no maneuver to show: CarPlay keeps its navigation session running,
 /// follows the vehicle and presents proposals, with this in place of the maneuver
-/// (`CPTripPauseReason`). Decided by the navigation core
-/// (`NavigationEngine.carPlayTripPauseLocked`), never inferred from missing guidance.
-public enum NavOSSCarPlayTripPause: Equatable, Sendable {
+/// (`CPTripPauseReason`); the phone shows the trip without a step or estimate. Decided by the
+/// navigation core (`NavigationEngine.tripPauseLocked`), never inferred from missing guidance.
+/// The raw value is the snapshot's `tripPause`.
+public enum NavOSSCarPlayTripPause: String, Equatable, Sendable {
   /// A restored trip finding its place on the route.
   case locating
   /// Off the route, a new route being fetched.
   case rerouting
   /// Off the route, no route being fetched: a proposal waiting for the driver, the reroute
   /// mode keeping the route, or a request that failed and will be retried.
-  case proceedToRoute
+  case proceedToRoute = "proceed-to-route"
 }
 
 public struct NavOSSCarPlayState: Equatable, Sendable {
@@ -778,10 +779,16 @@ public struct NavOSSCarPlayState: Equatable, Sendable {
     self.tripPause = trip != nil && guidance == nil ? tripPause : nil
   }
 
-  /// A trip is under way (CarPlay runs its navigation session and follows the vehicle), whether
-  /// or not there is a maneuver to show.
+  /// A trip is under way: guided, or paused without a maneuver. What every trip action (change
+  /// destination, stops, alternatives, Siri) and every replacement asks; an arrived trip is not.
+  public var isTripUnderWay: Bool {
+    trip != nil && (guidance?.phase == .navigating || tripPause != nil)
+  }
+
+  /// CarPlay runs its navigation session and follows the vehicle: a trip under way, or one
+  /// showing its arrival.
   public var isNavigating: Bool {
-    guidance?.phase == .navigating || guidance?.phase == .arrived || tripPause != nil
+    isTripUnderWay || (trip != nil && guidance?.phase == .arrived)
   }
 }
 
@@ -1348,6 +1355,26 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
         position: position,
         routeProgress: routeProgress,
         trip: trip,
+        tripPause: tripPause
+      )
+    }
+  }
+
+  /// Takes the reason the trip under way has no maneuver whenever the core's state changes
+  /// without a fix (a reroute request started or failed, a proposal offered or withdrawn), so
+  /// CarPlay never keeps a stale one. Only for the trip the store holds; a trip with guidance
+  /// has no reason (`NavOSSCarPlayState.init`).
+  public func publishTripPause(_ tripPause: NavOSSCarPlayTripPause?, forTripId tripId: String) {
+    update { current in
+      guard current.trip?.id == tripId, current.tripPause != tripPause else {
+        return current
+      }
+      return NavOSSCarPlayState(
+        connected: current.connected,
+        guidance: current.guidance,
+        position: current.position,
+        routeProgress: current.routeProgress,
+        trip: current.trip,
         tripPause: tripPause
       )
     }

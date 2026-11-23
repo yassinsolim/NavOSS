@@ -499,22 +499,35 @@ final class CarPlayGuidancePresentationTests: XCTestCase {
   }
 
   func testPreviewSurvivesResumeUnlessATripChangedWhileAway() {
-    XCTAssertEqual(
+    let trip = trip()
+    let guided = NavOSSCarPlayState(connected: true, guidance: guidance(stepIndex: 0), trip: trip)
+    let paused = NavOSSCarPlayState(
+      connected: true, guidance: nil, trip: trip, tripPause: .proceedToRoute)
+    let arrival = NavOSSCarPlayGuidance(
+      distanceToManeuverMeters: 0, durationToManeuverSeconds: 0, instruction: "Arrived",
+      maneuverType: "arrive", phase: .arrived, remainingDistanceMeters: 0,
+      remainingDurationSeconds: 0, roadName: "2 Street SW", stepIndex: 3)
+    let arrived = NavOSSCarPlayState(connected: true, guidance: arrival, trip: trip)
+    XCTAssertTrue(paused.isTripUnderWay)
+    XCTAssertFalse(arrived.isTripUnderWay)
+    XCTAssertTrue(arrived.isNavigating)
+    let none = NavOSSCarPlayState(connected: true, guidance: nil, trip: nil)
+    func action(_ previewing: Bool, replaces: Bool, _ state: NavOSSCarPlayState)
+      -> NavOSSCarPlayPreviewResumeAction
+    {
       navOSSCarPlayPreviewResumeAction(
-        isPreviewing: false, previewReplacesActiveTrip: false, guidancePhase: nil), .none)
-    XCTAssertEqual(
-      navOSSCarPlayPreviewResumeAction(
-        isPreviewing: true, previewReplacesActiveTrip: false, guidancePhase: nil), .keep)
-    XCTAssertEqual(
-      navOSSCarPlayPreviewResumeAction(
-        isPreviewing: true, previewReplacesActiveTrip: false, guidancePhase: .navigating),
-      .discard)
-    XCTAssertEqual(
-      navOSSCarPlayPreviewResumeAction(
-        isPreviewing: true, previewReplacesActiveTrip: true, guidancePhase: .navigating), .keep)
-    XCTAssertEqual(
-      navOSSCarPlayPreviewResumeAction(
-        isPreviewing: true, previewReplacesActiveTrip: true, guidancePhase: .arrived), .discard)
+        isPreviewing: previewing, previewReplacesActiveTrip: replaces,
+        isTripUnderWay: state.isTripUnderWay)
+    }
+    XCTAssertEqual(action(false, replaces: false, none), .none)
+    XCTAssertEqual(action(true, replaces: false, none), .keep)
+    XCTAssertEqual(action(true, replaces: false, guided), .discard)
+    XCTAssertEqual(action(true, replaces: true, guided), .keep)
+    XCTAssertEqual(action(true, replaces: true, arrived), .discard)
+    // A trip paused without a maneuver is under way: a replacement preview stays, a new-trip
+    // preview is stale.
+    XCTAssertEqual(action(true, replaces: true, paused), .keep)
+    XCTAssertEqual(action(true, replaces: false, paused), .discard)
   }
 
   // MARK: Persistence compatibility

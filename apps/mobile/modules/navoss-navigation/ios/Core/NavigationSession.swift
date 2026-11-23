@@ -126,6 +126,9 @@ final class NavigationSession {
     core.forgetPassConfirmation()
   }
 
+  /// See `NavigationCore.acceptedLatestFix`.
+  var acceptedLatestFix: Bool { core.acceptedLatestFix }
+
   /// See `NavigationCore.distances(from:)`.
   func distances(
     from coordinate: NavigationCoordinate

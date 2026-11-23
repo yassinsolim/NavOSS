@@ -889,6 +889,9 @@ public final class NavOSSNavigationModule: Module {
     if state.isAcquiringPosition {
       payload["isAcquiringPosition"] = true
     }
+    if let tripPause = state.tripPause {
+      payload["tripPause"] = tripPause.rawValue
+    }
     payload.merge(NavOSSCommunityBridge.navigationAlertsPayload()) { current, _ in current }
 
     if let speedMetersPerSecond = snapshot.speedMetersPerSecond {

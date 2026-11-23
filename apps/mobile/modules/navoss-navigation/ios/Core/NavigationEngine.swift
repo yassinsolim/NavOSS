@@ -223,11 +223,12 @@ final class NavigationEngine: @unchecked Sendable {
   private var judgesRestoredTripEnding = false
   /// The progress the restored trip resumed from, for `navOSSRestoredTripEnding`.
   private var restoredProgress: NavigationResumeContext?
-  /// A trip restored from a checkpoint has not been matched on its route since: whatever is
-  /// published or read carries no guidance or road (`NavigationSessionUpdate.withoutGuidance`).
-  /// Off its route it presents what a departure does (off route, rerouting, a proposal, End),
-  /// never the maneuver, distances, lanes or estimate of where it was saved.
-  private var presentsWithoutCheckpointGuidance = false
+  /// Whether the current trip's guidance may be presented. A trip restored from a checkpoint
+  /// starts `withheld`: whatever is published or read carries no guidance or road
+  /// (`NavigationSessionUpdate.withoutGuidance`), so off its route it presents what a departure
+  /// does (off route, rerouting, a proposal, End), never the maneuver, distances, lanes or
+  /// estimate of where it was saved. Written only by `changeCheckpointGuidanceLocked`.
+  private var checkpointGuidance = CheckpointGuidance.presented
   /// Capture time of the first accurate fix of a restored trip without usable progress, which
   /// is released as if just started after `navigationRestoredPassConfirmationSeconds`.
   private var firstAccurateRestoredFixAt: TimeInterval?
@@ -280,29 +281,65 @@ final class NavigationEngine: @unchecked Sendable {
     presentedLocked(navigationSession.currentUpdate())
   }
 
-  /// Why the trip in `update` has no maneuver to show, for CarPlay (`NavOSSCarPlayTripPause`):
-  /// a restored trip finding its place, or one off its route with no guidance since its
-  /// checkpoint. `nil` when there is guidance to show, or no trip under way.
-  func carPlayTripPauseLocked(for update: NavigationSessionUpdate) -> NavOSSCarPlayTripPause? {
-    guard update.trip != nil, update.snapshot.phase == .tracking else {
+  /// Why the trip under way has no maneuver to show (`NavOSSCarPlayTripPause`): a restored trip
+  /// finding its place, or one off its route with no guidance since its checkpoint. `nil` when
+  /// there is guidance to show, or no trip under way.
+  ///
+  /// Decided from the engine's own state, never from missing guidance, and current for every
+  /// read: a reroute status change (request started, failed, proposal offered, withdrawn or
+  /// expired, route installed) changes it without a fix. Part of every state read
+  /// (`NavOSSNavigationServiceState.tripPause`); CarPlay's store takes it at every publication
+  /// and every state change.
+  var tripPauseLocked: NavOSSCarPlayTripPause? {
+    let current = navigationSession.currentUpdate()
+    guard current.trip != nil, current.snapshot.phase == .tracking else {
       return nil
     }
     // Withheld: nothing but the trip is shown, whatever the session computed.
     if validatesPersistedNavigation {
       return .locating
     }
-    guard presentsWithoutCheckpointGuidance, update.guidance == nil else {
+    guard checkpointGuidance == .withheld else {
       return nil
     }
-    guard update.snapshot.isOffRoute else {
+    guard current.snapshot.isOffRoute else {
       return .locating
     }
     return routeStatus == .rerouting ? .rerouting : .proceedToRoute
   }
 
-  /// `update` as it may be presented (see `presentsWithoutCheckpointGuidance`).
+  private enum CheckpointGuidance {
+    case presented
+    case withheld
+  }
+
+  /// What may change `checkpointGuidance`. A new trip sets it; the three exits release it.
+  private enum CheckpointGuidanceChange {
+    /// A trip was started, restored, replaced by one the driver chose, or cleared.
+    case trip(restoredFromCheckpoint: Bool)
+    /// The matcher accepted a fix on the route (`NavigationSession.acceptedLatestFix`) whose
+    /// accuracy is `navigationPoorAccuracyMeters` or better. A matched coordinate is not that:
+    /// restored progress lets a poor fix match within its accuracy, and a rejected, held or
+    /// dead-reckoned update carries an earlier fix's match.
+    case accurateFixAccepted
+    /// A replacement route was installed: guided from its own start.
+    case routeInstalled
+    case arrived
+  }
+
+  /// The only writer of `checkpointGuidance`. Lock held.
+  private func changeCheckpointGuidanceLocked(_ change: CheckpointGuidanceChange) {
+    switch change {
+    case .trip(let restoredFromCheckpoint):
+      checkpointGuidance = restoredFromCheckpoint ? .withheld : .presented
+    case .accurateFixAccepted, .routeInstalled, .arrived:
+      checkpointGuidance = .presented
+    }
+  }
+
+  /// `update` as it may be presented (see `checkpointGuidance`).
   private func presentedLocked(_ update: NavigationSessionUpdate) -> NavigationSessionUpdate {
-    presentsWithoutCheckpointGuidance ? update.withoutGuidance() : update
+    checkpointGuidance == .withheld ? update.withoutGuidance() : update
   }
 
   func safetyCameraLocked(id: String) -> NavOSSSafetyCamera? {
@@ -326,7 +363,8 @@ final class NavigationEngine: @unchecked Sendable {
       speedingState: speedingMonitor.state,
       stateVersion: stateVersion,
       trip: update.trip,
-      tripEndReason: update.trip == nil ? tripEndReason : nil
+      tripEndReason: update.trip == nil ? tripEndReason : nil,
+      tripPause: tripPauseLocked
     )
     return validatesPersistedNavigation && update.trip != nil
       ? state.acquiringRestoredTrip() : state
@@ -552,10 +590,10 @@ final class NavigationEngine: @unchecked Sendable {
       firstAccurateRestoredFixAt = nil
       if case .progress(let saved) = resume, saved.isUsable {
         restoredProgress = saved
-        presentsWithoutCheckpointGuidance = true
+        changeCheckpointGuidanceLocked(.trip(restoredFromCheckpoint: true))
       } else {
         restoredProgress = nil
-        presentsWithoutCheckpointGuidance = false
+        changeCheckpointGuidanceLocked(.trip(restoredFromCheckpoint: false))
       }
       tripEndReason = nil
       stateVersion &+= 1
@@ -589,7 +627,7 @@ final class NavigationEngine: @unchecked Sendable {
     validatesPersistedNavigation = false
     judgesRestoredTripEnding = false
     restoredProgress = nil
-    presentsWithoutCheckpointGuidance = false
+    changeCheckpointGuidanceLocked(.trip(restoredFromCheckpoint: false))
     firstAccurateRestoredFixAt = nil
     let update = navigationSession.clear()
     navigationGeneration &+= 1
@@ -697,16 +735,14 @@ final class NavigationEngine: @unchecked Sendable {
     if update.snapshot.phase == .arrived {
       tripStore.clear()
     }
-    // A restored trip presents its checkpoint's guidance only once it is matched again: by
-    // this fix, accurate enough to count (`navigationPoorAccuracyMeters`) and accepted on a
-    // confirmed pass. A matched coordinate alone is not that: restored progress lets a poor fix
-    // match within its accuracy, and a held or dead-reckoned update carries an older one.
-    let snapshot = update.snapshot
-    if presentsWithoutCheckpointGuidance, let fix,
-      snapshot.phase == .arrived
-        || navOSSIsAccurateRematch(snapshot, of: fix)
+    // A restored trip presents its checkpoint's guidance again only from a fix the matcher
+    // accepted that is accurate enough to place the vehicle, or on arrival.
+    if update.snapshot.phase == .arrived {
+      changeCheckpointGuidanceLocked(.arrived)
+    } else if let accuracy = fix?.horizontalAccuracyMeters,
+      accuracy <= navigationPoorAccuracyMeters, navigationSession.acceptedLatestFix
     {
-      presentsWithoutCheckpointGuidance = false
+      changeCheckpointGuidanceLocked(.accurateFixAccepted)
     }
     stateVersion &+= 1
     return VersionedNavigationUpdate(
@@ -1093,7 +1129,7 @@ final class NavigationEngine: @unchecked Sendable {
     do {
       update = try navigationSession.start(trip)
       navigationGeneration &+= 1
-      presentsWithoutCheckpointGuidance = false
+      changeCheckpointGuidanceLocked(.routeInstalled)
       tripStore.save(trip)
       lastProgressPersistedAt = nil
       lastPersistedProgress = nil
