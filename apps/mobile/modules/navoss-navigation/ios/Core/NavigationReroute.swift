@@ -394,12 +394,77 @@ let navigationSameRouteToleranceMeters = 20.0
 /// Further than this from a route's course, a replacement drives that road the other way.
 let navigationSameRouteCourseToleranceDegrees = 60.0
 
-/// An answer along the route followed is the rest of it from the vehicle's match (and dropped)
-/// when its length is within this of the route left from that match: the router started where
-/// the matcher's anchor is. Longer, the vehicle is behind its match (a GPS gap); shorter, it is
-/// ahead of it or past a loop. Either way the matcher, which only moves forwards and only so far,
-/// may not find it on the route, so the answer is installed as any other.
+/// How far an answer may start or end from the rest of the route followed, or leave it, and
+/// still be that rest (the router snapping its origin onto the road a little before or after
+/// the vehicle's match).
 let navigationRestOfRouteToleranceMeters = 50.0
+
+/// Whether `candidate` is the rest of `reference` from `anchorAlongMeters` on: the router started
+/// where the matcher's anchor is. Walked in order every `navigationSharedRoadToleranceMeters`,
+/// each point of `candidate` must lie within `navigationSameRouteToleranceMeters` of `reference`,
+/// in its direction, at or just after where the previous point did (never skipping ahead),
+/// starting at the anchor; all but `navigationRestOfRouteToleranceMeters` of it, and its length
+/// within that of the route left. It ends at the route's destination, so it has followed the
+/// route to its end. Lying on the route's roads somewhere is not enough: on a loop or an out-and-back route,
+/// a road the vehicle is behind on (a GPS gap) or turned back on is on the route too, but far
+/// from the anchor, where the matcher, which only moves forwards and only so far, never finds it.
+func navigationIsRestOfRoute(
+  _ candidate: NavOSSCarPlayTrip,
+  of reference: NavOSSCarPlayTrip,
+  fromAlongMeters anchorAlongMeters: Double
+) -> Bool {
+  guard candidate.destination.latitude == reference.destination.latitude,
+    candidate.destination.longitude == reference.destination.longitude,
+    let route = try? RoutePolyline(coordinates: reference.geometry.map {
+      NavigationCoordinate(latitude: $0.latitude, longitude: $0.longitude)
+    }),
+    abs(navigationRouteLengthMeters(candidate) - (route.totalDistanceMeters - anchorAlongMeters))
+      <= navigationRestOfRouteToleranceMeters
+  else {
+    return false
+  }
+  // Where along `reference` the candidate has got to, and how much of it has not followed.
+  var alongMeters = anchorAlongMeters
+  var unsharedMeters = 0.0
+  for (start, end) in zip(candidate.geometry, candidate.geometry.dropFirst()) {
+    let from = NavigationCoordinate(latitude: start.latitude, longitude: start.longitude)
+    let to = NavigationCoordinate(latitude: end.latitude, longitude: end.longitude)
+    let length = navigationDistanceMeters(from: from, to: to)
+    guard length > 0 else { continue }
+    let course = navigationCourseDegrees(from: from, to: to)
+    let count = max(1, Int((length / navigationSharedRoadToleranceMeters).rounded(.up)))
+    let step = length / Double(count)
+    for index in 0..<count {
+      let fraction = (Double(index) + 0.5) / Double(count)
+      let point = NavigationCoordinate(
+        latitude: from.latitude + (to.latitude - from.latitude) * fraction,
+        longitude: from.longitude + (to.longitude - from.longitude) * fraction)
+      // Up to a step on from the last point that followed, plus whatever has not followed since
+      // (a short way onto the road) and the tolerance either side.
+      let lowest = alongMeters - navigationSameRouteToleranceMeters
+      let highest = alongMeters + step + unsharedMeters + navigationRestOfRouteToleranceMeters
+      let next = route.segmentIndices(near: point, radiusMeters: navigationSameRouteToleranceMeters)
+        .map { route.project(point, ontoSegment: $0) }
+        .filter {
+          $0.distanceMeters <= navigationSameRouteToleranceMeters
+            && navigationCourseDifferenceDegrees(course, $0.courseDegrees)
+              <= navigationSameRouteCourseToleranceDegrees
+            && $0.alongMeters >= lowest && $0.alongMeters <= highest
+        }
+        .map(\.alongMeters)
+        .min()
+      if let next {
+        alongMeters = max(alongMeters, next)
+      } else {
+        unsharedMeters += step
+        if unsharedMeters > navigationRestOfRouteToleranceMeters {
+          return false
+        }
+      }
+    }
+  }
+  return true
+}
 
 /// The length of `trip`'s geometry.
 func navigationRouteLengthMeters(_ trip: NavOSSCarPlayTrip) -> Double {

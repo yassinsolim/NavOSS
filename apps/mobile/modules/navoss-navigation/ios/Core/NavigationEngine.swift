@@ -1139,10 +1139,8 @@ final class NavigationEngine: @unchecked Sendable {
       else {
         return false
       }
-      let remainingMeters = (1 - current.snapshot.routeProgress) * length
-      return abs(navigationRouteLengthMeters(replacement) - remainingMeters)
-        <= navigationRestOfRouteToleranceMeters
-        && navigationIsMateriallySameRoute(replacement, as: trip)
+      return navigationIsRestOfRoute(
+        replacement, of: trip, fromAlongMeters: current.snapshot.routeProgress * length)
     }()
     if isRestOfActiveRoute
       || (detourReplacedTrips + [declinedTrip].compactMap { $0 }).contains(where: {

@@ -666,15 +666,13 @@ final class NavigationRerouteBackoffTests: XCTestCase {
     }
     try rig.start(Self.trip(id: "short", corners: [(0, 0), (0, 1_000)]))
     try rig.drive([(0, 0), (0, 800)])
-    var phases: [String] = []
     for _ in 0..<8 {
       try rig.fix(0, 995, course: 0, speed: 0)
-      phases.append("\(rig.state.navigation.phase)")
+      XCTAssertEqual(rig.state.navigation.phase, .tracking, "no arrival without movement")
     }
     let log = rig.timeline.joined(separator: "\n")
     XCTAssertEqual(rig.network.requests.count, 1, log)
     XCTAssertEqual(rig.installs, ["rest"], log)
-    print("STOPPED phases \(phases)")
   }
 
   /// An out-and-back route: north 3 km, back south, then north to the destination 5 km up. Matched
@@ -698,6 +696,88 @@ final class NavigationRerouteBackoffTests: XCTestCase {
     XCTAssertEqual(rig.installs, ["north"], log)
     XCTAssertEqual(rig.state.navigation.phase, .arrived, log)
     XCTAssertGreaterThan(rig.spokenManeuvers.count, spokenBefore, "guidance resumes: " + log)
+  }
+
+  /// A route round a block and back: north 3 km, round the block, back to y = 3 km, then north to
+  /// 5 km. Last matched at y = 2.5 km; after a GPS gap the vehicle is stopped at y = 0.5 km,
+  /// 2 km behind its match. The router answers straight north to the destination: on the route's
+  /// roads all the way and as long as the rest of it, but starting 2 km behind the match, so it
+  /// is not the rest of the route. Installed, as on `main`.
+  func testAnAnswerFromBehindTheMatchOnALoopRouteIsInstalled() throws {
+    let rig = Rig { request in
+      let p = Trace.local(
+        NavigationCoordinate(latitude: request.origin.latitude, longitude: request.origin.longitude))
+      return [Self.trip(id: "north", corners: [(0, p.y), (0, 5_000)])]
+    }
+    try rig.start(Self.trip(id: "loop", corners: Self.blockLoopCorners))
+    try rig.drive([(0, 0), (0, 2_500)])
+    XCTAssertFalse(rig.state.navigation.isOffRoute)
+    rig.clock.advance(300)
+    for _ in 0..<30 where rig.installs.isEmpty {
+      try rig.fix(0, 500, course: 0, speed: 0)
+    }
+    let log = rig.timeline.joined(separator: "\n")
+    XCTAssertGreaterThanOrEqual(rig.network.requests.count, 1, log)
+    XCTAssertEqual(rig.installs, ["north"], log)
+  }
+
+  static let blockLoopCorners: [(Double, Double)] = [
+    (0, 0), (0, 3_000), (500, 3_000), (500, 3_500), (0, 3_500), (0, 3_000), (0, 5_000),
+  ]
+
+  func testTheRestOfRouteComparison() {
+    func isRest(_ corners: [(Double, Double)], of route: [(Double, Double)], from along: Double)
+      -> Bool
+    {
+      navigationIsRestOfRoute(
+        Self.trip(id: "answer", corners: corners), of: Self.trip(id: "route", corners: route),
+        fromAlongMeters: along)
+    }
+    let chosen = Self.chosenCorners
+    // The tail from the anchor, with its own vertices, or starting a little either side.
+    XCTAssertTrue(isRest([(0, 1_000), (0, 3_600), Self.destination], of: chosen, from: 1_000))
+    XCTAssertTrue(
+      isRest([(0, 1_000), (0, 1_700), (0, 2_900), (0, 3_600), Self.destination], of: chosen, from: 1_000))
+    XCTAssertTrue(isRest([(0, 970), (0, 3_600), Self.destination], of: chosen, from: 1_000))
+    XCTAssertTrue(isRest([(0, 1_030), (0, 3_600), Self.destination], of: chosen, from: 1_000))
+    // From a lay-by 20 m off the road back onto it.
+    XCTAssertTrue(isRest([(20, 1_000), (0, 1_010), (0, 3_600), Self.destination], of: chosen, from: 1_000))
+    // Starting well ahead of or behind the anchor.
+    XCTAssertFalse(isRest([(0, 1_300), (0, 3_600), Self.destination], of: chosen, from: 1_000))
+    XCTAssertFalse(isRest([(0, 700), (0, 3_600), Self.destination], of: chosen, from: 1_000))
+    // Leaving the route and rejoining it.
+    XCTAssertFalse(
+      isRest([(0, 1_000), (0, 1_500), (100, 1_550), (0, 1_600), (0, 3_600), Self.destination], of: chosen, from: 1_000))
+    // On the road in order but wandering across it: longer by more than 50 m.
+    let zigzag = stride(from: 0, to: 20, by: 1).map { (Double($0 % 2) * 15, 1_010 + Double($0) * 10) }
+    XCTAssertFalse(isRest([(0, 1_000)] + zigzag + [(0, 1_210), (0, 3_600), Self.destination], of: chosen, from: 1_000))
+    // Cutting two small side loops of the route: shorter by more than 50 m.
+    let sideLoops: [(Double, Double)] = [
+      (0, 0), (0, 1_500), (20, 1_500), (20, 1_520), (0, 1_520), (0, 2_000), (20, 2_000), (20, 2_020),
+      (0, 2_020), (0, 3_600), Self.destination,
+    ]
+    XCTAssertTrue(isRest([(0, 1_000)] + sideLoops.dropFirst(2), of: sideLoops, from: 1_000))
+    XCTAssertFalse(isRest([(0, 1_000), (0, 3_600), Self.destination], of: sideLoops, from: 1_000))
+    // The tail the other way.
+    XCTAssertFalse(isRest([(600, 3_600), (0, 3_600), (0, 1_000)], of: chosen, from: 1_000))
+    // The block loop: from the anchor round the block is the rest; straight north from 2 km
+    // behind it, on the route's roads and as long, is not.
+    let loop = Self.blockLoopCorners
+    XCTAssertTrue(
+      isRest([(0, 2_500), (0, 3_000), (500, 3_000), (500, 3_500), (0, 3_500), (0, 3_000), (0, 5_000)], of: loop, from: 2_500))
+    XCTAssertFalse(isRest([(0, 500), (0, 5_000)], of: loop, from: 2_500))
+    // Straight north past the block, wandering across the road so that it is as long as the
+    // rest of the route: it skips the block, and is not.
+    let pastTheBlock = stride(from: 0, to: 250, by: 1).map { (Double($0 % 2) * 15, 2_510 + Double($0) * 10) }
+    XCTAssertEqual(
+      navigationRouteLengthMeters(Self.trip(id: "z", corners: [(0, 2_500)] + pastTheBlock + [(0, 5_000)])), 4_500,
+      accuracy: 50)
+    XCTAssertFalse(isRest([(0, 2_500)] + pastTheBlock + [(0, 5_000)], of: loop, from: 2_500))
+    // An out-and-back route, matched southbound at y = 2.5 km (3.5 km along): north from there
+    // is on the route's roads but 5 km further along.
+    let outAndBack: [(Double, Double)] = [(0, 0), (0, 3_000), (0.5, 0), (1, 5_000)]
+    XCTAssertTrue(isRest([(0.5, 2_500), (0.5, 0), (1, 5_000)], of: outAndBack, from: 3_500))
+    XCTAssertFalse(isRest([(1, 2_500), (1, 5_000)], of: outAndBack, from: 3_500))
   }
 
   /// The driver leaves the route at y = 400 and drives on beside it; the answer comes 300 m

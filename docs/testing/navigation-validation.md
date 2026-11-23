@@ -162,14 +162,15 @@ then back to the chosen road).
 - A replacement that is materially one of the last three routes replaced in this detour or the
   offer just declined (all but 50 m of it within 20 m of that route and in its direction) is
   not installed, offered, published, counted or spoken; it still counts as an answer for the
-  spacing. So is one that, once the route has been matched, is materially the route followed
-  and whose length is within 50 m of the route left from the vehicle's match: the router started
-  where the matcher's anchor is (a lay-by or a stop beside the road where the vehicle left it).
-  The vehicle stays off route until the matcher finds it on the route going forwards; nothing
-  about matching, jumps or arrival changes. An answer along the route followed that is longer
-  (the vehicle reappeared behind its match after a GPS gap) or shorter by more than 50 m (it
-  moved on beside the route, turned back past a loop or an out-and-back, or jumped near the end)
-  is installed as any other replacement, as before this change. The replaced and declined memory ends with the detour, when the
+  spacing. So is one that, once the route has been matched, is the rest of the route followed
+  from the vehicle's match: walked in order, every point of it but 50 m lies within 20 m of the
+  route, in its direction, at or just after the previous one, starting at the match, and its
+  length is within 50 m of the route left (`navigationIsRestOfRoute`). That is the router
+  starting where the matcher's anchor is (a lay-by or a stop beside the road where the vehicle
+  left it). The vehicle stays off route until the matcher finds it on the route going forwards;
+  nothing about matching, jumps or arrival changes. Any other answer along the route's roads
+  (starting behind the match after a GPS gap, ahead of it beside the route, on the far side of
+  a loop or an out-and-back, or near the end) is installed as any other replacement, as before this change. The replaced and declined memory ends with the detour, when the
   driver is established on a route. Before the first match the route followed is not compared.
 - A request without a platform heading carries the direction of the last 20 m of fixes within
   10 s, so the router does not start the route with a U-turn behind the car.
