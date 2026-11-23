@@ -128,6 +128,7 @@ import {
 } from '@/features/navigation/native-navigation';
 import {
   canSimulateDrive,
+  getLocationAvailability,
   liveGuidanceRefusal,
   startSimulatedDrive,
 } from '@/features/navigation/native-navigation';
@@ -1878,6 +1879,7 @@ export function useMapController() {
     onSelectTab: handleSelectTab,
     onShareEta: handleShareEta,
     onSimulateDrive: canSimulateDrive() ? handleSimulateDrive : undefined,
+    deviceHasNoGps: getLocationAvailability() === 'no-gps',
     hostStatus,
     simulatedDrive,
     onSharePlace: handleSharePlace,

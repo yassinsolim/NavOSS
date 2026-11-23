@@ -19,6 +19,10 @@ import {
   routeTrafficLabel,
   routeViaLabel,
 } from '@/features/navigation/route-progress';
+import {
+  NO_GPS_PREVIEW_NOTICE,
+  routePreviewPrimaryAction,
+} from '@/features/navigation/route-preview-action';
 import type { RouteError, RouteSource } from '@/features/navigation/route-ui-state';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
@@ -204,6 +208,8 @@ interface RoutePreviewSheetProps {
   onDetentChange?: (index: number) => void;
   /** Android, where no location provider can follow a drive (and development builds). */
   onSimulateDrive?: () => void;
+  /** Android only: no location provider exists, so a chosen start can only be simulated. */
+  deviceHasNoGps?: boolean;
   onEditStops: () => void;
   onSelectRoute: (route: RouteAlternativeV2) => void;
   onStart: () => void;
@@ -230,6 +236,7 @@ interface RoutePreviewSheetProps {
  */
 export function RoutePreviewSheet({
   destination,
+  deviceHasNoGps = false,
   initialDetent,
   metrics,
   onCancel,
@@ -260,6 +267,12 @@ export function RoutePreviewSheet({
   // it is re-measured after a text-size change, never when the driver selects another card.
   const routeChoices = useRef<ScrollView>(null);
   const demoOrigin = previewOriginLabel !== undefined;
+  const primaryAction = routePreviewPrimaryAction({
+    chosenStart: demoOrigin,
+    deviceHasNoGps,
+    isAndroid: IS_ANDROID,
+    simulateDriveAvailable: onSimulateDrive !== undefined,
+  });
   const detents = routePreviewSheetDetents(metrics, { demoOrigin });
   const trafficStatus = routeTrafficLabel(
     routeSource?.id === OFFLINE_ROUTE_SOURCE.id ? undefined : routeSource,
@@ -302,7 +315,15 @@ export function RoutePreviewSheet({
             {formatArrivalTime(selectedRoute.durationSeconds)}
           </Text>
         </View>
-        {demoOrigin ? (
+        {primaryAction === 'simulate-drive' && onSimulateDrive !== undefined ? (
+          <Button
+            accessibilityHint="Drives this route on the map with spoken guidance, without GPS. Your location is not used."
+            icon={{ android: 'play_arrow', ios: 'play.fill' }}
+            label="Simulate drive"
+            onPress={onSimulateDrive}
+            size="driving"
+          />
+        ) : primaryAction === 'use-my-location' ? (
           <Button
             accessibilityLabel="Use my location for navigation"
             icon={{ android: 'my_location', ios: 'location.fill' }}
@@ -340,7 +361,12 @@ export function RoutePreviewSheet({
               />
             </View>
           )}
-          {onSimulateDrive !== undefined && (
+          {primaryAction === 'simulate-drive' && (
+            <View style={styles.inset}>
+              <Text style={styles.quietNote}>{NO_GPS_PREVIEW_NOTICE}</Text>
+            </View>
+          )}
+          {onSimulateDrive !== undefined && primaryAction !== 'simulate-drive' && (
             <View style={styles.inset}>
               <Button
                 accessibilityHint="Drives this route on the map with spoken guidance, without GPS. Your location is not used."
@@ -466,6 +492,7 @@ const useStyles = createThemedStyles(({ colors }) =>
     planningBody: { gap: space.lg, paddingHorizontal: space.lg },
     planningState: { paddingHorizontal: space.lg },
     previewContent: { gap: space.lg },
+    quietNote: { ...typography.footnote, color: colors.textSecondary },
     routeChoice: {
       backgroundColor: colors.surfaceSunken,
       borderColor: 'transparent',
