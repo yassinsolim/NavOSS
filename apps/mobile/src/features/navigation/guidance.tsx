@@ -50,6 +50,7 @@ import {
   arrivalTitle,
   tripActions,
   tripNotice,
+  tripRemainingWithoutEstimate,
   tripStatusLabel,
   tripSummaryFlags,
 } from '@/features/navigation/trip-status';
@@ -319,21 +320,28 @@ export function ManeuverBanner({
 }
 
 /**
- * In place of the maneuver banner while a trip restored after a relaunch finds its place on the
- * route. The step it was saved on may be behind the vehicle, so no maneuver or distance is shown
- * until GPS confirms where it is.
+ * In place of the maneuver banner while the trip under way has no maneuver to show
+ * (`pausedTripBanner`): a trip restored after a relaunch finding its place on the route, or off
+ * its route and not matched since. The step it was saved on may be behind the vehicle, so no
+ * maneuver or distance is shown until GPS confirms where it is.
  */
-export function TripResumingBanner({
+export function TripPausedBanner({
+  message,
+  offRoute,
   onHeightChange,
   safeAreaTop,
+  title,
 }: {
+  message: string;
+  offRoute: boolean;
   onHeightChange: (height: number) => void;
   safeAreaTop: number;
+  title: string;
 }) {
   const { fontScale } = useWindowDimensions();
   return (
     <Animated.View
-      accessibilityLabel="Resuming trip, finding your place on the route"
+      accessibilityLabel={`${title}, ${message}`}
       accessibilityLiveRegion="polite"
       accessible
       entering={FadeInDown.duration(motion.duration.base).reduceMotion(ReduceMotion.System)}
@@ -347,7 +355,11 @@ export function TripResumingBanner({
         <View style={guidanceStyles.bannerRow}>
           <View style={guidanceStyles.maneuverTile}>
             <SymbolView
-              name={{ android: 'my_location', ios: 'location.magnifyingglass' }}
+              name={
+                offRoute
+                  ? { android: 'alt_route', ios: 'arrow.triangle.branch' }
+                  : { android: 'my_location', ios: 'location.magnifyingglass' }
+              }
               size={42}
               tintColor={palette.white}
             />
@@ -359,10 +371,10 @@ export function TripResumingBanner({
               numberOfLines={1}
               style={[guidanceStyles.distance, guidanceStyles.distanceText]}
             >
-              Resuming trip
+              {title}
             </Text>
             <Text maxFontSizeMultiplier={1.3} numberOfLines={3} style={guidanceStyles.instruction}>
-              Finding your place on the route
+              {message}
             </Text>
           </View>
         </View>
@@ -733,7 +745,7 @@ export function TripSheet({
     (!guidanceAvailable
       ? 'No turn-by-turn guidance yet'
       : remaining === undefined
-        ? 'Finding your place on the route'
+        ? tripRemainingWithoutEstimate(matchStatus)
         : `${formatDuration(remaining.durationSeconds)} · ${formatDistance(remaining.distanceMeters)}`);
   const summaryLabel =
     flags.label +

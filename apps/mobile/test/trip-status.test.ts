@@ -6,8 +6,10 @@ import {
   isResumingTrip,
   isTripState,
   nextTripSimulated,
+  pausedTripBanner,
   simulatedAtTripEntry,
   tripNotice,
+  tripRemainingWithoutEstimate,
   tripStatusLabel,
   tripActions,
   tripSummaryFlags,
@@ -97,6 +99,30 @@ describe('a restored trip off its route', () => {
     const notice = { matchStatus: 'off-route' as const, positionEstimated: false, resuming: true };
     expect(tripNotice({ ...notice, rerouteCount: 0 })?.title).toBe('Off route');
     expect(tripStatusLabel(notice)).toBe('off route');
+    // The collapsed panel and the banner in place of the maneuver say so, never "Finding your place".
+    expect(tripRemainingWithoutEstimate('off-route')).toBe('Off route');
+    expect(
+      pausedTripBanner({ matchStatus: 'off-route', resuming: false, tripPause: 'rerouting' }),
+    ).toEqual({ message: 'Finding a new route', title: 'Off route' });
+    for (const tripPause of ['proceed-to-route' as const, undefined]) {
+      expect(pausedTripBanner({ matchStatus: 'off-route', resuming: true, tripPause })).toEqual({
+        message: 'Finding a way back to your route',
+        title: 'Off route',
+      });
+    }
+  });
+
+  it('says it is finding its place only while it is', () => {
+    expect(tripRemainingWithoutEstimate('acquiring')).toBe('Finding your place on the route');
+    const resuming = { message: 'Finding your place on the route', title: 'Resuming trip' };
+    expect(pausedTripBanner({ matchStatus: 'acquiring', resuming: true })).toEqual(resuming);
+    // Paused on the route after a fix the matcher did not accept.
+    expect(
+      pausedTripBanner({ matchStatus: 'matched', resuming: false, tripPause: 'locating' }),
+    ).toEqual(resuming);
+    // A guided trip, on its route or departing mid-trip (as on main): the maneuver banner instead.
+    expect(pausedTripBanner({ matchStatus: 'matched', resuming: false })).toBeUndefined();
+    expect(pausedTripBanner({ matchStatus: 'off-route', resuming: false })).toBeUndefined();
   });
 
   it('leaves every other trip as on main', () => {
