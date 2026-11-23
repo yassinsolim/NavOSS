@@ -1,20 +1,62 @@
 # TestFlight beta runbook
 
-Status refreshed: 2026-11-20. The dated entries below are the release record and are not rewritten; this block is the current summary.
+Status refreshed: 2026-11-23. The dated entries below are the release record and are not rewritten; this block is the current summary.
 
 ## Current status
 
-- **Latest distributed build:** `0.1.0 (84)` from `cf2afaa` (`main`), profile `production-carplay-google`; hosted run `44731764239` succeeded, linked Google Places and contained no key-like strings in its log. EAS submission `81570460-b507-4450-92a6-53b25da88b7f` finished 2026-11-20 12:21 UTC. The internal `testers` group receives uploads automatically.
+- **Latest distributed build:** `0.1.0 (85)` from `3b57b04` (`main`), profile `production-carplay-google`; hosted run `45118388823` succeeded on 2026-11-23 (UTC; 2026-11-22 in Calgary), linked Google Places and contained no key-like strings in its log. EAS submission `f767353f-c3ec-4256-ac22-4bf6e341377b` finished 2026-11-23 05:52 UTC. The internal `testers` group receives uploads automatically. Dates in this file are UTC.
 - **Built, not delivered:** No-upload signing preflights: 74 (`d0594cd`, run `43601926831`), 76 (App Attest entitlement, run `43674818814`), 78 and 79 (Google profile on the #113 branch, runs `43682190454` and `43687223016`). Run `43677906278` and run `43681889973` failed before building while the Google key was an EAS "secret" (77 was consumed). Run `43688847904` on `7c3672a` was started by mistake before validation and cancelled during the build step; nothing was submitted.
-- **Older builds:** Build 83 (`2cb5c70`) was distributed to internal `testers` and NavOSS Friends on 2026-11-17; on 2026-11-20 App Store Connect showed 4 installs and 3 sessions, with no new feedback. The newest TestFlight feedback remains the two build 82 reports. Build 81 (`14dae86`, hosted run `43729757481`, EAS submission `5c6791e9-1d5e-4e15-ad7d-101f34d512fb`) was distributed on 2026-11-15. Its province-wide phone road-events list (#120) is absent from builds 75 and 80, which request Calgary `/v1/events` and Kelowna `/v2/events?region=kelowna-bc`. Starting away from the road in build 81 can reroute about every six seconds and replace the chosen alternative. Build 80 (`141b394`, hosted run `43693475548`, EAS submission `11f05277-2bd4-46cc-9bc7-1e7ba2978ae3`) was processed and distributed and shows one install and one session. Builds 75 and 70 preceded it. Build 73 was never uploaded and remains held permanently.
+- **Older builds:** Build 84 (`cf2afaa`, hosted run `44731764239`, EAS submission `81570460-b507-4450-92a6-53b25da88b7f`) was distributed on 2026-11-20; the owner's build 84 CarPlay feedback prompted #160, which is in build 85. Build 83 (`2cb5c70`) was distributed to internal `testers` and NavOSS Friends on 2026-11-17; on 2026-11-20 App Store Connect showed 4 installs and 3 sessions, with no new feedback. The newest TestFlight feedback remains the two build 82 reports. Build 81 (`14dae86`, hosted run `43729757481`, EAS submission `5c6791e9-1d5e-4e15-ad7d-101f34d512fb`) was distributed on 2026-11-15. Its province-wide phone road-events list (#120) is absent from builds 75 and 80, which request Calgary `/v1/events` and Kelowna `/v2/events?region=kelowna-bc`. Starting away from the road in build 81 can reroute about every six seconds and replace the chosen alternative. Build 80 (`141b394`, hosted run `43693475548`, EAS submission `11f05277-2bd4-46cc-9bc7-1e7ba2978ae3`) was processed and distributed and shows one install and one session. Builds 75 and 70 preceded it. Build 73 was never uploaded and remains held permanently.
 - **Production service:** Canada cutover was 2026-11-15 15:44 UTC using API image `4708d34`; the current API image is from `36c8a9f` (#127), deployed on 2026-11-15, with image rollback tag `navoss-api:pre-canada-search-fixes`. The earlier cutover image rollback is `navoss-api:pre-canada-registry`; its data backup is `infra/compose/.env.pre-canada-20261115T154413Z`, restored by recreating Valhalla, Nominatim, API and Caddy. `/v2/config` declares all 13 provinces and territories; `/v1/config` is unchanged. Province-wide events cover Alberta, BC and Ontario; 511 Alberta and Ontario 511 were connected in production on 2026-11-15; build 81's list now includes their events. Reports are `attested`, traffic is `collect` and not displayed. Offline maps: Alberta and Calgary only.
-- **Distribution:** App Store Connect build `5d9cde46-c973-40c9-88cd-9550d6b7495c` reached internal `testers` automatically. EAS workflow run `01a1f91f-1186-731c-83de-9f508b22c5d5` at 13:22 UTC on 2026-11-20 distributed it to NavOSS Friends with Beta App Review submission and reported SUCCESS. App Store Connect then showed **Build 84: Testing** for `testers` and NavOSS Friends (8 testers), with no installs or sessions yet. The TestFlight Test Information description was updated for build 84 and read back after saving; Review Notes were unchanged. The What to Test text sent is in [app-store-metadata.md](app-store-metadata.md#what-to-test).
+- **Distribution:** App Store Connect build `e17edee1-02d4-4624-8e90-7c9c0ba630e2` reached internal `testers` automatically. EAS workflow run `01a20730-abaa-77ea-aecf-96661379ffab` (SUCCESS, 2026-11-23 06:56 UTC) distributed it to NavOSS Friends. App Store Connect then showed Testing for both groups, and the TestFlight beta description was updated with a build 85 sentence, saved and read back from App Store Connect on 2026-11-23 (1,756 characters; nothing else changed). No installs or sessions have been observed yet. The What to Test text sent as the workflow's `changelog` input is in [app-store-metadata.md](app-store-metadata.md#what-to-test).
+- **Build 84 distribution (2026-11-20):** App Store Connect build `5d9cde46-c973-40c9-88cd-9550d6b7495c` reached internal `testers` automatically. EAS workflow run `01a1f91f-1186-731c-83de-9f508b22c5d5` at 13:22 UTC on 2026-11-20 distributed it to NavOSS Friends with Beta App Review submission and reported SUCCESS. App Store Connect then showed **Build 84: Testing** for `testers` and NavOSS Friends (8 testers), with no installs or sessions at that time. The TestFlight Test Information description was updated for build 84 and read back after saving; Review Notes were unchanged.
 - **Build 83 distribution (2026-11-17):** App Store Connect build `22053f21-da31-4230-bec2-30a6c25ea350`: external workflow run `01a1eb6d-2623-74d4-9fa4-0c4f12ba727b` at 21:32 UTC failed with "App Store Connect resource was not found" while Apple was still processing. Retry `01a1eb73-9b1f-7493-acd7-2def643441fc` at 21:41 UTC reported SUCCESS for NavOSS Friends with Beta App Review submission. App Store Connect then showed Testing for internal `testers` and NavOSS Friends (8 testers), expiring in 90 days, with no installs or sessions at that time. The TestFlight Test Information description was updated and read back; Review Notes were unchanged.
-- **Next checks:** The owner's car check of build 84 comes first. Physical iPhone offline download, first App Attest registration, Google's place panel and full wired/wireless CarPlay checks remain outstanding ([checklist](next-build-checklist.md)). Never retry build 73.
-- **Build 84 contents:** #147 (`a1787ff`) fixes phone guidance status-bar content and control fade; #149 (`4031d25`) changes CarPlay card wording and arrow scale to use car-display traits; #150 (`eb61be1`) adds offline-style restyle checks; #148 (`683bc99`) refreshes dependencies including app-shipped Zod 4.6.7; #144 fixes Maestro labels. The production API was not redeployed.
-- **Build 84 limits:** Real CarPlay chrome, a head unit, a physical iPhone, iOS 26.6.x, VoiceOver driven by a person, Reduce Motion, stacked camera/reroute/report-ahead cards, offline CarPlay from this binary and the signed build itself have not been verified. The simulator validation built `cf2afaa` with Xcode 27.2; the runner uses 26.6. The low findings and open checks are in the [build 84 record](#build-84-validation-and-known-limits-2026-11-20) and [checklist](next-build-checklist.md#build-84-owner-checks).
+- **Next checks:** The owner's car check of build 85, starting with the CarPlay free-drive arrow, comes first. Physical iPhone offline download, first App Attest registration, Google's place panel and full wired/wireless CarPlay checks remain outstanding ([checklist](next-build-checklist.md)). Never retry build 73.
+- **Build 85 contents:** since build 84 (`cf2afaa`): #160 CarPlay free drive: with no destination the CarPlay map shows the guidance vehicle arrow or car at the live position, pointing the direction of travel, with the close guidance camera; panning pauses following and Recenter resumes it; Go and End keep one marker. #153 and #154 phone floating map controls: faded controls take no taps, icon colours follow the basemap and glass backgrounds survive ending a trip. #156 Android bring-up, which reaches iOS only through cached date and collation formatters. #162 workflow hardening is not in the binary. The production API was not redeployed.
+- **Build 85 limits:** Arrival time and "updated h:mm" use formatters created once at app start, so a running app keeps its starting time zone until relaunch (reasoned from source, not exercised on screen; a fix is in progress in a separate PR and is not in build 85). Real CarPlay chrome, a head unit, Apple's CarPlay Simulator, a physical iPhone, the signed build itself, the Maestro suite in the validation pass and the iPhone SE pass were not verified. Changing text size mid-trip clips the step list until relaunch, and closing the app before a trip reaches the road ends that trip on reopen (#135 is parked). See the [build 85 record](#build-85-validation-and-known-limits-2026-11-22) and [checklist](next-build-checklist.md#build-85-in-testers-hands).
+
+### Build 85 validation and known limits (2026-11-22)
+
+Release validation of `3b57b04` was **go**; evidence is in git-ignored
+`artifacts/release-validation-main-85/RESULTS.md`. Clean install and all five gates passed with
+caches off (`TURBO_FORCE=1`) and database tests on (1,115 API, 652 mobile and 219 contracts tests);
+`test:native:ios` passed 551 tests with 3 skipped and 0 failures (build 84: 537). Prebuilding iOS
+at `cf2afaa` and at `3b57b04` gave byte-identical `Info.plist`, `NavOSS.entitlements`,
+`PrivacyInfo.xcprivacy`, `Podfile` and `Podfile.properties.json`, and a `project.pbxproj` identical
+apart from generated object IDs; only the two CarPlay Swift sources differ, so the Android work does
+not leak into the iOS config. A Release-configuration simulator build with the Google profile (placeholder
+key, so Google's place panel could not render) was exercised on screen against production read-only: search,
+place sheet, route preview with alternatives, arrival times today and tomorrow, guidance with the
+sheet pulled up and down, Day map under dark system appearance (glyphs readable, fixing the build 84 finding), ending a trip from the
+expanded sheet (report and recenter keep their glass circles, fixing another build 84 finding),
+kill and relaunch mid-trip, background and foreground, and a simulated drive to arrival. A
+CoreLocation log of that drive showed 539 fixes and 539 deliveries to one location client, none after
+arrival ended the trip or after the app was terminated. CarPlay harness captures for free drive and
+guidance were inspected: the NavOSS arrow on every live-fix capture, a neutral marker without a heading,
+nothing with no fix, no MapLibre dot and a close follow camera. A Release build with a simulated
+location 1,000 km from the Calgary centre drew the vehicle at the fix and moved with further fixes.
+The proxy log showed only GET requests and search and route POSTs.
+
+Known limits: (1) Arrival time and "updated h:mm" use `Intl.DateTimeFormat` instances created once at
+module load, so a running app keeps its starting time zone until relaunch. This is reasoned from source
+(ECMA-402 and Hermes), not exercised on screen: the simulator has no Date & Time page and follows
+the shared host's zone. A fix is in progress in a separate PR and is not in build 85. Build 84
+created a formatter per render; whether iOS refreshes the zone in a running app is inferred. (2) In
+`validate:navigation:ios`, every phase passed except the pixel gate for `carplay-free-drive-end.png`,
+which failed twice (marker at 0.561 of map height against 0.6). The marker is present and its
+size ratio matches PR #160's passing capture; the letterbox colour differs, and the shared simulator
+named "NavOSS iPhone 15 Pro Max" is an iPhone 11 Pro Max device type. This is judged a harness or
+device-type issue and is under investigation. (3) Not verified: a real head unit or Apple's CarPlay
+Simulator (including phone and CarPlay together, and Go and End on a connected scene), a physical iPhone,
+the signed build itself (validation used Xcode 27.2; the runner uses 26.6), the Maestro suite in this pass,
+the iPhone SE pass, opening hours on screen (production search returns none), the Google panel with a real
+key and time-zone change while running. (4) Still true from before: changing text size mid-trip clips the
+step list until relaunch, and closing the app before a trip reaches the road ends that trip on
+reopen (#135 is parked). No live traffic is shown.
 
 ### Build 84 validation and known limits (2026-11-20)
+
+Build 84 contained #147 (`a1787ff`), #149 (`4031d25`), #150 (`eb61be1`), #148 (`683bc99`) and the #144 Maestro label fixes; the production API was not redeployed.
 
 Release validation of `cf2afaa` was **go**; evidence is in git-ignored
 `artifacts/release-validation-main-84/RESULTS.md`. Clean install and five gates passed with database
