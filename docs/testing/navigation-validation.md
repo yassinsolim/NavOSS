@@ -150,8 +150,12 @@ Valhalla (to the next intersection in the direction of travel, then back to the 
   further answer in the same detour to at most 1 600 m and 120 s.
 - It is then made only while the vehicle is moving away from the route it is off: 30 m further
   from it than 100 m of travel earlier (about 17 degrees or more), or more than 500 m from it.
-  A driver on a parallel road stays the same distance from the route and keeps it until they
-  rejoin it.
+  A driver on a parallel road stays the same distance from the route and is not asked about
+  again for that alone.
+- Once per detour that test is waived: a driver who passed the new route's turn back and kept
+  going for the spacing gets one fresh route from where they are, along the road they chose
+  (on a 1.5 km parallel avenue, 34 s and about 290 m after the first). It is not waived after
+  the driver declined an Ask first offer in the detour.
 - After 500 m and 30 s on a route without leaving it, the driver is established again and the
   count starts over.
 - The replacement owed for an Ask first proposal nobody answered waits for the time spacing only
@@ -171,8 +175,11 @@ travel after the departure to see that the vehicle is moving away. A third waits
 On the 2.4 km straight detour (up the next avenue, ignoring every route): adaptive and keep-route
 went from 12 installs to 2, Ask first from 7 requests, 4 spoken offers and 3 installs to 2
 requests, 1 offer and 1 install. With a router that starts every route with a U-turn, adaptive
-went from 24 installs to 1. The recorded Calgary drive speaks the same prompts, and its detour,
-answered with the route already followed, installs nothing (2 before).
+went from 24 installs to 2. The recorded Calgary drive speaks the same prompts, and its detour,
+answered with the route already followed, installs nothing (2 before). A 1.5 km parallel avenue
+went from 9 installs to 2, and a service road 60 m beside the route for 1.5 km from 9 to 2. After
+the fresh route's own turn back has passed, nothing more is asked for until the driver rejoins
+or moves away.
 
 ## Artifact layout
 

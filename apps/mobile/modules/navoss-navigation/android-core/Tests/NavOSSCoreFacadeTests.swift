@@ -251,10 +251,10 @@ final class NavOSSCoreFacadeTests: XCTestCase {
     XCTAssertTrue(transcript.contains("request POST /v2/routes"), "the trace reroutes")
     XCTAssertTrue(transcript.contains { $0.hasPrefix("speak maneuver ") })
     // The detour is answered with the recorded route: the route already followed, so nothing is
-    // installed (`navigationIsMateriallySameRoute`) and the spacing asks for nothing more
-    // while the vehicle runs beside the route (`NavigationRerouteSpacing`).
+    // installed (`navigationIsMateriallySameRoute`), twice: the first answer and the detour's
+    // one fresh route (`NavigationRerouteSpacing`).
     let reroutes = transcript.filter { $0.hasPrefix("reroute ") }
-    XCTAssertEqual(reroutes.count, 1)
+    XCTAssertEqual(reroutes.count, 2, "the first answer and the detour's fresh route")
     XCTAssertTrue(reroutes.last?.contains(#""rerouteCount":0"#) == true)
     XCTAssertTrue(reroutes.allSatisfy { $0.contains(#""routeStatus":"tracking""#) })
   }

@@ -305,6 +305,57 @@ final class NavigationRerouteBackoffTests: XCTestCase {
     XCTAssertEqual(rig.spokenAlerts.filter { $0 == Self.newRouteAnnouncement }.count, 1)
   }
 
+  /// A deliberate parallel street: the next avenue over for 1.5 km, then back. After the first
+  /// route (which turns back at the next street), the driver who keeps going gets one fresh route
+  /// along the avenue they are on, 400 m and 20 s later; then nothing more until they rejoin.
+  func testADriverOnAParallelStreetGetsOneFreshRouteAlongIt() throws {
+    let rig = Self.gridRig()
+    try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
+    var installs: [(time: TimeInterval, along: Double)] = []
+    var before = 0
+    let path: [(Double, Double)] = [
+      (0, 0), (0, 400), (200, 400), (200, 1_900), (0, 1_900), (0, 3_600), Self.destination,
+    ]
+    for position in Trace.positions(along: path, every: 12).dropFirst() {
+      try rig.fix(position.x, position.y, course: position.courseDegrees)
+      if rig.installs.count > before { installs.append((rig.clock.time, position.alongMeters)) }
+      before = rig.installs.count
+    }
+    let log = rig.timeline.joined(separator: "\n")
+    XCTAssertEqual(rig.state.navigation.phase, .arrived, log)
+    XCTAssertEqual(installs.count, 2, log)
+    guard installs.count == 2 else { return }
+    XCTAssertLessThanOrEqual(installs[1].along - installs[0].along, 450, log)
+    XCTAssertLessThanOrEqual(installs[1].time - installs[0].time, 40, log)
+    // The fresh route goes on north up the avenue the driver is on.
+    let fresh = try XCTUnwrap(rig.network.requests.last)
+    let corners = Self.gridRoute(from: fresh.origin, heading: fresh.originHeadingDegrees)
+    XCTAssertEqual(corners[0].0, 200, accuracy: 1)
+    XCTAssertGreaterThan(corners[1].1, corners[0].1)
+  }
+
+  /// A service road 60 m beside the route: never far enough from it to count as moving away.
+  /// The driver still gets one fresh route from where they are once the spacing has passed.
+  func testAServiceRoadBesideTheRouteGetsOneFreshRoute() throws {
+    var count = 0
+    let lock = NSLock()
+    let rig = Rig { request in
+      let id = lock.withLock {
+        count += 1
+        return "service-\(count)"
+      }
+      let p = Trace.local(
+        NavigationCoordinate(latitude: request.origin.latitude, longitude: request.origin.longitude))
+      let next = ((p.y + 60) / Self.block).rounded(.up) * Self.block
+      return [Self.trip(id: id, corners: [(60, p.y), (60, next), (0, next), (0, 3_600), Self.destination])]
+    }
+    try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
+    try rig.drive([(0, 0), (0, 400), (60, 440), (60, 1_900), (0, 1_960), (0, 3_600), Self.destination])
+    let log = rig.timeline.joined(separator: "\n")
+    XCTAssertEqual(rig.state.navigation.phase, .arrived, log)
+    XCTAssertEqual(rig.installs.count, 2, log)
+  }
+
   // MARK: Safety: real departures still reroute
 
   /// A wrong turn east at y = 400 and on east for 2.4 km, ignoring every route. The first
@@ -614,7 +665,8 @@ final class NavigationRerouteBackoffTests: XCTestCase {
       Array(store.checkpoints.dropFirst(12)),
       [4_586, 4_961, 5_389, 5_855, 6_321, 6_706, 7_078, 7_457, 7_831, 8_204])
     XCTAssertEqual(store.savedTrips, 1, "the route was never replaced (twice on 74f6f9f)")
-    XCTAssertEqual(network.requests.count, 1, "two on 74f6f9f")
+    // The first answer and the detour's fresh route, both the route followed: nothing installed.
+    XCTAssertEqual(network.requests.count, 2)
     XCTAssertEqual(engine.currentState().rerouteCount, 0)
   }
 
@@ -624,6 +676,29 @@ final class NavigationRerouteBackoffTests: XCTestCase {
     let spacings = (1...6).map { NavigationRerouteSpacing.spacing(answers: $0) }
     XCTAssertEqual(spacings.map(\.meters), [400, 800, 1_600, 1_600, 1_600, 1_600])
     XCTAssertEqual(spacings.map(\.seconds), [20, 40, 80, 120, 120, 120])
+  }
+
+  /// Two answers in a detour, the driver beside the route: held. After 500 m and 30 s on a
+  /// route, the next departure is a first departure again.
+  func testEstablishingOnARouteStartsTheCountAgain() {
+    var spacing = NavigationRerouteSpacing()
+    var time = 0.0
+    var y = 0.0
+    func observe(offRoute: Bool) {
+      time += 1
+      y += 12
+      spacing.observe(
+        coordinate: Trace.coordinate(0, y), accuracyMeters: 5, isOffRoute: offRoute,
+        isMatched: !offRoute, distanceFromRouteMeters: offRoute ? 60 : nil, now: time)
+    }
+    spacing.answered(now: time)
+    spacing.answered(now: time)
+    for _ in 0..<100 { observe(offRoute: true) }
+    XCTAssertFalse(spacing.allowsRequest(now: time), "beside the route, fresh route used")
+    for _ in 0..<45 { observe(offRoute: false) }
+    observe(offRoute: true)
+    XCTAssertTrue(spacing.allowsRequest(now: time), "a first departure again")
+    XCTAssertEqual(spacing.answers, 0)
   }
 
   func testTheTrackHeading() {

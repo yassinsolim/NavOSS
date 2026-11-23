@@ -278,6 +278,11 @@ func navigationFetchRecoveryRoute(
 ///   at about 17 degrees or more), or more than `farFromRouteMeters` from it. A driver running
 ///   beside the route on a parallel road stays the same distance from it and keeps the route
 ///   until they rejoin it or turn away from it.
+/// - Once per detour (unless the driver declined an ask-first offer) the divergence test is waived: a driver who passed the replacement's turn
+///   back and kept going for the spacing gets one fresh route from where they are, along the
+///   road they chose. On a road close beside the route (a service road 60 m from it) the
+///   distance never grows enough to count as moving away, and they would otherwise keep a route
+///   whose turn is behind them until they rejoined.
 /// - The driver is established, and the count starts again, after `establishedMeters` and
 ///   `establishedSeconds` on a route without leaving it.
 ///
@@ -302,6 +307,8 @@ struct NavigationRerouteSpacing {
 
   /// Replacements answered since the driver was last established on a route.
   private(set) var answers = 0
+  /// The one request per detour made without moving away (see above) has been answered.
+  private var hasRefreshed = false
   private var lastAnswer: (time: TimeInterval, travelMeters: Double)?
   private var onRouteSince: (time: TimeInterval, travelMeters: Double)?
   /// Distance from the route the vehicle is off, against travel, covering at least the last
@@ -355,6 +362,7 @@ struct NavigationRerouteSpacing {
       {
         answers = 0
         lastAnswer = nil
+        hasRefreshed = false
       }
       return
     }
@@ -393,7 +401,7 @@ struct NavigationRerouteSpacing {
     else {
       return false
     }
-    if current.distanceMeters > Self.farFromRouteMeters {
+    if !hasRefreshed || current.distanceMeters > Self.farFromRouteMeters {
       return true
     }
     guard let base = trail.first,
@@ -406,8 +414,19 @@ struct NavigationRerouteSpacing {
 
   /// A replacement was answered: installed, proposed, or found to be the route followed.
   mutating func answered(now: TimeInterval) {
+    // Every answer after the first in a detour is this detour's fresh route, whether or not it
+    // was asked for while moving away.
+    if answers > 0 {
+      hasRefreshed = true
+    }
     answers += 1
     lastAnswer = (now, travelMeters)
+  }
+
+  /// The driver declined an ask-first replacement: they chose to stay on their own way, so the
+  /// fresh route is not offered without moving away.
+  mutating func declined() {
+    hasRefreshed = true
   }
 
   /// The route was replaced: distances measured to the old one no longer apply.
