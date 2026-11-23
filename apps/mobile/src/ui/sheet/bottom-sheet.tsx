@@ -20,6 +20,7 @@ import {
   View,
   type ViewStyle,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { Gesture, GestureDetector, type NativeGesture } from 'react-native-gesture-handler';
 import Animated, {
   cancelAnimation,
@@ -48,6 +49,7 @@ import {
   resolveSheetDetents,
   type SheetDetent,
 } from '@/ui/sheet/sheet-detents';
+import { useKeyboardCrowded } from '@/ui/sheet/use-keyboard-crowded';
 
 export type { SheetDetent };
 
@@ -137,15 +139,18 @@ export function BottomSheet({
   const frame = use(SheetFrameContext);
   const { height: windowHeight } = useWindowDimensions();
   const [contentHeight, setContentHeight] = useState(0);
+  // A crowded keyboard (Android landscape) leaves room for the field and results only: the
+  // sheet drops its grabber and the status bar and rises to the top of the window.
+  const crowded = useKeyboardCrowded() && keyboardAware;
   const sizedByContent = detents.includes('content');
-  const available = windowHeight - insets.top - space.sm - bottomOffset;
+  const available = windowHeight - (crowded ? 0 : insets.top) - space.sm - bottomOffset;
   const detentKey = detents.join('|');
   const resolved = useMemo(
     () => resolveSheetDetents(detents, contentHeight, available),
     // Dependencies: `detentKey` is the array's value.
     [available, contentHeight, detentKey],
   );
-  const tallest = resolved.at(-1) ?? 0;
+  const tallest = crowded ? available : (resolved.at(-1) ?? 0);
   const [detentIndex, setDetentIndex] = useState(initialDetent);
 
   const height = useSharedValue(0);
@@ -186,7 +191,7 @@ export function BottomSheet({
   // The resting detent is React state: gestures, the keyboard, `snapTo` and accessibility
   // actions all set it, and this effect is the one place the sheet is sent there.
   useEffect(() => {
-    const target = resolved[Math.min(detentIndex, resolved.length - 1)] ?? 0;
+    const target = crowded ? tallest : (resolved[Math.min(detentIndex, resolved.length - 1)] ?? 0);
     detentHeights.value = resolved;
     maxHeight.value = tallest;
     restingHeight.value = target;
@@ -201,6 +206,7 @@ export function BottomSheet({
     height.value = withSpring(target, SPRING);
   }, [
     closing,
+    crowded,
     detentHeights,
     detentIndex,
     height,
@@ -358,6 +364,7 @@ export function BottomSheet({
           ]}
           testID={testID}
         >
+          {crowded && <StatusBar hidden />}
           <View style={styles.underlay} />
           <View
             accessibilityActions={
@@ -375,9 +382,9 @@ export function BottomSheet({
               const step = event.nativeEvent.actionName === 'increment' ? 1 : -1;
               setDetentIndex(Math.max(0, Math.min(lastIndex, currentIndex + step)));
             }}
-            style={styles.grabberArea}
+            style={crowded ? styles.grabberAreaHidden : styles.grabberArea}
           >
-            <View style={styles.grabber} />
+            {!crowded && <View style={styles.grabber} />}
           </View>
           <SheetContext value={context}>
             <Animated.View
@@ -485,6 +492,7 @@ const useStyles = createThemedStyles(({ colors, scheme }) =>
       height: GRABBER_AREA_HEIGHT,
       justifyContent: 'center',
     },
+    grabberAreaHidden: { height: space.sm },
     fullWidth: { left: 0, right: 0 },
     host: { position: 'absolute' },
     sheet: {

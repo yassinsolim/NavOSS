@@ -179,10 +179,21 @@ jobs:
             /usr/libexec/PlistBuddy -c "Print :UIApplicationSceneManifest:UISceneConfigurations:$role:0:UISceneDelegateClassName" "$plist"
           done
 
+  # Two legs side by side: `debug` (debug APK and the Kotlin unit tests) and `release` (the R8 and
+  # resource-shrinking build). Each also builds or restores the navigation core and checks its APK.
+  # One job doing both took about 20 minutes, mostly compiling React Native's C++ twice.
   android:
-    name: Android build and Kotlin tests
+    name: Android build and Kotlin tests (${{ matrix.variant }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [debug, release]
+    env:
+      # The navigation plugin requires an HTTPS API origin; CI never calls it.
+      EXPO_PUBLIC_API_URL: https://ci.invalid
+      VARIANT: ${{ matrix.variant }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -202,7 +213,8 @@ jobs:
             exit 0
           fi
           changed="$(git diff --name-only "origin/$BASE_REF...HEAD")"
-          if grep -Eq '^(apps/mobile/(app\.json|package\.json|babel\.config\.js|metro\.config\.js|plugins/|modules/|src/|assets/)|packages/contracts/|pnpm-lock\.yaml|\.github/workflows/ci\.yml)' <<<"$changed"; then
+          # `modules/` covers the navigation core's sources (ios/Core, android-core).
+          if grep -Eq '^(apps/mobile/(app\.json|package\.json|babel\.config\.js|metro\.config\.js|plugins/|modules/|src/|assets/|scripts/(build-android-core\.sh|android-core-toolchain\.env|build-android-release\.sh|test-build-android-release\.sh|pin-gradle-wrapper\.sh|gradle-wrapper\.env|validate-release-env\.mjs))|packages/contracts/|pnpm-lock\.yaml|\.github/workflows/ci\.yml|\.github/actions/build-android-core/)' <<<"$changed"; then
             echo 'android=true' >> "$GITHUB_OUTPUT"
           else
             echo 'android=false' >> "$GITHUB_OUTPUT"
@@ -229,8 +241,8 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/plugins/*.cjs', 'apps/mobile/modules/*/android/build.gradle') }}
-          restore-keys: gradle-${{ runner.os }}-
+          key: gradle-${{ runner.os }}-${{ matrix.variant }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/plugins/*.cjs', 'apps/mobile/modules/*/android/build.gradle') }}
+          restore-keys: gradle-${{ runner.os }}-${{ matrix.variant }}-
 
       - name: Enable pnpm
         if: steps.changes.outputs.android == 'true'
@@ -251,15 +263,62 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
             'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1' >/dev/null
 
-      # ── Hook: build the native navigation core for Android (see android-release.yml) ──────
-
-      - name: Build debug APK and run Kotlin unit tests
+      # The Swift navigation core, built (or restored and re-verified) exactly as the release
+      # workflow does, so the APKs below package it.
+      - name: Build the Android navigation core
         if: steps.changes.outputs.android == 'true'
+        id: core
+        uses: ./.github/actions/build-android-core
+
+      - name: Build the debug APK and run Kotlin unit tests
+        if: steps.changes.outputs.android == 'true' && matrix.variant == 'debug'
         working-directory: apps/mobile
         run: |
           set -euo pipefail
           corepack pnpm --filter @navoss/contracts build
           corepack pnpm exec expo prebuild --platform android --clean --no-install
+          scripts/pin-gradle-wrapper.sh android
           cd android
           ./gradlew --console=plain :app:assembleDebug \
             :navoss-updater:testDebugUnitTest :navoss-navigation:testDebugUnitTest
+
+      # The release leg runs the release workflow's own two phases (build-android-release.sh), so
+      # R8 and resource shrinking run on every change and the claim that only signing and
+      # packaging happen while the key is present is tested here. Both keys are throwaway ones
+      # generated on the runner: the release signing plugin accepts any keystore named by its
+      # three variables; the release workflow is what pins the certificate.
+      - name: Check that the signing task check fails closed
+        if: steps.changes.outputs.android == 'true' && matrix.variant == 'release'
+        run: apps/mobile/scripts/test-build-android-release.sh
+
+      - name: Prepare the release build (no key)
+        if: steps.changes.outputs.android == 'true' && matrix.variant == 'release'
+        run: apps/mobile/scripts/build-android-release.sh prepare
+
+      - name: Create a throwaway signing key
+        if: steps.changes.outputs.android == 'true' && matrix.variant == 'release'
+        run: |
+          set -euo pipefail
+          password="$(openssl rand -hex 16)"
+          echo "::add-mask::$password"
+          keytool -genkeypair -storetype pkcs12 -keystore "$RUNNER_TEMP/ci-throwaway.p12" \
+            -storepass "$password" -alias ci-throwaway -keyalg RSA -keysize 2048 -validity 2 \
+            -dname 'CN=NavOSS CI throwaway' >/dev/null 2>&1
+          {
+            echo "NAVOSS_ANDROID_KEYSTORE=$RUNNER_TEMP/ci-throwaway.p12"
+            echo "NAVOSS_ANDROID_KEYSTORE_PASSWORD=$password"
+            echo 'NAVOSS_ANDROID_KEY_ALIAS=ci-throwaway'
+          } >> "$GITHUB_ENV"
+
+      - name: Sign and package the release APK (offline)
+        if: steps.changes.outputs.android == 'true' && matrix.variant == 'release'
+        run: apps/mobile/scripts/build-android-release.sh sign
+
+      # The APK carries the verified libraries byte for byte (so NDK r30's libc++_shared.so), and
+      # its dex keeps every class and member JNI reaches by name (in release: R8 did not strip them).
+      - name: Verify the navigation core in the APK
+        if: steps.changes.outputs.android == 'true'
+        run: |
+          set -euo pipefail
+          apps/mobile/modules/navoss-navigation/android-core/scripts/verify-apk-core.sh \
+            "apps/mobile/android/app/build/outputs/apk/$VARIANT/app-$VARIANT.apk"

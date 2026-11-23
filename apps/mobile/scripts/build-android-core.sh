@@ -4,6 +4,7 @@
 # as `jniLibs`: libNavOSSCore.so and every shared library it needs that Android does not provide,
 # stripped. Prints each library's size and deflated size, and the NEEDED closure.
 #
+# Runs on macOS and Linux (CI: android-core/scripts/install-toolchain-linux.sh installs the toolchain).
 # Requirements (versions pinned in android-core-toolchain.env; see docs/architecture/android-core.md):
 #   - the swift.org Swift toolchain on PATH (`. ~/.swiftly/env.sh` after `swiftly install`),
 #   - the Swift SDK for Android installed with `swift sdk install`,
@@ -27,17 +28,20 @@ fail() {
 ndk_revision="$(sed -n 's/^Pkg.Revision = //p' "$ANDROID_NDK_HOME/source.properties" 2>/dev/null || true)"
 [[ "$ndk_revision" == "$ANDROID_NDK_VERSION" ]] ||
   fail "ANDROID_NDK_HOME is NDK '$ndk_revision', expected $ANDROID_NDK_VERSION"
-swift --version 2>&1 | grep -q "Swift version $SWIFT_VERSION " ||
-  fail "swift on PATH is not Swift $SWIFT_VERSION (run: . ~/.swiftly/env.sh)"
-swift sdk list 2>/dev/null | grep -qx "$SWIFT_ANDROID_SDK_ID" ||
+# Here-strings, not pipes: `cmd | grep -q` can end `cmd` with SIGPIPE, which pipefail reports.
+grep -q "Swift version $SWIFT_VERSION " <<<"$(swift --version 2>&1)" ||
+  fail "swift on PATH is not Swift $SWIFT_VERSION (macOS: . ~/.swiftly/env.sh)"
+grep -qx "$SWIFT_ANDROID_SDK_ID" <<<"$(swift sdk list 2>/dev/null)" ||
   fail "Swift SDK $SWIFT_ANDROID_SDK_ID is not installed"
 
 # NAVOSS_HOST_HTTP: HTTP goes through the Kotlin host, so the URLSession adapter and with it
 # FoundationNetworking (libcurl) are left out. The test builds keep the adapter: the iOS tests
 # stub URLSession; the facade tests and the Kotlin test use the host transport this build ships.
-(cd "$package" && NAVOSS_ANDROID_CORE=1 swift build -c release --product NavOSSCore \
-  --swift-sdk "$SWIFT_ANDROID_SDK_ID" --triple "$SWIFT_ANDROID_TRIPLE" --scratch-path "$scratch" \
-  -Xswiftc -DNAVOSS_HOST_HTTP "$@")
+build=(swift build -c release --product NavOSSCore --swift-sdk "$SWIFT_ANDROID_SDK_ID"
+  --triple "$SWIFT_ANDROID_TRIPLE" --scratch-path "$scratch" -Xswiftc -DNAVOSS_HOST_HTTP "$@")
+(cd "$package" && NAVOSS_ANDROID_CORE=1 "${build[@]}")
+# SwiftPM's product directory differs between hosts and versions; ask it.
+products="$(cd "$package" && NAVOSS_ANDROID_CORE=1 "${build[@]}" --show-bin-path)"
 
 sdk_libs="$(swift sdk configure --show-configuration "$SWIFT_ANDROID_SDK_ID" "$SWIFT_ANDROID_TRIPLE" |
   sed -n 's/^swiftResourcesPath: //p')/android"
@@ -51,7 +55,7 @@ needed() {
 }
 
 rm -rf "$out" && mkdir -p "$out"
-cp "$scratch/out/Products/Release-android-${SWIFT_ANDROID_TRIPLE%%-*}/libNavOSSCore.so" "$out/"
+cp "$products/libNavOSSCore.so" "$out/"
 # The transitive closure of NEEDED libraries that Android itself does not provide.
 pending=(libNavOSSCore.so)
 while ((${#pending[@]})); do

@@ -1,8 +1,8 @@
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,6 +23,7 @@ import {
 } from '@/features/map/contribution-drafts';
 import { TAB_BAR_HEIGHT } from '@/features/map/overlay-layout';
 import { submitContribution } from '@/lib/api';
+import { IS_ANDROID } from '@/lib/device-copy';
 import { deviceDateTimeFormat } from '@/lib/device-time-format';
 import { createThemedStyles, motion, radius, space, typography, useTheme } from '@/theme';
 import { haptics } from '@/theme/haptics';
@@ -69,6 +70,34 @@ export function ContributeScreen({ bottomInset, safeAreaTop }: ContributeScreenP
   const [outcome, setOutcome] = useState<Outcome>();
   const [selectedType, setSelectedType] = useState<ContributionType>('missing-place');
   const [submittingDraftId, setSubmittingDraftId] = useState<string>();
+  // Android does not scroll a focused field above the keyboard once the keyboard has resized
+  // the page (a landscape keyboard covers most of a handheld's screen): scroll it there.
+  const scrollRef = useRef<ScrollView>(null);
+  const formY = useRef(0);
+  const fieldY = useRef({ details: 0, location: 0 });
+  const focusedField = useRef<'details' | 'location'>(undefined);
+  const revealFocusedField = () => {
+    const field = focusedField.current;
+    if (field === undefined) return;
+    scrollRef.current?.scrollTo({
+      animated: true,
+      y: Math.max(0, formY.current + fieldY.current[field] - space.xxl),
+    });
+  };
+  const onKeyboardShown = useEffectEvent(revealFocusedField);
+  useEffect(() => {
+    if (!IS_ANDROID) return undefined;
+    const subscription = Keyboard.addListener('keyboardDidShow', () => {
+      onKeyboardShown();
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+  const focusField = (field: 'details' | 'location') => {
+    focusedField.current = field;
+    if (IS_ANDROID && Keyboard.isVisible()) revealFocusedField();
+  };
   const busy = !isHydrated || isSaving || submittingDraftId !== undefined;
 
   useEffect(() => {
@@ -163,10 +192,13 @@ export function ContributeScreen({ bottomInset, safeAreaTop }: ContributeScreenP
       style={[styles.screen, { paddingTop: safeAreaTop }]}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        // Android draws edge to edge, so the window no longer resizes for the keyboard: pad there
+        // too, or a field low on the page stays under a landscape keyboard.
+        behavior="padding"
         style={styles.keyboardSurface}
       >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={[
             styles.content,
             { paddingBottom: TAB_BAR_HEIGHT + bottomInset + space.xxl },
@@ -213,11 +245,25 @@ export function ContributeScreen({ bottomInset, safeAreaTop }: ContributeScreenP
             </View>
           </View>
 
-          <View style={styles.section}>
+          <View
+            onLayout={(event) => {
+              formY.current = event.nativeEvent.layout.y;
+            }}
+            style={styles.section}
+          >
             <Text style={styles.fieldLabel}>Place or road</Text>
             <TextInput
               disableFullscreenUI
               accessibilityLabel="Place or road"
+              onBlur={() => {
+                focusedField.current = undefined;
+              }}
+              onFocus={() => {
+                focusField('location');
+              }}
+              onLayout={(event) => {
+                fieldY.current.location = event.nativeEvent.layout.y;
+              }}
               autoCapitalize="words"
               maxLength={160}
               onChangeText={setLocation}
@@ -233,6 +279,15 @@ export function ContributeScreen({ bottomInset, safeAreaTop }: ContributeScreenP
               accessibilityLabel="Contribution details"
               maxLength={800}
               multiline
+              onBlur={() => {
+                focusedField.current = undefined;
+              }}
+              onFocus={() => {
+                focusField('details');
+              }}
+              onLayout={(event) => {
+                fieldY.current.details = event.nativeEvent.layout.y;
+              }}
               onChangeText={setDescription}
               placeholder="Describe the missing place, incorrect detail, or route issue"
               placeholderTextColor={colors.textTertiary}

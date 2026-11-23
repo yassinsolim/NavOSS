@@ -120,3 +120,80 @@ export function tripStatusLabel({
   if (matchStatus === 'off-route') return 'off route';
   return 'acquiring route position';
 }
+
+/**
+ * What the trip sheet's always-visible summary adds before the remaining time: a simulated drive
+ * says so, and on Android a trip that is not on disk says "Not saved" (the full warning sits in
+ * the sheet's details, out of sight at the resting detent). iOS shows only the simulation label,
+ * as before.
+ */
+export function tripSummaryFlags({
+  isAndroid,
+  simulated,
+  tripNotSaved,
+}: {
+  isAndroid: boolean;
+  simulated: boolean;
+  tripNotSaved: boolean;
+}): { label: string; text: string } {
+  const notSaved = isAndroid && tripNotSaved;
+  return {
+    label:
+      (simulated ? 'Simulated drive. ' : '') +
+      (notSaved ? 'Trip not saved, it will not be restored if NavOSS closes. ' : ''),
+    text: (simulated ? 'Simulation · ' : '') + (notSaved ? 'Not saved · ' : ''),
+  };
+}
+
+/**
+ * The trip sheet's actions beside the sound control. A simulated drive (Android, a device with no
+ * usable location) has no real position: a road report would be recorded where the simulated
+ * vehicle is, and a shared ETA would tell someone about a trip nobody is driving, so neither is
+ * offered.
+ */
+export function tripActions({
+  hasRemaining,
+  simulated,
+}: {
+  hasRemaining: boolean;
+  simulated: boolean;
+}): { report: boolean; shareEta: boolean } {
+  return { report: !simulated, shareEta: hasRemaining && !simulated };
+}
+
+/**
+ * Whether the current trip (or the arrival it ended in) came from a simulated drive. The native
+ * simulation stops with the trip, so the arrival keeps the flag from the drive; a trip never
+ * turns from simulated into live. Cleared once the trip is over.
+ */
+export function nextTripSimulated(
+  previous: boolean,
+  routeState: string,
+  simulatedNow: boolean,
+): boolean {
+  if (!isTripState(routeState)) return false;
+  return previous || simulatedNow;
+}
+
+/**
+ * Whether to take the native trip's simulated flag now: once, when the screen first sees a trip.
+ * A screen mounted after a simulated arrival starts without a trip and adopts it a moment later,
+ * after the native simulation has stopped; only the native trip still knows where it came from.
+ */
+export function simulatedAtTripEntry(
+  routeState: string,
+  wasInTrip: boolean,
+  nativeTripSimulated: () => boolean,
+): boolean {
+  return isTripState(routeState) && !wasInTrip && nativeTripSimulated();
+}
+
+/** A trip is on screen: under way or just arrived. */
+export function isTripState(routeState: string): boolean {
+  return routeState === 'navigating' || routeState === 'arrived';
+}
+
+/** The arrival sheet's statement: a simulated drive must not read as a real arrival. */
+export function arrivalTitle(simulated: boolean): string {
+  return simulated ? 'Simulation finished' : "You've arrived";
+}

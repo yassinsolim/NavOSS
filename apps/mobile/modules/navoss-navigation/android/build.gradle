@@ -11,5 +11,31 @@ android {
   defaultConfig {
     versionCode 1
     versionName "0.0.0"
+    consumerProguardFiles 'consumer-rules.pro'
   }
+  sourceSets {
+    main {
+      // The Kotlin binding of the Swift core and the `.so` set `scripts/build-android-core.sh`
+      // produces (git-ignored). Without the libraries the module reports guidance unavailable.
+      java.srcDirs += "${projectDir}/../android-core/binding/src/main/kotlin"
+      jniLibs.srcDirs += "${projectDir}/../android-core/build/jniLibs"
+    }
+  }
+  packagingOptions {
+    jniLibs {
+      useLegacyPackaging = false
+    }
+  }
+  testOptions {
+    unitTests.all {
+      // Host logic tests run on the JVM; any android.* call they reach is a test bug.
+      it.testLogging { events "failed"; exceptionFormat "full" }
+    }
+  }
+}
+
+dependencies {
+  testImplementation 'junit:junit:4.13.2'
+  // android.jar's org.json is a stub on the JVM; the host logic reads and writes real JSON.
+  testImplementation 'org.json:json:20250517'
 }

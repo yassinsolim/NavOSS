@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const nativeModule = vi.hoisted(() => ({
-  addListener: vi.fn(() => ({ remove: vi.fn() })),
+  addListener: vi.fn<
+    (event: string, listener: (payload: unknown) => void) => { remove: () => void }
+  >(() => ({ remove: vi.fn() })),
   getCapabilities: vi.fn(() => ({ version: 10 })),
 }));
 
@@ -9,8 +11,10 @@ vi.mock('../modules/navoss-navigation/index.js', () => ({ default: nativeModule 
 
 import {
   nativeNavigationContractError,
+  nativeSnapshot,
   observeNavigationSnapshots,
   REQUIRED_NATIVE_NAVIGATION_VERSION,
+  UNAVAILABLE_SNAPSHOT,
 } from '../src/features/navigation/native-navigation.js';
 
 describe('native navigation contract gate', () => {
@@ -42,5 +46,54 @@ describe('native navigation contract gate', () => {
       'onNavigationSnapshot',
       expect.any(Function),
     );
+  });
+});
+
+describe('snapshot payloads', () => {
+  const snapshot = {
+    isOffRoute: false,
+    phase: 'tracking' as const,
+    rerouteCount: 0,
+    routeProgress: 0.5,
+    routeStatus: 'tracking' as const,
+    routeVersion: 1,
+    sequence: 3,
+    stateVersion: 7,
+  };
+
+  it('keeps the object iOS hands over', () => {
+    expect(nativeSnapshot(snapshot)).toBe(snapshot);
+  });
+
+  it("parses the Android core's JSON text once, value for value", () => {
+    expect(nativeSnapshot({ snapshotJson: JSON.stringify(snapshot) })).toEqual(snapshot);
+  });
+
+  it('treats malformed Android snapshot text as guidance unavailable', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    for (const text of [
+      'not json',
+      'null',
+      JSON.stringify({ ...snapshot, phase: 'flying' }),
+      JSON.stringify({ ...snapshot, stateVersion: '7' }),
+      JSON.stringify({ ...snapshot, routeStatus: undefined }),
+      JSON.stringify({ ...snapshot, trip: { id: 1, steps: [] } }),
+    ]) {
+      expect(nativeSnapshot({ snapshotJson: text })).toBe(UNAVAILABLE_SNAPSHOT);
+    }
+    expect(UNAVAILABLE_SNAPSHOT.stateVersion).toBeLessThan(0);
+    expect(UNAVAILABLE_SNAPSHOT.trip).toBeUndefined();
+    warn.mockRestore();
+  });
+
+  it('delivers parsed snapshots to listeners', () => {
+    nativeModule.getCapabilities.mockReturnValue({ version: 11 });
+    const received: unknown[] = [];
+    observeNavigationSnapshots((next) => received.push(next));
+    const forward = nativeModule.addListener.mock.calls.at(-1)?.[1] as unknown as (
+      payload: unknown,
+    ) => void;
+    forward({ snapshotJson: JSON.stringify(snapshot) });
+    expect(received).toEqual([snapshot]);
   });
 });

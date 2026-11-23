@@ -244,12 +244,39 @@ const TRIP_END_MESSAGES: Record<NativeTripEndReason, string> = {
 
 /**
  * What the phone says when the navigation core ended a trip on its own: a trip saved before the
- * app was closed that was not restored. Without a word the driver would see guidance vanish.
+ * app was closed that was not restored. Without a word the driver would see guidance vanish. On
+ * Android the notice stays until it is dismissed: a relaunch lands straight on the map, often
+ * while the driver is still looking elsewhere, and a five-second toast is easily missed. iOS
+ * keeps the toast that leaves on its own.
  */
 export function tripEndNotice(
   reason: NativeTripEndReason | undefined,
-): { message: string; title: string; tone: 'info' } | undefined {
+  platform: 'android' | 'ios',
+): { message: string; title: string; tone: 'info'; untilDismissed: boolean } | undefined {
   // A reason this build has no words for (sent by a newer core) says nothing.
   if (reason === undefined || !Object.hasOwn(TRIP_END_MESSAGES, reason)) return undefined;
-  return { message: TRIP_END_MESSAGES[reason], title: 'Trip ended', tone: 'info' };
+  return {
+    message: TRIP_END_MESSAGES[reason],
+    title: 'Trip ended',
+    tone: 'info',
+    untilDismissed: platform === 'android',
+  };
+}
+
+/**
+ * Whether the updater should hold installs for a trip. Until the navigation session has applied
+ * its first native snapshot the route state is still idle, so the native snapshot read at mount
+ * decides: a trip restored into a new JS instance is held from the first render, and a hold left
+ * by an earlier JS instance (End from the notification with JS dead) is released.
+ */
+export function updaterTripActive({
+  initialNativeTrip,
+  routeIsIdle,
+  snapshotApplied,
+}: {
+  initialNativeTrip: boolean;
+  routeIsIdle: boolean;
+  snapshotApplied: boolean;
+}): boolean {
+  return snapshotApplied ? !routeIsIdle : initialNativeTrip || !routeIsIdle;
 }

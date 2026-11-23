@@ -1,7 +1,8 @@
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { StyleSheet, Switch, Text, View } from 'react-native';
 
 import { createThemedStyles, space, typography, useTheme } from '@/theme';
 import { haptics } from '@/theme/haptics';
+import { FocusRingPressable } from '@/ui/pressable-scale';
 
 /**
  * A settings row whose whole width is the switch: one accessible element and a target as wide as
@@ -28,7 +29,7 @@ export function SwitchRow({
     onValueChange(!value);
   };
   return (
-    <Pressable
+    <FocusRingPressable
       accessibilityHint={detail}
       accessibilityLabel={label}
       accessibilityRole="switch"
@@ -49,7 +50,7 @@ export function SwitchRow({
           value={value}
         />
       </View>
-    </Pressable>
+    </FocusRingPressable>
   );
 }
 

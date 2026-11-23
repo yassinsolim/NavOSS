@@ -111,7 +111,10 @@ export function createAppUpdates(dependencies: AppUpdatesDependencies): AppUpdat
     ready: false,
   });
   let checking = false;
-  let tripActive = false;
+  // Unknown until the first call, which always reaches the native hold: JS can be recreated in a
+  // process where an earlier JS instance left the hold set (End from the notification with JS
+  // dead), and the native flag outlives it.
+  let tripActive: boolean | undefined;
 
   const update = (patch: Partial<AppUpdatesState>) => {
     store.set({ ...store.get(), ...patch });
@@ -235,7 +238,7 @@ export function createAppUpdates(dependencies: AppUpdatesDependencies): AppUpdat
       return;
     }
     // Read the trip state now, when the download has finished: it may have started meanwhile.
-    if (tripActive) {
+    if (tripActive === true) {
       setPhase({ kind: 'ready', update: target });
       return;
     }

@@ -9,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { createThemedStyles } from '@/theme';
+import { hiddenFromFocusProps } from '@/ui/focus';
 import { BottomSheet, type BottomSheetRef, type SheetDetent } from '@/ui/sheet/bottom-sheet';
 
 export interface ModalSheetProps {
@@ -66,9 +67,11 @@ export function ModalSheet({
     >
       <GestureHandlerRootView style={styles.root}>
         <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}>
+          {/* Never a D-pad focus stop: focused, a full-screen scrim traps the D-pad. */}
           <Pressable
             accessibilityElementsHidden
             importantForAccessibility="no"
+            {...hiddenFromFocusProps(Platform.OS)}
             onPress={onClose}
             style={StyleSheet.absoluteFill}
           />

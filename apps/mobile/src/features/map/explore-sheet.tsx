@@ -4,7 +4,6 @@ import { type RefObject, useMemo, useState } from 'react';
 import {
   Keyboard,
   Linking,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -30,6 +29,7 @@ import {
   searchSourceLabel,
 } from '@/features/map/search-status';
 import {
+  getLocationAvailability,
   type NativeDestinationCatalog,
   nativeDestinationToSearchResult,
 } from '@/features/navigation/native-navigation';
@@ -45,6 +45,8 @@ import { ListRow } from '@/ui/list-row';
 import { BottomSheet, type BottomSheetRef, BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
 import { SectionTitle } from '@/ui/sheet/sheet-header';
 import { StateView } from '@/ui/state-view';
+import { useKeyboardCrowded } from '@/ui/sheet/use-keyboard-crowded';
+import { FocusRingPressable } from '@/ui/pressable-scale';
 
 const NO_RECENT_DESTINATIONS: readonly string[] = [];
 
@@ -121,6 +123,8 @@ export function ExploreSheet({
   const detents = exploreSheetDetents(metrics);
   const [detentIndex, setDetentIndex] = useState(detents.initial);
   const [focused, setFocused] = useState(false);
+  // With a landscape keyboard up only the field and the results fit above the keyboard.
+  const crowded = useKeyboardCrowded();
   const activeCategoryLabel = selectedCategoryId === undefined ? undefined : query;
   const recentDestinationIds = useMemo(
     () => catalog.recents.map((destination) => destination.id),
@@ -155,6 +159,8 @@ export function ExploreSheet({
   const notice = exploreServiceNotice({
     apiConnection,
     coverageName,
+    // Android only (iOS answers `available`): read when a fix failed, to name the true reason.
+    locationAvailability: locationState === 'error' ? getLocationAvailability() : 'available',
     locationState,
     nearbySearchEnabled,
     offlineMapsInstalled,
@@ -237,7 +243,7 @@ export function ExploreSheet({
 
       {showResults ? (
         <>
-          {results.length > 0 && (
+          {results.length > 0 && !crowded && (
             <View style={styles.resultsHeader}>
               <Text
                 maxFontSizeMultiplier={1.4}
@@ -405,7 +411,7 @@ export function ExploreSheet({
               <Banner
                 action={
                   locationState === 'denied' && apiConnection !== 'offline' ? (
-                    <Pressable
+                    <FocusRingPressable
                       accessibilityLabel="Open Settings"
                       accessibilityRole="button"
                       hitSlop={12}
@@ -414,7 +420,18 @@ export function ExploreSheet({
                       }}
                     >
                       <Text style={styles.bannerAction}>Settings</Text>
-                    </Pressable>
+                    </FocusRingPressable>
+                  ) : notice.kind === 'location-off' ? (
+                    <FocusRingPressable
+                      accessibilityLabel="Open Location settings"
+                      accessibilityRole="button"
+                      hitSlop={12}
+                      onPress={() => {
+                        void Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
+                      }}
+                    >
+                      <Text style={styles.bannerAction}>Settings</Text>
+                    </FocusRingPressable>
                   ) : undefined
                 }
                 announce

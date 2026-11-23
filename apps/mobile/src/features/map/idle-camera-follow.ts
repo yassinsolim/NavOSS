@@ -61,8 +61,22 @@ export interface PhoneIdleLocationWatchInput {
 export function phoneIdleLocationWatchOptions<Accuracy>(accuracy: Accuracy): {
   accuracy: Accuracy;
   distanceInterval: 0;
+  mayShowUserSettingsDialog: false;
 } {
-  return { accuracy, distanceInterval: 0 };
+  return { ...automaticLocationOptions(accuracy), distanceInterval: 0 };
+}
+
+/**
+ * Options for a location request the driver did not ask for (the map's first fix and its watches).
+ * Android: never open Google's "turn on device location" dialog from one. With Location off,
+ * dismissing it returns to the app, the map asks again, and the dialog came back without end.
+ * iOS ignores the option.
+ */
+export function automaticLocationOptions<Accuracy>(accuracy: Accuracy): {
+  accuracy: Accuracy;
+  mayShowUserSettingsDialog: false;
+} {
+  return { accuracy, mayShowUserSettingsDialog: false };
 }
 
 /** The Expo watch is a foreground, phone-map concern; CarPlay owns its own location path. */

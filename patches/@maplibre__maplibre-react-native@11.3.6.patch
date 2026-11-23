@@ -1,5 +1,5 @@
 diff --git a/android/src/main/java/org/maplibre/reactnative/components/mapview/MLRNMapView.kt b/android/src/main/java/org/maplibre/reactnative/components/mapview/MLRNMapView.kt
-index 4ea5c73ad4a2680d4ca75e87844569d6410755ba..6b598b0283af1ba1c92274687fb4a0c35f510ff4 100644
+index 4ea5c73ad4a2680d4ca75e87844569d6410755ba..82398dff98e8142118fce5e3331f0c9307398657 100644
 --- a/android/src/main/java/org/maplibre/reactnative/components/mapview/MLRNMapView.kt
 +++ b/android/src/main/java/org/maplibre/reactnative/components/mapview/MLRNMapView.kt
 @@ -9,6 +9,7 @@ import android.os.Handler
@@ -10,7 +10,7 @@ index 4ea5c73ad4a2680d4ca75e87844569d6410755ba..6b598b0283af1ba1c92274687fb4a0c3
  import android.view.MotionEvent
  import android.view.View
  import android.view.ViewGroup
-@@ -360,6 +361,27 @@ open class MLRNMapView(
+@@ -360,6 +361,37 @@ open class MLRNMapView(
      private val layerWaiters: MutableMap<String?, MutableList<FoundLayerCallback>> =
          HashMap<String?, MutableList<FoundLayerCallback>>()
  
@@ -35,6 +35,28 @@ index 4ea5c73ad4a2680d4ca75e87844569d6410755ba..6b598b0283af1ba1c92274687fb4a0c3
 +
 +    override fun onTrackballEvent(event: MotionEvent): Boolean = false
 +
++    // Never a focus stop. MapView makes itself focusable, also in touch mode; focused, a
++    // full-screen view traps the D-pad (no control lies beyond its edges in any direction) and
++    // shows no focus, and it took focus whenever the focused control went away.
++    override fun setFocusable(focusable: Boolean) = super.setFocusable(false)
++
++    override fun setFocusable(focusable: Int) = super.setFocusable(View.NOT_FOCUSABLE)
++
++    override fun setFocusableInTouchMode(focusableInTouchMode: Boolean) =
++        super.setFocusableInTouchMode(false)
++
      init {
          onCreate(null)
          onStart()
+@@ -566,6 +598,11 @@ open class MLRNMapView(
+ 
+     @SuppressLint("ClickableViewAccessibility")
+     override fun onTouchEvent(ev: MotionEvent?): Boolean {
++        // Touching the map used to take focus from a text field (and so close the keyboard); it is
++        // no longer focusable, so it clears that focus itself.
++        if (ev?.actionMasked == MotionEvent.ACTION_DOWN) {
++            (rootView.findFocus() as? android.widget.EditText)?.clearFocus()
++        }
+         val result = super.onTouchEvent(ev)
+ 
+         if (result && scrollEnabled == true) {
