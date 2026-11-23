@@ -499,7 +499,6 @@ final class NavigationEngine: @unchecked Sendable {
       return false
     }
     declinedTrip = declined
-    rerouteSpacing.declined()
     routeStatus = .tracking
     stateVersion &+= 1
     lock.unlock()
@@ -942,8 +941,6 @@ final class NavigationEngine: @unchecked Sendable {
       accuracyMeters: update.snapshot.horizontalAccuracyMeters,
       isOffRoute: isOffRoute,
       isMatched: update.snapshot.matchedCoordinate != nil,
-      distanceFromRouteMeters: isOffRoute && rerouteSpacing.needsDistanceFromRoute
-        ? raw.flatMap { navigationSession.distances(from: $0)?.routeMeters } : nil,
       now: now.timeIntervalSinceReferenceDate
     )
     let canRequest = isOffRoute && raw != nil && rerouteTask == nil

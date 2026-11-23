@@ -266,39 +266,29 @@ func navigationFetchRecoveryRoute(
 /// replacement from where the vehicle was told it to turn back at the next street; the driver
 /// went straight on, left that route 35 m past the street on the third fix and got another one:
 /// twelve installs in adaptive and keep-route mode, a proposal every block in ask-first mode.
-/// Navigation apps settle after one or two. The rule:
+/// The rule:
 ///
 /// - The first request after the driver leaves a route they were established on is never held.
 /// - Once a replacement has been answered in this detour (installed, proposed, or found to be the
 ///   route already followed), the next request waits until the vehicle has travelled
 ///   `firstSpacingMeters` and `firstSpacingSeconds` have passed since that answer, doubling with
-///   every further answer up to `maximumSpacingMeters` and `maximumSpacingSeconds`.
-/// - And it is made only while the vehicle is moving away from the route it is off: further from
-///   it by `divergenceGrowthMeters` than `divergenceWindowMeters` of travel earlier (heading away
-///   at about 17 degrees or more), or more than `farFromRouteMeters` from it. A driver running
-///   beside the route on a parallel road stays the same distance from it and keeps the route
-///   until they rejoin it or turn away from it.
-/// - Once per detour (unless the driver declined an ask-first offer) the divergence test is waived: a driver who passed the replacement's turn
-///   back and kept going for the spacing gets one fresh route from where they are, along the
-///   road they chose. On a road close beside the route (a service road 60 m from it) the
-///   distance never grows enough to count as moving away, and they would otherwise keep a route
-///   whose turn is behind them until they rejoined.
+///   every further answer up to `maximumSpacingMeters` and `maximumSpacingSeconds`. Then, still
+///   off the route it was given (past its turn back, or further from it than a departure), the
+///   driver gets a fresh route from where they are, whichever way they are going: a driver is
+///   never left for long with a route whose next turn is behind them.
+/// - The replacement owed for an ask-first proposal nobody answered waits for the time spacing
+///   only (`allowsRequest(now:isOwed:)`).
 /// - The driver is established, and the count starts again, after `establishedMeters` and
 ///   `establishedSeconds` on a route without leaving it.
 ///
-/// - The replacement owed for an ask-first proposal nobody answered waits for the time spacing
-///   only (`allowsRequest(now:isOwed:)`).
-///
-/// Failed requests keep their own retry schedule (`navigationRerouteRetryDelaySeconds`) and do
-/// not count as answers.
+/// An answer that changes nothing is not installed (`navigationIsMateriallySameRoute`); it still
+/// counts as an answer. Failed requests keep their own retry schedule
+/// (`navigationRerouteRetryDelaySeconds`) and do not count as answers.
 struct NavigationRerouteSpacing {
   static let firstSpacingMeters = 400.0
   static let firstSpacingSeconds = 20.0
   static let maximumSpacingMeters = 1_600.0
   static let maximumSpacingSeconds = 120.0
-  static let divergenceWindowMeters = 100.0
-  static let divergenceGrowthMeters = 30.0
-  static let farFromRouteMeters = 500.0
   static let establishedMeters = 500.0
   static let establishedSeconds = 30.0
   /// Travel is counted in steps longer than this or the fix's accuracy, so a parked receiver's
@@ -307,19 +297,11 @@ struct NavigationRerouteSpacing {
 
   /// Replacements answered since the driver was last established on a route.
   private(set) var answers = 0
-  /// The one request per detour made without moving away (see above) has been answered.
-  private var hasRefreshed = false
   private var lastAnswer: (time: TimeInterval, travelMeters: Double)?
   private var onRouteSince: (time: TimeInterval, travelMeters: Double)?
-  /// Distance from the route the vehicle is off, against travel, covering at least the last
-  /// `divergenceWindowMeters` of it.
-  private var trail: [(travelMeters: Double, distanceMeters: Double)] = []
   private var travelAnchor: NavigationCoordinate?
   /// Distance the vehicle has covered since the trip started.
   private(set) var travelMeters = 0.0
-
-  /// Whether `observe` needs the distance from the route: only once an answer is being spaced.
-  var needsDistanceFromRoute: Bool { answers > 0 }
 
   /// The spacing after `answers` answers.
   static func spacing(answers: Int) -> (meters: Double, seconds: Double) {
@@ -330,13 +312,12 @@ struct NavigationRerouteSpacing {
     )
   }
 
-  /// A published fix: where the vehicle is and how it stands to its route.
+  /// A published fix: where the vehicle is and whether it is on its route.
   mutating func observe(
     coordinate: NavigationCoordinate?,
     accuracyMeters: Double?,
     isOffRoute: Bool,
     isMatched: Bool,
-    distanceFromRouteMeters: Double?,
     now: TimeInterval
   ) {
     if let coordinate {
@@ -350,42 +331,25 @@ struct NavigationRerouteSpacing {
         travelAnchor = coordinate
       }
     }
-    guard isOffRoute else {
-      trail.removeAll()
-      guard isMatched else {
-        return
-      }
-      let since = onRouteSince ?? (now, travelMeters)
-      onRouteSince = since
-      if now - since.time >= Self.establishedSeconds,
-        travelMeters - since.travelMeters >= Self.establishedMeters
-      {
-        answers = 0
-        lastAnswer = nil
-        hasRefreshed = false
-      }
+    guard !isOffRoute, isMatched else {
+      onRouteSince = nil
       return
     }
-    onRouteSince = nil
-    guard answers > 0, let distanceFromRouteMeters else {
-      return
-    }
-    if let last = trail.last, last.travelMeters == travelMeters {
-      trail[trail.count - 1].distanceMeters = distanceFromRouteMeters
-    } else {
-      trail.append((travelMeters, distanceFromRouteMeters))
-    }
-    while trail.count > 2,
-      trail[1].travelMeters <= travelMeters - Self.divergenceWindowMeters
+    let since = onRouteSince ?? (now, travelMeters)
+    onRouteSince = since
+    if now - since.time >= Self.establishedSeconds,
+      travelMeters - since.travelMeters >= Self.establishedMeters
     {
-      trail.removeFirst()
+      answers = 0
+      lastAnswer = nil
     }
   }
 
-  /// Whether a request may be made now. `isOwed` for the replacement an unanswered ask-first
-  /// proposal is owed (`NavigationRerouteConsent.installsNextReplacement`): it waits for the time
-  /// spacing only, which the 45 s response window has always covered, so a driver who could not
-  /// answer (or whose GPS dropped out meanwhile) is not left without a route.
+  /// Whether a request may be made now, for a vehicle off its route. `isOwed` for the
+  /// replacement an unanswered ask-first proposal is owed
+  /// (`NavigationRerouteConsent.installsNextReplacement`): it waits for the time spacing only,
+  /// which the 45 s response window has always covered, so a driver who could not answer (or
+  /// whose GPS dropped out meanwhile) is not left without a route.
   func allowsRequest(now: TimeInterval, isOwed: Bool = false) -> Bool {
     guard answers > 0, let lastAnswer else {
       return true
@@ -394,44 +358,17 @@ struct NavigationRerouteSpacing {
     guard now - lastAnswer.time >= spacing.seconds else {
       return false
     }
-    if isOwed {
-      return true
-    }
-    guard travelMeters - lastAnswer.travelMeters >= spacing.meters, let current = trail.last
-    else {
-      return false
-    }
-    if !hasRefreshed || current.distanceMeters > Self.farFromRouteMeters {
-      return true
-    }
-    guard let base = trail.first,
-      base.travelMeters <= current.travelMeters - Self.divergenceWindowMeters
-    else {
-      return false
-    }
-    return current.distanceMeters - base.distanceMeters >= Self.divergenceGrowthMeters
+    return isOwed || travelMeters - lastAnswer.travelMeters >= spacing.meters
   }
 
   /// A replacement was answered: installed, proposed, or found to be the route followed.
   mutating func answered(now: TimeInterval) {
-    // Every answer after the first in a detour is this detour's fresh route, whether or not it
-    // was asked for while moving away.
-    if answers > 0 {
-      hasRefreshed = true
-    }
     answers += 1
     lastAnswer = (now, travelMeters)
   }
 
-  /// The driver declined an ask-first replacement: they chose to stay on their own way, so the
-  /// fresh route is not offered without moving away.
-  mutating func declined() {
-    hasRefreshed = true
-  }
-
-  /// The route was replaced: distances measured to the old one no longer apply.
+  /// The route was replaced: time on the old one does not count towards the new one.
   mutating func routeReplaced() {
-    trail.removeAll()
     onRouteSince = nil
   }
 }

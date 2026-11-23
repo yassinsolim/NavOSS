@@ -44,8 +44,9 @@ Open, not merged (check each when it lands, and say which build contains it):
       In the car, passenger-operated, on the build that contains it, in each of Automatic, Ask
       first and Keep route: start a trip, then ignore the route for a few blocks on a parallel
       street before rejoining it. Count the "New route" alerts on CarPlay, the spoken offers in
-      Ask first and the trip sheet's "route updated" count: expect one or two new routes and at
-      most one offer, none while driving beside the route. Then take a wrong turn and keep
+      Ask first and the trip sheet's "route updated" count: expect a new route at once, then
+      one after about 400 m and one after a further 800 m (never one per block), and an offer at
+      most that often in Ask first. Then take a wrong turn and keep
       driving away from every route offered: a new route must still come, the first at once and
       later ones after a few hundred metres. On a freeway, miss an exit: one new route, promptly.
 - [ ] The `carplay-free-drive-end.png` harness pixel gate (marker at 0.561 of map height against
