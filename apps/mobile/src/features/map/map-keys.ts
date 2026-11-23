@@ -45,6 +45,29 @@ export function stickPanCenter(
   ];
 }
 
+/**
+ * The camera padding a key move must carry. MapLibre Android keeps the padding of the last camera
+ * move and treats a move without one as zero padding, so a key move that passed any other value
+ * would shift the map under a sheet: during a trip that is the guidance padding; otherwise the
+ * padding of the controller's last move (a fitted route preview or search results keep theirs),
+ * and before any move the padding the map started with.
+ */
+export function keyCameraPadding<Padding>({
+  applied,
+  guidance,
+  initial,
+  navigating,
+}: {
+  /** The padding of the controller's last camera move; `undefined` before the first. */
+  applied: Padding | undefined;
+  guidance: Padding;
+  initial: Padding;
+  navigating: boolean;
+}): Padding {
+  if (navigating) return guidance;
+  return applied ?? initial;
+}
+
 /** The zoom one shoulder-button press leads to, inside the map's limits. */
 export function keyZoom(zoom: number, command: 'zoom-in' | 'zoom-out'): number {
   const next = command === 'zoom-in' ? zoom + 1 : zoom - 1;

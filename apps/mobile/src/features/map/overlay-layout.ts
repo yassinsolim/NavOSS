@@ -158,6 +158,9 @@ export interface CameraPadding {
   top: number;
 }
 
+/** No padding: what MapLibre uses after a camera move that gave none. */
+export const NO_CAMERA_PADDING: CameraPadding = { bottom: 0, left: 0, right: 0, top: 0 };
+
 /** Height of the maneuver banner below the status bar, including its gap to the map. */
 export const GUIDANCE_BANNER_HEIGHT = 152;
 

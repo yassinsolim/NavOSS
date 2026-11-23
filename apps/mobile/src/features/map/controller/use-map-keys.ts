@@ -27,18 +27,17 @@ export function useMapKeys({
   enabled: boolean;
   mapRef: RefObject<MapRef | null>;
   /**
-   * The camera padding the map is using (the side panel's share in landscape). Every camera move
-   * from keys passes it: MapLibre Android treats a move without padding as zero padding, which
-   * would shift the centre under the side panel.
+   * The camera padding the map is using now (`keyCameraPadding`), read at each move. Every camera
+   * move from keys passes it: MapLibre Android treats a move without padding as zero padding,
+   * which would shift the centre under the side panel or a sheet.
    */
-  padding: CameraPadding;
+  padding: () => CameraPadding;
   /** The driver moved the map: stop following, as after a touch gesture. */
   onMove: () => void;
   onRecenter: () => void;
 }) {
   const stick = useRef({ x: 0, y: 0 });
-  const paddingRef = useRef(padding);
-  paddingRef.current = padding;
+  const currentPadding = useStableCallback(padding);
   const moved = useStableCallback(onMove);
   const recenter = useStableCallback(onRecenter);
 
@@ -59,7 +58,7 @@ export function useMapKeys({
         lastTick = now;
         const view = await map.getViewState();
         const center = stickPanCenter(view, stick.current, seconds);
-        cameraRef.current?.jumpTo({ center, padding: paddingRef.current });
+        cameraRef.current?.jumpTo({ center, padding: currentPadding() });
       } catch {
         // The map is gone or not ready: the next tick tries again.
       } finally {
@@ -78,7 +77,7 @@ export function useMapKeys({
         .then((zoom) => {
           cameraRef.current?.zoomTo(keyZoom(zoom, command), {
             duration: 250,
-            padding: paddingRef.current,
+            padding: currentPadding(),
           });
         })
         .catch(() => undefined);

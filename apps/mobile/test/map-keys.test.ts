@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { keyZoom, stickPanCenter } from '../src/features/map/map-keys.js';
+import { keyCameraPadding, keyZoom, stickPanCenter } from '../src/features/map/map-keys.js';
 
 const view = { bearing: 0, center: [-114.07, 51.05] as [number, number], zoom: 14 };
 
@@ -37,5 +37,29 @@ describe('keyZoom', () => {
     expect(keyZoom(14.4, 'zoom-out')).toBe(13.4);
     expect(keyZoom(19.6, 'zoom-in')).toBe(20);
     expect(keyZoom(2.5, 'zoom-out')).toBe(2);
+  });
+});
+
+describe('keyCameraPadding', () => {
+  const guidance = { bottom: 10, left: 400, right: 0, top: 0 };
+  const initial = { bottom: 0, left: 400, right: 0, top: 0 };
+  const preview = { bottom: 40, left: 440, right: 40, top: 60 };
+
+  it('is the guidance padding during a trip, whatever came before', () => {
+    expect(keyCameraPadding({ applied: preview, guidance, initial, navigating: true })).toBe(
+      guidance,
+    );
+  });
+
+  it('keeps the padding of the last camera move, so a fitted preview or results do not shift', () => {
+    expect(keyCameraPadding({ applied: preview, guidance, initial, navigating: false })).toBe(
+      preview,
+    );
+  });
+
+  it("is the map's starting padding before any move", () => {
+    expect(keyCameraPadding({ applied: undefined, guidance, initial, navigating: false })).toBe(
+      initial,
+    );
   });
 });
