@@ -13,6 +13,10 @@ import Foundation
 // maneuver). In v2 it describes the step's own maneuver. `NavOSSCarPlayRouteStep` uses the v2
 // meaning, so v1 responses are shifted by one step when they are decoded.
 
+/// `NavOSSCarPlayTrip.source` of a route planned on the device by the offline router. Defined
+/// here, with the route model's decoding, so builds without the offline router still know it.
+public let navOSSOfflineRouteSource = "offline-valhalla"
+
 struct NavigationRouteWaypointRequest: Encodable {
   let latitude: Double
   let longitude: Double
