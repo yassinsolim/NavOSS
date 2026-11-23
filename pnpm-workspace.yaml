@@ -8,7 +8,7 @@ allowBuilds:
   protobufjs: false
 
 catalog:
-  '@fastify/swagger': 9.9.4
+  '@fastify/swagger': 9.9.5
   fastify: 5.12.8
   fastify-type-provider-zod: 7.0.0
   openapi-types: 12.1.3

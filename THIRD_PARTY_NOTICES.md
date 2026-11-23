@@ -6,7 +6,7 @@ It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
 
-Lockfile SHA-256: `6604f6db4d4e0536400e327e4ed2ae265ca2928f2262c54913854b733b68c8da`
+Lockfile SHA-256: `50e2eeaa07e1dd4a4e1d512d626675d5d518b3ad8d05980446cd830782630d88`
 
 Regenerate with:
 
@@ -237,7 +237,7 @@ corepack pnpm licenses:generate
 - `@fastify/forwarded` - `3.0.1` - <https://github.com/fastify/forwarded#readme>
 - `@fastify/merge-json-schemas` - `0.2.1` - <https://github.com/fastify/merge-json-schemas#readme>
 - `@fastify/proxy-addr` - `5.1.0` - <https://github.com/fastify/proxy-addr#readme>
-- `@fastify/swagger` - `9.9.4` - <https://github.com/fastify/fastify-swagger#readme>
+- `@fastify/swagger` - `9.9.5` - <https://github.com/fastify/fastify-swagger#readme>
 - `@jest/schemas` - `29.6.3` - <https://github.com/jestjs/jest#readme>
 - `@jest/types` - `29.6.3` - <https://github.com/jestjs/jest#readme>
 - `@jridgewell/gen-mapping` - `0.3.13` - <https://github.com/jridgewell/sourcemaps/tree/main/packages/gen-mapping>
