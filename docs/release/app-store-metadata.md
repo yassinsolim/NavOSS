@@ -1,8 +1,8 @@
 # App Store Connect metadata draft
 
-Status (refreshed 2026-11-20): **TestFlight technical beta.** Build `0.1.0 (84)` was distributed to internal `testers` and NavOSS Friends on 2026-11-20. App Store Connect showed Testing for both groups, with no installs or sessions yet. The TestFlight Test Information description was updated for build 84 and read back after saving; Review Notes were unchanged. The production service covers Canada for search and routing and returns lanes and signposts when available. Reports are `attested` and traffic is `collect`; traffic is not displayed or used in routes. Public App Review remains subject to the applicable gates below.
+Status (refreshed 2026-11-23): **TestFlight technical beta.** Build `0.1.0 (85)` was distributed to internal `testers` and NavOSS Friends on 2026-11-23. App Store Connect showed Testing for both groups; no installs or sessions have been observed yet. The TestFlight Test Information description was updated for build 85 and read back after saving; Review Notes were unchanged. The production service covers Canada for search and routing and returns lanes and signposts when available. Reports are `attested` and traffic is `collect`; traffic is not displayed or used in routes. Public App Review remains subject to the applicable gates below.
 
-- Builds 80, 81, 82, 83 and 84 carry App Attest and the Google place panel; builds before 80 cannot share reports or traffic. As of 16:52 UTC on 2026-11-15 no installation had registered.
+- Builds 80, 81, 82, 83, 84 and 85 carry App Attest and the Google place panel; builds before 80 cannot share reports or traffic. As of 16:52 UTC on 2026-11-15 no installation had registered.
 - Live traffic remains unavailable. The production offline manifest publishes All Alberta and Calgary-area regions; BC has no offline region. A physical iPhone download in build 80 remains unverified.
 
 Use `docs/release/app-review.md` for the guideline-by-guideline risk assessment and `docs/release/testflight.md` for the release procedure.
@@ -70,17 +70,32 @@ Do not use “beta,” “alpha,” “technical preview,” “test,” or “h
 
 Beta language belongs here, not in a public App Store listing:
 
-> NavOSS is an account-free navigation technical beta. Its backend provides place search and routing across Canada. Build 84, distributed to testers on November 20, 2026, includes spoken turn-by-turn guidance, locked-phone background continuation, CarPlay search and navigation, and a province-wide road-events list for Alberta, British Columbia and Ontario. Drivers can opt in to share road reports; verified reports appear unconfirmed until corroborated.
+> NavOSS is an account-free navigation technical beta. Its backend provides place search and routing across Canada. Build 85, distributed to testers on November 23, 2026, includes spoken turn-by-turn guidance, locked-phone background continuation, CarPlay search and navigation, and a province-wide road-events list for Alberta, British Columbia and Ontario. Drivers can opt in to share road reports; verified reports appear unconfirmed until corroborated.
 >
 > There is no live traffic. All Alberta and the Calgary area can be downloaded for offline maps, search and routing; British Columbia has no offline region yet. Traffic speeds are collected only from drivers who opt in, for evaluation; nothing is displayed or used in routes. Keep the phone mounted and have a passenger operate controls while moving. Do not rely on this beta as the only navigation, road-closure, traffic, or safety source.
 
 The saved TestFlight Test Information description's build-specific text was read back as:
 
-> Build 84 keeps the phone's clock and map buttons readable and out of the way during guidance, and names express or collector lanes on the CarPlay turn card. Build 83 redesigned CarPlay after car testing: a short turn card that shows the road, exit or sign to look for, a calmer map with the route in blue and a closer camera, one small speed and limit unit, and End in the top bar.
+> Build 85 shows your car's arrow on the CarPlay map when no destination is set, close up and pointing the way you are driving. Build 84 keeps the phone's clock and map buttons readable and out of the way during guidance, and names express or collector lanes on the CarPlay turn card. Build 83 redesigned CarPlay after car testing: a short turn card that shows the road, exit or sign to look for, a calmer map with the route in blue and a closer camera, one small speed and limit unit, and End in the top bar.
 
 ## What to Test
 
-The following **What to Test** text was sent with the build 84 distribution request:
+The following **What to Test** text was sent as the `changelog` input of the build 85 distribution workflow run:
+
+```text
+Please test NavOSS 0.1.0 (85) while parked or with a passenger operating the controls.
+
+New in this build (from car testing of build 84):
+1. CarPlay with no destination: the map now opens close up on your car and shows the same arrow (or car) as during a trip, pointing the way you are driving, and follows you. Before, it opened zoomed out on the city.
+2. CarPlay: move the map and it stops following; touch Recenter to follow again. Starting and ending a trip keeps the same arrow on screen.
+3. Phone: the round map buttons keep their backgrounds after you end a trip, their icons are readable on the light map when the phone is in dark mode, and faded buttons no longer take taps.
+
+Please tell us: does the arrow point the right way when you pull away, at a red light, and after a turn; does it ever spin, jump or disappear; is the view too close or too far.
+
+Known limits: no live traffic is shown yet; changing text size during a trip clips the step list until you reopen the app; closing the app before a trip reaches the road ends that trip when you reopen it.
+```
+
+For the record, this text was sent with the build 84 distribution request:
 
 ```text
 Please test NavOSS 0.1.0 (84) while parked or with a passenger operating the controls.

@@ -163,6 +163,7 @@ import {
   selectedRouteOf,
   tripEndNotice,
 } from '@/features/navigation/route-ui-state';
+import { setUpdaterTripActive } from '@/features/updates/use-app-updates';
 import { useSafetyCameraAlert } from '@/features/navigation/use-safety-camera-alert';
 import {
   isResumingTrip,
@@ -1139,6 +1140,7 @@ export function useMapController() {
       showNotice({ ...refusal, tone: 'warning' });
       return;
     }
+    setUpdaterTripActive(true);
     cameraAlerts.reset();
     resetTrip();
     setPreviewDetent(undefined);
@@ -1172,6 +1174,7 @@ export function useMapController() {
   /** Android: drives the selected route without GPS, labelled as a simulation throughout. */
   const handleSimulateDrive = () => {
     if (routeState.type !== 'preview' || selectedRoute === undefined) return;
+    setUpdaterTripActive(true);
     cameraAlerts.reset();
     resetTrip();
     setPreviewDetent(undefined);
@@ -1326,6 +1329,7 @@ export function useMapController() {
     if (routeState.type !== 'navigating') return;
     cameraAlerts.reset();
     endTrip();
+    setUpdaterTripActive(false);
   };
 
   const handleFinishArrival = () => {

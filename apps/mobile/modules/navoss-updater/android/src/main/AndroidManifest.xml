@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Hands a downloaded, verified NavOSS update to the system installer. -->
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+  <application>
+    <receiver
+      android:name="org.navoss.mobile.updater.InstallResultReceiver"
+      android:exported="false" />
+  </application>
+</manifest>

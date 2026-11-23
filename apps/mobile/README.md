@@ -59,6 +59,8 @@ adb emu geo fix -114.0631 51.0447   # put the emulator in Calgary (longitude fir
 
 `start:android` uses `https://navoss-api.yassin.app` unless `EXPO_PUBLIC_API_URL` is set. Rebuild the APK only after `app.json`, plugin or `modules/` changes.
 
+A release APK (signed with the NavOSS release key, R8 and resource shrinking, Hermes bytecode) comes from `android:release`, which needs `EXPO_PUBLIC_API_URL` and the `NAVOSS_ANDROID_KEYSTORE`, `NAVOSS_ANDROID_KEYSTORE_PASSWORD` and `NAVOSS_ANDROID_KEY_ALIAS` variables and fails without them; `plugins/with-navoss-android-release.cjs` writes the signing and version code into the generated project. The Android-only `modules/navoss-updater` module and `src/features/updates` implement the in-app updater. Releases, verification and the updater are described in [docs/release/android.md](../../docs/release/android.md).
+
 ## UI structure
 
 The phone UI is one screen: a map with the sheet the current task needs on top of it.
