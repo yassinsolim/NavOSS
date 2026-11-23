@@ -467,6 +467,7 @@ export function MapScreen() {
         {routeState.type === 'preview' && route.selectedRoute !== undefined && (
           <RoutePreviewSheet
             destination={routeState.destination}
+            deviceHasNoGps={c.deviceHasNoGps}
             initialDetent={route.previewDetent}
             metrics={metrics}
             onCancel={c.onCancelRoute}

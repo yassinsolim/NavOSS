@@ -1700,6 +1700,7 @@ export function useMapController() {
     communityActionBusy,
     coverageName,
     darkMap,
+    deviceHasNoGps: location.deviceHasNoGps,
     destinationCatalog,
     exploreSheetRef,
     featureDetail: communityFeatureDetail ?? featureDetail,

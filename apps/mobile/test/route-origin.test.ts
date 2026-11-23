@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   currentLocationFix,
+  deviceLacksGps,
   LOCATION_FIX_TIMEOUT_MS,
   newestValidRouteOriginSample,
   routeOriginFailureMessage,
@@ -188,5 +189,20 @@ describe('one-shot location fix by platform', () => {
         true,
       ),
     ).resolves.toBe(7);
+  });
+});
+
+describe('a device without a GPS receiver', () => {
+  it('is reported only when location is on and the GPS provider is missing', () => {
+    expect(deviceLacksGps({ gpsAvailable: false, locationServicesEnabled: true })).toBe(true);
+    expect(deviceLacksGps({ gpsAvailable: true, locationServicesEnabled: true })).toBe(false);
+  });
+
+  it('is not claimed while location is off, when no provider is enabled anywhere', () => {
+    expect(deviceLacksGps({ gpsAvailable: false, locationServicesEnabled: false })).toBe(false);
+  });
+
+  it('is not claimed when the platform does not report a GPS provider (iOS)', () => {
+    expect(deviceLacksGps({ locationServicesEnabled: true })).toBe(false);
   });
 });

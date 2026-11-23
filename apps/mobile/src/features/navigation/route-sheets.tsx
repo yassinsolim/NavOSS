@@ -19,6 +19,10 @@ import {
   routeTrafficLabel,
   routeViaLabel,
 } from '@/features/navigation/route-progress';
+import {
+  NO_GPS_PREVIEW_NOTICE,
+  routePreviewPrimaryAction,
+} from '@/features/navigation/route-preview-action';
 import type { RouteError, RouteSource } from '@/features/navigation/route-ui-state';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
@@ -202,6 +206,8 @@ interface RoutePreviewSheetProps {
   metrics: ScreenMetrics;
   onCancel: () => void;
   onDetentChange?: (index: number) => void;
+  /** Android only: no location provider exists, so a chosen start can only be previewed. */
+  deviceHasNoGps?: boolean;
   onEditStops: () => void;
   onSelectRoute: (route: RouteAlternativeV2) => void;
   onStart: () => void;
@@ -228,6 +234,7 @@ interface RoutePreviewSheetProps {
  */
 export function RoutePreviewSheet({
   destination,
+  deviceHasNoGps = false,
   initialDetent,
   metrics,
   onCancel,
@@ -257,6 +264,12 @@ export function RoutePreviewSheet({
   // it is re-measured after a text-size change, never when the driver selects another card.
   const routeChoices = useRef<ScrollView>(null);
   const demoOrigin = previewOriginLabel !== undefined;
+  const primaryAction = routePreviewPrimaryAction({
+    chosenStart: demoOrigin,
+    deviceHasNoGps,
+    isAndroid: IS_ANDROID,
+    simulateDriveAvailable: false,
+  });
   const detents = routePreviewSheetDetents(metrics, { demoOrigin });
   const trafficStatus = routeTrafficLabel(
     routeSource?.id === OFFLINE_ROUTE_SOURCE.id ? undefined : routeSource,
@@ -299,7 +312,7 @@ export function RoutePreviewSheet({
             {formatArrivalTime(selectedRoute.durationSeconds)}
           </Text>
         </View>
-        {demoOrigin ? (
+        {primaryAction === 'use-my-location' ? (
           <Button
             accessibilityLabel="Use my location for navigation"
             icon={{ android: 'my_location', ios: 'location.fill' }}
@@ -307,7 +320,7 @@ export function RoutePreviewSheet({
             onPress={onUseCurrentLocation}
             size="driving"
           />
-        ) : (
+        ) : primaryAction === 'start' ? (
           <Button
             accessibilityLabel="Start navigation"
             icon={{ android: 'navigation', ios: 'location.north.fill' }}
@@ -316,7 +329,7 @@ export function RoutePreviewSheet({
             size="driving"
             style={styles.startButton}
           />
-        )}
+        ) : null}
       </View>
 
       <BottomSheetScrollView
@@ -335,6 +348,11 @@ export function RoutePreviewSheet({
               <Banner
                 message={`Preview starts at ${previewOriginLabel}. Live guidance always uses your real location.`}
               />
+            </View>
+          )}
+          {primaryAction === 'none' && (
+            <View style={styles.inset}>
+              <Text style={styles.quietNote}>{NO_GPS_PREVIEW_NOTICE}</Text>
             </View>
           )}
           <ScrollView
@@ -452,6 +470,7 @@ const useStyles = createThemedStyles(({ colors }) =>
     planningBody: { gap: space.lg, paddingHorizontal: space.lg },
     planningState: { paddingHorizontal: space.lg },
     previewContent: { gap: space.lg },
+    quietNote: { ...typography.footnote, color: colors.textSecondary },
     routeChoice: {
       backgroundColor: colors.surfaceSunken,
       borderColor: 'transparent',
