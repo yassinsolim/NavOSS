@@ -333,10 +333,15 @@ export function useLocationWatches(
         // with permission already granted), and the idle watch only runs once a fix is visible.
         // Wait for the first fix instead of leaving "Current location unavailable" until the
         // driver taps Center. iOS's lookup waits for a fix itself.
+        //
+        // High accuracy, like the idle watch that takes over: a Balanced request never switches
+        // GPS on, so without a network location (Google Location Accuracy off, or no Play
+        // services location) it waited forever whenever the app opened with no fix from the last
+        // minute. A device with only network location still answers a High request.
         if (!IS_ANDROID) return;
         let recovered = false;
         void Location.watchPositionAsync(
-          automaticLocationOptions(Location.Accuracy.Balanced),
+          automaticLocationOptions(Location.Accuracy.High),
           (position) => {
             if (!active() || recovered) return;
             recovered = true;
