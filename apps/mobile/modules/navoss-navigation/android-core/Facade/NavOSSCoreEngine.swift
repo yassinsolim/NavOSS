@@ -102,12 +102,6 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
   private let effects: EngineEffects
   /// Guarded by the engine lock.
   private var announceRoadReports: Bool
-  /// The fix being ingested, by the thread ingesting it and with the snapshot sequence before
-  /// it, until the engine has taken, ignored or refused it. Guarded by the engine lock.
-  private var offered: (sample: NavigationLocationSample, thread: ObjectIdentifier, sequence: Int)?
-  /// The newest fix the engine accepted, for the reroute origin's course, speed, accuracy and
-  /// age. Guarded by the engine lock.
-  private var acceptedSample: NavigationLocationSample?
 
   public init(configJSON: String, host: NavOSSCoreHost) throws {
     let config: NavOSSCoreConfig
@@ -178,8 +172,6 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
     } catch {
       throw NavOSSCoreError.from(error)
     }
-    // Fixes of the trip before say nothing about this one.
-    engine.lock.withLock { acceptedSample = nil }
     return snapshot()
   }
 
@@ -192,18 +184,10 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
     }
     do {
       let sample = try navOSSLiveNavigationFix(record.sample)
-      let thread = ObjectIdentifier(Thread.current)
-      engine.lock.withLock {
-        offered = (sample, thread, engine.currentUpdateLocked().snapshot.sequence)
-      }
-      // Withdrawn however this ends; promoted only below, once the engine has ingested it.
-      defer {
-        engine.lock.withLock {
-          if offered?.thread == thread { offered = nil }
-        }
-      }
+      #if DEBUG
+        fixWillIngest?(sample)
+      #endif
       _ = try engine.ingest(sample)
-      engine.lock.withLock { settleOfferedLocked() }
     } catch {
       throw NavOSSCoreError.from(error)
     }
@@ -302,6 +286,9 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
     /// another caller's change may land.
     var preferencesWillChange: (() -> Void)?
 
+    /// Tests: runs in `updateLocation` once the fix is decoded, before the engine is given it.
+    var fixWillIngest: ((NavigationLocationSample) -> Void)?
+
     /// Tests: the HTTP carrier and the host gate, for their interleaving hooks.
     var httpForTesting: NavOSSCoreHTTP { http }
     var bridgeForTesting: NavOSSCoreHostBridge { bridge }
@@ -309,33 +296,15 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
 
   // MARK: Internals
 
-  /// Makes the offered fix the accepted one if this thread is the one ingesting it and the
-  /// engine took it: the session numbers every fix it takes, so its snapshot's sequence has
-  /// moved on from the one read before the fix, and stands at the fix's coordinate. A fix the
-  /// session ignores (a duplicate, or an older one arriving late) leaves the sequence alone, and
-  /// one it refuses never gets here except through another thread's reroute, which is why the
-  /// thread is checked. Called after a successful ingest, and from inside it when the fix
-  /// itself starts a reroute.
-  private func settleOfferedLocked() {
-    guard let offered, offered.thread == ObjectIdentifier(Thread.current) else { return }
-    let snapshot = engine.currentUpdateLocked().snapshot
-    guard snapshot.sequence != offered.sequence, snapshot.rawCoordinate == offered.sample.coordinate
-    else { return }
-    if let acceptedAt = acceptedSample?.timestamp, let offeredAt = offered.sample.timestamp,
-      offeredAt <= acceptedAt
-    {
-      return
-    }
-    acceptedSample = offered.sample
-  }
-
-  /// The origin metadata of a reroute from `coordinate`: only from the accepted fix at that
-  /// very coordinate, never another fix's course or accuracy.
+  /// The origin metadata of a reroute from `coordinate`: the course, speed, accuracy and age
+  /// of the fix the matcher last applied to this route, and only if that fix is at the very
+  /// coordinate being routed from. The facade keeps no fix of its own: the matcher says which
+  /// one it applied (never a refused, repeated or late one) and forgets it when the route is
+  /// started, replaced or cleared, all under the engine lock this is called with.
   fileprivate func rerouteOriginLocked(at coordinate: NavOSSCarPlayCoordinate)
     -> NavOSSNavigationRouteOrigin?
   {
-    settleOfferedLocked()
-    guard let sample = acceptedSample,
+    guard let sample = engine.lastAppliedFixLocked,
       sample.coordinate.latitude == coordinate.latitude,
       sample.coordinate.longitude == coordinate.longitude,
       let accuracy = sample.horizontalAccuracyMeters, let timestamp = sample.timestamp

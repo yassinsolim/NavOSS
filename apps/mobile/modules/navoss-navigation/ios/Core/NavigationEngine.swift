@@ -253,6 +253,9 @@ final class NavigationEngine: @unchecked Sendable {
   var navigationGenerationLocked: UInt64 { navigationGeneration }
   var allowsAlertsLocked: Bool { announcementState.allowsAlerts }
   var tripLocked: NavOSSCarPlayTrip? { navigationSession.trip }
+  /// The latest fix the session applied to the current route; `nil` after a route is started,
+  /// replaced or cleared until its first fix. For the Android facade's reroute origin.
+  var lastAppliedFixLocked: NavigationLocationSample? { navigationSession.lastAppliedFix }
 
   func currentUpdateLocked() -> NavigationSessionUpdate {
     navigationSession.currentUpdate()

@@ -608,6 +608,11 @@ final class NavigationCore {
   private var isLatestFixAccepted = false
   /// Capture time of the latest real fix, accepted or not.
   private var latestFixTimestamp: TimeInterval?
+  /// The latest real fix applied to the current route: one that was valid and captured after
+  /// the one before it, so not a refused, repeated or late one. `nil` from the moment a route
+  /// is set or cleared until its first fix (not when tracking restarts within a route). Read by the Android facade for a reroute's origin
+  /// heading and accuracy; iOS takes those from `CLLocation` and does not use this.
+  private(set) var lastAppliedFix: NavigationLocationSample?
   /// Snapshot produced by the latest real fix. A held fix falls back to this, never to a
   /// dead-reckoned guess or to the rejected projection.
   private var lastRealSnapshot: NavigationSnapshot?
@@ -750,6 +755,7 @@ final class NavigationCore {
     let route = try RoutePolyline(coordinates: coordinates)
     self.route = route
     resetTrackingState()
+    lastAppliedFix = nil
     switch resume {
     case nil:
       break
@@ -799,6 +805,7 @@ final class NavigationCore {
   @discardableResult
   func clearRoute() -> NavigationSnapshot {
     resetTrackingState()
+    lastAppliedFix = nil
     route = nil
     routeVersion += 1
     sequence += 1
@@ -838,6 +845,7 @@ final class NavigationCore {
       return snapshot
     }
     latestFixTimestamp = sample.timestamp ?? latestFixTimestamp
+    lastAppliedFix = sample
     sequence += 1
     guard let route else {
       snapshot = NavigationSnapshot(

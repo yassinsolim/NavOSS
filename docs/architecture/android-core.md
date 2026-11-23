@@ -138,13 +138,20 @@ refused (`invalid-location`), as on iOS. Negative or unknown course, speed or ac
 omitted, not sent as `-1`. `latitude` and `longitude` default to `0` when absent and are refused
 when `null`, like the trip's fields.
 
-The core keeps the course, speed, accuracy and time of the newest fix **the engine accepted** to
-build a reroute origin (`navOSSNavigationRouteOrigin`), which iOS takes from `CLLocation`. The
-matcher ignores a fix that was not captured after the previous one (a duplicate, or an older one
-arriving late); such a fix does not replace the kept one, and neither does a fix the core
-refuses (`invalid-location`). A fix is kept only once the engine has ingested it, which shows
-in the snapshot's `sequence` moving on. The origin's heading and accuracy are sent only when the
-kept fix is at the very coordinate being routed from.
+A reroute's origin (`navOSSNavigationRouteOrigin`: heading, accuracy, age) comes on iOS from
+the service's latest `CLLocation`. Here it comes from the matcher itself: `NavigationCore`
+records the fix it last applied to the current route (`lastAppliedFix`), at the point where it
+numbers an applied fix, under the engine lock. A fix it refuses (`invalid-location`) or ignores
+(one not captured after the previous one: a duplicate, or an older one arriving late) is never
+recorded, whatever threads the fixes arrive on, and the record is dropped inside the same
+critical section that sets or clears a route, before any callback of that call runs. The facade
+keeps no fix of its own. The origin's heading and accuracy are sent only when the recorded fix
+is at the very coordinate being routed from.
+
+Compared with iOS: the service keeps its latest location across a reroute install, the matcher
+drops its record there. No request can tell the difference, because after an install the
+snapshot has no raw coordinate and the engine requests a reroute only from one; the next applied
+fix is recorded before anything is requested.
 
 ### The snapshot
 
