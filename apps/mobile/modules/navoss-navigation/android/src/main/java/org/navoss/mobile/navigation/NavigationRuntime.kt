@@ -73,6 +73,11 @@ class NavigationRuntime private constructor(
       Log.w(LOG_TAG, "navigation core unavailable: ${it.javaClass.simpleName}: ${it.message}")
     }
     lastSnapshot = engine.resumePersistedTrip()
+    // Phase and flags only: never coordinates or the trip.
+    parse(lastSnapshot ?: "")?.let {
+      Log.i(LOG_TAG, "resume phase=${it.optString("phase")} acquiring=${it.optBoolean("isAcquiringPosition")} " +
+        "endReason=${it.optString("tripEndReason", "none")} storedTrip=${storage.read(ACTIVE_TRIP_KEY) != null}")
+    }
     if (settings.getBoolean(SIMULATED_TRIP, false)) {
       // A simulated drive never resumes as a real trip after the process died.
       settings.edit().remove(SIMULATED_TRIP).apply()
@@ -343,6 +348,7 @@ class NavigationRuntime private constructor(
     const val ANNOUNCES_ROAD_REPORTS = "org.navoss.mobile.community.announce-road-reports"
     const val MODULE_CONTRACT_VERSION = 11
     const val API_BASE_URL = "https://navoss-api.yassin.app"
+    private const val ACTIVE_TRIP_KEY = "org.navoss.mobile.active-navigation-trip.v2"
     private const val SIMULATED_TRIP = "org.navoss.mobile.navigation.simulated-trip"
     private const val SIMULATION_TICK_MS = 1_000L
 
