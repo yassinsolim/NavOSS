@@ -165,7 +165,8 @@ then back to the chosen road).
   spacing. So is one that, once the route has been matched, is the rest of the route followed
   from the vehicle's match: walked in order, every point of it but 50 m lies within 20 m of the
   route, in its direction, at or just after the previous one, starting at the match, and its
-  length is within 50 m of the route left (`navigationIsRestOfRoute`). That is the router
+  length is within 50 m of the route left; it starts within 20 m of the match and ends within
+  20 m of the route's end (`navigationIsRestOfRoute`). That is the router
   starting where the matcher's anchor is (a lay-by or a stop beside the road where the vehicle
   left it). The vehicle stays off route until the matcher finds it on the route going forwards;
   nothing about matching, jumps or arrival changes. Any other answer along the route's roads

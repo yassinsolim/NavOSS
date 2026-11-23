@@ -132,6 +132,9 @@ final class NavigationRerouteBackoffTests: XCTestCase {
     let engine: NavigationEngine
     /// Seconds a reroute answer takes: it lands after this many more fixes.
     var latencyFixes = 1
+    /// Called with the state when a request is made: off route, its progress is the match the
+    /// request was made from.
+    var onRequest: ((NavOSSNavigationServiceState) -> Void)?
     /// Whether the host gives the router the vehicle's heading.
     var sendsHeading = true
     private(set) var requests = 0
@@ -198,6 +201,7 @@ final class NavigationRerouteBackoffTests: XCTestCase {
       if let request = engine.pendingRerouteTask, request != lastRequest {
         timeline.append("t=\(fixCount) request at (\(Int(x)), \(Int(y))) d=\(Int(state.navigation.distanceFromRouteMeters ?? -1))")
         requests += 1
+        onRequest?(state)
         lastRequest = request
         pending = (
           request, fixCount + latencyFixes,
@@ -729,19 +733,25 @@ final class NavigationRerouteBackoffTests: XCTestCase {
     func isRest(_ corners: [(Double, Double)], of route: [(Double, Double)], from along: Double)
       -> Bool
     {
-      navigationIsRestOfRoute(
-        Self.trip(id: "answer", corners: corners), of: Self.trip(id: "route", corners: route),
-        fromAlongMeters: along)
+      // The answer carries the destination asked for, whatever its geometry (as decoded).
+      let reference = Self.trip(id: "route", corners: route)
+      let answer = Self.trip(id: "answer", corners: corners)
+      return navigationIsRestOfRoute(
+        NavOSSCarPlayTrip(
+          destination: reference.destination, distanceMeters: answer.distanceMeters,
+          durationSeconds: answer.durationSeconds, geometry: answer.geometry, id: answer.id,
+          steps: answer.steps),
+        of: reference, fromAlongMeters: along)
     }
     let chosen = Self.chosenCorners
     // The tail from the anchor, with its own vertices, or starting a little either side.
     XCTAssertTrue(isRest([(0, 1_000), (0, 3_600), Self.destination], of: chosen, from: 1_000))
     XCTAssertTrue(
       isRest([(0, 1_000), (0, 1_700), (0, 2_900), (0, 3_600), Self.destination], of: chosen, from: 1_000))
-    XCTAssertTrue(isRest([(0, 970), (0, 3_600), Self.destination], of: chosen, from: 1_000))
-    XCTAssertTrue(isRest([(0, 1_030), (0, 3_600), Self.destination], of: chosen, from: 1_000))
-    // From a lay-by 20 m off the road back onto it.
-    XCTAssertTrue(isRest([(20, 1_000), (0, 1_010), (0, 3_600), Self.destination], of: chosen, from: 1_000))
+    XCTAssertTrue(isRest([(0, 985), (0, 3_600), Self.destination], of: chosen, from: 1_000))
+    XCTAssertTrue(isRest([(0, 1_015), (0, 3_600), Self.destination], of: chosen, from: 1_000))
+    // From a lay-by 15 m off the road back onto it.
+    XCTAssertTrue(isRest([(15, 1_000), (0, 1_010), (0, 3_600), Self.destination], of: chosen, from: 1_000))
     // Starting well ahead of or behind the anchor.
     XCTAssertFalse(isRest([(0, 1_300), (0, 3_600), Self.destination], of: chosen, from: 1_000))
     XCTAssertFalse(isRest([(0, 700), (0, 3_600), Self.destination], of: chosen, from: 1_000))
@@ -758,6 +768,16 @@ final class NavigationRerouteBackoffTests: XCTestCase {
     ]
     XCTAssertTrue(isRest([(0, 1_000)] + sideLoops.dropFirst(2), of: sideLoops, from: 1_000))
     XCTAssertFalse(isRest([(0, 1_000), (0, 3_600), Self.destination], of: sideLoops, from: 1_000))
+    // A window of the route shifted back or on, as long as the rest of it: a straight 1 km
+    // route matched at 500 m, answered from 440 m to 940 m or from 560 m to 1 060 m.
+    let straight: [(Double, Double)] = [(0, 0), (0, 1_000)]
+    XCTAssertTrue(isRest([(0, 500), (0, 1_000)], of: straight, from: 500))
+    XCTAssertFalse(isRest([(0, 440), (0, 940)], of: straight, from: 500))
+    XCTAssertFalse(isRest([(0, 560), (0, 1_060)], of: straight, from: 500))
+    // Right at one end and off at the other, within the length bound: starting 35 m back,
+    // or ending 40 m short.
+    XCTAssertFalse(isRest([(0, 465), (0, 1_000)], of: straight, from: 500))
+    XCTAssertFalse(isRest([(0, 500), (0, 960)], of: straight, from: 500))
     // The tail the other way.
     XCTAssertFalse(isRest([(600, 3_600), (0, 3_600), (0, 1_000)], of: chosen, from: 1_000))
     // The block loop: from the anchor round the block is the rest; straight north from 2 km
@@ -803,7 +823,8 @@ final class NavigationRerouteBackoffTests: XCTestCase {
       let rig = Rig(mode: mode) { request in
         let p = Trace.local(
           NavigationCoordinate(latitude: request.origin.latitude, longitude: request.origin.longitude))
-        return [Self.trip(id: "same", corners: [(p.x, p.y), (0, p.y), (0, 3_600), Self.destination])]
+        // The router snaps the origin onto the road beside the lay-by.
+        return [Self.trip(id: "same", corners: [(0, p.y), (0, 3_600), Self.destination])]
       }
       try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
       try rig.drive([(0, 0), (0, 400), (50, 410)], speed: 4)
@@ -860,9 +881,11 @@ final class NavigationRerouteBackoffTests: XCTestCase {
   /// A router that answers with the rest of the chosen route from the vehicle's match (it snapped
   /// the origin onto the road there): the answer that is dropped.
   private static func sameRoadRig(_ mode: NavOSSRerouteMode = .adaptive, from anchor: Anchor) -> Rig {
-    Rig(mode: mode) { _ in
+    let rig = Rig(mode: mode) { _ in
       [Self.trip(id: "same-road", corners: [(0, anchor.y), (0, 3_600), Self.destination])]
     }
+    rig.onRequest = { anchor.set(from: $0) }
+    return rig
   }
 
   /// A service road 60 m beside the route, slowly: the same-road answer changes nothing. The
@@ -873,7 +896,6 @@ final class NavigationRerouteBackoffTests: XCTestCase {
     let rig = Self.sameRoadRig(from: anchor)
     try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
     try rig.drive([(0, 0), (0, 400)])
-    anchor.set(from: rig.state)
     let progressBefore = rig.state.navigation.routeProgress
     var offRouteSince: Int?
     var index = 0
@@ -951,6 +973,7 @@ final class NavigationRerouteBackoffTests: XCTestCase {
   /// Ask first: B declined while beside A; after the cooldown a same-A answer changes nothing,
   /// and B is never offered again.
   func testASameRouteAnswerDoesNotLetADeclinedRouteBack() throws {
+    let anchor = Anchor()
     var calls = 0
     let lock = NSLock()
     let rig = Rig(mode: .askFirst) { request in
@@ -962,9 +985,10 @@ final class NavigationRerouteBackoffTests: XCTestCase {
         NavigationCoordinate(latitude: request.origin.latitude, longitude: request.origin.longitude))
       return call == 2
         // The rest of A from where the vehicle left it.
-        ? [Self.trip(id: "same-road", corners: [(0, 400), (0, 3_600), Self.destination])]
+        ? [Self.trip(id: "same-road", corners: [(0, anchor.y), (0, 3_600), Self.destination])]
         : [Self.trip(id: "b-\(call)", corners: [(60, p.y), (60, 3_600), Self.destination])]
     }
+    rig.onRequest = { anchor.set(from: $0) }
     try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
     var proposals: [String] = []
     for position in Trace.positions(along: [(0, 0), (0, 400), (60, 440), (60, 3_000)], every: 12)
@@ -989,7 +1013,6 @@ final class NavigationRerouteBackoffTests: XCTestCase {
     let rig = Self.sameRoadRig(from: anchor)
     try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
     try rig.drive([(0, 0), (0, 3_150)])
-    anchor.set(from: rig.state)
     let prepare = rig.spokenManeuvers.filter { $0.hasPrefix("In ") && $0.contains("Street 18") }
     XCTAssertEqual(prepare.count, 1, rig.spokenManeuvers.joined(separator: " | "))
     try rig.drive([(0, 3_150), (50, 3_170), (50, 3_300), (0, 3_330)], speed: 3)

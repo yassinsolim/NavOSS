@@ -404,8 +404,8 @@ let navigationRestOfRouteToleranceMeters = 50.0
 /// each point of `candidate` must lie within `navigationSameRouteToleranceMeters` of `reference`,
 /// in its direction, at or just after where the previous point did (never skipping ahead),
 /// starting at the anchor; all but `navigationRestOfRouteToleranceMeters` of it, and its length
-/// within that of the route left. It ends at the route's destination, so it has followed the
-/// route to its end. Lying on the route's roads somewhere is not enough: on a loop or an out-and-back route,
+/// within that of the route left; and it starts within `navigationSameRouteToleranceMeters` of
+/// the anchor's point and ends within that of the route's end. Lying on the route's roads somewhere is not enough: on a loop or an out-and-back route,
 /// a road the vehicle is behind on (a GPS gap) or turned back on is on the route too, but far
 /// from the anchor, where the matcher, which only moves forwards and only so far, never finds it.
 func navigationIsRestOfRoute(
@@ -419,7 +419,18 @@ func navigationIsRestOfRoute(
       NavigationCoordinate(latitude: $0.latitude, longitude: $0.longitude)
     }),
     abs(navigationRouteLengthMeters(candidate) - (route.totalDistanceMeters - anchorAlongMeters))
-      <= navigationRestOfRouteToleranceMeters
+      <= navigationRestOfRouteToleranceMeters,
+    let first = candidate.geometry.first, let last = candidate.geometry.last,
+    // It starts where the vehicle was matched and ends where the route does: equal lengths
+    // alone could be a window of the route shifted either way.
+    navigationDistanceMeters(
+      from: NavigationCoordinate(latitude: first.latitude, longitude: first.longitude),
+      to: route.point(alongMeters: anchorAlongMeters).coordinate)
+      <= navigationSameRouteToleranceMeters,
+    navigationDistanceMeters(
+      from: NavigationCoordinate(latitude: last.latitude, longitude: last.longitude),
+      to: route.point(alongMeters: route.totalDistanceMeters).coordinate)
+      <= navigationSameRouteToleranceMeters
   else {
     return false
   }
