@@ -60,6 +60,7 @@ import { isCarPlayVisualHarness } from '@/features/navigation/native-navigation'
 import { RoutePlanningSheet, RoutePreviewSheet } from '@/features/navigation/route-sheets';
 import { RouteStartPicker } from '@/features/navigation/route-start-picker';
 import { RouteStopsEditor } from '@/features/navigation/route-stops-editor';
+import { UpdateNotice } from '@/features/updates/update-notice';
 import { IS_ANDROID } from '@/lib/device-copy';
 import { useRenderCounter } from '@/lib/render-counter';
 import { createThemedStyles, space } from '@/theme';
@@ -381,6 +382,7 @@ export function MapScreen() {
           >
             {floatingControls}
             {drivingStatus}
+            <UpdateNotice top={insets.top + 8} tripActive={!routeIsIdle} />
             <MapNoticeToast notice={c.notice} onDismiss={c.onDismissNotice} top={insets.top + 8} />
           </View>
         )}
@@ -546,6 +548,7 @@ export function MapScreen() {
         {panel === undefined ? (
           <>
             {guidanceBanners}
+            <UpdateNotice top={insets.top + 8} tripActive={!routeIsIdle} />
             <MapNoticeToast
               notice={c.notice}
               onDismiss={c.onDismissNotice}

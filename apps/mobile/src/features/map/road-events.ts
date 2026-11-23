@@ -11,6 +11,8 @@ import type {
   RoadEventResponse,
 } from '@navoss/contracts';
 
+import { deviceDateTimeFormat } from '../../lib/device-time-format';
+
 import type { MapRegion } from '@/features/map/map-region';
 
 /**
@@ -210,18 +212,15 @@ export function relativeAge(time: number, now: number): string {
   return `${String(days)} ${days === 1 ? 'day' : 'days'} ago`;
 }
 
-const DATE_FORMAT = new Intl.DateTimeFormat('en-CA', { day: 'numeric', month: 'short' });
-const DATE_FORMAT_WITH_YEAR = new Intl.DateTimeFormat('en-CA', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-});
+// Device-local, so cached by `deviceDateTimeFormat`, which follows the device's time zone.
+const DATE_FORMAT = { day: 'numeric', month: 'short' } as const;
+const DATE_FORMAT_WITH_YEAR = { day: 'numeric', month: 'short', year: 'numeric' } as const;
 
 /** A calendar date, naming the year when it is not the current one (multi-year roadworks). */
 function formatLocalDate(value: string, now: number): string {
   const [year = 0, month = 1, day = 1] = value.split('-').map(Number);
   const format = year === new Date(now).getFullYear() ? DATE_FORMAT : DATE_FORMAT_WITH_YEAR;
-  return format.format(new Date(Date.UTC(year, month - 1, day, 12)));
+  return deviceDateTimeFormat('en-CA', format).format(new Date(Date.UTC(year, month - 1, day, 12)));
 }
 
 /** The age line under an event: from the source's own timestamps only. */
@@ -282,25 +281,25 @@ export function roadEventConfidenceLabel(event: MapRoadEvent): string {
   return event.confidence === 'official' ? 'Official' : 'Unverified';
 }
 
-const TIME_FORMAT = new Intl.DateTimeFormat('en-CA', {
+const TIME_FORMAT = {
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit',
   month: 'short',
-});
-const TIME_FORMAT_WITH_YEAR = new Intl.DateTimeFormat('en-CA', {
+} as const;
+const TIME_FORMAT_WITH_YEAR = {
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit',
   month: 'short',
   year: 'numeric',
-});
+} as const;
 
 /** An instant, naming the year when it is not the current one. */
 function formatEventTime(value: string, now: number): string {
   const time = Date.parse(value);
   const sameYear = new Date(time).getFullYear() === new Date(now).getFullYear();
-  return (sameYear ? TIME_FORMAT : TIME_FORMAT_WITH_YEAR).format(time);
+  return deviceDateTimeFormat('en-CA', sameYear ? TIME_FORMAT : TIME_FORMAT_WITH_YEAR).format(time);
 }
 
 /** Detail text for a tapped or listed event. */
