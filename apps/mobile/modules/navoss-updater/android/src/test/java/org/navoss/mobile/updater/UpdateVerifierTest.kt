@@ -80,6 +80,27 @@ class UpdateVerifierTest {
   }
 
   @Test
+  fun rejectsWhenTheInstalledPackageIsNotNavOSS() {
+    val (file, sha) = apk()
+    val other = PackageFacts("org.example.navoss", 101, setOf(release))
+    assertEquals(
+      Rejection.WRONG_PACKAGE,
+      verify(file, sha, PackageFacts(NAVOSS_PACKAGE_NAME, 102, setOf(release)), other),
+    )
+  }
+
+  @Test
+  fun rejectsAReleaseSignedUpdateOverAnInstallSignedByAnotherKey() {
+    // Signed by the pinned certificate, but not by the installed app's own one.
+    val (file, sha) = apk()
+    val debugInstalled = PackageFacts(NAVOSS_PACKAGE_NAME, 101, setOf(debugKey))
+    assertEquals(
+      Rejection.WRONG_SIGNER,
+      verify(file, sha, PackageFacts(NAVOSS_PACKAGE_NAME, 102, setOf(release)), debugInstalled),
+    )
+  }
+
+  @Test
   fun rejectsADebugSignedBuild() {
     val (file, sha) = apk()
     assertEquals(
