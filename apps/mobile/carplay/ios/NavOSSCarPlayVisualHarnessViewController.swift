@@ -4,8 +4,16 @@ internal import NavOSSNavigation
 import UIKit
 
 #if targetEnvironment(simulator)
+/// The phone scene looks this class up by its Objective-C name (see `NavOSSSimulatorLaunchRoot`).
 @MainActor
-final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
+@objc(NavOSSCarPlayVisualHarnessViewController)
+final class NavOSSCarPlayVisualHarnessViewController: UIViewController, NavOSSSimulatorLaunchRoot {
+  static func launchRootViewController(environment: [String: String]) -> UIViewController? {
+    guard let scenario = environment["NAVOSS_CARPLAY_VISUAL_SCENARIO"], scenarios.contains(scenario)
+    else { return nil }
+    return NavOSSCarPlayVisualHarnessViewController(scenario: scenario)
+  }
+
   /// Every scenario the harness renders; the phone scene shows the harness only for these.
   static let scenarios: Set<String> = [
     "preview", "preview-short", "preview-resize", "progress-05",
