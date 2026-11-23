@@ -1,5 +1,7 @@
 package org.navoss.mobile.navigation
 
+import org.json.JSONObject
+
 /** How native navigation recovers once the driver leaves the selected route (iOS `NavOSSRerouteMode`). */
 enum class RerouteMode(val raw: String) {
   ADAPTIVE("adaptive"),
@@ -28,105 +30,75 @@ data class NavigationCoordinate(val latitude: Double, val longitude: Double) {
       latitude in -90.0..90.0 && longitude in -180.0..180.0
 }
 
-data class NavigationLocationSample(
-  val coordinate: NavigationCoordinate,
-  val courseDegrees: Double?,
-  val horizontalAccuracyMeters: Double?,
-  val speedMetersPerSecond: Double?,
-  /** Fix time in milliseconds since the Unix epoch. */
-  val timestampMs: Double,
-)
+/**
+ * A refused navigation call, with the stable `code` of the core's error table
+ * (`docs/architecture/android-core.md`), or `guidance-unavailable` when no core is loaded.
+ */
+class NavigationEngineException(val code: String, message: String?, cause: Throwable? = null) :
+  RuntimeException(message, cause)
 
 /**
- * A trip as the phone hands it over. `payload` is the validated contract object (`NativeCarPlayTrip`)
- * that a snapshot reports back while the trip is active.
+ * The boundary between the Expo module and the navigation core. Trips, location samples and
+ * snapshots cross as the JSON of the JavaScript contract (`modules/navoss-navigation/index.ts`):
+ * the module hands JS objects in as JSON and returns the snapshot JSON to JS without touching a
+ * field. Failing calls throw [NavigationEngineException].
  */
-data class NavigationTrip(
-  val id: String,
-  val destination: NavigationDestination,
-  val geometry: List<NavigationCoordinate>,
-  val payload: Map<String, Any?>,
-)
+interface NavigationEngine : AutoCloseable {
+  /** The JS contract version of the loaded core, or `null` when guidance is unavailable. */
+  val contractVersion: Int?
 
-enum class NavigationPhase(val raw: String) { IDLE("idle"), TRACKING("tracking"), ARRIVED("arrived") }
-
-/**
- * What the engine knows, in the shape of the JS `NativeNavigationSnapshot` minus fields this engine
- * never produces. Absent values are omitted from the payload, never invented.
- */
-data class NavigationSnapshot(
-  val phase: NavigationPhase,
-  val isOffRoute: Boolean,
-  val isDeadReckoning: Boolean,
-  val rerouteCount: Int,
-  val rerouteMode: RerouteMode,
-  val routeProgress: Double,
-  val routeStatus: String,
-  val routeVersion: Int,
-  val sequence: Int,
-  val speedingState: String,
-  val stateVersion: Int,
-  val rawCoordinate: NavigationCoordinate?,
-  val horizontalAccuracyMeters: Double?,
-  val speedMetersPerSecond: Double?,
-  val trip: NavigationTrip?,
-)
-
-class InvalidNavigationInput(message: String) : IllegalArgumentException(message)
-
-/**
- * The boundary between the Expo module and whatever runs navigation on Android: a port of the
- * Swift core, or the Swift core itself cross-compiled. Kept narrow on purpose.
- */
-interface NavigationEngine {
-  fun setRoute(trip: NavigationTrip): NavigationSnapshot
-  fun updateLocation(sample: NavigationLocationSample): NavigationSnapshot
-  fun clearRoute(): NavigationSnapshot
-  fun snapshot(): NavigationSnapshot
+  /** Restores a trip saved before the process died. Called once, after creation. */
+  fun resumePersistedTrip(): String
+  fun setRoute(tripJson: String): String
+  fun updateLocation(sampleJson: String): String
+  fun clearRoute(): String
+  fun snapshot(): String
   fun acceptRerouteProposal(id: String): Boolean
   fun declineRerouteProposal(id: String): Boolean
   fun setAudioMode(mode: NavigationAudioMode)
   fun setRerouteMode(mode: RerouteMode)
   fun setSpeedingWarning(toleranceKph: Int, audible: Boolean)
-  fun stopAnnouncements()
-  /** Called after every state change, on the thread that made it. `null` removes the listener. */
-  fun setSnapshotListener(listener: ((NavigationSnapshot) -> Unit)?)
+  fun setAnnounceRoadReports(enabled: Boolean)
+
+  /** Whether `generation` is still the engine's navigation generation. */
+  fun isCurrentGeneration(generation: Long): Boolean
+  fun clockTick()
+  fun completeHttpRequest(requestId: Long, responseJson: String)
 }
 
 /**
- * Keeps the trip and the last fix and reports `idle` / `tracking` honestly. It does no matching,
- * guidance, rerouting, speech or arrival: no step, progress, matched position or speed state is
- * ever reported, and it never proposes a reroute.
+ * Stands in when the native core is missing or its ABI does not match: it reports an idle,
+ * guidance-free state and refuses trips, so the app says guidance is unavailable instead of
+ * crashing or pretending to navigate.
  */
-class PlaceholderNavigationEngine(
-  private var rerouteMode: RerouteMode,
+class UnavailableNavigationEngine(
+  private val rerouteMode: () -> RerouteMode,
+  /** Why the core could not be loaded; kept for diagnostics, never shown verbatim. */
+  val reason: Throwable?,
 ) : NavigationEngine {
-  private val lock = Any()
-  private var trip: NavigationTrip? = null
-  private var lastFix: NavigationLocationSample? = null
-  private var routeVersion = 0
-  private var sequence = 0
-  private var stateVersion = 0
-  private var listener: ((NavigationSnapshot) -> Unit)? = null
+  override val contractVersion: Int? = null
 
-  override fun setRoute(trip: NavigationTrip): NavigationSnapshot = change {
-    this.trip = trip
-    routeVersion += 1
-  }
+  override fun resumePersistedTrip(): String = snapshot()
 
-  override fun updateLocation(sample: NavigationLocationSample): NavigationSnapshot {
-    if (!sample.coordinate.isValid || !sample.timestampMs.isFinite() || sample.timestampMs <= 0) {
-      throw InvalidNavigationInput("A live fix needs a valid coordinate and a capture time.")
-    }
-    return change {
-      lastFix = sample
-      sequence += 1
-    }
-  }
+  override fun setRoute(tripJson: String): String = throw unavailable()
 
-  override fun clearRoute(): NavigationSnapshot = change { trip = null }
+  override fun updateLocation(sampleJson: String): String = throw unavailable()
 
-  override fun snapshot(): NavigationSnapshot = synchronized(lock) { snapshotLocked() }
+  override fun clearRoute(): String = snapshot()
+
+  override fun snapshot(): String = JSONObject()
+    .put("isDeadReckoning", false)
+    .put("isOffRoute", false)
+    .put("phase", "idle")
+    .put("rerouteCount", 0)
+    .put("rerouteMode", rerouteMode().raw)
+    .put("routeProgress", 0)
+    .put("routeStatus", "tracking")
+    .put("routeVersion", 0)
+    .put("sequence", 0)
+    .put("speedingState", "unknown")
+    .put("stateVersion", 0)
+    .toString()
 
   override fun acceptRerouteProposal(id: String): Boolean = false
 
@@ -134,47 +106,27 @@ class PlaceholderNavigationEngine(
 
   override fun setAudioMode(mode: NavigationAudioMode) = Unit
 
-  override fun setRerouteMode(mode: RerouteMode) {
-    change { rerouteMode = mode }
-  }
+  override fun setRerouteMode(mode: RerouteMode) = Unit
 
   override fun setSpeedingWarning(toleranceKph: Int, audible: Boolean) = Unit
 
-  override fun stopAnnouncements() = Unit
+  override fun setAnnounceRoadReports(enabled: Boolean) = Unit
 
-  override fun setSnapshotListener(listener: ((NavigationSnapshot) -> Unit)?) {
-    synchronized(lock) { this.listener = listener }
-  }
+  override fun isCurrentGeneration(generation: Long): Boolean = false
 
-  private inline fun change(update: () -> Unit): NavigationSnapshot {
-    val (snapshot, listener) = synchronized(lock) {
-      update()
-      stateVersion += 1
-      snapshotLocked() to listener
-    }
-    listener?.invoke(snapshot)
-    return snapshot
-  }
+  override fun clockTick() = Unit
 
-  private fun snapshotLocked(): NavigationSnapshot {
-    val fix = lastFix
-    val trip = trip
-    return NavigationSnapshot(
-      phase = if (trip == null) NavigationPhase.IDLE else NavigationPhase.TRACKING,
-      isOffRoute = false,
-      isDeadReckoning = false,
-      rerouteCount = 0,
-      rerouteMode = rerouteMode,
-      routeProgress = 0.0,
-      routeStatus = "tracking",
-      routeVersion = routeVersion,
-      sequence = sequence,
-      speedingState = "unknown",
-      stateVersion = stateVersion,
-      rawCoordinate = fix?.coordinate,
-      horizontalAccuracyMeters = fix?.horizontalAccuracyMeters,
-      speedMetersPerSecond = fix?.speedMetersPerSecond,
-      trip = trip,
-    )
+  override fun completeHttpRequest(requestId: Long, responseJson: String) = Unit
+
+  override fun close() = Unit
+
+  private fun unavailable() = NavigationEngineException(
+    GUIDANCE_UNAVAILABLE,
+    "Turn-by-turn guidance is not available in this build.",
+    reason,
+  )
+
+  companion object {
+    const val GUIDANCE_UNAVAILABLE = "guidance-unavailable"
   }
 }

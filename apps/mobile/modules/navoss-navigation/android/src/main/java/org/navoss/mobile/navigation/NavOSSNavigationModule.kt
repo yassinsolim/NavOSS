@@ -1,13 +1,18 @@
 package org.navoss.mobile.navigation
 
+import android.Manifest
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.os.Build
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
+import org.json.JSONArray
+import org.json.JSONObject
 
 private const val NAVIGATION_SNAPSHOT_EVENT = "onNavigationSnapshot"
 private const val NAVIGATION_PREFERENCES_EVENT = "onNavigationPreferencesChanged"
@@ -15,20 +20,10 @@ private const val CARPLAY_STATE_EVENT = "onCarPlayStateChanged"
 private const val CARPLAY_NAVIGATION_ENDED_EVENT = "onCarPlayNavigationEnded"
 private const val OFFLINE_STATE_EVENT = "onOfflineStateChanged"
 private const val COMMUNITY_STATE_EVENT = "onCommunityStateChanged"
+private const val SIMULATED_DRIVE_EVENT = "onSimulatedDriveChanged"
 
-private const val PREFERENCES_FILE = "org.navoss.mobile.navigation"
 private const val SHARES_TRAFFIC_SPEEDS = "org.navoss.mobile.community.share-traffic-speeds"
-private const val ANNOUNCES_ROAD_REPORTS = "org.navoss.mobile.community.announce-road-reports"
 private const val SHARES_ROAD_REPORTS = "org.navoss.mobile.community.share-road-reports"
-
-class NavigationLocationRecord : Record {
-  @Field val courseDegrees: Double? = null
-  @Field val horizontalAccuracyMeters: Double? = null
-  @Field val latitude: Double = Double.NaN
-  @Field val longitude: Double = Double.NaN
-  @Field val speedMetersPerSecond: Double? = null
-  @Field val timestampMs: Double? = null
-}
 
 class NavigationDestinationRecord : Record {
   @Field val category: String? = null
@@ -53,21 +48,30 @@ class RoutePreferencesRecord : Record {
 }
 
 /**
- * Android side of the `NavOSSNavigation` contract (version 11). Navigation itself runs behind
- * [NavigationEngine]; CarPlay, community reports, offline maps and Google place details do not
- * exist on Android and report themselves unavailable in the shapes the JavaScript expects.
+ * Android side of the `NavOSSNavigation` contract (version 11). Navigation runs in the shared
+ * Swift core behind [NavigationEngine], hosted by the process-wide [NavigationRuntime]; trips,
+ * fixes and snapshots cross as the core's JSON, untouched. CarPlay, community reports, offline
+ * maps and Google place details do not exist on Android and report themselves unavailable in the
+ * shapes the JavaScript expects.
  */
 class NavOSSNavigationModule : Module() {
   private val context: Context
     get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
 
   private val sharedPreferences: SharedPreferences by lazy {
-    context.getSharedPreferences(PREFERENCES_FILE, Context.MODE_PRIVATE)
+    context.getSharedPreferences(NavigationRuntime.PREFERENCES_FILE, Context.MODE_PRIVATE)
   }
-  private val preferencesStore by lazy { NavigationPreferencesStore(sharedPreferences) }
+  private val navigation: NavigationRuntime by lazy { NavigationRuntime.get(context) }
+  private val preferencesStore by lazy { navigation.preferences }
   private val destinationStore by lazy { DestinationStore(sharedPreferences) }
-  private val engine: NavigationEngine by lazy {
-    PlaceholderNavigationEngine(preferencesStore.load().rerouteMode)
+  private val engine: NavigationEngine
+    get() = navigation.engine
+
+  private val snapshotListener: (String) -> Unit = { snapshot ->
+    jsonObject(snapshot)?.let { sendEvent(NAVIGATION_SNAPSHOT_EVENT, it) }
+  }
+  private val simulationListener: (Boolean) -> Unit = { active ->
+    sendEvent(SIMULATED_DRIVE_EVENT, mapOf("active" to active))
   }
 
   override fun definition() = ModuleDefinition {
@@ -80,40 +84,21 @@ class NavOSSNavigationModule : Module() {
       CARPLAY_NAVIGATION_ENDED_EVENT,
       OFFLINE_STATE_EVENT,
       COMMUNITY_STATE_EVENT,
+      SIMULATED_DRIVE_EVENT,
     )
 
     OnCreate {
-      engine.setSnapshotListener { snapshot ->
-        sendEvent(NAVIGATION_SNAPSHOT_EVENT, serialize(snapshot))
-      }
+      // Creating the runtime restores a trip saved before the process died, as iOS does at launch.
+      navigation.addSnapshotListener(snapshotListener)
+      navigation.addSimulationListener(simulationListener)
     }
 
     OnDestroy {
-      engine.setSnapshotListener(null)
+      navigation.removeSnapshotListener(snapshotListener)
+      navigation.removeSimulationListener(simulationListener)
     }
 
-    Function("getCapabilities") {
-      // The contract flags describe the module interface this build implements. The placeholder
-      // engine behind it does no matching or guidance yet; snapshots say so by carrying none.
-      mapOf(
-        "arrivalDetection" to true,
-        "backgroundLocation" to false,
-        "carPlayTripBridge" to true,
-        "courseMatching" to true,
-        "deadReckoning" to true,
-        "geometryGuidance" to true,
-        "implementation" to "native-android",
-        "nativeSafetyCameraAlerts" to true,
-        "offRouteDetection" to true,
-        "replayInput" to true,
-        "rerouteConsent" to true,
-        "routeContinuity" to true,
-        "routeMatching" to true,
-        "safetyCameraAnnouncements" to true,
-        "speedingWarning" to true,
-        "version" to 11,
-      )
-    }
+    Function("getCapabilities") { navigation.capabilities }
 
     Function("isGooglePlaceRatingAvailable") { false }
     Function("isCarPlayVisualHarness") { false }
@@ -121,24 +106,18 @@ class NavOSSNavigationModule : Module() {
 
     // Navigation
 
-    Function("getSnapshot") { serialize(engine.snapshot()) }
+    Function("getSnapshot") { snapshot(engine.snapshot()) }
 
     Function("setRoute") { trip: Map<String, Any?> ->
-      serialize(guarded { engine.setRoute(parseTrip(trip)) })
+      requestNotificationPermission()
+      snapshot(guarded { navigation.setRoute(JSONObject(trip).toString()) })
     }
 
-    Function("updateLocation") { location: NavigationLocationRecord ->
-      val sample = NavigationLocationSample(
-        coordinate = NavigationCoordinate(location.latitude, location.longitude),
-        courseDegrees = location.courseDegrees,
-        horizontalAccuracyMeters = location.horizontalAccuracyMeters,
-        speedMetersPerSecond = location.speedMetersPerSecond,
-        timestampMs = location.timestampMs ?: Double.NaN,
-      )
-      serialize(guarded { engine.updateLocation(sample) })
+    Function("updateLocation") { location: Map<String, Any?> ->
+      snapshot(guarded { navigation.updateLocation(JSONObject(location).toString()) })
     }
 
-    Function("clearRoute") { serialize(engine.clearRoute()) }
+    Function("clearRoute") { snapshot(engine.clearRoute()) }
 
     Function("clearCarPlayTrip") { engine.clearRoute(); Unit }
 
@@ -146,7 +125,18 @@ class NavOSSNavigationModule : Module() {
 
     Function("declineRerouteProposal") { id: String -> engine.declineRerouteProposal(id) }
 
-    Function("stopAnnouncements") { engine.stopAnnouncements() }
+    Function("stopAnnouncements") { navigation.stopAnnouncements() }
+
+    // Android only: devices without GPS and the simulated drive.
+
+    Function("getLocationAvailability") { navigation.locationAvailability().raw }
+
+    Function("startSimulatedDrive") { trip: Map<String, Any?> ->
+      requestNotificationPermission()
+      snapshot(guarded { navigation.startSimulatedDrive(JSONObject(trip).toString()) })
+    }
+
+    Function("isSimulatingDrive") { navigation.isSimulating }
 
     // Preferences
 
@@ -245,7 +235,8 @@ class NavOSSNavigationModule : Module() {
     }
 
     Function("setAnnounceRoadReports") { enabled: Boolean ->
-      setCommunityPreference(ANNOUNCES_ROAD_REPORTS, enabled)
+      setCommunityPreference(NavigationRuntime.ANNOUNCES_ROAD_REPORTS, enabled)
+      engine.setAnnounceRoadReports(enabled)
     }
 
     // Offline maps: there is no on-device map, search or routing engine for Android.
@@ -277,8 +268,17 @@ class NavOSSNavigationModule : Module() {
 
   private fun <T> guarded(body: () -> T): T = try {
     body()
-  } catch (error: InvalidNavigationInput) {
-    throw CodedException("ERR_NAVOSS_INVALID_INPUT", error.message, error)
+  } catch (error: NavigationEngineException) {
+    throw CodedException("ERR_NAVOSS_" + error.code.uppercase().replace('-', '_'), error.message, error)
+  }
+
+  private fun snapshot(json: String): Map<String, Any?> = jsonObject(json).orEmpty()
+
+  /** Android 13+ shows the trip notification only with this permission; guidance works without it. */
+  private fun requestNotificationPermission() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+    appContext.permissions?.askForPermissions({ _ -> }, Manifest.permission.POST_NOTIFICATIONS)
   }
 
   private fun emitNavigationPreferences() {
@@ -305,7 +305,7 @@ class NavOSSNavigationModule : Module() {
     "canWrite" to false,
     "hasIdentity" to false,
     "preferences" to mapOf(
-      "announcesRoadReports" to sharedPreferences.getBoolean(ANNOUNCES_ROAD_REPORTS, true),
+      "announcesRoadReports" to sharedPreferences.getBoolean(NavigationRuntime.ANNOUNCES_ROAD_REPORTS, true),
       "sharesRoadReports" to sharedPreferences.getBoolean(SHARES_ROAD_REPORTS, false),
       "sharesTrafficSpeeds" to sharedPreferences.getBoolean(SHARES_TRAFFIC_SPEEDS, false),
     ),
@@ -347,57 +347,21 @@ class NavOSSNavigationModule : Module() {
     catalog.home?.let { put("home", serialize(it)) }
     catalog.work?.let { put("work", serialize(it)) }
   }
+}
 
-  private fun serialize(coordinate: NavigationCoordinate): Map<String, Any?> =
-    mapOf("latitude" to coordinate.latitude, "longitude" to coordinate.longitude)
+/** The core's snapshot JSON as the map Expo hands to JavaScript, value for value. */
+internal fun jsonObject(json: String): Map<String, Any?>? = try {
+  JSONObject(json).toMap()
+} catch (_: org.json.JSONException) {
+  null
+}
 
-  private fun serialize(snapshot: NavigationSnapshot): Map<String, Any?> = buildMap {
-    put("isDeadReckoning", snapshot.isDeadReckoning)
-    put("isOffRoute", snapshot.isOffRoute)
-    put("phase", snapshot.phase.raw)
-    put("rerouteCount", snapshot.rerouteCount)
-    put("rerouteMode", snapshot.rerouteMode.raw)
-    put("routeProgress", snapshot.routeProgress)
-    put("routeStatus", snapshot.routeStatus)
-    put("routeVersion", snapshot.routeVersion)
-    put("sequence", snapshot.sequence)
-    put("speedingState", snapshot.speedingState)
-    put("stateVersion", snapshot.stateVersion)
-    snapshot.rawCoordinate?.let { put("rawCoordinate", serialize(it)) }
-    snapshot.horizontalAccuracyMeters?.let { put("horizontalAccuracyMeters", it) }
-    snapshot.speedMetersPerSecond?.let { put("speedMetersPerSecond", it) }
-    if (snapshot.phase != NavigationPhase.IDLE) {
-      snapshot.trip?.let { put("trip", it.payload) }
-    }
-  }
+private fun JSONObject.toMap(): Map<String, Any?> =
+  keys().asSequence().associateWith { key -> fromJson(get(key)) }
 
-  private fun parseTrip(value: Map<String, Any?>): NavigationTrip {
-    val id = value["id"] as? String
-    if (id.isNullOrEmpty()) throw InvalidNavigationInput("A trip needs an id.")
-    val destination = (value["destination"] as? Map<*, *>)?.let(::parseDestination)
-      ?.takeIf { it.isValid }
-      ?: throw InvalidNavigationInput("A trip needs a valid destination.")
-    val geometry = (value["geometry"] as? List<*>)?.mapNotNull { point ->
-      val map = point as? Map<*, *> ?: return@mapNotNull null
-      val latitude = (map["latitude"] as? Number)?.toDouble() ?: return@mapNotNull null
-      val longitude = (map["longitude"] as? Number)?.toDouble() ?: return@mapNotNull null
-      NavigationCoordinate(latitude, longitude).takeIf { it.isValid }
-    }.orEmpty()
-    if (geometry.size < 2 || geometry.size != (value["geometry"] as List<*>).size) {
-      throw InvalidNavigationInput("A trip needs a geometry of at least two valid points.")
-    }
-    if (value["steps"] !is List<*>) throw InvalidNavigationInput("A trip needs its steps.")
-    return NavigationTrip(id, destination, geometry, value)
-  }
-
-  private fun parseDestination(value: Map<*, *>): NavigationDestination? {
-    return NavigationDestination(
-      category = value["category"] as? String,
-      id = value["id"] as? String ?: return null,
-      label = value["label"] as? String ?: return null,
-      latitude = (value["latitude"] as? Number)?.toDouble() ?: return null,
-      longitude = (value["longitude"] as? Number)?.toDouble() ?: return null,
-      name = value["name"] as? String ?: return null,
-    )
-  }
+private fun fromJson(value: Any?): Any? = when (value) {
+  JSONObject.NULL -> null
+  is JSONObject -> value.toMap()
+  is JSONArray -> (0 until value.length()).map { fromJson(value.get(it)) }
+  else -> value
 }

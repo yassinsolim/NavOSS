@@ -12,4 +12,16 @@ android {
     versionCode 1
     versionName "0.0.0"
   }
+  testOptions {
+    unitTests.all {
+      // Host logic tests run on the JVM; any android.* call they reach is a test bug.
+      it.testLogging { events "failed"; exceptionFormat "full" }
+    }
+  }
+}
+
+dependencies {
+  testImplementation 'junit:junit:4.13.2'
+  // android.jar's org.json is a stub on the JVM; the host logic reads and writes real JSON.
+  testImplementation 'org.json:json:20250517'
 }
