@@ -14,6 +14,12 @@ The delivery path is:
 
 EAS Submit sends iOS builds to TestFlight. It does not submit them for public App Store review.
 
+## Android
+
+Android is in testing and has no public release. The `Android build and Kotlin tests` job in `ci.yml` runs on pushes to `main`, manual runs, and pull requests that change the mobile app's config, plugins, modules, source or assets, the contracts, the lockfile or `ci.yml`; other pull requests finish it in seconds. It regenerates `apps/mobile/android` with `expo prebuild`, builds the debug APK and runs the Kotlin unit tests of `navoss-updater` and `navoss-navigation`, with the Gradle caches restored between runs. It runs beside the other jobs and does not delay them.
+
+`.github/workflows/android-release.yml` (manual dispatch only, environment `android-release`) builds the signed release APK on `ubuntu-latest`, verifies it against the pinned signing certificate, scans the build log for key material, and creates a **draft** GitHub release `android-v<versionName>-<versionCode>` with the APK, its `.sha256` and `update.json`; its `publish` input publishes instead. Only its `release` job has `contents: write`. The version code is 100 plus the workflow's run number. The procedure, the certificate digest and the in-app updater are in [android.md](android.md).
+
 ## Open item: CarPlay visuals runner
 
 Nightly run `43733475080` failed on both attempts on 2026-11-15: after the app built successfully and native tests passed, `xcrun simctl bootstatus` timed out after 120 seconds on the hosted runner. The same harness passed locally twice that day. The cause is not established; investigate the hosted simulator boot failure before treating the job as reliable. A local harness pass does not prove interactive CarPlay on a head unit.
