@@ -4,6 +4,7 @@ import Animated, { FadeInUp, FadeOutUp, ReduceMotion } from 'react-native-reanim
 import type { MapNotice } from '@/features/map/controller/use-map-controller';
 import { createThemedStyles, elevation, motion, radius, space, typography } from '@/theme';
 import { Banner } from '@/ui/banner';
+import { FocusRingPressable } from '@/ui/pressable-scale';
 
 /**
  * A confirmation or failure that appears over the map and leaves on its own. It replaces system
@@ -34,14 +35,14 @@ export function MapNoticeToast({
         <Banner
           action={
             notice.untilDismissed === true ? (
-              <Pressable
+              <FocusRingPressable
                 accessibilityLabel="Dismiss"
                 accessibilityRole="button"
                 hitSlop={12}
                 onPress={onDismiss}
               >
                 <Text style={styles.action}>Dismiss</Text>
-              </Pressable>
+              </FocusRingPressable>
             ) : undefined
           }
           announce

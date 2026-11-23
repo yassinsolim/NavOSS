@@ -1,10 +1,11 @@
 import { SymbolView } from 'expo-symbols';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { ReduceMotion, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 
 import { TAB_BAR_HEIGHT } from '@/features/map/overlay-layout';
 import { createThemedStyles, motion, radius, space, typography, useTheme } from '@/theme';
 import { haptics } from '@/theme/haptics';
+import { FocusRingPressable } from '@/ui/pressable-scale';
 
 export type AppTab = 'contribute' | 'explore' | 'saved';
 
@@ -41,7 +42,7 @@ function TabButton({
   );
 
   return (
-    <Pressable
+    <FocusRingPressable
       accessibilityLabel={tab.label}
       accessibilityRole="tab"
       accessibilityState={{ selected }}
@@ -58,7 +59,7 @@ function TabButton({
       <Text maxFontSizeMultiplier={1.2} style={[styles.label, selected && styles.labelSelected]}>
         {tab.label}
       </Text>
-    </Pressable>
+    </FocusRingPressable>
   );
 }
 

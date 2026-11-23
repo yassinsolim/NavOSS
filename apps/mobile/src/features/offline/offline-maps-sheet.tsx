@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fullSheetHeight, type ScreenMetrics } from '@/features/map/overlay-layout';
@@ -30,6 +30,7 @@ import { ModalSheet } from '@/ui/sheet/modal-sheet';
 import { SectionTitle, SheetHeader } from '@/ui/sheet/sheet-header';
 import { StateView } from '@/ui/state-view';
 import { DEVICE_NOUN } from '@/lib/device-copy';
+import { FocusRingPressable } from '@/ui/pressable-scale';
 
 const ACTION_LABELS: Readonly<Record<RegionAction, string>> = {
   cancel: 'Cancel',
@@ -228,7 +229,7 @@ export function OfflineMapsSheet({
 
         <View style={styles.section}>
           <SectionTitle>Map</SectionTitle>
-          <Pressable
+          <FocusRingPressable
             accessibilityHint="Uses downloaded maps inside your regions even with a connection."
             accessibilityLabel="Prefer offline maps"
             accessibilityRole="switch"
@@ -250,7 +251,7 @@ export function OfflineMapsSheet({
                 value={state.preferOffline}
               />
             </View>
-          </Pressable>
+          </FocusRingPressable>
         </View>
 
         <View style={styles.section}>

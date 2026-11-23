@@ -4,7 +4,6 @@ import { type RefObject, useMemo, useState } from 'react';
 import {
   Keyboard,
   Linking,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -47,6 +46,7 @@ import { BottomSheet, type BottomSheetRef, BottomSheetScrollView } from '@/ui/sh
 import { SectionTitle } from '@/ui/sheet/sheet-header';
 import { StateView } from '@/ui/state-view';
 import { useKeyboardCrowded } from '@/ui/sheet/use-keyboard-crowded';
+import { FocusRingPressable } from '@/ui/pressable-scale';
 
 const NO_RECENT_DESTINATIONS: readonly string[] = [];
 
@@ -411,7 +411,7 @@ export function ExploreSheet({
               <Banner
                 action={
                   locationState === 'denied' && apiConnection !== 'offline' ? (
-                    <Pressable
+                    <FocusRingPressable
                       accessibilityLabel="Open Settings"
                       accessibilityRole="button"
                       hitSlop={12}
@@ -420,9 +420,9 @@ export function ExploreSheet({
                       }}
                     >
                       <Text style={styles.bannerAction}>Settings</Text>
-                    </Pressable>
+                    </FocusRingPressable>
                   ) : notice.kind === 'location-off' ? (
-                    <Pressable
+                    <FocusRingPressable
                       accessibilityLabel="Open Location settings"
                       accessibilityRole="button"
                       hitSlop={12}
@@ -431,7 +431,7 @@ export function ExploreSheet({
                       }}
                     >
                       <Text style={styles.bannerAction}>Settings</Text>
-                    </Pressable>
+                    </FocusRingPressable>
                   ) : undefined
                 }
                 announce

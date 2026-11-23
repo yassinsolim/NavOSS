@@ -1,5 +1,5 @@
 import { SymbolView } from 'expo-symbols';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EXPLORE_CATEGORY_GROUPS, type ExploreCategory } from '@/features/map/explore-categories';
@@ -8,6 +8,7 @@ import { createThemedStyles, radius, space, touchTarget, typography, useTheme } 
 import { BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
 import { ModalSheet } from '@/ui/sheet/modal-sheet';
 import { SheetHeader } from '@/ui/sheet/sheet-header';
+import { FocusRingPressable } from '@/ui/pressable-scale';
 
 /** Every nearby-search category, grouped. Choosing one closes the sheet and runs the search. */
 export function CategoriesSheet({
@@ -57,7 +58,7 @@ export function CategoriesSheet({
             </View>
             <View style={styles.grid}>
               {group.categories.map((category) => (
-                <Pressable
+                <FocusRingPressable
                   accessibilityLabel={`Find ${category.label}`}
                   accessibilityRole="button"
                   key={category.id}
@@ -70,7 +71,7 @@ export function CategoriesSheet({
                   <Text numberOfLines={2} style={styles.cellLabel}>
                     {category.label}
                   </Text>
-                </Pressable>
+                </FocusRingPressable>
               ))}
             </View>
           </View>
