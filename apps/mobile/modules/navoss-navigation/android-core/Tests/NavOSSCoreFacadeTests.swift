@@ -757,6 +757,283 @@ final class NavOSSCoreBoundaryRaceTests: XCTestCase {
     XCTAssertEqual(retry, first)
   }
 
+  // Delta review 1: callbacks of two engines closing each other. Each close runs inside a
+  // callback (of the other engine), so neither may wait for callbacks.
+  func testTwoEnginesClosingEachOtherFromCallbacksDoNotDeadlock() throws {
+    let hostA = RecordingCoreHost()
+    let hostB = RecordingCoreHost()
+    let engineA = try makeEngine(hostA)
+    let engineB = try makeEngine(hostB)
+    let trip = try calgaryTripJSON()
+    // Both callbacks are running before either closes.
+    let inA = DispatchSemaphore(value: 0)
+    let inB = DispatchSemaphore(value: 0)
+    hostA.onStateChanged = {
+      inA.signal()
+      _ = inB.wait(timeout: .now() + 30)
+      engineB.close()
+    }
+    hostB.onStateChanged = {
+      inB.signal()
+      _ = inA.wait(timeout: .now() + 30)
+      engineA.close()
+    }
+    let done = DispatchSemaphore(value: 0)
+    Thread.detachNewThread {
+      _ = try? engineA.setRoute(trip)
+      done.signal()
+    }
+    Thread.detachNewThread {
+      _ = try? engineB.setRoute(trip)
+      done.signal()
+    }
+    XCTAssertEqual(done.wait(timeout: .now() + 10), .success, "the closes wait for each other")
+    XCTAssertEqual(done.wait(timeout: .now() + 10), .success, "the closes wait for each other")
+  }
+
+  // Delta review 2: a cancellation the flusher has claimed is still delivered when `close()`
+  // runs at that moment: close waits for it instead of revoking the host under it.
+  func testACancellationBeingFlushedSurvivesAConcurrentClose() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    try driveUntilRerouting(engine, host)
+    let config = try XCTUnwrap(host.takeRequest(endingWithAny: ["/v2/config"]))
+    let closerMoved = DispatchSemaphore(value: 0)
+    let closed = DispatchSemaphore(value: 0)
+    engine.bridgeForTesting.closeWillWait = { closerMoved.signal() }
+    engine.httpForTesting.didClaimCancellations = {
+      engine.httpForTesting.didClaimCancellations = nil
+      Thread.detachNewThread {
+        engine.close()
+        closerMoved.signal()
+        closed.signal()
+      }
+      // Until `close()` has either returned or begun to wait for this delivery.
+      _ = closerMoved.wait(timeout: .now() + 30)
+    }
+    _ = engine.clearRoute()
+    XCTAssertEqual(closed.wait(timeout: .now() + 30), .success)
+    XCTAssertEqual(
+      host.condition.withLock { host.cancelledRequests.filter { $0 == config.id } }, [config.id],
+      "the host was never told to cancel a request it holds")
+  }
+
+  // Delta review 3: a fix the core refuses (here a negative speed) at the accepted fix's
+  // coordinate, newer and with another accuracy, must not become the reroute origin.
+  func testARefusedFixDoesNotChangeTheRerouteOrigin() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    defer { engine.close() }
+    let accepted = try driveUntilRerouting(engine, host)
+    let acceptedAt = try XCTUnwrap(accepted["timestampMs"] as? Double)
+    func originOfNextRoutesRequest() throws -> [Double?] {
+      var routes = try XCTUnwrap(host.takeRequest(endingWithAny: ["/v2/config", "/v2/routes"]))
+      if requestURL(routes.json)?.hasSuffix("/v2/config") == true {
+        engine.completeHTTPRequest(
+          id: routes.id, responseJSON: okResponse(try recordedBody(productionConfig)))
+        routes = try XCTUnwrap(host.takeRequest(endingWithAny: ["/v2/routes"]))
+      }
+      engine.completeHTTPRequest(id: routes.id, responseJSON: #"{"error":"unreachable"}"#)
+      let request = try XCTUnwrap(
+        try JSONSerialization.jsonObject(with: Data(routes.json.utf8)) as? [String: Any])
+      let payload = try XCTUnwrap(
+        try JSONSerialization.jsonObject(
+          with: Data(try XCTUnwrap(request["body"] as? String).utf8)) as? [String: Any])
+      return [
+        payload["originHeadingDegrees"] as? Double,
+        payload["originHorizontalAccuracyMeters"] as? Double,
+      ]
+    }
+    let first = try originOfNextRoutesRequest()
+    XCTAssertEqual(
+      first,
+      [accepted["courseDegrees"] as? Double, accepted["horizontalAccuracyMeters"] as? Double])
+    XCTAssertNotNil(host.waitUntilNotRerouting())
+
+    var refused = accepted
+    refused["timestampMs"] = acceptedAt + 1_000
+    refused["speedMetersPerSecond"] = -1.0
+    refused["horizontalAccuracyMeters"] = 42.0
+    XCTAssertThrowsError(try engine.updateLocation(try json(refused))) {
+      XCTAssertEqual(($0 as? NavOSSCoreError)?.code, "invalid-location")
+    }
+
+    // Eleven seconds on, the accepted fix delivered again starts the retry.
+    host.setNow(acceptedAt + 11_000)
+    XCTAssertTrue(
+      try engine.updateLocation(try json(accepted)).contains(#""routeStatus":"rerouting""#),
+      "the repeated fix did not start the retry this test needs")
+    XCTAssertEqual(try originOfNextRoutesRequest(), first)
+  }
+
+  // MARK: The reroute origin's fix. The matcher says which fix it applied; these pin that
+  // nothing else can become the origin, whatever the interleaving.
+
+  /// The fix the matcher holds for the reroute origin, as `[latitude, longitude, course,
+  /// accuracy, timestamp]`.
+  private func appliedFix(_ engine: NavOSSCoreEngine) -> [Double?]? {
+    engine.engine.lock.withLock {
+      engine.engine.lastAppliedFixLocked.map {
+        [
+          $0.coordinate.latitude, $0.coordinate.longitude, $0.courseDegrees,
+          $0.horizontalAccuracyMeters,
+          $0.timestamp.map { Date(timeIntervalSinceReferenceDate: $0).timeIntervalSince1970 * 1_000 },
+        ]
+      }
+    }
+  }
+
+  private func values(_ fix: [String: Any]) -> [Double?] {
+    ["latitude", "longitude", "courseDegrees", "horizontalAccuracyMeters", "timestampMs"].map {
+      fix[$0] as? Double
+    }
+  }
+
+  /// Heading and accuracy of the next `/v2/routes` request, which is then failed.
+  private func failNextRoutesRequest(_ engine: NavOSSCoreEngine, _ host: RecordingCoreHost) throws
+    -> [Double?]
+  {
+    var routes = try XCTUnwrap(host.takeRequest(endingWithAny: ["/v2/config", "/v2/routes"]))
+    if requestURL(routes.json)?.hasSuffix("/v2/config") == true {
+      engine.completeHTTPRequest(
+        id: routes.id, responseJSON: okResponse(try recordedBody(productionConfig)))
+      routes = try XCTUnwrap(host.takeRequest(endingWithAny: ["/v2/routes"]))
+    }
+    engine.completeHTTPRequest(id: routes.id, responseJSON: #"{"error":"unreachable"}"#)
+    let request = try XCTUnwrap(
+      try JSONSerialization.jsonObject(with: Data(routes.json.utf8)) as? [String: Any])
+    let payload = try XCTUnwrap(
+      try JSONSerialization.jsonObject(
+        with: Data(try XCTUnwrap(request["body"] as? String).utf8)) as? [String: Any])
+    XCTAssertNotNil(host.waitUntilNotRerouting())
+    return [
+      payload["originHeadingDegrees"] as? Double,
+      payload["originHorizontalAccuracyMeters"] as? Double,
+    ]
+  }
+
+  // Review at 48f34c0, 1: B's newer fix and A's older one cross. A enters after B and is
+  // given to the engine after B's was applied, so the matcher ignores A. The origin stays B's.
+  func testAnOlderFixCrossingANewerOneNeverBecomesTheOrigin() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    defer { engine.close() }
+    let first = try driveUntilRerouting(engine, host)
+    let firstAt = try XCTUnwrap(first["timestampMs"] as? Double)
+    _ = try failNextRoutesRequest(engine, host)
+
+    var newer = first
+    newer["timestampMs"] = firstAt + 2_000
+    newer["courseDegrees"] = 200.0
+    newer["horizontalAccuracyMeters"] = 8.0
+    var older = newer
+    older["timestampMs"] = firstAt + 1_000
+    older["courseDegrees"] = 123.0
+    older["horizontalAccuracyMeters"] = 42.0
+    let newerJSON = try json(newer)
+    let olderJSON = try json(older)
+
+    let olderEntered = DispatchSemaphore(value: 0)
+    let newerReturned = DispatchSemaphore(value: 0)
+    let olderReturned = DispatchSemaphore(value: 0)
+    engine.fixWillIngest = { sample in
+      if sample.courseDegrees == 200 {
+        // B is decoded; A starts on another thread and is held just before the engine.
+        Thread.detachNewThread {
+          _ = try? engine.updateLocation(olderJSON)
+          olderReturned.signal()
+        }
+        _ = olderEntered.wait(timeout: .now() + 30)
+      } else {
+        olderEntered.signal()
+        _ = newerReturned.wait(timeout: .now() + 30)
+      }
+    }
+    host.setNow(firstAt + 2_000)
+    _ = try engine.updateLocation(newerJSON)
+    newerReturned.signal()
+    XCTAssertEqual(olderReturned.wait(timeout: .now() + 30), .success)
+    engine.fixWillIngest = nil
+    XCTAssertEqual(appliedFix(engine), values(newer))
+
+    // The retry, started by B delivered again, carries B's heading and accuracy.
+    host.setNow(firstAt + 11_000)
+    XCTAssertTrue(try engine.updateLocation(newerJSON).contains(#""routeStatus":"rerouting""#))
+    XCTAssertEqual(try failNextRoutesRequest(engine, host), [200, 8])
+  }
+
+  // Review at 48f34c0, 2: a fix applied on another thread while `setRoute` is still making
+  // its callbacks belongs to the new trip and is kept when `setRoute` returns; a repeat of it
+  // changes nothing.
+  func testAFixAppliedDuringRouteStartIsKept() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    defer { engine.close() }
+    let fix = try XCTUnwrap(try fixes().first)
+    let fixJSON = try json(fix)
+    host.setNow(try XCTUnwrap(fix["timestampMs"] as? Double))
+    let started = LockedBox(false)
+    let applied = LockedBox(false)
+    host.onStateChanged = { [unowned self] in
+      // Once: the fix's own state change comes through here too.
+      guard !started.get() else { return }
+      started.set(true)
+      applied.set(self.finishesOnAnotherThread { _ = try? engine.updateLocation(fixJSON) })
+    }
+    _ = try engine.setRoute(try calgaryTripJSON())
+    XCTAssertTrue(applied.get())
+    XCTAssertEqual(appliedFix(engine), values(fix))
+    _ = try engine.updateLocation(fixJSON)
+    XCTAssertEqual(appliedFix(engine), values(fix))
+  }
+
+  // A refused fix, a repeated one and an older one are never the matcher's applied fix, and
+  // a trip's fix is gone the moment another trip starts or the route is cleared.
+  func testOnlyAnAppliedFixOfTheCurrentTripIsKept() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    defer { engine.close() }
+    XCTAssertNil(appliedFix(engine))
+    let accepted = try driveUntilRerouting(engine, host)
+    let acceptedAt = try XCTUnwrap(accepted["timestampMs"] as? Double)
+    XCTAssertEqual(appliedFix(engine), values(accepted))
+
+    var refused = accepted
+    refused["timestampMs"] = acceptedAt + 1_000
+    refused["speedMetersPerSecond"] = -1.0
+    refused["horizontalAccuracyMeters"] = 42.0
+    XCTAssertThrowsError(try engine.updateLocation(try json(refused)))
+    XCTAssertEqual(appliedFix(engine), values(accepted), "a refused fix")
+
+    var repeated = accepted
+    repeated["horizontalAccuracyMeters"] = 43.0
+    _ = try engine.updateLocation(try json(repeated))
+    XCTAssertEqual(appliedFix(engine), values(accepted), "a repeated fix")
+
+    var older = accepted
+    older["timestampMs"] = acceptedAt - 1_000
+    older["courseDegrees"] = 123.0
+    _ = try engine.updateLocation(try json(older))
+    XCTAssertEqual(appliedFix(engine), values(accepted), "an older fix")
+
+    // Another trip: the old trip's fix is gone before any callback of the start runs.
+    let seenInCallback = LockedBox<[[Double?]?]>([])
+    host.onStateChanged = { [unowned self] in
+      seenInCallback.set(seenInCallback.get() + [self.appliedFix(engine)])
+    }
+    _ = try engine.setRoute(try calgaryTripJSON())
+    host.onStateChanged = nil
+    XCTAssertEqual(seenInCallback.get().first, .some(nil), "the old trip's fix outlived it")
+    XCTAssertNil(appliedFix(engine))
+
+    let fix = try XCTUnwrap(try fixes().first)
+    host.setNow(try XCTUnwrap(fix["timestampMs"] as? Double))
+    _ = try engine.updateLocation(try json(fix))
+    XCTAssertEqual(appliedFix(engine), values(fix))
+    _ = engine.clearRoute()
+    XCTAssertNil(appliedFix(engine))
+  }
+
   // Finding 11: the boundary's own ceiling on what the host hands it.
   func testOversizedTextFromTheHostIsRefused() throws {
     let host = RecordingCoreHost()

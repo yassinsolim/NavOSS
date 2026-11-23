@@ -102,11 +102,6 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
   private let effects: EngineEffects
   /// Guarded by the engine lock.
   private var announceRoadReports: Bool
-  /// The fix being ingested, until the engine has taken or ignored it. Guarded by the engine lock.
-  private var offeredSample: NavigationLocationSample?
-  /// The newest fix the engine accepted, for the reroute origin's course, speed, accuracy and
-  /// age. Guarded by the engine lock.
-  private var acceptedSample: NavigationLocationSample?
 
   public init(configJSON: String, host: NavOSSCoreHost) throws {
     let config: NavOSSCoreConfig
@@ -189,13 +184,9 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
     }
     do {
       let sample = try navOSSLiveNavigationFix(record.sample)
-      engine.lock.withLock { offeredSample = sample }
-      defer {
-        engine.lock.withLock {
-          settleLocked(sample)
-          if offeredSample == sample { offeredSample = nil }
-        }
-      }
+      #if DEBUG
+        fixWillIngest?(sample)
+      #endif
       _ = try engine.ingest(sample)
     } catch {
       throw NavOSSCoreError.from(error)
@@ -295,6 +286,9 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
     /// another caller's change may land.
     var preferencesWillChange: (() -> Void)?
 
+    /// Tests: runs in `updateLocation` once the fix is decoded, before the engine is given it.
+    var fixWillIngest: ((NavigationLocationSample) -> Void)?
+
     /// Tests: the HTTP carrier and the host gate, for their interleaving hooks.
     var httpForTesting: NavOSSCoreHTTP { http }
     var bridgeForTesting: NavOSSCoreHostBridge { bridge }
@@ -302,29 +296,15 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
 
   // MARK: Internals
 
-  /// Decides what became of an offered fix: it is the accepted one if the engine's snapshot
-  /// now stands at it and it is newer than the one kept. The session ignores a fix that was not
-  /// captured after the last one (a duplicate, or an older one arriving late) and leaves its
-  /// snapshot alone; such a fix must not replace the accepted one's course, accuracy and time.
-  private func settleLocked(_ offered: NavigationLocationSample) {
-    let raw = engine.currentUpdateLocked().snapshot.rawCoordinate
-    guard raw == offered.coordinate else { return }
-    if let accepted = acceptedSample, accepted.coordinate == raw,
-      let acceptedAt = accepted.timestamp, let offeredAt = offered.timestamp,
-      offeredAt <= acceptedAt
-    {
-      return
-    }
-    acceptedSample = offered
-  }
-
-  /// The origin metadata of a reroute from `coordinate`: only from the accepted fix at that
-  /// very coordinate, never another fix's course or accuracy.
+  /// The origin metadata of a reroute from `coordinate`: the course, speed, accuracy and age
+  /// of the fix the matcher last applied to this route, and only if that fix is at the very
+  /// coordinate being routed from. The facade keeps no fix of its own: the matcher says which
+  /// one it applied (never a refused, repeated or late one) and forgets it when the route is
+  /// started, replaced or cleared, all under the engine lock this is called with.
   fileprivate func rerouteOriginLocked(at coordinate: NavOSSCarPlayCoordinate)
     -> NavOSSNavigationRouteOrigin?
   {
-    if let offeredSample { settleLocked(offeredSample) }
-    guard let sample = acceptedSample,
+    guard let sample = engine.lastAppliedFixLocked,
       sample.coordinate.latitude == coordinate.latitude,
       sample.coordinate.longitude == coordinate.longitude,
       let accuracy = sample.horizontalAccuracyMeters, let timestamp = sample.timestamp
@@ -360,8 +340,16 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
 final class NavOSSCoreHostBridge: @unchecked Sendable {
   private let condition = NSCondition()
   private var host: NavOSSCoreHost?
-  /// Callbacks running now, by thread (a callback can cause another on its own thread).
-  private var inFlight: [ObjectIdentifier: Int] = [:]
+  /// Callbacks of this engine running now, on any thread.
+  private var inFlight = 0
+  /// Key of the calling thread's count of core callbacks it is inside, of any engine: a
+  /// callback of one engine may close another.
+  private static let depthKey = "org.navoss.core.callback-depth"
+
+  private static var callbackDepth: Int {
+    get { Thread.current.threadDictionary[depthKey] as? Int ?? 0 }
+    set { Thread.current.threadDictionary[depthKey] = newValue }
+  }
   #if DEBUG
     /// Tests: `close()` found callbacks running on other threads and is about to wait for them.
     var closeWillWait: (() -> Void)?
@@ -375,39 +363,35 @@ final class NavOSSCoreHostBridge: @unchecked Sendable {
   /// of running callbacks are one step, so `close()` either prevents the call or waits for it.
   @discardableResult
   func deliver<Result>(_ body: (NavOSSCoreHost) -> Result) -> Result? {
-    let thread = ObjectIdentifier(Thread.current)
     let host: NavOSSCoreHost? = condition.withLock {
       guard let host else { return nil }
-      inFlight[thread, default: 0] += 1
+      inFlight += 1
       return host
     }
     guard let host else { return nil }
+    Self.callbackDepth += 1
     defer {
+      Self.callbackDepth -= 1
       condition.withLock {
-        if let count = inFlight[thread], count > 1 {
-          inFlight[thread] = count - 1
-        } else {
-          inFlight[thread] = nil
-          condition.broadcast()
-        }
+        inFlight -= 1
+        if inFlight == 0 { condition.broadcast() }
       }
     }
     return body(host)
   }
 
   /// Revokes the host and waits for the callbacks running on other threads. Called from
-  /// inside a callback it cannot wait for its own caller, and two such calls would wait for
-  /// each other, so it then only revokes.
+  /// inside a callback, of this engine or of another, it cannot wait for its own caller, and
+  /// two such calls would wait for each other, so it then only revokes.
   func close() {
-    let thread = ObjectIdentifier(Thread.current)
     condition.lock()
     defer { condition.unlock() }
     host = nil
-    guard inFlight[thread] == nil else { return }
+    guard Self.callbackDepth == 0 else { return }
     #if DEBUG
-      if !inFlight.isEmpty { closeWillWait?() }
+      if inFlight > 0 { closeWillWait?() }
     #endif
-    while !inFlight.isEmpty {
+    while inFlight > 0 {
       condition.wait()
     }
   }
