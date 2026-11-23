@@ -695,7 +695,10 @@ export function TripSheet({
   // As in the maneuver banner: iOS keeps text measured at the old size when Dynamic Type changes
   // mid-trip ("End" drawn as "E…", the arrival time and action labels dropped). Keying the rows
   // on the font scale makes them measure again.
-  const { fontScale } = useWindowDimensions();
+  const { fontScale, height: windowHeight, width: windowWidth } = useWindowDimensions();
+  // Android fits a one-line label once per layout: remount the rows when the text size or the
+  // window changes (rotation, a navigation bar mode switch) so no label is left cut mid-word.
+  const layoutKey = `${String(fontScale)}-${String(windowWidth)}x${String(windowHeight)}`;
   // Without native guidance nothing tracks progress: show no estimate rather than a frozen one.
   const remaining = guidanceAvailable ? reportedRemaining : undefined;
   const resuming = guidanceAvailable && remaining === undefined;
@@ -746,7 +749,7 @@ export function TripSheet({
       initialDetent={detents.initial}
       position={position}
     >
-      <View key={`summary-${String(fontScale)}`} style={styles.tripSummary}>
+      <View key={`summary-${layoutKey}`} style={styles.tripSummary}>
         <View accessibilityLabel={summaryLabel} accessible style={styles.tripMetrics}>
           <Text
             maxFontSizeMultiplier={1.3}
@@ -778,7 +781,7 @@ export function TripSheet({
           variant="danger"
         />
       </View>
-      <View key={`actions-${String(fontScale)}`} style={styles.tripActions}>
+      <View key={`actions-${layoutKey}`} style={styles.tripActions}>
         <TripAction
           accessibilityHint="Opens guidance settings: sound, rerouting and speed warning"
           accessibilityLabel={
