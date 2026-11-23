@@ -542,7 +542,8 @@ React Native's r27 copy), and `apkanalyzer dex packages` shows the binding class
 native method, `NavOSSCore$Host` with every callback, and `NavOSSCoreException(String, String)`
 under their own names (the list comes from the Kotlin `external` functions and from every
 `FindClass` / `GetMethodID` the Swift JNI layer makes; `jni-contract.py check` fails on a lookup
-kind it cannot attribute), plus the NavOSS classes the manifest names and the app's Expo modules.
+kind it cannot attribute), plus the NavOSS classes the manifest names (Android instantiates those by name; the app's Expo
+modules are referenced as classes, and R8 renames them harmlessly).
 On a release APK that is the check that R8 neither stripped nor renamed them. The keep rules are
 `modules/navoss-navigation/android/consumer-rules.pro`; without them R8 removed the `Host`
 callbacks and `NavOSSCoreException` (CI run 45151549163), so `nativeCreate` would fail in every
