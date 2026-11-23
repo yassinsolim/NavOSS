@@ -84,6 +84,19 @@ for so in "$out"/*.so; do
   printf '%-42s %12d %12d\n' "$(basename "$so")" "$size" "$deflated"
 done
 printf '%-42s %12d %12d\n' TOTAL "$total" "$total_deflated"
+# Android 15 and later devices with 16 KB pages load a library only if its LOAD segments are
+# aligned to 16 KB (0x4000) or more.
+echo
+echo "LOAD alignment:"
+misaligned=0
+for so in "$out"/*.so; do
+  alignments="$("$readelf" -lW "$so" | awk '$1 == "LOAD" { print $NF }' | sort -u | tr '\n' ' ')"
+  printf '  %s: %s\n' "$(basename "$so")" "$alignments"
+  for alignment in $alignments; do
+    ((alignment >= 0x4000)) || misaligned=1
+  done
+done
+((misaligned == 0)) || fail "a library has a LOAD segment aligned below 16 KB (0x4000)"
 echo
 echo "NEEDED:"
 for so in "$out"/*.so; do
