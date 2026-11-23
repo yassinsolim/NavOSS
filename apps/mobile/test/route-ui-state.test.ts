@@ -181,11 +181,21 @@ describe('route from a native trip', () => {
 
 describe('trip end notice', () => {
   it('tells the driver when a restored trip was dropped, and nothing otherwise', () => {
-    expect(tripEndNotice('restored-trip-off-route')).toEqual({
+    expect(tripEndNotice('restored-trip-off-route', 'ios')).toEqual({
       message: 'Your earlier trip was ended because you are no longer on its route.',
       title: 'Trip ended',
       tone: 'info',
+      untilDismissed: false,
     });
-    expect(tripEndNotice(undefined)).toBeUndefined();
+    expect(tripEndNotice(undefined, 'ios')).toBeUndefined();
+    expect(tripEndNotice(undefined, 'android')).toBeUndefined();
+  });
+
+  it('keeps the notice on Android until the driver dismisses it', () => {
+    // Android relaunches straight into the map; a five-second toast is easily missed there.
+    expect(tripEndNotice('restored-trip-off-route', 'android')).toMatchObject({
+      title: 'Trip ended',
+      untilDismissed: true,
+    });
   });
 });

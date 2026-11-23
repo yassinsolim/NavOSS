@@ -170,6 +170,7 @@ import {
   vehicleMatchStatus as vehicleMatchStatusOf,
 } from '@/features/navigation/trip-status';
 import { fetchAppConfigUntilKnown, searchPlaces } from '@/lib/api';
+import { IS_ANDROID } from '@/lib/device-copy';
 import { useStableCallback } from '@/lib/use-stable-callback';
 import { createValueStore } from '@/lib/value-store';
 import { haptics } from '@/theme/haptics';
@@ -210,12 +211,14 @@ function roadEventDetail(
   };
 }
 
-/** A short confirmation or failure message that appears over the map and dismisses itself. */
+/** A short confirmation or failure message that appears over the map, usually dismissing itself. */
 export interface MapNotice {
   id: number;
   message: string;
   title: string;
   tone: 'danger' | 'info' | 'warning';
+  /** Stays until the driver dismisses it instead of leaving after a few seconds. */
+  untilDismissed?: boolean;
 }
 
 export interface CameraChange {
@@ -330,6 +333,7 @@ export function useMapController() {
     clearTimeout(noticeTimeoutRef.current);
     noticeIdRef.current += 1;
     setNotice({ ...next, id: noticeIdRef.current });
+    if (next.untilDismissed === true) return;
     noticeTimeoutRef.current = setTimeout(() => {
       setNotice(undefined);
     }, NOTICE_VISIBLE_MS);
@@ -360,7 +364,7 @@ export function useMapController() {
     onFix: location.setNavigationFix,
     onTripEnded: (reason) => {
       setIsIdleCameraFollowing(true);
-      const ended = tripEndNotice(reason);
+      const ended = tripEndNotice(reason, IS_ANDROID ? 'android' : 'ios');
       if (ended !== undefined) showNotice(ended);
     },
     routeState,
