@@ -17,7 +17,9 @@ final class NavigationEngineTests: XCTestCase {
     coordinates.map { NavOSSCarPlayCoordinate(latitude: $0.latitude, longitude: $0.longitude) }
   }
 
-  private static func trip(id: String, corners: [(Double, Double)] = corners) -> NavOSSCarPlayTrip {
+  private static func trip(
+    id: String, corners: [(Double, Double)] = corners, speedLimitKph: Int? = nil
+  ) -> NavOSSCarPlayTrip {
     var steps: [NavOSSCarPlayRouteStep] = []
     for (index, (start, end)) in zip(corners, corners.dropFirst()).enumerated() {
       let length = hypot(end.0 - start.0, end.1 - start.1)
@@ -40,7 +42,11 @@ final class NavigationEngineTests: XCTestCase {
         longitude: destination.longitude, name: "Engine test"),
       distanceMeters: steps.reduce(0) { $0 + $1.distanceMeters },
       durationSeconds: steps.reduce(0) { $0 + $1.durationSeconds },
-      geometry: carPlay(Trace.route(corners)), id: id, steps: steps)
+      geometry: carPlay(Trace.route(corners)), id: id,
+      speedLimitsKph: speedLimitKph.map {
+        Array(repeating: $0, count: Trace.route(corners).count - 1)
+      },
+      steps: steps)
   }
 
   /// An engine with everything around it under the test's control.
@@ -65,6 +71,7 @@ final class NavigationEngineTests: XCTestCase {
     init(
       audioMode: NavOSSCarPlayAudioMode = .allGuidance,
       rerouteMode: NavOSSRerouteMode = .adaptive,
+      speedingAudibleWarning: Bool = false,
       answer: @escaping (ScriptedEngineNetwork.Request) throws -> [NavOSSCarPlayTrip] = { _ in
         throw NavOSSNavigationAPIError.invalidResponse
       }
@@ -74,10 +81,38 @@ final class NavigationEngineTests: XCTestCase {
       companion = RecordingEngineCompanion(host: host)
       engine = NavigationEngine(
         tripStore: storeFixture.store, audioMode: audioMode,
-        preferences: NavOSSNavigationPreferences(rerouteMode: rerouteMode), network: network,
-        clock: { [clock] in clock.now })
+        preferences: NavOSSNavigationPreferences(
+          rerouteMode: rerouteMode, speedingAudibleWarning: speedingAudibleWarning),
+        network: network, clock: { [clock] in clock.now })
       engine.host = host
       engine.companion = companion
+    }
+
+    /// The effects of one fix.
+    func labels(of fix: () throws -> Void) rethrows -> [String] {
+      let before = host.events.count
+      try fix()
+      return host.events.dropFirst(before).map(\.label)
+    }
+
+    /// Where the latest fix was, in the local metre frame.
+    var position: (x: Double, y: Double) {
+      state.navigation.rawCoordinate.map { Trace.local($0) } ?? (0, 0)
+    }
+
+    /// `seconds` more fixes eastward from the latest one, a second apart.
+    func continueEast(seconds: Int) throws {
+      let start = position
+      for second in 1...seconds {
+        try fix(start.x + Double(second) * 12, start.y, course: 90)
+      }
+    }
+
+    /// Off the first leg with an ask-first proposal pending.
+    func proposeAReplacement() throws -> NavigationRerouteProposal {
+      try driveOffTheFirstLeg()
+      XCTAssertTrue(engine.completePendingReroute(through: network))
+      return try XCTUnwrap(state.rerouteProposal)
     }
 
     func start(_ trip: NavOSSCarPlayTrip) throws {
@@ -715,5 +750,356 @@ final class NavigationEngineTests: XCTestCase {
     rig.engine.setAudioMode(.allGuidance)
     XCTAssertEqual(rig.labels, ["cancelSpeech#1"], "turning guidance on stops nothing")
     XCTAssertEqual(rig.engine.audioMode(), .allGuidance)
+  }
+
+  // MARK: Ask-first proposals
+
+  private func askFirstRig() -> Rig {
+    Rig(rerouteMode: .askFirst, answer: { [Self.replacement(id: "proposed", from: $0.origin)] })
+  }
+
+  /// Still off the route 45 s after a proposal nobody answered: the proposal is dropped, a
+  /// fresh replacement is requested and installed without asking again.
+  func testAnUnansweredProposalTimesOutAndTheNextReplacementIsInstalled() throws {
+    let rig = askFirstRig()
+    let trip = Self.trip(id: "ask-first-timeout")
+    try rig.start(trip)
+    let proposal = try rig.proposeAReplacement()
+    try rig.continueEast(seconds: 44)
+    XCTAssertEqual(rig.state.rerouteProposal?.id, proposal.id, "44 s: still offered")
+    XCTAssertEqual(rig.requests, 1)
+    XCTAssertEqual(rig.state.trip?.id, trip.id)
+
+    try rig.continueEast(seconds: 1)
+    XCTAssertNil(rig.state.rerouteProposal, "45 s: withdrawn")
+    XCTAssertEqual(rig.requests, 2, "and a fresh replacement asked for")
+    XCTAssertEqual(rig.state.routeStatus, .rerouting)
+    XCTAssertFalse(rig.engine.acceptRerouteProposal(id: proposal.id), "too late to accept")
+    rig.host.removeAll()
+    XCTAssertTrue(rig.engine.completePendingReroute(through: rig.network))
+    XCTAssertEqual(rig.state.trip?.id, "proposed", "installed without asking again")
+    XCTAssertNil(rig.state.rerouteProposal)
+    XCTAssertEqual(rig.state.rerouteCount, 1)
+    XCTAssertFalse(rig.host.spoken.contains { $0.text == "A new route is ready." })
+  }
+
+  /// The same deadline during a GPS outage, when only the clock runs: the proposal expires
+  /// without a request, and the next fix asks for the replacement that is installed directly.
+  func testAProposalExpiresOnTheClockDuringAGPSOutage() throws {
+    let rig = askFirstRig()
+    let trip = Self.trip(id: "ask-first-outage")
+    try rig.start(trip)
+    let proposal = try rig.proposeAReplacement()
+    for _ in 0..<44 {
+      rig.clock.advance(1)
+      rig.engine.clockTick()
+    }
+    XCTAssertEqual(rig.state.rerouteProposal?.id, proposal.id)
+    rig.host.removeAll()
+    rig.clock.advance(1)
+    rig.engine.clockTick()
+    XCTAssertNil(rig.state.rerouteProposal)
+    XCTAssertEqual(rig.labels, ["stateDidChange"])
+    XCTAssertNil(rig.engine.pendingRerouteTask, "the clock never asks for a route")
+    XCTAssertEqual(rig.state.trip?.id, trip.id)
+
+    try rig.continueEast(seconds: 1)
+    XCTAssertEqual(rig.requests, 2)
+    XCTAssertTrue(rig.engine.completePendingReroute(through: rig.network))
+    XCTAssertEqual(rig.state.trip?.id, "proposed")
+    XCTAssertNil(rig.state.rerouteProposal)
+  }
+
+  func testAProposalIsWithdrawnWhenTheDriverReturnsToTheRoute() throws {
+    let rig = askFirstRig()
+    let trip = Self.trip(id: "ask-first-withdrawn")
+    try rig.start(trip)
+    let proposal = try rig.proposeAReplacement()
+    var withdrawnBy: [String]?
+    for position in Trace.positions(along: [(rig.position.x, 300), (0, 300), (0, 420)], every: 12)
+      .dropFirst()
+    {
+      let effects = try rig.labels {
+        try rig.fix(position.x, position.y, course: position.courseDegrees)
+      }
+      if withdrawnBy == nil, rig.state.rerouteProposal == nil { withdrawnBy = effects }
+    }
+    XCTAssertFalse(rig.state.navigation.isOffRoute)
+    XCTAssertNil(rig.state.rerouteProposal)
+    XCTAssertEqual(
+      withdrawnBy?.filter { !$0.hasPrefix("speak") },
+      ["publication#1", "stateDidChange", "stateDidChange"],
+      "the fix back on the route, then the withdrawal")
+    XCTAssertEqual(rig.state.trip?.id, trip.id)
+    XCTAssertEqual(rig.state.routeStatus, .tracking)
+    XCTAssertFalse(rig.engine.acceptRerouteProposal(id: proposal.id))
+    XCTAssertEqual(rig.state.rerouteCount, 0)
+    XCTAssertEqual(rig.requests, 1)
+  }
+
+  /// A decline keeps the selected route and is honoured for 90 s; still off the route after
+  /// that, the driver is asked again.
+  func testADeclinedProposalIsNotOfferedAgainForNinetySeconds() throws {
+    let rig = askFirstRig()
+    let trip = Self.trip(id: "ask-first-declined")
+    try rig.start(trip)
+    let proposal = try rig.proposeAReplacement()
+    rig.host.removeAll()
+    XCTAssertTrue(rig.engine.declineRerouteProposal(id: proposal.id))
+    XCTAssertEqual(rig.labels, ["stateDidChange"])
+    XCTAssertNil(rig.state.rerouteProposal)
+    XCTAssertFalse(rig.engine.declineRerouteProposal(id: proposal.id), "already answered")
+    XCTAssertFalse(rig.engine.acceptRerouteProposal(id: proposal.id))
+
+    try rig.continueEast(seconds: 89)
+    XCTAssertEqual(rig.requests, 1, "89 s after the decline")
+    XCTAssertNil(rig.state.rerouteProposal)
+    XCTAssertEqual(rig.state.trip?.id, trip.id)
+    try rig.continueEast(seconds: 1)
+    XCTAssertEqual(rig.requests, 2, "90 s after the decline")
+    XCTAssertTrue(rig.engine.completePendingReroute(through: rig.network))
+    let again = try XCTUnwrap(rig.state.rerouteProposal, "asked again, not installed")
+    XCTAssertNotEqual(again.id, proposal.id)
+    XCTAssertEqual(rig.state.trip?.id, trip.id)
+  }
+
+  /// Switching away from ask-first while a proposal is pending installs it at once; a change
+  /// that keeps ask-first, or no change, leaves it pending.
+  func testAPreferenceChangeDuringAProposalInstallsItUnlessTheModeStillAsks() throws {
+    for mode in [NavOSSRerouteMode.adaptive, .keepRoute] {
+      let rig = askFirstRig()
+      try rig.start(Self.trip(id: "ask-first-\(mode.rawValue)"))
+      let proposal = try rig.proposeAReplacement()
+
+      rig.host.removeAll()
+      rig.engine.setNavigationPreferences(NavOSSNavigationPreferences(rerouteMode: .askFirst))
+      XCTAssertEqual(rig.labels, [], "\(mode): unchanged preferences")
+      rig.engine.setNavigationPreferences(
+        NavOSSNavigationPreferences(rerouteMode: .askFirst, speedingToleranceKph: 10))
+      XCTAssertEqual(rig.labels, ["stateDidChange"], "\(mode): another preference")
+      XCTAssertEqual(rig.state.rerouteProposal?.id, proposal.id)
+
+      rig.host.removeAll()
+      rig.engine.setNavigationPreferences(NavOSSNavigationPreferences(rerouteMode: mode))
+      XCTAssertEqual(
+        rig.effects,
+        [
+          "stateDidChange", "companion.routeDidChange", "cancelSpeech#2", "publication#2",
+          "stateDidChange", "needsLocationUpdates",
+        ], "\(mode)")
+      XCTAssertEqual(rig.state.trip?.id, "proposed", "\(mode)")
+      XCTAssertNil(rig.state.rerouteProposal)
+      XCTAssertEqual(rig.state.rerouteMode, mode)
+      XCTAssertEqual(rig.engine.currentNavigationPreferences().rerouteMode, mode)
+    }
+  }
+
+  // MARK: Keep-route recovery
+
+  /// Keep-route asks for a route back onto the selected one through a rejoin point ahead; when
+  /// that request fails, one plain recovery route is asked for and installed.
+  func testKeepRouteRejoinsTheSelectedRouteAndFallsBackToAPlainRecovery() throws {
+    for rejoinFails in [false, true] {
+      let rig = Rig(rerouteMode: .keepRoute, answer: { request in
+        if rejoinFails, !request.waypointIds.isEmpty {
+          throw NavOSSNavigationAPIError.invalidResponse
+        }
+        return [
+          Self.replacement(
+            id: request.waypointIds.isEmpty ? "plain" : "rejoin", from: request.origin)
+        ]
+      })
+      try rig.start(Self.trip(id: "keep-route"))
+      try rig.driveOffTheFirstLeg()
+      XCTAssertTrue(rig.engine.completePendingReroute(through: rig.network))
+      let requests = rig.network.requests
+      XCTAssertEqual(
+        requests.map(\.waypointIds), rejoinFails ? [["navoss-route-rejoin"], []] : [["navoss-route-rejoin"]])
+      XCTAssertEqual(requests.first?.passThroughWaypointIds, ["navoss-route-rejoin"])
+      XCTAssertEqual(requests.map(\.alternatives), requests.map { _ in 0 })
+      XCTAssertEqual(rig.network.rerouteCount, 1, "one client for both requests")
+      XCTAssertEqual(rig.state.trip?.id, rejoinFails ? "plain" : "rejoin")
+      XCTAssertNil(rig.state.trip?.waypoints, "the rejoin point is not a stop")
+      XCTAssertEqual(rig.state.rerouteCount, 1)
+    }
+  }
+
+  func testOtherModesAskForAPlainRecoveryOnly() throws {
+    let rig = Rig(answer: { [Self.replacement(id: "plain", from: $0.origin)] })
+    try rig.start(Self.trip(id: "adaptive"))
+    try rig.driveOffTheFirstLeg()
+    XCTAssertTrue(rig.engine.completePendingReroute(through: rig.network))
+    XCTAssertEqual(rig.network.requests.map(\.waypointIds), [[]])
+  }
+
+  // MARK: Speeding, cameras, and what is spoken first
+
+  func testTheSpeedingReminderIsSpokenOncePerEpisodeWhenTurnedOnAndAlertsAreAllowed() throws {
+    for (mode, audible) in [
+      (NavOSSCarPlayAudioMode.allGuidance, true), (.alertsOnly, true), (.muted, true),
+      (.allGuidance, false),
+    ] {
+      let rig = Rig(audioMode: mode, speedingAudibleWarning: audible)
+      try rig.start(Self.trip(id: "speeding", speedLimitKph: 50))
+      // 72 km/h in a 50 zone with the default 5 km/h tolerance.
+      try rig.drive([(0, 0), (0, 400)], speed: 20)
+      let label = "\(mode), audible=\(audible)"
+      XCTAssertEqual(rig.state.speedingState, .overLimit, "\(label): shown in every mode")
+      XCTAssertEqual(
+        rig.host.spoken.filter { $0.text.hasPrefix("Speed limit") },
+        audible && mode != .muted
+          ? [NavigationEngineSpeech(text: "Speed limit 50.", kind: .alert)] : [], label)
+    }
+  }
+
+  /// The camera list is fetched when a trip starts; a failed fetch is retried from the clock
+  /// no more often than once a minute, and a fetched list is not fetched again.
+  func testAFailedCameraFetchIsRetriedFromTheClockOnceAMinute() throws {
+    let rig = Rig()
+    var fails = true
+    rig.network.cameras = {
+      if fails { throw NavOSSNavigationAPIError.invalidResponse }
+      return []
+    }
+    try rig.start(Self.trip(id: "cameras"))
+    XCTAssertEqual(rig.network.cameraFetchCount, 1)
+    func tick(_ seconds: TimeInterval) {
+      rig.clock.advance(seconds)
+      rig.engine.clockTick()
+      rig.engine.completePendingSafetyCameraFetch()
+    }
+    for _ in 0..<59 { tick(1) }
+    XCTAssertEqual(rig.network.cameraFetchCount, 1, "59 s after the failure")
+    tick(1)
+    XCTAssertEqual(rig.network.cameraFetchCount, 2, "60 s after the failure")
+    for _ in 0..<60 { tick(1) }
+    XCTAssertEqual(rig.network.cameraFetchCount, 3, "and again a minute later")
+    fails = false
+    for _ in 0..<60 { tick(1) }
+    XCTAssertEqual(rig.network.cameraFetchCount, 4)
+    for _ in 0..<600 { tick(1) }
+    XCTAssertEqual(rig.network.cameraFetchCount, 4, "a fetched list is kept")
+    // The list outlives the trip: a new trip does not fetch it again.
+    rig.engine.clearNavigation()
+    try rig.start(Self.trip(id: "cameras-next"))
+    XCTAssertEqual(rig.network.cameraFetchCount, 4)
+  }
+
+  /// A fix that brings a camera alert, a road report and a maneuver prompt: the alerts come
+  /// first, camera before report, and the maneuver prompt last.
+  func testAlertsAreSpokenBeforeTheManeuverPromptOfTheSameFix() throws {
+    let rig = Rig()
+    let camera = Trace.coordinate(0, 500)
+    rig.network.cameras = {
+      [
+        NavOSSSafetyCamera(
+          id: "engine-camera", latitude: camera.latitude, longitude: camera.longitude,
+          direction: .northbound, location: "Engine Road 0")
+      ]
+    }
+    rig.companion.announcement = { "Crash reported ahead." }
+    try rig.start(Self.trip(id: "order"))
+    var sawCameraWithReport = false
+    var sawPromptWithAlert = false
+    for position in Trace.positions(along: [(0, 0), (0, 800), (300, 800)], every: 12).dropFirst() {
+      let before = rig.host.spoken.count
+      let effects = try rig.labels {
+        try rig.fix(position.x, position.y, course: position.courseDegrees)
+      }
+      let spoken = Array(rig.host.spoken.dropFirst(before))
+      XCTAssertEqual(Array(effects.prefix(2)), ["publication#1", "stateDidChange"])
+      XCTAssertEqual(
+        Array(effects.dropFirst(2)), spoken.map { "speak(\($0.kind))#1" },
+        "speech follows the publication and the state change")
+      let kinds = spoken.map(\.kind)
+      XCTAssertEqual(kinds, kinds.filter { $0 == .alert } + kinds.filter { $0 == .maneuver })
+      XCTAssertLessThanOrEqual(kinds.filter { $0 == .maneuver }.count, 1)
+      if spoken.contains(where: { $0.text.hasPrefix("Red light") }) {
+        XCTAssertEqual(
+          spoken.prefix(2).map(\.text),
+          ["Red light and speed camera ahead.", "Crash reported ahead."])
+        sawCameraWithReport = true
+      }
+      sawPromptWithAlert = sawPromptWithAlert || (kinds.first == .alert && kinds.last == .maneuver)
+    }
+    XCTAssertTrue(sawCameraWithReport)
+    XCTAssertTrue(sawPromptWithAlert)
+  }
+
+  // MARK: Late results, continued
+
+  /// Off the last leg with a request in flight, then back onto it and on to the destination:
+  /// the result that arrives after arrival is not installed and nothing is announced.
+  func testARerouteResultArrivingAfterArrivalChangesNothing() throws {
+    for fails in [false, true] {
+      let rig = Rig(answer: {
+        if fails { throw NavOSSNavigationAPIError.invalidResponse }
+        return [Self.replacement(id: "late", from: $0.origin)]
+      })
+      let trip = Self.trip(id: "arrived")
+      try rig.start(trip)
+      try rig.drive(Self.corners.dropLast() + [(900, 1_400)], speed: 20)
+      var x = 900.0
+      while rig.requests == 0, x < 1_500 {
+        x += 12
+        try rig.fix(x, 1_400, course: 90)
+      }
+      let inFlight = try XCTUnwrap(rig.engine.pendingRerouteTask)
+      try rig.drive([(x, 1_400), (900, 1_400), (900, 1_700)])
+      for _ in 0..<4 where rig.state.navigation.phase != .arrived {
+        try rig.fix(900, 1_700, course: nil, speed: 0)
+      }
+      XCTAssertEqual(rig.state.navigation.phase, .arrived, "fails=\(fails)")
+      rig.host.removeAll()
+      let version = rig.state.stateVersion
+      rig.network.setGateOpen(true)
+      waitForEngineTask(inFlight)
+      XCTAssertEqual(rig.network.requests.count, 1, "the request was answered")
+      XCTAssertEqual(rig.labels, [], "fails=\(fails)")
+      XCTAssertEqual(rig.state.navigation.phase, .arrived)
+      XCTAssertEqual(rig.state.trip?.id, trip.id)
+      XCTAssertEqual(rig.state.routeStatus, .tracking, "fails=\(fails)")
+      XCTAssertEqual(rig.state.rerouteCount, 0)
+      XCTAssertEqual(rig.state.stateVersion, version)
+      XCTAssertNil(rig.store.load())
+    }
+  }
+
+  /// The window between a reroute task's cancellation check and the engine's lock. The test
+  /// holds the lock while the response is delivered, so the task passes its cancellation check
+  /// and waits for the lock; the trip is cleared before the lock is released. Only the checks
+  /// made under the lock can drop that result.
+  func testARerouteResultAcceptedBeforeTheTripWasClearedIsDroppedUnderTheLock() throws {
+    for mode in [NavOSSRerouteMode.adaptive, .askFirst] {
+      for fails in [false, true] {
+        let context = "\(mode), fails=\(fails)"
+        let rig = Rig(rerouteMode: mode, answer: {
+          if fails { throw NavOSSNavigationAPIError.invalidResponse }
+          return [Self.replacement(id: "late", from: $0.origin)]
+        })
+        try rig.start(Self.trip(id: "cleared-under-the-lock"))
+        try rig.driveOffTheFirstLeg()
+        let inFlight = try XCTUnwrap(rig.engine.pendingRerouteTask)
+
+        rig.engine.lock.lock()
+        rig.network.setGateOpen(true)
+        let deadline = Date().addingTimeInterval(30)
+        while rig.network.requests.isEmpty, Date() < deadline { usleep(10_000) }
+        XCTAssertEqual(rig.network.requests.count, 1, context)
+        // Long enough for the task to run from the response to the lock it now waits for.
+        usleep(500_000)
+        rig.engine.clearNavigation()
+        rig.host.removeAll()
+        rig.engine.lock.unlock()
+
+        waitForEngineTask(inFlight)
+        XCTAssertEqual(rig.labels, [], context)
+        XCTAssertNil(rig.state.trip, context)
+        XCTAssertNil(rig.state.rerouteProposal, context)
+        XCTAssertEqual(rig.state.routeStatus, .tracking, context)
+        XCTAssertEqual(rig.state.rerouteCount, 0, context)
+        XCTAssertNil(rig.store.load(), context)
+      }
+    }
   }
 }
