@@ -179,13 +179,21 @@ jobs:
             /usr/libexec/PlistBuddy -c "Print :UIApplicationSceneManifest:UISceneConfigurations:$role:0:UISceneDelegateClassName" "$plist"
           done
 
+  # Two legs side by side: `debug` (debug APK and the Kotlin unit tests) and `release` (the R8 and
+  # resource-shrinking build). Each also builds or restores the navigation core and checks its APK.
+  # One job doing both took about 20 minutes, mostly compiling React Native's C++ twice.
   android:
-    name: Android build and Kotlin tests
+    name: Android build and Kotlin tests (${{ matrix.variant }})
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [debug, release]
     env:
       # The navigation plugin requires an HTTPS API origin; CI never calls it.
       EXPO_PUBLIC_API_URL: https://ci.invalid
+      VARIANT: ${{ matrix.variant }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -233,8 +241,8 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/plugins/*.cjs', 'apps/mobile/modules/*/android/build.gradle') }}
-          restore-keys: gradle-${{ runner.os }}-
+          key: gradle-${{ runner.os }}-${{ matrix.variant }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/plugins/*.cjs', 'apps/mobile/modules/*/android/build.gradle') }}
+          restore-keys: gradle-${{ runner.os }}-${{ matrix.variant }}-
 
       - name: Enable pnpm
         if: steps.changes.outputs.android == 'true'
@@ -262,12 +270,12 @@ jobs:
         id: core
         uses: ./.github/actions/build-android-core
 
-      # A release build too, so R8 and resource shrinking run on every change. The release
-      # signing plugin accepts any keystore named by its three variables (the release workflow
-      # pins the certificate); this one is generated here, never leaves the runner, and is not
-      # a secret.
+      # The release leg builds the release variant, so R8 and resource shrinking run on every
+      # change. The release signing plugin accepts any keystore named by its three variables (the
+      # release workflow pins the certificate); this one is generated here, never leaves the
+      # runner, and is not a secret.
       - name: Create a throwaway signing key
-        if: steps.changes.outputs.android == 'true'
+        if: steps.changes.outputs.android == 'true' && matrix.variant == 'release'
         run: |
           set -euo pipefail
           password="$(openssl rand -hex 16)"
@@ -275,29 +283,32 @@ jobs:
           keytool -genkeypair -storetype pkcs12 -keystore "$RUNNER_TEMP/ci-throwaway.p12" \
             -storepass "$password" -alias ci-throwaway -keyalg RSA -keysize 2048 -validity 2 \
             -dname 'CN=NavOSS CI throwaway' >/dev/null 2>&1
-          echo "NAVOSS_ANDROID_KEYSTORE_PASSWORD=$password" >> "$GITHUB_ENV"
+          {
+            echo "NAVOSS_ANDROID_KEYSTORE=$RUNNER_TEMP/ci-throwaway.p12"
+            echo "NAVOSS_ANDROID_KEYSTORE_PASSWORD=$password"
+            echo 'NAVOSS_ANDROID_KEY_ALIAS=ci-throwaway'
+          } >> "$GITHUB_ENV"
 
-      - name: Build debug and release APKs and run Kotlin unit tests
+      - name: Build the APK (and, for debug, run Kotlin unit tests)
         if: steps.changes.outputs.android == 'true'
         working-directory: apps/mobile
-        env:
-          NAVOSS_ANDROID_KEYSTORE: ${{ runner.temp }}/ci-throwaway.p12
-          NAVOSS_ANDROID_KEY_ALIAS: ci-throwaway
         run: |
           set -euo pipefail
           corepack pnpm --filter @navoss/contracts build
           corepack pnpm exec expo prebuild --platform android --clean --no-install
           cd android
-          ./gradlew --console=plain :app:assembleDebug :app:assembleRelease \
-            :navoss-updater:testDebugUnitTest :navoss-navigation:testDebugUnitTest
+          if [ "$VARIANT" = release ]; then
+            ./gradlew --console=plain :app:assembleRelease
+          else
+            ./gradlew --console=plain :app:assembleDebug \
+              :navoss-updater:testDebugUnitTest :navoss-navigation:testDebugUnitTest
+          fi
 
-      # Both APKs carry the verified libraries byte for byte (so NDK r30's libc++_shared.so),
-      # and R8 kept every class and member JNI reaches by name.
-      - name: Verify the navigation core in the APKs
+      # The APK carries the verified libraries byte for byte (so NDK r30's libc++_shared.so), and
+      # its dex keeps every class and member JNI reaches by name (in release: R8 did not strip them).
+      - name: Verify the navigation core in the APK
         if: steps.changes.outputs.android == 'true'
         run: |
           set -euo pipefail
-          verify=apps/mobile/modules/navoss-navigation/android-core/scripts/verify-apk-core.sh
-          outputs=apps/mobile/android/app/build/outputs/apk
-          "$verify" "$outputs/debug/app-debug.apk"
-          "$verify" "$outputs/release/app-release.apk"
+          apps/mobile/modules/navoss-navigation/android-core/scripts/verify-apk-core.sh \
+            "apps/mobile/android/app/build/outputs/apk/$VARIANT/app-$VARIANT.apk"
