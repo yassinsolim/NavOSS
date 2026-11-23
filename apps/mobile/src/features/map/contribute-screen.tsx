@@ -47,6 +47,9 @@ function contributionLabel(type: ContributionType): string {
   return CONTRIBUTION_TYPES.find((option) => option.id === type)?.label ?? 'Draft';
 }
 
+// Built once: Hermes on Android builds each Intl formatter through ICU in Java, slowly.
+const DRAFT_DATE = new Intl.DateTimeFormat('en-CA', { dateStyle: 'medium' });
+
 /**
  * Beta feedback. A submission is stored on the device first and removed only once the service
  * accepts it, so a failed send is never lost and never silently retried. Outcomes are shown
@@ -274,9 +277,7 @@ export function ContributeScreen({ bottomInset, safeAreaTop }: ContributeScreenP
                       </Text>
                       <Text style={styles.draftMeta}>
                         {draft.location ?? 'No location'} ·{' '}
-                        {new Intl.DateTimeFormat('en-CA', { dateStyle: 'medium' }).format(
-                          new Date(draft.createdAt),
-                        )}
+                        {DRAFT_DATE.format(new Date(draft.createdAt))}
                       </Text>
                     </View>
                     <IconButton

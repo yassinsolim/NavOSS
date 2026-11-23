@@ -80,6 +80,12 @@ The CarPlay visual suite mounts the exact production `NavOSSCarPlayMapViewContro
   camera; marker scenarios assert a marker is on screen;
 - `guidance-maneuver` and `guidance-night` show the maneuver arrow, road pill and compact speed
   unit; annotation and community-report scenarios assert fixture markers are visible;
+- `free-drive-*` (no destination) feed synthetic 1 Hz fixes and a compass heading through the
+  map's real free-drive entry points: first open parked (compass only), straight, mid-turn,
+  stopped after moving (noisy stopped courses), panned away, after Recenter, north-up, no live fix,
+  Go, End, and the Dashboard tile. Each checks the heading source, follow state and map heading in
+  the app; the pixel gate requires the NavOSS vehicle marker in the lower part of the map, no
+  MapLibre user-location dot in any of them, and no vehicle without a live fix;
 - `frame-pacing` measures frame and per-fix work during a 60-second simulated drive at about
   60 km/h with 1 Hz fixes (not head-unit performance);
 - permission-overlay absence through Vision OCR, nonblank pixels, color diversity, luminance
