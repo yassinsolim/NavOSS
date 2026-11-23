@@ -432,6 +432,7 @@ uncompressed by default, so the first column is what the APK grows by):
 | Spike (`libNavOSSNavigationJNI`, FoundationNetworking linked)       | 70,102,456 | 25,846,446 |
 | This facade, FoundationNetworking linked                            | 70,346,904 | 25,960,413 |
 | HTTP through the host (`NAVOSS_HOST_HTTP`), no FoundationNetworking | 66,864,096 | 24,475,222 |
+| Contract v2 (review fixes; `libNavOSSCore.so` 1,259,568 / 509,360)  | 66,908,984 | 24,491,062 |
 
 `lib_FoundationICU.so` (40,042,536 / 15,614,315) is now 60 % of the set. Dropping it means
 building the core against FoundationEssentials alone. A trial build of the Android subset with
