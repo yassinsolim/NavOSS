@@ -157,13 +157,21 @@ then back to the chosen road).
 - Ask first: a declined offer holds for 90 s and the spacing, and an answer materially the same
   as the declined route is not offered again. The replacement owed for an offer nobody answered
   waits for the time spacing only (the 45 s response window has always covered it).
-- A replacement that is materially the route followed (all but 50 m of it within 20 m of that
-  route and in its direction) is not installed as a new route, offered, counted or spoken: the
-  route is started again on itself, the same trip, so the matcher places the vehicle where it is
-  (after a GPS gap it may have reappeared behind its last match, where the matcher does not go
-  back). Once the route has been matched, one materially the same as a route replaced in this
-  detour or the offer just declined is dropped. That memory ends with the detour, when the
-  driver is established on a route. Either still counts as an answer for the spacing.
+- Once the route has been matched, a replacement that is materially the route followed, one of
+  the last three routes replaced in this detour or the offer just declined (all but 50 m of it
+  within 20 m of that route and in its direction) is not installed, offered, published, counted
+  or spoken; it still counts as an answer for the spacing. The replaced and declined memory ends
+  with the detour, when the driver is established on a route. Before the first match nothing
+  changes.
+- An answer that is the route followed also lets the matcher place the vehicle on it where it
+  is on the next fix only, even behind its last match
+  (`NavigationCore.relocaliseOnNextFix()`): after a GPS gap a vehicle may reappear behind it,
+  where the matcher never goes back. The fix must be accurate, within the 20 m recovery distance
+  and not heading against the route; otherwise nothing changes. Nothing else is reset: the
+  trip, its off-route or paused state until that fix, departure counts, history, prompts
+  already spoken for the maneuver ahead, completed stops (a later reroute never routes back
+  through them) and the estimate. Maneuvers the vehicle had passed and has ahead of it again
+  are announced again.
 - A request without a platform heading carries the direction of the last 20 m of fixes within
   10 s, so the router does not start the route with a U-turn behind the car.
 - Failed requests keep their retry schedule: 10 s, doubling to 2 minutes, nothing spoken; they

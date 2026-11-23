@@ -711,6 +711,11 @@ final class NavigationCore {
   private var lastRealSnapshot: NavigationSnapshot?
   private var progressHighWaterMark = 0.0
   private var recoverySampleCount = 0
+  /// Set by `relocaliseOnNextFix()` for the next real fix only.
+  private var relocalisesOnNextFix = false
+  /// Where along the route the anchor was when the last relocalisation moved it; read once
+  /// (`takeRelocalisation()`).
+  private var relocalisedFromAlongMeters: Double?
   private var route: RoutePolyline?
   private var routeVersion = 0
   private var sequence = 0
@@ -741,6 +746,24 @@ final class NavigationCore {
   /// Along-route position established by the latest real fix.
   var fixAlongMeters: Double? {
     route.map { fixProgress * $0.totalDistanceMeters }
+  }
+
+  /// Lets the next real fix place an off-route vehicle on the route where it is, anywhere along
+  /// it, instead of only at or after its last match: for a vehicle that reappeared behind that
+  /// match after a gap in fixes, which the matcher never goes back for. The fix must be accurate
+  /// (`navigationPoorAccuracyMeters`), within the on-route recovery distance of the route
+  /// (`onRouteRecoveryDistanceThresholdMeters`, with its accuracy) and not heading against it.
+  /// It is then placed as the first fix of a route is, and accepted or not by the usual rules.
+  /// Any other next fix, or a vehicle on its route, changes nothing. Only this one fix may.
+  func relocaliseOnNextFix() {
+    relocalisesOnNextFix = route != nil && isOffRoute && hasMatchedRoute && !hasArrived
+  }
+
+  /// Where along the route the anchor was before the latest relocalisation, once; `nil` when
+  /// there has been none since the last read.
+  func takeRelocalisation() -> Double? {
+    defer { relocalisedFromAlongMeters = nil }
+    return relocalisedFromAlongMeters
   }
 
   /// A restored trip without usable progress that has not confirmed its pass in two minutes of
@@ -983,6 +1006,10 @@ final class NavigationCore {
     }
 
     let accuracyAllowanceMeters = sample.horizontalAccuracyMeters ?? 0
+    if relocalisesOnNextFix {
+      relocalisesOnNextFix = false
+      relocaliseIfOnRoute(sample, on: route)
+    }
     // A restored anchor whose capture time is unusable (missing, or not before this fix: the
     // clock was set back while the app was not running) bounds and explains nothing, so the
     // speed saved with it is no evidence either: how far the vehicle has gone since is unknown,
@@ -1382,6 +1409,44 @@ final class NavigationCore {
     return snapshot
   }
 
+  /// See `relocaliseOnNextFix()`. Drops the anchor, the off-route state and the progress the
+  /// matcher measures regression from, so this fix is placed from nothing; the route stays
+  /// matched (no pre-match rules) and arrival, pass and timing state stand.
+  private func relocaliseIfOnRoute(_ sample: NavigationLocationSample, on route: RoutePolyline) {
+    guard isOffRoute, hasMatchedRoute, !hasArrived,
+      let accuracy = sample.horizontalAccuracyMeters, accuracy <= navigationPoorAccuracyMeters
+    else {
+      return
+    }
+    let reach = onRouteRecoveryDistanceThresholdMeters - accuracy
+    guard reach >= 0,
+      let nearest = route.segmentIndices(near: sample.coordinate, radiusMeters: reach)
+        .map({ route.project(sample.coordinate, ontoSegment: $0) })
+        .min(by: { $0.distanceMeters < $1.distanceMeters }),
+      nearest.distanceMeters <= reach,
+      Self.headingEvidenceDegrees(sample).map({
+        navigationCourseDifferenceDegrees($0, nearest.courseDegrees)
+          < wrongWayMinimumCourseDifferenceDegrees
+      }) ?? true
+    else {
+      return
+    }
+    relocalisedFromAlongMeters = fixProgress * route.totalDistanceMeters
+    hasAnchor = false
+    anchorRawCoordinate = nil
+    anchorAccuracyMeters = 0
+    anchorSpeed = nil
+    anchorTimestamp = nil
+    isAnchorRestored = false
+    heldJump = nil
+    arrivalSampleCount = 0
+    departureSampleCount = 0
+    recoverySampleCount = 0
+    fixProgress = 0
+    progressHighWaterMark = 0
+    isOffRoute = false
+  }
+
   private func resetTrackingState() {
     hasAnchor = false
     anchorRawCoordinate = nil
@@ -1403,6 +1468,8 @@ final class NavigationCore {
     isOffRoute = false
     progressHighWaterMark = 0
     recoverySampleCount = 0
+    relocalisesOnNextFix = false
+    relocalisedFromAlongMeters = nil
     hasMatchedRoute = false
     preMatchStartDistanceMeters = nil
     preMatchClosest = nil

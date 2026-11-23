@@ -602,35 +602,258 @@ final class NavigationRerouteBackoffTests: XCTestCase {
   }
 
   /// After a GPS gap (a tunnel, a parkade) the vehicle reappears 1 km behind its last match,
-  /// driving on along the route. The matcher does not go backwards, so it is off route; the
-  /// router answers with the same road. That answer re-anchors the route where the vehicle is,
-  /// quietly: matched again on the fix after it, no new route counted, shown or said.
+  /// before a right turn it had already made, driving on along the route. The matcher does not
+  /// go backwards, so it is off route; the router answers with the same road. That answer lets
+  /// the matcher place the vehicle where it is on the next fix: matched again at once, nothing
+  /// installed, counted, shown or said, and the turn it has to make again is announced again.
   func testAVehicleReappearingBehindItsLastMatchIsMatchedAgainOnTheAnswer() throws {
+    let corners: [(Double, Double)] = [(0, 0), (0, 1_500), (300, 1_500), (300, 3_600)]
     let rig = Rig { request in
       let p = Trace.local(
         NavigationCoordinate(latitude: request.origin.latitude, longitude: request.origin.longitude))
-      return [Self.trip(id: "same-road", corners: [(0, p.y), (0, 3_600), Self.destination])]
+      return [Self.trip(id: "same-road", corners: [(0, p.y)] + corners.dropFirst())]
     }
-    try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
-    try rig.drive([(0, 0), (0, 2_000)])
+    let chosen = Self.trip(id: "chosen", corners: corners)
+    try rig.start(chosen)
+    try rig.drive([(0, 0), (0, 1_500), (300, 1_500), (300, 2_500)])
     XCTAssertFalse(rig.state.navigation.isOffRoute)
+    let turn = "Turn right onto Street 8"
+    XCTAssertEqual(rig.spokenManeuvers.filter { $0.hasPrefix(turn) }.count, 1)
     rig.clock.advance(120)
     var unmatchedAfterAnswer = 0
     var answered = false
-    for position in Trace.positions(along: [(0, 1_000), (0, 3_600), Self.destination], every: 12) {
+    for position in Trace.positions(along: [(0, 500), (0, 1_500), (300, 1_500), (300, 3_600)], every: 12)
+    {
       try rig.fix(position.x, position.y, course: position.courseDegrees)
       if answered, rig.state.navigation.isOffRoute || rig.state.navigation.matchedCoordinate == nil {
         unmatchedAfterAnswer += 1
       }
       answered = answered || rig.network.requests.count > 0
     }
-    let log = rig.timeline.joined(separator: "\n")
+    try rig.stop(at: (300, 3_600), course: 0)
+    let log = rig.timeline.joined(separator: "\n") + " | " + rig.spokenManeuvers.joined(separator: " | ")
     XCTAssertEqual(rig.network.requests.count, 1, log)
     XCTAssertLessThanOrEqual(unmatchedAfterAnswer, 1, log)
     XCTAssertEqual(rig.state.navigation.phase, .arrived, log)
     XCTAssertEqual(rig.installs, [], "the same trip, not a new route")
     XCTAssertEqual(rig.state.rerouteCount, 0)
     XCTAssertFalse(rig.spokenAlerts.contains(Self.newRouteAnnouncement))
+    XCTAssertEqual(
+      rig.spokenManeuvers.filter { $0.hasPrefix(turn) }.count, 2,
+      "the turn made before the gap is ahead again: " + rig.spokenManeuvers.joined(separator: " | "))
+  }
+
+  /// A stop passed before a GPS gap stays done when the vehicle is placed behind it again: a
+  /// later reroute does not route back through it.
+  func testAStopPassedBeforeTheGapStaysDone() throws {
+    let stopPoint = Trace.coordinate(0, 1_000)
+    let stop = NavOSSCarPlayDestination(
+      id: "stop", label: "Stop", latitude: stopPoint.latitude, longitude: stopPoint.longitude,
+      name: "Stop")
+    let rig = Self.sameRoadRig()
+    try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners).replacingWaypoints([stop]))
+    try rig.drive([(0, 0), (0, 2_000)])
+    rig.clock.advance(120)
+    try rig.drive([(0, 500), (0, 700), (300, 700)])
+    let log = rig.timeline.joined(separator: "\n")
+    XCTAssertGreaterThanOrEqual(rig.network.requests.count, 2, log)
+    XCTAssertEqual(rig.network.requests.map(\.waypointIds), rig.network.requests.map { _ in [] }, log)
+  }
+
+  /// The matcher's side of a same-route answer: only the next fix may place the vehicle behind
+  /// its last match, and only on the route (within the recovery distance) and not heading
+  /// against it.
+  func testRelocalisingPlacesOnlyTheNextFixAndOnlyOnTheRoute() throws {
+    func offRouteBehindTheMatch() throws -> NavigationCore {
+      let core = NavigationCore()
+      _ = try core.setRoute(Trace.route([(0, 0), (0, 3_000)]))
+      var time = 0.0
+      for y in stride(from: 0.0, through: 2_000, by: 12) {
+        time += 1
+        try core.updateLocation(Trace.sample(x: 0, y: y, courseDegrees: 0, speed: 12, time: time))
+      }
+      time += 120
+      for y in stride(from: 500.0, through: 560, by: 12) {
+        time += 1
+        try core.updateLocation(Trace.sample(x: 0, y: y, courseDegrees: 0, speed: 12, time: time))
+      }
+      XCTAssertTrue(core.currentSnapshot().isOffRoute)
+      return core
+    }
+    // On the route, heading along it: placed where it is.
+    var core = try offRouteBehindTheMatch()
+    core.relocaliseOnNextFix()
+    var snapshot = try core.updateLocation(
+      Trace.sample(x: 0, y: 572, courseDegrees: 0, speed: 12, time: 1_000))
+    XCTAssertFalse(snapshot.isOffRoute)
+    XCTAssertEqual(snapshot.routeProgress * 3_000, 572, accuracy: 2)
+    // Heading against the route: not placed.
+    core = try offRouteBehindTheMatch()
+    core.relocaliseOnNextFix()
+    snapshot = try core.updateLocation(
+      Trace.sample(x: 0, y: 560, courseDegrees: 180, speed: 12, time: 1_000))
+    XCTAssertTrue(snapshot.isOffRoute, "heading against the route")
+    // Beside the route: not placed, and the next fix on the route is not either.
+    core = try offRouteBehindTheMatch()
+    core.relocaliseOnNextFix()
+    snapshot = try core.updateLocation(
+      Trace.sample(x: 40, y: 572, courseDegrees: 0, speed: 12, time: 1_000))
+    XCTAssertTrue(snapshot.isOffRoute, "40 m beside the route")
+    snapshot = try core.updateLocation(
+      Trace.sample(x: 0, y: 584, courseDegrees: 0, speed: 12, time: 1_001))
+    XCTAssertTrue(snapshot.isOffRoute, "only the next fix")
+  }
+
+  /// A long detour remembers only the last three routes it replaced: an answer that is the route
+  /// replaced first, many routes ago, is installed.
+  func testADetourRemembersOnlyItsLastFewReplacedRoutes() throws {
+    var calls = 0
+    let lock = NSLock()
+    let rig = Rig { request in
+      let call = lock.withLock {
+        calls += 1
+        return calls
+      }
+      return call == 6
+        ? [Self.trip(id: "chosen-again", corners: Self.chosenCorners)]
+        : [Self.trip(id: "grid-\(call)", corners: Self.gridRoute(from: request.origin, heading: request.originHeadingDegrees))]
+    }
+    try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
+    try rig.drive([(0, 0), (0, 400), (5_400, 400)])
+    let log = rig.timeline.joined(separator: "\n")
+    XCTAssertGreaterThanOrEqual(rig.requests, 6, log)
+    XCTAssertTrue(rig.installs.contains("chosen-again"), log)
+  }
+
+  /// A router that answers with the chosen route from wherever the vehicle is.
+  private static func sameRoadRig(_ mode: NavOSSRerouteMode = .adaptive) -> Rig {
+    Rig(mode: mode) { request in
+      let p = Trace.local(
+        NavigationCoordinate(latitude: request.origin.latitude, longitude: request.origin.longitude))
+      return [Self.trip(id: "same-road", corners: [(0, p.y), (0, 3_600), Self.destination])]
+    }
+  }
+
+  /// A service road 60 m beside the route, slowly: the same-road answer changes nothing. The
+  /// vehicle stays off route at the progress it left with; nothing restarts the route's
+  /// departure allowance, and the next answer still comes within the minute.
+  func testASameRouteAnswerBesideTheRouteChangesNothing() throws {
+    let rig = Self.sameRoadRig()
+    try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
+    try rig.drive([(0, 0), (0, 400)])
+    let progressBefore = rig.state.navigation.routeProgress
+    var offRouteSince: Int?
+    var index = 0
+    var lowestProgress = 1.0
+    var requestFixes: [Int] = []
+    var before = 0
+    for position in Trace.positions(along: [(0, 400), (60, 440), (60, 1_200)], every: 4)
+      .dropFirst()
+    {
+      try rig.fix(position.x, position.y, course: position.courseDegrees, speed: 4)
+      index += 1
+      if rig.state.navigation.isOffRoute, offRouteSince == nil { offRouteSince = index }
+      if let since = offRouteSince, index > since {
+        XCTAssertTrue(rig.state.navigation.isOffRoute, "fix \(index): still off route")
+        lowestProgress = min(lowestProgress, rig.state.navigation.routeProgress)
+      }
+      if rig.requests > before { requestFixes.append(index) }
+      before = rig.requests
+    }
+    let log = rig.timeline.joined(separator: "\n")
+    XCTAssertNotNil(offRouteSince, log)
+    XCTAssertGreaterThanOrEqual(lowestProgress, progressBefore - 0.001, "progress kept: " + log)
+    XCTAssertGreaterThanOrEqual(requestFixes.count, 3, log)
+    let gaps = zip(requestFixes, requestFixes.dropFirst()).map { $1 - $0 }
+    XCTAssertLessThanOrEqual(gaps.dropFirst().max() ?? 0, 62, "within the minute: " + log)
+    XCTAssertEqual(rig.installs, [])
+    XCTAssertTrue(rig.spokenManeuvers.isEmpty || !rig.spokenAlerts.contains(Self.newRouteAnnouncement))
+  }
+
+  /// A restored trip off its route (#168's paused state): a same-route answer publishes nothing,
+  /// so CarPlay keeps the pause and no guidance from the checkpoint.
+  func testASameRouteAnswerKeepsARestoredTripPaused() throws {
+    let first = Self.sameRoadRig()
+    try first.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
+    try first.drive([(0, 0), (0, 600)])
+    let network = ScriptedEngineNetwork(answer: first.network.answer)
+    let host = RecordingEngineHost()
+    let engine = NavigationEngine(
+      tripStore: first.storeFixture.store, audioMode: .allGuidance,
+      preferences: NavOSSNavigationPreferences(rerouteMode: .adaptive, speedingAudibleWarning: false),
+      network: network, session: NavigationSession(), clock: { [clock = first.clock] in clock.now })
+    engine.host = host
+    host.tripPause = { [weak engine] in engine?.tripPauseLocked }
+    first.clock.advance(5)
+    engine.resumePersistedNavigation()
+    var y = 620.0
+    var answered = false
+    for _ in 0..<12 {
+      first.clock.advance(1)
+      y += 12
+      try engine.ingest(
+        NavigationLocationSample(
+          coordinate: Trace.coordinate(80, y), courseDegrees: 0, horizontalAccuracyMeters: 5,
+          speedMetersPerSecond: 12, timestamp: first.clock.time))
+      if engine.completePendingReroute(through: network) { answered = true; break }
+    }
+    XCTAssertTrue(answered)
+    XCTAssertEqual(network.requests.count, 1)
+    let state = engine.currentState()
+    XCTAssertNil(state.guidance, "no guidance from the checkpoint")
+    XCTAssertNotNil(state.tripPause)
+    XCTAssertNil(host.publishedGuidance.last ?? nil, "nothing published with guidance")
+    XCTAssertNotNil(host.publishedTripPauses.last ?? nil)
+    XCTAssertEqual(host.tripPausesAtStateChange.last ?? nil, state.tripPause)
+  }
+
+  /// Ask first: B declined while beside A; after the cooldown a same-A answer changes nothing,
+  /// and B is never offered again.
+  func testASameRouteAnswerDoesNotLetADeclinedRouteBack() throws {
+    var calls = 0
+    let lock = NSLock()
+    let rig = Rig(mode: .askFirst) { request in
+      let call = lock.withLock {
+        calls += 1
+        return calls
+      }
+      let p = Trace.local(
+        NavigationCoordinate(latitude: request.origin.latitude, longitude: request.origin.longitude))
+      return call == 2
+        ? [Self.trip(id: "same-road", corners: [(0, p.y), (0, 3_600), Self.destination])]
+        : [Self.trip(id: "b-\(call)", corners: [(60, p.y), (60, 3_600), Self.destination])]
+    }
+    try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
+    var proposals: [String] = []
+    for position in Trace.positions(along: [(0, 0), (0, 400), (60, 440), (60, 3_000)], every: 12)
+      .dropFirst()
+    {
+      try rig.fix(position.x, position.y, course: position.courseDegrees)
+      if let proposal = rig.state.rerouteProposal, proposals.last != proposal.id {
+        proposals.append(proposal.id)
+        if proposals.count == 1 { XCTAssertTrue(rig.engine.declineRerouteProposal(id: proposal.id)) }
+      }
+    }
+    let log = rig.timeline.joined(separator: "\n")
+    XCTAssertGreaterThanOrEqual(rig.requests, 3, log)
+    XCTAssertEqual(proposals.count, 1, "B is not offered again: " + log)
+    XCTAssertEqual(rig.installs, [], log)
+  }
+
+  /// A prepare prompt already spoken for the turn ahead is not spoken again after a same-route
+  /// answer (a slow minute in a lay-by just before the turn).
+  func testASameRouteAnswerDoesNotRepeatAPromptAlreadySpoken() throws {
+    let rig = Self.sameRoadRig()
+    try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
+    try rig.drive([(0, 0), (0, 3_150)])
+    let prepare = rig.spokenManeuvers.filter { $0.hasPrefix("In ") && $0.contains("Street 18") }
+    XCTAssertEqual(prepare.count, 1, rig.spokenManeuvers.joined(separator: " | "))
+    try rig.drive([(0, 3_150), (50, 3_170), (50, 3_300), (0, 3_330)], speed: 3)
+    try rig.drive([(0, 3_330), (0, 3_600), Self.destination])
+    XCTAssertGreaterThanOrEqual(rig.network.requests.count, 1, rig.timeline.joined(separator: "\n"))
+    XCTAssertEqual(
+      rig.spokenManeuvers.filter { $0.hasPrefix("In ") && $0.contains("Street 18") }.count, 1,
+      rig.spokenManeuvers.joined(separator: " | "))
   }
 
   /// A to B; the driver follows B for a kilometre (established on it), then turns onto A where B
@@ -762,7 +985,7 @@ final class NavigationRerouteBackoffTests: XCTestCase {
   /// The recorded drive (Deerfoot Trail to Glenmore Trail, its detour from fix 176 to 213
   /// answered with the recorded route, as the Android replay does) speaks and checkpoints exactly
   /// what it did before the spacing (the committed replay transcript of 74f6f9f, #168's head),
-  /// and checkpoints exactly as it did.
+  /// and checkpoints as it did up to the detour.
   func testTheRecordedCalgaryDriveSpeaksAndCheckpointsAsBefore() throws {
     let base = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
     let document = try JSONSerialization.jsonObject(
@@ -825,15 +1048,16 @@ final class NavigationRerouteBackoffTests: XCTestCase {
         "maneuver Your destination is ahead.",
         "maneuver You've arrived at Replay destination.",
       ])
-    // The checkpoints of 74f6f9f. That head installed the recorded route again on the detour;
-    // now it is recognised as the route followed and the route is started again on itself
-    // (`reanchorLocked`), which restarts the checkpoint clock as the install did.
+    // On the route up to the detour, the checkpoints of 74f6f9f. That head installed the
+    // recorded route again on the detour (restarting the fifteen-second checkpoint clock); now the
+    // answer is recognised as the route followed and nothing is installed, so later checkpoints
+    // fall a few seconds differently along the same route.
     XCTAssertEqual(
-      store.checkpoints,
-      [
-        18, 304, 400, 687, 968, 1_256, 1_537, 1_863, 2_233, 2_608, 2_985, 3_360, 4_482, 4_858,
-        5_266, 5_729, 6_194, 6_604, 6_982, 7_354, 7_732, 8_106, 8_480,
-      ])
+      Array(store.checkpoints.prefix(12)),
+      [18, 304, 400, 687, 968, 1_256, 1_537, 1_863, 2_233, 2_608, 2_985, 3_360])
+    XCTAssertEqual(
+      Array(store.checkpoints.dropFirst(12)),
+      [4_586, 4_961, 5_389, 5_855, 6_321, 6_706, 7_078, 7_457, 7_831, 8_204])
     XCTAssertEqual(store.savedTrips, 1, "the route was never replaced (saved again twice on 74f6f9f)")
     // Asked twice on the detour (as on 74f6f9f), both answers the route followed.
     XCTAssertEqual(network.requests.count, 2)
