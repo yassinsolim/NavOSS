@@ -83,16 +83,19 @@ protocol NavigationEngineNetwork: Sendable {
   func safetyCameras() async throws -> [NavOSSSafetyCamera]
 }
 
-/// The NavOSS API, through a fresh `NavOSSNavigationAPIClient` per reroute or camera fetch.
-struct NavOSSNavigationAPIEngineNetwork: NavigationEngineNetwork {
-  func rerouteClient() throws -> any NavigationRerouteRouting {
-    try NavOSSNavigationAPIClient()
-  }
+#if !NAVOSS_HOST_HTTP
+  /// The NavOSS API, through a fresh `NavOSSNavigationAPIClient` per reroute or camera fetch.
+  /// Left out where the host supplies HTTP itself (`NAVOSS_HOST_HTTP`, the Android build).
+  struct NavOSSNavigationAPIEngineNetwork: NavigationEngineNetwork {
+    func rerouteClient() throws -> any NavigationRerouteRouting {
+      try NavOSSNavigationAPIClient()
+    }
 
-  func safetyCameras() async throws -> [NavOSSSafetyCamera] {
-    try await NavOSSNavigationAPIClient().safetyCameras()
+    func safetyCameras() async throws -> [NavOSSSafetyCamera] {
+      try await NavOSSNavigationAPIClient().safetyCameras()
+    }
   }
-}
+#endif
 
 /// Features that ride along with a trip without being part of navigation (on iOS, community
 /// road reports and traffic speeds). Optional: Android has none yet.
@@ -217,7 +220,7 @@ final class NavigationEngine: @unchecked Sendable {
     tripStore: NavigationTripStoring,
     audioMode: NavOSSCarPlayAudioMode,
     preferences: NavOSSNavigationPreferences,
-    network: NavigationEngineNetwork = NavOSSNavigationAPIEngineNetwork(),
+    network: NavigationEngineNetwork,
     session: NavigationSession = NavigationSession(),
     lock: NSRecursiveLock = NSRecursiveLock(),
     clock: @escaping () -> Date = Date.init
@@ -230,6 +233,20 @@ final class NavigationEngine: @unchecked Sendable {
     self.lock = lock
     self.clock = clock
   }
+
+  #if !NAVOSS_HOST_HTTP
+    /// An engine on the NavOSS API.
+    convenience init(
+      tripStore: NavigationTripStoring,
+      audioMode: NavOSSCarPlayAudioMode,
+      preferences: NavOSSNavigationPreferences,
+      session: NavigationSession = NavigationSession()
+    ) {
+      self.init(
+        tripStore: tripStore, audioMode: audioMode, preferences: preferences,
+        network: NavOSSNavigationAPIEngineNetwork(), session: session)
+    }
+  #endif
 
   // MARK: Reads (lock held by the caller)
 

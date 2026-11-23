@@ -57,6 +57,10 @@ final class NavigationEngineTests: XCTestCase {
     var labels: [String] { host.events.map(\.label) }
     /// Every effect but speech, which depends on where a prompt falls.
     var effects: [String] { labels.filter { !$0.hasPrefix("speak") } }
+    /// Reroute requests the engine has started. Counted here, as each fix returns, because the
+    /// network sees a request only once its task runs.
+    private(set) var requests = 0
+    private var lastRequest: Task<Void, Never>?
 
     init(
       audioMode: NavOSSCarPlayAudioMode = .allGuidance,
@@ -87,8 +91,15 @@ final class NavigationEngineTests: XCTestCase {
       -> NavigationEngineFixOutcome
     {
       clock.advance(1)
-      return try engine.ingest(
-        Trace.sample(x: x, y: y, courseDegrees: course, speed: speed, time: clock.time))
+      let outcome = try engine.ingest(
+        NavigationLocationSample(
+          coordinate: Trace.coordinate(x, y), courseDegrees: course, horizontalAccuracyMeters: 5,
+          speedMetersPerSecond: speed, timestamp: clock.time))
+      if let request = engine.pendingRerouteTask, request != lastRequest {
+        requests += 1
+        lastRequest = request
+      }
+      return outcome
     }
 
     /// A fix a second along `path` at `speed`, skipping its first position.
@@ -102,11 +113,15 @@ final class NavigationEngineTests: XCTestCase {
     /// positive `direction`, west for a negative one) until the engine asks for a replacement.
     func driveOffTheFirstLeg(direction: Double = 1) throws {
       try drive([(0, 0), (0, 300)])
-      let requests = network.rerouteCount
+      try leaveTheFirstLeg(at: 300, direction: direction)
+    }
+
+    func leaveTheFirstLeg(at y: Double, direction: Double) throws {
+      let before = requests
       var x = 0.0
-      while network.rerouteCount == requests, abs(x) < 600 {
+      while requests == before, abs(x) < 600 {
         x += 12 * direction
-        try fix(x, 300, course: direction > 0 ? 90 : 270)
+        try fix(x, y, course: direction > 0 ? 90 : 270)
       }
     }
   }
@@ -271,6 +286,32 @@ final class NavigationEngineTests: XCTestCase {
     XCTAssertFalse(rig.host.spoken.contains { $0.text.lowercased().contains("right") })
   }
 
+  /// A trip saved without progress is placed by its first fix, but where that fix fits two
+  /// passes (the shared start and end of a loop) nothing is guided until the pass is known.
+  /// The clock must not move it meanwhile: dead reckoning from the moving fix would publish
+  /// guidance for a pass the vehicle has not been confirmed to be on.
+  func testTheClockDoesNotPublishARestoredTripThatIsPlacedButNotConfirmed() throws {
+    let rig = Rig()
+    rig.store.save(
+      Self.trip(
+        id: "restored-without-progress",
+        corners: [(0, 0), (0, 3_000), (3_000, 3_000), (3_000, 0), (20, 0)]))
+    rig.engine.resumePersistedNavigation()
+    rig.engine.completePendingSafetyCameraFetch()
+    guard case .acquiring(let held) = try rig.fix(0, 10, course: nil, speed: 5) else {
+      return XCTFail("the first fix of a trip without progress was not withheld")
+    }
+    XCTAssertNotNil(held.update.snapshot.matchedCoordinate, "placed on the route")
+    XCTAssertFalse(held.update.snapshot.isPassConfirmed)
+    rig.host.removeAll()
+    for _ in 0..<5 {
+      rig.clock.advance(1)
+      rig.engine.clockTick()
+    }
+    XCTAssertEqual(rig.labels, [], "five seconds without a fix")
+    assertWithheld(rig.state, "after five ticks")
+  }
+
   func testARestoredTripWhoseFirstFixIsOffItsRouteIsDiscarded() throws {
     let (rig, _) = restoredRig()
     rig.host.removeAll()
@@ -431,54 +472,118 @@ final class NavigationEngineTests: XCTestCase {
     }
   }
 
-  /// The same trip started again while its reroute was in flight, and off route again in the
-  /// same way, with its own request in flight: everything about the late result matches the
-  /// trip except the generation and the request it belongs to. It is dropped whether it carries
-  /// a route or a failure, and the current request's result is the one installed.
-  func testARerouteResultFromAnEarlierGenerationOfTheSameTripIsDropped() throws {
-    for staleFails in [false, true] {
-      let fresh = DispatchSemaphore(value: 0)
-      let rig = Rig(answer: { request in
-        // The earlier generation left the route eastward, the current one westward.
-        if Trace.local(
-          NavigationCoordinate(
-            latitude: request.origin.latitude, longitude: request.origin.longitude)
-        ).x > 0 {
-          if staleFails { throw NavOSSNavigationAPIError.invalidResponse }
-          return [Self.replacement(id: "stale", from: request.origin)]
-        }
-        fresh.wait()
-        return [Self.replacement(id: "fresh", from: request.origin)]
-      })
-      let trip = Self.trip(id: "same-trip")
-      try rig.start(trip)
-      try rig.driveOffTheFirstLeg(direction: 1)
-      let stale = try XCTUnwrap(rig.engine.pendingRerouteTask)
+  /// Two requests for the same trip, the earlier one overtaken. `overtake` makes the engine
+  /// drop the first request (which left the route eastward) and takes the vehicle off the
+  /// route westward, so that everything about the late result matches the trip's current state
+  /// except what `overtake` changed. The late result is dropped whether it carries a route or
+  /// a failure, in every reroute mode, and the current request's result is the one used.
+  private func assertAnOvertakenRerouteResultIsDropped(
+    _ label: String, overtake: (Rig, NavOSSCarPlayTrip) throws -> Void,
+    file: StaticString = #filePath, line: UInt = #line
+  ) throws {
+    for mode in [NavOSSRerouteMode.adaptive, .askFirst] {
+      for staleFails in [false, true] {
+        let context = "\(label), \(mode), staleFails=\(staleFails)"
+        let fresh = DispatchSemaphore(value: 0)
+        let rig = Rig(rerouteMode: mode, answer: { request in
+          if Trace.local(
+            NavigationCoordinate(
+              latitude: request.origin.latitude, longitude: request.origin.longitude)
+          ).x > 0 {
+            if staleFails { throw NavOSSNavigationAPIError.invalidResponse }
+            return [Self.replacement(id: "stale", from: request.origin)]
+          }
+          _ = fresh.wait(timeout: .now() + 60)
+          return [Self.replacement(id: "fresh", from: request.origin)]
+        })
+        let trip = Self.trip(id: "same-trip")
+        try rig.start(trip)
+        try rig.driveOffTheFirstLeg(direction: 1)
+        let stale = try XCTUnwrap(rig.engine.pendingRerouteTask, context, file: file, line: line)
 
+        try overtake(rig, trip)
+        XCTAssertEqual(rig.requests, 2, context, file: file, line: line)
+        let current = try XCTUnwrap(rig.engine.pendingRerouteTask, context, file: file, line: line)
+        XCTAssertEqual(rig.state.routeStatus, .rerouting, context, file: file, line: line)
+        XCTAssertEqual(rig.state.trip?.id, trip.id, context, file: file, line: line)
+        XCTAssertTrue(rig.state.navigation.isOffRoute, context, file: file, line: line)
+
+        rig.host.removeAll()
+        let version = rig.state.stateVersion
+        rig.network.setGateOpen(true)
+        waitForEngineTask(stale)
+        XCTAssertEqual(rig.labels, [], context, file: file, line: line)
+        XCTAssertEqual(rig.state.trip?.id, trip.id, context, file: file, line: line)
+        XCTAssertNil(rig.state.rerouteProposal, context, file: file, line: line)
+        XCTAssertEqual(rig.state.rerouteCount, 0, context, file: file, line: line)
+        XCTAssertEqual(
+          rig.state.routeStatus, .rerouting, "\(context): the current request is in flight",
+          file: file, line: line)
+        XCTAssertEqual(rig.state.stateVersion, version, context, file: file, line: line)
+
+        fresh.signal()
+        waitForEngineTask(current)
+        if mode == .askFirst {
+          let proposal = try XCTUnwrap(rig.state.rerouteProposal, context, file: file, line: line)
+          XCTAssertTrue(rig.engine.acceptRerouteProposal(id: proposal.id), context, file: file, line: line)
+        }
+        XCTAssertEqual(rig.state.trip?.id, "fresh", context, file: file, line: line)
+        XCTAssertEqual(rig.state.rerouteCount, 1, context, file: file, line: line)
+        XCTAssertEqual(rig.store.load()?.id, "fresh", context, file: file, line: line)
+      }
+    }
+  }
+
+  /// The same trip started again while its reroute was in flight: the late result belongs to
+  /// an earlier generation.
+  func testARerouteResultFromAnEarlierGenerationOfTheSameTripIsDropped() throws {
+    try assertAnOvertakenRerouteResultIsDropped("restarted") { rig, trip in
       try rig.start(trip)
       try rig.driveOffTheFirstLeg(direction: -1)
-      XCTAssertEqual(rig.network.rerouteCount, 2)
-      let current = try XCTUnwrap(rig.engine.pendingRerouteTask)
-      XCTAssertEqual(rig.state.routeStatus, .rerouting)
-      XCTAssertEqual(rig.state.trip?.id, trip.id)
-      XCTAssertTrue(rig.state.navigation.isOffRoute)
-
-      rig.host.removeAll()
-      let version = rig.state.stateVersion
-      rig.network.setGateOpen(true)
-      waitForEngineTask(stale)
-      XCTAssertEqual(rig.labels, [], "staleFails=\(staleFails)")
-      XCTAssertEqual(rig.state.trip?.id, trip.id, "staleFails=\(staleFails)")
-      XCTAssertEqual(rig.state.rerouteCount, 0)
-      XCTAssertEqual(rig.state.routeStatus, .rerouting, "the current request is still in flight")
-      XCTAssertEqual(rig.state.stateVersion, version)
-
-      fresh.signal()
-      waitForEngineTask(current)
-      XCTAssertEqual(rig.state.trip?.id, "fresh", "staleFails=\(staleFails)")
-      XCTAssertEqual(rig.state.rerouteCount, 1)
-      XCTAssertEqual(rig.store.load()?.id, "fresh")
     }
+  }
+
+  /// The vehicle rejoined the route, which withdraws the request, and left it again: the late
+  /// result is for the same generation of the same trip, but not for the request in flight.
+  func testARerouteResultFromAnEarlierRequestOfTheSameGenerationIsDropped() throws {
+    try assertAnOvertakenRerouteResultIsDropped("rejoined") { rig, _ in
+      let generation = rig.host.events.last.map(\.label)
+      let x = try XCTUnwrap(rig.state.navigation.rawCoordinate.map { Trace.local($0).x })
+      try rig.drive([(x, 300), (0, 300), (0, 420)])
+      XCTAssertFalse(rig.state.navigation.isOffRoute)
+      XCTAssertEqual(rig.state.routeStatus, .tracking)
+      XCTAssertNil(rig.engine.pendingRerouteTask, "rejoining withdraws the request")
+      XCTAssertFalse(
+        rig.labels.contains { $0.hasSuffix("#2") }, "no new generation (was \(generation ?? "-"))")
+      try rig.leaveTheFirstLeg(at: 420, direction: -1)
+    }
+  }
+
+  /// An update overtaken between its publication and what follows it: the host restarts the
+  /// trip from inside the state-change callback of the fix that left the route, as another
+  /// thread could between the engine's critical sections. The overtaken update must not ask
+  /// for a replacement for the restarted trip, which is not off its route.
+  func testAnUpdateOvertakenByARestartIsNotReroutedFromOrCheckpointed() throws {
+    let rig = Rig()
+    let trip = Self.trip(id: "overtaken")
+    try rig.start(trip)
+    var restarted = false
+    rig.host.onStateDidChange = { [unowned rig] in
+      guard !restarted, rig.state.navigation.isOffRoute else { return }
+      restarted = true
+      try? rig.engine.startNavigation(trip)
+    }
+    try rig.drive([(0, 0), (0, 300)])
+    var x = 0.0
+    while !restarted, x < 600 {
+      x += 12
+      try rig.fix(x, 300, course: 90)
+    }
+    XCTAssertTrue(restarted, "the vehicle never left the route")
+    XCTAssertNil(rig.engine.pendingRerouteTask, "a replacement was requested from a stale update")
+    XCTAssertEqual(rig.state.routeStatus, .tracking)
+    XCTAssertFalse(rig.state.navigation.isOffRoute)
+    XCTAssertEqual(rig.store.loadProgress(for: trip), .withoutProgress)
   }
 
   func testARerouteResultArrivingBackOnTheRouteIsNotInstalled() throws {
@@ -508,11 +613,11 @@ final class NavigationEngineTests: XCTestCase {
     for second in 1...8 {
       try rig.fix(x + Double(second) * 12, 300, course: 90)
     }
-    XCTAssertEqual(rig.network.rerouteCount, 1, "no retry inside ten seconds")
+    XCTAssertEqual(rig.requests, 1, "no retry inside ten seconds")
     for second in 9...12 {
       try rig.fix(x + Double(second) * 12, 300, course: 90)
     }
-    XCTAssertEqual(rig.network.rerouteCount, 2)
+    XCTAssertEqual(rig.requests, 2)
   }
 
   // MARK: Speech and the audio mode

@@ -41,6 +41,9 @@ final class RecordingEngineHost: NavigationEngineHost, @unchecked Sendable {
   private var recorded: [Event] = []
   /// Origin returned for a reroute request; `nil` means no recent platform fix.
   var rerouteOrigin: NavOSSNavigationRouteOrigin?
+  /// Runs inside `navigationEngineStateDidChange`, after it is recorded: the engine has
+  /// released its lock, so a test can re-enter it here as another thread could.
+  var onStateDidChange: (() -> Void)?
 
   var events: [Event] { lock.withLock { recorded } }
 
@@ -82,6 +85,7 @@ final class RecordingEngineHost: NavigationEngineHost, @unchecked Sendable {
 
   func navigationEngineStateDidChange() {
     record(.stateDidChange)
+    onStateDidChange?()
   }
 
   func navigationEngineSpeak(_ speech: NavigationEngineSpeech, generation: UInt64) {
@@ -248,15 +252,19 @@ final class RecordingEngineCompanion: NavigationEngineCompanion {
   }
 }
 
-/// Blocks until `task` finishes.
-func waitForEngineTask(_ task: Task<Void, Never>?) {
+/// Blocks until `task` finishes; fails the test instead of hanging if it does not.
+func waitForEngineTask(
+  _ task: Task<Void, Never>?, file: StaticString = #filePath, line: UInt = #line
+) {
   guard let task else { return }
   let done = DispatchSemaphore(value: 0)
   Task {
     await task.value
     done.signal()
   }
-  done.wait()
+  if done.wait(timeout: .now() + 60) == .timedOut {
+    XCTFail("the engine's task did not finish", file: file, line: line)
+  }
 }
 
 extension NavigationEngine {
