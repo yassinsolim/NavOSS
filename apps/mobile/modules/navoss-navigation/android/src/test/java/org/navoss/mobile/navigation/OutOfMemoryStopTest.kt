@@ -9,14 +9,14 @@ class OutOfMemoryStopTest {
   private val events = mutableListOf<String>()
 
   @Test
-  fun `an out-of-memory refusal posts the prebuilt notification and ends the process, even when posting throws`() {
-    val stop = OutOfMemoryStop(notifyDriver = { events += "notified" }, exitProcess = { events += "exit" })
+  fun `an out-of-memory refusal posts the prebuilt notification, finishes the task and ends the process, even when the first two throw`() {
+    val stop = OutOfMemoryStop(notifyDriver = { events += "notified" }, finishTask = { events += "finished" }, exitProcess = { events += "exit" })
     stop.stop()
-    assertEquals(listOf("notified", "exit"), events)
+    assertEquals(listOf("notified", "finished", "exit"), events)
 
     events.clear()
     for (failure in listOf<Throwable>(OutOfMemoryError(), SecurityException(), IllegalStateException())) {
-      val failing = OutOfMemoryStop(notifyDriver = { throw failure }, exitProcess = { events += "exit" })
+      val failing = OutOfMemoryStop(notifyDriver = { throw failure }, finishTask = { throw failure }, exitProcess = { events += "exit" })
       failing.stop()
     }
     assertEquals(listOf("exit", "exit", "exit"), events)
@@ -30,7 +30,7 @@ class OutOfMemoryStopTest {
     storage.write("trip.progress", "{\"step\":3}")
     val before = directory.listFiles()!!.associate { it.name to it.readText() }
 
-    val stop = OutOfMemoryStop(notifyDriver = {}, exitProcess = {})
+    val stop = OutOfMemoryStop(notifyDriver = {}, finishTask = {}, exitProcess = {})
     stop.stop()
 
     assertEquals(before, directory.listFiles()!!.associate { it.name to it.readText() })
@@ -39,9 +39,20 @@ class OutOfMemoryStopTest {
 
   @Test
   fun `only the first stop ends the process`() {
-    val stop = OutOfMemoryStop(notifyDriver = { events += "notified" }, exitProcess = { events += "exit" })
+    val stop = OutOfMemoryStop(notifyDriver = { events += "notified" }, finishTask = { events += "finished" }, exitProcess = { events += "exit" })
     stop.stop()
     stop.stop()
-    assertEquals(listOf("notified", "exit"), events)
+    assertEquals(listOf("notified", "finished", "exit"), events)
+  }
+
+  @Test
+  fun `a failing notification still finishes the task before the kill`() {
+    val stop = OutOfMemoryStop(
+      notifyDriver = { throw OutOfMemoryError() },
+      finishTask = { events += "finished" },
+      exitProcess = { events += "exit" },
+    )
+    stop.stop()
+    assertEquals(listOf("finished", "exit"), events)
   }
 }

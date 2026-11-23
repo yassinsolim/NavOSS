@@ -8,15 +8,19 @@ import java.util.concurrent.atomic.AtomicBoolean
  * relied on (the JNI layer may have skipped callbacks, and any further work may fail the same
  * way), so the host does no clean-up: during a trip it makes one best-effort attempt to post a
  * notification built in advance ([notifyDriver], no allocation beyond the binder call; it does
- * nothing without a trip) and ends the process ([exitProcess]) whatever happens.
+ * nothing without a trip), stops the guidance service and finishes the app's task
+ * ([finishTask]) so Android neither restarts the service nor relaunches a visible activity on its
+ * own, and ends the process ([exitProcess]) whatever happens. Each step is best effort and none
+ * can prevent the next.
  *
  * The saved trip stays on disk: the next launch restores it through the normal restore path, as
  * after Android's low-memory killer (which gives no callback at all) and as iOS does after an
- * allocation failure. Opening the app is a user action, and the guidance service is
- * `START_NOT_STICKY`, so a restore cannot loop on its own.
+ * allocation failure. The driver comes back through the notification ("Open NavOSS to continue
+ * your trip"); opening the app is a user action, so a restore cannot loop on its own.
  */
 internal class OutOfMemoryStop(
   private val notifyDriver: () -> Unit,
+  private val finishTask: () -> Unit,
   private val exitProcess: () -> Unit,
 ) {
   private val stopping = AtomicBoolean(false)
@@ -27,9 +31,13 @@ internal class OutOfMemoryStop(
     try {
       notifyDriver()
     } catch (_: Throwable) {
-      // Out of memory again, or the platform refused: the process ends anyway.
-    } finally {
-      exitProcess()
+      // Out of memory again, or the platform refused: the next steps run anyway.
     }
+    try {
+      finishTask()
+    } catch (_: Throwable) {
+      // As above.
+    }
+    exitProcess()
   }
 }

@@ -1,5 +1,6 @@
 package org.navoss.mobile.navigation
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -80,6 +81,7 @@ class NavigationRuntime private constructor(
   internal val notification = TripNotification(this.context)
 
   @Volatile private var serviceRequested = false
+  private val serviceIntent = Intent(this.context, NavigationForegroundService::class.java)
 
   /**
    * Out of memory at any core call is handled as a crash: during a trip one attempt to post the
@@ -88,6 +90,10 @@ class NavigationRuntime private constructor(
    */
   private val outOfMemory = OutOfMemoryStop(
     notifyDriver = { if (serviceRequested) notification.postStopped() },
+    finishTask = {
+      context.stopService(serviceIntent)
+      context.getSystemService(ActivityManager::class.java)?.appTasks?.forEach { it.finishAndRemoveTask() }
+    },
     exitProcess = { Process.killProcess(Process.myPid()) },
   )
   private var simulation: DriveSimulation? = null
@@ -318,11 +324,10 @@ class NavigationRuntime private constructor(
 
   private fun startService() {
     try {
-      val intent = Intent(context, NavigationForegroundService::class.java)
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        context.startForegroundService(intent)
+        context.startForegroundService(serviceIntent)
       } else {
-        context.startService(intent)
+        context.startService(serviceIntent)
       }
     } catch (error: RuntimeException) {
       // Started from the background (a reroute while the service was not running): location
@@ -338,7 +343,7 @@ class NavigationRuntime private constructor(
     stopSimulation()
     if (serviceRequested) {
       serviceRequested = false
-      context.stopService(Intent(context, NavigationForegroundService::class.java))
+      context.stopService(serviceIntent)
     }
   }
 
