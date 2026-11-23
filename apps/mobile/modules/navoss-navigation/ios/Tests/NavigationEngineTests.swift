@@ -12,6 +12,11 @@ import XCTest
 /// order of what it asks the platform to do, what a restored trip may show before it is
 /// matched, checkpoints against clear and restart, and reroute results that arrive too late.
 final class NavigationEngineTests: XCTestCase {
+  override func tearDown() {
+    ScriptedEngineNetwork.assertNothingWaiting()
+    super.tearDown()
+  }
+
   private typealias Trace = NavigationTrace
 
   /// North 800 m, east 900 m, north 900 m: three legs and an arrival.
@@ -416,6 +421,7 @@ final class NavigationEngineTests: XCTestCase {
     XCTAssertEqual(rig.requests, 1, "rerouted like any departure")
     XCTAssertNil(rig.state.tripEndReason)
     XCTAssertNotNil(rig.store.load())
+    XCTAssertTrue(rig.engine.completePendingReroute(through: rig.network))
   }
 
   /// A restored trip ended on its first accurate fix (here 30 km away ten minutes after its
@@ -485,6 +491,7 @@ final class NavigationEngineTests: XCTestCase {
       } else {
         XCTAssertNil(rig.state.tripEndReason, label)
         XCTAssertEqual(rig.requests, 1, "\(label): rerouted")
+        XCTAssertTrue(rig.engine.completePendingReroute(through: rig.network), label)
       }
     }
   }
@@ -638,16 +645,18 @@ final class NavigationEngineTests: XCTestCase {
     for mode in [NavOSSRerouteMode.adaptive, .askFirst] {
       for staleFails in [false, true] {
         let context = "\(label), \(mode), staleFails=\(staleFails)"
-        let fresh = DispatchSemaphore(value: 0)
-        let rig = Rig(rerouteMode: mode, answer: { request in
-          if Trace.local(
+        // The stale request is the one made east of the route.
+        let isStale: (ScriptedEngineNetwork.Request) -> Bool = { request in
+          Trace.local(
             NavigationCoordinate(
               latitude: request.origin.latitude, longitude: request.origin.longitude)
-          ).x > 0 {
+          ).x > 0
+        }
+        let rig = Rig(rerouteMode: mode, answer: { request in
+          if isStale(request) {
             if staleFails { throw NavOSSNavigationAPIError.invalidResponse }
             return [Self.replacement(id: "stale", from: request.origin)]
           }
-          _ = fresh.wait(timeout: .now() + 60)
           return [Self.replacement(id: "fresh", from: request.origin)]
         })
         let trip = Self.trip(id: "same-trip")
@@ -664,7 +673,8 @@ final class NavigationEngineTests: XCTestCase {
 
         rig.host.removeAll()
         let version = rig.state.stateVersion
-        rig.network.setGateOpen(true)
+        // Only the stale request is answered; the current one stays at the gate.
+        rig.network.release(isStale)
         waitForEngineTask(stale)
         XCTAssertEqual(rig.labels, [], context, file: file, line: line)
         XCTAssertEqual(rig.state.trip?.id, trip.id, context, file: file, line: line)
@@ -675,7 +685,7 @@ final class NavigationEngineTests: XCTestCase {
           file: file, line: line)
         XCTAssertEqual(rig.state.stateVersion, version, context, file: file, line: line)
 
-        fresh.signal()
+        rig.engine.completePendingReroute(through: rig.network)
         waitForEngineTask(current)
         if mode == .askFirst {
           let proposal = try XCTUnwrap(rig.state.rerouteProposal, context, file: file, line: line)
@@ -772,6 +782,7 @@ final class NavigationEngineTests: XCTestCase {
       try rig.fix(x + Double(second) * 12, 300, course: 90)
     }
     XCTAssertEqual(rig.requests, 2)
+    XCTAssertTrue(rig.engine.completePendingReroute(through: rig.network))
   }
 
   // MARK: Speech and the audio mode
