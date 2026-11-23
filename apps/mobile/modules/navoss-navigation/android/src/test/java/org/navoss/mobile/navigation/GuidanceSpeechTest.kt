@@ -11,6 +11,7 @@ class GuidanceSpeechTest {
   private var currentGeneration = 1L
   private var focusGranted = true
   private var synthesizerAccepts = true
+  private var synthesizerAvailable = true
   private var lastId = ""
   private val scheduled = mutableListOf<Pair<Long, () -> Unit>>()
   private lateinit var speech: GuidanceSpeech
@@ -25,6 +26,9 @@ class GuidanceSpeechTest {
     override fun stop() {
       events += "stop"
     }
+
+    override val isAvailable: Boolean
+      get() = synthesizerAvailable
   }
 
   private val focus = object : GuidanceAudioFocus {
@@ -55,6 +59,15 @@ class GuidanceSpeechTest {
     val id = lastId
     speech.onStart(id)
     speech.onDone(id)
+  }
+
+  @Test
+  fun `an unavailable engine never takes audio focus`() {
+    synthesizerAvailable = false
+    speech.speak("Turn left", 1)
+    speech.speak("Speed camera ahead", 1)
+    assertEquals(emptyList<String>(), events)
+    assertFalse(speech.holdsAudioFocus)
   }
 
   @Test

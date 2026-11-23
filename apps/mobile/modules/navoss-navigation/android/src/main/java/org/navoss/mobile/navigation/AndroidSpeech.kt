@@ -37,7 +37,7 @@ internal class AndroidSpeechSynthesizer(
   @Volatile private var state = State.STARTING
 
   /** False once the engine failed to start or has no English voice: prompts are not spoken. */
-  val isAvailable: Boolean
+  override val isAvailable: Boolean
     get() = state != State.FAILED
   private var waiting: Pair<String, String>? = null
   private val engine: TextToSpeech = TextToSpeech(context.applicationContext) { status ->

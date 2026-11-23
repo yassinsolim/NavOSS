@@ -7,6 +7,9 @@ interface SpeechSynthesizer {
 
   /** Stops whatever is being spoken. */
   fun stop()
+
+  /** `false` once the engine cannot speak at all: prompts are dropped without taking audio focus. */
+  val isAvailable: Boolean
 }
 
 /** Transient, ducking audio focus for navigation guidance. */
@@ -108,6 +111,11 @@ class GuidanceSpeech(
     while (true) {
       val prompt = queue.removeFirstOrNull() ?: return finishBurst()
       if (!isCurrentGeneration(prompt.generation)) continue
+      if (!synthesizer.isAvailable) {
+        // No engine or no voice: ducking the driver's audio for silence helps nobody.
+        queue.clear()
+        return finishBurst()
+      }
       if (!holdsFocus) {
         if (!focus.request()) {
           // A call or another app holds exclusive focus: drop the burst rather than talk over it.
