@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const nativeModule = vi.hoisted(() => ({
-  addListener: vi.fn(() => ({ remove: vi.fn() })),
+  addListener: vi.fn<
+    (event: string, listener: (payload: unknown) => void) => { remove: () => void }
+  >(() => ({ remove: vi.fn() })),
   getCapabilities: vi.fn(() => ({ version: 10 })),
 }));
 

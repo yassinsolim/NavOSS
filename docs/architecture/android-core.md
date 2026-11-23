@@ -237,6 +237,19 @@ enough: reads after a write must see it, durability may lag). The trip blob is w
 starts or a reroute is installed; the progress blob at most every fifteen seconds and on an
 arrival-deferral change.
 
+The app's host (`TripStorage.kt`) writes one file per key under `noBackupFilesDir` (temporary
+file, sync, rename). A write that fails stays in memory and is retried, in order, before the next
+write (the next checkpoint), so a durable progress record is never newer than its durable trip;
+meanwhile the trip sheet says the trip is not saved. Staging files are deleted on failure and on
+key deletion and swept at startup. While a simulated drive runs, the host writes nothing (a
+trip it replaces is deleted), so a simulated route can never be restored as a real trip.
+
+**HTTP in the app's host.** `apiBaseUrl` is the origin the JS bundle is built with
+(`EXPO_PUBLIC_API_URL`, written to the manifest as `org.navoss.mobile.API_URL` by the config
+plugin). `HttpTransport.kt` contacts only that origin (HTTPS, or HTTP on the loopback interface
+for a local API), follows no redirects, fails a body over 8 MB as `unreachable`, and never sends a
+request whose cancel arrived before it.
+
 **Wall clock.** `nowMs()` returns `System.currentTimeMillis()` as a `Double` in production and a
 test-controlled value in tests. Fix times come from the fixes themselves; the clock drives
 consent deadlines, reroute backoff, checkpoints and camera refresh.
