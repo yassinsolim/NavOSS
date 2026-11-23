@@ -538,6 +538,17 @@
           routing in a downloaded region are computed on the phone.
         </p>
 
+        <p>
+          The Android app is in testing and not yet published. It is installed from NavOSS's GitHub
+          releases, so it asks GitHub's API (<span translate="no">api.github.com</span>) for the
+          NavOSS releases list to offer a newer version: when it opens, at most once every 24 hours
+          and never during a trip, and when you tap Check now. The request contains no location,
+          search text, trip data, or identifier; GitHub sees your IP address and the time. An update
+          is downloaded from GitHub only when you choose Install, checked on the phone, and handed
+          to Android's installer. Turn the check off with Check for updates automatically under
+          About and privacy, App updates. The iOS app has no update check.
+        </p>
+
         <h2 id="providers-and-retention">Providers and retention</h2>
         <p>
           <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a> provides DNS, TLS,

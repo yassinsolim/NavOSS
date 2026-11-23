@@ -30,6 +30,8 @@ DerivedData/
 apps/mobile/android/
 apps/mobile/modules/navoss-navigation/android/build/
 apps/mobile/modules/navoss-navigation/android/.gradle/
+apps/mobile/modules/navoss-updater/android/build/
+apps/mobile/modules/navoss-updater/android/.gradle/
 apps/mobile/ios/
 
 # Local map and routing artifacts
