@@ -8,6 +8,11 @@ const {
 // arm64). Building one ABI instead of React Native's four also quarters native build time.
 const ARCHITECTURES = 'arm64-v8a';
 
+// Expo's template gives the Gradle daemon 512 MiB of Metaspace. Every release build (over 900
+// tasks with R8) reported "running out of JVM Metaspace", and one release run then failed in
+// `:app:packageRelease` with no other cause. The heap is the template's.
+const GRADLE_JVM_ARGS = '-Xmx2048m -XX:MaxMetaspaceSize=1024m';
+
 /** Set or replace one `gradle.properties` entry. */
 function setGradleProperty(properties, key, value) {
   const existing = properties.find((item) => item.type === 'property' && item.key === key);
@@ -67,6 +72,7 @@ function withFreeRotation(manifest) {
 function withNavOSSAndroid(config) {
   config = withGradleProperties(config, (modConfig) => {
     setGradleProperty(modConfig.modResults, 'reactNativeArchitectures', ARCHITECTURES);
+    setGradleProperty(modConfig.modResults, 'org.gradle.jvmargs', GRADLE_JVM_ARGS);
     return modConfig;
   });
   config = withAndroidManifest(config, (modConfig) => {
