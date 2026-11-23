@@ -214,7 +214,7 @@ jobs:
           fi
           changed="$(git diff --name-only "origin/$BASE_REF...HEAD")"
           # `modules/` covers the navigation core's sources (ios/Core, android-core).
-          if grep -Eq '^(apps/mobile/(app\.json|package\.json|babel\.config\.js|metro\.config\.js|plugins/|modules/|src/|assets/|scripts/(build-android-core\.sh|android-core-toolchain\.env|build-android-release\.sh|pin-gradle-wrapper\.sh|gradle-wrapper\.env|validate-release-env\.mjs))|packages/contracts/|pnpm-lock\.yaml|\.github/workflows/ci\.yml|\.github/actions/build-android-core/)' <<<"$changed"; then
+          if grep -Eq '^(apps/mobile/(app\.json|package\.json|babel\.config\.js|metro\.config\.js|plugins/|modules/|src/|assets/|scripts/(build-android-core\.sh|android-core-toolchain\.env|build-android-release\.sh|test-build-android-release\.sh|pin-gradle-wrapper\.sh|gradle-wrapper\.env|validate-release-env\.mjs))|packages/contracts/|pnpm-lock\.yaml|\.github/workflows/ci\.yml|\.github/actions/build-android-core/)' <<<"$changed"; then
             echo 'android=true' >> "$GITHUB_OUTPUT"
           else
             echo 'android=false' >> "$GITHUB_OUTPUT"
@@ -287,6 +287,10 @@ jobs:
       # packaging happen while the key is present is tested here. Both keys are throwaway ones
       # generated on the runner: the release signing plugin accepts any keystore named by its
       # three variables; the release workflow is what pins the certificate.
+      - name: Check that the signing task check fails closed
+        if: steps.changes.outputs.android == 'true' && matrix.variant == 'release'
+        run: apps/mobile/scripts/test-build-android-release.sh
+
       - name: Prepare the release build (no key)
         if: steps.changes.outputs.android == 'true' && matrix.variant == 'release'
         run: apps/mobile/scripts/build-android-release.sh prepare

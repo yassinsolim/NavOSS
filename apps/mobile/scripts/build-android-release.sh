@@ -15,6 +15,9 @@
 #                                      Only signing/packaging and Gradle/AGP's always-run no-op
 #                                      tasks may execute (SIGNING_TASKS); the script lists every
 #                                      task that executed and fails on any other.
+#   build-android-release.sh check-log <file>
+#                                      the sign phase's check of a Gradle log, on its own (tested
+#                                      by test-build-android-release.sh).
 #
 # Both phases read EXPO_PUBLIC_API_URL and NAVOSS_ANDROID_VERSION_CODE; give them the same
 # values. Used by .github/workflows/android-release.yml and the release leg of ci.yml.
@@ -39,7 +42,31 @@ fail() {
 # key-bearing step, and fails it.
 SIGNING_TASKS='^:[^:]+:((pre|preRelease)Build|assert[A-Za-z]*Task|(configure|build)CMakeRelWithDebInfo\[arm64-v8a\](\[[a-z]+\])?|externalNativeBuildRelease|generateJsonModelRelease|prefabReleaseConfigurePackage)$|^:app:(validateSigningRelease|signingConfigWriterRelease|packageRelease|createReleaseApkListingFileRedirect|assembleRelease)$'
 
+# Reads the sign phase's Gradle log (`--console=plain`) and fails unless it shows a successful
+# build in which packageRelease really ran and nothing outside SIGNING_TASKS did. Every task
+# record must be understood: an executed task has no outcome label, the others carry one of
+# Gradle's. A log without task records (a quiet or filtered log) proves nothing and fails.
+check_signing_log() {
+  local log="$1" records malformed executed unexpected
+  [[ -s "$log" ]] || fail "the signing log is empty"
+  grep -q '^BUILD SUCCESSFUL' "$log" || fail "the signing log does not report a successful build"
+  records="$(grep '^> Task ' "$log")" || fail "the signing log lists no tasks"
+  malformed="$(grep -Ev '^> Task :[^ ]+( (UP-TO-DATE|FROM-CACHE|NO-SOURCE|SKIPPED))?$' <<<"$records")" || true
+  [[ -z "$malformed" ]] || fail "task records the check does not understand: $(tr '\n' ' ' <<<"$malformed")"
+  executed="$(sed -n 's/^> Task \(:[^ ]*\)$/\1/p' <<<"$records")"
+  echo "Tasks executed with the release key present:"
+  sed 's/^/  /' <<<"$executed"
+  grep -qx ':app:packageRelease' <<<"$executed" ||
+    fail ":app:packageRelease did not run, so this build did not sign and package the APK"
+  unexpected="$(grep -Ev "$SIGNING_TASKS" <<<"$executed")" || true
+  [[ -z "$unexpected" ]] || fail "tasks other than signing and packaging ran with the key present: $(tr '\n' ' ' <<<"$unexpected")"
+}
+
 case "${1:-}" in
+  check-log)
+    [[ -n "${2:-}" && -f "$2" ]] || fail "usage: build-android-release.sh check-log <file>"
+    check_signing_log "$2"
+    ;;
   prepare)
     for name in NAVOSS_ANDROID_KEYSTORE NAVOSS_ANDROID_KEYSTORE_PASSWORD NAVOSS_ANDROID_KEY_ALIAS; do
       [[ -z "${!name:-}" ]] || fail "$name is set: the prepare phase must run without the release key"
@@ -68,16 +95,12 @@ case "${1:-}" in
     done
     cd "$mobile/android"
     log="$(mktemp)"
+    trap 'rm -f "$log"' EXIT
     "${gradle[@]}" --offline :app:assembleRelease -x lintVitalRelease \
       -x :expo-constants:createExpoConfig | tee "$log"
-    executed="$(sed -n 's/^> Task \(:[^ ]*\)$/\1/p' "$log")"
-    rm -f "$log"
-    echo "Tasks executed with the release key present:"
-    sed 's/^/  /' <<<"$executed"
-    unexpected="$(grep -Ev "$SIGNING_TASKS" <<<"$executed" || true)"
-    [[ -z "$unexpected" ]] || fail "tasks other than signing and packaging ran with the key present: $(tr '\n' ' ' <<<"$unexpected")"
+    check_signing_log "$log"
     ;;
   *)
-    fail "usage: build-android-release.sh prepare | sign"
+    fail "usage: build-android-release.sh prepare | sign | check-log <file>"
     ;;
 esac

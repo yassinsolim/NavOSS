@@ -69,8 +69,10 @@ prepare`): checks the release configuration (`validate-release-env.mjs`), builds
       still executes (measured in CI): Gradle's lifecycle and plugin version-assert tasks, AGP's
       always-run CMake configure/build tasks (ninja finds nothing to do), their JSON model and
       prefab configuration, and `packageRelease`, which signs and packages. The step lists the
-      tasks it executed and fails if any other ran. The CI release leg runs the same two phases
-      with throwaway keys, so this is checked on every change;
+      tasks it executed and fails if any other ran, if `packageRelease` did not run, or if the
+      log has no task records it understands (`test-build-android-release.sh` checks each of
+      those). The CI release leg runs the same two phases with throwaway keys, so this is
+      checked on every change;
    6. deletes the keystore (also when the build fails);
    7. scans the sign step's log for key material (the password and encoded keystore are given to
       `grep` as patterns on a file descriptor, never on a command line);
