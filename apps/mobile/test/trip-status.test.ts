@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  arrivalTitle,
   isResumingTrip,
+  nextTripSimulated,
   tripNotice,
   tripStatusLabel,
   tripActions,
@@ -118,5 +120,31 @@ describe('trip actions', () => {
 
   it('shares no ETA before the remaining route is known', () => {
     expect(tripActions({ hasRemaining: false, simulated: false }).shareEta).toBe(false);
+  });
+});
+
+describe('a simulated trip at arrival', () => {
+  it('stays simulated after the simulation stops at the destination', () => {
+    let simulated = nextTripSimulated(false, 'navigating', true);
+    expect(simulated).toBe(true);
+    // The native simulation ends with the trip; the arrival still came from it.
+    simulated = nextTripSimulated(simulated, 'navigating', false);
+    simulated = nextTripSimulated(simulated, 'arrived', false);
+    expect(simulated).toBe(true);
+  });
+
+  it('is cleared once the trip is over', () => {
+    expect(nextTripSimulated(true, 'idle', false)).toBe(false);
+    expect(nextTripSimulated(true, 'preview', false)).toBe(false);
+  });
+
+  it('is never set by a live trip', () => {
+    expect(nextTripSimulated(false, 'navigating', false)).toBe(false);
+    expect(nextTripSimulated(false, 'arrived', false)).toBe(false);
+  });
+
+  it('says so on the arrival sheet', () => {
+    expect(arrivalTitle(true)).toBe('Simulation finished');
+    expect(arrivalTitle(false)).toBe("You've arrived");
   });
 });

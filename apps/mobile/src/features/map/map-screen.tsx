@@ -526,6 +526,7 @@ export function MapScreen() {
             destination={routeState.destination}
             onDone={c.onFinishArrival}
             position={c.sheetPosition}
+            simulated={c.tripSimulated}
           />
         )}
 

@@ -176,6 +176,7 @@ import { setUpdaterTripActive } from '@/features/updates/use-app-updates';
 import { useSafetyCameraAlert } from '@/features/navigation/use-safety-camera-alert';
 import {
   isResumingTrip,
+  nextTripSimulated,
   vehicleMatchStatus as vehicleMatchStatusOf,
 } from '@/features/navigation/trip-status';
 import { fetchAppConfigUntilKnown, searchPlaces } from '@/lib/api';
@@ -1192,6 +1193,10 @@ export function useMapController() {
   };
 
   const simulatedDrive = useSimulatedDrive();
+  // The arrival of a simulated drive says so, after the native simulation has already stopped.
+  const [tripSimulated, setTripSimulated] = useState(false);
+  const nextSimulated = nextTripSimulated(tripSimulated, routeState.type, simulatedDrive);
+  if (nextSimulated !== tripSimulated) setTripSimulated(nextSimulated);
   const hostStatus = useHostStatus();
   // Android: the previous process ended its trip because the core ran out of memory (the host
   // deleted the trip and ended the process). The launch after says so; it stays until dismissed.
@@ -1921,6 +1926,7 @@ export function useMapController() {
     hostStatus,
     updaterTripActive: updaterHold,
     simulatedDrive,
+    tripSimulated,
     onSharePlace: handleSharePlace,
     onShortcutPress: handleShortcutPress,
     onStartNavigation: handleStartNavigation,

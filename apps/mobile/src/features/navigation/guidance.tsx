@@ -47,6 +47,7 @@ import {
 } from '@/features/navigation/route-progress';
 import type { RouteSource } from '@/features/navigation/route-ui-state';
 import {
+  arrivalTitle,
   tripActions,
   tripNotice,
   tripStatusLabel,
@@ -894,11 +895,14 @@ export function ArrivalSheet({
   destination,
   onDone,
   position,
+  simulated,
 }: {
   bottomInset: number;
   destination: SearchResult;
   onDone: () => void;
   position: SharedValue<number>;
+  /** Android: the trip was a simulated drive, not a real one. */
+  simulated: boolean;
 }) {
   const { colors } = useTheme();
   const styles = useStyles();
@@ -922,7 +926,7 @@ export function ArrivalSheet({
           </View>
           <View style={styles.arrivalCopy}>
             <Text maxFontSizeMultiplier={1.4} style={styles.arrivalTitle}>
-              You've arrived
+              {arrivalTitle(simulated)}
             </Text>
             <Text
               maxFontSizeMultiplier={1.4}

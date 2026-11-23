@@ -143,3 +143,22 @@ export function tripActions({
 }): { report: boolean; shareEta: boolean } {
   return { report: !simulated, shareEta: hasRemaining && !simulated };
 }
+
+/**
+ * Whether the current trip (or the arrival it ended in) came from a simulated drive. The native
+ * simulation stops with the trip, so the arrival keeps the flag from the drive; a trip never
+ * turns from simulated into live. Cleared once the trip is over.
+ */
+export function nextTripSimulated(
+  previous: boolean,
+  routeState: string,
+  simulatedNow: boolean,
+): boolean {
+  if (routeState !== 'navigating' && routeState !== 'arrived') return false;
+  return previous || simulatedNow;
+}
+
+/** The arrival sheet's statement: a simulated drive must not read as a real arrival. */
+export function arrivalTitle(simulated: boolean): string {
+  return simulated ? 'Simulation finished' : "You've arrived";
+}
