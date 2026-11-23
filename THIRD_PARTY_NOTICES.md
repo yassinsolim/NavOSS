@@ -1,6 +1,7 @@
 # Third-Party Notices
 
-This inventory is generated from required production JavaScript dependencies in `pnpm-lock.yaml`.
+This inventory is generated from required production JavaScript dependencies in `pnpm-lock.yaml`,
+followed by the prebuilt native libraries shipped in the Android app.
 It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
@@ -676,3 +677,42 @@ corepack pnpm licenses:generate
 
 - `big-integer` - `1.6.52` - <https://github.com/peterolson/BigInteger.js#readme>
 - `stream-buffers` - `2.2.0` - <https://github.com/samcday/node-stream-buffer#readme>
+
+## Native libraries in the Android app
+
+The Android app carries the navigation core as `libNavOSSCore.so` (NavOSS's own code, MPL-2.0)
+together with the prebuilt shared libraries it needs. They are copied unmodified, apart from
+stripping symbols, by `apps/mobile/scripts/build-android-core.sh` from the Swift SDK for Android
+and the Android NDK pinned in `apps/mobile/scripts/android-core-toolchain.env`. This section is
+maintained by hand in `apps/mobile/modules/navoss-navigation/android-core/NOTICES.md`; update it
+whenever that file's versions or the list of libraries the build prints change.
+
+### Apache-2.0 WITH Swift-exception
+
+The Swift project's licence: Apache License 2.0 with the Runtime Library Exception
+(<https://swift.org/LICENSE.txt>). Copyright Apple Inc. and the Swift project authors.
+
+- Swift standard library and runtime, Swift 6.4.3 - `libswiftCore.so`, `libswift_Concurrency.so`,
+  `libswift_StringProcessing.so`, `libswift_RegexParser.so`, `libswiftObservation.so`,
+  `libswiftSynchronization.so`, `libswift_Builtin_float.so`, `libswift_math.so`,
+  `libswiftAndroid.so` - <https://github.com/swiftlang/swift>,
+  <https://github.com/swiftlang/swift-experimental-string-processing>
+- swift-corelibs-libdispatch - `libdispatch.so`, `libBlocksRuntime.so`, `libswiftDispatch.so` -
+  <https://github.com/swiftlang/swift-corelibs-libdispatch>
+- swift-corelibs-foundation - `libFoundation.so` -
+  <https://github.com/swiftlang/swift-corelibs-foundation>
+- swift-foundation - `libFoundationEssentials.so`, `libFoundationInternationalization.so` -
+  <https://github.com/swiftlang/swift-foundation>
+- swift-foundation-icu (the Swift project's packaging) - `lib_FoundationICU.so` -
+  <https://github.com/swiftlang/swift-foundation-icu>
+
+### Unicode-3.0
+
+- ICU, International Components for Unicode, built into `lib_FoundationICU.so` - Copyright
+  Unicode, Inc. - Unicode License v3, with the third-party notices listed in ICU's licence
+  file - <https://github.com/unicode-org/icu/blob/main/LICENSE>
+
+### Apache-2.0 WITH LLVM-exception
+
+- LLVM libc++, libc++abi and libunwind, from Android NDK r30 - `libc++_shared.so` - Copyright
+  the LLVM project contributors - <https://llvm.org/LICENSE.txt>
