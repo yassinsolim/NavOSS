@@ -227,14 +227,20 @@ extension NavigationEngine {
   }
 }
 
-/// A trip store backed by a throwaway `UserDefaults` suite, as in the app.
-func makeEngineTripStore(
-  clock: EngineTestClock? = nil
-) -> (NavOSSActiveTripStore, UserDefaults) {
-  let suite = "navigation-engine-\(UUID().uuidString)"
-  let defaults = UserDefaults(suiteName: suite)!
-  defaults.removePersistentDomain(forName: suite)
-  let store = NavOSSActiveTripStore(
-    defaults: defaults, clock: { clock?.now ?? Date() })
-  return (store, defaults)
+/// A trip store backed by a throwaway `UserDefaults` suite, as in the app. The suite is
+/// removed with the fixture.
+final class EngineTripStoreFixture {
+  let store: NavOSSActiveTripStore
+  let defaults: UserDefaults
+  private let suite = "navigation-engine-\(UUID().uuidString)"
+
+  init(clock: EngineTestClock? = nil) {
+    defaults = UserDefaults(suiteName: suite)!
+    defaults.removePersistentDomain(forName: suite)
+    store = NavOSSActiveTripStore(defaults: defaults, clock: { clock?.now ?? Date() })
+  }
+
+  deinit {
+    defaults.removePersistentDomain(forName: suite)
+  }
 }

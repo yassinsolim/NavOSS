@@ -108,9 +108,11 @@ protocol NavigationEngineCompanion: AnyObject {
   func navigationRouteDidChange(_ trip: NavOSSCarPlayTrip)
   func navigationDidEnd()
   func navigationClockTick()
-  /// Called with the engine's lock held, for every published update. Returns an alert to speak
-  /// (alerts allowed permitting), or `nil`.
-  func navigationDidUpdateLocked(routeProgress: Double, isTracking: Bool) -> String?
+  /// Called with the engine's lock held, for every published update. Returns `nil` when there
+  /// is nothing to announce. Otherwise it returns the announcement, which the engine evaluates
+  /// (still under the lock) only when alerts are allowed: the text to speak, or `nil` when the
+  /// driver turned these announcements off.
+  func navigationDidUpdateLocked(routeProgress: Double, isTracking: Bool) -> (() -> String?)?
 }
 
 /// The platform side of the engine.
@@ -215,12 +217,6 @@ final class NavigationEngine: @unchecked Sendable {
 
   func currentUpdateLocked() -> NavigationSessionUpdate {
     navigationSession.currentUpdate()
-  }
-
-  /// Whether a trip is being guided (started and not arrived).
-  var hasActiveNavigationLocked: Bool {
-    let update = navigationSession.currentUpdate()
-    return update.trip != nil && update.snapshot.phase != .arrived
   }
 
   func safetyCameraLocked(id: String) -> NavOSSSafetyCamera? {
@@ -601,8 +597,8 @@ final class NavigationEngine: @unchecked Sendable {
       routeProgress: snapshot.routeProgress,
       isTracking: snapshot.phase == .tracking && !snapshot.isOffRoute
         && snapshot.rawCoordinate != nil && snapshot.matchedCoordinate != nil
-    ), announcementState.allowsAlerts {
-      utterances.append(reportAlert)
+    ), announcementState.allowsAlerts, let text = reportAlert() {
+      utterances.append(text)
     }
     let speechPrompt =
       announcementState.allowsManeuverGuidance ? speechPlanner.prompt(for: update, now: now) : nil
