@@ -104,6 +104,10 @@ A connected display, from either the template scene or the Dashboard scene alone
 
 The service exposes typed snapshots and events to both Swift scene delegates and the React Native TurboModule adapter.
 
+The trip logic itself is platform-neutral and lives in the core as `NavigationEngine` (`ios/Core/NavigationEngine.swift`): starting, restoring and clearing a trip, what a fix publishes and in which order (camera, speeding and road-report alerts, then the maneuver prompt), reroute consent and requests, the one-second clock's work, the safety-camera fetch and progress checkpoints. `NavOSSNavigationService` is its host on iOS and keeps what only iOS has: Core Location, the CarPlay trip store and leases, the timer, `AVSpeechSynthesizer` and the audio session. An Android host supplies the same effects through `NavigationEngineHost`.
+
+Threading: the engine may be entered from any thread and guards all its state with one recursive lock, which the service shares for its own location state. Host callbacks named `...Locked` run with that lock held and only read; every other effect runs after the lock is released, in a fixed order, and carries the navigation generation it was issued for. Each start, installed route and clear advances the generation; a published update, a reroute result, queued speech, and a clock or location change are dropped when the generation (and for reroutes the request, trip and off-route state) they belong to is no longer current.
+
 ### Main CarPlay scene
 
 `NavOSSCarPlaySceneDelegate` conforms to `CPTemplateApplicationSceneDelegate` and handles the navigation-specific connection method that supplies both `CPInterfaceController` and `CPWindow`.

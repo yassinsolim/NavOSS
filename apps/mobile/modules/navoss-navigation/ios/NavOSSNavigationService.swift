@@ -633,7 +633,9 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
   private func stopNavigationClock(expectedGeneration: UInt64) {
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
-      let isCurrent = self.lock.withLock { self.engine.navigationGenerationLocked == expectedGeneration }
+      let isCurrent = self.lock.withLock {
+        self.engine.navigationGenerationLocked == expectedGeneration
+      }
       guard isCurrent else { return }
       self.navigationClockTimer?.cancel()
       self.navigationClockTimer = nil
@@ -845,7 +847,8 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       self.lock.lock()
       let update = self.engine.currentUpdateLocked()
       let hasActiveNavigation = update.trip != nil && update.snapshot.phase != .arrived
-      let generationMatches = expectedGeneration.map { $0 == self.engine.navigationGenerationLocked } ?? true
+      let generationMatches =
+        expectedGeneration.map { $0 == self.engine.navigationGenerationLocked } ?? true
       let shouldTrack = navOSSShouldTrackLocation(
         hasActiveNavigation: hasActiveNavigation,
         isCarPlayRoutePlanning: self.carPlayRoutePlanningLeases.isActive,
@@ -988,16 +991,18 @@ private final class NavOSSCommunityNavigationCompanion: NavigationEngineCompanio
     NavOSSCommunityService.shared.navigationClockTick()
   }
 
-  func navigationDidUpdateLocked(routeProgress: Double, isTracking: Bool) -> String? {
+  func navigationDidUpdateLocked(routeProgress: Double, isTracking: Bool) -> (() -> String?)? {
     guard
       let reportAlert = NavOSSCommunityService.shared.navigationDidUpdate(
         routeProgress: routeProgress,
         isTracking: isTracking
-      ),
-      NavOSSCommunityService.shared.preferences().announcesRoadReports
+      )
     else {
       return nil
     }
-    return navOSSCommunityReportSpokenAlert(reportAlert.type)
+    return {
+      NavOSSCommunityService.shared.preferences().announcesRoadReports
+        ? navOSSCommunityReportSpokenAlert(reportAlert.type) : nil
+    }
   }
 }

@@ -42,24 +42,24 @@ final class NavigationTripStartTests: XCTestCase {
     try XCTUnwrap(trips.first { $0.steps.contains { $0.instruction.contains(road) } })
   }
 
-  /// Drives a trip the way `NavOSSNavigationService` does: every fix goes through the session
-  /// and reroute consent; a request asks for the alternatives the service asks for, is answered
-  /// from the recorded production responses (the preview's three routes, or the reroute's
-  /// one), and the replacement is chosen with the service's rule.
+  /// Drives a trip through the real `NavigationEngine`, as `NavOSSNavigationService` does:
+  /// every fix is ingested, and a reroute the engine asks for is answered from the recorded
+  /// production responses (the preview's three routes when it asks for alternatives, otherwise
+  /// the reroute's one) before the next fix.
   private final class TripHarness {
     let session = NavigationSession()
-    var consent = NavigationRerouteConsent()
-    let mode: NavOSSRerouteMode
-    let preview: [NavOSSCarPlayTrip]
-    let reroute: [NavOSSCarPlayTrip]
-    private(set) var requests = 0
+    let engine: NavigationEngine
+    private let host = RecordingEngineHost()
+    private let network: ScriptedEngineNetwork
+    private let clock = EngineTestClock(NavigationTripStartTests.startTime)
+    private let store = EngineTripStoreFixture()
     private(set) var proposals = 0
     private(set) var installed: [String] = []
     private(set) var offRouteFixes = 0
     private(set) var latest: NavigationSessionUpdate?
-    /// Every update, with the maneuver prompt the service would speak for it.
+    /// Every update, with the maneuver prompt the engine had spoken for it.
     private(set) var history: [(update: NavigationSessionUpdate, prompt: String?)] = []
-    let planner = NavigationSpeechPlanner()
+    private var lastProposalId: String?
     var time = NavigationTripStartTests.startTime
 
     init(
@@ -68,13 +68,19 @@ final class NavigationTripStartTests: XCTestCase {
       reroute: [NavOSSCarPlayTrip],
       mode: NavOSSRerouteMode = .adaptive
     ) throws {
-      self.mode = mode
-      self.preview = preview
-      self.reroute = reroute
-      try session.start(selected)
+      network = ScriptedEngineNetwork { $0.alternatives > 0 ? preview : reroute }
+      engine = NavigationEngine(
+        tripStore: store.store, audioMode: .allGuidance,
+        preferences: NavOSSNavigationPreferences(rerouteMode: mode), network: network,
+        session: session, clock: { [clock] in clock.now })
+      engine.host = host
+      try engine.startNavigation(selected)
+      engine.completePendingSafetyCameraFetch()
     }
 
     var activeRouteId: String? { session.trip?.id }
+    /// Reroutes the engine asked the network for.
+    var requests: Int { network.rerouteCount }
 
     func fix(
       _ coordinate: NavigationCoordinate,
@@ -84,47 +90,30 @@ final class NavigationTripStartTests: XCTestCase {
       after seconds: TimeInterval
     ) throws {
       time += seconds
-      let update = try session.updateLocation(
+      clock.time = time
+      let eventsBefore = host.events.count
+      let update = try engine.ingest(
         NavigationLocationSample(
           coordinate: coordinate, courseDegrees: course, horizontalAccuracyMeters: accuracy,
-          speedMetersPerSecond: speed, timestamp: time))
-      latest = update
-      history.append((update, planner.prompt(for: update, now: time)?.text))
-      let isOffRoute = update.snapshot.phase == .tracking && update.snapshot.isOffRoute
-      if isOffRoute { offRouteFixes += 1 }
-      switch consent.evaluate(
-        mode: mode, isOffRoute: isOffRoute,
-        canRequest: isOffRoute && update.snapshot.rawCoordinate != nil, now: time)
-      {
-      case .request:
-        requests += 1
-        let hasMatchedRoute = session.hasMatchedRoute
-        let alternatives = navigationRerouteAlternatives(
-          hasMatchedRoute: hasMatchedRoute, waypointCount: 0)
-        let answer = alternatives > 0 ? preview : reroute
-        guard let current = session.trip,
-          let replacement = navigationReplacement(
-            from: answer, closestTo: current, hasMatchedRoute: hasMatchedRoute)
-        else { return }
-        switch consent.received(
-          replacement, mode: mode,
-          remainingDurationSeconds: update.guidance?.remainingDurationSeconds,
-          remainingDistanceMeters: update.guidance?.remainingDistanceMeters, now: time)
-        {
-        case .install: try install(replacement)
-        case .propose: proposals += 1
-        }
-      case .installProposal(let proposal):
-        try install(proposal.trip)
-      case .none, .withdrew, .expired:
-        break
+          speedMetersPerSecond: speed, timestamp: time)
+      ).versionedUpdate.update
+      let prompts = host.events.dropFirst(eventsBefore).compactMap { event -> String? in
+        if case .speak(let speech, _) = event, speech.kind == .maneuver { return speech.text }
+        return nil
       }
-    }
-
-    private func install(_ trip: NavOSSCarPlayTrip) throws {
-      try session.start(trip)
-      consent.reset()
-      installed.append(trip.id)
+      latest = update
+      history.append((update, prompts.first))
+      if update.snapshot.phase == .tracking && update.snapshot.isOffRoute { offRouteFixes += 1 }
+      let installsBefore = engine.currentState().rerouteCount
+      engine.completePendingReroute(through: network)
+      let state = engine.currentState()
+      if state.rerouteCount > installsBefore, let id = state.trip?.id {
+        installed.append(id)
+      }
+      if let proposal = state.rerouteProposal?.id, proposal != lastProposalId {
+        proposals += 1
+      }
+      lastProposalId = state.rerouteProposal?.id
     }
 
     /// Parked: a fix every two seconds, half a metre apart, no speed or course.
