@@ -511,24 +511,65 @@ packages without symlinks, which have to be maintained by hand and silently drop
 - Every shipped `.so` must have 16 KB-aligned `LOAD` segments (`llvm-readelf -l`, alignment
   `0x4000`): Android 15 and later devices with 16 KB pages refuse anything else.
 
-### On a GitHub `ubuntu-latest` runner
+### In CI and releases
 
-Not yet a workflow; the steps are:
+The composite action `.github/actions/build-android-core` is the one implementation both
+`ci.yml` (job `Android build and Kotlin tests`) and `android-release.yml` call before Gradle. On
+`ubuntu-latest` (Ubuntu 26.04, x86_64) it:
 
-```sh
-. apps/mobile/scripts/android-core-toolchain.env
-curl -fsSLO "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz"
-tar zxf "swiftly-$(uname -m).tar.gz" && ./swiftly init --quiet-shell-followup --skip-install -y
-. "$HOME/.local/share/swiftly/env.sh" && swiftly install "$SWIFT_VERSION" --use
-swift sdk install "$SWIFT_ANDROID_SDK_URL" --checksum "$SWIFT_ANDROID_SDK_SHA256"
-curl -fsSLO "https://dl.google.com/android/repository/android-ndk-$ANDROID_NDK_RELEASE-linux.zip"
-echo "$ANDROID_NDK_LINUX_SHA1  android-ndk-$ANDROID_NDK_RELEASE-linux.zip" | sha1sum -c
-unzip -q "android-ndk-$ANDROID_NDK_RELEASE-linux.zip" && export ANDROID_NDK_HOME="$PWD/android-ndk-$ANDROID_NDK_RELEASE"
-"$HOME/.swiftpm/swift-sdks/$SWIFT_ANDROID_SDK_ID.artifactbundle/swift-android/scripts/setup-android-sdk.sh"
-apps/mobile/scripts/build-android-core.sh
-```
+1. runs `android-core/scripts/jni-contract.py check`: the Kotlin binding's `external` functions
+   and the Swift `@_cdecl` entry points must name the same JNI symbols, and every `Host` method
+   the Swift side looks up (`GetMethodID`) must exist in `NavOSSCore.Host` with that signature;
+2. restores `android-core/build/jniLibs` from the cache `android-core-libs-v1-…`, keyed on the
+   pinned Swift version, toolchain and SDK checksums, NDK version, and a hash of
+   `Package.swift`, `ios/Core/**`, `android-core/Facade/**`, `android-core/JNI/**`,
+   `build-android-core.sh` and `android-core-toolchain.env`;
+3. on a miss, restores the toolchain tarballs (cache `android-core-toolchain-v1-…`, keyed on the
+   pins only, so a source change does not download them again), and
+   `android-core/scripts/install-toolchain-linux.sh` checks each against its pinned SHA-256,
+   extracts the toolchain, installs the SDK bundle, installs NDK r30 with `sdkmanager` and links
+   it into the SDK; then `build-android-core.sh` builds;
+4. always, cache hit or not, runs `android-core/scripts/verify-android-core.sh`, which fails on
+   any ABI directory but `arm64-v8a`, a missing `libNavOSSCore.so`, a NEEDED library that is
+   neither shipped nor one of Android's own (the NDK's API 28 stubs), a shipped library nothing
+   needs, a Kotlin `external` not exported by `libNavOSSCore.so`, a `LOAD` segment aligned below
+   16 KB, or a `libc++_shared.so` that lacks the symbol the config plugin checks for r30;
+5. saves the libraries to the cache only after they passed.
 
-swiftly verifies the toolchain's signature; the SDK and NDK are checked against the pinned
-checksums. Expected time (not measured on a runner): toolchain about 3 minutes, SDK and NDK
-downloads about 2 minutes, release build about 5 minutes on a 4-core runner; cache
-`~/.local/share/swiftly`, `~/.swiftpm/swift-sdks` and the NDK by the pinned versions.
+After Gradle, `android-core/scripts/verify-apk-core.sh` checks an APK: every verified library is
+packaged under `lib/arm64-v8a/` byte for byte (so the packaged `libc++_shared.so` is r30's, not
+React Native's r27 copy), and `apkanalyzer dex packages` shows the binding class with every
+native method, `NavOSSCore$Host` with every callback, and `NavOSSCoreException(String, String)`
+under their own names. On a release APK that is the check that R8 neither stripped nor renamed
+what JNI finds by name. CI runs it on a debug APK and on a release APK built with a throwaway
+key generated in the job (the release signing plugin accepts any keystore named by its three
+variables; the release workflow is what pins the certificate). The release workflow runs it on
+the signed APK, and every check fails the run.
+
+React Native keeps NDK r27 (`ndk;27.1.12297006`, installed by the workflows); the core and its
+`libc++_shared.so` use r30, which the action installs and passes to the build as
+`ANDROID_NDK_HOME` for that step only.
+
+### Pins and how to bump them
+
+Every pin is in `apps/mobile/scripts/android-core-toolchain.env`:
+
+| Pin                            | Value                                                                     | Source                                                                                                                                                 |
+| ------------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SWIFT_VERSION`                | 6.4.3                                                                     | swift.org release                                                                                                                                      |
+| `SWIFT_LINUX_TOOLCHAIN_URL`    | `…/ubuntu2604/swift-6.4.3-RELEASE/swift-6.4.3-RELEASE-ubuntu26.04.tar.gz` | swift.org download for the runner's Ubuntu                                                                                                             |
+| `SWIFT_LINUX_TOOLCHAIN_SHA256` | `0e408a92…3045613`                                                        | computed 2026-11-23 from the download whose `.sig` verified against swift.org's keys (swift.org publishes a signature, not a checksum, for toolchains) |
+| `SWIFT_ANDROID_SDK_SHA256`     | `a78839ed…71f0a9`                                                         | published by swift.org on <https://www.swift.org/install/linux/>                                                                                       |
+| `ANDROID_NDK_VERSION`          | 30.0.16248370                                                             | installed by `sdkmanager`, which checks Google's own checksum                                                                                          |
+
+To bump the toolchain: change `SWIFT_VERSION`, the URLs and the SDK ID; take the SDK checksum
+from swift.org's install page; for the Linux toolchain, download the tarball and its `.sig`,
+verify it (`gpg --import` <https://www.swift.org/keys/all-keys.asc> (served gzip-encoded:
+`curl --compressed`), then `gpg --verify`) and pin `sha256sum` of the verified file. When
+GitHub moves `ubuntu-latest` to another Ubuntu, `install-toolchain-linux.sh` stops with a
+message naming both versions: pin the toolchain built for the new one
+(`SWIFT_LINUX_OS_VERSION`, URL, checksum). Every pin is part of both cache keys, so a bump
+rebuilds. Update `android-core/NOTICES.md` with the pins.
+
+Locally, the macOS steps (swiftly, `swift sdk install … --checksum`, the NDK zip with its SHA-1)
+are unchanged; `build-android-core.sh` runs on both hosts.

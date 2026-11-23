@@ -60,7 +60,11 @@ fi
 sdkmanager="${ANDROID_HOME:?set ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
 "$sdkmanager" "ndk;$ANDROID_NDK_VERSION" >/dev/null
 ndk="$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
-ANDROID_NDK_HOME="$ndk" \
-  "$HOME/.swiftpm/swift-sdks/$SWIFT_ANDROID_SDK_ID.artifactbundle/swift-android/scripts/setup-android-sdk.sh" >&2
+# Where `swift sdk install` put the bundle depends on the host (~/.swiftpm or the XDG directory);
+# its resources path is <bundle>/swift-android/swift-resources/….
+resources="$(sed -n 's/^swiftResourcesPath: //p' <<<"$("$swift_bin/swift" sdk configure \
+  --show-configuration "$SWIFT_ANDROID_SDK_ID" "$SWIFT_ANDROID_TRIPLE")")"
+[[ "$resources" == */swift-android/swift-resources/* ]] || fail "unexpected SDK layout: $resources"
+ANDROID_NDK_HOME="$ndk" "${resources%%/swift-resources/*}/scripts/setup-android-sdk.sh" >&2
 
 printf '%s\n' "$swift_bin" "$ndk"
