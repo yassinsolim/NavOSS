@@ -27,6 +27,12 @@ shared engine. Merged on `main` after `3b57b04`:
   [#170](https://github.com/yassinsolim/NavOSS/pull/170): the Android app (UI, engine host, core
   for Android, releases and updater, handheld keys). #157 and #170 touch shared screens; the iPhone
   was compared on a simulator and came out the same on screen.
+- [#172](https://github.com/yassinsolim/NavOSS/pull/172): with no trip, the phone map draws the
+  driver's Arrow or Car instead of the blue dot (below). Seen on an iOS simulator only.
+- [#173](https://github.com/yassinsolim/NavOSS/pull/173): builds without CarPlay declare the phone
+  window scene, so a Debug build made with Xcode 27 launches on iOS 27. The CarPlay flavours that
+  ship already had a scene manifest; their generated `Info.plist` and `AppDelegate.swift` are
+  byte-identical to before. TestFlight builds are made with Xcode 26.6.
 - [#162](https://github.com/yassinsolim/NavOSS/pull/162),
   [#166](https://github.com/yassinsolim/NavOSS/pull/166),
   [#169](https://github.com/yassinsolim/NavOSS/pull/169): workflows and the CarPlay harness; no app
@@ -78,9 +84,7 @@ Known and open:
 - The "Trip ended" notice after a restore shows for a few seconds only on iOS.
 - The `carplay-free-drive-no-fix` harness pixel gate fails on a simulator whose status bar shows
   the blue location badge; it is not a product defect.
-- Open pull requests not on `main`: reroute spacing on long detours (#171), the NavOSS vehicle on
-  the phone map without a trip (#172), a scene manifest for builds without CarPlay (#173; shipped
-  flavours already have one and are built with Xcode 26.6).
+- Open pull request not on `main`: reroute spacing on long detours (#171).
 
 ## Build 85, in testers' hands
 
