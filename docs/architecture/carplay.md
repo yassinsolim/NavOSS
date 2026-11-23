@@ -327,7 +327,8 @@ traffic, lane, speed, or incident knowledge.
 - Free-drive direction (`navOSSCarPlayFreeDriveHeading`): the fix's GPS course at 9 km/h or more
   (and not rated worse than 45° by Core Location); the last such course while stopped or
   crawling, so a stopped car's wandering course never spins the arrow; the compass only before any
-  course has been seen (it says how the phone faces); otherwise the non-directional marker. It never
+  course has been seen (it says how the phone faces); otherwise the non-directional marker, also after End or when the compass becomes invalid: a
+  bearing guidance or an earlier compass reading left behind is dropped. It never
   defaults to north. The position must pass the route-origin rule (`navOSSNavigationRouteOrigin`:
   at most 15 s old, 100 m accurate); after 15 s without one the vehicle is hidden. A fix more than
   3 s after the previous one is drawn where it is rather than animated. Between fixes the render

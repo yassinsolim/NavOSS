@@ -331,9 +331,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       self?.receiveFreeDriveFix(location)
     }
     freeDriveLocationManager.onHeading = { [weak self] heading in
-      guard heading.headingAccuracy >= 0 else { return }
+      // An uncalibrated or interfered compass (negative accuracy) is no heading at all.
       self?.receiveFreeDriveCompassHeading(
-        heading.trueHeading >= 0 ? heading.trueHeading : heading.magneticHeading)
+        heading.headingAccuracy < 0
+          ? nil : heading.trueHeading >= 0 ? heading.trueHeading : heading.magneticHeading)
     }
     updateFreeDriveLocationUpdates()
     mapView.setCenter(calgaryCenter, zoomLevel: 10.5, animated: false)
@@ -707,6 +708,11 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   /// The map's current heading, for the visual harness.
   var cameraHeadingDegrees: Double { mapView.direction }
+
+  /// Whether the drawn vehicle points somewhere (arrow or car) rather than the neutral marker, and
+  /// whether its heading cone is drawn; for the visual harness.
+  private(set) var drawnVehicleIsDirectional = false
+  private(set) var drawnVehicleHasCone = false
   var isPresentingRouteOverview: Bool { activeGuidance && presentsRouteOverview }
 
   /// Camera and report markers whose point lies inside the visible map.
@@ -1015,11 +1021,13 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     showFreeDrivePosition(position)
   }
 
-  /// The phone's compass. It turns the marker only before any course has been seen (see
-  /// `navOSSCarPlayFreeDriveHeading`); afterwards it only feeds the heading cone, like guidance.
-  func receiveFreeDriveCompassHeading(_ degrees: Double) {
-    guard degrees.isFinite, (0..<360).contains(degrees) else { return }
-    freeDriveCompassHeadingDegrees = degrees
+  /// The phone's compass, or nil once it is no longer valid. It turns the marker only before any
+  /// course has been seen (see `navOSSCarPlayFreeDriveHeading`); afterwards it only feeds the
+  /// heading cone, like guidance.
+  func receiveFreeDriveCompassHeading(_ degrees: Double?) {
+    let valid = degrees.flatMap { $0.isFinite && (0..<360).contains($0) ? $0 : nil }
+    guard valid != freeDriveCompassHeadingDegrees else { return }
+    freeDriveCompassHeadingDegrees = valid
     guard !activeGuidance, requestsUserLocation, freeDriveLastCourseDegrees == nil,
       latestPosition != nil, let position = liveFreeDrivePosition()
     else { return }
@@ -1665,12 +1673,20 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         ),
       // The road's own bearing turns the arrow through the bend as the vehicle travels it. Course
       // reported between two fixes only changes once the turn is already over.
+      // Free drive draws only the bearing its own heading chain resolved for the target fix, so
+      // a bearing guidance or an earlier compass reading left behind is dropped, not kept.
       courseDegrees: roadPath?.bearingDegrees
-        ?? interpolatedCourse(
-          from: start.courseDegrees,
-          to: target.courseDegrees,
-          progress: progress
-        ),
+        ?? (activeGuidance
+          ? interpolatedCourse(
+            from: start.courseDegrees,
+            to: target.courseDegrees,
+            progress: progress
+          )
+          : navOSSCarPlayFreeDriveDrawnCourse(
+            fromDegrees: start.courseDegrees,
+            toDegrees: target.courseDegrees,
+            progress: progress
+          )),
       compassHeadingDegrees: target.compassHeadingDegrees,
       speedMetersPerSecond: target.speedMetersPerSecond
     )
@@ -2454,16 +2470,17 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     //   1. validated course from the published position (guidance: matched route bearing, else
     //      GPS course; free drive: `navOSSCarPlayFreeDriveHeading`)
     //   2. guidance only: bearing of the route segment nearest the puck
-    //   3. last heading actually rendered
+    //   3. guidance only: last heading actually rendered (free drive's own chain already holds
+    //      its last trusted course; anything else it inherited is not evidence)
     //   4. none -> neutral, non-directional marker
     let resolvedCourseDegrees =
       validCourseDegrees(position.courseDegrees)
       ?? (activeGuidance
-        ? navOSSRouteBearingDegrees(near: position.coordinate, in: routeGeometry) : nil)
-      ?? lastRenderedCourseDegrees
-    if let resolvedCourseDegrees {
-      lastRenderedCourseDegrees = resolvedCourseDegrees
-    }
+        ? navOSSRouteBearingDegrees(near: position.coordinate, in: routeGeometry)
+          ?? lastRenderedCourseDegrees
+        : nil)
+    lastRenderedCourseDegrees =
+      resolvedCourseDegrees ?? (activeGuidance ? lastRenderedCourseDegrees : nil)
     // The marker keeps its course-based rotation; only the cone prefers the compass, which is the
     // one bearing that still answers "which way is the car pointing" while stopped.
     let coneHeading = navOSSCarPlayConeHeadingDegrees(
@@ -2486,6 +2503,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       latitude: position.coordinate.latitude,
       longitude: position.coordinate.longitude
     )
+    drawnVehicleIsDirectional = resolvedCourseDegrees != nil
+    drawnVehicleHasCone = coneHeading != nil
     point.attributes = [
       "bearing": resolvedCourseDegrees ?? 0,
       "hasCone": coneHeading != nil,

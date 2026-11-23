@@ -771,6 +771,7 @@ try {
         ['carplay-free-drive-go', 'free-drive-go', 'light'],
         ['carplay-free-drive-end', 'free-drive-end', 'dark'],
         ['carplay-free-drive-dashboard', 'free-drive-dashboard', 'light'],
+        ['carplay-free-drive-end-without-heading', 'free-drive-end-without-heading', 'light'],
       ]) {
         await captureCarPlayScenario(name, scenario, appearance);
       }
@@ -932,6 +933,11 @@ try {
       if (name === 'carplay-free-drive-no-fix.png') {
         if (metric.vehicleMarkerRatio > 0.00002) {
           throw new Error(`${name} draws a vehicle without a live fix.`);
+        }
+      } else if (name === 'carplay-free-drive-end-without-heading.png') {
+        // No sensor bearing: the neutral marker, never the arrow (whose disc is the teal measured).
+        if (metric.vehicleMarkerRatio > 0.00002) {
+          throw new Error(`${name} draws a directional arrow with no heading.`);
         }
       } else if (
         name !== 'carplay-free-drive-panned.png' &&

@@ -21,7 +21,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     "audio-release", "idle-live-location", "offline-preview", "offline-guidance",
     "free-drive-open", "free-drive-straight", "free-drive-turn", "free-drive-stopped",
     "free-drive-panned", "free-drive-recenter", "free-drive-north-up", "free-drive-no-fix",
-    "free-drive-go", "free-drive-end", "free-drive-dashboard",
+    "free-drive-go", "free-drive-end", "free-drive-dashboard", "free-drive-end-without-heading",
   ]
 
   private let mapViewController = NavOSSCarPlayMapViewController()
@@ -99,7 +99,7 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       return
     case "free-drive-open", "free-drive-straight", "free-drive-turn", "free-drive-stopped",
       "free-drive-panned", "free-drive-recenter", "free-drive-north-up", "free-drive-no-fix",
-      "free-drive-go", "free-drive-end", "free-drive-dashboard":
+      "free-drive-go", "free-drive-end", "free-drive-dashboard", "free-drive-end-without-heading":
       runFreeDriveScenario()
       return
     case "idle-location":
@@ -1416,6 +1416,22 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     case "free-drive-go":
       drive(1...6)
       steps.append { [weak self] in self?.startFreeDriveGuidance(afterSeconds: 6) }
+    case "free-drive-end-without-heading":
+      // Parked the whole time: the compass turns the arrow, then becomes invalid, then a trip is
+      // started and ended. Guidance drew the road's bearing; free drive has no course and no
+      // compass, so the vehicle must be the neutral marker with no cone, not the inherited arrow.
+      let parked = Self.freeDriveStart.coordinate
+      steps.append { map.receiveFreeDriveCompassHeading(nil) }
+      steps.append { [weak self] in self?.startFreeDriveGuidance(afterSeconds: 0) }
+      steps.append { [weak self] in
+        guard let self else { return }
+        map.receiveFreeDriveFix(self.freeDriveLocation(parked, course: -1, speed: 0))
+        map.clearRoute()
+      }
+      steps.append { [weak self] in
+        guard let self else { return }
+        map.receiveFreeDriveFix(self.freeDriveLocation(parked, course: -1, speed: 0))
+      }
     case "free-drive-end":
       drive(1...6)
       steps.append { [weak self] in self?.startFreeDriveGuidance(afterSeconds: 6) }
@@ -1489,12 +1505,18 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
       switch scenario {
       case "free-drive-open": .compass
       case "free-drive-stopped": .lastCourse
+      case "free-drive-end-without-heading": NavOSSCarPlayFreeDriveHeadingSource.none
       case "free-drive-go": nil
       default: .course
       }
     if map.freeDriveHeadingSource != expectedSource {
       return "heading source \(String(describing: map.freeDriveHeadingSource)), expected "
         + String(describing: expectedSource)
+    }
+    let directional = scenario != "free-drive-end-without-heading"
+    if map.drawnVehicleIsDirectional != directional || map.drawnVehicleHasCone != directional {
+      return "directional marker \(map.drawnVehicleIsDirectional), cone \(map.drawnVehicleHasCone), "
+        + "expected \(directional)"
     }
     let following = scenario != "free-drive-panned"
     if map.isFollowingVehicle != following {

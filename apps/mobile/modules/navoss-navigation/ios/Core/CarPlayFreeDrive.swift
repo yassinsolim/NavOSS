@@ -166,6 +166,23 @@ public func navOSSShouldShowFreeDriveVehicle(
   !hasActiveGuidance && requestsUserLocation && hasLiveFix
 }
 
+/// The bearing free drive draws between two fixes: eased from the drawn bearing toward the new
+/// fix's free-drive heading the short way round, or none when that heading resolved to nothing.
+/// A bearing free drive did not produce itself (the road bearing guidance drew before End, or a
+/// compass reading that has since become invalid) is never kept: the marker turns
+/// non-directional instead.
+public func navOSSCarPlayFreeDriveDrawnCourse(
+  fromDegrees: Double?,
+  toDegrees: Double?,
+  progress: Double
+) -> Double? {
+  guard let target = navOSSCarPlayValidBearing(toDegrees) else { return nil }
+  guard let start = navOSSCarPlayValidBearing(fromDegrees) else { return target }
+  let delta = (target - start + 540).truncatingRemainder(dividingBy: 360) - 180
+  let fraction = min(1, max(0, progress))
+  return (start + delta * fraction + 360).truncatingRemainder(dividingBy: 360)
+}
+
 private func navOSSCarPlayValidBearing(_ degrees: Double?) -> Double? {
   guard let degrees, degrees.isFinite, (0..<360).contains(degrees) else { return nil }
   return degrees

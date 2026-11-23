@@ -91,6 +91,19 @@ final class CarPlayFreeDriveTests: XCTestCase {
       ).degrees)
   }
 
+  /// A bearing the free-drive chain did not produce (guidance's road bearing kept after End, or a
+  /// compass reading that has since become invalid) must not keep the marker directional.
+  func testTheDrawnBearingIsDroppedWhenTheFreeDriveHeadingResolvesToNothing() {
+    XCTAssertNil(navOSSCarPlayFreeDriveDrawnCourse(fromDegrees: 90, toDegrees: nil, progress: 0))
+    XCTAssertNil(navOSSCarPlayFreeDriveDrawnCourse(fromDegrees: 90, toDegrees: nil, progress: 1))
+    XCTAssertNil(navOSSCarPlayFreeDriveDrawnCourse(fromDegrees: 90, toDegrees: -1, progress: 0.5))
+    XCTAssertEqual(navOSSCarPlayFreeDriveDrawnCourse(fromDegrees: nil, toDegrees: 45, progress: 0), 45)
+    XCTAssertEqual(
+      navOSSCarPlayFreeDriveDrawnCourse(fromDegrees: 350, toDegrees: 10, progress: 0.5) ?? -1, 0,
+      accuracy: 1e-9)
+    XCTAssertEqual(navOSSCarPlayFreeDriveDrawnCourse(fromDegrees: 80, toDegrees: 100, progress: 1), 100)
+  }
+
   // MARK: Live position
 
   func testOnlyALiveFixBecomesTheVehicle() {
