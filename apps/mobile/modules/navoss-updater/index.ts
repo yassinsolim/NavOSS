@@ -31,6 +31,13 @@ type NavOSSUpdaterEvents = {
 };
 
 declare class NavOSSUpdaterModule extends NativeModule<NavOSSUpdaterEvents> {
+  /**
+   * Called at Start: holds installs for the trip, or returns false while a committed install has
+   * not reported its result (Android may replace the app at any moment).
+   */
+  beginTrip(): boolean;
+  /** True while a committed install has not reported its result. */
+  isInstallCommitted(): boolean;
   canRequestPackageInstalls(): boolean;
   cancelDownload(): void;
   cleanDownloads(keepVersionCode: number): void;

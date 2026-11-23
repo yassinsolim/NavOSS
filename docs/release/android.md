@@ -118,9 +118,13 @@ until the next day, or until a newer version). It never appears during a trip.
 Nothing installs during a trip either: a download that finishes while a trip is active (including
 one continued on return from the install-permission setting) is kept, and the card comes back after
 the trip as "NavOSS <version> is ready to install". The system's install prompt opens only after
-the driver taps **Install** then. If a trip starts while the file is being verified, the app does
-not commit the install, and an install prompt Android asks for during a trip is abandoned instead
-of opened.
+the driver taps **Install** then. **Start** holds installs before the trip begins (not after a
+screen update), and the session commit checks that hold under the same lock: a trip that starts
+while the file is verified or copied abandons the session instead of committing it, and an install
+prompt Android asks for during a trip is abandoned instead of opened. The other way round, once an
+install is committed and until Android reports its result, **Start** is refused with "NavOSS is
+updating and will close in a moment. Start your trip after it reopens." and a restored trip is not
+guided on the phone; when the install fails or is cancelled, **Start** works again at once.
 
 **Install** downloads the APK into the app's private cache, with progress and **Cancel download**,
 on any network. A download that stops (no connection, the app closed, the phone restarted)

@@ -147,6 +147,12 @@ import {
   getUpcomingManeuvers,
 } from '@/features/navigation/route-progress';
 import { selectedRouteOf, tripEndNotice } from '@/features/navigation/route-ui-state';
+import {
+  beginTripForUpdates,
+  endTripForUpdates,
+  UPDATE_INSTALLING_NOTICE,
+  useAppUpdatesState,
+} from '@/features/updates/use-app-updates';
 import { useSafetyCameraAlert } from '@/features/navigation/use-safety-camera-alert';
 import {
   isResumingTrip,
@@ -340,7 +346,11 @@ export function useMapController() {
   const progressCoordinate = navigationSnapshot?.matchedCoordinate ?? userCoordinate;
   // A trip restored after a relaunch carries no step until it has found its place on the route;
   // the step it was saved on may be behind the vehicle, so nothing is derived from it.
-  const resumingTrip = routeState.type === 'navigating' && isResumingTrip(navigationSnapshot);
+  // Android: while an update install is committed the app may be replaced at any moment, so a
+  // restored trip is not guided until the installer reports back.
+  const updateInstalling = useAppUpdatesState()?.installCommitted === true;
+  const resumingTrip =
+    routeState.type === 'navigating' && (isResumingTrip(navigationSnapshot) || updateInstalling);
   const guidingRoute =
     routeState.type === 'navigating' && !resumingTrip ? routeState.route : undefined;
   const guidanceStep =
@@ -1058,6 +1068,11 @@ export function useMapController() {
     ) {
       return;
     }
+    // Android: hold update installs before the trip exists, or refuse while one is installing.
+    if (!beginTripForUpdates()) {
+      showNotice({ ...UPDATE_INSTALLING_NOTICE, tone: 'warning' });
+      return;
+    }
     cameraAlerts.reset();
     resetTrip();
     setPreviewDetent(undefined);
@@ -1218,6 +1233,7 @@ export function useMapController() {
     if (routeState.type !== 'navigating') return;
     cameraAlerts.reset();
     endTrip();
+    endTripForUpdates();
   };
 
   const handleFinishArrival = () => {
