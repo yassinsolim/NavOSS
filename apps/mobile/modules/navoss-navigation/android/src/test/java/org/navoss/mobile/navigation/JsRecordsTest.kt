@@ -92,7 +92,14 @@ class JsRecordsTest {
     val sources =
       modules
         .listFiles { dir -> dir.isDirectory && dir.name.startsWith("navoss-") }!!
-        .flatMap { module -> module.resolve("android/src/main").walkTopDown().filter { it.extension == "kt" || it.extension == "java" }.toList() }
+        // Every source set (main, test, debug, release, …), this guard's own file excepted.
+        .flatMap { module ->
+          module
+            .resolve("android/src")
+            .walkTopDown()
+            .filter { (it.extension == "kt" || it.extension == "java") && it.name != "JsRecordsTest.kt" }
+            .toList()
+        }
     assertTrue("no Android sources found under $modules", sources.isNotEmpty())
     val offenders =
       sources.filter { file ->
