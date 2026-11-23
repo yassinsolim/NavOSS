@@ -8,7 +8,10 @@ import * as Location from 'expo-location';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
-import { phoneIdleLocationWatchOptions } from '@/features/map/idle-camera-follow';
+import {
+  automaticLocationOptions,
+  phoneIdleLocationWatchOptions,
+} from '@/features/map/idle-camera-follow';
 import { ensureForegroundLocationPermission } from '@/features/map/map-location';
 import {
   type MapRegion,
@@ -248,7 +251,9 @@ export function useLocationWatches(
         if (!active()) return;
         const position =
           lastKnown ??
-          (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+          (await Location.getCurrentPositionAsync(
+            automaticLocationOptions(Location.Accuracy.Balanced),
+          ));
         if (!active()) return;
         onSample(routeOriginSampleFromLocation(position));
         onLocationState('visible');
@@ -262,14 +267,17 @@ export function useLocationWatches(
         // driver taps Center. iOS's lookup waits for a fix itself.
         if (!IS_ANDROID) return;
         let recovered = false;
-        void Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced }, (position) => {
-          if (!active() || recovered) return;
-          recovered = true;
-          recovery?.remove();
-          recovery = undefined;
-          onSample(routeOriginSampleFromLocation(position));
-          onLocationState('visible');
-        })
+        void Location.watchPositionAsync(
+          automaticLocationOptions(Location.Accuracy.Balanced),
+          (position) => {
+            if (!active() || recovered) return;
+            recovered = true;
+            recovery?.remove();
+            recovery = undefined;
+            onSample(routeOriginSampleFromLocation(position));
+            onLocationState('visible');
+          },
+        )
           .then((subscription) => {
             if (active() && !recovered) recovery = subscription;
             else subscription.remove();

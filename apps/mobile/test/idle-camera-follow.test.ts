@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   idleCameraCenterForFollow,
   idleCameraFollowIntentAfterRegionChange,
+  automaticLocationOptions,
   phoneIdleLocationWatchOptions,
   shouldFollowIdleCamera,
   shouldWatchPhoneIdleLocation,
@@ -55,6 +56,17 @@ describe('idle camera follow policy', () => {
     expect(phoneIdleLocationWatchOptions('high-accuracy')).toEqual({
       accuracy: 'high-accuracy',
       distanceInterval: 0,
+      mayShowUserSettingsDialog: false,
+    });
+  });
+
+  it('never asks to turn Location on from a request the driver did not make', () => {
+    // Android: with Location off, each automatic request opened Google's "turn on device
+    // location" dialog; dismissing it returned to the app, which asked again, without end.
+    // Only an explicit tap (Center, directions) may lead to the system settings.
+    expect(automaticLocationOptions('balanced')).toEqual({
+      accuracy: 'balanced',
+      mayShowUserSettingsDialog: false,
     });
   });
 
