@@ -24,7 +24,9 @@ export type UpdatePhase =
   | { kind: 'idle' }
   /** Verifying the file, then the system's install prompt. */
   | { kind: 'installing'; update: AvailableUpdate }
-  | { kind: 'needs-permission'; update: AvailableUpdate };
+  | { kind: 'needs-permission'; update: AvailableUpdate }
+  /** Downloaded while a trip was active; installs only when the driver taps Install after it. */
+  | { kind: 'ready'; update: AvailableUpdate };
 
 export interface AppUpdatesState {
   installed: InstalledVersion | undefined;
@@ -53,6 +55,7 @@ export interface UpdaterNative {
   downloadedBytes(versionCode: number): number;
   getInstalledVersion(): InstalledVersion;
   openInstallPermissionSettings(): void;
+  setInstallHold(held: boolean): void;
   verifyAndInstall(versionCode: number, sha256: string): Promise<void>;
 }
 
@@ -87,6 +90,12 @@ export interface AppUpdates {
   /** The app came back to the foreground: continue once installs from NavOSS are allowed. */
   resume: () => void;
   setAutoCheck: (value: boolean) => Promise<void>;
+  /**
+   * The live trip state. While a trip is active nothing is installed and the system's install
+   * prompt never opens: a finished download waits as `ready` until the driver taps Install after
+   * the trip. The native installer is held too, for an install already on its way.
+   */
+  setTripActive: (active: boolean) => void;
   /** Whether the notice over the map shows now. */
   isNoticeVisible: (state: AppUpdatesState, tripActive: boolean) => boolean;
   store: ValueStore<AppUpdatesState>;
@@ -102,6 +111,7 @@ export function createAppUpdates(dependencies: AppUpdatesDependencies): AppUpdat
     ready: false,
   });
   let checking = false;
+  let tripActive = false;
 
   const update = (patch: Partial<AppUpdatesState>) => {
     store.set({ ...store.get(), ...patch });
@@ -135,6 +145,10 @@ export function createAppUpdates(dependencies: AppUpdatesDependencies): AppUpdat
     const { phase } = store.get();
     if (phase.kind !== 'installing') return;
     if (status === 'pending-user-action' || status === 'success') return;
+    if (status === 'deferred') {
+      setPhase({ kind: 'ready', update: phase.update });
+      return;
+    }
     if (status === 'cancelled') {
       setPhase({ kind: 'available', update: phase.update });
       return;
@@ -182,7 +196,8 @@ export function createAppUpdates(dependencies: AppUpdatesDependencies): AppUpdat
       // permission request for the same version stays, but retries the release as published now.
       if (!busy()) {
         setPhase(
-          sameVersion && (phase.kind === 'failed' || phase.kind === 'needs-permission')
+          sameVersion &&
+            (phase.kind === 'failed' || phase.kind === 'needs-permission' || phase.kind === 'ready')
             ? { ...phase, update: found }
             : { kind: 'available', update: found },
         );
@@ -217,11 +232,21 @@ export function createAppUpdates(dependencies: AppUpdatesDependencies): AppUpdat
       );
       return;
     }
+    // Read the trip state now, when the download has finished: it may have started meanwhile.
+    if (tripActive) {
+      setPhase({ kind: 'ready', update: target });
+      return;
+    }
     setPhase({ kind: 'installing', update: target });
     try {
       await native.verifyAndInstall(target.versionCode, target.sha256);
     } catch (error) {
-      setPhase({ kind: 'failed', message: updateFailureMessage(errorCode(error)), update: target });
+      const code = errorCode(error);
+      setPhase(
+        code === 'deferred'
+          ? { kind: 'ready', update: target }
+          : { kind: 'failed', message: updateFailureMessage(code), update: target },
+      );
     }
   }
 
@@ -276,6 +301,11 @@ export function createAppUpdates(dependencies: AppUpdatesDependencies): AppUpdat
       }
     },
     setAutoCheck: (value) => savePreferences({ autoCheck: value }),
+    setTripActive: (active) => {
+      if (active === tripActive) return;
+      tripActive = active;
+      native.setInstallHold(active);
+    },
     isNoticeVisible: (state, tripActive) => {
       if (tripActive) return false;
       const { phase } = state;

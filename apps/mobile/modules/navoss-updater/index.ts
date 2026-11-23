@@ -15,6 +15,8 @@ export type InstallStatus =
   | 'blocked'
   | 'cancelled'
   | 'conflict'
+  /** A trip was active when the prompt would have opened; the session was abandoned. */
+  | 'deferred'
   | 'failed'
   | 'incompatible'
   | 'invalid'
@@ -37,9 +39,12 @@ declare class NavOSSUpdaterModule extends NativeModule<NavOSSUpdaterEvents> {
   downloadedBytes(versionCode: number): number;
   getInstalledVersion(): InstalledVersion;
   openInstallPermissionSettings(): void;
+  /** While held (a trip is active), no install session is committed and no prompt opens. */
+  setInstallHold(held: boolean): void;
   /**
    * Rejects with a code: `digest-mismatch`, `not-an-apk`, `wrong-package`, `wrong-signer`,
-   * `not-newer`, `missing`, `failed`. A rejected file has been deleted.
+   * `not-newer`, `missing`, `failed`; a rejected file has been deleted. `deferred` means the
+   * install was held for a trip and the verified file is kept.
    */
   verifyAndInstall(versionCode: number, sha256: string): Promise<void>;
 }

@@ -139,6 +139,8 @@ class NavOSSUpdaterModule : Module() {
 
     Function("cancelDownload") { cancelled.set(true) }
 
+    Function("setInstallHold") { held: Boolean -> InstallResultReceiver.installHeld = held }
+
     /**
      * Verifies the downloaded APK and, when it passes, commits it to the installer. A rejected
      * file is deleted. Resolves once the session is committed; the outcome arrives as
@@ -162,6 +164,11 @@ class NavOSSUpdaterModule : Module() {
             if (rejection != null) {
               file.delete()
               promise.reject(UpdaterException(rejection.code))
+              return@Thread
+            }
+            if (InstallResultReceiver.installHeld) {
+              // A trip started while the file was being verified; keep it for later.
+              promise.reject(UpdaterException("deferred"))
               return@Thread
             }
             UpdateInstaller(context).install(file, sha256)

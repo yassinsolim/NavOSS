@@ -100,6 +100,12 @@ it was; only a manual check says what happened.
 When a newer published `android-v` release with an APK exists, a card over the map says
 "NavOSS <version> is available" with the download size, **Install** and **Later** (which hides it
 until the next day, or until a newer version). It never appears during a trip.
+Nothing installs during a trip either: a download that finishes while a trip is active (including
+one continued on return from the install-permission setting) is kept, and the card comes back after
+the trip as "NavOSS <version> is ready to install". The system's install prompt opens only after
+the driver taps **Install** then. If a trip starts while the file is being verified, the app does
+not commit the install, and an install prompt Android asks for during a trip is abandoned instead
+of opened.
 
 **Install** downloads the APK into the app's private cache, with progress and **Cancel download**,
 on any network. A download that stops (no connection, the app closed, the phone restarted)

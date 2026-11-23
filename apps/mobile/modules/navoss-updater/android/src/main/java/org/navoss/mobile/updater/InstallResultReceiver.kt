@@ -14,6 +14,14 @@ class InstallResultReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
     if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+      if (installHeld) {
+        // A trip started after the install began: never open the prompt over guidance. The
+        // verified file stays; the driver installs it from the notice after the trip.
+        val session = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
+        if (session >= 0) runCatching { context.packageManager.packageInstaller.abandonSession(session) }
+        listener?.invoke("deferred")
+        return
+      }
       val confirm: Intent? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
           intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
@@ -38,6 +46,9 @@ class InstallResultReceiver : BroadcastReceiver() {
 
   companion object {
     const val ACTION = "org.navoss.mobile.updater.INSTALL_STATUS"
+
+    /** True while a trip is active (set from JavaScript); no install prompt opens then. */
+    @Volatile var installHeld = false
 
     /** Set by the module while JavaScript is running. */
     @Volatile var listener: ((String) -> Unit)? = null

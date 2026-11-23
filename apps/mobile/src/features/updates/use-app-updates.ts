@@ -55,13 +55,14 @@ export function useAppUpdatesState(): AppUpdatesState | undefined {
 }
 
 /**
- * Starts the updater and runs the once-a-day check on launch and whenever the app returns to the
- * foreground, except during a trip.
+ * Starts the updater, tells it whether a trip is active (nothing installs during one), and runs the
+ * once-a-day check on launch and whenever the app returns to the foreground, except during a trip.
  */
 export function useAutomaticUpdateChecks(tripActive: boolean): void {
   useEffect(() => {
     if (appUpdates === undefined) return;
     const updater = appUpdates;
+    updater.setTripActive(tripActive);
     void updater.start().then(() => updater.checkAutomatically(tripActive));
     const subscription = AppState.addEventListener('change', (next) => {
       if (next !== 'active') return;

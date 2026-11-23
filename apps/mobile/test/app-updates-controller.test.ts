@@ -28,12 +28,15 @@ const RELEASES = [
 function harness({
   allowed = true,
   downloadError,
+  holdDownload = false,
   installError,
   response = { body: RELEASES as unknown, status: 200 },
   stored = null as string | null,
 }: {
   allowed?: boolean;
   downloadError?: string;
+  /** The first download resolves only when the test calls `finishDownload`. */
+  holdDownload?: boolean;
   installError?: string;
   response?: { body: unknown; status: number } | 'offline';
   stored?: string | null;
@@ -44,6 +47,7 @@ function harness({
   const calls: string[] = [];
   const listeners: Record<string, (payload: never) => void> = {};
   let saved = stored;
+  let finishDownload: () => void = () => undefined;
   const native = {
     addListener: (event: string, listener: (payload: never) => void) => {
       listeners[event] = listener;
@@ -54,6 +58,12 @@ function harness({
     cleanDownloads: (keep: number) => calls.push(`clean:${String(keep)}`),
     download: (_url: string, size: number, versionCode: number) => {
       calls.push(`download:${String(versionCode)}:${String(size)}`);
+      if (holdDownload) {
+        holdDownload = false;
+        return new Promise<void>((resolve) => {
+          finishDownload = resolve;
+        });
+      }
       return downloadError === undefined
         ? Promise.resolve()
         : Promise.reject(Object.assign(new Error('x'), { code: downloadError }));
@@ -66,6 +76,7 @@ function harness({
       versionName: '0.1.0',
     }),
     openInstallPermissionSettings: () => calls.push('settings'),
+    setInstallHold: (held: boolean) => calls.push(`hold:${String(held)}`),
     verifyAndInstall: (versionCode: number, sha256: string) => {
       calls.push(`install:${String(versionCode)}:${sha256.slice(0, 4)}`);
       return installError === undefined
@@ -101,6 +112,13 @@ function harness({
       now += ms;
     },
     calls,
+    finishDownload: async () => {
+      finishDownload();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    },
+    grant: () => {
+      allowed = true;
+    },
     republish: (body: unknown) => {
       response = { body, status: 200 };
     },
@@ -235,5 +253,59 @@ describe('app updates', () => {
     const { phase } = h.updater.store.get();
     expect(phase.kind).toBe('failed');
     expect('update' in phase && phase.update.sha256).toBe('CD'.repeat(32));
+  });
+
+  it('keeps a download that finishes during a trip and offers it only after the trip', async () => {
+    const h = harness({ holdDownload: true });
+    await h.updater.start();
+    await h.updater.checkAutomatically(false);
+    const installing = h.updater.install();
+    expect(h.updater.store.get().phase.kind).toBe('downloading');
+    // A trip starts while the download runs; the native installer is held at once.
+    h.updater.setTripActive(true);
+    expect(h.calls).toContain('hold:true');
+    await h.finishDownload();
+    await installing;
+    expect(h.calls.some((call) => call.startsWith('install:'))).toBe(false);
+    const state = h.updater.store.get();
+    expect(state.phase.kind).toBe('ready');
+    expect(h.updater.isNoticeVisible(state, true)).toBe(false);
+    // After End the notice comes back; nothing opens the system prompt on its own.
+    h.updater.setTripActive(false);
+    expect(h.calls).toContain('hold:false');
+    expect(h.updater.isNoticeVisible(h.updater.store.get(), false)).toBe(true);
+    expect(h.calls.some((call) => call.startsWith('install:'))).toBe(false);
+    await h.updater.install();
+    expect(h.calls).toContain('install:102:ABAB');
+  });
+
+  it('does not install on return from the permission screen during a trip', async () => {
+    const h = harness({ allowed: false });
+    await h.updater.start();
+    await h.updater.checkAutomatically(false);
+    await h.updater.install();
+    expect(h.updater.store.get().phase.kind).toBe('needs-permission');
+    h.updater.setTripActive(true);
+    h.grant();
+    h.updater.resume();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(h.calls).toContain('download:102:40000000');
+    expect(h.calls.some((call) => call.startsWith('install:'))).toBe(false);
+    expect(h.updater.store.get().phase.kind).toBe('ready');
+  });
+
+  it('returns to "ready" when the installer defers its prompt because a trip started', async () => {
+    const h = harness();
+    await h.updater.start();
+    await h.updater.checkAutomatically(false);
+    await h.updater.install();
+    expect(h.updater.store.get().phase.kind).toBe('installing');
+    h.emitInstall('deferred');
+    expect(h.updater.store.get().phase.kind).toBe('ready');
+    const rejected = harness({ installError: 'deferred' });
+    await rejected.updater.start();
+    await rejected.updater.checkAutomatically(false);
+    await rejected.updater.install();
+    expect(rejected.updater.store.get().phase.kind).toBe('ready');
   });
 });

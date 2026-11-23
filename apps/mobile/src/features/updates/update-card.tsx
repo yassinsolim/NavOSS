@@ -53,6 +53,23 @@ export function UpdateCard({
         </>
       );
       break;
+    case 'ready':
+      title = `NavOSS ${update.versionName} is ready to install`;
+      message = 'It downloaded during your trip. NavOSS closes while it installs.';
+      actions = (
+        <>
+          {later}
+          <Button
+            accessibilityLabel={`Install NavOSS ${update.versionName}`}
+            label="Install"
+            onPress={() => {
+              void updater.install();
+            }}
+            size="sm"
+          />
+        </>
+      );
+      break;
     case 'downloading':
       title = `Downloading NavOSS ${update.versionName}`;
       message = downloadProgressLabel(phase.received, phase.total);
