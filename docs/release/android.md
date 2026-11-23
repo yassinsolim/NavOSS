@@ -205,7 +205,7 @@ NavOSS reopens.
 **Install** downloads the APK into the app's private cache, with progress and **Cancel download**,
 on any network. A download that stops (no connection, the app closed, the phone restarted)
 continues where it stopped on the next **Install**. An APK announced above 250 MB (the release APK
-is about 48 MB) is never offered or downloaded, and a download stops as soon as the server sends or
+is about 114 MB) is never offered or downloaded, and a download stops as soon as the server sends or
 announces more than the release declared. Before the first byte the app checks that the phone has
 room for the rest of the file plus the installer's own copy of it; when it does not, or when
 writing the file fails, the card says storage is full (not that the connection dropped) and the
@@ -260,21 +260,27 @@ the release workflow refuses to build with it set.
 
 ## Size
 
-Measured on a local release-signed build of 2026-11-22 (arm64-v8a, the only ABI). Native libraries
-are stored uncompressed so Android can map them directly.
+Measured on the release APK of draft `android-v0.1.0-106` (2026-11-23; arm64-v8a, the only ABI).
+Native libraries are stored uncompressed so Android can map them directly. About 63 MB is the
+Swift runtime and Foundation that the shared navigation core needs, 40 MB of it Foundation's ICU
+data; before the core was packaged the APK was 48 MB.
 
-| Item                                                              | Size    |
-| ----------------------------------------------------------------- | ------- |
-| APK (arm64-v8a, R8 + resource shrinking)                          | 48.2 MB |
-| JavaScript bundle (Hermes bytecode)                               | 5.5 MB  |
-| Native libraries, `lib/arm64-v8a` (24 files, stored uncompressed) | 32.5 MB |
-| of which `libappmodules.so`                                       | 1.7 MB  |
-| of which `libc++_shared.so`                                       | 1.3 MB  |
-| of which `libexpo-modules-core.so`                                | 1.5 MB  |
-| of which `libhermesvm.so`                                         | 2.5 MB  |
-| of which `libmaplibre.so`                                         | 10.5 MB |
-| of which `libreact_codegen_rnscreens.so`                          | 1.1 MB  |
-| of which `libreactnative.so`                                      | 7.0 MB  |
-| of which `libreanimated.so`                                       | 1.5 MB  |
-| of which `libworklets.so`                                         | 1.1 MB  |
-| Other ABIs                                                        | none    |
+| Item                                                              | Size     |
+| ----------------------------------------------------------------- | -------- |
+| APK (arm64-v8a, R8 + resource shrinking)                          | 114.1 MB |
+| JavaScript bundle (Hermes bytecode)                               | 5.6 MB   |
+| Native libraries, `lib/arm64-v8a` (41 files, stored uncompressed) | 98.2 MB  |
+| of which `lib_FoundationICU.so`                                   | 40.0 MB  |
+| of which `libmaplibre.so`                                         | 10.5 MB  |
+| of which `libreactnative.so`                                      | 7.0 MB   |
+| of which `libswiftCore.so`                                        | 6.9 MB   |
+| of which `libFoundationEssentials.so`                             | 6.3 MB   |
+| of which `libFoundation.so`                                       | 6.1 MB   |
+| of which `libhermesvm.so`                                         | 2.5 MB   |
+| of which `libappmodules.so`                                       | 1.7 MB   |
+| of which `libFoundationInternationalization.so`                   | 1.7 MB   |
+| of which `libreanimated.so`                                       | 1.5 MB   |
+| of which `libexpo-modules-core.so`                                | 1.5 MB   |
+| of which `libc++_shared.so`                                       | 1.4 MB   |
+| of which `libNavOSSCore.so`                                       | 1.3 MB   |
+| Other ABIs                                                        | none     |

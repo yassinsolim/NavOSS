@@ -237,6 +237,20 @@ check off with **Check for updates automatically** under About and privacy, App 
 now** still works when you ask. The iOS app has no update check; TestFlight and the App Store
 handle its updates.
 
+### Android permissions
+
+The Android app (in testing, not yet published) declares these permissions:
+
+| Permission                                                                                                 | Used for                                                                                                                                                                                                                |
+| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Precise and approximate location (`ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`)                        | Your position on the map, the route origin and guidance, only while the app is in use or a trip is running. Asked when first needed; the app never asks for background ("all the time") location.                       |
+| Foreground service (`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`, `FOREGROUND_SERVICE_SPECIAL_USE`) | Keeps guidance running with the screen off or another app in front, always with a visible notification. The location type is used on a real trip; a simulated drive reads no location and runs as the special-use type. |
+| Notifications (`POST_NOTIFICATIONS`)                                                                       | The trip notification. Declining it does not stop guidance.                                                                                                                                                             |
+| Network (`INTERNET`, `ACCESS_NETWORK_STATE`)                                                               | Requests to the NavOSS service, map tiles and the update check, and knowing whether there is a connection.                                                                                                              |
+| Wi-Fi state (`ACCESS_WIFI_STATE`)                                                                          | Declared by the MapLibre map library that draws the map. NavOSS's own code does not use it and does not read Wi-Fi network names or scan for networks.                                                                  |
+| Install packages (`REQUEST_INSTALL_PACKAGES`)                                                              | Only for an update you choose to install (see App update checks).                                                                                                                                                       |
+| Vibration (`VIBRATE`)                                                                                      | Touch feedback.                                                                                                                                                                                                         |
+
 ### Sharing and external actions
 
 Place sharing and Share ETA use the operating system's share sheet. The share text is created on the phone. A place share contains the public place name, its displayed address or category, and an OpenStreetMap link. An ETA share contains the chosen destination name, estimated arrival time, remaining time, and remaining distance. It does not contain the current coordinate, route geometry, a live-tracking link, or automatic updates.
