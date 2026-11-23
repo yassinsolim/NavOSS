@@ -45,7 +45,13 @@ Locally, `NAVOSS_ANDROID_VERSION_CODE` sets the version code; without it the bui
    `corepack pnpm --filter @navoss/mobile android:release`, deletes the keystore, scans the build
    log for key material, and verifies the APK: exactly the pinned signing certificate, package
    `org.navoss.mobile` with the expected version, not debuggable, no cleartext traffic, arm64-v8a
-   only, Hermes bytecode. The `release` job (the only one with `contents: write`) creates the
+   only, Hermes bytecode. Before Gradle it builds the Swift navigation core (or restores it from
+   the cache `main`'s CI made) with `.github/actions/build-android-core` and verifies the
+   libraries; after the build it checks that the signed APK carries every one of them byte for
+   byte (including NDK r30's `libc++_shared.so`) and that R8 kept the classes and members JNI
+   reaches by name. Any failed check stops the release: an APK without a working core is never
+   published (see [android-core.md](../architecture/android-core.md#in-ci-and-releases)). The
+   release notes name the core's contract version and the SHA-256 of `libNavOSSCore.so`. The `release` job (the only one with `contents: write`) creates the
    draft with three assets: `navoss-<versionName>-<versionCode>.apk`, its `.sha256`, and
    `update.json` (`versionCode`, `versionName`, `minSdk`, `apk`, `sha256`, `size`, `notes`). It
    then checks that the SHA-256 GitHub reports for the APK equals the build's own.
@@ -168,8 +174,11 @@ NAVOSS_ANDROID_KEYSTORE_PASSWORD="$(security find-generic-password -s navoss-and
 # apps/mobile/android/app/build/outputs/apk/release/app-release.apk
 ```
 
-A release build without all three `NAVOSS_ANDROID_*` signing variables fails with an explicit
-error; it never falls back to the debug key. R8 and resource shrinking are on.
+Build the navigation core first (`apps/mobile/scripts/build-android-core.sh`, see
+[android-core.md](../architecture/android-core.md#build-and-packaging)); without it the APK reports
+guidance unavailable. A release build without all three `NAVOSS_ANDROID_*` signing variables fails with an explicit
+error; it never falls back to the debug key. R8 and resource shrinking are on. Check the result
+with `apps/mobile/modules/navoss-navigation/android-core/scripts/verify-apk-core.sh` and the APK path.
 
 ### Testing the updater against a local feed
 
