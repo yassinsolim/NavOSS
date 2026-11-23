@@ -41,7 +41,14 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = .black
+    // The letterbox around the scaled CarPlay map is its own view: when a Debug build loads its JS
+    // bundle from Metro, expo-system-ui's module (`OnCreate`) paints the window root view's
+    // background white or black by the system appearance; `--carplay-only` runs (no Metro) never
+    // load it.
+    let letterbox = UIView(frame: view.bounds)
+    letterbox.backgroundColor = .black
+    letterbox.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    view.addSubview(letterbox)
     mapViewController.applyAppearance(isDarkAppearance ? .dark : .light)
     // Offline scenarios draw the installed offline region's local style (needs a region
     // installed on the simulator; see docs/architecture/offline.md).
@@ -1902,6 +1909,15 @@ final class NavOSSCarPlayVisualHarnessViewController: UIViewController {
     }
     view.accessibilityLabel = "CarPlay visual \(scenario) ready"
     view.isAccessibilityElement = true
+    // Where the CarPlay map sits in the screenshot, in pixels, so the validator measures positions
+    // against the map itself rather than guessing it from the letterbox around it.
+    let mapFrame = map.view.convert(map.view.bounds, to: nil)
+    let pixelsPerPoint = view.window?.screen.scale ?? traitCollection.displayScale
+    let frameJSON = [mapFrame.minX, mapFrame.minY, mapFrame.width, mapFrame.height]
+      .map { String(Int(($0 * pixelsPerPoint).rounded())) }
+    print(
+      "NAVOSS_CARPLAY_VISUAL_MAP_FRAME {\"x\":\(frameJSON[0]),\"y\":\(frameJSON[1]),"
+        + "\"width\":\(frameJSON[2]),\"height\":\(frameJSON[3])}")
     // The validator redirects this to a file, where stdout is block buffered, so a few bytes would
     // otherwise sit unwritten until the process exits.
     print("NAVOSS_CARPLAY_VISUAL_READY \(scenario)")
