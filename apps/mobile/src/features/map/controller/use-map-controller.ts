@@ -1082,6 +1082,20 @@ export function useMapController() {
 
   const selectedRoute = selectedRouteOf(routeState);
 
+  // A rotation or window resize keeps the preview but not its framing: frame the selected route
+  // again for the new window. The iPhone build is portrait-only, so in practice this is Android.
+  const refitPreviewForWindow = useEffectEvent(() => {
+    if (routeState.type !== 'preview' || selectedRoute === undefined) return;
+    fitRoute(selectedRoute, routeState.previewOrigin !== undefined);
+  });
+  const previewWindowRef = useRef({ height: windowHeight, width: windowWidth });
+  useEffect(() => {
+    const previous = previewWindowRef.current;
+    if (previous.height === windowHeight && previous.width === windowWidth) return;
+    previewWindowRef.current = { height: windowHeight, width: windowWidth };
+    refitPreviewForWindow();
+  }, [windowHeight, windowWidth]);
+
   const handleStartNavigation = () => {
     if (
       routeState.type !== 'preview' ||
