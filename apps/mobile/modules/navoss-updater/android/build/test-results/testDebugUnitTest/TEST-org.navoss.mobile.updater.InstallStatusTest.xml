@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="org.navoss.mobile.updater.InstallStatusTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-23T03:45:35.332Z" hostname="MBP-0569.lan" time="0.0">
+  <properties/>
+  <testcase name="mapsEveryInstallerOutcomeToACode" classname="org.navoss.mobile.updater.InstallStatusTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

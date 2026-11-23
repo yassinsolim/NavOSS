@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="org.navoss.mobile.updater.ApkDownloaderTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-23T03:45:35.286Z" hostname="MBP-0569.lan" time="0.045">
+  <properties/>
+  <testcase name="downloadsTheWholeFileAndReportsProgress" classname="org.navoss.mobile.updater.ApkDownloaderTest" time="0.02"/>
+  <testcase name="keepsThePartialFileWhenTheConnectionDropsAndFinishesLater" classname="org.navoss.mobile.updater.ApkDownloaderTest" time="0.006"/>
+  <testcase name="startsAgainWhenTheServerIgnoresTheRange" classname="org.navoss.mobile.updater.ApkDownloaderTest" time="0.007"/>
+  <testcase name="refusesAFileLargerThanTheReleaseAnnounced" classname="org.navoss.mobile.updater.ApkDownloaderTest" time="0.001"/>
+  <testcase name="resumesAPartialDownloadWithARangeRequest" classname="org.navoss.mobile.updater.ApkDownloaderTest" time="0.005"/>
+  <testcase name="cancellingDeletesThePartialFile" classname="org.navoss.mobile.updater.ApkDownloaderTest" time="0.001"/>
+  <testcase name="startsAgainWhenTheServerRefusesTheRange" classname="org.navoss.mobile.updater.ApkDownloaderTest" time="0.004"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

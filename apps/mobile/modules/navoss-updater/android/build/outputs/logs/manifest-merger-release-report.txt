@@ -1,0 +1,28 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/ysoli/Projects/navoss-wt/android-release/apps/mobile/modules/navoss-updater/android/src/main/AndroidManifest.xml:1:1-10:12
+INJECTED from /Users/ysoli/Projects/navoss-wt/android-release/apps/mobile/modules/navoss-updater/android/src/main/AndroidManifest.xml:1:1-10:12
+	package
+		INJECTED from /Users/ysoli/Projects/navoss-wt/android-release/apps/mobile/modules/navoss-updater/android/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /Users/ysoli/Projects/navoss-wt/android-release/apps/mobile/modules/navoss-updater/android/src/main/AndroidManifest.xml:1:11-69
+uses-permission#android.permission.REQUEST_INSTALL_PACKAGES
+ADDED from /Users/ysoli/Projects/navoss-wt/android-release/apps/mobile/modules/navoss-updater/android/src/main/AndroidManifest.xml:3:3-81
+	android:name
+		ADDED from /Users/ysoli/Projects/navoss-wt/android-release/apps/mobile/modules/navoss-updater/android/src/main/AndroidManifest.xml:3:20-78
+application
+ADDED from /Users/ysoli/Projects/navoss-wt/android-release/apps/mobile/modules/navoss-updater/android/src/main/AndroidManifest.xml:5:3-9:17
+receiver#org.navoss.mobile.updater.InstallResultReceiver
+ADDED from /Users/ysoli/Projects/navoss-wt/android-release/apps/mobile/modules/navoss-updater/android/src/main/AndroidManifest.xml:6:5-8:34
+	android:exported
+		ADDED from /Users/ysoli/Projects/navoss-wt/android-release/apps/mobile/modules/navoss-updater/android/src/main/AndroidManifest.xml:8:7-31
+	android:name
+		ADDED from /Users/ysoli/Projects/navoss-wt/android-release/apps/mobile/modules/navoss-updater/android/src/main/AndroidManifest.xml:7:7-69
+uses-sdk
+INJECTED from /Users/ysoli/Projects/navoss-wt/android-release/apps/mobile/modules/navoss-updater/android/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /Users/ysoli/Projects/navoss-wt/android-release/apps/mobile/modules/navoss-updater/android/src/main/AndroidManifest.xml
+INJECTED from /Users/ysoli/Projects/navoss-wt/android-release/apps/mobile/modules/navoss-updater/android/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /Users/ysoli/Projects/navoss-wt/android-release/apps/mobile/modules/navoss-updater/android/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /Users/ysoli/Projects/navoss-wt/android-release/apps/mobile/modules/navoss-updater/android/src/main/AndroidManifest.xml
