@@ -32,3 +32,17 @@ export function createAutomaticLocationPermission(
       return requestPermission();
     });
 }
+
+/**
+ * The first-fix effect's permission request. Android prompts once per app session
+ * (`createAutomaticLocationPermission`); iOS keeps asking whenever it may, so a one-time grant
+ * that expired while the app stayed open is asked for again, as before Android support.
+ */
+export function mapLocationPermissionRequest(
+  isAndroid: boolean,
+  getPermission: () => Promise<ForegroundPermission>,
+  requestPermission: () => Promise<ForegroundPermission>,
+): () => Promise<boolean> {
+  if (isAndroid) return createAutomaticLocationPermission(getPermission, requestPermission);
+  return () => ensureForegroundLocationPermission(getPermission, requestPermission);
+}

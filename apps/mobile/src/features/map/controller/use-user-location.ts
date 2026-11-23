@@ -13,8 +13,8 @@ import {
   phoneIdleLocationWatchOptions,
 } from '@/features/map/idle-camera-follow';
 import {
-  createAutomaticLocationPermission,
   ensureForegroundLocationPermission,
+  mapLocationPermissionRequest,
 } from '@/features/map/map-location';
 import {
   type MapRegion,
@@ -35,8 +35,9 @@ import { RouteOriginUnavailableError } from '@/features/navigation/route-ui-stat
 import { createValueStore, type ValueStore } from '@/lib/value-store';
 import { IS_ANDROID } from '@/lib/device-copy';
 
-/** The first-fix effect's permission request: prompts once per app session (see the helper). */
-const automaticLocationPermission = createAutomaticLocationPermission(
+/** The first-fix effect's permission request: once per session on Android (see the helper). */
+const automaticLocationPermission = mapLocationPermissionRequest(
+  IS_ANDROID,
   Location.getForegroundPermissionsAsync,
   Location.requestForegroundPermissionsAsync,
 );

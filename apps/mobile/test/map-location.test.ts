@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createAutomaticLocationPermission,
   ensureForegroundLocationPermission,
+  mapLocationPermissionRequest,
 } from '../src/features/map/map-location.js';
 
 describe('foreground map location permission', () => {
@@ -66,6 +67,33 @@ describe('automatic map location permission', () => {
 
     expect(await automatic()).toBe(false);
     expect(await automatic()).toBe(true);
+    expect(requestPermission).toHaveBeenCalledOnce();
+  });
+});
+
+describe('the map first-fix permission request per platform', () => {
+  const denied = () => Promise.resolve({ canAskAgain: true, granted: false });
+
+  it('asks every time on iOS, as before Android support (an expired one-time grant)', async () => {
+    const requestPermission = vi.fn(denied);
+    const automatic = mapLocationPermissionRequest(false, denied, requestPermission);
+
+    expect(await automatic()).toBe(false);
+    expect(await automatic()).toBe(false);
+    expect(requestPermission).toHaveBeenCalledTimes(2);
+    // Parity with the helper iOS used before: the same calls for the same answers.
+    const direct = vi.fn(denied);
+    await ensureForegroundLocationPermission(denied, direct);
+    await ensureForegroundLocationPermission(denied, direct);
+    expect(direct).toHaveBeenCalledTimes(requestPermission.mock.calls.length);
+  });
+
+  it('asks once per session on Android', async () => {
+    const requestPermission = vi.fn(denied);
+    const automatic = mapLocationPermissionRequest(true, denied, requestPermission);
+
+    await automatic();
+    await automatic();
     expect(requestPermission).toHaveBeenCalledOnce();
   });
 });
