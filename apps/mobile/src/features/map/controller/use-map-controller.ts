@@ -43,6 +43,12 @@ import {
 import { useCommunity } from '@/features/community/use-community';
 import { mapBackAction } from '@/features/map/back-navigation';
 import type { AppTab } from '@/features/map/app-tab-bar';
+import {
+  dismissNotice,
+  type NoticeSlots,
+  showNoticeInSlots,
+  visibleNotice,
+} from '@/features/map/controller/map-notice-slots';
 import { useMapPreferences, useMapStyle } from '@/features/map/controller/use-map-preferences';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import { useNavigationSession } from '@/features/map/controller/use-navigation-session';
@@ -312,7 +318,7 @@ export function useMapController() {
   // The visible area itself, as of the last time the camera settled: what the traffic caption
   // describes. Fetches use the snapped `viewBox`, which reaches up to a grid cell beyond it.
   const [visibleBox, setVisibleBox] = useState<GeographicBox>();
-  const [notice, setNotice] = useState<MapNotice>();
+  const [noticeSlots, setNoticeSlots] = useState<NoticeSlots<MapNotice>>({});
   const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
   const [googlePlaceRatingAvailable] = useState(() => isGooglePlaceRatingAvailable());
   const [turnByTurnAvailable] = useState(() => hasNativeTurnByTurnGuidance());
@@ -332,13 +338,16 @@ export function useMapController() {
   const { preferences: mapPreferences, updatePreferences } = useMapPreferences();
   const { darkMap, mapStyle, offline: mapStyleOffline } = useMapStyle(mapPreferences, colorScheme);
 
+  // A notice that stays until dismissed keeps its own slot: a later transient notice cannot
+  // replace it (see `map-notice-slots`).
   const showNotice = (next: Omit<MapNotice, 'id'>) => {
-    clearTimeout(noticeTimeoutRef.current);
     noticeIdRef.current += 1;
-    setNotice({ ...next, id: noticeIdRef.current });
+    const id = noticeIdRef.current;
+    setNoticeSlots((slots) => showNoticeInSlots(slots, { ...next, id }));
     if (next.untilDismissed === true) return;
+    clearTimeout(noticeTimeoutRef.current);
     noticeTimeoutRef.current = setTimeout(() => {
-      setNotice(undefined);
+      setNoticeSlots((slots) => dismissNotice(slots, id));
     }, NOTICE_VISIBLE_MS);
   };
 
@@ -1861,7 +1870,7 @@ export function useMapController() {
       visible: isOfflineMapsVisible,
     },
     metrics,
-    notice,
+    notice: visibleNotice(noticeSlots),
     onApplyRouteStops: handleApplyRouteStops,
     onBeginShortcutSetup: beginShortcutSetup,
     onCancelRoute: handleCancelRoute,
@@ -1882,8 +1891,10 @@ export function useMapController() {
     },
     onClosePlace: handleClosePlace,
     onDismissNotice: () => {
-      clearTimeout(noticeTimeoutRef.current);
-      setNotice(undefined);
+      setNoticeSlots((slots) => {
+        const visible = visibleNotice(slots);
+        return visible === undefined ? slots : dismissNotice(slots, visible.id);
+      });
     },
     onEndNavigation: handleEndNavigation,
     onFindParking: handleFindParking,
