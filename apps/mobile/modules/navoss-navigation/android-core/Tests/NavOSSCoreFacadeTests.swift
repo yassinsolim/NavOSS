@@ -419,7 +419,7 @@ final class NavOSSCoreFacadeTests: XCTestCase {
         cancelled.fulfill()
       }
       wait(for: [cancelled], timeout: 30)
-      XCTAssertEqual(host.cancelledRequests, [config.id])
+      XCTAssertEqual(host.waitForCancelled(1), [config.id])
       return
     }
     XCTFail("the trace never left the route")
@@ -480,7 +480,7 @@ final class NavOSSCoreFacadeTests: XCTestCase {
     XCTAssertEqual(code { try engine.updateLocation(fix) }, "no-active-trip")
     XCTAssertEqual(code { try engine.setRoute("[]") }, "invalid-json")
     XCTAssertEqual(code { try engine.setRoute("{}") }, "invalid-route")
-    XCTAssertEqual(code { try engine.setRoute(#"{"speedLimitsKph":[50.5]}"#) }, "invalid-json")
+    XCTAssertEqual(code { try engine.setRoute(#"{"speedLimitsKph":50}"#) }, "invalid-json")
     XCTAssertEqual(code { try engine.setRoute(#"{"id":7}"#) }, "invalid-json")
     XCTAssertEqual(code { try engine.setRerouteMode("sometimes") }, "invalid-argument")
     _ = try engine.setRoute(try calgaryTripJSON())
@@ -500,6 +500,415 @@ final class NavOSSCoreFacadeTests: XCTestCase {
     host.events.removeAll()
     _ = engine.clearRoute()
     XCTAssertEqual(host.events, [])
+  }
+}
+
+// MARK: - Review findings (PR #159)
+
+/// Interleavings are forced through hooks (the host's callbacks, `willPublish`,
+/// `closeWillWait`), never by sleeping: a wait with a deadline only ends a failing run.
+final class NavOSSCoreBoundaryRaceTests: XCTestCase {
+  private func makeEngine(_ host: RecordingCoreHost) throws -> NavOSSCoreEngine {
+    try NavOSSCoreEngine(configJSON: #"{"apiBaseUrl":"https://navoss.test"}"#, host: host)
+  }
+
+  private func fixes() throws -> [[String: Any]] {
+    let trace = try bundled("Fixtures", "calgary-deerfoot-glenmore.trace.json")
+    let object = try JSONSerialization.jsonObject(with: Data(trace.utf8)) as? [String: Any]
+    return try XCTUnwrap(object?["fixes"] as? [[String: Any]])
+  }
+
+  private func json(_ object: Any) throws -> String {
+    String(decoding: try JSONSerialization.data(withJSONObject: object), as: UTF8.self)
+  }
+
+  /// Starts the Calgary trip, takes the camera request out of the way (`afterStart` runs then)
+  /// and drives the trace until a fix starts a reroute. Returns that fix.
+  @discardableResult
+  private func driveUntilRerouting(
+    _ engine: NavOSSCoreEngine, _ host: RecordingCoreHost, afterStart: () -> Void = {}
+  ) throws -> [String: Any] {
+    _ = try engine.setRoute(try calgaryTripJSON())
+    _ = try XCTUnwrap(host.takeRequest(endingWithAny: ["/v1/cameras"]))
+    afterStart()
+    for fix in try fixes() {
+      host.setNow(try XCTUnwrap(fix["timestampMs"] as? Double))
+      if try engine.updateLocation(try json(fix)).contains(#""routeStatus":"rerouting""#) {
+        return fix
+      }
+    }
+    throw XCTSkip("the trace never left the route")
+  }
+
+  /// Runs `body` on another thread and says whether it finished within ten seconds.
+  private func finishesOnAnotherThread(_ body: @escaping @Sendable () -> Void) -> Bool {
+    let done = DispatchSemaphore(value: 0)
+    Thread.detachNewThread {
+      body()
+      done.signal()
+    }
+    return done.wait(timeout: .now() + 10) == .success
+  }
+
+  // Finding 3: a reroute is cancelled with the engine lock held, and Swift runs cancellation
+  // handlers synchronously. The host must be told once the lock is free: here it waits, as a
+  // host may, for another thread's core call.
+  func testTheHostIsToldOfACancelledRequestWithTheEngineLockFree() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    defer { engine.close() }
+    try driveUntilRerouting(engine, host)
+    let config = try XCTUnwrap(host.takeRequest(endingWithAny: ["/v2/config"]))
+    let otherThreadFinished = LockedBox<Bool?>(nil)
+    host.onCancelHTTPRequest = { [unowned self] _ in
+      otherThreadFinished.set(self.finishesOnAnotherThread { _ = engine.snapshot() })
+    }
+    _ = engine.clearRoute()
+    XCTAssertEqual(host.waitForCancelled(1), [config.id])
+    XCTAssertEqual(
+      otherThreadFinished.get(), true,
+      "cancelHttpRequest was called with the engine lock held: another thread's call blocked")
+  }
+
+  // Finding 5: closing cancels what the host still holds, before the host is let go.
+  func testCloseCancelsTheRequestsTheHostHolds() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    _ = try engine.setRoute(try calgaryTripJSON())
+    let cameras = try XCTUnwrap(host.takeRequest(endingWithAny: ["/v1/cameras"]))
+    engine.close()
+    XCTAssertEqual(host.cancelledRequests, [cameras.id])
+    // Its late answer is ignored, and nothing follows.
+    host.events.removeAll()
+    engine.completeHTTPRequest(id: cameras.id, responseJSON: okResponse("[]"))
+    _ = engine.clearRoute()
+    XCTAssertEqual(host.events, [])
+    XCTAssertEqual(host.cancelledRequests, [cameras.id])
+  }
+
+  // Finding 6: a request cancelled between its registration and the host call is not sent
+  // (and so not cancelled at the host either).
+  func testARequestCancelledBeforeTheHostSeesItIsNeverPublished() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    defer { engine.close() }
+    let settled = DispatchSemaphore(value: 0)
+    // The reroute's request waits here until the fix that asked for it has returned.
+    let fixReturned = DispatchSemaphore(value: 0)
+    try driveUntilRerouting(engine, host) {
+      engine.httpForTesting.willPublish = { _ in
+        fixReturned.wait()
+        _ = engine.clearRoute()
+      }
+      engine.httpForTesting.didPublish = { _ in settled.signal() }
+    }
+    fixReturned.signal()
+    XCTAssertEqual(settled.wait(timeout: .now() + 30), .success)
+    XCTAssertEqual(host.condition.withLock { host.httpLog.filter { !$0.hasSuffix(" 1") } }, [])
+  }
+
+  // Finding 6: a request cancelled while the host is being given it is cancelled at the host
+  // after `httpRequest` returned, never before or during.
+  func testACancelDuringPublicationReachesTheHostAfterTheRequest() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    defer { engine.close() }
+    let settled = DispatchSemaphore(value: 0)
+    let fixReturned = DispatchSemaphore(value: 0)
+    try driveUntilRerouting(engine, host) {
+      host.onHTTPRequest = { _, _ in
+        fixReturned.wait()
+        _ = engine.clearRoute()
+      }
+      engine.httpForTesting.didPublish = { _ in settled.signal() }
+    }
+    fixReturned.signal()
+    XCTAssertEqual(settled.wait(timeout: .now() + 30), .success)
+    XCTAssertEqual(
+      host.condition.withLock { host.httpLog.filter { !$0.hasSuffix(" 1") } },
+      ["request-begin 2", "request-end 2", "cancel 2"])
+    // The host answering a request it was told to cancel changes nothing.
+    engine.completeHTTPRequest(id: 2, responseJSON: okResponse("{}"))
+  }
+
+  // Finding 4: `close()` returns only once a callback already running has returned, and no
+  // callback starts after it.
+  func testCloseWaitsForARunningCallbackAndNoneFollows() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    let closeReturned = LockedBox(false)
+    let closeReturnedDuringCallback = LockedBox<Bool?>(nil)
+    let closerMoved = DispatchSemaphore(value: 0)
+    let closerDone = DispatchSemaphore(value: 0)
+    engine.bridgeForTesting.closeWillWait = { closerMoved.signal() }
+    host.onStateChanged = {
+      guard closeReturnedDuringCallback.get() == nil else { return }
+      Thread.detachNewThread {
+        engine.close()
+        closeReturned.set(true)
+        closerMoved.signal()
+        closerDone.signal()
+      }
+      // Until `close()` on the other thread has either returned or begun to wait for us.
+      _ = closerMoved.wait(timeout: .now() + 30)
+      closeReturnedDuringCallback.set(closeReturned.get())
+    }
+    _ = try engine.setRoute(try calgaryTripJSON())
+    XCTAssertEqual(closerDone.wait(timeout: .now() + 30), .success)
+    XCTAssertEqual(
+      closeReturnedDuringCallback.get(), false, "close() returned while a callback was running")
+    XCTAssertEqual(host.events, ["cancelSpeech", "stateChanged"], "a callback started after close")
+    XCTAssertEqual(host.requests.count, 0)
+  }
+
+  // Findings 1 and 4, re-entrant case: `close()` from inside a callback returns at once (it
+  // cannot wait for its own caller) and no further callback starts.
+  func testCloseFromInsideACallbackReturnsAndStopsCallbacks() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    host.onStateChanged = { engine.close() }
+    _ = try engine.setRoute(try calgaryTripJSON())
+    XCTAssertEqual(host.events, ["cancelSpeech", "stateChanged"])
+    _ = engine.clearRoute()
+    XCTAssertEqual(host.events, ["cancelSpeech", "stateChanged"])
+    XCTAssertEqual(host.requests.count, 0)
+  }
+
+  // Finding 8: the reroute-mode and speeding setters each change part of one record. A
+  // change that lands while the other setter is between its start and its write (here made
+  // at exactly that point) must survive it.
+  func testAPreferenceSetterKeepsAChangeMadeMeanwhile() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    defer { engine.close() }
+    engine.preferencesWillChange = {
+      engine.preferencesWillChange = nil
+      engine.setSpeedingWarning(toleranceKph: 12, audible: true)
+    }
+    try engine.setRerouteMode("ask-first")
+    var preferences = engine.engine.currentNavigationPreferences()
+    XCTAssertEqual(preferences.rerouteMode, .askFirst)
+    XCTAssertEqual(preferences.speedingToleranceKph, 12)
+    XCTAssertEqual(preferences.speedingAudibleWarning, true)
+
+    engine.preferencesWillChange = {
+      engine.preferencesWillChange = nil
+      try? engine.setRerouteMode("keep-route")
+    }
+    engine.setSpeedingWarning(toleranceKph: 3, audible: false)
+    preferences = engine.engine.currentNavigationPreferences()
+    XCTAssertEqual(preferences.rerouteMode, .keepRoute)
+    XCTAssertEqual(preferences.speedingToleranceKph, 3)
+    XCTAssertEqual(preferences.speedingAudibleWarning, false)
+  }
+
+  // Finding 9: a fix the matcher ignores (older than the last one) must not lend its course
+  // and accuracy to a reroute from the accepted position.
+  func testALateFixDoesNotChangeTheRerouteOrigin() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    defer { engine.close() }
+    let accepted = try driveUntilRerouting(engine, host)
+    let acceptedAt = try XCTUnwrap(accepted["timestampMs"] as? Double)
+    /// `origin`, `originHeadingDegrees` and `originHorizontalAccuracyMeters` of the request.
+    func originOfNextRoutesRequest() throws -> [Double?] {
+      // The config is asked for once per engine, then the routes.
+      var routes = try XCTUnwrap(host.takeRequest(endingWithAny: ["/v2/config", "/v2/routes"]))
+      if requestURL(routes.json)?.hasSuffix("/v2/config") == true {
+        engine.completeHTTPRequest(
+          id: routes.id, responseJSON: okResponse(try recordedBody(productionConfig)))
+        routes = try XCTUnwrap(host.takeRequest(endingWithAny: ["/v2/routes"]))
+      }
+      engine.completeHTTPRequest(id: routes.id, responseJSON: #"{"error":"unreachable"}"#)
+      let request = try XCTUnwrap(
+        try JSONSerialization.jsonObject(with: Data(routes.json.utf8)) as? [String: Any])
+      let body = try XCTUnwrap(request["body"] as? String)
+      let payload = try XCTUnwrap(
+        try JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any])
+      let origin = try XCTUnwrap(payload["origin"] as? [String: Double])
+      return [
+        origin["latitude"], origin["longitude"], payload["originHeadingDegrees"] as? Double,
+        payload["originHorizontalAccuracyMeters"] as? Double,
+      ]
+    }
+    let first = try originOfNextRoutesRequest()
+    XCTAssertEqual(
+      first,
+      [
+        accepted["latitude"] as? Double, accepted["longitude"] as? Double,
+        accepted["courseDegrees"] as? Double, accepted["horizontalAccuracyMeters"] as? Double,
+      ])
+    XCTAssertEqual(
+      try XCTUnwrap(host.waitUntilNotRerouting()).contains(#""routeStatus":"reroute-failed""#),
+      true)
+
+    // Eleven seconds on (the retry is due), a fix captured before the accepted one arrives,
+    // elsewhere and with its own course and accuracy.
+    host.setNow(acceptedAt + 11_000)
+    var late = accepted
+    late["timestampMs"] = acceptedAt - 1_000
+    late["latitude"] = try XCTUnwrap(accepted["latitude"] as? Double) + 0.0005
+    late["courseDegrees"] = 123.0
+    late["horizontalAccuracyMeters"] = 42.0
+    XCTAssertTrue(
+      try engine.updateLocation(try json(late)).contains(#""routeStatus":"rerouting""#),
+      "the late fix did not start the retry this test needs")
+    let retry = try originOfNextRoutesRequest()
+    XCTAssertEqual(retry, first)
+  }
+
+  // Finding 11: the boundary's own ceiling on what the host hands it.
+  func testOversizedTextFromTheHostIsRefused() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    defer { engine.close() }
+    let oversized = String(repeating: " ", count: navOSSCoreMaximumJSONBytes + 1)
+    XCTAssertThrowsError(try engine.setRoute(oversized)) {
+      XCTAssertEqual(($0 as? NavOSSCoreError)?.code, "invalid-argument")
+    }
+    XCTAssertThrowsError(
+      try NavOSSCoreHTTP.response(#"{"status":200,"body":""# + oversized + #""}"#).get()
+    ) {
+      guard case NavOSSNavigationAPIError.invalidResponse = $0 else {
+        return XCTFail("an oversized answer must be an invalid response")
+      }
+    }
+  }
+
+  // Finding 10: what a failing call says names the field, never what was sent.
+  func testErrorMessagesNameFieldsNotPayloads() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    defer { engine.close() }
+    func message(_ body: () throws -> Any) -> String {
+      do {
+        _ = try body()
+        return "no error"
+      } catch {
+        return "\(error)"
+      }
+    }
+    XCTAssertEqual(
+      message { try engine.setRerouteMode("51.0447,-114.0719") },
+      "invalid-argument: Unknown reroute mode")
+    XCTAssertEqual(
+      message { try engine.setAudioMode("51.0447,-114.0719") },
+      "invalid-argument: Unknown audio mode")
+    XCTAssertEqual(
+      message { try engine.setRoute(#"{"destination":{"name":"Secret Place","latitude":"51.0447"}}"#) },
+      "invalid-json: Wrong type at destination.latitude")
+    XCTAssertEqual(
+      message { try engine.setRoute(#"{"id":"Secret Place" 51.0447}"#) }, "invalid-json: Not JSON")
+    XCTAssertEqual(
+      message { try engine.updateLocation(#"{"latitude":51.0447,"longitude":"x"}"#) },
+      "invalid-json: Wrong type at longitude")
+    XCTAssertEqual(
+      message { try engine.setRoute(#"{"id":"Secret Place"}"#) },
+      "invalid-route: The trip failed validation")
+  }
+}
+
+/// Finding 7: the trip and fix records against the cases of `Golden/record-rules.json`, each a
+/// change to the recorded Calgary trip (or to a fix) and what must become of it.
+final class NavOSSCoreRecordRuleTests: XCTestCase {
+  private struct Case: Decodable {
+    let name: String
+    /// `trip` or `fix`.
+    let record: String
+    /// Keys and array indexes to the value replaced.
+    let path: [PathElement]
+    /// The JSON text put there.
+    let value: String
+    /// The error message, or `nil` when the record must be accepted.
+    let error: String?
+    /// Decoded values to find afterwards, by name (see `decoded`).
+    let expect: [String: Double]?
+  }
+
+  private enum PathElement: Decodable {
+    case key(String)
+    case index(Int)
+
+    init(from decoder: Decoder) throws {
+      let container = try decoder.singleValueContainer()
+      if let index = try? container.decode(Int.self) {
+        self = .index(index)
+      } else {
+        self = .key(try container.decode(String.self))
+      }
+    }
+  }
+
+  private func replacing(_ node: Any, _ path: ArraySlice<PathElement>, with value: Any) throws -> Any {
+    guard let head = path.first else { return value }
+    switch head {
+    case .key(let key):
+      var object = try XCTUnwrap(node as? [String: Any])
+      object[key] = try replacing(object[key] ?? [String: Any](), path.dropFirst(), with: value)
+      return object
+    case .index(let index):
+      var array = try XCTUnwrap(node as? [Any])
+      array[index] = try replacing(array[index], path.dropFirst(), with: value)
+      return array
+    }
+  }
+
+  func testRecordsFollowTheGoldenRules() throws {
+    let cases = try JSONDecoder().decode(
+      [Case].self, from: Data(try bundled("Golden", "record-rules.json").utf8))
+    XCTAssertGreaterThan(cases.count, 40)
+    let trip = try JSONSerialization.jsonObject(with: Data(try calgaryTripJSON().utf8))
+    let fix: [String: Any] = [
+      "latitude": 51.0, "longitude": -114.0, "timestampMs": 1_800_000_000_000.0,
+      "courseDegrees": 90.0, "horizontalAccuracyMeters": 5.0, "speedMetersPerSecond": 10.0,
+    ]
+    for item in cases {
+      let value = try JSONSerialization.jsonObject(
+        with: Data(item.value.utf8), options: [.fragmentsAllowed])
+      let changed = try replacing(item.record == "trip" ? trip : fix, item.path[...], with: value)
+      let data = try JSONSerialization.data(withJSONObject: changed)
+      var decoded: [String: Double] = [:]
+      var failure: String?
+      do {
+        if item.record == "trip" {
+          let trip = try JSONDecoder().decode(NavOSSCoreTripRecord.self, from: data).trip
+          decoded = [
+            "roundaboutExit": Double(trip.steps[0].roundaboutExit ?? -1),
+            "speedLimit": Double(trip.speedLimitsKph?.first ?? -1),
+            "waypoints": Double(trip.waypoints?.count ?? 0),
+            "lanes": Double(trip.steps[0].lanes?.count ?? 0),
+            "valid": trip.isValid ? 1 : 0,
+          ]
+        } else {
+          let sample = try JSONDecoder().decode(NavOSSCoreLocationRecord.self, from: data).sample
+          decoded = ["hasCourse": sample.courseDegrees == nil ? 0 : 1]
+        }
+      } catch {
+        failure = NavOSSCoreError.invalidJSON(error).message
+      }
+      XCTAssertEqual(failure, item.error, item.name)
+      for (key, want) in item.expect ?? [:] {
+        XCTAssertEqual(decoded[key], want, "\(item.name): \(key)")
+      }
+    }
+  }
+}
+
+/// A value shared between a test and the threads it starts.
+final class LockedBox<Value>: @unchecked Sendable {
+  private let lock = NSLock()
+  private var value: Value
+
+  init(_ value: Value) {
+    self.value = value
+  }
+
+  func get() -> Value {
+    lock.withLock { value }
+  }
+
+  func set(_ newValue: Value) {
+    lock.withLock { value = newValue }
   }
 }
 
