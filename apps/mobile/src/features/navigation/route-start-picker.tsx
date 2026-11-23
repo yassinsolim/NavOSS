@@ -147,7 +147,7 @@ export function RouteStartPicker({
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.xxl }]}
         keyboardDismissMode="on-drag"
       >
-        <Text style={styles.hint}>
+        <Text maxFontSizeMultiplier={1.5} style={styles.hint}>
           The route is previewed from the place you choose. Live guidance needs your real location.
         </Text>
         <View style={styles.section}>
@@ -155,6 +155,8 @@ export function RouteStartPicker({
           <View style={styles.searchRow}>
             <TextInput
               disableFullscreenUI
+              // The field is one line of fixed height: the largest text sizes cut the placeholder.
+              maxFontSizeMultiplier={1.4}
               accessibilityLabel="Search for a start"
               autoCapitalize="words"
               autoCorrect={false}
@@ -189,7 +191,9 @@ export function RouteStartPicker({
             />
           </View>
           {query.trim().length === 1 && (
-            <Text style={styles.hint}>Type at least 2 characters to search.</Text>
+            <Text maxFontSizeMultiplier={1.5} style={styles.hint}>
+              Type at least 2 characters to search.
+            </Text>
           )}
           {canSearch && searchState !== 'idle' && (
             <View style={styles.card}>
