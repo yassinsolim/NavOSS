@@ -218,6 +218,13 @@ export function MapScreen() {
       onOpenMapPreferences={c.mapPreferencesSheet.open}
       onOpenReport={c.roadReport.open}
       onRecenter={c.camera.recenter}
+      {...(IS_ANDROID
+        ? {
+            onResetBearing: () => {
+              void c.cameraRef.current?.setStop({ bearing: 0, duration: 300 });
+            },
+          }
+        : {})}
       onOpenRoadEvents={c.roadEventsSheet.open}
       onShowAttribution={c.onShowAttribution}
       onToggleOrientation={c.onToggleOrientation}
