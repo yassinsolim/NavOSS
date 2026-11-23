@@ -19,7 +19,7 @@
 	<img src="https://img.shields.io/badge/API-AGPL--3.0-E65342" alt="API license: AGPL-3.0-only">
 </p>
 
-NavOSS is an independently designed navigation app built on OpenStreetMap-derived data, MapLibre and Valhalla. There is no account or advertising. The default build has no analytics SDK; builds 80, 81, 82, 83 and 84 include Google's Places SDK, whose privacy declarations are described in the policy. Search and routing use a self-hosted service in Alberta covering Canada; route matching, guidance and speech run on the phone. Fixed safety-camera alerts are a local Calgary overlay. The current milestone is an iPhone and CarPlay technical beta distributed through TestFlight. Android and coverage beyond Canada follow the iOS navigation and operations gates.
+NavOSS is an independently designed navigation app built on OpenStreetMap-derived data, MapLibre and Valhalla. There is no account or advertising. The default build has no analytics SDK; builds 80, 81, 82, 83, 84 and 85 include Google's Places SDK, whose privacy declarations are described in the policy. Search and routing use a self-hosted service in Alberta covering Canada; route matching, guidance and speech run on the phone. Fixed safety-camera alerts are a local Calgary overlay. The current milestone is an iPhone and CarPlay technical beta distributed through TestFlight. Android and coverage beyond Canada follow the iOS navigation and operations gates.
 
 > [!WARNING]
 > NavOSS is pre-release software. The service it talks to today has no live traffic and no production guarantee. Do not rely on it as your only source for navigation, closures, road rules or safety-camera information. Have a passenger operate the controls while a vehicle is moving.
@@ -32,13 +32,15 @@ This status distinguishes the deployed service from individual builds. Build ava
 
 The deployed `/v2/routes` service provides Canada-wide routing with lane and signpost data when returned.
 
-Build `0.1.0 (84)` from `cf2afaa` was distributed to internal testers and NavOSS Friends on 2026-11-20 with the `production-carplay-google` profile. App Store Connect showed Testing for both groups, with no installs or sessions yet. It includes phone guidance status-bar and control changes, CarPlay card wording and arrow scale, offline-style checks, the dependency refresh and Maestro label fixes. Release simulator validation passed; real CarPlay chrome, a head unit, a physical iPhone, iOS 26.6.x and the signed build itself have not been verified. See the [release record](docs/release/testflight.md#build-84-validation-and-known-limits-2026-11-20) for validation and known limits.
+Build `0.1.0 (85)` from `3b57b04` was distributed to internal testers and NavOSS Friends on 2026-11-23 with the `production-carplay-google` profile. App Store Connect showed Testing for both groups; no installs or sessions have been observed yet. With no destination set, CarPlay shows the guidance vehicle arrow or car at the live position, pointing the direction of travel, with the close guidance camera; panning pauses following and Recenter resumes it, and Go and End keep one marker. The phone's floating map controls take no taps while faded, their icon colours follow the basemap, and their glass backgrounds survive ending a trip. Android bring-up reaches iOS only through cached date and collation formatters. Release simulator validation was a go (551 native tests; the CarPlay free-drive captures were inspected), but its harness pixel gate for one free-drive capture failed twice and is judged a harness issue under investigation. Arrival time and "updated h:mm" use formatters created when the app starts, so a running app keeps its starting time zone until relaunch; this was reasoned from source, not seen on screen, and a fix is in progress in a separate PR. Real CarPlay chrome, a head unit or Apple's CarPlay Simulator, a physical iPhone, the signed build itself, the Maestro suite in this pass and an iPhone SE pass have not been verified. See the [release record](docs/release/testflight.md#build-85-validation-and-known-limits-2026-11-22) for validation and known limits.
+
+Build `0.1.0 (84)` from `cf2afaa` was distributed to internal testers and NavOSS Friends on 2026-11-20 with the `production-carplay-google` profile. App Store Connect showed Testing for both groups, with no installs or sessions at that time. Its CarPlay showed no arrow when no destination was set (owner feedback; changed in build 85). It includes phone guidance status-bar and control changes, CarPlay card wording and arrow scale, offline-style checks, the dependency refresh and Maestro label fixes. Release simulator validation passed; real CarPlay chrome, a head unit, a physical iPhone, iOS 26.6.x and the signed build itself have not been verified. See the [release record](docs/release/testflight.md#build-84-validation-and-known-limits-2026-11-20) for validation and known limits.
 
 Build `0.1.0 (83)` from `2cb5c70` was distributed to internal testers and NavOSS Friends on 2026-11-17 with the `production-carplay-google` profile. On 2026-11-20 it showed 4 installs and 3 sessions, with no new feedback. It includes the Share ETA / Share place sheet fix and CarPlay card, controls and map changes. The navigation harness passed; two Maestro flows failed on stale label checks fixed after the build commit. Real CarPlay chrome and iOS 26.6.1 hardware remain unverified. See the [release record](docs/release/testflight.md#build-83-build-82-feedback-validation-and-limits-2026-11-17) for known limits.
 
 Build `0.1.0 (82)` from `65649ab` was distributed to internal testers and NavOSS Friends on 2026-11-15 with the `production-carplay-google` profile. It fixes repeated rerouting and lost route choice when starting away from the road, adds long-trip formatting on phone and CarPlay, and shows the year for event dates outside the current year. A Release simulator pass against production checked trip starts and phone long-trip text; CarPlay long-trip text has only Swift test and compile evidence.
 
-Build 84 still ends a trip on relaunch if the app was closed before its first route match; PR #135 is parked. The Alberta events list can omit Edmonton rows from Calgary because only the 100 newest are shown; those events remain on the map. Alberta search rows show the city without the province. Repeated confirmed departures can trigger repeated reroutes without backoff.
+Build 85 still ends a trip on relaunch if the app was closed before its first route match; PR #135 is parked. The Alberta events list can omit Edmonton rows from Calgary because only the 100 newest are shown; those events remain on the map. Alberta search rows show the city without the province. Repeated confirmed departures can trigger repeated reroutes without backoff. Changing the text size mid-trip clips the step list until relaunch.
 
 Build 83's phone guidance can show a white status-bar clock on the light map and overlapping
 controls when the trip sheet is expanded. Its CarPlay card can omit "Express" from "401 East",
@@ -182,15 +184,15 @@ For native navigation changes also run `corepack pnpm --filter @navoss/mobile te
 
 ## Limitations
 
-- **Coverage.** The deployed v2 service covers Canada; build 84 uses it. Build 70 uses v1 for Calgary and Kelowna. Some places have no connecting road route.
+- **Coverage.** The deployed v2 service covers Canada; build 85 uses it. Build 70 uses v1 for Calgary and Kelowna. Some places have no connecting road route.
 - **No live traffic or traffic-aware ETA.** Lane guidance and signposts appear only when returned by v2 and are unavailable in build 70.
 - **Offline coverage.** All Alberta and the Calgary area can be downloaded in build 80. British Columbia has no offline region. A physical iPhone download in build 80 remains unverified.
-- **CarPlay needs further head-unit validation.** The owner reported on build 82 in a car; build 84's real CarPlay chrome and head-unit appearance have not been seen.
+- **CarPlay needs further head-unit validation.** The owner reported on build 82 in a car; build 85's real CarPlay chrome, head-unit appearance and free-drive arrow have not been seen on a car or Apple's CarPlay Simulator.
 - **iOS only.** Android is planned after the iOS navigation core is stable.
 - **Map matching** is geometric; it does not use road-network topology. Background guidance and spoken instructions still need sustained on-road evidence.
 - **Data is incomplete.** OpenStreetMap, City of Calgary and DriveBC data can be missing, wrong or late; camera alerts are informational and do not replace signs and signals.
 - **Single operator.** There is no staffed support, no service-level agreement and no direct support email yet.
-- **External TestFlight is manual.** Build 84 was confirmed Testing for NavOSS Friends; a successful distribution request alone does not establish external availability or an installation.
+- **External TestFlight is manual.** Build 85 was confirmed Testing for NavOSS Friends; a successful distribution request alone does not establish external availability or an installation.
 
 ## Contributing
 
