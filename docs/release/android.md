@@ -37,24 +37,37 @@ Locally, `NAVOSS_ANDROID_VERSION_CODE` sets the version code; without it the bui
 
 ## Cutting a release
 
-1. Merge to `main` with CI green (the `Android build and Kotlin tests` job builds the debug APK).
-2. In GitHub Actions, run **Android release** on `main`. Leave **publish** off; add one or two
-   sentences of notes if useful. The workflow needs the `android-release` environment and its
-   secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`.
-3. The `build` job decodes the keystore into the runner's temporary directory, builds with
-   `corepack pnpm --filter @navoss/mobile android:release`, deletes the keystore, scans the build
-   log for key material, and verifies the APK: exactly the pinned signing certificate, package
-   `org.navoss.mobile` with the expected version, not debuggable, no cleartext traffic, arm64-v8a
-   only, Hermes bytecode. Before Gradle it builds the Swift navigation core (or restores it from
-   the cache `main`'s CI made) with `.github/actions/build-android-core` and verifies the
-   libraries; after the build it checks that the signed APK carries every one of them byte for
-   byte (including NDK r30's `libc++_shared.so`) and that R8 kept the classes and members JNI
-   reaches by name. Any failed check stops the release: an APK without a working core is never
-   published (see [android-core.md](../architecture/android-core.md#in-ci-and-releases)). The
-   release notes name the core's contract version and the SHA-256 of `libNavOSSCore.so`. The `release` job (the only one with `contents: write`) creates the
-   draft with three assets: `navoss-<versionName>-<versionCode>.apk`, its `.sha256`, and
-   `update.json` (`versionCode`, `versionName`, `minSdk`, `apk`, `sha256`, `size`, `notes`). It
-   then checks that the SHA-256 GitHub reports for the APK equals the build's own.
+1. Merge to `main` with CI green (the `Android build and Kotlin tests` job builds the core, a
+   debug APK and an R8 release APK signed with a throwaway key, and checks both).
+2. In GitHub Actions, run **Android release** on `main`; the workflow refuses any other ref. Leave
+   **publish** off; add one or two sentences of notes if useful. The workflow needs the
+   `android-release` environment and its secrets `ANDROID_KEYSTORE_BASE64`,
+   `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`.
+3. The `build` job runs, in this order:
+   1. refuses a ref other than `main`; checks out, installs Node, JDK and the pnpm dependencies,
+      installs the Android SDK packages, chooses the version, refuses test-only configuration;
+   2. builds the Swift navigation core **from source** with `.github/actions/build-android-core`
+      (`library-cache: false`: built libraries are never restored from a cache for a release; the
+      toolchain tarballs may be, and are checked against their pinned SHA-256 before use) and
+      verifies the libraries. Every download, install and native build of the core happens here,
+      before the keystore exists;
+   3. decodes the keystore into the runner's temporary directory;
+   4. builds and signs with `corepack pnpm --filter @navoss/mobile android:release`;
+   5. deletes the keystore (also when the build fails);
+   6. scans the build log for key material;
+   7. verifies the APK: exactly the pinned signing certificate, package `org.navoss.mobile` with
+      the expected version, not debuggable, no cleartext traffic, arm64-v8a only, Hermes
+      bytecode, every verified core library packaged byte for byte (including NDK r30's
+      `libc++_shared.so`), and R8 kept the classes and members JNI reaches by name.
+
+   Any failed check stops the release: an APK without a working core is never published (see
+   [android-core.md](../architecture/android-core.md#in-ci-and-releases)). The release notes name
+   the core's contract version and the SHA-256 of `libNavOSSCore.so`. The `release` job (the only
+   one with `contents: write`) creates the draft with three assets:
+   `navoss-<versionName>-<versionCode>.apk`, its `.sha256`, and `update.json` (`versionCode`,
+   `versionName`, `minSdk`, `apk`, `sha256`, `size`, `notes`). It then checks that the SHA-256
+   GitHub reports for the APK equals the build's own.
+
 4. Download the APK from the draft, verify it (below) and install it on a test device.
 5. When it is good, publish the draft (`gh release edit <tag> --draft=false`). From then on, the
    app offers it to installed copies at their next daily check. A draft or pre-release is never

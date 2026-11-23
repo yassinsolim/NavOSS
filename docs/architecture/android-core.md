@@ -527,23 +527,42 @@ The composite action `.github/actions/build-android-core` is the one implementat
 `ubuntu-latest` (Ubuntu 26.04, x86_64) it:
 
 1. runs `android-core/scripts/jni-contract.py check`: the Kotlin binding's `external` functions
-   and the Swift `@_cdecl` entry points must name the same JNI symbols, and every `Host` method
-   the Swift side looks up (`GetMethodID`) must exist in `NavOSSCore.Host` with that signature;
-2. restores `android-core/build/jniLibs` from the cache `android-core-libs-v1-…`, keyed on the
-   pinned Swift version, toolchain and SDK checksums, NDK version, and a hash of
+   and the Swift `@_cdecl` entry points must name the same JNI symbols; every lookup call site in
+   `android-core/JNI/**` (`FindClass`, `GetObjectClass`, `GetMethodID`, `GetStaticMethodID`,
+   `GetFieldID`, `GetStaticFieldID`, `RegisterNatives`, `ThrowNew`, ...) must use string-literal
+   names and descriptors on a class it can attribute, or the check fails with file and line, and
+   the number of lookups read must equal the number of call sites; every `Host` method looked up
+   must exist in `NavOSSCore.Host` with that descriptor, and the exception constructor looked up
+   must be `NavOSSCoreException`'s primary constructor;
+2. in CI only, restores `android-core/build/jniLibs` from the cache `android-core-libs-v1-…`, keyed
+   on the pinned Swift version, toolchain and SDK checksums, NDK version, and a hash of
    `Package.swift`, `ios/Core/**`, `android-core/Facade/**`, `android-core/JNI/**`,
-   `build-android-core.sh` and `android-core-toolchain.env`;
-3. on a miss, restores the toolchain tarballs (cache `android-core-toolchain-v1-…`, keyed on the
-   pins only, so a source change does not download them again), and
-   `android-core/scripts/install-toolchain-linux.sh` checks each against its pinned SHA-256,
-   extracts the toolchain, installs the SDK bundle, installs NDK r30 with `sdkmanager` and links
-   it into the SDK; then `build-android-core.sh` builds;
+   `build-android-core.sh`, `android-core-toolchain.env`, the action itself and
+   `install-toolchain-linux.sh`. The release workflow passes `library-cache: false` and always
+   compiles: the build is not reproducible and the checks are structural, so a stale or poisoned
+   cache entry would otherwise be signed. A cache entry is only as trustworthy as the run that
+   saved it; GitHub scopes entries to the branch that made them (pull requests cannot write
+   `main`'s), which is why CI may use them and a release may not;
+3. installs NDK r30 with `sdkmanager` and fails unless its `source.properties` revision is the
+   pinned one; on a library-cache miss (always, for a release) restores the toolchain tarballs
+   (cache `android-core-toolchain-v1-…`, keyed on the pins only, so a source change does not
+   download them again), and `android-core/scripts/install-toolchain-linux.sh` downloads what is
+   missing over HTTPS only (`--proto '=https' --proto-redir '=https' --tlsv1.2`), checks every
+   tarball against its pinned SHA-256 before extracting it, cached or not, installs the SDK bundle
+   and links NDK r30 into it; then `build-android-core.sh` builds;
 4. always, cache hit or not, runs `android-core/scripts/verify-android-core.sh`, which fails on
    any ABI directory but `arm64-v8a`, a missing `libNavOSSCore.so`, a NEEDED library that is
    neither shipped nor one of Android's own (the NDK's API 28 stubs), a shipped library nothing
-   needs, a Kotlin `external` not exported by `libNavOSSCore.so`, a `LOAD` segment aligned below
-   16 KB, or a `libc++_shared.so` that lacks the symbol the config plugin checks for r30;
-5. saves the libraries to the cache only after they passed.
+   needs, a Kotlin `external` not exported by `libNavOSSCore.so`, a library without a `LOAD`
+   segment or with one aligned below 16 KB, a `libc++_shared.so` that lacks the symbol the config
+   plugin checks for r30, or any failure of the ELF readers themselves (each tool's output and exit
+   status are captured before parsing, so a reader error cannot yield an empty, passing list);
+5. runs `android-core/scripts/test-verify-scripts.sh` on both checkers: broken copies (computed
+   lookup names or descriptors, a lookup through a helper, a static field lookup, wrong
+   descriptors, a renamed entry point; a non-ELF `.so`, an ELF without `LOAD`, a 4 KB-aligned
+   segment, a missing or unneeded library, a second ABI, a missing export, r27's `libc++`) must
+   each fail and the unchanged input must pass;
+6. in CI, saves the libraries to the cache only after they passed.
 
 After Gradle, `android-core/scripts/verify-apk-core.sh` checks an APK: every verified library is
 packaged under `lib/arm64-v8a/` byte for byte (so the packaged `libc++_shared.so` is r30's, not
@@ -560,6 +579,16 @@ release. CI runs it in two parallel legs, on a debug APK and on a release APK bu
 key generated in the job (the release signing plugin accepts any keystore named by its three
 variables; the release workflow is what pins the certificate). The release workflow runs it on
 the signed APK, and every check fails the run.
+
+What the dex check proves, and what it does not: it reads the release APK's dex with
+`apkanalyzer` and finds the binding class with every native method, the `Host` interface with
+every callback the Swift side looks up, and the exception constructor, each declared under its
+JNI name and descriptor. It does not run anything: that `GetMethodID` on the concrete `Host`
+implementation resolves (R8 keeping the implementing methods under the interface's names), that
+`System.loadLibrary` and the NEEDED closure load on a device, and that the core then guides a
+trip are only shown by running the signed APK on an arm64 device or emulator. Hosted
+`ubuntu-latest` runners are x86_64; an emulator there could run this arm64-only APK only through
+ARM translation, at a cost of tens of minutes, so CI does not do it.
 
 React Native keeps NDK r27 (`ndk;27.1.12297006`, installed by the workflows); the core and its
 `libc++_shared.so` use r30, which the action installs and passes to the build as

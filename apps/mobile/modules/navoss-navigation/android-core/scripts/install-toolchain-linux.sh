@@ -33,7 +33,8 @@ fetch() {
   file="$downloads/$(basename "$url")"
   if [[ ! -f "$file" ]]; then
     echo "Downloading $url" >&2
-    curl -fsSL --retry 3 -o "$file.part" "$url"
+    # HTTPS only, redirects included; the checksum below is what decides.
+    curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 --retry 3 -o "$file.part" "$url"
     mv "$file.part" "$file"
   fi
   sha256sum -c --quiet - <<<"$sha  $file" >&2 || fail "checksum mismatch for $file"
@@ -60,6 +61,9 @@ fi
 sdkmanager="${ANDROID_HOME:?set ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
 "$sdkmanager" "ndk;$ANDROID_NDK_VERSION" >/dev/null
 ndk="$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION"
+# sdkmanager checks Google's archive hash; this checks it installed the revision pinned here.
+[[ "$(sed -n 's/^Pkg.Revision = //p' "$ndk/source.properties")" == "$ANDROID_NDK_VERSION" ]] ||
+  fail "$ndk is not NDK $ANDROID_NDK_VERSION"
 # Where `swift sdk install` put the bundle depends on the host (~/.swiftpm or the XDG directory);
 # its resources path is <bundle>/swift-android/swift-resources/….
 resources="$(sed -n 's/^swiftResourcesPath: //p' <<<"$("$swift_bin/swift" sdk configure \

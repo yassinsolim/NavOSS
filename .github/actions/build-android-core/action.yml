@@ -4,8 +4,18 @@ description: >-
   libc++_shared.so) into apps/mobile/modules/navoss-navigation/android-core/build/jniLibs, where
   the Gradle module packages it, or restores it from a cache keyed on the pinned toolchain and every
   file it is built from. Verifies the result either way and fails the job on any problem. Shared by
-  ci.yml and android-release.yml; see docs/architecture/android-core.md. Needs ubuntu-latest with
+  ci.yml and android-release.yml (which passes library-cache: false); see
+  docs/architecture/android-core.md. Needs ubuntu-latest with
   ANDROID_HOME and accepted SDK licenses.
+
+inputs:
+  library-cache:
+    description: >-
+      "false" never restores or saves the built libraries (the release workflow: it always compiles
+      from source). The toolchain tarballs may still come from their cache; they are checked
+      against the pinned SHA-256 before use either way.
+    required: false
+    default: 'true'
 
 outputs:
   cache-hit:
@@ -27,7 +37,12 @@ runs:
     # A rename on one side of the JNI boundary fails here, before anything is built.
     - name: Check the JNI contract between Kotlin and Swift
       shell: bash
-      run: python3 apps/mobile/modules/navoss-navigation/android-core/scripts/jni-contract.py check
+      run: |
+        set -euo pipefail
+        scripts=apps/mobile/modules/navoss-navigation/android-core/scripts
+        python3 "$scripts/jni-contract.py" check
+        # The check itself must still fail on each kind of broken input.
+        "$scripts/test-verify-scripts.sh" contract
 
     - name: Compute core cache keys
       id: keys
@@ -41,7 +56,9 @@ runs:
             'apps/mobile/modules/navoss-navigation/android-core/Facade/**',
             'apps/mobile/modules/navoss-navigation/android-core/JNI/**',
             'apps/mobile/scripts/build-android-core.sh',
-            'apps/mobile/scripts/android-core-toolchain.env'
+            'apps/mobile/scripts/android-core-toolchain.env',
+            '.github/actions/build-android-core/action.yml',
+            'apps/mobile/modules/navoss-navigation/android-core/scripts/install-toolchain-linux.sh'
           ) }}
       run: |
         set -euo pipefail
@@ -55,6 +72,7 @@ runs:
 
     - name: Restore built core libraries
       id: libraries
+      if: inputs.library-cache == 'true'
       uses: actions/cache/restore@v6
       with:
         path: apps/mobile/modules/navoss-navigation/android-core/build/jniLibs
@@ -69,6 +87,12 @@ runs:
       run: |
         set -euo pipefail
         "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" >/dev/null
+        # The pin the repository records, not whatever sdkmanager or the image put there.
+        revision="$(sed -n 's/^Pkg.Revision = //p' "$ANDROID_HOME/ndk/$NDK_VERSION/source.properties")"
+        if [ "$revision" != "$NDK_VERSION" ]; then
+          echo "NDK at ndk/$NDK_VERSION is revision '$revision', expected $NDK_VERSION" >&2
+          exit 1
+        fi
 
     # The toolchain and SDK tarballs (about 1.2 GB), cached apart from the libraries so a source
     # change rebuilds without downloading them again. Checksums are verified after restoring too.
@@ -121,6 +145,9 @@ runs:
         checksums="$RUNNER_TEMP/android-core.sha256"
         ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION" "$core/scripts/verify-android-core.sh" >"$checksums"
         cat "$checksums"
+        # The verifier itself must still fail on each kind of broken library.
+        ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION" "$core/scripts/test-verify-scripts.sh" \
+          libraries "$core/build/jniLibs"
         contract="$(sed -n 's/.*navOSSCoreContractVersion: Int32 = \([0-9][0-9]*\).*/\1/p' \
           "$core/Facade/NavOSSCoreEngine.swift")"
         [ -n "$contract" ] || { echo 'cannot read navOSSCoreContractVersion' >&2; exit 1; }
@@ -132,7 +159,7 @@ runs:
 
     # Saved only after verification, so a bad build is never reused.
     - name: Save built core libraries
-      if: steps.libraries.outputs.cache-hit != 'true'
+      if: inputs.library-cache == 'true' && steps.libraries.outputs.cache-hit != 'true'
       uses: actions/cache/save@v6
       with:
         path: apps/mobile/modules/navoss-navigation/android-core/build/jniLibs

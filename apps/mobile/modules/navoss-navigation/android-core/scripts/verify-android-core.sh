@@ -41,8 +41,20 @@ abis="$(cd "$root" 2>/dev/null && ls)" || fail "no libraries at $root"
 [[ "$abis" == "$ANDROID_ABI" ]] || fail "expected only $ANDROID_ABI under $root, found: $(tr '\n' ' ' <<<"$abis")"
 [[ -f "$dir/libNavOSSCore.so" ]] || fail "libNavOSSCore.so is missing"
 
+# Every tool's output is captured, and its exit status checked, before anything parses it: a
+# reader that fails must fail the verification, not yield an empty (and so passing) list.
+errors="$(mktemp)"
+trap 'rm -f "$errors"' EXIT
+tool() {
+  local out
+  out="$("$@" 2>"$errors")" || fail "$(basename "$1") failed on ${*: -1}: $(head -c 400 "$errors")"
+  printf '%s\n' "$out"
+}
+
 needed() {
-  sed -n 's/.*Shared library: \[\(.*\)\]/\1/p' <<<"$("$readelf" -d "$1")"
+  local dynamic
+  dynamic="$(tool "$readelf" -d "$1")" || exit 1
+  sed -n 's/.*Shared library: \[\(.*\)\]/\1/p' <<<"$dynamic"
 }
 
 # The NEEDED closure from libNavOSSCore.so: each library either shipped or Android's own.
@@ -52,7 +64,8 @@ pending=(libNavOSSCore.so)
 while ((${#pending[@]})); do
   lib="${pending[0]}"
   pending=("${pending[@]:1}")
-  for need in $(needed "$dir/$lib"); do
+  needs="$(needed "$dir/$lib")" || exit 1
+  for need in $needs; do
     grep -qxF "$need" <<<"$reached" && continue
     if [[ -f "$dir/$need" ]]; then
       reached+=$'\n'"$need"
@@ -68,16 +81,23 @@ for so in "$dir"/*; do
 done
 
 # JNI entry points: every Kotlin `external` (read from the binding) is exported.
-exports="$("$nm" -D --defined-only --format=just-symbols "$dir/libNavOSSCore.so")"
+exports="$(tool "$nm" -D --defined-only --format=just-symbols "$dir/libNavOSSCore.so")" || exit 1
+symbols="$(tool python3 "$here/jni-contract.py" symbols)" || exit 1
+[[ -n "$symbols" ]] || fail "jni-contract.py listed no JNI symbols"
 missing=0
 while read -r symbol; do
-  grep -qx "$symbol" <<<"$exports" || { echo "::error::libNavOSSCore.so does not export $symbol"; missing=1; }
-done <<<"$(python3 "$here/jni-contract.py" symbols)"
+  grep -qxF "$symbol" <<<"$exports" || { echo "::error::libNavOSSCore.so does not export $symbol"; missing=1; }
+done <<<"$symbols"
 ((missing == 0)) || fail "JNI entry points missing from libNavOSSCore.so"
 
 # Android 15+ devices with 16 KB pages load only libraries whose LOAD segments are 16 KB aligned.
+# A library with no LOAD segment at all cannot be loaded either.
 for so in "$dir"/*.so; do
-  for alignment in $(awk '$1 == "LOAD" { print $NF }' <<<"$("$readelf" -lW "$so")"); do
+  headers="$(tool "$readelf" -lW "$so")" || exit 1
+  alignments="$(awk '$1 == "LOAD" { print $NF }' <<<"$headers")"
+  [[ -n "$alignments" ]] || fail "$(basename "$so") has no LOAD segment"
+  for alignment in $alignments; do
+    [[ "$alignment" =~ ^0x[0-9a-fA-F]+$ ]] || fail "$(basename "$so"): unreadable LOAD alignment '$alignment'"
     ((alignment >= 0x4000)) || fail "$(basename "$so") has a LOAD segment aligned to $alignment, below 16 KB"
   done
 done
@@ -86,8 +106,9 @@ done
 symbol="$(grep -o '_ZNSt6__ndk1[A-Za-z0-9_]*' "$plugin" | sort -u)"
 [[ "$(wc -l <<<"$symbol")" -eq 1 && -n "$symbol" ]] || fail "cannot read the libc++ symbol from $plugin"
 [[ -f "$dir/libc++_shared.so" ]] || fail "libc++_shared.so is missing"
-grep -qx "$symbol" <<<"$("$nm" -D --defined-only --format=just-symbols "$dir/libc++_shared.so")" ||
-  fail "libc++_shared.so does not define $symbol: not NDK r30's"
+libcxx_exports="$(tool "$nm" -D --defined-only --format=just-symbols "$dir/libc++_shared.so")" || exit 1
+grep -qxF "$symbol" <<<"$libcxx_exports" || fail "libc++_shared.so does not define $symbol: not NDK r30's"
 
 echo "verify-android-core: $(wc -l <<<"$reached" | tr -d ' ') libraries, JNI exports, 16 KB alignment and r30 libc++ OK" >&2
-(cd "$dir" && "${sha256[@]}" -- *.so)
+sums="$(cd "$dir" && "${sha256[@]}" -- *.so)" || fail "cannot hash the libraries"
+printf '%s\n' "$sums"

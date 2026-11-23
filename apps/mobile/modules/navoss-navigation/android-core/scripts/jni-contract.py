@@ -109,59 +109,105 @@ def swift_cdecls():
     return re.findall(r'@_cdecl\("(Java_\w+)"\)', swift_text())
 
 
-def swift_host_lookups():
-    """(name, JNI signature) of every method the Swift side looks up on the Host object."""
-    return re.findall(r'\bmethod\("(\w+)",\s*"([^"]+)"\)', swift_text())
-
-
-# JNI calls that find a class, method or field by name. Each one the Swift side makes must be
-# one of the patterns `swift_lookups` understands, so a new kind of lookup fails here (and needs a
-# keep rule) instead of failing on a phone.
+# JNI calls that find a class, method or field by name. Every call site in JNI/** is accounted
+# for: each must be a pattern `swift_lookups` reads in full (string-literal names and
+# descriptors, a class it can attribute), or the check fails with its file and line.
 LOOKUP_CALLS = ("FindClass", "GetObjectClass", "GetMethodID", "GetStaticMethodID", "GetFieldID",
-                "GetStaticFieldID", "RegisterNatives", "ThrowNew", "NewObject", "NewObjectA",
-                "NewObjectV", "AllocObject")
+                "GetStaticFieldID", "RegisterNatives", "ThrowNew", "AllocObject",
+                "FromReflectedMethod", "FromReflectedField")
+CALL = re.compile(r"\b(" + "|".join(LOOKUP_CALLS) + r")\s*\(")
+STRING = re.compile(r'^"((?:[^"\\]|\\.)*)"$')
+
+
+def blank_comments(text):
+    """Comments replaced by spaces, newlines kept, so offsets still give line numbers."""
+    def blank(match):
+        return re.sub(r"[^\n]", " ", match.group(0))
+    return re.sub(r'"(?:[^"\\\n]|\\.)*"|/\*.*?\*/|//[^\n]*',
+                  lambda m: m.group(0) if m.group(0).startswith('"') else blank(m), text, flags=re.S)
+
+
+def call_arguments(text, start):
+    """Top-level arguments of the call whose `(` is at `start`, and the index after its `)`."""
+    depth, args, current, i = 0, [], "", start
+    while i < len(text):
+        char = text[i]
+        if char == '"':
+            end = text.index('"', i + 1)
+            while text[end - 1] == "\\":
+                end = text.index('"', end + 1)
+            current += text[i:end + 1]
+            i = end + 1
+            continue
+        if char in "([{":
+            depth += 1
+            if depth == 1:
+                i += 1
+                continue
+        elif char in ")]}":
+            depth -= 1
+            if depth == 0:
+                args.append(current.strip())
+                return args, i + 1
+        elif char == "," and depth == 1:
+            args.append(current.strip())
+            current = ""
+            i += 1
+            continue
+        current += char
+        i += 1
+    fail("unbalanced call")
 
 
 def swift_lookups(binding):
-    """class -> set of `(name, JNI descriptor)` the Swift JNI layer finds by name; an empty set
-    for a class found only for itself. Fails on any lookup it cannot attribute."""
-    text = swift_text()
-    constants = dict(re.findall(r'\blet\s+(\w+)\s*=\s*"([\w/$]+)"', text))
+    """class -> set of `(name, JNI descriptor)` the native JNI layer finds by name (an empty set
+    for a class looked up only for itself). Fails, naming file and line, on any lookup call it
+    cannot read in full."""
     host = f"{binding}$Host"
     found = {}
-    # Function and initializer bodies: from one declaration to the next is precise enough for
-    # this file's layout.
-    parts = re.split(r"\b(?:func\s+(\w+)|(init)\??)\s*[(<]", text)
-    for index in range(1, len(parts), 3):
-        name, body = parts[index] or parts[index + 1], parts[index + 2]
-        calls = re.findall(r'\bjni\.(\w+)\(\s*env\s*,\s*((?:"[^"]*"|[^)"])*)\)', body)
-        calls = [(call, args) for call, args in calls if call in LOOKUP_CALLS]
-        if not calls:
-            continue
-        classes = []
-        for call, args in calls:
-            first = args.split(",")[0].strip()
-            if call == "FindClass":
-                value = constants.get(first) or (first.strip('"') if first.startswith('"') else None)
-                if value is None:
-                    fail(f"func {name}: FindClass with a computed name ({first})")
-                classes.append(value.replace("/", "."))
-                found.setdefault(classes[-1], set())
-        for call, args in calls:
-            literals = re.findall(r'"([^"]*)"', args)
-            if call in ("FindClass", "NewObjectA", "NewObject", "NewObjectV"):
+    sites = extracted = 0
+    files = sorted(p for p in SWIFT.parent.rglob("*") if p.suffix in (".swift", ".c", ".h"))
+    for path in files:
+        text = blank_comments(path.read_text())
+        variables = {}  # local name -> class, from `let name = jni.FindClass(...)` and the like
+        for match in CALL.finditer(text):
+            call = match.group(1)
+            line = text.count("\n", 0, match.start()) + 1
+            where = f"{path.relative_to(SWIFT.parent.parent)}:{line}"
+            # A C prototype or a Swift function named like a JNI call is not a call.
+            if re.search(r"(\bfunc\s+|\(\s*\*\s*|JNICALL\s*\*?\s*)$", text[:match.start()]):
                 continue
-            if call == "GetObjectClass" and name == "init":
-                continue  # the Host object: its methods are looked up through `method(...)`
-            if call == "GetMethodID" and len(literals) == 2 and len(classes) == 1:
-                found[classes[0]].add(tuple(literals))
-            elif call == "GetMethodID" and name == "method" and not literals:
-                continue  # the Host helper; its call sites are read below
+            sites += 1
+            args, _ = call_arguments(text, match.end() - 1)
+            binding_name = re.search(r"\blet\s+(\w+)\s*=\s*(?:\w+\.)*$", text[:match.start()])
+            literals = [STRING.match(a) for a in args[1:]]
+            if call == "FindClass" and len(args) == 2 and literals[0]:
+                owner = literals[0].group(1).replace("/", ".")
+                found.setdefault(owner, set())
+                if binding_name:
+                    variables[binding_name.group(1)] = owner
+                extracted += 1
+            elif call == "GetObjectClass" and args[1:] == ["host"] and binding_name:
+                # The Kotlin object nativeCreate receives: NavOSSCore.Host.
+                variables[binding_name.group(1)] = host
+                found.setdefault(host, set())
+                extracted += 1
+            elif (call == "GetMethodID" and len(args) == 4 and literals[1] and literals[2]
+                  and args[1] in variables):
+                found[variables[args[1]]].add((literals[1].group(1), literals[2].group(1)))
+                extracted += 1
             else:
-                fail(f"func {name}: jni.{call}({args.strip()}) is a lookup this check does not "
-                     "understand; extend jni-contract.py and the module's consumer-rules.pro")
-    found.setdefault(host, set()).update(swift_host_lookups())
+                fail(f"{where}: jni.{call}({', '.join(args)}) is not a lookup this check can read "
+                     "(string-literal names and descriptors on a class found in the same file); "
+                     "use literals, or extend jni-contract.py and consumer-rules.pro")
+    if sites != extracted or sites == 0:
+        fail(f"{sites} JNI lookup call sites but {extracted} lookups read")
     return found
+
+
+def swift_host_lookups(binding):
+    """(name, JNI signature) of every method the Swift side looks up on the Host object."""
+    return sorted(swift_lookups(binding).get(f"{binding}$Host", set()))
 
 
 def kotlin_host_methods(binding_class):
@@ -208,7 +254,8 @@ def check():
         print(f"::error::the Swift core exports {symbol}, no Kotlin external declares it")
         status = 1
     host = kotlin_host_methods(externals[0][1])
-    for name, signature in swift_host_lookups():
+    lookups = swift_host_lookups(externals[0][1])
+    for name, signature in lookups:
         if host.get(name) != signature:
             print(f"::error::Swift looks up Host.{name}{signature}; Kotlin declares "
                   f"{host.get(name, 'nothing')}")
@@ -231,7 +278,7 @@ def check():
                 status = 1
     if status:
         sys.exit(status)
-    print(f"JNI contract: {len(kotlin)} entry points and {len(swift_host_lookups())} Host "
+    print(f"JNI contract: {len(kotlin)} entry points and {len(lookups)} Host "
           f"callbacks agree between Kotlin and Swift")
 
 
