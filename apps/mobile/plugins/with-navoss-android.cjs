@@ -44,13 +44,35 @@ function withoutDevMenuButton(manifest) {
   return manifest;
 }
 
+/**
+ * iOS stays portrait (`orientation` in app.json), but Android must rotate: the Retroid Pocket
+ * Flip 2's screen is landscape by nature, and car mounts and tablets hold phones on their side.
+ * `fullUser` follows the sensor in all four directions unless the user locks rotation. The
+ * activity handles the change itself (`configChanges`), so a rotation re-lays out the map screen
+ * instead of recreating it: an open sheet, a route preview or a trip keeps its state.
+ */
+const ROTATION_CONFIG_CHANGES = ['orientation', 'screenLayout', 'screenSize', 'smallestScreenSize'];
+
+function withFreeRotation(manifest) {
+  const activity = AndroidConfig.Manifest.getMainActivityOrThrow(manifest);
+  activity.$['android:screenOrientation'] = 'fullUser';
+  const changes = new Set(
+    (activity.$['android:configChanges'] ?? '').split('|').filter((item) => item !== ''),
+  );
+  for (const change of ROTATION_CONFIG_CHANGES) changes.add(change);
+  activity.$['android:configChanges'] = [...changes].join('|');
+  return manifest;
+}
+
 function withNavOSSAndroid(config) {
   config = withGradleProperties(config, (modConfig) => {
     setGradleProperty(modConfig.modResults, 'reactNativeArchitectures', ARCHITECTURES);
     return modConfig;
   });
   config = withAndroidManifest(config, (modConfig) => {
-    modConfig.modResults = withoutDevMenuButton(withNoCleartextTraffic(modConfig.modResults));
+    modConfig.modResults = withFreeRotation(
+      withoutDevMenuButton(withNoCleartextTraffic(modConfig.modResults)),
+    );
     return modConfig;
   });
   return config;
@@ -58,6 +80,7 @@ function withNavOSSAndroid(config) {
 
 module.exports = withNavOSSAndroid;
 module.exports.ARCHITECTURES = ARCHITECTURES;
+module.exports.withFreeRotation = withFreeRotation;
 module.exports.setGradleProperty = setGradleProperty;
 module.exports.withNoCleartextTraffic = withNoCleartextTraffic;
 module.exports.withoutDevMenuButton = withoutDevMenuButton;

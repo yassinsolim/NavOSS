@@ -17,6 +17,7 @@ import { PressableScale } from '@/ui/pressable-scale';
 import { ModalSheet } from '@/ui/sheet/modal-sheet';
 import { SheetHeader } from '@/ui/sheet/sheet-header';
 import { SwitchRow } from '@/ui/switch-row';
+import { DEVICE_NOUN } from '@/lib/device-copy';
 
 interface RoadReportSheetProps {
   isSaving: boolean;
@@ -138,7 +139,7 @@ export function RoadReportSheet({
                   detail={
                     sharing.enabled
                       ? 'Other drivers see your reports'
-                      : 'Off: reports stay on this iPhone'
+                      : `Off: reports stay on this ${DEVICE_NOUN}`
                   }
                   disabled={isSaving}
                   label="Share road reports"

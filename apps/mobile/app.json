@@ -51,6 +51,7 @@
     "android": {
       "package": "org.navoss.mobile",
       "versionCode": 1,
+      "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#0F8F7F",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -92,6 +93,7 @@
       "./plugins/with-navoss-deployment-target.cjs",
       "./plugins/with-navoss-android.cjs",
       "./plugins/with-navoss-android-release.cjs",
+      ["expo-navigation-bar", { "enforceContrast": false }],
       [
         "expo-location",
         {

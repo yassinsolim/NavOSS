@@ -19,9 +19,14 @@ import {
   routeTrafficLabel,
   routeViaLabel,
 } from '@/features/navigation/route-progress';
+import {
+  NO_GPS_PREVIEW_NOTICE,
+  routePreviewPrimaryAction,
+} from '@/features/navigation/route-preview-action';
 import type { RouteError, RouteSource } from '@/features/navigation/route-ui-state';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
+import { IS_ANDROID } from '@/lib/device-copy';
 import { createThemedStyles, radius, space, typography, useTheme } from '@/theme';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
@@ -39,6 +44,11 @@ interface RoutePlanningSheetProps {
   /** Why the route could not be planned; undefined while it is being calculated. */
   failure?: RouteError;
   onCancel: () => void;
+  /**
+   * Opens the start-place picker when the device's location could not start the route. Only the
+   * Android build passes it (handhelds without a GPS radio); iOS keeps its own sheet.
+   */
+  onChooseStart?: () => void;
   onPreviewSupportedRoute: () => void;
   onRetry: () => void;
   position: SharedValue<number>;
@@ -50,6 +60,7 @@ export function RoutePlanningSheet({
   destination,
   failure,
   onCancel,
+  onChooseStart,
   onPreviewSupportedRoute,
   onRetry,
   position,
@@ -92,13 +103,23 @@ export function RoutePlanningSheet({
                   label="Retry"
                   onPress={onRetry}
                 />
-                <Button
-                  accessibilityHint="Plans this trip from Calgary Tower so you can see the route. It cannot be started."
-                  icon={{ android: 'map', ios: 'map.fill' }}
-                  label="Preview a supported route"
-                  onPress={onPreviewSupportedRoute}
-                  variant="tonal"
-                />
+                {failure.originUnavailable === true && onChooseStart !== undefined ? (
+                  <Button
+                    accessibilityHint="Plans this trip from a place you choose so you can see the route. It cannot be started."
+                    icon={{ android: 'trip_origin', ios: 'mappin.and.ellipse' }}
+                    label="Choose a start"
+                    onPress={onChooseStart}
+                    variant="tonal"
+                  />
+                ) : (
+                  <Button
+                    accessibilityHint="Plans this trip from Calgary Tower so you can see the route. It cannot be started."
+                    icon={{ android: 'map', ios: 'map.fill' }}
+                    label="Preview a supported route"
+                    onPress={onPreviewSupportedRoute}
+                    variant="tonal"
+                  />
+                )}
               </View>
             )}
           </View>
@@ -185,6 +206,8 @@ interface RoutePreviewSheetProps {
   metrics: ScreenMetrics;
   onCancel: () => void;
   onDetentChange?: (index: number) => void;
+  /** Android only: no location provider exists, so a chosen start can only be previewed. */
+  deviceHasNoGps?: boolean;
   onEditStops: () => void;
   onSelectRoute: (route: RouteAlternativeV2) => void;
   onStart: () => void;
@@ -211,6 +234,7 @@ interface RoutePreviewSheetProps {
  */
 export function RoutePreviewSheet({
   destination,
+  deviceHasNoGps = false,
   initialDetent,
   metrics,
   onCancel,
@@ -240,6 +264,12 @@ export function RoutePreviewSheet({
   // it is re-measured after a text-size change, never when the driver selects another card.
   const routeChoices = useRef<ScrollView>(null);
   const demoOrigin = previewOriginLabel !== undefined;
+  const primaryAction = routePreviewPrimaryAction({
+    chosenStart: demoOrigin,
+    deviceHasNoGps,
+    isAndroid: IS_ANDROID,
+    simulateDriveAvailable: false,
+  });
   const detents = routePreviewSheetDetents(metrics, { demoOrigin });
   const trafficStatus = routeTrafficLabel(
     routeSource?.id === OFFLINE_ROUTE_SOURCE.id ? undefined : routeSource,
@@ -271,13 +301,18 @@ export function RoutePreviewSheet({
           >
             {formatDuration(selectedRoute.durationSeconds)}
           </Text>
-          {/* Two lines rather than "arrive 1:4…" when a wide button shares the row. */}
-          <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={styles.arrival}>
+          {/* Two lines rather than "arrive 1:4…" when a wide button shares the row; three on
+              Android, whose clock adds "p.m." and whose side panel is narrower than a phone. */}
+          <Text
+            maxFontSizeMultiplier={1.3}
+            numberOfLines={IS_ANDROID ? 3 : 2}
+            style={styles.arrival}
+          >
             {formatDistance(selectedRoute.distanceMeters)} · arrive{' '}
             {formatArrivalTime(selectedRoute.durationSeconds)}
           </Text>
         </View>
-        {demoOrigin ? (
+        {primaryAction === 'use-my-location' ? (
           <Button
             accessibilityLabel="Use my location for navigation"
             icon={{ android: 'my_location', ios: 'location.fill' }}
@@ -285,7 +320,7 @@ export function RoutePreviewSheet({
             onPress={onUseCurrentLocation}
             size="driving"
           />
-        ) : (
+        ) : primaryAction === 'start' ? (
           <Button
             accessibilityLabel="Start navigation"
             icon={{ android: 'navigation', ios: 'location.north.fill' }}
@@ -294,7 +329,7 @@ export function RoutePreviewSheet({
             size="driving"
             style={styles.startButton}
           />
-        )}
+        ) : null}
       </View>
 
       <BottomSheetScrollView
@@ -313,6 +348,11 @@ export function RoutePreviewSheet({
               <Banner
                 message={`Preview starts at ${previewOriginLabel}. Live guidance always uses your real location.`}
               />
+            </View>
+          )}
+          {primaryAction === 'none' && (
+            <View style={styles.inset}>
+              <Text style={styles.quietNote}>{NO_GPS_PREVIEW_NOTICE}</Text>
             </View>
           )}
           <ScrollView
@@ -430,6 +470,7 @@ const useStyles = createThemedStyles(({ colors }) =>
     planningBody: { gap: space.lg, paddingHorizontal: space.lg },
     planningState: { paddingHorizontal: space.lg },
     previewContent: { gap: space.lg },
+    quietNote: { ...typography.footnote, color: colors.textSecondary },
     routeChoice: {
       backgroundColor: colors.surfaceSunken,
       borderColor: 'transparent',

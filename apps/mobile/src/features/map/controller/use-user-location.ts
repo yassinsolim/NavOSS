@@ -16,14 +16,18 @@ import {
   TORONTO_CAMERA_BOUNDS,
 } from '@/features/map/map-region';
 import {
+  currentLocationFix,
+  deviceLacksGps,
   newestValidRouteOriginSample,
+  routeOriginFailureMessage,
   routeOriginSampleFromLocation,
   routeRequestOriginFromSample,
   type RouteOriginSample,
   type RouteRequestOrigin,
 } from '@/features/navigation/route-origin';
-import { NavOssApiError } from '@/lib/api';
+import { RouteOriginUnavailableError } from '@/features/navigation/route-ui-state';
 import { createValueStore, type ValueStore } from '@/lib/value-store';
+import { IS_ANDROID } from '@/lib/device-copy';
 
 export type LocationState = 'denied' | 'error' | 'idle' | 'locating' | 'visible';
 
@@ -35,6 +39,8 @@ export interface UserLocation {
    * cone layer subscribes to; nothing else re-renders when the phone turns.
    */
   deviceHeadingStore: ValueStore<number | undefined>;
+  /** Android only: location is on but the device has no GPS receiver, so no drive can be followed. */
+  deviceHasNoGps: boolean;
   /** Resolves a fresh, accurate origin for a route request, prompting for permission if needed. */
   getCurrentRouteOrigin: (signal: AbortSignal) => Promise<RouteRequestOrigin | undefined>;
   /**
@@ -44,8 +50,11 @@ export interface UserLocation {
    */
   getFreshLocationSample: (signal: AbortSignal) => Promise<RouteOriginSample | undefined>;
   inTorontoCameraBounds: boolean;
-  /** One-shot high-accuracy fix for the locate button. Returns the fix when one was obtained. */
-  locate: () => Promise<Coordinate | undefined>;
+  /**
+   * One-shot high-accuracy fix for the locate button: the fix, `'denied'` without permission,
+   * `'no-fix'` when the device found no location in time, or undefined if the app left the screen.
+   */
+  locate: () => Promise<Coordinate | 'denied' | 'no-fix' | undefined>;
   locationState: LocationState;
   mapRegion: MapRegion;
   /** Origin for nearby search, or undefined outside (or before) the server's declared coverage. */
@@ -73,6 +82,29 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
   const [locationState, setLocationState] = useState<LocationState>('idle');
   const [userCoordinate, setUserCoordinate] = useState<Coordinate>();
   const [userHeading, setUserHeading] = useState(0);
+  const [deviceHasNoGps, setDeviceHasNoGps] = useState(false);
+
+  // Read again whenever the app returns, since location may have been switched on meanwhile.
+  useEffect(() => {
+    if (!IS_ANDROID) return;
+    let cancelled = false;
+    const read = () => {
+      Location.getProviderStatusAsync().then(
+        (status) => {
+          if (!cancelled) setDeviceHasNoGps(deviceLacksGps(status));
+        },
+        () => undefined,
+      );
+    };
+    read();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') read();
+    });
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, []);
 
   const applySample = (sample: RouteOriginSample) => {
     routeOriginSampleRef.current = sample;
@@ -97,9 +129,8 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     if (aborted()) return undefined;
     if (!granted) {
       setLocationState('denied');
-      throw new NavOssApiError(
-        'Allow NavOSS to use your location in iPhone Settings to calculate a route.',
-        0,
+      throw new RouteOriginUnavailableError(
+        `Allow NavOSS to use your location in ${IS_ANDROID ? 'Settings' : 'iPhone Settings'} to calculate a route.`,
       );
     }
 
@@ -108,16 +139,25 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
       requiredAccuracy: 100,
     });
     const location =
-      lastKnown ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }));
+      lastKnown ??
+      (await currentLocationFix(
+        {
+          currentPosition: () =>
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+          servicesEnabled: Location.hasServicesEnabledAsync,
+        },
+        IS_ANDROID,
+      ));
     if (aborted()) return undefined;
+    if (location === 'no-fix' || location === 'services-off') {
+      setLocationState('error');
+      throw new RouteOriginUnavailableError(routeOriginFailureMessage(location));
+    }
     const sample = routeOriginSampleFromLocation(location);
     const selectedSample = newestValidRouteOriginSample(sample, routeOriginSampleRef.current);
     const routeOrigin = routeRequestOriginFromSample(selectedSample);
     if (selectedSample === undefined || routeOrigin === undefined) {
-      throw new NavOssApiError(
-        'A fresh, accurate location fix is needed. Wait for GPS to update, then try again.',
-        0,
-      );
+      throw new RouteOriginUnavailableError(routeOriginFailureMessage('stale-fix'));
     }
     if (aborted()) return undefined;
     applySample(selectedSample);
@@ -130,7 +170,7 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
   ): Promise<RouteRequestOrigin | undefined> =>
     routeRequestOriginFromSample(await getFreshLocationSample(signal));
 
-  const locate = async (): Promise<Coordinate | undefined> => {
+  const locate = async (): Promise<Coordinate | 'denied' | 'no-fix' | undefined> => {
     setLocationState('locating');
     const appIsActive = () => AppState.currentState === 'active';
     try {
@@ -141,19 +181,30 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
       if (!appIsActive()) return undefined;
       if (!granted) {
         setLocationState('denied');
-        return undefined;
+        return 'denied';
       }
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+      const location = await currentLocationFix(
+        {
+          currentPosition: () =>
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+          servicesEnabled: Location.hasServicesEnabledAsync,
+        },
+        IS_ANDROID,
+      );
       if (!appIsActive()) return undefined;
+      if (location === 'no-fix' || location === 'services-off') {
+        setLocationState('error');
+        return 'no-fix';
+      }
       const sample = routeOriginSampleFromLocation(location);
       applySample(sample);
       setLocationState('visible');
       return sample.coordinate;
     } catch {
       setLocationState('error');
-      return undefined;
+      // iOS keeps its silent failure (the button can simply be tapped again); only the Android
+      // build, where a missing fix is the normal case on GPS-less handhelds, says why.
+      return IS_ANDROID ? 'no-fix' : undefined;
     }
   };
 
@@ -171,6 +222,7 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
 
   return {
     applySample,
+    deviceHasNoGps,
     deviceHeadingStore,
     getCurrentRouteOrigin,
     getFreshLocationSample,

@@ -1,5 +1,6 @@
 import type { FeatureCollection, Point } from 'geojson';
 
+import { DEVICE_NOUN, IS_ANDROID } from '../../lib/device-copy';
 import { ROAD_REPORT_TYPES } from '../map/road-report-drafts';
 import { type RouteOriginSample, routeRequestOriginFromSample } from '../navigation/route-origin';
 import type {
@@ -340,8 +341,8 @@ export function privateDraftNotice(reportSharing: CommunityFeatureState): Commun
   return {
     message:
       reportSharing === 'live'
-        ? 'Saved privately on this iPhone for two hours and not shown to other drivers.'
-        : 'Saved privately on this iPhone for two hours and not shown to other drivers yet.',
+        ? `Saved privately on this ${DEVICE_NOUN} for two hours and not shown to other drivers.`
+        : `Saved privately on this ${DEVICE_NOUN} for two hours and not shown to other drivers yet.`,
     title: 'Saved privately',
     tone: 'info',
   };
@@ -367,7 +368,7 @@ function notSharedReason(error: NativeCommunityError, retryAfterSeconds?: number
     case 'rate-limited':
       return `You have shared several reports recently. You can share again ${retryLabel(retryAfterSeconds)}.`;
     case 'too-new':
-      return `This iPhone was registered very recently. You can share ${retryLabel(retryAfterSeconds)}.`;
+      return `This ${DEVICE_NOUN} was registered very recently. You can share ${retryLabel(retryAfterSeconds)}.`;
     case 'out-of-coverage':
       return 'Reports can be shared only inside NavOSS coverage.';
     case 'location-unavailable':
@@ -421,7 +422,7 @@ export function reportSubmitOutcome(
   return {
     kind: 'private',
     notice: {
-      message: `${notSharedReason(result.error, result.retryAfterSeconds)} Saved privately on this iPhone instead.`,
+      message: `${notSharedReason(result.error, result.retryAfterSeconds)} Saved privately on this ${DEVICE_NOUN} instead.`,
       title: 'Not shared',
       tone: result.error === 'not-shared' ? 'info' : 'warning',
     },
@@ -466,7 +467,7 @@ export function voteNotice(
       case 'unsupported':
         return 'This device cannot answer reports (it has no Apple App Attest).';
       case 'too-new':
-        return `This iPhone was registered very recently. Try again ${retryLabel(result.retryAfterSeconds)}.`;
+        return `This ${DEVICE_NOUN} was registered very recently. Try again ${retryLabel(result.retryAfterSeconds)}.`;
       default:
         return 'NavOSS did not accept the answer.';
     }
@@ -501,8 +502,7 @@ export function resetIdentityNotice(result: NativeCommunityResult): CommunityNot
   }
   if (result.error === 'identity-lost') {
     return {
-      message:
-        'This iPhone had lost its community key, so NavOSS could not delete it. Its reports expire on their own; the next share starts a new identity.',
+      message: `This ${DEVICE_NOUN} had lost its community key, so NavOSS could not delete it. Its reports expire on their own; the next share starts a new identity.`,
       title: 'Identity could not be deleted',
       tone: 'warning',
     };
@@ -527,12 +527,12 @@ export function reportSheetNotice(sharing: {
     case 'live':
       return sharing.enabled
         ? `Shared with other drivers at an approximate location. It expires on its own unless others confirm it. ${safety}`
-        : `Sharing is off: reports are saved privately on this iPhone for two hours and not shown to other drivers. ${safety}`;
+        : `Sharing is off: reports are saved privately on this ${DEVICE_NOUN} for two hours and not shown to other drivers. ${safety}`;
     case 'unsupported':
-      return `Saved privately on this iPhone for two hours. This device cannot share reports with other drivers. ${safety}`;
+      return `Saved privately on this ${DEVICE_NOUN} for two hours. This device cannot share reports with other drivers. ${safety}`;
     case 'checking':
     case 'not-available':
-      return `Saved privately on this iPhone for two hours and not shown to other drivers yet. ${safety}`;
+      return `Saved privately on this ${DEVICE_NOUN} for two hours and not shown to other drivers yet. ${safety}`;
   }
 }
 
@@ -618,14 +618,16 @@ export function reportSharingRowStatus(availability: CommunityFeatureState): Com
       };
     case 'unsupported':
       return {
-        detail: 'Not supported on this device. Reports stay private on this iPhone.',
+        detail: IS_ANDROID
+          ? 'Not available on Android. Reports stay private on this device.'
+          : 'Not supported on this device. Reports stay private on this iPhone.',
         enabled: false,
       };
     case 'checking':
       return { detail: 'Checking…', enabled: false };
     case 'not-available':
       return {
-        detail: 'Not available yet. Reports stay private on this iPhone.',
+        detail: `Not available yet. Reports stay private on this ${DEVICE_NOUN}.`,
         enabled: false,
       };
   }
