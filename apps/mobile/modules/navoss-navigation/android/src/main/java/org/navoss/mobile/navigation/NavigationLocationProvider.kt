@@ -20,7 +20,21 @@ enum class LocationAvailability(val raw: String) {
   /** Location is turned off in system settings. */
   LOCATION_OFF("location-off"),
   /** Precise location permission is not granted. */
-  PERMISSION_DENIED("permission-denied"),
+  PERMISSION_DENIED("permission-denied");
+
+  companion object {
+    /**
+     * No GPS is reported first, whatever the permission: a GPS-less handheld cannot follow a
+     * drive even with location allowed, and its driver is offered Simulate drive, not told to
+     * allow location.
+     */
+    fun of(hasGps: Boolean, permissionGranted: Boolean, locationEnabled: Boolean): LocationAvailability = when {
+      !hasGps -> NO_GPS
+      !permissionGranted -> PERMISSION_DENIED
+      !locationEnabled -> LOCATION_OFF
+      else -> AVAILABLE
+    }
+  }
 }
 
 /**
@@ -36,20 +50,15 @@ internal class NavigationLocationProvider(
   private val listener = LocationListener { location -> onFix(location.toRawFix()) }
   private var running = false
 
-  fun availability(): LocationAvailability {
-    if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-      return LocationAvailability.PERMISSION_DENIED
-    }
-    if (!context.packageManager.hasSystemFeature(PackageManager.FEATURE_LOCATION_GPS) || provider() == null) {
-      return LocationAvailability.NO_GPS
-    }
-    val enabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+  fun availability(): LocationAvailability = LocationAvailability.of(
+    hasGps = context.packageManager.hasSystemFeature(PackageManager.FEATURE_LOCATION_GPS) && provider() != null,
+    permissionGranted = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED,
+    locationEnabled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
       manager.isLocationEnabled
     } else {
       manager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-    }
-    return if (enabled) LocationAvailability.AVAILABLE else LocationAvailability.LOCATION_OFF
-  }
+    },
+  )
 
   /** Starts updates; `false` when [availability] is not [LocationAvailability.AVAILABLE]. */
   @SuppressLint("MissingPermission")
