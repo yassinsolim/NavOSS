@@ -9,9 +9,10 @@ The 2026-11-15 Release simulator Canada pass on `14dae86` against production was
 ## CarPlay free drive (after build 84)
 
 Owner report on build 84 (2026-11-21): with no destination, CarPlay zoomed to the general area and
-showed no arrow. Changed in FREE_DRIVE_PR, not in build 84 or any distributed build: with a live fix and no destination, CarPlay draws the guidance vehicle marker pointing the way the
-car is going and follows it with the close, tilted guidance camera. Verified only on a simulator
-with synthetic fixes and mocked CarPlay buttons. Check while parked or with a passenger operating:
+showed no arrow. Changed in [#160](https://github.com/yassinsolim/NavOSS/pull/160), not in build 84
+or any distributed build: with a live fix and no destination, CarPlay draws the guidance vehicle
+marker pointing the way the car is going and follows it with the close, tilted guidance camera.
+Verified only on a simulator with synthetic fixes and mocked CarPlay buttons. Check while parked or with a passenger operating:
 
 - [ ] Open CarPlay parked: the arrow (or car) appears low on the map within a few seconds, close
       and tilted, not a city overview. Before the car has moved it points the way the **phone**
