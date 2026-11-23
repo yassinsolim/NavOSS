@@ -20,6 +20,9 @@ class FakeResponse(
   val delayMillis: Long = 0,
   /** Wait this long between body bytes (a server that trickles). */
   val trickleMillis: Long = 0,
+  /** After this many body bytes, stop sending for [stallMillis] (then send the rest). */
+  val stallAtByte: Int = -1,
+  val stallMillis: Long = 0,
 )
 
 /**
@@ -67,8 +70,9 @@ class FakeHttpServer(private val routes: Map<String, FakeResponse>) : Closeable 
             Thread.sleep(response.delayMillis)
             output.write(head.toString().toByteArray())
             output.flush()
-            if (response.trickleMillis > 0) {
-              for (byte in response.body) {
+            if (response.trickleMillis > 0 || response.stallAtByte >= 0) {
+              response.body.forEachIndexed { index, byte ->
+                if (index == response.stallAtByte) Thread.sleep(response.stallMillis)
                 output.write(byte.toInt())
                 output.flush()
                 Thread.sleep(response.trickleMillis)
