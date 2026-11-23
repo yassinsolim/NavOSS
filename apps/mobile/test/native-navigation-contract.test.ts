@@ -86,6 +86,27 @@ describe('snapshot payloads', () => {
     warn.mockRestore();
   });
 
+  it("accepts the fix's course off the route, and a snapshot from a core without it", () => {
+    const offRoute = { ...snapshot, isOffRoute: true, rawCourseDegrees: 270 };
+    expect(nativeSnapshot({ snapshotJson: JSON.stringify(offRoute) })).toEqual(offRoute);
+    expect(
+      nativeSnapshot({ snapshotJson: JSON.stringify({ ...offRoute, rawCourseDegrees: 0 }) }),
+    ).toMatchObject({ rawCourseDegrees: 0 });
+    const older = nativeSnapshot({ snapshotJson: JSON.stringify(snapshot) });
+    expect(older).toEqual(snapshot);
+    expect(older.rawCourseDegrees).toBeUndefined();
+  });
+
+  it('treats a course that is not a bearing as a malformed snapshot', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    for (const rawCourseDegrees of [-1, 360, 720, '270', null, true]) {
+      expect(
+        nativeSnapshot({ snapshotJson: JSON.stringify({ ...snapshot, rawCourseDegrees }) }),
+      ).toBe(UNAVAILABLE_SNAPSHOT);
+    }
+    warn.mockRestore();
+  });
+
   it('delivers parsed snapshots to listeners', () => {
     nativeModule.getCapabilities.mockReturnValue({ version: 11 });
     const received: unknown[] = [];

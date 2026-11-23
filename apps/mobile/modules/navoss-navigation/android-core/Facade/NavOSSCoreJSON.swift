@@ -488,6 +488,9 @@ func navOSSCoreSnapshot(_ state: NavOSSNavigationServiceState) -> NavOSSCoreJSON
   if let matchedCourseDegrees = snapshot.matchedCourseDegrees {
     payload["matchedCourseDegrees"] = .double(matchedCourseDegrees)
   }
+  if let rawCourseDegrees = snapshot.rawCourseDegrees {
+    payload["rawCourseDegrees"] = .double(rawCourseDegrees)
+  }
   if let distanceFromRouteMeters = snapshot.distanceFromRouteMeters {
     payload["distanceFromRouteMeters"] = .double(distanceFromRouteMeters)
   }

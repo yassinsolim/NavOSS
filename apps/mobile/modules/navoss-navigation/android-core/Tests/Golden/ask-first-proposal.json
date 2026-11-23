@@ -19,6 +19,7 @@
     "latitude" : 50.9948894,
     "longitude" : -114.0401062
   },
+  "rawCourseDegrees" : 278.3,
   "rerouteCount" : 0,
   "rerouteMode" : "ask-first",
   "rerouteProposal" : {

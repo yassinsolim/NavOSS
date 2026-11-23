@@ -37,6 +37,9 @@ naming both numbers) on a mismatch. The ABI version changes whenever a native fu
 callback, a JSON key or an error code changes meaning. The JS contract version (`version: 11` in
 `getCapabilities`) is separate and is reported by `nativeContractVersion()` so the Expo module can
 build its capabilities from the core it actually loaded.
+An added optional snapshot key changes neither: the Kotlin side passes the snapshot JSON through
+untouched, and JS reading an older core finds the key absent and behaves as before
+(`rawCourseDegrees` was added this way under ABI 2 and contract v11).
 
 Version 2 (review of the first implementation) changed, against version 1:
 
@@ -164,8 +167,9 @@ Every call that returns a snapshot, and the `onStateChanged` callback, produce a
 - present only when known: `tripEndReason`, `isAcquiringPosition` (only ever `true`),
   `speedMetersPerSecond`, `speedLimitKph`, `currentRoadName`, `rerouteProposal`,
   `safetyCameraAlert`, `rawCoordinate`, `matchedCoordinate`, `matchedCourseDegrees`,
-  `distanceFromRouteMeters`, `horizontalAccuracyMeters`, and, unless `phase` is `idle`,
-  `guidance` and `trip`;
+  `rawCourseDegrees` (the real fix's GPS course when it is a bearing reported at 2 m/s or more;
+  never when dead-reckoned or arrived), `distanceFromRouteMeters`, `horizontalAccuracyMeters`,
+  and, unless `phase` is `idle`, `guidance` and `trip`;
 - `rerouteProposal.createdAtMs` is Unix milliseconds; `respondWithinSeconds` is the core's
   constant; the proposal's `trip` and the snapshot's `trip` use the trip serializer (destination
   without `category`, waypoints with it, lanes as `active`/`valid`/`validIndication`,

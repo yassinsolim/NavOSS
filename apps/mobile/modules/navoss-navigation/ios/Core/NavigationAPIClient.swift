@@ -141,6 +141,27 @@ public struct NavOSSNavigationRouteOrigin: Sendable {
   }
 }
 
+/// Below this ground speed a fix's GPS course is noise.
+let navOSSTrustworthyCourseMinimumSpeedMetersPerSecond = 2.0
+
+/// The direction of travel a fix proves on its own: a real bearing (finite, 0..<360) reported
+/// while moving at `navOSSTrustworthyCourseMinimumSpeedMetersPerSecond` or faster. One rule for a
+/// reroute's origin heading, the course CarPlay falls back to off route, and the snapshot's
+/// `rawCourseDegrees`.
+func navOSSTrustworthyCourseDegrees(
+  _ courseDegrees: Double?,
+  speedMetersPerSecond: Double?
+) -> Double? {
+  guard let courseDegrees, let speedMetersPerSecond,
+    courseDegrees.isFinite, (0..<360).contains(courseDegrees),
+    speedMetersPerSecond.isFinite,
+    speedMetersPerSecond >= navOSSTrustworthyCourseMinimumSpeedMetersPerSecond
+  else {
+    return nil
+  }
+  return courseDegrees
+}
+
 public func navOSSNavigationRouteOrigin(
   coordinate: NavOSSCarPlayCoordinate,
   courseDegrees: Double?,
@@ -155,18 +176,10 @@ public func navOSSNavigationRouteOrigin(
   else {
     return nil
   }
-  let headingDegrees: Double? =
-    if let courseDegrees, let speedMetersPerSecond,
-      courseDegrees.isFinite, (0..<360).contains(courseDegrees),
-      speedMetersPerSecond.isFinite, speedMetersPerSecond >= 2
-    {
-      courseDegrees
-    } else {
-      nil
-    }
   return NavOSSNavigationRouteOrigin(
     coordinate: coordinate,
-    headingDegrees: headingDegrees,
+    headingDegrees: navOSSTrustworthyCourseDegrees(
+      courseDegrees, speedMetersPerSecond: speedMetersPerSecond),
     horizontalAccuracyMeters: horizontalAccuracyMeters
   )
 }

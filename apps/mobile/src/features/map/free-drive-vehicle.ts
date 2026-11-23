@@ -1,5 +1,7 @@
 import type { Coordinate } from '@navoss/contracts';
 
+import { tripVehicleCourseDegrees, validBearing } from '../navigation/vehicle-heading';
+
 // With no trip the phone map draws the same NavOSS vehicle as guidance, under the rules CarPlay's
 // free drive uses (`CarPlayFreeDrive.swift`): the vehicle means a live, accurate fix, and it
 // points only where the evidence says the car is going.
@@ -51,14 +53,6 @@ interface LocationLike {
   timestamp: number;
 }
 
-function validBearing(degrees: number | null | undefined): number | undefined {
-  return degrees !== null && degrees !== undefined && Number.isFinite(degrees) && degrees >= 0
-    ? degrees < 360
-      ? degrees
-      : undefined
-    : undefined;
-}
-
 function nonNegative(value: number | null | undefined): number | undefined {
   return value !== null && value !== undefined && Number.isFinite(value) && value >= 0
     ? value
@@ -104,24 +98,25 @@ export function trackWithFix(
 }
 
 /**
- * The navigation snapshot gives the trip vehicle its course (used at Start before the trip has
- * drawn one). It is never a free-drive fix: it carries no time of measurement, and during an
- * Android simulated drive it is not where the phone is. While a trip runs the free-drive fix and
- * course are dropped (the phone map's own watch is off then), so after End the vehicle starts over
- * as at launch: the dot until the restarted watch delivers a drawable fix, and a course only from
- * that fix or later ones. A snapshot without a trip clears the trip course. An unchanged track is
- * returned as is, so repeated snapshots re-render nothing.
+ * The navigation snapshot gives the trip vehicle its course (`tripVehicleCourseDegrees`: the
+ * matched road's, else off the route the fix's own), used at Start before the trip has drawn one.
+ * With neither the course held stays. It is never a free-drive fix: it carries no time of
+ * measurement, and during an Android simulated drive it is not where the phone is. While a trip
+ * runs the free-drive fix and course are dropped (the phone map's own watch is off then), so after
+ * End the vehicle starts over as at launch: the dot until the restarted watch delivers a drawable
+ * fix, and a course only from that fix or later ones. A snapshot without a trip clears the trip
+ * course. An unchanged track is returned as is, so repeated snapshots re-render nothing.
  */
 export function trackWithTripSnapshot(
   track: FreeDriveTrack,
-  snapshot: { matchedCourseDegrees?: number; trip?: unknown },
+  snapshot: { matchedCourseDegrees?: number; rawCourseDegrees?: number; trip?: unknown },
 ): FreeDriveTrack {
   if (snapshot.trip === undefined) {
     return track.tripCourseDegrees === undefined
       ? track
       : { ...track, tripCourseDegrees: undefined };
   }
-  const tripCourseDegrees = validBearing(snapshot.matchedCourseDegrees) ?? track.tripCourseDegrees;
+  const tripCourseDegrees = tripVehicleCourseDegrees(snapshot) ?? track.tripCourseDegrees;
   return track.fix === undefined &&
     track.lastCourseDegrees === undefined &&
     track.tripCourseDegrees === tripCourseDegrees

@@ -275,6 +275,37 @@ describe('vehicle hand-over between free drive and a trip', () => {
     });
   });
 
+  it("off the route the trip vehicle takes the fix's course, and the road's again once matched", () => {
+    // Matched south after a turn, then driven west off the route with no new route yet.
+    const matched = trackWithTripSnapshot(EMPTY_FREE_DRIVE_TRACK, {
+      matchedCourseDegrees: 180,
+      rawCourseDegrees: 182,
+      trip: {},
+    });
+    expect(matched.tripCourseDegrees).toBe(180);
+    const offRoute = trackWithTripSnapshot(matched, { rawCourseDegrees: 270, trip: {} });
+    expect(offRoute.tripCourseDegrees).toBe(270);
+    const rematched = trackWithTripSnapshot(offRoute, {
+      matchedCourseDegrees: 90,
+      rawCourseDegrees: 93,
+      trip: {},
+    });
+    expect(rematched.tripCourseDegrees).toBe(90);
+  });
+
+  it('off the route without a course from the fix (stopped) the trip vehicle holds its heading', () => {
+    const offRoute = trackWithTripSnapshot(EMPTY_FREE_DRIVE_TRACK, {
+      rawCourseDegrees: 270,
+      trip: {},
+    });
+    const stopped = trackWithTripSnapshot(offRoute, { trip: {} });
+    expect(stopped).toBe(offRoute);
+    expect(stopped.tripCourseDegrees).toBe(270);
+    expect(
+      trackWithTripSnapshot(offRoute, { rawCourseDegrees: 400, trip: {} }).tripCourseDegrees,
+    ).toBe(270);
+  });
+
   it('repeated trip snapshots leave the stored track untouched, so nothing re-renders', () => {
     const during = trackWithTripSnapshot(EMPTY_FREE_DRIVE_TRACK, {
       matchedCourseDegrees: 270,

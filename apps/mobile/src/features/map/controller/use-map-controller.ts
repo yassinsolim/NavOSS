@@ -177,6 +177,7 @@ import {
 } from '@/features/navigation/route-ui-state';
 import { setUpdaterTripActive } from '@/features/updates/use-app-updates';
 import { useSafetyCameraAlert } from '@/features/navigation/use-safety-camera-alert';
+import { tripVehicleCourseDegrees } from '@/features/navigation/vehicle-heading';
 import {
   hasNoRouteGuidance,
   isResumingTrip,
@@ -1559,7 +1560,7 @@ export function useMapController() {
     routeState.type === 'navigating'
       ? navigationCameraBearing(
           mapPreferences.navigationOrientation,
-          navigationSnapshot?.matchedCourseDegrees,
+          tripVehicleCourseDegrees(navigationSnapshot),
           userHeading,
         )
       : undefined;

@@ -248,6 +248,12 @@ export interface NativeNavigationSnapshot {
   matchedCourseDegrees?: number;
   phase: 'arrived' | 'idle' | 'tracking';
   rawCoordinate?: NativeNavigationCoordinate;
+  /**
+   * The latest real fix's GPS course, in [0, 360), when it proves the direction of travel (a valid
+   * course at 2 m/s or more). Absent when dead-reckoned, once arrived, and without a fix. Off the
+   * route, where there is no `matchedCourseDegrees`, it is the vehicle's course.
+   */
+  rawCourseDegrees?: number;
   rerouteCount: number;
   rerouteMode?: NativeRerouteMode;
   rerouteProposal?: NativeRerouteProposal;

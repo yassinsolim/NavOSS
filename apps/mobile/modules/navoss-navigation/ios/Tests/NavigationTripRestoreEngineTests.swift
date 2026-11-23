@@ -393,6 +393,43 @@ final class NavigationTripRestoreEngineTests: XCTestCase {
     }
   }
 
+  /// The recorded detour with no new route coming: off the route there is no matched course,
+  /// and every state carries the fix's own course while that fix proves the direction of travel,
+  /// so the phone can turn the map and the vehicle with the car. A restored trip finding its
+  /// place off the route carries it too.
+  func testOffTheRouteTheStateCarriesTheFixCourse() throws {
+    func trustworthy(_ sample: NavigationLocationSample) -> Double? {
+      navOSSTrustworthyCourseDegrees(
+        sample.courseDegrees, speedMetersPerSecond: sample.speedMetersPerSecond)
+    }
+    let drive = process(phone())
+    drive.answersReroutes = false
+    try drive.start(trip)
+    var offRouteWithCourse = 0
+    for (index, sample) in fixes[0...212].enumerated() {
+      try drive.fix(sample)
+      let navigation = drive.state.navigation
+      XCTAssertEqual(navigation.rawCourseDegrees, trustworthy(sample), "fix \(index)")
+      if navigation.isOffRoute {
+        XCTAssertNil(navigation.matchedCourseDegrees, "fix \(index)")
+        if navigation.rawCourseDegrees != nil { offRouteWithCourse += 1 }
+      }
+    }
+    XCTAssertGreaterThan(offRouteWithCourse, 20, "the detour is driven off the route")
+    drive.kill()
+
+    let phone = phone()
+    _ = try driveThenKill(phone, through: 180, answering: false)
+    let restored = relaunch(phone, at: fixes[181].timestamp! - 0.5)
+    restored.answersReroutes = false
+    try restored.fix(fixes[181])
+    XCTAssertTrue(restored.state.isAcquiringPosition)
+    XCTAssertNil(restored.state.navigation.matchedCourseDegrees)
+    XCTAssertNotNil(trustworthy(fixes[181]))
+    XCTAssertEqual(restored.state.navigation.rawCourseDegrees, trustworthy(fixes[181]))
+    restored.kill()
+  }
+
   /// Killed on the route, reopened on a road beside it (100 m to the right): an ordinary
   /// departure, rerouted after three fixes, never ended.
   func testARestoredTripReopenedBesideItsRouteIsRerouted() throws {

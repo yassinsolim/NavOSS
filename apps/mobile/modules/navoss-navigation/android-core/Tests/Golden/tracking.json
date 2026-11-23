@@ -25,6 +25,7 @@
     "latitude" : 51.0086034,
     "longitude" : -114.0154283
   },
+  "rawCourseDegrees" : 252.9,
   "rerouteCount" : 0,
   "rerouteMode" : "adaptive",
   "routeProgress" : 0.11207499926371918,

@@ -548,6 +548,11 @@ struct NavigationLocationSample: Equatable, Sendable {
     }
     return horizontalAccuracyMeters.isFinite && horizontalAccuracyMeters >= 0
   }
+
+  /// This fix's course when it proves the direction of travel (`navOSSTrustworthyCourseDegrees`).
+  var trustworthyCourseDegrees: Double? {
+    navOSSTrustworthyCourseDegrees(courseDegrees, speedMetersPerSecond: speedMetersPerSecond)
+  }
 }
 
 enum NavigationPhase: String, Sendable {
@@ -573,6 +578,10 @@ struct NavigationSnapshot: Equatable, Sendable {
   /// The matched position was extrapolated along the route through a gap in fixes.
   var isDeadReckoning = false
   var speedMetersPerSecond: Double? = nil
+  /// The GPS course of the real fix behind this snapshot, when it proves the direction of travel
+  /// (`navOSSTrustworthyCourseDegrees`). Off route and before a match there is no matched course,
+  /// but the vehicle still has this one. `nil` when dead-reckoned, once arrived, and without a fix.
+  var rawCourseDegrees: Double? = nil
   /// Whether the pass of the route the vehicle is on is known. False only on a restored trip
   /// without usable progress, while its fixes fit more than one pass (the start and end of a
   /// loop, a parkade spiral) and nothing else tells them apart: its matched position is then a
@@ -977,7 +986,8 @@ final class NavigationCore {
         routeProgress: 0,
         routeVersion: routeVersion,
         sequence: sequence,
-        speedMetersPerSecond: sample.speedMetersPerSecond
+        speedMetersPerSecond: sample.speedMetersPerSecond,
+        rawCourseDegrees: sample.trustworthyCourseDegrees
       )
       return snapshot
     }
@@ -1316,6 +1326,7 @@ final class NavigationCore {
         ? projection.geometrySegmentIndex
         : isOffRoute || isAcquiring ? nil : provisionalGeometrySegmentIndex,
       speedMetersPerSecond: sample.speedMetersPerSecond,
+      rawCourseDegrees: sample.trustworthyCourseDegrees,
       isPassConfirmed: !requiresPassConfirmation
     )
     fixProgress = routeProgress
