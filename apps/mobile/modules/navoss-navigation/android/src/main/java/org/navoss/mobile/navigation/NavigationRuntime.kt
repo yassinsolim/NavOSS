@@ -90,8 +90,8 @@ class NavigationRuntime private constructor(
    */
   private val outOfMemory = OutOfMemoryStop(
     notifyDriver = { if (serviceRequested) notification.postStopped() },
+    stopService = { context.stopService(serviceIntent) },
     finishTask = {
-      context.stopService(serviceIntent)
       context.getSystemService(ActivityManager::class.java)?.appTasks?.forEach { it.finishAndRemoveTask() }
     },
     exitProcess = { Process.killProcess(Process.myPid()) },

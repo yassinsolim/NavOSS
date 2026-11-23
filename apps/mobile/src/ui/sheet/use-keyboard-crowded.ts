@@ -1,27 +1,24 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Keyboard, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IS_ANDROID } from '@/lib/device-copy';
-import { CLOSED_KEYBOARD, isKeyboardCrowded, keyboardShown } from '@/ui/sheet/keyboard-space';
+import { CLOSED_KEYBOARD, keyboardSession } from '@/ui/sheet/keyboard-space';
 
-/** `isKeyboardCrowded` for the current window and keyboard, with the inset it opened with. */
+/** Whether the open keyboard crowds a search sheet; holds while it stays open in the same window. */
 export function useKeyboardCrowded(): boolean {
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const topInsetRef = useRef(insets.top);
-  topInsetRef.current = insets.top;
-  const [keyboard, setKeyboard] = useState(CLOSED_KEYBOARD);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [session, setSession] = useState(CLOSED_KEYBOARD);
 
   useEffect(() => {
     if (!IS_ANDROID) return undefined;
     const show = Keyboard.addListener('keyboardDidShow', (event) => {
-      setKeyboard((previous) =>
-        keyboardShown(previous, event.endCoordinates.height, topInsetRef.current),
-      );
+      setKeyboardHeight(event.endCoordinates.height);
     });
     const hide = Keyboard.addListener('keyboardDidHide', () => {
-      setKeyboard(CLOSED_KEYBOARD);
+      setKeyboardHeight(0);
     });
     return () => {
       show.remove();
@@ -29,10 +26,13 @@ export function useKeyboardCrowded(): boolean {
     };
   }, []);
 
-  return isKeyboardCrowded({
+  const next = keyboardSession(session, {
     android: IS_ANDROID,
-    keyboardHeight: keyboard.height,
-    topInset: keyboard.topInset,
+    keyboardHeight,
+    topInset: insets.top,
     windowHeight,
+    windowWidth,
   });
+  if (next !== session) setSession(next);
+  return next.crowded;
 }

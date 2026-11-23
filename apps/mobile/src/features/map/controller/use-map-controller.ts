@@ -178,7 +178,9 @@ import { setUpdaterTripActive } from '@/features/updates/use-app-updates';
 import { useSafetyCameraAlert } from '@/features/navigation/use-safety-camera-alert';
 import {
   isResumingTrip,
+  isTripState,
   nextTripSimulated,
+  simulatedAtTripEntry,
   vehicleMatchStatus as vehicleMatchStatusOf,
 } from '@/features/navigation/trip-status';
 import { fetchAppConfigUntilKnown, searchPlaces } from '@/lib/api';
@@ -1204,10 +1206,17 @@ export function useMapController() {
 
   const simulatedDrive = useSimulatedDrive();
   // The arrival of a simulated drive says so, after the native simulation has already stopped;
-  // a screen mounted after it reads the native trip's flag, kept until End / Done.
-  const [tripSimulated, setTripSimulated] = useState(isSimulatedTrip);
-  const nextSimulated = nextTripSimulated(tripSimulated, routeState.type, simulatedDrive);
+  // a screen mounted after it adopts the trip a render later and reads the native trip's flag
+  // then, kept until End / Done.
+  const [tripSimulated, setTripSimulated] = useState(false);
+  const [wasInTrip, setWasInTrip] = useState(false);
+  const nextSimulated = nextTripSimulated(
+    tripSimulated,
+    routeState.type,
+    simulatedDrive || simulatedAtTripEntry(routeState.type, wasInTrip, isSimulatedTrip),
+  );
   if (nextSimulated !== tripSimulated) setTripSimulated(nextSimulated);
+  if (isTripState(routeState.type) !== wasInTrip) setWasInTrip(!wasInTrip);
   const hostStatus = useHostStatus();
 
   /** Android: drives the selected route without GPS, labelled as a simulation throughout. */

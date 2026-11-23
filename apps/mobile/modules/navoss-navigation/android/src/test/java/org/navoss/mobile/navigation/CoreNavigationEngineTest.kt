@@ -191,6 +191,35 @@ class CoreNavigationEngineTest {
   }
 
   @Test
+  fun `out of memory anywhere in the factory is fatal, not a missing core`() {
+    fun loader(loadError: () -> Throwable?, contractVersion: () -> Int) = object : NavigationCoreLoader {
+      override fun loadError(): Throwable? = loadError()
+      override fun contractVersion() = contractVersion()
+      override fun create(configJson: String, host: NavigationCoreHost): NavigationCore = ScriptedCore()
+    }
+    val stages = listOf(
+      loader({ throw OutOfMemoryError() }, { 11 }),
+      loader({ OutOfMemoryError() }, { 11 }),
+      loader({ null }, { throw OutOfMemoryError() }),
+    )
+    for (stage in stages) {
+      var fatal = 0
+      CoreNavigationEngine.create(stage, "{}", host, onOutOfMemory = { fatal += 1 }) { RerouteMode.ADAPTIVE }
+      assertEquals(1, fatal)
+    }
+    // A library that is simply missing is still only "guidance unavailable".
+    var fatal = 0
+    val engine = CoreNavigationEngine.create(
+      loader({ UnsatisfiedLinkError("missing") }, { 11 }),
+      "{}",
+      host,
+      onOutOfMemory = { fatal += 1 },
+    ) { RerouteMode.ADAPTIVE }
+    assertEquals(0, fatal)
+    assertNull(engine.contractVersion)
+  }
+
+  @Test
   fun `other refusals pass through without the fatal handler`() {
     var fatal = 0
     val core = ScriptedCore().apply { failure = NavigationEngineException("internal", "DecodingError") }
