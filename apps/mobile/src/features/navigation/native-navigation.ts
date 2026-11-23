@@ -440,14 +440,17 @@ export function liveGuidanceRefusal(): { message: string; title: string } | unde
 }
 
 /**
- * Android only: Simulate drive is offered where no location provider can follow a drive, and
- * in development builds.
+ * Android only: Simulate drive is offered where no location provider can follow a drive (no GPS,
+ * or Location turned off), and in development builds. Not for a denied permission: Start says how
+ * to allow it, and a simulation would only hide that.
  */
 export function canSimulateDrive(): boolean {
   if (NavOSSNavigation.startSimulatedDrive === undefined || !hasNativeTurnByTurnGuidance()) {
     return false;
   }
-  return __DEV__ || getLocationAvailability() !== 'available';
+  if (__DEV__) return true;
+  const availability = getLocationAvailability();
+  return availability === 'no-gps' || availability === 'location-off';
 }
 
 /** Starts a clearly labelled simulated drive of `route`; real fixes are ignored meanwhile. */
