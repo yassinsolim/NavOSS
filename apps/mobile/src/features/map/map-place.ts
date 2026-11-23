@@ -399,14 +399,37 @@ const OPENING_HOURS_WEEKDAY_INDEX: Record<string, number> = {
   Sun: 6,
 };
 
+// Built once per time zone: on Android, Hermes builds every Intl formatter through ICU in Java,
+// which is slow enough to stall rendering when it happens on each call.
+const WEEK_MINUTE_FORMATS = new Map<string, Intl.DateTimeFormat>();
+const UTC_OFFSET_FORMATS = new Map<string, Intl.DateTimeFormat>();
+
+function cachedFormat(
+  cache: Map<string, Intl.DateTimeFormat>,
+  timeZone: string,
+  create: () => Intl.DateTimeFormat,
+): Intl.DateTimeFormat {
+  let format = cache.get(timeZone);
+  if (format === undefined) {
+    format = create();
+    cache.set(timeZone, format);
+  }
+  return format;
+}
+
 function localWeekMinute(now: Date, timeZone: string): number | undefined {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    hour: '2-digit',
-    hourCycle: 'h23',
-    minute: '2-digit',
+  const parts = cachedFormat(
+    WEEK_MINUTE_FORMATS,
     timeZone,
-    weekday: 'short',
-  }).formatToParts(now);
+    () =>
+      new Intl.DateTimeFormat('en-CA', {
+        hour: '2-digit',
+        hourCycle: 'h23',
+        minute: '2-digit',
+        timeZone,
+        weekday: 'short',
+      }),
+  ).formatToParts(now);
   const weekdayToken = parts.find((part) => part.type === 'weekday')?.value;
   const hourToken = parts.find((part) => part.type === 'hour')?.value;
   const minuteToken = parts.find((part) => part.type === 'minute')?.value;
@@ -423,16 +446,21 @@ function localWeekMinute(now: Date, timeZone: string): number | undefined {
 // the same built-in Intl the rest of this module already relies on rather than a time zone
 // database dependency.
 function utcOffsetMinutes(date: Date, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    day: '2-digit',
-    hour: '2-digit',
-    hourCycle: 'h23',
-    minute: '2-digit',
-    month: '2-digit',
-    second: '2-digit',
+  const parts = cachedFormat(
+    UTC_OFFSET_FORMATS,
     timeZone,
-    year: 'numeric',
-  }).formatToParts(date);
+    () =>
+      new Intl.DateTimeFormat('en-US', {
+        day: '2-digit',
+        hour: '2-digit',
+        hourCycle: 'h23',
+        minute: '2-digit',
+        month: '2-digit',
+        second: '2-digit',
+        timeZone,
+        year: 'numeric',
+      }),
+  ).formatToParts(date);
   const value = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
   const asUtc = Date.UTC(
     value('year'),
