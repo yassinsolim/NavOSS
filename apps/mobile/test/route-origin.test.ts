@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   newestValidRouteOriginSample,
+  routeOriginFailureMessage,
   routeOriginSampleFromLocation,
   routeRequestOriginFromSample,
+  withinLocationTimeout,
 } from '../src/features/navigation/route-origin.js';
 
 const nowMs = Date.UTC(2026, 7, 1, 12, 0, 0);
@@ -84,5 +86,38 @@ describe('route origin correlation', () => {
     const newer = routeOriginSampleFromLocation(location({ timestamp: nowMs + 1_000 }));
 
     expect(newestValidRouteOriginSample(older, newer, nowMs + 1_000)).toBe(newer);
+  });
+});
+
+describe('route origin without a location', () => {
+  it('names a missing fix and location turned off without blaming the connection', () => {
+    for (const failure of ['no-fix', 'services-off'] as const) {
+      const message = routeOriginFailureMessage(failure);
+      expect(message).not.toMatch(/connection/i);
+      expect(message).toMatch(/preview a supported route/i);
+    }
+    expect(routeOriginFailureMessage('services-off')).toMatch(/turned off/);
+    expect(routeOriginFailureMessage('stale-fix')).toBe(
+      'A fresh, accurate location fix is needed. Wait for GPS to update, then try again.',
+    );
+  });
+
+  it('gives up on a lookup that never answers instead of waiting forever', async () => {
+    vi.useFakeTimers();
+    try {
+      const never = new Promise<number>(() => undefined);
+      const result = withinLocationTimeout(never, 1_000);
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(result).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('passes a fix through and treats a failed lookup as no fix', async () => {
+    await expect(withinLocationTimeout(Promise.resolve(7), 1_000)).resolves.toBe(7);
+    await expect(
+      withinLocationTimeout(Promise.reject(new Error('no provider')), 1_000),
+    ).resolves.toBeUndefined();
   });
 });

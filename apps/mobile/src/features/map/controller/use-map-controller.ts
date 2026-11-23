@@ -83,6 +83,7 @@ import {
 } from '@/features/map/map-place';
 import {
   GUIDANCE_BANNER_HEIGHT,
+  idleCameraPadding,
   routePreviewCameraPadding,
   type ScreenMetrics,
   searchResultsCameraPadding,
@@ -227,6 +228,12 @@ export function useMapController() {
     }),
     [insets.bottom, insets.left, insets.right, insets.top, windowHeight, windowWidth],
   );
+  // A camera move replaces the map's padding. Beside a side panel each move carries the panel's
+  // width, so what it centres lands in the map the panel leaves visible, not under the panel.
+  const sidePanelFlight = useMemo(() => {
+    const padding = idleCameraPadding(metrics);
+    return padding === undefined ? {} : { padding };
+  }, [metrics]);
   const cameraRef = useRef<CameraRef>(null);
   const mapRef = useRef<MapRef>(null);
   const exploreSheetRef = useRef<BottomSheetRef>(null);
@@ -670,6 +677,7 @@ export function useMapController() {
     cameraRef.current?.flyTo({
       center: [result.center.longitude, result.center.latitude],
       duration: 650,
+      ...sidePanelFlight,
       zoom: 16,
     });
     loadPlaceDetails(result, interactionId);
@@ -745,6 +753,7 @@ export function useMapController() {
       cameraRef.current?.flyTo({
         center: [onlyResult.center.longitude, onlyResult.center.latitude],
         duration: 650,
+        ...sidePanelFlight,
         zoom: 15,
       });
       return;
@@ -963,10 +972,22 @@ export function useMapController() {
   const handleLocate = async () => {
     setIsIdleCameraFollowing(true);
     const coordinate = await location.locate();
-    if (coordinate !== undefined && hasTransientDestination) {
+    if (coordinate === 'no-fix') {
+      // Say why the button did nothing; a denied permission has its own banner in the sheet.
+      showNotice({
+        message:
+          'This device has not found your location. Search, places and route previews still work.',
+        title: 'Current location unavailable',
+        tone: 'warning',
+      });
+      return;
+    }
+    if (coordinate === undefined || coordinate === 'denied') return;
+    if (hasTransientDestination) {
       cameraRef.current?.flyTo({
         center: [coordinate.longitude, coordinate.latitude],
         duration: 750,
+        ...sidePanelFlight,
         zoom: 15,
       });
     }

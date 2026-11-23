@@ -89,3 +89,46 @@ export function newestValidRouteOriginSample(
   );
   return validSamples.sort((left, right) => right.capturedAtMs - left.capturedAtMs)[0];
 }
+
+/** How long a one-shot location lookup may take before the device is treated as having no fix. */
+export const LOCATION_FIX_TIMEOUT_MS = 15_000;
+
+/** Why no route origin could be found from the device's location. */
+export type RouteOriginFailure = 'no-fix' | 'services-off' | 'stale-fix';
+
+/**
+ * What the route sheet says when the device's location cannot start a route. Devices without a
+ * GPS radio (a Wi-Fi-only handheld) or with location turned off land here; the sheet's own
+ * "Preview a supported route" action stays available beside the message.
+ */
+export function routeOriginFailureMessage(failure: RouteOriginFailure): string {
+  switch (failure) {
+    case 'services-off':
+      return 'Location is turned off on this device, so NavOSS cannot route from where you are. Turn it on in Settings, or preview a supported route.';
+    case 'no-fix':
+      return 'This device has not found your location, so NavOSS cannot route from where you are. Try again, or preview a supported route.';
+    case 'stale-fix':
+      return 'A fresh, accurate location fix is needed. Wait for GPS to update, then try again.';
+  }
+}
+
+/**
+ * Resolves `lookup`, or `undefined` once `timeoutMs` passes or the lookup fails. A device with no
+ * location provider can otherwise leave a one-shot lookup waiting with a spinner on screen.
+ */
+export async function withinLocationTimeout<T>(
+  lookup: Promise<T>,
+  timeoutMs: number = LOCATION_FIX_TIMEOUT_MS,
+): Promise<T | undefined> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => {
+      resolve(undefined);
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([lookup.catch(() => undefined), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
