@@ -759,8 +759,9 @@ export function TripSheet({
           </Text>
           <Text
             maxFontSizeMultiplier={1.3}
-            // Without guidance the line is a sentence, not a readout: let it wrap in a narrow panel.
-            numberOfLines={guidanceAvailable ? 1 : 2}
+            // Without guidance the line is a sentence, not a readout, and a "Simulation" or "Not
+            // saved" flag must not push the distance out: let either wrap in a narrow panel.
+            numberOfLines={guidanceAvailable && flags.text === '' ? 1 : 2}
             style={[styles.tripRemaining, guidanceStyles.tabular]}
           >
             {remainingText}
