@@ -2,7 +2,7 @@ import type { CameraRef, MapRef } from '@maplibre/maplibre-react-native';
 import { type RefObject, useEffect, useRef } from 'react';
 
 import { NavOSSInput } from '../../../../modules/navoss-input';
-import { keyZoom, stickPanCenter } from '@/features/map/map-keys';
+import { keyZoom, paddedCenterPoint, stickPanCenter } from '@/features/map/map-keys';
 import type { CameraPadding } from '@/features/map/overlay-layout';
 import { useStableCallback } from '@/lib/use-stable-callback';
 
@@ -22,22 +22,29 @@ export function useMapKeys({
   onMove,
   onRecenter,
   padding,
+  size,
 }: {
   cameraRef: RefObject<CameraRef | null>;
   enabled: boolean;
   mapRef: RefObject<MapRef | null>;
   /**
-   * The camera padding the map is using now (`keyCameraPadding`), read at each move. Every camera
-   * move from keys passes it: MapLibre Android treats a move without padding as zero padding,
-   * which would shift the centre under the side panel or a sheet.
+   * The padding a stick pan gives the camera (the side panel's share in landscape). MapLibre
+   * Android applies a centred move's padding as given, none counting as zero, so a pan passes one
+   * on every step. The camera may hold another padding when the pan starts, so the first step
+   * starts from the coordinate under this padding's centre on screen (`paddedCenterPoint`).
    */
-  padding: () => CameraPadding;
+  padding: CameraPadding;
+  /** The map view's size in dp. */
+  size: { height: number; width: number };
   /** The driver moved the map: stop following, as after a touch gesture. */
   onMove: () => void;
   onRecenter: () => void;
 }) {
   const stick = useRef({ x: 0, y: 0 });
-  const currentPadding = useStableCallback(padding);
+  const paddingRef = useRef(padding);
+  paddingRef.current = padding;
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
   const moved = useStableCallback(onMove);
   const recenter = useStableCallback(onRecenter);
 
@@ -46,6 +53,8 @@ export function useMapKeys({
     let timer: ReturnType<typeof setInterval> | undefined;
     let lastTick = 0;
     let panning = false;
+    // The padding this pan has given the camera; `undefined` until its first step.
+    let panPadding: CameraPadding | undefined;
 
     const panStep = async () => {
       if (panning) return;
@@ -57,8 +66,13 @@ export function useMapKeys({
         const seconds = Math.min(0.2, (now - lastTick) / 1000);
         lastTick = now;
         const view = await map.getViewState();
-        const center = stickPanCenter(view, stick.current, seconds);
-        cameraRef.current?.jumpTo({ center, padding: currentPadding() });
+        const stepPadding = paddingRef.current;
+        const from = samePadding(panPadding, stepPadding)
+          ? view.center
+          : await map.unproject(paddedCenterPoint(sizeRef.current, stepPadding));
+        const center = stickPanCenter({ ...view, center: from }, stick.current, seconds);
+        cameraRef.current?.jumpTo({ center, padding: stepPadding });
+        panPadding = stepPadding;
       } catch {
         // The map is gone or not ready: the next tick tries again.
       } finally {
@@ -75,10 +89,8 @@ export function useMapKeys({
       void mapRef.current
         ?.getZoom()
         .then((zoom) => {
-          cameraRef.current?.zoomTo(keyZoom(zoom, command), {
-            duration: 250,
-            padding: currentPadding(),
-          });
+          // No centre, so the camera keeps the padding it holds and zooms about what it shows.
+          cameraRef.current?.zoomTo(keyZoom(zoom, command), { duration: 250 });
         })
         .catch(() => undefined);
     });
@@ -88,6 +100,8 @@ export function useMapKeys({
       if (resting) {
         clearInterval(timer);
         timer = undefined;
+        // Another camera move may change the padding before the next pan.
+        panPadding = undefined;
         return;
       }
       if (timer !== undefined) return;
@@ -104,4 +118,8 @@ export function useMapKeys({
       stick.current = { x: 0, y: 0 };
     };
   }, [cameraRef, enabled, mapRef, moved, recenter]);
+}
+
+function samePadding(a: CameraPadding | undefined, b: CameraPadding): boolean {
+  return a?.bottom === b.bottom && a.left === b.left && a.right === b.right && a.top === b.top;
 }

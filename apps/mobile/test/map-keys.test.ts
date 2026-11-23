@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { keyCameraPadding, keyZoom, stickPanCenter } from '../src/features/map/map-keys.js';
+import { keyZoom, paddedCenterPoint, stickPanCenter } from '../src/features/map/map-keys.js';
 
 const view = { bearing: 0, center: [-114.07, 51.05] as [number, number], zoom: 14 };
 
@@ -40,26 +40,20 @@ describe('keyZoom', () => {
   });
 });
 
-describe('keyCameraPadding', () => {
-  const guidance = { bottom: 10, left: 400, right: 0, top: 0 };
-  const initial = { bottom: 0, left: 400, right: 0, top: 0 };
-  const preview = { bottom: 40, left: 440, right: 40, top: 60 };
+describe('paddedCenterPoint', () => {
+  const size = { height: 393, width: 873 };
 
-  it('is the guidance padding during a trip, whatever came before', () => {
-    expect(keyCameraPadding({ applied: preview, guidance, initial, navigating: true })).toBe(
-      guidance,
-    );
+  it('is the middle of the map without padding', () => {
+    expect(paddedCenterPoint(size, { bottom: 0, left: 0, right: 0, top: 0 })).toEqual([
+      436.5, 196.5,
+    ]);
   });
 
-  it('keeps the padding of the last camera move, so a fitted preview or results do not shift', () => {
-    expect(keyCameraPadding({ applied: preview, guidance, initial, navigating: false })).toBe(
-      preview,
-    );
-  });
-
-  it("is the map's starting padding before any move", () => {
-    expect(keyCameraPadding({ applied: undefined, guidance, initial, navigating: false })).toBe(
-      initial,
-    );
+  it('is the middle of what a side panel and a sheet leave visible', () => {
+    // A 400 dp panel on the left: the centre moves right by half the panel.
+    expect(paddedCenterPoint(size, { bottom: 0, left: 400, right: 0, top: 0 })).toEqual([
+      636.5, 196.5,
+    ]);
+    expect(paddedCenterPoint(size, { bottom: 93, left: 0, right: 73, top: 0 })).toEqual([400, 150]);
   });
 });

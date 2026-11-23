@@ -91,13 +91,10 @@ import {
   mapPlaceFromRenderedFeatures,
   placeShareMessage,
 } from '@/features/map/map-place';
-import { keyCameraPadding } from '@/features/map/map-keys';
 import {
-  type CameraPadding,
   GUIDANCE_BANNER_HEIGHT,
   guidanceCameraPadding,
   idleCameraPadding,
-  NO_CAMERA_PADDING,
   routePreviewCameraPadding,
   type ScreenMetrics,
   searchResultsCameraPadding,
@@ -276,13 +273,6 @@ export function useMapController() {
   }, [metrics]);
   const cameraRef = useRef<CameraRef>(null);
   const mapRef = useRef<MapRef>(null);
-  // The padding of this controller's last camera move, which the map keeps until the next one
-  // (none given counts as zero). Key moves reuse it so they do not shift the map (use-map-keys).
-  const appliedCameraPadding = useRef<CameraPadding | undefined>(undefined);
-  const cameraPadding = (padding: CameraPadding | undefined) => {
-    appliedCameraPadding.current = padding ?? NO_CAMERA_PADDING;
-    return padding === undefined ? {} : { padding };
-  };
   const exploreSheetRef = useRef<BottomSheetRef>(null);
   const placeAbortControllerRef = useRef<AbortController>(null);
   const placeInteractionRef = useRef(createLatestRequestGate());
@@ -511,7 +501,7 @@ export function useMapController() {
     onFitResults: (bounds) => {
       cameraRef.current?.fitBounds(bounds, {
         duration: 700,
-        ...cameraPadding(searchResultsCameraPadding(metrics, 1)),
+        padding: searchResultsCameraPadding(metrics, 1),
       });
     },
     searchOrigin,
@@ -593,7 +583,7 @@ export function useMapController() {
       bearing: 0,
       duration: 750,
       pitch: 0,
-      ...cameraPadding(routePreviewCameraPadding(metrics, { demoOrigin })),
+      padding: routePreviewCameraPadding(metrics, { demoOrigin }),
     });
   }
 
@@ -745,7 +735,7 @@ export function useMapController() {
     cameraRef.current?.flyTo({
       center: [result.center.longitude, result.center.latitude],
       duration: 650,
-      ...cameraPadding(sidePanelFlight.padding),
+      ...sidePanelFlight,
       zoom: 16,
     });
     loadPlaceDetails(result, interactionId);
@@ -821,14 +811,14 @@ export function useMapController() {
       cameraRef.current?.flyTo({
         center: [onlyResult.center.longitude, onlyResult.center.latitude],
         duration: 650,
-        ...cameraPadding(sidePanelFlight.padding),
+        ...sidePanelFlight,
         zoom: 15,
       });
       return;
     }
     cameraRef.current?.fitBounds(bounds, {
       duration: 700,
-      ...cameraPadding(searchResultsCameraPadding(metrics, 0)),
+      padding: searchResultsCameraPadding(metrics, 0),
     });
   };
 
@@ -1055,7 +1045,7 @@ export function useMapController() {
       cameraRef.current?.flyTo({
         center: [coordinate.longitude, coordinate.latitude],
         duration: 750,
-        ...cameraPadding(sidePanelFlight.padding),
+        ...sidePanelFlight,
         zoom: 15,
       });
     }
@@ -1075,12 +1065,7 @@ export function useMapController() {
     setSelectedResult(undefined);
     search.setQuery('');
     if (userCoordinate === undefined) {
-      cameraRef.current?.flyTo({
-        center: CANADA_CENTER,
-        duration: 650,
-        zoom: 3.2,
-        ...cameraPadding(undefined),
-      });
+      cameraRef.current?.flyTo({ center: CANADA_CENTER, duration: 650, zoom: 3.2 });
     }
   };
 
@@ -1751,26 +1736,18 @@ export function useMapController() {
     toggleOrientation: useStableCallback(handleToggleOrientation),
   };
 
-  // The map canvas gives its camera a new padding when a trip starts or ends and when the window
-  // changes (map-canvas.tsx), which replaces whatever an earlier camera move left.
-  const isNavigating = routeState.type === 'navigating';
-  useEffect(() => {
-    appliedCameraPadding.current = undefined;
-  }, [isNavigating, metrics]);
-
   useMapKeys({
     cameraRef,
     enabled: IS_ANDROID && phoneMapVisible,
     mapRef,
     onMove: stopFollowingAfterGesture,
-    padding: () =>
-      keyCameraPadding({
-        applied: appliedCameraPadding.current,
-        guidance: guidanceCameraPadding(metrics),
-        // What the map canvas gives its camera before any move (map-canvas.tsx).
-        initial: idleCameraPadding(metrics) ?? NO_CAMERA_PADDING,
-        navigating: isNavigating,
-      }),
+    // The padding the map canvas gives its camera (map-canvas.tsx).
+    padding:
+      routeState.type === 'navigating'
+        ? guidanceCameraPadding(metrics)
+        : (idleCameraPadding(metrics) ?? { bottom: 0, left: 0, right: 0, top: 0 }),
+    // The map fills the window.
+    size: { height: windowHeight, width: windowWidth },
     onRecenter: () => {
       if (routeState.type === 'navigating') {
         stable.recenter();
