@@ -229,6 +229,7 @@ export function useLocationWatches(
     if (!phoneMapVisible) return;
     let cancelled = false;
     const active = () => !cancelled;
+    let recovery: Location.LocationSubscription | undefined;
     onLocationState('locating');
     void ensureForegroundLocationPermission(
       Location.getForegroundPermissionsAsync,
@@ -253,10 +254,31 @@ export function useLocationWatches(
         onLocationState('visible');
       })
       .catch(() => {
-        if (active()) onLocationState('error');
+        if (!active()) return;
+        onLocationState('error');
+        // Android's one-shot lookup fails at once when the provider has no fix yet (a cold start
+        // with permission already granted), and the idle watch only runs once a fix is visible.
+        // Wait for the first fix instead of leaving "Current location unavailable" until the
+        // driver taps Center. iOS's lookup waits for a fix itself.
+        if (!IS_ANDROID) return;
+        let recovered = false;
+        void Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced }, (position) => {
+          if (!active() || recovered) return;
+          recovered = true;
+          recovery?.remove();
+          recovery = undefined;
+          onSample(routeOriginSampleFromLocation(position));
+          onLocationState('visible');
+        })
+          .then((subscription) => {
+            if (active() && !recovered) recovery = subscription;
+            else subscription.remove();
+          })
+          .catch(() => undefined);
       });
     return () => {
       cancelled = true;
+      recovery?.remove();
     };
   }, [phoneMapVisible]);
 
