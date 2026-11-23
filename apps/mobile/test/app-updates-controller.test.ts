@@ -38,7 +38,7 @@ function harness({
   /** The first download resolves only when the test calls `finishDownload`. */
   holdDownload?: boolean;
   installError?: string;
-  response?: { body: unknown; status: number } | 'offline' | 'too-large';
+  response?: { body: unknown; status: number } | 'offline' | 'redirect' | 'too-large';
   stored?: string | null;
 } = {}) {
   let now = 1_800_000_000_000;
@@ -78,8 +78,8 @@ function harness({
     fetchFeed: (url: string) => {
       requests.push(url);
       const current = response;
-      if (current === 'offline' || current === 'too-large') {
-        const code = current === 'offline' ? 'network' : 'too-large';
+      if (current === 'offline' || current === 'redirect' || current === 'too-large') {
+        const code = current === 'offline' ? 'network' : current;
         return Promise.reject(Object.assign(new Error('x'), { code }));
       }
       return Promise.resolve({
@@ -239,6 +239,21 @@ describe('app updates', () => {
     const { phase } = h.updater.store.get();
     expect(phase.kind === 'failed' && phase.message).toContain('continues where it stopped');
     expect(h.calls.filter((call) => call.startsWith('clean'))).toEqual(['clean:0', 'clean:102']);
+  });
+
+  it('says a refused redirect is not a connection problem', async () => {
+    const h = harness({ downloadError: 'redirect' });
+    await h.updater.start();
+    await h.updater.checkAutomatically(false);
+    await h.updater.install();
+    const { phase } = h.updater.store.get();
+    expect(phase.kind === 'failed' && phase.message).toBe(
+      'The download didn’t come from GitHub’s release servers, so NavOSS stopped it.',
+    );
+    const feed = harness({ response: 'redirect' });
+    await feed.updater.start();
+    await feed.updater.checkNow();
+    expect(feed.logs).toEqual(['unavailable']);
   });
 
   it('says a full disk is a storage problem, not a connection one', async () => {

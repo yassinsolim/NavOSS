@@ -177,7 +177,13 @@ export function createAppUpdates(dependencies: AppUpdatesDependencies): AppUpdat
         if (result.kind === 'update') found = result.update;
       }
     } catch (error) {
-      code = errorCode(error) === 'too-large' ? 'malformed' : 'no-network';
+      const failure = errorCode(error);
+      code =
+        failure === 'too-large'
+          ? 'malformed'
+          : failure === 'redirect'
+            ? 'unavailable'
+            : 'no-network';
     }
     checking = false;
     dependencies.log(code);

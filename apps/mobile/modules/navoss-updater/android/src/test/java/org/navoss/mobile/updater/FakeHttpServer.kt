@@ -27,6 +27,8 @@ class FakeHttpServer(private val routes: Map<String, FakeResponse>) : Closeable 
   private val server = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
   /** Every request seen, as `host/path`. */
   val requests: MutableList<String> = Collections.synchronizedList(mutableListOf())
+  /** The `User-Agent` of every request (empty when none was sent). */
+  val userAgents: MutableList<String> = Collections.synchronizedList(mutableListOf())
   val port: Int get() = server.localPort
 
   init {
@@ -37,15 +39,20 @@ class FakeHttpServer(private val routes: Map<String, FakeResponse>) : Closeable 
           val reader = BufferedReader(InputStreamReader(client.getInputStream(), Charsets.US_ASCII))
           val path = reader.readLine()?.split(' ')?.getOrNull(1) ?: return@use
           var host = "127.0.0.1"
+          var userAgent = ""
           while (true) {
             val line = reader.readLine() ?: return@use
             if (line.isEmpty()) break
             if (line.startsWith("X-Original-Host:", ignoreCase = true)) {
               host = line.substringAfter(':').trim()
             }
+            if (line.startsWith("User-Agent:", ignoreCase = true)) {
+              userAgent = line.substringAfter(':').trim()
+            }
           }
           val key = host + path
           requests.add(key)
+          userAgents.add(userAgent)
           val response = routes[key] ?: FakeResponse(status = 404)
           val head = StringBuilder("HTTP/1.1 ${response.status} X\r\n")
           response.headers.forEach { head.append(it).append("\r\n") }

@@ -41,11 +41,12 @@ describe('Android release config plugin', () => {
     expect(once).toContain('throw new GradleException');
   });
 
-  it('allows cleartext only for a loopback test feed', () => {
+  it('accepts a test feed on 127.0.0.1 only and allows cleartext for it alone', () => {
     expect(testFeedOrigin({})).toBeUndefined();
-    expect(testFeedOrigin({ EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL: 'https://example.org/x' })).toBe(
-      undefined,
-    );
+    // The updater refuses any other host, so a build pointing elsewhere fails here instead.
+    for (const url of ['https://example.org/x', 'http://localhost:8765/releases']) {
+      expect(() => testFeedOrigin({ EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL: url })).toThrow();
+    }
     expect(
       testFeedOrigin({ EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL: 'http://127.0.0.1:8765/releases' }),
     ).toBe('127.0.0.1');

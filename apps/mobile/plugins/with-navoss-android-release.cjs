@@ -106,15 +106,15 @@ function addReleaseSigning(buildGradle) {
 /**
  * Test builds only: `EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL` points the updater at a fake release
  * endpoint on the device's loopback (reached through `adb reverse`). Cleartext is then allowed for
- * 127.0.0.1 alone. The release workflow refuses to build with the variable set.
+ * 127.0.0.1 alone. The updater refuses every other host outside GitHub, so any other value fails
+ * the build here. The release workflow refuses to build with the variable set.
  */
 function testFeedOrigin(env) {
   const raw = env.EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL;
   if (raw === undefined || raw === '') return undefined;
   const url = new URL(raw);
-  if (url.protocol === 'https:') return undefined;
   if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1') {
-    throw new Error('EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL must be https:// or http://127.0.0.1.');
+    throw new Error('EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL must be http://127.0.0.1:<port>/….');
   }
   return url.hostname;
 }

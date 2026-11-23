@@ -38,14 +38,25 @@ export function parseFeedBody(body: unknown): unknown {
   }
 }
 
+/** A test build's local feed: plain HTTP on the device's loopback address, nothing else. */
+function isLoopbackFeed(url: URL): boolean {
+  return url.protocol === 'http:' && url.hostname === '127.0.0.1';
+}
+
 /**
  * Test builds only: `EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL` replaces the releases URL with a local
- * fake. Metro inlines the variable at bundle time, so a build made without it contains only the
- * GitHub URL; the release workflow refuses to build with it set.
+ * fake on 127.0.0.1 (any other value is ignored). Metro inlines the variable at bundle time, so a
+ * build made without it contains only the GitHub URL; the release workflow refuses to build with
+ * it set.
  */
 export function releasesUrl(): string {
   const override: unknown = process.env.EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL;
-  return typeof override === 'string' && override !== '' ? override : RELEASES_URL;
+  if (typeof override !== 'string' || override === '') return RELEASES_URL;
+  try {
+    return isLoopbackFeed(new URL(override)) ? override : RELEASES_URL;
+  } catch {
+    return RELEASES_URL;
+  }
 }
 
 /**
@@ -107,8 +118,9 @@ export function parseDigest(value: unknown): string | undefined {
 }
 
 /**
- * Asset downloads must come from GitHub over HTTPS. A test feed (see [releasesUrl]) may also
- * serve them from its own origin.
+ * Asset downloads must start at this repository's GitHub release URL over HTTPS (the native
+ * module checks every redirect hop too). A local test feed (see [releasesUrl]) may also serve
+ * them from its own origin.
  */
 export function isAllowedDownloadUrl(value: string, feedUrl: string): boolean {
   let url: URL;
@@ -121,7 +133,8 @@ export function isAllowedDownloadUrl(value: string, feedUrl: string): boolean {
     return url.pathname.startsWith('/yassinsolim/NavOSS/releases/download/');
   }
   if (feedUrl === RELEASES_URL) return false;
-  return url.origin === new URL(feedUrl).origin;
+  const feed = new URL(feedUrl);
+  return isLoopbackFeed(feed) && url.origin === feed.origin;
 }
 
 /** The update a release offers, or undefined when it has no usable APK. */

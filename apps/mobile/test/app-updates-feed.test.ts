@@ -8,6 +8,7 @@ import {
   MAX_FEED_BYTES,
   parseFeedBody,
   parseReleaseTag,
+  releasesUrl,
   RELEASES_URL,
 } from '../src/features/updates/update-feed.js';
 import {
@@ -177,6 +178,24 @@ describe('release feed', () => {
     expect(isAllowedDownloadUrl('http://127.0.0.1:8765/navoss.apk', feed)).toBe(true);
     expect(isAllowedDownloadUrl('http://127.0.0.1:8765/navoss.apk', RELEASES_URL)).toBe(false);
     expect(isAllowedDownloadUrl('http://127.0.0.1:9999/navoss.apk', feed)).toBe(false);
+    // Only 127.0.0.1: another local name or address is not a test feed.
+    const named = 'http://localhost:8765/releases';
+    expect(isAllowedDownloadUrl('http://localhost:8765/navoss.apk', named)).toBe(false);
+  });
+
+  it('uses a build-time feed override only on 127.0.0.1', () => {
+    const saved = process.env.EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL;
+    try {
+      process.env.EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL = 'http://127.0.0.1:8765/releases';
+      expect(releasesUrl()).toBe('http://127.0.0.1:8765/releases');
+      for (const other of ['http://localhost:8765/releases', 'https://example.org/releases']) {
+        process.env.EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL = other;
+        expect(releasesUrl()).toBe(RELEASES_URL);
+      }
+    } finally {
+      if (saved === undefined) delete process.env.EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL;
+      else process.env.EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL = saved;
+    }
   });
 });
 

@@ -5,6 +5,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.OutputStream
 import java.net.HttpURLConnection
+import java.net.MalformedURLException
 import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -33,6 +34,7 @@ class ApkDownloader(
     FileOutputStream(file, append)
   },
   private val freeSpace: (File) -> Long = { directory -> directory.usableSpace },
+  private val policy: HostPolicy = HostPolicy.ASSET,
 ) {
   fun download(
     url: String,
@@ -81,23 +83,20 @@ class ApkDownloader(
   ): Boolean {
     val offset = if (part.isFile) part.length() else 0L
     if (offset == expectedSize) return true
-    val connection =
+    val start =
       try {
-        openConnection(URL(url))
-      } catch (error: IOException) {
-        throw DownloadException("network", error.javaClass.simpleName)
+        URL(url)
+      } catch (_: MalformedURLException) {
+        throw DownloadException("invalid", "Bad URL")
+      }
+    val connection =
+      UpdateHttp.open(start, policy, openConnection) { hop ->
+        hop.connectTimeout = 15_000
+        hop.readTimeout = 30_000
+        if (offset > 0) hop.setRequestProperty("Range", "bytes=$offset-")
       }
     try {
-      connection.connectTimeout = 15_000
-      connection.readTimeout = 30_000
-      connection.instanceFollowRedirects = true
-      if (offset > 0) connection.setRequestProperty("Range", "bytes=$offset-")
-      val status =
-        try {
-          connection.responseCode
-        } catch (error: IOException) {
-          throw DownloadException("network", error.javaClass.simpleName)
-        }
+      val status = connection.responseCode
       val append =
         when {
           status == HttpURLConnection.HTTP_PARTIAL && offset > 0 -> {

@@ -29,8 +29,9 @@ class FeedFetcher(
   private val maxBytes: Int = MAX_FEED_BYTES,
   private val deadlineMillis: Long = 30_000,
   private val clock: () -> Long = System::currentTimeMillis,
+  private val policy: HostPolicy = HostPolicy.FEED,
 ) {
-  /** Throws [DownloadException] with `invalid`, `network` or `too-large`. */
+  /** Throws [DownloadException] with `invalid`, `network`, `redirect` or `too-large`. */
   fun fetch(url: String): FeedResponse {
     val started = clock()
     val parsed =
@@ -40,16 +41,13 @@ class FeedFetcher(
         throw DownloadException("invalid", "Bad URL")
       }
     val connection =
-      try {
-        openConnection(parsed)
-      } catch (error: IOException) {
-        throw DownloadException("network", error.javaClass.simpleName)
+      UpdateHttp.open(parsed, policy, openConnection) { hop ->
+        hop.connectTimeout = 15_000
+        hop.readTimeout = 15_000
+        hop.useCaches = false
+        hop.setRequestProperty("Accept", "application/vnd.github+json")
       }
     try {
-      connection.connectTimeout = 15_000
-      connection.readTimeout = 15_000
-      connection.useCaches = false
-      connection.setRequestProperty("Accept", "application/vnd.github+json")
       val status = connection.responseCode
       if (status != HttpURLConnection.HTTP_OK) return FeedResponse(status, null)
       if (connection.contentLengthLong > maxBytes) {

@@ -224,11 +224,13 @@ The Android app is in testing and is not yet published. It is installed from Nav
 releases, so to offer a newer version it sends one HTTPS request to GitHub's API
 (`api.github.com/repos/yassinsolim/NavOSS/releases`): when the app opens, at most once every 24
 hours and never during a trip, and when you tap **Check now**. The request contains no location,
-search text, trip data or identifier, only the app's default HTTP headers; GitHub, which operates
+search text, trip data or identifier; it names itself only as `NavOSS-Android` (not the phone
+model or Android version); GitHub, which operates
 the service, sees your IP address and the time under
 [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).
-Only when you choose **Install** is the update downloaded from GitHub (`github.com` and its release
-download storage) into the app's private storage, checked, and handed to Android's installer. Old
+Only when you choose **Install** is the update downloaded from GitHub (`github.com`, which redirects
+to GitHub's release download host `release-assets.githubusercontent.com` or its predecessor
+`objects.githubusercontent.com`; the app refuses any other host) into the app's private storage, checked, and handed to Android's installer. Old
 downloads are deleted. The app keeps only the time of the last check, the version it offered and
 whether you chose **Later**, on the device; nothing about update checks is sent to NavOSS. Turn the
 check off with **Check for updates automatically** under About and privacy, App updates; **Check

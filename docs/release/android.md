@@ -97,7 +97,19 @@ carries the tag, the APK's size and the SHA-256 GitHub computed for it, in one r
 It asks for the newest 10 releases (`per_page=10`) and reads only those, at most 20 assets each.
 The request is made by the app's native updater module, which refuses an answer that announces or
 sends more than 1 MiB (ten NavOSS releases are a few tens of kilobytes), and gives up after 30
-seconds. Rate limiting, no network, a malformed or oversized answer or a release without a usable
+seconds.
+
+Every request follows redirects itself, at most three, and refuses a hop that is not HTTPS on the
+default port to an expected host, before connecting to it:
+
+| Request | Hosts                                                                                 |
+| ------- | ------------------------------------------------------------------------------------- |
+| Feed    | `api.github.com`                                                                      |
+| APK     | `github.com`, `release-assets.githubusercontent.com`, `objects.githubusercontent.com` |
+
+On 2026-11-22, `curl -sIL` on a release asset of `cli/cli` showed `github.com` answering 302 to
+`release-assets.githubusercontent.com`; `objects.githubusercontent.com` is the host GitHub used
+before. Requests send `User-Agent: NavOSS-Android` and nothing that identifies the phone. Rate limiting, no network, a malformed or oversized answer or a release without a usable
 APK leave the app as it was; only a manual check says what happened.
 
 When a newer published `android-v` release with an APK exists, a card over the map says
@@ -157,7 +169,9 @@ error; it never falls back to the debug key. R8 and resource shrinking are on.
 
 `EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL=http://127.0.0.1:<port>/releases` at build time points the
 updater at a fake releases endpoint on the device's loopback (forward it with
-`adb reverse tcp:<port> tcp:<port>`) and allows cleartext traffic to `127.0.0.1` only. It must
+`adb reverse tcp:<port> tcp:<port>`) and allows cleartext traffic to `127.0.0.1` only. Any other
+value fails the build (`localhost` included), and a chain that starts there must stay on
+`127.0.0.1`; a GitHub chain can never redirect to it. It must
 answer in the GitHub releases-list shape, with each asset's `digest`. Use it for test builds only;
 the release workflow refuses to build with it set.
 

@@ -35,6 +35,8 @@ export function updateFailureMessage(code: string): string {
   switch (code) {
     case 'network':
       return 'The download stopped. Check your connection and try again; it continues where it stopped.';
+    case 'redirect':
+      return 'The download didn’t come from GitHub’s release servers, so NavOSS stopped it.';
     case 'storage':
       return 'There isn’t enough free storage for the update. Free up some space and try again.';
     case 'digest-mismatch':

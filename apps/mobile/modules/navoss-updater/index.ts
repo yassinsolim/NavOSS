@@ -34,12 +34,16 @@ declare class NavOSSUpdaterModule extends NativeModule<NavOSSUpdaterEvents> {
   canRequestPackageInstalls(): boolean;
   cancelDownload(): void;
   cleanDownloads(keepVersionCode: number): void;
-  /** Rejects with a code: `network`, `http`, `size`, `cancelled`, `storage`, `invalid`, `busy`. */
+  /**
+   * Rejects with a code: `network`, `http`, `size`, `cancelled`, `storage`, `invalid`, `busy`,
+   * `redirect` (a hop that is not HTTPS to GitHub's release hosts, or more than three redirects).
+   */
   download(url: string, size: number, versionCode: number): Promise<void>;
   downloadedBytes(versionCode: number): number;
   /**
    * One GET of the releases list, capped at 1 MiB. Resolves with the status and, for a 200, the
-   * body. Rejects with a code: `invalid`, `network`, `too-large`.
+   * body. Rejects with a code: `invalid`, `network`, `too-large`, `redirect` (a hop outside
+   * api.github.com over HTTPS, or more than three redirects).
    */
   fetchFeed(url: string): Promise<{ body: string | null; status: number }>;
   getInstalledVersion(): InstalledVersion;

@@ -11,7 +11,6 @@ import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
-import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val DOWNLOAD_PROGRESS_EVENT = "onDownloadProgress"
@@ -121,12 +120,6 @@ class NavOSSUpdaterModule : Module() {
       size: Double,
       versionCode: Double,
       promise: Promise ->
-      val parsed = runCatching { URL(url) }.getOrNull()
-      val loopback = parsed?.host == "127.0.0.1" || parsed?.host == "localhost"
-      if (parsed == null || !(parsed.protocol == "https" || (parsed.protocol == "http" && loopback))) {
-        promise.reject(UpdaterException("invalid"))
-        return@AsyncFunction
-      }
       if (downloading) {
         promise.reject(UpdaterException("busy"))
         return@AsyncFunction
