@@ -39,6 +39,11 @@ interface RoutePlanningSheetProps {
   /** Why the route could not be planned; undefined while it is being calculated. */
   failure?: RouteError;
   onCancel: () => void;
+  /**
+   * Opens the start-place picker when the device's location could not start the route. Only the
+   * Android build passes it (handhelds without a GPS radio); iOS keeps its own sheet.
+   */
+  onChooseStart?: () => void;
   onPreviewSupportedRoute: () => void;
   onRetry: () => void;
   position: SharedValue<number>;
@@ -50,6 +55,7 @@ export function RoutePlanningSheet({
   destination,
   failure,
   onCancel,
+  onChooseStart,
   onPreviewSupportedRoute,
   onRetry,
   position,
@@ -92,13 +98,23 @@ export function RoutePlanningSheet({
                   label="Retry"
                   onPress={onRetry}
                 />
-                <Button
-                  accessibilityHint="Plans this trip from Calgary Tower so you can see the route. It cannot be started."
-                  icon={{ android: 'map', ios: 'map.fill' }}
-                  label="Preview a supported route"
-                  onPress={onPreviewSupportedRoute}
-                  variant="tonal"
-                />
+                {failure.originUnavailable === true && onChooseStart !== undefined ? (
+                  <Button
+                    accessibilityHint="Plans this trip from a place you choose so you can see the route. It cannot be started."
+                    icon={{ android: 'trip_origin', ios: 'mappin.and.ellipse' }}
+                    label="Choose a start"
+                    onPress={onChooseStart}
+                    variant="tonal"
+                  />
+                ) : (
+                  <Button
+                    accessibilityHint="Plans this trip from Calgary Tower so you can see the route. It cannot be started."
+                    icon={{ android: 'map', ios: 'map.fill' }}
+                    label="Preview a supported route"
+                    onPress={onPreviewSupportedRoute}
+                    variant="tonal"
+                  />
+                )}
               </View>
             )}
           </View>

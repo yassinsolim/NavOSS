@@ -96,7 +96,7 @@ describe('route origin without a location', () => {
     for (const failure of ['no-fix', 'services-off'] as const) {
       const message = routeOriginFailureMessage(failure);
       expect(message).not.toMatch(/connection/i);
-      expect(message).toMatch(/preview a supported route/i);
+      expect(message).toMatch(/choose where the route starts/i);
     }
     expect(routeOriginFailureMessage('services-off')).toMatch(/turned off/);
     expect(routeOriginFailureMessage('stale-fix')).toBe(

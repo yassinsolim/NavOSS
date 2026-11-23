@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../modules/navoss-navigation/index.js', () => ({ default: {} }));
 
 import { fetchRoutes } from '../src/lib/api.js';
-import { routeErrorFrom } from '../src/features/navigation/route-ui-state.js';
+import {
+  RouteOriginUnavailableError,
+  routeErrorFrom,
+} from '../src/features/navigation/route-ui-state.js';
 import disconnectedProvinces from './fixtures/routes-v2/disconnected-provinces-400.json' with { type: 'json' };
 import noRoadRoute from './fixtures/routes-v2/no-road-route-422.json' with { type: 'json' };
 
@@ -77,5 +80,22 @@ describe('route failures the phone presents', () => {
       title: 'Invalid request',
     });
     expect((await plannedError(400, rejection)).refusalTitle).toBeUndefined();
+  });
+
+  it('marks a route that failed for want of a location, so the sheet can offer another start', () => {
+    expect(
+      routeErrorFrom(
+        new RouteOriginUnavailableError(
+          'This device has not found your location, so NavOSS cannot route from where you are.',
+        ),
+      ),
+    ).toEqual({
+      message:
+        'This device has not found your location, so NavOSS cannot route from where you are.',
+      originUnavailable: true,
+    });
+    expect(routeErrorFrom(new TypeError('Network request failed')).originUnavailable).toBe(
+      undefined,
+    );
   });
 });
