@@ -531,7 +531,8 @@ The composite action `.github/actions/build-android-core` is the one implementat
    `android-core/JNI/**` (`FindClass`, `GetObjectClass`, `GetMethodID`, `GetStaticMethodID`,
    `GetFieldID`, `GetStaticFieldID`, `RegisterNatives`, `ThrowNew`, ...) must use string-literal
    names and descriptors on a class it can attribute, or the check fails with file and line, and
-   the number of lookups read must equal the number of call sites; every `Host` method looked up
+   the number of lookups read must equal the number of call sites; any other mention of a
+   lookup API (an alias such as `let f = jni.GetMethodID`, or another receiver) fails too; every `Host` method looked up
    must exist in `NavOSSCore.Host` with that descriptor, and the exception constructor looked up
    must be `NavOSSCoreException`'s primary constructor;
 2. in CI only, restores `android-core/build/jniLibs` from the cache `android-core-libs-v1-…`, keyed
@@ -558,7 +559,7 @@ The composite action `.github/actions/build-android-core` is the one implementat
    plugin checks for r30, or any failure of the ELF readers themselves (each tool's output and exit
    status are captured before parsing, so a reader error cannot yield an empty, passing list);
 5. runs `android-core/scripts/test-verify-scripts.sh` on both checkers: broken copies (computed
-   lookup names or descriptors, a lookup through a helper, a static field lookup, wrong
+   lookup names or descriptors, a lookup through a helper, an alias or another receiver, a static field lookup, wrong
    descriptors, a renamed entry point; a non-ELF `.so`, an ELF without `LOAD`, a 4 KB-aligned
    segment, a missing or unneeded library, a second ABI, a missing export, r27's `libc++`) must
    each fail and the unchanged input must pass;

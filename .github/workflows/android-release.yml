@@ -124,6 +124,16 @@ jobs:
         with:
           library-cache: 'false'
 
+      # Everything that can run without the key runs here: release configuration check,
+      # contracts build, expo prebuild, the Gradle wrapper pinned to gradle.org's checksum, and a
+      # full assembleRelease signed with a throwaway key (deleted with its APK), which downloads
+      # the Gradle distribution and every dependency and builds the bundle, R8 output, resources
+      # and native libraries.
+      - name: Prepare the release build (no key)
+        env:
+          NAVOSS_ANDROID_VERSION_CODE: ${{ steps.version.outputs.version-code }}
+        run: apps/mobile/scripts/build-android-release.sh prepare
+
       # The keystore exists only for the next step and is removed right after it.
       - name: Decode release keystore
         env:
@@ -137,23 +147,27 @@ jobs:
           umask 077
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/navoss-release.p12"
 
-      - name: Build signed release APK
-        working-directory: apps/mobile
+      - name: Sign and package the release APK (offline)
         env:
           NAVOSS_ANDROID_KEYSTORE: ${{ runner.temp }}/navoss-release.p12
           NAVOSS_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           NAVOSS_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           NAVOSS_ANDROID_VERSION_CODE: ${{ steps.version.outputs.version-code }}
+        # Offline: nothing is downloaded while the key is on disk. Only the signing and packaging
+        # tasks run (the script lists them and fails on any other).
         run: |
           set -euo pipefail
-          corepack pnpm android:release 2>&1 | tee "$RUNNER_TEMP/build.log"
+          apps/mobile/scripts/build-android-release.sh sign 2>&1 | tee "$RUNNER_TEMP/build.log"
 
       - name: Remove release keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/navoss-release.p12"
 
       # GitHub masks secret values in its own log, but the uploaded build log and any artifact
-      # would not be. Fail if anything key-like reached the build output.
+      # would not be. Fail if anything key-like reached the build output. The secrets are in this
+      # step's environment only to be compared: the step runs nothing but grep on the log, after
+      # the keystore is deleted, and passes them as patterns on a file descriptor (`printf` is a
+      # shell builtin), never on a command line other processes could read.
       - name: Scan build log for key material
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -165,10 +179,11 @@ jobs:
           if grep -Eq -- '-----BEGIN [A-Z ]*(PRIVATE KEY|CERTIFICATE)-----' "$log"; then
             echo 'PEM key material in the build log' >&2; status=1
           fi
-          if [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && grep -qF -- "$ANDROID_KEYSTORE_PASSWORD" "$log"; then
+          if [ -n "$ANDROID_KEYSTORE_PASSWORD" ] &&
+            grep -qF -f <(printf '%s\n' "$ANDROID_KEYSTORE_PASSWORD") -- "$log"; then
             echo 'Keystore password in the build log' >&2; status=1
           fi
-          if grep -qF -- "${ANDROID_KEYSTORE_BASE64:0:48}" "$log"; then
+          if grep -qF -f <(printf '%s\n' "${ANDROID_KEYSTORE_BASE64:0:48}") -- "$log"; then
             echo 'Encoded keystore in the build log' >&2; status=1
           fi
           if grep -Eq '[A-Za-z0-9+/]{200,}={0,2}' "$log"; then

@@ -214,7 +214,7 @@ jobs:
           fi
           changed="$(git diff --name-only "origin/$BASE_REF...HEAD")"
           # `modules/` covers the navigation core's sources (ios/Core, android-core).
-          if grep -Eq '^(apps/mobile/(app\.json|package\.json|babel\.config\.js|metro\.config\.js|plugins/|modules/|src/|assets/|scripts/(build-android-core\.sh|android-core-toolchain\.env))|packages/contracts/|pnpm-lock\.yaml|\.github/workflows/ci\.yml|\.github/actions/build-android-core/)' <<<"$changed"; then
+          if grep -Eq '^(apps/mobile/(app\.json|package\.json|babel\.config\.js|metro\.config\.js|plugins/|modules/|src/|assets/|scripts/(build-android-core\.sh|android-core-toolchain\.env|build-android-release\.sh|test-build-android-release\.sh|pin-gradle-wrapper\.sh|gradle-wrapper\.env|validate-release-env\.mjs))|packages/contracts/|pnpm-lock\.yaml|\.github/workflows/ci\.yml|\.github/actions/build-android-core/)' <<<"$changed"; then
             echo 'android=true' >> "$GITHUB_OUTPUT"
           else
             echo 'android=false' >> "$GITHUB_OUTPUT"
@@ -270,10 +270,31 @@ jobs:
         id: core
         uses: ./.github/actions/build-android-core
 
-      # The release leg builds the release variant, so R8 and resource shrinking run on every
-      # change. The release signing plugin accepts any keystore named by its three variables (the
-      # release workflow pins the certificate); this one is generated here, never leaves the
-      # runner, and is not a secret.
+      - name: Build the debug APK and run Kotlin unit tests
+        if: steps.changes.outputs.android == 'true' && matrix.variant == 'debug'
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          corepack pnpm --filter @navoss/contracts build
+          corepack pnpm exec expo prebuild --platform android --clean --no-install
+          scripts/pin-gradle-wrapper.sh android
+          cd android
+          ./gradlew --console=plain :app:assembleDebug \
+            :navoss-updater:testDebugUnitTest :navoss-navigation:testDebugUnitTest
+
+      # The release leg runs the release workflow's own two phases (build-android-release.sh), so
+      # R8 and resource shrinking run on every change and the claim that only signing and
+      # packaging happen while the key is present is tested here. Both keys are throwaway ones
+      # generated on the runner: the release signing plugin accepts any keystore named by its
+      # three variables; the release workflow is what pins the certificate.
+      - name: Check that the signing task check fails closed
+        if: steps.changes.outputs.android == 'true' && matrix.variant == 'release'
+        run: apps/mobile/scripts/test-build-android-release.sh
+
+      - name: Prepare the release build (no key)
+        if: steps.changes.outputs.android == 'true' && matrix.variant == 'release'
+        run: apps/mobile/scripts/build-android-release.sh prepare
+
       - name: Create a throwaway signing key
         if: steps.changes.outputs.android == 'true' && matrix.variant == 'release'
         run: |
@@ -289,20 +310,9 @@ jobs:
             echo 'NAVOSS_ANDROID_KEY_ALIAS=ci-throwaway'
           } >> "$GITHUB_ENV"
 
-      - name: Build the APK (and, for debug, run Kotlin unit tests)
-        if: steps.changes.outputs.android == 'true'
-        working-directory: apps/mobile
-        run: |
-          set -euo pipefail
-          corepack pnpm --filter @navoss/contracts build
-          corepack pnpm exec expo prebuild --platform android --clean --no-install
-          cd android
-          if [ "$VARIANT" = release ]; then
-            ./gradlew --console=plain :app:assembleRelease
-          else
-            ./gradlew --console=plain :app:assembleDebug \
-              :navoss-updater:testDebugUnitTest :navoss-navigation:testDebugUnitTest
-          fi
+      - name: Sign and package the release APK (offline)
+        if: steps.changes.outputs.android == 'true' && matrix.variant == 'release'
+        run: apps/mobile/scripts/build-android-release.sh sign
 
       # The APK carries the verified libraries byte for byte (so NDK r30's libc++_shared.so), and
       # its dex keeps every class and member JNI reaches by name (in release: R8 did not strip them).
