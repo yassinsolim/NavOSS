@@ -24,3 +24,24 @@ export function isKeyboardCrowded({
   if (!android || keyboardHeight <= 0) return false;
   return windowHeight - topInset - keyboardHeight < CROWDED_KEYBOARD_SPACE;
 }
+
+/** The open keyboard (`height` 0: closed) and the top inset when it opened. */
+export interface KeyboardSession {
+  height: number;
+  topInset: number;
+}
+
+export const CLOSED_KEYBOARD: KeyboardSession = { height: 0, topInset: 0 };
+
+/**
+ * The session after a keyboard-shown event. The top inset is captured when the keyboard opens and
+ * kept while it stays open: crowded mode hides the status bar, and measuring against the inset
+ * that leaves would turn crowded mode off again, then on, for as long as the keyboard is up.
+ */
+export function keyboardShown(
+  previous: KeyboardSession,
+  height: number,
+  currentTopInset: number,
+): KeyboardSession {
+  return { height, topInset: previous.height > 0 ? previous.topInset : currentTopInset };
+}
