@@ -540,8 +540,13 @@ After Gradle, `android-core/scripts/verify-apk-core.sh` checks an APK: every ver
 packaged under `lib/arm64-v8a/` byte for byte (so the packaged `libc++_shared.so` is r30's, not
 React Native's r27 copy), and `apkanalyzer dex packages` shows the binding class with every
 native method, `NavOSSCore$Host` with every callback, and `NavOSSCoreException(String, String)`
-under their own names. On a release APK that is the check that R8 neither stripped nor renamed
-what JNI finds by name. CI runs it in two parallel legs, on a debug APK and on a release APK built with a throwaway
+under their own names (the list comes from the Kotlin `external` functions and from every
+`FindClass` / `GetMethodID` the Swift JNI layer makes; `jni-contract.py check` fails on a lookup
+kind it cannot attribute), plus the NavOSS classes the manifest names and the app's Expo modules.
+On a release APK that is the check that R8 neither stripped nor renamed them. The keep rules are
+`modules/navoss-navigation/android/consumer-rules.pro`; without them R8 removed the `Host`
+callbacks and `NavOSSCoreException` (CI run 45151549163), so `nativeCreate` would fail in every
+release. CI runs it in two parallel legs, on a debug APK and on a release APK built with a throwaway
 key generated in the job (the release signing plugin accepts any keystore named by its three
 variables; the release workflow is what pins the certificate). The release workflow runs it on
 the signed APK, and every check fails the run.

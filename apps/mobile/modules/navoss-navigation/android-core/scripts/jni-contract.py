@@ -9,7 +9,10 @@
                                      (FILE) still has every class and member JNI reaches by name,
                                      unrenamed: R8 must neither strip nor rename them
 
-Nothing here is a hand-kept list: a rename on either side changes what is compared.
+Nothing here is a hand-kept list. The names come from the Kotlin `external` functions and from
+every lookup the Swift JNI layer makes (`FindClass`, `GetMethodID`, ...); a lookup of a kind this
+script cannot attribute fails `check`, so a new one needs this script and a keep rule in
+modules/navoss-navigation/android/consumer-rules.pro before CI passes.
 """
 
 import pathlib
@@ -111,11 +114,54 @@ def swift_host_lookups():
     return re.findall(r'\bmethod\("(\w+)",\s*"([^"]+)"\)', swift_text())
 
 
-def swift_exception_class():
-    match = re.search(r'exceptionClassName\s*=\s*"([\w/]+)"', swift_text())
-    if not match:
-        fail("exceptionClassName not found in the Swift JNI sources")
-    return match.group(1).replace("/", ".")
+# JNI calls that find a class, method or field by name. Each one the Swift side makes must be
+# one of the patterns `swift_lookups` understands, so a new kind of lookup fails here (and needs a
+# keep rule) instead of failing on a phone.
+LOOKUP_CALLS = ("FindClass", "GetObjectClass", "GetMethodID", "GetStaticMethodID", "GetFieldID",
+                "GetStaticFieldID", "RegisterNatives", "ThrowNew", "NewObject", "NewObjectA",
+                "NewObjectV", "AllocObject")
+
+
+def swift_lookups(binding):
+    """class -> set of `(name, JNI descriptor)` the Swift JNI layer finds by name; an empty set
+    for a class found only for itself. Fails on any lookup it cannot attribute."""
+    text = swift_text()
+    constants = dict(re.findall(r'\blet\s+(\w+)\s*=\s*"([\w/$]+)"', text))
+    host = f"{binding}$Host"
+    found = {}
+    # Function and initializer bodies: from one declaration to the next is precise enough for
+    # this file's layout.
+    parts = re.split(r"\b(?:func\s+(\w+)|(init)\??)\s*[(<]", text)
+    for index in range(1, len(parts), 3):
+        name, body = parts[index] or parts[index + 1], parts[index + 2]
+        calls = re.findall(r'\bjni\.(\w+)\(\s*env\s*,\s*((?:"[^"]*"|[^)"])*)\)', body)
+        calls = [(call, args) for call, args in calls if call in LOOKUP_CALLS]
+        if not calls:
+            continue
+        classes = []
+        for call, args in calls:
+            first = args.split(",")[0].strip()
+            if call == "FindClass":
+                value = constants.get(first) or (first.strip('"') if first.startswith('"') else None)
+                if value is None:
+                    fail(f"func {name}: FindClass with a computed name ({first})")
+                classes.append(value.replace("/", "."))
+                found.setdefault(classes[-1], set())
+        for call, args in calls:
+            literals = re.findall(r'"([^"]*)"', args)
+            if call in ("FindClass", "NewObjectA", "NewObject", "NewObjectV"):
+                continue
+            if call == "GetObjectClass" and name == "init":
+                continue  # the Host object: its methods are looked up through `method(...)`
+            if call == "GetMethodID" and len(literals) == 2 and len(classes) == 1:
+                found[classes[0]].add(tuple(literals))
+            elif call == "GetMethodID" and name == "method" and not literals:
+                continue  # the Host helper; its call sites are read below
+            else:
+                fail(f"func {name}: jni.{call}({args.strip()}) is a lookup this check does not "
+                     "understand; extend jni-contract.py and the module's consumer-rules.pro")
+    found.setdefault(host, set()).update(swift_host_lookups())
+    return found
 
 
 def kotlin_host_methods(binding_class):
@@ -143,6 +189,8 @@ def java_signature(name, jni_descriptor):
                 i += 1
         return out
     params, result = re.fullmatch(r"\((.*)\)(.+)", jni_descriptor).groups()
+    if name == "<init>":
+        return f"<init>({','.join(types(params))})"
     return f"{types(result)[0]} {name}({','.join(types(params))})"
 
 
@@ -165,6 +213,22 @@ def check():
             print(f"::error::Swift looks up Host.{name}{signature}; Kotlin declares "
                   f"{host.get(name, 'nothing')}")
             status = 1
+    binding = externals[0][1]
+    for owner, members in swift_lookups(binding).items():
+        if owner == f"{binding}$Host":
+            continue
+        path = KOTLIN.joinpath(*owner.split(".")[:-1], owner.split(".")[-1] + ".kt")
+        if not path.exists():
+            continue  # a platform class
+        text = strip_comments(path.read_text())
+        simple = owner.split(".")[-1]
+        primary = re.search(rf"\bclass\s+{re.escape(simple)}\s*\(([^)]*)\)", text)
+        for name, signature in members:
+            params = re.sub(r"\b(?:val|var|private|internal)\s+", "", primary.group(1)) if primary else None
+            if name != "<init>" or params is None or descriptor(params, "Unit") != signature:
+                print(f"::error::Swift looks up {owner}.{name}{signature}; the Kotlin source does "
+                      "not declare it as a primary constructor this check can read")
+                status = 1
     if status:
         sys.exit(status)
     print(f"JNI contract: {len(kotlin)} entry points and {len(swift_host_lookups())} Host "
@@ -178,17 +242,15 @@ def dex_members(listing):
     methods = {l.split("\t")[-1] for l in lines if l.startswith("M ")}
     externals = kotlin_externals()
     binding = externals[0][1]
-    host = f"{binding}$Host"
-    exception = swift_exception_class()
-    expected = {binding: [java_signature(e[2], e[3]) for e in externals],
-                host: [java_signature(n, s) for n, s in swift_host_lookups()],
-                exception: ["<init>(java.lang.String,java.lang.String)"]}
+    expected = {binding: {java_signature(e[2], e[3]) for e in externals}}
+    for owner, members in swift_lookups(binding).items():
+        expected.setdefault(owner, set()).update(java_signature(n, d) for n, d in members)
     missing = []
     for owner, members in expected.items():
         if owner not in classes:
             missing.append(f"class {owner}")
             continue
-        missing += [f"{owner} {m}" for m in members if f"{owner} {m}" not in methods]
+        missing += [f"{owner} {m}" for m in sorted(members) if f"{owner} {m}" not in methods]
     if missing:
         for item in missing:
             print(f"::error::not in the APK's dex under its JNI name: {item}")

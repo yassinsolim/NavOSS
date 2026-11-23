@@ -3,8 +3,9 @@
 # it: every library in <jniLibs-dir>/<abi> is packaged under lib/<abi>/ byte for byte (so the
 # packaged libc++_shared.so is the verified NDK r30 one, not React Native's), and the dex keeps,
 # under their JNI names, the binding's native methods, the Host callbacks and the exception
-# constructor the Swift side looks up (jni-contract.py dex-members). For a release APK the second
-# check is what catches R8 stripping or renaming them.
+# constructor the Swift side looks up (jni-contract.py dex-members), and the NavOSS classes the
+# manifest names and the app's Expo modules. For a release APK the dex checks are what catch R8
+# stripping or renaming them.
 #
 # Usage: verify-apk-core.sh <apk> [<jniLibs-dir>]  (default: android-core/build/jniLibs)
 # Needs ANDROID_HOME (cmdline-tools' apkanalyzer), Java, python3 and unzip.
@@ -49,6 +50,31 @@ done
 ((status == 0)) || fail "the APK does not carry the verified core libraries"
 echo "verify-apk-core: $(find "$dir" -name '*.so' | wc -l | tr -d ' ') core libraries packaged unchanged; libNavOSSCore.so $(digest "$dir/libNavOSSCore.so")" >&2
 
-"${ANDROID_HOME:?set ANDROID_HOME}/cmdline-tools/latest/bin/apkanalyzer" dex packages --defined-only "$apk" \
-  >"$scratch/dex.txt"
+apkanalyzer="${ANDROID_HOME:?set ANDROID_HOME}/cmdline-tools/latest/bin/apkanalyzer"
+"$apkanalyzer" dex packages --defined-only "$apk" >"$scratch/dex.txt"
 python3 "$here/jni-contract.py" dex-members "$scratch/dex.txt"
+
+# The same hole outside JNI: NavOSS classes Android instantiates by name from the manifest
+# (services, receivers, ...) and the app's own Expo modules (expo-module.config.json) must be in
+# the dex under their names.
+classes="$(awk -F'\t' '/^C / { print $NF }' "$scratch/dex.txt")"
+"$apkanalyzer" manifest print "$apk" >"$scratch/manifest.xml"
+named="$(python3 - "$scratch/manifest.xml" "$here/../../.." <<'PY'
+import json, pathlib, re, sys
+manifest = pathlib.Path(sys.argv[1]).read_text()
+for tag in re.findall(r"<(?:activity|service|receiver|provider)\b[^>]*>", manifest):
+    name = re.search(r'android:name="(org\.navoss\.[^"]+)"', tag)
+    if name:
+        print(name.group(1))
+for config in sorted(pathlib.Path(sys.argv[2]).glob("*/expo-module.config.json")):
+    print("\n".join(json.loads(config.read_text()).get("android", {}).get("modules", [])))
+PY
+)"
+count=0
+while read -r name; do
+  [[ -n "$name" ]] || continue
+  count=$((count + 1))
+  grep -qxF "$name" <<<"$classes" || { echo "::error::$name is not in the APK's dex under its name"; status=1; }
+done <<<"$named"
+((status == 0 && count > 0)) || fail "classes Android or Expo load by name are missing or renamed"
+echo "verify-apk-core: $count manifest components and Expo modules present by name" >&2
