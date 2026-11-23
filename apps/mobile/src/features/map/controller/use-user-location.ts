@@ -30,6 +30,7 @@ import {
   type RouteOriginSample,
   type RouteRequestOrigin,
 } from '@/features/navigation/route-origin';
+import { getLocationAvailability } from '@/features/navigation/native-navigation';
 import { RouteOriginUnavailableError } from '@/features/navigation/route-ui-state';
 import { createValueStore, type ValueStore } from '@/lib/value-store';
 import { IS_ANDROID } from '@/lib/device-copy';
@@ -137,7 +138,12 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     if (aborted()) return undefined;
     if (location === 'no-fix' || location === 'services-off') {
       setLocationState('error');
-      throw new RouteOriginUnavailableError(routeOriginFailureMessage(location));
+      // Android: a device without GPS (a handheld) can only have a Wi-Fi position; say so.
+      const failure =
+        location === 'no-fix' && IS_ANDROID && getLocationAvailability() === 'no-gps'
+          ? 'no-gps'
+          : location;
+      throw new RouteOriginUnavailableError(routeOriginFailureMessage(failure));
     }
     const sample = routeOriginSampleFromLocation(location);
     const selectedSample = newestValidRouteOriginSample(sample, routeOriginSampleRef.current);
