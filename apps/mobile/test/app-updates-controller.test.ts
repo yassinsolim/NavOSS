@@ -5,7 +5,7 @@ import {
   createAppUpdates,
   type UpdaterNative,
 } from '../src/features/updates/app-updates.js';
-import { RELEASES_URL } from '../src/features/updates/update-feed.js';
+import { MAX_FEED_BYTES, RELEASES_URL } from '../src/features/updates/update-feed.js';
 
 const TAG = 'android-v0.2.0-102';
 const RELEASES = [
@@ -38,7 +38,7 @@ function harness({
   /** The first download resolves only when the test calls `finishDownload`. */
   holdDownload?: boolean;
   installError?: string;
-  response?: { body: unknown; status: number } | 'offline';
+  response?: { body: unknown; status: number } | 'offline' | 'too-large';
   stored?: string | null;
 } = {}) {
   let now = 1_800_000_000_000;
@@ -75,6 +75,23 @@ function harness({
       versionCode: 101,
       versionName: '0.1.0',
     }),
+    fetchFeed: (url: string) => {
+      requests.push(url);
+      const current = response;
+      if (current === 'offline' || current === 'too-large') {
+        const code = current === 'offline' ? 'network' : 'too-large';
+        return Promise.reject(Object.assign(new Error('x'), { code }));
+      }
+      return Promise.resolve({
+        body:
+          current.status === 200
+            ? typeof current.body === 'string'
+              ? current.body
+              : JSON.stringify(current.body)
+            : null,
+        status: current.status,
+      });
+    },
     openInstallPermissionSettings: () => calls.push('settings'),
     setInstallHold: (held: boolean) => calls.push(`hold:${String(held)}`),
     verifyAndInstall: (versionCode: number, sha256: string) => {
@@ -86,15 +103,6 @@ function harness({
   } as unknown as UpdaterNative;
   const dependencies: AppUpdatesDependencies = {
     feedUrl: RELEASES_URL,
-    fetchReleases: (url) => {
-      requests.push(url);
-      const current = response;
-      if (current === 'offline') return Promise.reject(new TypeError('Network request failed'));
-      return Promise.resolve({
-        json: () => Promise.resolve(current.body),
-        status: current.status,
-      });
-    },
     log: (code) => logs.push(code),
     native,
     now: () => now,
@@ -165,6 +173,9 @@ describe('app updates', () => {
       'offline',
       { body: {}, status: 403 },
       { body: 'x', status: 200 },
+      'too-large',
+      // Past the ceiling even if the native side let it through.
+      { body: '[' + ' '.repeat(MAX_FEED_BYTES) + ']', status: 200 },
     ] as const) {
       const h = harness({ response });
       await h.updater.start();

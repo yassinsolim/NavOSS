@@ -94,8 +94,11 @@ never during a trip, and on **Check now** under About and privacy, App updates, 
 [`docs/privacy.md`](../privacy.md). It reads the list rather than `/releases/latest` because iOS
 and Android releases share the repository, and rather than `update.json` because the list already
 carries the tag, the APK's size and the SHA-256 GitHub computed for it, in one request to one host.
-Rate limiting, no network, a malformed answer or a release without a usable APK leave the app as
-it was; only a manual check says what happened.
+It asks for the newest 10 releases (`per_page=10`) and reads only those, at most 20 assets each.
+The request is made by the app's native updater module, which refuses an answer that announces or
+sends more than 1 MiB (ten NavOSS releases are a few tens of kilobytes), and gives up after 30
+seconds. Rate limiting, no network, a malformed or oversized answer or a release without a usable
+APK leave the app as it was; only a manual check says what happened.
 
 When a newer published `android-v` release with an APK exists, a card over the map says
 "NavOSS <version> is available" with the download size, **Install** and **Later** (which hides it

@@ -97,6 +97,25 @@ class NavOSSUpdaterModule : Module() {
       }
     }
 
+    /**
+     * The update check: one GET of the releases list, capped at [MAX_FEED_BYTES]. Resolves with
+     * `{ status, body }` (body only for a 200); rejects with `invalid`, `network` or `too-large`.
+     */
+    AsyncFunction("fetchFeed") { url: String, promise: Promise ->
+      Thread {
+          try {
+            val response = FeedFetcher().fetch(url)
+            promise.resolve(mapOf("status" to response.status, "body" to response.body))
+          } catch (error: DownloadException) {
+            promise.reject(UpdaterException(error.code))
+          } catch (_: Exception) {
+            promise.reject(UpdaterException("network"))
+          }
+        }
+        .apply { name = "NavOSSUpdateCheck" }
+        .start()
+    }
+
     AsyncFunction("download") {
       url: String,
       size: Double,

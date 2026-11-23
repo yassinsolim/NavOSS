@@ -37,6 +37,11 @@ declare class NavOSSUpdaterModule extends NativeModule<NavOSSUpdaterEvents> {
   /** Rejects with a code: `network`, `http`, `size`, `cancelled`, `storage`, `invalid`, `busy`. */
   download(url: string, size: number, versionCode: number): Promise<void>;
   downloadedBytes(versionCode: number): number;
+  /**
+   * One GET of the releases list, capped at 1 MiB. Resolves with the status and, for a 200, the
+   * body. Rejects with a code: `invalid`, `network`, `too-large`.
+   */
+  fetchFeed(url: string): Promise<{ body: string | null; status: number }>;
   getInstalledVersion(): InstalledVersion;
   openInstallPermissionSettings(): void;
   /** While held (a trip is active), no install session is committed and no prompt opens. */

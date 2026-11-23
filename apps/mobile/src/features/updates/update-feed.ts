@@ -9,7 +9,34 @@
  * Anonymous requests see published releases only; drafts and pre-releases are skipped anyway.
  */
 
-export const RELEASES_URL = 'https://api.github.com/repos/yassinsolim/NavOSS/releases?per_page=30';
+/**
+ * Releases read per check: the newest ten (GitHub lists newest first). Anonymous requests never see
+ * drafts, so ten leaves room for pre-releases and any non-Android release published in between.
+ */
+export const FEED_PAGE_SIZE = 10;
+
+export const RELEASES_URL = `https://api.github.com/repos/yassinsolim/NavOSS/releases?per_page=${String(FEED_PAGE_SIZE)}`;
+
+/**
+ * The most the releases list may be (the native fetch enforces it while reading; this is the same
+ * limit in characters). Ten NavOSS releases are a few tens of kilobytes.
+ */
+export const MAX_FEED_BYTES = 1_048_576;
+
+/** Assets read per release; a NavOSS release has three. */
+const MAX_ASSETS_READ = 20;
+const MAX_NAME_LENGTH = 200;
+const MAX_URL_LENGTH = 2_048;
+
+/** The JSON of a feed body, or undefined for no body, a body past the ceiling, or bad JSON. */
+export function parseFeedBody(body: unknown): unknown {
+  if (typeof body !== 'string' || body.length > MAX_FEED_BYTES) return undefined;
+  try {
+    return JSON.parse(body) as unknown;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Test builds only: `EXPO_PUBLIC_NAVOSS_UPDATE_FEED_URL` replaces the releases URL with a local
@@ -44,7 +71,7 @@ export type FeedResult =
   | { kind: 'up-to-date'; latestVersionCode: number }
   | { kind: 'update'; update: AvailableUpdate };
 
-const TAG_PATTERN = /^android-v(\d+\.\d+\.\d+)-(\d{1,10})$/;
+const TAG_PATTERN = /^android-v(\d{1,4}\.\d{1,4}\.\d{1,4})-(\d{1,10})$/;
 
 export function parseReleaseTag(
   tag: string,
@@ -103,13 +130,16 @@ function releaseUpdate(release: ReleaseFields, feedUrl: string): AvailableUpdate
   if (typeof release.tag_name !== 'string') return undefined;
   const version = parseReleaseTag(release.tag_name);
   if (version === undefined || !Array.isArray(release.assets)) return undefined;
-  for (const entry of release.assets as unknown[]) {
+  for (const entry of (release.assets as unknown[]).slice(0, MAX_ASSETS_READ)) {
     if (typeof entry !== 'object' || entry === null) continue;
     const asset = entry as AssetFields;
     const { browser_download_url: url, name, size, state } = asset;
-    if (typeof name !== 'string' || !name.endsWith('.apk')) continue;
+    if (typeof name !== 'string' || name.length > MAX_NAME_LENGTH || !name.endsWith('.apk')) {
+      continue;
+    }
     if (state !== undefined && state !== 'uploaded') continue;
-    if (typeof url !== 'string' || !isAllowedDownloadUrl(url, feedUrl)) continue;
+    if (typeof url !== 'string' || url.length > MAX_URL_LENGTH) continue;
+    if (!isAllowedDownloadUrl(url, feedUrl)) continue;
     if (typeof size !== 'number' || !Number.isSafeInteger(size) || size <= 0) continue;
     if (size > MAX_APK_BYTES) continue;
     const sha256 = parseDigest(asset.digest);
@@ -138,7 +168,8 @@ export function latestUpdate(
 ): FeedResult {
   if (!Array.isArray(json)) return { kind: 'malformed' };
   let latest: AvailableUpdate | undefined;
-  for (const release of json) {
+  // Only the page the app asked for, whatever the server sent.
+  for (const release of json.slice(0, FEED_PAGE_SIZE)) {
     if (typeof release !== 'object' || release === null) continue;
     const update = releaseUpdate(release as ReleaseFields, feedUrl);
     if (update !== undefined && (latest === undefined || update.versionCode > latest.versionCode)) {

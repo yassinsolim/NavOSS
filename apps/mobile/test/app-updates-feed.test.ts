@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   checkCodeForStatus,
   isAllowedDownloadUrl,
+  FEED_PAGE_SIZE,
   latestUpdate,
+  MAX_FEED_BYTES,
+  parseFeedBody,
   parseReleaseTag,
   RELEASES_URL,
 } from '../src/features/updates/update-feed.js';
@@ -119,7 +122,41 @@ describe('release feed', () => {
       release('android-v0.2.0-160', {}, { size: 250_000_001 }),
     ];
     expect(latestUpdate(skipped, 101)).toEqual({ kind: 'no-release' });
-    expect(latestUpdate([...skipped, release('android-v0.2.0-110')], 101).kind).toBe('update');
+    expect(latestUpdate([release('android-v0.2.0-110'), ...skipped], 101).kind).toBe('update');
+  });
+
+  it('asks for a small page and reads only that many releases and assets', () => {
+    expect(new URL(RELEASES_URL).searchParams.get('per_page')).toBe(String(FEED_PAGE_SIZE));
+    const filler = Array.from({ length: FEED_PAGE_SIZE }, () => release('ios-v1.0.0-80'));
+    // An eleventh entry is past the page the app asked for.
+    expect(latestUpdate([...filler, release('android-v0.2.0-110')], 101).kind).toBe('no-release');
+    const manyAssets = release('android-v0.2.0-111');
+    manyAssets.assets = [
+      ...Array.from({ length: 40 }, () => ({ ...manyAssets.assets[0] })),
+      manyAssets.assets[1],
+    ];
+    expect(latestUpdate([manyAssets], 101).kind).toBe('no-release');
+  });
+
+  it('ignores oversized fields', () => {
+    const long = 'x'.repeat(300);
+    for (const asset of [
+      { name: `${long}.apk` },
+      {
+        browser_download_url: `https://github.com/yassinsolim/NavOSS/releases/download/${'x'.repeat(2_100)}/navoss.apk`,
+      },
+    ]) {
+      expect(latestUpdate([release('android-v0.2.0-110', {}, asset)], 101).kind).toBe('no-release');
+    }
+    expect(parseReleaseTag('android-v0.2.0-12345678901')).toBeUndefined();
+    expect(parseReleaseTag(`android-v${'1'.repeat(20)}.0.0-110`)).toBeUndefined();
+  });
+
+  it('parses a feed body only below the byte ceiling', () => {
+    expect(parseFeedBody('[]')).toEqual([]);
+    expect(parseFeedBody('not json')).toBeUndefined();
+    expect(parseFeedBody(null)).toBeUndefined();
+    expect(parseFeedBody('[' + ' '.repeat(MAX_FEED_BYTES) + ']')).toBeUndefined();
   });
 
   it('treats a body that is not a release list as malformed', () => {

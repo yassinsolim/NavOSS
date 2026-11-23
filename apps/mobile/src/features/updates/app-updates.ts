@@ -7,6 +7,7 @@ import {
   type CheckCode,
   checkCodeForStatus,
   latestUpdate,
+  parseFeedBody,
 } from './update-feed';
 import {
   DEFAULT_UPDATE_PREFERENCES,
@@ -53,6 +54,7 @@ export interface UpdaterNative {
   cleanDownloads(keepVersionCode: number): void;
   download(url: string, size: number, versionCode: number): Promise<void>;
   downloadedBytes(versionCode: number): number;
+  fetchFeed(url: string): Promise<{ body: string | null; status: number }>;
   getInstalledVersion(): InstalledVersion;
   openInstallPermissionSettings(): void;
   setInstallHold(held: boolean): void;
@@ -61,8 +63,6 @@ export interface UpdaterNative {
 
 export interface AppUpdatesDependencies {
   feedUrl: string;
-  /** One GET of the releases list. Rejects when there is no network. */
-  fetchReleases: (url: string) => Promise<{ json: () => Promise<unknown>; status: number }>;
   /** Receives only a result code. */
   log: (code: CheckCode) => void;
   native: UpdaterNative;
@@ -165,23 +165,19 @@ export function createAppUpdates(dependencies: AppUpdatesDependencies): AppUpdat
     let code: CheckCode;
     let found: AvailableUpdate | undefined;
     try {
-      const response = await dependencies.fetchReleases(dependencies.feedUrl);
+      // The native GET caps the response size; React Native's fetch cannot.
+      const response = await native.fetchFeed(dependencies.feedUrl);
       const statusCode = checkCodeForStatus(response.status);
       if (statusCode !== undefined) {
         code = statusCode;
       } else {
-        let json: unknown;
-        try {
-          json = await response.json();
-        } catch {
-          json = undefined;
-        }
+        const json = parseFeedBody(response.body);
         const result = latestUpdate(json, installed.versionCode, dependencies.feedUrl);
         code = result.kind;
         if (result.kind === 'update') found = result.update;
       }
-    } catch {
-      code = 'no-network';
+    } catch (error) {
+      code = errorCode(error) === 'too-large' ? 'malformed' : 'no-network';
     }
     checking = false;
     dependencies.log(code);

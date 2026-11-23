@@ -7,31 +7,16 @@ import { type AppUpdates, type AppUpdatesState, createAppUpdates } from './app-u
 import { releasesUrl } from './update-feed';
 
 const STORAGE_KEY = 'navoss.app-updates.v1';
-const CHECK_TIMEOUT_MS = 15_000;
 
 /**
  * The app's updater, or undefined where there is none (iOS, where the native module is absent,
- * and web). The check is one anonymous GET with React Native's default headers.
+ * and web). The check is one anonymous GET, made by the native module so its size is capped.
  */
 export const appUpdates: AppUpdates | undefined =
   NavOSSUpdater === null
     ? undefined
     : createAppUpdates({
         feedUrl: releasesUrl(),
-        fetchReleases: async (url) => {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => {
-            controller.abort();
-          }, CHECK_TIMEOUT_MS);
-          try {
-            return await fetch(url, {
-              headers: { Accept: 'application/vnd.github+json' },
-              signal: controller.signal,
-            });
-          } finally {
-            clearTimeout(timeout);
-          }
-        },
         // The result code is the only thing recorded about a check.
         log: (code) => {
           console.info(`NavOSS update check: ${code}`);
