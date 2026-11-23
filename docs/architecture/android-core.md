@@ -579,3 +579,23 @@ rebuilds. Update `android-core/NOTICES.md` with the pins.
 
 Locally, the macOS steps (swiftly, `swift sdk install … --checksum`, the NDK zip with its SHA-1)
 are unchanged; `build-android-core.sh` runs on both hosts.
+
+### Timings (2026-11-23, `ubuntu-latest`)
+
+| Step                                                | Cold (no cache)                           | Warm (cache hit) |
+| --------------------------------------------------- | ----------------------------------------- | ---------------- |
+| Core action                                         | 75-87 s                                   | about 5 s        |
+| of which toolchain and SDK download, check, extract | 27 s (8 s more to save the 1.46 GB cache) | not run          |
+| of which `swift build` (release) and strip          | 44 s                                      | not run          |
+| Android job before this change (debug only)         | about 12 min (Gradle cache miss)          | 6-7 min          |
+| `debug` leg (debug APK, Kotlin tests)               | 8-10 min                                  | 6.5 min          |
+| `release` leg (R8 release APK)                      | 13-14 min                                 | 12 min           |
+
+Most of each leg is Gradle compiling React Native's and the Expo modules' C++, which no cache
+keeps between runs (release: 10.5 of 12 minutes warm); the release leg adds R8. The legs run in
+parallel, so the Android check takes as long as the release leg. One job building both variants took 19.5 minutes, so they
+run as two parallel legs. The core libraries' cache entry is about 24 MB.
+
+`swift build` is not byte-reproducible: two runners building the same commit produced different
+`libNavOSSCore.so` checksums. Every check therefore compares the APK with the libraries that job
+verified, and the release notes give the checksum of the shipped library.
