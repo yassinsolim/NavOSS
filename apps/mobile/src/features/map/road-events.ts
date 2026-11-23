@@ -78,13 +78,23 @@ export function roadEventSourceTime(
   return undefined;
 }
 
+// Intl formatters and collators are built once and reused: on Android, Hermes builds each one
+// through ICU in Java, which took seconds per refresh for a few hundred events.
+const LOCAL_DAY_FORMATS = new Map<string, Intl.DateTimeFormat>();
+const EVENT_ID_ORDER = new Intl.Collator('en-CA');
+
 function localToday(now: number, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    day: '2-digit',
-    month: '2-digit',
-    timeZone,
-    year: 'numeric',
-  }).formatToParts(now);
+  let format = LOCAL_DAY_FORMATS.get(timeZone);
+  if (format === undefined) {
+    format = new Intl.DateTimeFormat('en-CA', {
+      day: '2-digit',
+      month: '2-digit',
+      timeZone,
+      year: 'numeric',
+    });
+    LOCAL_DAY_FORMATS.set(timeZone, format);
+  }
+  const parts = format.formatToParts(now);
   const value = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value ?? '';
   return `${value('year')}-${value('month')}-${value('day')}`;
@@ -167,7 +177,7 @@ export function currentRoadEvents(
       const leftTime = roadEventRecency(left, sources.get(left.sourceId)?.checkedAt);
       const rightTime = roadEventRecency(right, sources.get(right.sourceId)?.checkedAt);
       return leftTime === rightTime
-        ? left.id.localeCompare(right.id, 'en-CA')
+        ? EVENT_ID_ORDER.compare(left.id, right.id)
         : rightTime - leftTime;
     });
 }

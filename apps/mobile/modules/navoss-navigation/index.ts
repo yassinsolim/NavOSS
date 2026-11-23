@@ -11,7 +11,7 @@ export interface NativeNavigationCapabilities {
   courseMatching: true;
   deadReckoning: true;
   geometryGuidance: true;
-  implementation: 'native-ios';
+  implementation: 'native-android' | 'native-ios';
   nativeSafetyCameraAlerts: true;
   offRouteDetection: true;
   replayInput: true;

@@ -19,6 +19,9 @@ function coordinateDistanceMeters(left: Coordinate, right: Coordinate): number {
   return 2 * EARTH_RADIUS_METERS * Math.asin(Math.sqrt(haversine));
 }
 
+// One collator for every sort: Hermes on Android builds a new ICU collator per `localeCompare`.
+const NAME_ORDER = new Intl.Collator('en-CA');
+
 export function approximateSearchCoordinate(
   coordinate: Coordinate | undefined,
 ): Coordinate | undefined {
@@ -191,7 +194,7 @@ export function rankCategoryResults(
       return (
         left.distanceMeters - right.distanceMeters ||
         right.confidence - left.confidence ||
-        left.name.localeCompare(right.name, 'en-CA')
+        NAME_ORDER.compare(left.name, right.name)
       );
     })
     .slice(0, limit);

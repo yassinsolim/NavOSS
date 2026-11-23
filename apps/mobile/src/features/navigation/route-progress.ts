@@ -269,18 +269,18 @@ export function formatDistance(distanceMetersValue: number): string {
 }
 
 /** "8:53 a.m." today; "Tue 8:53 a.m." later this week; "Nov 23 8:53 a.m." beyond it. */
+// Reused rather than rebuilt per call: on Android, Hermes builds each Intl formatter through ICU
+// in Java, which is slow enough to stall a guidance render.
+const CLOCK_TIME = new Intl.DateTimeFormat('en-CA', { hour: 'numeric', minute: '2-digit' });
+const WEEKDAY = new Intl.DateTimeFormat('en-CA', { weekday: 'short' });
+const MONTH_DAY = new Intl.DateTimeFormat('en-CA', { day: 'numeric', month: 'short' });
+
 export function formatArrivalTime(durationSeconds: number, now: Date = new Date()): string {
   const arrival = new Date(now.getTime() + durationSeconds * 1_000);
-  const time = arrival.toLocaleTimeString('en-CA', {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  const time = CLOCK_TIME.format(arrival);
   if (arrival.toDateString() === now.toDateString()) return time;
   const withinWeek = arrival.getTime() - now.getTime() < 6 * HOURS_PER_DAY * 3_600_000;
-  const day = arrival.toLocaleDateString(
-    'en-CA',
-    withinWeek ? { weekday: 'short' } : { day: 'numeric', month: 'short' },
-  );
+  const day = (withinWeek ? WEEKDAY : MONTH_DAY).format(arrival);
   return `${day} ${time}`;
 }
 
@@ -327,10 +327,7 @@ export function communityTrafficUpdated(
     .map((boundary) => Date.parse(boundary ?? ''))
     .filter((time) => Number.isFinite(time));
   if (times.length === 0) return undefined;
-  return `updated ${new Date(Math.min(...times)).toLocaleTimeString('en-CA', {
-    hour: 'numeric',
-    minute: '2-digit',
-  })}`;
+  return `updated ${CLOCK_TIME.format(new Date(Math.min(...times)))}`;
 }
 
 /**
