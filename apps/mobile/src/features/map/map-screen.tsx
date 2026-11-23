@@ -57,7 +57,9 @@ import { GuidanceSettingsSheet } from '@/features/navigation/guidance-settings-s
 import { maneuverSignage } from '@/features/navigation/lane-guidance';
 import { isCarPlayVisualHarness } from '@/features/navigation/native-navigation';
 import { RoutePlanningSheet, RoutePreviewSheet } from '@/features/navigation/route-sheets';
+import { RouteStartPicker } from '@/features/navigation/route-start-picker';
 import { RouteStopsEditor } from '@/features/navigation/route-stops-editor';
+import { IS_ANDROID } from '@/lib/device-copy';
 import { useRenderCounter } from '@/lib/render-counter';
 import { createThemedStyles, space } from '@/theme';
 import { SheetFrameContext } from '@/ui/sheet/bottom-sheet';
@@ -447,6 +449,7 @@ export function MapScreen() {
             destination={routeState.destination}
             failure={routeState.type === 'error' ? routeState : undefined}
             onCancel={c.onCancelRoute}
+            {...(IS_ANDROID ? { onChooseStart: c.routeStart.open } : {})}
             onPreviewSupportedRoute={c.onPreviewSupportedRoute}
             onRetry={c.onRetryRoute}
             position={c.sheetPosition}
@@ -468,9 +471,7 @@ export function MapScreen() {
             onUseCurrentLocation={c.onUseCurrentLocation}
             onVehicleStyleChange={route.setVehicleStyle}
             position={c.sheetPosition}
-            previewOriginLabel={
-              routeState.previewOrigin === undefined ? undefined : 'Calgary Tower'
-            }
+            previewOriginLabel={routeState.previewOrigin?.label}
             routePreferences={route.preferences}
             routeSource={route.source}
             routes={routeState.routes}
@@ -627,6 +628,16 @@ export function MapScreen() {
           onClose={c.onCloseFeatureDetail}
           onOpenLink={c.onOpenExternalUrl}
         />
+        {IS_ANDROID && (routeState.type === 'loading' || routeState.type === 'error') && (
+          <RouteStartPicker
+            catalog={c.destinationCatalog}
+            destination={routeState.destination}
+            metrics={metrics}
+            onChoose={c.routeStart.choose}
+            onClose={c.routeStart.close}
+            visible={c.routeStart.visible}
+          />
+        )}
         {routeState.type === 'preview' && (
           <RouteStopsEditor
             destinations={[...routeState.waypoints, routeState.destination]}

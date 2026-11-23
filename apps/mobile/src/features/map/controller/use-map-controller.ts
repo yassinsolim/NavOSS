@@ -157,7 +157,11 @@ import {
   getUpcomingGuidanceStep,
   getUpcomingManeuvers,
 } from '@/features/navigation/route-progress';
-import { selectedRouteOf, tripEndNotice } from '@/features/navigation/route-ui-state';
+import {
+  type RoutePreviewOrigin,
+  selectedRouteOf,
+  tripEndNotice,
+} from '@/features/navigation/route-ui-state';
 import { useSafetyCameraAlert } from '@/features/navigation/use-safety-camera-alert';
 import {
   isResumingTrip,
@@ -171,7 +175,10 @@ import type { SymbolName } from '@/ui/button';
 import type { BottomSheetRef } from '@/ui/sheet/bottom-sheet';
 
 const CANADA_CENTER: [longitude: number, latitude: number] = [-106.3468, 56.1304];
-const CALGARY_TOWER_ROUTE_ORIGIN: Coordinate = { latitude: 51.04427, longitude: -114.06309 };
+const CALGARY_TOWER_ROUTE_ORIGIN: RoutePreviewOrigin = {
+  coordinate: { latitude: 51.04427, longitude: -114.06309 },
+  label: 'Calgary Tower',
+};
 const TAP_RADIUS = 18;
 const CAMERA_ROUTE_CORRIDOR_METERS = 60;
 const NOTICE_VISIBLE_MS = 5_000;
@@ -277,6 +284,7 @@ export function useMapController() {
   const [isRoadReportSaving, setIsRoadReportSaving] = useState(false);
   const [isRoadReportVisible, setIsRoadReportVisible] = useState(false);
   const [isRouteStopsVisible, setIsRouteStopsVisible] = useState(false);
+  const [isRouteStartPickerVisible, setIsRouteStartPickerVisible] = useState(false);
   const [isGuidanceSettingsVisible, setIsGuidanceSettingsVisible] = useState(false);
   const [featureDetail, setFeatureDetail] = useState<MapFeatureDetail>();
   const [isRoadEventsVisible, setIsRoadEventsVisible] = useState(false);
@@ -1073,6 +1081,19 @@ export function useMapController() {
       routeState.destination,
       planner.routePreferences,
       CALGARY_TOWER_ROUTE_ORIGIN,
+      routeState.waypoints,
+    );
+  };
+
+  // A device without a location fix (a Wi-Fi-only handheld, location off or denied) previews the
+  // route from a place the driver chooses. Like the supported-route demo it is never started.
+  const handleChooseRouteStart = (start: SearchResult) => {
+    if (routeState.type !== 'error' && routeState.type !== 'loading') return;
+    setIsRouteStartPickerVisible(false);
+    void planner.calculateRoute(
+      routeState.destination,
+      planner.routePreferences,
+      { coordinate: start.center, label: start.name },
       routeState.waypoints,
     );
   };
@@ -1901,6 +1922,16 @@ export function useMapController() {
       source: planner.routeSource,
       state: routeState,
       vehicleStyle: planner.vehicleStyle,
+    },
+    routeStart: {
+      choose: handleChooseRouteStart,
+      close: () => {
+        setIsRouteStartPickerVisible(false);
+      },
+      open: () => {
+        setIsRouteStartPickerVisible(true);
+      },
+      visible: isRouteStartPickerVisible,
     },
     routeStops: {
       close: () => {

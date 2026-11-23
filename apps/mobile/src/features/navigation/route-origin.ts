@@ -98,15 +98,15 @@ export type RouteOriginFailure = 'no-fix' | 'services-off' | 'stale-fix';
 
 /**
  * What the route sheet says when the device's location cannot start a route. Devices without a
- * GPS radio (a Wi-Fi-only handheld) or with location turned off land here; the sheet's own
- * "Preview a supported route" action stays available beside the message.
+ * GPS radio (a Wi-Fi-only handheld) or with location turned off land here (the Android build
+ * only); the sheet offers "Choose a start" beside the message.
  */
 export function routeOriginFailureMessage(failure: RouteOriginFailure): string {
   switch (failure) {
     case 'services-off':
-      return 'Location is turned off on this device, so NavOSS cannot route from where you are. Turn it on in Settings, or preview a supported route.';
+      return 'Location is turned off on this device, so NavOSS cannot route from where you are. Turn it on in Settings, or choose where the route starts.';
     case 'no-fix':
-      return 'This device has not found your location, so NavOSS cannot route from where you are. Try again, or preview a supported route.';
+      return 'This device has not found your location, so NavOSS cannot route from where you are. Try again, or choose where the route starts.';
     case 'stale-fix':
       return 'A fresh, accurate location fix is needed. Wait for GPS to update, then try again.';
   }

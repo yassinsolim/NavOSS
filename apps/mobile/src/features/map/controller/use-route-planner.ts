@@ -1,6 +1,5 @@
 import {
   isCoordinateServed,
-  type Coordinate,
   type RouteAlternativeV2,
   type RoutePreferences,
   type SearchResult,
@@ -16,6 +15,7 @@ import type { RouteRequestOrigin } from '@/features/navigation/route-origin';
 import {
   IDLE_ROUTE,
   routeErrorFrom,
+  type RoutePreviewOrigin,
   type RouteSource,
   type RouteUiState,
 } from '@/features/navigation/route-ui-state';
@@ -36,7 +36,7 @@ export interface RoutePlanner {
   calculateRoute: (
     destination: SearchResult,
     preferences?: RoutePreferences,
-    previewOrigin?: Coordinate,
+    previewOrigin?: RoutePreviewOrigin,
     waypoints?: SearchResult[],
   ) => Promise<void>;
   routePreferences: RoutePreferences;
@@ -89,7 +89,7 @@ export function useRoutePlanner({
   const calculateRoute = async (
     destination: SearchResult,
     preferences: RoutePreferences = routePreferences,
-    previewOrigin?: Coordinate,
+    previewOrigin?: RoutePreviewOrigin,
     waypoints: SearchResult[] = [],
   ) => {
     abortControllerRef.current?.abort();
@@ -109,7 +109,7 @@ export function useRoutePlanner({
       const routeOrigin =
         previewOrigin === undefined
           ? await getCurrentRouteOrigin(controller.signal)
-          : { origin: previewOrigin };
+          : { origin: previewOrigin.coordinate };
       if (routeOrigin === undefined || superseded()) return;
       const places = [
         routeOrigin.origin,

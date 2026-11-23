@@ -24,7 +24,7 @@ import {
   type RouteOriginSample,
   type RouteRequestOrigin,
 } from '@/features/navigation/route-origin';
-import { NavOssApiError } from '@/lib/api';
+import { RouteOriginUnavailableError } from '@/features/navigation/route-ui-state';
 import { createValueStore, type ValueStore } from '@/lib/value-store';
 import { IS_ANDROID } from '@/lib/device-copy';
 
@@ -103,9 +103,8 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     if (aborted()) return undefined;
     if (!granted) {
       setLocationState('denied');
-      throw new NavOssApiError(
+      throw new RouteOriginUnavailableError(
         `Allow NavOSS to use your location in ${IS_ANDROID ? 'Settings' : 'iPhone Settings'} to calculate a route.`,
-        0,
       );
     }
 
@@ -126,13 +125,13 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     if (aborted()) return undefined;
     if (location === 'no-fix' || location === 'services-off') {
       setLocationState('error');
-      throw new NavOssApiError(routeOriginFailureMessage(location), 0);
+      throw new RouteOriginUnavailableError(routeOriginFailureMessage(location));
     }
     const sample = routeOriginSampleFromLocation(location);
     const selectedSample = newestValidRouteOriginSample(sample, routeOriginSampleRef.current);
     const routeOrigin = routeRequestOriginFromSample(selectedSample);
     if (selectedSample === undefined || routeOrigin === undefined) {
-      throw new NavOssApiError(routeOriginFailureMessage('stale-fix'), 0);
+      throw new RouteOriginUnavailableError(routeOriginFailureMessage('stale-fix'));
     }
     if (aborted()) return undefined;
     applySample(selectedSample);
