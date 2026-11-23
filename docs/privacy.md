@@ -218,6 +218,23 @@ regions stay on the device, are excluded from iCloud backup, and are removed wit
 removing the app. The app still tries the NavOSS service first; when there is no connection or the
 service cannot be reached, search and routing in a downloaded region are computed on the phone.
 
+### App update checks (Android only)
+
+The Android app is in testing and is not yet published. It is installed from NavOSS's GitHub
+releases, so to offer a newer version it sends one HTTPS request to GitHub's API
+(`api.github.com/repos/yassinsolim/NavOSS/releases`): when the app opens, at most once every 24
+hours and never during a trip, and when you tap **Check now**. The request contains no location,
+search text, trip data or identifier, only the app's default HTTP headers; GitHub, which operates
+the service, sees your IP address and the time under
+[GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).
+Only when you choose **Install** is the update downloaded from GitHub (`github.com` and its release
+download storage) into the app's private storage, checked, and handed to Android's installer. Old
+downloads are deleted. The app keeps only the time of the last check, the version it offered and
+whether you chose **Later**, on the device; nothing about update checks is sent to NavOSS. Turn the
+check off with **Check for updates automatically** under About and privacy, App updates; **Check
+now** still works when you ask. The iOS app has no update check; TestFlight and the App Store
+handle its updates.
+
 ### Sharing and external actions
 
 Place sharing and Share ETA use the operating system's share sheet. The share text is created on the phone. A place share contains the public place name, its displayed address or category, and an OpenStreetMap link. An ETA share contains the chosen destination name, estimated arrival time, remaining time, and remaining distance. It does not contain the current coordinate, route geometry, a live-tracking link, or automatic updates.
@@ -349,6 +366,8 @@ You can deny or revoke location in iOS Settings. Search and map browsing remain 
 You can erase all locally stored recent and saved destinations at any time using **Clear saved and recent destinations** in the app's About and Privacy screen. Pending contribution retries can be deleted individually on the Contribute screen. Accepted beta feedback cannot be linked back to an account because NavOSS has no account or contributor identifier; contact support with the random submission ID if deletion before automatic expiry is required. Road-report private drafts expire after two hours. **Reset community identity** turns off both sharing switches and deletes this installation's shared road reports and answers from the server, as described under [Community road reports](#community-road-reports). Removing the app removes all remaining local records.
 
 You can use NavOSS without granting Contacts access because the app never asks for it. Sharing and the external reviews link are optional, user-initiated actions. Dismissing the system share sheet sends nothing to a recipient. In a Google build, opening a named place's sheet can send its coordinate to Google for Google-rendered place details and reviews, and its name only when you choose Find this place on Google; choosing no external reviews link sends no Google Maps search.
+
+On Android, turn **Check for updates automatically** off under About and privacy, App updates, to stop the daily update check described under App update checks.
 
 Traffic sharing is optional and off by default; turn **Share traffic speeds** off in Map appearance, under Community, to stop it, as described under Traffic sharing above.
 
