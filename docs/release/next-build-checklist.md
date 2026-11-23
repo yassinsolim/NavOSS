@@ -6,6 +6,25 @@ Context: production search and routing cover Canada. Reports are `attested`, tra
 
 The 2026-11-15 Release simulator Canada pass on `14dae86` against production was a go before build 81 distribution; see [the release record](testflight.md#build-81-canada-validation-and-subsequent-fixes-2026-11-15) and `artifacts/release-validation-main-81/round3/`. CarPlay refusal alerts were Swift-tested only; no physical iPhone or head unit was exercised.
 
+## CarPlay free drive (after build 84)
+
+Owner report on build 84 (2026-11-21): with no destination, CarPlay zoomed to the general area and
+showed no arrow. Changed in FREE_DRIVE_PR, not in build 84 or any distributed build: with a live fix and no destination, CarPlay draws the guidance vehicle marker pointing the way the
+car is going and follows it with the close, tilted guidance camera. Verified only on a simulator
+with synthetic fixes and mocked CarPlay buttons. Check while parked or with a passenger operating:
+
+- [ ] Open CarPlay parked: the arrow (or car) appears low on the map within a few seconds, close
+      and tilted, not a city overview. Before the car has moved it points the way the **phone**
+      faces (compass); note whether that is wrong for your mount.
+- [ ] Drive off: the arrow turns to the direction of travel and the map follows it heading-up,
+      smoothly between fixes. At a red light the arrow and map do not spin.
+- [ ] Pan the map: following stops, the arrow keeps moving; Recenter brings it back.
+- [ ] Settings ▸ North up: north stays up and the arrow rotates instead.
+- [ ] Start a trip with Go: the view does not jump and there is never a blue dot beside the arrow.
+      End the trip: the arrow stays, with no gap or second marker.
+- [ ] Dashboard and, if the car has one, the instrument cluster show the same arrow.
+- [ ] In a tunnel or with location off: no arrow is drawn rather than a stale one.
+
 ## Build 83: build 82 feedback and car checks (historical)
 
 On 2026-11-16 the owner filed two build 82 reports after driving with an iPhone 15 Pro Max on

@@ -3,100 +3,74 @@ import MapLibre
 internal import NavOSSNavigation
 import UIKit
 
-/// Feeds `MLNMapView.showsUserLocation` from a `CLLocationManager` explicitly configured for
-/// background delivery, instead of `MLNMapView`'s private default location manager.
+/// The CarPlay map's own live position source for free drive (no destination), configured for
+/// background delivery like `NavOSSNavigationService`'s manager.
 ///
-/// `MLNMapView.locationManager` exists precisely so a host app can supply its own: the SDK's own
-/// documentation on the protocol notes a conforming type "does not need to be based on
-/// `CLLocationManager`" at all. Nothing in this app ever configured the *default* manager for
-/// background delivery (see `docs/architecture/carplay.md`), so once the phone's screen slept the
-/// idle CarPlay map's own puck stopped updating and the camera never left its startup default.
-/// This manager mirrors `NavOSSNavigationService`'s own location manager configuration —
-/// `allowsBackgroundLocationUpdates`, driven by the `location` `UIBackgroundModes` entry every iOS
-/// navigation build already declares — so the idle map's live-location source does not depend on
-/// another manager's background session keeping the whole process from being suspended.
+/// Nothing in this app ever configured MapLibre's default manager for background delivery (see
+/// `docs/architecture/carplay.md`), so once the phone's screen slept the idle map stopped updating.
+/// This manager sets `allowsBackgroundLocationUpdates` from the `location` `UIBackgroundModes`
+/// entry every iOS navigation build declares. The map no longer shows MapLibre's own user-location
+/// dot: these fixes drive the same NavOSS vehicle marker guidance draws, so there is only ever one
+/// marker. It keeps running during guidance so the last course and a fresh fix are ready the
+/// moment a trip ends.
 @MainActor
-final class NavOSSCarPlayLocationManager: NSObject, @preconcurrency MLNLocationManager,
-  @preconcurrency CLLocationManagerDelegate
-{
+final class NavOSSCarPlayLocationManager: NSObject, @preconcurrency CLLocationManagerDelegate {
   private let manager = CLLocationManager()
-  weak var delegate: MLNLocationManagerDelegate?
+  var onLocation: ((CLLocation) -> Void)?
+  var onHeading: ((CLHeading) -> Void)?
+  private(set) var isRunning = false
 
   override init() {
     super.init()
     manager.activityType = .automotiveNavigation
-    // Matches `MLNMapView`'s own default manager's accuracy/filter so swapping it in changes
-    // nothing about fix cadence, only whether fixes keep arriving once the screen sleeps.
     manager.desiredAccuracy = kCLLocationAccuracyBest
     manager.distanceFilter = kCLDistanceFilterNone
+    // Same as the navigation service: ignores sub-degree magnetometer jitter.
+    manager.headingFilter = 3
     manager.pausesLocationUpdatesAutomatically = false
     let backgroundLocationEnabled =
       (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?
       .contains("location") == true
     manager.allowsBackgroundLocationUpdates = backgroundLocationEnabled
     manager.showsBackgroundLocationIndicator = backgroundLocationEnabled
-    // `MLNMapView` installs itself as `delegate` right after `locationManager` is assigned; do not
-    // set it here.
     manager.delegate = self
   }
 
-  var distanceFilter: CLLocationDistance {
-    get { manager.distanceFilter }
-    set { manager.distanceFilter = newValue }
+  func start() {
+    guard !isRunning else { return }
+    isRunning = true
+    // When In Use only, as everywhere in NavOSS; Always is never requested.
+    if manager.authorizationStatus == .notDetermined {
+      manager.requestWhenInUseAuthorization()
+    }
+    manager.startUpdatingLocation()
+    if CLLocationManager.headingAvailable() {
+      manager.startUpdatingHeading()
+    }
   }
 
-  var desiredAccuracy: CLLocationAccuracy {
-    get { manager.desiredAccuracy }
-    set { manager.desiredAccuracy = newValue }
-  }
-
-  var accuracyAuthorization: CLAccuracyAuthorization { manager.accuracyAuthorization }
-
-  var activityType: CLActivityType {
-    get { manager.activityType }
-    set { manager.activityType = newValue }
-  }
-
-  var headingOrientation: CLDeviceOrientation {
-    get { manager.headingOrientation }
-    set { manager.headingOrientation = newValue }
-  }
-
-  var authorizationStatus: CLAuthorizationStatus { manager.authorizationStatus }
-
-  func requestAlwaysAuthorization() { manager.requestAlwaysAuthorization() }
-  func requestWhenInUseAuthorization() { manager.requestWhenInUseAuthorization() }
-  func startUpdatingLocation() { manager.startUpdatingLocation() }
-  func stopUpdatingLocation() { manager.stopUpdatingLocation() }
-  func startUpdatingHeading() { manager.startUpdatingHeading() }
-  func stopUpdatingHeading() { manager.stopUpdatingHeading() }
-  func dismissHeadingCalibrationDisplay() { manager.dismissHeadingCalibrationDisplay() }
-
-  func requestTemporaryFullAccuracyAuthorization(withPurposeKey purposeKey: String) {
-    manager.requestTemporaryFullAccuracyAuthorization(withPurposeKey: purposeKey)
+  func stop() {
+    guard isRunning else { return }
+    isRunning = false
+    manager.stopUpdatingLocation()
+    manager.stopUpdatingHeading()
   }
 
   func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-    delegate?.locationManager(self, didUpdate: locations)
+    guard isRunning, let location = locations.last else { return }
+    onLocation?(location)
   }
 
   func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
-    delegate?.locationManager(self, didUpdate: newHeading)
+    guard isRunning else { return }
+    onHeading?(newHeading)
   }
 
   func locationManagerShouldDisplayHeadingCalibration(_ manager: CLLocationManager) -> Bool {
-    delegate?.locationManagerShouldDisplayHeadingCalibration(self) ?? false
+    false
   }
 
-  func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-    delegate?.locationManager(self, didFailWithError: error)
-  }
-
-  // Only forward: MLNMapView starts and stops updates from `showsUserLocation`. Starting here would
-  // keep a background location session alive while the map has not asked for one.
-  func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-    delegate?.locationManagerDidChangeAuthorization(self)
-  }
+  func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
 }
 
 /// Optional guidance decorations the scene delegate derives from the active trip. Every field may
@@ -185,12 +159,27 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private var idleLocationFollowEnabled = true
   private var renderedPosition: NavOSSCarPlayPosition?
   private var lastRenderedCourseDegrees: Double?
+  /// Free drive: the map's own live fixes when no trip is being guided. Outside guidance
+  /// `latestPosition` is only ever set from these, so a non-nil one there is a live vehicle.
+  private let freeDriveLocationManager = NavOSSCarPlayLocationManager()
+  /// The visual harness turns this off and feeds synthetic fixes through `receiveFreeDriveFix`.
+  var usesDeviceLocation = true
+  private var freeDriveLocation: CLLocation?
+  private var freeDriveLastCourseDegrees: Double?
+  private var freeDriveCompassHeadingDegrees: Double?
+  private var freeDriveExpiry: DispatchWorkItem?
+  /// The free-drive camera owns the view: close and tilted, the vehicle low on the visible map. It
+  /// stays on while the driver pans (only following pauses), and ends with a route preview or the
+  /// no-fix fallback view.
+  private var freeDriveCamera = false
   /// Layers of the loaded style adjusted after the restyle: POIs (hidden in guidance) and road
   /// names (enlarged in guidance), collected once per style load.
   private var pointOfInterestLayers: [MLNStyleLayer] = []
   private var roadLabelLayers: [MLNSymbolStyleLayer] = []
   private struct DeclutterState: Equatable {
     var guidance: Bool
+    /// Guidance or the free-drive camera: wider roads and larger road names at driving zoom.
+    var drivingView: Bool
     var pointsOfInterest: Bool
   }
   private var appliedDeclutter: DeclutterState?
@@ -335,11 +324,18 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     mapView.logoView.isHidden = true
     mapView.attributionButton.isHidden = true
     mapView.delegate = self
-    // `MLNMapView`'s own default location manager is a private `CLLocationManager` this app never
-    // configures for background delivery; set the custom one before `showsUserLocation` per
-    // `MLNMapView.locationManager`'s documented requirement.
-    mapView.locationManager = NavOSSCarPlayLocationManager()
-    mapView.showsUserLocation = requestsUserLocation
+    // MapLibre's own user-location dot is never shown: the free-drive vehicle is the NavOSS
+    // marker, fed by this map's own location manager (`NavOSSCarPlayLocationManager`).
+    mapView.showsUserLocation = false
+    freeDriveLocationManager.onLocation = { [weak self] location in
+      self?.receiveFreeDriveFix(location)
+    }
+    freeDriveLocationManager.onHeading = { [weak self] heading in
+      guard heading.headingAccuracy >= 0 else { return }
+      self?.receiveFreeDriveCompassHeading(
+        heading.trueHeading >= 0 ? heading.trueHeading : heading.magneticHeading)
+    }
+    updateFreeDriveLocationUpdates()
     mapView.setCenter(calgaryCenter, zoomLevel: 10.5, animated: false)
     self.mapView = mapView
     scheduleStyleLoadWatchdog()
@@ -643,9 +639,10 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   var attributionFrame: CGRect { attributionLabel.frame }
   var attributionText: String? { attributionLabel.text }
 
-  /// The vehicle's on-screen position in `view` coordinates during guidance.
+  /// The vehicle's on-screen position in `view` coordinates while it is drawn (guidance, or free
+  /// drive with a live fix).
   var vehicleScreenPoint: CGPoint? {
-    guard activeGuidance, let position = renderedPosition ?? latestPosition else { return nil }
+    guard drawsVehicle, let position = renderedPosition ?? latestPosition else { return nil }
     let point = mapView.convert(
       CLLocationCoordinate2D(
         latitude: position.coordinate.latitude, longitude: position.coordinate.longitude),
@@ -668,8 +665,48 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   /// Whether a route preview (not guidance) is on the map.
   var isPresentingRoutePreview: Bool { !activeGuidance && routeCoordinates.count >= 2 }
 
-  /// Whether the camera is following the vehicle (guidance, not the overview).
-  var isFollowingVehicle: Bool { activeGuidance && !presentsRouteOverview }
+  /// Whether the camera is following the vehicle (guidance, not the overview; or free drive).
+  var isFollowingVehicle: Bool {
+    activeGuidance ? !presentsRouteOverview : followsFreeDriveVehicle
+  }
+
+  /// Whether a vehicle marker is drawn: guidance always has one; free drive only with a live fix.
+  var drawsVehicle: Bool {
+    activeGuidance
+      || navOSSShouldShowFreeDriveVehicle(
+        hasActiveGuidance: false,
+        requestsUserLocation: requestsUserLocation,
+        hasLiveFix: latestPosition != nil
+      )
+  }
+
+  /// Whether the free-drive camera is following the vehicle (not paused by a pan).
+  private var followsFreeDriveVehicle: Bool {
+    freeDriveCamera && drawsVehicle
+      && navOSSShouldFollowIdleCarPlayLocation(
+        hasActiveGuidance: activeGuidance,
+        idleFollowEnabled: idleLocationFollowEnabled,
+        requestsUserLocation: requestsUserLocation
+      )
+  }
+
+  /// Whether the map uses the driving view (vehicle low on the screen, wider roads): guidance
+  /// outside the overview, or the free-drive camera.
+  private var usesDrivingView: Bool {
+    activeGuidance ? !presentsRouteOverview : freeDriveCamera
+  }
+
+  /// Which bearing free drive's last fix resolved to, for the visual harness.
+  var freeDriveHeadingSource: NavOSSCarPlayFreeDriveHeadingSource? {
+    guard !activeGuidance, let fix = freeDriveFix(freeDriveLocation) else { return nil }
+    return navOSSCarPlayFreeDriveHeading(
+      fix: fix, lastCourseDegrees: freeDriveLastCourseDegrees,
+      compassHeadingDegrees: freeDriveCompassHeadingDegrees
+    ).source
+  }
+
+  /// The map's current heading, for the visual harness.
+  var cameraHeadingDegrees: Double { mapView.direction }
   var isPresentingRouteOverview: Bool { activeGuidance && presentsRouteOverview }
 
   /// Camera and report markers whose point lies inside the visible map.
@@ -736,6 +773,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard mapSize.width > 0, mapSize.height > 0, mapSize != lastLaidOutMapSize else { return }
     lastLaidOutMapSize = mapSize
     updateGuidanceContentInset()
+    if !activeGuidance, followsFreeDriveVehicle, let position = renderedPosition ?? latestPosition {
+      follow(position, duration: 0)
+    }
     guard routeCoordinates.count >= 2 else { return }
     if activeGuidance, !presentsRouteOverview, latestPosition != nil {
       recenter()
@@ -744,17 +784,18 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
   }
 
-  /// The map's focal point. During guidance it is where the vehicle sits: the horizontal centre of
-  /// the visible map (what CarPlay's safe area leaves beside the card and the map buttons) and
-  /// `puckVerticalFraction` down it, so the vehicle sits in the lower third with the road ahead
-  /// above it. The top is measured from the view's own top, not the safe area: the top inset
-  /// changes whenever the navigation bar appears, and following it would bounce the camera on
-  /// every touch.
+  /// The map's focal point. While following the vehicle (guidance, or the free-drive camera) it is
+  /// where the vehicle sits: the horizontal centre of the visible map (what CarPlay's safe area
+  /// leaves beside the card and the map buttons) and `puckVerticalFraction` down it, so the vehicle
+  /// sits in the lower third with the road ahead above it. The top is measured from the view's own
+  /// top, not the safe area: the top inset changes whenever the navigation bar appears, and
+  /// following it would bounce the camera on every touch. A pan keeps the free-drive inset, so the
+  /// map does not shift under the driver's finger.
   private func updateGuidanceContentInset() {
     guard isViewLoaded else { return }
     let insets = view.safeAreaInsets
     let target: UIEdgeInsets
-    if activeGuidance && !presentsRouteOverview {
+    if usesDrivingView {
       let visibleHeight = max(0, view.bounds.height - insets.bottom)
       target = UIEdgeInsets(
         top: (2 * Self.puckVerticalFraction - 1) * visibleHeight,
@@ -807,19 +848,23 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   func setIdleLocationTrackingEnabled(_ enabled: Bool) {
     requestsUserLocation = enabled
-    guard isViewLoaded, !activeGuidance else { return }
-    mapView.showsUserLocation = enabled
+    guard isViewLoaded else { return }
+    updateFreeDriveLocationUpdates()
+    guard !activeGuidance else { return }
     if enabled {
+      // A fix that is still live is drawn at once rather than after the next one.
+      if latestPosition == nil, let position = liveFreeDrivePosition() {
+        showFreeDrivePosition(position)
+      }
       // A route preview owns its camera until the driver explicitly recenters.
       if routeCoordinates.count >= 2 {
         idleLocationFollowEnabled = false
-        mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
       } else {
         recenter()
       }
     } else {
       idleLocationFollowEnabled = false
-      mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
+      clearFreeDriveVehicle()
     }
   }
 
@@ -851,10 +896,6 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
   }
 
-  private var idleLocationTrackingMode: MLNUserTrackingMode {
-    mapOrientation == .northUp ? .follow : .followWithCourse
-  }
-
   func recenter() {
     presentsRouteOverview = false
     if activeGuidance {
@@ -868,26 +909,20 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
     guard requestsUserLocation else {
       idleLocationFollowEnabled = false
-      mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
       return
     }
 
     idleLocationFollowEnabled = true
-    flattenCamera()
-    // Do not let MapLibre center on an old cached `userLocation`. It takes over as soon as its
-    // delegate supplies a fresh fix; until then, a separately validated service coordinate can
-    // center the camera without becoming a fake live puck.
-    if currentLocationCoordinate() != nil {
-      mapView.setUserTrackingMode(
-        idleLocationTrackingMode,
-        animated: true,
-        completionHandler: nil
-      )
-    } else {
-      mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
-      if let fallbackCoordinate = NavOSSNavigationService.shared.currentCoordinate() {
-        displayIdleLocation(fallbackCoordinate, animated: true)
+    if latestPosition != nil {
+      if freeDriveCamera, cameraDistance.isFinite, let position = renderedPosition ?? latestPosition {
+        follow(position, duration: 0.35)
+      } else {
+        startFreeDriveCamera()
       }
+    } else if let fallbackCoordinate = NavOSSNavigationService.shared.currentCoordinate() {
+      // No live fix: a separately validated service coordinate may centre the flat map, but no
+      // vehicle is drawn for it, so an old service cache can never masquerade as the car.
+      displayIdleLocation(fallbackCoordinate, animated: true)
     }
   }
 
@@ -898,8 +933,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard !activeGuidance, coordinate.latitude.isFinite, coordinate.longitude.isFinite,
       (-90...90).contains(coordinate.latitude), (-180...180).contains(coordinate.longitude)
     else { return }
-    // This is a camera fallback only. It deliberately does not synthesize a MapLibre user location
-    // or change tracking mode, so an old service cache can never masquerade as a live puck.
+    // This is a camera fallback only. It deliberately draws no vehicle, so an old service cache can
+    // never masquerade as a live position.
+    endFreeDriveCamera()
     flattenCamera()
     mapView.setCenter(
       CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude),
@@ -908,9 +944,8 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     )
   }
 
-  /// The idle map is flat: leaving guidance must not keep its tilted driving camera, which with
-  /// 3D buildings restored made the idle map read as a skyline instead of a map. Heading is kept
-  /// so heading-up idle tracking does not spin.
+  /// Route previews and the no-fix fallback are flat: leaving guidance must not keep its tilted
+  /// driving camera there. Heading is kept so the view does not spin.
   private func flattenCamera() {
     guard mapView.camera.pitch != 0 else { return }
     let flat = mapView.camera
@@ -919,23 +954,161 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     cameraPitch = .nan
   }
 
+  /// The live free-drive position, when there is one; used as the origin for CarPlay searches and
+  /// routes.
   func currentLocationCoordinate() -> NavOSSCarPlayCoordinate? {
-    guard let location = mapView.userLocation?.location,
-      navOSSNavigationRouteOrigin(
-        coordinate: NavOSSCarPlayCoordinate(
-          latitude: location.coordinate.latitude,
-          longitude: location.coordinate.longitude
-        ),
-        courseDegrees: location.course,
-        speedMetersPerSecond: location.speed,
-        horizontalAccuracyMeters: location.horizontalAccuracy,
-        ageSeconds: Date().timeIntervalSince(location.timestamp)
-      ) != nil
-    else { return nil }
-    return NavOSSCarPlayCoordinate(
-      latitude: location.coordinate.latitude,
-      longitude: location.coordinate.longitude
+    liveFreeDrivePosition()?.coordinate
+  }
+
+  // MARK: Free drive
+
+  private var isDeactivated = false
+
+  private func updateFreeDriveLocationUpdates() {
+    if usesDeviceLocation, requestsUserLocation, !isDeactivated {
+      freeDriveLocationManager.start()
+    } else {
+      freeDriveLocationManager.stop()
+    }
+  }
+
+  private func freeDriveFix(_ location: CLLocation?) -> NavOSSCarPlayFreeDriveFix? {
+    guard let location else { return nil }
+    return NavOSSCarPlayFreeDriveFix(
+      coordinate: NavOSSCarPlayCoordinate(
+        latitude: location.coordinate.latitude, longitude: location.coordinate.longitude),
+      courseDegrees: location.course,
+      courseAccuracyDegrees: location.courseAccuracy,
+      speedMetersPerSecond: location.speed,
+      horizontalAccuracyMeters: location.horizontalAccuracy,
+      ageSeconds: Date().timeIntervalSince(location.timestamp)
     )
+  }
+
+  private func liveFreeDrivePosition() -> NavOSSCarPlayPosition? {
+    guard let fix = freeDriveFix(freeDriveLocation) else { return nil }
+    return navOSSCarPlayFreeDrivePosition(
+      fix: fix,
+      lastCourseDegrees: freeDriveLastCourseDegrees,
+      compassHeadingDegrees: freeDriveCompassHeadingDegrees
+    )
+  }
+
+  /// A fix from this map's location manager (or the visual harness). It is remembered during
+  /// guidance too, so the last course and a fresh fix are ready when the trip ends, but only drawn
+  /// outside guidance.
+  func receiveFreeDriveFix(_ location: CLLocation) {
+    guard let fix = freeDriveFix(location),
+      navOSSCarPlayFreeDrivePosition(fix: fix, lastCourseDegrees: nil, compassHeadingDegrees: nil)
+        != nil
+    else { return }
+    // A late, older fix never replaces a newer one.
+    if let previous = freeDriveLocation, previous.timestamp > location.timestamp { return }
+    if let course = navOSSCarPlayFreeDriveCourseDegrees(fix) {
+      freeDriveLastCourseDegrees = course
+    }
+    freeDriveLocation = location
+    scheduleFreeDriveExpiry(after: navOSSCarPlayFreeDriveSecondsUntilStale(ageSeconds: fix.ageSeconds))
+    guard !activeGuidance, requestsUserLocation, let position = liveFreeDrivePosition() else {
+      return
+    }
+    showFreeDrivePosition(position)
+  }
+
+  /// The phone's compass. It turns the marker only before any course has been seen (see
+  /// `navOSSCarPlayFreeDriveHeading`); afterwards it only feeds the heading cone, like guidance.
+  func receiveFreeDriveCompassHeading(_ degrees: Double) {
+    guard degrees.isFinite, (0..<360).contains(degrees) else { return }
+    freeDriveCompassHeadingDegrees = degrees
+    guard !activeGuidance, requestsUserLocation, freeDriveLastCourseDegrees == nil,
+      latestPosition != nil, let position = liveFreeDrivePosition()
+    else { return }
+    // Turn in place over a short span; the position is unchanged, so `lastTargetAt` (the fix
+    // cadence) is left alone.
+    interpolationFromPosition = renderedPosition ?? position
+    latestPosition = position
+    interpolationStartedAt = CACurrentMediaTime()
+    interpolationDuration = navOSSCarPlayMinimumInterpolationSeconds
+    ensureRenderLoop()
+  }
+
+  private func showFreeDrivePosition(_ position: NavOSSCarPlayPosition) {
+    let hadVehicle = latestPosition != nil
+    let now = CACurrentMediaTime()
+    if !navOSSCarPlayFreeDriveAnimatesToFix(
+      hasDrawnPosition: renderedPosition != nil,
+      secondsSincePreviousFix: lastTargetAt.map { now - $0 }
+    ) {
+      // First fix, or one after a gap: draw it where it is rather than gliding from old data.
+      latestPosition = nil
+      renderedPosition = nil
+      interpolationFromPosition = nil
+      lastTargetAt = nil
+    }
+    cameraTarget = navOSSCarPlayFreeDriveCameraTarget(
+      speedMetersPerSecond: position.speedMetersPerSecond)
+    updateTargetPosition(position)
+    if !hadVehicle, idleLocationFollowEnabled, routeCoordinates.count < 2 {
+      startFreeDriveCamera()
+    }
+  }
+
+  /// Moves into the driving view around the vehicle and follows it. From the flat fallback view
+  /// (city scale before any fix) it cuts straight there: easing the distance down from kilometres
+  /// across took seconds of zooming. After guidance or a pan the eased state is still valid, so the
+  /// view continues from it.
+  private func startFreeDriveCamera() {
+    guard let position = renderedPosition ?? latestPosition else { return }
+    freeDriveCamera = true
+    updateGuidanceContentInset()
+    updateMapDeclutter()
+    follow(position, duration: 0)
+    ensureRenderLoop()
+  }
+
+  private func endFreeDriveCamera() {
+    guard freeDriveCamera else { return }
+    freeDriveCamera = false
+    updateGuidanceContentInset()
+    updateMapDeclutter()
+  }
+
+  /// Guidance ended: free drive takes the vehicle over from where guidance drew it, gliding to the
+  /// latest live fix (never from data older than a few seconds), or hides it if there is none.
+  private func handOverVehicleToFreeDrive() {
+    interpolationSpan = nil
+    guard requestsUserLocation, let position = liveFreeDrivePosition() else {
+      clearFreeDriveVehicle()
+      return
+    }
+    showFreeDrivePosition(position)
+  }
+
+  private func clearFreeDriveVehicle() {
+    latestPosition = nil
+    renderedPosition = nil
+    interpolationFromPosition = nil
+    lastTargetAt = nil
+    invalidateDisplayLink()
+    installPositionOverlayIfReady()
+  }
+
+  private func scheduleFreeDriveExpiry(after seconds: TimeInterval) {
+    freeDriveExpiry?.cancel()
+    let workItem = DispatchWorkItem { [weak self] in
+      self?.expireFreeDriveFixIfStale()
+    }
+    freeDriveExpiry = workItem
+    DispatchQueue.main.asyncAfter(deadline: .now() + seconds + 0.05, execute: workItem)
+  }
+
+  /// No fix for 15 s (a tunnel, lost signal): the vehicle is no longer known, so it is hidden
+  /// rather than left looking live. The camera stays where it is.
+  private func expireFreeDriveFixIfStale() {
+    guard freeDriveLocation != nil, liveFreeDrivePosition() == nil else { return }
+    freeDriveLocation = nil
+    guard !activeGuidance else { return }
+    clearFreeDriveVehicle()
   }
 
   func toggleRouteOverview() -> Bool {
@@ -968,36 +1141,37 @@ final class NavOSSCarPlayMapViewController: UIViewController,
         speedMetersPerSecond: nil
       )
     }
+    // Guidance draws the published (matched) position, else the free-drive vehicle it takes over
+    // from, else the route origin. Outside guidance only free drive's own live fixes are drawn:
+    // a preview's published position may be left over from an earlier trip.
     let effectivePosition =
-      position ?? latestPosition ?? (activeGuidance ? routeOriginPosition : nil)
+      activeGuidance ? position ?? latestPosition ?? routeOriginPosition : nil
+    let wasGuidance = self.activeGuidance
     let shouldEnterFollowMode = activeGuidance && (!self.activeGuidance || renderedPosition == nil)
     self.activeGuidance = activeGuidance
     mapView.isScrollEnabled = !activeGuidance
     if !activeGuidance {
+      // A route preview owns its camera until the driver explicitly recenters.
       idleLocationFollowEnabled = false
-      mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
+      freeDriveCamera = false
     }
     latestOrigin = activeGuidance ? nil : route.first
     latestDestination = route.last
     if let effectivePosition {
       updateTargetPosition(effectivePosition)
-    } else if !activeGuidance {
-      latestPosition = nil
-      renderedPosition = nil
-      lastRenderedCourseDegrees = nil
-      lastTargetAt = nil
+    } else if wasGuidance {
+      handOverVehicleToFreeDrive()
     }
     latestDistanceToManeuverMeters = activeGuidance ? distanceToManeuverMeters : nil
-    cameraTarget = navOSSCarPlayCameraTarget(
-      speedMetersPerSecond: effectivePosition?.speedMetersPerSecond,
-      distanceToManeuverMeters: latestDistanceToManeuverMeters
-    )
+    if activeGuidance {
+      cameraTarget = navOSSCarPlayCameraTarget(
+        speedMetersPerSecond: effectivePosition?.speedMetersPerSecond,
+        distanceToManeuverMeters: latestDistanceToManeuverMeters
+      )
+    }
     self.routeProgress = routeProgress
     guidanceOverlay = activeGuidance ? overlay : NavOSSCarPlayGuidanceOverlay()
     updateGuidanceContentInset()
-    if mapView.showsUserLocation != (requestsUserLocation && !activeGuidance) {
-      mapView.showsUserLocation = requestsUserLocation && !activeGuidance
-    }
     self.routeId = routeId
     let displayedRoute =
       activeGuidance
@@ -1053,22 +1227,26 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   }
 
   func clearRoute() {
-    if activeGuidance {
+    let wasGuidance = activeGuidance
+    // The free-drive vehicle continues from where guidance drew it when a live fix exists; the
+    // camera then stays in the driving view instead of flattening and re-tilting.
+    let handsOver = wasGuidance && requestsUserLocation && liveFreeDrivePosition() != nil
+    if wasGuidance, !handsOver {
       flattenCamera()
     }
     activeGuidance = false
     latestOrigin = nil
     latestDestination = nil
-    latestPosition = nil
-    renderedPosition = nil
-    lastRenderedCourseDegrees = nil
-    lastTargetAt = nil
-    invalidateDisplayLink()
     speedLabel.isHidden = true
     speedLimitLabel.isHidden = true
     updateSpeedHUDVisibility()
     roadNamePill.isHidden = true
-    resetCamera()
+    if handsOver {
+      navigationZoomScale = 1
+    } else if wasGuidance {
+      lastRenderedCourseDegrees = nil
+      resetCamera()
+    }
     presentsRouteOverview = false
     routeId = nil
     alternateRouteCoordinates = []
@@ -1081,7 +1259,6 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     latestDistanceToManeuverMeters = nil
     updateGuidanceContentInset()
     mapView.isScrollEnabled = true
-    mapView.showsUserLocation = requestsUserLocation
     for identifier in [
       travelledRouteSourceIdentifier, congestionSourceIdentifier, maneuverArrowSourceIdentifier,
       maneuverArrowHeadSourceIdentifier, routeSourceIdentifier, routeHeadSourceIdentifier,
@@ -1091,11 +1268,20 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       (mapView.style?.source(withIdentifier: identifier) as? MLNShapeSource)?.shape = nil
     }
     resetInstalledOverlayShapes()
+    if wasGuidance {
+      handOverVehicleToFreeDrive()
+    }
+    // The vehicle source was emptied with the rest; redraw the vehicle at once if there is one.
+    installPositionOverlayIfReady()
     updateMapDeclutter()
     recenter()
   }
 
   func deactivate() {
+    isDeactivated = true
+    updateFreeDriveLocationUpdates()
+    freeDriveExpiry?.cancel()
+    freeDriveExpiry = nil
     invalidateDisplayLink()
     latestPosition = nil
     renderedPosition = nil
@@ -1103,18 +1289,16 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     lastTargetAt = nil
     idleLocationFollowEnabled = false
     mapView.isScrollEnabled = false
-    mapView.showsUserLocation = false
-    mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
     mapView.delegate = nil
   }
 
   func zoom(by delta: Double) {
-    if activeGuidance {
+    if isFollowingVehicle {
+      // Guidance and free drive keep following at the new scale, which carries into a trip.
       navigationZoomScale = max(0.4, min(4, navigationZoomScale * pow(2, -delta)))
       recenter()
     } else {
       idleLocationFollowEnabled = false
-      mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
       mapView.setZoomLevel(max(8, min(18, mapView.zoomLevel + delta)), animated: true)
     }
   }
@@ -1185,38 +1369,18 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     onStyleLoaded?()
   }
 
-  func mapView(_ mapView: MLNMapView, didUpdate userLocation: MLNUserLocation?) {
-    guard
-      navOSSShouldFollowIdleCarPlayLocation(
-        hasActiveGuidance: activeGuidance,
-        idleFollowEnabled: idleLocationFollowEnabled,
-        requestsUserLocation: requestsUserLocation
-      ),
-      let location = userLocation?.location,
-      navOSSNavigationRouteOrigin(
-        coordinate: NavOSSCarPlayCoordinate(
-          latitude: location.coordinate.latitude,
-          longitude: location.coordinate.longitude
-        ),
-        courseDegrees: location.course,
-        speedMetersPerSecond: location.speed,
-        horizontalAccuracyMeters: location.horizontalAccuracy,
-        ageSeconds: Date().timeIntervalSince(location.timestamp)
-      ) != nil
-    else { return }
-    if mapView.userTrackingMode != idleLocationTrackingMode {
-      mapView.setUserTrackingMode(
-        idleLocationTrackingMode,
-        animated: false,
-        completionHandler: nil
-      )
-    }
+  /// A driver pan pauses free-drive following (the vehicle stays drawn and keeps moving); Recenter
+  /// resumes it. Our own camera moves are not gestures.
+  func mapView(_ mapView: MLNMapView, regionIsChangingWith reason: MLNCameraChangeReason) {
+    guard reason.contains(.gesturePan) else { return }
+    pauseFollowing()
   }
 
-  func mapView(_ mapView: MLNMapView, regionIsChangingWith reason: MLNCameraChangeReason) {
-    guard !activeGuidance, requestsUserLocation, reason.contains(.gesturePan) else { return }
+  /// What a driver pan does to the idle map. The visual harness calls it directly, since it cannot
+  /// make a real gesture.
+  func pauseFollowing() {
+    guard !activeGuidance, requestsUserLocation else { return }
     idleLocationFollowEnabled = false
-    mapView.setUserTrackingMode(.none, animated: false, completionHandler: nil)
   }
 
   func mapViewDidFailLoadingMap(_ mapView: MLNMapView, withError error: Error) {
@@ -1470,7 +1634,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   }
 
   private func renderPositionFrame() {
-    guard activeGuidance, let target = latestPosition, let start = interpolationFromPosition else {
+    guard drawsVehicle, let target = latestPosition, let start = interpolationFromPosition else {
       invalidateDisplayLink()
       return
     }
@@ -1481,11 +1645,14 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     // Follow the carriageway between the two fixes where the road can describe the movement, so
     // the vehicle rounds a corner instead of cutting the chord across it and then snapping back.
     // The span between the two fixes is resolved once per fix (O(route)); a frame only places the
-    // vehicle along it.
+    // vehicle along it. Free drive has no route to follow, and must not be snapped onto a
+    // previewed one, so it moves straight between fixes.
     if interpolationSpanIsStale {
       interpolationSpanIsStale = false
-      interpolationSpan = navOSSCarPlayPathSpan(
-        from: start.coordinate, to: target.coordinate, along: routePath)
+      interpolationSpan =
+        activeGuidance
+        ? navOSSCarPlayPathSpan(from: start.coordinate, to: target.coordinate, along: routePath)
+        : nil
     }
     let roadPath = interpolationSpan?.position(at: progress)
     renderedPosition = NavOSSCarPlayPosition(
@@ -1507,7 +1674,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
       compassHeadingDegrees: target.compassHeadingDegrees,
       speedMetersPerSecond: target.speedMetersPerSecond
     )
-    if let renderedPosition, routeCoordinates.count >= 2 {
+    if activeGuidance, let renderedPosition, routeCoordinates.count >= 2 {
       routeCoordinates[0] = CLLocationCoordinate2D(
         latitude: renderedPosition.coordinate.latitude,
         longitude: renderedPosition.coordinate.longitude
@@ -1518,7 +1685,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     }
     installPositionOverlayIfReady()
     var cameraSettled = true
-    if !presentsRouteOverview, let renderedPosition {
+    if isFollowingVehicle, let renderedPosition {
       cameraSettled = follow(renderedPosition, duration: 0)
     }
     // Keep rendering until both the vehicle has reached its fix and the camera has finished
@@ -1530,7 +1697,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
 
   /// Restarts the render loop so the eased camera can reach a new target between fixes.
   private func ensureRenderLoop() {
-    guard activeGuidance, latestPosition != nil, displayLink == nil else { return }
+    guard drawsVehicle, latestPosition != nil, displayLink == nil else { return }
     displayLink = makeRenderDisplayLink(on: renderScreen())
   }
 
@@ -1710,7 +1877,9 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   /// so a fix never walks the whole style.
   private func updateMapDeclutter() {
     guard mapView.style != nil else { return }
-    let state = DeclutterState(guidance: activeGuidance, pointsOfInterest: showsPointsOfInterest)
+    let state = DeclutterState(
+      guidance: activeGuidance, drivingView: usesDrivingView || activeGuidance,
+      pointsOfInterest: showsPointsOfInterest)
     guard state != appliedDeclutter else { return }
     appliedDeclutter = state
     for layer in pointOfInterestLayers {
@@ -2162,7 +2331,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
   private func updateRoadWidths() {
     for (line, scale) in roadLineLayers {
       let identifier = line.identifier
-      if activeGuidance {
+      if appliedDeclutter?.drivingView == true {
         if roadLineWidths[identifier] == nil {
           roadLineWidths[identifier] = line.lineWidth
         }
@@ -2184,7 +2353,7 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     let scale = 1.22
     for symbol in roadLabelLayers {
       let identifier = symbol.identifier
-      if activeGuidance {
+      if appliedDeclutter?.drivingView == true {
         if roadLabelFontSizes[identifier] == nil {
           roadLabelFontSizes[identifier] = symbol.textFontSize
           roadLabelHaloWidths[identifier] = symbol.textHaloWidth
@@ -2264,22 +2433,33 @@ final class NavOSSCarPlayMapViewController: UIViewController,
     guard let style = mapView.style else {
       return
     }
-    guard activeGuidance, let position = renderedPosition ?? latestPosition else {
+    guard drawsVehicle, let position = renderedPosition ?? latestPosition else {
       vehicleLayers?.source.shape = nil
       (style.source(withIdentifier: positionSourceIdentifier) as? MLNShapeSource)?.shape = nil
       return
     }
     let layers = vehicleLayers ?? installVehicleLayers(in: style)
+    if !activeGuidance, style.layer(withIdentifier: headingConeLayerIdentifier) == nil {
+      // Free drive draws the same heading cone as guidance; it lives in the route layer set.
+      installRouteLayersIfNeeded(
+        positionSource: layers.source,
+        tailSource: ensureShapeSource(routeSourceIdentifier, in: style),
+        headSource: ensureShapeSource(routeHeadSourceIdentifier, in: style),
+        in: style
+      )
+    }
     // Heading fallback chain. Pointing a directional marker due north when the heading is
     // unknown is worse than showing no direction at all, so the terminal case swaps in a
     // non-directional marker instead of inventing a bearing.
-    //   1. validated course from the published position (matched route bearing, else GPS course)
-    //   2. bearing of the route segment nearest the puck
-    //   3. last heading actually rendered this trip
+    //   1. validated course from the published position (guidance: matched route bearing, else
+    //      GPS course; free drive: `navOSSCarPlayFreeDriveHeading`)
+    //   2. guidance only: bearing of the route segment nearest the puck
+    //   3. last heading actually rendered
     //   4. none -> neutral, non-directional marker
     let resolvedCourseDegrees =
       validCourseDegrees(position.courseDegrees)
-      ?? navOSSRouteBearingDegrees(near: position.coordinate, in: routeGeometry)
+      ?? (activeGuidance
+        ? navOSSRouteBearingDegrees(near: position.coordinate, in: routeGeometry) : nil)
       ?? lastRenderedCourseDegrees
     if let resolvedCourseDegrees {
       lastRenderedCourseDegrees = resolvedCourseDegrees
