@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { StyleSheet, View, type ViewStyle } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 
 import {
@@ -92,15 +92,6 @@ export function MapScreen() {
     mapFloor.value = metrics.bottomInset;
   }, [mapFloor, metrics.bottomInset]);
   const floatingSheetPosition = sideLayout ? mapFloor : c.sheetPosition;
-  const panelColumn: ViewStyle =
-    panel === undefined
-      ? StyleSheet.absoluteFill
-      : { ...styles.column, left: panel.left - space.sm, width: panel.width + 2 * space.sm };
-  const tabBarColumn: ViewStyle =
-    panel === undefined
-      ? StyleSheet.absoluteFill
-      : { ...styles.column, left: panel.left, width: panel.width };
-  const mapAreaColumn: ViewStyle = { ...styles.column, left: mapArea.left, right: mapArea.right };
 
   if (c.surface === 'guidance' && c.carPlayGuidance !== undefined) {
     return (
@@ -186,6 +177,135 @@ export function MapScreen() {
   const guidanceStackTop =
     insets.top + guidance.bannerHeight + 8 + cameraAlertHeight + rerouteCardHeight;
 
+  // Shared between the two layouts. Without a side panel (every portrait phone, and every iPhone)
+  // they render as direct children of the screen in the same order as before the side panel
+  // existed; with one they sit in the map-area, tab-bar and panel columns.
+  const floatingControls = mapChromeVisible && (
+    <MapControls
+      attribution={
+        (c.mapStyleOffline ? 'Offline map · ' : '') +
+        mapAttributionLabel({
+          hasTorontoCameras: overlays.torontoSafetyCameras.length > 0,
+          mapRegion: c.location.mapRegion,
+          roadEventCredit: mapPreferences.showRoadEvents
+            ? roadEventCredit(overlays.roadEventSnapshot, Date.now())
+            : undefined,
+        })
+      }
+      bannerStackHeight={sideLayout ? 0 : bannerStackHeight}
+      darkMap={c.darkMap}
+      locating={c.location.locationState === 'locating'}
+      mapBearing={c.mapBearing}
+      metrics={metrics}
+      mode={
+        navigating
+          ? 'guidance'
+          : routeState.type === 'arrived'
+            ? 'arrived'
+            : c.appShellVisible
+              ? 'explore'
+              : 'planning'
+      }
+      onLocate={c.location.locate}
+      onOpenAbout={c.about.open}
+      onOpenMapPreferences={c.mapPreferencesSheet.open}
+      onOpenReport={c.roadReport.open}
+      onRecenter={c.camera.recenter}
+      onOpenRoadEvents={c.roadEventsSheet.open}
+      onShowAttribution={c.onShowAttribution}
+      onToggleOrientation={c.onToggleOrientation}
+      orientation={mapPreferences.navigationOrientation}
+      problems={mapProblemLabels({
+        apiConnection: c.apiConnection,
+        locationState: c.location.locationState,
+        mapError: c.mapError,
+        routeIsIdle,
+      }).join(' · ')}
+      roadEventStatus={
+        mapPreferences.showRoadEvents
+          ? roadEventStatusLabel({
+              hasFeed: overlays.roadEventFeedAvailable,
+              noFeedProvince: overlays.roadEventNoFeedProvince,
+              now: Date.now(),
+              refreshDelayed: overlays.roadEventRefreshDelayed,
+              snapshot: overlays.roadEventSnapshot,
+            })
+          : undefined
+      }
+      sheetPosition={floatingSheetPosition}
+      showRecenter={!c.camera.isNavigationFollowing}
+      onCreditsHeightChange={setCreditsHeight}
+      trafficStatus={c.community.trafficStatus}
+    />
+  );
+  const drivingStatus = navigating && c.turnByTurnAvailable && (
+    <DrivingStatus
+      bannerBottom={insets.top + (sideLayout ? 0 : bannerStackHeight + 8)}
+      creditsHeight={creditsHeight}
+      roadName={guidance.currentRoadName}
+      sheetPosition={floatingSheetPosition}
+      speed={guidance.speed}
+    />
+  );
+  const tabBar = (
+    <AppTabBar activeTab={c.activeTab} bottomInset={insets.bottom} onSelect={c.onSelectTab} />
+  );
+  const guidanceBanners = (
+    <>
+      {navigating && guidance.resumingTrip && (
+        <TripResumingBanner
+          onHeightChange={guidance.onBannerHeightChange}
+          safeAreaTop={insets.top}
+        />
+      )}
+      {guidanceReady && guidance.step !== undefined && guidance.remainingStep !== undefined && (
+        <ManeuverBanner
+          distanceMeters={guidance.remainingStep.distanceMeters}
+          instruction={guidance.step.instruction}
+          maneuverModifier={guidance.step.maneuverModifier}
+          maneuverType={guidance.step.maneuverType}
+          onHeightChange={guidance.onBannerHeightChange}
+          roadName={guidance.step.roadName}
+          safeAreaTop={insets.top}
+          signage={maneuverSignage(guidance.step)}
+          status={guidance.routeStatus}
+        >
+          {guidance.laneStrip !== undefined && <LaneGuidanceStrip strip={guidance.laneStrip} />}
+        </ManeuverBanner>
+      )}
+      {navigating && c.cameraAlert !== undefined && (
+        <SafetyCameraAlertBanner
+          camera={c.cameraAlert.camera}
+          distanceAheadMeters={c.cameraAlert.distanceAheadMeters}
+          top={insets.top + guidance.bannerHeight + 8}
+        />
+      )}
+      {guidance.rerouteProposal !== undefined && (
+        <RerouteProposalCard
+          distanceDeltaMeters={guidance.rerouteProposal.distanceDeltaMeters}
+          distanceMeters={guidance.rerouteProposal.distanceMeters}
+          durationDeltaSeconds={guidance.rerouteProposal.durationDeltaSeconds}
+          durationSeconds={guidance.rerouteProposal.durationSeconds}
+          onAccept={guidance.onAcceptReroute}
+          onKeep={guidance.onKeepRoute}
+          top={insets.top + guidance.bannerHeight + 8 + cameraAlertHeight}
+        />
+      )}
+      {navigating && c.community.reportAhead !== undefined && (
+        <ReportAheadBanner report={c.community.reportAhead} top={guidanceStackTop} />
+      )}
+      {navigating && c.community.stillThere !== undefined && (
+        <StillTherePrompt
+          busy={c.community.stillThereBusy}
+          onAnswer={c.community.onAnswerStillThere}
+          onDismiss={c.community.onDismissStillThere}
+          prompt={c.community.stillThere}
+          top={guidanceStackTop + reportAheadHeight}
+        />
+      )}
+    </>
+  );
+
   return (
     <SheetFrameContext value={panel}>
       <View style={styles.container}>
@@ -244,79 +364,20 @@ export function MapScreen() {
           />
         </MapCanvas>
 
-        <View pointerEvents="box-none" style={mapAreaColumn}>
-          {mapChromeVisible && (
-            <MapControls
-              attribution={
-                (c.mapStyleOffline ? 'Offline map · ' : '') +
-                mapAttributionLabel({
-                  hasTorontoCameras: overlays.torontoSafetyCameras.length > 0,
-                  mapRegion: c.location.mapRegion,
-                  roadEventCredit: mapPreferences.showRoadEvents
-                    ? roadEventCredit(overlays.roadEventSnapshot, Date.now())
-                    : undefined,
-                })
-              }
-              bannerStackHeight={sideLayout ? 0 : bannerStackHeight}
-              darkMap={c.darkMap}
-              locating={c.location.locationState === 'locating'}
-              mapBearing={c.mapBearing}
-              metrics={metrics}
-              mode={
-                navigating
-                  ? 'guidance'
-                  : routeState.type === 'arrived'
-                    ? 'arrived'
-                    : c.appShellVisible
-                      ? 'explore'
-                      : 'planning'
-              }
-              onLocate={c.location.locate}
-              onOpenAbout={c.about.open}
-              onOpenMapPreferences={c.mapPreferencesSheet.open}
-              onOpenReport={c.roadReport.open}
-              onRecenter={c.camera.recenter}
-              onOpenRoadEvents={c.roadEventsSheet.open}
-              onShowAttribution={c.onShowAttribution}
-              onToggleOrientation={c.onToggleOrientation}
-              orientation={mapPreferences.navigationOrientation}
-              problems={mapProblemLabels({
-                apiConnection: c.apiConnection,
-                locationState: c.location.locationState,
-                mapError: c.mapError,
-                routeIsIdle,
-              }).join(' · ')}
-              roadEventStatus={
-                mapPreferences.showRoadEvents
-                  ? roadEventStatusLabel({
-                      hasFeed: overlays.roadEventFeedAvailable,
-                      noFeedProvince: overlays.roadEventNoFeedProvince,
-                      now: Date.now(),
-                      refreshDelayed: overlays.roadEventRefreshDelayed,
-                      snapshot: overlays.roadEventSnapshot,
-                    })
-                  : undefined
-              }
-              sheetPosition={floatingSheetPosition}
-              showRecenter={!c.camera.isNavigationFollowing}
-              onCreditsHeightChange={setCreditsHeight}
-              trafficStatus={c.community.trafficStatus}
-            />
-          )}
-
-          {navigating && c.turnByTurnAvailable && (
-            <DrivingStatus
-              bannerBottom={insets.top + (sideLayout ? 0 : bannerStackHeight + 8)}
-              creditsHeight={creditsHeight}
-              roadName={guidance.currentRoadName}
-              sheetPosition={floatingSheetPosition}
-              speed={guidance.speed}
-            />
-          )}
-          {sideLayout && (
+        {panel === undefined ? (
+          floatingControls
+        ) : (
+          <View
+            pointerEvents="box-none"
+            style={[styles.column, { left: mapArea.left, right: mapArea.right }]}
+          >
+            {floatingControls}
+            {drivingStatus}
             <MapNoticeToast notice={c.notice} onDismiss={c.onDismissNotice} top={insets.top + 8} />
-          )}
-        </View>
+          </View>
+        )}
+
+        {panel === undefined && drivingStatus}
 
         {c.appShellVisible && exploring && (
           <ExploreSheet
@@ -463,76 +524,38 @@ export function MapScreen() {
         {c.appShellVisible && c.activeTab === 'contribute' && (
           <ContributeScreen bottomInset={insets.bottom} safeAreaTop={insets.top} />
         )}
-        {c.appShellVisible && (
-          <View pointerEvents="box-none" style={tabBarColumn}>
-            <AppTabBar
-              activeTab={c.activeTab}
-              bottomInset={insets.bottom}
-              onSelect={c.onSelectTab}
-            />
-          </View>
-        )}
-
-        <View pointerEvents="box-none" style={panelColumn}>
-          {navigating && guidance.resumingTrip && (
-            <TripResumingBanner
-              onHeightChange={guidance.onBannerHeightChange}
-              safeAreaTop={insets.top}
-            />
-          )}
-          {guidanceReady && guidance.step !== undefined && guidance.remainingStep !== undefined && (
-            <ManeuverBanner
-              distanceMeters={guidance.remainingStep.distanceMeters}
-              instruction={guidance.step.instruction}
-              maneuverModifier={guidance.step.maneuverModifier}
-              maneuverType={guidance.step.maneuverType}
-              onHeightChange={guidance.onBannerHeightChange}
-              roadName={guidance.step.roadName}
-              safeAreaTop={insets.top}
-              signage={maneuverSignage(guidance.step)}
-              status={guidance.routeStatus}
+        {c.appShellVisible &&
+          (panel === undefined ? (
+            tabBar
+          ) : (
+            <View
+              pointerEvents="box-none"
+              style={[styles.column, { left: panel.left, width: panel.width }]}
             >
-              {guidance.laneStrip !== undefined && <LaneGuidanceStrip strip={guidance.laneStrip} />}
-            </ManeuverBanner>
-          )}
-          {navigating && c.cameraAlert !== undefined && (
-            <SafetyCameraAlertBanner
-              camera={c.cameraAlert.camera}
-              distanceAheadMeters={c.cameraAlert.distanceAheadMeters}
-              top={insets.top + guidance.bannerHeight + 8}
-            />
-          )}
-          {guidance.rerouteProposal !== undefined && (
-            <RerouteProposalCard
-              distanceDeltaMeters={guidance.rerouteProposal.distanceDeltaMeters}
-              distanceMeters={guidance.rerouteProposal.distanceMeters}
-              durationDeltaSeconds={guidance.rerouteProposal.durationDeltaSeconds}
-              durationSeconds={guidance.rerouteProposal.durationSeconds}
-              onAccept={guidance.onAcceptReroute}
-              onKeep={guidance.onKeepRoute}
-              top={insets.top + guidance.bannerHeight + 8 + cameraAlertHeight}
-            />
-          )}
-          {navigating && c.community.reportAhead !== undefined && (
-            <ReportAheadBanner report={c.community.reportAhead} top={guidanceStackTop} />
-          )}
-          {navigating && c.community.stillThere !== undefined && (
-            <StillTherePrompt
-              busy={c.community.stillThereBusy}
-              onAnswer={c.community.onAnswerStillThere}
-              onDismiss={c.community.onDismissStillThere}
-              prompt={c.community.stillThere}
-              top={guidanceStackTop + reportAheadHeight}
-            />
-          )}
-          {!sideLayout && (
+              {tabBar}
+            </View>
+          ))}
+
+        {panel === undefined ? (
+          <>
+            {guidanceBanners}
             <MapNoticeToast
               notice={c.notice}
               onDismiss={c.onDismissNotice}
               top={insets.top + 8 + (navigating ? bannerStackHeight : 0)}
             />
-          )}
-        </View>
+          </>
+        ) : (
+          <View
+            pointerEvents="box-none"
+            style={[
+              styles.column,
+              { left: panel.left - space.sm, width: panel.width + 2 * space.sm },
+            ]}
+          >
+            {guidanceBanners}
+          </View>
+        )}
 
         <RoadEventsSheet
           events={overlays.roadEvents}
