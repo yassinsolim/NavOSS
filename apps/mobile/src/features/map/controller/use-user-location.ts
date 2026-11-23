@@ -8,6 +8,7 @@ import * as Location from 'expo-location';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
+import { findFirstFix } from '@/features/map/first-fix';
 import {
   EMPTY_FREE_DRIVE_TRACK,
   type FreeDriveTrack,
@@ -302,59 +303,50 @@ export function useLocationWatches(
   useEffect(() => {
     if (!phoneMapVisible) return;
     let cancelled = false;
-    const active = () => !cancelled;
-    let recovery: Location.LocationSubscription | undefined;
+    let stopSearch: (() => void) | undefined;
     onLocationState('locating');
     void automaticLocationPermission()
-      .then(async (granted) => {
-        if (!active()) return;
+      .then((granted) => {
+        if (cancelled) return;
         if (!granted) {
           onLocationState('denied');
           return;
         }
-        const lastKnown = await Location.getLastKnownPositionAsync({
-          maxAge: 60_000,
-          requiredAccuracy: 500,
-        });
-        if (!active()) return;
-        const position =
-          lastKnown ??
-          (await Location.getCurrentPositionAsync(
-            automaticLocationOptions(Location.Accuracy.Balanced),
-          ));
-        if (!active()) return;
-        onLocation(position);
-        onLocationState('visible');
+        stopSearch = findFirstFix<Location.LocationObject>(
+          {
+            lastKnown: () =>
+              Location.getLastKnownPositionAsync({ maxAge: 60_000, requiredAccuracy: 500 }),
+            lookup: () =>
+              Location.getCurrentPositionAsync(
+                automaticLocationOptions(Location.Accuracy.Balanced),
+              ),
+            // High accuracy, like the idle watch that takes over: only a High request switches
+            // GPS on. A device with only network location still answers one.
+            watch: IS_ANDROID
+              ? (onPosition) =>
+                  Location.watchPositionAsync(
+                    automaticLocationOptions(Location.Accuracy.High),
+                    onPosition,
+                  )
+              : undefined,
+          },
+          {
+            onFix: (position) => {
+              onLocation(position);
+              onLocationState('visible');
+            },
+            onGaveUp: () => {
+              onLocationState('error');
+            },
+          },
+        );
       })
       .catch(() => {
-        if (!active()) return;
-        onLocationState('error');
-        // Android's one-shot lookup fails at once when the provider has no fix yet (a cold start
-        // with permission already granted), and the idle watch only runs once a fix is visible.
-        // Wait for the first fix instead of leaving "Current location unavailable" until the
-        // driver taps Center. iOS's lookup waits for a fix itself.
-        if (!IS_ANDROID) return;
-        let recovered = false;
-        void Location.watchPositionAsync(
-          automaticLocationOptions(Location.Accuracy.Balanced),
-          (position) => {
-            if (!active() || recovered) return;
-            recovered = true;
-            recovery?.remove();
-            recovery = undefined;
-            onLocation(position);
-            onLocationState('visible');
-          },
-        )
-          .then((subscription) => {
-            if (active() && !recovered) recovery = subscription;
-            else subscription.remove();
-          })
-          .catch(() => undefined);
+        if (!cancelled) onLocationState('error');
       });
     return () => {
       cancelled = true;
-      recovery?.remove();
+      stopSearch?.();
     };
   }, [phoneMapVisible]);
 
