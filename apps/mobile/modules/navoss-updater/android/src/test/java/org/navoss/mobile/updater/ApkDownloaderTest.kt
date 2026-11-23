@@ -2,11 +2,14 @@ package org.navoss.mobile.updater
 
 import java.io.BufferedReader
 import java.io.File
+import java.io.IOException
 import java.io.InputStreamReader
+import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -26,6 +29,7 @@ class ApkDownloaderTest {
   private val body = ByteArray(700_000) { (it * 31 % 251).toByte() }
   private lateinit var server: ServerSocket
   private val lastRange = AtomicReference<String?>(null)
+  private val requests = AtomicInteger(0)
   /** How the fake server answers: honour ranges, ignore them, or drop after N bytes. */
   @Volatile private var honourRange = true
   @Volatile private var dropAfter = -1
@@ -57,6 +61,7 @@ class ApkDownloaderTest {
       if (line.startsWith("Range:", ignoreCase = true)) range = line.substringAfter(':').trim()
     }
     lastRange.set(range)
+    requests.incrementAndGet()
     val output = socket.getOutputStream()
     var start = 0
     val head =
@@ -162,6 +167,75 @@ class ApkDownloaderTest {
     } catch (error: DownloadException) {
       assertEquals("size", error.code)
     }
+    assertFalse(File(target().path + ".part").exists())
+  }
+
+  private fun downloadError(downloader: ApkDownloader, size: Long = body.size.toLong()): String =
+    try {
+      downloader.download(url, target(), size, AtomicBoolean(false)) { _, _ -> }
+      fail("expected the download to stop")
+      ""
+    } catch (error: DownloadException) {
+      error.code
+    }
+
+  @Test
+  fun reportsAFailedWriteAsStorageAndDeletesThePartialFile() {
+    // The disk fills after 200 kB: an output failure, not a network one.
+    val full =
+      ApkDownloader(
+        openOutput = { file, append ->
+          val stream = java.io.FileOutputStream(file, append)
+          object : OutputStream() {
+            var written = 0
+            override fun write(b: Int) = write(byteArrayOf(b.toByte()), 0, 1)
+            override fun write(b: ByteArray, off: Int, len: Int) {
+              if (written + len > 200_000) throw IOException("ENOSPC (No space left on device)")
+              written += len
+              stream.write(b, off, len)
+            }
+            override fun close() = stream.close()
+          }
+        },
+      )
+    assertEquals("storage", downloadError(full))
+    assertFalse(File(target().path + ".part").exists())
+    assertFalse(target().exists())
+  }
+
+  @Test
+  fun reportsAnOutputFileThatCannotBeCreatedAsStorage() {
+    // The updates directory's path is taken by a plain file.
+    File(folder.root, "updates").writeText("not a directory")
+    assertEquals("storage", downloadError(ApkDownloader()))
+    assertEquals(0, requests.get())
+  }
+
+  @Test
+  fun refusesToStartWithoutRoomForTheDownloadAndItsInstall() {
+    // Room for the file but not for the installer's copy of it.
+    val tight = ApkDownloader(freeSpace = { body.size.toLong() + 10 })
+    assertEquals("storage", downloadError(tight))
+    assertEquals(0, requests.get())
+    val roomy = ApkDownloader(freeSpace = { body.size * 2L })
+    assertArrayEquals(
+      body,
+      roomy.download(url, target(), body.size.toLong(), AtomicBoolean(false)) { _, _ -> }.readBytes(),
+    )
+  }
+
+  @Test
+  fun refusesAnAssetAboveTheSizeCeilingBeforeAnyRequest() {
+    assertEquals("size", downloadError(ApkDownloader(), MAX_APK_BYTES + 1))
+    assertEquals(0, requests.get())
+  }
+
+  @Test
+  fun refusesAResponseThatAnnouncesMoreThanTheReleaseDeclared() {
+    // The server announces 700 kB and sends 640 kB; the release declared 650 kB. Without the
+    // Content-Length check this looks like a dropped connection and the partial file is kept.
+    dropAfter = 640_000
+    assertEquals("size", downloadError(ApkDownloader(), 650_000))
     assertFalse(File(target().path + ".part").exists())
   }
 }

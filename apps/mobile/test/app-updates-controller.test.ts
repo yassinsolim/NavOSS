@@ -230,6 +230,17 @@ describe('app updates', () => {
     expect(h.calls.filter((call) => call.startsWith('clean'))).toEqual(['clean:0', 'clean:102']);
   });
 
+  it('says a full disk is a storage problem, not a connection one', async () => {
+    const h = harness({ downloadError: 'storage' });
+    await h.updater.start();
+    await h.updater.checkAutomatically(false);
+    await h.updater.install();
+    const { phase } = h.updater.store.get();
+    expect(phase.kind === 'failed' && phase.message).toBe(
+      'There isn’t enough free storage for the update. Free up some space and try again.',
+    );
+  });
+
   it('keeps the partial download of an offered newer version across a restart', async () => {
     const h = harness({ stored: JSON.stringify({ autoCheck: true, offeredVersionCode: 102 }) });
     await h.updater.start();

@@ -109,7 +109,12 @@ of opened.
 
 **Install** downloads the APK into the app's private cache, with progress and **Cancel download**,
 on any network. A download that stops (no connection, the app closed, the phone restarted)
-continues where it stopped on the next **Install**. Before anything is installed, the app checks:
+continues where it stopped on the next **Install**. An APK announced above 250 MB (the release APK
+is about 48 MB) is never offered or downloaded, and a download stops as soon as the server sends or
+announces more than the release declared. Before the first byte the app checks that the phone has
+room for the rest of the file plus the installer's own copy of it; when it does not, or when
+writing the file fails, the card says storage is full (not that the connection dropped) and the
+partial file is deleted. Before anything is installed, the app checks:
 
 1. the file's SHA-256 equals the digest GitHub published for the asset;
 2. it is an APK of `org.navoss.mobile`;

@@ -115,6 +115,8 @@ describe('release feed', () => {
         },
       ),
       release('android-v0.2.0-159', { assets: [] }),
+      // Above the 250 MB ceiling: refused before a byte is downloaded.
+      release('android-v0.2.0-160', {}, { size: 250_000_001 }),
     ];
     expect(latestUpdate(skipped, 101)).toEqual({ kind: 'no-release' });
     expect(latestUpdate([...skipped, release('android-v0.2.0-110')], 101).kind).toBe('update');

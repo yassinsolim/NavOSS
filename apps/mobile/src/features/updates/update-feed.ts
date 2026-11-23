@@ -21,6 +21,12 @@ export function releasesUrl(): string {
   return typeof override === 'string' && override !== '' ? override : RELEASES_URL;
 }
 
+/**
+ * The largest APK offered (the native downloader refuses it too). The release APK is about 48 MB;
+ * the ceiling leaves room to grow and ignores a release that announces something absurd.
+ */
+export const MAX_APK_BYTES = 250_000_000;
+
 export interface AvailableUpdate {
   apkName: string;
   apkUrl: string;
@@ -105,6 +111,7 @@ function releaseUpdate(release: ReleaseFields, feedUrl: string): AvailableUpdate
     if (state !== undefined && state !== 'uploaded') continue;
     if (typeof url !== 'string' || !isAllowedDownloadUrl(url, feedUrl)) continue;
     if (typeof size !== 'number' || !Number.isSafeInteger(size) || size <= 0) continue;
+    if (size > MAX_APK_BYTES) continue;
     const sha256 = parseDigest(asset.digest);
     if (sha256 === undefined) continue;
     return {
