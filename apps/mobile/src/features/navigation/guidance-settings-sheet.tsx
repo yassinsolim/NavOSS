@@ -20,6 +20,7 @@ import { type SegmentOption, SegmentedControl } from '@/ui/segmented-control';
 import { BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
 import { ModalSheet } from '@/ui/sheet/modal-sheet';
 import { SectionTitle, SheetHeader } from '@/ui/sheet/sheet-header';
+import { IS_ANDROID } from '@/lib/device-copy';
 
 export const AUDIO_MODES: readonly {
   detail: string;
@@ -101,7 +102,7 @@ export function GuidanceSettingsSheet({
       <SheetHeader
         closeLabel="Close guidance settings"
         onClose={onClose}
-        subtitle="Shared with CarPlay."
+        subtitle={IS_ANDROID ? undefined : 'Shared with CarPlay.'}
         title="Guidance settings"
       />
       <BottomSheetScrollView

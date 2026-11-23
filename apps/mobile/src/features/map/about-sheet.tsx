@@ -9,6 +9,7 @@ import { ListRow } from '@/ui/list-row';
 import { BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
 import { ModalSheet } from '@/ui/sheet/modal-sheet';
 import { SheetHeader } from '@/ui/sheet/sheet-header';
+import { IS_ANDROID } from '@/lib/device-copy';
 
 const PRIVACY_POLICY_URL = 'https://navoss.yassin.app/privacy';
 const SUPPORT_URL = 'https://navoss.yassin.app/support';
@@ -80,18 +81,22 @@ export function AboutSheet({
         <Section title="Privacy">
           <Text style={styles.body}>
             Precise location is used to show your position, match you to an active route, detect
-            reroutes and arrival, and warn about safety cameras. During active navigation, location
-            continues while your phone is locked or connected to CarPlay and iOS shows its
-            background location indicator. Search text and route endpoints are sent to the NavOSS
-            API and its configured search and routing provider. Current production uses self-hosted
-            OpenStreetMap services; a licensed live-traffic deployment may send route endpoints to
-            Mapbox. Rerouting sends your latest route origin.
+            reroutes and arrival, and warn about safety cameras.{' '}
+            {IS_ANDROID
+              ? 'On Android, NavOSS uses location only with the While using the app permission.'
+              : 'During active navigation, location continues while your phone is locked or connected to CarPlay and iOS shows its background location indicator.'}{' '}
+            Search text and route endpoints are sent to the NavOSS API and its configured search and
+            routing provider. Current production uses self-hosted OpenStreetMap services; a licensed
+            live-traffic deployment may send route endpoints to Mapbox. Rerouting sends your latest
+            route origin.
           </Text>
           <Text style={styles.body}>
             NavOSS does not require an account, show ads, request Always location access, or send
             destination history to its servers. Up to 12 recent destinations and 20 places you save
-            are stored only on this device for phone and CarPlay shortcuts. Ending navigation stops
-            background location and erases the transient active route.
+            are stored only on this device for{' '}
+            {IS_ANDROID
+              ? 'shortcuts. Ending navigation erases the transient active route.'
+              : 'phone and CarPlay shortcuts. Ending navigation stops background location and erases the transient active route.'}
           </Text>
           {googlePlacesLicenseInfo !== undefined && (
             <Text style={styles.body}>

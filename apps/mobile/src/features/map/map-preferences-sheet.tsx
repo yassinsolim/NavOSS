@@ -14,6 +14,7 @@ import {
 } from '@/features/community/community-sheets';
 import { fullSheetHeight, type ScreenMetrics } from '@/features/map/overlay-layout';
 import type { NavigationMapOrientation } from '@/features/navigation/navigation-camera';
+import { IS_ANDROID } from '@/lib/device-copy';
 import { createThemedStyles, radius, space, touchTarget, typography } from '@/theme';
 import { haptics } from '@/theme/haptics';
 import { ListRow } from '@/ui/list-row';
@@ -242,16 +243,25 @@ export function MapPreferencesSheet({
         </View>
         <View key={`section-6-${String(fontScale)}`} style={styles.section}>
           <SectionTitle>Offline</SectionTitle>
-          <View style={styles.linkCard}>
-            <ListRow
-              accessibilityLabel="Offline maps"
-              icon={{ android: 'download_for_offline', ios: 'arrow.down.circle' }}
-              onPress={onOpenOfflineMaps}
-              subtitle="Download regions for use without a connection"
-              title="Offline maps"
-              trailing="chevron"
-            />
-          </View>
+          {IS_ANDROID ? (
+            // Android has no on-device map, search or routing engine yet: say so instead of
+            // offering downloads it could not use.
+            <Text maxFontSizeMultiplier={1.5} style={styles.hint}>
+              Offline maps are not available on Android yet. Maps, search and directions need a
+              connection.
+            </Text>
+          ) : (
+            <View style={styles.linkCard}>
+              <ListRow
+                accessibilityLabel="Offline maps"
+                icon={{ android: 'download_for_offline', ios: 'arrow.down.circle' }}
+                onPress={onOpenOfflineMaps}
+                subtitle="Download regions for use without a connection"
+                title="Offline maps"
+                trailing="chevron"
+              />
+            </View>
+          )}
         </View>
       </BottomSheetScrollView>
     </ModalSheet>

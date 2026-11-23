@@ -93,24 +93,25 @@ class NavOSSNavigationModule : Module() {
     }
 
     Function("getCapabilities") {
-      // The contract flags describe the module interface this build implements. The placeholder
-      // engine behind it does no matching or guidance yet; snapshots say so by carrying none.
+      // Honest flags: the placeholder engine keeps the trip but does no matching, guidance,
+      // rerouting, speech or camera alerts, so those are off. The engine slice turns on what it
+      // delivers. CarPlay, community reports and community traffic stay off on Android.
       mapOf(
-        "arrivalDetection" to true,
+        "arrivalDetection" to false,
         "backgroundLocation" to false,
-        "carPlayTripBridge" to true,
-        "courseMatching" to true,
-        "deadReckoning" to true,
-        "geometryGuidance" to true,
+        "carPlayTripBridge" to false,
+        "courseMatching" to false,
+        "deadReckoning" to false,
+        "geometryGuidance" to false,
         "implementation" to "native-android",
-        "nativeSafetyCameraAlerts" to true,
-        "offRouteDetection" to true,
-        "replayInput" to true,
-        "rerouteConsent" to true,
-        "routeContinuity" to true,
-        "routeMatching" to true,
-        "safetyCameraAnnouncements" to true,
-        "speedingWarning" to true,
+        "nativeSafetyCameraAlerts" to false,
+        "offRouteDetection" to false,
+        "replayInput" to false,
+        "rerouteConsent" to false,
+        "routeContinuity" to false,
+        "routeMatching" to false,
+        "safetyCameraAnnouncements" to false,
+        "speedingWarning" to false,
         "version" to 11,
       )
     }
