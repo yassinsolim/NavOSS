@@ -126,18 +126,23 @@ const SCENE_REACT_NATIVE_START =
   '    // NavOSSPhoneSceneDelegate starts React Native when the phone scene connects.\n';
 
 /**
- * Removes the template's React Native start from `AppDelegate.swift` so that the phone scene starts
- * it with the launch options of the scene connection (builds without CarPlay). CarPlay builds keep
- * the template: their phone scene moves the started root view into the scene's window.
+ * Sets where React Native starts in `AppDelegate.swift`, both ways, so `expo prebuild --no-clean`
+ * can switch flavours. Builds without CarPlay replace the template's start with a marker, and the
+ * phone scene starts React Native with the launch options of the scene connection. CarPlay builds
+ * keep (or get back) the template start: their phone scene moves the started root view into the
+ * scene's window, and must never take the deferred path.
  */
-function deferReactNativeStartToScene(contents) {
-  if (contents.includes(SCENE_REACT_NATIVE_START)) return contents;
-  if (!contents.includes(TEMPLATE_REACT_NATIVE_START)) {
+function applyReactNativeStart(contents, carPlayEnabled) {
+  const [from, to] = carPlayEnabled
+    ? [SCENE_REACT_NATIVE_START, TEMPLATE_REACT_NATIVE_START]
+    : [TEMPLATE_REACT_NATIVE_START, SCENE_REACT_NATIVE_START];
+  if (contents.includes(to) && !contents.includes(from)) return contents;
+  if (!contents.includes(from) || contents.includes(to)) {
     throw new Error(
-      'AppDelegate.swift no longer contains the Expo SDK 57 React Native start that the phone scene replaces.',
+      'AppDelegate.swift does not contain exactly one Expo SDK 57 React Native start or NavOSS scene start marker.',
     );
   }
-  return contents.replace(TEMPLATE_REACT_NATIVE_START, SCENE_REACT_NATIVE_START);
+  return contents.replace(from, to);
 }
 
 function withNavOSSCarPlay(config) {
@@ -192,11 +197,15 @@ function withNavOSSCarPlay(config) {
       overwrite: true,
     });
   }
+  config = withAppDelegate(config, (modConfig) => {
+    modConfig.modResults.contents = applyReactNativeStart(
+      modConfig.modResults.contents,
+      carPlayEnabled,
+    );
+    return modConfig;
+  });
   if (!carPlayEnabled) {
-    return withAppDelegate(config, (modConfig) => {
-      modConfig.modResults.contents = deferReactNativeStartToScene(modConfig.modResults.contents);
-      return modConfig;
-    });
+    return config;
   }
 
   config = withXcodeProject(config, (modConfig) => {
@@ -243,8 +252,8 @@ function withNavOSSCarPlay(config) {
 }
 
 module.exports = withNavOSSCarPlay;
+module.exports.applyReactNativeStart = applyReactNativeStart;
 module.exports.applySceneManifest = applySceneManifest;
-module.exports.deferReactNativeStartToScene = deferReactNativeStartToScene;
 module.exports.googlePlacesBuildConfiguration = googlePlacesBuildConfiguration;
 module.exports.phoneSourceFiles = phoneSourceFiles;
 module.exports.sourceFiles = sourceFiles;

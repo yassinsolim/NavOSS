@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
 const {
+  applyReactNativeStart,
   applySceneManifest,
-  deferReactNativeStartToScene,
   phoneSourceFiles,
   sourceFiles,
 } = require('../plugins/with-navoss-carplay.cjs');
@@ -81,26 +81,36 @@ const templateAppDelegate = readFileSync(
 );
 
 // Without CarPlay, the phone scene starts React Native so that the URL that opened the app is in
-// its launch options; the development client decides there whether to reopen the last server.
-describe('deferred React Native start', () => {
-  it('removes the template start so only the phone scene starts React Native', () => {
-    const deferred = deferReactNativeStartToScene(templateAppDelegate);
+// its launch options. A CarPlay build must always keep the template start, including after
+// `expo prebuild --no-clean` switches flavours.
+describe('React Native start in AppDelegate', () => {
+  const deferred = applyReactNativeStart(templateAppDelegate, false);
+
+  it('off -> off: removes the template start, then leaves it removed', () => {
     expect(deferred).not.toContain('startReactNative');
     expect(deferred).not.toContain('UIWindow(frame:');
     expect(deferred).toContain('reactNativeFactory = factory');
     expect(deferred).toContain(
       'return super.application(application, didFinishLaunchingWithOptions',
     );
+    expect(applyReactNativeStart(deferred, false)).toBe(deferred);
   });
 
-  it('is idempotent', () => {
-    const deferred = deferReactNativeStartToScene(templateAppDelegate);
-    expect(deferReactNativeStartToScene(deferred)).toBe(deferred);
+  it('off -> on: restores the template byte for byte', () => {
+    expect(applyReactNativeStart(deferred, true)).toBe(templateAppDelegate);
   });
 
-  it('fails loudly when the template start changes', () => {
-    expect(() =>
-      deferReactNativeStartToScene(templateAppDelegate.replace('withModuleName', 'moduleName')),
-    ).toThrow(/React Native start/);
+  it('on -> off: removes the start again', () => {
+    expect(applyReactNativeStart(applyReactNativeStart(deferred, true), false)).toBe(deferred);
+  });
+
+  it('on -> on: leaves the template untouched', () => {
+    expect(applyReactNativeStart(templateAppDelegate, true)).toBe(templateAppDelegate);
+  });
+
+  it('fails loudly when neither the template start nor the marker is present', () => {
+    const changed = templateAppDelegate.replace('withModuleName', 'moduleName');
+    expect(() => applyReactNativeStart(changed, false)).toThrow(/React Native start/);
+    expect(() => applyReactNativeStart(changed, true)).toThrow(/React Native start/);
   });
 });
