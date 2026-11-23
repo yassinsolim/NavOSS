@@ -12,11 +12,15 @@ struct Metrics: Codable {
   let luminanceVariance: Double
   let nonBackgroundRatio: Double
   let path: String
+  let mapLibrePuckRatio: Double
   let perceptualSignature: [Int]
   let quantizedColorCount: Int
   let recognizedText: [String]
   let originGreenRatio: Double
   let routeBlueRatio: Double
+  /// The NavOSS vehicle marker's mean height within the map, 0 (top) to 1 (bottom); -1 if absent.
+  let vehicleMarkerFrameY: Double
+  let vehicleMarkerRatio: Double
   let width: Int
 }
 
@@ -87,6 +91,45 @@ func analyze(path: String) throws -> Metrics {
     }
   }
 
+  // The NavOSS vehicle marker (the arrow's teal disc, #0F8F7F) and MapLibre's own user-location
+  // puck (its blue, about #0088F8), with the marker's height within the map. The harness
+  // letterboxes the CarPlay frame on black, so the map is the band of rows that are mostly lit.
+  var frameTop = height
+  var frameBottom = -1
+  var vehicleMarkerCount = 0
+  var vehicleMarkerYSum = 0.0
+  var mapLibrePuckCount = 0
+  for y in Swift.stride(from: 0, to: height, by: stride) {
+    var lit = 0
+    var total = 0
+    for x in Swift.stride(from: 0, to: width, by: stride) {
+      let offset = (y * width + x) * 4
+      let red = Int(pixels[offset])
+      let green = Int(pixels[offset + 1])
+      let blue = Int(pixels[offset + 2])
+      total += 1
+      if max(red, green, blue) > 24 { lit += 1 }
+      if red < 70 && green >= 115 && green <= 175 && blue >= 95 && blue <= 160
+        && green > red + 60 && green > blue
+      {
+        vehicleMarkerCount += 1
+        vehicleMarkerYSum += Double(y)
+      }
+      if red < 24 && green >= 120 && green <= 160 && blue > 235 {
+        mapLibrePuckCount += 1
+      }
+    }
+    if lit * 2 > total {
+      frameTop = min(frameTop, y)
+      frameBottom = max(frameBottom, y)
+    }
+  }
+  let vehicleMarkerFrameY =
+    vehicleMarkerCount > 0 && frameBottom > frameTop
+    ? (vehicleMarkerYSum / Double(vehicleMarkerCount) - Double(frameTop))
+      / Double(frameBottom - frameTop)
+    : -1
+
   let mean = luminanceSum / Double(sampleCount)
   let variance = max(0, luminanceSquaredSum / Double(sampleCount) - mean * mean)
   let dominant = colors.values.max() ?? sampleCount
@@ -117,11 +160,14 @@ func analyze(path: String) throws -> Metrics {
     luminanceVariance: variance,
     nonBackgroundRatio: 1 - Double(nearBackgroundCount) / Double(sampleCount),
     path: path,
+    mapLibrePuckRatio: Double(mapLibrePuckCount) / Double(sampleCount),
     perceptualSignature: perceptualSignature,
     quantizedColorCount: colors.count,
     recognizedText: recognizedText,
     originGreenRatio: Double(originGreenCount) / Double(sampleCount),
     routeBlueRatio: Double(routeBlueCount) / Double(sampleCount),
+    vehicleMarkerFrameY: vehicleMarkerFrameY,
+    vehicleMarkerRatio: Double(vehicleMarkerCount) / Double(sampleCount),
     width: width
   )
 }

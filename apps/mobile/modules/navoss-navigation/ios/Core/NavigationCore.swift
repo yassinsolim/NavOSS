@@ -299,8 +299,9 @@ func navOSSShouldHoldBackgroundLocationSession(
   hasActiveNavigation || isCarPlayConnected
 }
 
-/// The CarPlay map may follow only while it is idle, the display still requests location, and the
-/// driver has not explicitly panned or opened an overview. MapLibre owns the actual live tracking.
+/// The CarPlay map may follow the free-drive vehicle only while it is idle, the display still
+/// requests location, and the driver has not panned away or opened a route preview; Recenter turns
+/// following back on.
 public func navOSSShouldFollowIdleCarPlayLocation(
   hasActiveGuidance: Bool,
   idleFollowEnabled: Bool,
