@@ -125,7 +125,7 @@ import Foundation
 
     private static func carPlaySummary() -> String {
       let state = NavOSSCarPlayTripStore.shared.snapshot()
-      return "carPlayTrip=\(state.trip != nil) carPlayGuidance=\(state.guidance.map { "\($0.phase.rawValue):\($0.stepIndex)" } ?? "-")"
+      return "carPlayTrip=\(state.trip != nil) carPlayGuidance=\(state.guidance.map { "\($0.phase.rawValue):\($0.stepIndex)" } ?? "-") carPlayPause=\(state.tripPause.map { "\($0)" } ?? "-") carPlayNavigating=\(state.isNavigating)"
     }
 
     private static func storeSummary(_ defaults: UserDefaults = .standard) -> String {
