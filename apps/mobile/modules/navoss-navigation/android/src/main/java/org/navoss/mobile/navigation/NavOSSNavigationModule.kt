@@ -9,8 +9,6 @@ import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import expo.modules.kotlin.records.Field
-import expo.modules.kotlin.records.Record
 import android.util.Log
 
 private const val NAVIGATION_SNAPSHOT_EVENT = "onNavigationSnapshot"
@@ -24,28 +22,6 @@ private const val HOST_STATUS_EVENT = "onHostStatusChanged"
 
 private const val SHARES_TRAFFIC_SPEEDS = "org.navoss.mobile.community.share-traffic-speeds"
 private const val SHARES_ROAD_REPORTS = "org.navoss.mobile.community.share-road-reports"
-
-class NavigationDestinationRecord : Record {
-  @Field val category: String? = null
-  @Field val id: String = ""
-  @Field val label: String = ""
-  @Field val latitude: Double = 0.0
-  @Field val longitude: Double = 0.0
-  @Field val name: String = ""
-
-  val destination: NavigationDestination
-    get() = NavigationDestination(category, id, label, latitude, longitude, name)
-}
-
-class RoutePreferencesRecord : Record {
-  @Field val avoidFerries: Boolean = false
-  @Field val avoidHighways: Boolean = false
-  @Field val avoidTolls: Boolean = false
-  @Field val avoidUnpaved: Boolean = false
-
-  val preferences: RoutePreferences
-    get() = RoutePreferences(avoidFerries, avoidHighways, avoidTolls, avoidUnpaved)
-}
 
 /**
  * Android side of the `NavOSSNavigation` contract (version 11). Navigation runs in the shared
@@ -173,8 +149,10 @@ class NavOSSNavigationModule : Module() {
 
     Function("getRoutePreferences") { serialize(preferencesStore.load().routePreferences) }
 
-    Function("setRoutePreferences") { record: RoutePreferencesRecord ->
-      preferencesStore.setRoutePreferences(record.preferences)
+    // Records arrive as maps and are read explicitly (JsRecords), not through Expo's
+    // reflection-based Record conversion.
+    Function("setRoutePreferences") { record: Map<String, Any?> ->
+      preferencesStore.setRoutePreferences(JsRecords.routePreferences(record))
       emitNavigationPreferences()
     }
 
@@ -198,8 +176,8 @@ class NavOSSNavigationModule : Module() {
 
     Function("getRecentDestinationIds") { destinationStore.snapshot().recents.map { it.id } }
 
-    Function("recordRecentDestination") { record: NavigationDestinationRecord ->
-      destinationStore.recordRecent(record.destination)
+    Function("recordRecentDestination") { record: Map<String, Any?> ->
+      JsRecords.destination(record)?.let(destinationStore::recordRecent)
     }
 
     Function("clearRecentDestinations") { destinationStore.clearRecents() }
@@ -208,20 +186,20 @@ class NavOSSNavigationModule : Module() {
 
     Function("isFavoriteDestination") { id: String -> destinationStore.isFavorite(id) }
 
-    Function("toggleFavoriteDestination") { record: NavigationDestinationRecord ->
-      destinationStore.toggleFavorite(record.destination)
+    Function("toggleFavoriteDestination") { record: Map<String, Any?> ->
+      JsRecords.destination(record)?.let(destinationStore::toggleFavorite) ?: false
     }
 
-    Function("replaceFavoriteDestinations") { records: List<NavigationDestinationRecord> ->
-      destinationStore.replaceFavorites(records.map { it.destination })
+    Function("replaceFavoriteDestinations") { records: List<Any?> ->
+      destinationStore.replaceFavorites(JsRecords.destinations(records))
     }
 
-    Function("setHomeDestination") { record: NavigationDestinationRecord? ->
-      destinationStore.setHome(record?.destination)
+    Function("setHomeDestination") { record: Map<String, Any?>? ->
+      destinationStore.setHome(JsRecords.destination(record))
     }
 
-    Function("setWorkDestination") { record: NavigationDestinationRecord? ->
-      destinationStore.setWork(record?.destination)
+    Function("setWorkDestination") { record: Map<String, Any?>? ->
+      destinationStore.setWork(JsRecords.destination(record))
     }
 
     // CarPlay does not exist on Android.

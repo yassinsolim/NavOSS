@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, use, useEffect, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
@@ -10,6 +10,7 @@ import Animated, {
 
 import { createThemedStyles } from '@/theme';
 import { hiddenFromFocusProps } from '@/ui/focus';
+import { ModalLayerContext, openModalSheets } from '@/ui/key-focus';
 import { BottomSheet, type BottomSheetRef, type SheetDetent } from '@/ui/sheet/bottom-sheet';
 
 export interface ModalSheetProps {
@@ -47,6 +48,16 @@ export function ModalSheet({
   const sheetRef = useRef<BottomSheetRef>(null);
   const position = useSharedValue(0);
   if (visible && !rendered) setRendered(true);
+  const layer = use(ModalLayerContext) + 1;
+
+  // Counted while on screen so the controls underneath stop drawing their focus ring.
+  useEffect(() => {
+    if (!rendered) return;
+    openModalSheets.set(openModalSheets.get() + 1);
+    return () => {
+      openModalSheets.set(openModalSheets.get() - 1);
+    };
+  }, [rendered]);
 
   useEffect(() => {
     if (!visible && rendered) sheetRef.current?.close();
@@ -92,7 +103,7 @@ export function ModalSheet({
           position={position}
           ref={sheetRef}
         >
-          {children}
+          <ModalLayerContext value={layer}>{children}</ModalLayerContext>
         </BottomSheet>
       </GestureHandlerRootView>
     </Modal>

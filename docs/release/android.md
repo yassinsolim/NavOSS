@@ -9,6 +9,29 @@ Android Auto, offline maps, sharing road reports and traffic speeds, Google plac
 iOS navigation core's matching, guidance, speech and rerouting until the Android engine lands. Only
 arm64 devices are supported.
 
+## Buttons and keys
+
+Handhelds with a controller (for example the Retroid Pocket) and phones with a keyboard can use
+NavOSS without touching the screen:
+
+| Control                | Action                                                     |
+| ---------------------- | ---------------------------------------------------------- |
+| D-pad or left stick    | Move between controls (a ring shows the focused one)       |
+| A, Enter, D-pad centre | Press the focused control                                  |
+| B                      | Back: close a sheet or leave the app (never ends a trip)   |
+| L1 / R1                | Zoom the map out / in                                      |
+| Right stick            | Move the map                                               |
+| Right stick press (R3) | Centre the map on you again (on the vehicle during a trip) |
+
+When a sheet opens or changes (a place, a route preview, a trip, a settings sheet), its main
+control takes focus, so A acts on it at once; closing a settings sheet returns focus to the
+button that opened it. End, chosen with a button, asks for a second press within four seconds;
+a touch ends at once, as on iOS. The mapping is also under About and privacy, Buttons and keys.
+The shoulder buttons and right stick are read by the `navoss-input` module (`modules/navoss-input`);
+KEYCODE_BUTTON_L1 (102), KEYCODE_BUTTON_R1 (103), KEYCODE_BUTTON_THUMBR (107) and the stick's
+AXIS_Z / AXIS_RZ. Checked on an emulator with key events only; a real controller's codes are
+unverified.
+
 ## Signing certificate
 
 Every NavOSS Android release is signed with one key (alias `navoss-release`, RSA 4096). Its

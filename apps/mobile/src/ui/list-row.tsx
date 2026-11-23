@@ -14,6 +14,7 @@ import {
 import { createThemedStyles, radius, space, touchTarget, typography, useTheme } from '@/theme';
 import type { SymbolName } from '@/ui/button';
 import { hiddenFromFocusProps } from '@/ui/focus';
+import { useKeyFocus } from '@/ui/key-focus';
 import { useFocusRing } from '@/ui/pressable-scale';
 
 export interface ListRowProps {
@@ -27,6 +28,8 @@ export interface ListRowProps {
    * turn it off so focus never moves to a control the driver cannot see.
    */
   focusable?: boolean;
+  /** Android: takes keyboard focus for this key, as `Button`'s `focusKey` (`useKeyFocus`). */
+  focusKey?: string;
   icon?: SymbolName;
   iconTint?: string;
   /** Text under the leading icon, e.g. a distance. */
@@ -48,6 +51,7 @@ export function ListRow({
   accessibilityRole,
   eyebrow,
   focusable,
+  focusKey,
   icon,
   iconTint,
   leadingCaption,
@@ -62,6 +66,7 @@ export function ListRow({
   const { colors } = useTheme();
   const styles = useStyles();
   const focusRing = useFocusRing();
+  const focusRef = useKeyFocus<View>(focusable === false ? undefined : focusKey);
   const content = (
     <>
       {icon !== undefined && (
@@ -127,6 +132,7 @@ export function ListRow({
       onBlur={focusRing.onBlur}
       onFocus={focusRing.onFocus}
       onPress={onPress}
+      ref={focusRef}
       style={({ pressed }) => [styles.row, pressed && styles.pressed, style, focusRing.style]}
     >
       {content}

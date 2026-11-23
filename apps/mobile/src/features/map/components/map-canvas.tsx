@@ -18,6 +18,7 @@ import {
   type ScreenMetrics,
 } from '@/features/map/overlay-layout';
 import { NAVIGATION_CAMERA_TRANSITION } from '@/features/navigation/navigation-camera';
+import { IS_ANDROID } from '@/lib/device-copy';
 import { useRenderCounter } from '@/lib/render-counter';
 import { palette } from '@/theme/tokens';
 
@@ -117,7 +118,8 @@ export function MapCanvas({
       accessibilityElementsHidden={hidden}
       accessibilityLabel={accessibilityLabel}
       attribution={false}
-      compass={!isNavigating}
+      // Android draws its compass as a map button (`MapControls`), clear of the other buttons.
+      compass={!isNavigating && !IS_ANDROID}
       compassPosition={{ right: 14, top: metrics.topInset + 124 }}
       importantForAccessibility={hidden ? 'no-hide-descendants' : 'auto'}
       logo={false}

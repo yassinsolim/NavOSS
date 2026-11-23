@@ -1,14 +1,17 @@
 import { SymbolView } from 'expo-symbols';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useState } from 'react';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOut,
   ReduceMotion,
   type SharedValue,
+  useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import {
   CONTROL_MARGIN,
@@ -24,6 +27,7 @@ import { useControlInteractive, useGlassKey } from '@/features/map/use-control-f
 import type { NavigationMapOrientation } from '@/features/navigation/navigation-camera';
 import { useRenderCounter } from '@/lib/render-counter';
 import { createSchemeStyles, motion, radius, space, typography } from '@/theme';
+import { readoutFocusProps } from '@/ui/focus';
 import { IconButton } from '@/ui/icon-button';
 import { FocusRingPressable } from '@/ui/pressable-scale';
 
@@ -46,6 +50,11 @@ export interface MapControlsProps {
   onOpenMapPreferences: () => void;
   onOpenReport: () => void;
   onRecenter: () => void;
+  /**
+   * Android: turns a rotated map back to north. The compass is a button in the top column there,
+   * so it never sits on another map control; iOS keeps MapLibre's own compass.
+   */
+  onResetBearing?: () => void;
   onShowAttribution: () => void;
   /** Opens the road-events list from the road-events status line. */
   onOpenRoadEvents: () => void;
@@ -81,6 +90,7 @@ export function MapControls({
   onOpenMapPreferences,
   onOpenReport,
   onRecenter,
+  onResetBearing,
   onShowAttribution,
   onOpenRoadEvents,
   onToggleOrientation,
@@ -146,6 +156,16 @@ export function MapControls({
   const needleStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${String(-mapBearing.value)}deg` }],
   }));
+  // Shown while the map is turned away from north (beyond half a degree), outside guidance,
+  // whose orientation button already carries a needle.
+  const [rotated, setRotated] = useState(false);
+  useAnimatedReaction(
+    () => Math.abs((((mapBearing.value % 360) + 360) % 360) - 180) < 179.5,
+    (next, previous) => {
+      if (next !== previous) scheduleOnRN(setRotated, next);
+    },
+  );
+  const showCompass = onResetBearing !== undefined && rotated && !guidance;
 
   return (
     <>
@@ -202,6 +222,25 @@ export function MapControls({
           size={48}
           variant="floating"
         />
+        {showCompass && (
+          <IconButton
+            key={`top-${String(topGlassKey)}-4`}
+            accessibilityLabel="Map compass. Turns the map back to north."
+            icon={{ android: 'navigation', ios: 'location.north.line.fill' }}
+            onPress={onResetBearing}
+            scheme={scheme}
+            size={48}
+            variant="floating"
+          >
+            <Animated.View style={needleStyle}>
+              <SymbolView
+                name={{ android: 'navigation', ios: 'location.north.line.fill' }}
+                size={22}
+                tintColor={colors.danger}
+              />
+            </Animated.View>
+          </IconButton>
+        )}
       </Animated.View>
 
       <Animated.View
@@ -252,6 +291,7 @@ export function MapControls({
             <View
               accessibilityLabel={trafficStatus.accessibilityLabel}
               accessible
+              {...readoutFocusProps(Platform.OS)}
               style={styles.creditPill}
             >
               <Text maxFontSizeMultiplier={1.2} style={styles.statusText}>
