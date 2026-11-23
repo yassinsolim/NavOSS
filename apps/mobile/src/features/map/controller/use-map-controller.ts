@@ -10,6 +10,7 @@ import {
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import {
   AppState,
+  BackHandler,
   Keyboard,
   Linking,
   Share,
@@ -40,6 +41,7 @@ import {
   trafficFlowStatus,
 } from '@/features/community/traffic-flow';
 import { useCommunity } from '@/features/community/use-community';
+import { mapBackAction } from '@/features/map/back-navigation';
 import type { AppTab } from '@/features/map/app-tab-bar';
 import { useMapPreferences, useMapStyle } from '@/features/map/controller/use-map-preferences';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
@@ -83,6 +85,7 @@ import {
 } from '@/features/map/map-place';
 import {
   GUIDANCE_BANNER_HEIGHT,
+  idleCameraPadding,
   routePreviewCameraPadding,
   type ScreenMetrics,
   searchResultsCameraPadding,
@@ -105,6 +108,7 @@ import {
   getDestinationCatalog,
   getNavigationPreferences,
   isFavoriteDestination,
+  hasNativeTurnByTurnGuidance,
   isGooglePlaceRatingAvailable,
   type NativeCommunityReport,
   type NativeDestinationCatalog,
@@ -146,7 +150,11 @@ import {
   getUpcomingGuidanceStep,
   getUpcomingManeuvers,
 } from '@/features/navigation/route-progress';
-import { selectedRouteOf, tripEndNotice } from '@/features/navigation/route-ui-state';
+import {
+  type RoutePreviewOrigin,
+  selectedRouteOf,
+  tripEndNotice,
+} from '@/features/navigation/route-ui-state';
 import { setUpdaterTripActive } from '@/features/updates/use-app-updates';
 import { useSafetyCameraAlert } from '@/features/navigation/use-safety-camera-alert';
 import {
@@ -161,7 +169,10 @@ import type { SymbolName } from '@/ui/button';
 import type { BottomSheetRef } from '@/ui/sheet/bottom-sheet';
 
 const CANADA_CENTER: [longitude: number, latitude: number] = [-106.3468, 56.1304];
-const CALGARY_TOWER_ROUTE_ORIGIN: Coordinate = { latitude: 51.04427, longitude: -114.06309 };
+const CALGARY_TOWER_ROUTE_ORIGIN: RoutePreviewOrigin = {
+  coordinate: { latitude: 51.04427, longitude: -114.06309 },
+  label: 'Calgary Tower',
+};
 const TAP_RADIUS = 18;
 const CAMERA_ROUTE_CORRIDOR_METERS = 60;
 const NOTICE_VISIBLE_MS = 5_000;
@@ -216,11 +227,24 @@ export interface CameraChange {
 export function useMapController() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const metrics: ScreenMetrics = useMemo(
-    () => ({ bottomInset: insets.bottom, topInset: insets.top, windowHeight }),
-    [insets.bottom, insets.top, windowHeight],
+    () => ({
+      bottomInset: insets.bottom,
+      leftInset: insets.left,
+      rightInset: insets.right,
+      topInset: insets.top,
+      windowHeight,
+      windowWidth,
+    }),
+    [insets.bottom, insets.left, insets.right, insets.top, windowHeight, windowWidth],
   );
+  // A camera move replaces the map's padding. Beside a side panel each move carries the panel's
+  // width, so what it centres lands in the map the panel leaves visible, not under the panel.
+  const sidePanelFlight = useMemo(() => {
+    const padding = idleCameraPadding(metrics);
+    return padding === undefined ? {} : { padding };
+  }, [metrics]);
   const cameraRef = useRef<CameraRef>(null);
   const mapRef = useRef<MapRef>(null);
   const exploreSheetRef = useRef<BottomSheetRef>(null);
@@ -254,6 +278,7 @@ export function useMapController() {
   const [isRoadReportSaving, setIsRoadReportSaving] = useState(false);
   const [isRoadReportVisible, setIsRoadReportVisible] = useState(false);
   const [isRouteStopsVisible, setIsRouteStopsVisible] = useState(false);
+  const [isRouteStartPickerVisible, setIsRouteStartPickerVisible] = useState(false);
   const [isGuidanceSettingsVisible, setIsGuidanceSettingsVisible] = useState(false);
   const [featureDetail, setFeatureDetail] = useState<MapFeatureDetail>();
   const [isRoadEventsVisible, setIsRoadEventsVisible] = useState(false);
@@ -276,6 +301,7 @@ export function useMapController() {
   const [notice, setNotice] = useState<MapNotice>();
   const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
   const [googlePlaceRatingAvailable] = useState(() => isGooglePlaceRatingAvailable());
+  const [turnByTurnAvailable] = useState(() => hasNativeTurnByTurnGuidance());
   const [selectedPlaceSaved, setSelectedPlaceSaved] = useState(false);
   const [selectedResult, setSelectedResult] = useState<SearchResult>();
   const [shortcutBeingSet, setShortcutBeingSet] = useState<'home' | 'work'>();
@@ -664,6 +690,7 @@ export function useMapController() {
     cameraRef.current?.flyTo({
       center: [result.center.longitude, result.center.latitude],
       duration: 650,
+      ...sidePanelFlight,
       zoom: 16,
     });
     loadPlaceDetails(result, interactionId);
@@ -739,6 +766,7 @@ export function useMapController() {
       cameraRef.current?.flyTo({
         center: [onlyResult.center.longitude, onlyResult.center.latitude],
         duration: 650,
+        ...sidePanelFlight,
         zoom: 15,
       });
       return;
@@ -957,10 +985,22 @@ export function useMapController() {
   const handleLocate = async () => {
     setIsIdleCameraFollowing(true);
     const coordinate = await location.locate();
-    if (coordinate !== undefined && hasTransientDestination) {
+    if (coordinate === 'no-fix') {
+      // Say why the button did nothing; a denied permission has its own banner in the sheet.
+      showNotice({
+        message:
+          'This device has not found your location. Search, places and route previews still work.',
+        title: 'Current location unavailable',
+        tone: 'warning',
+      });
+      return;
+    }
+    if (coordinate === undefined || coordinate === 'denied') return;
+    if (hasTransientDestination) {
       cameraRef.current?.flyTo({
         center: [coordinate.longitude, coordinate.latitude],
         duration: 750,
+        ...sidePanelFlight,
         zoom: 15,
       });
     }
@@ -1039,6 +1079,19 @@ export function useMapController() {
     );
   };
 
+  // A device without a location fix (a Wi-Fi-only handheld, location off or denied) previews the
+  // route from a place the driver chooses. Like the supported-route demo it is never started.
+  const handleChooseRouteStart = (start: SearchResult) => {
+    if (routeState.type !== 'error' && routeState.type !== 'loading') return;
+    setIsRouteStartPickerVisible(false);
+    void planner.calculateRoute(
+      routeState.destination,
+      planner.routePreferences,
+      { coordinate: start.center, label: start.name },
+      routeState.waypoints,
+    );
+  };
+
   const handleUseCurrentLocation = () => {
     if (routeState.type !== 'preview') return;
     void planner.calculateRoute(
@@ -1050,6 +1103,20 @@ export function useMapController() {
   };
 
   const selectedRoute = selectedRouteOf(routeState);
+
+  // A rotation or window resize keeps the preview but not its framing: frame the selected route
+  // again for the new window. The iPhone build is portrait-only, so in practice this is Android.
+  const refitPreviewForWindow = useEffectEvent(() => {
+    if (routeState.type !== 'preview' || selectedRoute === undefined) return;
+    fitRoute(selectedRoute, routeState.previewOrigin !== undefined);
+  });
+  const previewWindowRef = useRef({ height: windowHeight, width: windowWidth });
+  useEffect(() => {
+    const previous = previewWindowRef.current;
+    if (previous.height === windowHeight && previous.width === windowWidth) return;
+    previewWindowRef.current = { height: windowHeight, width: windowWidth };
+    refitPreviewForWindow();
+  }, [windowHeight, windowWidth]);
 
   const handleStartNavigation = () => {
     if (
@@ -1279,6 +1346,39 @@ export function useMapController() {
     setActiveTab(tab);
     if (tab === 'saved') refreshDestinationCatalog();
   };
+
+  // --- Android back -------------------------------------------------------------------------
+
+  const handleBackPress = useEffectEvent((): boolean => {
+    const action = mapBackAction({
+      activeTab,
+      hasSearch: search.query.trim().length > 0 || search.searchState !== 'idle',
+      placeOpen: selectedResult !== undefined,
+      routeState: routeState.type,
+    });
+    switch (action) {
+      case 'cancel-route':
+        handleCancelRoute();
+        return true;
+      case 'close-place':
+        handleClosePlace();
+        return true;
+      case 'explore-tab':
+        handleSelectTab('explore');
+        return true;
+      case 'clear-search':
+        handleClear();
+        return true;
+      case 'system':
+        return false;
+    }
+  });
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   // --- CarPlay ------------------------------------------------------------------------------
 
@@ -1600,10 +1700,12 @@ export function useMapController() {
     communityActionBusy,
     coverageName,
     darkMap,
+    deviceHasNoGps: location.deviceHasNoGps,
     destinationCatalog,
     exploreSheetRef,
     featureDetail: communityFeatureDetail ?? featureDetail,
     googlePlaceRatingAvailable,
+    turnByTurnAvailable,
     guidanceSettings: {
       change: handleChangeGuidanceSettings,
       close: () => {
@@ -1781,6 +1883,16 @@ export function useMapController() {
       source: planner.routeSource,
       state: routeState,
       vehicleStyle: planner.vehicleStyle,
+    },
+    routeStart: {
+      choose: handleChooseRouteStart,
+      close: () => {
+        setIsRouteStartPickerVisible(false);
+      },
+      open: () => {
+        setIsRouteStartPickerVisible(true);
+      },
+      visible: isRouteStartPickerVisible,
     },
     routeStops: {
       close: () => {

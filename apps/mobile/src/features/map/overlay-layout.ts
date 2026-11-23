@@ -13,7 +13,63 @@ export interface ScreenMetrics {
   bottomInset: number;
   topInset: number;
   windowHeight: number;
+  /**
+   * Window width and side insets. Without a width the layout is the portrait phone's (iOS is
+   * portrait-only); with one, a landscape or tablet-wide window gets the side panel.
+   */
+  windowWidth?: number;
+  leftInset?: number;
+  rightInset?: number;
 }
+
+/** Narrowest and widest a side panel gets. */
+export const SIDE_PANEL_MIN_WIDTH = 360;
+export const SIDE_PANEL_MAX_WIDTH = 420;
+
+/** Narrowest portrait window that gets the side panel too: a 7 inch tablet and up. */
+export const SIDE_PANEL_PORTRAIT_MIN_WIDTH = 600;
+
+/**
+ * The column sheets and the guidance banners take in a wide window, measured from the left edge
+ * of the screen. The map fills the screen behind it; everything else floats to its right.
+ */
+export interface SidePanelFrame {
+  left: number;
+  width: number;
+}
+
+/**
+ * Where the side panel sits, or `undefined` for the portrait phone layout (bottom sheets across
+ * the full width). A landscape window, or a portrait one at least `SIDE_PANEL_PORTRAIT_MIN_WIDTH`
+ * wide, docks sheets to the leading edge instead of stretching them across the map.
+ */
+export function sidePanelFrame(metrics: ScreenMetrics): SidePanelFrame | undefined {
+  const { windowHeight, windowWidth } = metrics;
+  if (windowWidth === undefined) return undefined;
+  if (windowWidth <= windowHeight && windowWidth < SIDE_PANEL_PORTRAIT_MIN_WIDTH) return undefined;
+  const left = (metrics.leftInset ?? 0) + CONTROL_MARGIN;
+  const usable = windowWidth - left - (metrics.rightInset ?? 0);
+  const preferred = Math.min(
+    SIDE_PANEL_MAX_WIDTH,
+    Math.max(SIDE_PANEL_MIN_WIDTH, Math.round(windowWidth * 0.4)),
+  );
+  // On a very small window the map keeps at least 45% of the width.
+  return { left, width: Math.min(preferred, Math.round(usable * 0.55)) };
+}
+
+/**
+ * The horizontal span of the screen the side panel leaves to the map, as distances from the left
+ * and right edges. Floating controls, the driving readouts and the camera framing live here. Both
+ * are zero in the portrait phone layout, where sheets cover the bottom of the map instead.
+ */
+export function mapAreaInsets(metrics: ScreenMetrics): { left: number; right: number } {
+  const panel = sidePanelFrame(metrics);
+  if (panel === undefined) return { left: 0, right: 0 };
+  return { left: panel.left + panel.width, right: metrics.rightInset ?? 0 };
+}
+
+/** Space the trailing column of floating map buttons takes, including its margins. */
+const TRAILING_CONTROLS_WIDTH = 48 + 2 * CONTROL_MARGIN;
 
 export interface SheetDetents {
   /** Index the sheet opens at. */
@@ -25,6 +81,15 @@ function fraction(metrics: ScreenMetrics, value: number): number {
   return Math.round(metrics.windowHeight * value);
 }
 
+/**
+ * The side panel's two resting heights. A short window (a landscape phone) can make the peek the
+ * tallest the panel may be; then it has the one detent.
+ */
+function peekAndOpen(peek: number, open: number, initial: number): SheetDetents {
+  if (open <= peek) return { initial: 0, values: [Math.max(0, open)] };
+  return { initial, values: [peek, open] };
+}
+
 /** Tallest a sheet may rest: just under the status bar. */
 export function fullSheetHeight(metrics: ScreenMetrics, bottomOffset = 0): number {
   return Math.max(0, metrics.windowHeight - metrics.topInset - 8 - bottomOffset);
@@ -33,6 +98,9 @@ export function fullSheetHeight(metrics: ScreenMetrics, bottomOffset = 0): numbe
 /** The explore sheet sits on the tab bar: search field and category chips at rest. */
 export function exploreSheetDetents(metrics: ScreenMetrics): SheetDetents {
   const bottomOffset = TAB_BAR_HEIGHT + metrics.bottomInset;
+  if (sidePanelFrame(metrics) !== undefined) {
+    return { initial: 0, values: [142, fullSheetHeight(metrics, bottomOffset)] };
+  }
   return {
     initial: 0,
     values: [142, fraction(metrics, 0.44), fullSheetHeight(metrics, bottomOffset)],
@@ -41,6 +109,10 @@ export function exploreSheetDetents(metrics: ScreenMetrics): SheetDetents {
 
 /** Place details: name and actions at rest, details at half, photos and reviews at full. */
 export function placeSheetDetents(metrics: ScreenMetrics): SheetDetents {
+  if (sidePanelFrame(metrics) !== undefined) {
+    // The panel leaves the map beside it, so the place opens with its details showing.
+    return peekAndOpen(218 + metrics.bottomInset, fullSheetHeight(metrics), 1);
+  }
   return {
     initial: 0,
     values: [218 + metrics.bottomInset, fraction(metrics, 0.52), fullSheetHeight(metrics)],
@@ -55,6 +127,9 @@ export function routePreviewSheetDetents(
   metrics: ScreenMetrics,
   { demoOrigin }: { demoOrigin: boolean },
 ): SheetDetents {
+  if (sidePanelFrame(metrics) !== undefined) {
+    return peekAndOpen(168 + metrics.bottomInset, fullSheetHeight(metrics), 1);
+  }
   const middle = (demoOrigin ? 452 : 388) + metrics.bottomInset;
   return {
     initial: 1,
@@ -64,6 +139,12 @@ export function routePreviewSheetDetents(
 
 /** Trip panel: arrival, time, distance and the four driving controls at rest. */
 export function tripSheetDetents(metrics: ScreenMetrics): SheetDetents {
+  if (sidePanelFrame(metrics) !== undefined) {
+    // The maneuver banner tops the same column; the open panel stops under it.
+    const underBanner =
+      metrics.windowHeight - metrics.topInset - GUIDANCE_BANNER_HEIGHT - CONTROL_MARGIN;
+    return peekAndOpen(164 + metrics.bottomInset, underBanner, 0);
+  }
   return {
     initial: 0,
     values: [164 + metrics.bottomInset, fraction(metrics, 0.62)],
@@ -86,11 +167,39 @@ export const CAMERA_ALERT_HEIGHT = 76;
 /** Space a reroute offer takes under the maneuver banner, including its gap. */
 export const REROUTE_CARD_HEIGHT = 176;
 
+/**
+ * Framing for routes and results beside the side panel: clear of the panel, the trailing
+ * controls and the system bars. `undefined` in the portrait phone layout.
+ */
+function sidePanelFraming(metrics: ScreenMetrics, margin: number): CameraPadding | undefined {
+  if (sidePanelFrame(metrics) === undefined) return undefined;
+  const area = mapAreaInsets(metrics);
+  return {
+    bottom: metrics.bottomInset + margin,
+    left: area.left + margin,
+    right: area.right + TRAILING_CONTROLS_WIDTH,
+    top: metrics.topInset + margin,
+  };
+}
+
+/**
+ * Padding for the map at rest: the side panel's width on the leading edge, so the location and
+ * places centred on the map are centred in the part the panel leaves visible. `undefined` in the
+ * portrait phone layout, where the map at rest is not padded.
+ */
+export function idleCameraPadding(metrics: ScreenMetrics): CameraPadding | undefined {
+  if (sidePanelFrame(metrics) === undefined) return undefined;
+  const area = mapAreaInsets(metrics);
+  return { bottom: 0, left: area.left, right: area.right, top: 0 };
+}
+
 /** Padding that frames a previewed route between the top controls and the preview sheet. */
 export function routePreviewCameraPadding(
   metrics: ScreenMetrics,
   options: { demoOrigin: boolean },
 ): CameraPadding {
+  const sideFraming = sidePanelFraming(metrics, 40);
+  if (sideFraming !== undefined) return sideFraming;
   const detents = routePreviewSheetDetents(metrics, options);
   return {
     bottom: (detents.values[detents.initial] ?? 0) + 28,
@@ -105,6 +214,8 @@ export function searchResultsCameraPadding(
   metrics: ScreenMetrics,
   detentIndex: number,
 ): CameraPadding {
+  const sideFraming = sidePanelFraming(metrics, 54);
+  if (sideFraming !== undefined) return sideFraming;
   const detents = exploreSheetDetents(metrics);
   // Above the half detent the sheet covers the map; frame for the half detent instead.
   const height = detents.values[Math.min(detentIndex, 1)] ?? 0;
@@ -118,6 +229,18 @@ export function searchResultsCameraPadding(
 
 /** Padding that keeps the vehicle between the maneuver banner and the resting trip panel. */
 export function guidanceCameraPadding(metrics: ScreenMetrics): CameraPadding {
+  const area = mapAreaInsets(metrics);
+  if (sidePanelFrame(metrics) !== undefined) {
+    // Banner and trip panel share the leading column, so the vehicle rides beside them, in the
+    // lower part of the map with the road ahead above it.
+    const height = metrics.windowHeight - metrics.topInset - metrics.bottomInset;
+    return {
+      bottom: metrics.bottomInset + 48,
+      left: area.left + 24,
+      right: area.right + TRAILING_CONTROLS_WIDTH,
+      top: metrics.topInset + Math.round(height * 0.35),
+    };
+  }
   return {
     bottom: (tripSheetDetents(metrics).values[0] ?? 0) + 16,
     left: 24,

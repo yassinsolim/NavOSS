@@ -185,6 +185,7 @@ export function ExploreSheet({
             tintColor={colors.textSecondary}
           />
           <TextInput
+            disableFullscreenUI
             accessibilityLabel="Search places"
             autoCapitalize="words"
             autoCorrect={false}
@@ -315,6 +316,9 @@ export function ExploreSheet({
                             ? { android: 'history', ios: 'clock.arrow.circlepath' }
                             : { android: 'location_on', ios: 'mappin' }
                         }
+                        // Collapsed, the list sits below the sheet's visible edge: D-pad focus
+                        // reaches it through Show list instead of landing on hidden rows.
+                        focusable={listExpanded}
                         iconTint={section.recent ? colors.primaryText : colors.danger}
                         key={item.id}
                         leadingCaption={distance}

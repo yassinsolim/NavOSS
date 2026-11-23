@@ -19,3 +19,15 @@ export function statusBarContent({
   if (!mapVisible) return 'auto';
   return darkMap ? 'light' : 'dark';
 }
+
+/** expo-navigation-bar's style names the bar itself: a `light` bar has dark buttons. */
+export type NavigationBarStyle = 'auto' | 'dark' | 'light';
+
+/**
+ * Android's 3-button navigation bar is drawn over the map like the status bar (edge to edge, no
+ * contrast scrim), so its buttons follow the same content colour as the status bar.
+ */
+export function navigationBarStyleFor(content: StatusBarContent): NavigationBarStyle {
+  if (content === 'auto') return 'auto';
+  return content === 'dark' ? 'light' : 'dark';
+}

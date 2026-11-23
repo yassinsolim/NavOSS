@@ -347,6 +347,16 @@ export function stopNavigationAnnouncements(): void {
   NavOSSNavigation.stopAnnouncements();
 }
 
+/**
+ * Whether the native engine matches the vehicle to the route and derives turn-by-turn guidance
+ * from it. The Android placeholder engine does neither; the phone then shows the trip without a
+ * maneuver, an estimate or speed readouts, and says guidance is not available yet.
+ */
+export function hasNativeTurnByTurnGuidance(): boolean {
+  const capabilities = NavOSSNavigation.getCapabilities();
+  return capabilities.routeMatching && capabilities.geometryGuidance;
+}
+
 // Community reports and traffic sharing. Networking and App Attest live natively and are
 // shared with CarPlay; these wrappers never touch identity material.
 

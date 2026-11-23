@@ -1,0 +1,40 @@
+diff --git a/android/src/main/java/org/maplibre/reactnative/components/mapview/MLRNMapView.kt b/android/src/main/java/org/maplibre/reactnative/components/mapview/MLRNMapView.kt
+index 4ea5c73ad4a2680d4ca75e87844569d6410755ba..6b598b0283af1ba1c92274687fb4a0c35f510ff4 100644
+--- a/android/src/main/java/org/maplibre/reactnative/components/mapview/MLRNMapView.kt
++++ b/android/src/main/java/org/maplibre/reactnative/components/mapview/MLRNMapView.kt
+@@ -9,6 +9,7 @@ import android.os.Handler
+ import android.os.Looper
+ import android.util.AttributeSet
+ import android.view.Gravity
++import android.view.KeyEvent
+ import android.view.MotionEvent
+ import android.view.View
+ import android.view.ViewGroup
+@@ -360,6 +361,27 @@ open class MLRNMapView(
+     private val layerWaiters: MutableMap<String?, MutableList<FoundLayerCallback>> =
+         HashMap<String?, MutableList<FoundLayerCallback>>()
+ 
++    // Key and trackball events never move the map. MapView zooms in on Enter / D-pad centre key-up,
++    // so the Enter that submits a focused text field (hardware keyboard, handheld controls) landed
++    // on the map once the field blurred and its zoom animation cancelled the app's own camera move
++    // (for example the search results fit). The app drives the camera itself.
++    override fun onKeyDown(
++        keyCode: Int,
++        event: KeyEvent,
++    ): Boolean = false
++
++    override fun onKeyUp(
++        keyCode: Int,
++        event: KeyEvent,
++    ): Boolean = false
++
++    override fun onKeyLongPress(
++        keyCode: Int,
++        event: KeyEvent,
++    ): Boolean = false
++
++    override fun onTrackballEvent(event: MotionEvent): Boolean = false
++
+     init {
+         onCreate(null)
+         onStart()

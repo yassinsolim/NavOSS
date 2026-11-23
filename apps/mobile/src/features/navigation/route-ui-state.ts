@@ -22,24 +22,34 @@ export type RouteSource = RouteResponseV2['source'] | OfflineRouteSource;
 
 type NativeTrip = NonNullable<NativeNavigationSnapshot['trip']>;
 
+/**
+ * A fixed start a route is previewed from instead of the driver's location (a place chosen on a
+ * device without a location fix, or the supported-route demo). Such a route is never started.
+ */
+export interface RoutePreviewOrigin {
+  coordinate: Coordinate;
+  /** The place's name, as the preview sheet says where the preview starts. */
+  label: string;
+}
+
 /** The phone's route lifecycle: nothing, planning, a plan that failed, a preview, a trip. */
 export type RouteUiState =
   | { type: 'idle' }
   | {
       destination: SearchResult;
-      previewOrigin?: Coordinate;
+      previewOrigin?: RoutePreviewOrigin;
       type: 'loading';
       waypoints: SearchResult[];
     }
   | ({
       destination: SearchResult;
-      previewOrigin?: Coordinate;
+      previewOrigin?: RoutePreviewOrigin;
       type: 'error';
       waypoints: SearchResult[];
     } & RouteError)
   | {
       destination: SearchResult;
-      previewOrigin?: Coordinate;
+      previewOrigin?: RoutePreviewOrigin;
       routes: RouteAlternativeV2[];
       selectedRouteId: string;
       type: 'preview';
@@ -81,13 +91,27 @@ export const IDLE_ROUTE: RouteUiState = { type: 'idle' };
  * Why a route could not be planned. `refusalTitle` is the server's title when it refused the
  * route itself: asking again cannot help, so the phone offers another destination instead of a
  * retry. Without it the failure is an outage or a lost connection, and a retry may work.
+ * `originUnavailable` marks a route that failed because the device's location could not be used
+ * (denied, off, no fix, too old): another start place can still be previewed.
  */
 export interface RouteError {
   message: string;
+  originUnavailable?: true;
   refusalTitle?: string;
 }
 
+/** The device's location cannot start this route; the message says why and what to do. */
+export class RouteOriginUnavailableError extends NavOssApiError {
+  public constructor(message: string) {
+    super(message, 0);
+    this.name = 'RouteOriginUnavailableError';
+  }
+}
+
 export function routeErrorFrom(error: unknown): RouteError {
+  if (error instanceof RouteOriginUnavailableError) {
+    return { message: error.message, originUnavailable: true };
+  }
   if (!(error instanceof NavOssApiError)) {
     return { message: 'A route could not be calculated. Check the connection and try again.' };
   }

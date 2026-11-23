@@ -7,12 +7,16 @@ import {
   type StyleSpecification,
 } from '@maplibre/maplibre-react-native';
 import type { Coordinate } from '@navoss/contracts';
-import type { ReactNode, RefObject } from 'react';
+import { type ReactNode, type RefObject, useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 
 import type { CameraChange } from '@/features/map/controller/use-map-controller';
 import type { NavigationViewMode } from '@/features/map/map-preferences';
-import { guidanceCameraPadding, type ScreenMetrics } from '@/features/map/overlay-layout';
+import {
+  guidanceCameraPadding,
+  idleCameraPadding,
+  type ScreenMetrics,
+} from '@/features/map/overlay-layout';
 import { NAVIGATION_CAMERA_TRANSITION } from '@/features/navigation/navigation-camera';
 import { useRenderCounter } from '@/lib/render-counter';
 import { palette } from '@/theme/tokens';
@@ -103,6 +107,8 @@ export function MapCanvas({
   vehicleCoordinate,
 }: MapCanvasProps) {
   useRenderCounter('MapCanvas');
+  // Beside a side panel the resting map centres in the part the panel leaves visible.
+  const idlePadding = useMemo(() => idleCameraPadding(metrics) ?? NO_PADDING, [metrics]);
   const followsVehicle = isNavigating && isNavigationFollowing;
   const animatesFollow = isNavigating || idleShouldFollow;
 
@@ -160,7 +166,7 @@ export function MapCanvas({
         initialViewState={INITIAL_VIEW_STATE}
         maxZoom={19}
         minZoom={0}
-        padding={isNavigating ? guidanceCameraPadding(metrics) : NO_PADDING}
+        padding={isNavigating ? guidanceCameraPadding(metrics) : idlePadding}
         pitch={followsVehicle ? (navigationView === 'tilted' ? 42 : 0) : undefined}
         ref={cameraRef}
         zoom={followsVehicle ? 16 : idleShouldFollow ? 15 : undefined}

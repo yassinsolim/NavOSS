@@ -1,25 +1,29 @@
 import { NativeModule, requireNativeModule } from 'expo';
 
+/**
+ * What the native module really does. iOS reports every flag true; Android reports false for
+ * what its engine does not deliver yet, and JavaScript must not present those features.
+ */
 export interface NativeNavigationCapabilities {
-  arrivalDetection: true;
+  arrivalDetection: boolean;
   backgroundLocation: boolean;
-  carPlayTripBridge: true;
+  carPlayTripBridge: boolean;
   /** Community road reports bridge (`submitCommunityReport` …). Absent on older native builds. */
   communityReports?: true;
   /** "Share traffic speeds" uploader. Absent on older native builds. */
   communityTraffic?: true;
-  courseMatching: true;
-  deadReckoning: true;
-  geometryGuidance: true;
+  courseMatching: boolean;
+  deadReckoning: boolean;
+  geometryGuidance: boolean;
   implementation: 'native-android' | 'native-ios';
-  nativeSafetyCameraAlerts: true;
-  offRouteDetection: true;
-  replayInput: true;
-  rerouteConsent: true;
-  routeContinuity: true;
-  routeMatching: true;
-  safetyCameraAnnouncements: true;
-  speedingWarning: true;
+  nativeSafetyCameraAlerts: boolean;
+  offRouteDetection: boolean;
+  replayInput: boolean;
+  rerouteConsent: boolean;
+  routeContinuity: boolean;
+  routeMatching: boolean;
+  safetyCameraAnnouncements: boolean;
+  speedingWarning: boolean;
   version: 11;
 }
 
