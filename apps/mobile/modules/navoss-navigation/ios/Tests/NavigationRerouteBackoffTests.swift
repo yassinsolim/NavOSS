@@ -230,27 +230,28 @@ final class NavigationRerouteBackoffTests: XCTestCase {
 
   /// Before: 12 requests and 12 installs in adaptive mode, the same in keep-route mode, and in
   /// ask-first mode 7 requests, 4 spoken proposals and 3 installs (see the PR).
-  func testTheStraightDetourSettlesAfterThreeRoutesInAdaptiveMode() throws {
+  /// After: one at once, one 400 m and 20 s on, then one a minute (720 m at 43 km/h).
+  func testTheStraightDetourGetsAFreshRouteAtMostEveryMinuteInAdaptiveMode() throws {
     let rig = Self.gridRig()
     try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
     try rig.drive(Self.straightDetour)
     XCTAssertEqual(rig.state.navigation.phase, .arrived, rig.timeline.joined(separator: "\n"))
-    XCTAssertEqual(rig.requests, 3, rig.timeline.joined(separator: "\n"))
-    XCTAssertEqual(rig.installs.count, 3)
-    XCTAssertEqual(rig.state.rerouteCount, 3)
+    XCTAssertEqual(rig.requests, 5, rig.timeline.joined(separator: "\n"))
+    XCTAssertEqual(rig.installs.count, 5)
+    XCTAssertEqual(rig.state.rerouteCount, 5)
     XCTAssertFalse(rig.spokenAlerts.contains(Self.newRouteAnnouncement))
   }
 
-  func testTheStraightDetourInKeepRouteModeRejoinsThreeTimesAtMost() throws {
+  func testTheStraightDetourInKeepRouteModeRejoinsAtMostEveryMinute() throws {
     let rig = Self.gridRig(.keepRoute)
     try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
     try rig.drive(Self.straightDetour)
     XCTAssertEqual(rig.state.navigation.phase, .arrived, rig.timeline.joined(separator: "\n"))
-    XCTAssertEqual(rig.requests, 3, rig.timeline.joined(separator: "\n"))
-    XCTAssertEqual(rig.installs.count, 3)
+    XCTAssertEqual(rig.requests, 5, rig.timeline.joined(separator: "\n"))
+    XCTAssertEqual(rig.installs.count, 5)
     XCTAssertEqual(
       rig.network.requests.map(\.passThroughWaypointIds),
-      Array(repeating: ["navoss-route-rejoin"], count: 3), "every request rejoins the route ahead")
+      Array(repeating: ["navoss-route-rejoin"], count: 5), "every request rejoins the route ahead")
   }
 
   /// Nobody answers the proposals (CarPlay, hands on the wheel): each unanswered one is followed
@@ -282,8 +283,8 @@ final class NavigationRerouteBackoffTests: XCTestCase {
     XCTAssertTrue(declined)
     XCTAssertEqual(rig.state.navigation.phase, .arrived)
     let log = rig.timeline.joined(separator: "\n")
-    XCTAssertEqual(rig.requests, 3, log)
-    XCTAssertEqual(rig.spokenAlerts.filter { $0 == Self.newRouteAnnouncement }.count, 2)
+    XCTAssertEqual(rig.requests, 4, log)
+    XCTAssertEqual(rig.spokenAlerts.filter { $0 == Self.newRouteAnnouncement }.count, 3)
     XCTAssertEqual(rig.installs.count, 1, log)
     let times = rig.timeline.filter { $0.contains("request") }.compactMap {
       $0.split(separator: " ").first.flatMap { Double($0.dropFirst(2)) }
@@ -315,7 +316,7 @@ final class NavigationRerouteBackoffTests: XCTestCase {
 
   /// A deliberate parallel street: the next avenue over for 1.5 km, then back. After the first
   /// route (which turns back at the next street), the driver who keeps going gets a fresh route
-  /// along the avenue they are on 400 m and 20 s later, and another 800 m and 40 s after that.
+  /// along the avenue they are on 400 m and 20 s later, and another a minute after that.
   func testADriverOnAParallelStreetGetsAFreshRouteAtEachSpacing() throws {
     let rig = Self.gridRig()
     try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
@@ -335,8 +336,8 @@ final class NavigationRerouteBackoffTests: XCTestCase {
     guard installs.count == 3 else { return }
     XCTAssertLessThanOrEqual(installs[1].along - installs[0].along, 450, log)
     XCTAssertLessThanOrEqual(installs[1].time - installs[0].time, 40, log)
-    XCTAssertGreaterThanOrEqual(installs[2].along - installs[1].along, 800, log)
-    XCTAssertLessThanOrEqual(installs[2].along - installs[1].along, 850, log)
+    XCTAssertLessThanOrEqual(installs[2].along - installs[1].along, 800, log)
+    XCTAssertEqual(installs[2].time - installs[1].time, 61, accuracy: 1, log)
     // The fresh route goes on north up the avenue the driver is on.
     let fresh = try XCTUnwrap(rig.network.requests.last)
     let corners = Self.gridRoute(from: fresh.origin, heading: fresh.originHeadingDegrees)
@@ -383,14 +384,55 @@ final class NavigationRerouteBackoffTests: XCTestCase {
       before = (rig.requests, rig.installs.count)
     }
     let log = rig.timeline.joined(separator: "\n")
-    XCTAssertEqual(installXs.count, 3, log)
+    XCTAssertEqual(installXs.count, 4, log)
     XCTAssertLessThan(try XCTUnwrap(installXs.first), 100, "the first is not held: " + log)
-    guard installXs.count == 3 else { return }
+    guard installXs.count == 4 else { return }
     let gaps = [installXs[1] - installXs[0], installXs[2] - installXs[1]]
     XCTAssertGreaterThanOrEqual(gaps[0], 400, log)
     XCTAssertLessThanOrEqual(gaps[0], 450, "held only for the spacing: " + log)
-    XCTAssertGreaterThanOrEqual(gaps[1], 800, log)
-    XCTAssertLessThanOrEqual(gaps[1], 850, log)
+    XCTAssertGreaterThanOrEqual(gaps[1], 700, "the second step, 800 m or a minute: " + log)
+    XCTAssertLessThanOrEqual(gaps[1], 800, log)
+  }
+
+  /// 5 km ignoring every route, in town and on a highway: never more than 800 m or a minute
+  /// (plus the fix that reaches it and the one-second answer) between fresh routes. Measured: at
+  /// 43 km/h 8 installs, longest gap 61 s and 732 m; at 108 km/h 7, longest 28 s and 840 m.
+  func testADriverIgnoringEveryRouteIsNeverLongWithoutAFreshRoute() throws {
+    for (speed, expectedInstalls) in [(12.0, 8), (30.0, 7)] {
+      let rig = Self.gridRig()
+      try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
+      var installs: [(time: TimeInterval, along: Double)] = []
+      var before = 0
+      for position in Trace.positions(along: [(0, 0), (0, 400), (5_400, 400)], every: speed)
+        .dropFirst()
+      {
+        try rig.fix(position.x, position.y, course: position.courseDegrees, speed: speed)
+        if rig.installs.count > before { installs.append((rig.clock.time, position.alongMeters)) }
+        before = rig.installs.count
+      }
+      let log = "\(speed) m/s: " + rig.timeline.joined(separator: "\n")
+      let gaps = zip(installs, installs.dropFirst()).map { ($1.time - $0.time, $1.along - $0.along) }
+      XCTAssertEqual(installs.count, expectedInstalls, log)
+      XCTAssertLessThanOrEqual(gaps.map(\.0).max() ?? 0, 61, log)
+      // The fix that reaches 800 m, and the second the answer takes.
+      XCTAssertLessThanOrEqual(gaps.map(\.1).max() ?? 0, 800 + 2 * speed, log)
+    }
+  }
+
+  /// A vehicle that has not moved since the last answer is not routed again from the same place,
+  /// however long it waits; one that has moved gets its fresh route at the minute.
+  func testTheMinuteCeilingNeedsMovement() {
+    var spacing = NavigationRerouteSpacing()
+    spacing.observe(
+      coordinate: Trace.coordinate(0, 0), accuracyMeters: 5, isOffRoute: true, isMatched: false,
+      now: 0)
+    for _ in 0..<3 { spacing.answered(now: 0) }
+    XCTAssertFalse(spacing.allowsRequest(now: 120), "parked")
+    spacing.observe(
+      coordinate: Trace.coordinate(0, 20), accuracyMeters: 5, isOffRoute: true, isMatched: false,
+      now: 59)
+    XCTAssertFalse(spacing.allowsRequest(now: 59))
+    XCTAssertTrue(spacing.allowsRequest(now: 60), "20 m in a minute")
   }
 
   /// The freeway: exit at y = 2 000, the next one 3 km on at y = 5 000.
@@ -473,13 +515,13 @@ final class NavigationRerouteBackoffTests: XCTestCase {
 
   /// The router ignores the heading and starts each route with a U-turn behind the vehicle.
   /// The driver drives on up the parallel avenue; the U-turn route is given its fair chance and
-  /// the trip settles after three routes instead of one every nine seconds (24 before).
+  /// the trip gets a route at most once a minute instead of one every nine seconds (24 before).
   func testAUTurnFirstRouteIsNotReplacedOnItsFirstFixes() throws {
     let rig = Self.gridRig(ignoresHeading: true)
     try rig.start(Self.trip(id: "chosen", corners: Self.chosenCorners))
     try rig.drive(Self.straightDetour)
     XCTAssertEqual(rig.state.navigation.phase, .arrived, rig.timeline.joined(separator: "\n"))
-    XCTAssertLessThanOrEqual(rig.installs.count, 3, rig.timeline.joined(separator: "\n"))
+    XCTAssertLessThanOrEqual(rig.installs.count, 5, rig.timeline.joined(separator: "\n"))
   }
 
   /// With no heading from the platform (a course reported invalid), the request carries the
@@ -685,8 +727,8 @@ final class NavigationRerouteBackoffTests: XCTestCase {
 
   func testTheSpacingDoublesToItsCeiling() {
     let spacings = (1...6).map { NavigationRerouteSpacing.spacing(answers: $0) }
-    XCTAssertEqual(spacings.map(\.meters), [400, 800, 1_600, 1_600, 1_600, 1_600])
-    XCTAssertEqual(spacings.map(\.seconds), [20, 40, 80, 120, 120, 120])
+    XCTAssertEqual(spacings.map(\.meters), [400, 800, 800, 800, 800, 800])
+    XCTAssertEqual(spacings.map(\.seconds), [20, 40, 60, 60, 60, 60])
   }
 
   /// Two answers in a detour: the next request is held for 800 m and 40 s. After 500 m and

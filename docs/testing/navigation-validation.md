@@ -147,8 +147,9 @@ then back to the chosen road).
 
 - The first request after leaving a route the driver was established on is never held.
 - After a replacement is answered (installed, proposed in Ask first, or found to be the route
-  already followed), the next request waits for 400 m of travel and 20 s, doubling with each
-  further answer in the same detour to at most 1 600 m and 120 s. Then, while the driver is
+  already followed), the next request waits for 400 m of travel and 20 s, then 800 m and 40 s,
+  and never longer than 800 m or 60 s, whichever comes first (the minute needs the vehicle to
+  have moved since the last answer, so a parked car is not routed again). Then, while the driver is
   still off the route they were given (past its turn back, or further from it than a
   departure), they get a fresh route from where they are, whichever way they are going.
 - After 500 m and 30 s on a route without leaving it, the driver is established again and the
@@ -167,16 +168,18 @@ then back to the chosen road).
 
 Worst-case added delay: none for the first reroute after a departure. A second departure in the
 same detour waits until 400 m and 20 s after the previous replacement (about 29 s at 50 km/h,
-20 s at 100 km/h, less the few seconds the departure itself takes to confirm). A third waits
-800 m and 40 s, and from the fourth 1 600 m and 120 s: the longest a driver who keeps ignoring
-routes drives with one whose turn is behind them.
+20 s at 100 km/h, less the few seconds the departure itself takes to confirm). After that a
+driver who keeps ignoring routes is never more than 800 m or a minute from the next fresh route
+(on 5 km ignoring every route: 8 installs, longest gap 61 s and 732 m at 43 km/h; 7 installs,
+longest 28 s and 840 m at 108 km/h, the answer taking a second).
 
-On the 2.4 km straight detour (up the next avenue, ignoring every route): adaptive and keep-route
-went from 12 installs to 3, Ask first from 7 requests, 4 spoken offers and 3 installs to 4
-requests, 2 offers and 2 installs. With a router that starts every route with a U-turn, adaptive
-went from 24 installs to 3. A 1.5 km parallel avenue went from 9 installs to 3, and a service
-road 60 m beside the route for 1.5 km from 9 to 3. The recorded Calgary drive speaks the same
-prompts, and its detour, answered with the route already followed, installs nothing (2 before).
+On the 2.4 km straight detour at 43 km/h (up the next avenue, ignoring every route): adaptive and
+keep-route went from 12 installs to 5 (one at once, one 400 m on, then one a minute), Ask first
+from 7 requests, 4 spoken offers and 3 installs to 4 requests, 2 offers and 2 installs. With a
+router that starts every route with a U-turn, adaptive went from 24 installs to 5. A 1.5 km
+parallel avenue went from 9 installs to 3, and a service road 60 m beside the route for 1.5 km
+from 9 to 3. The recorded Calgary drive speaks the same prompts, and its detour, answered with
+the route already followed, installs nothing (2 before).
 
 ## Artifact layout
 

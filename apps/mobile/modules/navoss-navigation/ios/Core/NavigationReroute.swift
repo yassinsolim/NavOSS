@@ -272,7 +272,8 @@ func navigationFetchRecoveryRoute(
 /// - Once a replacement has been answered in this detour (installed, proposed, or found to be the
 ///   route already followed), the next request waits until the vehicle has travelled
 ///   `firstSpacingMeters` and `firstSpacingSeconds` have passed since that answer, doubling with
-///   every further answer up to `maximumSpacingMeters` and `maximumSpacingSeconds`. Then, still
+///   every further answer up to `maximumSpacingMeters` and `maximumSpacingSeconds`, and never
+///   longer than either of those: whichever comes first, provided the vehicle has moved. Then, still
 ///   off the route it was given (past its turn back, or further from it than a departure), the
 ///   driver gets a fresh route from where they are, whichever way they are going: a driver is
 ///   never left for long with a route whose next turn is behind them.
@@ -287,8 +288,10 @@ func navigationFetchRecoveryRoute(
 struct NavigationRerouteSpacing {
   static let firstSpacingMeters = 400.0
   static let firstSpacingSeconds = 20.0
-  static let maximumSpacingMeters = 1_600.0
-  static let maximumSpacingSeconds = 120.0
+  /// The most a driver who keeps going their own way drives, or waits while moving, before the
+  /// next fresh route: in town 60 s is about 700 m.
+  static let maximumSpacingMeters = 800.0
+  static let maximumSpacingSeconds = 60.0
   static let establishedMeters = 500.0
   static let establishedSeconds = 30.0
   /// Travel is counted in steps longer than this or the fix's accuracy, so a parked receiver's
@@ -355,10 +358,19 @@ struct NavigationRerouteSpacing {
       return true
     }
     let spacing = Self.spacing(answers: answers)
-    guard now - lastAnswer.time >= spacing.seconds else {
+    let elapsed = now - lastAnswer.time
+    let travelled = travelMeters - lastAnswer.travelMeters
+    // The ceilings bound the wait whichever is reached first; a vehicle that has not moved since
+    // the answer is not routed again from the same place.
+    if travelled >= Self.maximumSpacingMeters
+      || (elapsed >= Self.maximumSpacingSeconds && travelled > 0)
+    {
+      return true
+    }
+    guard elapsed >= spacing.seconds else {
       return false
     }
-    return isOwed || travelMeters - lastAnswer.travelMeters >= spacing.meters
+    return isOwed || travelled >= spacing.meters
   }
 
   /// A replacement was answered: installed, proposed, or found to be the route followed.
