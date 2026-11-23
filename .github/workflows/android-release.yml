@@ -74,7 +74,10 @@ jobs:
       - name: Install Android SDK packages
         run: |
           set -euo pipefail
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          # A bounded answer list on a here-string: `yes | sdkmanager` ends `yes` with SIGPIPE, which
+          # pipefail turns into a failed step. sdkmanager's own exit status still decides.
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null \
+            <<<"$(printf 'y\n%.0s' {1..64})"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
             'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1' >/dev/null
 
@@ -166,29 +169,33 @@ jobs:
           bt="$ANDROID_HOME/build-tools/36.0.0"
           apk=apps/mobile/android/app/build/outputs/apk/release/app-release.apk
           certs="$("$bt/apksigner" verify --print-certs "$apk")"
-          echo "$certs" | grep -E 'certificate (DN|SHA-256)'
-          if [ "$(echo "$certs" | grep -c 'certificate SHA-256 digest')" -ne 1 ] || \
-             ! echo "$certs" | grep -q "certificate SHA-256 digest: $NAVOSS_RELEASE_CERT_SHA256"; then
+          grep -E 'certificate (DN|SHA-256)' <<<"$certs"
+          if [ "$(grep -c 'certificate SHA-256 digest' <<<"$certs")" -ne 1 ] || \
+             ! grep -q "certificate SHA-256 digest: $NAVOSS_RELEASE_CERT_SHA256" <<<"$certs"; then
             echo 'APK is not signed by exactly the pinned NavOSS release certificate' >&2
             exit 1
           fi
           badging="$("$bt/aapt2" dump badging "$apk")"
-          echo "$badging" | grep -q "package: name='org.navoss.mobile' versionCode='$VERSION_CODE' versionName='$VERSION_NAME'" || {
+          grep -q "package: name='org.navoss.mobile' versionCode='$VERSION_CODE' versionName='$VERSION_NAME'" <<<"$badging" || {
             echo 'Unexpected package, version code or version name' >&2; exit 1; }
           manifest="$("$bt/aapt2" dump xmltree --file AndroidManifest.xml "$apk")"
-          if echo "$manifest" | grep -q 'debuggable(0x0101000f)=true'; then
+          if grep -q 'debuggable(0x0101000f)=true' <<<"$manifest"; then
             echo 'Release APK is debuggable' >&2; exit 1
           fi
-          if ! echo "$manifest" | grep -q 'usesCleartextTraffic(0x010104ec)=false' || \
-             echo "$manifest" | grep -q networkSecurityConfig; then
+          if ! grep -q 'usesCleartextTraffic(0x010104ec)=false' <<<"$manifest" || \
+             grep -q networkSecurityConfig <<<"$manifest"; then
             echo 'Release APK allows cleartext traffic' >&2; exit 1
           fi
           abis="$(unzip -Z1 "$apk" 'lib/*' | cut -d/ -f2 | sort -u | tr '\n' ' ')"
           if [ "$abis" != 'arm64-v8a ' ]; then
             echo "Unexpected native ABIs: $abis" >&2; exit 1
           fi
-          # Hermes bytecode starts with the magic 0x1F1903C103BC1FC6 (little-endian).
-          magic="$(unzip -p "$apk" assets/index.android.bundle | head -c 8 | od -An -tx1 | tr -d ' \n')"
+          # Hermes bytecode starts with the magic 0x1F1903C103BC1FC6 (little-endian). Extract to a
+          # file first: `unzip -p | head -c 8` ends unzip with SIGPIPE, which pipefail fails on.
+          # Searches below read here-strings for the same reason (`echo | grep -q` can hide a match).
+          bundle="$RUNNER_TEMP/index.android.bundle"
+          unzip -p "$apk" assets/index.android.bundle >"$bundle"
+          magic="$(head -c 8 "$bundle" | od -An -tx1 | tr -d ' \n')"
           if [ "$magic" != c61fbc03c103191f ]; then
             echo 'JavaScript bundle is not Hermes bytecode' >&2; exit 1
           fi
