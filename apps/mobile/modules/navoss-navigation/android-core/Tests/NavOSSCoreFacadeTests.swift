@@ -757,6 +757,115 @@ final class NavOSSCoreBoundaryRaceTests: XCTestCase {
     XCTAssertEqual(retry, first)
   }
 
+  // Delta review 1: callbacks of two engines closing each other. Each close runs inside a
+  // callback (of the other engine), so neither may wait for callbacks.
+  func testTwoEnginesClosingEachOtherFromCallbacksDoNotDeadlock() throws {
+    let hostA = RecordingCoreHost()
+    let hostB = RecordingCoreHost()
+    let engineA = try makeEngine(hostA)
+    let engineB = try makeEngine(hostB)
+    let trip = try calgaryTripJSON()
+    // Both callbacks are running before either closes.
+    let inA = DispatchSemaphore(value: 0)
+    let inB = DispatchSemaphore(value: 0)
+    hostA.onStateChanged = {
+      inA.signal()
+      _ = inB.wait(timeout: .now() + 30)
+      engineB.close()
+    }
+    hostB.onStateChanged = {
+      inB.signal()
+      _ = inA.wait(timeout: .now() + 30)
+      engineA.close()
+    }
+    let done = DispatchSemaphore(value: 0)
+    Thread.detachNewThread {
+      _ = try? engineA.setRoute(trip)
+      done.signal()
+    }
+    Thread.detachNewThread {
+      _ = try? engineB.setRoute(trip)
+      done.signal()
+    }
+    XCTAssertEqual(done.wait(timeout: .now() + 10), .success, "the closes wait for each other")
+    XCTAssertEqual(done.wait(timeout: .now() + 10), .success, "the closes wait for each other")
+  }
+
+  // Delta review 2: a cancellation the flusher has claimed is still delivered when `close()`
+  // runs at that moment: close waits for it instead of revoking the host under it.
+  func testACancellationBeingFlushedSurvivesAConcurrentClose() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    try driveUntilRerouting(engine, host)
+    let config = try XCTUnwrap(host.takeRequest(endingWithAny: ["/v2/config"]))
+    let closerMoved = DispatchSemaphore(value: 0)
+    let closed = DispatchSemaphore(value: 0)
+    engine.bridgeForTesting.closeWillWait = { closerMoved.signal() }
+    engine.httpForTesting.didClaimCancellations = {
+      engine.httpForTesting.didClaimCancellations = nil
+      Thread.detachNewThread {
+        engine.close()
+        closerMoved.signal()
+        closed.signal()
+      }
+      // Until `close()` has either returned or begun to wait for this delivery.
+      _ = closerMoved.wait(timeout: .now() + 30)
+    }
+    _ = engine.clearRoute()
+    XCTAssertEqual(closed.wait(timeout: .now() + 30), .success)
+    XCTAssertEqual(
+      host.condition.withLock { host.cancelledRequests.filter { $0 == config.id } }, [config.id],
+      "the host was never told to cancel a request it holds")
+  }
+
+  // Delta review 3: a fix the core refuses (here a negative speed) at the accepted fix's
+  // coordinate, newer and with another accuracy, must not become the reroute origin.
+  func testARefusedFixDoesNotChangeTheRerouteOrigin() throws {
+    let host = RecordingCoreHost()
+    let engine = try makeEngine(host)
+    defer { engine.close() }
+    let accepted = try driveUntilRerouting(engine, host)
+    let acceptedAt = try XCTUnwrap(accepted["timestampMs"] as? Double)
+    func originOfNextRoutesRequest() throws -> [Double?] {
+      var routes = try XCTUnwrap(host.takeRequest(endingWithAny: ["/v2/config", "/v2/routes"]))
+      if requestURL(routes.json)?.hasSuffix("/v2/config") == true {
+        engine.completeHTTPRequest(
+          id: routes.id, responseJSON: okResponse(try recordedBody(productionConfig)))
+        routes = try XCTUnwrap(host.takeRequest(endingWithAny: ["/v2/routes"]))
+      }
+      engine.completeHTTPRequest(id: routes.id, responseJSON: #"{"error":"unreachable"}"#)
+      let request = try XCTUnwrap(
+        try JSONSerialization.jsonObject(with: Data(routes.json.utf8)) as? [String: Any])
+      let payload = try XCTUnwrap(
+        try JSONSerialization.jsonObject(
+          with: Data(try XCTUnwrap(request["body"] as? String).utf8)) as? [String: Any])
+      return [
+        payload["originHeadingDegrees"] as? Double,
+        payload["originHorizontalAccuracyMeters"] as? Double,
+      ]
+    }
+    let first = try originOfNextRoutesRequest()
+    XCTAssertEqual(
+      first,
+      [accepted["courseDegrees"] as? Double, accepted["horizontalAccuracyMeters"] as? Double])
+    XCTAssertNotNil(host.waitUntilNotRerouting())
+
+    var refused = accepted
+    refused["timestampMs"] = acceptedAt + 1_000
+    refused["speedMetersPerSecond"] = -1.0
+    refused["horizontalAccuracyMeters"] = 42.0
+    XCTAssertThrowsError(try engine.updateLocation(try json(refused))) {
+      XCTAssertEqual(($0 as? NavOSSCoreError)?.code, "invalid-location")
+    }
+
+    // Eleven seconds on, the accepted fix delivered again starts the retry.
+    host.setNow(acceptedAt + 11_000)
+    XCTAssertTrue(
+      try engine.updateLocation(try json(accepted)).contains(#""routeStatus":"rerouting""#),
+      "the repeated fix did not start the retry this test needs")
+    XCTAssertEqual(try originOfNextRoutesRequest(), first)
+  }
+
   // Finding 11: the boundary's own ceiling on what the host hands it.
   func testOversizedTextFromTheHostIsRefused() throws {
     let host = RecordingCoreHost()

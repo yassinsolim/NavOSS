@@ -34,6 +34,8 @@ final class NavOSSCoreHTTP: @unchecked Sendable {
   #if DEBUG
     /// Tests: runs after a request is registered and before the host is given it.
     var willPublish: ((Int64) -> Void)?
+    /// Tests: runs once the flusher has withdrawn cancellations and before it tells the host.
+    var didClaimCancellations: (() -> Void)?
     /// Tests: runs once a registered request was given to the host or dropped.
     var didPublish: ((Int64) -> Void)?
   #endif
@@ -156,13 +158,21 @@ final class NavOSSCoreHTTP: @unchecked Sendable {
   }
 
   /// Tells the host about the requests cancelled since the last call. Never with a lock held.
+  /// The batch is withdrawn inside the delivery gate: `close()` then either finds the ids still
+  /// queued and tells the host itself, or waits for this delivery. Withdrawn outside it, a
+  /// close in between would revoke the host and the cancellation would be lost.
   private func flushHostCancellations() {
-    let ids: [Int64] = lock.withLock {
-      defer { hostCancellations.removeAll() }
-      return hostCancellations
-    }
-    for id in ids {
-      bridge.deliver { $0.cancelHTTPRequest(id: id) }
+    bridge.deliver { host in
+      let ids: [Int64] = lock.withLock {
+        defer { hostCancellations.removeAll() }
+        return hostCancellations
+      }
+      #if DEBUG
+        if !ids.isEmpty { didClaimCancellations?() }
+      #endif
+      for id in ids {
+        host.cancelHTTPRequest(id: id)
+      }
     }
   }
 

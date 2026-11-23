@@ -141,8 +141,10 @@ when `null`, like the trip's fields.
 The core keeps the course, speed, accuracy and time of the newest fix **the engine accepted** to
 build a reroute origin (`navOSSNavigationRouteOrigin`), which iOS takes from `CLLocation`. The
 matcher ignores a fix that was not captured after the previous one (a duplicate, or an older one
-arriving late); such a fix does not replace the kept one, and the origin's heading and accuracy
-are sent only when the kept fix is at the very coordinate being routed from.
+arriving late); such a fix does not replace the kept one, and neither does a fix the core
+refuses (`invalid-location`). A fix is kept only once the engine has ingested it, which shows
+in the snapshot's `sequence` moving on. The origin's heading and accuracy are sent only when the
+kept fix is at the very coordinate being routed from.
 
 ### The snapshot
 
@@ -335,7 +337,8 @@ Two consequences for the host:
   callback it is in, and two callbacks closing at once would wait for each other). Steps 1 to 3
   happen; callbacks already running, including the calling one, finish; the memory is released
   when the outermost call on that thread returns. The call that caused the callback still
-  returns its result.
+  returns its result. "Inside a callback" means inside a callback of any engine in the
+  process, tracked per thread: a callback of one engine may close another.
 
 `close()` is idempotent. A second `close()` made while the first is still waiting returns at
 once, before the first has finished.
