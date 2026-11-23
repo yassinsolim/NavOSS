@@ -56,7 +56,11 @@ export interface PhoneIdleLocationWatchInput {
   carPlayConnected: boolean;
   locationIsVisible: boolean;
   mapTabIsVisible: boolean;
-  routeIsIdle: boolean;
+  /**
+   * The navigation core owns location during a trip (and after arrival until End). Before then,
+   * including route preview, the watch keeps the free-drive vehicle on a live fix.
+   */
+  tripIsActive: boolean;
 }
 export function phoneIdleLocationWatchOptions<Accuracy>(accuracy: Accuracy): {
   accuracy: Accuracy;
@@ -85,7 +89,7 @@ export function shouldWatchPhoneIdleLocation({
   carPlayConnected,
   locationIsVisible,
   mapTabIsVisible,
-  routeIsIdle,
+  tripIsActive,
 }: PhoneIdleLocationWatchInput): boolean {
-  return appIsActive && !carPlayConnected && locationIsVisible && mapTabIsVisible && routeIsIdle;
+  return appIsActive && !carPlayConnected && locationIsVisible && mapTabIsVisible && !tripIsActive;
 }

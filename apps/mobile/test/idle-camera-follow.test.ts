@@ -70,13 +70,13 @@ describe('idle camera follow policy', () => {
     });
   });
 
-  it('stops the foreground phone watch when the map is hidden, backgrounded, or CarPlay owns it', () => {
+  it('stops the foreground phone watch when the map is hidden, backgrounded, CarPlay owns it, or a trip runs', () => {
     const visiblePhoneMap = {
       appIsActive: true,
       carPlayConnected: false,
       locationIsVisible: true,
       mapTabIsVisible: true,
-      routeIsIdle: true,
+      tripIsActive: false,
     };
 
     expect(shouldWatchPhoneIdleLocation(visiblePhoneMap)).toBe(true);
@@ -87,5 +87,7 @@ describe('idle camera follow policy', () => {
     expect(shouldWatchPhoneIdleLocation({ ...visiblePhoneMap, carPlayConnected: true })).toBe(
       false,
     );
+    // Route preview keeps the watch (no trip yet); the navigation core owns location in a trip.
+    expect(shouldWatchPhoneIdleLocation({ ...visiblePhoneMap, tripIsActive: true })).toBe(false);
   });
 });
