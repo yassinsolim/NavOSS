@@ -46,7 +46,12 @@ import {
   type UpcomingManeuver,
 } from '@/features/navigation/route-progress';
 import type { RouteSource } from '@/features/navigation/route-ui-state';
-import { tripNotice, tripStatusLabel, tripSummaryFlags } from '@/features/navigation/trip-status';
+import {
+  tripActions,
+  tripNotice,
+  tripStatusLabel,
+  tripSummaryFlags,
+} from '@/features/navigation/trip-status';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
 import type { VehicleMatchStatus } from '@/features/navigation/vehicle-puck';
 import { IS_ANDROID } from '@/lib/device-copy';
@@ -718,6 +723,7 @@ export function TripSheet({
   const arrival =
     remaining === undefined ? 'No ETA yet' : formatArrivalTime(remaining.durationSeconds);
   const flags = tripSummaryFlags({ isAndroid: IS_ANDROID, simulated, tripNotSaved });
+  const actions = tripActions({ hasRemaining: remaining !== undefined, simulated });
   const remainingText =
     flags.text +
     (!guidanceAvailable
@@ -783,14 +789,16 @@ export function TripSheet({
           label={voiceUnavailable ? 'No voice' : sound.label}
           onPress={onSound}
         />
-        <TripAction
-          accessibilityHint="Choose a road condition to record at your current location"
-          accessibilityLabel="Report road condition"
-          icon={{ android: 'add_alert', ios: 'exclamationmark.bubble.fill' }}
-          label="Report"
-          onPress={onReport}
-        />
-        {remaining !== undefined && (
+        {actions.report && (
+          <TripAction
+            accessibilityHint="Choose a road condition to record at your current location"
+            accessibilityLabel="Report road condition"
+            icon={{ android: 'add_alert', ios: 'exclamationmark.bubble.fill' }}
+            label="Report"
+            onPress={onReport}
+          />
+        )}
+        {actions.shareEta && (
           <TripAction
             accessibilityHint="Opens the system share sheet without reading your contacts"
             accessibilityLabel="Share ETA"

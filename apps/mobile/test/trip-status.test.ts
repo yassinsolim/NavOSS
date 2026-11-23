@@ -4,6 +4,7 @@ import {
   isResumingTrip,
   tripNotice,
   tripStatusLabel,
+  tripActions,
   tripSummaryFlags,
   vehicleMatchStatus,
 } from '../src/features/navigation/trip-status.js';
@@ -97,5 +98,25 @@ describe('trip summary flags', () => {
       label: 'Simulated drive. ',
       text: 'Simulation · ',
     });
+  });
+});
+
+describe('trip actions', () => {
+  it('offers Report and Share ETA on a real trip', () => {
+    expect(tripActions({ hasRemaining: true, simulated: false })).toEqual({
+      report: true,
+      shareEta: true,
+    });
+  });
+
+  it('never reports a road condition at, or shares an ETA from, a simulated position', () => {
+    expect(tripActions({ hasRemaining: true, simulated: true })).toEqual({
+      report: false,
+      shareEta: false,
+    });
+  });
+
+  it('shares no ETA before the remaining route is known', () => {
+    expect(tripActions({ hasRemaining: false, simulated: false }).shareEta).toBe(false);
   });
 });

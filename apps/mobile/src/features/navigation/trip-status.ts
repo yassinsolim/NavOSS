@@ -127,3 +127,19 @@ export function tripSummaryFlags({
     text: (simulated ? 'Simulation · ' : '') + (notSaved ? 'Not saved · ' : ''),
   };
 }
+
+/**
+ * The trip sheet's actions beside the sound control. A simulated drive (Android, a device with no
+ * usable location) has no real position: a road report would be recorded where the simulated
+ * vehicle is, and a shared ETA would tell someone about a trip nobody is driving, so neither is
+ * offered.
+ */
+export function tripActions({
+  hasRemaining,
+  simulated,
+}: {
+  hasRemaining: boolean;
+  simulated: boolean;
+}): { report: boolean; shareEta: boolean } {
+  return { report: !simulated, shareEta: hasRemaining && !simulated };
+}
