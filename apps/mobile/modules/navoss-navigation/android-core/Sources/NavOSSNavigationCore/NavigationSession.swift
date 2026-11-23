@@ -1,0 +1,1 @@
+../../../ios/Core/NavigationSession.swift

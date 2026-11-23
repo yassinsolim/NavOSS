@@ -1,0 +1,1 @@
+../../../ios/Core/NavigationServiceState.swift

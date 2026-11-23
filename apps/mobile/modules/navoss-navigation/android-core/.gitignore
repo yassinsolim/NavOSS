@@ -1,0 +1,4 @@
+.build/
+jni-proof/.gradle/
+jni-proof/build/
+jni-proof/local.properties
