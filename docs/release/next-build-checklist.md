@@ -29,7 +29,11 @@ Open, not merged (check each when it lands, and say which build contains it):
   - Start a trip, drive onto the route, then close the app (swipe it away) and reopen it after
     leaving the route (a side road or a parking lot beside it). The trip should still be there,
     finding its place for a few seconds, then rerouted in Automatic, offering a new route in Ask
-    first, or guiding back to the route in Keep route. It must not say "Trip ended".
+    first, or guiding back to the route in Keep route. It must not say "Trip ended". Until
+    the car is back on the route, neither the phone nor CarPlay shows the turn it was saved
+    before. CarPlay keeps the trip running and follows the car, showing "Finding your place on
+    the route", then "Finding a new route" or "Off route" instead of a maneuver. In Ask first,
+    the "Use new route" / "Keep mine" offer appears on CarPlay.
   - Tap Start in a parking lot about 100 m from the road, close the app before reaching the road,
     reopen it in the same spot. The trip and the chosen route should still be there, silent and
     not rerouted while parked, and guided once the car reaches the road.

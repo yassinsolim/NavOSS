@@ -632,14 +632,16 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     }
 
     if isPreviewingRoutes, routePreviewReplacesActiveTrip,
-      state.guidance?.phase == .navigating
+      state.guidance?.phase == .navigating || state.tripPause != nil
     {
       return
     }
 
     updateRootAction(hasActiveTrip: true)
     updateActiveTripControls(visible: true)
-    let activeGuidance = state.guidance?.phase == .navigating || state.guidance?.phase == .arrived
+    // A trip under way runs its session and follows the vehicle with or without a maneuver to
+    // show (`NavOSSCarPlayState.isNavigating`).
+    let activeGuidance = state.isNavigating
     mapTemplate?.automaticallyHidesNavigationBar = activeGuidance
     configureRouteAttribution(trip: trip)
     let presentation = state.guidance.flatMap {
@@ -695,12 +697,20 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
     }
 
     guard let guidance = state.guidance else {
+      if let tripPause = state.tripPause {
+        // No maneuver, distance or estimate from where the trip was saved: the reason instead,
+        // and any proposal on top of it.
+        presentTripPause(tripPause)
+        presentLiveAlerts(live)
+        return
+      }
       updateTripEstimates(
         distanceMeters: trip.distanceMeters,
         durationSeconds: trip.durationSeconds
       )
       return
     }
+    presentedTripPause = nil
     updateGuidance(
       guidance,
       trip: trip,
@@ -709,6 +719,31 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
       position: state.position
     )
     presentLiveAlerts(live)
+  }
+
+  // MARK: A trip without a maneuver
+
+  private var presentedTripPause: NavOSSCarPlayTripPause?
+
+  /// Shows why the trip under way has no maneuver (`CPNavigationSession.pauseTrip`), once per
+  /// reason. Guidance that comes back sets the upcoming maneuvers again, which resumes it.
+  private func presentTripPause(_ pause: NavOSSCarPlayTripPause) {
+    guard let navigationSession, presentedTripPause != pause else { return }
+    presentedTripPause = pause
+    upcomingManeuverSteps = []
+    navigationSession.upcomingManeuvers = []
+    if #available(iOS 17.4, *) {
+      navigationSession.currentRoadNameVariants = []
+      navigationSession.currentLaneGuidance = nil
+    }
+    switch pause {
+    case .locating:
+      navigationSession.pauseTrip(for: .locating, description: "Finding your place on the route")
+    case .rerouting:
+      navigationSession.pauseTrip(for: .rerouting, description: "Finding a new route")
+    case .proceedToRoute:
+      navigationSession.pauseTrip(for: .proceedToRoute, description: "Off route")
+    }
   }
 
   // MARK: Live alerts
@@ -950,6 +985,7 @@ final class NavOSSCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneD
   }
 
   private func resetManeuvers() {
+    presentedTripPause = nil
     maneuversByStep = [:]
     laneGuidanceByStep = [:]
     maneuverTripId = nil

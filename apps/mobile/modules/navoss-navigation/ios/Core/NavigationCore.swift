@@ -376,6 +376,29 @@ func navOSSPersistedNavigationDecision(
   return snapshot.matchedCoordinate != nil && snapshot.isPassConfirmed ? .publish : .wait
 }
 
+/// Whether `snapshot` is `fix` accepted on its route: matched on a confirmed pass, within the
+/// off-route distance of the route (not merely not yet confirmed off it), not dead-reckoned,
+/// and the fix accurate enough to place the vehicle (`navigationPoorAccuracyMeters`). A held
+/// fix (the snapshot of an earlier one) or a duplicate does not carry this fix's position and
+/// accuracy, so it never counts.
+func navOSSIsAccurateRematch(_ snapshot: NavigationSnapshot, of fix: NavigationLocationSample)
+  -> Bool
+{
+  guard let accuracy = fix.horizontalAccuracyMeters, accuracy <= navigationPoorAccuracyMeters
+  else {
+    return false
+  }
+  guard let distance = snapshot.distanceFromRouteMeters,
+    distance <= offRouteDistanceThresholdMeters + accuracy
+  else {
+    return false
+  }
+  return snapshot.phase == .tracking && !snapshot.isOffRoute && !snapshot.isDeadReckoning
+    && snapshot.isPassConfirmed && snapshot.matchedCoordinate != nil
+    && snapshot.rawCoordinate == fix.coordinate
+    && snapshot.horizontalAccuracyMeters == accuracy
+}
+
 /// Off the route, this close to the destination, a restored trip that was nearly done had got
 /// there: the route ends on the road nearest the destination, and the car is parked beside it
 /// (the driveway, the car park). Arrival needs a fix within `arrivalDistanceThresholdMeters` of

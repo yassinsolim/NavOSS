@@ -280,6 +280,26 @@ final class NavigationEngine: @unchecked Sendable {
     presentedLocked(navigationSession.currentUpdate())
   }
 
+  /// Why the trip in `update` has no maneuver to show, for CarPlay (`NavOSSCarPlayTripPause`):
+  /// a restored trip finding its place, or one off its route with no guidance since its
+  /// checkpoint. `nil` when there is guidance to show, or no trip under way.
+  func carPlayTripPauseLocked(for update: NavigationSessionUpdate) -> NavOSSCarPlayTripPause? {
+    guard update.trip != nil, update.snapshot.phase == .tracking else {
+      return nil
+    }
+    // Withheld: nothing but the trip is shown, whatever the session computed.
+    if validatesPersistedNavigation {
+      return .locating
+    }
+    guard presentsWithoutCheckpointGuidance, update.guidance == nil else {
+      return nil
+    }
+    guard update.snapshot.isOffRoute else {
+      return .locating
+    }
+    return routeStatus == .rerouting ? .rerouting : .proceedToRoute
+  }
+
   /// `update` as it may be presented (see `presentsWithoutCheckpointGuidance`).
   private func presentedLocked(_ update: NavigationSessionUpdate) -> NavigationSessionUpdate {
     presentsWithoutCheckpointGuidance ? update.withoutGuidance() : update
@@ -606,7 +626,7 @@ final class NavigationEngine: @unchecked Sendable {
     lock.lock()
     do {
       let update = try navigationSession.updateLocation(sample)
-      versionedUpdate = prepareForPublicationLocked(update)
+      versionedUpdate = prepareForPublicationLocked(update, fix: sample)
     } catch {
       lock.unlock()
       throw error
@@ -661,8 +681,10 @@ final class NavigationEngine: @unchecked Sendable {
     tripStore.saveProgress(progress, forTripId: trip.id)
   }
 
+  /// `fix` is the sample `update` came from; `nil` for the clock's dead reckoning.
   private func prepareForPublicationLocked(
-    _ update: NavigationSessionUpdate
+    _ update: NavigationSessionUpdate,
+    fix: NavigationLocationSample? = nil
   ) -> VersionedNavigationUpdate {
     if update.snapshot.phase == .arrived || !update.snapshot.isOffRoute {
       rerouteTask?.cancel()
@@ -675,11 +697,14 @@ final class NavigationEngine: @unchecked Sendable {
     if update.snapshot.phase == .arrived {
       tripStore.clear()
     }
-    // A restored trip presents its checkpoint's guidance only once it is matched again.
+    // A restored trip presents its checkpoint's guidance only once it is matched again: by
+    // this fix, accurate enough to count (`navigationPoorAccuracyMeters`) and accepted on a
+    // confirmed pass. A matched coordinate alone is not that: restored progress lets a poor fix
+    // match within its accuracy, and a held or dead-reckoned update carries an older one.
     let snapshot = update.snapshot
-    if presentsWithoutCheckpointGuidance,
+    if presentsWithoutCheckpointGuidance, let fix,
       snapshot.phase == .arrived
-        || (!snapshot.isOffRoute && snapshot.matchedCoordinate != nil && snapshot.isPassConfirmed)
+        || navOSSIsAccurateRematch(snapshot, of: fix)
     {
       presentsWithoutCheckpointGuidance = false
     }

@@ -114,6 +114,14 @@ drive (`NavigationTripRestoreEngineTests`):
 | Checkpoint on the final leg with at most 500 m left, first accurate fix off the route within 250 m of the destination | Ended                                                                                                                                                     | `restored-trip-arrived`     |
 | The saved trip cannot be read or started again                                                                        | Removed                                                                                                                                                   | `restored-trip-unavailable` |
 
+"Matched again" means an accepted fix of 50 m accuracy or better, on a confirmed pass and
+within the off-route distance of the route, or a new route installed. A poor fix matched
+within its accuracy does not count. While a restored trip has no maneuver to show, it is
+still under way for CarPlay (`NavOSSCarPlayState.tripPause`). The navigation session keeps
+running and follows the vehicle, and reroute proposals are presented. In place of a maneuver,
+CarPlay shows the trip paused for locating ("Finding your place on the route"), rerouting
+("Finding a new route") or proceed to route ("Off route").
+
 The simulator restore harness (`NAVOSS_RESTORE_E2E`, `NavOSSRestoreSimulatorHarness.swift`)
 checks the same through the real `NavOSSNavigationService`; it is run by hand on a simulator.
 

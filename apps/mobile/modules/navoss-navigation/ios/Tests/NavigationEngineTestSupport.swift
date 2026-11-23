@@ -50,6 +50,12 @@ final class RecordingEngineHost: NavigationEngineHost, @unchecked Sendable {
   /// The guidance of every publication, in order (`nil` where it carried none).
   var publishedGuidance: [NavOSSCarPlayGuidance?] { lock.withLock { guidances } }
   private var guidances: [NavOSSCarPlayGuidance?] = []
+  /// What CarPlay is told in place of a maneuver at every publication and acquisition, in
+  /// order, as the iOS service asks the engine (`carPlayTripPauseLocked`). Recorded only once
+  /// `tripPause` is set.
+  var publishedTripPauses: [NavOSSCarPlayTripPause?] { lock.withLock { tripPauses } }
+  private var tripPauses: [NavOSSCarPlayTripPause?] = []
+  var tripPause: ((NavigationSessionUpdate) -> NavOSSCarPlayTripPause?)?
 
   var spoken: [NavigationEngineSpeech] {
     events.compactMap {
@@ -73,9 +79,13 @@ final class RecordingEngineHost: NavigationEngineHost, @unchecked Sendable {
       generation: update.generation, sequence: update.update.snapshot.sequence,
       tripId: update.update.trip?.id)
     let guidance = update.update.guidance
+    let pause = tripPause.map { $0(update.update) }
     return { [weak self] in
       self?.record(event)
-      self?.lock.withLock { self?.guidances.append(guidance) }
+      self?.lock.withLock {
+        self?.guidances.append(guidance)
+        if let pause { self?.tripPauses.append(pause) }
+      }
     }
   }
 
@@ -84,7 +94,11 @@ final class RecordingEngineHost: NavigationEngineHost, @unchecked Sendable {
     _ update: VersionedNavigationUpdate
   ) -> (() -> Void)? {
     let event = Event.restoredTripAcquisition(generation: update.generation, tripId: trip.id)
-    return { [weak self] in self?.record(event) }
+    let pause = tripPause.map { $0(update.update) }
+    return { [weak self] in
+      self?.record(event)
+      if let pause { self?.lock.withLock { self?.tripPauses.append(pause) } }
+    }
   }
 
   func navigationEngineDidClearTrip(generation: UInt64, sequence: Int) {

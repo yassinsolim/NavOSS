@@ -195,6 +195,7 @@ final class NavigationTripRestoreEngineTests: XCTestCase {
         network: network, session: session, clock: { [clock = phone.clock] in clock.now })
       engine.host = host
       engine.companion = companion
+      host.tripPause = { [unowned engine] in engine.carPlayTripPauseLocked(for: $0) }
     }
 
     var state: NavOSSNavigationServiceState { engine.currentState() }
@@ -785,6 +786,89 @@ final class NavigationTripRestoreEngineTests: XCTestCase {
         XCTAssertNotNil(restored.state.guidance, "\(label): guided again")
       }
     }
+  }
+
+  /// Review finding: restored progress lets a poor fix match within its accuracy, so a matched
+  /// coordinate is no proof the trip is back on its route. Restored beside a parallel road 60 m
+  /// away: an 80 m fix (matched, withheld), then accurate fixes on that road. Nothing from the
+  /// checkpoint is presented at any point, in every mode, and the trip departs as any other.
+  func testAPoorFixMatchedAfterARestoreBringsNoCheckpointGuidanceBack() throws {
+    for (mode, network, answers, label) in [
+      (NavOSSRerouteMode.adaptive, false, true, "adaptive, no network"),
+      (.askFirst, true, true, "ask-first, proposal pending"),
+      (.keepRoute, true, false, "keep-route, request pending"),
+    ] {
+      let phone = phone()
+      _ = try driveThenKill(phone, through: 127)
+      let restored = relaunch(
+        phone, at: fixes[128].timestamp! - 0.5, mode: mode, network: network)
+      restored.answersReroutes = answers
+      try restored.fix(beside(128, meters: 60, accuracy: 80))
+      for index in 129..<136 {
+        try restored.fix(beside(index, meters: 60))
+      }
+      XCTAssertNil(restored.endReason, label)
+      XCTAssertTrue(restored.state.navigation.isOffRoute, label)
+      XCTAssertEqual(restored.requests, 1, label)
+      XCTAssertNil(restored.state.guidance, label)
+      XCTAssertNil(
+        restored.engine.lock.withLock { restored.engine.currentUpdateLocked().guidance }, label)
+      XCTAssertTrue(
+        restored.host.publishedGuidance.allSatisfy { $0 == nil }, "\(label): published")
+    }
+  }
+
+  /// "A trip is active" and "there is a maneuver to show" are two facts: CarPlay runs its
+  /// session, follows the vehicle and presents proposals for a restored trip without guidance,
+  /// with the reason in place of the maneuver. Finding its place: locating. Off its route:
+  /// rerouting while a route is fetched, otherwise proceed to the route (a proposal waiting, a
+  /// failed request). Guidance back (a replacement, or matched again): no pause. A mid-trip
+  /// departure keeps its guidance, as on `main`.
+  func testCarPlayIsToldWhyARestoredTripHasNoManeuver() throws {
+    for (mode, network, answers, label) in [
+      (NavOSSRerouteMode.adaptive, false, true, "adaptive, no network"),
+      (.adaptive, true, true, "adaptive"),
+      (.askFirst, true, true, "ask-first, proposal pending"),
+      (.keepRoute, true, false, "keep-route, request pending"),
+    ] {
+      let phone = phone()
+      _ = try driveThenKill(phone, through: 127)
+      let restored = relaunch(
+        phone, at: fixes[128].timestamp! - 0.5, mode: mode, network: network)
+      restored.answersReroutes = answers
+      try restored.fix(beside(128, meters: 100))
+      // The restore and its first fix: finding its place.
+      XCTAssertEqual(restored.host.publishedTripPauses, [.locating, .locating], label)
+      for index in 129..<136 {
+        try restored.fix(beside(index, meters: 100))
+      }
+      let pauses = restored.host.publishedTripPauses
+      let last = try XCTUnwrap(pauses.last, label)
+      switch label {
+      case "adaptive, no network", "ask-first, proposal pending":
+        XCTAssertEqual(last, .proceedToRoute, label)
+        XCTAssertFalse(pauses.contains(nil), "\(label): \(pauses)")
+      case "adaptive":
+        XCTAssertNil(last, "\(label): guided on the replacement")
+        XCTAssertNotNil(restored.host.publishedGuidance.last ?? nil, label)
+      default:
+        XCTAssertEqual(last, .rerouting, label)
+        XCTAssertFalse(pauses.contains(nil), "\(label): \(pauses)")
+        try restored.fix(fixes[150...160])
+        XCTAssertEqual(restored.host.publishedTripPauses.last, .some(nil), "\(label): matched")
+      }
+    }
+    // A mid-trip departure: guidance throughout, nothing in its place.
+    let phone = phone()
+    let driving = process(phone, mode: .askFirst)
+    try driving.start(trip)
+    try driving.fix(fixes[0...127])
+    for index in 128..<136 {
+      try driving.fix(beside(index, meters: 100))
+    }
+    XCTAssertTrue(driving.state.navigation.isOffRoute)
+    XCTAssertTrue(driving.host.publishedTripPauses.allSatisfy { $0 == nil })
+    XCTAssertTrue(driving.host.publishedGuidance.allSatisfy { $0 != nil })
   }
 
   // MARK: Poor fixes before the first match

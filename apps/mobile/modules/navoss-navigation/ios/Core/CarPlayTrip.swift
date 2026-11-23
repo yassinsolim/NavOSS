@@ -739,25 +739,49 @@ public struct NavOSSCarPlayGuidance: Codable, Equatable, Sendable {
   }
 }
 
+/// Why a trip under way has no maneuver to show: CarPlay keeps its navigation session running,
+/// follows the vehicle and presents proposals, with this in place of the maneuver
+/// (`CPTripPauseReason`). Decided by the navigation core
+/// (`NavigationEngine.carPlayTripPauseLocked`), never inferred from missing guidance.
+public enum NavOSSCarPlayTripPause: Equatable, Sendable {
+  /// A restored trip finding its place on the route.
+  case locating
+  /// Off the route, a new route being fetched.
+  case rerouting
+  /// Off the route, no route being fetched: a proposal waiting for the driver, the reroute
+  /// mode keeping the route, or a request that failed and will be retried.
+  case proceedToRoute
+}
+
 public struct NavOSSCarPlayState: Equatable, Sendable {
   public let connected: Bool
   public let guidance: NavOSSCarPlayGuidance?
   public let position: NavOSSCarPlayPosition?
   public let routeProgress: Double
   public let trip: NavOSSCarPlayTrip?
+  /// Set only for a trip under way without guidance; see `NavOSSCarPlayTripPause`.
+  public let tripPause: NavOSSCarPlayTripPause?
 
   public init(
     connected: Bool,
     guidance: NavOSSCarPlayGuidance?,
     position: NavOSSCarPlayPosition? = nil,
     routeProgress: Double = 0,
-    trip: NavOSSCarPlayTrip?
+    trip: NavOSSCarPlayTrip?,
+    tripPause: NavOSSCarPlayTripPause? = nil
   ) {
     self.connected = connected
     self.guidance = guidance
     self.position = position
     self.routeProgress = min(1, max(0, routeProgress.isFinite ? routeProgress : 0))
     self.trip = trip
+    self.tripPause = trip != nil && guidance == nil ? tripPause : nil
+  }
+
+  /// A trip is under way (CarPlay runs its navigation session and follows the vehicle), whether
+  /// or not there is a maneuver to show.
+  public var isNavigating: Bool {
+    guidance?.phase == .navigating || guidance?.phase == .arrived || tripPause != nil
   }
 }
 
@@ -1308,6 +1332,7 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
     guidance: NavOSSCarPlayGuidance?,
     position: NavOSSCarPlayPosition? = nil,
     routeProgress: Double = 0,
+    tripPause: NavOSSCarPlayTripPause? = nil,
     generation: UInt64,
     sequence: Int
   ) {
@@ -1322,7 +1347,8 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
         guidance: guidance,
         position: position,
         routeProgress: routeProgress,
-        trip: trip
+        trip: trip,
+        tripPause: tripPause
       )
     }
   }
@@ -1334,7 +1360,8 @@ public final class NavOSSCarPlayTripStore: @unchecked Sendable {
         guidance: current.guidance,
         position: current.position,
         routeProgress: current.routeProgress,
-        trip: current.trip
+        trip: current.trip,
+        tripPause: current.tripPause
       )
     }
   }

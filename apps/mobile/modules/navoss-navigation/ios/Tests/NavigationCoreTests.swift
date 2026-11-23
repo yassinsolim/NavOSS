@@ -1289,6 +1289,36 @@ final class NavigationCoreTests: XCTestCase {
     XCTAssertEqual(store.snapshot().routeProgress, 0.75)
   }
 
+  /// A trip under way without a maneuver (a restored trip finding its place or off its route)
+  /// is still under way for CarPlay; a trip with neither guidance nor a reason is not, and a
+  /// reason never stands beside guidance or without a trip.
+  func testCarPlayStateTellsATripUnderWayFromAManeuverToShow() {
+    let trip = makeNavigationSessionTrip()
+    let guidance = makeGuidance(distance: 300, duration: 30)
+    XCTAssertTrue(NavOSSCarPlayState(connected: true, guidance: guidance, trip: trip).isNavigating)
+    for pause in [NavOSSCarPlayTripPause.locating, .rerouting, .proceedToRoute] {
+      let state = NavOSSCarPlayState(connected: true, guidance: nil, trip: trip, tripPause: pause)
+      XCTAssertTrue(state.isNavigating)
+      XCTAssertEqual(state.tripPause, pause)
+    }
+    XCTAssertFalse(NavOSSCarPlayState(connected: true, guidance: nil, trip: trip).isNavigating)
+    XCTAssertNil(
+      NavOSSCarPlayState(connected: true, guidance: guidance, trip: trip, tripPause: .rerouting)
+        .tripPause)
+    XCTAssertNil(
+      NavOSSCarPlayState(connected: true, guidance: nil, trip: nil, tripPause: .rerouting)
+        .tripPause)
+
+    let store = NavOSSCarPlayTripStore(notificationCenter: NotificationCenter())
+    store.publishNavigationState(
+      trip: trip, guidance: nil, tripPause: .proceedToRoute, generation: 1, sequence: 1)
+    store.setConnected(true)
+    XCTAssertEqual(store.snapshot().tripPause, .proceedToRoute)
+    XCTAssertTrue(store.snapshot().isNavigating)
+    store.publishNavigationState(trip: trip, guidance: guidance, generation: 1, sequence: 2)
+    XCTAssertNil(store.snapshot().tripPause)
+  }
+
   func testActiveTripStoreExpiresAndClearsTransientRoute() throws {
     let suiteName = "NavOSSActiveTripStoreTests.\(UUID().uuidString)"
     let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

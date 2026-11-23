@@ -467,6 +467,7 @@ public final class NavOSSNavigationService: NSObject, CLLocationManagerDelegate,
       guidance: previousState.guidance,
       position: position,
       routeProgress: previousState.routeProgress,
+      tripPause: previousState.tripPause,
       generation: versionedUpdate.generation,
       sequence: versionedUpdate.update.snapshot.sequence
     )
@@ -882,6 +883,7 @@ extension NavOSSNavigationService: NavigationEngineHost {
     let update = versionedUpdate.update
     let compassHeadingDegrees = latestCompassHeadingDegrees
     let latestCarPlayPosition = latestCarPlayPositionLocked()
+    let tripPause = engine.carPlayTripPauseLocked(for: update)
     return { [weak self] in
       guard let self, let trip = update.trip else { return }
       let speed = self.lock.withLock {
@@ -903,6 +905,7 @@ extension NavOSSNavigationService: NavigationEngineHost {
         guidance: update.guidance,
         position: carPlayPosition,
         routeProgress: update.snapshot.routeProgress,
+        tripPause: tripPause,
         generation: versionedUpdate.generation,
         sequence: update.snapshot.sequence
       )
@@ -914,12 +917,14 @@ extension NavOSSNavigationService: NavigationEngineHost {
     _ versionedUpdate: VersionedNavigationUpdate
   ) -> (() -> Void)? {
     let position = latestCarPlayPositionLocked()
+    let tripPause = engine.carPlayTripPauseLocked(for: versionedUpdate.update)
     return {
       NavOSSCarPlayTripStore.shared.publishNavigationState(
         trip: trip,
         guidance: nil,
         position: position,
         routeProgress: 0,
+        tripPause: tripPause,
         generation: versionedUpdate.generation,
         sequence: versionedUpdate.update.snapshot.sequence
       )
