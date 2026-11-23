@@ -1,25 +1,29 @@
 import { NativeModule, requireNativeModule } from 'expo';
 
+/**
+ * What the loaded native module delivers. iOS reports every navigation flag true; Android reports
+ * them true only when the shared navigation core loaded, and `carPlayTripBridge` false.
+ */
 export interface NativeNavigationCapabilities {
-  arrivalDetection: true;
+  arrivalDetection: boolean;
   backgroundLocation: boolean;
-  carPlayTripBridge: true;
+  carPlayTripBridge: boolean;
   /** Community road reports bridge (`submitCommunityReport` …). Absent on older native builds. */
   communityReports?: true;
   /** "Share traffic speeds" uploader. Absent on older native builds. */
   communityTraffic?: true;
-  courseMatching: true;
-  deadReckoning: true;
-  geometryGuidance: true;
+  courseMatching: boolean;
+  deadReckoning: boolean;
+  geometryGuidance: boolean;
   implementation: 'native-android' | 'native-ios';
-  nativeSafetyCameraAlerts: true;
-  offRouteDetection: true;
-  replayInput: true;
-  rerouteConsent: true;
-  routeContinuity: true;
-  routeMatching: true;
-  safetyCameraAnnouncements: true;
-  speedingWarning: true;
+  nativeSafetyCameraAlerts: boolean;
+  offRouteDetection: boolean;
+  replayInput: boolean;
+  rerouteConsent: boolean;
+  routeContinuity: boolean;
+  routeMatching: boolean;
+  safetyCameraAnnouncements: boolean;
+  speedingWarning: boolean;
   version: 11;
 }
 
@@ -446,7 +450,17 @@ type NavOSSNavigationEvents = {
   onNavigationPreferencesChanged(preferences: NativeNavigationPreferences): void;
   onNavigationSnapshot(snapshot: NativeNavigationSnapshot): void;
   onOfflineStateChanged(state: NativeOfflineState): void;
+  /** Android only: a simulated drive started or ended. */
+  onSimulatedDriveChanged(event: { active: boolean }): void;
 };
+
+/**
+ * Android only: whether this device can follow a moving car. `no-gps`: no GPS receiver (Wi-Fi
+ * positions cannot); `location-off`: turned off in settings; `permission-denied`: precise
+ * location not granted.
+ */
+export type NativeLocationAvailability =
+  'available' | 'location-off' | 'no-gps' | 'permission-denied';
 
 declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents> {
   acceptRerouteProposal(id: string): boolean;
@@ -477,10 +491,14 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   offlineRegionCovers(points: NativeNavigationCoordinate[]): boolean;
   getRecentDestinationIds(): string[];
   getRoutePreferences(): NativeRoutePreferences;
+  /** Android only. */
+  getLocationAvailability?(): NativeLocationAvailability;
   getSnapshot(): NativeNavigationSnapshot;
   isFavoriteDestination(id: string): boolean;
   isCarPlayVisualHarness(): boolean;
   isGooglePlaceRatingAvailable(): boolean;
+  /** Android only: a simulated drive is feeding the trip instead of real fixes. */
+  isSimulatingDrive?(): boolean;
   pauseOfflineRegion(regionId: string): void;
   planOfflineRoutes(request: NativeOfflineRouteRequest): Promise<NativeOfflineRouteResult>;
   recordRecentDestination(destination: NativeNavigationDestination): void;
@@ -505,6 +523,11 @@ declare class NavOSSNavigationModule extends NativeModule<NavOSSNavigationEvents
   setShareTrafficSpeeds(enabled: boolean): void;
   setSpeedingWarning(toleranceKph: number, audible: boolean): void;
   setWorkDestination(destination: NativeNavigationDestination | null): void;
+  /**
+   * Android only: starts `trip` driven along its own geometry at each step's average speed
+   * instead of by real fixes, until it arrives or is cleared. Nothing is uploaded for it.
+   */
+  startSimulatedDrive?(trip: NativeCarPlayTrip): NativeNavigationSnapshot;
   stopAnnouncements(): void;
   submitCommunityReport(
     report: NativeCommunityReportSubmission,

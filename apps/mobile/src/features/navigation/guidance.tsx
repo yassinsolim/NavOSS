@@ -645,6 +645,8 @@ interface TripSheetProps {
   /** The route being driven, for its traffic status. */
   route: Pick<RouteAlternativeV2, 'congestion' | 'traffic'> | undefined;
   routeSource: RouteSource | undefined;
+  /** Android: a simulated drive, not the phone's location, is moving this trip. */
+  simulated?: boolean;
   upcomingManeuvers: readonly UpcomingManeuver[];
 }
 
@@ -668,6 +670,7 @@ export function TripSheet({
   rerouteCount,
   route,
   routeSource,
+  simulated = false,
   upcomingManeuvers,
 }: TripSheetProps) {
   const { colors } = useTheme();
@@ -697,13 +700,15 @@ export function TripSheet({
   const arrival =
     remaining === undefined ? 'No ETA yet' : formatArrivalTime(remaining.durationSeconds);
   const remainingText =
-    remaining === undefined
+    (simulated ? 'Simulation · ' : '') +
+    (remaining === undefined
       ? 'Finding your place on the route'
-      : `${formatDuration(remaining.durationSeconds)} · ${formatDistance(remaining.distanceMeters)}`;
+      : `${formatDuration(remaining.durationSeconds)} · ${formatDistance(remaining.distanceMeters)}`);
   const summaryLabel =
-    remaining === undefined
+    (simulated ? 'Simulated drive. ' : '') +
+    (remaining === undefined
       ? `Navigation status, ${matchStatusLabel}, ${rerouteDetail}, no arrival time yet`
-      : `Navigation status, ${matchStatusLabel}, ${rerouteDetail}, ${cameraDetail}, arrive ${arrival}, ${formatDuration(remaining.durationSeconds)}, ${formatDistance(remaining.distanceMeters)}`;
+      : `Navigation status, ${matchStatusLabel}, ${rerouteDetail}, ${cameraDetail}, arrive ${arrival}, ${formatDuration(remaining.durationSeconds)}, ${formatDistance(remaining.distanceMeters)}`);
 
   return (
     <BottomSheet

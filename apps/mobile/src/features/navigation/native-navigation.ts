@@ -11,8 +11,10 @@ import NavOSSNavigation, {
   type NativeCommunityReport,
   type NativeCommunityReportSubmission,
   type NativeCommunityResult,
+  type NativeCarPlayTrip,
   type NativeCommunityState,
   type NativeDestinationCatalog,
+  type NativeLocationAvailability,
   type NativeNavigationDestination,
   type NativeNavigationAudioMode,
   type NativeVoteObservation,
@@ -278,8 +280,22 @@ export function setNavigationRoute(
   trafficSource?: string,
 ): NativeNavigationSnapshot {
   assertNativeNavigationContract();
+  return NavOSSNavigation.setRoute(
+    nativeTrip(route, destination, preferences, source, traffic, waypoints, trafficSource),
+  );
+}
+
+function nativeTrip(
+  route: RouteAlternativeV2,
+  destination: SearchResult,
+  preferences: RoutePreferences,
+  source?: string,
+  traffic?: NativeTrafficInput,
+  waypoints: SearchResult[] = [],
+  trafficSource?: string,
+): NativeCarPlayTrip {
   const coordinate = ([longitude, latitude]: [number, number]) => ({ latitude, longitude });
-  return NavOSSNavigation.setRoute({
+  return {
     destination: nativeDestination(destination),
     distanceMeters: route.distanceMeters,
     durationSeconds: route.durationSeconds,
@@ -312,6 +328,88 @@ export function setNavigationRoute(
     ...(waypoints.length === 0
       ? {}
       : { waypoints: waypoints.map((waypoint) => nativeDestination(waypoint)) }),
+  };
+}
+
+/** Whether the native module can give turn-by-turn guidance (Android: the core loaded). */
+export function isNativeGuidanceAvailable(): boolean {
+  return NavOSSNavigation.getCapabilities().routeMatching;
+}
+
+/** Android only; iOS owns location without this check and always answers `available`. */
+export function getLocationAvailability(): NativeLocationAvailability {
+  return NavOSSNavigation.getLocationAvailability?.() ?? 'available';
+}
+
+/**
+ * Why Start cannot begin live guidance on this device, or `undefined` when it can. Android
+ * only: iOS always starts.
+ */
+export function liveGuidanceRefusal(): { message: string; title: string } | undefined {
+  if (NavOSSNavigation.getLocationAvailability === undefined) return undefined;
+  if (!isNativeGuidanceAvailable()) {
+    return {
+      message: 'This build of NavOSS cannot give turn-by-turn guidance on this device.',
+      title: 'Guidance unavailable',
+    };
+  }
+  switch (getLocationAvailability()) {
+    case 'available':
+      return undefined;
+    case 'no-gps':
+      return {
+        message:
+          'This device has no GPS, so NavOSS cannot follow your drive. Use Simulate drive to see how guidance works.',
+        title: 'No GPS on this device',
+      };
+    case 'location-off':
+      return {
+        message: 'Turn on Location in system settings, then start again.',
+        title: 'Location is off',
+      };
+    case 'permission-denied':
+      return {
+        message: 'Allow NavOSS to use your precise location in system settings, then start again.',
+        title: 'Location not allowed',
+      };
+  }
+}
+
+/**
+ * Android only: Simulate drive is offered where no location provider can follow a drive, and
+ * in development builds.
+ */
+export function canSimulateDrive(): boolean {
+  if (NavOSSNavigation.startSimulatedDrive === undefined || !isNativeGuidanceAvailable()) {
+    return false;
+  }
+  return __DEV__ || getLocationAvailability() !== 'available';
+}
+
+/** Starts a clearly labelled simulated drive of `route`; real fixes are ignored meanwhile. */
+export function startSimulatedDrive(
+  route: RouteAlternativeV2,
+  destination: SearchResult,
+  preferences: RoutePreferences,
+  source?: string,
+  waypoints: SearchResult[] = [],
+): NativeNavigationSnapshot {
+  assertNativeNavigationContract();
+  const snapshot = NavOSSNavigation.startSimulatedDrive?.(
+    nativeTrip(route, destination, preferences, source, undefined, waypoints),
+  );
+  if (snapshot === undefined)
+    throw new Error('Simulated drives are not available on this platform.');
+  return snapshot;
+}
+
+export function isSimulatingDrive(): boolean {
+  return NavOSSNavigation.isSimulatingDrive?.() ?? false;
+}
+
+export function observeSimulatedDrive(listener: (active: boolean) => void) {
+  return NavOSSNavigation.addListener('onSimulatedDriveChanged', (event) => {
+    listener(event.active);
   });
 }
 

@@ -123,6 +123,12 @@ import {
   toggleFavoriteDestination,
 } from '@/features/navigation/native-navigation';
 import {
+  canSimulateDrive,
+  liveGuidanceRefusal,
+  startSimulatedDrive,
+} from '@/features/navigation/native-navigation';
+import { useSimulatedDrive } from '@/features/navigation/use-simulated-drive';
+import {
   DEFAULT_GUIDANCE_SETTINGS,
   type GuidanceSettings,
   guidanceSettingsFromNative,
@@ -1058,6 +1064,12 @@ export function useMapController() {
     ) {
       return;
     }
+    // Android: say plainly why live guidance cannot start instead of waiting for a fix.
+    const refusal = liveGuidanceRefusal();
+    if (refusal !== undefined) {
+      showNotice({ ...refusal, tone: 'warning' });
+      return;
+    }
     cameraAlerts.reset();
     resetTrip();
     setPreviewDetent(undefined);
@@ -1083,6 +1095,32 @@ export function useMapController() {
       waypoints: routeState.waypoints,
     });
     haptics.success();
+  };
+
+  const simulatedDrive = useSimulatedDrive();
+
+  /** Android: drives the selected route without GPS, labelled as a simulation throughout. */
+  const handleSimulateDrive = () => {
+    if (routeState.type !== 'preview' || selectedRoute === undefined) return;
+    cameraAlerts.reset();
+    resetTrip();
+    setPreviewDetent(undefined);
+    session.adoptSnapshot(
+      startSimulatedDrive(
+        selectedRoute,
+        routeState.destination,
+        planner.routePreferences,
+        planner.routeSource?.id,
+        routeState.waypoints,
+      ),
+    );
+    setRouteState({
+      destination: routeState.destination,
+      route: selectedRoute,
+      routes: routeState.routes,
+      type: 'navigating',
+      waypoints: routeState.waypoints,
+    });
   };
 
   const handleShareEta = () => {
@@ -1736,6 +1774,8 @@ export function useMapController() {
     onSelectRoute: handleSelectRoute,
     onSelectTab: handleSelectTab,
     onShareEta: handleShareEta,
+    onSimulateDrive: canSimulateDrive() ? handleSimulateDrive : undefined,
+    simulatedDrive,
     onSharePlace: handleSharePlace,
     onShortcutPress: handleShortcutPress,
     onStartNavigation: handleStartNavigation,

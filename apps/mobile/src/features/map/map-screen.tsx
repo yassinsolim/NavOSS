@@ -362,6 +362,7 @@ export function MapScreen() {
           onDetentChange={route.onPreviewDetentChange}
           onEditStops={c.routeStops.open}
           onSelectRoute={c.onSelectRoute}
+          onSimulateDrive={c.onSimulateDrive}
           onStart={c.onStartNavigation}
           onToggleRoutePreference={c.onToggleRoutePreference}
           onUseCurrentLocation={c.onUseCurrentLocation}
@@ -394,6 +395,7 @@ export function MapScreen() {
           rerouteCount={guidance.rerouteCount}
           route={route.selectedRoute}
           routeSource={route.source}
+          simulated={c.simulatedDrive}
           upcomingManeuvers={guidance.upcomingManeuvers ?? []}
         />
       )}

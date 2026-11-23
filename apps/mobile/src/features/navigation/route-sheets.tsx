@@ -185,6 +185,8 @@ interface RoutePreviewSheetProps {
   metrics: ScreenMetrics;
   onCancel: () => void;
   onDetentChange?: (index: number) => void;
+  /** Android, where no location provider can follow a drive (and development builds). */
+  onSimulateDrive?: () => void;
   onEditStops: () => void;
   onSelectRoute: (route: RouteAlternativeV2) => void;
   onStart: () => void;
@@ -217,6 +219,7 @@ export function RoutePreviewSheet({
   onDetentChange,
   onEditStops,
   onSelectRoute,
+  onSimulateDrive,
   onStart,
   onToggleRoutePreference,
   onUseCurrentLocation,
@@ -312,6 +315,17 @@ export function RoutePreviewSheet({
             >
               <Banner
                 message={`Preview starts at ${previewOriginLabel}. Live guidance always uses your real location.`}
+              />
+            </View>
+          )}
+          {onSimulateDrive !== undefined && (
+            <View style={styles.inset}>
+              <Button
+                accessibilityHint="Drives this route on the map with spoken guidance, without GPS. Your location is not used."
+                icon={{ android: 'play_arrow', ios: 'play.fill' }}
+                label="Simulate drive"
+                onPress={onSimulateDrive}
+                variant="tonal"
               />
             </View>
           )}
