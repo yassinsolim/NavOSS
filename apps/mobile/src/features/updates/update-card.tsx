@@ -69,7 +69,7 @@ export function UpdateCard({
     case 'installing':
       title = `Installing NavOSS ${update.versionName}`;
       message =
-        'NavOSS checked the download. Confirm the update in the Android prompt; NavOSS closes while it installs.';
+        'NavOSS checks the download first. Then confirm the update when Android asks; NavOSS closes while it installs.';
       break;
     case 'needs-permission':
       title = 'Allow NavOSS to install updates';

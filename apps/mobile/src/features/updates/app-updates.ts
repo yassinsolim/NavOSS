@@ -191,7 +191,8 @@ export function createAppUpdates(dependencies: AppUpdatesDependencies): AppUpdat
       setPhase({ kind: 'idle' });
     }
     // An offer shows its own card; the message is for every other outcome.
-    if (manual) update({ lastCheckMessage: code === 'update' ? undefined : checkResultMessage(code) });
+    if (manual)
+      update({ lastCheckMessage: code === 'update' ? undefined : checkResultMessage(code) });
   }
 
   async function downloadAndInstall(target: AvailableUpdate): Promise<void> {
