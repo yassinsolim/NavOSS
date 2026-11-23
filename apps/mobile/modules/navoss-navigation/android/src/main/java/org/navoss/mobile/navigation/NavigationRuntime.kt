@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import java.io.File
@@ -62,9 +63,9 @@ class NavigationRuntime private constructor(
     apiBaseUrl ?: "",
     executor = Executors.newCachedThreadPool { Thread(it, "NavOSSNavigationHttp").apply { isDaemon = true } },
     timer = Executors.newSingleThreadScheduledExecutor { Thread(it, "NavOSSNavigationHttpTimer").apply { isDaemon = true } },
-    complete = { id, response -> engine.completeHttpRequest(id, response) },
+    complete = { id, response -> outOfMemory.run { engine.completeHttpRequest(id, response) } },
   )
-  private val clock = NavigationClock(HandlerTicker(handler), ::isCurrentGeneration) { engine.clockTick() }
+  private val clock = NavigationClock(HandlerTicker(handler), ::isCurrentGeneration) { outOfMemory.run { engine.clockTick() } }
   private lateinit var speech: GuidanceSpeech
   private val synthesizer = AndroidSpeechSynthesizer(
     this.context,
@@ -79,6 +80,14 @@ class NavigationRuntime private constructor(
   internal val notification = TripNotification(this.context)
 
   private var serviceRequested = false
+
+  /** Why the host stopped the last trip on its own (`out-of-memory`), until the next trip starts. */
+  @Volatile private var guidanceStopped: String? = null
+  private val outOfMemory = OutOfMemoryStop(
+    stopHost = { onNavigationThread(::stopTripForOutOfMemory) },
+    clearTrip = { engine.clearRoute() },
+    announce = { onNavigationThread(::announceOutOfMemoryStop) },
+  )
   private var simulation: DriveSimulation? = null
   private var simulationTick: Runnable? = null
 
@@ -117,10 +126,16 @@ class NavigationRuntime private constructor(
     val speechAvailable: Boolean,
     /** `false` while the active trip is not on disk: it would not be restored if the app closed. */
     val tripSaved: Boolean,
+    /** Why the host ended the last trip on its own (`out-of-memory`); `null` once a new trip starts. */
+    val guidanceStopped: String? = null,
   )
 
   val hostStatus: HostStatus
-    get() = HostStatus(speechAvailable = synthesizer.isAvailable, tripSaved = storage.isDurable)
+    get() = HostStatus(
+      speechAvailable = synthesizer.isAvailable,
+      tripSaved = storage.isDurable,
+      guidanceStopped = guidanceStopped,
+    )
 
   fun addHostStatusListener(listener: (HostStatus) -> Unit) = hostStatusListeners.add(listener)
 
@@ -171,6 +186,7 @@ class NavigationRuntime private constructor(
   fun setRoute(tripJson: String): String {
     if (isSimulating) handler.post { stopSimulation() }
     setSimulating(false)
+    clearGuidanceStopped()
     return engine.setRoute(tripJson)
   }
 
@@ -182,6 +198,7 @@ class NavigationRuntime private constructor(
       null
     } ?: throw NavigationEngineException("invalid-route", "This route cannot be simulated.")
     setSimulating(true)
+    clearGuidanceStopped()
     val snapshot = try {
       engine.setRoute(tripJson)
     } catch (error: RuntimeException) {
@@ -196,7 +213,8 @@ class NavigationRuntime private constructor(
     if (isSimulating) {
       throw NavigationEngineException("simulation-active", "A simulated drive is running; real fixes are ignored.")
     }
-    return engine.updateLocation(sampleJson)
+    return outOfMemory.run { engine.updateLocation(sampleJson) }
+      ?: throw NavigationEngineException(CoreNavigationEngine.OUT_OF_MEMORY, OUT_OF_MEMORY_MESSAGE)
   }
 
   fun stopAnnouncements() {
@@ -263,7 +281,7 @@ class NavigationRuntime private constructor(
   }
 
   override fun startClock(generation: Long) {
-    handler.post { clock.start(generation) }
+    handler.post { if (guidanceStopped == null) clock.start(generation) }
   }
 
   override fun stopClock(generation: Long) {
@@ -290,6 +308,8 @@ class NavigationRuntime private constructor(
   private fun hasActiveTrip(): Boolean = parse(engine.snapshot())?.let { it.has("trip") && !it.isNull("trip") } == true
 
   private fun startTripLocation() {
+    // A trip the host stopped for lack of memory is not driven again, even if clearing it failed.
+    if (guidanceStopped != null) return
     if (!isSimulating && !location.start()) {
       Log.w(LOG_TAG, "trip location unavailable: ${location.availability().raw}")
       return
@@ -329,7 +349,7 @@ class NavigationRuntime private constructor(
     if (isSimulating) return
     val sample = fixFilter.accept(fix, System.currentTimeMillis()) ?: return
     try {
-      engine.updateLocation(sample)
+      outOfMemory.run { engine.updateLocation(sample) }
     } catch (_: NavigationEngineException) {
       // No active trip any more, or the core refused this fix; the next fix tries again.
     }
@@ -348,7 +368,8 @@ class NavigationRuntime private constructor(
         lastTick = now
         val phase = sample?.let {
           try {
-            JSONObject(engine.updateLocation(it)).optString("phase")
+            val snapshot = outOfMemory.run { engine.updateLocation(it) } ?: return
+            JSONObject(snapshot).optString("phase")
           } catch (_: RuntimeException) {
             null
           }
@@ -381,6 +402,32 @@ class NavigationRuntime private constructor(
     simulationListeners.forEach { it(value) }
     // A running service is promoted again with the type the new trip needs.
     handler.post { if (serviceRequested) startService() }
+  }
+
+  private fun onNavigationThread(body: () -> Unit) {
+    if (Looper.myLooper() == thread.looper) body() else handler.post(body)
+  }
+
+  private fun stopTripForOutOfMemory() {
+    guidanceStopped = CoreNavigationEngine.OUT_OF_MEMORY
+    Log.e(LOG_TAG, "guidance stopped: out-of-memory")
+    speech.stopAll()
+    clock.shutdown()
+    stopTripLocation()
+  }
+
+  private fun announceOutOfMemoryStop() {
+    notification.showStopped(OUT_OF_MEMORY_MESSAGE)
+    publishHostStatus()
+  }
+
+  private fun clearGuidanceStopped() {
+    if (guidanceStopped == null) return
+    guidanceStopped = null
+    handler.post {
+      notification.cancelStopped()
+      publishHostStatus()
+    }
   }
 
   private fun createConfig(): String {
@@ -431,6 +478,7 @@ class NavigationRuntime private constructor(
     const val MODULE_CONTRACT_VERSION = 11
     const val API_URL_META_DATA = "org.navoss.mobile.API_URL"
     private const val SIMULATION_TICK_MS = 1_000L
+    internal const val OUT_OF_MEMORY_MESSAGE = "Guidance stopped because the phone ran out of memory."
 
     @Volatile private var instance: NavigationRuntime? = null
 

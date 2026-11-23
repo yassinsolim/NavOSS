@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../modules/navoss-navigation/index.js', () => ({ default: {} }));
 
 import {
+  hostStopNotice,
   routeFromNativeTrip,
   routeSourceForNativeTrip,
   selectedRouteOf,
@@ -197,5 +198,18 @@ describe('trip end notice', () => {
       title: 'Trip ended',
       untilDismissed: true,
     });
+  });
+});
+
+describe('host stop notice', () => {
+  it('says guidance stopped when the phone ran out of memory, until dismissed', () => {
+    expect(hostStopNotice('out-of-memory')).toEqual({
+      message: 'Guidance stopped because the phone ran out of memory.',
+      title: 'Trip ended',
+      tone: 'warning',
+      untilDismissed: true,
+    });
+    expect(hostStopNotice(null)).toBeUndefined();
+    expect(hostStopNotice(undefined)).toBeUndefined();
   });
 });

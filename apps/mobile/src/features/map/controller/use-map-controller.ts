@@ -159,6 +159,7 @@ import {
   getUpcomingManeuvers,
 } from '@/features/navigation/route-progress';
 import {
+  hostStopNotice,
   type RoutePreviewOrigin,
   selectedRouteOf,
   tripEndNotice,
@@ -1174,6 +1175,16 @@ export function useMapController() {
 
   const simulatedDrive = useSimulatedDrive();
   const hostStatus = useHostStatus();
+  // Android: the native host ended the trip because the core ran out of memory. Shown when it
+  // happens and again on a later mount while no new trip has started (the driver may have been
+  // away from the app); it stays until dismissed.
+  const showHostStopNotice = useEffectEvent((reason: typeof hostStatus.guidanceStopped) => {
+    const stopped = hostStopNotice(reason);
+    if (stopped !== undefined) showNotice(stopped);
+  });
+  useEffect(() => {
+    showHostStopNotice(hostStatus.guidanceStopped);
+  }, [hostStatus.guidanceStopped]);
 
   /** Android: drives the selected route without GPS, labelled as a simulation throughout. */
   const handleSimulateDrive = () => {

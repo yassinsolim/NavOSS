@@ -252,3 +252,20 @@ export function tripEndNotice(
     untilDismissed: platform === 'android',
   };
 }
+
+/**
+ * Android only: what the phone says when the native host ended a trip on its own because the
+ * navigation core ran out of memory. Guidance would otherwise go silent; the notice stays until
+ * it is dismissed.
+ */
+export function hostStopNotice(
+  reason: 'out-of-memory' | null | undefined,
+): { message: string; title: string; tone: 'warning'; untilDismissed: true } | undefined {
+  if (reason !== 'out-of-memory') return undefined;
+  return {
+    message: 'Guidance stopped because the phone ran out of memory.',
+    title: 'Trip ended',
+    tone: 'warning',
+    untilDismissed: true,
+  };
+}

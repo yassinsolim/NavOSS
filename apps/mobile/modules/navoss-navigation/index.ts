@@ -469,6 +469,11 @@ export interface NativeHostStatus {
   speechAvailable: boolean;
   /** `false` while the active trip is not saved on the device: it would not survive the app closing. */
   tripSaved: boolean;
+  /**
+   * Why the host ended the last trip on its own (`out-of-memory`: the core refused a call for lack
+   * of memory, so guidance was stopped rather than left silent); `null` once a new trip starts.
+   */
+  guidanceStopped?: 'out-of-memory' | null;
 }
 
 /**

@@ -97,6 +97,33 @@ internal class TripNotification(private val context: Context) {
     shown = null
   }
 
+  /** Tells the driver the host ended the trip on its own; dismissable, replaced by the next trip. */
+  fun showStopped(text: String) {
+    ensureChannel()
+    val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      Notification.Builder(context, CHANNEL_ID)
+    } else {
+      @Suppress("DEPRECATION")
+      Notification.Builder(context).setPriority(Notification.PRIORITY_LOW)
+    }
+    builder
+      .setSmallIcon(R.drawable.navoss_navigation_notification)
+      .setContentTitle("Trip ended")
+      .setContentText(text)
+      .setStyle(Notification.BigTextStyle().bigText(text))
+      .setAutoCancel(true)
+      .setCategory(Notification.CATEGORY_NAVIGATION)
+      .setVisibility(Notification.VISIBILITY_PUBLIC)
+    context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
+      builder.setContentIntent(PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+    }
+    manager.notify(STOPPED_NOTIFICATION_ID, builder.build())
+  }
+
+  fun cancelStopped() {
+    manager.cancel(STOPPED_NOTIFICATION_ID)
+  }
+
   private fun ensureChannel() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     if (manager.getNotificationChannel(CHANNEL_ID) != null) return
@@ -112,5 +139,6 @@ internal class TripNotification(private val context: Context) {
   companion object {
     const val CHANNEL_ID = "org.navoss.mobile.navigation"
     const val NOTIFICATION_ID = 0x4e41
+    const val STOPPED_NOTIFICATION_ID = 0x4e42
   }
 }

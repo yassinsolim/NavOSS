@@ -81,7 +81,11 @@ class NavOSSNavigationModule : Module() {
   }
 
   private fun hostStatusPayload(status: NavigationRuntime.HostStatus) =
-    mapOf("speechAvailable" to status.speechAvailable, "tripSaved" to status.tripSaved)
+    mapOf(
+      "speechAvailable" to status.speechAvailable,
+      "tripSaved" to status.tripSaved,
+      "guidanceStopped" to status.guidanceStopped,
+    )
 
   override fun definition() = ModuleDefinition {
     Name("NavOSSNavigation")
