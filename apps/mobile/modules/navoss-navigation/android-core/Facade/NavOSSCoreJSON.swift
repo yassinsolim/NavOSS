@@ -445,6 +445,9 @@ func navOSSCoreSnapshot(_ state: NavOSSNavigationServiceState) -> NavOSSCoreJSON
   if state.isAcquiringPosition {
     payload["isAcquiringPosition"] = .bool(true)
   }
+  if let tripPause = state.tripPause {
+    payload["tripPause"] = .string(tripPause.rawValue)
+  }
   if let speedMetersPerSecond = snapshot.speedMetersPerSecond {
     payload["speedMetersPerSecond"] = .double(speedMetersPerSecond)
   }

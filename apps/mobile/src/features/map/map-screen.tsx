@@ -164,8 +164,8 @@ export function MapScreen() {
     guidance.step !== undefined &&
     guidance.remainingRoute !== undefined &&
     guidance.remainingStep !== undefined;
-  // A trip restored off its route has no step until it is matched again; it keeps its panel.
-  const tripPanel = guidanceReady || guidance.vehicleMatchStatus === 'off-route';
+  // A trip the core paused (no maneuver, `tripPause`) has no step; it keeps its panel.
+  const tripPanel = guidanceReady || guidance.tripPaused;
   const cameraAlertHeight = navigating && c.cameraAlert !== undefined ? CAMERA_ALERT_HEIGHT : 0;
   const rerouteCardHeight = guidance.rerouteProposal === undefined ? 0 : REROUTE_CARD_HEIGHT;
   const reportAheadHeight =

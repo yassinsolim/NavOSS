@@ -1548,15 +1548,14 @@ public enum NavOSSCarPlayPreviewResumeAction: Equatable, Sendable {
   case discard
 }
 
+/// `isTripUnderWay`: `NavOSSCarPlayState.isTripUnderWay` (guided, or paused without a maneuver).
 public func navOSSCarPlayPreviewResumeAction(
   isPreviewing: Bool,
   previewReplacesActiveTrip: Bool,
-  guidancePhase: NavOSSCarPlayGuidancePhase?
+  isTripUnderWay: Bool
 ) -> NavOSSCarPlayPreviewResumeAction {
   guard isPreviewing else { return .none }
-  if guidancePhase == .navigating, !previewReplacesActiveTrip { return .discard }
-  if guidancePhase != .navigating, previewReplacesActiveTrip { return .discard }
-  return .keep
+  return isTripUnderWay == previewReplacesActiveTrip ? .keep : .discard
 }
 
 extension String {

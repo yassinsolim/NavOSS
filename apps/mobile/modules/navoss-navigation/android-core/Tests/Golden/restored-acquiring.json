@@ -2203,5 +2203,6 @@
         "spokenInstruction" : "You have arrived at your destination."
       }
     ]
-  }
+  },
+  "tripPause" : "locating"
 }

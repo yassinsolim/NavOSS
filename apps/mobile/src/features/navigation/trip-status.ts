@@ -15,19 +15,18 @@ export function isResumingTrip(snapshot: MatchSnapshot | undefined): boolean {
   return snapshot?.isAcquiringPosition === true;
 }
 
-type GuidanceSnapshot = MatchSnapshot & Pick<NativeNavigationSnapshot, 'guidance' | 'phase'>;
+type PauseSnapshot = MatchSnapshot & Pick<NativeNavigationSnapshot, 'tripPause'>;
 
 /**
- * Whether the phone derives no step, lanes, remaining distance or estimate from the route: a
- * restored trip still finding its place, or one restored off its route and not matched since.
- * The core sends no guidance for the latter until it is matched again, because the step it was
- * saved on may be behind the vehicle; the phone shows it off route, with End and the reroute
+ * Whether the phone derives no step, lanes, remaining distance or estimate from the route: the
+ * core says the trip under way has no maneuver (`tripPause`): a restored trip still finding its
+ * place, or one restored off its route and not matched since (the step it was saved on may be
+ * behind the vehicle). The phone then shows the trip with End, and off route the reroute
  * controls. A trip that leaves its route mid-drive keeps its guidance and is unaffected.
  */
-export function hasNoRouteGuidance(snapshot: GuidanceSnapshot | undefined): boolean {
+export function hasNoRouteGuidance(snapshot: PauseSnapshot | undefined): boolean {
   if (snapshot === undefined) return false;
-  if (isResumingTrip(snapshot)) return true;
-  return snapshot.phase === 'tracking' && snapshot.isOffRoute && snapshot.guidance === undefined;
+  return isResumingTrip(snapshot) || snapshot.tripPause !== undefined;
 }
 
 /**

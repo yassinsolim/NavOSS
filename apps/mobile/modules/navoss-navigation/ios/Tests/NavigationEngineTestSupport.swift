@@ -51,11 +51,14 @@ final class RecordingEngineHost: NavigationEngineHost, @unchecked Sendable {
   var publishedGuidance: [NavOSSCarPlayGuidance?] { lock.withLock { guidances } }
   private var guidances: [NavOSSCarPlayGuidance?] = []
   /// What CarPlay is told in place of a maneuver at every publication and acquisition, in
-  /// order, as the iOS service asks the engine (`carPlayTripPauseLocked`). Recorded only once
+  /// order, as the iOS service asks the engine (`tripPauseLocked`). Recorded only once
   /// `tripPause` is set.
   var publishedTripPauses: [NavOSSCarPlayTripPause?] { lock.withLock { tripPauses } }
   private var tripPauses: [NavOSSCarPlayTripPause?] = []
-  var tripPause: ((NavigationSessionUpdate) -> NavOSSCarPlayTripPause?)?
+  /// The same, at every `navigationEngineStateDidChange`, as the iOS service stores it.
+  var tripPausesAtStateChange: [NavOSSCarPlayTripPause?] { lock.withLock { stateChangePauses } }
+  private var stateChangePauses: [NavOSSCarPlayTripPause?] = []
+  var tripPause: (() -> NavOSSCarPlayTripPause?)?
 
   var spoken: [NavigationEngineSpeech] {
     events.compactMap {
@@ -79,7 +82,7 @@ final class RecordingEngineHost: NavigationEngineHost, @unchecked Sendable {
       generation: update.generation, sequence: update.update.snapshot.sequence,
       tripId: update.update.trip?.id)
     let guidance = update.update.guidance
-    let pause = tripPause.map { $0(update.update) }
+    let pause = tripPause.map { $0() }
     return { [weak self] in
       self?.record(event)
       self?.lock.withLock {
@@ -94,7 +97,7 @@ final class RecordingEngineHost: NavigationEngineHost, @unchecked Sendable {
     _ update: VersionedNavigationUpdate
   ) -> (() -> Void)? {
     let event = Event.restoredTripAcquisition(generation: update.generation, tripId: trip.id)
-    let pause = tripPause.map { $0(update.update) }
+    let pause = tripPause.map { $0() }
     return { [weak self] in
       self?.record(event)
       if let pause { self?.lock.withLock { self?.tripPauses.append(pause) } }
@@ -107,6 +110,9 @@ final class RecordingEngineHost: NavigationEngineHost, @unchecked Sendable {
 
   func navigationEngineStateDidChange() {
     record(.stateDidChange)
+    if let pause = tripPause.map({ $0() }) {
+      lock.withLock { stateChangePauses.append(pause) }
+    }
     onStateDidChange?()
   }
 

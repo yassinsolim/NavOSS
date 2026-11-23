@@ -883,7 +883,7 @@ extension NavOSSNavigationService: NavigationEngineHost {
     let update = versionedUpdate.update
     let compassHeadingDegrees = latestCompassHeadingDegrees
     let latestCarPlayPosition = latestCarPlayPositionLocked()
-    let tripPause = engine.carPlayTripPauseLocked(for: update)
+    let tripPause = engine.tripPauseLocked
     return { [weak self] in
       guard let self, let trip = update.trip else { return }
       let speed = self.lock.withLock {
@@ -917,7 +917,7 @@ extension NavOSSNavigationService: NavigationEngineHost {
     _ versionedUpdate: VersionedNavigationUpdate
   ) -> (() -> Void)? {
     let position = latestCarPlayPositionLocked()
-    let tripPause = engine.carPlayTripPauseLocked(for: versionedUpdate.update)
+    let tripPause = engine.tripPauseLocked
     return {
       NavOSSCarPlayTripStore.shared.publishNavigationState(
         trip: trip,
@@ -936,6 +936,12 @@ extension NavOSSNavigationService: NavigationEngineHost {
   }
 
   func navigationEngineStateDidChange() {
+    // A reroute status change without a fix (a request started or failed, a proposal offered
+    // or withdrawn) can change why the trip has no maneuver; CarPlay must not keep the old one.
+    let (tripId, tripPause) = lock.withLock { (engine.tripLocked?.id, engine.tripPauseLocked) }
+    if let tripId {
+      NavOSSCarPlayTripStore.shared.publishTripPause(tripPause, forTripId: tripId)
+    }
     notificationCenter.post(name: .navOSSNavigationSnapshotDidChange, object: self)
   }
 

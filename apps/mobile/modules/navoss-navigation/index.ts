@@ -234,6 +234,13 @@ export interface NativeNavigationSnapshot {
    * matched position, road or speed limit. Guidance resumes with the first snapshot without it.
    */
   isAcquiringPosition?: boolean;
+  /**
+   * Why the trip under way has no maneuver to show, decided by the navigation core: a restored
+   * trip finding its place (`locating`), or one off its route with no guidance since it was saved
+   * (`rerouting` while a route is fetched, otherwise `proceed-to-route`). Absent while there is a
+   * maneuver, and without a trip. Nothing about the trip is derived from the route while present.
+   */
+  tripPause?: 'locating' | 'proceed-to-route' | 'rerouting';
   /** The matched position is extrapolated along the route through a short gap in fixes. */
   isDeadReckoning?: boolean;
   isOffRoute: boolean;

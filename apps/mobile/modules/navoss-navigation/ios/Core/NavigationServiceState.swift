@@ -39,6 +39,10 @@ struct NavOSSNavigationServiceState: Sendable {
   let trip: NavOSSCarPlayTrip?
   /// Why the last trip ended without the driver ending it; `nil` while a trip is active.
   let tripEndReason: NavOSSTripEndReason?
+  /// Why the trip under way has no maneuver to show (`NavigationEngine.tripPauseLocked`); `nil`
+  /// with a maneuver, or without a trip. Every surface reads "a trip with a maneuver", "a trip
+  /// paused" and "no trip" from `trip` and this, never from missing guidance.
+  var tripPause: NavOSSCarPlayTripPause? = nil
 
   /// The state of a restored trip before a fix is matched on a known pass: the trip and the
   /// latest raw position, and nothing taken from where the trip was saved or from a fix that is
@@ -71,7 +75,8 @@ struct NavOSSNavigationServiceState: Sendable {
       speedingState: .unknown,
       stateVersion: stateVersion,
       trip: trip,
-      tripEndReason: nil
+      tripEndReason: nil,
+      tripPause: .locating
     )
   }
 }
