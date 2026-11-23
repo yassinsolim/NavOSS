@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolation,
@@ -81,6 +81,10 @@ export function ModalSheet({
           onDismiss={() => {
             setRendered(false);
             if (visible) onClose();
+            // React Native calls Modal's onDismiss on iOS only; elsewhere the sheet leaving the
+            // screen is the end of the modal, so a sheet that leads to another (a road event's
+            // details) still opens it.
+            if (Platform.OS !== 'ios') onClosed?.();
           }}
           position={position}
           ref={sheetRef}
