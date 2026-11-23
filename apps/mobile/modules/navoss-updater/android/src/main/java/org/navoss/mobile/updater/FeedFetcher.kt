@@ -28,12 +28,19 @@ class FeedFetcher(
   },
   private val maxBytes: Int = MAX_FEED_BYTES,
   private val deadlineMillis: Long = 30_000,
-  private val clock: () -> Long = System::currentTimeMillis,
+  /** Monotonic milliseconds; wall-clock changes cannot stretch or cut the deadline. */
+  private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
   private val policy: HostPolicy = HostPolicy.FEED,
 ) {
   /** Throws [DownloadException] with `invalid`, `network`, `redirect` or `too-large`. */
   fun fetch(url: String): FeedResponse {
-    val started = clock()
+    // One deadline for every redirect hop, connect, headers and body.
+    val deadline = clock() + deadlineMillis
+    fun remaining(): Int {
+      val left = deadline - clock()
+      if (left <= 0) throw DownloadException("network", "Too slow")
+      return left.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    }
     val parsed =
       try {
         URL(url)
@@ -42,13 +49,15 @@ class FeedFetcher(
       }
     val connection =
       UpdateHttp.open(parsed, policy, openConnection) { hop ->
-        hop.connectTimeout = 15_000
-        hop.readTimeout = 15_000
+        val left = remaining()
+        hop.connectTimeout = left
+        hop.readTimeout = left
         hop.useCaches = false
         hop.setRequestProperty("Accept", "application/vnd.github+json")
       }
     try {
       val status = connection.responseCode
+      remaining()
       if (status != HttpURLConnection.HTTP_OK) return FeedResponse(status, null)
       if (connection.contentLengthLong > maxBytes) {
         throw DownloadException("too-large", "Announced too large")
@@ -61,9 +70,10 @@ class FeedFetcher(
           if (read < 0) break
           if (body.size() + read > maxBytes) throw DownloadException("too-large", "Too large")
           body.write(buffer, 0, read)
-          if (clock() - started > deadlineMillis) throw DownloadException("network", "Too slow")
+          remaining()
         }
       }
+      remaining()
       return FeedResponse(status, body.toString(Charsets.UTF_8.name()))
     } catch (error: DownloadException) {
       throw error

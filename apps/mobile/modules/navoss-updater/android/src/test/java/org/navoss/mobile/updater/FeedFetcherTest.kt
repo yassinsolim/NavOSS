@@ -3,6 +3,7 @@ package org.navoss.mobile.updater
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
@@ -83,5 +84,55 @@ class FeedFetcherTest {
     fake.close()
     val fetcher = FeedFetcher({ url -> java.net.URL("http", "127.0.0.1", port, url.file).openConnection() as java.net.HttpURLConnection })
     assertEquals("network", fetchError(fetcher))
+  }
+
+  private fun elapsedMillis(block: () -> Unit): Long {
+    val start = System.nanoTime()
+    block()
+    return (System.nanoTime() - start) / 1_000_000
+  }
+
+  @Test
+  fun aTricklingBodyFailsAtTheDeadline() {
+    val fake = serve(FakeResponse(body = ByteArray(200) { ' '.code.toByte() }, trickleMillis = 20))
+    val took = elapsedMillis {
+      assertEquals("network", fetchError(FeedFetcher(fake::connect, deadlineMillis = 300)))
+    }
+    assertTrue("took $took ms", took < 1_500)
+  }
+
+  @Test
+  fun headersThatNeverComeFailAtTheDeadline() {
+    val fake = serve(FakeResponse(body = "[]".toByteArray(), delayMillis = 3_000))
+    val took = elapsedMillis {
+      assertEquals("network", fetchError(FeedFetcher(fake::connect, deadlineMillis = 300)))
+    }
+    assertTrue("took $took ms", took < 1_500)
+  }
+
+  @Test
+  fun oneDeadlineCoversASlowRedirectChain() {
+    // Each hop answers quickly enough on its own; together they pass the deadline.
+    val fake =
+      FakeHttpServer(
+        mapOf(
+          "api.github.com$path" to
+            FakeResponse(
+              status = 301,
+              headers = listOf("Location: https://api.github.com/a"),
+              delayMillis = 150,
+            ),
+          "api.github.com/a" to
+            FakeResponse(
+              status = 301,
+              headers = listOf("Location: https://api.github.com/b"),
+              delayMillis = 150,
+            ),
+          // An empty body: nothing to read, so only a deadline checked per hop and at EOF catches it.
+          "api.github.com/b" to FakeResponse(delayMillis = 150),
+        ),
+      ).also { server = it }
+    assertEquals("network", fetchError(FeedFetcher(fake::connect, deadlineMillis = 350)))
+    assertEquals("", FeedFetcher(fake::connect, deadlineMillis = 5_000).fetch(feed).body)
   }
 }

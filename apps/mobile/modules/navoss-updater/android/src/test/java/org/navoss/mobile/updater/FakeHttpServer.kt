@@ -16,6 +16,10 @@ class FakeResponse(
   val headers: List<String> = emptyList(),
   val body: ByteArray = ByteArray(0),
   val sendLength: Boolean = true,
+  /** Wait this long before answering at all. */
+  val delayMillis: Long = 0,
+  /** Wait this long between body bytes (a server that trickles). */
+  val trickleMillis: Long = 0,
 )
 
 /**
@@ -59,9 +63,21 @@ class FakeHttpServer(private val routes: Map<String, FakeResponse>) : Closeable 
           if (response.sendLength) head.append("Content-Length: ${response.body.size}\r\n")
           head.append("Connection: close\r\n\r\n")
           val output = client.getOutputStream()
-          output.write(head.toString().toByteArray())
-          output.write(response.body)
-          output.flush()
+          runCatching {
+            Thread.sleep(response.delayMillis)
+            output.write(head.toString().toByteArray())
+            output.flush()
+            if (response.trickleMillis > 0) {
+              for (byte in response.body) {
+                output.write(byte.toInt())
+                output.flush()
+                Thread.sleep(response.trickleMillis)
+              }
+            } else {
+              output.write(response.body)
+            }
+            output.flush()
+          }
         }
       }
     }
