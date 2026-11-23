@@ -472,7 +472,10 @@ packages without symlinks, which have to be maintained by hand and silently drop
   `android-core/build/jniLibs/arm64-v8a` (Gradle `jniLibs`), strips it, and prints sizes and the
   NEEDED closure. It defines `NAVOSS_HOST_HTTP`, which leaves out the URLSession adapter and with it
   FoundationNetworking.
-- `apps/mobile/scripts/run-android-core-tests.sh` runs both XCTest suites on a device or emulator.
+- `apps/mobile/scripts/run-android-core-tests.sh` runs both XCTest suites on a device or emulator. Give the
+  emulator six cores: the engine tests hold requests by blocking Swift concurrency threads, and
+  on a two-core emulator the pool runs out and the core suite stalls (the facade suite passes
+  either way).
 - `android-core/binding` is a Gradle library project holding the Kotlin binding
   (`NavOSSCore.kt`, `HandleGate.kt`, `NavOSSCoreException.kt`), a JVM test of the handle's
   lifetime rules (`testDebugUnitTest`) and the instrumented test (`connectedAndroidTest`), which
