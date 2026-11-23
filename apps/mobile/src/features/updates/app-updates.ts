@@ -31,11 +31,6 @@ export type UpdatePhase =
 
 export interface AppUpdatesState {
   installed: InstalledVersion | undefined;
-  /**
-   * An install was committed to Android and has no result yet: Android may replace (and close)
-   * the app at any moment, so no trip starts and a restored trip is not guided until it ends.
-   */
-  installCommitted: boolean;
   /** The outcome of the last "Check now", shown in settings. */
   lastCheckMessage: string | undefined;
   phase: UpdatePhase;
@@ -46,9 +41,6 @@ export interface AppUpdatesState {
 
 /** The parts of the native module the controller uses (a fake in tests). */
 export interface UpdaterNative {
-  /** Synchronous: holds installs for a trip, or false while a committed install has no result. */
-  beginTrip(): boolean;
-  isInstallCommitted(): boolean;
   addListener(
     event: 'onDownloadProgress',
     listener: (progress: { received: number; total: number }) => void,
@@ -104,11 +96,6 @@ export interface AppUpdates {
    * the trip. The native installer is held too, for an install already on its way.
    */
   setTripActive: (active: boolean) => void;
-  /**
-   * Called at Start, before the trip begins: holds installs at once, or returns false while a
-   * committed install has no result (the app is about to be replaced), and the trip must not start.
-   */
-  beginTrip: () => boolean;
   /** Whether the notice over the map shows now. */
   isNoticeVisible: (state: AppUpdatesState, tripActive: boolean) => boolean;
   store: ValueStore<AppUpdatesState>;
@@ -117,7 +104,6 @@ export interface AppUpdates {
 export function createAppUpdates(dependencies: AppUpdatesDependencies): AppUpdates {
   const { native } = dependencies;
   const store = createValueStore<AppUpdatesState>({
-    installCommitted: false,
     installed: undefined,
     lastCheckMessage: undefined,
     phase: { kind: 'idle' },
@@ -156,7 +142,6 @@ export function createAppUpdates(dependencies: AppUpdatesDependencies): AppUpdat
     if (phase.kind === 'downloading') setPhase({ ...phase, received, total });
   });
   native.addListener('onInstallStatus', ({ status }) => {
-    if (status !== 'pending-user-action') update({ installCommitted: false });
     const { phase } = store.get();
     if (phase.kind !== 'installing') return;
     if (status === 'pending-user-action' || status === 'success') return;
@@ -257,7 +242,6 @@ export function createAppUpdates(dependencies: AppUpdatesDependencies): AppUpdat
     setPhase({ kind: 'installing', update: target });
     try {
       await native.verifyAndInstall(target.versionCode, target.sha256);
-      update({ installCommitted: true });
     } catch (error) {
       const code = errorCode(error);
       setPhase(
@@ -283,12 +267,7 @@ export function createAppUpdates(dependencies: AppUpdatesDependencies): AppUpdat
       const offered = preferences.offeredVersionCode;
       // Keep a partial download of a still-newer version so it can resume; delete the rest.
       native.cleanDownloads(offered !== undefined && offered > installed.versionCode ? offered : 0);
-      update({
-        installCommitted: native.isInstallCommitted(),
-        installed,
-        preferences,
-        ready: true,
-      });
+      update({ installed, preferences, ready: true });
     },
     checkAutomatically: async (tripActive) => {
       const { preferences, ready } = store.get();
@@ -324,11 +303,6 @@ export function createAppUpdates(dependencies: AppUpdatesDependencies): AppUpdat
       }
     },
     setAutoCheck: (value) => savePreferences({ autoCheck: value }),
-    beginTrip: () => {
-      if (!native.beginTrip()) return false;
-      tripActive = true;
-      return true;
-    },
     setTripActive: (active) => {
       if (active === tripActive) return;
       tripActive = active;

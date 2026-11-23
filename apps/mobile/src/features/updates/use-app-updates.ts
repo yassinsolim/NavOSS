@@ -29,23 +29,12 @@ export const appUpdates: AppUpdates | undefined =
         },
       });
 
-/** What Start says while an update is being installed. */
-export const UPDATE_INSTALLING_NOTICE = {
-  message: 'NavOSS is updating and will close in a moment. Start your trip after it reopens.',
-  title: 'Update in progress',
-} as const;
-
 /**
- * Called by Start before a trip begins. Android: holds update installs at once (not after a
- * render), or returns false while an update is being installed. Elsewhere always true.
+ * Called synchronously at Start (true) and End (false) so update installs are held from the first
+ * instant of a trip. It never refuses or delays navigation, and does nothing without the updater.
  */
-export function beginTripForUpdates(): boolean {
-  return appUpdates?.beginTrip() ?? true;
-}
-
-/** Called at End: installs may go ahead again. */
-export function endTripForUpdates(): void {
-  appUpdates?.setTripActive(false);
+export function setUpdaterTripActive(active: boolean): void {
+  appUpdates?.setTripActive(active);
 }
 
 const noUpdates = {

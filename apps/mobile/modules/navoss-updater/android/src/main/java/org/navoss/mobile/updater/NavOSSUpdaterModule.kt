@@ -151,12 +151,8 @@ class NavOSSUpdaterModule : Module() {
 
     Function("cancelDownload") { cancelled.set(true) }
 
-    Function("setInstallHold") { held: Boolean -> InstallGate.shared.setTripHeld(held) }
-
-    /** Called synchronously at Start: false while a committed install has no result yet. */
-    Function("beginTrip") { InstallGate.shared.beginTrip() }
-
-    Function("isInstallCommitted") { InstallGate.shared.isCommitted }
+    /** The trip flag, set synchronously at Start and cleared at End; never blocks. */
+    Function("setInstallHold") { held: Boolean -> InstallGate.shared.setTripActive(held) }
 
     /**
      * Verifies the downloaded APK and, when it passes, commits it to the installer. A rejected
@@ -183,7 +179,7 @@ class NavOSSUpdaterModule : Module() {
               promise.reject(UpdaterException(rejection.code))
               return@Thread
             }
-            if (InstallGate.shared.isTripHeld) {
+            if (InstallGate.shared.isTripActive) {
               // A trip started while the file was being verified; keep it for later.
               promise.reject(UpdaterException(DEFERRED))
               return@Thread

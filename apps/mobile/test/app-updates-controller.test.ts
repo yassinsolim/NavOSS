@@ -48,14 +48,7 @@ function harness({
   const listeners: Record<string, (payload: never) => void> = {};
   let saved = stored;
   let finishDownload: () => void = () => undefined;
-  // Mirrors the native gate: committed from a successful verifyAndInstall until a final result.
-  let nativeCommitted = false;
   const native = {
-    beginTrip: () => {
-      calls.push('beginTrip');
-      return !nativeCommitted;
-    },
-    isInstallCommitted: () => nativeCommitted,
     addListener: (event: string, listener: (payload: never) => void) => {
       listeners[event] = listener;
       return { remove: () => undefined };
@@ -103,7 +96,6 @@ function harness({
     setInstallHold: (held: boolean) => calls.push(`hold:${String(held)}`),
     verifyAndInstall: (versionCode: number, sha256: string) => {
       calls.push(`install:${String(versionCode)}:${sha256.slice(0, 4)}`);
-      if (installError === undefined) nativeCommitted = true;
       return installError === undefined
         ? Promise.resolve()
         : Promise.reject(Object.assign(new Error('x'), { code: installError }));
@@ -124,7 +116,6 @@ function harness({
   };
   const updater = createAppUpdates(dependencies);
   return {
-    dependencies,
     advance: (ms: number) => {
       now += ms;
     },
@@ -139,10 +130,7 @@ function harness({
     republish: (body: unknown) => {
       response = { body, status: 200 };
     },
-    emitInstall: (status: string) => {
-      if (status !== 'pending-user-action') nativeCommitted = false;
-      listeners.onInstallStatus({ status } as never);
-    },
+    emitInstall: (status: string) => listeners.onInstallStatus({ status } as never),
     logs,
     requests,
     saved: () => saved,
@@ -356,35 +344,5 @@ describe('app updates', () => {
     await rejected.updater.checkAutomatically(false);
     await rejected.updater.install();
     expect(rejected.updater.store.get().phase.kind).toBe('ready');
-  });
-
-  it('refuses Start while a committed install has no result, and allows it again after one', async () => {
-    for (const result of ['failed', 'cancelled']) {
-      const h = harness();
-      await h.updater.start();
-      expect(h.updater.beginTrip()).toBe(true);
-      h.updater.setTripActive(false);
-      await h.updater.checkAutomatically(false);
-      await h.updater.install();
-      expect(h.updater.store.get().installCommitted).toBe(true);
-      // The prompt was approved and Android is installing: no trip may start.
-      h.emitInstall('pending-user-action');
-      expect(h.updater.beginTrip()).toBe(false);
-      expect(h.calls).not.toContain('hold:true');
-      h.emitInstall(result);
-      expect(h.updater.store.get().installCommitted).toBe(false);
-      expect(h.updater.beginTrip()).toBe(true);
-    }
-  });
-
-  it('reads a committed install on start, so a restored trip waits for its result', async () => {
-    const h = harness();
-    await h.updater.start();
-    await h.updater.checkAutomatically(false);
-    await h.updater.install();
-    // A new JavaScript runtime in the same process.
-    const again = createAppUpdates({ ...h.dependencies });
-    await again.start();
-    expect(again.store.get().installCommitted).toBe(true);
   });
 });
