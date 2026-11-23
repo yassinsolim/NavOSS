@@ -4,34 +4,40 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * A JS record (trip, fix) as the core's JSON. A key whose value is `null` is left out: contract v2
- * reads an absent optional field as `nil` but refuses an explicit `null` for a required one, and
- * an absent required field is refused the same way (`invalid-json`), so dropping changes no
- * outcome except that an optional `null` is accepted, as on iOS (Expo maps it to `nil`).
- * [onDroppedNull] receives the path of each dropped key (names and indices only, never a value).
+ * A JS record (trip, fix) as the core's JSON. A key whose value is `null` is kept as JSON `null`:
+ * contract v2 reads an explicit `null` as `nil` for an optional field and refuses it
+ * (`invalid-json`) for a required one, as iOS's Expo records do. Leaving the key out instead would
+ * be wrong, because the core defaults an absent non-optional field (a zero coordinate passes
+ * validation) and would invent a position. [onNull] receives the path of each null key (names and
+ * indices only, never a value).
  */
 internal object JsRecordJson {
-  fun encode(record: Map<String, Any?>, onDroppedNull: (path: String) -> Unit = {}): String =
-    objectOf(record, "", onDroppedNull).toString()
+  fun encode(record: Map<String, Any?>, onNull: (path: String) -> Unit = {}): String =
+    objectOf(record, "", onNull).toString()
 
-  private fun objectOf(record: Map<*, *>, path: String, onDroppedNull: (String) -> Unit): JSONObject {
+  private fun objectOf(record: Map<*, *>, path: String, onNull: (String) -> Unit): JSONObject {
     val json = JSONObject()
     for ((key, value) in record) {
       val name = key.toString()
       val child = if (path.isEmpty()) name else "$path.$name"
-      if (value == null) onDroppedNull(child) else json.put(name, valueOf(value, child, onDroppedNull))
+      if (value == null) {
+        onNull(child)
+        json.put(name, JSONObject.NULL)
+      } else {
+        json.put(name, valueOf(value, child, onNull))
+      }
     }
     return json
   }
 
-  private fun valueOf(value: Any, path: String, onDroppedNull: (String) -> Unit): Any = when (value) {
-    is Map<*, *> -> objectOf(value, path, onDroppedNull)
+  private fun valueOf(value: Any, path: String, onNull: (String) -> Unit): Any = when (value) {
+    is Map<*, *> -> objectOf(value, path, onNull)
     is Iterable<*> -> JSONArray().also { array ->
       value.forEachIndexed { index, item ->
-        array.put(item?.let { valueOf(it, "$path[$index]", onDroppedNull) } ?: JSONObject.NULL)
+        array.put(item?.let { valueOf(it, "$path[$index]", onNull) } ?: JSONObject.NULL)
       }
     }
-    is Array<*> -> valueOf(value.asList(), path, onDroppedNull)
+    is Array<*> -> valueOf(value.asList(), path, onNull)
     else -> value
   }
 }

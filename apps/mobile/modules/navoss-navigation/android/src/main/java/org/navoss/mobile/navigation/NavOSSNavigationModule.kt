@@ -289,9 +289,9 @@ class NavOSSNavigationModule : Module() {
 
   private fun snapshot(json: String): Map<String, Any?> = mapOf("snapshotJson" to json)
 
-  /** A trip or fix for the core, `null` values dropped; each new dropped path is logged once (names only). */
+  /** A trip or fix for the core, `null` values kept as JSON `null`; each new null path is logged once (names only). */
   private fun record(map: Map<String, Any?>): String = JsRecordJson.encode(map) { path ->
-    if (reportedNullPaths.add(path)) Log.i(NavigationRuntime.LOG_TAG, "dropped null field $path")
+    if (reportedNullPaths.add(path)) Log.i(NavigationRuntime.LOG_TAG, "null field $path")
   }
 
   private val reportedNullPaths = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
