@@ -16,3 +16,6 @@ catalog:
   typescript: 6.0.3
   vitest: 4.1.12
   zod: 4.6.7
+
+patchedDependencies:
+  '@maplibre/maplibre-react-native@11.3.6': patches/@maplibre__maplibre-react-native@11.3.6.patch
