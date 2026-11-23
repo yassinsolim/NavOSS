@@ -345,4 +345,19 @@ describe('app updates', () => {
     await rejected.updater.install();
     expect(rejected.updater.store.get().phase.kind).toBe('ready');
   });
+
+  it('marks a trip at once whatever the install did, and has nothing that refuses a trip', async () => {
+    for (const result of ['cancelled', 'failed', 'pending-user-action']) {
+      const h = harness();
+      await h.updater.start();
+      await h.updater.checkAutomatically(false);
+      await h.updater.install();
+      h.emitInstall(result);
+      // Start's only call into the updater: synchronous, returns nothing to refuse with.
+      expect(h.updater.setTripActive(true)).toBeUndefined();
+      expect(h.calls.at(-1)).toBe('hold:true');
+      h.updater.setTripActive(false);
+      expect(h.calls.at(-1)).toBe('hold:false');
+    }
+  });
 });
