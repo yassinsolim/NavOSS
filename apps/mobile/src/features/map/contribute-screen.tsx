@@ -23,6 +23,7 @@ import {
 } from '@/features/map/contribution-drafts';
 import { TAB_BAR_HEIGHT } from '@/features/map/overlay-layout';
 import { submitContribution } from '@/lib/api';
+import { deviceDateTimeFormat } from '@/lib/device-time-format';
 import { createThemedStyles, motion, radius, space, typography, useTheme } from '@/theme';
 import { haptics } from '@/theme/haptics';
 import { Banner, type BannerTone } from '@/ui/banner';
@@ -47,8 +48,9 @@ function contributionLabel(type: ContributionType): string {
   return CONTRIBUTION_TYPES.find((option) => option.id === type)?.label ?? 'Draft';
 }
 
-// Built once: Hermes on Android builds each Intl formatter through ICU in Java, slowly.
-const DRAFT_DATE = new Intl.DateTimeFormat('en-CA', { dateStyle: 'medium' });
+// Cached by `deviceDateTimeFormat`: Hermes on Android builds each Intl formatter through ICU in
+// Java, slowly, and the cache follows the device's time zone.
+const DRAFT_DATE = { dateStyle: 'medium' } as const;
 
 /**
  * Beta feedback. A submission is stored on the device first and removed only once the service
@@ -277,7 +279,9 @@ export function ContributeScreen({ bottomInset, safeAreaTop }: ContributeScreenP
                       </Text>
                       <Text style={styles.draftMeta}>
                         {draft.location ?? 'No location'} ·{' '}
-                        {DRAFT_DATE.format(new Date(draft.createdAt))}
+                        {deviceDateTimeFormat('en-CA', DRAFT_DATE).format(
+                          new Date(draft.createdAt),
+                        )}
                       </Text>
                     </View>
                     <IconButton

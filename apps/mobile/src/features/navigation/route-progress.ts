@@ -1,5 +1,6 @@
 import type { Coordinate, RouteAlternativeV2, RouteResponseV2 } from '@navoss/contracts';
 
+import { deviceDateTimeFormat } from '../../lib/device-time-format';
 import { readableRoadName } from './instruction-text';
 
 const EARTH_RADIUS_METERS = 6_371_000;
@@ -269,18 +270,22 @@ export function formatDistance(distanceMetersValue: number): string {
 }
 
 /** "8:53 a.m." today; "Tue 8:53 a.m." later this week; "Nov 23 8:53 a.m." beyond it. */
-// Reused rather than rebuilt per call: on Android, Hermes builds each Intl formatter through ICU
-// in Java, which is slow enough to stall a guidance render.
-const CLOCK_TIME = new Intl.DateTimeFormat('en-CA', { hour: 'numeric', minute: '2-digit' });
-const WEEKDAY = new Intl.DateTimeFormat('en-CA', { weekday: 'short' });
-const MONTH_DAY = new Intl.DateTimeFormat('en-CA', { day: 'numeric', month: 'short' });
+// Device-local and reused (see `deviceDateTimeFormat`): rebuilt per call these stall a guidance
+// render on Android, but built once for good they would keep the zone the app launched in.
+const CLOCK_TIME = { hour: 'numeric', minute: '2-digit' } as const;
+const WEEKDAY = { weekday: 'short' } as const;
+const MONTH_DAY = { day: 'numeric', month: 'short' } as const;
+
+function formatDeviceTime(options: Intl.DateTimeFormatOptions, value: Date): string {
+  return deviceDateTimeFormat('en-CA', options).format(value);
+}
 
 export function formatArrivalTime(durationSeconds: number, now: Date = new Date()): string {
   const arrival = new Date(now.getTime() + durationSeconds * 1_000);
-  const time = CLOCK_TIME.format(arrival);
+  const time = formatDeviceTime(CLOCK_TIME, arrival);
   if (arrival.toDateString() === now.toDateString()) return time;
   const withinWeek = arrival.getTime() - now.getTime() < 6 * HOURS_PER_DAY * 3_600_000;
-  const day = (withinWeek ? WEEKDAY : MONTH_DAY).format(arrival);
+  const day = formatDeviceTime(withinWeek ? WEEKDAY : MONTH_DAY, arrival);
   return `${day} ${time}`;
 }
 
@@ -327,7 +332,7 @@ export function communityTrafficUpdated(
     .map((boundary) => Date.parse(boundary ?? ''))
     .filter((time) => Number.isFinite(time));
   if (times.length === 0) return undefined;
-  return `updated ${CLOCK_TIME.format(new Date(Math.min(...times)))}`;
+  return `updated ${formatDeviceTime(CLOCK_TIME, new Date(Math.min(...times)))}`;
 }
 
 /**
