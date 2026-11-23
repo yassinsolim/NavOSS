@@ -203,9 +203,10 @@ describe('trip end notice', () => {
 });
 
 describe('host stop notice', () => {
-  it('says guidance stopped when the phone ran out of memory, until dismissed', () => {
+  it('says at the next launch why the last trip ended, until dismissed', () => {
     expect(hostStopNotice('out-of-memory')).toEqual({
-      message: 'Guidance stopped because the phone ran out of memory.',
+      message:
+        'Your last trip ended because the phone ran out of memory. Start it again when you are ready.',
       title: 'Trip ended',
       tone: 'warning',
       untilDismissed: true,

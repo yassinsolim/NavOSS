@@ -26,6 +26,8 @@ class TripStorage(
   private val cache = HashMap<String, String?>()
   /** Writes not yet on disk, in the order each key first waited; one entry per key holding its latest value. */
   private val pending = LinkedHashMap<String, String?>()
+  /** Set by [deleteAll] with `refuseLaterWrites`: every later write is dropped. */
+  private var closed = false
 
   init {
     directory.listFiles { file -> file.name.endsWith(STAGING_SUFFIX) }?.forEach { it.delete() }
@@ -36,6 +38,7 @@ class TripStorage(
     get() = synchronized(lock) { pending.isEmpty() }
 
   fun read(key: String): String? = synchronized(lock) {
+    if (closed) return null
     cache.getOrPut(key) {
       val file = fileFor(key)
       try {
@@ -48,6 +51,7 @@ class TripStorage(
 
   fun write(key: String, value: String?) {
     val change = synchronized(lock) {
+      if (closed) return
       val wasDurable = pending.isEmpty()
       cache[key] = value
       // A key already waiting keeps its place (LinkedHashMap keeps the insertion order on
@@ -59,6 +63,20 @@ class TripStorage(
       durable.takeIf { it != wasDurable }
     }
     change?.let(onDurabilityChanged)
+  }
+
+  /**
+   * Deletes every stored key and staging file directly, dropping writes not yet on disk. With
+   * [refuseLaterWrites] (the out-of-memory stop) a write the core makes afterwards, from a call
+   * still in flight on another thread, is dropped too, so nothing can recreate the trip before
+   * the process exits. Returns whether the directory holds no file afterwards.
+   */
+  fun deleteAll(refuseLaterWrites: Boolean = false): Boolean = synchronized(lock) {
+    if (refuseLaterWrites) closed = true
+    pending.clear()
+    cache.clear()
+    directory.listFiles()?.forEach { it.delete() }
+    directory.listFiles().isNullOrEmpty()
   }
 
   /** Writes pending values in order, stopping at the first that fails. */
