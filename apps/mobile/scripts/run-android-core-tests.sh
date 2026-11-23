@@ -45,7 +45,7 @@ sdk_libs="$(swift sdk configure --show-configuration "$SWIFT_ANDROID_SDK_ID" "$S
   sed -n 's/^swiftResourcesPath: //p')/android"
 cxx="${CXX_RUNTIME:-$(echo "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/*/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so)}"
 
-adb shell "rm -rf $DEVICE_ROOT && mkdir -p $DEVICE_ROOT/repo/apps/mobile/test $DEVICE_ROOT/repo/packages/contracts/test"
+adb shell "rm -rf $DEVICE_ROOT && mkdir -p $DEVICE_ROOT/repo/apps/mobile/test $DEVICE_ROOT/repo/packages/contracts/test $DEVICE_ROOT/repo/$module_rel/ios/Tests $DEVICE_ROOT/repo/$module_rel/android-core/Tests"
 adb push "$sdk_libs"/*.so "$cxx" "$DEVICE_ROOT/" >/dev/null
 adb push "$products"/*-test-runner "$products"/*Tests.so "$products"/*.bundle "$DEVICE_ROOT/" >/dev/null
 adb push "$stage/apps/mobile/test/fixtures" "$DEVICE_ROOT/repo/apps/mobile/test/" >/dev/null

@@ -58,10 +58,19 @@ final class NavOSSCoreFacadeTests: XCTestCase {
     if regeneratesGolden {
       try writeSource("Golden", name, reference)
     }
-    XCTAssertEqual(
-      stable(try canonicalJSON(engine.snapshot()) + "\n"), try bundled("Golden", name),
-      file: file, line: line)
-    XCTAssertEqual(reference, try bundled("Golden", name), file: file, line: line)
+    let golden = try bundled("Golden", name)
+    #if os(Android)
+      // The golden files were written on macOS; bionic's libm differs in the last digits.
+      for (label, text) in [("facade", stable(try engine.snapshot())), ("iOS serializer", reference)] {
+        if let difference = jsonDifference(golden, text, tolerance: 1e-12) {
+          XCTFail("\(label) vs \(name)\(difference)", file: file, line: line)
+        }
+      }
+    #else
+      XCTAssertEqual(
+        stable(try canonicalJSON(engine.snapshot()) + "\n"), golden, file: file, line: line)
+      XCTAssertEqual(reference, golden, file: file, line: line)
+    #endif
   }
 
   // MARK: Fixtures

@@ -311,6 +311,15 @@ func assertTranscriptsMatch(
   }
 }
 
+/// Two JSON texts with the same structure, strings and integers, and floating point within
+/// `tolerance` relative. `nil` when they match, otherwise where they differ.
+func jsonDifference(_ expected: String, _ actual: String, tolerance: Double) -> String? {
+  guard let a = try? JSONSerialization.jsonObject(with: Data(expected.utf8)),
+    let b = try? JSONSerialization.jsonObject(with: Data(actual.utf8))
+  else { return "not JSON" }
+  return jsonDifference(a, b, tolerance: tolerance, path: "")
+}
+
 private func jsonDifference(_ a: Any, _ b: Any, tolerance: Double, path: String) -> String? {
   switch (a, b) {
   case let (a as [String: Any], b as [String: Any]):

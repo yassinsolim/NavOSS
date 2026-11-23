@@ -32,8 +32,12 @@ swift --version 2>&1 | grep -q "Swift version $SWIFT_VERSION " ||
 swift sdk list 2>/dev/null | grep -qx "$SWIFT_ANDROID_SDK_ID" ||
   fail "Swift SDK $SWIFT_ANDROID_SDK_ID is not installed"
 
+# NAVOSS_HOST_HTTP: HTTP goes through the Kotlin host, so the URLSession adapter and with it
+# FoundationNetworking (libcurl) are left out. The test builds keep the adapter: the iOS tests
+# stub URLSession; the facade tests and the Kotlin test use the host transport this build ships.
 (cd "$package" && NAVOSS_ANDROID_CORE=1 swift build -c release --product NavOSSCore \
-  --swift-sdk "$SWIFT_ANDROID_SDK_ID" --triple "$SWIFT_ANDROID_TRIPLE" --scratch-path "$scratch" "$@")
+  --swift-sdk "$SWIFT_ANDROID_SDK_ID" --triple "$SWIFT_ANDROID_TRIPLE" --scratch-path "$scratch" \
+  -Xswiftc -DNAVOSS_HOST_HTTP "$@")
 
 sdk_libs="$(swift sdk configure --show-configuration "$SWIFT_ANDROID_SDK_ID" "$SWIFT_ANDROID_TRIPLE" |
   sed -n 's/^swiftResourcesPath: //p')/android"

@@ -290,9 +290,54 @@ Malformed JSON from the host in `completeHttpRequest` is treated as `{"error":"u
 - Callback-produced local references are deleted before the callback returns, so a long-running
   background thread does not grow the local reference table.
 
+## Package layout
+
+One manifest, `apps/mobile/modules/navoss-navigation/Package.swift`, gated on the environment:
+
+- Without `NAVOSS_ANDROID_CORE` it is the iOS core exactly as before (`ios/Core`, `ios/Tests`),
+  which `test:native:ios` and the Xcode build use.
+- With `NAVOSS_ANDROID_CORE=1` it builds the Android subset: `ios/Core` without the `Community*`
+  and `Offline*` sources (CryptoKit, App Attest, Valhalla, SQLite), plus `android-core/Facade`
+  in the same module (the facade drives the engine's internal API); the `CNavOSSJNI` and
+  `NavOSSCoreJNI` targets (product `NavOSSCore`, a dynamic library); `ios/Tests` without the
+  `Community*` / `Offline*` tests and `CarPlayCardTextTests` (offline fixtures); and
+  `android-core/Tests` (facade tests, golden snapshots, the replay).
+
+The subset is defined by exclusion, so a new Core file or test is built and run on Android
+without touching the manifest; a test that cannot build there fails the build instead of being
+skipped. A second manifest was rejected: SwiftPM cannot share one source file between two
+packages without symlinks, which have to be maintained by hand and silently drop new tests.
+
 ## Build and packaging
 
-See `apps/mobile/scripts/build-android-core.sh` and the measurements in the Size section of the
-pull request that introduced this file. The `.so` set for `arm64-v8a` is consumed by Gradle as
-`jniLibs`. `NAVOSS_ANDROID_CORE=1` switches the package manifest to the Android subset
-(community and offline sources excluded, facade and JNI targets added).
+- `apps/mobile/scripts/android-core-toolchain.env` pins every version and checksum.
+- `apps/mobile/scripts/build-android-core.sh` builds the release `.so` set for `arm64-v8a` into
+  `android-core/build/jniLibs/arm64-v8a` (Gradle `jniLibs`), strips it, and prints sizes and the
+  NEEDED closure. It defines `NAVOSS_HOST_HTTP`, which leaves out the URLSession adapter and with it
+  FoundationNetworking.
+- `apps/mobile/scripts/run-android-core-tests.sh` runs both XCTest suites on a device or emulator.
+- `android-core/binding` is a Gradle library project holding the Kotlin binding and its
+  instrumented test (`connectedAndroidTest`), which replays the recorded Calgary trip through JNI
+  and compares it with the committed macOS transcript.
+
+### On a GitHub `ubuntu-latest` runner
+
+Not yet a workflow; the steps are:
+
+```sh
+. apps/mobile/scripts/android-core-toolchain.env
+curl -fsSLO "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz"
+tar zxf "swiftly-$(uname -m).tar.gz" && ./swiftly init --quiet-shell-followup --skip-install -y
+. "$HOME/.local/share/swiftly/env.sh" && swiftly install "$SWIFT_VERSION" --use
+swift sdk install "$SWIFT_ANDROID_SDK_URL" --checksum "$SWIFT_ANDROID_SDK_SHA256"
+curl -fsSLO "https://dl.google.com/android/repository/android-ndk-$ANDROID_NDK_RELEASE-linux.zip"
+echo "$ANDROID_NDK_LINUX_SHA1  android-ndk-$ANDROID_NDK_RELEASE-linux.zip" | sha1sum -c
+unzip -q "android-ndk-$ANDROID_NDK_RELEASE-linux.zip" && export ANDROID_NDK_HOME="$PWD/android-ndk-$ANDROID_NDK_RELEASE"
+"$HOME/.swiftpm/swift-sdks/$SWIFT_ANDROID_SDK_ID.artifactbundle/swift-android/scripts/setup-android-sdk.sh"
+apps/mobile/scripts/build-android-core.sh
+```
+
+swiftly verifies the toolchain's signature; the SDK and NDK are checked against the pinned
+checksums. Expected time (not measured on a runner): toolchain about 3 minutes, SDK and NDK
+downloads about 2 minutes, release build about 5 minutes on a 4-core runner; cache
+`~/.local/share/swiftly`, `~/.swiftpm/swift-sdks` and the NDK by the pinned versions.
