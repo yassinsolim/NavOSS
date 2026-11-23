@@ -198,10 +198,11 @@ final class NavigationEngine: @unchecked Sendable {
   private var rerouteTask: Task<Void, Never>?
   /// When the next request may be made while the driver keeps leaving the routes they are given.
   private var rerouteSpacing = NavigationRerouteSpacing()
-  /// The route the last install replaced, and the ask-first replacement the driver last
-  /// declined: a replacement materially the same as either (or as the route followed) is not
-  /// installed or offered again (`navigationIsMateriallySameRoute`).
-  private var replacedTrip: NavOSSCarPlayTrip?
+  /// The routes replaced in this detour, and the ask-first replacement the driver last declined
+  /// in it: a replacement materially the same as one of them is not installed or offered again
+  /// (`navigationIsMateriallySameRoute`). Forgotten with the rest of the detour once the driver
+  /// is established on a route (`NavigationRerouteSpacing`).
+  private var detourReplacedTrips: [NavOSSCarPlayTrip] = []
   private var declinedTrip: NavOSSCarPlayTrip?
   /// The latest fixes, for a reroute heading when the platform has none.
   private var recentTrack: [(coordinate: NavigationCoordinate, time: TimeInterval)] = []
@@ -639,7 +640,7 @@ final class NavigationEngine: @unchecked Sendable {
   /// Forgets the reroutes of the trip before. Lock held.
   private func resetRerouteHistoryLocked() {
     rerouteSpacing = NavigationRerouteSpacing()
-    replacedTrip = nil
+    detourReplacedTrips.removeAll()
     declinedTrip = nil
     recentTrack.removeAll()
   }
@@ -943,6 +944,12 @@ final class NavigationEngine: @unchecked Sendable {
       isMatched: update.snapshot.matchedCoordinate != nil,
       now: now.timeIntervalSinceReferenceDate
     )
+    if rerouteSpacing.answers == 0 {
+      // No detour under way (or the driver just became established): nothing it replaced or
+      // declined applies to the next one.
+      detourReplacedTrips.removeAll()
+      declinedTrip = nil
+    }
     let canRequest = isOffRoute && raw != nil && rerouteTask == nil
       && (rerouteRetryAfter.map { $0 <= now } ?? true)
       && rerouteSpacing.allowsRequest(
@@ -1117,22 +1124,29 @@ final class NavigationEngine: @unchecked Sendable {
     rerouteRetryAfter = nil
     rerouteFailureCount = 0
     rerouteSpacing.answered(now: clock().timeIntervalSinceReferenceDate)
-    // The route followed, the one it replaced or the one just declined, again: nothing changes
-    // for the driver, so nothing is installed, offered or said. The vehicle stays off route
-    // until it rejoins the route or the spacing allows a fresh request
-    // (`NavigationRerouteSpacing`). Before the
-    // first match the replacement is chosen for being closest to the chosen route
-    // (`navigationReplacement`) and installing it restarts the pre-match rules, as before.
-    if navigationSession.hasMatchedRoute, let trip = current.trip,
-      ([trip] + [replacedTrip, declinedTrip].compactMap { $0 }).contains(where: {
-        navigationIsMateriallySameRoute(replacement, as: $0)
-      })
-    {
-      routeStatus = .tracking
-      stateVersion &+= 1
-      lock.unlock()
-      host?.navigationEngineStateDidChange()
+    // The route followed, again: nothing changes for the driver, so nothing is installed,
+    // offered or said. But the vehicle is off it, perhaps behind its last match (it reappeared
+    // there after a GPS gap) where the matcher will not go back for it: the route is started
+    // again on itself, the same trip, so it is matched from where the vehicle is. Before the
+    // first match that is what installing it did (the pre-match rules start again).
+    if let trip = current.trip, navigationIsMateriallySameRoute(replacement, as: trip) {
+      reanchorLocked(trip)
       return
+    }
+    // Once matched, a route replaced in this detour, or the one just declined: nothing the
+    // driver was not already told. The vehicle stays off route until it rejoins the route or the
+    // spacing allows a fresh request (`NavigationRerouteSpacing`). Before the first match the
+    // replacement is chosen for being closest to the chosen route (`navigationReplacement`).
+    if navigationSession.hasMatchedRoute {
+      if (detourReplacedTrips + [declinedTrip].compactMap { $0 }).contains(where: {
+        navigationIsMateriallySameRoute(replacement, as: $0)
+      }) {
+        routeStatus = .tracking
+        stateVersion &+= 1
+        lock.unlock()
+        host?.navigationEngineStateDidChange()
+        return
+      }
     }
     let decision = rerouteConsent.received(
       replacement,
@@ -1189,7 +1203,9 @@ final class NavigationEngine: @unchecked Sendable {
     }
     do {
       update = try navigationSession.start(trip)
-      replacedTrip = current.trip
+      if let replaced = current.trip {
+        detourReplacedTrips.append(replaced)
+      }
       navigationGeneration &+= 1
       rerouteSpacing.routeReplaced()
       changeCheckpointGuidanceLocked(.routeInstalled)
@@ -1221,6 +1237,30 @@ final class NavigationEngine: @unchecked Sendable {
     publish(versionedUpdate)
     host?.navigationEngineNeedsLocationUpdates()
     return true
+  }
+
+  /// Starts the active route again on itself, quietly: the matcher places the vehicle on it from
+  /// nothing, as at the start of a route, so a vehicle it would not go back for is matched where
+  /// it is. The same trip and identifier: no new route is counted, saved, shown or announced,
+  /// and the reroute consent and checkpoint guidance stand. Called with `lock` held; releases it.
+  private func reanchorLocked(_ trip: NavOSSCarPlayTrip) {
+    guard let update = try? navigationSession.start(trip) else {
+      routeStatus = .tracking
+      stateVersion &+= 1
+      lock.unlock()
+      host?.navigationEngineStateDidChange()
+      return
+    }
+    navigationGeneration &+= 1
+    rerouteSpacing.routeReplaced()
+    lastProgressPersistedAt = nil
+    lastPersistedProgress = nil
+    routeStatus = .tracking
+    speechPlanner.resetForReroute()
+    stateVersion &+= 1
+    let versionedUpdate = VersionedNavigationUpdate(generation: navigationGeneration, update: update)
+    lock.unlock()
+    publish(versionedUpdate)
   }
 
   private func handleRerouteFailure(

@@ -375,8 +375,11 @@ final class NavigationTripStartTests: XCTestCase {
     XCTAssertEqual(trip.requests, 1)
     XCTAssertLessThanOrEqual(driven, 120, "rerouted soon after moving away")
     // Not yet matched, so the server's alternatives are asked for and the one closest to the
-    // chosen route is installed (the recorded preview answer stands in for the server's).
-    XCTAssertEqual(trip.installed, [express.id])
+    // chosen route is taken (the recorded preview answer stands in for the server's). Here that
+    // is the chosen route itself: it is started again on itself, from where the car is, the same
+    // trip, not counted or shown as a new route.
+    XCTAssertEqual(trip.installed, [])
+    XCTAssertEqual(trip.activeRouteId, express.id)
   }
 
   // MARK: Which replacement a reroute takes

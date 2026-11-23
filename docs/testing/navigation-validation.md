@@ -157,10 +157,13 @@ then back to the chosen road).
 - Ask first: a declined offer holds for 90 s and the spacing, and an answer materially the same
   as the declined route is not offered again. The replacement owed for an offer nobody answered
   waits for the time spacing only (the 45 s response window has always covered it).
-- Once the route has been matched, a replacement that is materially the route followed, the one
-  it replaced or the one just declined (all but 50 m of it within 20 m of that route and in its
-  direction) is not installed, offered or spoken; it still counts as an answer. Before the first
-  match nothing changes.
+- A replacement that is materially the route followed (all but 50 m of it within 20 m of that
+  route and in its direction) is not installed as a new route, offered, counted or spoken: the
+  route is started again on itself, the same trip, so the matcher places the vehicle where it is
+  (after a GPS gap it may have reappeared behind its last match, where the matcher does not go
+  back). Once the route has been matched, one materially the same as a route replaced in this
+  detour or the offer just declined is dropped. That memory ends with the detour, when the
+  driver is established on a route. Either still counts as an answer for the spacing.
 - A request without a platform heading carries the direction of the last 20 m of fixes within
   10 s, so the router does not start the route with a U-turn behind the car.
 - Failed requests keep their retry schedule: 10 s, doubling to 2 minutes, nothing spoken; they
@@ -179,7 +182,7 @@ from 7 requests, 4 spoken offers and 3 installs to 4 requests, 2 offers and 2 in
 router that starts every route with a U-turn, adaptive went from 24 installs to 5. A 1.5 km
 parallel avenue went from 9 installs to 3, and a service road 60 m beside the route for 1.5 km
 from 9 to 3. The recorded Calgary drive speaks the same prompts, and its detour, answered with
-the route already followed, installs nothing (2 before).
+the route already followed, installs nothing (2 before) and checkpoints exactly as before.
 
 ## Artifact layout
 
