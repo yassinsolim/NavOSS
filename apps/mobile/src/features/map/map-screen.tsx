@@ -161,7 +161,10 @@ export function MapScreen() {
   const mapSummary = `Map with ${countLabel(safetyCameraCount, 'official safety camera symbol')}, ${countLabel(roadEventCount, 'road event')} and ${countLabel(communityReportCount, 'driver report')}`;
   const selectedPlacePhoneUrl = placePhoneUrl(selectedResult?.details?.phone);
   const selectedPlaceWebsiteUrl = placeWebsiteUrl(selectedResult?.details?.website);
+  // Without native turn-by-turn guidance (the Android placeholder engine) the trip shows its route
+  // and the trip panel only: no maneuver, estimate or speed readout that nothing keeps current.
   const guidanceReady =
+    c.turnByTurnAvailable &&
     routeState.type === 'navigating' &&
     guidance.step !== undefined &&
     guidance.remainingRoute !== undefined &&
@@ -301,7 +304,7 @@ export function MapScreen() {
             />
           )}
 
-          {navigating && (
+          {navigating && c.turnByTurnAvailable && (
             <DrivingStatus
               bannerBottom={insets.top + (sideLayout ? 0 : bannerStackHeight + 8)}
               creditsHeight={creditsHeight}
@@ -415,11 +418,12 @@ export function MapScreen() {
           />
         )}
 
-        {navigating && (guidanceReady || guidance.resumingTrip) && (
+        {navigating && (guidanceReady || guidance.resumingTrip || !c.turnByTurnAvailable) && (
           <TripSheet
             audioMode={c.guidanceSettings.settings.audioMode}
             cameraAnnouncementCount={c.cameraAnnouncementCount}
             destinationName={routeState.destination.name}
+            guidanceAvailable={c.turnByTurnAvailable}
             matchStatus={guidance.vehicleMatchStatus}
             metrics={metrics}
             onEnd={c.onEndNavigation}

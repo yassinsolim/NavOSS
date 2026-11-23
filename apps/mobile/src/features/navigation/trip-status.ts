@@ -33,16 +33,27 @@ export interface TripNotice {
 
 /** The trip panel's notice: shown only when the driver should know something. */
 export function tripNotice({
+  guidanceAvailable = true,
   matchStatus,
   positionEstimated,
   rerouteCount,
   resuming,
 }: {
+  /** False when the native engine gives no turn-by-turn guidance (the Android placeholder). */
+  guidanceAvailable?: boolean;
   matchStatus: VehicleMatchStatus;
   positionEstimated: boolean;
   rerouteCount: number;
   resuming: boolean;
 }): TripNotice | undefined {
+  if (!guidanceAvailable) {
+    // Never "Waiting for GPS": no fix would start guidance this build does not have.
+    return {
+      message:
+        'NavOSS shows the route on the map, but this build does not give turn-by-turn directions, arrival times or spoken guidance yet.',
+      title: 'Turn-by-turn guidance is not available yet',
+    };
+  }
   if (resuming) {
     return {
       message: 'Guidance resumes once GPS confirms where you are on the route.',

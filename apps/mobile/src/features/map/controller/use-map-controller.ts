@@ -10,6 +10,7 @@ import {
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import {
   AppState,
+  BackHandler,
   Keyboard,
   Linking,
   Share,
@@ -40,6 +41,7 @@ import {
   trafficFlowStatus,
 } from '@/features/community/traffic-flow';
 import { useCommunity } from '@/features/community/use-community';
+import { mapBackAction } from '@/features/map/back-navigation';
 import type { AppTab } from '@/features/map/app-tab-bar';
 import { useMapPreferences, useMapStyle } from '@/features/map/controller/use-map-preferences';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
@@ -106,6 +108,7 @@ import {
   getDestinationCatalog,
   getNavigationPreferences,
   isFavoriteDestination,
+  hasNativeTurnByTurnGuidance,
   isGooglePlaceRatingAvailable,
   type NativeCommunityReport,
   type NativeDestinationCatalog,
@@ -289,6 +292,7 @@ export function useMapController() {
   const [notice, setNotice] = useState<MapNotice>();
   const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
   const [googlePlaceRatingAvailable] = useState(() => isGooglePlaceRatingAvailable());
+  const [turnByTurnAvailable] = useState(() => hasNativeTurnByTurnGuidance());
   const [selectedPlaceSaved, setSelectedPlaceSaved] = useState(false);
   const [selectedResult, setSelectedResult] = useState<SearchResult>();
   const [shortcutBeingSet, setShortcutBeingSet] = useState<'home' | 'work'>();
@@ -1305,6 +1309,39 @@ export function useMapController() {
     if (tab === 'saved') refreshDestinationCatalog();
   };
 
+  // --- Android back -------------------------------------------------------------------------
+
+  const handleBackPress = useEffectEvent((): boolean => {
+    const action = mapBackAction({
+      activeTab,
+      hasSearch: search.query.trim().length > 0 || search.searchState !== 'idle',
+      placeOpen: selectedResult !== undefined,
+      routeState: routeState.type,
+    });
+    switch (action) {
+      case 'cancel-route':
+        handleCancelRoute();
+        return true;
+      case 'close-place':
+        handleClosePlace();
+        return true;
+      case 'explore-tab':
+        handleSelectTab('explore');
+        return true;
+      case 'clear-search':
+        handleClear();
+        return true;
+      case 'system':
+        return false;
+    }
+  });
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   // --- CarPlay ------------------------------------------------------------------------------
 
   const handleCarPlayNavigationEnded = useEffectEvent(() => {
@@ -1629,6 +1666,7 @@ export function useMapController() {
     exploreSheetRef,
     featureDetail: communityFeatureDetail ?? featureDetail,
     googlePlaceRatingAvailable,
+    turnByTurnAvailable,
     guidanceSettings: {
       change: handleChangeGuidanceSettings,
       close: () => {

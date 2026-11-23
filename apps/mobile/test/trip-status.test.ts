@@ -60,3 +60,17 @@ describe('trip status', () => {
     ).toBe('on route');
   });
 });
+
+describe('trip notice without native guidance', () => {
+  it('says guidance is unavailable instead of waiting for a GPS fix that would not start it', () => {
+    const notice = tripNotice({
+      guidanceAvailable: false,
+      matchStatus: 'acquiring',
+      positionEstimated: false,
+      rerouteCount: 0,
+      resuming: false,
+    });
+    expect(notice?.title).toBe('Turn-by-turn guidance is not available yet');
+    expect(notice?.message).not.toMatch(/GPS/);
+  });
+});
