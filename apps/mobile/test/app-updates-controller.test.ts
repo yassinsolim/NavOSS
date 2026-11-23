@@ -62,7 +62,6 @@ function harness({
     getInstalledVersion: () => ({
       sdkInt: 33,
       signedByRelease: true,
-      updatesWithoutPrompt: false,
       versionCode: 101,
       versionName: '0.1.0',
     }),

@@ -1,8 +1,6 @@
 import { NativeModule, requireOptionalNativeModule } from 'expo';
 
 export interface InstalledVersion {
-  /** Android 12+ and NavOSS is its own installer of record: updates install without a prompt. */
-  updatesWithoutPrompt: boolean;
   sdkInt: number;
   signedByRelease: boolean;
   versionCode: number;

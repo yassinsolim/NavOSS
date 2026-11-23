@@ -28,8 +28,8 @@ class UpdateInstaller(private val context: Context) {
           setInstallReason(PackageManager.INSTALL_REASON_USER)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-          // Honoured only when NavOSS is already the installer of record of itself (after its
-          // first in-app update); otherwise the system still asks. See docs/release/android.md.
+          // Android may skip its prompt only when NavOSS is already its own installer of record.
+          // An Android 15 emulator still prompted in that case; see docs/release/android.md.
           setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

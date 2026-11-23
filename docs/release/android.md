@@ -118,11 +118,11 @@ streamed into an Android `PackageInstaller` session (hashed again on the way) an
   continues when you come back.
 - Android then shows its own install prompt. Cancelling it returns to the offer.
 - On Android 12 and later the app asks Android not to require that prompt
-  (`USER_ACTION_NOT_REQUIRED`). Android honours this only when NavOSS is already the installer of
-  record of itself, which is true **after the first in-app update**: an APK installed from a
-  browser, file manager, `adb` or Obtainium has that app as its installer, so the first in-app
-  update still shows the prompt, and later ones install without it. On Android 11 and earlier
-  every update shows the prompt.
+  (`USER_ACTION_NOT_REQUIRED`). Android documents that it may honour this only when NavOSS is
+  already the installer of record of itself, which is true after the first in-app update (an APK
+  installed from a browser, file manager, `adb` or Obtainium has that app as its installer). **In
+  testing it was not honoured:** on an Android 15 emulator, a second in-app update with NavOSS as
+  its own installer of record still showed the system prompt. Expect the prompt for every update.
 - Installing replaces the app and closes it; saved places, recents and settings stay.
 
 ## Building a release APK locally

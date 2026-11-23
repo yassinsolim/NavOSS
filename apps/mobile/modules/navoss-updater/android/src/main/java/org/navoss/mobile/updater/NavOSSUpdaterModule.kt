@@ -59,22 +59,10 @@ class NavOSSUpdaterModule : Module() {
     Function("getInstalledVersion") {
       val facts = inspector.installed(context.packageName)
       val info = context.packageManager.getPackageInfo(context.packageName, 0)
-      val installer =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-          runCatching {
-              context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName
-            }
-            .getOrNull()
-        } else {
-          @Suppress("DEPRECATION") context.packageManager.getInstallerPackageName(context.packageName)
-        }
       mapOf(
         "versionCode" to facts.versionCode.toDouble(),
         "versionName" to (info.versionName ?: ""),
         "sdkInt" to Build.VERSION.SDK_INT,
-        // Android 12+ installs an update without a second prompt only when NavOSS installed itself.
-        "updatesWithoutPrompt" to
-          (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && installer == context.packageName),
         "signedByRelease" to (NAVOSS_RELEASE_CERTIFICATE_SHA256 in facts.signerSha256),
       )
     }
