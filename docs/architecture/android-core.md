@@ -401,6 +401,15 @@ exception is cleared and the line above is logged; an exception thrown by the ho
 is cleared the same way. A failing `storageRead` reads as no value and a failing `nowMs` as the
 system clock.
 
+**Out of memory in the app host.** The Android host turns an `OutOfMemoryError` from a call into
+the refusal `out-of-memory` and handles it as process death: one best-effort post of a
+notification built when the guidance service started ("Guidance stopped. Open NavOSS to continue
+your trip.", which opens the app), then `Process.killProcess`, whatever the post does. It does not
+stop effects one by one, delete the saved trip or record a reason. The trip stays on disk and the
+next launch restores it through the normal restore path, as after Android's low-memory killer
+(which gives no callback) and as iOS does after an allocation failure. The service is
+`START_NOT_STICKY`, so only the driver opening the app restores it.
+
 ## Memory and strings
 
 - Strings cross as Java `String`s. Swift reads them with `GetStringChars` / `GetStringLength`

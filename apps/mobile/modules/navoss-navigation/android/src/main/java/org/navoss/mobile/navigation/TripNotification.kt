@@ -97,8 +97,15 @@ internal class TripNotification(private val context: Context) {
     shown = null
   }
 
-  /** Tells the driver the host ended the trip on its own; dismissable, replaced by the next trip. */
-  fun showStopped(text: String) {
+  /** Built ahead of time by [prepareStopped]: posting it needs no allocation beyond the binder call. */
+  @Volatile private var stopped: Notification? = null
+
+  /**
+   * Builds the notification an out-of-memory refusal posts before the process ends, while memory
+   * is fine (the guidance service is starting). Tapping it opens the app, which restores the trip.
+   */
+  fun prepareStopped() {
+    if (stopped != null) return
     ensureChannel()
     val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       Notification.Builder(context, CHANNEL_ID)
@@ -108,20 +115,20 @@ internal class TripNotification(private val context: Context) {
     }
     builder
       .setSmallIcon(R.drawable.navoss_navigation_notification)
-      .setContentTitle("Trip ended")
-      .setContentText(text)
-      .setStyle(Notification.BigTextStyle().bigText(text))
+      .setContentTitle(STOPPED_TITLE)
+      .setContentText(STOPPED_TEXT)
       .setAutoCancel(true)
       .setCategory(Notification.CATEGORY_NAVIGATION)
       .setVisibility(Notification.VISIBILITY_PUBLIC)
     context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
       builder.setContentIntent(PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
     }
-    manager.notify(STOPPED_NOTIFICATION_ID, builder.build())
+    stopped = builder.build()
   }
 
-  fun cancelStopped() {
-    manager.cancel(STOPPED_NOTIFICATION_ID)
+  /** Posts the prebuilt notification, if the service got as far as building it. */
+  fun postStopped() {
+    stopped?.let { manager.notify(STOPPED_NOTIFICATION_ID, it) }
   }
 
   private fun ensureChannel() {
@@ -139,6 +146,8 @@ internal class TripNotification(private val context: Context) {
   companion object {
     const val CHANNEL_ID = "org.navoss.mobile.navigation"
     const val NOTIFICATION_ID = 0x4e41
+    internal const val STOPPED_TITLE = "Guidance stopped"
+    internal const val STOPPED_TEXT = "Open NavOSS to continue your trip."
     const val STOPPED_NOTIFICATION_ID = 0x4e42
   }
 }

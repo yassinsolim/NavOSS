@@ -254,24 +254,6 @@ export function tripEndNotice(
 }
 
 /**
- * Android only: what the app says at launch when the native host ended the previous process's
- * trip on its own because the navigation core ran out of memory (the host deletes the trip and
- * ends the process instead of continuing in an unknown state). Stays until dismissed.
- */
-export function hostStopNotice(
-  reason: 'out-of-memory' | null | undefined,
-): { message: string; title: string; tone: 'warning'; untilDismissed: true } | undefined {
-  if (reason !== 'out-of-memory') return undefined;
-  return {
-    message:
-      'Your last trip ended because the phone ran out of memory. Start it again when you are ready.',
-    title: 'Trip ended',
-    tone: 'warning',
-    untilDismissed: true,
-  };
-}
-
-/**
  * Whether the updater should hold installs for a trip. Until the navigation session has applied
  * its first native snapshot the route state is still idle, so the native snapshot read at mount
  * decides: a trip restored into a new JS instance is held from the first render, and a hold left

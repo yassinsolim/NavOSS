@@ -118,17 +118,4 @@ class TripStorageTest {
     storage.write(progressKey, "p2")
     assertEquals(listOf(false, true), changes)
   }
-
-  @Test
-  fun `deleteAll removes every key and staging file, and the storage keeps working at launch`() {
-    val storage = TripStorage(directory)
-    storage.write(key, "{}")
-    storage.write(progressKey, "p")
-    File(directory, "$key.tmp").writeText("partial")
-    assertTrue(storage.deleteAll())
-    assertTrue(directory.listFiles().isNullOrEmpty())
-    assertNull(TripStorage(directory).read(key))
-    storage.write(key, "{}")
-    assertEquals("{}", TripStorage(directory).read(key))
-  }
 }

@@ -84,7 +84,6 @@ class NavOSSNavigationModule : Module() {
     mapOf(
       "speechAvailable" to status.speechAvailable,
       "tripSaved" to status.tripSaved,
-      "guidanceStopped" to status.guidanceStopped,
     )
 
   override fun definition() = ModuleDefinition {
