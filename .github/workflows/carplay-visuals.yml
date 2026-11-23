@@ -73,7 +73,10 @@ jobs:
         run: |
           set -euo pipefail
           name='NavOSS iPhone 15 Pro Max'
-          if xcrun simctl list devices available | grep -qF "$name ("; then
+          # Read the list first: under `pipefail`, `grep -q` exiting on the first match can kill
+          # the writer with SIGPIPE and turn "present" into "absent".
+          devices="$(xcrun simctl list devices available)"
+          if grep -qF "$name (" <<<"$devices"; then
             echo "Simulator already present"
             exit 0
           fi
