@@ -755,6 +755,23 @@ try {
         ['carplay-flow-arrival', 'arrival', 'light'],
         ['carplay-flow-end', 'end', 'light'],
         ['carplay-flow-dashboard', 'dashboard', 'light'],
+        // Free drive (no destination): the guidance vehicle marker and driving camera on the idle
+        // map, fed synthetic fixes through the map's real free-drive path.
+        ['carplay-free-drive-open-light', 'free-drive-open', 'light'],
+        ['carplay-free-drive-open-dark', 'free-drive-open', 'dark'],
+        ['carplay-free-drive-straight-light', 'free-drive-straight', 'light'],
+        ['carplay-free-drive-straight-dark', 'free-drive-straight', 'dark'],
+        ['carplay-free-drive-turn-light', 'free-drive-turn', 'light'],
+        ['carplay-free-drive-turn-dark', 'free-drive-turn', 'dark'],
+        ['carplay-free-drive-stopped', 'free-drive-stopped', 'light'],
+        ['carplay-free-drive-panned', 'free-drive-panned', 'light'],
+        ['carplay-free-drive-recenter', 'free-drive-recenter', 'light'],
+        ['carplay-free-drive-north-up', 'free-drive-north-up', 'light'],
+        ['carplay-free-drive-no-fix', 'free-drive-no-fix', 'light'],
+        ['carplay-free-drive-go', 'free-drive-go', 'light'],
+        ['carplay-free-drive-end', 'free-drive-end', 'dark'],
+        ['carplay-free-drive-dashboard', 'free-drive-dashboard', 'light'],
+        ['carplay-free-drive-end-without-heading', 'free-drive-end-without-heading', 'light'],
       ]) {
         await captureCarPlayScenario(name, scenario, appearance);
       }
@@ -845,6 +862,7 @@ try {
       metricsByName.get('carplay-real-vancouver-lanes-night.png'),
       metricsByName.get('carplay-offline-guidance-light.png'),
       metricsByName.get('carplay-offline-guidance-dark.png'),
+      metricsByName.get('carplay-free-drive-go.png'),
     ].filter((metric) => metric !== undefined);
     // The tilted guidance camera draws the route ahead foreshortened and part of it sits under
     // the card, so a present route covers less of the frame than the old flat camera's did.
@@ -905,12 +923,40 @@ try {
     ) {
       throw new Error('CarPlay clear scenario retained the route overlay.');
     }
+    // Free drive draws the NavOSS vehicle marker (never MapLibre's own dot) low on the map, and
+    // nothing at all without a live fix. Panned away, the vehicle may be anywhere or off screen.
+    for (const [name, metric] of metricsByName) {
+      if (!name.startsWith('carplay-free-drive-')) continue;
+      if (metric.mapLibrePuckRatio > 0.00002) {
+        throw new Error(`${name} draws MapLibre's user-location dot.`);
+      }
+      if (name === 'carplay-free-drive-no-fix.png') {
+        if (metric.vehicleMarkerRatio > 0.00002) {
+          throw new Error(`${name} draws a vehicle without a live fix.`);
+        }
+      } else if (name === 'carplay-free-drive-end-without-heading.png') {
+        // No sensor bearing: the neutral marker, never the arrow (whose disc is the teal measured).
+        if (metric.vehicleMarkerRatio > 0.00002) {
+          throw new Error(`${name} draws a directional arrow with no heading.`);
+        }
+      } else if (
+        name !== 'carplay-free-drive-panned.png' &&
+        (metric.vehicleMarkerRatio < 0.0001 || metric.vehicleMarkerFrameY < 0.6)
+      ) {
+        throw new Error(
+          `${name} has no vehicle marker in the lower part of the map ` +
+            `(ratio ${String(metric.vehicleMarkerRatio)}, height ${String(metric.vehicleMarkerFrameY)}).`,
+        );
+      }
+    }
     for (const [first, second] of [
       ['carplay-preview-light.png', 'carplay-preview-dark.png'],
       ['carplay-progress-05.png', 'carplay-progress-60.png'],
       ['carplay-progress-05.png', 'carplay-overview.png'],
       ['carplay-guidance-maneuver.png', 'carplay-guidance-night.png'],
       ['carplay-offline-preview-light.png', 'carplay-offline-preview-dark.png'],
+      ['carplay-free-drive-straight-light.png', 'carplay-free-drive-straight-dark.png'],
+      ['carplay-free-drive-straight-light.png', 'carplay-free-drive-north-up.png'],
     ]) {
       const firstMetric = metricsByName.get(first);
       const secondMetric = metricsByName.get(second);
