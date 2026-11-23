@@ -28,6 +28,8 @@ DerivedData/
 # Expo and React Native output
 .expo/
 apps/mobile/android/
+apps/mobile/modules/navoss-navigation/android/build/
+apps/mobile/modules/navoss-navigation/android/.gradle/
 apps/mobile/ios/
 
 # Local map and routing artifacts

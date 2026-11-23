@@ -1,7 +1,10 @@
 {
-  "platforms": ["apple"],
+  "platforms": ["apple", "android"],
   "apple": {
     "modules": ["NavOSSNavigationModule"],
     "appDelegateSubscribers": ["NavOSSNavigationAppDelegateSubscriber"]
+  },
+  "android": {
+    "modules": ["org.navoss.mobile.navigation.NavOSSNavigationModule"]
   }
 }
