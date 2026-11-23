@@ -179,6 +179,19 @@ jobs:
             /usr/libexec/PlistBuddy -c "Print :UIApplicationSceneManifest:UISceneConfigurations:$role:0:UISceneDelegateClassName" "$plist"
           done
 
+      # Builds without CarPlay move the React Native start from AppDelegate.swift to the phone scene.
+      # A CarPlay project must keep the template start (its phone scene moves the started root view),
+      # even when generated over a project without CarPlay by `expo prebuild --no-clean`.
+      - name: Verify the CarPlay AppDelegate starts React Native
+        working-directory: apps/mobile
+        run: |
+          delegate=ios/NavOSS/AppDelegate.swift
+          if ! grep -q 'factory.startReactNative(' "$delegate" ||
+            grep -q 'NavOSSPhoneSceneDelegate starts React Native' "$delegate"; then
+            echo "::error file=$delegate::CarPlay AppDelegate does not start React Native in didFinishLaunching"
+            exit 1
+          fi
+
   # Two legs side by side: `debug` (debug APK and the Kotlin unit tests) and `release` (the R8 and
   # resource-shrinking build). Each also builds or restores the navigation core and checks its APK.
   # One job doing both took about 20 minutes, mostly compiling React Native's C++ twice.
