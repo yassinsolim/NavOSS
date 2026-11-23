@@ -1,5 +1,5 @@
 import { SymbolView } from 'expo-symbols';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -25,6 +25,7 @@ import type { NavigationMapOrientation } from '@/features/navigation/navigation-
 import { useRenderCounter } from '@/lib/render-counter';
 import { createSchemeStyles, motion, radius, space, typography } from '@/theme';
 import { IconButton } from '@/ui/icon-button';
+import { FocusRingPressable } from '@/ui/pressable-scale';
 
 export interface MapControlsProps {
   attribution: string;
@@ -234,7 +235,7 @@ export function MapControls({
             </View>
           )}
           {roadEventStatus !== undefined && (
-            <Pressable
+            <FocusRingPressable
               accessibilityHint="Opens the list of road events, newest first"
               accessibilityLabel={roadEventStatus}
               accessibilityRole="button"
@@ -245,7 +246,7 @@ export function MapControls({
               <Text maxFontSizeMultiplier={1.2} style={styles.statusText}>
                 {roadEventStatus}
               </Text>
-            </Pressable>
+            </FocusRingPressable>
           )}
           {trafficStatus !== undefined && (
             <View
@@ -258,7 +259,7 @@ export function MapControls({
               </Text>
             </View>
           )}
-          <Pressable
+          <FocusRingPressable
             accessibilityLabel="Map attribution"
             accessibilityRole="button"
             hitSlop={12}
@@ -268,7 +269,7 @@ export function MapControls({
             <Text maxFontSizeMultiplier={1.2} numberOfLines={2} style={styles.creditText}>
               {attribution}
             </Text>
-          </Pressable>
+          </FocusRingPressable>
         </View>
         <View pointerEvents="box-none" style={styles.actions}>
           {!guidance && (

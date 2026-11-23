@@ -1,5 +1,5 @@
 import { SymbolView } from 'expo-symbols';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fullSheetHeight, type ScreenMetrics } from '@/features/map/overlay-layout';
@@ -21,6 +21,7 @@ import { BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
 import { ModalSheet } from '@/ui/sheet/modal-sheet';
 import { SectionTitle, SheetHeader } from '@/ui/sheet/sheet-header';
 import { IS_ANDROID } from '@/lib/device-copy';
+import { FocusRingPressable } from '@/ui/pressable-scale';
 
 export const AUDIO_MODES: readonly {
   detail: string;
@@ -167,7 +168,7 @@ export function GuidanceSettingsSheet({
             value={String(settings.speedingToleranceKph)}
           />
           <View style={styles.card}>
-            <Pressable
+            <FocusRingPressable
               accessibilityHint="Speaks the limit when your speed goes over it by more than the tolerance"
               accessibilityLabel="Audible speed warning"
               accessibilityRole="switch"
@@ -188,7 +189,7 @@ export function GuidanceSettingsSheet({
                   value={settings.speedingAudibleWarning}
                 />
               </View>
-            </Pressable>
+            </FocusRingPressable>
           </View>
           <Text style={styles.hint}>
             Limits come from route data and can be missing or out of date. Posted signs always take

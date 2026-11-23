@@ -43,8 +43,15 @@ import {
 import { useCommunity } from '@/features/community/use-community';
 import { mapBackAction } from '@/features/map/back-navigation';
 import type { AppTab } from '@/features/map/app-tab-bar';
+import {
+  dismissNotice,
+  type NoticeSlots,
+  showNoticeInSlots,
+  visibleNotice,
+} from '@/features/map/controller/map-notice-slots';
 import { useMapPreferences, useMapStyle } from '@/features/map/controller/use-map-preferences';
 import { OFFLINE_ROUTE_SOURCE } from '@/features/offline/offline-copy';
+import { TRIP_END_NOTICE } from '@/features/map/controller/trip-end-notice-memory';
 import { useNavigationSession } from '@/features/map/controller/use-navigation-session';
 import { useOverlayData } from '@/features/map/controller/use-overlay-data';
 import { usePlaceSearch } from '@/features/map/controller/use-place-search';
@@ -127,6 +134,16 @@ import {
   toggleFavoriteDestination,
 } from '@/features/navigation/native-navigation';
 import {
+  canSimulateDrive,
+  getLocationAvailability,
+  getNavigationSnapshot,
+  isSimulatedTrip,
+  liveGuidanceRefusal,
+  startSimulatedDrive,
+} from '@/features/navigation/native-navigation';
+import { useHostStatus } from '@/features/navigation/use-host-status';
+import { useSimulatedDrive } from '@/features/navigation/use-simulated-drive';
+import {
   DEFAULT_GUIDANCE_SETTINGS,
   type GuidanceSettings,
   guidanceSettingsFromNative,
@@ -154,15 +171,20 @@ import {
   type RoutePreviewOrigin,
   selectedRouteOf,
   tripEndNotice,
+  updaterTripActive,
 } from '@/features/navigation/route-ui-state';
 import { setUpdaterTripActive } from '@/features/updates/use-app-updates';
 import { useSafetyCameraAlert } from '@/features/navigation/use-safety-camera-alert';
 import {
   hasNoRouteGuidance,
   isResumingTrip,
+  isTripState,
+  nextTripSimulated,
+  simulatedAtTripEntry,
   vehicleMatchStatus as vehicleMatchStatusOf,
 } from '@/features/navigation/trip-status';
 import { fetchAppConfigUntilKnown, searchPlaces } from '@/lib/api';
+import { IS_ANDROID } from '@/lib/device-copy';
 import { useStableCallback } from '@/lib/use-stable-callback';
 import { createValueStore } from '@/lib/value-store';
 import { haptics } from '@/theme/haptics';
@@ -203,12 +225,14 @@ function roadEventDetail(
   };
 }
 
-/** A short confirmation or failure message that appears over the map and dismisses itself. */
+/** A short confirmation or failure message that appears over the map, usually dismissing itself. */
 export interface MapNotice {
   id: number;
   message: string;
   title: string;
   tone: 'danger' | 'info' | 'warning';
+  /** Stays until the driver dismisses it instead of leaving after a few seconds. */
+  untilDismissed?: boolean;
 }
 
 export interface CameraChange {
@@ -253,6 +277,8 @@ export function useMapController() {
   const placeInteractionRef = useRef(createLatestRequestGate());
   const noticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const noticeIdRef = useRef(0);
+  /** The id of the trip-end notice on screen, so dismissing it (or its timeout) settles it. */
+  const tripEndNoticeIdRef = useRef<number | undefined>(undefined);
   const guidanceSettingsQueuedRef = useRef(false);
   const offlineMapsQueuedRef = useRef(false);
   const [isOfflineMapsVisible, setIsOfflineMapsVisible] = useState(false);
@@ -299,7 +325,7 @@ export function useMapController() {
   // The visible area itself, as of the last time the camera settled: what the traffic caption
   // describes. Fetches use the snapped `viewBox`, which reaches up to a grid cell beyond it.
   const [visibleBox, setVisibleBox] = useState<GeographicBox>();
-  const [notice, setNotice] = useState<MapNotice>();
+  const [noticeSlots, setNoticeSlots] = useState<NoticeSlots<MapNotice>>({});
   const [placeDetailsLoading, setPlaceDetailsLoading] = useState(false);
   const [googlePlaceRatingAvailable] = useState(() => isGooglePlaceRatingAvailable());
   const [turnByTurnAvailable] = useState(() => hasNativeTurnByTurnGuidance());
@@ -319,13 +345,19 @@ export function useMapController() {
   const { preferences: mapPreferences, updatePreferences } = useMapPreferences();
   const { darkMap, mapStyle, offline: mapStyleOffline } = useMapStyle(mapPreferences, colorScheme);
 
-  const showNotice = (next: Omit<MapNotice, 'id'>) => {
-    clearTimeout(noticeTimeoutRef.current);
+  // A notice that stays until dismissed keeps its own slot: a later transient notice cannot
+  // replace it (see `map-notice-slots`).
+  const showNotice = (next: Omit<MapNotice, 'id'>): number => {
     noticeIdRef.current += 1;
-    setNotice({ ...next, id: noticeIdRef.current });
+    const id = noticeIdRef.current;
+    setNoticeSlots((slots) => showNoticeInSlots(slots, { ...next, id }));
+    if (next.untilDismissed === true) return id;
+    clearTimeout(noticeTimeoutRef.current);
     noticeTimeoutRef.current = setTimeout(() => {
-      setNotice(undefined);
+      if (id === tripEndNoticeIdRef.current) TRIP_END_NOTICE.settle();
+      setNoticeSlots((slots) => dismissNotice(slots, id));
     }, NOTICE_VISIBLE_MS);
+    return id;
   };
 
   // --- Route planning and the navigation session -------------------------------------------
@@ -353,8 +385,8 @@ export function useMapController() {
     onFix: location.setNavigationFix,
     onTripEnded: (reason) => {
       setIsIdleCameraFollowing(true);
-      const ended = tripEndNotice(reason);
-      if (ended !== undefined) showNotice(ended);
+      const ended = tripEndNotice(reason, IS_ANDROID ? 'android' : 'ios');
+      if (ended !== undefined) tripEndNoticeIdRef.current = showNotice(ended);
     },
     routeState,
     setRouteSource: planner.setRouteSource,
@@ -362,6 +394,13 @@ export function useMapController() {
   });
   const navigationSnapshot = session.snapshot;
   const navigationStepIndex = session.stepIndex;
+  // Read once at mount, before the session has applied its first snapshot (see updaterTripActive).
+  const [initialNativeTrip] = useState(() => getNavigationSnapshot().trip !== undefined);
+  const updaterHold = updaterTripActive({
+    initialNativeTrip,
+    routeIsIdle,
+    snapshotApplied: navigationSnapshot !== undefined,
+  });
 
   // --- Which surface the handset shows ------------------------------------------------------
 
@@ -1129,6 +1168,12 @@ export function useMapController() {
     ) {
       return;
     }
+    // Android: say plainly why live guidance cannot start instead of waiting for a fix.
+    const refusal = liveGuidanceRefusal();
+    if (refusal !== undefined) {
+      showNotice({ ...refusal, tone: 'warning' });
+      return;
+    }
     setUpdaterTripActive(true);
     cameraAlerts.reset();
     resetTrip();
@@ -1155,6 +1200,46 @@ export function useMapController() {
       waypoints: routeState.waypoints,
     });
     haptics.success();
+  };
+
+  const simulatedDrive = useSimulatedDrive();
+  // The arrival of a simulated drive says so, after the native simulation has already stopped;
+  // a screen mounted after it adopts the trip a render later and reads the native trip's flag
+  // then, kept until End / Done.
+  const [tripSimulated, setTripSimulated] = useState(false);
+  const [wasInTrip, setWasInTrip] = useState(false);
+  const nextSimulated = nextTripSimulated(
+    tripSimulated,
+    routeState.type,
+    simulatedDrive || simulatedAtTripEntry(routeState.type, wasInTrip, isSimulatedTrip),
+  );
+  if (nextSimulated !== tripSimulated) setTripSimulated(nextSimulated);
+  if (isTripState(routeState.type) !== wasInTrip) setWasInTrip(!wasInTrip);
+  const hostStatus = useHostStatus();
+
+  /** Android: drives the selected route without GPS, labelled as a simulation throughout. */
+  const handleSimulateDrive = () => {
+    if (routeState.type !== 'preview' || selectedRoute === undefined) return;
+    setUpdaterTripActive(true);
+    cameraAlerts.reset();
+    resetTrip();
+    setPreviewDetent(undefined);
+    session.adoptSnapshot(
+      startSimulatedDrive(
+        selectedRoute,
+        routeState.destination,
+        planner.routePreferences,
+        planner.routeSource?.id,
+        routeState.waypoints,
+      ),
+    );
+    setRouteState({
+      destination: routeState.destination,
+      route: selectedRoute,
+      routes: routeState.routes,
+      type: 'navigating',
+      waypoints: routeState.waypoints,
+    });
   };
 
   const handleShareEta = () => {
@@ -1703,7 +1788,6 @@ export function useMapController() {
     communityActionBusy,
     coverageName,
     darkMap,
-    deviceHasNoGps: location.deviceHasNoGps,
     destinationCatalog,
     exploreSheetRef,
     featureDetail: communityFeatureDetail ?? featureDetail,
@@ -1800,7 +1884,7 @@ export function useMapController() {
       visible: isOfflineMapsVisible,
     },
     metrics,
-    notice,
+    notice: visibleNotice(noticeSlots),
     onApplyRouteStops: handleApplyRouteStops,
     onBeginShortcutSetup: beginShortcutSetup,
     onCancelRoute: handleCancelRoute,
@@ -1821,8 +1905,17 @@ export function useMapController() {
     },
     onClosePlace: handleClosePlace,
     onDismissNotice: () => {
-      clearTimeout(noticeTimeoutRef.current);
-      setNotice(undefined);
+      // Dismissing the transient notice also cancels its timer (always the case on iOS, which
+      // shows no persistent notice), as before notices had slots.
+      if (noticeSlots.persistent === undefined) clearTimeout(noticeTimeoutRef.current);
+      const visible = visibleNotice(noticeSlots);
+      if (visible !== undefined && visible.id === tripEndNoticeIdRef.current) {
+        TRIP_END_NOTICE.settle();
+      }
+      setNoticeSlots((slots) => {
+        const current = visibleNotice(slots);
+        return current === undefined ? slots : dismissNotice(slots, current.id);
+      });
     },
     onEndNavigation: handleEndNavigation,
     onFindParking: handleFindParking,
@@ -1845,6 +1938,12 @@ export function useMapController() {
     onSelectRoute: handleSelectRoute,
     onSelectTab: handleSelectTab,
     onShareEta: handleShareEta,
+    onSimulateDrive: canSimulateDrive() ? handleSimulateDrive : undefined,
+    deviceHasNoGps: getLocationAvailability() === 'no-gps',
+    hostStatus,
+    updaterTripActive: updaterHold,
+    simulatedDrive,
+    tripSimulated,
     onSharePlace: handleSharePlace,
     onShortcutPress: handleShortcutPress,
     onStartNavigation: handleStartNavigation,

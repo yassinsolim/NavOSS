@@ -9,8 +9,6 @@
   public typealias Env = UnsafeMutablePointer<JNIEnv?>
   public typealias VM = UnsafeMutablePointer<JavaVM?>
 
-  private let exceptionClassName = "org/navoss/navigation/core/NavOSSCoreException"
-
   // Failures. A JNI call that can fail leaves a Java exception pending (`NewString`,
   // `GetStringChars` and `PushLocalFrame` an `OutOfMemoryError`), and with one pending almost no
   // JNI call may be made. So every such call is checked, and the path that failed makes no
@@ -46,7 +44,7 @@
   private func raise(_ env: Env, _ error: NavOSSCoreError) {
     let jni = env.pointee!.pointee
     guard jni.ExceptionCheck(env) == 0 else { return }
-    guard let type = jni.FindClass(env, exceptionClassName) else { return }
+    guard let type = jni.FindClass(env, "org/navoss/navigation/core/NavOSSCoreException") else { return }
     defer { jni.DeleteLocalRef(env, type) }
     guard
       let constructor = jni.GetMethodID(
@@ -87,21 +85,19 @@
       guard jni.GetJavaVM(env, &vm) == JNI_OK, let vm, let type = jni.GetObjectClass(env, host)
       else { return nil }
       defer { jni.DeleteLocalRef(env, type) }
-      func method(_ name: String, _ signature: String) -> jmethodID? {
-        jni.GetMethodID(env, type, name, signature)
-      }
-      guard let onStateChanged = method("onStateChanged", "(Ljava/lang/String;)V"),
-        let speak = method("speak", "(Ljava/lang/String;Ljava/lang/String;J)V"),
-        let cancelSpeech = method("cancelSpeech", "(J)V"),
-        let needsLocationUpdates = method("needsLocationUpdates", "()V"),
-        let reconcile = method("reconcileLocationUpdates", "(JZ)V"),
-        let startClock = method("startClock", "(J)V"),
-        let stopClock = method("stopClock", "(J)V"),
-        let httpRequest = method("httpRequest", "(JLjava/lang/String;)V"),
-        let cancelHttpRequest = method("cancelHttpRequest", "(J)V"),
-        let storageRead = method("storageRead", "(Ljava/lang/String;)Ljava/lang/String;"),
-        let storageWrite = method("storageWrite", "(Ljava/lang/String;Ljava/lang/String;)V"),
-        let nowMs = method("nowMs", "()D"),
+      // Literal names and descriptors only: jni-contract.py reads every lookup from this file.
+      guard let onStateChanged = jni.GetMethodID(env, type, "onStateChanged", "(Ljava/lang/String;)V"),
+        let speak = jni.GetMethodID(env, type, "speak", "(Ljava/lang/String;Ljava/lang/String;J)V"),
+        let cancelSpeech = jni.GetMethodID(env, type, "cancelSpeech", "(J)V"),
+        let needsLocationUpdates = jni.GetMethodID(env, type, "needsLocationUpdates", "()V"),
+        let reconcile = jni.GetMethodID(env, type, "reconcileLocationUpdates", "(JZ)V"),
+        let startClock = jni.GetMethodID(env, type, "startClock", "(J)V"),
+        let stopClock = jni.GetMethodID(env, type, "stopClock", "(J)V"),
+        let httpRequest = jni.GetMethodID(env, type, "httpRequest", "(JLjava/lang/String;)V"),
+        let cancelHttpRequest = jni.GetMethodID(env, type, "cancelHttpRequest", "(J)V"),
+        let storageRead = jni.GetMethodID(env, type, "storageRead", "(Ljava/lang/String;)Ljava/lang/String;"),
+        let storageWrite = jni.GetMethodID(env, type, "storageWrite", "(Ljava/lang/String;Ljava/lang/String;)V"),
+        let nowMs = jni.GetMethodID(env, type, "nowMs", "()D"),
         let global = jni.NewGlobalRef(env, host)
       else {
         return nil

@@ -308,6 +308,19 @@ expired, cannot be read or cannot be started again is removed, and the snapshot 
 end on its first accurate fix (`restored-trip-too-far`, `restored-trip-arrived`). Off its route it
 is not ended but rerouted. The host passes the reason to JS unchanged, like every snapshot field.
 
+The app's host (`TripStorage.kt`) writes one file per key under `noBackupFilesDir` (temporary
+file, sync, rename). A write that fails stays in memory and is retried, in order, before the next
+write (the next checkpoint), so a durable progress record is never newer than its durable trip;
+meanwhile the trip sheet says the trip is not saved. Staging files are deleted on failure and on
+key deletion and swept at startup. While a simulated drive runs, the host writes nothing (a
+trip it replaces is deleted), so a simulated route can never be restored as a real trip.
+
+**HTTP in the app's host.** `apiBaseUrl` is the origin the JS bundle is built with
+(`EXPO_PUBLIC_API_URL`, written to the manifest as `org.navoss.mobile.API_URL` by the config
+plugin). `HttpTransport.kt` contacts only that origin (HTTPS, or HTTP on the loopback interface
+for a local API), follows no redirects, fails a body over 8 MB as `unreachable`, and never sends a
+request whose cancel arrived before it.
+
 **Wall clock.** `nowMs()` returns `System.currentTimeMillis()` as a `Double` in production and a
 test-controlled value in tests. Fix times come from the fixes themselves; the clock drives
 consent deadlines, reroute backoff, checkpoints and camera refresh.
@@ -394,6 +407,15 @@ can throw `OutOfMemoryError` as well as `NavOSSCoreException`). A host callback 
 exception is cleared and the line above is logged; an exception thrown by the host's own method
 is cleared the same way. A failing `storageRead` reads as no value and a failing `nowMs` as the
 system clock.
+
+**Out of memory in the app host.** The Android host turns an `OutOfMemoryError` from a call into
+the refusal `out-of-memory` and handles it as process death: one best-effort post of a
+notification built when the guidance service started ("Guidance stopped. Open NavOSS to continue
+your trip.", which opens the app), then `Process.killProcess`, whatever the post does. It does not
+stop effects one by one, delete the saved trip or record a reason. The trip stays on disk and the
+next launch restores it through the normal restore path, as after Android's low-memory killer
+(which gives no callback) and as iOS does after an allocation failure. The service is
+`START_NOT_STICKY`, so only the driver opening the app restores it.
 
 ## Memory and strings
 
@@ -505,24 +527,121 @@ packages without symlinks, which have to be maintained by hand and silently drop
 - Every shipped `.so` must have 16 KB-aligned `LOAD` segments (`llvm-readelf -l`, alignment
   `0x4000`): Android 15 and later devices with 16 KB pages refuse anything else.
 
-### On a GitHub `ubuntu-latest` runner
+### In CI and releases
 
-Not yet a workflow; the steps are:
+The composite action `.github/actions/build-android-core` is the one implementation both
+`ci.yml` (job `Android build and Kotlin tests`) and `android-release.yml` call before Gradle. On
+`ubuntu-latest` (Ubuntu 26.04, x86_64) it:
 
-```sh
-. apps/mobile/scripts/android-core-toolchain.env
-curl -fsSLO "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz"
-tar zxf "swiftly-$(uname -m).tar.gz" && ./swiftly init --quiet-shell-followup --skip-install -y
-. "$HOME/.local/share/swiftly/env.sh" && swiftly install "$SWIFT_VERSION" --use
-swift sdk install "$SWIFT_ANDROID_SDK_URL" --checksum "$SWIFT_ANDROID_SDK_SHA256"
-curl -fsSLO "https://dl.google.com/android/repository/android-ndk-$ANDROID_NDK_RELEASE-linux.zip"
-echo "$ANDROID_NDK_LINUX_SHA1  android-ndk-$ANDROID_NDK_RELEASE-linux.zip" | sha1sum -c
-unzip -q "android-ndk-$ANDROID_NDK_RELEASE-linux.zip" && export ANDROID_NDK_HOME="$PWD/android-ndk-$ANDROID_NDK_RELEASE"
-"$HOME/.swiftpm/swift-sdks/$SWIFT_ANDROID_SDK_ID.artifactbundle/swift-android/scripts/setup-android-sdk.sh"
-apps/mobile/scripts/build-android-core.sh
-```
+1. runs `android-core/scripts/jni-contract.py check`: the Kotlin binding's `external` functions
+   and the Swift `@_cdecl` entry points must name the same JNI symbols; every lookup call site in
+   `android-core/JNI/**` (`FindClass`, `GetObjectClass`, `GetMethodID`, `GetStaticMethodID`,
+   `GetFieldID`, `GetStaticFieldID`, `RegisterNatives`, `ThrowNew`, ...) must use string-literal
+   names and descriptors on a class it can attribute, or the check fails with file and line, and
+   the number of lookups read must equal the number of call sites; any other mention of a
+   lookup API (an alias such as `let f = jni.GetMethodID`, or another receiver) fails too; every `Host` method looked up
+   must exist in `NavOSSCore.Host` with that descriptor, and the exception constructor looked up
+   must be `NavOSSCoreException`'s primary constructor;
+2. in CI only, restores `android-core/build/jniLibs` from the cache `android-core-libs-v1-…`, keyed
+   on the pinned Swift version, toolchain and SDK checksums, NDK version, and a hash of
+   `Package.swift`, `ios/Core/**`, `android-core/Facade/**`, `android-core/JNI/**`,
+   `build-android-core.sh`, `android-core-toolchain.env`, the action itself and
+   `install-toolchain-linux.sh`. The release workflow passes `library-cache: false` and always
+   compiles: the build is not reproducible and the checks are structural, so a stale or poisoned
+   cache entry would otherwise be signed. A cache entry is only as trustworthy as the run that
+   saved it; GitHub scopes entries to the branch that made them (pull requests cannot write
+   `main`'s), which is why CI may use them and a release may not;
+3. installs NDK r30 with `sdkmanager` and fails unless its `source.properties` revision is the
+   pinned one; on a library-cache miss (always, for a release) restores the toolchain tarballs
+   (cache `android-core-toolchain-v1-…`, keyed on the pins only, so a source change does not
+   download them again), and `android-core/scripts/install-toolchain-linux.sh` downloads what is
+   missing over HTTPS only (`--proto '=https' --proto-redir '=https' --tlsv1.2`), checks every
+   tarball against its pinned SHA-256 before extracting it, cached or not, installs the SDK bundle
+   and links NDK r30 into it; then `build-android-core.sh` builds;
+4. always, cache hit or not, runs `android-core/scripts/verify-android-core.sh`, which fails on
+   any ABI directory but `arm64-v8a`, a missing `libNavOSSCore.so`, a NEEDED library that is
+   neither shipped nor one of Android's own (the NDK's API 28 stubs), a shipped library nothing
+   needs, a Kotlin `external` not exported by `libNavOSSCore.so`, a library without a `LOAD`
+   segment or with one aligned below 16 KB, a `libc++_shared.so` that lacks the symbol the config
+   plugin checks for r30, or any failure of the ELF readers themselves (each tool's output and exit
+   status are captured before parsing, so a reader error cannot yield an empty, passing list);
+5. runs `android-core/scripts/test-verify-scripts.sh` on both checkers: broken copies (computed
+   lookup names or descriptors, a lookup through a helper, an alias or another receiver, a static field lookup, wrong
+   descriptors, a renamed entry point; a non-ELF `.so`, an ELF without `LOAD`, a 4 KB-aligned
+   segment, a missing or unneeded library, a second ABI, a missing export, r27's `libc++`) must
+   each fail and the unchanged input must pass;
+6. in CI, saves the libraries to the cache only after they passed.
 
-swiftly verifies the toolchain's signature; the SDK and NDK are checked against the pinned
-checksums. Expected time (not measured on a runner): toolchain about 3 minutes, SDK and NDK
-downloads about 2 minutes, release build about 5 minutes on a 4-core runner; cache
-`~/.local/share/swiftly`, `~/.swiftpm/swift-sdks` and the NDK by the pinned versions.
+After Gradle, `android-core/scripts/verify-apk-core.sh` checks an APK: every verified library is
+packaged under `lib/arm64-v8a/` byte for byte (so the packaged `libc++_shared.so` is r30's, not
+React Native's r27 copy), and `apkanalyzer dex packages` shows the binding class with every
+native method, `NavOSSCore$Host` with every callback, and `NavOSSCoreException(String, String)`
+under their own names (the list comes from the Kotlin `external` functions and from every
+`FindClass` / `GetMethodID` the Swift JNI layer makes; `jni-contract.py check` fails on a lookup
+kind it cannot attribute), plus the NavOSS classes the manifest names (Android instantiates those by name; the app's Expo
+modules are referenced as classes, and R8 renames them harmlessly).
+On a release APK that is the check that R8 neither stripped nor renamed them. The keep rules are
+`modules/navoss-navigation/android/consumer-rules.pro`; without them R8 removed the `Host`
+callbacks and `NavOSSCoreException` (CI run 45151549163), so `nativeCreate` would fail in every
+release. CI runs it in two parallel legs, on a debug APK and on a release APK built with a throwaway
+key generated in the job (the release signing plugin accepts any keystore named by its three
+variables; the release workflow is what pins the certificate). The release workflow runs it on
+the signed APK, and every check fails the run.
+
+What the dex check proves, and what it does not: it reads the release APK's dex with
+`apkanalyzer` and finds the binding class with every native method, the `Host` interface with
+every callback the Swift side looks up, and the exception constructor, each declared under its
+JNI name and descriptor. It does not run anything: that `GetMethodID` on the concrete `Host`
+implementation resolves (R8 keeping the implementing methods under the interface's names), that
+`System.loadLibrary` and the NEEDED closure load on a device, and that the core then guides a
+trip are only shown by running the signed APK on an arm64 device or emulator. Hosted
+`ubuntu-latest` runners are x86_64; an emulator there could run this arm64-only APK only through
+ARM translation, at a cost of tens of minutes, so CI does not do it.
+
+React Native keeps NDK r27 (`ndk;27.1.12297006`, installed by the workflows); the core and its
+`libc++_shared.so` use r30, which the action installs and passes to the build as
+`ANDROID_NDK_HOME` for that step only.
+
+### Pins and how to bump them
+
+Every pin is in `apps/mobile/scripts/android-core-toolchain.env`:
+
+| Pin                            | Value                                                                     | Source                                                                                                                                                 |
+| ------------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SWIFT_VERSION`                | 6.4.3                                                                     | swift.org release                                                                                                                                      |
+| `SWIFT_LINUX_TOOLCHAIN_URL`    | `…/ubuntu2604/swift-6.4.3-RELEASE/swift-6.4.3-RELEASE-ubuntu26.04.tar.gz` | swift.org download for the runner's Ubuntu                                                                                                             |
+| `SWIFT_LINUX_TOOLCHAIN_SHA256` | `0e408a92…3045613`                                                        | computed 2026-11-23 from the download whose `.sig` verified against swift.org's keys (swift.org publishes a signature, not a checksum, for toolchains) |
+| `SWIFT_ANDROID_SDK_SHA256`     | `a78839ed…71f0a9`                                                         | published by swift.org on <https://www.swift.org/install/linux/>                                                                                       |
+| `ANDROID_NDK_VERSION`          | 30.0.16248370                                                             | installed by `sdkmanager`, which checks Google's own checksum                                                                                          |
+
+To bump the toolchain: change `SWIFT_VERSION`, the URLs and the SDK ID; take the SDK checksum
+from swift.org's install page; for the Linux toolchain, download the tarball and its `.sig`,
+verify it (`gpg --import` <https://www.swift.org/keys/all-keys.asc> (served gzip-encoded:
+`curl --compressed`), then `gpg --verify`) and pin `sha256sum` of the verified file. When
+GitHub moves `ubuntu-latest` to another Ubuntu, `install-toolchain-linux.sh` stops with a
+message naming both versions: pin the toolchain built for the new one
+(`SWIFT_LINUX_OS_VERSION`, URL, checksum). Every pin is part of both cache keys, so a bump
+rebuilds. Update `android-core/NOTICES.md` with the pins.
+
+Locally, the macOS steps (swiftly, `swift sdk install … --checksum`, the NDK zip with its SHA-1)
+are unchanged; `build-android-core.sh` runs on both hosts.
+
+### Timings (2026-11-23, `ubuntu-latest`)
+
+| Step                                                | Cold (no cache)                           | Warm (cache hit) |
+| --------------------------------------------------- | ----------------------------------------- | ---------------- |
+| Core action                                         | 75-87 s                                   | about 5 s        |
+| of which toolchain and SDK download, check, extract | 27 s (8 s more to save the 1.46 GB cache) | not run          |
+| of which `swift build` (release) and strip          | 44 s                                      | not run          |
+| Android job before this change (debug only)         | about 12 min (Gradle cache miss)          | 6-7 min          |
+| `debug` leg (debug APK, Kotlin tests)               | 8-10 min                                  | 6.5 min          |
+| `release` leg (R8 release APK)                      | 13-14 min                                 | 12 min           |
+
+Most of each leg is Gradle compiling React Native's and the Expo modules' C++, which no cache
+keeps between runs (release: 10.5 of 12 minutes warm); the release leg adds R8. The legs run in
+parallel, so the Android check takes as long as the release leg. One job building both variants took 19.5 minutes, so they
+run as two parallel legs. The core libraries' cache entry is about 24 MB.
+
+`swift build` is not byte-reproducible: two runners building the same commit produced different
+`libNavOSSCore.so` checksums. Every check therefore compares the APK with the libraries that job
+verified, and the release notes give the checksum of the shipped library.

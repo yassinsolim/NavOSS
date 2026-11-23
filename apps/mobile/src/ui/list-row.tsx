@@ -2,6 +2,7 @@ import { SymbolView } from 'expo-symbols';
 import type { ReactNode } from 'react';
 import {
   type AccessibilityRole,
+  Platform,
   Pressable,
   type StyleProp,
   StyleSheet,
@@ -12,6 +13,7 @@ import {
 
 import { createThemedStyles, radius, space, touchTarget, typography, useTheme } from '@/theme';
 import type { SymbolName } from '@/ui/button';
+import { hiddenFromFocusProps } from '@/ui/focus';
 import { useFocusRing } from '@/ui/pressable-scale';
 
 export interface ListRowProps {
@@ -121,6 +123,7 @@ export function ListRow({
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={accessibilityRole ?? 'button'}
       focusable={focusable}
+      {...(focusable === false ? hiddenFromFocusProps(Platform.OS) : undefined)}
       onBlur={focusRing.onBlur}
       onFocus={focusRing.onFocus}
       onPress={onPress}

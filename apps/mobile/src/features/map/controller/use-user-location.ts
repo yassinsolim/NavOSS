@@ -8,8 +8,14 @@ import * as Location from 'expo-location';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
-import { phoneIdleLocationWatchOptions } from '@/features/map/idle-camera-follow';
-import { ensureForegroundLocationPermission } from '@/features/map/map-location';
+import {
+  automaticLocationOptions,
+  phoneIdleLocationWatchOptions,
+} from '@/features/map/idle-camera-follow';
+import {
+  ensureForegroundLocationPermission,
+  mapLocationPermissionRequest,
+} from '@/features/map/map-location';
 import {
   type MapRegion,
   mapRegionForCoordinate,
@@ -25,9 +31,17 @@ import {
   type RouteOriginSample,
   type RouteRequestOrigin,
 } from '@/features/navigation/route-origin';
+import { getLocationAvailability } from '@/features/navigation/native-navigation';
 import { RouteOriginUnavailableError } from '@/features/navigation/route-ui-state';
 import { createValueStore, type ValueStore } from '@/lib/value-store';
 import { IS_ANDROID } from '@/lib/device-copy';
+
+/** The first-fix effect's permission request: once per session on Android (see the helper). */
+const automaticLocationPermission = mapLocationPermissionRequest(
+  IS_ANDROID,
+  Location.getForegroundPermissionsAsync,
+  Location.requestForegroundPermissionsAsync,
+);
 
 export type LocationState = 'denied' | 'error' | 'idle' | 'locating' | 'visible';
 
@@ -151,7 +165,12 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     if (aborted()) return undefined;
     if (location === 'no-fix' || location === 'services-off') {
       setLocationState('error');
-      throw new RouteOriginUnavailableError(routeOriginFailureMessage(location));
+      // Android: a device without GPS (a handheld) can only have a Wi-Fi position; say so.
+      const failure =
+        location === 'no-fix' && IS_ANDROID && getLocationAvailability() === 'no-gps'
+          ? 'no-gps'
+          : location;
+      throw new RouteOriginUnavailableError(routeOriginFailureMessage(failure));
     }
     const sample = routeOriginSampleFromLocation(location);
     const selectedSample = newestValidRouteOriginSample(sample, routeOriginSampleRef.current);
@@ -256,11 +275,9 @@ export function useLocationWatches(
     if (!phoneMapVisible) return;
     let cancelled = false;
     const active = () => !cancelled;
+    let recovery: Location.LocationSubscription | undefined;
     onLocationState('locating');
-    void ensureForegroundLocationPermission(
-      Location.getForegroundPermissionsAsync,
-      Location.requestForegroundPermissionsAsync,
-    )
+    void automaticLocationPermission()
       .then(async (granted) => {
         if (!active()) return;
         if (!granted) {
@@ -274,16 +291,42 @@ export function useLocationWatches(
         if (!active()) return;
         const position =
           lastKnown ??
-          (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+          (await Location.getCurrentPositionAsync(
+            automaticLocationOptions(Location.Accuracy.Balanced),
+          ));
         if (!active()) return;
         onSample(routeOriginSampleFromLocation(position));
         onLocationState('visible');
       })
       .catch(() => {
-        if (active()) onLocationState('error');
+        if (!active()) return;
+        onLocationState('error');
+        // Android's one-shot lookup fails at once when the provider has no fix yet (a cold start
+        // with permission already granted), and the idle watch only runs once a fix is visible.
+        // Wait for the first fix instead of leaving "Current location unavailable" until the
+        // driver taps Center. iOS's lookup waits for a fix itself.
+        if (!IS_ANDROID) return;
+        let recovered = false;
+        void Location.watchPositionAsync(
+          automaticLocationOptions(Location.Accuracy.Balanced),
+          (position) => {
+            if (!active() || recovered) return;
+            recovered = true;
+            recovery?.remove();
+            recovery = undefined;
+            onSample(routeOriginSampleFromLocation(position));
+            onLocationState('visible');
+          },
+        )
+          .then((subscription) => {
+            if (active() && !recovered) recovery = subscription;
+            else subscription.remove();
+          })
+          .catch(() => undefined);
       });
     return () => {
       cancelled = true;
+      recovery?.remove();
     };
   }, [phoneMapVisible]);
 

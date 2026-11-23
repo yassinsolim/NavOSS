@@ -94,12 +94,15 @@ describe('route origin correlation', () => {
 
 describe('route origin without a location', () => {
   it('names a missing fix and location turned off without blaming the connection', () => {
-    for (const failure of ['no-fix', 'services-off'] as const) {
+    for (const failure of ['no-fix', 'no-gps', 'services-off'] as const) {
       const message = routeOriginFailureMessage(failure);
       expect(message).not.toMatch(/connection/i);
       expect(message).toMatch(/choose where the route starts/i);
     }
     expect(routeOriginFailureMessage('services-off')).toMatch(/turned off/);
+    // A device with no GPS (the Retroid handhelds) says so rather than suggesting a retry.
+    expect(routeOriginFailureMessage('no-gps')).toMatch(/has no GPS/);
+    expect(routeOriginFailureMessage('no-gps')).not.toMatch(/try again/i);
     expect(routeOriginFailureMessage('stale-fix')).toBe(
       'A fresh, accurate location fix is needed. Wait for GPS to update, then try again.',
     );

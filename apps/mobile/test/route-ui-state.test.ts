@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../modules/navoss-navigation/index.js', () => ({ default: {} }));
 
 import {
+  updaterTripActive,
   routeFromNativeTrip,
   routeSourceForNativeTrip,
   selectedRouteOf,
@@ -181,26 +182,58 @@ describe('route from a native trip', () => {
 
 describe('trip end notice', () => {
   it('tells the driver why a saved trip was not restored, and nothing otherwise', () => {
-    expect(tripEndNotice('restored-trip-expired')).toEqual({
+    expect(tripEndNotice('restored-trip-expired', 'ios')).toEqual({
       message: 'Your last trip was more than 12 hours old, so it was ended.',
       title: 'Trip ended',
       tone: 'info',
+      untilDismissed: false,
     });
-    expect(tripEndNotice('restored-trip-too-far')?.message).toBe(
+    expect(tripEndNotice('restored-trip-too-far', 'ios')?.message).toBe(
       'Your last trip was ended because you are now far from its route.',
     );
-    expect(tripEndNotice('restored-trip-arrived')?.message).toBe(
+    expect(tripEndNotice('restored-trip-arrived', 'ios')?.message).toBe(
       'Your last trip had reached its destination, so it was ended.',
     );
-    expect(tripEndNotice('restored-trip-unavailable')?.message).toBe(
+    expect(tripEndNotice('restored-trip-unavailable', 'ios')?.message).toBe(
       'Your last trip could not be restored. Choose the destination again.',
     );
-    expect(tripEndNotice(undefined)).toBeUndefined();
+    expect(tripEndNotice(undefined, 'ios')).toBeUndefined();
+    expect(tripEndNotice(undefined, 'android')).toBeUndefined();
+  });
+
+  it('keeps the notice on Android until the driver dismisses it', () => {
+    // Android relaunches straight into the map; a five-second toast is easily missed there.
+    expect(tripEndNotice('restored-trip-unavailable', 'android')).toMatchObject({
+      title: 'Trip ended',
+      untilDismissed: true,
+    });
   });
 
   it('says nothing for a reason this build does not know', () => {
     expect(
-      tripEndNotice('restored-trip-off-route' as unknown as 'restored-trip-expired'),
+      tripEndNotice('restored-trip-off-route' as unknown as 'restored-trip-expired', 'ios'),
     ).toBeUndefined();
+    expect(
+      tripEndNotice('restored-trip-off-route' as unknown as 'restored-trip-expired', 'android'),
+    ).toBeUndefined();
+  });
+});
+
+describe('updater trip hold', () => {
+  it('follows the native trip until the first snapshot is applied, then the route state', () => {
+    // Mount with a native trip: held before the route state has caught up.
+    expect(
+      updaterTripActive({ initialNativeTrip: true, routeIsIdle: true, snapshotApplied: false }),
+    ).toBe(true);
+    // Mount with none: the hold a dead JS instance left is released.
+    expect(
+      updaterTripActive({ initialNativeTrip: false, routeIsIdle: true, snapshotApplied: false }),
+    ).toBe(false);
+    expect(
+      updaterTripActive({ initialNativeTrip: true, routeIsIdle: true, snapshotApplied: true }),
+    ).toBe(false);
+    expect(
+      updaterTripActive({ initialNativeTrip: false, routeIsIdle: false, snapshotApplied: true }),
+    ).toBe(true);
   });
 });

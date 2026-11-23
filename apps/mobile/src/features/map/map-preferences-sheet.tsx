@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -23,6 +23,7 @@ import { BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
 import { ModalSheet } from '@/ui/sheet/modal-sheet';
 import { SectionTitle, SheetHeader } from '@/ui/sheet/sheet-header';
 import { SwitchRow } from '@/ui/switch-row';
+import { FocusRingPressable } from '@/ui/pressable-scale';
 
 const STYLE_OPTIONS: readonly SegmentOption<MapStylePreset>[] = [
   { label: 'Auto', value: 'automatic' },
@@ -207,7 +208,7 @@ export function MapPreferencesSheet({
             {ROUTE_COLOR_OPTIONS.map((option) => {
               const selected = option.value === preferences.routeColor;
               return (
-                <Pressable
+                <FocusRingPressable
                   accessibilityLabel={option.label}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: selected, selected }}
@@ -223,7 +224,7 @@ export function MapPreferencesSheet({
                   ]}
                 >
                   <View style={[styles.swatch, { backgroundColor: ROUTE_COLORS[option.value] }]} />
-                </Pressable>
+                </FocusRingPressable>
               );
             })}
           </View>

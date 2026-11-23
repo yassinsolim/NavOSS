@@ -47,10 +47,20 @@ jobs:
       version-code: ${{ steps.version.outputs.version-code }}
       version-name: ${{ steps.version.outputs.version-name }}
       tag: ${{ steps.version.outputs.tag }}
+      core-sha256: ${{ steps.core.outputs.core-sha256 }}
+      core-contract-version: ${{ steps.core.outputs.contract-version }}
     env:
       # The production origin is public, not a secret.
       EXPO_PUBLIC_API_URL: https://navoss-api.yassin.app
     steps:
+      # Releases come from main only (docs/release/android.md).
+      - name: Refuse a ref other than main
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "Android releases are built from main only, not $GITHUB_REF." >&2
+            exit 1
+          fi
+
       - name: Check out repository
         uses: actions/checkout@v7
 
@@ -103,6 +113,28 @@ jobs:
             exit 1
           fi
 
+      # The Swift navigation core, always compiled from source here (never from the library
+      # cache: the build is not reproducible and a cached library would be signed unseen) and
+      # verified, before the keystore exists: every download, install and native build of the core
+      # runs without the key on disk. Shared with ci.yml; any failed check stops the release.
+      # See docs/architecture/android-core.md.
+      - name: Build the Android navigation core
+        id: core
+        uses: ./.github/actions/build-android-core
+        with:
+          library-cache: 'false'
+
+      # Everything that can run without the key runs here: release configuration check,
+      # contracts build, expo prebuild, the Gradle wrapper pinned to gradle.org's checksum, and a
+      # full assembleRelease signed with a throwaway key (deleted with its APK), which downloads
+      # the Gradle distribution and every dependency and builds the bundle, R8 output, resources
+      # and native libraries.
+      - name: Prepare the release build (no key)
+        env:
+          NAVOSS_ANDROID_VERSION_CODE: ${{ steps.version.outputs.version-code }}
+        run: apps/mobile/scripts/build-android-release.sh prepare
+
+      # The keystore exists only for the next step and is removed right after it.
       - name: Decode release keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -115,28 +147,27 @@ jobs:
           umask 077
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/navoss-release.p12"
 
-      # ── Hook: build the native navigation core for Android ─────────────────────────────────
-      # When the shared Swift navigation core is cross-compiled for Android, its build step goes
-      # here (before Gradle), so the APK packages the freshly built library.
-      # ───────────────────────────────────────────────────────────────────────────────────────
-
-      - name: Build signed release APK
-        working-directory: apps/mobile
+      - name: Sign and package the release APK (offline)
         env:
           NAVOSS_ANDROID_KEYSTORE: ${{ runner.temp }}/navoss-release.p12
           NAVOSS_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           NAVOSS_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           NAVOSS_ANDROID_VERSION_CODE: ${{ steps.version.outputs.version-code }}
+        # Offline: nothing is downloaded while the key is on disk. Only the signing and packaging
+        # tasks run (the script lists them and fails on any other).
         run: |
           set -euo pipefail
-          corepack pnpm android:release 2>&1 | tee "$RUNNER_TEMP/build.log"
+          apps/mobile/scripts/build-android-release.sh sign 2>&1 | tee "$RUNNER_TEMP/build.log"
 
       - name: Remove release keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/navoss-release.p12"
 
       # GitHub masks secret values in its own log, but the uploaded build log and any artifact
-      # would not be. Fail if anything key-like reached the build output.
+      # would not be. Fail if anything key-like reached the build output. The secrets are in this
+      # step's environment only to be compared: the step runs nothing but grep on the log, after
+      # the keystore is deleted, and passes them as patterns on a file descriptor (`printf` is a
+      # shell builtin), never on a command line other processes could read.
       - name: Scan build log for key material
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -148,10 +179,11 @@ jobs:
           if grep -Eq -- '-----BEGIN [A-Z ]*(PRIVATE KEY|CERTIFICATE)-----' "$log"; then
             echo 'PEM key material in the build log' >&2; status=1
           fi
-          if [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && grep -qF -- "$ANDROID_KEYSTORE_PASSWORD" "$log"; then
+          if [ -n "$ANDROID_KEYSTORE_PASSWORD" ] &&
+            grep -qF -f <(printf '%s\n' "$ANDROID_KEYSTORE_PASSWORD") -- "$log"; then
             echo 'Keystore password in the build log' >&2; status=1
           fi
-          if grep -qF -- "${ANDROID_KEYSTORE_BASE64:0:48}" "$log"; then
+          if grep -qF -f <(printf '%s\n' "${ANDROID_KEYSTORE_BASE64:0:48}") -- "$log"; then
             echo 'Encoded keystore in the build log' >&2; status=1
           fi
           if grep -Eq '[A-Za-z0-9+/]{200,}={0,2}' "$log"; then
@@ -199,6 +231,9 @@ jobs:
           if [ "$magic" != c61fbc03c103191f ]; then
             echo 'JavaScript bundle is not Hermes bytecode' >&2; exit 1
           fi
+          # The navigation core, byte for byte as verified (NDK r30's libc++_shared.so with it),
+          # and every class and member JNI reaches kept under its name by R8.
+          apps/mobile/modules/navoss-navigation/android-core/scripts/verify-apk-core.sh "$apk"
           min_sdk="$(echo "$badging" | sed -n "s/^minSdkVersion:'\([0-9]*\)'/\1/p")"
           echo "min-sdk=$min_sdk" >> "$GITHUB_OUTPUT"
           echo "Verified $(du -h "$apk" | cut -f1) APK, minSdk $min_sdk"
@@ -252,6 +287,8 @@ jobs:
       TAG: ${{ needs.build.outputs.tag }}
       VERSION_CODE: ${{ needs.build.outputs.version-code }}
       VERSION_NAME: ${{ needs.build.outputs.version-name }}
+      CORE_SHA256: ${{ needs.build.outputs.core-sha256 }}
+      CORE_CONTRACT: ${{ needs.build.outputs.core-contract-version }}
       PUBLISH: ${{ inputs.publish }}
       NOTES: ${{ inputs.notes }}
     steps:
@@ -280,6 +317,7 @@ jobs:
 
           SHA-256 of $apk: $(cut -d' ' -f1 "release/$apk.sha256")
           Signing certificate SHA-256: $NAVOSS_RELEASE_CERT_SHA256
+          Navigation core: contract v$CORE_CONTRACT, libNavOSSCore.so SHA-256 $CORE_SHA256
           How to verify and install: https://github.com/$GITHUB_REPOSITORY/blob/main/docs/release/android.md"
           draft=--draft
           if [ "$PUBLISH" = true ]; then draft=''; fi

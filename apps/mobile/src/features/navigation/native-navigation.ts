@@ -11,14 +11,18 @@ import NavOSSNavigation, {
   type NativeCommunityReport,
   type NativeCommunityReportSubmission,
   type NativeCommunityResult,
+  type NativeCarPlayTrip,
   type NativeCommunityState,
   type NativeDestinationCatalog,
+  type NativeHostStatus,
+  type NativeLocationAvailability,
   type NativeNavigationDestination,
   type NativeNavigationAudioMode,
   type NativeVoteObservation,
   type NativeNavigationPreferences,
   type NativeNavigationSnapshot,
   type NativeRerouteMode,
+  type NativeSnapshotPayload,
 } from '../../../modules/navoss-navigation';
 
 interface NativeTrafficInput {
@@ -51,6 +55,69 @@ export const REQUIRED_NATIVE_NAVIGATION_VERSION = 11;
  * (`isAcquiringPosition`) native withholds guidance behind from contract 11: an older binary
  * would show a restored trip's saved step as current.
  */
+/**
+ * Stands in for a snapshot that is not one: idle, no trip, nothing guided. Its `stateVersion` is
+ * below every real one, so during a trip it is dropped and the last good snapshot stays; nothing
+ * is invented from a malformed one.
+ */
+export const UNAVAILABLE_SNAPSHOT: NativeNavigationSnapshot = {
+  isDeadReckoning: false,
+  isOffRoute: false,
+  phase: 'idle',
+  rerouteCount: 0,
+  routeProgress: 0,
+  routeStatus: 'tracking',
+  routeVersion: 0,
+  sequence: 0,
+  speedingState: 'unknown',
+  stateVersion: -1,
+};
+
+const PHASES = new Set(['arrived', 'idle', 'tracking']);
+const ROUTE_STATUSES = new Set(['reroute-failed', 'rerouting', 'tracking']);
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+/** The fields the app reads on every snapshot, checked before any of them is trusted. */
+function isSnapshot(value: unknown): value is NativeNavigationSnapshot {
+  if (typeof value !== 'object' || value === null) return false;
+  const snapshot = value as Record<string, unknown>;
+  const trip = snapshot.trip;
+  return (
+    PHASES.has(snapshot.phase as string) &&
+    ROUTE_STATUSES.has(snapshot.routeStatus as string) &&
+    typeof snapshot.isOffRoute === 'boolean' &&
+    isFiniteNumber(snapshot.stateVersion) &&
+    isFiniteNumber(snapshot.rerouteCount) &&
+    isFiniteNumber(snapshot.routeVersion) &&
+    isFiniteNumber(snapshot.routeProgress) &&
+    (trip === undefined ||
+      (typeof trip === 'object' &&
+        trip !== null &&
+        typeof (trip as Record<string, unknown>).id === 'string' &&
+        Array.isArray((trip as Record<string, unknown>).steps)))
+  );
+}
+
+/**
+ * iOS hands over the snapshot object; Android the core's JSON text, parsed here once and checked:
+ * a malformed snapshot is [UNAVAILABLE_SNAPSHOT], never half-read.
+ */
+export function nativeSnapshot(payload: NativeSnapshotPayload): NativeNavigationSnapshot {
+  if (!('snapshotJson' in payload)) return payload;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload.snapshotJson);
+  } catch {
+    parsed = undefined;
+  }
+  if (isSnapshot(parsed)) return parsed;
+  console.warn('NavOSS navigation: ignored a malformed native snapshot');
+  return UNAVAILABLE_SNAPSHOT;
+}
+
 export function nativeNavigationContractError(version: number | undefined): string | undefined {
   if (version !== undefined && version >= REQUIRED_NATIVE_NAVIGATION_VERSION) {
     return undefined;
@@ -132,7 +199,9 @@ export function declineRerouteProposal(id: string): boolean {
 
 export function observeNavigationSnapshots(listener: (snapshot: NativeNavigationSnapshot) => void) {
   assertNativeNavigationContract();
-  return NavOSSNavigation.addListener('onNavigationSnapshot', listener);
+  return NavOSSNavigation.addListener('onNavigationSnapshot', (payload) => {
+    listener(nativeSnapshot(payload));
+  });
 }
 
 export function observeNavigationPreferences(
@@ -158,7 +227,7 @@ export function getNavigationPreferences(): NativeNavigationPreferences {
 }
 
 export function getNavigationSnapshot(): NativeNavigationSnapshot {
-  return NavOSSNavigation.getSnapshot();
+  return nativeSnapshot(NavOSSNavigation.getSnapshot());
 }
 
 export function getRecentDestinationIds(): string[] {
@@ -278,8 +347,24 @@ export function setNavigationRoute(
   trafficSource?: string,
 ): NativeNavigationSnapshot {
   assertNativeNavigationContract();
+  return nativeSnapshot(
+    NavOSSNavigation.setRoute(
+      nativeTrip(route, destination, preferences, source, traffic, waypoints, trafficSource),
+    ),
+  );
+}
+
+function nativeTrip(
+  route: RouteAlternativeV2,
+  destination: SearchResult,
+  preferences: RoutePreferences,
+  source?: string,
+  traffic?: NativeTrafficInput,
+  waypoints: SearchResult[] = [],
+  trafficSource?: string,
+): NativeCarPlayTrip {
   const coordinate = ([longitude, latitude]: [number, number]) => ({ latitude, longitude });
-  return NavOSSNavigation.setRoute({
+  return {
     destination: nativeDestination(destination),
     distanceMeters: route.distanceMeters,
     durationSeconds: route.durationSeconds,
@@ -312,6 +397,100 @@ export function setNavigationRoute(
     ...(waypoints.length === 0
       ? {}
       : { waypoints: waypoints.map((waypoint) => nativeDestination(waypoint)) }),
+  };
+}
+
+/** Android only; iOS owns location without this check and always answers `available`. */
+export function getLocationAvailability(): NativeLocationAvailability {
+  return NavOSSNavigation.getLocationAvailability?.() ?? 'available';
+}
+
+/**
+ * Why Start cannot begin live guidance on this device, or `undefined` when it can. Android
+ * only: iOS always starts.
+ */
+export function liveGuidanceRefusal(): { message: string; title: string } | undefined {
+  if (NavOSSNavigation.getLocationAvailability === undefined) return undefined;
+  if (!hasNativeTurnByTurnGuidance()) {
+    return {
+      message: 'This build of NavOSS cannot give turn-by-turn guidance on this device.',
+      title: 'Guidance unavailable',
+    };
+  }
+  switch (getLocationAvailability()) {
+    case 'available':
+      return undefined;
+    case 'no-gps':
+      return {
+        message:
+          'This device has no GPS, so NavOSS cannot follow your drive. Use Simulate drive to see how guidance works.',
+        title: 'No GPS on this device',
+      };
+    case 'location-off':
+      return {
+        message: 'Turn on Location in system settings, then start again.',
+        title: 'Location is off',
+      };
+    case 'permission-denied':
+      return {
+        message: 'Allow NavOSS to use your precise location in system settings, then start again.',
+        title: 'Location not allowed',
+      };
+  }
+}
+
+/**
+ * Android only: Simulate drive is offered where no location provider can follow a drive (no GPS,
+ * or Location turned off), and in development builds. Not for a denied permission: Start says how
+ * to allow it, and a simulation would only hide that.
+ */
+export function canSimulateDrive(): boolean {
+  if (NavOSSNavigation.startSimulatedDrive === undefined || !hasNativeTurnByTurnGuidance()) {
+    return false;
+  }
+  if (__DEV__) return true;
+  const availability = getLocationAvailability();
+  return availability === 'no-gps' || availability === 'location-off';
+}
+
+/** Starts a clearly labelled simulated drive of `route`; real fixes are ignored meanwhile. */
+export function startSimulatedDrive(
+  route: RouteAlternativeV2,
+  destination: SearchResult,
+  preferences: RoutePreferences,
+  source?: string,
+  waypoints: SearchResult[] = [],
+): NativeNavigationSnapshot {
+  assertNativeNavigationContract();
+  const snapshot = NavOSSNavigation.startSimulatedDrive?.(
+    nativeTrip(route, destination, preferences, source, undefined, waypoints),
+  );
+  if (snapshot === undefined)
+    throw new Error('Simulated drives are not available on this platform.');
+  return nativeSnapshot(snapshot);
+}
+
+export function isSimulatingDrive(): boolean {
+  return NavOSSNavigation.isSimulatingDrive?.() ?? false;
+}
+
+/** Android: the trip or its arrival came from a simulated drive (kept natively until End / Done). */
+export function isSimulatedTrip(): boolean {
+  return NavOSSNavigation.isSimulatedTrip?.() ?? false;
+}
+
+/** Android: speech and trip storage as the native host sees them; both fine on iOS. */
+export function getHostStatus(): NativeHostStatus {
+  return NavOSSNavigation.getHostStatus?.() ?? { speechAvailable: true, tripSaved: true };
+}
+
+export function observeHostStatus(listener: (status: NativeHostStatus) => void) {
+  return NavOSSNavigation.addListener('onHostStatusChanged', listener);
+}
+
+export function observeSimulatedDrive(listener: (active: boolean) => void) {
+  return NavOSSNavigation.addListener('onSimulatedDriveChanged', (event) => {
+    listener(event.active);
   });
 }
 
@@ -340,7 +519,7 @@ export function toggleFavoriteDestination(destination: SearchResult): boolean {
 }
 
 export function clearNavigationRoute(): NativeNavigationSnapshot {
-  return NavOSSNavigation.clearRoute();
+  return nativeSnapshot(NavOSSNavigation.clearRoute());
 }
 
 export function stopNavigationAnnouncements(): void {
