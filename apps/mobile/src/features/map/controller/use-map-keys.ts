@@ -30,8 +30,9 @@ export function useMapKeys({
   /**
    * The padding a stick pan gives the camera (the side panel's share in landscape). MapLibre
    * Android applies a centred move's padding as given, none counting as zero, so a pan passes one
-   * on every step. The camera may hold another padding when the pan starts, so the first step
-   * starts from the coordinate under this padding's centre on screen (`paddedCenterPoint`).
+   * on every step. The camera may hold another padding (a fitted preview or results, also one
+   * that lands while the stick is held), so every step starts from the coordinate under this
+   * padding's centre on screen (`paddedCenterPoint`), not from the camera's own centre.
    */
   padding: CameraPadding;
   /** The map view's size in dp. */
@@ -53,8 +54,6 @@ export function useMapKeys({
     let timer: ReturnType<typeof setInterval> | undefined;
     let lastTick = 0;
     let panning = false;
-    // The padding this pan has given the camera; `undefined` until its first step.
-    let panPadding: CameraPadding | undefined;
 
     const panStep = async () => {
       if (panning) return;
@@ -65,14 +64,13 @@ export function useMapKeys({
         const now = Date.now();
         const seconds = Math.min(0.2, (now - lastTick) / 1000);
         lastTick = now;
-        const view = await map.getViewState();
         const stepPadding = paddingRef.current;
-        const from = samePadding(panPadding, stepPadding)
-          ? view.center
-          : await map.unproject(paddedCenterPoint(sizeRef.current, stepPadding));
+        const [view, from] = await Promise.all([
+          map.getViewState(),
+          map.unproject(paddedCenterPoint(sizeRef.current, stepPadding)),
+        ]);
         const center = stickPanCenter({ ...view, center: from }, stick.current, seconds);
         cameraRef.current?.jumpTo({ center, padding: stepPadding });
-        panPadding = stepPadding;
       } catch {
         // The map is gone or not ready: the next tick tries again.
       } finally {
@@ -100,8 +98,6 @@ export function useMapKeys({
       if (resting) {
         clearInterval(timer);
         timer = undefined;
-        // Another camera move may change the padding before the next pan.
-        panPadding = undefined;
         return;
       }
       if (timer !== undefined) return;
@@ -118,8 +114,4 @@ export function useMapKeys({
       stick.current = { x: 0, y: 0 };
     };
   }, [cameraRef, enabled, mapRef, moved, recenter]);
-}
-
-function samePadding(a: CameraPadding | undefined, b: CameraPadding): boolean {
-  return a?.bottom === b.bottom && a.left === b.left && a.right === b.right && a.top === b.top;
 }

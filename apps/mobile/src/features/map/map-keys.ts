@@ -46,10 +46,10 @@ export function stickPanCenter(
 }
 
 /**
- * The screen point (dp) a camera with `padding` centres on in a map of `size`. A stick pan starts
- * from the coordinate under this point rather than from the camera's own centre: the camera may
- * still hold another padding (a fitted route preview or search results keep theirs), and moving
- * its centre under a new padding would shift the whole map by the difference.
+ * The screen point (dp) a camera with `padding` centres on in a map of `size`. Each stick pan step
+ * starts from the coordinate under this point rather than from the camera's own centre: the camera
+ * may hold another padding (a fitted route preview or search results keep theirs), and moving its
+ * centre under a new padding would shift the whole map by the difference.
  */
 export function paddedCenterPoint(
   size: { height: number; width: number },
