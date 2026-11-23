@@ -3,7 +3,11 @@ package org.navoss.navigation.core
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.concurrent.thread
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import kotlin.math.abs
@@ -51,35 +55,60 @@ class NavOSSCoreTest {
     var lastSnapshot = ""
     var stateChanges = 0
     val threads = HashSet<String>()
+    val cancelled = ArrayList<Long>()
+    /** Every callback but the storage and clock ones, counted. */
+    val callbacks = AtomicInteger()
+    /** Runs inside `onStateChanged`, with no test lock held. */
+    @Volatile var onState: (() -> Unit)? = null
 
-    override fun onStateChanged(snapshotJson: String) = lock.withLock {
-      lastSnapshot = snapshotJson
-      stateChanges++
-      threads += Thread.currentThread().name
-      changed.signalAll()
+    override fun onStateChanged(snapshotJson: String) {
+      callbacks.incrementAndGet()
+      lock.withLock {
+        lastSnapshot = snapshotJson
+        stateChanges++
+        threads += Thread.currentThread().name
+        changed.signalAll()
+      }
+      onState?.invoke()
     }
 
-    override fun speak(text: String, kind: String, generation: Long) = lock.withLock {
-      spoken += "speak $kind $text"
-      Unit
+    override fun speak(text: String, kind: String, generation: Long) {
+      callbacks.incrementAndGet()
+      lock.withLock { spoken += "speak $kind $text" }
     }
 
-    override fun cancelSpeech(generation: Long) {}
-
-    override fun needsLocationUpdates() {}
-
-    override fun reconcileLocationUpdates(generation: Long, shouldTrack: Boolean) {}
-
-    override fun startClock(generation: Long) {}
-
-    override fun stopClock(generation: Long) {}
-
-    override fun httpRequest(requestId: Long, requestJson: String) = lock.withLock {
-      requests += requestId to JSONObject(requestJson)
-      changed.signalAll()
+    override fun cancelSpeech(generation: Long) {
+      callbacks.incrementAndGet()
     }
 
-    override fun cancelHttpRequest(requestId: Long) {}
+    override fun needsLocationUpdates() {
+      callbacks.incrementAndGet()
+    }
+
+    override fun reconcileLocationUpdates(generation: Long, shouldTrack: Boolean) {
+      callbacks.incrementAndGet()
+    }
+
+    override fun startClock(generation: Long) {
+      callbacks.incrementAndGet()
+    }
+
+    override fun stopClock(generation: Long) {
+      callbacks.incrementAndGet()
+    }
+
+    override fun httpRequest(requestId: Long, requestJson: String) {
+      callbacks.incrementAndGet()
+      lock.withLock {
+        requests += requestId to JSONObject(requestJson)
+        changed.signalAll()
+      }
+    }
+
+    override fun cancelHttpRequest(requestId: Long) {
+      callbacks.incrementAndGet()
+      lock.withLock { cancelled += requestId }
+    }
 
     override fun storageRead(key: String): String? = lock.withLock { storage[key] }
 
@@ -248,6 +277,139 @@ class NavOSSCoreTest {
     NavOSSCore(config, RecordingHost()).use { engine ->
       val snapshot = JSONObject(engine.setRoute(trip.toString()))
       assertEquals(name, snapshot.getJSONObject("trip").getJSONObject("destination").getString("name"))
+    }
+  }
+
+  // Lifetime and failure paths. Run these with CheckJNI on (`adb shell setprop debug.checkjni 1`
+  // before the test process starts): a JNI call made with an exception pending, or a use of a
+  // released handle that the allocator notices, then aborts the process instead of passing.
+
+  /** Calls racing `close()` either finish or fail as `closed`; none touches freed memory. */
+  @Test
+  fun callsRacingCloseFinishOrFailAsClosed() {
+    val trip = asset("calgary-deerfoot-glenmore.trip.json")
+    val fix = fixes().first().toString()
+    repeat(40) {
+      val host = RecordingHost()
+      val engine = NavOSSCore(config, host)
+      engine.setRoute(trip)
+      val start = CountDownLatch(1)
+      val unexpected = AtomicReference<Throwable?>(null)
+      val callers =
+        (0 until 4).map { index ->
+          thread {
+            start.await()
+            try {
+              repeat(200) {
+                when (index) {
+                  0 -> engine.getSnapshot()
+                  1 -> engine.updateLocation(fix)
+                  2 -> engine.setSpeedingWarning(it % 20, it % 2 == 0)
+                  else -> engine.isCurrentGeneration(it.toLong())
+                }
+              }
+            } catch (error: NavOSSCoreException) {
+              if (error.code != "closed") unexpected.compareAndSet(null, error)
+            } catch (error: Throwable) {
+              unexpected.compareAndSet(null, error)
+            }
+          }
+        }
+      start.countDown()
+      engine.close()
+      callers.forEach { it.join(30_000) }
+      assertNull(unexpected.get())
+      assertEquals("closed", assertThrows(NavOSSCoreException::class.java) { engine.clockTick() }.code)
+    }
+  }
+
+  /** `close()` from inside a callback returns, and nothing is called back afterwards. */
+  @Test
+  fun closeFromInsideACallbackReturnsAndStopsCallbacks() {
+    val host = RecordingHost()
+    val engine = NavOSSCore(config, host)
+    val callbacksAtClose = AtomicInteger(-1)
+    host.onState = {
+      engine.close()
+      callbacksAtClose.compareAndSet(-1, host.callbacks.get())
+      assertEquals("closed", assertThrows(NavOSSCoreException::class.java) { engine.getSnapshot() }.code)
+    }
+    // The call that caused the callback still returns its snapshot.
+    assertEquals("tracking", JSONObject(engine.setRoute(asset("calgary-deerfoot-glenmore.trip.json"))).getString("phase"))
+    assertEquals(callbacksAtClose.get(), host.callbacks.get())
+    assertEquals("closed", assertThrows(NavOSSCoreException::class.java) { engine.clearRoute() }.code)
+    assertEquals(callbacksAtClose.get(), host.callbacks.get())
+    assertEquals(0, host.requests.size)
+  }
+
+  /** `close()` waits for a callback running on another thread, and none starts after it. */
+  @Test
+  fun closeWaitsForARunningCallbackAndNoneFollows() {
+    val host = RecordingHost()
+    val engine = NavOSSCore(config, host)
+    val inCallback = CountDownLatch(1)
+    val letCallbackEnd = CountDownLatch(1)
+    host.onState = {
+      inCallback.countDown()
+      letCallbackEnd.await(30, TimeUnit.SECONDS)
+    }
+    val caller = thread { engine.setRoute(asset("calgary-deerfoot-glenmore.trip.json")) }
+    assertTrue(inCallback.await(30, TimeUnit.SECONDS))
+    val closer = thread { engine.close() }
+    closer.join(300)
+    assertTrue("close() returned while a callback was running", closer.isAlive)
+    letCallbackEnd.countDown()
+    closer.join(30_000)
+    caller.join(30_000)
+    assertFalse(closer.isAlive)
+    val callbacks = host.callbacks.get()
+    assertEquals("closed", assertThrows(NavOSSCoreException::class.java) { engine.clockTick() }.code)
+    Thread.sleep(200)
+    assertEquals(callbacks, host.callbacks.get())
+  }
+
+  /** Closing cancels the requests the host holds; their late answers are refused as closed. */
+  @Test
+  fun closeCancelsPendingRequestsAtTheHost() {
+    val host = RecordingHost()
+    val engine = NavOSSCore(config, host)
+    engine.setRoute(asset("calgary-deerfoot-glenmore.trip.json"))
+    val cameras = host.takeRequest("/v1/cameras")
+    assertNotNull(cameras)
+    engine.close()
+    assertEquals(listOf(cameras!!.first), host.cancelled)
+    val callbacks = host.callbacks.get()
+    assertEquals(
+      "closed",
+      assertThrows(NavOSSCoreException::class.java) { engine.completeHttpRequest(cameras.first, ok("[]")) }.code,
+    )
+    assertEquals(callbacks, host.callbacks.get())
+  }
+
+  /** A callback that throws is cleared in the native layer; the call and the engine carry on. */
+  @Test
+  fun aThrowingCallbackDoesNotBreakTheCall() {
+    val host = RecordingHost()
+    host.onState = { throw IllegalStateException("51.0447,-114.0719 must not reach logcat") }
+    NavOSSCore(config, host).use { engine ->
+      val snapshot = JSONObject(engine.setRoute(asset("calgary-deerfoot-glenmore.trip.json")))
+      assertEquals("tracking", snapshot.getString("phase"))
+      val fix = fixes().first()
+      host.setNow(fix.getDouble("timestampMs"))
+      assertEquals("tracking", JSONObject(engine.updateLocation(fix.toString())).getString("phase"))
+    }
+  }
+
+  /** Error messages carry codes and field names, never what was sent. */
+  @Test
+  fun errorMessagesDoNotEchoTheirInput() {
+    NavOSSCore(config, RecordingHost()).use { engine ->
+      val mode = assertThrows(NavOSSCoreException::class.java) { engine.setRerouteMode("51.0447,-114.0719") }
+      assertEquals("invalid-argument: Unknown reroute mode", mode.message)
+      val trip = assertThrows(NavOSSCoreException::class.java) {
+        engine.setRoute("""{"destination":{"name":"Secret Place","latitude":null}}""")
+      }
+      assertEquals("invalid-json: Missing value at destination.latitude", trip.message)
     }
   }
 

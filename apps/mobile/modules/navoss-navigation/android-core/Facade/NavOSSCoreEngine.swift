@@ -5,9 +5,12 @@ import Foundation
 // on macOS.
 
 /// Version of the boundary; the Kotlin binding refuses a library that reports another one.
-public let navOSSCoreABIVersion: Int32 = 1
+public let navOSSCoreABIVersion: Int32 = 2
 /// The JS contract (`NativeNavigationCapabilities.version`) the snapshots follow.
 public let navOSSCoreContractVersion: Int32 = 11
+/// The largest JSON text accepted from the host (a trip, an HTTP answer), in UTF-8 bytes. The
+/// host bounds what it reads from the network; this is the boundary's own ceiling.
+public let navOSSCoreMaximumJSONBytes = 16 * 1024 * 1024
 
 /// A failure reported across the boundary instead of a trap. `code` is stable (see "Errors").
 public struct NavOSSCoreError: Error, Equatable, CustomStringConvertible {
@@ -21,8 +24,30 @@ public struct NavOSSCoreError: Error, Equatable, CustomStringConvertible {
 
   public var description: String { "\(code): \(message)" }
 
+  /// Names what was wrong and where (the field path), never the text that was sent: messages
+  /// can end up in logcat.
   static func invalidJSON(_ error: Error) -> NavOSSCoreError {
-    NavOSSCoreError(code: "invalid-json", message: "\(error)")
+    func at(_ context: DecodingError.Context) -> String {
+      let path = context.codingPath.reduce(into: "") { path, key in
+        if let index = key.intValue {
+          path += "[\(index)]"
+        } else {
+          path += (path.isEmpty ? "" : ".") + key.stringValue
+        }
+      }
+      return path.isEmpty ? "" : " at " + path
+    }
+    let message =
+      switch error {
+      case DecodingError.typeMismatch(_, let context): "Wrong type" + at(context)
+      case DecodingError.valueNotFound(_, let context): "Missing value" + at(context)
+      case DecodingError.keyNotFound(let key, let context):
+        "Missing field \(key.stringValue)" + at(context)
+      case DecodingError.dataCorrupted(let context):
+        context.codingPath.isEmpty ? "Not JSON" : "Invalid value" + at(context)
+      default: "Not JSON"
+      }
+    return NavOSSCoreError(code: "invalid-json", message: message)
   }
 
   static func invalidArgument(_ message: String) -> NavOSSCoreError {
@@ -35,12 +60,16 @@ public struct NavOSSCoreError: Error, Equatable, CustomStringConvertible {
   static func from(_ error: Error) -> NavOSSCoreError {
     switch error {
     case let error as NavOSSCoreError: error
-    case NavigationCoreError.invalidRoute: NavOSSCoreError(code: "invalid-route", message: "\(error)")
-    case NavigationCoreError.invalidCoordinate, NavigationCoreError.untimedLiveFix:
-      NavOSSCoreError(code: "invalid-location", message: "\(error)")
+    case NavigationCoreError.invalidRoute:
+      NavOSSCoreError(code: "invalid-route", message: "The trip failed validation")
+    case NavigationCoreError.invalidCoordinate:
+      NavOSSCoreError(code: "invalid-location", message: "The fix is not a valid coordinate")
+    case NavigationCoreError.untimedLiveFix:
+      NavOSSCoreError(code: "invalid-location", message: "The fix has no timestampMs")
     case NavigationSessionError.noActiveTrip:
-      NavOSSCoreError(code: "no-active-trip", message: "\(error)")
-    default: NavOSSCoreError(code: "internal", message: "\(error)")
+      NavOSSCoreError(code: "no-active-trip", message: "There is no active trip")
+    // The type only: an error's description may quote what it was given.
+    default: NavOSSCoreError(code: "internal", message: "\(type(of: error))")
     }
   }
 }
@@ -73,8 +102,11 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
   private let effects: EngineEffects
   /// Guarded by the engine lock.
   private var announceRoadReports: Bool
-  /// The latest fix and when it was given, for the reroute origin. Guarded by the engine lock.
-  private var latestSample: NavigationLocationSample?
+  /// The fix being ingested, until the engine has taken or ignored it. Guarded by the engine lock.
+  private var offeredSample: NavigationLocationSample?
+  /// The newest fix the engine accepted, for the reroute origin's course, speed, accuracy and
+  /// age. Guarded by the engine lock.
+  private var acceptedSample: NavigationLocationSample?
 
   public init(configJSON: String, host: NavOSSCoreHost) throws {
     let config: NavOSSCoreConfig
@@ -114,11 +146,13 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
     engine.host = effects
   }
 
-  /// Stops every callback and cancels pending requests. The stored trip stays for a later
-  /// `resumePersistedTrip`. Idempotent.
+  /// Cancels the host's pending requests, then stops every callback. When it returns no
+  /// callback is running or will run, except that a `close()` made from inside a callback
+  /// returns at once: callbacks already running (its own, and any on other threads) finish, and
+  /// none starts. The stored trip stays for a later `resumePersistedTrip`. Idempotent.
   public func close() {
+    http.close()
     bridge.close()
-    http.cancelAll()
   }
 
   // MARK: Trip
@@ -129,6 +163,9 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
   }
 
   public func setRoute(_ tripJSON: String) throws -> String {
+    guard tripJSON.utf8.count <= navOSSCoreMaximumJSONBytes else {
+      throw NavOSSCoreError.invalidArgument("The trip is larger than the boundary allows")
+    }
     let record: NavOSSCoreTripRecord
     do {
       record = try JSONDecoder().decode(NavOSSCoreTripRecord.self, from: Data(tripJSON.utf8))
@@ -152,7 +189,13 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
     }
     do {
       let sample = try navOSSLiveNavigationFix(record.sample)
-      engine.lock.withLock { latestSample = sample }
+      engine.lock.withLock { offeredSample = sample }
+      defer {
+        engine.lock.withLock {
+          settleLocked(sample)
+          if offeredSample == sample { offeredSample = nil }
+        }
+      }
       _ = try engine.ingest(sample)
     } catch {
       throw NavOSSCoreError.from(error)
@@ -181,13 +224,16 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
 
   public func setRerouteMode(_ rawValue: String) throws {
     let mode = try Self.rerouteMode(rawValue)
-    let current = engine.currentNavigationPreferences()
-    engine.setNavigationPreferences(
-      NavOSSNavigationPreferences(
+    #if DEBUG
+      preferencesWillChange?()
+    #endif
+    engine.updateNavigationPreferences {
+      $0 = NavOSSNavigationPreferences(
         rerouteMode: mode,
-        speedingToleranceKph: current.speedingToleranceKph,
-        speedingAudibleWarning: current.speedingAudibleWarning
-      ))
+        speedingToleranceKph: $0.speedingToleranceKph,
+        speedingAudibleWarning: $0.speedingAudibleWarning
+      )
+    }
   }
 
   public func setAudioMode(_ rawValue: String) throws {
@@ -195,13 +241,16 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
   }
 
   public func setSpeedingWarning(toleranceKph: Int, audible: Bool) {
-    let current = engine.currentNavigationPreferences()
-    engine.setNavigationPreferences(
-      NavOSSNavigationPreferences(
-        rerouteMode: current.rerouteMode,
+    #if DEBUG
+      preferencesWillChange?()
+    #endif
+    engine.updateNavigationPreferences {
+      $0 = NavOSSNavigationPreferences(
+        rerouteMode: $0.rerouteMode,
         speedingToleranceKph: toleranceKph,
         speedingAudibleWarning: audible
-      ))
+      )
+    }
   }
 
   public func setAnnounceRoadReports(_ enabled: Bool) {
@@ -241,22 +290,51 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
       await engine.pendingRerouteTask?.value
       await engine.pendingSafetyCameraTask?.value
     }
+
+    /// Tests: runs in the reroute-mode and speeding setters before the change is applied, where
+    /// another caller's change may land.
+    var preferencesWillChange: (() -> Void)?
+
+    /// Tests: the HTTP carrier and the host gate, for their interleaving hooks.
+    var httpForTesting: NavOSSCoreHTTP { http }
+    var bridgeForTesting: NavOSSCoreHostBridge { bridge }
   #endif
 
   // MARK: Internals
 
+  /// Decides what became of an offered fix: it is the accepted one if the engine's snapshot
+  /// now stands at it and it is newer than the one kept. The session ignores a fix that was not
+  /// captured after the last one (a duplicate, or an older one arriving late) and leaves its
+  /// snapshot alone; such a fix must not replace the accepted one's course, accuracy and time.
+  private func settleLocked(_ offered: NavigationLocationSample) {
+    let raw = engine.currentUpdateLocked().snapshot.rawCoordinate
+    guard raw == offered.coordinate else { return }
+    if let accepted = acceptedSample, accepted.coordinate == raw,
+      let acceptedAt = accepted.timestamp, let offeredAt = offered.timestamp,
+      offeredAt <= acceptedAt
+    {
+      return
+    }
+    acceptedSample = offered
+  }
+
+  /// The origin metadata of a reroute from `coordinate`: only from the accepted fix at that
+  /// very coordinate, never another fix's course or accuracy.
   fileprivate func rerouteOriginLocked(at coordinate: NavOSSCarPlayCoordinate)
     -> NavOSSNavigationRouteOrigin?
   {
-    guard let latestSample, let accuracy = latestSample.horizontalAccuracyMeters,
-      let timestamp = latestSample.timestamp
+    if let offeredSample { settleLocked(offeredSample) }
+    guard let sample = acceptedSample,
+      sample.coordinate.latitude == coordinate.latitude,
+      sample.coordinate.longitude == coordinate.longitude,
+      let accuracy = sample.horizontalAccuracyMeters, let timestamp = sample.timestamp
     else {
       return nil
     }
     return navOSSNavigationRouteOrigin(
       coordinate: coordinate,
-      courseDegrees: latestSample.courseDegrees,
-      speedMetersPerSecond: latestSample.speedMetersPerSecond,
+      courseDegrees: sample.courseDegrees,
+      speedMetersPerSecond: sample.speedMetersPerSecond,
       horizontalAccuracyMeters: accuracy,
       ageSeconds: bridge.now().timeIntervalSinceReferenceDate - timestamp
     )
@@ -264,41 +342,81 @@ public final class NavOSSCoreEngine: @unchecked Sendable {
 
   private static func audioMode(_ rawValue: String) throws -> NavOSSCarPlayAudioMode {
     guard let mode = NavOSSCarPlayAudioMode(rawValue: rawValue) else {
-      throw NavOSSCoreError.invalidArgument("Unknown audio mode \(rawValue)")
+      throw NavOSSCoreError.invalidArgument("Unknown audio mode")
     }
     return mode
   }
 
   private static func rerouteMode(_ rawValue: String) throws -> NavOSSRerouteMode {
     guard let mode = NavOSSRerouteMode(rawValue: rawValue) else {
-      throw NavOSSCoreError.invalidArgument("Unknown reroute mode \(rawValue)")
+      throw NavOSSCoreError.invalidArgument("Unknown reroute mode")
     }
     return mode
   }
 }
 
-/// The host, until `close()`. Every callback goes through here so none is delivered after it.
+/// The host, until `close()`. Every callback goes through `deliver`, which is how none starts
+/// after `close()` and how `close()` waits for the ones already running.
 final class NavOSSCoreHostBridge: @unchecked Sendable {
-  private let lock = NSLock()
+  private let condition = NSCondition()
   private var host: NavOSSCoreHost?
+  /// Callbacks running now, by thread (a callback can cause another on its own thread).
+  private var inFlight: [ObjectIdentifier: Int] = [:]
+  #if DEBUG
+    /// Tests: `close()` found callbacks running on other threads and is about to wait for them.
+    var closeWillWait: (() -> Void)?
+  #endif
 
   init(host: NavOSSCoreHost) {
     self.host = host
   }
 
-  var current: NavOSSCoreHost? {
-    lock.withLock { host }
+  /// Calls the host unless the engine was closed; `nil` then. The closed check and the count
+  /// of running callbacks are one step, so `close()` either prevents the call or waits for it.
+  @discardableResult
+  func deliver<Result>(_ body: (NavOSSCoreHost) -> Result) -> Result? {
+    let thread = ObjectIdentifier(Thread.current)
+    let host: NavOSSCoreHost? = condition.withLock {
+      guard let host else { return nil }
+      inFlight[thread, default: 0] += 1
+      return host
+    }
+    guard let host else { return nil }
+    defer {
+      condition.withLock {
+        if let count = inFlight[thread], count > 1 {
+          inFlight[thread] = count - 1
+        } else {
+          inFlight[thread] = nil
+          condition.broadcast()
+        }
+      }
+    }
+    return body(host)
   }
 
+  /// Revokes the host and waits for the callbacks running on other threads. Called from
+  /// inside a callback it cannot wait for its own caller, and two such calls would wait for
+  /// each other, so it then only revokes.
   func close() {
-    lock.withLock { host = nil }
+    let thread = ObjectIdentifier(Thread.current)
+    condition.lock()
+    defer { condition.unlock() }
+    host = nil
+    guard inFlight[thread] == nil else { return }
+    #if DEBUG
+      if !inFlight.isEmpty { closeWillWait?() }
+    #endif
+    while !inFlight.isEmpty {
+      condition.wait()
+    }
   }
 
   /// The host's wall clock; the system clock once closed (nothing is published then).
   var now: @Sendable () -> Date {
     { [weak self] in
-      guard let host = self?.current else { return Date() }
-      return Date(timeIntervalSince1970: host.nowMs() / 1_000)
+      guard let ms = self?.deliver({ $0.nowMs() }) else { return Date() }
+      return Date(timeIntervalSince1970: ms / 1_000)
     }
   }
 }
@@ -312,15 +430,15 @@ private final class NavOSSCoreHostStorage: NavOSSKeyValueStore {
   }
 
   func data(forKey key: String) -> Data? {
-    bridge.current?.storageRead(key: key).map { Data($0.utf8) }
+    (bridge.deliver { $0.storageRead(key: key) } ?? nil).map { Data($0.utf8) }
   }
 
   func setData(_ data: Data, forKey key: String) {
-    bridge.current?.storageWrite(key: key, value: String(decoding: data, as: UTF8.self))
+    bridge.deliver { $0.storageWrite(key: key, value: String(decoding: data, as: UTF8.self)) }
   }
 
   func removeObject(forKey key: String) {
-    bridge.current?.storageWrite(key: key, value: nil)
+    bridge.deliver { $0.storageWrite(key: key, value: nil) }
   }
 }
 
@@ -371,8 +489,11 @@ private final class EngineEffects: NavigationEngineHost {
   func navigationEngineDidClearTrip(generation: UInt64, sequence: Int) {}
 
   func navigationEngineStateDidChange() {
-    guard let host = bridge.current, let owner else { return }
-    host.stateChanged(owner.snapshot())
+    // The snapshot is read inside the gate: a `close()` that returns has waited for this.
+    bridge.deliver { host in
+      guard let owner else { return }
+      host.stateChanged(owner.snapshot())
+    }
   }
 
   func navigationEngineSpeak(_ speech: NavigationEngineSpeech, generation: UInt64) {
@@ -381,15 +502,15 @@ private final class EngineEffects: NavigationEngineHost {
       case .alert: "alert"
       case .maneuver: "maneuver"
       }
-    bridge.current?.speak(text: speech.text, kind: kind, generation: generation)
+    bridge.deliver { $0.speak(text: speech.text, kind: kind, generation: generation) }
   }
 
   func navigationEngineCancelSpeech(generation: UInt64) {
-    bridge.current?.cancelSpeech(generation: generation)
+    bridge.deliver { $0.cancelSpeech(generation: generation) }
   }
 
   func navigationEngineNeedsLocationUpdates() {
-    bridge.current?.needsLocationUpdates()
+    bridge.deliver { $0.needsLocationUpdates() }
   }
 
   func navigationEngineReconcileLocationUpdates(generation: UInt64) {
@@ -398,15 +519,17 @@ private final class EngineEffects: NavigationEngineHost {
       let update = engine.currentUpdateLocked()
       return update.trip != nil && update.snapshot.phase != .arrived
     }
-    bridge.current?.reconcileLocationUpdates(generation: generation, shouldTrack: shouldTrack)
+    bridge.deliver {
+      $0.reconcileLocationUpdates(generation: generation, shouldTrack: shouldTrack)
+    }
   }
 
   func navigationEngineStartClock(generation: UInt64) {
-    bridge.current?.startClock(generation: generation)
+    bridge.deliver { $0.startClock(generation: generation) }
   }
 
   func navigationEngineStopClock(generation: UInt64) {
-    bridge.current?.stopClock(generation: generation)
+    bridge.deliver { $0.stopClock(generation: generation) }
   }
 
   func navigationEngineRerouteOriginLocked(

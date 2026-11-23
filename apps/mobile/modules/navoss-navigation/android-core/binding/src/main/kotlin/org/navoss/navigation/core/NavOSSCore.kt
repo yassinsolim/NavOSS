@@ -6,7 +6,11 @@ package org.navoss.navigation.core
  *
  * Calls are synchronous and may come from any thread. Arguments and results are JSON strings in
  * the shapes of `modules/navoss-navigation/index.ts`. A failing call throws
- * [NavOSSCoreException]; nothing else crosses the boundary.
+ * [NavOSSCoreException]; nothing else crosses the boundary, except an `OutOfMemoryError` from
+ * a string the JVM could not allocate.
+ *
+ * Every call after [close] throws `NavOSSCoreException("closed")`. See [close] for what it
+ * waits for.
  */
 class NavOSSCore(configJson: String, host: Host) : AutoCloseable {
   /** The platform side, called by Swift. See "Callbacks" in the contract. */
@@ -29,6 +33,10 @@ class NavOSSCore(configJson: String, host: Host) : AutoCloseable {
     /** Must return at once; answer later with [completeHttpRequest]. */
     fun httpRequest(requestId: Long, requestJson: String)
 
+    /**
+     * Stop request [requestId] and do not answer it. Always after its [httpRequest] returned,
+     * never with the engine lock held; may arrive for a request already answered (ignore it).
+     */
     fun cancelHttpRequest(requestId: Long)
 
     /** Called with the engine lock held: must not call into [NavOSSCore]. */
@@ -41,57 +49,68 @@ class NavOSSCore(configJson: String, host: Host) : AutoCloseable {
     fun nowMs(): Double
   }
 
-  @Volatile private var handle: Long
+  private val gate: HandleGate
 
   init {
     loadError()?.let { throw IllegalStateException("The navigation core is unavailable", it) }
-    handle = nativeCreate(configJson, host)
+    gate = HandleGate(nativeCreate(configJson, host), ::nativeDestroy)
   }
 
-  fun resumePersistedTrip(): String = nativeResumePersistedTrip(live())
+  fun resumePersistedTrip(): String = gate.call { nativeResumePersistedTrip(it) }
 
-  fun setRoute(tripJson: String): String = nativeSetRoute(live(), tripJson)
+  fun setRoute(tripJson: String): String = gate.call { nativeSetRoute(it, tripJson) }
 
-  fun updateLocation(sampleJson: String): String = nativeUpdateLocation(live(), sampleJson)
+  fun updateLocation(sampleJson: String): String = gate.call { nativeUpdateLocation(it, sampleJson) }
 
-  fun clearRoute(): String = nativeClearRoute(live())
+  fun clearRoute(): String = gate.call { nativeClearRoute(it) }
 
-  fun getSnapshot(): String = nativeGetSnapshot(live())
+  fun getSnapshot(): String = gate.call { nativeGetSnapshot(it) }
 
-  fun acceptRerouteProposal(id: String): Boolean = nativeAcceptRerouteProposal(live(), id)
+  fun acceptRerouteProposal(id: String): Boolean = gate.call { nativeAcceptRerouteProposal(it, id) }
 
-  fun declineRerouteProposal(id: String): Boolean = nativeDeclineRerouteProposal(live(), id)
+  fun declineRerouteProposal(id: String): Boolean = gate.call { nativeDeclineRerouteProposal(it, id) }
 
-  fun setRerouteMode(mode: String) = nativeSetRerouteMode(live(), mode)
+  fun setRerouteMode(mode: String) = gate.call { nativeSetRerouteMode(it, mode) }
 
-  fun setAudioMode(mode: String) = nativeSetAudioMode(live(), mode)
+  fun setAudioMode(mode: String) = gate.call { nativeSetAudioMode(it, mode) }
 
   fun setSpeedingWarning(toleranceKph: Int, audible: Boolean) =
-    nativeSetSpeedingWarning(live(), toleranceKph, audible)
+    gate.call { nativeSetSpeedingWarning(it, toleranceKph, audible) }
 
-  fun setAnnounceRoadReports(enabled: Boolean) = nativeSetAnnounceRoadReports(live(), enabled)
+  fun setAnnounceRoadReports(enabled: Boolean) = gate.call { nativeSetAnnounceRoadReports(it, enabled) }
 
-  fun getPreferences(): String = nativeGetPreferences(live())
+  fun getPreferences(): String = gate.call { nativeGetPreferences(it) }
 
-  fun clockTick() = nativeClockTick(live())
+  fun clockTick() = gate.call { nativeClockTick(it) }
 
-  fun isCurrentGeneration(generation: Long): Boolean = nativeIsCurrentGeneration(live(), generation)
+  fun isCurrentGeneration(generation: Long): Boolean =
+    gate.call { nativeIsCurrentGeneration(it, generation) }
 
   fun completeHttpRequest(requestId: Long, responseJson: String) =
-    nativeCompleteHttpRequest(live(), requestId, responseJson)
+    gate.call { nativeCompleteHttpRequest(it, requestId, responseJson) }
 
-  /** Idempotent. Not from inside a [Host] callback. */
-  override fun close() {
-    val closing = synchronized(this) { handle.also { handle = 0L } }
-    if (closing != 0L) nativeDestroy(closing)
-  }
-
-  private fun live(): Long =
-    handle.also { if (it == 0L) throw NavOSSCoreException("closed", "The engine was closed") }
+  /**
+   * Closes the engine. From then on every call throws `NavOSSCoreException("closed")` and no
+   * [Host] callback starts.
+   *
+   * Before it returns it cancels the requests the host still holds ([Host.cancelHttpRequest],
+   * on this thread) and waits for callbacks running on other threads to return. So do not
+   * call it while holding a lock that a callback takes, or from a thread a callback is
+   * waiting for.
+   *
+   * Called from inside a callback it cannot wait for the callback it is in, so it does not
+   * wait at all: callbacks already running (that one, and any on other threads) finish, and
+   * none starts.
+   *
+   * Calls that were running when it was called finish normally against an engine that no
+   * longer calls back; the native memory is released when the last of them returns.
+   * Idempotent; a second call, also one made while the first is still waiting, returns at once.
+   */
+  override fun close() = gate.close { nativeClose(it) }
 
   companion object {
     /** The boundary version this binding speaks; the library must report the same. */
-    const val ABI_VERSION = 1
+    const val ABI_VERSION = 2
 
     private val loadFailure: Throwable? by lazy {
       try {
@@ -123,6 +142,10 @@ class NavOSSCore(configJson: String, host: Host) : AutoCloseable {
 
     @JvmStatic private external fun nativeCreate(configJson: String, host: Host): Long
 
+    /** Cancels pending requests and stops callbacks; the handle stays valid. */
+    @JvmStatic private external fun nativeClose(handle: Long)
+
+    /** Releases the handle. Once, after [nativeClose], with no call using it. */
     @JvmStatic private external fun nativeDestroy(handle: Long)
 
     @JvmStatic private external fun nativeResumePersistedTrip(handle: Long): String

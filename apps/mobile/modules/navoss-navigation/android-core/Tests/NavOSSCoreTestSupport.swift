@@ -114,13 +114,21 @@ final class RecordingCoreHost: NavOSSCoreHost, @unchecked Sendable {
   var events: [String] = []
   var spoken: [String] = []
   var lastSnapshot = ""
+  /// `request-begin <id>`, `request-end <id>` and `cancel <id>`, in the order the host saw them.
+  var httpLog: [String] = []
+  /// Interleaving hooks, run inside the callback with no test lock held.
+  var onStateChanged: (() -> Void)?
+  var onHTTPRequest: ((Int64, String) -> Void)?
+  var onCancelHTTPRequest: ((Int64) -> Void)?
 
   func stateChanged(_ snapshotJSON: String) {
-    condition.withLock {
+    let hook = condition.withLock {
       lastSnapshot = snapshotJSON
       events.append("stateChanged")
       condition.broadcast()
+      return onStateChanged
     }
+    hook?()
   }
 
   func speak(text: String, kind: String, generation: UInt64) {
@@ -151,14 +159,37 @@ final class RecordingCoreHost: NavOSSCoreHost, @unchecked Sendable {
   }
 
   func httpRequest(id: Int64, json: String) {
-    condition.withLock {
+    let hook = condition.withLock {
+      httpLog.append("request-begin \(id)")
       requests.append((id, json))
+      condition.broadcast()
+      return onHTTPRequest
+    }
+    hook?(id, json)
+    condition.withLock { httpLog.append("request-end \(id)") }
+  }
+
+  func cancelHTTPRequest(id: Int64) {
+    let hook = condition.withLock {
+      httpLog.append("cancel \(id)")
+      return onCancelHTTPRequest
+    }
+    hook?(id)
+    condition.withLock {
+      cancelledRequests.append(id)
       condition.broadcast()
     }
   }
 
-  func cancelHTTPRequest(id: Int64) {
-    condition.withLock { cancelledRequests.append(id) }
+  /// Waits up to 30 s for the host to have been told of `count` cancelled requests.
+  func waitForCancelled(_ count: Int) -> [Int64]? {
+    condition.withLock {
+      let deadline = Date().addingTimeInterval(30)
+      while cancelledRequests.count < count {
+        if !condition.wait(until: deadline) { return nil }
+      }
+      return cancelledRequests
+    }
   }
 
   func storageRead(key: String) -> String? {
@@ -196,7 +227,8 @@ final class RecordingCoreHost: NavOSSCoreHost, @unchecked Sendable {
           return requests.remove(at: index)
         }
         if !condition.wait(until: deadline) {
-          print("no request among", requests.map(\.json), "cancelled", cancelledRequests, "events", events.suffix(8))
+          // Never the requests themselves: they carry coordinates.
+          print("no request among", requests.count, "cancelled", cancelledRequests.count, "events", events.suffix(8))
           return nil
         }
       }

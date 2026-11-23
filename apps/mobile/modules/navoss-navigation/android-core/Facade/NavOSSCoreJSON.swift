@@ -38,24 +38,64 @@ enum NavOSSCoreJSON: Encodable, Equatable {
 
 // MARK: - Input records
 
-/// Decodes an integer field that JavaScript sent as a number: Kotlin maps hold every JS number as
-/// a `Double`, so `50.0` is accepted as `50`; a fractional value is a type mismatch.
-private func lenientInt<Key: CodingKey>(
-  _ container: KeyedDecodingContainer<Key>, _ key: Key
-) throws -> Int? {
-  if let value = try? container.decodeIfPresent(Int.self, forKey: key) {
-    return value
+// Expo's rules for a record field, which these records follow:
+// - a field that is not optional takes its default when the key is absent, and refuses an
+//   explicit `null` (Expo's "Value for field … is required, got nil");
+// - an optional field is `nil` for an absent key or `null`;
+// - an `Int` takes any JS number, rounded to nearest, halves away from zero (Expo's
+//   `Int(double.rounded())`).
+// One Expo rule is not followed: Expo wraps a value that is not an array into a one-element
+// array for an array field. Here that is a type mismatch (`invalid-json`); JS never sends one.
+
+extension KeyedDecodingContainer {
+  /// A field that is not optional: `value` when the key is absent, an error for `null`.
+  fileprivate func field<T: Decodable>(_ key: Key, default value: T) throws -> T {
+    guard contains(key) else { return value }
+    guard try !decodeNil(forKey: key) else {
+      throw DecodingError.valueNotFound(
+        T.self, DecodingError.Context(codingPath: codingPath + [key], debugDescription: "null"))
+    }
+    return try decode(T.self, forKey: key)
   }
-  guard let double = try container.decodeIfPresent(Double.self, forKey: key) else {
-    return nil
-  }
-  guard double.rounded() == double, let value = Int(exactly: double) else {
+}
+
+/// A JS number as an `Int`, as Expo converts it. A number no `Int` holds is a type mismatch
+/// (Expo would trap).
+private func roundedInt(_ double: Double, at codingPath: [CodingKey]) throws -> Int {
+  let rounded = double.rounded()
+  guard let value = Int(exactly: rounded) else {
     throw DecodingError.typeMismatch(
       Int.self,
-      DecodingError.Context(
-        codingPath: container.codingPath + [key], debugDescription: "Expected an integer"))
+      DecodingError.Context(codingPath: codingPath, debugDescription: "Expected an integer"))
   }
   return value
+}
+
+/// An array index in an error's path.
+private struct IndexKey: CodingKey {
+  let intValue: Int?
+  var stringValue: String { "\(intValue ?? 0)" }
+
+  init(_ index: Int) {
+    intValue = index
+  }
+
+  init?(intValue: Int) {
+    self.intValue = intValue
+  }
+
+  init?(stringValue: String) {
+    return nil
+  }
+}
+
+/// An optional integer field.
+private func roundedInt<Key: CodingKey>(
+  _ container: KeyedDecodingContainer<Key>, _ key: Key
+) throws -> Int? {
+  try container.decodeIfPresent(Double.self, forKey: key).map {
+    try roundedInt($0, at: container.codingPath + [key])
+  }
 }
 
 /// `NativeNavigationLocationSample`, as `NavigationLocationRecord`.
@@ -78,8 +118,8 @@ struct NavOSSCoreLocationRecord: Decodable {
     courseDegrees = try container.decodeIfPresent(Double.self, forKey: .courseDegrees)
     horizontalAccuracyMeters = try container.decodeIfPresent(
       Double.self, forKey: .horizontalAccuracyMeters)
-    latitude = try container.decodeIfPresent(Double.self, forKey: .latitude) ?? 0
-    longitude = try container.decodeIfPresent(Double.self, forKey: .longitude) ?? 0
+    latitude = try container.field(.latitude, default: 0)
+    longitude = try container.field(.longitude, default: 0)
     speedMetersPerSecond = try container.decodeIfPresent(Double.self, forKey: .speedMetersPerSecond)
     timestampMs = try container.decodeIfPresent(Double.self, forKey: .timestampMs)
   }
@@ -105,8 +145,8 @@ private struct CoordinateRecord: Decodable {
 
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    latitude = try container.decodeIfPresent(Double.self, forKey: .latitude) ?? 0
-    longitude = try container.decodeIfPresent(Double.self, forKey: .longitude) ?? 0
+    latitude = try container.field(.latitude, default: 0)
+    longitude = try container.field(.longitude, default: 0)
   }
 
   var coordinate: NavOSSCarPlayCoordinate {
@@ -130,11 +170,11 @@ private struct DestinationRecord: Decodable {
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     category = try container.decodeIfPresent(String.self, forKey: .category)
-    id = try container.decodeIfPresent(String.self, forKey: .id) ?? ""
-    label = try container.decodeIfPresent(String.self, forKey: .label) ?? ""
-    latitude = try container.decodeIfPresent(Double.self, forKey: .latitude) ?? 0
-    longitude = try container.decodeIfPresent(Double.self, forKey: .longitude) ?? 0
-    name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+    id = try container.field(.id, default: "")
+    label = try container.field(.label, default: "")
+    latitude = try container.field(.latitude, default: 0)
+    longitude = try container.field(.longitude, default: 0)
+    name = try container.field(.name, default: "")
   }
 
   var destination: NavOSSCarPlayDestination {
@@ -156,8 +196,8 @@ private struct LaneRecord: Decodable {
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     active = try container.decodeIfPresent(Bool.self, forKey: .active)
-    indications = try container.decodeIfPresent([String].self, forKey: .indications) ?? []
-    valid = try container.decodeIfPresent(Bool.self, forKey: .valid) ?? false
+    indications = try container.field(.indications, default: [])
+    valid = try container.field(.valid, default: false)
     validIndication = try container.decodeIfPresent(String.self, forKey: .validIndication)
   }
 
@@ -203,12 +243,12 @@ private struct StepRecord: Decodable {
 
   init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
-    distanceMeters = try c.decodeIfPresent(Double.self, forKey: .distanceMeters) ?? 0
-    durationSeconds = try c.decodeIfPresent(Double.self, forKey: .durationSeconds) ?? 0
-    geometry = try c.decodeIfPresent([CoordinateRecord].self, forKey: .geometry) ?? []
-    instruction = try c.decodeIfPresent(String.self, forKey: .instruction) ?? ""
-    maneuverType = try c.decodeIfPresent(String.self, forKey: .maneuverType) ?? ""
-    roadName = try c.decodeIfPresent(String.self, forKey: .roadName) ?? ""
+    distanceMeters = try c.field(.distanceMeters, default: 0)
+    durationSeconds = try c.field(.durationSeconds, default: 0)
+    geometry = try c.field(.geometry, default: [])
+    instruction = try c.field(.instruction, default: "")
+    maneuverType = try c.field(.maneuverType, default: "")
+    roadName = try c.field(.roadName, default: "")
     spokenInstruction = try c.decodeIfPresent(String.self, forKey: .spokenInstruction)
     bearingAfterDegrees = try c.decodeIfPresent(Double.self, forKey: .bearingAfterDegrees)
     bearingBeforeDegrees = try c.decodeIfPresent(Double.self, forKey: .bearingBeforeDegrees)
@@ -217,7 +257,7 @@ private struct StepRecord: Decodable {
     junctionName = try c.decodeIfPresent(String.self, forKey: .junctionName)
     lanes = try c.decodeIfPresent([LaneRecord].self, forKey: .lanes)
     maneuverModifier = try c.decodeIfPresent(String.self, forKey: .maneuverModifier)
-    roundaboutExit = try lenientInt(c, .roundaboutExit)
+    roundaboutExit = try roundedInt(c, .roundaboutExit)
     signpost = try c.decodeIfPresent(String.self, forKey: .signpost)
     signpostBranch = try c.decodeIfPresent([String].self, forKey: .signpostBranch)
     signpostToward = try c.decodeIfPresent([String].self, forKey: .signpostToward)
@@ -264,10 +304,10 @@ private struct PreferencesRecord: Decodable {
   init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
     preferences = NavOSSRoutePreferences(
-      avoidFerries: try c.decodeIfPresent(Bool.self, forKey: .avoidFerries) ?? false,
-      avoidHighways: try c.decodeIfPresent(Bool.self, forKey: .avoidHighways) ?? false,
-      avoidTolls: try c.decodeIfPresent(Bool.self, forKey: .avoidTolls) ?? false,
-      avoidUnpaved: try c.decodeIfPresent(Bool.self, forKey: .avoidUnpaved) ?? false
+      avoidFerries: try c.field(.avoidFerries, default: false),
+      avoidHighways: try c.field(.avoidHighways, default: false),
+      avoidTolls: try c.field(.avoidTolls, default: false),
+      avoidUnpaved: try c.field(.avoidUnpaved, default: false)
     )
   }
 }
@@ -284,9 +324,9 @@ private struct TrafficRecord: Decodable {
 
   init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
-    delaySeconds = try c.decodeIfPresent(Double.self, forKey: .delaySeconds) ?? 0
+    delaySeconds = try c.field(.delaySeconds, default: 0)
     oldestObservedAt = try c.decodeIfPresent(String.self, forKey: .oldestObservedAt)
-    typicalDurationSeconds = try c.decodeIfPresent(Double.self, forKey: .typicalDurationSeconds) ?? 0
+    typicalDurationSeconds = try c.field(.typicalDurationSeconds, default: 0)
   }
 
   var traffic: NavOSSCarPlayTraffic {
@@ -321,29 +361,26 @@ struct NavOSSCoreTripRecord: Decodable {
 
   init(from decoder: Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
-    destination = try c.decodeIfPresent(DestinationRecord.self, forKey: .destination)
-    distanceMeters = try c.decodeIfPresent(Double.self, forKey: .distanceMeters) ?? 0
-    durationSeconds = try c.decodeIfPresent(Double.self, forKey: .durationSeconds) ?? 0
-    geometry = try c.decodeIfPresent([CoordinateRecord].self, forKey: .geometry) ?? []
-    id = try c.decodeIfPresent(String.self, forKey: .id) ?? ""
-    preferences = try c.decodeIfPresent(PreferencesRecord.self, forKey: .preferences)
-      ?? PreferencesRecord()
+    destination = try c.field(.destination, default: DestinationRecord?.none)
+    distanceMeters = try c.field(.distanceMeters, default: 0)
+    durationSeconds = try c.field(.durationSeconds, default: 0)
+    geometry = try c.field(.geometry, default: [])
+    id = try c.field(.id, default: "")
+    preferences = try c.field(.preferences, default: PreferencesRecord())
     source = try c.decodeIfPresent(String.self, forKey: .source)
-    if let limits = try c.decodeIfPresent([Double].self, forKey: .speedLimitsKph) {
-      speedLimitsKph = try limits.map { limit in
-        guard limit.rounded() == limit, let value = Int(exactly: limit) else {
-          throw DecodingError.typeMismatch(
-            Int.self,
-            DecodingError.Context(
-              codingPath: c.codingPath + [CodingKeys.speedLimitsKph],
-              debugDescription: "Expected integers"))
+    if let limits = try c.decodeIfPresent([Double?].self, forKey: .speedLimitsKph) {
+      speedLimitsKph = try limits.enumerated().map { index, limit in
+        let path = c.codingPath + [CodingKeys.speedLimitsKph, IndexKey(index)]
+        guard let limit else {
+          throw DecodingError.valueNotFound(
+            Int.self, DecodingError.Context(codingPath: path, debugDescription: "null"))
         }
-        return value
+        return try roundedInt(limit, at: path)
       }
     }
-    steps = try c.decodeIfPresent([StepRecord].self, forKey: .steps) ?? []
+    steps = try c.field(.steps, default: [])
     traffic = try c.decodeIfPresent(TrafficRecord.self, forKey: .traffic)
-    waypoints = try c.decodeIfPresent([DestinationRecord].self, forKey: .waypoints) ?? []
+    waypoints = try c.field(.waypoints, default: [])
     congestion = try c.decodeIfPresent([String].self, forKey: .congestion)
     trafficSource = try c.decodeIfPresent(String.self, forKey: .trafficSource)
   }

@@ -321,6 +321,31 @@ final class NavigationEngine: @unchecked Sendable {
     evaluateReroute(for: versionedUpdate)
   }
 
+  /// Changes some of the preferences in one step: `change` edits the preferences as they are
+  /// now, with `lock` held, so two partial changes made at once cannot overwrite each other.
+  /// Otherwise as `setNavigationPreferences`. The Android facade's setters use it; iOS loads
+  /// and applies whole preferences. `change` must only edit its argument.
+  func updateNavigationPreferences(_ change: (inout NavOSSNavigationPreferences) -> Void) {
+    lock.lock()
+    var preferences = navigationPreferences
+    change(&preferences)
+    let changed = preferences != navigationPreferences
+    navigationPreferences = preferences
+    if changed {
+      stateVersion &+= 1
+    }
+    lock.unlock()
+    guard changed else { return }
+    host?.navigationEngineStateDidChange()
+    lock.lock()
+    let versionedUpdate = VersionedNavigationUpdate(
+      generation: navigationGeneration,
+      update: navigationSession.currentUpdate()
+    )
+    lock.unlock()
+    evaluateReroute(for: versionedUpdate)
+  }
+
   func audioMode() -> NavOSSCarPlayAudioMode {
     lock.lock()
     defer { lock.unlock() }

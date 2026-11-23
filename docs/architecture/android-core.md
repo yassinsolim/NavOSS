@@ -1,6 +1,6 @@
 # Android navigation core: the Swift ↔ Kotlin boundary
 
-Status: contract v1. Implemented by `apps/mobile/modules/navoss-navigation/android-core` (Swift
+Status: contract v2 (`ABI_VERSION = 2`). Implemented by `apps/mobile/modules/navoss-navigation/android-core` (Swift
 facade and JNI layer) and the Kotlin binding `org.navoss.navigation.core.NavOSSCore`.
 
 ## Decision
@@ -31,12 +31,22 @@ focus, the foreground service, the one-second timer, HTTP, persistence and prefe
 
 ## Versioning
 
-`NavOSSCore.ABI_VERSION = 1`. `nativeAbiVersion()` returns the Swift side's value; the Kotlin
+`NavOSSCore.ABI_VERSION = 2`. `nativeAbiVersion()` returns the Swift side's value; the Kotlin
 binding compares it at class load and refuses to create an engine (`IllegalStateException`
 naming both numbers) on a mismatch. The ABI version changes whenever a native function, a
 callback, a JSON key or an error code changes meaning. The JS contract version (`version: 11` in
 `getCapabilities`) is separate and is reported by `nativeContractVersion()` so the Expo module can
 build its capabilities from the core it actually loaded.
+
+Version 2 (review of the first implementation) changed, against version 1:
+
+- `nativeClose(handle)` is new and `nativeDestroy(handle)` only releases memory; `close()` has
+  defined waiting and re-entrancy rules ("Closing").
+- A non-optional record field refuses an explicit `null`; integer fields round ("Set route").
+- `cancelHttpRequest` is ordered after its `httpRequest` and is also sent by `close()` ("HTTP").
+- Error messages no longer quote input; a trip or HTTP answer above 16 MiB is refused.
+
+The Kotlin API (`NavOSSCore`'s methods and `Host`) has the same signatures as in version 1.
 
 ## Lifecycle and calls
 
@@ -46,7 +56,7 @@ opaque `Long` from `nativeCreate`; `0` is never a valid handle.
 | Kotlin (`NavOSSCore`)              | JNI function (`native…`)                        | In                                       | Out              |
 | ---------------------------------- | ----------------------------------------------- | ---------------------------------------- | ---------------- |
 | `NavOSSCore(config, host)`         | `Create(configJson, host)`                      | config JSON, `Host`                      | handle           |
-| `close()`                          | `Destroy(handle)`                               |                                          |                  |
+| `close()`                          | `Close(handle)`, later `Destroy(handle)`        |                                          |                  |
 | `resumePersistedTrip()`            | `ResumePersistedTrip(handle)`                   |                                          | snapshot         |
 | `setRoute(tripJson)`               | `SetRoute(handle, tripJson)`                    | `NativeCarPlayTrip`                      | snapshot         |
 | `updateLocation(sampleJson)`       | `UpdateLocation(handle, sampleJson)`            | `NativeNavigationLocationSample`         | snapshot         |
@@ -93,16 +103,31 @@ decodes it with the same rules as the iOS module's `CarPlayTripRecord` (Expo rec
 | Field                                        | JS record (`index.ts`, iOS `CarPlayTripRecord`)                                                          | `NavOSSCarPlayTrip` `Codable`                                                                                    |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | any missing field                            | defaulted (`0`, `""`, `[]`, `false`), then the trip is validated                                         | decoding error                                                                                                   |
+| explicit `null`                              | `nil` for an optional field; an error (`invalid-json`) for any other, as Expo's "required, got nil"      | decoding error                                                                                                   |
 | `steps[].lanes[]`                            | keys `active`, `valid`, `validIndication`, `indications`; a list with any unknown arrow is dropped whole | same keys (Swift names them `isPreferred`, `isValid`, `activeIndication`); an unknown arrow fails the whole trip |
 | `congestion`                                 | dropped whole if any level is unknown                                                                    | decoding error                                                                                                   |
 | `traffic.oldestObservedAt`                   | ISO 8601 string, with or without fractional seconds                                                      | `Date` as seconds since 2001                                                                                     |
 | `waypoints`                                  | `[]` means none                                                                                          | `null` means none                                                                                                |
 | `destination.placeCategory`                  | not part of the record                                                                                   | optional                                                                                                         |
-| `speedLimitsKph[]`, `steps[].roundaboutExit` | JS numbers (Kotlin maps hold `Double`); integral values accepted                                         | `Int`                                                                                                            |
+| `speedLimitsKph[]`, `steps[].roundaboutExit` | JS numbers (Kotlin maps hold `Double`), rounded to nearest, halves away from zero, as Expo does          | `Int`                                                                                                            |
 
 So the Android module's only mapping is `JSONObject(map).toString()` of the record Expo hands it.
 A trip that decodes but fails the core's validation (`NavOSSCarPlayTrip.isValid`) is an
 `invalid-route` error, as on iOS.
+
+Two differences from the iOS record remain, both stricter and both stated here rather than
+silent:
+
+- **A value that is not an array where an array is expected** (`geometry`, `steps`, `waypoints`,
+  `congestion`, `speedLimitsKph`, `steps[].geometry`, `steps[].lanes`, `lanes[].indications`,
+  `steps[].signpostBranch`, `steps[].signpostToward`): Expo wraps it into a one-element array;
+  this boundary refuses it (`invalid-json`, "Wrong type at …"). The JS builders
+  (`apps/mobile/src/features/navigation/native-navigation.ts`) only ever send arrays.
+- **A number no `Int` can hold** in an integer field: Expo traps; this boundary refuses it.
+
+The trip JSON may be at most 16 MiB of UTF-8 (`invalid-argument` above that).
+`android-core/Tests/Golden/record-rules.json` lists every one of these cases (each field with
+`null`, the rounding, the non-array forms) with the outcome the tests require.
 
 ### Update location: sample in, snapshot out
 
@@ -110,8 +135,14 @@ The sample is `NativeNavigationLocationSample`:
 `{latitude, longitude, timestampMs, courseDegrees?, horizontalAccuracyMeters?, speedMetersPerSecond?}`.
 `timestampMs` is milliseconds since the Unix epoch (`Location.getTime()`); a fix without it is
 refused (`invalid-location`), as on iOS. Negative or unknown course, speed or accuracy must be
-omitted, not sent as `-1`. The core also keeps the latest sample's course, speed, accuracy and time
-to build a reroute origin (`navOSSNavigationRouteOrigin`), which iOS takes from `CLLocation`.
+omitted, not sent as `-1`. `latitude` and `longitude` default to `0` when absent and are refused
+when `null`, like the trip's fields.
+
+The core keeps the course, speed, accuracy and time of the newest fix **the engine accepted** to
+build a reroute origin (`navOSSNavigationRouteOrigin`), which iOS takes from `CLLocation`. The
+matcher ignores a fix that was not captured after the previous one (a duplicate, or an older one
+arriving late); such a fix does not replace the kept one, and the origin's heading and accuracy
+are sent only when the kept fix is at the very coordinate being routed from.
 
 ### The snapshot
 
@@ -185,6 +216,13 @@ interface Host {
   still has an active (not arrived) trip at that moment.
 - **`onStateChanged`** carries the current snapshot, read after the engine lock was released. The
   Expo module emits it as `onNavigationSnapshot` unchanged.
+- **Order is not guaranteed.** Callbacks caused on different threads (a fix on the location
+  thread, a reroute result on a Swift thread, a clock tick) are not serialized against each
+  other, and each `onStateChanged` reads the state when it runs. Two snapshots can therefore
+  arrive out of order, or carry the same state twice. Every snapshot has `stateVersion`, which
+  only grows: a consumer keeps the snapshot with the highest `stateVersion` it has seen and drops
+  an older one. The same holds for a snapshot returned by a call against one delivered by a
+  callback.
 
 ### Host services called from Swift
 
@@ -225,8 +263,25 @@ immediately; the host answers later, from any thread, with
 `error` is `unreachable` (no connection, DNS, TLS, reset), `timeout`, or `cancelled`; the core
 treats `unreachable` and `timeout` like an iOS `URLError` (a reroute retries with backoff). Every
 `httpRequest` must be completed exactly once, unless `cancelHttpRequest(requestId)` arrives first
-(the trip was cleared or replaced); completing a cancelled or unknown id is ignored. Bodies are
-UTF-8 JSON text. The base URL is the one given at creation.
+(the trip was cleared or replaced, or the engine was closed); completing a cancelled or unknown
+id is ignored. Bodies are UTF-8 JSON text. The base URL is the one given at creation.
+
+Order and threads of the two calls, for one request id:
+
+- `cancelHttpRequest(id)` is only ever called after `httpRequest(id, …)` has returned. A request
+  cancelled before the host was given it is never given to it; one cancelled while
+  `httpRequest` is running is cancelled on the same thread as soon as it returns.
+- `cancelHttpRequest` is never called with the engine lock held. The engine cancels a reroute
+  under its lock, so the host is told a moment later from a Swift thread, not from inside the
+  call that cancelled (`clearRoute()` may return first). `close()` tells it on the closing thread
+  before it returns.
+- A cancel can cross the host's own answer: `cancelHttpRequest` for a request the host has just
+  completed must be ignored.
+
+**Size.** The host bounds what it reads from the network: it must stop reading and answer
+`{"error":"unreachable"}` beyond its own cap. The boundary has its own ceiling as a second line: a
+`responseJson` above 16 MiB of UTF-8 is refused unread and the request fails as an invalid
+response. Arrays inside a trip or an answer are bounded only by that size.
 
 **Trip storage: blobs through the host.** The core stores the active trip and its progress
 checkpoint with the same records, keys, 12-hour expiry and checkpoint format as iOS
@@ -267,8 +322,36 @@ consent deadlines, reroute backoff, checkpoints and camera refresh.
   invoked with the lock released and may call back in (for example `getSnapshot()` from
   `onStateChanged`).
 - `httpRequest` must not block (see above).
-- After `close()`, no callback is delivered: in-flight background work finishes silently and
-  pending requests are cancelled. `close()` must not be called from inside a callback.
+- No callback is called with a lock of the binding held.
+
+### Closing
+
+`close()` ends the engine for every thread:
+
+1. From the moment it is called, every other call throws `NavOSSCoreException("closed")` without
+   reaching native code. Calls already running finish against an engine that no longer calls
+   back.
+2. It cancels at the host every request the host still holds (`cancelHttpRequest`, on the
+   closing thread).
+3. It revokes the host: no callback starts after this point. The check and the count of running
+   callbacks are one step, so a callback either began before and is waited for, or never runs.
+4. It waits for callbacks running on other threads to return, then returns. So after `close()`
+   returns, no callback is running and none will run.
+5. The native memory is released when the last call that was using the handle has returned
+   (usually at once; otherwise on that call's thread).
+
+Two consequences for the host:
+
+- **Do not call `close()` holding a lock a callback takes**, or from a thread a callback is
+  waiting for: step 4 would wait for that callback forever.
+- **`close()` from inside a callback is allowed and does not wait** (it cannot wait for the
+  callback it is in, and two callbacks closing at once would wait for each other). Steps 1 to 3
+  happen; callbacks already running, including the calling one, finish; the memory is released
+  when the outermost call on that thread returns. The call that caused the callback still
+  returns its result.
+
+`close()` is idempotent. A second `close()` made while the first is still waiting returns at
+once, before the first has finished.
 
 ## Errors
 
@@ -285,10 +368,28 @@ stable `code`:
 | `invalid-location` | an untimed fix or an invalid coordinate                                     |
 | `no-active-trip`   | `updateLocation` without a trip (the session refuses it)                    |
 | `closed`           | the handle was destroyed                                                    |
-| `internal`         | anything else, with the Swift error's description                           |
+| `internal`         | anything else, with the Swift error's type name                             |
 
 The Expo module turns the exception into a rejected call, as the iOS module's `throws` does.
 Malformed JSON from the host in `completeHttpRequest` is treated as `{"error":"unreachable"}`.
+
+**Nothing from a payload is in a message or a log.** Messages are fixed text plus, for
+`invalid-json`, the path of the field (`Wrong type at steps[0].lanes[0].valid`,
+`Missing value at destination.latitude`, `Not JSON`); never a value, a mode string, a
+coordinate or a parser's quotation of the input. The native layer writes one kind of line to
+logcat (tag `NavOSSCore`): `Host callback <name> failed with a Java exception; it was cleared`.
+It does not print the exception (`ExceptionDescribe` would print its message and stack, which
+can quote a snapshot or a request). A host that wants its own exceptions logged catches them
+inside its callback.
+
+**JNI failures.** A JNI call that fails leaves a Java exception pending (`NewString`,
+`GetStringChars` and `PushLocalFrame` an `OutOfMemoryError`). The native layer checks each one
+and makes no further JNI call on that path except those permitted with an exception pending. An
+entry point returns `null`/`0`/`false` and lets the exception reach its Kotlin caller (so a call
+can throw `OutOfMemoryError` as well as `NavOSSCoreException`). A host callback is skipped, the
+exception is cleared and the line above is logged; an exception thrown by the host's own method
+is cleared the same way. A failing `storageRead` reads as no value and a failing `nowMs` as the
+system clock.
 
 ## Memory and strings
 
@@ -297,9 +398,10 @@ Malformed JSON from the host in `completeHttpRequest` is treated as `{"error":"u
   outside the Basic Multilingual Plane (an emoji in a place name) survives both ways. Swift
   releases every `GetStringChars` buffer and local reference before returning; returned strings
   belong to the JVM.
-- The handle is a retained Swift object; `nativeDestroy` releases it once. Kotlin's `close()` is
-  idempotent and zeroes the handle before calling it. The `Host` is held as a JNI global
-  reference until the engine is deallocated.
+- The handle is a retained Swift object; `nativeDestroy` releases it once. The binding counts the
+  calls using the handle (`HandleGate`): a call takes it only while the engine is open, and it
+  is released after `close()` once that count is zero, so no thread can pass a released handle
+  to native code. The `Host` is held as a JNI global reference until the engine is deallocated.
 - Callback-produced local references are deleted before the callback returns, so a long-running
   background thread does not grow the local reference table.
 
@@ -343,6 +445,7 @@ uncompressed by default, so the first column is what the APK grows by):
 | Spike (`libNavOSSNavigationJNI`, FoundationNetworking linked)       | 70,102,456 | 25,846,446 |
 | This facade, FoundationNetworking linked                            | 70,346,904 | 25,960,413 |
 | HTTP through the host (`NAVOSS_HOST_HTTP`), no FoundationNetworking | 66,864,096 | 24,475,222 |
+| Contract v2 (review fixes; `libNavOSSCore.so` 1,259,568 / 509,360)  | 66,908,984 | 24,491,062 |
 
 `lib_FoundationICU.so` (40,042,536 / 15,614,315) is now 60 % of the set. Dropping it means
 building the core against FoundationEssentials alone. A trial build of the Android subset with
@@ -382,10 +485,21 @@ packages without symlinks, which have to be maintained by hand and silently drop
   `android-core/build/jniLibs/arm64-v8a` (Gradle `jniLibs`), strips it, and prints sizes and the
   NEEDED closure. It defines `NAVOSS_HOST_HTTP`, which leaves out the URLSession adapter and with it
   FoundationNetworking.
-- `apps/mobile/scripts/run-android-core-tests.sh` runs both XCTest suites on a device or emulator.
-- `android-core/binding` is a Gradle library project holding the Kotlin binding and its
-  instrumented test (`connectedAndroidTest`), which replays the recorded Calgary trip through JNI
-  and compares it with the committed macOS transcript.
+- `apps/mobile/scripts/run-android-core-tests.sh` runs both XCTest suites on a device or emulator. Give the
+  emulator six cores: the engine tests hold requests by blocking Swift concurrency threads, and
+  on a two-core emulator the pool runs out and the core suite stalls (the facade suite passes
+  either way).
+- `android-core/binding` is a Gradle library project holding the Kotlin binding
+  (`NavOSSCore.kt`, `HandleGate.kt`, `NavOSSCoreException.kt`), a JVM test of the handle's
+  lifetime rules (`testDebugUnitTest`) and the instrumented test (`connectedAndroidTest`), which
+  replays the recorded Calgary trip through JNI, compares it with the committed macOS
+  transcript, and exercises closing against running calls and callbacks. Run the instrumented
+  test with CheckJNI on (`adb shell setprop debug.checkjni 1`).
+- Third-party notices for the shipped Swift runtime, Foundation, ICU and libc++ libraries are in
+  `android-core/NOTICES.md`, which `pnpm licenses:generate` appends to `THIRD_PARTY_NOTICES.md`.
+  Update it with the toolchain pins.
+- Every shipped `.so` must have 16 KB-aligned `LOAD` segments (`llvm-readelf -l`, alignment
+  `0x4000`): Android 15 and later devices with 16 KB pages refuse anything else.
 
 ### On a GitHub `ubuntu-latest` runner
 

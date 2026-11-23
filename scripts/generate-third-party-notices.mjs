@@ -15,6 +15,13 @@ const inventory = JSON.parse(
 const lockfile = readFileSync(resolve(repositoryRoot, 'pnpm-lock.yaml'));
 const lockfileHash = createHash('sha256').update(lockfile).digest('hex');
 
+// Prebuilt native libraries shipped in the Android app. They come from no package manager, so
+// their inventory is a hand-maintained file appended as it stands.
+const nativeNotices = readFileSync(
+  resolve(repositoryRoot, 'apps/mobile/modules/navoss-navigation/android-core/NOTICES.md'),
+  'utf8',
+).trimEnd();
+
 const sections = Object.entries(inventory)
   .sort(([left], [right]) => left.localeCompare(right))
   .map(([license, packages]) => {
@@ -39,7 +46,8 @@ const sections = Object.entries(inventory)
 
 const notice = `# Third-Party Notices
 
-This inventory is generated from required production JavaScript dependencies in \`pnpm-lock.yaml\`.
+This inventory is generated from required production JavaScript dependencies in \`pnpm-lock.yaml\`,
+followed by the prebuilt native libraries shipped in the Android app.
 It excludes development-only and optional packages, downloaded map/routing data,
 native build-tool dependencies, and external services. Those components retain
 their own licenses and attribution requirements.
@@ -53,6 +61,8 @@ corepack pnpm licenses:generate
 \`\`\`
 
 ${sections.join('\n\n')}
+
+${nativeNotices}
 `;
 
 writeFileSync(resolve(repositoryRoot, 'THIRD_PARTY_NOTICES.md'), notice);
