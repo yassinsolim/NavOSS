@@ -132,3 +132,26 @@ export async function withinLocationTimeout<T>(
     clearTimeout(timer);
   }
 }
+
+/** The device location calls a one-shot fix lookup needs. */
+export interface CurrentFixLookup<T> {
+  currentPosition: () => Promise<T>;
+  servicesEnabled: () => Promise<boolean>;
+}
+
+/**
+ * One-shot current position. With `givesUp` (the Android build: handhelds without a GPS radio and
+ * devices with location off) it first checks that location services are on and stops waiting
+ * after `timeoutMs`, so a spinner never stays up forever. Without it (iOS) it waits for the fix
+ * for as long as acquisition takes (slow indoor or parkade fixes) and lets a failed lookup throw,
+ * exactly as before Android existed.
+ */
+export async function currentLocationFix<T>(
+  lookup: CurrentFixLookup<T>,
+  givesUp: boolean,
+  timeoutMs: number = LOCATION_FIX_TIMEOUT_MS,
+): Promise<T | 'no-fix' | 'services-off'> {
+  if (!givesUp) return lookup.currentPosition();
+  if (!(await lookup.servicesEnabled())) return 'services-off';
+  return (await withinLocationTimeout(lookup.currentPosition(), timeoutMs)) ?? 'no-fix';
+}

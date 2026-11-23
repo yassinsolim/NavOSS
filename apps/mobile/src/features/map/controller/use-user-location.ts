@@ -16,13 +16,13 @@ import {
   TORONTO_CAMERA_BOUNDS,
 } from '@/features/map/map-region';
 import {
+  currentLocationFix,
   newestValidRouteOriginSample,
   routeOriginFailureMessage,
   routeOriginSampleFromLocation,
   routeRequestOriginFromSample,
   type RouteOriginSample,
   type RouteRequestOrigin,
-  withinLocationTimeout,
 } from '@/features/navigation/route-origin';
 import { NavOssApiError } from '@/lib/api';
 import { createValueStore, type ValueStore } from '@/lib/value-store';
@@ -109,24 +109,24 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
       );
     }
 
-    if (!(await Location.hasServicesEnabledAsync())) {
-      if (aborted()) return undefined;
-      setLocationState('error');
-      throw new NavOssApiError(routeOriginFailureMessage('services-off'), 0);
-    }
     const lastKnown = await Location.getLastKnownPositionAsync({
       maxAge: 15_000,
       requiredAccuracy: 100,
     });
     const location =
       lastKnown ??
-      (await withinLocationTimeout(
-        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+      (await currentLocationFix(
+        {
+          currentPosition: () =>
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+          servicesEnabled: Location.hasServicesEnabledAsync,
+        },
+        IS_ANDROID,
       ));
     if (aborted()) return undefined;
-    if (location === undefined) {
+    if (location === 'no-fix' || location === 'services-off') {
       setLocationState('error');
-      throw new NavOssApiError(routeOriginFailureMessage('no-fix'), 0);
+      throw new NavOssApiError(routeOriginFailureMessage(location), 0);
     }
     const sample = routeOriginSampleFromLocation(location);
     const selectedSample = newestValidRouteOriginSample(sample, routeOriginSampleRef.current);
@@ -158,13 +158,16 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
         setLocationState('denied');
         return 'denied';
       }
-      const location = (await Location.hasServicesEnabledAsync())
-        ? await withinLocationTimeout(
+      const location = await currentLocationFix(
+        {
+          currentPosition: () =>
             Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
-          )
-        : undefined;
+          servicesEnabled: Location.hasServicesEnabledAsync,
+        },
+        IS_ANDROID,
+      );
       if (!appIsActive()) return undefined;
-      if (location === undefined) {
+      if (location === 'no-fix' || location === 'services-off') {
         setLocationState('error');
         return 'no-fix';
       }
@@ -174,7 +177,9 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
       return sample.coordinate;
     } catch {
       setLocationState('error');
-      return 'no-fix';
+      // iOS keeps its silent failure (the button can simply be tapped again); only the Android
+      // build, where a missing fix is the normal case on GPS-less handhelds, says why.
+      return IS_ANDROID ? 'no-fix' : undefined;
     }
   };
 
