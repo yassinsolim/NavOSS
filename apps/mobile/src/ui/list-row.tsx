@@ -12,6 +12,7 @@ import {
 
 import { createThemedStyles, radius, space, touchTarget, typography, useTheme } from '@/theme';
 import type { SymbolName } from '@/ui/button';
+import { useFocusRing } from '@/ui/pressable-scale';
 
 export interface ListRowProps {
   accessibilityHint?: string;
@@ -19,6 +20,11 @@ export interface ListRowProps {
   accessibilityRole?: AccessibilityRole;
   /** Small line above the title, e.g. "Home". */
   eyebrow?: string;
+  /**
+   * Whether D-pad focus can land on the row (Android; default true). Rows a collapsed sheet hides
+   * turn it off so focus never moves to a control the driver cannot see.
+   */
+  focusable?: boolean;
   icon?: SymbolName;
   iconTint?: string;
   /** Text under the leading icon, e.g. a distance. */
@@ -39,6 +45,7 @@ export function ListRow({
   accessibilityLabel,
   accessibilityRole,
   eyebrow,
+  focusable,
   icon,
   iconTint,
   leadingCaption,
@@ -52,6 +59,7 @@ export function ListRow({
 }: ListRowProps) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const focusRing = useFocusRing();
   const content = (
     <>
       {icon !== undefined && (
@@ -112,8 +120,11 @@ export function ListRow({
       accessibilityHint={accessibilityHint}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={accessibilityRole ?? 'button'}
+      focusable={focusable}
+      onBlur={focusRing.onBlur}
+      onFocus={focusRing.onFocus}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed, style]}
+      style={({ pressed }) => [styles.row, pressed && styles.pressed, style, focusRing.style]}
     >
       {content}
     </Pressable>
