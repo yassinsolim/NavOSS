@@ -18,6 +18,11 @@ import {
 } from '@/features/map/free-drive-vehicle';
 import {
   automaticLocationOptions,
+  fixArrivedDuringLookup,
+  type LocationPermission,
+  type LocationState,
+  locationStateAfterLookupFailure,
+  locationStateAfterWatchFix,
   phoneIdleLocationWatchOptions,
 } from '@/features/map/idle-camera-follow';
 import {
@@ -55,11 +60,11 @@ const automaticLocationPermission = mapLocationPermissionRequest(
   Location.requestForegroundPermissionsAsync,
 );
 
-export type LocationState = 'denied' | 'error' | 'idle' | 'locating' | 'visible';
-
 export interface UserLocation {
   /** Records a fix from a location subscription. */
   applyLocation: (location: Location.LocationObject) => void;
+  /** How many fixes the map has applied, to tell whether one arrived during a lookup. */
+  appliedFixCount: () => number;
   /**
    * Compass facing. It ticks many times a second, so it lives in a store that only the heading
    * cone layer subscribes to; nothing else re-renders when the phone turns.
@@ -86,10 +91,13 @@ export interface UserLocation {
    * `'no-fix'` when the device found no location in time, or undefined if the app left the screen.
    */
   locate: () => Promise<Coordinate | 'denied' | 'no-fix' | undefined>;
+  /** Foreground permission as last learned by the first-fix search, Center or a route request. */
+  locationPermission: LocationPermission;
   locationState: LocationState;
   mapRegion: MapRegion;
   /** Origin for nearby search, or undefined outside (or before) the server's declared coverage. */
   searchOrigin: Coordinate | undefined;
+  setLocationPermission: (permission: LocationPermission) => void;
   setLocationState: (state: LocationState) => void;
   /** Mirrors the navigation core's snapshot while a trip is active. */
   setNavigationFix: (snapshot: NativeNavigationSnapshot) => void;
@@ -114,6 +122,8 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     createValueStore<FreeDriveTrack>(EMPTY_FREE_DRIVE_TRACK),
   );
   const [locationState, setLocationState] = useState<LocationState>('idle');
+  const [locationPermission, setLocationPermission] = useState<LocationPermission>('unknown');
+  const appliedFixCountRef = useRef(0);
   const [userCoordinate, setUserCoordinate] = useState<Coordinate>();
   const [userHeading, setUserHeading] = useState(0);
   const [deviceHasNoGps, setDeviceHasNoGps] = useState(false);
@@ -141,6 +151,7 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
   }, []);
 
   const applySample = (sample: RouteOriginSample) => {
+    appliedFixCountRef.current += 1;
     routeOriginSampleRef.current = sample;
     setUserCoordinate(sample.coordinate);
     if (sample.headingDegrees !== undefined) setUserHeading(sample.headingDegrees);
@@ -171,6 +182,7 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
       Location.getForegroundPermissionsAsync,
       Location.requestForegroundPermissionsAsync,
     );
+    setLocationPermission(granted ? 'granted' : 'denied');
     if (aborted()) return undefined;
     if (!granted) {
       setLocationState('denied');
@@ -224,11 +236,27 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
   const locate = async (): Promise<Coordinate | 'denied' | 'no-fix' | undefined> => {
     setLocationState('locating');
     const appIsActive = () => AppState.currentState === 'active';
+    const fixesAtStart = appliedFixCountRef.current;
+    // Android: the phone watch keeps running during the lookup. A fix it delivered meanwhile is
+    // current, so a failed lookup then ends visible and Center returns that fix instead of a
+    // failure (`locationStateAfterLookupFailure`). iOS always takes the lookup's own outcome.
+    const settleFailure = (): Coordinate | undefined => {
+      const state = locationStateAfterLookupFailure(
+        fixArrivedDuringLookup({
+          android: IS_ANDROID,
+          fixesAtStart,
+          fixesNow: appliedFixCountRef.current,
+        }),
+      );
+      setLocationState(state);
+      return state === 'visible' ? routeOriginSampleRef.current?.coordinate : undefined;
+    };
     try {
       const granted = await ensureForegroundLocationPermission(
         Location.getForegroundPermissionsAsync,
         Location.requestForegroundPermissionsAsync,
       );
+      setLocationPermission(granted ? 'granted' : 'denied');
       if (!appIsActive()) return undefined;
       if (!granted) {
         setLocationState('denied');
@@ -243,18 +271,14 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
         IS_ANDROID,
       );
       if (!appIsActive()) return undefined;
-      if (location === 'no-fix' || location === 'services-off') {
-        setLocationState('error');
-        return 'no-fix';
-      }
+      if (location === 'no-fix' || location === 'services-off') return settleFailure() ?? 'no-fix';
       applyLocation(location);
       setLocationState('visible');
       return { latitude: location.coords.latitude, longitude: location.coords.longitude };
     } catch {
-      setLocationState('error');
       // iOS keeps its silent failure (the button can simply be tapped again); only the Android
       // build, where a missing fix is the normal case on GPS-less handhelds, says why.
-      return IS_ANDROID ? 'no-fix' : undefined;
+      return settleFailure() ?? (IS_ANDROID ? 'no-fix' : undefined);
     }
   };
 
@@ -271,6 +295,7 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
 
   return {
     applyLocation,
+    appliedFixCount: () => appliedFixCountRef.current,
     deviceHasNoGps,
     deviceHeadingStore,
     freeDriveTrackStore,
@@ -279,9 +304,11 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
     inTorontoCameraBounds:
       userCoordinate !== undefined && isCoordinateInBounds(userCoordinate, TORONTO_CAMERA_BOUNDS),
     locate,
+    locationPermission,
     locationState,
     mapRegion,
     searchOrigin: searchArea === undefined ? undefined : userCoordinate,
+    setLocationPermission,
     setLocationState,
     setNavigationFix,
     userCoordinate,
@@ -292,15 +319,31 @@ export function useUserLocation(coverage: ServerCoverage | undefined): UserLocat
 /**
  * The subscriptions behind `useUserLocation`: the first fix when the phone map becomes visible,
  * the compass, and the idle position watch. Each stops as soon as its condition is false, so
- * nothing samples location while the map is hidden or CarPlay owns the handset.
+ * nothing samples location while the map is hidden or CarPlay owns the handset. On Android the
+ * idle watch runs whenever permission is granted (`shouldWatchPhoneIdleLocation`), beside the
+ * first-fix search and Center's lookup, and its fixes bring a failed lookup's map back to
+ * `'visible'`; iOS watches only while a position is shown.
  */
 export function useLocationWatches(
   location: UserLocation,
   { phoneMapVisible, watchIdlePosition }: { phoneMapVisible: boolean; watchIdlePosition: boolean },
 ): void {
-  const { applyLocation, deviceHeadingStore, locationState, setLocationState } = location;
+  const {
+    applyLocation,
+    appliedFixCount,
+    deviceHeadingStore,
+    locationState,
+    setLocationPermission,
+    setLocationState,
+  } = location;
   const onLocation = useEffectEvent(applyLocation);
   const onLocationState = useEffectEvent(setLocationState);
+  const onLocationPermission = useEffectEvent(setLocationPermission);
+  const fixCount = useEffectEvent(appliedFixCount);
+  const onWatchFix = useEffectEvent((position: Location.LocationObject) => {
+    applyLocation(position);
+    if (IS_ANDROID) setLocationState(locationStateAfterWatchFix(locationState));
+  });
 
   useEffect(() => {
     if (!phoneMapVisible) return;
@@ -310,10 +353,16 @@ export function useLocationWatches(
     void automaticLocationPermission()
       .then((granted) => {
         if (cancelled) return;
+        onLocationPermission(granted ? 'granted' : 'denied');
         if (!granted) {
           onLocationState('denied');
           return;
         }
+        // Android: granting starts the phone watch beside this search. Once it (or Center) has put
+        // a fix on the map, the search's answer is older and its failure no longer true.
+        const fixesAtStart = fixCount();
+        const fixArrived = () =>
+          fixArrivedDuringLookup({ android: IS_ANDROID, fixesAtStart, fixesNow: fixCount() });
         stopSearch = findFirstFix<Location.LocationObject>(
           {
             lastKnown: () =>
@@ -322,23 +371,14 @@ export function useLocationWatches(
               Location.getCurrentPositionAsync(
                 automaticLocationOptions(Location.Accuracy.Balanced),
               ),
-            // High accuracy, like the idle watch that takes over: only a High request switches
-            // GPS on. A device with only network location still answers one.
-            watch: IS_ANDROID
-              ? (onPosition) =>
-                  Location.watchPositionAsync(
-                    automaticLocationOptions(Location.Accuracy.High),
-                    onPosition,
-                  )
-              : undefined,
           },
           {
             onFix: (position) => {
-              onLocation(position);
+              if (!fixArrived()) onLocation(position);
               onLocationState('visible');
             },
             onGaveUp: () => {
-              onLocationState('error');
+              onLocationState(locationStateAfterLookupFailure(fixArrived()));
             },
           },
         );
@@ -384,7 +424,7 @@ export function useLocationWatches(
     void Location.watchPositionAsync(
       phoneIdleLocationWatchOptions(Location.Accuracy.High),
       (position) => {
-        if (active) onLocation(position);
+        if (active) onWatchFix(position);
       },
     )
       .then((nextSubscription) => {

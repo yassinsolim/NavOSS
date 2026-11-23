@@ -283,6 +283,8 @@ export function useMapController() {
   const noticeIdRef = useRef(0);
   /** The id of the trip-end notice on screen, so dismissing it (or its timeout) settles it. */
   const tripEndNoticeIdRef = useRef<number | undefined>(undefined);
+  /** Android: Center's "Current location unavailable", withdrawn when a fix arrives after all. */
+  const locateFailureNoticeIdRef = useRef<number | undefined>(undefined);
   const guidanceSettingsQueuedRef = useRef(false);
   const offlineMapsQueuedRef = useRef(false);
   const [isOfflineMapsVisible, setIsOfflineMapsVisible] = useState(false);
@@ -474,9 +476,11 @@ export function useMapController() {
   useLocationWatches(location, {
     phoneMapVisible,
     watchIdlePosition: shouldWatchPhoneIdleLocation({
+      android: IS_ANDROID,
       appIsActive: isAppActive,
       carPlayConnected: carPlayConnected && surface !== 'map',
-      locationIsVisible: locationState === 'visible',
+      locationPermission: location.locationPermission,
+      locationState,
       mapTabIsVisible: activeTab === 'explore',
       routeStatus: routeState.type,
     }),
@@ -628,6 +632,17 @@ export function useMapController() {
       subscription.remove();
     };
   }, []);
+
+  useEffect(() => {
+    // Android: the phone watch keeps running after Center found nothing, so a fix can arrive
+    // while the notice saying so is still up. The map's labels follow the state; this withdraws
+    // the notice too. (iOS never shows it: its Center fails silently.)
+    if (!IS_ANDROID || locationState !== 'visible') return;
+    const id = locateFailureNoticeIdRef.current;
+    if (id === undefined) return;
+    locateFailureNoticeIdRef.current = undefined;
+    setNoticeSlots((slots) => dismissNotice(slots, id));
+  }, [locationState]);
 
   useEffect(
     () => () => {
@@ -1037,7 +1052,7 @@ export function useMapController() {
     const coordinate = await location.locate();
     if (coordinate === 'no-fix') {
       // Say why the button did nothing; a denied permission has its own banner in the sheet.
-      showNotice({
+      locateFailureNoticeIdRef.current = showNotice({
         message:
           'This device has not found your location. Search, places and route previews still work.',
         title: 'Current location unavailable',
