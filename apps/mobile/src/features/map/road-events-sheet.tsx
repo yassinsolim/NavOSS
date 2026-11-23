@@ -180,6 +180,7 @@ export function RoadEventsSheet({
                             accessibilityHint="Shows the source's description"
                             accessibilityLabel={`${event.title}. ${roadEventConfidenceLabel(event)}. ${subtitle}`}
                             accessibilityRole="button"
+                            focusKey={index === 0 ? 'road-events' : undefined}
                             eyebrow={`${roadEventTypeLabel(event)} · ${roadEventConfidenceLabel(event)}`}
                             icon={TYPE_ICONS[event.type]}
                             iconTint={

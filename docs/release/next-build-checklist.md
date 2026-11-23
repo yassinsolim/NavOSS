@@ -8,30 +8,53 @@ The 2026-11-15 Release simulator Canada pass on `14dae86` against production was
 
 ## Next build (after build 85)
 
-Merged on `main` after `3b57b04`, not in build 85: [#162](https://github.com/yassinsolim/NavOSS/pull/162),
-workflow hardening (CI reads command output before grepping it under pipefail). It changes no app
-code, so it needs no on-device check.
+No iOS build has been made from `main` since build 85 (`3b57b04`). The next one will contain a
+large change under the phone and CarPlay: trip orchestration moved out of the iOS service into a
+shared engine. Merged on `main` after `3b57b04`:
 
-Open, not merged (check each when it lands, and say which build contains it):
+- [#163](https://github.com/yassinsolim/NavOSS/pull/163): trip orchestration moved from the iOS
+  service into `NavigationEngine`, shared with Android. Intended to change nothing a driver sees;
+  compared on a simulator against the previous code (phone and CarPlay harness captures), not in a
+  car.
+- [#168](https://github.com/yassinsolim/NavOSS/pull/168): a trip restored after the app was closed
+  no longer ends because the car is off its route (below).
+- [#165](https://github.com/yassinsolim/NavOSS/pull/165): arrival time and "updated h:mm" follow the
+  device's time zone after it changes while the app runs. Not exercised on screen.
+- [#157](https://github.com/yassinsolim/NavOSS/pull/157),
+  [#158](https://github.com/yassinsolim/NavOSS/pull/158),
+  [#159](https://github.com/yassinsolim/NavOSS/pull/159),
+  [#161](https://github.com/yassinsolim/NavOSS/pull/161),
+  [#170](https://github.com/yassinsolim/NavOSS/pull/170): the Android app (UI, engine host, core
+  for Android, releases and updater, handheld keys). #157 and #170 touch shared screens; the iPhone
+  was compared on a simulator and came out the same on screen.
+- [#162](https://github.com/yassinsolim/NavOSS/pull/162),
+  [#166](https://github.com/yassinsolim/NavOSS/pull/166),
+  [#169](https://github.com/yassinsolim/NavOSS/pull/169): workflows and the CarPlay harness; no app
+  code.
 
-- [ ] Android pull requests [#157](https://github.com/yassinsolim/NavOSS/pull/157),
-      [#158](https://github.com/yassinsolim/NavOSS/pull/158),
-      [#159](https://github.com/yassinsolim/NavOSS/pull/159),
-      [#161](https://github.com/yassinsolim/NavOSS/pull/161) and
-      [#163](https://github.com/yassinsolim/NavOSS/pull/163). Before any iOS build that contains
-      them, repeat the iOS prebuild comparison used for build 85 (`Info.plist`, entitlements and
-      privacy manifest byte-identical to the previous build's).
-- [ ] The time-zone fix, in progress in a separate pull request: arrival time and "updated h:mm"
-      should follow the device's zone after it changes while the app runs. Check by changing the
-      time zone with the app open (not exercised on screen so far).
-- [ ] Trip restore rules (pull request `fix/restore-off-route`, supersedes #135). In the car,
-      parked or passenger-operated, on the build that contains it:
+Before the build:
+
+- [ ] Repeat the iOS prebuild comparison used for build 85 (`Info.plist`, entitlements and privacy
+      manifest byte-identical to build 85's, apart from the build number) on the candidate commit.
+- [ ] Release validation on the candidate commit as for build 85 (gates, native tests, Release
+      simulator build against production, the navigation harness), with a full drive in each
+      rerouting mode: #163 replaced the code every trip runs through.
+- [ ] The updater and Android input modules are in the JavaScript bundle but must add nothing to
+      the iOS binary; check the archive as for build 85.
+
+In the car, parked or passenger-operated, on the build that contains them:
+
+- [ ] **An ordinary trip (#163).** Start, turns with spoken prompts, a missed turn in each rerouting
+      mode (Automatic, Ask first, Keep route), a stop added mid-trip, arrival, End. Anything that
+      differs from build 85 is a defect.
+- [ ] **Trip restore (#168, supersedes #135).**
   - Start a trip, drive onto the route, then close the app (swipe it away) and reopen it after
     leaving the route (a side road or a parking lot beside it). The trip should still be there,
     finding its place for a few seconds, then rerouted in Automatic, offering a new route in Ask
     first, or guiding back to the route in Keep route. It must not say "Trip ended". Until
     the car is back on the route, neither the phone nor CarPlay shows the turn it was saved
-    before. CarPlay keeps the trip running and follows the car, showing "Finding your place",
+    before: the phone shows "Off route" with "Finding a new route" or "Finding a way back to your
+    route"; CarPlay keeps the trip running and follows the car, showing "Finding your place",
     then "Finding a new route" or "Off route" instead of a maneuver. In Ask first,
     the "Use new route" / "Keep mine" offer appears on CarPlay.
   - Tap Start in a parking lot about 100 m from the road, close the app before reaching the road,
@@ -40,18 +63,27 @@ Open, not merged (check each when it lands, and say which build contains it):
   - Close the app mid-trip, reopen it on the route: guidance continues with no new route request.
   - Close the app in the destination's car park before arrival is confirmed and reopen it there:
     "Trip ended" with "Your last trip had reached its destination, so it was ended."
-- [ ] Repeated departures (pull request #171, `fix/reroute-backoff`).
-      In the car, passenger-operated, on the build that contains it, in each of Automatic, Ask
-      first and Keep route: start a trip, then ignore the route for a few blocks on a parallel
-      street before rejoining it. Count the "New route" alerts on CarPlay, the spoken offers in
-      Ask first and the trip sheet's "route updated" count: expect a new route at once, then
-      one after about 400 m, then about one a minute (never one per block), and an offer at
-      most that often in Ask first. Then take a wrong turn and keep
-      driving away from every route offered: a new route must still come, the first at once and
-      later ones after a few hundred metres. On a freeway, miss an exit: one new route, promptly.
-- [ ] The `carplay-free-drive-end.png` harness pixel gate (marker at 0.561 of map height against
-      0.6, twice) is under investigation; settle whether it is the harness or the device type
-      before relying on that gate for the next build.
+  - Seen in a Release simulator on the phone (all of the above except the second case's
+    counter-example); CarPlay was checked in the harness only, with synthetic states.
+- [ ] **Time zone (#165).** Change the time zone with the app open: arrival time and "updated
+      h:mm" follow it without a relaunch.
+- [ ] **Repeated departures (#171).** In the car, passenger-operated, in each of Automatic,
+      Ask first and Keep route: start a trip, then ignore the route for a few blocks on a
+      parallel street before rejoining it. Count the "New route" alerts on CarPlay, the spoken
+      offers in Ask first and the trip sheet's "route updated" count: expect a new route at
+      once, then one after about 400 m, then about one a minute (never one per block), and an
+      offer at most that often in Ask first. Then take a wrong turn and keep driving away from
+      every route offered: a new route must still come, the first at once and later ones after a
+      few hundred metres. On a freeway, miss an exit: one new route, promptly.
+
+Known and open:
+
+- The "Trip ended" notice after a restore shows for a few seconds only on iOS.
+- The `carplay-free-drive-no-fix` harness pixel gate fails on a simulator whose status bar shows
+  the blue location badge; it is not a product defect.
+- Open pull requests not on `main`: reroute spacing on long detours (#171), the NavOSS vehicle on
+  the phone map without a trip (#172), a scene manifest for builds without CarPlay (#173; shipped
+  flavours already have one and are built with Xcode 26.6).
 
 ## Build 85, in testers' hands
 

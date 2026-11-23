@@ -15,3 +15,77 @@ export function hiddenFromFocusProps(platform: string): {
     ? { accessible: false, focusable: false, importantForAccessibility: 'no-hide-descendants' }
     : {};
 }
+
+/**
+ * Props for a readout TalkBack reads as one element but that is not a control (speed, trip
+ * status, the maneuver banner). On Android `accessible` makes a view a D-pad focus stop that does
+ * nothing when pressed, and `focusable={false}` never takes that back (React Native's view manager
+ * leaves focusability alone for it), so `accessible` is turned off and the view stays one TalkBack
+ * element through `screenReaderFocusable` (Android 9 and later; older versions read the texts
+ * one by one). Spread after `accessible`. Nothing changes on iOS.
+ */
+export function readoutFocusProps(platform: string): {
+  accessible?: false;
+  screenReaderFocusable?: true;
+} {
+  return platform === 'android' ? { accessible: false, screenReaderFocusable: true } : {};
+}
+
+/**
+ * Whether a control asks for keyboard focus (`useKeyFocus`): on Android, when it mounts with a
+ * key or its key changes (a sheet opened or changed what it shows). The native side then gives it
+ * focus only while the driver is using keys, never after a touch.
+ */
+export function keyFocusRequested(
+  platform: string,
+  previous: string | undefined,
+  next: string | undefined,
+): boolean {
+  return platform === 'android' && next !== undefined && next !== previous;
+}
+
+/**
+ * Whether a focused control draws its ring. A control under an open modal sheet keeps Android's
+ * focus in its own window while the sheet has the keys, so its ring would be stale: only the top
+ * layer (`layer` = the number of modal sheets the control sits in) draws one.
+ */
+export function focusRingVisible({
+  focused,
+  layer,
+  openModals,
+}: {
+  focused: boolean;
+  layer: number;
+  openModals: number;
+}): boolean {
+  return focused && layer >= openModals;
+}
+
+/**
+ * The focus key for a search sheet's results (`useKeyFocus`): focus moves from the search field
+ * to the results only after the driver submits that query, or once the field has no focus. While
+ * the field is being edited nothing moves: a result taking focus mid-word would swallow the next
+ * keys, and Enter or A would then open a result, possibly of the previous query.
+ */
+export function resultFocusKey({
+  fieldFocused,
+  query,
+  submittedQuery,
+}: {
+  fieldFocused: boolean;
+  query: string;
+  submittedQuery: string | undefined;
+}): string | undefined {
+  return !fieldFocused || submittedQuery === query ? `results:${query}` : undefined;
+}
+
+/**
+ * The submitted query after the search field takes focus or submits. A submit lets the results
+ * take focus once; when the field takes focus again the driver is editing, even before a key
+ * changes the text, so the earlier submit no longer counts.
+ */
+export function submittedQueryAfter(
+  event: { query: string; type: 'submit' } | { type: 'field-focus' },
+): string | undefined {
+  return event.type === 'submit' ? event.query : undefined;
+}

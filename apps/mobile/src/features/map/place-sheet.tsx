@@ -157,6 +157,7 @@ export function PlaceSheet({
       <View key={`actions-${remeasure}`} style={styles.actions}>
         <Button
           icon={{ android: 'directions', ios: 'arrow.triangle.turn.up.right.diamond.fill' }}
+          focusKey={`place:${place.id}`}
           label="Directions"
           onPress={onDirections}
           size="driving"

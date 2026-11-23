@@ -40,6 +40,7 @@ import { haptics } from '@/theme/haptics';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Chip } from '@/ui/chip';
+import { resultFocusKey, submittedQueryAfter } from '@/ui/focus';
 import { IconButton } from '@/ui/icon-button';
 import { ListRow } from '@/ui/list-row';
 import { BottomSheet, type BottomSheetRef, BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
@@ -123,6 +124,9 @@ export function ExploreSheet({
   const detents = exploreSheetDetents(metrics);
   const [detentIndex, setDetentIndex] = useState(detents.initial);
   const [focused, setFocused] = useState(false);
+  // The query last submitted from the field: only then do results take focus while it has it.
+  const [submittedQuery, setSubmittedQuery] = useState<string>();
+  const resultsFocusKey = resultFocusKey({ fieldFocused: focused, query, submittedQuery });
   // With a landscape keyboard up only the field and the results fit above the keyboard.
   const crowded = useKeyboardCrowded();
   const activeCategoryLabel = selectedCategoryId === undefined ? undefined : query;
@@ -202,9 +206,11 @@ export function ExploreSheet({
             onChangeText={onChangeQuery}
             onFocus={() => {
               setFocused(true);
+              setSubmittedQuery(submittedQueryAfter({ type: 'field-focus' }));
               sheetRef.current?.snapTo(detents.values.length - 1);
             }}
             onSubmitEditing={() => {
+              setSubmittedQuery(submittedQueryAfter({ query, type: 'submit' }));
               Keyboard.dismiss();
               onSubmit();
             }}
@@ -260,6 +266,8 @@ export function ExploreSheet({
                 }
                 accessibilityLabel={listExpanded ? 'Show map' : 'Show list'}
                 accessibilityState={{ expanded: listExpanded }}
+                // Keys land here when results arrive, or after the list closes again.
+                focusKey={!listExpanded && searchState === 'success' ? resultsFocusKey : undefined}
                 icon={
                   listExpanded
                     ? { android: 'map', ios: 'map' }
@@ -305,7 +313,7 @@ export function ExploreSheet({
               sections.map((section) => (
                 <View key={section.key}>
                   {section.title !== undefined && <SectionTitle>{section.title}</SectionTitle>}
-                  {section.data.map((item) => {
+                  {section.data.map((item, index) => {
                     const distance = formatSearchDistance(item.distanceMeters);
                     const context = searchResultSubtitle(item);
                     const badge = categoryLabel(item, activeCategoryLabel);
@@ -325,6 +333,11 @@ export function ExploreSheet({
                         // Collapsed, the list sits below the sheet's visible edge: D-pad focus
                         // reaches it through Show list instead of landing on hidden rows.
                         focusable={listExpanded}
+                        focusKey={
+                          index === 0 && section === sections[0] && resultsFocusKey !== undefined
+                            ? `list:${resultsFocusKey}`
+                            : undefined
+                        }
                         iconTint={section.recent ? colors.primaryText : colors.danger}
                         key={item.id}
                         leadingCaption={distance}
@@ -454,6 +467,8 @@ export function ExploreSheet({
                 {favorites.map((place) => (
                   <ListRow
                     accessibilityLabel={`${place.name}, ${place.label}`}
+                    // Below the collapsed sheet's edge the row is hidden: no focus stop.
+                    focusable={listExpanded}
                     icon={{ android: 'bookmark', ios: 'bookmark.fill' }}
                     key={place.id}
                     onPress={() => {
@@ -472,6 +487,7 @@ export function ExploreSheet({
                 {recents.map((place) => (
                   <ListRow
                     accessibilityLabel={`${place.name}, ${place.label}`}
+                    focusable={listExpanded}
                     icon={{ android: 'history', ios: 'clock.arrow.circlepath' }}
                     iconTint={colors.textSecondary}
                     key={place.id}

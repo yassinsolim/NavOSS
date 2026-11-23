@@ -4,10 +4,39 @@ NavOSS for Android is in testing. **No public Android release exists yet**: rele
 GitHub **drafts** and stay drafts until the owner has tried the APK on a device. This file explains
 how a release is cut, how to verify and install the APK, and how the in-app updater works.
 
-What the Android app lacks today (see [`apps/mobile/README.md`](../../apps/mobile/README.md)):
-Android Auto, offline maps, sharing road reports and traffic speeds, Google place details, and the
-iOS navigation core's matching, guidance, speech and rerouting until the Android engine lands. Only
-arm64 devices are supported.
+Turn-by-turn guidance, speech and rerouting run in the same navigation core as iOS. What the
+Android app lacks today (see [`apps/mobile/README.md`](../../apps/mobile/README.md)): Android Auto,
+offline maps, sharing road reports and traffic speeds, and Google place details. Only arm64 devices
+are supported. Nothing has run on a real Android device yet: every check so far used an emulator.
+
+## Release record
+
+| Release              | State             | Built from                                 | Checked                                                                                                                                                                                                                                                                |
+| -------------------- | ----------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `android-v0.1.0-101` | Draft, 2026-11-23 | `main` `b80c7d1`, workflow run 45217106042 | The downloaded APK: digest, the pinned signing certificate, package and version, arm64 only, the navigation core's digest; installed on an API 33 arm64 emulator: search, route preview, Start, guidance banner, foreground service, speech requests. Not on a device. |
+
+## Buttons and keys
+
+Handhelds with a controller (for example the Retroid Pocket) and phones with a keyboard can use
+NavOSS without touching the screen:
+
+| Control                | Action                                                     |
+| ---------------------- | ---------------------------------------------------------- |
+| D-pad or left stick    | Move between controls (a ring shows the focused one)       |
+| A, Enter, D-pad centre | Press the focused control                                  |
+| B                      | Back: close a sheet or leave the app (never ends a trip)   |
+| L1 / R1                | Zoom the map out / in                                      |
+| Right stick            | Move the map                                               |
+| Right stick press (R3) | Centre the map on you again (on the vehicle during a trip) |
+
+When a sheet opens or changes (a place, a route preview, a trip, a settings sheet), its main
+control takes focus, so A acts on it at once; closing a settings sheet returns focus to the
+button that opened it. End, chosen with a button, asks for a second press within four seconds;
+a touch ends at once, as on iOS. The mapping is also under About and privacy, Buttons and keys.
+The shoulder buttons and right stick are read by the `navoss-input` module (`modules/navoss-input`);
+KEYCODE_BUTTON_L1 (102), KEYCODE_BUTTON_R1 (103), KEYCODE_BUTTON_THUMBR (107) and the stick's
+AXIS_Z / AXIS_RZ. Checked on an emulator with key events only; a real controller's codes are
+unverified.
 
 ## Signing certificate
 

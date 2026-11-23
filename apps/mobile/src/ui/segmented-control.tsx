@@ -13,11 +13,14 @@ export interface SegmentOption<T extends string> {
 
 export function SegmentedControl<T extends string>({
   accessibilityLabel,
+  focusKey,
   onChange,
   options,
   value,
 }: {
   accessibilityLabel: string;
+  /** Android: the selected segment takes keyboard focus for this key (`useKeyFocus`). */
+  focusKey?: string;
   onChange: (value: T) => void;
   options: readonly SegmentOption<T>[];
   value: T;
@@ -36,6 +39,7 @@ export function SegmentedControl<T extends string>({
             accessibilityLabel={option.accessibilityLabel}
             accessibilityRole="radio"
             accessibilityState={{ checked: selected, selected }}
+            focusKey={selected ? focusKey : undefined}
             key={option.value}
             onPress={() => {
               if (selected) return;
