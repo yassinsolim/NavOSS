@@ -127,7 +127,7 @@ The mobile client does not depend on provider-specific route models. Public Phot
 ## Install
 
 - **iPhone:** NavOSS is a TestFlight technical beta for invited testers; it is not on the App Store.
-- **Android:** in testing. Signed APKs are attached to GitHub releases tagged `android-v<version>-<code>`, but none has been published yet; releases stay drafts until they have been tried on a device. When one is published, download the APK from the [releases page](https://github.com/yassinsolim/NavOSS/releases), check its SHA-256 and signing certificate, and install it as described in [docs/release/android.md](docs/release/android.md). The app then offers newer releases itself, once a day (switchable off), and verifies each before Android installs it. Obtainium can also track the releases.
+- **Android:** in testing. Signed APKs are attached to GitHub releases tagged `android-v<version>-<code>`, but none has been published yet; releases stay drafts until they have been tried on a device (the first draft, `android-v0.1.0-101`, is waiting for that). When one is published, download the APK from the [releases page](https://github.com/yassinsolim/NavOSS/releases), check its SHA-256 and signing certificate, and install it as described in [docs/release/android.md](docs/release/android.md). The app then offers newer releases itself, once a day (switchable off), and verifies each before Android installs it. Obtainium can also track the releases.
 
 ## Run it locally
 
@@ -193,7 +193,7 @@ For native navigation changes also run `corepack pnpm --filter @navoss/mobile te
 - **No live traffic or traffic-aware ETA.** Lane guidance and signposts appear only when returned by v2 and are unavailable in build 70.
 - **Offline coverage.** All Alberta and the Calgary area can be downloaded in build 80. British Columbia has no offline region. A physical iPhone download in build 80 remains unverified.
 - **CarPlay needs further head-unit validation.** The owner reported on build 82 in a car; build 85's real CarPlay chrome, head-unit appearance and free-drive arrow have not been seen on a car or Apple's CarPlay Simulator.
-- **Android is in testing, not released.** The Android app builds and runs, but has no turn-by-turn guidance, speech or rerouting yet, and no Android Auto, offline maps, report or traffic sharing, or Google place details. No Android release has been published; see [Install](#install).
+- **Android is in testing, not released.** The Android app has turn-by-turn guidance, speech and rerouting from the same navigation core as iOS, checked on emulators only: it has not run on a real device, with real GPS or in a car. It has no Android Auto, offline maps, report or traffic sharing, or Google place details. No Android release has been published; see [Install](#install).
 - **Map matching** is geometric; it does not use road-network topology. Background guidance and spoken instructions still need sustained on-road evidence.
 - **Data is incomplete.** OpenStreetMap, City of Calgary and DriveBC data can be missing, wrong or late; camera alerts are informational and do not replace signs and signals.
 - **Single operator.** There is no staffed support, no service-level agreement and no direct support email yet.
