@@ -225,8 +225,14 @@ class NavOSSCoreTest {
     report("updateLocation", latenciesNs)
     assertTrue("max relative difference $maxRelative", maxRelative < 1e-12)
     assertEquals(expected.count { it.startsWith("speak ") }, speech)
-    assertEquals(2, reroutes.size)
-    assertEquals(2, JSONObject(reroutes.last().substringAfter(' ')).getInt("rerouteCount"))
+    val expectedReroutes = expected.filter { it.startsWith("reroute ") }
+    assertEquals(expectedReroutes.size, reroutes.size)
+    if (expectedReroutes.isNotEmpty()) {
+      assertEquals(
+        JSONObject(expectedReroutes.last().substringAfter(' ')).getInt("rerouteCount"),
+        JSONObject(reroutes.last().substringAfter(' ')).getInt("rerouteCount"),
+      )
+    }
     // Reroute completions arrive on Swift's own threads, attached to the VM for the call.
     Log.i(TAG, "onStateChanged threads=${host.threads}")
   }
