@@ -83,7 +83,7 @@ depend on a coordinated API deployment.
 
 Normal builds omit the CarPlay scene and entitlement but retain active-navigation background location for phone guidance. Native location runs during active navigation, while CarPlay needs a current origin, and for as long as a CarPlay display is connected. When in Use authorization and iOS's visible background indicator are used; Always authorization is not requested. The current active route is stored only for operating-system recovery and erased on End or confirmed arrival.
 
-A connected display, from either the template scene or the Dashboard scene alone, also holds a `CLBackgroundActivitySession`. Under When in Use authorization that session is what keeps location flowing after the phone's screen sleeps, and without it the CarPlay map froze until the phone was physically woken, since the driver's phone is normally locked in a pocket or cradle. TestFlight build 70 verified on a real car that the design's prior assumption — that the session is process-wide and also keeps MapLibre's own location manager delivering — does not hold: the idle map still opened on its hard-coded Calgary default and never moved. `NavOSSCarPlayMapViewController` now supplies `MLNMapView.locationManager` with `NavOSSCarPlayLocationManager`, a custom `MLNLocationManager` (the protocol's own documentation notes a conforming type need not be `CLLocationManager`-backed at all) wrapping a `CLLocationManager` configured with `allowsBackgroundLocationUpdates`, independently of whatever keeps any other manager's session alive. The main scene's `didConnect` also starts `setCarPlayConnected` before the first `recenter()`, which previously ran first and found no cached fix from either source. Publishing a position through the shared trip store instead would still be actively harmful: every fix posts a state change whose no-trip branch cancels in-flight route planning and hides trip previews. Idle phone use deliberately holds no session: the map is not visible then, so it would cost battery and show the background indicator for nothing. The accepted cost is that a connected CarPlay session holds navigation-grade location for its whole duration, including while the driver is using another app on the head unit.
+A connected display, from either the template scene or the Dashboard scene alone, also holds a `CLBackgroundActivitySession`. Under When in Use authorization that session is what keeps location flowing after the phone's screen sleeps, and without it the CarPlay map froze until the phone was physically woken, since the driver's phone is normally locked in a pocket or cradle. TestFlight build 70 verified on a real car that the design's prior assumption — that the session is process-wide and also keeps MapLibre's own location manager delivering — does not hold: the idle map still opened on its hard-coded Calgary default and never moved. `NavOSSCarPlayMapViewController` therefore owns `NavOSSCarPlayLocationManager`, a `CLLocationManager` configured with `allowsBackgroundLocationUpdates`, independently of whatever keeps any other manager's session alive. Since free drive (see Driving map) it no longer feeds MapLibre's user-location dot (`showsUserLocation` is always off); its fixes and compass headings drive the NavOSS vehicle marker directly, and it keeps running during guidance so a fresh fix and the last course are ready when a trip ends. The main scene's `didConnect` also starts `setCarPlayConnected` before the first `recenter()`, which previously ran first and found no cached fix from either source. Publishing a position through the shared trip store instead would still be actively harmful: every fix posts a state change whose no-trip branch cancels in-flight route planning and hides trip previews. Idle phone use deliberately holds no session: the map is not visible then, so it would cost battery and show the background indicator for nothing. The accepted cost is that a connected CarPlay session holds navigation-grade location for its whole duration, including while the driver is using another app on the head unit.
 
 ### CarPlay Dashboard scene
 
@@ -315,6 +315,33 @@ traffic, lane, speed, or incident knowledge.
   times its distance, with a 240 m floor; a maneuver kilometres away does not widen the view.
   Pitch eases from 55° close in to 50° at the widest view. Distance, pitch, and heading ease toward
   their targets with frame-rate-independent time constants.
+- **Free drive** (no destination, owner request on build 84): as soon as the map has a live fix it
+  draws the same vehicle marker as guidance (the driver's Arrow or Car, its shadow and heading
+  cone) and follows it with the guidance camera for "nothing coming up"
+  (`navOSSCarPlayFreeDriveCameraTarget`: 280 m across and about 55° tilt when stopped, widening with
+  speed), the vehicle 72% down the visible map, heading-up or north-up from Settings. Pressing Go
+  therefore does not move the view. The tilt was kept because 3D buildings are hidden by the
+  restyle and the tilted 2D streets read as a driving view on the 800 × 480 captures. Road widths
+  and labels use the guidance sizes in this view; points of interest still follow the driver's
+  setting.
+- Free-drive direction (`navOSSCarPlayFreeDriveHeading`): the fix's GPS course at 9 km/h or more
+  (and not rated worse than 45° by Core Location); the last such course while stopped or
+  crawling, so a stopped car's wandering course never spins the arrow; the compass only before any
+  course has been seen (it says how the phone faces); otherwise the non-directional marker, also after End or when the compass becomes invalid: a
+  bearing guidance or an earlier compass reading left behind is dropped. It never
+  defaults to north. The position must pass the route-origin rule (`navOSSNavigationRouteOrigin`:
+  at most 15 s old, 100 m accurate); after 15 s without one the vehicle is hidden. A fix more than
+  3 s after the previous one is drawn where it is rather than animated. Between fixes the render
+  loop moves the vehicle in a straight line (there is no route to follow).
+- MapLibre's own user-location dot is never shown. Without a live fix the idle map may centre on
+  the navigation service's validated coordinate, flat at zoom 15.5, with no vehicle. A pan pauses
+  following (the vehicle stays drawn and keeps moving) and Recenter resumes it; a route preview
+  owns its camera until Recenter. On Go guidance takes over the drawn vehicle and glides it to the
+  matched position; on End the free-drive vehicle continues from where guidance drew it. There is
+  only ever one vehicle layer. The Dashboard and instrument-cluster scenes use the same map
+  controller and so the same rule; the cluster's zoom controls scale the free-drive view as they
+  do guidance. Reconnecting CarPlay starts a new map, so the arrow uses the compass again until
+  the car moves.
 - The render loop is bound to the car's screen and requests 60 fps (30 fps minimum). It keeps
   running until both the vehicle and the camera have settled, then stops until the next fix.
 - During guidance the camera centres in the area beside CarPlay's guidance card, using the window's
@@ -350,8 +377,9 @@ traffic, lane, speed, or incident knowledge.
   control already provide orientation without colliding with template controls.
 - Vehicle position and course interpolate only between received matched GPS updates. NavOSS does not
   extrapolate or predict movement beyond the latest real position.
-- When Go arrives before a publishable GPS position, enter follow mode at the selected route origin
-  and preserve that position across later nil-position snapshots. Replace it as soon as a real
+- When Go arrives before a publishable GPS position, enter follow mode at the free-drive vehicle's
+  live position, or at the selected route origin without one, and preserve that position across
+  later nil-position snapshots. Replace it as soon as a real
   matched or raw location is published.
 - Settings persist Automatic/Light/Dark appearance, All guidance/Alerts only/Muted audio, visible or
   hidden basemap points of interest, and Arrow/Car vehicle marker choices. Choosing a sound mode
@@ -495,6 +523,10 @@ scenarios assert a marker is on screen. `frame-pacing` measures a 60-second simu
 60 km/h with 1 Hz fixes: render-frame work p95 fell from 1.0 to 0.4 ms, per-fix work p95 from 2.6
 to about 1.2 ms, and frames over 20 ms from two to zero or one. These are simulator measurements,
 not phone or head-unit performance.
+The `free-drive-*` scenarios feed synthetic fixes and a compass heading through the map's
+free-drive entry points (open, straight, turn, stopped, panned, recenter, north-up, no fix, Go,
+End, Dashboard) and assert the heading source, follow state, the marker low in the map and no
+MapLibre dot.
 Per-fix overlay caches re-upload only changed data and reset when the style loads.
 
 Simulators cannot host CarPlay templates on Xcode 27.2: Device Hub disables its CarPlay Simulator
