@@ -121,18 +121,82 @@ class CoreNavigationEngineTest {
     assertNull(engine.contractVersion)
   }
 
+  /** A core whose every call throws [failure]. */
+  private fun failingCore(failure: () -> Throwable): NavigationCore =
+    java.lang.reflect.Proxy.newProxyInstance(
+      NavigationCore::class.java.classLoader,
+      arrayOf(NavigationCore::class.java),
+    ) { _, _, _ -> throw failure() } as NavigationCore
+
+  private fun everyCall(engine: NavigationEngine): List<() -> Unit> = listOf(
+    { engine.resumePersistedTrip() },
+    { engine.setRoute("{}") },
+    { engine.updateLocation("{}") },
+    { engine.clearRoute() },
+    { engine.snapshot() },
+    { engine.acceptRerouteProposal("p") },
+    { engine.declineRerouteProposal("p") },
+    { engine.setAudioMode(NavigationAudioMode.ALL_GUIDANCE) },
+    { engine.setRerouteMode(RerouteMode.ADAPTIVE) },
+    { engine.setSpeedingWarning(5, true) },
+    { engine.setAnnounceRoadReports(true) },
+    { engine.isCurrentGeneration(1) },
+    { engine.clockTick() },
+    { engine.completeHttpRequest(1, "{}") },
+  )
+
   @Test
-  fun `an out-of-memory error at the boundary is a refused call, not a crash`() {
-    val core = ScriptedCore().apply { failure = OutOfMemoryError("NewString") }
-    val engine = CoreNavigationEngine.create(loader(core = core), "{}", host) { RerouteMode.ADAPTIVE }
-    try {
-      engine.updateLocation("{}")
-      fail("expected a refusal")
-    } catch (refused: NavigationEngineException) {
-      assertEquals(CoreNavigationEngine.OUT_OF_MEMORY, refused.code)
+  fun `out of memory at any core call, raw or refused by the core, goes to the fatal handler first`() {
+    val failures = listOf<() -> Throwable>(
+      { OutOfMemoryError("NewString") },
+      { NavigationEngineException(CoreNavigationEngine.OUT_OF_MEMORY, null) },
+    )
+    for (failure in failures) {
+      var fatal = 0
+      val engine = CoreNavigationEngine.create(
+        loader(core = failingCore(failure)),
+        "{}",
+        host,
+        onOutOfMemory = { fatal += 1 },
+      ) { RerouteMode.ADAPTIVE }
+      val calls = everyCall(engine)
+      for ((index, call) in calls.withIndex()) {
+        try {
+          call()
+          fail("expected a refusal")
+        } catch (refused: NavigationEngineException) {
+          assertEquals(CoreNavigationEngine.OUT_OF_MEMORY, refused.code)
+        }
+        assertEquals("call $index", index + 1, fatal)
+      }
     }
-    // The core's own refusals pass through unchanged.
-    core.failure = NavigationEngineException("internal", "DecodingError")
+  }
+
+  @Test
+  fun `out of memory while the core is created goes to the fatal handler`() {
+    for (failure in listOf<Throwable>(OutOfMemoryError(), NavigationEngineException(CoreNavigationEngine.OUT_OF_MEMORY, null))) {
+      var fatal = 0
+      CoreNavigationEngine.create(
+        object : NavigationCoreLoader {
+          override fun loadError(): Throwable? = null
+          override fun contractVersion() = 11
+          override fun create(configJson: String, host: NavigationCoreHost): NavigationCore = throw failure
+        },
+        "{}",
+        host,
+        onOutOfMemory = { fatal += 1 },
+      ) { RerouteMode.ADAPTIVE }
+      assertEquals(1, fatal)
+    }
+  }
+
+  @Test
+  fun `other refusals pass through without the fatal handler`() {
+    var fatal = 0
+    val core = ScriptedCore().apply { failure = NavigationEngineException("internal", "DecodingError") }
+    val engine = CoreNavigationEngine.create(loader(core = core), "{}", host, onOutOfMemory = { fatal += 1 }) {
+      RerouteMode.ADAPTIVE
+    }
     try {
       engine.updateLocation("{}")
       fail("expected a refusal")
@@ -140,6 +204,7 @@ class CoreNavigationEngineTest {
       assertEquals("internal", refused.code)
       assertEquals("DecodingError", refused.message)
     }
+    assertEquals(0, fatal)
   }
 
   @Test

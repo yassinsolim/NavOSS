@@ -51,12 +51,16 @@ interface NavigationCoreLoader {
 
 /**
  * [NavigationEngine] over the shared Swift core: every snapshot is the core's JSON, untouched.
- * An [OutOfMemoryError] the boundary raises (contract v2, "JNI failures") becomes a refused call
- * with code `out-of-memory`, so every caller's existing refusal path handles it.
+ *
+ * This is the one boundary every call into the core crosses, so out of memory is handled here:
+ * an [OutOfMemoryError] the boundary raises (contract v2, "JNI failures") or the core's own
+ * `out-of-memory` refusal goes to [onOutOfMemory] (which ends the process, see [OutOfMemoryStop])
+ * before anything is allocated; should it return, the call is refused with code `out-of-memory`.
  */
 class CoreNavigationEngine(
   private val core: NavigationCore,
   override val contractVersion: Int,
+  private val onOutOfMemory: () -> Unit = {},
 ) : NavigationEngine {
   override fun resumePersistedTrip(): String = call { core.resumePersistedTrip() }
 
@@ -88,14 +92,21 @@ class CoreNavigationEngine(
   override fun completeHttpRequest(requestId: Long, responseJson: String) =
     call { core.completeHttpRequest(requestId, responseJson) }
 
-  private inline fun <T> call(body: () -> T): T = try {
-    body()
-  } catch (error: OutOfMemoryError) {
-    throw NavigationEngineException(OUT_OF_MEMORY, "Not enough memory for this navigation call.", error)
-  }
+  private inline fun <T> call(body: () -> T): T = outOfMemoryBoundary(onOutOfMemory, body)
 
   companion object {
     const val OUT_OF_MEMORY = "out-of-memory"
+
+    /** Runs a core call; out of memory goes to [onOutOfMemory] first, then the call is refused. */
+    private inline fun <T> outOfMemoryBoundary(onOutOfMemory: () -> Unit, body: () -> T): T = try {
+      body()
+    } catch (error: OutOfMemoryError) {
+      onOutOfMemory()
+      throw NavigationEngineException(OUT_OF_MEMORY, "Not enough memory for this navigation call.", error)
+    } catch (error: NavigationEngineException) {
+      if (error.code == OUT_OF_MEMORY) onOutOfMemory()
+      throw error
+    }
 
     /**
      * The core when [loader] can provide one, otherwise [UnavailableNavigationEngine]. A missing
@@ -106,6 +117,7 @@ class CoreNavigationEngine(
       configJson: String,
       host: NavigationCoreHost,
       reportHostFailure: (callback: String, error: Throwable) -> Unit = { _, _ -> },
+      onOutOfMemory: () -> Unit = {},
       rerouteMode: () -> RerouteMode,
     ): NavigationEngine {
       val error = try {
@@ -115,7 +127,8 @@ class CoreNavigationEngine(
       }
       if (error != null) return UnavailableNavigationEngine(rerouteMode, error)
       return try {
-        CoreNavigationEngine(loader.create(configJson, GuardedHost(host, reportHostFailure)), loader.contractVersion())
+        val core = outOfMemoryBoundary(onOutOfMemory) { loader.create(configJson, GuardedHost(host, reportHostFailure)) }
+        CoreNavigationEngine(core, loader.contractVersion(), onOutOfMemory)
       } catch (error: RuntimeException) {
         UnavailableNavigationEngine(rerouteMode, error)
       } catch (error: LinkageError) {

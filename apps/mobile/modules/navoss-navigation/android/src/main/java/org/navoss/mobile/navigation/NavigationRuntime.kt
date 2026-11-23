@@ -63,9 +63,9 @@ class NavigationRuntime private constructor(
     apiBaseUrl ?: "",
     executor = Executors.newCachedThreadPool { Thread(it, "NavOSSNavigationHttp").apply { isDaemon = true } },
     timer = Executors.newSingleThreadScheduledExecutor { Thread(it, "NavOSSNavigationHttpTimer").apply { isDaemon = true } },
-    complete = { id, response -> outOfMemory.run { engine.completeHttpRequest(id, response) } },
+    complete = { id, response -> engine.completeHttpRequest(id, response) },
   )
-  private val clock = NavigationClock(HandlerTicker(handler), ::isCurrentGeneration) { outOfMemory.run { engine.clockTick() } }
+  private val clock = NavigationClock(HandlerTicker(handler), ::isCurrentGeneration) { engine.clockTick() }
   private lateinit var speech: GuidanceSpeech
   private val synthesizer = AndroidSpeechSynthesizer(
     this.context,
@@ -79,15 +79,15 @@ class NavigationRuntime private constructor(
   private val fixFilter = LocationFixFilter()
   internal val notification = TripNotification(this.context)
 
-  private var serviceRequested = false
+  @Volatile private var serviceRequested = false
 
   /**
-   * A core `out-of-memory` refusal is handled as a crash: one attempt to post the notification
-   * built when the guidance service started, then the process ends. The saved trip stays and the
-   * next launch restores it (see [OutOfMemoryStop]).
+   * Out of memory at any core call is handled as a crash: during a trip one attempt to post the
+   * notification built when the guidance service started, then the process ends. The saved trip
+   * stays and the next launch restores it (see [OutOfMemoryStop]).
    */
   private val outOfMemory = OutOfMemoryStop(
-    notifyDriver = { notification.postStopped() },
+    notifyDriver = { if (serviceRequested) notification.postStopped() },
     exitProcess = { Process.killProcess(Process.myPid()) },
   )
   private var simulation: DriveSimulation? = null
@@ -106,6 +106,7 @@ class NavigationRuntime private constructor(
       loader,
       createConfig(),
       this,
+      onOutOfMemory = outOfMemory::stop,
       rerouteMode = { preferences.load().rerouteMode },
       // Type only: a message could quote a snapshot or a request.
       reportHostFailure = { callback, error -> Log.e(LOG_TAG, "host callback $callback failed: ${error.javaClass.name}") },
@@ -210,8 +211,7 @@ class NavigationRuntime private constructor(
     if (isSimulating) {
       throw NavigationEngineException("simulation-active", "A simulated drive is running; real fixes are ignored.")
     }
-    return outOfMemory.run { engine.updateLocation(sampleJson) }
-      ?: throw NavigationEngineException(CoreNavigationEngine.OUT_OF_MEMORY, OUT_OF_MEMORY_MESSAGE)
+    return engine.updateLocation(sampleJson)
   }
 
   fun stopAnnouncements() {
@@ -346,7 +346,7 @@ class NavigationRuntime private constructor(
     if (isSimulating) return
     val sample = fixFilter.accept(fix, System.currentTimeMillis()) ?: return
     try {
-      outOfMemory.run { engine.updateLocation(sample) }
+      engine.updateLocation(sample)
     } catch (_: NavigationEngineException) {
       // No active trip any more, or the core refused this fix; the next fix tries again.
     }
@@ -365,7 +365,7 @@ class NavigationRuntime private constructor(
         lastTick = now
         val phase = sample?.let {
           try {
-            val snapshot = outOfMemory.run { engine.updateLocation(it) } ?: return
+            val snapshot = engine.updateLocation(it)
             JSONObject(snapshot).optString("phase")
           } catch (_: RuntimeException) {
             null
@@ -449,7 +449,6 @@ class NavigationRuntime private constructor(
     const val MODULE_CONTRACT_VERSION = 11
     const val API_URL_META_DATA = "org.navoss.mobile.API_URL"
     private const val SIMULATION_TICK_MS = 1_000L
-    internal const val OUT_OF_MEMORY_MESSAGE = "Guidance stopped because the phone ran out of memory."
 
     @Volatile private var instance: NavigationRuntime? = null
 
