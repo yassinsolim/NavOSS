@@ -1119,7 +1119,8 @@ final class NavigationEngine: @unchecked Sendable {
     rerouteSpacing.answered(now: clock().timeIntervalSinceReferenceDate)
     // The route followed, the one it replaced or the one just declined, again: nothing changes
     // for the driver, so nothing is installed, offered or said. The vehicle stays off route
-    // until it rejoins the route or moves away from it (`NavigationRerouteSpacing`). Before the
+    // until it rejoins the route or the spacing allows a fresh request
+    // (`NavigationRerouteSpacing`). Before the
     // first match the replacement is chosen for being closest to the chosen route
     // (`navigationReplacement`) and installing it restarts the pre-match rules, as before.
     if navigationSession.hasMatchedRoute, let trip = current.trip,

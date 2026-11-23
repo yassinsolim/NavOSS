@@ -27,6 +27,11 @@ import XCTest
 ///
 /// Reasons are compared as strings so the defect tests also build against the code they fixed.
 final class NavigationTripRestoreEngineTests: XCTestCase {
+  override func tearDown() {
+    ScriptedEngineNetwork.assertNothingWaiting()
+    super.tearDown()
+  }
+
   // MARK: The recorded drive
 
   private static let routeFixture = URL(fileURLWithPath: #filePath)
@@ -785,6 +790,8 @@ final class NavigationTripRestoreEngineTests: XCTestCase {
         XCTAssertFalse(restored.state.navigation.isOffRoute, label)
         XCTAssertNotNil(restored.state.guidance, "\(label): guided again")
       }
+      // A request left waiting would hold a thread the next tests need.
+      restored.engine.completePendingReroute(through: restored.network)
     }
   }
 
@@ -815,6 +822,8 @@ final class NavigationTripRestoreEngineTests: XCTestCase {
         restored.engine.lock.withLock { restored.engine.currentUpdateLocked().guidance }, label)
       XCTAssertTrue(
         restored.host.publishedGuidance.allSatisfy { $0 == nil }, "\(label): published")
+      // A request left waiting would hold a thread the next tests need.
+      restored.engine.completePendingReroute(through: restored.network)
     }
   }
 
@@ -952,6 +961,8 @@ final class NavigationTripRestoreEngineTests: XCTestCase {
         try restored.fix(fixes[150...160])
         XCTAssertEqual(restored.host.publishedTripPauses.last, .some(nil), "\(label): matched")
       }
+      // A request left waiting would hold a thread the next tests need.
+      restored.engine.completePendingReroute(through: restored.network)
     }
     // A mid-trip departure: guidance throughout, nothing in its place.
     let phone = phone()

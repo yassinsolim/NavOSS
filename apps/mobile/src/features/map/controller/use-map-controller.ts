@@ -180,6 +180,7 @@ import {
   isResumingTrip,
   isTripState,
   nextTripSimulated,
+  pausedTripBanner,
   simulatedAtTripEntry,
   vehicleMatchStatus as vehicleMatchStatusOf,
 } from '@/features/navigation/trip-status';
@@ -1534,6 +1535,15 @@ export function useMapController() {
     [routeProgress, routeState.type, selectedRoute],
   );
   const vehicleMatchStatus = vehicleMatchStatusOf(navigationSnapshot);
+  // In place of the maneuver while the trip under way has none to show: why.
+  const pausedBanner =
+    routeState.type === 'navigating'
+      ? pausedTripBanner({
+          matchStatus: vehicleMatchStatus,
+          resuming: resumingTrip,
+          tripPause: navigationSnapshot?.tripPause,
+        })
+      : undefined;
   const vehicleCoordinate = matchedCoordinate ?? userCoordinate;
   const followCenter = navigationCameraCenter(
     vehicleCoordinate,
@@ -1812,6 +1822,7 @@ export function useMapController() {
       remainingRoute,
       remainingStep,
       resumingTrip,
+      pausedBanner,
       tripPaused,
       rerouteCount: session.rerouteCount,
       rerouteProposal,

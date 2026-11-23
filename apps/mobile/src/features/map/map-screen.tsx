@@ -51,7 +51,7 @@ import {
   ManeuverBanner,
   RerouteProposalCard,
   SafetyCameraAlertBanner,
-  TripResumingBanner,
+  TripPausedBanner,
   TripSheet,
 } from '@/features/navigation/guidance';
 import { GuidanceSettingsSheet } from '@/features/navigation/guidance-settings-sheet';
@@ -263,10 +263,13 @@ export function MapScreen() {
   );
   const guidanceBanners = (
     <>
-      {navigating && guidance.resumingTrip && (
-        <TripResumingBanner
+      {navigating && guidance.pausedBanner !== undefined && (
+        <TripPausedBanner
+          message={guidance.pausedBanner.message}
+          offRoute={guidance.vehicleMatchStatus === 'off-route'}
           onHeightChange={guidance.onBannerHeightChange}
           safeAreaTop={insets.top}
+          title={guidance.pausedBanner.title}
         />
       )}
       {guidanceReady && guidance.step !== undefined && guidance.remainingStep !== undefined && (

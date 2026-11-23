@@ -102,6 +102,39 @@ export function tripNotice({
   return undefined;
 }
 
+/**
+ * The banner in place of the maneuver while the trip under way has none to show (`tripPause`, or a
+ * restored trip still finding its place). Off its route it says so; it says it is finding its place
+ * only while it is. A guided trip, including a mid-trip departure, gets the maneuver banner instead.
+ */
+export function pausedTripBanner({
+  matchStatus,
+  resuming,
+  tripPause,
+}: {
+  matchStatus: VehicleMatchStatus;
+  resuming: boolean;
+  tripPause?: NativeNavigationSnapshot['tripPause'];
+}): TripNotice | undefined {
+  if (!resuming && tripPause === undefined) return undefined;
+  if (matchStatus === 'off-route') {
+    return {
+      message:
+        tripPause === 'rerouting' ? 'Finding a new route' : 'Finding a way back to your route',
+      title: 'Off route',
+    };
+  }
+  return { message: 'Finding your place on the route', title: 'Resuming trip' };
+}
+
+/**
+ * The collapsed trip panel's line in place of the remaining time and distance when the trip has
+ * no estimate: off its route it says so, otherwise it is still finding its place.
+ */
+export function tripRemainingWithoutEstimate(matchStatus: VehicleMatchStatus): string {
+  return matchStatus === 'off-route' ? 'Off route' : 'Finding your place on the route';
+}
+
 /** The trip's position status, as read in the trip panel's accessible summary. */
 export function tripStatusLabel({
   matchStatus,

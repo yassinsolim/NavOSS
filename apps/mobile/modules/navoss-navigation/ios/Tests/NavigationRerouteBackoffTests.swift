@@ -15,6 +15,11 @@ final class NavigationRerouteBackoffTests: XCTestCase {
   private typealias Trace = NavigationTrace
 
   static let block = 200.0
+
+  override func tearDown() {
+    ScriptedEngineNetwork.assertNothingWaiting()
+    super.tearDown()
+  }
   static let destination = (600.0, 3_600.0)
   static let startTime: TimeInterval = 800_000_000
 

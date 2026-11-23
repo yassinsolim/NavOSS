@@ -40,7 +40,7 @@ Open, not merged (check each when it lands, and say which build contains it):
   - Close the app mid-trip, reopen it on the route: guidance continues with no new route request.
   - Close the app in the destination's car park before arrival is confirmed and reopen it there:
     "Trip ended" with "Your last trip had reached its destination, so it was ended."
-- [ ] Repeated departures (pull request `fix/reroute-backoff`, stacked on `fix/restore-off-route`).
+- [ ] Repeated departures (pull request #171, `fix/reroute-backoff`).
       In the car, passenger-operated, on the build that contains it, in each of Automatic, Ask
       first and Keep route: start a trip, then ignore the route for a few blocks on a parallel
       street before rejoining it. Count the "New route" alerts on CarPlay, the spoken offers in
