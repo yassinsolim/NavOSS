@@ -11,10 +11,10 @@
 #                                      libraries are fetched and built now.
 #   build-android-release.sh sign      with NAVOSS_ANDROID_KEYSTORE, NAVOSS_ANDROID_KEYSTORE_PASSWORD
 #                                      and NAVOSS_ANDROID_KEY_ALIAS set: `./gradlew --offline
-#                                      :app:assembleRelease`. Only the tasks whose input is the
-#                                      signing configuration run again; the script lists every
-#                                      task that executed and fails if one is not a
-#                                      signing/packaging task.
+#                                      :app:assembleRelease` without lint and createExpoConfig.
+#                                      Only signing/packaging and Gradle/AGP's always-run no-op
+#                                      tasks may execute (SIGNING_TASKS); the script lists every
+#                                      task that executed and fails on any other.
 #
 # Both phases read EXPO_PUBLIC_API_URL and NAVOSS_ANDROID_VERSION_CODE; give them the same
 # values. Used by .github/workflows/android-release.yml and the release leg of ci.yml.
@@ -29,9 +29,15 @@ fail() {
   exit 1
 }
 
-# Tasks the sign phase may execute: those whose inputs include the signing configuration.
-# Anything else running there means the prepare phase left work for the key-bearing step.
-SIGNING_TASKS='^:app:(validateSigningRelease|signingConfigWriterRelease|packageRelease|createReleaseApkListingFileRedirect|assembleRelease)$'
+# Tasks the sign phase may execute. Measured in CI (run 45181150954): with everything built,
+# Gradle still runs its lifecycle and plugin version-assert tasks, and AGP always re-runs the
+# CMake configure/build tasks (ninja finds nothing to do: about 0.1 s each) and their JSON model
+# and prefab configuration; then packageRelease signs and packages. Lint (lintVital, already run
+# in the prepare phase on the same inputs) and expo-constants' createExpoConfig (which would
+# evaluate the app config, plugins included, with the key in the environment; its output is
+# already there) are excluded. Anything else running means the prepare phase left work for the
+# key-bearing step, and fails it.
+SIGNING_TASKS='^:[^:]+:((pre|preRelease)Build|assert[A-Za-z]*Task|(configure|build)CMakeRelWithDebInfo\[arm64-v8a\](\[[a-z]+\])?|externalNativeBuildRelease|generateJsonModelRelease|prefabReleaseConfigurePackage)$|^:app:(validateSigningRelease|signingConfigWriterRelease|packageRelease|createReleaseApkListingFileRedirect|assembleRelease)$'
 
 case "${1:-}" in
   prepare)
@@ -62,7 +68,8 @@ case "${1:-}" in
     done
     cd "$mobile/android"
     log="$(mktemp)"
-    "${gradle[@]}" --offline :app:assembleRelease | tee "$log"
+    "${gradle[@]}" --offline :app:assembleRelease -x lintVitalRelease \
+      -x :expo-constants:createExpoConfig | tee "$log"
     executed="$(sed -n 's/^> Task \(:[^ ]*\)$/\1/p' "$log")"
     rm -f "$log"
     echo "Tasks executed with the release key present:"

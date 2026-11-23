@@ -64,9 +64,11 @@ prepare`): checks the release configuration (`validate-release-env.mjs`), builds
       are all fetched and built here;
    4. decodes the keystore into the runner's temporary directory;
    5. signs and packages (`build-android-release.sh sign`): `./gradlew --offline
-:app:assembleRelease`, so nothing can be downloaded while the key is on disk. Only the tasks
-      whose input is the signing configuration run again (`validateSigningRelease`,
-      `signingConfigWriterRelease`, `packageRelease` and the APK listing); the step lists the
+:app:assembleRelease -x lintVitalRelease -x :expo-constants:createExpoConfig`, so nothing
+      can be downloaded while the key is on disk and no app-config JavaScript is evaluated. What
+      still executes (measured in CI): Gradle's lifecycle and plugin version-assert tasks, AGP's
+      always-run CMake configure/build tasks (ninja finds nothing to do), their JSON model and
+      prefab configuration, and `packageRelease`, which signs and packages. The step lists the
       tasks it executed and fails if any other ran. The CI release leg runs the same two phases
       with throwaway keys, so this is checked on every change;
    6. deletes the keystore (also when the build fails);
