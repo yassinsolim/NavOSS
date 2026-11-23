@@ -1,0 +1,22 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'org.navoss.mobile'
+version = '0.0.0'
+
+android {
+  namespace "org.navoss.mobile.updater"
+  defaultConfig {
+    versionCode 1
+    versionName "0.0.0"
+  }
+  testOptions {
+    unitTests.returnDefaultValues = true
+  }
+}
+
+dependencies {
+  testImplementation 'junit:junit:4.13.2'
+}

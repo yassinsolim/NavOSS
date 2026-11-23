@@ -52,6 +52,7 @@ import { maneuverSignage } from '@/features/navigation/lane-guidance';
 import { isCarPlayVisualHarness } from '@/features/navigation/native-navigation';
 import { RoutePlanningSheet, RoutePreviewSheet } from '@/features/navigation/route-sheets';
 import { RouteStopsEditor } from '@/features/navigation/route-stops-editor';
+import { UpdateNotice } from '@/features/updates/update-notice';
 import { useRenderCounter } from '@/lib/render-counter';
 import { createThemedStyles } from '@/theme';
 
@@ -476,6 +477,7 @@ export function MapScreen() {
           top={guidanceStackTop + reportAheadHeight}
         />
       )}
+      <UpdateNotice top={insets.top + 8} tripActive={!routeIsIdle} />
       <MapNoticeToast
         notice={c.notice}
         onDismiss={c.onDismissNotice}
