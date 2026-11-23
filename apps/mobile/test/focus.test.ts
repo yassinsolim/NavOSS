@@ -6,6 +6,7 @@ import {
   keyFocusRequested,
   readoutFocusProps,
   resultFocusKey,
+  submittedQueryAfter,
 } from '../src/ui/focus.js';
 
 describe('hiddenFromFocusProps', () => {
@@ -74,6 +75,18 @@ describe('resultFocusKey', () => {
     // Editing after a submit: the submitted query no longer matches.
     expect(
       resultFocusKey({ fieldFocused: true, query: 'Calgary T', submittedQuery: 'Calgary' }),
+    ).toBeUndefined();
+  });
+
+  it('lets a submit move focus once: focusing the field again withdraws it', () => {
+    const submitted = submittedQueryAfter({ query: 'Calgary', type: 'submit' });
+    expect(
+      resultFocusKey({ fieldFocused: true, query: 'Calgary', submittedQuery: submitted }),
+    ).toBe('results:Calgary');
+    // The driver goes back to the unchanged field: nothing may take focus from it.
+    const refocused = submittedQueryAfter({ type: 'field-focus' });
+    expect(
+      resultFocusKey({ fieldFocused: true, query: 'Calgary', submittedQuery: refocused }),
     ).toBeUndefined();
   });
 

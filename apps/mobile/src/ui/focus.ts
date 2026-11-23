@@ -78,3 +78,14 @@ export function resultFocusKey({
 }): string | undefined {
   return !fieldFocused || submittedQuery === query ? `results:${query}` : undefined;
 }
+
+/**
+ * The submitted query after the search field takes focus or submits. A submit lets the results
+ * take focus once; when the field takes focus again the driver is editing, even before a key
+ * changes the text, so the earlier submit no longer counts.
+ */
+export function submittedQueryAfter(
+  event: { query: string; type: 'submit' } | { type: 'field-focus' },
+): string | undefined {
+  return event.type === 'submit' ? event.query : undefined;
+}

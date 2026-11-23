@@ -40,7 +40,7 @@ import { haptics } from '@/theme/haptics';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Chip } from '@/ui/chip';
-import { resultFocusKey } from '@/ui/focus';
+import { resultFocusKey, submittedQueryAfter } from '@/ui/focus';
 import { IconButton } from '@/ui/icon-button';
 import { ListRow } from '@/ui/list-row';
 import { BottomSheet, type BottomSheetRef, BottomSheetScrollView } from '@/ui/sheet/bottom-sheet';
@@ -206,10 +206,11 @@ export function ExploreSheet({
             onChangeText={onChangeQuery}
             onFocus={() => {
               setFocused(true);
+              setSubmittedQuery(submittedQueryAfter({ type: 'field-focus' }));
               sheetRef.current?.snapTo(detents.values.length - 1);
             }}
             onSubmitEditing={() => {
-              setSubmittedQuery(query);
+              setSubmittedQuery(submittedQueryAfter({ query, type: 'submit' }));
               Keyboard.dismiss();
               onSubmit();
             }}
