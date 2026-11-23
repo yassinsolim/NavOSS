@@ -25,23 +25,40 @@ export function isKeyboardCrowded({
   return windowHeight - topInset - keyboardHeight < CROWDED_KEYBOARD_SPACE;
 }
 
-/** The open keyboard (`height` 0: closed) and the top inset when it opened. */
+/** The open keyboard (`height` 0: closed), the window it is open in, and that window's top inset. */
 export interface KeyboardSession {
   height: number;
   topInset: number;
+  windowHeight: number;
+  windowWidth: number;
 }
 
-export const CLOSED_KEYBOARD: KeyboardSession = { height: 0, topInset: 0 };
+export const CLOSED_KEYBOARD: KeyboardSession = {
+  height: 0,
+  topInset: 0,
+  windowHeight: 0,
+  windowWidth: 0,
+};
 
 /**
- * The session after a keyboard-shown event. The top inset is captured when the keyboard opens and
- * kept while it stays open: crowded mode hides the status bar, and measuring against the inset
- * that leaves would turn crowded mode off again, then on, for as long as the keyboard is up.
+ * The session for the keyboard and window as they are now. While the keyboard stays open in the
+ * same window, the top inset is the greatest seen: crowded mode hides the status bar, and
+ * measuring against the inset that leaves would turn crowded mode off again, then on, for as long
+ * as the keyboard is up. A window of another size (a rotation, a resize) starts over with its own
+ * inset, and so does a keyboard that closed and opened again.
  */
-export function keyboardShown(
+export function keyboardSession(
   previous: KeyboardSession,
-  height: number,
-  currentTopInset: number,
+  current: KeyboardSession,
 ): KeyboardSession {
-  return { height, topInset: previous.height > 0 ? previous.topInset : currentTopInset };
+  if (current.height <= 0) return CLOSED_KEYBOARD;
+  const sameWindow =
+    previous.height > 0 &&
+    previous.windowHeight === current.windowHeight &&
+    previous.windowWidth === current.windowWidth;
+  const topInset = sameWindow ? Math.max(previous.topInset, current.topInset) : current.topInset;
+  if (sameWindow && previous.height === current.height && previous.topInset === topInset) {
+    return previous;
+  }
+  return { ...current, topInset };
 }
