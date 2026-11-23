@@ -67,6 +67,11 @@ In the car, parked or passenger-operated, on the build that contains them:
     counter-example); CarPlay was checked in the harness only, with synthetic states.
 - [ ] **Time zone (#165).** Change the time zone with the app open: arrival time and "updated
       h:mm" follow it without a relaunch.
+- [ ] **Phone free drive (#172, the phone side of #160).** With no trip the phone map shows your
+      Arrow or Car instead of the blue dot. Parked it points the way the phone faces; driving, the
+      way you go; at a light it holds. Start a trip: one marker, no jump. End: the blue dot shows
+      until the next fix, then the arrow returns. In a garage or after 15 s without a fix the blue
+      dot (with its accuracy ring) returns. Seen only on a simulator.
 
 Known and open:
 

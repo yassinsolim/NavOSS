@@ -1,4 +1,4 @@
-import { GeoJSONSource, Layer, UserLocation } from '@maplibre/maplibre-react-native';
+import { GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
 import type {
   Coordinate,
   OfficialSafetyCamera,
@@ -14,6 +14,8 @@ import { useMemo } from 'react';
 
 import { communityReportFeatures } from '@/features/community/community';
 
+import { MapVehicle } from '@/features/map/components/map-vehicle';
+import type { FreeDriveTrack } from '@/features/map/free-drive-vehicle';
 import { headingConeFeature } from '@/features/map/heading-cone';
 import type { MapRoadEvent } from '@/features/map/road-events';
 import {
@@ -27,8 +29,7 @@ import {
 } from '@/features/map/map-features';
 import { ROUTE_COLORS, type RouteColor } from '@/features/map/map-preferences';
 import type { NativeCommunityReport } from '@/features/navigation/native-navigation';
-import { mapAlignedHeadingDegrees } from '@/features/navigation/vehicle-heading';
-import { VehiclePuck, type VehicleStyle } from '@/features/navigation/vehicle-puck';
+import type { VehicleStyle } from '@/features/navigation/vehicle-puck';
 import { useRenderCounter } from '@/lib/render-counter';
 import { useStoreValue, type ValueStore } from '@/lib/value-store';
 import { palette, trafficColors } from '@/theme/tokens';
@@ -83,6 +84,8 @@ export interface MapLayersProps {
   darkMap: boolean;
   deviceHeadingStore: ValueStore<number | undefined>;
   displayedSelectedRoute: RouteAlternativeV2 | undefined;
+  /** The newest fix and its course, for the vehicle without a trip. */
+  freeDriveTrackStore: ValueStore<FreeDriveTrack>;
   isNavigating: boolean;
   roadEvents: readonly MapRoadEvent[];
   routeColor: RouteColor;
@@ -96,6 +99,7 @@ export interface MapLayersProps {
   showRoadEvents: boolean;
   showSafetyCameras: boolean;
   showSafetyFacilities: boolean;
+  /** Location is granted and found, outside a trip: the free-drive vehicle (or dot) may show. */
   showUserLocation: boolean;
   torontoSafetyCameras: readonly OfficialSafetyCamera[];
   trafficCameras: readonly TrafficCamera[];
@@ -120,6 +124,7 @@ export function MapLayers({
   darkMap,
   deviceHeadingStore,
   displayedSelectedRoute,
+  freeDriveTrackStore,
   isNavigating,
   roadEvents,
   routeColor,
@@ -191,7 +196,6 @@ export function MapLayers({
         deviceHeadingStore={deviceHeadingStore}
         zoomStepStore={zoomStepStore}
       />
-      {showUserLocation && <UserLocation accuracy heading />}
 
       {alternateRoutes.length > 0 && (
         <GeoJSONSource data={alternateRouteData} id="alternate-routes">
@@ -271,13 +275,16 @@ export function MapLayers({
         </GeoJSONSource>
       )}
 
-      {isNavigating && userCoordinate !== undefined && vehicleCoordinate !== undefined && (
-        <VehiclePuck
-          coordinate={vehicleCoordinate}
-          heading={mapAlignedHeadingDegrees(userHeading)}
-          vehicleStyle={vehicleStyle}
-        />
-      )}
+      <MapVehicle
+        compassStore={deviceHeadingStore}
+        locationAvailable={showUserLocation}
+        trackStore={freeDriveTrackStore}
+        tripCoordinate={
+          isNavigating && userCoordinate !== undefined ? vehicleCoordinate : undefined
+        }
+        tripFallbackHeadingDegrees={userHeading}
+        vehicleStyle={vehicleStyle}
+      />
 
       <GeoJSONSource data={selectedPlaceData} id="selected-place">
         <Layer
