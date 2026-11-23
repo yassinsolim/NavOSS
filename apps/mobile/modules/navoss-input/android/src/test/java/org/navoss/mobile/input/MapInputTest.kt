@@ -47,4 +47,56 @@ class MapInputTest {
     assertEquals(0.5f, MapInput.axis(0.575f, 0f), 1e-6f)
     assertEquals(-0.5f, MapInput.axis(-0.575f, 0f), 1e-6f)
   }
+
+  private class Recorder : MapInput.Listener {
+    val sticks = mutableListOf<Pair<Float, Float>>()
+
+    override fun onCommand(command: String) {}
+
+    override fun onStick(x: Float, y: Float) {
+      sticks += x to y
+    }
+  }
+
+  private fun withRecorder(block: (Recorder) -> Unit) {
+    val recorder = Recorder()
+    MapInput.listener = recorder
+    try {
+      MapInput.releaseStick()
+      recorder.sticks.clear()
+      block(recorder)
+    } finally {
+      MapInput.releaseStick()
+      MapInput.listener = null
+    }
+  }
+
+  @Test
+  fun stickChangesAreSentOnce() {
+    withRecorder { recorder ->
+      MapInput.stick(0.5f, 0f)
+      MapInput.stick(0.5f, 0f)
+      MapInput.stick(0f, 0f)
+      assertEquals(listOf(0.5f to 0f, 0f to 0f), recorder.sticks)
+    }
+  }
+
+  @Test
+  fun releasingAHeldStickSendsNeutralOnce() {
+    // A modal window or a paused activity takes the stick's release: the pan must still stop.
+    withRecorder { recorder ->
+      MapInput.stick(0f, -1f)
+      MapInput.releaseStick()
+      MapInput.releaseStick()
+      assertEquals(listOf(0f to -1f, 0f to 0f), recorder.sticks)
+    }
+  }
+
+  @Test
+  fun aRestingStickSendsNothingOnRelease() {
+    withRecorder { recorder ->
+      MapInput.releaseStick()
+      assertEquals(emptyList<Pair<Float, Float>>(), recorder.sticks)
+    }
+  }
 }

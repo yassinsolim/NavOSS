@@ -42,6 +42,24 @@ object MapInput {
     return Math.copySign(scaled.toFloat() / STEPS, value)
   }
 
+  private var stickX = 0f
+  private var stickY = 0f
+
+  /** The right stick moved to (x, y) (each from [axis]); a change is sent once. */
+  @Synchronized
+  fun stick(x: Float, y: Float) {
+    if (x == stickX && y == stickY) return
+    stickX = x
+    stickY = y
+    listener?.onStick(x, y)
+  }
+
+  /**
+   * The stick's release may never reach the activity (a modal sheet's window took the input, the
+   * activity paused, a text field took focus): stop any pan now. Sends (0, 0) once if it was held.
+   */
+  fun releaseStick() = stick(0f, 0f)
+
   /** Receives commands and stick changes while the JavaScript module is alive. */
   @Volatile var listener: Listener? = null
 

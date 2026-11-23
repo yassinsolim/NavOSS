@@ -41,16 +41,31 @@ class NavOSSInputPackage : Package {
         override fun onCreate(activity: Activity, savedInstanceState: Bundle?) {
           val window = activity.window ?: return
           val callback = window.callback ?: return
-          if (callback !is StickWindowCallback) window.callback = StickWindowCallback(callback)
+          if (callback !is StickWindowCallback) {
+            window.callback = StickWindowCallback(activity, callback)
+          }
+        }
+
+        override fun onPause(activity: Activity) {
+          MapInput.releaseStick()
         }
       },
     )
 }
 
-/** Passes everything to [base]; reads the right stick from joystick motion first. */
-private class StickWindowCallback(private val base: Window.Callback) : Window.Callback by base {
-  private var lastX = 0f
-  private var lastY = 0f
+/**
+ * Passes everything to [base]; reads the right stick from joystick motion first. Only this
+ * window's input arrives here: when another window (a modal sheet) takes focus the stick is
+ * released, since its own release would go to that window.
+ */
+private class StickWindowCallback(
+  private val activity: Activity,
+  private val base: Window.Callback,
+) : Window.Callback by base {
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    if (!hasFocus) MapInput.releaseStick()
+    base.onWindowFocusChanged(hasFocus)
+  }
 
   override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
     if (
@@ -67,11 +82,7 @@ private class StickWindowCallback(private val base: Window.Callback) : Window.Ca
           event.getAxisValue(MotionEvent.AXIS_RZ),
           device?.getMotionRange(MotionEvent.AXIS_RZ, event.source)?.flat ?: 0f,
         )
-      if (x != lastX || y != lastY) {
-        lastX = x
-        lastY = y
-        MapInput.listener?.onStick(x, y)
-      }
+      MapInput.stick(x, y)
     }
     return base.dispatchGenericMotionEvent(event)
   }
